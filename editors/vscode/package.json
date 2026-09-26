@@ -163,7 +163,8 @@
     "test": "node --experimental-transform-types --import ./test/hooks.mjs --test 'test/**/*.test.ts'",
     "package": "npm run typecheck && npm run build && vsce package --no-dependencies",
     "vscode:prepublish": "npm run build",
-    "test:live": "node --experimental-transform-types --import ./test/hooks.mjs --test test/live/*.live.ts"
+    "test:live": "node --experimental-transform-types --import ./test/hooks.mjs --test test/live/*.live.ts",
+    "publish:marketplace": "npm run typecheck && npm test && npm run build && vsce publish --no-dependencies"
   },
   "dependencies": {
     "acorn": "8.18.0"
@@ -176,5 +177,15 @@
     "typescript": "5.9.3",
     "vscode-oniguruma": "^2.0.1",
     "vscode-textmate": "^9.3.2"
+  },
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#0c0d14",
+    "theme": "dark"
+  },
+  "pricing": "Free",
+  "homepage": "https://github.com/MarkusAugust/streamlord/tree/main/editors/vscode",
+  "bugs": {
+    "url": "https://github.com/MarkusAugust/streamlord/issues"
   }
 }

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1b1d2a"/>
+      <stop offset="1" stop-color="#0c0d14"/>
+    </linearGradient>
+    <linearGradient id="stream" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4fc1ff"/>
+      <stop offset="1" stop-color="#c586c0"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="44" fill="url(#bg)"/>
+  <!-- the crown: three iron spikes -->
+  <path d="M64 92 L84 52 L104 84 L128 40 L152 84 L172 52 L192 92 Z" fill="#d7ba7d" opacity="0.95"/>
+  <rect x="64" y="92" width="128" height="14" rx="3" fill="#d7ba7d"/>
+  <!-- the streams: three currents bent to one will -->
+  <g fill="none" stroke="url(#stream)" stroke-width="14" stroke-linecap="round">
+    <path d="M40 140 C 80 120, 112 160, 152 140 S 216 120, 216 140"/>
+    <path d="M40 176 C 80 156, 112 196, 152 176 S 216 156, 216 176"/>
+    <path d="M40 212 C 80 192, 112 232, 152 212 S 216 192, 216 212"/>
+  </g>
+</svg>

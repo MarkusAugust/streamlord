@@ -78,6 +78,19 @@ npm run build      # dist/extension.js
 npm run package    # streamlord-<version>.vsix
 ```
 
-Press F5 in VS Code with `editors/vscode` open to launch an Extension Development Host. The
+Press F5 in the `streamlord.code-workspace` to launch an Extension Development Host.
+
+### Publishing
+
+The extension is published to the VS Code Marketplace under the publisher in `package.json`.
+Two ways:
+
+- **From CI:** bump `version` in `package.json`, commit, then push a tag `vscode-v<version>`.
+  The `publish-vscode` job checks that the tag matches, builds, and runs `vsce publish` with
+  the `VSCE_PAT` repository secret (an Azure DevOps personal access token with the
+  Marketplace *Manage* scope).
+- **Locally:** `npx vsce login <publisher>` once, then `npm run publish:marketplace`.
+
+No `.vsix` is ever committed; `npm run package` only builds one locally for installing by hand. The
 attribute and action catalog lives in `../../catalog/` and is verified against the Kotlin DSL
 by the SDK's own tests.
