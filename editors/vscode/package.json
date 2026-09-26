@@ -183,7 +183,7 @@
     "theme": "dark"
   },
   "pricing": "Free",
-  "homepage": "https://github.com/MarkusAugust/streamlord/tree/main/editors/vscode",
+  "homepage": "https://github.com/MarkusAugust/streamlord/tree/master/editors/vscode",
   "bugs": {
     "url": "https://github.com/MarkusAugust/streamlord/issues"
   }
