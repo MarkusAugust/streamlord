@@ -60,7 +60,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration("streamlord")) vscode.workspace.textDocuments.forEach(lint);
     }),
-    vscode.languages.registerCompletionItemProvider(SELECTOR, new StreamlordCompletionProvider(signals, prefix), "$", "@", "_", ".", "-", ":"),
+    vscode.languages.registerCompletionItemProvider(SELECTOR, new StreamlordCompletionProvider(signals, prefix), "$", "@", "#", "_", ".", "-", ":"),
     vscode.languages.registerHoverProvider(SELECTOR, new StreamlordHoverProvider(prefix)),
     vscode.commands.registerCommand("streamlord.inspector.open", () => inspector.open()),
     vscode.commands.registerCommand("streamlord.reindexSignals", async () => {

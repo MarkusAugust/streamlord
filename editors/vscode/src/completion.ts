@@ -6,6 +6,13 @@ import { findCallSites, selectStringArg } from "./scanner.ts";
 import type { SignalIndex } from "./signalIndex.ts";
 
 const EXPRESSION_SITES: ReadonlySet<string> = new Set(Object.keys(catalog.callSites.expression));
+const ALL_SITES: ReadonlySet<string> = new Set([
+  ...Object.keys(catalog.callSites.expression),
+  ...Object.keys(catalog.callSites.html),
+  ...Object.keys(catalog.callSites.script),
+  ...Object.keys(catalog.callSites.selector),
+]);
+const SELECTOR_ARG_NAMES = new Set(["selector", "viewTransitionSelector"]);
 
 /** Completions for Datastar expressions in Kotlin strings, and for data-* attributes in HTML. */
 export class StreamlordCompletionProvider implements vscode.CompletionItemProvider {
@@ -19,6 +26,8 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
   }
 
   private kotlin(src: string, offset: number, document: vscode.TextDocument, position: vscode.Position): vscode.CompletionItem[] {
+    const selectorItems = this.selectorItems(src, offset, document, position);
+    if (selectorItems) return selectorItems;
     const site = findCallSites(src, EXPRESSION_SITES).find((s) => s.openParen < offset && offset <= s.closeParen);
     if (!site) return [];
     const spec = catalog.callSites.expression[site.name];
@@ -27,6 +36,45 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
     if (!s || offset <= s.start || offset > s.contentEnd + (s.unterminated ? 1 : 0)) return [];
     const text = src.slice(s.contentStart, offset);
     return [...this.expressionItems(text, document, position, offset - text.length, true), ...this.modifierPropertyItems(src, offset, site.name)];
+  }
+
+  /** `selector = "#|"` on any DSL call, or the first argument of removeElements: ids and classes from the workspace. */
+  private selectorItems(src: string, offset: number, document: vscode.TextDocument, position: vscode.Position): vscode.CompletionItem[] | null {
+    const site = findCallSites(src, ALL_SITES).find((s) => s.openParen < offset && offset <= s.closeParen);
+    if (!site) return null;
+    const arg = site.args.find((a) => a.string && a.string.start < offset && offset <= a.string.contentEnd + (a.string.unterminated ? 1 : 0));
+    if (!arg?.string) return null;
+    const isSelector = (arg.named !== null && SELECTOR_ARG_NAMES.has(arg.named)) || (arg.named === null && site.name === "removeElements" && site.args.indexOf(arg) === 0);
+    if (!isSelector) return null;
+    const typed = src.slice(arg.string.contentStart, offset);
+    const token = /[#.]?[\w-]*$/.exec(typed)?.[0] ?? "";
+    const local = this.signals.selectorsForFile(document.uri.toString());
+    const all = this.signals.allSelectors();
+    const range = new vscode.Range(position.translate(0, -token.length), position);
+    const items: vscode.CompletionItem[] = [];
+    const wantIds = !token.startsWith(".");
+    const wantClasses = !token.startsWith("#");
+    if (wantIds) {
+      for (const id of [...all.ids].sort()) {
+        const item = new vscode.CompletionItem("#" + id, vscode.CompletionItemKind.Reference);
+        const isLocal = local.ids.has(id);
+        item.detail = isLocal ? "id (this file)" : "id (workspace)";
+        item.sortText = (isLocal ? "0" : "1") + id;
+        item.range = range;
+        items.push(item);
+      }
+    }
+    if (wantClasses) {
+      for (const cls of [...all.classes].sort()) {
+        const item = new vscode.CompletionItem("." + cls, vscode.CompletionItemKind.Color);
+        const isLocal = local.classes.has(cls);
+        item.detail = isLocal ? "class (this file)" : "class (workspace)";
+        item.sortText = (isLocal ? "2" : "3") + cls;
+        item.range = range;
+        items.push(item);
+      }
+    }
+    return items;
   }
 
   private html(src: string, offset: number, document: vscode.TextDocument, position: vscode.Position): vscode.CompletionItem[] {

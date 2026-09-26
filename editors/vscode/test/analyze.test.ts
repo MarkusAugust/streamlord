@@ -14,6 +14,7 @@ import { findCallSites } from "../src/scanner.ts";
 import { validateExpression } from "../src/expression.ts";
 import { validateMarkup } from "../src/markup.ts";
 import { collectSignals } from "../src/signals.ts";
+import { collectSelectors } from "../src/selectors.ts";
 import { decodeDatastar, mergePatch, SseParser } from "../src/sse.ts";
 
 const opts = { prefix: "data-", checkHtmlAttributes: true };
@@ -162,6 +163,17 @@ describe("signals", () => {
     expect([...collectSignals(kt, "kotlin")].sort()).toEqual(["away", "count", "gone", "name", "open", "page", "query", "search", "user"]);
     const html = `<div data-signals="{count: 1, open: false}" data-bind:first-name data-text="$other.x"></div>`;
     expect([...collectSignals(html, "html")].sort()).toEqual(["count", "firstName", "open", "other.x"]);
+  });
+});
+
+describe("selectors", () => {
+  it("collects ids and classes from kotlin dsl and html", () => {
+    const src = `div { id = "feed"; classes = setOf("card", "dark") }
+      patchElements("""<ul id="list" class="menu open"><li id="\${item.id}" class="\$cls"></li></ul>""")
+      <span id="counter" class="big"></span>`;
+    const s = collectSelectors(src);
+    expect([...s.ids].sort()).toEqual(["counter", "feed", "list"]);
+    expect([...s.classes].sort()).toEqual(["big", "card", "dark", "menu", "open"]);
   });
 });
 

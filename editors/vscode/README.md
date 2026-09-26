@@ -19,7 +19,8 @@ the Datastar 1.0.4 protocol.
 - `data-*` attributes: unknown names with "did you mean", unknown modifiers, wrong modifier
   arguments (`__debounce` without a duration, `__threshold.150`), missing or unexpected keys.
 
-**Completions**: `$` offers every signal name declared anywhere in the workspace (Kotlin DSL
+**Completions**: `#` and `.` in any `selector` argument offer the ids and classes declared
+anywhere in the workspace, this file first; `$` offers every signal name declared anywhere in the workspace (Kotlin DSL
 calls, `@Serializable` classes, HTML templates); `@` offers actions with snippets; `data-`
 offers attributes; `__` offers modifiers and their values.
 
