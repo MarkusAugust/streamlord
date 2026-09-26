@@ -4,6 +4,20 @@ All notable changes to Streamlord are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] - 2026-09-26
+
+### Added
+
+- `streamlord-html`: `ExpressionGuard` and `InterpolatedExpressionException`. Every expression
+  helper in `streamlord-html` and `streamlord-html-pro` now refuses, at render time, text that
+  has the shape a Kotlin string template leaves behind when it interpolates a signal
+  (`"$count++"` arriving as `"++"`). The message names the helpers and the `$$"..."` literal.
+- README: a section on the `$` trap and the three ways to avoid it.
+
+### Fixed
+
+- CI: the Maven Central publish job no longer fires on `vscode-v*` tags.
+
 ## [0.1.0] - 2026-09-26
 
 The first forging.
