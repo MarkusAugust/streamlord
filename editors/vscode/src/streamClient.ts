@@ -107,5 +107,6 @@ export function describeError(e: unknown): string {
   if (cause?.code === "ECONNREFUSED") return `Connection refused at ${cause.address ?? "host"}:${cause.port ?? "?"}. Is the server running?`;
   if (cause?.code === "ENOTFOUND") return `Host not found: ${cause.address ?? err.message}.`;
   if (cause?.code) return `${cause.code}: ${cause.message ?? err.message}`;
+  if (cause?.message) return `${err.message}: ${cause.message}`;
   return err.message;
 }
