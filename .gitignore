@@ -31,3 +31,6 @@ editors/vscode/dist/
 
 # Local scratch files for trying the extension
 playground/
+
+# Stream Inspector secrets and local hosts (saved requests in .streamlord/inspector.json are shareable)
+.streamlord/env.json

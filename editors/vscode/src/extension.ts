@@ -6,6 +6,8 @@ import { StreamlordCompletionProvider } from "./completion.ts";
 import type { Issue } from "./expression.ts";
 import { StreamlordHoverProvider } from "./hover.ts";
 import { Inspector } from "./inspector.ts";
+import { RequestStore } from "./requestStore.ts";
+import { RouteLensProvider } from "./routeLens.ts";
 import { SignalIndex } from "./signalIndex.ts";
 
 const SELECTOR: vscode.DocumentSelector = [{ language: "kotlin" }, { language: "html" }];
@@ -16,7 +18,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const diagnostics = vscode.languages.createDiagnosticCollection("streamlord");
   const signals = new SignalIndex();
-  const inspector = new Inspector(context);
+  const store = new RequestStore(context);
+  const inspector = new Inspector(context, store);
   const timers = new Map<string, NodeJS.Timeout>();
 
   const lint = (document: vscode.TextDocument) => {
@@ -55,6 +58,9 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     diagnostics,
     signals,
+    store,
+    vscode.languages.registerCodeLensProvider({ language: "kotlin" }, new RouteLensProvider()),
+    vscode.commands.registerCommand("streamlord.inspector.openWith", (route: { method: string; path: string }) => inspector.openWithRoute(route)),
     vscode.workspace.onDidOpenTextDocument(schedule),
     vscode.workspace.onDidChangeTextDocument((e) => schedule(e.document)),
     vscode.workspace.onDidCloseTextDocument((d) => diagnostics.delete(d.uri)),

@@ -55,6 +55,11 @@
         "command": "streamlord.colors.remove",
         "title": "Streamlord: Remove recommended colors",
         "category": "Streamlord"
+      },
+      {
+        "command": "streamlord.inspector.openWith",
+        "title": "Streamlord: Open Stream Inspector with route",
+        "category": "Streamlord"
       }
     ],
     "configuration": {
@@ -82,7 +87,25 @@
         "streamlord.inspector.defaultUrl": {
           "type": "string",
           "default": "http://localhost:8080/",
-          "description": "URL prefilled in the Stream Inspector."
+          "description": "Default value of the {{baseUrl}} variable when neither settings nor .streamlord/env.json define it."
+        },
+        "streamlord.inspector.variables": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "description": "Variables for {{name}} placeholders in inspector requests. .streamlord/env.json in the workspace overrides these."
+        },
+        "streamlord.inspector.requestsFile": {
+          "type": "string",
+          "default": ".streamlord/inspector.json",
+          "description": "Workspace-relative file holding saved inspector requests."
+        },
+        "streamlord.inspector.codeLens": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show \u201cOpen in Stream Inspector\u201d above Ktor and Spring routes."
         }
       }
     },
@@ -124,6 +147,12 @@
           "Datastar expression"
         ],
         "configuration": "./language-configuration.json"
+      }
+    ],
+    "jsonValidation": [
+      {
+        "fileMatch": ".streamlord/inspector.json",
+        "url": "./schemas/inspector.schema.json"
       }
     ]
   },

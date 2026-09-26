@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "requests": [
+    {
+      "name": "demo: counter stream",
+      "url": "{{baseUrl}}/api/counter-stream",
+      "method": "GET",
+      "signals": "",
+      "headers": ""
+    },
+    {
+      "name": "demo: counter page (non-SSE)",
+      "url": "{{baseUrl}}/api/counter",
+      "method": "GET",
+      "signals": "",
+      "headers": ""
+    }
+  ]
+}

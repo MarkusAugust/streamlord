@@ -37,6 +37,19 @@ a method, signals and headers; every SSE event arrives decoded, and the signal s
 exactly as the client would keep it. Non-SSE Datastar responses are shown with their
 `datastar-*` headers.
 
+- **Saved requests** live in `.streamlord/inspector.json` in the workspace (commit it to share
+  with the team, or ignore it). Save, load and delete from the panel, or edit the file; it has
+  a JSON schema.
+- **Recent** requests are remembered automatically, and the last one is prefilled on open.
+- **Variables**: `{{baseUrl}}` and any other `{{name}}` in URL, headers and signals. Values
+  come from `streamlord.inspector.variables` in settings, overridden by
+  `.streamlord/env.json` in the workspace, which is the place for tokens and should be
+  git-ignored. `{{baseUrl}}` defaults to `streamlord.inspector.defaultUrl`.
+- **Code lens** above every Ktor route (`route("/api") { get("/feed") }`) and Spring mapping
+  (`@GetMapping("/feed")` under a class `@RequestMapping`): “Open in Stream Inspector” prefills
+  method and `{{baseUrl}}` + path, asking for `{id}` parameters.
+- **Copy as curl** puts an equivalent `curl -N ...` command on the clipboard.
+
 ## Settings
 
 | Setting | Default | Meaning |

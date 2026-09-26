@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Streamlord inspector requests",
+  "type": "object",
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "requests": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "url"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "May use {{baseUrl}} and other variables."
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "GET",
+              "POST",
+              "PUT",
+              "PATCH",
+              "DELETE",
+              "QUERY"
+            ],
+            "default": "GET"
+          },
+          "signals": {
+            "type": [
+              "string",
+              "object"
+            ],
+            "description": "Signals as JSON text or an object."
+          },
+          "headers": {
+            "type": [
+              "string",
+              "object"
+            ],
+            "description": "Headers as 'Name: value' lines or an object."
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "requests"
+  ]
+}
