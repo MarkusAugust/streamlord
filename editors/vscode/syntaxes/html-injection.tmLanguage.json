@@ -1,0 +1,56 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "scopeName": "streamlord.html.injection",
+  "injectionSelector": "L:meta.tag -comment -meta.embedded.inline.datastar",
+  "patterns": [{ "include": "#datastar-attribute-with-value" }, { "include": "#datastar-attribute-bare" }],
+  "repository": {
+    "attribute-name": {
+      "comment": "data-on:click__debounce.500ms.leading  ->  prefix+base | :key | __modifier.args",
+      "match": "(data-(?:star-)?)([a-z][a-z-]*?)(?:(:)([A-Za-z0-9_.-]+))?((?:__[A-Za-z0-9_.-]+)*)",
+      "captures": {
+        "1": { "name": "entity.other.attribute-name.datastar.prefix" },
+        "2": { "name": "entity.other.attribute-name.datastar.plugin" },
+        "3": { "name": "punctuation.separator.key.datastar" },
+        "4": { "name": "entity.other.attribute-name.datastar.key" },
+        "5": {
+          "patterns": [
+            {
+              "match": "(__)([A-Za-z]+)((?:\\.[A-Za-z0-9_-]+)*)",
+              "captures": {
+                "1": { "name": "punctuation.definition.modifier.datastar" },
+                "2": { "name": "keyword.other.modifier.datastar" },
+                "3": {
+                  "patterns": [
+                    { "match": "\\.\\d+(?:ms|s)", "name": "constant.numeric.duration.datastar" },
+                    { "match": "\\.\\d+", "name": "constant.numeric.datastar" },
+                    { "match": "\\.[A-Za-z0-9_-]+", "name": "constant.other.modifier-arg.datastar" }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "datastar-attribute-with-value": {
+      "begin": "\\b(?=data-(?:star-)?[a-z])(data-(?:star-)?[A-Za-z0-9_:.-]+)(\\s*=\\s*)(\")",
+      "beginCaptures": {
+        "1": { "patterns": [{ "include": "#attribute-name" }] },
+        "2": { "name": "punctuation.separator.key-value.html" },
+        "3": { "name": "punctuation.definition.string.begin.html" }
+      },
+      "end": "(\")",
+      "endCaptures": { "1": { "name": "punctuation.definition.string.end.html" } },
+      "contentName": "meta.embedded.inline.datastar",
+      "patterns": [
+        { "match": "\\$\\{'\\$'\\}", "name": "constant.character.escape.dollar.kotlin" },
+        { "match": "&quot;|&amp;|&lt;|&gt;|&#\\d+;", "name": "constant.character.entity.html" },
+        { "include": "source.datastar" }
+      ]
+    },
+    "datastar-attribute-bare": {
+      "match": "\\b(data-(?:star-)?[a-z][A-Za-z0-9_:.-]*)(?=[\\s/>])",
+      "captures": { "1": { "patterns": [{ "include": "#attribute-name" }] } }
+    }
+  }
+}

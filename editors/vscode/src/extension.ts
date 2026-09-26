@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { analyzeHtml, analyzeKotlin } from "./analyze.ts";
 import { catalog } from "./catalog.ts";
+import { applyRecommendedColors, removeRecommendedColors } from "./colors.ts";
 import { StreamlordCompletionProvider } from "./completion.ts";
 import type { Issue } from "./expression.ts";
 import { StreamlordHoverProvider } from "./hover.ts";
@@ -63,6 +64,8 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.languages.registerCompletionItemProvider(SELECTOR, new StreamlordCompletionProvider(signals, prefix), "$", "@", "#", "_", ".", "-", ":"),
     vscode.languages.registerHoverProvider(SELECTOR, new StreamlordHoverProvider(prefix)),
     vscode.commands.registerCommand("streamlord.inspector.open", () => inspector.open()),
+    vscode.commands.registerCommand("streamlord.colors.apply", () => applyRecommendedColors()),
+    vscode.commands.registerCommand("streamlord.colors.remove", () => removeRecommendedColors()),
     vscode.commands.registerCommand("streamlord.reindexSignals", async () => {
       const n = await signals.rebuild();
       void vscode.window.showInformationMessage(`Streamlord: indexed ${n} signal names.`);

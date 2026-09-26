@@ -45,6 +45,16 @@
         "command": "streamlord.reindexSignals",
         "title": "Streamlord: Re-index signals",
         "category": "Streamlord"
+      },
+      {
+        "command": "streamlord.colors.apply",
+        "title": "Streamlord: Apply recommended colors",
+        "category": "Streamlord"
+      },
+      {
+        "command": "streamlord.colors.remove",
+        "title": "Streamlord: Remove recommended colors",
+        "category": "Streamlord"
       }
     ],
     "configuration": {
@@ -92,6 +102,18 @@
           "meta.embedded.inline.datastar": "datastar-expression",
           "meta.embedded.block.html": "html",
           "meta.embedded.block.javascript": "javascript"
+        }
+      },
+      {
+        "scopeName": "streamlord.html.injection",
+        "path": "./syntaxes/html-injection.tmLanguage.json",
+        "injectTo": [
+          "text.html.basic",
+          "text.html.derivative",
+          "source.kotlin"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.inline.datastar": "datastar-expression"
         }
       }
     ],

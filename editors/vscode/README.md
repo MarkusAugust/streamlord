@@ -26,7 +26,11 @@ offers attributes; `__` offers modifiers and their values.
 
 **Hover**: documentation for every attribute, modifier and action, and for the DSL functions.
 
-**Syntax highlighting** of Datastar expressions and HTML inside the DSL strings.
+**Syntax highlighting** of Datastar expressions and HTML inside the DSL strings, and of
+`data-*` attributes in HTML (plugin, key, modifiers and modifier arguments each get their own
+scope, and the attribute value is highlighted as a Datastar expression). Most themes color only
+a few of these scopes, so run `Streamlord: Apply recommended colors` once to write a palette
+into your user settings; `Streamlord: Remove recommended colors` takes it out again.
 
 **Stream Inspector** (`Streamlord: Open Stream Inspector`): connect to a running endpoint with
 a method, signals and headers; every SSE event arrives decoded, and the signal store is kept
