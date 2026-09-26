@@ -185,7 +185,7 @@ dataText("$count")`;
     const [inExpression, inText] = issues.filter((i) => i.code === "kotlin-interpolation" && src.slice(i.start, i.end) !== "$count");
     expect(src.slice(inExpression!.start, inExpression!.end)).toBe("$navn");
     expect(inExpression!.severity).toBe("error");
-    expect(inExpression!.fixes!.map((f) => f.title)).toEqual(["Escape as ${'$'}navn"]);
+    expect(inExpression!.fixes!.map((f) => f.title)).toEqual(["Make it a $$ literal, where $navn is a signal", "Escape as ${'$'}navn"]);
     expect(inText!.severity).toBe("hint");
     expect(inText!.fixes).toBe(undefined);
     expect(src.slice(inText!.start, inText!.end)).toBe("$title");

@@ -14,10 +14,23 @@ describe("quick fixes in kotlin", () => {
   it("offers the dsl helper and the two escapes for an interpolated signal", () => {
     const src = `dataOnClick("$count++")`;
     const [issue] = withCode(analyzeKotlin(src, opts), "kotlin-interpolation");
-    assert.deepEqual(issue!.fixes!.map((f) => f.title), ['Use increment("count")', "Escape as ${'$'}count", "Escape as \\$count"]);
+    assert.deepEqual(issue!.fixes!.map((f) => f.title), ['Use increment("count")', "Make it a $$ literal, where $count is a signal", "Escape as ${'$'}count", "Escape as \\$count"]);
     assert.equal(apply(src, issue!.fixes![0]!), `dataOnClick(increment("count"))`);
-    assert.equal(apply(src, issue!.fixes![1]!), `dataOnClick("\${'$'}count++")`);
-    assert.equal(apply(src, issue!.fixes![2]!), `dataOnClick("\\$count++")`);
+    assert.equal(apply(src, issue!.fixes![1]!), `dataOnClick($$"$count++")`);
+    assert.equal(apply(src, issue!.fixes![2]!), `dataOnClick("\${'$'}count++")`);
+    assert.equal(apply(src, issue!.fixes![3]!), `dataOnClick("\\$count++")`);
+  });
+
+  it("turns an html string into a $$ literal, keeping the kotlin templates kotlin", () => {
+    const src = `fun f(d: String, t: String) = """<h2>$t \${'$'}x \${t.length}</h2><span data-text="$d"></span>"""`;
+    const issues = withCode(analyzeKotlin(src, opts), "kotlin-interpolation");
+    const onD = issues.find((i) => src.slice(i.start, i.end) === "$d")!;
+    assert.equal(onD.severity, "error");
+    assert.deepEqual(onD.fixes!.map((f) => f.title), ["Make it a $$ literal, where $d is a signal", "Escape as ${'$'}d"]);
+    assert.equal(apply(src, onD.fixes![0]!), `fun f(d: String, t: String) = $$"""<h2>$$t $x $\${t.length}</h2><span data-text="$d"></span>"""`);
+    assert.deepEqual(analyzeKotlin(apply(src, onD.fixes![0]!), opts), [], "the result is clean");
+    const onT = issues.find((i) => src.slice(i.start, i.end) === "$t")!;
+    assert.equal(onT.severity, "hint");
   });
 
   it("recognises the other helpers and skips them for mixed expressions", () => {
@@ -26,7 +39,10 @@ describe("quick fixes in kotlin", () => {
     assert.equal(helper(`dataShow("!$open")`), 'Use not("open")');
     assert.equal(helper(`dataOnClick("$n--")`), 'Use decrement("n")');
     assert.equal(helper(`dataOnClick("$open = !$open")`), 'Use toggle("open")');
-    assert.equal(helper(`dataOnClick("$a + $b")`), "Escape as ${'$'}a");
+    assert.equal(helper(`dataOnClick("$a + $b")`), "Make it a $$ literal, where $a is a signal");
+    const both = withCode(analyzeKotlin(`dataOnClick("$a + $b")`, opts), "kotlin-interpolation");
+    assert.equal(apply(`dataOnClick("$a + $b")`, both[0]!.fixes![0]!), `dataOnClick($$"$a + $$b")`);
+    assert.equal(apply(`dataOnClick("$a + $b")`, both[1]!.fixes![0]!), `dataOnClick($$"$$a + $b")`);
     const raw = withCode(analyzeKotlin(`dataText("""$count""")`, opts), "kotlin-interpolation")[0]!;
     assert.ok(!raw.fixes!.some((f) => f.title.startsWith("Escape as \\\\")), "no backslash escape in raw strings");
   });

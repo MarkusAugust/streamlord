@@ -1,6 +1,6 @@
 import { catalog, parseAttributeName, type CallSiteSpec } from "./catalog.ts";
 import { DOCS, validateExpression, type Fix, type Issue } from "./expression.ts";
-import { PLACEHOLDER, toSource, type KotlinString } from "./kotlinStrings.ts";
+import { PLACEHOLDER, toSource, type Interpolation, type KotlinString } from "./kotlinStrings.ts";
 import { tokenize, validateAttributes, validateMarkup } from "./markup.ts";
 import { findCallSites, findKotlinStrings, isHtmlString, namedArgText, selectStringArg, stringAt, type CallSite } from "./scanner.ts";
 
@@ -78,13 +78,36 @@ const HELPERS: [RegExp, (n: string) => string][] = [
   [/^!\$([A-Za-z_][A-Za-z0-9_.]*)$/, (n) => `not("${n}")`],
 ];
 
+/**
+ * The whole literal rewritten as a `$$` literal (Kotlin 2.2+): the flagged template becomes a
+ * signal by staying as it is, every other template gains a dollar so it stays Kotlin, and the
+ * `${'$'}` idiom becomes the plain dollar it always meant.
+ */
+function multiDollarFix(s: KotlinString, src: string, signal: Interpolation): Fix {
+  const keep = new Set(s.interpolations.filter((ip) => ip !== signal).map((ip) => ip.start));
+  let out = "$$" + src.slice(s.start, s.contentStart);
+  let i = s.contentStart;
+  while (i < s.contentEnd) {
+    if (keep.has(i)) out += "$";
+    if (src.startsWith("${'$'}", i)) {
+      out += "$";
+      i += 6;
+      continue;
+    }
+    out += src[i];
+    i++;
+  }
+  out += src.slice(s.contentEnd, s.end);
+  return { title: `Make it a $$ literal, where $${signal.text} is a signal`, start: s.start, end: s.end, text: out };
+}
+
 function interpolationIssues(s: KotlinString, src: string): Issue[] {
   const issues: Issue[] = [];
   // In a multi-dollar literal a single $ is text, so there is no trap: every template there is deliberate.
   if (s.dollars > 1) return issues;
   for (const ip of s.interpolations) {
     if (ip.kind !== "simple") continue;
-    const fixes: Fix[] = [{ title: `Escape as \${'$'}${ip.text}`, start: ip.start, end: ip.start + 1, text: "${'$'}" }];
+    const fixes: Fix[] = [multiDollarFix(s, src, ip), { title: `Escape as \${'$'}${ip.text}`, start: ip.start, end: ip.start + 1, text: "${'$'}" }];
     if (!s.raw) fixes.push({ title: `Escape as \\$${ip.text}`, start: ip.start, end: ip.start, text: "\\" });
     // The literal as the author meant it, with every template read as a signal.
     const meant = src.slice(s.contentStart, s.contentEnd);
@@ -99,7 +122,7 @@ function interpolationIssues(s: KotlinString, src: string): Issue[] {
     issues.push({
       start: ip.start,
       end: ip.end,
-      message: `Kotlin interpolates $${ip.text} here; the browser will never see a signal. Write signal("${ip.text}"), \${'$'}${ip.text} or \\$${ip.text}.`,
+      message: `Kotlin interpolates $${ip.text} here; the browser will never see a signal. Write signal("${ip.text}"), make the literal $$"..." (Kotlin 2.2+), or escape as \${'$'}${ip.text}.`,
       severity: "error",
       code: "kotlin-interpolation",
       link: DOCS.expressions,
@@ -130,8 +153,8 @@ function interpolationHints(s: KotlinString, src: string): Issue[] {
     if (ip && inExpression(ip.decodedStart)) {
       return {
         ...i,
-        fixes: i.fixes?.filter((f) => f.title.startsWith("Escape")),
-        message: `Kotlin interpolates $${name} here, inside a Datastar expression; the browser will never see a signal. Write \${'$'}${name}, or make the whole literal $$"""...""" (Kotlin 2.2+).`,
+        fixes: i.fixes?.filter((f) => f.title.startsWith("Make it") || f.title.startsWith("Escape")),
+        message: `Kotlin interpolates $${name} here, inside a Datastar expression; the browser will never see a signal. Make the whole literal $$"""...""" (Kotlin 2.2+), or escape as \${'$'}${name}.`,
       };
     }
     return { ...i, severity: "hint" as const, fixes: undefined, message: `Kotlin interpolates $${name} into the HTML. Make sure it is escaped.` };

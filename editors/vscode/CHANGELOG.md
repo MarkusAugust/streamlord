@@ -11,6 +11,9 @@ All notable changes to the Streamlord extension are recorded here.
   attributes, modifiers, signals and actions, hover documentation and syntax highlighting.
 - Kotlin interpolation inside a `data-*` expression in an HTML string (`data-text="$count"`)
   is an error with the escape as quick fix; in element text it stays a hint.
+- New quick fix on every `$` interpolation trap: "Make it a `$$` literal", which rewrites the
+  whole literal so the flagged `$name` stays a signal, every other template becomes `$$name`
+  and stays Kotlin, and `${'$'}` becomes a plain dollar. Offered right after the DSL helper.
 - Multi-dollar literals (`$$"..."`, `$$"""..."""`, Kotlin 2.2+) are read as Kotlin reads them:
   a single `$` is text, only `$$name` is a template. No interpolation diagnostics there, since
   there is no trap; the expression, markup and attribute checks, completion and highlighting
