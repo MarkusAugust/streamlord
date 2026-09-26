@@ -1,0 +1,98 @@
+package io.github.markusaugust.streamlord.core.application
+
+import io.github.markusaugust.streamlord.core.SignalsCodecException
+import io.github.markusaugust.streamlord.core.SignalsTooLargeException
+import io.github.markusaugust.streamlord.core.StreamlordException
+import io.github.markusaugust.streamlord.core.domain.DatastarEvent
+import io.github.markusaugust.streamlord.core.json.JsonObject
+import io.github.markusaugust.streamlord.core.json.JsonParser
+import io.github.markusaugust.streamlord.core.port.driven.BuiltInSignalsCodec
+import io.github.markusaugust.streamlord.core.port.driven.IncomingRequest
+import io.github.markusaugust.streamlord.core.port.driven.SignalsCodec
+import io.github.markusaugust.streamlord.core.port.driven.SseSink
+import io.github.markusaugust.streamlord.core.port.driven.carriesSignalsInQuery
+import io.github.markusaugust.streamlord.core.port.driving.DatastarStream
+import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
+import io.github.markusaugust.streamlord.core.protocol.SseEncoder
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import kotlin.reflect.KType
+import kotlin.reflect.typeOf
+
+/**
+ * The signals the browser sent, when no typed codec is in play: a [JsonObject].
+ */
+public typealias Signals = JsonObject
+
+/**
+ * The seat of power. One immutable, thread-safe instance configures how Streamlord behaves;
+ * the framework adapters ask it for streams and for signals.
+ *
+ * Construct one with your codec of choice and hand it to the adapter (a Ktor plugin, a Spring
+ * bean), or lean on [Default] when the built-in codec suffices.
+ *
+ * @property codec Turns signals into JSON and back. Defaults to the dependency-free built-in.
+ * @property maxSignalsSize Upper bound for incoming signal payloads: bytes for a request body,
+ *   characters for the `datastar` query parameter. Exceeding it raises [SignalsTooLargeException]
+ *   before any parsing happens, and adapters stop reading the body at this size.
+ */
+public class Streamlord(
+    public val codec: SignalsCodec = BuiltInSignalsCodec,
+    public val maxSignalsSize: Int = DEFAULT_MAX_SIGNALS_SIZE,
+) {
+    init {
+        require(maxSignalsSize > 0) { "maxSignalsSize must be positive" }
+    }
+
+    /** Open a [DatastarStream] over a sink. Adapters call this; you rarely need to. */
+    public fun stream(sink: SseSink): DatastarStream = SseDatastarStream(sink, codec)
+
+    /** Encode a flow of events into a flow of SSE frames, one string per event. */
+    public fun encode(events: Flow<DatastarEvent>): Flow<String> = events.map(SseEncoder::encode)
+
+    /**
+     * The raw JSON text of the signals in a request, or `null` when there are none.
+     * Applies the protocol rule: query parameter `datastar` for GET and DELETE, body otherwise.
+     */
+    public suspend fun readSignalsJson(request: IncomingRequest): String? {
+        val raw = if (request.carriesSignalsInQuery) {
+            request.queryParameter(DatastarProtocol.SIGNALS_PARAMETER)
+        } else {
+            request.bodyText(maxSignalsSize)
+        }
+        val text = raw?.takeIf { it.isNotBlank() } ?: return null
+        if (text.length > maxSignalsSize) throw SignalsTooLargeException(text.length.toLong(), maxSignalsSize)
+        return text
+    }
+
+    /** The signals as a [JsonObject]; [JsonObject.EMPTY] when the request carried none. */
+    public suspend fun readSignals(request: IncomingRequest): Signals =
+        readSignalsJson(request)?.let { JsonParser.parseObject(it) } ?: JsonObject.EMPTY
+
+    /** The signals decoded into [type] by the codec, or `null` when the request carried none. */
+    public suspend fun <T : Any> readSignals(request: IncomingRequest, type: KType): T? {
+        val json = readSignalsJson(request) ?: return null
+        return try {
+            codec.decode(json, type)
+        } catch (e: StreamlordException) {
+            throw e
+        } catch (e: Exception) {
+            throw SignalsCodecException("Could not decode signals into $type", e)
+        }
+    }
+
+    public companion object {
+        /** One mebibyte. Generous for signals, fatal for nobody. */
+        public const val DEFAULT_MAX_SIGNALS_SIZE: Int = 1_048_576
+
+        /** A Streamlord with the built-in codec and default limits. */
+        public val Default: Streamlord = Streamlord()
+    }
+}
+
+/** The signals decoded into [T], or `null` when the request carried none. */
+public suspend inline fun <reified T : Any> Streamlord.readSignals(request: IncomingRequest): T? =
+    readSignals(request, typeOf<T>())
+
+/** Encode this flow of events into SSE frames using the default encoder. */
+public fun Flow<DatastarEvent>.asSse(): Flow<String> = map(SseEncoder::encode)

@@ -1,0 +1,25 @@
+# Claude Code local state
+.claude/
+
+# Gradle
+.gradle/
+build/
+**/build/
+!gradle/wrapper/gradle-wrapper.jar
+.kotlin/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+out/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local
+local.properties
+*.log
