@@ -1,0 +1,69 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Datastar expression",
+  "scopeName": "source.datastar",
+  "patterns": [{ "include": "#expression" }],
+  "repository": {
+    "expression": {
+      "patterns": [
+        { "include": "#signal" },
+        { "include": "#action" },
+        { "include": "#scope-vars" },
+        { "include": "#strings" },
+        { "include": "#regex" },
+        { "include": "#numbers" },
+        { "include": "#keywords" },
+        { "include": "#operators" },
+        { "include": "#punctuation" }
+      ]
+    },
+    "signal": {
+      "match": "(\\$)([A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*)",
+      "captures": {
+        "1": { "name": "punctuation.definition.variable.signal.datastar" },
+        "2": { "name": "variable.other.signal.datastar" }
+      }
+    },
+    "action": {
+      "match": "(@)(get|post|put|patch|delete|query|setAll|toggleAll|peek|clipboard|fit|intl|[A-Za-z_][A-Za-z0-9_]*)(?=\\s*\\()",
+      "captures": {
+        "1": { "name": "punctuation.definition.function.action.datastar" },
+        "2": { "name": "entity.name.function.action.datastar" }
+      }
+    },
+    "scope-vars": {
+      "match": "\\b(el|evt|patch)\\b",
+      "name": "variable.language.datastar"
+    },
+    "strings": {
+      "patterns": [
+        { "begin": "'", "end": "'", "name": "string.quoted.single.datastar", "patterns": [{ "match": "\\\\.", "name": "constant.character.escape.datastar" }] },
+        { "begin": "\"", "end": "\"", "name": "string.quoted.double.datastar", "patterns": [{ "match": "\\\\.", "name": "constant.character.escape.datastar" }] },
+        { "begin": "`", "end": "`", "name": "string.template.datastar", "patterns": [
+          { "begin": "\\$\\{", "end": "\\}", "name": "meta.template.expression.datastar", "patterns": [{ "include": "#expression" }] },
+          { "match": "\\\\.", "name": "constant.character.escape.datastar" }
+        ] }
+      ]
+    },
+    "regex": {
+      "match": "(?<=[(,:=\\s{])/(?![/*])(?:\\\\.|\\[[^\\]]*\\]|[^/\\\\\\n])+/[gimsuy]*",
+      "name": "string.regexp.datastar"
+    },
+    "numbers": {
+      "match": "\\b\\d+(\\.\\d+)?(ms|s)?\\b",
+      "name": "constant.numeric.datastar"
+    },
+    "keywords": {
+      "match": "\\b(true|false|null|undefined|new|typeof|instanceof|in|of|if|else|return|await|async|function|let|const|var|this|window|document|console)\\b",
+      "name": "keyword.other.datastar"
+    },
+    "operators": {
+      "match": "=>|===|!==|==|!=|<=|>=|&&|\\|\\||\\?\\?|\\+\\+|--|[-+*/%=<>!?:]",
+      "name": "keyword.operator.datastar"
+    },
+    "punctuation": {
+      "match": "[{}()\\[\\],;.]",
+      "name": "punctuation.datastar"
+    }
+  }
+}

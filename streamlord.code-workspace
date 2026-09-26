@@ -1,0 +1,21 @@
+{
+  "folders": [
+    { "name": "streamlord (Kotlin SDK)", "path": "." },
+    { "name": "editors/vscode (extension)", "path": "editors/vscode" }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/.gradle": true,
+      "**/build": true,
+      "**/node_modules": true
+    },
+    "search.exclude": {
+      "**/build": true,
+      "**/node_modules": true,
+      "**/dist": true
+    }
+  },
+  "extensions": {
+    "recommendations": ["jetbrains.kotlin-server"]
+  }
+}

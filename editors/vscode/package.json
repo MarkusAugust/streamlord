@@ -1,0 +1,126 @@
+{
+  "name": "streamlord",
+  "displayName": "Streamlord",
+  "description": "Datastar tooling for the Streamlord Kotlin SDK: expression and markup diagnostics, completions, hover docs, and a live SSE stream inspector.",
+  "version": "0.1.0",
+  "publisher": "markusaugust",
+  "license": "MIT",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MarkusAugust/streamlord",
+    "directory": "editors/vscode"
+  },
+  "engines": {
+    "vscode": "^1.105.0",
+    "node": ">=22"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters",
+    "Other"
+  ],
+  "keywords": [
+    "datastar",
+    "kotlin",
+    "ktor",
+    "spring",
+    "sse",
+    "hypermedia"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguage:kotlin",
+    "onLanguage:html",
+    "onCommand:streamlord.inspector.open"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "streamlord.inspector.open",
+        "title": "Streamlord: Open Stream Inspector",
+        "category": "Streamlord"
+      },
+      {
+        "command": "streamlord.reindexSignals",
+        "title": "Streamlord: Re-index signals",
+        "category": "Streamlord"
+      }
+    ],
+    "configuration": {
+      "title": "Streamlord",
+      "properties": {
+        "streamlord.diagnostics.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Validate Datastar expressions and markup in Kotlin strings and HTML files."
+        },
+        "streamlord.diagnostics.html": {
+          "type": "boolean",
+          "default": true,
+          "description": "Also validate data-* attributes in .html files (templates)."
+        },
+        "streamlord.attributePrefix": {
+          "type": "string",
+          "default": "data-",
+          "enum": [
+            "data-",
+            "data-star-"
+          ],
+          "description": "The attribute prefix of the Datastar bundle you load."
+        },
+        "streamlord.inspector.defaultUrl": {
+          "type": "string",
+          "default": "http://localhost:8080/",
+          "description": "URL prefilled in the Stream Inspector."
+        }
+      }
+    },
+    "grammars": [
+      {
+        "language": "datastar-expression",
+        "scopeName": "source.datastar",
+        "path": "./syntaxes/datastar-expression.tmLanguage.json"
+      },
+      {
+        "scopeName": "streamlord.kotlin.injection",
+        "path": "./syntaxes/kotlin-injection.tmLanguage.json",
+        "injectTo": [
+          "source.kotlin"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.inline.datastar": "datastar-expression",
+          "meta.embedded.block.html": "html",
+          "meta.embedded.block.javascript": "javascript"
+        }
+      }
+    ],
+    "languages": [
+      {
+        "id": "datastar-expression",
+        "aliases": [
+          "Datastar expression"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test 'test/**/*.test.ts'",
+    "package": "npm run typecheck && npm run build && vsce package --no-dependencies",
+    "vscode:prepublish": "npm run build"
+  },
+  "dependencies": {
+    "acorn": "8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.0",
+    "@types/vscode": "1.105.0",
+    "@vscode/vsce": "3.6.2",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3"
+  }
+}

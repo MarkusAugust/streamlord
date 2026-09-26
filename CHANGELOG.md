@@ -10,6 +10,10 @@ The first forging.
 
 ### Added
 
+- `editors/vscode`: the Streamlord VS Code extension (diagnostics, completions, hover,
+  highlighting, Stream Inspector) and `catalog/datastar-1.0.4.json`, the shared source of
+  truth verified by `CatalogTest`.
+
 - `streamlord-core`: Datastar 1.0.4 protocol model (`PatchElements`, `PatchSignals`,
   `ExecuteScript`), `SseEncoder` verified against the official SDK golden files, non-SSE
   `DatastarResponse` types, a dependency-free strict JSON parser and writer, the

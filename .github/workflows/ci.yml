@@ -9,7 +9,8 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  sdk:
+    name: Kotlin SDK
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,4 +30,31 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-reports
-          path: '**/build/reports/tests/test'
+          path: '**/build/reports/tests/**'
+
+  vscode:
+    name: VS Code extension
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: editors/vscode
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: editors/vscode/package-lock.json
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npx vsce package --no-dependencies
+
+      - name: Upload vsix
+        uses: actions/upload-artifact@v4
+        with:
+          name: streamlord-vsix
+          path: editors/vscode/*.vsix

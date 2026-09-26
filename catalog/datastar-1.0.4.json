@@ -1,0 +1,430 @@
+{
+  "$comment": "Single source of truth for the Datastar 1.0.4 surface Streamlord knows: attributes, modifiers, actions, fetch options. Read by the Kotlin DSL tests (streamlord-html-pro/CatalogTest) and bundled into the VS Code extension. Pro entries name only publicly documented attribute names; no Datastar Pro code is included anywhere.",
+  "version": "1.0.4",
+  "prefix": "data-",
+  "aliasedPrefix": "data-star-",
+  "modifierTypes": {
+    "flag": "no argument, e.g. __once",
+    "duration": "a duration such as 500ms or 1s, e.g. __debounce.500ms, optionally followed by flags",
+    "enum": "one of the listed values, e.g. __case.kebab",
+    "int": "an integer, e.g. __threshold.50",
+    "ident": "an identifier, e.g. __prop.value",
+    "idents": "one or more identifiers, e.g. __event.input.blur"
+  },
+  "modifierGroups": {
+    "timing": [
+      { "name": "delay", "type": "duration" },
+      { "name": "debounce", "type": "duration", "flags": ["leading", "notrailing"] },
+      { "name": "throttle", "type": "duration", "flags": ["noleading", "trailing"] }
+    ],
+    "case": [
+      { "name": "case", "type": "enum", "values": ["camel", "kebab", "snake", "pascal"] }
+    ],
+    "viewtransition": [
+      { "name": "viewtransition", "type": "flag" }
+    ]
+  },
+  "attributes": [
+    {
+      "name": "attr",
+      "forms": ["data-attr:<name>=\"expr\"", "data-attr=\"{name: expr}\""],
+      "keyed": true,
+      "valueKind": "expression",
+      "kotlin": ["dataAttr"],
+      "modifiers": [],
+      "doc": "Sets one or more attributes from expressions."
+    },
+    {
+      "name": "bind",
+      "forms": ["data-bind:<signal>", "data-bind=\"signal\""],
+      "keyed": true,
+      "valueKind": "signal",
+      "kotlin": ["dataBind"],
+      "modifiers": [
+        { "$ref": "case" },
+        { "name": "prop", "type": "ident" },
+        { "name": "event", "type": "idents" }
+      ],
+      "doc": "Two-way binding between an input element and a signal."
+    },
+    {
+      "name": "class",
+      "forms": ["data-class:<name>=\"expr\"", "data-class=\"{name: expr}\""],
+      "keyed": true,
+      "valueKind": "expression",
+      "kotlin": ["dataClass"],
+      "modifiers": [{ "$ref": "case" }],
+      "doc": "Toggles CSS classes from boolean expressions."
+    },
+    {
+      "name": "computed",
+      "forms": ["data-computed:<signal>=\"expr\"", "data-computed=\"{name: () => expr}\""],
+      "keyed": true,
+      "valueKind": "expression",
+      "kotlin": ["dataComputed"],
+      "modifiers": [{ "$ref": "case" }],
+      "doc": "A read-only signal derived from other signals."
+    },
+    {
+      "name": "effect",
+      "forms": ["data-effect=\"expr\""],
+      "keyed": false,
+      "valueKind": "expression",
+      "kotlin": ["dataEffect"],
+      "modifiers": [],
+      "doc": "Runs an expression whenever a signal it reads changes."
+    },
+    {
+      "name": "ignore",
+      "forms": ["data-ignore", "data-ignore__self"],
+      "keyed": false,
+      "valueKind": "none",
+      "kotlin": ["dataIgnore"],
+      "modifiers": [{ "name": "self", "type": "flag" }],
+      "doc": "Datastar leaves this element (and its subtree, unless __self) alone."
+    },
+    {
+      "name": "ignore-morph",
+      "forms": ["data-ignore-morph"],
+      "keyed": false,
+      "valueKind": "none",
+      "kotlin": ["dataIgnoreMorph"],
+      "modifiers": [],
+      "doc": "This element is never morphed."
+    },
+    {
+      "name": "indicator",
+      "forms": ["data-indicator:<signal>", "data-indicator=\"signal\""],
+      "keyed": true,
+      "valueKind": "signal",
+      "kotlin": ["dataIndicator"],
+      "modifiers": [{ "$ref": "case" }],
+      "doc": "A boolean signal that is true while a fetch from this element is in flight."
+    },
+    {
+      "name": "init",
+      "forms": ["data-init=\"expr\""],
+      "keyed": false,
+      "valueKind": "expression",
+      "kotlin": ["dataInit"],
+      "modifiers": [{ "name": "delay", "type": "duration" }, { "$ref": "viewtransition" }],
+      "doc": "Runs an expression once when the element enters the DOM."
+    },
+    {
+      "name": "json-signals",
+      "forms": ["data-json-signals", "data-json-signals=\"{include: /re/, exclude: /re/}\""],
+      "keyed": false,
+      "valueKind": "filter",
+      "kotlin": ["dataJsonSignals"],
+      "modifiers": [{ "name": "terse", "type": "flag" }],
+      "doc": "Renders the signal store as JSON into the element. Debugging aid."
+    },
+    {
+      "name": "on",
+      "forms": ["data-on:<event>=\"expr\""],
+      "keyed": true,
+      "keyRequired": true,
+      "valueKind": "expression",
+      "kotlin": ["dataOn", "dataOnClick", "dataOnSubmit", "dataOnChange", "dataOnInput", "dataOnKeydown", "dataOnFetch"],
+      "modifiers": [
+        { "name": "once", "type": "flag" },
+        { "name": "passive", "type": "flag" },
+        { "name": "capture", "type": "flag" },
+        { "$ref": "case" },
+        { "$ref": "timing" },
+        { "$ref": "viewtransition" },
+        { "name": "window", "type": "flag" },
+        { "name": "document", "type": "flag" },
+        { "name": "outside", "type": "flag" },
+        { "name": "prevent", "type": "flag" },
+        { "name": "stop", "type": "flag" }
+      ],
+      "doc": "Attaches an event listener. `evt` is the event; `el` the element."
+    },
+    {
+      "name": "on-intersect",
+      "forms": ["data-on-intersect=\"expr\""],
+      "keyed": false,
+      "valueKind": "expression",
+      "kotlin": ["dataOnIntersect"],
+      "modifiers": [
+        { "name": "once", "type": "flag" },
+        { "name": "exit", "type": "flag" },
+        { "name": "half", "type": "flag" },
+        { "name": "full", "type": "flag" },
+        { "name": "threshold", "type": "int", "min": 0, "max": 100 },
+        { "$ref": "timing" },
+        { "$ref": "viewtransition" }
+      ],
+      "doc": "Runs an expression when the element intersects the viewport."
+    },
+    {
+      "name": "on-interval",
+      "forms": ["data-on-interval=\"expr\""],
+      "keyed": false,
+      "valueKind": "expression",
+      "kotlin": ["dataOnInterval"],
+      "modifiers": [
+        { "name": "duration", "type": "duration", "flags": ["leading"] },
+        { "$ref": "viewtransition" }
+      ],
+      "doc": "Runs an expression on an interval (default 1s)."
+    },
+    {
+      "name": "on-signal-patch",
+      "forms": ["data-on-signal-patch=\"expr\""],
+      "keyed": false,
+      "valueKind": "expression",
+      "kotlin": ["dataOnSignalPatch"],
+      "modifiers": [{ "$ref": "timing" }],
+      "doc": "Runs an expression whenever signals are patched. `patch` holds the patch."
+    },
+    {
+      "name": "on-signal-patch-filter",
+      "forms": ["data-on-signal-patch-filter=\"{include: /re/, exclude: /re/}\""],
+      "keyed": false,
+      "valueKind": "filter",
+      "kotlin": ["dataOnSignalPatch"],
+      "modifiers": [],
+      "doc": "Filters which signal patches trigger data-on-signal-patch."
+    },
+    {
+      "name": "preserve-attr",
+      "forms": ["data-preserve-attr=\"name name\""],
+      "keyed": false,
+      "valueKind": "text",
+      "kotlin": ["dataPreserveAttr"],
+      "modifiers": [],
+      "doc": "Keeps the listed attributes through a morph."
+    },
+    {
+      "name": "ref",
+      "forms": ["data-ref:<signal>", "data-ref=\"signal\""],
+      "keyed": true,
+      "valueKind": "signal",
+      "kotlin": ["dataRef"],
+      "modifiers": [{ "$ref": "case" }],
+      "doc": "Exposes the element as a signal."
+    },
+    {
+      "name": "show",
+      "forms": ["data-show=\"expr\""],
+      "keyed": false,
+      "valueKind": "expression",
+      "kotlin": ["dataShow"],
+      "modifiers": [],
+      "doc": "Shows the element when the expression is truthy."
+    },
+    {
+      "name": "signals",
+      "forms": ["data-signals:<name>=\"expr\"", "data-signals=\"{name: value}\""],
+      "keyed": true,
+      "valueKind": "expression",
+      "kotlin": ["dataSignals"],
+      "modifiers": [{ "$ref": "case" }, { "name": "ifmissing", "type": "flag" }],
+      "doc": "Declares signals. Dotted names create nested signals."
+    },
+    {
+      "name": "style",
+      "forms": ["data-style:<property>=\"expr\"", "data-style=\"{property: expr}\""],
+      "keyed": true,
+      "valueKind": "expression",
+      "kotlin": ["dataStyle"],
+      "modifiers": [],
+      "doc": "Sets inline styles from expressions."
+    },
+    {
+      "name": "text",
+      "forms": ["data-text=\"expr\""],
+      "keyed": false,
+      "valueKind": "expression",
+      "kotlin": ["dataText"],
+      "modifiers": [],
+      "doc": "Sets the element's text content from an expression."
+    },
+    {
+      "name": "nonce",
+      "forms": ["data-nonce=\"nonce\""],
+      "keyed": false,
+      "valueKind": "text",
+      "kotlin": ["dataNonce"],
+      "modifiers": [],
+      "onlyOn": ["html"],
+      "doc": "On the html element: enables CSP mode with this nonce."
+    },
+    {
+      "name": "animate",
+      "pro": true,
+      "forms": ["data-animate:<attribute>=\"expr\""],
+      "keyed": true,
+      "keyRequired": true,
+      "valueKind": "expression",
+      "kotlin": ["dataAnimate"],
+      "modifiers": [],
+      "doc": "Pro. Animates an attribute whenever the expression's signals change."
+    },
+    {
+      "name": "custom-validity",
+      "pro": true,
+      "forms": ["data-custom-validity=\"expr\""],
+      "keyed": false,
+      "valueKind": "expression",
+      "kotlin": ["dataCustomValidity"],
+      "modifiers": [],
+      "doc": "Pro. Custom form validation: '' is valid, any other string is the message."
+    },
+    {
+      "name": "match-media",
+      "pro": true,
+      "forms": ["data-match-media:<signal>=\"'query'\""],
+      "keyed": true,
+      "keyRequired": true,
+      "valueKind": "expression",
+      "kotlin": ["dataMatchMedia"],
+      "modifiers": [{ "$ref": "case" }],
+      "doc": "Pro. A boolean signal that follows a media query."
+    },
+    {
+      "name": "on-raf",
+      "pro": true,
+      "forms": ["data-on-raf=\"expr\""],
+      "keyed": false,
+      "valueKind": "expression",
+      "kotlin": ["dataOnRaf"],
+      "modifiers": [{ "name": "throttle", "type": "duration", "flags": ["noleading", "trailing"] }],
+      "doc": "Pro. Runs on every animation frame."
+    },
+    {
+      "name": "on-resize",
+      "pro": true,
+      "forms": ["data-on-resize=\"expr\""],
+      "keyed": false,
+      "valueKind": "expression",
+      "kotlin": ["dataOnResize"],
+      "modifiers": [
+        { "name": "debounce", "type": "duration", "flags": ["leading", "notrailing"] },
+        { "name": "throttle", "type": "duration", "flags": ["noleading", "trailing"] }
+      ],
+      "doc": "Pro. Runs when the element's size changes."
+    },
+    {
+      "name": "persist",
+      "pro": true,
+      "forms": ["data-persist", "data-persist:<key>", "data-persist=\"{include: /re/}\""],
+      "keyed": true,
+      "valueKind": "filter",
+      "kotlin": ["dataPersist"],
+      "modifiers": [{ "name": "session", "type": "flag" }],
+      "doc": "Pro. Persists signals in local or session storage."
+    },
+    {
+      "name": "query-string",
+      "pro": true,
+      "forms": ["data-query-string", "data-query-string=\"{include: /re/}\""],
+      "keyed": false,
+      "valueKind": "filter",
+      "kotlin": ["dataQueryString"],
+      "modifiers": [{ "name": "filter", "type": "flag" }, { "name": "history", "type": "flag" }],
+      "doc": "Pro. Two-way sync between signals and the URL query string."
+    },
+    {
+      "name": "replace-url",
+      "pro": true,
+      "forms": ["data-replace-url=\"expr\""],
+      "keyed": false,
+      "valueKind": "expression",
+      "kotlin": ["dataReplaceUrl"],
+      "modifiers": [],
+      "doc": "Pro. Replaces the browser URL without reloading."
+    },
+    {
+      "name": "scroll-into-view",
+      "pro": true,
+      "forms": ["data-scroll-into-view", "data-scroll-into-view__smooth__vcenter"],
+      "keyed": false,
+      "valueKind": "none",
+      "kotlin": ["dataScrollIntoView"],
+      "modifiers": [
+        { "name": "smooth", "type": "flag" }, { "name": "instant", "type": "flag" }, { "name": "auto", "type": "flag" },
+        { "name": "hstart", "type": "flag" }, { "name": "hcenter", "type": "flag" }, { "name": "hend", "type": "flag" }, { "name": "hnearest", "type": "flag" },
+        { "name": "vstart", "type": "flag" }, { "name": "vcenter", "type": "flag" }, { "name": "vend", "type": "flag" }, { "name": "vnearest", "type": "flag" },
+        { "name": "focus", "type": "flag" }
+      ],
+      "doc": "Pro. Scrolls the element into view."
+    },
+    {
+      "name": "view-transition",
+      "pro": true,
+      "forms": ["data-view-transition=\"expr\""],
+      "keyed": false,
+      "valueKind": "expression",
+      "kotlin": ["dataViewTransition"],
+      "modifiers": [],
+      "doc": "Pro. Sets the element's view-transition-name."
+    }
+  ],
+  "actions": [
+    { "name": "get", "kind": "backend", "signature": "@get(uri, options?)", "kotlin": "get", "doc": "GET with signals in the query string." },
+    { "name": "post", "kind": "backend", "signature": "@post(uri, options?)", "kotlin": "post", "doc": "POST with signals in the body." },
+    { "name": "put", "kind": "backend", "signature": "@put(uri, options?)", "kotlin": "put", "doc": "PUT with signals in the body." },
+    { "name": "patch", "kind": "backend", "signature": "@patch(uri, options?)", "kotlin": "patch", "doc": "PATCH with signals in the body." },
+    { "name": "delete", "kind": "backend", "signature": "@delete(uri, options?)", "kotlin": "delete", "doc": "DELETE with signals in the query string." },
+    { "name": "query", "kind": "backend", "signature": "@query(uri, options?)", "kotlin": "query", "doc": "QUERY with signals in the body." },
+    { "name": "setAll", "kind": "signals", "signature": "@setAll(value, filter?)", "kotlin": "setAll", "doc": "Sets every matching signal." },
+    { "name": "toggleAll", "kind": "signals", "signature": "@toggleAll(filter?)", "kotlin": "toggleAll", "doc": "Toggles every matching boolean signal." },
+    { "name": "peek", "kind": "signals", "signature": "@peek(() => expr)", "kotlin": "peek", "doc": "Reads signals without subscribing." },
+    { "name": "clipboard", "pro": true, "kind": "pro", "signature": "@clipboard(text, isBase64?)", "kotlin": "clipboard", "doc": "Pro. Copies text to the clipboard." },
+    { "name": "fit", "pro": true, "kind": "pro", "signature": "@fit(v, oldMin, oldMax, newMin, newMax, clamp?, round?)", "kotlin": "fit", "doc": "Pro. Linear interpolation between ranges." },
+    { "name": "intl", "pro": true, "kind": "pro", "signature": "@intl(type, value, options?, locale?)", "kotlin": "intl", "doc": "Pro. Locale-aware formatting via Intl." }
+  ],
+  "fetchOptions": [
+    { "name": "contentType", "type": "'json' | 'form'", "default": "'json'" },
+    { "name": "filterSignals", "type": "{include?: RegExp, exclude?: RegExp}", "default": "{include: /.*/, exclude: /(^|\\.)_/}" },
+    { "name": "selector", "type": "string", "default": "closest form" },
+    { "name": "headers", "type": "Record<string, string>", "default": "{}" },
+    { "name": "openWhenHidden", "type": "boolean", "default": "false for @get, true otherwise" },
+    { "name": "payload", "type": "any", "default": "the filtered signal store" },
+    { "name": "requestCancellation", "type": "'auto' | 'cleanup' | 'disabled' | AbortController", "default": "'auto'" },
+    { "name": "responseOverrides", "type": "{selector?, mode?, namespace?, useViewTransition?} | {onlyIfMissing?}", "default": "none" },
+    { "name": "retry", "type": "'auto' | 'error' | 'always' | 'never'", "default": "'auto'" },
+    { "name": "retryInterval", "type": "number (ms)", "default": "1000" },
+    { "name": "retryScaler", "type": "number", "default": "2" },
+    { "name": "retryMaxWait", "type": "number (ms)", "default": "30000" },
+    { "name": "retryMaxCount", "type": "number", "default": "10" }
+  ],
+  "fetchEvents": ["started", "finished", "error", "retrying", "retries-failed"],
+  "expressionScope": ["el", "evt", "patch", "$", "@"],
+  "sse": {
+    "events": ["datastar-patch-elements", "datastar-patch-signals"],
+    "patchModes": ["outer", "inner", "replace", "prepend", "append", "before", "after", "remove"],
+    "namespaces": ["html", "svg", "mathml"],
+    "dataLines": ["selector", "mode", "namespace", "useViewTransition", "viewTransitionSelector", "elements", "signals", "onlyIfMissing"]
+  },
+  "kotlinCallSites": {
+    "$comment": "Which Streamlord DSL functions take Datastar strings, and at which argument. Used by the editor to know where to validate and complete.",
+    "expression": {
+      "dataOn": { "arg": 1 }, "dataOnClick": { "arg": 0 }, "dataOnSubmit": { "arg": 0 }, "dataOnChange": { "arg": 0 },
+      "dataOnInput": { "arg": 0 }, "dataOnKeydown": { "arg": 0 }, "dataOnFetch": { "arg": 0 },
+      "dataOnIntersect": { "arg": 0 }, "dataOnInterval": { "arg": 0 }, "dataOnSignalPatch": { "arg": 0 },
+      "dataInit": { "arg": 0 }, "dataEffect": { "arg": 0 }, "dataText": { "arg": 0 }, "dataShow": { "arg": 0 },
+      "dataComputed": { "arg": "last" }, "dataClass": { "arg": "last" }, "dataStyle": { "arg": "last" }, "dataAttr": { "arg": "last" },
+      "dataSignals": { "arg": "last", "onlyIfStringArgs": true },
+      "dataOnRaf": { "arg": 0 }, "dataOnResize": { "arg": 0 }, "dataCustomValidity": { "arg": 0 },
+      "dataReplaceUrl": { "arg": 0 }, "dataViewTransition": { "arg": 0 }, "dataAnimate": { "arg": 1 },
+      "setExpr": { "arg": 1 }, "peek": { "arg": 0 }, "clipboardExpr": { "arg": 0 }
+    },
+    "html": {
+      "patchElements": { "arg": 0, "selectorArg": "selector", "modeArg": "mode" },
+      "respondElements": { "arg": 0, "selectorArg": "selector", "modeArg": "mode" },
+      "PatchElements": { "arg": 0, "named": "elements", "selectorArg": "selector", "modeArg": "mode" },
+      "ElementsResponse": { "arg": 0, "named": "elements", "selectorArg": "selector", "modeArg": "mode" },
+      "datastarElements": { "arg": 0, "selectorArg": "selector", "modeArg": "mode" }
+    },
+    "script": {
+      "executeScript": { "arg": 0 }, "ExecuteScript": { "arg": 0, "named": "script" }, "respondScript": { "arg": 0 }, "datastarScript": { "arg": 0 }
+    },
+    "selector": {
+      "removeElements": { "arg": 0 }
+    }
+  }
+}
