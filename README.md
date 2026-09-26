@@ -25,7 +25,7 @@ get("/feed") {
 }
 ```
 
-> *Every soul in the Hollow March knows my name, and not one knows my face. I took three rubies
+> *Every soul in Gallowmark knows my name, and not one knows my face. I took three rubies
 > from the Iron Crown of Kell and the land fell apart in my hands. Now I will take one thing
 > from you: the belief that the browser must be bought with JavaScript.*
 >
@@ -303,5 +303,5 @@ JDK 21 builds it; the artifacts target JDK 17.
 
 MIT. Take it, wield it, and may your streams never buffer.
 
-*Gorvek, Sarn, the Hollow March and every other name in this grimoire are our own
+*Gorvek, Sarn, Gallowmark and every other name in this grimoire are our own
 invention. Any resemblance to legends told at other tables is the mead's doing.*
