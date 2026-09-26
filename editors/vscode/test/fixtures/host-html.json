@@ -1,0 +1,19 @@
+{
+  "scopeName": "text.html.basic",
+  "comment": "A minimal stand-in for the HTML grammar: tags produce meta.tag scopes, attributes and strings as in the real one.",
+  "patterns": [
+    {
+      "begin": "(<)([A-Za-z][A-Za-z0-9-]*)",
+      "beginCaptures": { "1": { "name": "punctuation.definition.tag.begin.html" }, "2": { "name": "entity.name.tag.html" } },
+      "end": "(/?>)",
+      "endCaptures": { "1": { "name": "punctuation.definition.tag.end.html" } },
+      "name": "meta.tag.any.html",
+      "patterns": [
+        { "match": "[A-Za-z][A-Za-z0-9_:.-]*", "name": "entity.other.attribute-name.html" },
+        { "match": "=", "name": "punctuation.separator.key-value.html" },
+        { "begin": "\"", "end": "\"", "name": "string.quoted.double.html" }
+      ]
+    },
+    { "match": "</[A-Za-z][A-Za-z0-9-]*>", "name": "meta.tag.close.html" }
+  ]
+}

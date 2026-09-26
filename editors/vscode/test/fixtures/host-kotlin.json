@@ -1,0 +1,11 @@
+{
+  "scopeName": "source.kotlin",
+  "comment": "A minimal stand-in for the Kotlin grammar, so the injection grammars can be tested without redistributing JetBrains' grammar.",
+  "patterns": [
+    { "match": "//.*$", "name": "comment.line.double-slash.kotlin" },
+    { "begin": "\"\"\"", "end": "\"\"\"", "name": "string.quoted.triple.kotlin" },
+    { "begin": "\"", "end": "\"", "name": "string.quoted.double.kotlin", "patterns": [{ "match": "\\\\.", "name": "constant.character.escape.kotlin" }] },
+    { "match": "\\b(fun|val|var)\\b", "name": "keyword.kotlin" },
+    { "match": "[A-Za-z_][A-Za-z0-9_]*", "name": "identifier.kotlin" }
+  ]
+}

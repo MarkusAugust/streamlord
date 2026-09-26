@@ -131,9 +131,10 @@
     "build": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit",
-    "test": "node --test 'test/**/*.test.ts'",
+    "test": "node --experimental-transform-types --import ./test/hooks.mjs --test 'test/**/*.test.ts'",
     "package": "npm run typecheck && npm run build && vsce package --no-dependencies",
-    "vscode:prepublish": "npm run build"
+    "vscode:prepublish": "npm run build",
+    "test:live": "node --experimental-transform-types --import ./test/hooks.mjs --test test/live/*.live.ts"
   },
   "dependencies": {
     "acorn": "8.18.0"
@@ -143,6 +144,8 @@
     "@types/vscode": "1.105.0",
     "@vscode/vsce": "3.6.2",
     "esbuild": "0.28.2",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.3.2"
   }
 }

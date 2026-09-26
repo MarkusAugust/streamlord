@@ -56,7 +56,8 @@ Pro bundle you license and load yourself.
 
 ```
 npm ci
-npm test
+npm test           # unit tests: analysis, providers (with a vscode mock), grammars (real TextMate engine)
+npm run test:live  # the Stream Inspector client against a running Datastar server (STREAMLORD_LIVE_URL, default http://localhost:8080/api)
 npm run build      # dist/extension.js
 npm run package    # streamlord-<version>.vsix
 ```

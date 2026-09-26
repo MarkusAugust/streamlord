@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
-import { decodeDatastar, mergePatch, SseParser, type DatastarFrame } from "./sse.ts";
+import { mergePatch, type DatastarFrame } from "./sse.ts";
+import { openStream, parseHeaderLines } from "./streamClient.ts";
 
 /**
  * The Stream Inspector: a webview that opens a Datastar request against your running server and
@@ -53,65 +54,24 @@ export class Inspector {
       this.post({ type: "error", message: `Signals are not valid JSON: ${(e as Error).message}` });
       return;
     }
-    const headers: Record<string, string> = { Accept: "text/event-stream", "Datastar-Request": "true" };
-    for (const line of headersText.split("\n")) {
-      const idx = line.indexOf(":");
-      if (idx > 0) headers[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
-    }
-    const bodyless = method === "GET" || method === "DELETE";
-    let target: URL;
-    try {
-      target = new URL(url);
-    } catch {
-      this.post({ type: "error", message: `Not a valid URL: ${url}` });
-      return;
-    }
-    let body: string | undefined;
-    if (bodyless) {
-      target.searchParams.set("datastar", JSON.stringify(signals));
-    } else {
-      headers["Content-Type"] = "application/json";
-      body = JSON.stringify(signals);
-    }
     this.abort = new AbortController();
-    this.post({ type: "status", status: "connecting" });
-    try {
-      const response = await fetch(target, { method, headers, body, signal: this.abort.signal });
-      const ct = response.headers.get("content-type") ?? "";
-      this.post({ type: "status", status: "open", http: `${response.status} ${response.statusText}`, contentType: ct });
-      if (!ct.includes("text/event-stream")) {
-        const text = await response.text();
-        const datastarHeaders: Record<string, string> = {};
-        response.headers.forEach((v, k) => {
-          if (k.startsWith("datastar-")) datastarHeaders[k] = v;
-        });
-        this.post({ type: "nonsse", contentType: ct, body: text, headers: datastarHeaders });
-        this.post({ type: "status", status: "closed" });
-        return;
-      }
-      if (!response.body) return;
-      const parser = new SseParser();
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        for (const msg of parser.feed(decoder.decode(value, { stream: true }))) {
-          if (msg.comments.length && msg.data.length === 0 && msg.event === "message") {
-            this.post({ type: "comment", text: msg.comments.join("\n"), at: Date.now() });
-            continue;
-          }
-          const frame = decodeDatastar(msg);
+    await openStream(
+      { url, method, signals, headers: parseHeaderLines(headersText) },
+      {
+        onStatus: (status, detail) => this.post({ type: "status", status, ...(detail ?? {}) }),
+        onComment: (text) => this.post({ type: "comment", text, at: Date.now() }),
+        onNonSse: (r) => this.post({ type: "nonsse", ...r }),
+        onFrame: (frame) => {
           this.applyFrame(frame);
           this.post({ type: "frame", frame });
-        }
-      }
-      this.post({ type: "status", status: "closed" });
-    } catch (e) {
-      if ((e as Error).name === "AbortError") return;
-      this.post({ type: "error", message: (e as Error).message });
-      this.post({ type: "status", status: "idle" });
-    }
+        },
+        onError: (message) => {
+          this.post({ type: "error", message });
+          this.post({ type: "status", status: "idle" });
+        },
+      },
+      this.abort.signal,
+    );
   }
 
   private applyFrame(frame: DatastarFrame): void {

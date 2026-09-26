@@ -12,8 +12,8 @@
   ],
   "repository": {
     "attribute-name": {
-      "comment": "data-on:click__debounce.500ms.leading  ->  prefix+base | :key | __modifier.args",
-      "match": "^(data-(?:star-)?)([a-z][a-z-]*)(?:(:)([A-Za-z0-9_.-]+))?((?:__[A-Za-z0-9_.-]+)*)$",
+      "comment": "data-on:click__debounce.500ms.leading -> prefix | plugin | :key | __modifier.args. Not anchored: capture sub-patterns run mid-line, where ^ never matches.",
+      "match": "(data-(?:star-)?)([a-z][a-z-]*)(?:(:)((?:[A-Za-z0-9.-]|_(?!_))+))?((?:__[A-Za-z0-9_.-]+)*)",
       "captures": {
         "1": {
           "name": "entity.other.attribute-name.datastar.prefix"
