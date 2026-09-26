@@ -79,6 +79,6 @@ describe("live stream inspector", () => {
   it("reports an unreachable host as an error", async () => {
     let error = "";
     await openStream({ url: "http://localhost:1/x", method: "GET" }, { onError: (m) => (error = m) }, new AbortController().signal);
-    assert.ok(error.length > 0);
+    assert.match(error, /Connection refused at .*:1\. Is the server running\?/);
   });
 });

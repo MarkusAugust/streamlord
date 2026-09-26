@@ -96,6 +96,16 @@ export async function openStream(req: StreamRequest, handlers: StreamHandlers, s
       handlers.onStatus?.("closed");
       return;
     }
-    handlers.onError?.((e as Error).message);
+    handlers.onError?.(describeError(e));
   }
+}
+
+/** `fetch failed` says nothing; the cause underneath usually says everything. */
+export function describeError(e: unknown): string {
+  const err = e as Error & { cause?: { code?: string; message?: string; address?: string; port?: number } };
+  const cause = err.cause;
+  if (cause?.code === "ECONNREFUSED") return `Connection refused at ${cause.address ?? "host"}:${cause.port ?? "?"}. Is the server running?`;
+  if (cause?.code === "ENOTFOUND") return `Host not found: ${cause.address ?? err.message}.`;
+  if (cause?.code) return `${cause.code}: ${cause.message ?? err.message}`;
+  return err.message;
 }
