@@ -12,12 +12,15 @@ const KOTLIN_PATTERNS: RegExp[] = [
   /\\\$([A-Za-z_][A-Za-z0-9_.]*)/g,
 ];
 
-const HTML_PATTERNS: RegExp[] = [
+/** Declarations in markup. These also run over Kotlin, where they only ever match inside HTML strings. */
+const HTML_ATTRIBUTE_PATTERNS: RegExp[] = [
   /data-(?:star-)?(?:signals|bind|indicator|ref|computed|match-media):([A-Za-z_][A-Za-z0-9_.-]*)/g,
   /data-(?:star-)?(?:bind|indicator|ref)(?:__[^=\s]*)?="([A-Za-z_][A-Za-z0-9_.]*)"/g,
   /data-(?:star-)?signals(?:__[^=\s]*)?="\{([^"]*)\}"/g,
-  /\$([A-Za-z_][A-Za-z0-9_.]*)/g,
 ];
+
+/** A bare `$name` is a signal in markup; in Kotlin it is a template, so it stays out of the Kotlin list. */
+const HTML_PATTERNS: RegExp[] = [...HTML_ATTRIBUTE_PATTERNS, /\$([A-Za-z_][A-Za-z0-9_.]*)/g];
 
 const SERIALIZABLE_CLASS = /@Serializable\s*(?:\([^)]*\))?\s*(?:data\s+)?class\s+\w+\s*\(([^)]*)\)/g;
 const PROPERTY = /\b(?:val|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:/g;
@@ -40,7 +43,7 @@ export function collectSignals(src: string, language: "kotlin" | "html"): Set<st
       });
     }
   }
-  const patterns = language === "kotlin" ? KOTLIN_PATTERNS : HTML_PATTERNS;
+  const patterns = language === "kotlin" ? [...KOTLIN_PATTERNS, ...HTML_ATTRIBUTE_PATTERNS] : HTML_PATTERNS;
   for (const re of patterns) {
     re.lastIndex = 0;
     let m: RegExpExecArray | null;

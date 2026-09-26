@@ -1,8 +1,8 @@
-import { catalog, type CallSiteSpec } from "./catalog.ts";
+import { catalog, parseAttributeName, type CallSiteSpec } from "./catalog.ts";
 import { DOCS, validateExpression, type Fix, type Issue } from "./expression.ts";
 import { PLACEHOLDER, toSource, type KotlinString } from "./kotlinStrings.ts";
 import { tokenize, validateAttributes, validateMarkup } from "./markup.ts";
-import { findCallSites, namedArgText, selectStringArg, type CallSite } from "./scanner.ts";
+import { findCallSites, findKotlinStrings, isHtmlString, namedArgText, selectStringArg, stringAt, type CallSite } from "./scanner.ts";
 
 /**
  * Editor-independent analysis: Kotlin source in, issues with source offsets out.
@@ -20,8 +20,11 @@ const ALL_SITE_NAMES: ReadonlySet<string> = new Set([
   ...Object.keys(catalog.callSites.selector),
 ]);
 
+const HTML_SITE_NAMES: ReadonlySet<string> = new Set(Object.keys(catalog.callSites.html));
+
 export function analyzeKotlin(src: string, opts: AnalyzeOptions): Issue[] {
   const issues: Issue[] = [];
+  const claimed = new Set<number>();
   for (const site of findCallSites(src, ALL_SITE_NAMES)) {
     const expr = catalog.callSites.expression[site.name];
     if (expr) issues.push(...checkExpressionSite(site, expr, src));
@@ -31,7 +34,39 @@ export function analyzeKotlin(src: string, opts: AnalyzeOptions): Issue[] {
     if (script) issues.push(...checkScriptSite(site, script));
     const selector = catalog.callSites.selector[site.name];
     if (selector) issues.push(...checkSelectorSite(site, selector));
+    for (const a of site.args) if (a.string) claimed.add(a.string.start);
   }
+  for (const s of findKotlinStrings(src)) {
+    if (claimed.has(s.start) || s.unterminated || !isHtmlString(src, s)) continue;
+    issues.push(...checkFreeHtmlString(s, opts, src));
+  }
+  return issues;
+}
+
+/**
+ * The string literal at an offset when it holds HTML: the argument of an HTML call site, or a
+ * free-standing literal that looks like HTML (see [isHtmlString]). Completion and hover use
+ * it to give Kotlin the HTML side.
+ */
+export function htmlStringAt(src: string, offset: number): KotlinString | null {
+  const s = stringAt(src, offset);
+  if (!s) return null;
+  if (isHtmlString(src, s)) return s;
+  const site = findCallSites(src, HTML_SITE_NAMES).find((c) => c.openParen < s.start && s.end <= c.closeParen + 1);
+  if (!site) return null;
+  const spec = catalog.callSites.html[site.name];
+  const arg = spec ? selectStringArg(site, spec.arg, spec.named) : null;
+  return arg && arg.start === s.start ? s : null;
+}
+
+/**
+ * A string that holds HTML but is not handed straight to a Streamlord call: a function that
+ * returns markup, a `val` with a fragment. Nothing is known about how it will be patched, so
+ * only the attributes are checked, as in a template file; ids and completeness are not.
+ */
+function checkFreeHtmlString(s: KotlinString, opts: AnalyzeOptions, src: string): Issue[] {
+  const issues: Issue[] = interpolationHints(s, src);
+  if (opts.checkHtmlAttributes) issues.push(...mapIssues(s, analyzeHtml(s.text, opts)));
   return issues;
 }
 
@@ -72,6 +107,35 @@ function interpolationIssues(s: KotlinString, src: string): Issue[] {
   return issues;
 }
 
+/**
+ * In HTML a Kotlin template is usually meant (`<li>$name</li>`), so interpolation is a hint,
+ * not an error, unless it sits in a `data-*` attribute that takes an expression: there the
+ * browser expects a signal and gets whatever Kotlin evaluated.
+ */
+function interpolationHints(s: KotlinString, src: string): Issue[] {
+  const tags = tokenize(s.text).tags;
+  const inExpression = (decoded: number) =>
+    tags.some((t) =>
+      t.attributes.some((a) => {
+        if (a.value === null || decoded < a.valueStart || decoded >= a.valueStart + a.value.length) return false;
+        const parsed = a.name.toLowerCase().startsWith("data-") ? parseAttributeName(a.name.toLowerCase(), "data-") : null;
+        return parsed?.spec?.valueKind === "expression";
+      }),
+    );
+  return interpolationIssues(s, src).map((i) => {
+    const ip = s.interpolations.find((x) => x.start === i.start);
+    const name = ip?.text ?? "";
+    if (ip && inExpression(ip.decodedStart)) {
+      return {
+        ...i,
+        fixes: i.fixes?.filter((f) => f.title.startsWith("Escape")),
+        message: `Kotlin interpolates $${name} here, inside a Datastar expression; the browser will never see a signal. Write \${'$'}${name}, or make the whole literal $$"""...""" (Kotlin 2.2+).`,
+      };
+    }
+    return { ...i, severity: "hint" as const, fixes: undefined, message: `Kotlin interpolates $${name} into the HTML. Make sure it is escaped.` };
+  });
+}
+
 function mapIssues(s: KotlinString, issues: Issue[]): Issue[] {
   return issues.map((i) => {
     const r = toSource(s, i.start, i.end);
@@ -101,7 +165,7 @@ function checkHtmlSite(site: CallSite, spec: CallSiteSpec, opts: AnalyzeOptions,
   const modeArg = spec.modeArg ? site.args.find((a) => a.named === spec.modeArg) : undefined;
   const modeText = modeArg?.text ?? null;
   const mode = modeText ? /\.([A-Z]+)\s*$/.exec(modeText)?.[1]?.toLowerCase() ?? null : null;
-  const issues: Issue[] = interpolationIssues(s, src).map((i) => ({ ...i, severity: "hint" as const, fixes: undefined, message: `Kotlin interpolates $${i.message.slice(19).split(" ")[0]} into the HTML. Make sure it is escaped.` }));
+  const issues: Issue[] = interpolationHints(s, src);
   if (mode && mode !== "outer" && mode !== "replace" && !selector && modeArg) {
     const at = modeArg.start - (spec.modeArg?.length ?? 0) - src.slice(0, modeArg.start).match(/\s*=\s*$/)![0].length;
     issues.push({

@@ -4,6 +4,37 @@ All notable changes to Streamlord are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `streamlord-core`: `ElementsGuard`, the `$` trap hunted in HTML written as a string. It walks
+  the tags, finds every `data-*` attribute whose value is an expression and runs it through
+  `ExpressionGuard`; the exception names the attribute. `Streamlord(guardElements = true)`
+  applies it to every element patch and elements response that leaves through that instance:
+  streams, `encode(flow)`, Ktor's `respondDatastar(response)`, Spring's `datastarElements` and
+  `asServerSentEvents`. Off by default.
+- `@Language("HTML")`, `@Language("JSON")` and `@Language("JavaScript")` on every `elements`,
+  `signals` and `script` parameter in core, Ktor and Spring, so IntelliJ injects the right
+  language into a literal passed straight in. The annotation comes with the Kotlin standard
+  library; no new dependency.
+- README: "Three ways to write markup", covering the DSL, strings (`$$"""..."""`,
+  `@Language("HTML")`) and templates as equals, with what each gets from the SDK and the editors.
+
+### Changed
+
+- `ExpressionGuard` and `InterpolatedExpressionException` moved from `streamlord-html` to
+  `streamlord-core` (`io.github.markusaugust.streamlord.core.domain`), so the string and
+  template paths can use them without the DSL. `InterpolatedExpressionException` gained an
+  `attribute` property.
+- `datastarElements` (Spring) and `asServerSentEvents` (Spring WebFlux) take an optional
+  `streamlord` parameter, last, for the guard.
+
+### Deprecated
+
+- The `streamlord-html` names `ExpressionGuard` and `InterpolatedExpressionException` remain as
+  type aliases of the core ones.
+
 ## [0.1.1] - 2026-09-26
 
 ### Added

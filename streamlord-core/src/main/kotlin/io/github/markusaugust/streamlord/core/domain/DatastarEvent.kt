@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.core.domain
 
 import io.github.markusaugust.streamlord.core.DatastarEventValidationException
+import org.intellij.lang.annotations.Language
 import kotlin.time.Duration
 
 /**
@@ -40,7 +41,7 @@ public sealed interface DatastarEvent {
  *   Only sent when [useViewTransition] is `true`.
  */
 public data class PatchElements(
-    val elements: String? = null,
+    @Language("HTML") val elements: String? = null,
     val selector: String? = null,
     val mode: ElementPatchMode = ElementPatchMode.DEFAULT,
     val namespace: ElementNamespace = ElementNamespace.DEFAULT,
@@ -87,7 +88,7 @@ public data class PatchElements(
  * @property onlyIfMissing Only set signals that do not already exist on the client.
  */
 public data class PatchSignals(
-    val signals: String,
+    @Language("JSON") val signals: String,
     val onlyIfMissing: Boolean = false,
     override val eventId: String? = null,
     override val retry: Duration? = null,
@@ -107,7 +108,7 @@ public data class PatchSignals(
  * @property attributes Extra attributes for the script tag, e.g. `type` or a CSP `nonce`.
  */
 public data class ExecuteScript(
-    val script: String,
+    @Language("JavaScript") val script: String,
     val autoRemove: Boolean = true,
     val attributes: Map<String, String> = emptyMap(),
     override val eventId: String? = null,

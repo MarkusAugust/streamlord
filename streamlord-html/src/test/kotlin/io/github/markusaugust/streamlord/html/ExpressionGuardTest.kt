@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.html
 
+import io.github.markusaugust.streamlord.core.domain.ExpressionGuard
+import io.github.markusaugust.streamlord.core.domain.InterpolatedExpressionException
 import kotlinx.html.button
 import kotlinx.html.div
 import kotlin.test.Test

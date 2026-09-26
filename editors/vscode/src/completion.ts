@@ -1,9 +1,11 @@
 import * as vscode from "vscode";
+import { htmlStringAt } from "./analyze.ts";
 import { catalog, parseAttributeName, type AttributeSpec } from "./catalog.ts";
 import { actionPrefixAt, signalPrefixAt } from "./expression.ts";
-import { readKotlinStringAt } from "./kotlinStrings.ts";
 import { findCallSites, selectStringArg } from "./scanner.ts";
 import type { SignalIndex } from "./signalIndex.ts";
+
+export { stringAt } from "./scanner.ts";
 
 const EXPRESSION_SITES: ReadonlySet<string> = new Set(Object.keys(catalog.callSites.expression));
 const ALL_SITES: ReadonlySet<string> = new Set([
@@ -28,6 +30,9 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
   private kotlin(src: string, offset: number, document: vscode.TextDocument, position: vscode.Position): vscode.CompletionItem[] {
     const selectorItems = this.selectorItems(src, offset, document, position);
     if (selectorItems) return selectorItems;
+    // HTML in a string, handed to patchElements or free-standing: the HTML side applies.
+    const html = htmlStringAt(src, offset);
+    if (html && offset > html.contentStart && offset <= html.contentEnd) return this.html(src, offset, document, position);
     const site = findCallSites(src, EXPRESSION_SITES).find((s) => s.openParen < offset && offset <= s.closeParen);
     if (!site) return [];
     const spec = catalog.callSites.expression[site.name];
@@ -99,7 +104,8 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
     if (partial.includes("__")) return this.modifierItems(partial, prefix, document, position);
     if (!partial.startsWith(prefix.slice(0, Math.max(1, partial.length)))) return [];
     // In plain HTML files the attribute names come from html-customdata.json through VS Code's own
-    // HTML service, with the same docs; offering them here as well would list them twice.
+    // HTML service, with the same docs; offering them here as well would list them twice. Inside
+    // Kotlin strings and template languages that service is absent.
     if (document.languageId === "html" && prefix === catalog.prefix) return [];
     return catalog.attributes
       .filter((a) => !a.onlyOn || a.onlyOn.includes(tagName))
@@ -193,15 +199,4 @@ export function docFor(a: AttributeSpec, prefix: string): string {
   const kotlin = a.kotlin.length ? "\n\n**Kotlin:** " + a.kotlin.map((k) => "`" + k + "()`").join(", ") : "";
   const pro = a.pro ? "\n\n_Datastar Pro. Requires the Pro bundle, which you license and load yourself._" : "";
   return `**${prefix}${a.name}**\n\n${a.doc}\n\n${a.forms.map((f) => "`" + f.replace(/^data-/, prefix) + "`").join("  \n")}${mods}${kotlin}${pro}`;
-}
-
-/** Find the Kotlin string literal that contains an offset, if any (used by hover). */
-export function stringAt(src: string, offset: number): ReturnType<typeof readKotlinStringAt> {
-  let i = src.lastIndexOf('"', offset - 1);
-  while (i >= 0) {
-    const s = readKotlinStringAt(src, i);
-    if (s && s.start < offset && offset <= s.end) return s;
-    i = src.lastIndexOf('"', i - 1);
-  }
-  return null;
 }

@@ -10,10 +10,12 @@ the Datastar 1.0.4 protocol.
 
 ## What it does
 
-**Diagnostics** in Kotlin strings passed to the Streamlord DSL, and in `.html` templates:
+**Diagnostics** in Kotlin strings, whether passed to a Streamlord call or free-standing (a
+function that returns HTML, a `val` holding a fragment), and in `.html` and template files:
 
 - Kotlin interpolation of signals: `"$count++"` becomes `"++"` at runtime. Flagged as an error
-  with the fix spelled out.
+  with the fix spelled out. In HTML strings, `$name` inside a `data-*` expression is the same
+  error; `$name` in text is a hint, since there it is usually meant.
 - Datastar expression syntax, checked with a real JavaScript parser, with the error at the
   right column.
 - Unknown actions (`@Post`), Pro actions and Pro attributes (hint: they need the Pro bundle).
@@ -22,30 +24,43 @@ the Datastar 1.0.4 protocol.
 - `data-*` attributes: unknown names with "did you mean", unknown modifiers, wrong modifier
   arguments (`__debounce` without a duration, `__threshold.150`), missing or unexpected keys.
 
+A string counts as HTML when it opens with a tag, a comment or a doctype, or when it carries
+IntelliJ's injection marker: `@Language("HTML")` on the function or property, or a
+`// language=HTML` comment just before it. Free-standing strings get the attribute checks of a
+template file; the id and completeness rules apply only where the string is handed to
+`patchElements` and its kin, because only there is the patch mode known.
+
 **Quick fixes** on the lightbulb: `$count` becomes `increment("count")`, `signal("count")`,
 `toggle("open")` or an escaped `${'$'}count`; `__debunce` becomes `__debounce`; `@Post` becomes
 `@post`; `data-signal` becomes `data-signals`; a missing duration, `id` or `selector` is added.
 Every diagnostic links to the matching page of the Datastar reference.
 
-**Snippets** for Ktor and Spring routes and the DSL calls in Kotlin, and for every `data-*`
-attribute in HTML. **HTML custom data** gives VS Code's own HTML service the Datastar
-attributes with documentation, so they complete and hover in `.html` files like any other
-attribute.
+**Snippets** for Ktor and Spring routes and the DSL calls in Kotlin, for a function that
+returns HTML as a `$$"""..."""` string (`htmlFunction`), and for every `data-*` attribute in
+HTML. **HTML custom data** gives VS Code's own HTML service the Datastar attributes with
+documentation, so they complete and hover in `.html` files like any other attribute.
 
-**Template languages**: the HTML side (diagnostics, completion, hover) also runs in Pebble,
-Twig, Jinja, Django, Razor, PHP, Blade, ERB, Handlebars, EJS, Liquid, Nunjucks, Edge, Astro,
-Svelte, Vue and Go templates; the list is the setting `streamlord.languages`.
+**Template languages**: the HTML side (diagnostics, completion, hover) also runs in JTE and
+kte, FreeMarker, Velocity, Mustache, Pebble, Twig, Jinja, Django, Razor, PHP, Blade, ERB,
+Handlebars, EJS, Liquid, Nunjucks, Edge, Astro, Svelte, Vue and Go templates; Thymeleaf files
+are `.html` and need no entry. The list is the setting `streamlord.languages`. The engine's own
+syntax (`${...}`, `!{...}`, `{{...}}`, `@if`, `#if`, `<#if>`, `<@macro>`, `[#if]`) is left
+alone: an attribute value that contains it cannot be judged before rendering, and directives
+are not elements.
 
 **Completions**: `#` and `.` in any `selector` argument offer the ids and classes declared
 anywhere in the workspace, this file first; `$` offers every signal name declared anywhere in the workspace (Kotlin DSL
-calls, `@Serializable` classes, HTML templates); `@` offers actions with snippets; `data-`
-offers attributes; `__` offers modifiers and their values.
+calls, `@Serializable` classes, HTML strings and templates); `@` offers actions with snippets; `data-`
+offers attributes; `__` offers modifiers and their values. Inside an HTML string in Kotlin
+the HTML completions apply.
 
-**Hover**: documentation for every attribute, modifier and action, and for the DSL functions.
+**Hover**: documentation for every attribute, modifier and action, and for the DSL functions,
+in HTML files, templates and HTML strings in Kotlin alike.
 
-**Syntax highlighting** of Datastar expressions and HTML inside the DSL strings, and of
-`data-*` attributes in HTML (plugin, key, modifiers and modifier arguments each get their own
-scope, and the attribute value is highlighted as a Datastar expression). Most themes color only
+**Syntax highlighting** of Datastar expressions and HTML inside the DSL strings and in
+free-standing HTML strings, and of `data-*` attributes in HTML (plugin, key, modifiers and
+modifier arguments each get their own scope, and the attribute value is highlighted as a
+Datastar expression). Most themes color only
 a few of these scopes, so run `Streamlord: Apply recommended colors` once to write a palette
 into your user settings; `Streamlord: Remove recommended colors` takes it out again.
 
@@ -73,7 +88,7 @@ exactly as the client would keep it. Non-SSE Datastar responses are shown with t
 |---|---|---|
 | `streamlord.diagnostics.enabled` | `true` | Validate Kotlin strings and HTML. |
 | `streamlord.diagnostics.html` | `true` | Also validate markup files. |
-| `streamlord.languages` | html, pebble, twig, … | Language ids that get the HTML side. Reload after changing. |
+| `streamlord.languages` | html, jte, kte, ftl, velocity, mustache, pebble, twig, … | Language ids that get the HTML side. Reload after changing. |
 | `streamlord.attributePrefix` | `data-` | `data-star-` when you load the aliased bundle. |
 | `streamlord.inspector.defaultUrl` | `http://localhost:8080/` | Prefilled in the inspector. |
 

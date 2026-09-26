@@ -20,6 +20,7 @@ import io.ktor.server.response.respondText
 import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.writeStringUtf8
 import kotlinx.coroutines.flow.Flow
+import org.intellij.lang.annotations.Language
 import kotlin.reflect.typeOf
 
 /**
@@ -63,13 +64,14 @@ public suspend fun ApplicationCall.respondDatastar(
     response: DatastarResponse,
     status: HttpStatusCode = HttpStatusCode.OK,
 ) {
+    streamlord.guard(response)
     for ((name, value) in response.headers) this.response.header(name, value)
     respondText(response.body, ContentType.parse(response.contentType), status)
 }
 
 /** Respond with HTML to be patched as elements, without opening a stream. */
 public suspend fun ApplicationCall.respondElements(
-    elements: String,
+    @Language("HTML") elements: String,
     selector: String? = null,
     mode: ElementPatchMode = ElementPatchMode.DEFAULT,
     namespace: ElementNamespace = ElementNamespace.DEFAULT,
@@ -81,7 +83,7 @@ public suspend fun ApplicationCall.respondElements(
 
 /** Respond with a JSON object to be patched as signals, without opening a stream. */
 public suspend fun ApplicationCall.respondSignals(
-    signals: String,
+    @Language("JSON") signals: String,
     onlyIfMissing: Boolean = false,
     status: HttpStatusCode = HttpStatusCode.OK,
 ) {
@@ -99,7 +101,7 @@ public suspend inline fun <reified T> ApplicationCall.respondSignals(
 
 /** Respond with JavaScript to execute, without opening a stream. */
 public suspend fun ApplicationCall.respondScript(
-    script: String,
+    @Language("JavaScript") script: String,
     attributes: Map<String, String> = emptyMap(),
     status: HttpStatusCode = HttpStatusCode.OK,
 ) {

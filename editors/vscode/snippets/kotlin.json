@@ -54,6 +54,16 @@
     "body": ["patchElements(\"\"\"<${1:div} id=\"${2:id}\">$0</${1:div}>\"\"\")"],
     "description": "Patch elements from an HTML string."
   },
+  "Function returning HTML": {
+    "prefix": "htmlFunction",
+    "body": [
+      "@Language(\"HTML\")",
+      "fun ${1:name}(${2}): String = \\$\\$\"\"\"",
+      "    <${3:div} id=\"${4:id}\">$0</${3:div}>",
+      "\"\"\".trimIndent()"
+    ],
+    "description": "A function that returns HTML as a multi-dollar string (Kotlin 2.2+): a single $ is just a dollar, so $count reaches the browser. @Language makes IntelliJ inject HTML."
+  },
   "patchSignals": {
     "prefix": "patchSignals",
     "body": ["patchSignals(\"${1:name}\" to ${2:value})"],

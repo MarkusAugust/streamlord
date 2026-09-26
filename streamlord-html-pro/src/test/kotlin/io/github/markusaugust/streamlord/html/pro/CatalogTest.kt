@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.html.pro
 
 import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
+import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
@@ -94,6 +95,15 @@ class CatalogTest {
         assertEquals(ElementPatchMode.entries.map { it.wire }, sse.array("patchModes")!!.strings())
         assertEquals(ElementNamespace.entries.map { it.wire }, sse.array("namespaces")!!.strings())
         assertEquals(listOf(DatastarProtocol.Events.PATCH_ELEMENTS, DatastarProtocol.Events.PATCH_SIGNALS), sse.array("events")!!.strings())
+    }
+
+    @Test
+    fun `the elements guard checks exactly the expression-valued attributes`() {
+        val expression = catalog.array("attributes")!!.objects()
+            .filter { it.string("valueKind") == "expression" }
+            .map { it.string("name")!! }
+            .toSet()
+        assertEquals(expression, ElementsGuard.expressionAttributes)
     }
 
     @Test

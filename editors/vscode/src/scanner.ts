@@ -174,6 +174,82 @@ export function codeMask(src: string): Uint8Array {
   return mask;
 }
 
+/** Every string literal in the source that is not inside a comment, in order. */
+export function findKotlinStrings(src: string): KotlinString[] {
+  const out: KotlinString[] = [];
+  let i = 0;
+  while (i < src.length) {
+    const c = src[i];
+    if (c === '"') {
+      const s = readKotlinStringAt(src, i);
+      if (s) out.push(s);
+      i = s ? Math.max(s.end, i + 1) : i + 1;
+      continue;
+    }
+    if (c === "'") {
+      let j = i + 1;
+      if (src[j] === "\\") j += 2;
+      else j += 1;
+      if (src[j] === "'") j++;
+      i = j;
+      continue;
+    }
+    if (c === "/" && src[i + 1] === "/") {
+      const nl = src.indexOf("\n", i);
+      i = nl < 0 ? src.length : nl;
+      continue;
+    }
+    if (c === "/" && src[i + 1] === "*") {
+      let depth = 1;
+      let j = i + 2;
+      while (j < src.length && depth > 0) {
+        if (src.startsWith("/*", j)) {
+          depth++;
+          j += 2;
+        } else if (src.startsWith("*/", j)) {
+          depth--;
+          j += 2;
+        } else j++;
+      }
+      i = j;
+      continue;
+    }
+    i++;
+  }
+  return out;
+}
+
+/**
+ * The string literal that contains an offset, if any. Scans from the start of the file rather
+ * than backwards from the offset: a quote inside a raw HTML string (`data-text="$count"`) is
+ * not the start of a literal, and only a forward scan knows that.
+ */
+export function stringAt(src: string, offset: number): KotlinString | null {
+  for (const s of findKotlinStrings(src)) {
+    if (s.start >= offset) return null;
+    if (offset <= s.end) return s;
+  }
+  return null;
+}
+
+const HTML_START = /^\s*<(?:[A-Za-z]|!--|!doctype)/i;
+const HTML_MARKER = /@Language\(\s*"html"\s*\)|\/\/\s*language\s*=\s*html\b/gi;
+
+/**
+ * Does a string literal hold HTML? Yes when its text opens with a tag, a comment or a doctype,
+ * or when the code just before it carries IntelliJ's injection marker: `@Language("HTML")` on
+ * the function or property, or a `// language=HTML` comment. The marker reaches the next
+ * string literal only.
+ */
+export function isHtmlString(src: string, s: KotlinString): boolean {
+  if (HTML_START.test(s.text)) return true;
+  const before = src.slice(Math.max(0, s.start - 240), s.start);
+  const markers = [...before.matchAll(HTML_MARKER)];
+  const last = markers[markers.length - 1];
+  if (!last) return false;
+  return !before.slice(last.index + last[0].length).includes('"');
+}
+
 /** Pick the string argument a call-site spec points at. */
 export function selectStringArg(site: CallSite, arg: number | "last", named?: string): KotlinString | null {
   if (named) {

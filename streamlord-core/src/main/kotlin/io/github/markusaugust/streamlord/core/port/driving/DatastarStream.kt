@@ -9,6 +9,7 @@ import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.core.json.JsonWriter
 import io.github.markusaugust.streamlord.core.port.driven.SignalsCodec
 import kotlinx.coroutines.flow.Flow
+import org.intellij.lang.annotations.Language
 import kotlin.reflect.typeOf
 import kotlin.time.Duration
 
@@ -47,7 +48,7 @@ public interface DatastarStream {
      * ```
      */
     public suspend fun patchElements(
-        elements: String,
+        @Language("HTML") elements: String,
         selector: String? = null,
         mode: ElementPatchMode = ElementPatchMode.DEFAULT,
         namespace: ElementNamespace = ElementNamespace.DEFAULT,
@@ -82,7 +83,7 @@ public interface DatastarStream {
 
     /** Patch signals from a JSON object text. */
     public suspend fun patchSignals(
-        signals: String,
+        @Language("JSON") signals: String,
         onlyIfMissing: Boolean = false,
         eventId: String? = null,
         retry: Duration? = null,
@@ -114,7 +115,7 @@ public interface DatastarStream {
 
     /** Execute JavaScript in the browser. See [ExecuteScript]. */
     public suspend fun executeScript(
-        script: String,
+        @Language("JavaScript") script: String,
         autoRemove: Boolean = true,
         attributes: Map<String, String> = emptyMap(),
         eventId: String? = null,

@@ -1,0 +1,11 @@
+{{! Hver linje med kommentar skal gi markeringen kommentaren beskriver. }}
+<div data-signals="{count: {{count}}}">                              {{! ingen markering (Mustache-uttrykk tolereres) }}
+  {{#open}}
+  <span data-text="$count"></span>                                   {{! ingen markering }}
+  {{/open}}
+  {{#saker}}
+  <li data-on:click="@post('/sak/{{id}}')">{{{navn}}}</li>           {{! ingen markering }}
+  {{/saker}}
+  <div data-persist></div>                                           {{! HINT: Pro }}
+  <div data-text="$count +"></div>                                   {{! RØD: syntaksfeil }}
+</div>

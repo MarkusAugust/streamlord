@@ -17,11 +17,12 @@ import kotlinx.coroutines.sync.withLock
 internal class SseDatastarStream(
     private val sink: SseSink,
     override val codec: SignalsCodec,
+    private val guard: (DatastarEvent) -> DatastarEvent = { it },
 ) : DatastarStream {
     private val lock = Mutex()
 
     override suspend fun send(event: DatastarEvent) {
-        write(SseEncoder.encode(event))
+        write(SseEncoder.encode(guard(event)))
     }
 
     override suspend fun comment(text: String) {

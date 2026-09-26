@@ -8,7 +8,22 @@ import { attributeDoc, DOCS, validateExpression, type Issue } from "./expression
 
 const VOID = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"]);
 const RAW_TEXT = new Set(["script", "style"]);
-const TEMPLATE_SYNTAX = /\{\{|\{%|<%|\$\{|__kt__/;
+
+/**
+ * Where a template engine or a Kotlin template will substitute text, the expression cannot be
+ * judged before rendering: Pebble, Twig, Jinja, Handlebars and Mustache (`{{ }}`, `{% %}`),
+ * ERB, EJS and JTE comments (`<% %>`), Kotlin, Thymeleaf, FreeMarker, JTE, kte and Velocity
+ * (`${ }`, and JTE's `!{ }` for unescaped output), Thymeleaf's `*{ }`, `#{ }` and `@{ }`,
+ * FreeMarker's square-bracket syntax (`[# ]`, `[= ]`), JTE's control flow (`@if`, `@for`,
+ * ...), Velocity's (`#if`, `#foreach`, ...), and the placeholder for a Kotlin interpolation.
+ */
+const TEMPLATE_SYNTAX = /\{\{|\{%|<%|[$!*#@]\{|\[#|\[=|@(?:if|elseif|else|endif|for|endfor|template|import|param|raw|endraw)\b|#(?:if|elseif|else|end|foreach|set|macro|parse|include)\b|__kt__/;
+
+/**
+ * Tags that belong to a template engine, not to the document: FreeMarker directives and macro
+ * calls (`<#if>`, `</#if>`, `<@row/>`), and its `<#-- -->` comments. Skipped like `<!DOCTYPE>`.
+ */
+const TEMPLATE_TAG = /^<\/?[#@]/;
 
 export interface Attribute {
   name: string;
@@ -50,13 +65,19 @@ export function tokenize(html: string): { tags: Tag[]; topLevelText: { start: nu
     textStart = -1;
   };
   while (i < html.length) {
-    if (html.startsWith("<!--", i)) {
+    if (html.startsWith("<!--", i) || html.startsWith("<#--", i)) {
       flushText(i);
       const close = html.indexOf("-->", i + 4);
       i = close < 0 ? html.length : close + 3;
       continue;
     }
-    if (html[i] === "<" && (html.startsWith("<!", i) || html.startsWith("<?", i))) {
+    if (html.startsWith("<%--", i)) {
+      flushText(i);
+      const close = html.indexOf("--%>", i + 4);
+      i = close < 0 ? html.length : close + 4;
+      continue;
+    }
+    if (html[i] === "<" && (html.startsWith("<!", i) || html.startsWith("<?", i) || TEMPLATE_TAG.test(html.slice(i, i + 3)))) {
       flushText(i);
       const close = html.indexOf(">", i);
       i = close < 0 ? html.length : close + 1;

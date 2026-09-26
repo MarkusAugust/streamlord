@@ -2,6 +2,24 @@
 
 All notable changes to the Streamlord extension are recorded here.
 
+## Unreleased
+
+- HTML strings that are not handed to a Streamlord call get the HTML side too: a function
+  that returns markup, a `val` with a fragment. A string counts as HTML when it opens with a
+  tag, a comment or a doctype, or when `@Language("HTML")` or `// language=HTML` sits just
+  before it. Diagnostics for the `data-*` attributes and their expressions, completion of
+  attributes, modifiers, signals and actions, hover documentation and syntax highlighting.
+- Kotlin interpolation inside a `data-*` expression in an HTML string (`data-text="$count"`)
+  is an error with the escape as quick fix; in element text it stays a hint.
+- Signal names declared in HTML strings in Kotlin (`data-signals:draft`, `data-bind="search"`)
+  feed signal completion.
+- Template languages of the JVM: JTE and kte, FreeMarker, Velocity and Mustache are on the
+  default language list, and their syntax is understood: `!{...}`, `@if`/`@for`, `#if`/
+  `#foreach`, `<#if>`, `</#list>`, `<@macro>`, `<#-- -->`, `<%-- --%>`, `[#if]`, `[=x]`, and
+  Thymeleaf's `*{...}`, `#{...}` and `@{...}`.
+- Snippet `htmlFunction`: a function returning HTML as a `$$"""..."""` string under
+  `@Language("HTML")`.
+
 ## 0.2.0
 
 - Quick fixes for the diagnostics that have one right answer: Kotlin `$` interpolation (DSL

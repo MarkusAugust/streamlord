@@ -3,6 +3,7 @@ package io.github.markusaugust.streamlord.core.domain
 import io.github.markusaugust.streamlord.core.DatastarEventValidationException
 import io.github.markusaugust.streamlord.core.json.JsonWriter
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
+import org.intellij.lang.annotations.Language
 
 /**
  * A plain, non-streaming HTTP response the Datastar client (1.0.2+) understands without SSE.
@@ -27,7 +28,7 @@ public sealed interface DatastarResponse {
 
 /** A `text/html` body patched as elements. Mirrors [PatchElements]. */
 public data class ElementsResponse(
-    val elements: String,
+    @Language("HTML") val elements: String,
     val selector: String? = null,
     val mode: ElementPatchMode = ElementPatchMode.DEFAULT,
     val namespace: ElementNamespace = ElementNamespace.DEFAULT,
@@ -54,7 +55,7 @@ public data class ElementsResponse(
 
 /** An `application/json` body patched as signals. Mirrors [PatchSignals]. */
 public data class SignalsResponse(
-    val signals: String,
+    @Language("JSON") val signals: String,
     val onlyIfMissing: Boolean = false,
 ) : DatastarResponse {
     init {
@@ -69,7 +70,7 @@ public data class SignalsResponse(
 
 /** A `text/javascript` body executed in the browser. Mirrors [ExecuteScript]. */
 public data class ScriptResponse(
-    val script: String,
+    @Language("JavaScript") val script: String,
     val attributes: Map<String, String> = emptyMap(),
 ) : DatastarResponse {
     init {

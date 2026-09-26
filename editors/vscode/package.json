@@ -112,6 +112,11 @@
           },
           "default": [
             "html",
+            "jte",
+            "kte",
+            "ftl",
+            "velocity",
+            "mustache",
             "pebble",
             "twig",
             "jinja",
@@ -131,7 +136,7 @@
             "vue",
             "gotemplate"
           ],
-          "description": "Language ids that get Datastar attribute diagnostics, completion and hover on the HTML side. Kotlin is always included. Reload the window after changing."
+          "description": "Language ids that get Datastar attribute diagnostics, completion and hover on the HTML side: HTML itself (which is what Thymeleaf files are), JTE/kte, FreeMarker (ftl), Velocity, Mustache, Pebble and the rest. Kotlin is always included. Reload the window after changing."
         }
       }
     },

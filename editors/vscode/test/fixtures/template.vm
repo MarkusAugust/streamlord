@@ -1,0 +1,12 @@
+## Hver linje med kommentar skal gi markeringen kommentaren beskriver.
+#set($open = true)
+<div data-signals="{count: $count}">                                 ## ingen markering ($count er både Velocity og signal)
+  #if($open)
+  <span data-text="${navn}"></span>                                  ## ingen markering (Velocity-uttrykk tolereres)
+  #end
+  #foreach($sak in $saker)
+  <li data-on:click="@post('/sak/$sak.id')">$sak.navn</li>           ## ingen markering
+  #end
+  <div data-on:click="#if($a) x() #end"></div>                       ## ingen markering (Velocity-kontrollflyt i verdien)
+  <div data-on-intersect__threshold.150="x()"></div>                 ## RØD: threshold 0-100
+</div>

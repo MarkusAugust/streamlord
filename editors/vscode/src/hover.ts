@@ -1,8 +1,9 @@
 import * as vscode from "vscode";
+import { htmlStringAt } from "./analyze.ts";
 import { catalog, parseAttributeName } from "./catalog.ts";
 import { docFor } from "./completion.ts";
 
-/** Hover docs for Datastar attributes in HTML, DSL functions in Kotlin, and actions in strings. */
+/** Hover docs for Datastar attributes in HTML (files and Kotlin strings), DSL functions in Kotlin, and actions in strings. */
 export class StreamlordHoverProvider implements vscode.HoverProvider {
   constructor(private readonly prefix: () => string) {}
 
@@ -14,7 +15,7 @@ export class StreamlordHoverProvider implements vscode.HoverProvider {
       if (a) return new vscode.Hover(new vscode.MarkdownString(`**${a.signature}**\n\n${a.doc}${a.pro ? "\n\n_Datastar Pro._" : ""}\n\nKotlin: \`${a.kotlin}()\``), actionRange);
     }
     const prefix = this.prefix();
-    if (document.languageId !== "kotlin") {
+    if (document.languageId !== "kotlin" || htmlStringAt(document.getText(), document.offsetAt(position))) {
       const range = document.getWordRangeAtPosition(position, /[A-Za-z][A-Za-z0-9_:.-]*/);
       if (!range) return null;
       const parsed = parseAttributeName(document.getText(range).toLowerCase(), prefix);

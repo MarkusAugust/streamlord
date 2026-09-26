@@ -115,6 +115,18 @@ describe("completion provider", () => {
     const items = complete(hdoc, 0, 17, index);
     assert.ok(items.some((i) => i.label === "$busy"));
   });
+
+  it("gives html strings in kotlin the html side: attributes, modifiers, signals", () => {
+    const src = `fun side() = """\n<div data-\n<div data-on:click__\n<div data-text="$\n"""\nval sql = """select data-\n"""`;
+    const kdoc = new MockDocument(src, "kotlin");
+    const attrs = complete(kdoc, 1, 10, index);
+    assert.ok(attrs.some((i) => i.label === "data-on") && attrs.some((i) => i.label === "data-signals"), "attributes inside a free-standing html string");
+    assert.ok(complete(kdoc, 2, 20, index).some((i) => i.label === "debounce"), "modifiers");
+    assert.ok(complete(kdoc, 3, 17, index).some((i) => i.label === "$busy"), "signals in an attribute value");
+    assert.deepEqual(complete(kdoc, 5, 25, index), [], "nothing in a string that is not html");
+    const call = new MockDocument(`s.patchElements("""<li data-""")`, "kotlin");
+    assert.ok(complete(call, 0, 28, index).some((i) => i.label === "data-on"), "attributes inside patchElements");
+  });
 });
 
 describe("hover provider", () => {
@@ -130,6 +142,14 @@ describe("hover provider", () => {
     const attr = hover.provideHover(hdoc as never, new Position(0, 10) as never);
     assert.match(String((attr?.contents as unknown as { value: string }).value), /data-on-intersect/);
     assert.match(String((attr?.contents as unknown as { value: string }).value), /__threshold/);
+  });
+
+  it("documents attributes inside html strings in kotlin", () => {
+    const kdoc = new MockDocument(`val x = """<div data-on-intersect__once="x()">"""`, "kotlin");
+    const attr = hover.provideHover(kdoc as never, new Position(0, 20) as never);
+    assert.match(String((attr?.contents as unknown as { value: string }).value), /\*\*data-on-intersect\*\*/);
+    const plain = new MockDocument(`val x = "data-on-intersect"`, "kotlin");
+    assert.equal(hover.provideHover(plain as never, new Position(0, 15) as never), null);
   });
 });
 

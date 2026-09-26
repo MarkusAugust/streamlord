@@ -48,6 +48,20 @@ async function tokens(scope: string, line: string): Promise<{ text: string; scop
 
 const scopeOf = (toks: { text: string; scopes: string[] }[], text: string) => toks.find((t) => t.text === text)?.scopes.join(" ") ?? `<no token '${text}'>`;
 
+/** Tokenize several lines in sequence, carrying the rule stack, and return the tokens of each line. */
+async function tokenLines(scope: string, lines: string[]): Promise<{ text: string; scopes: string[] }[][]> {
+  const grammar = await registry.loadGrammar(scope);
+  assert.ok(grammar);
+  let stack = tm.INITIAL;
+  const out: { text: string; scopes: string[] }[][] = [];
+  for (const line of lines) {
+    const result = grammar.tokenizeLine(line, stack);
+    out.push(result.tokens.map((t) => ({ text: line.slice(t.startIndex, t.endIndex), scopes: t.scopes })));
+    stack = result.ruleStack;
+  }
+  return out;
+}
+
 describe("kotlin injection grammar", () => {
   it("highlights datastar tokens inside dsl strings", async () => {
     const t = await tokens("source.kotlin", `dataOnClick("$count++; @post('/x', {contentType: 'form', retry: 'never'})")`);
@@ -82,6 +96,27 @@ describe("kotlin injection grammar", () => {
     assert.match(scopeOf(t, ".leading"), /constant\.other\.modifier-arg\.datastar/);
     assert.match(scopeOf(t, "n"), /variable\.other\.constant\.signal\.datastar/);
     assert.match(scopeOf(t, "div"), /entity\.name\.tag\.html/);
+  });
+
+  it("highlights html in strings that open with a tag, wherever they are", async () => {
+    const t = await tokens("source.kotlin", `val row = """<li data-on:click="$n++">x</li>""" + "<b data-ignore>"`);
+    assert.match(scopeOf(t, "li"), /entity\.name\.tag\.html/);
+    assert.match(scopeOf(t, "click"), /entity\.other\.attribute-name\.datastar\.key/);
+    assert.match(scopeOf(t, "b"), /entity\.name\.tag\.html/);
+    assert.match(scopeOf(t, "ignore"), /entity\.other\.attribute-name\.datastar\.plugin/);
+    const plain = await tokens("source.kotlin", `val sql = """select * from x where a < b"""`);
+    assert.ok(plain.every((x) => !x.scopes.some((s) => s.includes("html") || s.includes("datastar"))), "no html in a query");
+  });
+
+  it("follows the injection marker across lines", async () => {
+    for (const marker of [`@Language("HTML")`, `// language=HTML`]) {
+      const lines = await tokenLines("source.kotlin", [marker, `fun page(): String = """`, `  <div data-text="$count" class="x">`, `"""`, `val after = """`, `  <p>not marked, not on the first line</p>`, `"""`]);
+      assert.match(scopeOf(lines[2]!, "div"), /entity\.name\.tag\.html/, marker);
+      assert.match(scopeOf(lines[2]!, "text"), /entity\.other\.attribute-name\.datastar\.plugin/, marker);
+      assert.match(scopeOf(lines[2]!, "class"), /entity\.other\.attribute-name\.html/, marker);
+      assert.match(scopeOf(lines[3]!, `"""`), /string\.quoted\.triple\.kotlin/, marker);
+      assert.ok(lines[5]!.every((x) => !x.scopes.some((s) => s.includes("html"))), `${marker}: the marker reaches one string only`);
+    }
   });
 });
 

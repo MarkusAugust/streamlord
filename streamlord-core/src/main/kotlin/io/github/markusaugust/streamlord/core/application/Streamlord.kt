@@ -4,6 +4,10 @@ import io.github.markusaugust.streamlord.core.SignalsCodecException
 import io.github.markusaugust.streamlord.core.SignalsTooLargeException
 import io.github.markusaugust.streamlord.core.StreamlordException
 import io.github.markusaugust.streamlord.core.domain.DatastarEvent
+import io.github.markusaugust.streamlord.core.domain.DatastarResponse
+import io.github.markusaugust.streamlord.core.domain.ElementsGuard
+import io.github.markusaugust.streamlord.core.domain.ElementsResponse
+import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.port.driven.BuiltInSignalsCodec
@@ -35,20 +39,42 @@ public typealias Signals = JsonObject
  * @property maxSignalsSize Upper bound for incoming signal payloads: bytes for a request body,
  *   characters for the `datastar` query parameter. Exceeding it raises [SignalsTooLargeException]
  *   before any parsing happens, and adapters stop reading the body at this size.
+ * @property guardElements Run [ElementsGuard] over the HTML of every element patch and elements
+ *   response that leaves through this instance, so a `data-*` attribute whose expression a
+ *   Kotlin string template ate (`data-text="$count"` shipping as `data-text=""`) throws
+ *   [io.github.markusaugust.streamlord.core.domain.InterpolatedExpressionException] instead of
+ *   reaching the browser. Off by default; the kotlinx.html DSL guards its own expressions
+ *   regardless. Meant for HTML written as strings or rendered by a template engine.
  */
 public class Streamlord(
     public val codec: SignalsCodec = BuiltInSignalsCodec,
     public val maxSignalsSize: Int = DEFAULT_MAX_SIGNALS_SIZE,
+    public val guardElements: Boolean = false,
 ) {
     init {
         require(maxSignalsSize > 0) { "maxSignalsSize must be positive" }
     }
 
     /** Open a [DatastarStream] over a sink. Adapters call this; you rarely need to. */
-    public fun stream(sink: SseSink): DatastarStream = SseDatastarStream(sink, codec)
+    public fun stream(sink: SseSink): DatastarStream = SseDatastarStream(sink, codec, ::guard)
 
     /** Encode a flow of events into a flow of SSE frames, one string per event. */
-    public fun encode(events: Flow<DatastarEvent>): Flow<String> = events.map(SseEncoder::encode)
+    public fun encode(events: Flow<DatastarEvent>): Flow<String> = events.map { SseEncoder.encode(guard(it)) }
+
+    /**
+     * The event, unchanged. When [guardElements] is on and the event patches elements, the HTML
+     * has passed [ElementsGuard] first. Adapters call this before anything reaches the wire.
+     */
+    public fun guard(event: DatastarEvent): DatastarEvent {
+        if (guardElements && event is PatchElements) event.elements?.let(ElementsGuard::check)
+        return event
+    }
+
+    /** The response, unchanged; with [guardElements] on, an [ElementsResponse] has passed [ElementsGuard] first. */
+    public fun guard(response: DatastarResponse): DatastarResponse {
+        if (guardElements && response is ElementsResponse) ElementsGuard.check(response.elements)
+        return response
+    }
 
     /**
      * The raw JSON text of the signals in a request, or `null` when there are none.

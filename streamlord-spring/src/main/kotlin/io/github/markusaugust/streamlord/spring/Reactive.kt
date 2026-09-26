@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.spring
 
+import io.github.markusaugust.streamlord.core.application.Streamlord
 import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.protocol.SseEncoder
 import kotlinx.coroutines.flow.Flow
@@ -31,5 +32,9 @@ public fun DatastarEvent.toServerSentEvent(): ServerSentEvent<String> {
  * @GetMapping("/feed", produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
  * fun feed(): Flow<ServerSentEvent<String>> = ticker().asServerSentEvents()
  * ```
+ *
+ * @param streamlord The configured instance; with `guardElements` on, every element patch
+ *   passes [io.github.markusaugust.streamlord.core.domain.ElementsGuard] before it is encoded.
  */
-public fun Flow<DatastarEvent>.asServerSentEvents(): Flow<ServerSentEvent<String>> = map { it.toServerSentEvent() }
+public fun Flow<DatastarEvent>.asServerSentEvents(streamlord: Streamlord = Streamlord.Default): Flow<ServerSentEvent<String>> =
+    map { streamlord.guard(it).toServerSentEvent() }

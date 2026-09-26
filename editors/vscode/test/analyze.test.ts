@@ -8,7 +8,8 @@ const expect = (actual: unknown) => ({
   toContain: (needle: string) => assert.ok(typeof actual === "string" && actual.includes(needle), `expected ${JSON.stringify(actual)} to contain ${JSON.stringify(needle)}`),
   toBeGreaterThan: (n: number) => assert.ok((actual as number) > n, `expected ${actual} > ${n}`),
 });
-import { analyzeHtml, analyzeKotlin } from "../src/analyze.ts";
+import { readFileSync } from "node:fs";
+import { analyzeHtml, analyzeKotlin, htmlStringAt } from "../src/analyze.ts";
 import { readKotlinStringAt } from "../src/kotlinStrings.ts";
 import { findCallSites } from "../src/scanner.ts";
 import { validateExpression } from "../src/expression.ts";
@@ -148,10 +149,71 @@ describe("analyzeKotlin", () => {
   });
 });
 
+describe("free-standing html strings", () => {
+  const src = `@Language("HTML")
+fun side(tilstand: Tilstand): String = """
+  <div data-signals="{count: 0}" data-on:click__debunce.500ms="@post('/x')">
+    <span data-text="\${'$'}count"></span>
+    <p data-text="$navn"></p>
+    <i>$title</i>
+  </div>
+"""
+val row = "<li data-onn:click=\\"x()\\">x</li>"
+val notHtml = "count: $count"
+val sql = """select * from x where a < 1 and b = $b"""
+s.patchElements("""<div data-onn:x="1"></div>""")
+dataText("$count")`;
+
+  it("checks attributes like a template, and interpolation inside expressions as an error", () => {
+    const issues = analyzeKotlin(src, opts);
+    expect(codes(issues)).toEqual(["unknown-attribute", "missing-id", "kotlin-interpolation", "kotlin-interpolation", "kotlin-interpolation", "unknown-modifier", "unknown-attribute"]);
+    const [inExpression, inText] = issues.filter((i) => i.code === "kotlin-interpolation" && src.slice(i.start, i.end) !== "$count");
+    expect(src.slice(inExpression!.start, inExpression!.end)).toBe("$navn");
+    expect(inExpression!.severity).toBe("error");
+    expect(inExpression!.fixes!.map((f) => f.title)).toEqual(["Escape as ${'$'}navn"]);
+    expect(inText!.severity).toBe("hint");
+    expect(inText!.fixes).toBe(undefined);
+    expect(src.slice(inText!.start, inText!.end)).toBe("$title");
+  });
+
+  it("finds html strings by content, marker or call site", () => {
+    const at = (needle: string) => htmlStringAt(src, src.indexOf(needle) + 1);
+    expect(at("data-signals")?.raw).toBe(true);
+    expect(at("data-onn:click")?.raw).toBe(false);
+    expect(at("count: $count")).toBeNull();
+    expect(at("select *")).toBeNull();
+    expect(at("data-onn:x")?.raw).toBe(true);
+    expect(at('"$count")')).toBeNull();
+    expect(htmlStringAt(src, src.indexOf("fun side"))).toBeNull();
+  });
+
+  it("honours the injection marker without a leading tag", () => {
+    const marked = `// language=HTML\nval fragment = """Hei <b data-onn:y="1">du</b>"""`;
+    expect(codes(analyzeKotlin(marked, opts))).toEqual(["unknown-attribute"]);
+    expect(codes(analyzeKotlin(marked.replace("// language=HTML\n", ""), opts))).toEqual([]);
+    const annotated = `@Language("html")\nprivate val head = """\n  \${'$'}{title}<title data-text="$t"></title>\n"""`;
+    expect(codes(analyzeKotlin(annotated, opts))).toEqual(["kotlin-interpolation"]);
+  });
+});
+
 describe("analyzeHtml", () => {
   it("validates a template", () => {
     const src = `<form data-on:submit__prevent="@post('/save')"><input data-bind:search data-indicator="busy" data-onn:x="1"></form>`;
     expect(codes(analyzeHtml(src, opts))).toEqual(["unknown-attribute"]);
+  });
+
+  it("matches the expectations written in the jvm template fixtures", () => {
+    const fixture = (name: string) => codes(analyzeHtml(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8"), opts));
+    expect(fixture("template.jte")).toEqual(["unknown-modifier", "expression-syntax"]);
+    expect(fixture("template.ftl")).toEqual(["unknown-attribute", "missing-key"]);
+    expect(fixture("template.vm")).toEqual(["modifier-args"]);
+    expect(fixture("template.mustache")).toEqual(["pro-attribute", "expression-syntax"]);
+  });
+
+  it("skips template tags and comments when checking completeness", () => {
+    const ftl = `<#if x><div id="a" data-text="\${y}"></div><#else><p id="b">no</p></#if><#-- <span> --><%-- <b> --%>`;
+    expect(validateMarkup(ftl, { requireIds: true, prefix: "data-", checkAttributes: true })).toEqual([]);
+    expect(validateMarkup(`@if(x)<div id="a"></div>@endif`, { requireIds: true, prefix: "data-", checkAttributes: true })).toEqual([]);
   });
 });
 
@@ -163,6 +225,8 @@ describe("signals", () => {
     expect([...collectSignals(kt, "kotlin")].sort()).toEqual(["away", "count", "gone", "name", "open", "page", "query", "search", "user"]);
     const html = `<div data-signals="{count: 1, open: false}" data-bind:first-name data-text="$other.x"></div>`;
     expect([...collectSignals(html, "html")].sort()).toEqual(["count", "firstName", "open", "other.x"]);
+    const raw = `fun side() = """<div data-signals="{draft: ''}" data-bind:search data-indicator="busy" data-text="$kotlinTemplate"></div>"""`;
+    expect([...collectSignals(raw, "kotlin")].sort()).toEqual(["busy", "draft", "search"]);
   });
 });
 

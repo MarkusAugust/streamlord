@@ -14,9 +14,145 @@
     },
     {
       "include": "#script-call"
+    },
+    {
+      "include": "#html-string"
     }
   ],
   "repository": {
+    "html-string": {
+      "comment": "HTML in a string that is not handed to a Streamlord call: a function that returns markup, a val with a fragment. Recognised by its first character, or by IntelliJ's injection marker (@Language(\"HTML\") or // language=HTML) before it.",
+      "patterns": [
+        {
+          "begin": "(@Language\\(\\s*\"(?i:html)\"\\s*\\))",
+          "beginCaptures": {
+            "1": {
+              "name": "storage.type.annotation.kotlin"
+            }
+          },
+          "end": "(?<=\")",
+          "patterns": [
+            {
+              "include": "#html-triple-string"
+            },
+            {
+              "include": "#html-double-string"
+            }
+          ]
+        },
+        {
+          "begin": "(//\\s*language=(?i:html)\\b[^\\n]*)",
+          "beginCaptures": {
+            "1": {
+              "name": "comment.line.double-slash.kotlin"
+            }
+          },
+          "end": "(?<=\")",
+          "patterns": [
+            {
+              "include": "#html-triple-string"
+            },
+            {
+              "include": "#html-double-string"
+            }
+          ]
+        },
+        {
+          "begin": "(\"\"\")(?=\\s*<(?:[A-Za-z]|!--|!(?i:doctype)))",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.begin.kotlin string.quoted.triple.kotlin"
+            }
+          },
+          "end": "(\"\"\")",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.kotlin string.quoted.triple.kotlin"
+            }
+          },
+          "contentName": "meta.embedded.block.html",
+          "patterns": [
+            {
+              "match": "\\$\\{'\\$'\\}",
+              "name": "constant.character.escape.dollar.kotlin"
+            },
+            {
+              "include": "text.html.basic"
+            }
+          ]
+        },
+        {
+          "begin": "(\")(?=<(?:[A-Za-z]|!--))",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.begin.kotlin string.quoted.double.kotlin"
+            }
+          },
+          "end": "(\")",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.kotlin string.quoted.double.kotlin"
+            }
+          },
+          "contentName": "meta.embedded.block.html",
+          "patterns": [
+            {
+              "include": "#kotlin-escapes"
+            },
+            {
+              "include": "text.html.basic"
+            }
+          ]
+        }
+      ]
+    },
+    "html-triple-string": {
+      "begin": "(\"\"\")",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.string.begin.kotlin string.quoted.triple.kotlin"
+        }
+      },
+      "end": "(\"\"\")",
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.string.end.kotlin string.quoted.triple.kotlin"
+        }
+      },
+      "contentName": "meta.embedded.block.html",
+      "patterns": [
+        {
+          "match": "\\$\\{'\\$'\\}",
+          "name": "constant.character.escape.dollar.kotlin"
+        },
+        {
+          "include": "text.html.basic"
+        }
+      ]
+    },
+    "html-double-string": {
+      "begin": "(\")",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.string.begin.kotlin string.quoted.double.kotlin"
+        }
+      },
+      "end": "(\")",
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.string.end.kotlin string.quoted.double.kotlin"
+        }
+      },
+      "contentName": "meta.embedded.block.html",
+      "patterns": [
+        {
+          "include": "#kotlin-escapes"
+        },
+        {
+          "include": "text.html.basic"
+        }
+      ]
+    },
     "kotlin-escapes": {
       "patterns": [
         {

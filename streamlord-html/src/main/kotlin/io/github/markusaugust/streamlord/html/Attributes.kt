@@ -2,6 +2,7 @@
 
 package io.github.markusaugust.streamlord.html
 
+import io.github.markusaugust.streamlord.core.domain.ExpressionGuard
 import io.github.markusaugust.streamlord.core.json.JsonWriter
 import kotlinx.html.HTMLTag
 

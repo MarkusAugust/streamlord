@@ -198,10 +198,10 @@ div {
 
 `$` opens a template in Kotlin strings, so `dataOnClick("$count++")` sends `++` to the browser,
 and `dataText("$user.name")` sends `.name`. Datastar ignores both without a word. Streamlord does
-not: every expression helper runs the text through `ExpressionGuard`, which throws
-`InterpolatedExpressionException` at render time when the text has the shape only an eaten
-signal leaves behind (empty, only operators, an operator with a missing side). Three ways to
-write it right, in order of preference:
+not: every expression helper runs the text through `ExpressionGuard` (in `streamlord-core`),
+which throws `InterpolatedExpressionException` at render time when the text has the shape only
+an eaten signal leaves behind (empty, only operators, an operator with a missing side). Three
+ways to write it right, in order of preference:
 
 ```kotlin
 dataOnClick(increment("count"))       // the helpers: signal, set, toggle, not, increment, decrement, statements
@@ -211,7 +211,8 @@ dataOnClick("${'$'}count++")          // any Kotlin
 
 The VS Code extension flags the same trap while you type. Existing 0.1.0 code is unaffected
 unless it already shipped a broken expression, in which case you now get a stack trace instead
-of a silent page.
+of a silent page. For HTML written as a string, the same guard is available as `ElementsGuard`;
+see the next section.
 
 Backend actions render their options only when you set them:
 
@@ -228,19 +229,101 @@ The DSL also feeds events and streams directly: `stream.patchElements(selector =
 
 ---
 
+## Three ways to write markup
+
+The DSL is one way, not the way. Every place Streamlord takes HTML takes a `String`, so a
+function that returns a multi-line string, or a template engine rendering to one, is as much a
+first-class citizen as `div { }`. Pick what your team reads best; the SDK and the editor
+tooling serve all three.
+
+### Strings
+
+```kotlin
+@Language("HTML")
+fun counter(count: Int): String = $$"""
+    <div id="counter" data-signals="{count: $$count}">
+        <button data-on:click="$count++">Raise</button>
+        <span data-text="$count"></span>
+    </div>
+""".trimIndent()
+
+call.respondDatastar { patchElements(counter(state.count)) }
+```
+
+Two things make this comfortable:
+
+* **`$$"""..."""`** (Kotlin 2.2+). In a multi-dollar string a single `$` is just a dollar, so
+  `$count` reaches the browser as the signal it is, and `$$count` is the Kotlin template.
+  Without it, `$count` either fails to compile or, when a `count` happens to be in scope,
+  silently ships `data-text=""`. On older Kotlin, write `${'$'}count`.
+* **`@Language("HTML")`** from `org.intellij.lang.annotations`, which your build already has
+  through the Kotlin standard library. IntelliJ then treats the string as HTML: highlighting,
+  tag completion, and, with the official [Datastar plugin](https://plugins.jetbrains.com/plugin/26072),
+  completion of every `data-*` attribute. Streamlord's own parameters (`patchElements`,
+  `PatchElements`, `respondElements`, `datastarElements`, `ElementsResponse`; `JSON` for
+  signals, `JavaScript` for scripts) carry the annotation, so a literal passed straight in is
+  injected without you writing anything. On your own functions and properties, add it yourself.
+
+The VS Code extension treats a string as HTML when it opens with a tag or carries the
+annotation or a `// language=HTML` comment, and gives it the same diagnostics, completions,
+hover and highlighting as a template file.
+
+### Templates
+
+Pebble, Thymeleaf, JTE, kte, FreeMarker, Velocity, Mustache: render, then pass the string.
+
+```kotlin
+patchElements(pebble.getTemplate("cards/sak.peb").render(mapOf("sak" to sak)), selector = "#saker", mode = APPEND)
+```
+
+There is no `$` trap here, because the template engine owns the file. IntelliJ with the
+Datastar plugin completes attributes in Thymeleaf, FreeMarker and JTE files; the VS Code
+extension does so for all of the above and understands each engine's syntax well enough not
+to flag it.
+
+### The guard for strings and templates
+
+The DSL guards its own expressions. For HTML that arrives as a string, opt in:
+
+```kotlin
+Streamlord(guardElements = true)             // one instance, in the Ktor plugin or as a Spring bean
+```
+
+Every element patch and elements response that leaves through that instance is walked by
+`ElementsGuard`, which finds each `data-*` attribute whose value is an expression and runs it
+through `ExpressionGuard`. A `data-text=""` that a Kotlin template left behind throws
+`InterpolatedExpressionException` naming the attribute, instead of reaching the browser. It is
+a small, allocation-free scan, off by default so that the choice is yours; `ElementsGuard.check(html)`
+is also there to call directly, for example in the tests of your markup functions.
+
+### What each gets
+
+| | DSL | Strings | Templates |
+|---|---|---|---|
+| Passed to the SDK as | `div { }` blocks | `String` | `String` |
+| `$` trap | caught by the helpers | `$$"""` avoids it; `guardElements` catches it | none |
+| IntelliJ | Kotlin plugin: completion, KDoc, types | `@Language("HTML")` + Datastar plugin: attribute completion | Datastar plugin: attribute completion |
+| VS Code | expression diagnostics, completion, hover | markup and attribute diagnostics, completion, hover, highlighting | the same, per language |
+
+---
+
 ## The Eye: VS Code
 
 `editors/vscode` holds the Streamlord extension, on the Marketplace as `MarkusAugust.streamlord`:
-diagnostics with quick fixes for Datastar expressions and markup inside the DSL strings and in
-HTML and template files (Kotlin `$` interpolation traps, syntax errors with the right column,
-missing ids, unknown attributes and modifiers), completions for signals, actions, attributes,
-modifiers, ids and classes, snippets, hover docs, syntax highlighting, and a Stream Inspector
-that shows a live SSE stream decoded with saved requests and route code lenses. Everything it
-knows comes from `catalog/datastar-1.0.4.json`, which the SDK's own tests bind to the DSL.
+diagnostics with quick fixes for Datastar expressions and markup inside Kotlin strings, whether
+handed to the DSL or free-standing, and in HTML and template files (Kotlin `$` interpolation
+traps, syntax errors with the right column, missing ids, unknown attributes and modifiers),
+completions for signals, actions, attributes, modifiers, ids and classes, snippets, hover docs,
+syntax highlighting, and a Stream Inspector that shows a live SSE stream decoded with saved
+requests and route code lenses. The template languages of the JVM (JTE, kte, FreeMarker,
+Velocity, Mustache, Pebble; Thymeleaf is plain HTML) are on by default. Everything it knows
+comes from `catalog/datastar-1.0.4.json`, which the SDK's own tests bind to the DSL.
 
 IntelliJ IDEA gives you the DSL itself for free through the Kotlin plugin: completion, KDoc
-and type errors for every call. What it does not see yet is the inside of the strings; an
-IntelliJ plugin for that is planned.
+and type errors for every call. Inside strings, `@Language("HTML")` on Streamlord's parameters
+turns on HTML injection, and the official Datastar plugin adds attribute completion there and
+in template files (it needs the JavaScript plugin, so IntelliJ IDEA Ultimate). A Streamlord
+plugin for IntelliJ, with the expression checks and actions, is still planned.
 
 ## The Hexagon
 

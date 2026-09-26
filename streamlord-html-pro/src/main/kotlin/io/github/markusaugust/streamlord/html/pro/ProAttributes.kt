@@ -2,9 +2,9 @@
 
 package io.github.markusaugust.streamlord.html.pro
 
+import io.github.markusaugust.streamlord.core.domain.ExpressionGuard
 import io.github.markusaugust.streamlord.html.Case
 import io.github.markusaugust.streamlord.html.DatastarAttributes
-import io.github.markusaugust.streamlord.html.ExpressionGuard
 import io.github.markusaugust.streamlord.html.SignalFilter
 import kotlinx.html.HTMLTag
 import kotlin.time.Duration
