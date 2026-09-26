@@ -174,9 +174,6 @@
             {
               "match": "\\\\.",
               "name": "constant.character.escape.datastar"
-            },
-            {
-              "include": "#url"
             }
           ]
         },
@@ -188,9 +185,6 @@
             {
               "match": "\\\\.",
               "name": "constant.character.escape.datastar"
-            },
-            {
-              "include": "#url"
             }
           ]
         },
@@ -226,10 +220,6 @@
           ]
         }
       ]
-    },
-    "url": {
-      "match": "(?<=^|['\"])(/[^'\"\\s]*|https?://[^'\"\\s]*)(?=['\"]|$)",
-      "name": "string.other.link.url.datastar markup.underline.link.datastar"
     },
     "regex": {
       "match": "(?<=[(,:=\\s{\\[])/(?![/*])(?:\\\\.|\\[[^\\]]*\\]|[^/\\\\\\n])+/[gimsuy]*",

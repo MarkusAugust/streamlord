@@ -27,20 +27,12 @@
         {
           "name": "Streamlord: signal",
           "scope": [
-            "variable.other.constant.signal.datastar"
+            "variable.other.constant.signal.datastar",
+            "punctuation.definition.signal.datastar"
           ],
           "settings": {
             "foreground": "#4FC1FF",
             "fontStyle": "bold"
-          }
-        },
-        {
-          "name": "Streamlord: signal sigil",
-          "scope": [
-            "punctuation.definition.signal.datastar"
-          ],
-          "settings": {
-            "foreground": "#4FC1FF"
           }
         },
         {
@@ -55,10 +47,11 @@
         {
           "name": "Streamlord: backend action",
           "scope": [
-            "entity.name.function.action.backend.datastar"
+            "entity.name.function.action.backend.datastar",
+            "punctuation.definition.action.datastar"
           ],
           "settings": {
-            "foreground": "#DCDCAA",
+            "foreground": "#C586C0",
             "fontStyle": "bold"
           }
         },
@@ -66,15 +59,6 @@
           "name": "Streamlord: action",
           "scope": [
             "entity.name.function.action.datastar"
-          ],
-          "settings": {
-            "foreground": "#DCDCAA"
-          }
-        },
-        {
-          "name": "Streamlord: action sigil",
-          "scope": [
-            "punctuation.definition.action.datastar"
           ],
           "settings": {
             "foreground": "#C586C0"
@@ -91,21 +75,13 @@
           }
         },
         {
-          "name": "Streamlord: globals",
-          "scope": [
-            "support.class.global.datastar"
-          ],
-          "settings": {
-            "foreground": "#4EC9B0"
-          }
-        },
-        {
           "name": "Streamlord: option keys",
           "scope": [
             "support.type.property-name.option.datastar"
           ],
           "settings": {
-            "foreground": "#C586C0"
+            "foreground": "#9CDCFE",
+            "fontStyle": "bold"
           }
         },
         {
@@ -118,99 +94,21 @@
           }
         },
         {
-          "name": "Streamlord: property",
+          "name": "Streamlord: identifiers",
           "scope": [
-            "variable.other.property.datastar"
+            "variable.other.readwrite.datastar"
           ],
           "settings": {
             "foreground": "#9CDCFE"
           }
         },
         {
-          "name": "Streamlord: method",
+          "name": "Streamlord: duration",
           "scope": [
-            "entity.name.function.method.datastar"
-          ],
-          "settings": {
-            "foreground": "#DCDCAA"
-          }
-        },
-        {
-          "name": "Streamlord: constants",
-          "scope": [
-            "constant.language.datastar"
-          ],
-          "settings": {
-            "foreground": "#569CD6"
-          }
-        },
-        {
-          "name": "Streamlord: control",
-          "scope": [
-            "keyword.control.datastar",
-            "storage.type.function.arrow.datastar"
-          ],
-          "settings": {
-            "foreground": "#C586C0"
-          }
-        },
-        {
-          "name": "Streamlord: numbers and durations",
-          "scope": [
-            "constant.numeric.datastar",
             "constant.numeric.duration.datastar"
           ],
           "settings": {
             "foreground": "#B5CEA8"
-          }
-        },
-        {
-          "name": "Streamlord: strings",
-          "scope": [
-            "string.quoted.single.datastar",
-            "string.quoted.double.datastar",
-            "string.template.datastar"
-          ],
-          "settings": {
-            "foreground": "#CE9178"
-          }
-        },
-        {
-          "name": "Streamlord: url",
-          "scope": [
-            "string.other.link.url.datastar"
-          ],
-          "settings": {
-            "foreground": "#E8AB53",
-            "fontStyle": "underline"
-          }
-        },
-        {
-          "name": "Streamlord: regex",
-          "scope": [
-            "string.regexp.datastar"
-          ],
-          "settings": {
-            "foreground": "#D16969"
-          }
-        },
-        {
-          "name": "Streamlord: assignment",
-          "scope": [
-            "keyword.operator.assignment.datastar",
-            "keyword.operator.increment.datastar"
-          ],
-          "settings": {
-            "foreground": "#D4D4D4"
-          }
-        },
-        {
-          "name": "Streamlord: comparison",
-          "scope": [
-            "keyword.operator.comparison.datastar"
-          ],
-          "settings": {
-            "foreground": "#569CD6"
           }
         },
         {
@@ -247,7 +145,7 @@
             "entity.other.attribute-name.datastar.key"
           ],
           "settings": {
-            "foreground": "#DCDCAA"
+            "foreground": "#4EC9B0"
           }
         },
         {
@@ -260,7 +158,7 @@
           }
         },
         {
-          "name": "Streamlord: modifier sigil",
+          "name": "Streamlord: modifier sigils",
           "scope": [
             "punctuation.definition.modifier.datastar",
             "punctuation.separator.key.datastar"
@@ -278,7 +176,163 @@
             "foreground": "#4EC9B0"
           }
         }
-      ]
+      ],
+      "[*Light*]": {
+        "textMateRules": [
+          {
+            "name": "Streamlord: signal",
+            "scope": [
+              "variable.other.constant.signal.datastar",
+              "punctuation.definition.signal.datastar"
+            ],
+            "settings": {
+              "foreground": "#0070C1",
+              "fontStyle": "bold"
+            }
+          },
+          {
+            "name": "Streamlord: signal path",
+            "scope": [
+              "variable.other.property.signal-path.datastar"
+            ],
+            "settings": {
+              "foreground": "#001080"
+            }
+          },
+          {
+            "name": "Streamlord: backend action",
+            "scope": [
+              "entity.name.function.action.backend.datastar",
+              "punctuation.definition.action.datastar"
+            ],
+            "settings": {
+              "foreground": "#AF00DB",
+              "fontStyle": "bold"
+            }
+          },
+          {
+            "name": "Streamlord: action",
+            "scope": [
+              "entity.name.function.action.datastar"
+            ],
+            "settings": {
+              "foreground": "#AF00DB"
+            }
+          },
+          {
+            "name": "Streamlord: el / evt / patch",
+            "scope": [
+              "variable.language.scope.datastar"
+            ],
+            "settings": {
+              "foreground": "#0000FF",
+              "fontStyle": "italic"
+            }
+          },
+          {
+            "name": "Streamlord: option keys",
+            "scope": [
+              "support.type.property-name.option.datastar"
+            ],
+            "settings": {
+              "foreground": "#001080",
+              "fontStyle": "bold"
+            }
+          },
+          {
+            "name": "Streamlord: object keys",
+            "scope": [
+              "variable.other.property.key.datastar"
+            ],
+            "settings": {
+              "foreground": "#001080"
+            }
+          },
+          {
+            "name": "Streamlord: identifiers",
+            "scope": [
+              "variable.other.readwrite.datastar"
+            ],
+            "settings": {
+              "foreground": "#001080"
+            }
+          },
+          {
+            "name": "Streamlord: duration",
+            "scope": [
+              "constant.numeric.duration.datastar"
+            ],
+            "settings": {
+              "foreground": "#098658"
+            }
+          },
+          {
+            "name": "Streamlord: kotlin dollar escape",
+            "scope": [
+              "constant.character.escape.dollar.kotlin"
+            ],
+            "settings": {
+              "foreground": "#EE0000"
+            }
+          },
+          {
+            "name": "Streamlord: attribute prefix",
+            "scope": [
+              "entity.other.attribute-name.datastar.prefix"
+            ],
+            "settings": {
+              "foreground": "#8E8E8E"
+            }
+          },
+          {
+            "name": "Streamlord: attribute plugin",
+            "scope": [
+              "entity.other.attribute-name.datastar.plugin"
+            ],
+            "settings": {
+              "foreground": "#AF00DB",
+              "fontStyle": "bold"
+            }
+          },
+          {
+            "name": "Streamlord: attribute key",
+            "scope": [
+              "entity.other.attribute-name.datastar.key"
+            ],
+            "settings": {
+              "foreground": "#267F99"
+            }
+          },
+          {
+            "name": "Streamlord: modifier",
+            "scope": [
+              "keyword.other.modifier.datastar"
+            ],
+            "settings": {
+              "foreground": "#0000FF"
+            }
+          },
+          {
+            "name": "Streamlord: modifier sigils",
+            "scope": [
+              "punctuation.definition.modifier.datastar",
+              "punctuation.separator.key.datastar"
+            ],
+            "settings": {
+              "foreground": "#8E8E8E"
+            }
+          },
+          {
+            "name": "Streamlord: modifier argument",
+            "scope": [
+              "constant.other.modifier-arg.datastar"
+            ],
+            "settings": {
+              "foreground": "#267F99"
+            }
+          }
+        ]
+      }
     }
   },
   "extensions": {
