@@ -1,7 +1,6 @@
 {
   "folders": [
-    { "name": "streamlord (Kotlin SDK)", "path": "." },
-    { "name": "editors/vscode (extension)", "path": "editors/vscode" }
+    { "name": "streamlord", "path": "." }
   ],
   "settings": {
     "files.exclude": {
@@ -17,5 +16,31 @@
   },
   "extensions": {
     "recommendations": ["jetbrains.kotlin-server"]
+  },
+  "launch": {
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Run Streamlord extension",
+        "type": "extensionHost",
+        "request": "launch",
+        "args": ["--extensionDevelopmentPath=${workspaceFolder}/editors/vscode"],
+        "outFiles": ["${workspaceFolder}/editors/vscode/dist/**/*.js"],
+        "preLaunchTask": "streamlord: build extension"
+      }
+    ]
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "streamlord: build extension",
+        "type": "shell",
+        "command": "npm run build",
+        "options": { "cwd": "${workspaceFolder}/editors/vscode" },
+        "problemMatcher": [],
+        "presentation": { "reveal": "silent" }
+      }
+    ]
   }
 }
