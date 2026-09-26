@@ -24,7 +24,7 @@ dependencies {
 val spring7Version = libs.versions.spring7.get()
 val servlet61Version = libs.versions.servlet61.get()
 
-val spring7TestRuntimeClasspath: Configuration by configurations.creating {
+val spring7TestRuntimeClasspath: Configuration = configurations.create("spring7TestRuntimeClasspath") {
     extendsFrom(configurations.testRuntimeClasspath.get())
     attributes {
         attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage.JAVA_RUNTIME))
@@ -37,7 +37,7 @@ val spring7TestRuntimeClasspath: Configuration by configurations.creating {
     }
 }
 
-val testSpring7 by tasks.registering(Test::class) {
+val testSpring7 = tasks.register<Test>("testSpring7") {
     description = "Runs the Spring adapter tests against Spring Framework $spring7Version (Boot 4)."
     group = "verification"
     testClassesDirs = sourceSets.test.get().output.classesDirs
