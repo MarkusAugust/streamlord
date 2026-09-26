@@ -28,21 +28,25 @@ private fun ds(suffix: String): String = DatastarAttributes.name(suffix)
  * The `data-*` attributes of Datastar 1.0.4 as kotlinx.html extension functions.
  *
  * Every function writes exactly one attribute with the exact key Datastar parses, modifiers
- * included. Expressions are passed through untouched; kotlinx.html escapes them for the
- * attribute context. Remember that `$` starts a template in Kotlin strings: write signal
- * references as `"${'$'}count"` or, far nicer, with the helpers in Expressions.kt.
+ * included. kotlinx.html escapes the values for the attribute context.
+ *
+ * Every expression passes [ExpressionGuard] first. `$` starts a template in Kotlin strings, so
+ * `"$count++"` reaches the DSL as `"++"`; the guard throws [InterpolatedExpressionException]
+ * at render time instead of letting the browser ignore a broken attribute. Write signals with
+ * the helpers in Expressions.kt, or with a `$$"..."` string literal (Kotlin 2.2+), where a
+ * single dollar is just a dollar.
  */
 
 // ---- Signals ----------------------------------------------------------------------------------
 
 /** `data-signals="{...}"` from a JavaScript object expression. */
 public fun HTMLTag.dataSignals(expression: String, case: Case? = null, ifMissing: Boolean = false) {
-    attributes[ds("signals${signalMods(case, ifMissing)}")] = expression
+    attributes[ds("signals${signalMods(case, ifMissing)}")] = ExpressionGuard.check(expression)
 }
 
 /** `data-signals:name="expression"`. Dotted names create nested signals. */
 public fun HTMLTag.dataSignals(name: String, expression: String, case: Case? = null, ifMissing: Boolean = false) {
-    attributes[ds("signals:$name${signalMods(case, ifMissing)}")] = expression
+    attributes[ds("signals:$name${signalMods(case, ifMissing)}")] = ExpressionGuard.check(expression)
 }
 
 /**
@@ -58,12 +62,12 @@ public fun HTMLTag.dataSignals(vararg signals: Pair<String, Any?>, case: Case? =
 
 /** `data-computed="{...}"`. */
 public fun HTMLTag.dataComputed(expression: String, case: Case? = null) {
-    attributes[ds("computed${caseMod(case)}")] = expression
+    attributes[ds("computed${caseMod(case)}")] = ExpressionGuard.check(expression)
 }
 
 /** `data-computed:name="expression"`. */
 public fun HTMLTag.dataComputed(name: String, expression: String, case: Case? = null) {
-    attributes[ds("computed:$name${caseMod(case)}")] = expression
+    attributes[ds("computed:$name${caseMod(case)}")] = ExpressionGuard.check(expression)
 }
 
 /** `data-json-signals`: renders the signal store as JSON into the element. Handy while debugging. */
@@ -75,19 +79,19 @@ public fun HTMLTag.dataJsonSignals(filter: SignalFilter? = null, terse: Boolean 
 
 /** `data-init="expression"`, run once when the element enters the DOM. */
 public fun HTMLTag.dataInit(expression: String, modifiers: InitModifiers.() -> Unit = {}) {
-    attributes[ds("init${InitModifiers().apply(modifiers).build()}")] = expression
+    attributes[ds("init${InitModifiers().apply(modifiers).build()}")] = ExpressionGuard.check(expression)
 }
 
 /** `data-effect="expression"`, re-run whenever a signal it reads changes. */
 public fun HTMLTag.dataEffect(expression: String) {
-    attributes[ds("effect")] = expression
+    attributes[ds("effect")] = ExpressionGuard.check(expression)
 }
 
 // ---- Events -----------------------------------------------------------------------------------
 
 /** `data-on:event="expression"` with optional modifiers. */
 public fun HTMLTag.dataOn(event: String, expression: String, modifiers: OnModifiers.() -> Unit = {}) {
-    attributes[ds("on:$event${OnModifiers().apply(modifiers).build()}")] = expression
+    attributes[ds("on:$event${OnModifiers().apply(modifiers).build()}")] = ExpressionGuard.check(expression)
 }
 
 public fun HTMLTag.dataOnClick(expression: String, modifiers: OnModifiers.() -> Unit = {}): Unit =
@@ -127,18 +131,18 @@ public fun HTMLTag.dataOnSignalPatch(
     filter: SignalFilter? = null,
     modifiers: TimingModifiers.() -> Unit = {},
 ) {
-    attributes[ds("on-signal-patch${TimingModifiers().apply(modifiers).build()}")] = expression
+    attributes[ds("on-signal-patch${TimingModifiers().apply(modifiers).build()}")] = ExpressionGuard.check(expression)
     filter?.let { attributes[ds("on-signal-patch-filter")] = it.toJs() }
 }
 
 /** `data-on-interval`. */
 public fun HTMLTag.dataOnInterval(expression: String, modifiers: IntervalModifiers.() -> Unit = {}) {
-    attributes[ds("on-interval${IntervalModifiers().apply(modifiers).build()}")] = expression
+    attributes[ds("on-interval${IntervalModifiers().apply(modifiers).build()}")] = ExpressionGuard.check(expression)
 }
 
 /** `data-on-intersect`. */
 public fun HTMLTag.dataOnIntersect(expression: String, modifiers: IntersectModifiers.() -> Unit = {}) {
-    attributes[ds("on-intersect${IntersectModifiers().apply(modifiers).build()}")] = expression
+    attributes[ds("on-intersect${IntersectModifiers().apply(modifiers).build()}")] = ExpressionGuard.check(expression)
 }
 
 // ---- Binding and references -------------------------------------------------------------------
@@ -161,41 +165,41 @@ public fun HTMLTag.dataIndicator(signal: String, case: Case? = null) {
 // ---- Display ----------------------------------------------------------------------------------
 
 public fun HTMLTag.dataText(expression: String) {
-    attributes[ds("text")] = expression
+    attributes[ds("text")] = ExpressionGuard.check(expression)
 }
 
 public fun HTMLTag.dataShow(expression: String) {
-    attributes[ds("show")] = expression
+    attributes[ds("show")] = ExpressionGuard.check(expression)
 }
 
 /** `data-class="{name: expression}"`. */
 public fun HTMLTag.dataClass(expression: String, case: Case? = null) {
-    attributes[ds("class${caseMod(case)}")] = expression
+    attributes[ds("class${caseMod(case)}")] = ExpressionGuard.check(expression)
 }
 
 /** `data-class:name="expression"`. */
 public fun HTMLTag.dataClass(name: String, expression: String, case: Case? = null) {
-    attributes[ds("class:$name${caseMod(case)}")] = expression
+    attributes[ds("class:$name${caseMod(case)}")] = ExpressionGuard.check(expression)
 }
 
 /** `data-style="{property: expression}"`. */
 public fun HTMLTag.dataStyle(expression: String) {
-    attributes[ds("style")] = expression
+    attributes[ds("style")] = ExpressionGuard.check(expression)
 }
 
 /** `data-style:property="expression"`. */
 public fun HTMLTag.dataStyle(property: String, expression: String) {
-    attributes[ds("style:$property")] = expression
+    attributes[ds("style:$property")] = ExpressionGuard.check(expression)
 }
 
 /** `data-attr="{name: expression}"`. */
 public fun HTMLTag.dataAttr(expression: String) {
-    attributes[ds("attr")] = expression
+    attributes[ds("attr")] = ExpressionGuard.check(expression)
 }
 
 /** `data-attr:name="expression"`. */
 public fun HTMLTag.dataAttr(name: String, expression: String) {
-    attributes[ds("attr:$name")] = expression
+    attributes[ds("attr:$name")] = ExpressionGuard.check(expression)
 }
 
 // ---- Morphing and walker control --------------------------------------------------------------

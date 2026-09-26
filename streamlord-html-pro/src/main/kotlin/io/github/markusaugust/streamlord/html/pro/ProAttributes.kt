@@ -4,6 +4,7 @@ package io.github.markusaugust.streamlord.html.pro
 
 import io.github.markusaugust.streamlord.html.Case
 import io.github.markusaugust.streamlord.html.DatastarAttributes
+import io.github.markusaugust.streamlord.html.ExpressionGuard
 import io.github.markusaugust.streamlord.html.SignalFilter
 import kotlinx.html.HTMLTag
 import kotlin.time.Duration
@@ -78,12 +79,12 @@ public enum class VerticalAlign(internal val modifier: String) {
 
 /** `data-animate:attribute="expression"` (Pro): animate an attribute whenever its signals change. */
 public fun HTMLTag.dataAnimate(attribute: String, expression: String) {
-    attributes[ds("animate:$attribute")] = expression
+    attributes[ds("animate:$attribute")] = ExpressionGuard.check(expression)
 }
 
 /** `data-custom-validity="expression"` (Pro): an expression yielding `''` when valid, a message otherwise. */
 public fun HTMLTag.dataCustomValidity(expression: String) {
-    attributes[ds("custom-validity")] = expression
+    attributes[ds("custom-validity")] = ExpressionGuard.check(expression)
 }
 
 /** `data-match-media:signal="'(query)'"` (Pro): a boolean signal that follows a media query. */
@@ -94,12 +95,12 @@ public fun HTMLTag.dataMatchMedia(signal: String, mediaQuery: String, case: Case
 
 /** `data-on-raf="expression"` (Pro): run on every animation frame. */
 public fun HTMLTag.dataOnRaf(expression: String, modifiers: RafModifiers.() -> Unit = {}) {
-    attributes[ds("on-raf${RafModifiers().apply(modifiers).build()}")] = expression
+    attributes[ds("on-raf${RafModifiers().apply(modifiers).build()}")] = ExpressionGuard.check(expression)
 }
 
 /** `data-on-resize="expression"` (Pro): run when the element's size changes. */
 public fun HTMLTag.dataOnResize(expression: String, modifiers: ResizeModifiers.() -> Unit = {}) {
-    attributes[ds("on-resize${ResizeModifiers().apply(modifiers).build()}")] = expression
+    attributes[ds("on-resize${ResizeModifiers().apply(modifiers).build()}")] = ExpressionGuard.check(expression)
 }
 
 /**
@@ -136,7 +137,7 @@ public fun HTMLTag.dataQueryString(filter: SignalFilter? = null, omitEmpty: Bool
 
 /** `data-replace-url="expression"` (Pro): replace the browser URL without a reload. */
 public fun HTMLTag.dataReplaceUrl(expression: String) {
-    attributes[ds("replace-url")] = expression
+    attributes[ds("replace-url")] = ExpressionGuard.check(expression)
 }
 
 /** `data-scroll-into-view` (Pro): scroll the element into the viewport when it appears. */
@@ -158,5 +159,5 @@ public fun HTMLTag.dataScrollIntoView(
 
 /** `data-view-transition="expression"` (Pro): set the element's `view-transition-name`. */
 public fun HTMLTag.dataViewTransition(expression: String) {
-    attributes[ds("view-transition")] = expression
+    attributes[ds("view-transition")] = ExpressionGuard.check(expression)
 }

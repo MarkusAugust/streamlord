@@ -194,6 +194,25 @@ div {
 }
 ```
 
+### The `$` trap
+
+`$` opens a template in Kotlin strings, so `dataOnClick("$count++")` sends `++` to the browser,
+and `dataText("$user.name")` sends `.name`. Datastar ignores both without a word. Streamlord does
+not: every expression helper runs the text through `ExpressionGuard`, which throws
+`InterpolatedExpressionException` at render time when the text has the shape only an eaten
+signal leaves behind (empty, only operators, an operator with a missing side). Three ways to
+write it right, in order of preference:
+
+```kotlin
+dataOnClick(increment("count"))       // the helpers: signal, set, toggle, not, increment, decrement, statements
+dataOnClick($$"$count++")             // Kotlin 2.2+: in a $$"..." literal a single $ is just a dollar
+dataOnClick("${'$'}count++")          // any Kotlin
+```
+
+The VS Code extension flags the same trap while you type. Existing 0.1.0 code is unaffected
+unless it already shipped a broken expression, in which case you now get a stack trace instead
+of a silent page.
+
 Backend actions render their options only when you set them:
 
 ```kotlin

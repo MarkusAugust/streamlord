@@ -95,7 +95,7 @@ jobs:
 
   publish-maven-central:
     name: Publish to Maven Central
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') && !startsWith(github.ref, 'refs/tags/vscode-v')
     needs: [sdk]
     runs-on: ubuntu-latest
     steps:
