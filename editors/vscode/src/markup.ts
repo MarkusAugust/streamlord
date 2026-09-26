@@ -1,5 +1,5 @@
 import { catalog, distance, parseAttributeName, type AttributeSpec } from "./catalog.ts";
-import { validateExpression, type Issue } from "./expression.ts";
+import { attributeDoc, DOCS, validateExpression, type Issue } from "./expression.ts";
 
 /**
  * Markup checks for the HTML Datastar patches: complete elements, ids where the protocol needs
@@ -175,12 +175,15 @@ export function validateMarkup(html: string, opts: MarkupOptions): Issue[] {
     for (const tag of topLevel) {
       if (tag.name === "html" || tag.name === "body" || tag.name === "head") continue;
       if (!tag.attributes.some((a) => a.name.toLowerCase() === "id")) {
+        const afterName = tag.start + 1 + tag.name.length;
         issues.push({
           start: tag.start,
           end: tag.end,
           message: `<${tag.name}> has no id. Without a selector, Datastar matches top-level elements by id and silently ignores the rest.`,
           severity: "warning",
           code: "missing-id",
+          link: DOCS.sse,
+          fixes: [{ title: `Add id="${tag.name}"`, start: afterName, end: afterName, text: ` id="${tag.name}"` }],
         });
       }
     }
@@ -210,19 +213,28 @@ export function validateAttributes(tag: Tag, prefix: string): Issue[] {
         .filter((x) => x.d > 0 && x.d <= 2)
         .sort((x, y) => x.d - y.d)[0];
       if (near) {
-        issues.push({ start: attr.nameStart, end: nameEnd, message: `Unknown Datastar attribute ${prefix}${parsed.base}. Did you mean ${prefix}${near.a.name}?`, severity: "warning", code: "unknown-attribute" });
+        const baseEnd = attr.nameStart + prefix.length + parsed.base.length;
+        issues.push({
+          start: attr.nameStart,
+          end: nameEnd,
+          message: `Unknown Datastar attribute ${prefix}${parsed.base}. Did you mean ${prefix}${near.a.name}?`,
+          severity: "warning",
+          code: "unknown-attribute",
+          link: attributeDoc(near.a.name),
+          fixes: [{ title: `Change to ${prefix}${near.a.name}`, start: attr.nameStart, end: baseEnd, text: `${prefix}${near.a.name}` }],
+        });
       }
       continue;
     }
     const spec = parsed.spec;
     if (spec.pro) {
-      issues.push({ start: attr.nameStart, end: nameEnd, message: `${prefix}${spec.name} is a Datastar Pro attribute; it needs the Pro bundle.`, severity: "hint", code: "pro-attribute" });
+      issues.push({ start: attr.nameStart, end: nameEnd, message: `${prefix}${spec.name} is a Datastar Pro attribute; it needs the Pro bundle.`, severity: "hint", code: "pro-attribute", link: attributeDoc(spec.name) });
     }
     if (spec.keyRequired && !parsed.key) {
-      issues.push({ start: attr.nameStart, end: nameEnd, message: `${prefix}${spec.name} needs a key, e.g. ${spec.forms[0] ?? ""}.`, severity: "error", code: "missing-key" });
+      issues.push({ start: attr.nameStart, end: nameEnd, message: `${prefix}${spec.name} needs a key, e.g. ${spec.forms[0] ?? ""}.`, severity: "error", code: "missing-key", link: attributeDoc(spec.name) });
     }
     if (!spec.keyed && parsed.key !== null) {
-      issues.push({ start: attr.nameStart, end: nameEnd, message: `${prefix}${spec.name} does not take a key.`, severity: "error", code: "unexpected-key" });
+      issues.push({ start: attr.nameStart, end: nameEnd, message: `${prefix}${spec.name} does not take a key.`, severity: "error", code: "unexpected-key", link: attributeDoc(spec.name) });
     }
     if (spec.onlyOn && !spec.onlyOn.includes(tag.name)) {
       issues.push({ start: attr.nameStart, end: nameEnd, message: `${prefix}${spec.name} only works on <${spec.onlyOn.join(">, <")}>.`, severity: "warning", code: "wrong-element" });
@@ -233,10 +245,18 @@ export function validateAttributes(tag: Tag, prefix: string): Issue[] {
       const mspec = spec.modifiers.find((m) => m.name === mod.name);
       if (!mspec) {
         const near = spec.modifiers.map((m) => m.name).find((n) => distance(n, mod.name) <= 2);
-        issues.push({ start: mstart, end: mend, message: near ? `Unknown modifier __${mod.name} on ${prefix}${spec.name}. Did you mean __${near}?` : `Unknown modifier __${mod.name} on ${prefix}${spec.name}.`, severity: "error", code: "unknown-modifier" });
+        issues.push({
+          start: mstart,
+          end: mend,
+          message: near ? `Unknown modifier __${mod.name} on ${prefix}${spec.name}. Did you mean __${near}?` : `Unknown modifier __${mod.name} on ${prefix}${spec.name}.`,
+          severity: "error",
+          code: "unknown-modifier",
+          link: attributeDoc(spec.name),
+          fixes: near ? [{ title: `Change to __${near}`, start: mstart, end: mstart + mod.name.length, text: near }] : undefined,
+        });
         continue;
       }
-      issues.push(...validateModifierArgs(mspec, mod.args, mstart, mend, prefix + spec.name));
+      issues.push(...validateModifierArgs(mspec, mod.args, mstart, mend, prefix + spec.name).map((i) => ({ ...i, link: attributeDoc(spec.name) })));
     }
     if (attr.value !== null && spec.valueKind === "expression" && attr.value.trim().length > 0 && !TEMPLATE_SYNTAX.test(attr.value)) {
       for (const issue of validateExpression(attr.value)) {
@@ -262,7 +282,10 @@ function validateModifierArgs(spec: AttributeSpec["modifiers"][number], args: st
       break;
     case "duration": {
       const [d, ...flags] = args;
-      if (!d || !DURATION.test(d)) fail(`__${spec.name} needs a duration such as __${spec.name}.500ms or __${spec.name}.1s.`);
+      if (!d || !DURATION.test(d)) {
+        fail(`__${spec.name} needs a duration such as __${spec.name}.500ms or __${spec.name}.1s.`);
+        if (!d) issues[issues.length - 1]!.fixes = [{ title: `Add .500ms`, start: start + spec.name.length, end: start + spec.name.length, text: ".500ms" }];
+      }
       for (const f of flags) if (!(spec.flags ?? []).includes(f)) fail(`Unknown flag .${f} for __${spec.name}. Allowed: ${(spec.flags ?? []).map((x) => "." + x).join(", ") || "none"}.`);
       break;
     }

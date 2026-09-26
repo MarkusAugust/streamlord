@@ -14,7 +14,7 @@ export class StreamlordHoverProvider implements vscode.HoverProvider {
       if (a) return new vscode.Hover(new vscode.MarkdownString(`**${a.signature}**\n\n${a.doc}${a.pro ? "\n\n_Datastar Pro._" : ""}\n\nKotlin: \`${a.kotlin}()\``), actionRange);
     }
     const prefix = this.prefix();
-    if (document.languageId === "html") {
+    if (document.languageId !== "kotlin") {
       const range = document.getWordRangeAtPosition(position, /[A-Za-z][A-Za-z0-9_:.-]*/);
       if (!range) return null;
       const parsed = parseAttributeName(document.getText(range).toLowerCase(), prefix);

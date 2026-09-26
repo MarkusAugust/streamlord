@@ -13,6 +13,28 @@ export interface Issue {
   message: string;
   severity: "error" | "warning" | "info" | "hint";
   code?: string;
+  /** Documentation the diagnostic links to. */
+  link?: string;
+  /** Quick fixes: replace [start, end) with text. Offsets are in the same space as the issue's. */
+  fixes?: Fix[];
+}
+
+export interface Fix {
+  title: string;
+  start: number;
+  end: number;
+  text: string;
+}
+
+export const DOCS = {
+  attributes: "https://data-star.dev/reference/attributes",
+  actions: "https://data-star.dev/reference/actions",
+  sse: "https://data-star.dev/reference/sse_events",
+  expressions: "https://data-star.dev/guide/datastar_expressions",
+};
+
+export function attributeDoc(name: string): string {
+  return `${DOCS.attributes}#${name.startsWith("data-") ? name : "data-" + name}`;
 }
 
 const ACTION = /@([A-Za-z_][A-Za-z0-9_]*)\s*\(/g;
@@ -36,7 +58,7 @@ export function validateExpression(text: string): Issue[] {
     const pos = Math.min(err.pos ?? 0, text.length);
     const end = Math.max(pos + 1, Math.min(err.raisedAt ?? pos + 1, text.length));
     const msg = (err.message ?? "Syntax error").replace(/\s*\(\d+:\d+\)$/, "");
-    issues.push({ start: pos, end, message: `Datastar expression: ${msg}`, severity: "error", code: "expression-syntax" });
+    issues.push({ start: pos, end, message: `Datastar expression: ${msg}`, severity: "error", code: "expression-syntax", link: DOCS.expressions });
   }
   ACTION.lastIndex = 0;
   let m: RegExpExecArray | null;
@@ -53,9 +75,11 @@ export function validateExpression(text: string): Issue[] {
         message: near ? `Unknown action @${name}. Did you mean @${near}?` : `Unknown action @${name}.`,
         severity: "warning",
         code: "unknown-action",
+        link: DOCS.actions,
+        fixes: near ? [{ title: `Change to @${near}`, start, end, text: `@${near}` }] : undefined,
       });
     } else if (spec.pro) {
-      issues.push({ start, end, message: `@${name} is a Datastar Pro action; it needs the Pro bundle.`, severity: "hint", code: "pro-action" });
+      issues.push({ start, end, message: `@${name} is a Datastar Pro action; it needs the Pro bundle.`, severity: "hint", code: "pro-action", link: DOCS.actions });
     }
   }
   return issues;

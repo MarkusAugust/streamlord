@@ -22,6 +22,20 @@ the Datastar 1.0.4 protocol.
 - `data-*` attributes: unknown names with "did you mean", unknown modifiers, wrong modifier
   arguments (`__debounce` without a duration, `__threshold.150`), missing or unexpected keys.
 
+**Quick fixes** on the lightbulb: `$count` becomes `increment("count")`, `signal("count")`,
+`toggle("open")` or an escaped `${'$'}count`; `__debunce` becomes `__debounce`; `@Post` becomes
+`@post`; `data-signal` becomes `data-signals`; a missing duration, `id` or `selector` is added.
+Every diagnostic links to the matching page of the Datastar reference.
+
+**Snippets** for Ktor and Spring routes and the DSL calls in Kotlin, and for every `data-*`
+attribute in HTML. **HTML custom data** gives VS Code's own HTML service the Datastar
+attributes with documentation, so they complete and hover in `.html` files like any other
+attribute.
+
+**Template languages**: the HTML side (diagnostics, completion, hover) also runs in Pebble,
+Twig, Jinja, Django, Razor, PHP, Blade, ERB, Handlebars, EJS, Liquid, Nunjucks, Edge, Astro,
+Svelte, Vue and Go templates; the list is the setting `streamlord.languages`.
+
 **Completions**: `#` and `.` in any `selector` argument offer the ids and classes declared
 anywhere in the workspace, this file first; `$` offers every signal name declared anywhere in the workspace (Kotlin DSL
 calls, `@Serializable` classes, HTML templates); `@` offers actions with snippets; `data-`
@@ -58,7 +72,8 @@ exactly as the client would keep it. Non-SSE Datastar responses are shown with t
 | Setting | Default | Meaning |
 |---|---|---|
 | `streamlord.diagnostics.enabled` | `true` | Validate Kotlin strings and HTML. |
-| `streamlord.diagnostics.html` | `true` | Also validate `.html` files. |
+| `streamlord.diagnostics.html` | `true` | Also validate markup files. |
+| `streamlord.languages` | html, pebble, twig, … | Language ids that get the HTML side. Reload after changing. |
 | `streamlord.attributePrefix` | `data-` | `data-star-` when you load the aliased bundle. |
 | `streamlord.inspector.defaultUrl` | `http://localhost:8080/` | Prefilled in the inspector. |
 
@@ -74,7 +89,7 @@ Pro bundle you license and load yourself.
 npm ci
 npm test           # unit tests: analysis, providers (with a vscode mock), grammars (real TextMate engine)
 npm run test:live  # the Stream Inspector client against a running Datastar server (STREAMLORD_LIVE_URL, default http://localhost:8080/api)
-npm run build      # dist/extension.js
+npm run build      # generates html-customdata.json and snippets/html.json from the catalog, then dist/extension.js
 npm run package    # streamlord-<version>.vsix
 ```
 

@@ -211,16 +211,17 @@ The DSL also feeds events and streams directly: `stream.patchElements(selector =
 
 ## The Eye: VS Code
 
-`editors/vscode` holds the Streamlord extension: diagnostics for Datastar expressions and
-markup inside the DSL strings and in `.html` templates (Kotlin `$` interpolation traps, syntax
-errors with the right column, missing ids, unknown attributes and modifiers), completions for
-signals, actions, attributes and modifiers, hover docs, syntax highlighting, and a Stream
-Inspector that shows a live SSE stream decoded. Everything it knows comes from
-`catalog/datastar-1.0.4.json`, which the SDK's own tests bind to the DSL.
+`editors/vscode` holds the Streamlord extension, on the Marketplace as `MarkusAugust.streamlord`:
+diagnostics with quick fixes for Datastar expressions and markup inside the DSL strings and in
+HTML and template files (Kotlin `$` interpolation traps, syntax errors with the right column,
+missing ids, unknown attributes and modifiers), completions for signals, actions, attributes,
+modifiers, ids and classes, snippets, hover docs, syntax highlighting, and a Stream Inspector
+that shows a live SSE stream decoded with saved requests and route code lenses. Everything it
+knows comes from `catalog/datastar-1.0.4.json`, which the SDK's own tests bind to the DSL.
 
-```
-cd editors/vscode && npm ci && npm run package && code --install-extension streamlord-0.1.0.vsix
-```
+IntelliJ IDEA gives you the DSL itself for free through the Kotlin plugin: completion, KDoc
+and type errors for every call. What it does not see yet is the inside of the strings; an
+IntelliJ plugin for that is planned.
 
 ## The Hexagon
 

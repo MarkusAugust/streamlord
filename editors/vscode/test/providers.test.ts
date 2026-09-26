@@ -97,7 +97,11 @@ describe("completion provider", () => {
   it("offers attributes, modifiers and modifier values in html", () => {
     const html = `<form data-on:submit__prevent="@post('/x')">\n<input data-\n<div data-on:click__\n<div data-on:click__debounce.`;
     const hdoc = new MockDocument(html, "html");
-    const attrs = complete(hdoc, 1, 12, index);
+    // Attribute names in plain HTML come from html-customdata.json through VS Code itself.
+    assert.deepEqual(complete(hdoc, 1, 12, index), []);
+    // In template languages VS Code's HTML service is absent, so the extension offers them.
+    const pdoc = new MockDocument(html, "pebble");
+    const attrs = complete(pdoc, 1, 12, index);
     assert.ok(attrs.some((i) => i.label === "data-on") && attrs.some((i) => i.label === "data-signals"));
     assert.ok((attrs.find((i) => i.label === "data-persist")?.sortText ?? "") > (attrs.find((i) => i.label === "data-on")?.sortText ?? ""));
     const mods = complete(hdoc, 2, 20, index);

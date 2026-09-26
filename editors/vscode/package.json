@@ -2,7 +2,7 @@
   "name": "streamlord",
   "displayName": "Streamlord",
   "description": "Datastar tooling for the Streamlord Kotlin SDK: expression and markup diagnostics, completions, hover docs, and a live SSE stream inspector.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "MarkusAugust",
   "license": "MIT",
   "private": true,
@@ -30,9 +30,7 @@
   ],
   "main": "./dist/extension.js",
   "activationEvents": [
-    "onLanguage:kotlin",
-    "onLanguage:html",
-    "onCommand:streamlord.inspector.open"
+    "onStartupFinished"
   ],
   "contributes": {
     "commands": [
@@ -106,6 +104,34 @@
           "type": "boolean",
           "default": true,
           "description": "Show \u201cOpen in Stream Inspector\u201d above Ktor and Spring routes."
+        },
+        "streamlord.languages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "html",
+            "pebble",
+            "twig",
+            "jinja",
+            "jinja-html",
+            "django-html",
+            "razor",
+            "php",
+            "blade",
+            "erb",
+            "handlebars",
+            "ejs",
+            "liquid",
+            "nunjucks",
+            "edge",
+            "astro",
+            "svelte",
+            "vue",
+            "gotemplate"
+          ],
+          "description": "Language ids that get Datastar attribute diagnostics, completion and hover on the HTML side. Kotlin is always included. Reload the window after changing."
         }
       }
     },
@@ -154,16 +180,32 @@
         "fileMatch": ".streamlord/inspector.json",
         "url": "./schemas/inspector.schema.json"
       }
+    ],
+    "html": {
+      "customData": [
+        "./html-customdata.json"
+      ]
+    },
+    "snippets": [
+      {
+        "language": "kotlin",
+        "path": "./snippets/kotlin.json"
+      },
+      {
+        "language": "html",
+        "path": "./snippets/html.json"
+      }
     ]
   },
   "scripts": {
-    "build": "node esbuild.mjs",
+    "build": "node scripts/generate.mjs && node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-transform-types --import ./test/hooks.mjs --test 'test/**/*.test.ts'",
     "package": "npm run typecheck && npm run build && vsce package --no-dependencies",
     "vscode:prepublish": "npm run build",
-    "test:live": "node --experimental-transform-types --import ./test/hooks.mjs --test test/live/*.live.ts"
+    "test:live": "node --experimental-transform-types --import ./test/hooks.mjs --test test/live/*.live.ts",
+    "generate": "node scripts/generate.mjs"
   },
   "dependencies": {
     "acorn": "8.18.0"

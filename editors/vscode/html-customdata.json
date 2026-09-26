@@ -1,0 +1,421 @@
+{
+  "version": 1.1,
+  "globalAttributes": [
+    {
+      "name": "data-attr",
+      "description": {
+        "kind": "markdown",
+        "value": "Sets one or more attributes from expressions.\n\n`data-attr:<name>=\"expr\"`\n`data-attr=\"{name: expr}\"`"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-attr"
+        }
+      ]
+    },
+    {
+      "name": "data-bind",
+      "description": {
+        "kind": "markdown",
+        "value": "Two-way binding between an input element and a signal.\n\n`data-bind:<signal>`\n`data-bind=\"signal\"`\n\n**Modifiers:** `__case.camel|kebab|snake|pascal`, `__prop.name`, `__event.a.b`"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-bind"
+        }
+      ]
+    },
+    {
+      "name": "data-class",
+      "description": {
+        "kind": "markdown",
+        "value": "Toggles CSS classes from boolean expressions.\n\n`data-class:<name>=\"expr\"`\n`data-class=\"{name: expr}\"`\n\n**Modifiers:** `__case.camel|kebab|snake|pascal`"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-class"
+        }
+      ]
+    },
+    {
+      "name": "data-computed",
+      "description": {
+        "kind": "markdown",
+        "value": "A read-only signal derived from other signals.\n\n`data-computed:<signal>=\"expr\"`\n`data-computed=\"{name: () => expr}\"`\n\n**Modifiers:** `__case.camel|kebab|snake|pascal`"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-computed"
+        }
+      ]
+    },
+    {
+      "name": "data-effect",
+      "description": {
+        "kind": "markdown",
+        "value": "Runs an expression whenever a signal it reads changes.\n\n`data-effect=\"expr\"`"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-effect"
+        }
+      ]
+    },
+    {
+      "name": "data-ignore",
+      "description": {
+        "kind": "markdown",
+        "value": "Datastar leaves this element (and its subtree, unless __self) alone.\n\n`data-ignore`\n`data-ignore__self`\n\n**Modifiers:** `__self`"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-ignore"
+        }
+      ]
+    },
+    {
+      "name": "data-ignore-morph",
+      "description": {
+        "kind": "markdown",
+        "value": "This element is never morphed.\n\n`data-ignore-morph`"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-ignore-morph"
+        }
+      ]
+    },
+    {
+      "name": "data-indicator",
+      "description": {
+        "kind": "markdown",
+        "value": "A boolean signal that is true while a fetch from this element is in flight.\n\n`data-indicator:<signal>`\n`data-indicator=\"signal\"`\n\n**Modifiers:** `__case.camel|kebab|snake|pascal`"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-indicator"
+        }
+      ]
+    },
+    {
+      "name": "data-init",
+      "description": {
+        "kind": "markdown",
+        "value": "Runs an expression once when the element enters the DOM.\n\n`data-init=\"expr\"`\n\n**Modifiers:** `__delay.500ms`, `__viewtransition`"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-init"
+        }
+      ]
+    },
+    {
+      "name": "data-json-signals",
+      "description": {
+        "kind": "markdown",
+        "value": "Renders the signal store as JSON into the element. Debugging aid.\n\n`data-json-signals`\n`data-json-signals=\"{include: /re/, exclude: /re/}\"`\n\n**Modifiers:** `__terse`"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-json-signals"
+        }
+      ]
+    },
+    {
+      "name": "data-on",
+      "description": {
+        "kind": "markdown",
+        "value": "Attaches an event listener. `evt` is the event; `el` the element.\n\n`data-on:<event>=\"expr\"`\n\n**Modifiers:** `__once`, `__passive`, `__capture`, `__case.camel|kebab|snake|pascal`, `__delay.500ms`, `__debounce.500ms (.leading, .notrailing)`, `__throttle.500ms (.noleading, .trailing)`, `__viewtransition`, `__window`, `__document`, `__outside`, `__prevent`, `__stop`"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-on"
+        }
+      ]
+    },
+    {
+      "name": "data-on-intersect",
+      "description": {
+        "kind": "markdown",
+        "value": "Runs an expression when the element intersects the viewport.\n\n`data-on-intersect=\"expr\"`\n\n**Modifiers:** `__once`, `__exit`, `__half`, `__full`, `__threshold.50`, `__delay.500ms`, `__debounce.500ms (.leading, .notrailing)`, `__throttle.500ms (.noleading, .trailing)`, `__viewtransition`"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-on-intersect"
+        }
+      ]
+    },
+    {
+      "name": "data-on-interval",
+      "description": {
+        "kind": "markdown",
+        "value": "Runs an expression on an interval (default 1s).\n\n`data-on-interval=\"expr\"`\n\n**Modifiers:** `__duration.500ms (.leading)`, `__viewtransition`"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-on-interval"
+        }
+      ]
+    },
+    {
+      "name": "data-on-signal-patch",
+      "description": {
+        "kind": "markdown",
+        "value": "Runs an expression whenever signals are patched. `patch` holds the patch.\n\n`data-on-signal-patch=\"expr\"`\n\n**Modifiers:** `__delay.500ms`, `__debounce.500ms (.leading, .notrailing)`, `__throttle.500ms (.noleading, .trailing)`"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-on-signal-patch"
+        }
+      ]
+    },
+    {
+      "name": "data-on-signal-patch-filter",
+      "description": {
+        "kind": "markdown",
+        "value": "Filters which signal patches trigger data-on-signal-patch.\n\n`data-on-signal-patch-filter=\"{include: /re/, exclude: /re/}\"`"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-on-signal-patch-filter"
+        }
+      ]
+    },
+    {
+      "name": "data-preserve-attr",
+      "description": {
+        "kind": "markdown",
+        "value": "Keeps the listed attributes through a morph.\n\n`data-preserve-attr=\"name name\"`"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-preserve-attr"
+        }
+      ]
+    },
+    {
+      "name": "data-ref",
+      "description": {
+        "kind": "markdown",
+        "value": "Exposes the element as a signal.\n\n`data-ref:<signal>`\n`data-ref=\"signal\"`\n\n**Modifiers:** `__case.camel|kebab|snake|pascal`"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-ref"
+        }
+      ]
+    },
+    {
+      "name": "data-show",
+      "description": {
+        "kind": "markdown",
+        "value": "Shows the element when the expression is truthy.\n\n`data-show=\"expr\"`"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-show"
+        }
+      ]
+    },
+    {
+      "name": "data-signals",
+      "description": {
+        "kind": "markdown",
+        "value": "Declares signals. Dotted names create nested signals.\n\n`data-signals:<name>=\"expr\"`\n`data-signals=\"{name: value}\"`\n\n**Modifiers:** `__case.camel|kebab|snake|pascal`, `__ifmissing`"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-signals"
+        }
+      ]
+    },
+    {
+      "name": "data-style",
+      "description": {
+        "kind": "markdown",
+        "value": "Sets inline styles from expressions.\n\n`data-style:<property>=\"expr\"`\n`data-style=\"{property: expr}\"`"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-style"
+        }
+      ]
+    },
+    {
+      "name": "data-text",
+      "description": {
+        "kind": "markdown",
+        "value": "Sets the element's text content from an expression.\n\n`data-text=\"expr\"`"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-text"
+        }
+      ]
+    },
+    {
+      "name": "data-nonce",
+      "description": {
+        "kind": "markdown",
+        "value": "On the html element: enables CSP mode with this nonce.\n\n`data-nonce=\"nonce\"`"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-nonce"
+        }
+      ]
+    },
+    {
+      "name": "data-animate",
+      "description": {
+        "kind": "markdown",
+        "value": "Pro. Animates an attribute whenever the expression's signals change.\n\n`data-animate:<attribute>=\"expr\"`\n\n_Datastar Pro. Requires the Pro bundle, which you license and load yourself._"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-animate"
+        }
+      ]
+    },
+    {
+      "name": "data-custom-validity",
+      "description": {
+        "kind": "markdown",
+        "value": "Pro. Custom form validation: '' is valid, any other string is the message.\n\n`data-custom-validity=\"expr\"`\n\n_Datastar Pro. Requires the Pro bundle, which you license and load yourself._"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-custom-validity"
+        }
+      ]
+    },
+    {
+      "name": "data-match-media",
+      "description": {
+        "kind": "markdown",
+        "value": "Pro. A boolean signal that follows a media query.\n\n`data-match-media:<signal>=\"'query'\"`\n\n**Modifiers:** `__case.camel|kebab|snake|pascal`\n\n_Datastar Pro. Requires the Pro bundle, which you license and load yourself._"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-match-media"
+        }
+      ]
+    },
+    {
+      "name": "data-on-raf",
+      "description": {
+        "kind": "markdown",
+        "value": "Pro. Runs on every animation frame.\n\n`data-on-raf=\"expr\"`\n\n**Modifiers:** `__throttle.500ms (.noleading, .trailing)`\n\n_Datastar Pro. Requires the Pro bundle, which you license and load yourself._"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-on-raf"
+        }
+      ]
+    },
+    {
+      "name": "data-on-resize",
+      "description": {
+        "kind": "markdown",
+        "value": "Pro. Runs when the element's size changes.\n\n`data-on-resize=\"expr\"`\n\n**Modifiers:** `__debounce.500ms (.leading, .notrailing)`, `__throttle.500ms (.noleading, .trailing)`\n\n_Datastar Pro. Requires the Pro bundle, which you license and load yourself._"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-on-resize"
+        }
+      ]
+    },
+    {
+      "name": "data-persist",
+      "description": {
+        "kind": "markdown",
+        "value": "Pro. Persists signals in local or session storage.\n\n`data-persist`\n`data-persist:<key>`\n`data-persist=\"{include: /re/}\"`\n\n**Modifiers:** `__session`\n\n_Datastar Pro. Requires the Pro bundle, which you license and load yourself._"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-persist"
+        }
+      ]
+    },
+    {
+      "name": "data-query-string",
+      "description": {
+        "kind": "markdown",
+        "value": "Pro. Two-way sync between signals and the URL query string.\n\n`data-query-string`\n`data-query-string=\"{include: /re/}\"`\n\n**Modifiers:** `__filter`, `__history`\n\n_Datastar Pro. Requires the Pro bundle, which you license and load yourself._"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-query-string"
+        }
+      ]
+    },
+    {
+      "name": "data-replace-url",
+      "description": {
+        "kind": "markdown",
+        "value": "Pro. Replaces the browser URL without reloading.\n\n`data-replace-url=\"expr\"`\n\n_Datastar Pro. Requires the Pro bundle, which you license and load yourself._"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-replace-url"
+        }
+      ]
+    },
+    {
+      "name": "data-scroll-into-view",
+      "description": {
+        "kind": "markdown",
+        "value": "Pro. Scrolls the element into view.\n\n`data-scroll-into-view`\n`data-scroll-into-view__smooth__vcenter`\n\n**Modifiers:** `__smooth`, `__instant`, `__auto`, `__hstart`, `__hcenter`, `__hend`, `__hnearest`, `__vstart`, `__vcenter`, `__vend`, `__vnearest`, `__focus`\n\n_Datastar Pro. Requires the Pro bundle, which you license and load yourself._"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-scroll-into-view"
+        }
+      ]
+    },
+    {
+      "name": "data-view-transition",
+      "description": {
+        "kind": "markdown",
+        "value": "Pro. Sets the element's view-transition-name.\n\n`data-view-transition=\"expr\"`\n\n_Datastar Pro. Requires the Pro bundle, which you license and load yourself._"
+      },
+      "references": [
+        {
+          "name": "Datastar reference",
+          "url": "https://data-star.dev/reference/attributes#data-view-transition"
+        }
+      ]
+    }
+  ]
+}

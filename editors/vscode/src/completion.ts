@@ -77,6 +77,7 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
     return items;
   }
 
+  /** Signals, actions, attribute names (outside plain HTML), modifiers and modifier values in markup languages. */
   private html(src: string, offset: number, document: vscode.TextDocument, position: vscode.Position): vscode.CompletionItem[] {
     const prefix = this.prefix();
     const lineStart = src.lastIndexOf("\n", offset - 1) + 1;
@@ -97,6 +98,9 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
     const tagName = (inName[1] ?? "").toLowerCase();
     if (partial.includes("__")) return this.modifierItems(partial, prefix, document, position);
     if (!partial.startsWith(prefix.slice(0, Math.max(1, partial.length)))) return [];
+    // In plain HTML files the attribute names come from html-customdata.json through VS Code's own
+    // HTML service, with the same docs; offering them here as well would list them twice.
+    if (document.languageId === "html" && prefix === catalog.prefix) return [];
     return catalog.attributes
       .filter((a) => !a.onlyOn || a.onlyOn.includes(tagName))
       .map((a) => {

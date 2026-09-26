@@ -1,0 +1,172 @@
+{
+  "data-attr": {
+    "prefix": "data-attr",
+    "body": "data-attr=\"${2:expression}\"",
+    "description": "Sets one or more attributes from expressions."
+  },
+  "data-bind": {
+    "prefix": "data-bind",
+    "body": "data-bind=\"${2:signal}\"",
+    "description": "Two-way binding between an input element and a signal."
+  },
+  "data-class": {
+    "prefix": "data-class",
+    "body": "data-class=\"${2:expression}\"",
+    "description": "Toggles CSS classes from boolean expressions."
+  },
+  "data-computed": {
+    "prefix": "data-computed",
+    "body": "data-computed=\"${2:expression}\"",
+    "description": "A read-only signal derived from other signals."
+  },
+  "data-effect": {
+    "prefix": "data-effect",
+    "body": "data-effect=\"${2:expression}\"",
+    "description": "Runs an expression whenever a signal it reads changes."
+  },
+  "data-ignore": {
+    "prefix": "data-ignore",
+    "body": "data-ignore",
+    "description": "Datastar leaves this element (and its subtree, unless __self) alone."
+  },
+  "data-ignore-morph": {
+    "prefix": "data-ignore-morph",
+    "body": "data-ignore-morph",
+    "description": "This element is never morphed."
+  },
+  "data-indicator": {
+    "prefix": "data-indicator",
+    "body": "data-indicator=\"${2:signal}\"",
+    "description": "A boolean signal that is true while a fetch from this element is in flight."
+  },
+  "data-init": {
+    "prefix": "data-init",
+    "body": "data-init=\"${2:expression}\"",
+    "description": "Runs an expression once when the element enters the DOM."
+  },
+  "data-json-signals": {
+    "prefix": "data-json-signals",
+    "body": "data-json-signals=\"${2:{include: /.*/\\}}\"",
+    "description": "Renders the signal store as JSON into the element. Debugging aid."
+  },
+  "data-on": {
+    "prefix": "data-on",
+    "body": "data-on:${1:click}=\"${2:expression}\"",
+    "description": "Attaches an event listener. `evt` is the event; `el` the element."
+  },
+  "data-on-intersect": {
+    "prefix": "data-on-intersect",
+    "body": "data-on-intersect=\"${2:expression}\"",
+    "description": "Runs an expression when the element intersects the viewport."
+  },
+  "data-on-interval": {
+    "prefix": "data-on-interval",
+    "body": "data-on-interval=\"${2:expression}\"",
+    "description": "Runs an expression on an interval (default 1s)."
+  },
+  "data-on-signal-patch": {
+    "prefix": "data-on-signal-patch",
+    "body": "data-on-signal-patch=\"${2:expression}\"",
+    "description": "Runs an expression whenever signals are patched. `patch` holds the patch."
+  },
+  "data-on-signal-patch-filter": {
+    "prefix": "data-on-signal-patch-filter",
+    "body": "data-on-signal-patch-filter=\"${2:{include: /.*/\\}}\"",
+    "description": "Filters which signal patches trigger data-on-signal-patch."
+  },
+  "data-preserve-attr": {
+    "prefix": "data-preserve-attr",
+    "body": "data-preserve-attr=\"${2:expression}\"",
+    "description": "Keeps the listed attributes through a morph."
+  },
+  "data-ref": {
+    "prefix": "data-ref",
+    "body": "data-ref=\"${2:signal}\"",
+    "description": "Exposes the element as a signal."
+  },
+  "data-show": {
+    "prefix": "data-show",
+    "body": "data-show=\"${2:expression}\"",
+    "description": "Shows the element when the expression is truthy."
+  },
+  "data-signals": {
+    "prefix": "data-signals",
+    "body": "data-signals=\"${2:expression}\"",
+    "description": "Declares signals. Dotted names create nested signals."
+  },
+  "data-style": {
+    "prefix": "data-style",
+    "body": "data-style=\"${2:expression}\"",
+    "description": "Sets inline styles from expressions."
+  },
+  "data-text": {
+    "prefix": "data-text",
+    "body": "data-text=\"${2:expression}\"",
+    "description": "Sets the element's text content from an expression."
+  },
+  "data-nonce": {
+    "prefix": "data-nonce",
+    "body": "data-nonce=\"${2:expression}\"",
+    "description": "On the html element: enables CSP mode with this nonce."
+  },
+  "data-animate": {
+    "prefix": "data-animate",
+    "body": "data-animate:${1:name}=\"${2:expression}\"",
+    "description": "Pro: Pro. Animates an attribute whenever the expression's signals change."
+  },
+  "data-custom-validity": {
+    "prefix": "data-custom-validity",
+    "body": "data-custom-validity=\"${2:expression}\"",
+    "description": "Pro: Pro. Custom form validation: '' is valid, any other string is the message."
+  },
+  "data-match-media": {
+    "prefix": "data-match-media",
+    "body": "data-match-media:${1:name}=\"${2:expression}\"",
+    "description": "Pro: Pro. A boolean signal that follows a media query."
+  },
+  "data-on-raf": {
+    "prefix": "data-on-raf",
+    "body": "data-on-raf=\"${2:expression}\"",
+    "description": "Pro: Pro. Runs on every animation frame."
+  },
+  "data-on-resize": {
+    "prefix": "data-on-resize",
+    "body": "data-on-resize=\"${2:expression}\"",
+    "description": "Pro: Pro. Runs when the element's size changes."
+  },
+  "data-persist": {
+    "prefix": "data-persist",
+    "body": "data-persist=\"${2:{include: /.*/\\}}\"",
+    "description": "Pro: Pro. Persists signals in local or session storage."
+  },
+  "data-query-string": {
+    "prefix": "data-query-string",
+    "body": "data-query-string=\"${2:{include: /.*/\\}}\"",
+    "description": "Pro: Pro. Two-way sync between signals and the URL query string."
+  },
+  "data-replace-url": {
+    "prefix": "data-replace-url",
+    "body": "data-replace-url=\"${2:expression}\"",
+    "description": "Pro: Pro. Replaces the browser URL without reloading."
+  },
+  "data-scroll-into-view": {
+    "prefix": "data-scroll-into-view",
+    "body": "data-scroll-into-view",
+    "description": "Pro: Pro. Scrolls the element into view."
+  },
+  "data-view-transition": {
+    "prefix": "data-view-transition",
+    "body": "data-view-transition=\"${2:expression}\"",
+    "description": "Pro: Pro. Sets the element's view-transition-name."
+  },
+  "data-on:click @post": {
+    "prefix": "data-on:click",
+    "body": "data-on:click=\"@post('${1:/path}')\"",
+    "description": "Post signals to the server on click."
+  },
+  "data-init @get": {
+    "prefix": "data-init",
+    "body": "data-init=\"@get('${1:/path}')\"",
+    "description": "Open a stream when the element appears."
+  }
+}

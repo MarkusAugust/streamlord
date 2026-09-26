@@ -8,3 +8,4 @@ vitest.config.*
 **/*.map
 **/.DS_Store
 media/icon.svg
+scripts/**

@@ -1,0 +1,87 @@
+{
+  "Ktor Datastar route": {
+    "prefix": "ktor-datastar-route",
+    "body": [
+      "${1|get,post,put,patch,delete|}(\"${2:/path}\") {",
+      "    call.respondDatastar {",
+      "        patchElements(selector = \"#${3:target}\", mode = ElementPatchMode.${4|OUTER,INNER,APPEND,PREPEND,REPLACE,BEFORE,AFTER|}) {",
+      "            $0",
+      "        }",
+      "    }",
+      "}"
+    ],
+    "description": "A Ktor route that answers with a Datastar stream."
+  },
+  "Ktor Datastar route with typed signals": {
+    "prefix": "ktor-datastar-signals",
+    "body": [
+      "post(\"${1:/path}\") {",
+      "    val signals = call.readSignals<${2:Signals}>() ?: ${2:Signals}()",
+      "    call.respondDatastar {",
+      "        patchSignals(signals.copy(${3:}))",
+      "    }",
+      "}"
+    ],
+    "description": "Read typed signals and patch them back."
+  },
+  "Ktor long-lived stream from a Flow": {
+    "prefix": "ktor-datastar-flow",
+    "body": [
+      "get(\"${1:/stream}\") {",
+      "    call.respondDatastar(${2:events}.map { patchElements { $0 } })",
+      "}"
+    ],
+    "description": "A stream that lives as long as the flow."
+  },
+  "Spring WebMVC Datastar endpoint": {
+    "prefix": "spring-datastar-endpoint",
+    "body": [
+      "@${1|GetMapping,PostMapping|}(\"${2:/path}\")",
+      "fun ${3:name}(request: HttpServletRequest, response: HttpServletResponse): StreamingResponseBody =",
+      "    response.datastarStream(streamlord) {",
+      "        patchElements(\"\"\"${4:<div id=\"target\"></div>}\"\"\")",
+      "    }"
+    ],
+    "description": "A Spring WebMVC endpoint that answers with a Datastar stream."
+  },
+  "patchElements with DSL": {
+    "prefix": "patchElements",
+    "body": ["patchElements(selector = \"#${1:target}\", mode = ElementPatchMode.${2|OUTER,INNER,APPEND,PREPEND|}) {", "    $0", "}"],
+    "description": "Patch elements written in the kotlinx.html DSL."
+  },
+  "patchElements with HTML string": {
+    "prefix": "patchElementsHtml",
+    "body": ["patchElements(\"\"\"<${1:div} id=\"${2:id}\">$0</${1:div}>\"\"\")"],
+    "description": "Patch elements from an HTML string."
+  },
+  "patchSignals": {
+    "prefix": "patchSignals",
+    "body": ["patchSignals(\"${1:name}\" to ${2:value})"],
+    "description": "Patch signals from pairs."
+  },
+  "removeElements": {
+    "prefix": "removeElements",
+    "body": ["removeElements(\"#${1:id}\")"],
+    "description": "Remove elements by selector."
+  },
+  "executeScript": {
+    "prefix": "executeScript",
+    "body": ["executeScript(\"\"\"${1:console.log('x')}\"\"\")"],
+    "description": "Run JavaScript in the browser."
+  },
+  "dataOnClick post": {
+    "prefix": "dataOnClick",
+    "body": ["dataOnClick(post(\"${1:/path}\"))"],
+    "description": "Post signals on click."
+  },
+  "dataSignals": {
+    "prefix": "dataSignals",
+    "body": ["dataSignals(\"${1:name}\" to ${2:value})"],
+    "description": "Declare signals."
+  },
+  "dataInit stream": {
+    "prefix": "dataInit",
+    "body": ["dataInit(get(\"${1:/stream}\"))"],
+    "description": "Open a stream when the element appears."
+  }
+}
