@@ -14,6 +14,7 @@ import kotlinx.html.li
 import kotlinx.html.span
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -187,5 +188,49 @@ class HtmlDslTest {
     fun `expression helpers`() {
         assertEquals("${'$'}user.name = \"Gorvek\"; ${'$'}open = !${'$'}open; ${'$'}n--", statements(set("user.name", "Gorvek"), toggle("open"), decrement("n")))
         assertEquals("${'$'}a = ${'$'}b + 1", setExpr("a", "${'$'}b + 1"))
+    }
+
+    /**
+     * The browser lowercases attribute names and Datastar camel-cases signal keys, so the name
+     * you write must survive both. The DSL writes camelCase keys as kebab-case, which Datastar
+     * turns back into the same camelCase; helpers read kebab-case keys the way Datastar does.
+     */
+    @Test
+    fun `camelCase names survive the attribute key`() {
+        val html = elements {
+            div {
+                dataSignals("fooBar", "1")
+                dataSignals("form.firstName", "''", ifMissing = true)
+                dataComputed("fullName", "${'$'}first + ${'$'}last")
+                dataOn("widgetLoaded", "x()") { once = true }
+                dataClass("isOpen", "${'$'}open")
+                dataStyle("backgroundColor", "'red'")
+                dataAttr("ariaLabel", "'x'")
+            }
+        }
+        assertEquals(
+            """<div data-signals:foo-bar="1" data-signals:form.first-name__ifmissing="''" data-computed:full-name="${'$'}first + ${'$'}last" """ +
+                """data-on:widget-loaded__once__case.camel="x()" data-class:is-open__case.camel="${'$'}open" """ +
+                """data-style:background-color="'red'" data-attr:aria-label="'x'"></div>""",
+            html,
+        )
+        // Already kebab, snake or lower-case: written as given. An explicit case is never second-guessed.
+        assertEquals(
+            """<div data-signals:foo-bar="1" data-signals:foo_bar="2" data-on:my-event="x()" data-signals:fooBar__case.kebab="3"></div>""",
+            elements { div { dataSignals("foo-bar", "1"); dataSignals("foo_bar", "2"); dataOn("my-event", "x()"); dataSignals("fooBar", "3", case = Case.KEBAB) } },
+        )
+        // A leading capital needs __case.pascal to come back as written.
+        assertEquals("""<div data-signals:my-signal__case.pascal="1" data-on:my-event__case.pascal="x()"></div>""", elements { div { dataSignals("MySignal", "1"); dataOn("MyEvent", "x()") } })
+        // Capitals that Datastar's own kebab would merge (myURL) still come back exactly.
+        assertEquals("""<div data-signals:my-u-r-l="1" data-signals:item2-name="2"></div>""", elements { div { dataSignals("myURL", "1"); dataSignals("item2Name", "2") } })
+        assertEquals("myURL", Casing.camel(Casing.kebab("myURL")))
+        assertEquals("item2Name", Casing.camel(Casing.kebab("item2Name")))
+        // Helpers read a kebab key the way Datastar names the signal.
+        assertEquals("${'$'}fooBar", signal("foo-bar"))
+        assertEquals("${'$'}form.firstName++", increment("form.first-name"))
+        assertEquals("${'$'}fooBar", signal("fooBar"))
+        assertFailsWith<InvalidSignalNameException> { signal("") }
+        assertFailsWith<InvalidSignalNameException> { signal("my signal") }
+        assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("a b", "1") } } }
     }
 }

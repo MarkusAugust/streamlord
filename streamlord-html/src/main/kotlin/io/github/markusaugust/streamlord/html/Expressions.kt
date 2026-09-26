@@ -10,7 +10,7 @@ import io.github.markusaugust.streamlord.core.json.JsonWriter
  */
 
 /** `$name`: a reference to a signal. Dotted names reach nested signals. */
-public fun signal(name: String): String = "$$name"
+public fun signal(name: String): String = "$" + Casing.reference(name)
 
 /** `$name = value`, with [value] serialised as JSON (which is valid JavaScript). */
 public fun set(name: String, value: Any?): String = "${signal(name)} = ${JsonWriter.write(value)}"

@@ -198,5 +198,25 @@ export function docFor(a: AttributeSpec, prefix: string): string {
   const mods = a.modifiers.length ? "\n\n**Modifiers:** " + a.modifiers.map((m) => "`__" + m.name + (m.type === "flag" ? "" : m.type === "enum" ? "." + (m.values ?? []).join("|") : m.type === "duration" ? ".500ms" : m.type === "int" ? ".n" : ".name") + "`").join(", ") : "";
   const kotlin = a.kotlin.length ? "\n\n**Kotlin:** " + a.kotlin.map((k) => "`" + k + "()`").join(", ") : "";
   const pro = a.pro ? "\n\n_Datastar Pro. Requires the Pro bundle, which you license and load yourself._" : "";
-  return `**${prefix}${a.name}**\n\n${a.doc}\n\n${a.forms.map((f) => "`" + f.replace(/^data-/, prefix) + "`").join("  \n")}${mods}${kotlin}${pro}`;
+  const casing = a.keyed ? "\n\n**Key casing:** " + casingNote(a) : "";
+  return `**${prefix}${a.name}**\n\n${a.doc}\n\n${a.forms.map((f) => "`" + f.replace(/^data-/, prefix) + "`").join("  \n")}${casing}${mods}${kotlin}${pro}`;
+}
+
+/** The browser lowercases attribute names; how Datastar reads the key differs per attribute. */
+function casingNote(a: AttributeSpec): string {
+  switch (a.name) {
+    case "signals":
+    case "computed":
+    case "bind":
+    case "ref":
+    case "indicator":
+    case "match-media":
+      return "the browser lowercases attribute names, and Datastar reads the key as camelCase: `foo-bar` is the signal `$fooBar`. Write keys in kebab-case; `__case` changes the conversion.";
+    case "on":
+      return "the key is the event name, lowercased by the browser. For a camelCase event write `widget-loaded__case.camel`.";
+    case "class":
+      return "the key is the class name, lowercased by the browser. For a camelCase class write `is-open__case.camel`.";
+    default:
+      return "the key is used as written, after the browser has lowercased it. Write it in kebab-case.";
+  }
 }

@@ -23,6 +23,10 @@ function that returns HTML, a `val` holding a fragment), and in `.html` and temp
   on top-level elements when no selector is given, a mode that needs a selector.
 - `data-*` attributes: unknown names with "did you mean", unknown modifiers, wrong modifier
   arguments (`__debounce` without a duration, `__threshold.150`), missing or unexpected keys.
+- Casing: a capital letter in a key (`data-signals:fooBar`), which the browser lowercases so
+  the signal becomes `$foobar`, and `$foo-bar` in an expression, which reads as `$foo` minus
+  `bar`. Both come with the fix: the kebab-case key (plus `__case.camel` for `data-on` and
+  `data-class`) and the camelCase signal.
 
 A string counts as HTML when it opens with a tag, a comment or a doctype, or when it carries
 IntelliJ's injection marker: `@Language("HTML")` on the function or property, or a

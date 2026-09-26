@@ -297,6 +297,32 @@ through `ExpressionGuard`. A `data-text=""` that a Kotlin template left behind t
 a small, allocation-free scan, off by default so that the choice is yours; `ElementsGuard.check(html)`
 is also there to call directly, for example in the tests of your markup functions.
 
+### Casing: keys in kebab-case, signals in camelCase
+
+The browser lowercases every attribute name, so `data-signals:fooBar` reaches Datastar as
+`foobar`. Datastar then reads the keys of the signal attributes (`signals`, `computed`, `bind`,
+`ref`, `indicator`, `match-media`) in camelCase: `foo-bar` is the signal `$fooBar`. The keys of
+`on` and `class` stay as written unless `__case` says otherwise (`widget-loaded__case.camel`
+listens to `widgetLoaded`), and `attr`, `style` and `animate` use the key as it comes. One rule
+covers it: **write keys in kebab-case, read signals in camelCase, and reach for `__case` only
+when the name really has capitals.**
+
+The DSL applies the rule so you never trip over it. A camelCase name is written as the kebab
+key that comes back as that name, with `__case` added where Datastar's default is not camel:
+
+```kotlin
+dataSignals("fooBar", "1")            // data-signals:foo-bar            -> $fooBar
+dataOn("widgetLoaded", "x()")         // data-on:widget-loaded__case.camel
+dataClass("isOpen", signal("open"))   // data-class:is-open__case.camel
+dataAttr("ariaLabel", "'x'")          // data-attr:aria-label
+signal("foo-bar")                     // $fooBar, because that is what Datastar calls it
+```
+
+An explicit `case =` is never second-guessed. A name with characters no signal can carry
+throws `InvalidSignalNameException` at render time. For strings and templates, the VS Code
+extension flags a capital letter in a key (with the kebab-case fix) and a `$foo-bar` in an
+expression (which reads as `$foo` minus `bar`) with the camelCase fix.
+
 ### What each gets
 
 | | DSL | Strings | Templates |

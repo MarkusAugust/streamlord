@@ -45,9 +45,13 @@ public fun HTMLTag.dataSignals(expression: String, case: Case? = null, ifMissing
     attributes[ds("signals${signalMods(case, ifMissing)}")] = ExpressionGuard.check(expression)
 }
 
-/** `data-signals:name="expression"`. Dotted names create nested signals. */
+/**
+ * `data-signals:name="expression"`. Dotted names create nested signals. A camelCase [name] is
+ * written in kebab-case, which Datastar reads back as the same camelCase signal; see [Casing].
+ */
 public fun HTMLTag.dataSignals(name: String, expression: String, case: Case? = null, ifMissing: Boolean = false) {
-    attributes[ds("signals:$name${signalMods(case, ifMissing)}")] = ExpressionGuard.check(expression)
+    val (key, mod) = Casing.key(name, case, Case.CAMEL)
+    attributes[ds("signals:$key${signalMods(mod, ifMissing)}")] = ExpressionGuard.check(expression)
 }
 
 /**
@@ -68,7 +72,8 @@ public fun HTMLTag.dataComputed(expression: String, case: Case? = null) {
 
 /** `data-computed:name="expression"`. */
 public fun HTMLTag.dataComputed(name: String, expression: String, case: Case? = null) {
-    attributes[ds("computed:$name${caseMod(case)}")] = ExpressionGuard.check(expression)
+    val (key, mod) = Casing.key(name, case, Case.CAMEL)
+    attributes[ds("computed:$key${caseMod(mod)}")] = ExpressionGuard.check(expression)
 }
 
 /** `data-json-signals`: renders the signal store as JSON into the element. Handy while debugging. */
@@ -90,9 +95,16 @@ public fun HTMLTag.dataEffect(expression: String) {
 
 // ---- Events -----------------------------------------------------------------------------------
 
-/** `data-on:event="expression"` with optional modifiers. */
+/**
+ * `data-on:event="expression"` with optional modifiers. A camelCase [event] such as
+ * `widgetLoaded` is written as `widget-loaded__case.camel`, which is how Datastar listens to
+ * it; see [Casing].
+ */
 public fun HTMLTag.dataOn(event: String, expression: String, modifiers: OnModifiers.() -> Unit = {}) {
-    attributes[ds("on:$event${OnModifiers().apply(modifiers).build()}")] = ExpressionGuard.check(expression)
+    val mods = OnModifiers().apply(modifiers)
+    val (key, mod) = Casing.key(event, mods.case, Case.KEBAB)
+    mods.case = mod
+    attributes[ds("on:$key${mods.build()}")] = ExpressionGuard.check(expression)
 }
 
 public fun HTMLTag.dataOnClick(expression: String, modifiers: OnModifiers.() -> Unit = {}): Unit =
@@ -178,9 +190,10 @@ public fun HTMLTag.dataClass(expression: String, case: Case? = null) {
     attributes[ds("class${caseMod(case)}")] = ExpressionGuard.check(expression)
 }
 
-/** `data-class:name="expression"`. */
+/** `data-class:name="expression"`. A camelCase [name] is written as `is-open__case.camel`, so the class stays `isOpen`; see [Casing]. */
 public fun HTMLTag.dataClass(name: String, expression: String, case: Case? = null) {
-    attributes[ds("class:$name${caseMod(case)}")] = ExpressionGuard.check(expression)
+    val (key, mod) = Casing.key(name, case, Case.KEBAB)
+    attributes[ds("class:$key${caseMod(mod)}")] = ExpressionGuard.check(expression)
 }
 
 /** `data-style="{property: expression}"`. */
@@ -188,9 +201,9 @@ public fun HTMLTag.dataStyle(expression: String) {
     attributes[ds("style")] = ExpressionGuard.check(expression)
 }
 
-/** `data-style:property="expression"`. */
+/** `data-style:property="expression"`. A camelCase [property] such as `backgroundColor` is written as `background-color`. */
 public fun HTMLTag.dataStyle(property: String, expression: String) {
-    attributes[ds("style:$property")] = ExpressionGuard.check(expression)
+    attributes[ds("style:${Casing.plainKey(property)}")] = ExpressionGuard.check(expression)
 }
 
 /** `data-attr="{name: expression}"`. */
@@ -198,9 +211,13 @@ public fun HTMLTag.dataAttr(expression: String) {
     attributes[ds("attr")] = ExpressionGuard.check(expression)
 }
 
-/** `data-attr:name="expression"`. */
+/**
+ * `data-attr:name="expression"`. A camelCase [name] such as `ariaLabel` is written as
+ * `aria-label`. An attribute that really is camelCase (SVG's `viewBox`) cannot travel in a key,
+ * since the browser lowercases it; use the object form, `dataAttr("{viewBox: ...}")`.
+ */
 public fun HTMLTag.dataAttr(name: String, expression: String) {
-    attributes[ds("attr:$name")] = ExpressionGuard.check(expression)
+    attributes[ds("attr:${Casing.plainKey(name)}")] = ExpressionGuard.check(expression)
 }
 
 // ---- Morphing and walker control --------------------------------------------------------------

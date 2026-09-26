@@ -26,6 +26,12 @@ All notable changes to the Streamlord extension are recorded here.
   Thymeleaf's `*{...}`, `#{...}` and `@{...}`.
 - Snippet `htmlFunction`: a function returning HTML as a `$$"""..."""` string under
   `@Language("HTML")`.
+- Casing. A capital letter in an attribute key (`data-signals:fooBar`, `data-on:widgetLoaded`,
+  `data-class:isOpen`, `data-attr:ariaLabel`) is a warning, since the browser lowercases it
+  and Datastar would name the signal `$foobar`; the quick fix writes the kebab-case key that
+  comes back as the intended name, with `__case.camel` or `__case.pascal` where needed. A
+  `$foo-bar` in an expression, which reads as `$foo` minus `bar`, is a warning with `$fooBar`
+  as the fix. Hover documentation of every keyed attribute states its casing rule.
 
 ## 0.2.0
 

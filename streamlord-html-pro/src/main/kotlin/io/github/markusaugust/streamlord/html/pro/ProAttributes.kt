@@ -4,6 +4,7 @@ package io.github.markusaugust.streamlord.html.pro
 
 import io.github.markusaugust.streamlord.core.domain.ExpressionGuard
 import io.github.markusaugust.streamlord.html.Case
+import io.github.markusaugust.streamlord.html.Casing
 import io.github.markusaugust.streamlord.html.DatastarAttributes
 import io.github.markusaugust.streamlord.html.SignalFilter
 import kotlinx.html.HTMLTag
@@ -79,7 +80,7 @@ public enum class VerticalAlign(internal val modifier: String) {
 
 /** `data-animate:attribute="expression"` (Pro): animate an attribute whenever its signals change. */
 public fun HTMLTag.dataAnimate(attribute: String, expression: String) {
-    attributes[ds("animate:$attribute")] = ExpressionGuard.check(expression)
+    attributes[ds("animate:${Casing.plainKey(attribute)}")] = ExpressionGuard.check(expression)
 }
 
 /** `data-custom-validity="expression"` (Pro): an expression yielding `''` when valid, a message otherwise. */
@@ -89,8 +90,9 @@ public fun HTMLTag.dataCustomValidity(expression: String) {
 
 /** `data-match-media:signal="'(query)'"` (Pro): a boolean signal that follows a media query. */
 public fun HTMLTag.dataMatchMedia(signal: String, mediaQuery: String, case: Case? = null) {
-    val mods = case?.let { "__case.${it.wire}" } ?: ""
-    attributes[ds("match-media:$signal$mods")] = "'$mediaQuery'"
+    val (key, mod) = Casing.key(signal, case, Case.CAMEL)
+    val mods = mod?.let { "__case.${it.wire}" } ?: ""
+    attributes[ds("match-media:$key$mods")] = "'$mediaQuery'"
 }
 
 /** `data-on-raf="expression"` (Pro): run on every animation frame. */

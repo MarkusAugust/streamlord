@@ -21,6 +21,15 @@ All notable changes to Streamlord are recorded here. The format follows
   library; no new dependency.
 - README: "Three ways to write markup", covering the DSL, strings (`$$"""..."""`,
   `@Language("HTML")`) and templates as equals, with what each gets from the SDK and the editors.
+- `streamlord-html`: `Casing`, the casing rules of Datastar applied so that the name you write
+  is the name you get. The browser lowercases attribute names, so the keyed helpers write a
+  camelCase name as the kebab-case key Datastar reads back as that name (`dataSignals("fooBar")`
+  is `data-signals:foo-bar`, the signal `$fooBar`), adding `__case.camel` for `dataOn` and
+  `dataClass` where Datastar's default is kebab, and `__case.pascal` for a leading capital.
+  `dataAttr`, `dataStyle` and `dataAnimate` write the key in kebab-case. `signal()` and the
+  other expression helpers read a kebab-case key the way Datastar names it (`signal("foo-bar")`
+  is `$fooBar`). `InvalidSignalNameException` for a blank name or one with characters no signal
+  can carry. An explicit `case =` is left alone.
 
 ### Changed
 

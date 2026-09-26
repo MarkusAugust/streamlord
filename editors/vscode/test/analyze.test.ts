@@ -111,6 +111,25 @@ describe("markup", () => {
     expect(codes(validateMarkup('<div id="a" data-text="$x +"></div>', { requireIds: false, prefix: "data-", checkAttributes: true }))).toEqual(["expression-syntax"]);
     expect(validateMarkup('<div id="a" data-text="{{ name }}" data-show="{% if x %}1{% endif %}"></div>', { requireIds: false, prefix: "data-", checkAttributes: true })).toEqual([]);
   });
+  it("warns about capitals in keys, which the browser lowercases", () => {
+    const src = `<div data-signals:fooBar="1" data-computed:fullName="1" data-bind:MySignal data-on:widgetLoaded="x()" data-class:isOpen="$open" data-attr:ariaLabel="'x'" data-style:backgroundColor="'red'"></div>`;
+    const issues = analyzeHtml(src, opts);
+    expect(codes(issues)).toEqual(["key-case", "key-case", "key-case", "key-case", "key-case", "key-case", "key-case"]);
+    expect(issues.map((i) => i.fixes![0]!.text)).toEqual(["foo-bar", "full-name", "my-signal__case.pascal", "widget-loaded__case.camel", "is-open__case.camel", "aria-label", "background-color"]);
+    expect(issues[0]!.message).toContain("$foobar");
+    expect(src.slice(issues[0]!.start, issues[0]!.end)).toBe("fooBar");
+    const fine = `<div data-signals:foo-bar="1" data-signals:fooBar__case.kebab="1" data-on:widgetLoaded__case.camel="x()" data-bind="fooBar" data-signals="{fooBar: 1}"></div>`;
+    expect(analyzeHtml(fine, opts)).toEqual([]);
+  });
+
+  it("warns about kebab-case where a camelCase signal belongs", () => {
+    const issues = validateExpression("$foo-bar + $form.first-name-x + $a - $b + $count-1");
+    expect(codes(issues)).toEqual(["signal-kebab", "signal-kebab"]);
+    expect(issues.map((i) => i.fixes![0]!.text)).toEqual(["$fooBar", "$form.firstNameX"]);
+    expect(validateExpression("$fooBar && $a-$b")).toEqual([]);
+    expect(codes(analyzeKotlin(`dataText("\${'$'}foo-bar")`, opts))).toEqual(["signal-kebab"]);
+  });
+
   it("honours the aliased prefix", () => {
     expect(codes(validateMarkup('<div data-star-on:click="x()" data-on:click="y("></div>', { requireIds: false, prefix: "data-star-", checkAttributes: true }))).toEqual([]);
     expect(codes(validateMarkup('<div data-star-on:click="x()"></div>', { requireIds: false, prefix: "data-", checkAttributes: true }))).toEqual(["prefix-mismatch"]);

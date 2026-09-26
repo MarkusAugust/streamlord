@@ -31,7 +31,11 @@ export const DOCS = {
   actions: "https://data-star.dev/reference/actions",
   sse: "https://data-star.dev/reference/sse_events",
   expressions: "https://data-star.dev/guide/datastar_expressions",
+  signals: "https://data-star.dev/guide/reactive_signals",
 };
+
+/** `$foo-bar`: a kebab-case key written where the camelCase signal belongs. */
+const KEBAB_SIGNAL = /\$[A-Za-z_][A-Za-z0-9_.]*(?:-[a-z][A-Za-z0-9_]*)+/g;
 
 export function attributeDoc(name: string): string {
   return `${DOCS.attributes}#${name.startsWith("data-") ? name : "data-" + name}`;
@@ -59,6 +63,21 @@ export function validateExpression(text: string): Issue[] {
     const end = Math.max(pos + 1, Math.min(err.raisedAt ?? pos + 1, text.length));
     const msg = (err.message ?? "Syntax error").replace(/\s*\(\d+:\d+\)$/, "");
     issues.push({ start: pos, end, message: `Datastar expression: ${msg}`, severity: "error", code: "expression-syntax", link: DOCS.expressions });
+  }
+  KEBAB_SIGNAL.lastIndex = 0;
+  let k: RegExpExecArray | null;
+  while ((k = KEBAB_SIGNAL.exec(text)) !== null) {
+    const written = k[0];
+    const camel = written.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+    issues.push({
+      start: k.index,
+      end: k.index + written.length,
+      message: `${written} reads as ${written.split("-")[0]} minus the rest. Datastar names signals in camelCase: a key foo-bar is the signal $fooBar.`,
+      severity: "warning",
+      code: "signal-kebab",
+      link: DOCS.signals,
+      fixes: [{ title: `Change to ${camel}`, start: k.index, end: k.index + written.length, text: camel }],
+    });
   }
   ACTION.lastIndex = 0;
   let m: RegExpExecArray | null;
