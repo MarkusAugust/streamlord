@@ -23,16 +23,21 @@ const SERIALIZABLE_CLASS = /@Serializable\s*(?:\([^)]*\))?\s*(?:data\s+)?class\s
 const PROPERTY = /\b(?:val|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:/g;
 
 const PAIR_CALLS: ReadonlySet<string> = new Set(["dataSignals", "patchSignals", "removeSignals", "respondSignals", "datastarSignals"]);
-const PAIR = /"([A-Za-z_][A-Za-z0-9_.]*)"(?:\s+to\b|\s*,|\s*\)|\s*$)/g;
+const PAIR = /"([A-Za-z_][A-Za-z0-9_.]*)"\s+to\b/g;
+const NAME = /^"([A-Za-z_][A-Za-z0-9_.]*)"$/;
 
 export function collectSignals(src: string, language: "kotlin" | "html"): Set<string> {
   const out = new Set<string>();
   if (language === "kotlin") {
     for (const site of findCallSites(src, PAIR_CALLS)) {
-      const inner = src.slice(site.openParen + 1, site.closeParen);
-      PAIR.lastIndex = 0;
-      let pm: RegExpExecArray | null;
-      while ((pm = PAIR.exec(inner)) !== null) if (pm[1] && !/^(true|false)$/.test(pm[1])) out.add(pm[1]);
+      const positional = site.args.filter((a) => a.named === null);
+      positional.forEach((a, idx) => {
+        for (const pair of a.text.matchAll(PAIR)) if (pair[1]) out.add(pair[1]);
+        const name = NAME.exec(a.text);
+        if (!name?.[1]) return;
+        // removeSignals("a", "b") and dataSignals("name", "expression") take names positionally.
+        if (site.name === "removeSignals" || (site.name === "dataSignals" && idx === 0 && positional[1]?.string)) out.add(name[1]);
+      });
     }
   }
   const patterns = language === "kotlin" ? KOTLIN_PATTERNS : HTML_PATTERNS;
