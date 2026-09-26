@@ -1,12 +1,12 @@
 # Streamlord
 
-> *The elders of the Emberwastes asked Gorvek what a warrior wants of a stream.*
+> *The elders of Bonereach asked Gorvek what a warrior wants of a stream.*
 > *"That it flows when I say flow. That it stops when I say stop. That it carries my will to
 > the far shore, and nothing else."*
 > *"And the JavaScript?"*
 > *"I do not know the word."*
 >
-> — Gorvek, who walked out of the Ashfall with iron in his hand
+> — Gorvek of Bonereach, who walked out of the Ashfall with iron in his hand
 
 **Streamlord** is a Kotlin SDK for [Datastar](https://data-star.dev) 1.0.4. It speaks the
 Datastar Server-Sent Events protocol exactly, reads the signals the browser sends back, and
@@ -31,9 +31,9 @@ get("/feed") {
 >
 > *Sit. Read. The stream was always yours to bend.*
 >
-> — Velmoraine the Faceless, whom the river-priests of Ithe call the Lord of Streams
+> — Sarn the Faceless, whom the river-priests of Thurn call the Lord of Streams
 
-What follows is Velmoraine's grimoire. The code is deadly serious; the voice is not ours.
+What follows is Sarn's grimoire. The code is deadly serious; the voice is not ours.
 
 ---
 
@@ -303,5 +303,5 @@ JDK 21 builds it; the artifacts target JDK 17.
 
 MIT. Take it, wield it, and may your streams never buffer.
 
-*Gorvek, Velmoraine, the Hollow March and every other name in this grimoire are our own
+*Gorvek, Sarn, the Hollow March and every other name in this grimoire are our own
 invention. Any resemblance to legends told at other tables is the mead's doing.*
