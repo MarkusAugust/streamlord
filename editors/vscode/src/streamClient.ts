@@ -19,7 +19,7 @@ export interface StreamHandlers {
   onStatus?: (status: "connecting" | "open" | "closed", detail?: { http?: string; contentType?: string }) => void;
   onFrame?: (frame: DatastarFrame) => void;
   onComment?: (text: string) => void;
-  onNonSse?: (response: { contentType: string; body: string; headers: Record<string, string> }) => void;
+  onNonSse?: (response: { http: string; contentType: string; body: string; headers: Record<string, string> }) => void;
   onError?: (message: string) => void;
 }
 
@@ -68,7 +68,7 @@ export async function openStream(req: StreamRequest, handlers: StreamHandlers, s
       response.headers.forEach((v, k) => {
         if (k.startsWith("datastar-")) datastarHeaders[k] = v;
       });
-      handlers.onNonSse?.({ contentType: ct, body: text, headers: datastarHeaders });
+      handlers.onNonSse?.({ http: `${response.status} ${response.statusText}`, contentType: ct, body: text, headers: datastarHeaders });
       handlers.onStatus?.("closed");
       return;
     }
