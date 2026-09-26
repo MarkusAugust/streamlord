@@ -1,6 +1,9 @@
 # Streamlord for VS Code
 
-> *The forge is one thing. The eye that sees the flaw before the blade is quenched is another.*
+> *The forge is one thing. The eye that sees the flaw before the blade is quenched is another.
+> I have both, and I lend them to you for nothing. Ask yourself why.*
+>
+> — Merigall
 
 Editor support for the [Streamlord](https://github.com/MarkusAugust/streamlord) Kotlin SDK and
 the Datastar 1.0.4 protocol.
