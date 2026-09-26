@@ -102,11 +102,15 @@ export async function openStream(req: StreamRequest, handlers: StreamHandlers, s
 
 /** `fetch failed` says nothing; the cause underneath usually says everything. */
 export function describeError(e: unknown): string {
-  const err = e as Error & { cause?: { code?: string; message?: string; address?: string; port?: number } };
+  type Cause = { code?: string; message?: string; address?: string; port?: number; errors?: Cause[] };
+  const err = e as Error & { cause?: Cause };
   const cause = err.cause;
-  if (cause?.code === "ECONNREFUSED") return `Connection refused at ${cause.address ?? "host"}:${cause.port ?? "?"}. Is the server running?`;
-  if (cause?.code === "ENOTFOUND") return `Host not found: ${cause.address ?? err.message}.`;
-  if (cause?.code) return `${cause.code}: ${cause.message ?? err.message}`;
+  // A refused connection to localhost is an AggregateError over ::1 and 127.0.0.1; the details sit in errors[].
+  const first = cause?.errors?.[0] ?? cause;
+  const where = first?.address ? `${first.address}:${first.port ?? "?"}` : new URL(err.message.startsWith("http") ? err.message : "http://unknown").host;
+  if (cause?.code === "ECONNREFUSED") return `Connection refused at ${where}. Is the server running?`;
+  if (cause?.code === "ENOTFOUND") return `Host not found: ${first?.address ?? cause.message ?? err.message}.`;
+  if (cause?.code) return `${cause.code}: ${cause.message || err.message}`;
   if (cause?.message) return `${err.message}: ${cause.message}`;
   return err.message;
 }
