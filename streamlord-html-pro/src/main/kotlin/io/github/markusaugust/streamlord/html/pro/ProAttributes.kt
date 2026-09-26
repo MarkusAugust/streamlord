@@ -3,6 +3,7 @@
 package io.github.markusaugust.streamlord.html.pro
 
 import io.github.markusaugust.streamlord.html.Case
+import io.github.markusaugust.streamlord.html.DatastarAttributes
 import io.github.markusaugust.streamlord.html.SignalFilter
 import kotlinx.html.HTMLTag
 import kotlin.time.Duration
@@ -21,6 +22,8 @@ import kotlin.time.Duration
  */
 
 private fun Duration.ms(): String = "${inWholeMilliseconds}ms"
+
+private fun ds(suffix: String): String = DatastarAttributes.name(suffix)
 
 /** Modifiers for `data-on-resize`. */
 public class ResizeModifiers {
@@ -75,28 +78,28 @@ public enum class VerticalAlign(internal val modifier: String) {
 
 /** `data-animate:attribute="expression"` (Pro): animate an attribute whenever its signals change. */
 public fun HTMLTag.dataAnimate(attribute: String, expression: String) {
-    attributes["data-animate:$attribute"] = expression
+    attributes[ds("animate:$attribute")] = expression
 }
 
 /** `data-custom-validity="expression"` (Pro): an expression yielding `''` when valid, a message otherwise. */
 public fun HTMLTag.dataCustomValidity(expression: String) {
-    attributes["data-custom-validity"] = expression
+    attributes[ds("custom-validity")] = expression
 }
 
 /** `data-match-media:signal="'(query)'"` (Pro): a boolean signal that follows a media query. */
 public fun HTMLTag.dataMatchMedia(signal: String, mediaQuery: String, case: Case? = null) {
     val mods = case?.let { "__case.${it.wire}" } ?: ""
-    attributes["data-match-media:$signal$mods"] = "'$mediaQuery'"
+    attributes[ds("match-media:$signal$mods")] = "'$mediaQuery'"
 }
 
 /** `data-on-raf="expression"` (Pro): run on every animation frame. */
 public fun HTMLTag.dataOnRaf(expression: String, modifiers: RafModifiers.() -> Unit = {}) {
-    attributes["data-on-raf${RafModifiers().apply(modifiers).build()}"] = expression
+    attributes[ds("on-raf${RafModifiers().apply(modifiers).build()}")] = expression
 }
 
 /** `data-on-resize="expression"` (Pro): run when the element's size changes. */
 public fun HTMLTag.dataOnResize(expression: String, modifiers: ResizeModifiers.() -> Unit = {}) {
-    attributes["data-on-resize${ResizeModifiers().apply(modifiers).build()}"] = expression
+    attributes[ds("on-resize${ResizeModifiers().apply(modifiers).build()}")] = expression
 }
 
 /**
@@ -108,7 +111,7 @@ public fun HTMLTag.dataOnResize(expression: String, modifiers: ResizeModifiers.(
  */
 public fun HTMLTag.dataPersist(key: String? = null, filter: SignalFilter? = null, session: Boolean = false) {
     val name = buildString {
-        append("data-persist")
+        append(ds("persist"))
         key?.let { append(':').append(it) }
         if (session) append("__session")
     }
@@ -124,7 +127,7 @@ public fun HTMLTag.dataPersist(key: String? = null, filter: SignalFilter? = null
  */
 public fun HTMLTag.dataQueryString(filter: SignalFilter? = null, omitEmpty: Boolean = false, history: Boolean = false) {
     val name = buildString {
-        append("data-query-string")
+        append(ds("query-string"))
         if (omitEmpty) append("__filter")
         if (history) append("__history")
     }
@@ -133,7 +136,7 @@ public fun HTMLTag.dataQueryString(filter: SignalFilter? = null, omitEmpty: Bool
 
 /** `data-replace-url="expression"` (Pro): replace the browser URL without a reload. */
 public fun HTMLTag.dataReplaceUrl(expression: String) {
-    attributes["data-replace-url"] = expression
+    attributes[ds("replace-url")] = expression
 }
 
 /** `data-scroll-into-view` (Pro): scroll the element into the viewport when it appears. */
@@ -144,7 +147,7 @@ public fun HTMLTag.dataScrollIntoView(
     focus: Boolean = false,
 ) {
     val name = buildString {
-        append("data-scroll-into-view")
+        append(ds("scroll-into-view"))
         behavior?.let { append(it.modifier) }
         horizontal?.let { append(it.modifier) }
         vertical?.let { append(it.modifier) }
@@ -155,5 +158,5 @@ public fun HTMLTag.dataScrollIntoView(
 
 /** `data-view-transition="expression"` (Pro): set the element's `view-transition-name`. */
 public fun HTMLTag.dataViewTransition(expression: String) {
-    attributes["data-view-transition"] = expression
+    attributes[ds("view-transition")] = expression
 }

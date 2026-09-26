@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.html.pro
 
 import io.github.markusaugust.streamlord.html.Case
+import io.github.markusaugust.streamlord.html.DatastarAttributes
 import io.github.markusaugust.streamlord.html.SignalFilter
 import io.github.markusaugust.streamlord.html.elements
 import io.github.markusaugust.streamlord.html.signal
@@ -38,6 +39,19 @@ class ProDslTest {
                 """<input data-custom-validity="${'$'}a === ${'$'}b ? '' : 'Values must match.'">""",
             html,
         )
+    }
+
+    @Test
+    fun `pro attributes honour the aliased prefix`() {
+        DatastarAttributes.prefix = "data-star-"
+        try {
+            assertEquals(
+                """<div data-star-persist:k="" data-star-query-string__history="" data-star-scroll-into-view__smooth="" data-star-on-raf="x()"></div>""",
+                elements { div { dataPersist("k"); dataQueryString(history = true); dataScrollIntoView(ScrollBehavior.SMOOTH); dataOnRaf("x()") } },
+            )
+        } finally {
+            DatastarAttributes.prefix = "data-"
+        }
     }
 
     @Test

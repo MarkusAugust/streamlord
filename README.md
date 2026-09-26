@@ -187,6 +187,9 @@ post("/form") { contentType = FetchOptions.ContentType.FORM; retry = FetchOption
 // @post("/form", {contentType: "form", retry: "never"})
 ```
 
+Every attribute plugin, modifier and action of the 1.0.4 client is covered, audited against its
+source. Using the aliased bundle? Set `DatastarAttributes.prefix = "data-star-"` once at startup.
+
 The DSL also feeds events and streams directly: `stream.patchElements(selector = "#x") { ... }`,
 `patchElements { ... }` for a `Flow`, and `elementsResponse { ... }` for a non-SSE reply.
 

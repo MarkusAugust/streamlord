@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.html
 
+import io.github.markusaugust.streamlord.core.domain.ElementNamespace
+import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.json.JsonWriter
 import kotlin.time.Duration
 
@@ -34,9 +36,46 @@ public class FetchOptions {
     /** `'auto'` (default), `'cleanup'` or `'disabled'`. */
     public var requestCancellation: RequestCancellation? = null
 
+    /** Send this value instead of the signal store. Serialised as JSON. */
+    public var payload: Any? = null
+
+    /** Send this raw JavaScript expression as the payload, e.g. `"{id: ${'$'}selected}"`. Overrides [payload]. */
+    public var payloadExpr: String? = null
+
+    /** Options the client applies to a non-SSE response regardless of its `datastar-*` headers. */
+    public var responseOverrides: ResponseOverrides? = null
+
+    /** Configure [responseOverrides] inline. */
+    public fun responseOverrides(block: ResponseOverrides.() -> Unit) {
+        responseOverrides = ResponseOverrides().apply(block)
+    }
+
     public enum class ContentType(public val wire: String) { JSON("json"), FORM("form") }
     public enum class Retry(public val wire: String) { AUTO("auto"), ERROR("error"), ALWAYS("always"), NEVER("never") }
     public enum class RequestCancellation(public val wire: String) { AUTO("auto"), CLEANUP("cleanup"), DISABLED("disabled") }
+
+    /**
+     * Overrides for non-SSE responses: the element options for a `text/html` body, or
+     * `onlyIfMissing` for an `application/json` body.
+     */
+    public class ResponseOverrides {
+        public var selector: String? = null
+        public var mode: ElementPatchMode? = null
+        public var namespace: ElementNamespace? = null
+        public var useViewTransition: Boolean? = null
+        public var onlyIfMissing: Boolean? = null
+
+        internal fun toJs(): String? {
+            val entries = buildList {
+                selector?.let { add("selector: ${js(it)}") }
+                mode?.let { add("mode: ${js(it.wire)}") }
+                namespace?.let { add("namespace: ${js(it.wire)}") }
+                useViewTransition?.let { add("useViewTransition: $it") }
+                onlyIfMissing?.let { add("onlyIfMissing: $it") }
+            }
+            return if (entries.isEmpty()) null else entries.joinToString(", ", "{", "}")
+        }
+    }
 
     /** Render as a JavaScript object literal, or `null` when every option is at its default. */
     public fun toJs(): String? {
@@ -52,6 +91,8 @@ public class FetchOptions {
             retryMaxWait?.let { add("retryMaxWait: ${it.inWholeMilliseconds}") }
             retryMaxCount?.let { add("retryMaxCount: $it") }
             requestCancellation?.let { add("requestCancellation: ${js(it.wire)}") }
+            (payloadExpr ?: payload?.let { JsonWriter.write(it) })?.let { add("payload: $it") }
+            responseOverrides?.toJs()?.let { add("responseOverrides: $it") }
         }
         return if (entries.isEmpty()) null else entries.joinToString(", ", "{", "}")
     }

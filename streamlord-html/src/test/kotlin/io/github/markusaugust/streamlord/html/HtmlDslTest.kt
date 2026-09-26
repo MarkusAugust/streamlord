@@ -6,6 +6,8 @@ import io.github.markusaugust.streamlord.core.port.driven.BufferedSseSink
 import kotlinx.coroutines.test.runTest
 import kotlinx.html.button
 import kotlinx.html.div
+import kotlinx.html.form
+import kotlinx.html.html
 import kotlinx.html.id
 import kotlinx.html.input
 import kotlinx.html.li
@@ -124,6 +126,61 @@ class HtmlDslTest {
         assertEquals("@setAll(false, {include: /^menu\\./})", setAll(false, SignalFilter.include("^menu\\.")))
         assertEquals("@toggleAll()", toggleAll())
         assertEquals("@peek(() => ${'$'}count)", peek(signal("count")))
+    }
+
+    @Test
+    fun `payload and response overrides`() {
+        assertEquals(
+            """@post("/x", {payload: {"id":7}, responseOverrides: {selector: "#out", mode: "inner", useViewTransition: true}})""",
+            post("/x") {
+                payload = mapOf("id" to 7)
+                responseOverrides { selector = "#out"; mode = ElementPatchMode.INNER; useViewTransition = true }
+            },
+        )
+        assertEquals("""@get("/x", {payload: {id: ${'$'}selected}, responseOverrides: {onlyIfMissing: true}})""", get("/x") { payloadExpr = "{id: ${'$'}selected}"; responseOverrides { onlyIfMissing = true } })
+    }
+
+    @Test
+    fun `fetch lifecycle sugar`() {
+        assertEquals(
+            """<div data-on:datastar-fetch__window="evt.detail.type === 'started' &amp;&amp; (${'$'}busy = true)"></div>""",
+            elements { div { dataOnFetch("evt.detail.type === '${FetchEventType.STARTED}' && (${set("busy", true)})") { window = true } } },
+        )
+    }
+
+    @Test
+    fun `aliased bundle prefix applies everywhere`() {
+        DatastarAttributes.prefix = "data-star-"
+        try {
+            assertEquals(
+                """<div data-star-signals="{&quot;n&quot;:1}" data-star-on:click__once="x()" data-star-ignore__self="" data-star-json-signals=""></div>""",
+                elements { div { dataSignals("n" to 1); dataOnClick("x()") { once = true }; dataIgnore(self = true); dataJsonSignals() } },
+            )
+        } finally {
+            DatastarAttributes.prefix = "data-"
+        }
+    }
+
+    @Test
+    fun `remaining event sugar, nonce, verbs and responses`() {
+        val html = elements {
+            html {
+                dataNonce("n0nce")
+                form {
+                    dataOnSubmit(post("/save"))
+                    input { dataOnInput(put("/draft")); dataOnChange(patch("/field")); dataOnKeydown("evt.key") }
+                }
+            }
+        }
+        assertEquals(
+            """<html data-nonce="n0nce"><form data-on:submit="@post(&quot;/save&quot;)">""" +
+                """<input data-on:input="@put(&quot;/draft&quot;)" data-on:change="@patch(&quot;/field&quot;)" data-on:keydown="evt.key"></form></html>""",
+            html,
+        )
+        assertEquals("\"a'b\"", js("a'b"))
+        val response = elementsResponse(selector = "#out", mode = ElementPatchMode.INNER) { span { +"x" } }
+        assertEquals("<span>x</span>", response.body)
+        assertEquals(mapOf("datastar-selector" to "#out", "datastar-mode" to "inner"), response.headers)
     }
 
     @Test
