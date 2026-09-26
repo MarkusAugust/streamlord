@@ -163,8 +163,7 @@
     "test": "node --experimental-transform-types --import ./test/hooks.mjs --test 'test/**/*.test.ts'",
     "package": "npm run typecheck && npm run build && vsce package --no-dependencies",
     "vscode:prepublish": "npm run build",
-    "test:live": "node --experimental-transform-types --import ./test/hooks.mjs --test test/live/*.live.ts",
-    "publish:marketplace": "npm run typecheck && npm test && npm run build && vsce publish --no-dependencies"
+    "test:live": "node --experimental-transform-types --import ./test/hooks.mjs --test test/live/*.live.ts"
   },
   "dependencies": {
     "acorn": "8.18.0"

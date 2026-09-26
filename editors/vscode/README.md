@@ -82,14 +82,11 @@ Press F5 in the `streamlord.code-workspace` to launch an Extension Development H
 
 ### Publishing
 
-The extension is published to the VS Code Marketplace under the publisher in `package.json`.
-Two ways:
-
-- **From CI:** bump `version` in `package.json`, commit, then push a tag `vscode-v<version>`.
-  The `publish-vscode` job checks that the tag matches, builds, and runs `vsce publish` with
-  the `VSCE_PAT` repository secret (an Azure DevOps personal access token with the
-  Marketplace *Manage* scope).
-- **Locally:** `npx vsce login <publisher>` once, then `npm run publish:marketplace`.
+The extension is published to the VS Code Marketplace from CI only, never from a developer
+machine. Bump `version` in `package.json`, commit, then push a tag `vscode-v<version>`. The
+`publish-vscode` job checks that the tag matches, builds, tests, and runs `vsce publish` with
+the `VSCE_PAT` repository secret (an Azure DevOps personal access token with the Marketplace
+*Manage* scope for the `MarkusAugust` publisher).
 
 No `.vsix` is ever committed; `npm run package` only builds one locally for installing by hand. The
 attribute and action catalog lives in `../../catalog/` and is verified against the Kotlin DSL
