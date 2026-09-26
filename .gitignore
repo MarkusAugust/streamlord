@@ -28,3 +28,6 @@ local.properties
 node_modules/
 editors/vscode/dist/
 *.vsix
+
+# Local scratch files for trying the extension
+playground/

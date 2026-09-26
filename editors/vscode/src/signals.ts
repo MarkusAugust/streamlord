@@ -1,3 +1,5 @@
+import { findCallSites } from "./scanner.ts";
+
 /**
  * Collects signal names declared anywhere in a source file, for completion. Heuristic and
  * generous: better to offer a name twice than to miss it.
@@ -6,7 +8,6 @@
 const KOTLIN_PATTERNS: RegExp[] = [
   /\b(?:signal|set|setExpr|increment|decrement|toggle|not|dataBind|dataIndicator|dataRef|dataComputed|dataMatchMedia)\(\s*"([A-Za-z_][A-Za-z0-9_.]*)"/g,
   /\bdataSignals\(\s*"([A-Za-z_][A-Za-z0-9_.]*)"\s*,/g,
-  /"([A-Za-z_][A-Za-z0-9_.]*)"\s+to\b/g,
   /\$\{'\$'\}([A-Za-z_][A-Za-z0-9_.]*)/g,
   /\\\$([A-Za-z_][A-Za-z0-9_.]*)/g,
 ];
@@ -21,8 +22,19 @@ const HTML_PATTERNS: RegExp[] = [
 const SERIALIZABLE_CLASS = /@Serializable\s*(?:\([^)]*\))?\s*(?:data\s+)?class\s+\w+\s*\(([^)]*)\)/g;
 const PROPERTY = /\b(?:val|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:/g;
 
+const PAIR_CALLS: ReadonlySet<string> = new Set(["dataSignals", "patchSignals", "removeSignals", "respondSignals", "datastarSignals"]);
+const PAIR = /"([A-Za-z_][A-Za-z0-9_.]*)"(?:\s+to\b|\s*,|\s*\)|\s*$)/g;
+
 export function collectSignals(src: string, language: "kotlin" | "html"): Set<string> {
   const out = new Set<string>();
+  if (language === "kotlin") {
+    for (const site of findCallSites(src, PAIR_CALLS)) {
+      const inner = src.slice(site.openParen + 1, site.closeParen);
+      PAIR.lastIndex = 0;
+      let pm: RegExpExecArray | null;
+      while ((pm = PAIR.exec(inner)) !== null) if (pm[1] && !/^(true|false)$/.test(pm[1])) out.add(pm[1]);
+    }
+  }
   const patterns = language === "kotlin" ? KOTLIN_PATTERNS : HTML_PATTERNS;
   for (const re of patterns) {
     re.lastIndex = 0;

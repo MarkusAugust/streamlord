@@ -31,14 +31,15 @@ const IDENT = /\b([A-Za-z_][A-Za-z0-9_]*)\s*\(/g;
 
 export function findCallSites(src: string, names: ReadonlySet<string>): CallSite[] {
   const sites: CallSite[] = [];
+  const mask = codeMask(src);
   IDENT.lastIndex = 0;
   let m: RegExpExecArray | null;
   while ((m = IDENT.exec(src)) !== null) {
     const name = m[1] ?? "";
     if (!names.has(name)) continue;
     const nameStart = m.index;
+    if (mask[nameStart] === 0) continue;
     if (/\bfun\s+(?:[A-Za-z_][A-Za-z0-9_<>.,?* ]*\.)?$/.test(src.slice(Math.max(0, nameStart - 80), nameStart))) continue;
-    if (isInsideStringOrComment(src, nameStart)) continue;
     const openParen = m.index + m[0].length - 1;
     const parsed = parseArgs(src, openParen);
     if (!parsed) continue;
@@ -119,26 +120,58 @@ function makeArg(src: string, from: number, to: number): Arg {
   return { start, end, named, text: src.slice(start, end), string };
 }
 
-/** Cheap check: is this offset inside a string literal or comment? Scans from the start of the line. */
-function isInsideStringOrComment(src: string, offset: number): boolean {
-  // Block comments and raw strings can span lines; check for an enclosing one first.
-  const before = src.slice(0, offset);
-  const lastRawOpen = before.lastIndexOf('"""');
-  if (lastRawOpen >= 0) {
-    const s = readKotlinStringAt(src, lastRawOpen);
-    if (s && s.end > offset && !s.unterminated) return true;
-  }
-  const lastBlockOpen = before.lastIndexOf("/*");
-  if (lastBlockOpen >= 0 && before.lastIndexOf("*/") < lastBlockOpen) return true;
-  const lineStart = before.lastIndexOf("\n") + 1;
-  let inString = false;
-  for (let i = lineStart; i < offset; i++) {
+/**
+ * A mask of which offsets are code, as opposed to string literals, character literals and
+ * comments. Built once per scan; Kotlin block comments nest, raw strings span lines.
+ */
+export function codeMask(src: string): Uint8Array {
+  const mask = new Uint8Array(src.length).fill(1);
+  let i = 0;
+  const blank = (from: number, to: number) => mask.fill(0, from, Math.min(to, src.length));
+  while (i < src.length) {
     const c = src[i];
-    if (!inString && c === "/" && src[i + 1] === "/") return true;
-    if (c === '"') inString = !inString;
-    if (c === "\\" && inString) i++;
+    if (c === '"') {
+      const s = readKotlinStringAt(src, i);
+      const end = s ? Math.max(s.end, i + 1) : i + 1;
+      blank(i, end);
+      i = end;
+      continue;
+    }
+    if (c === "'") {
+      let j = i + 1;
+      if (src[j] === "\\") j += 2;
+      else j += 1;
+      if (src[j] === "'") j++;
+      blank(i, j);
+      i = j;
+      continue;
+    }
+    if (c === "/" && src[i + 1] === "/") {
+      const nl = src.indexOf("\n", i);
+      const end = nl < 0 ? src.length : nl;
+      blank(i, end);
+      i = end;
+      continue;
+    }
+    if (c === "/" && src[i + 1] === "*") {
+      let depth = 1;
+      let j = i + 2;
+      while (j < src.length && depth > 0) {
+        if (src.startsWith("/*", j)) {
+          depth++;
+          j += 2;
+        } else if (src.startsWith("*/", j)) {
+          depth--;
+          j += 2;
+        } else j++;
+      }
+      blank(i, j);
+      i = j;
+      continue;
+    }
+    i++;
   }
-  return inString;
+  return mask;
 }
 
 /** Pick the string argument a call-site spec points at. */

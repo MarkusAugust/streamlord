@@ -124,6 +124,16 @@ describe("analyzeKotlin", () => {
     `;
     expect(codes(analyzeKotlin(src, opts))).toEqual(["missing-id", "mode-needs-selector", "blank-selector", "script-close"]);
   });
+  it("keeps scanning after raw strings, nested comments and char literals", () => {
+    const src = `
+      s.patchElements("""<div>a</div>""")
+      s.patchElements("<li>x</li>", mode = ElementPatchMode.APPEND)
+      val c = '"'
+      /* outer /* inner */ still comment: patchElements("<p>") */
+      s.patchElements("""<div id="a"><p>x</div>""")
+      s.removeElements(" ")`;
+    expect(codes(analyzeKotlin(src, opts))).toEqual(["missing-id", "mode-needs-selector", "unclosed", "blank-selector"]);
+  });
   it("ignores declarations, comments and dsl-built html", () => {
     const src = `// dataOnClick("$x")
       /* patchElements("<div>") */
@@ -147,8 +157,9 @@ describe("analyzeHtml", () => {
 describe("signals", () => {
   it("collects from kotlin and html", () => {
     const kt = `dataSignals("count" to 0, "user" to mapOf("name" to "")); dataBind("search"); signal("open"); patchSignals(Search(q = "x"))
+      mapOf("notASignal" to 1); removeSignals("gone", "away")
       @Serializable data class Search(val query: String = "", val page: Int = 1)`;
-    expect([...collectSignals(kt, "kotlin")].sort()).toEqual(["count", "name", "open", "page", "query", "search", "user"]);
+    expect([...collectSignals(kt, "kotlin")].sort()).toEqual(["away", "count", "gone", "name", "open", "page", "query", "search", "user"]);
     const html = `<div data-signals="{count: 1, open: false}" data-bind:first-name data-text="$other.x"></div>`;
     expect([...collectSignals(html, "html")].sort()).toEqual(["count", "firstName", "open", "other.x"]);
   });

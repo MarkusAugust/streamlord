@@ -39,6 +39,11 @@ export class SignalIndex implements vscode.Disposable {
     this.byFile.set(key, collectSignals(text, language));
   }
 
+  /** Signals declared in one file, or an empty set. */
+  forFile(uri: string): Set<string> {
+    return this.byFile.get(uri) ?? new Set();
+  }
+
   all(): Set<string> {
     const out = new Set<string>();
     for (const s of this.byFile.values()) for (const n of s) out.add(n);

@@ -96,9 +96,12 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
   private expressionItems(textBefore: string, document: vscode.TextDocument, position: vscode.Position, textStartOffset: number, allowActions: boolean): vscode.CompletionItem[] {
     const sig = signalPrefixAt(textBefore, textBefore.length);
     if (sig !== null) {
+      const local = this.signals.forFile(document.uri.toString());
       return [...this.signals.all()].sort().map((name) => {
         const item = new vscode.CompletionItem("$" + name, vscode.CompletionItemKind.Variable);
-        item.detail = "signal";
+        const isLocal = local.has(name);
+        item.detail = isLocal ? "signal (this file)" : "signal (workspace)";
+        item.sortText = (isLocal ? "0" : "1") + name;
         item.range = new vscode.Range(document.positionAt(textStartOffset + textBefore.length - sig.length - 1), position);
         item.filterText = "$" + name;
         return item;
