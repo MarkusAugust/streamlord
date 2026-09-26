@@ -1,8 +1,13 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
+import com.vanniktech.maven.publish.JavadocJar
+import com.vanniktech.maven.publish.KotlinJvm
+import com.vanniktech.maven.publish.MavenPublishBaseExtension
+
 plugins {
     alias(libs.plugins.kotlin.jvm) apply false
     alias(libs.plugins.kotlin.serialization) apply false
+    alias(libs.plugins.maven.publish) apply false
 }
 
 /*
@@ -15,7 +20,7 @@ plugins {
 subprojects {
     apply(plugin = "org.jetbrains.kotlin.jvm")
     apply(plugin = "java-library")
-    apply(plugin = "maven-publish")
+    apply(plugin = "com.vanniktech.maven.publish")
 
     group = rootProject.group
     version = rootProject.version
@@ -31,7 +36,6 @@ subprojects {
     }
 
     extensions.configure<JavaPluginExtension> {
-        withSourcesJar()
         toolchain.languageVersion.set(JavaLanguageVersion.of(21))
     }
 
@@ -47,25 +51,39 @@ subprojects {
         }
     }
 
-    extensions.configure<PublishingExtension> {
-        publications {
-            create<MavenPublication>("maven") {
-                from(components["java"])
-                pom {
-                    name.set(project.name)
-                    description.set("Streamlord: a Kotlin SDK for Datastar. Bend server streams to your will.")
-                    url.set("https://github.com/MarkusAugust/streamlord")
-                    licenses {
-                        license {
-                            name.set("MIT")
-                            url.set("https://opensource.org/licenses/MIT")
-                        }
-                    }
-                    scm {
-                        url.set("https://github.com/MarkusAugust/streamlord")
-                        connection.set("scm:git:https://github.com/MarkusAugust/streamlord.git")
-                    }
+    /*
+     * Maven Central, through Sonatype's Central Portal. Credentials and the signing key come
+     * from CI secrets as Gradle properties (ORG_GRADLE_PROJECT_mavenCentralUsername etc.);
+     * without them the build still runs, only publishing does not.
+     */
+    extensions.configure<MavenPublishBaseExtension> {
+        publishToMavenCentral(automaticRelease = true)
+        if (providers.gradleProperty("signingInMemoryKey").isPresent) signAllPublications()
+        configure(KotlinJvm(javadocJar = JavadocJar.Empty(), sourcesJar = true))
+        coordinates(rootProject.group.toString(), project.name, rootProject.version.toString())
+        pom {
+            name.set(project.name)
+            description.set(project.provider { project.description ?: "Streamlord: a Kotlin SDK for Datastar." })
+            url.set("https://github.com/MarkusAugust/streamlord")
+            inceptionYear.set("2026")
+            licenses {
+                license {
+                    name.set("MIT")
+                    url.set("https://opensource.org/licenses/MIT")
+                    distribution.set("repo")
                 }
+            }
+            developers {
+                developer {
+                    id.set("MarkusAugust")
+                    name.set("Markus August")
+                    url.set("https://github.com/MarkusAugust")
+                }
+            }
+            scm {
+                url.set("https://github.com/MarkusAugust/streamlord")
+                connection.set("scm:git:https://github.com/MarkusAugust/streamlord.git")
+                developerConnection.set("scm:git:git@github.com:MarkusAugust/streamlord.git")
             }
         }
     }

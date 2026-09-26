@@ -29,5 +29,6 @@ jackson2-databind = { module = "com.fasterxml.jackson.core:jackson-databind", ve
 jackson2-kotlin = { module = "com.fasterxml.jackson.module:jackson-module-kotlin", version.ref = "jackson2" }
 
 [plugins]
+maven-publish = { id = "com.vanniktech.maven.publish", version = "0.37.0" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

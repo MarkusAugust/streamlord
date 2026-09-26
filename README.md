@@ -291,13 +291,18 @@ div {
 * `0.2`: Spring Boot auto-configuration module (opt-in), Ktor `data-*` helpers for CSRF tokens.
 * `0.3`: pluggable templating adapters (Pebble, Thymeleaf) behind an `ElementsRenderer` port.
 
-## Building
+## Building and releasing
 
 ```
 ./gradlew build
 ```
 
 JDK 21 builds it; the artifacts target JDK 17.
+
+Releases go to Maven Central from CI only: bump `version` in `gradle.properties`, commit, push
+a tag `v<version>`. The `publish-maven-central` job checks that the tag matches, then signs and
+publishes every module under `io.github.markusaugust.streamlord` through the Central Portal
+with automatic release. The VS Code extension has its own tag, `vscode-v<version>`.
 
 ## License
 
