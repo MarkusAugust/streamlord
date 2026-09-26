@@ -23,4 +23,8 @@ The first forging.
 - `streamlord-spring`: `datastarStream` over `StreamingResponseBody`, `readSignals` over
   `HttpServletRequest`, `ResponseEntity` helpers, `Flow<DatastarEvent>.asServerSentEvents()`
   for WebFlux, and `ElementPatchModeConverter`.
-- `streamlord-json-kotlinx` and `streamlord-json-jackson`: codec adapters for typed signals.
+- `streamlord-json-kotlinx`, `streamlord-json-jackson` (Jackson 3, Spring Boot 4) and
+  `streamlord-json-jackson2` (Jackson 2, Spring Boot 3): codec adapters for typed signals.
+- `streamlord-html-pro`: opt-in helpers for the attribute names and actions of Datastar Pro,
+  containing no Pro code. The Spring adapter is compiled against Spring Framework 6.2 and
+  tested against 6.2 and 7.0.

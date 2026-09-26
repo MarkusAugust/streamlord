@@ -16,8 +16,10 @@ rootProject.name = "streamlord"
 include(
     "streamlord-core",
     "streamlord-html",
+    "streamlord-html-pro",
     "streamlord-json-kotlinx",
     "streamlord-json-jackson",
+    "streamlord-json-jackson2",
     "streamlord-ktor",
     "streamlord-spring",
 )

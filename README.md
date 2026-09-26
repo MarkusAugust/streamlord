@@ -32,9 +32,11 @@ get("/feed") {
 | `streamlord-core` | **The Soul.** The protocol, the events, the encoder, a strict JSON engine, the ports. | `kotlin-stdlib`, `kotlinx-coroutines-core` |
 | `streamlord-html` | **The Tongue.** kotlinx.html DSL with every `data-*` attribute, action and modifier of Datastar 1.0.4. | `kotlinx-html` |
 | `streamlord-ktor` | **The Sword.** `call.respondDatastar { }`, `call.readSignals<T>()`, a plugin. | nothing (Ktor is `compileOnly`) |
-| `streamlord-spring` | **The Shield.** `response.datastarStream { }`, `request.readSignals<T>()`, WebFlux `Flow` mapping. | nothing (Spring and the servlet API are `compileOnly`) |
+| `streamlord-spring` | **The Shield.** `response.datastarStream { }`, `request.readSignals<T>()`, WebFlux `Flow` mapping. Spring Boot 3 and 4. | nothing (Spring and the servlet API are `compileOnly`) |
 | `streamlord-json-kotlinx` | Codec adapter for typed signals via kotlinx.serialization. | `kotlinx-serialization-json` |
-| `streamlord-json-jackson` | Codec adapter for typed signals via Jackson 3 (`tools.jackson`). | `jackson-databind` |
+| `streamlord-json-jackson` | Codec adapter via Jackson 3 (`tools.jackson`), for Spring Boot 4. | `jackson-databind` 3 |
+| `streamlord-json-jackson2` | Codec adapter via Jackson 2 (`com.fasterxml`), for Spring Boot 3. | `jackson-databind` 2 |
+| `streamlord-html-pro` | **Opt-in.** Helpers for the attribute names and actions of Datastar Pro. Contains no Pro code. | nothing beyond `streamlord-html` |
 
 Streamlord's first law: **it brings nothing you do not already carry.** The core has no JSON
 library; it has its own strict RFC 8259 parser and writer. Framework modules compile against
@@ -152,6 +154,11 @@ fun counter(): Flow<ServerSentEvent<String>> =
 
 Spring ships no auto-configuration on purpose: one bean, declared by you, is the whole setup.
 
+The Shield is compiled against Spring Framework 6.2 and tested against both 6.2 (Boot 3) and
+7.0 (Boot 4) on every build. Pick the codec that matches your Boot generation:
+`Jackson2SignalsCodec` from `streamlord-json-jackson2` for Boot 3, `JacksonSignalsCodec` from
+`streamlord-json-jackson` for Boot 4.
+
 ---
 
 ## The Tongue: HTML
@@ -231,14 +238,26 @@ Enterprise is a siege, and Streamlord is built for one.
 
 ## Datastar Pro
 
-Streamlord covers the open-source Datastar bundle and nothing else. The Pro attributes and
-actions are licensed software and are deliberately absent; nothing from the Pro bundle may be
-redistributed here.
+Datastar Pro is licensed software, and none of it lives in this repository: no plugin source,
+no bundle, no inspector. The open-source modules cover the free Datastar bundle only.
+
+If you hold a Pro license, add `streamlord-html-pro`. It is a separate artifact so that using
+it is an explicit choice. It contains nothing but kotlinx.html helpers that write the publicly
+documented Pro attribute names and action strings (`dataPersist()`, `dataScrollIntoView()`,
+`dataQueryString()`, `clipboard()`, `fit()`, `intl()`, ...). They are inert until you load the
+Pro bundle you licensed; Streamlord does not ship it, fetch it or unlock it.
+
+```kotlin
+div {
+    dataPersist("draft", SignalFilter.include("^form"), session = true)
+    dataQueryString(history = true)
+    button { dataOnClick(clipboardExpr(signal("code"))); +"Copy" }
+}
+```
 
 ## Roadmap
 
-* `0.2`: Spring Boot auto-configuration module (opt-in), Ktor `data-*` helpers for CSRF tokens,
-  a `streamlord-json-jackson2` adapter for Spring Boot 3.
+* `0.2`: Spring Boot auto-configuration module (opt-in), Ktor `data-*` helpers for CSRF tokens.
 * `0.3`: pluggable templating adapters (Pebble, Thymeleaf) behind an `ElementsRenderer` port.
 
 ## Building
