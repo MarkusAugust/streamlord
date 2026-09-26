@@ -98,6 +98,16 @@ describe("kotlin injection grammar", () => {
     assert.match(scopeOf(t, "div"), /entity\.name\.tag\.html/);
   });
 
+  it("accepts a multi-dollar prefix on every kind of string", async () => {
+    const call = await tokens("source.kotlin", `s.patchElements($$"""<div data-text="$n"></div>""")`);
+    assert.match(scopeOf(call, "div"), /entity\.name\.tag\.html/);
+    assert.match(scopeOf(call, "n"), /variable\.other\.constant\.signal\.datastar/);
+    const dsl = await tokens("source.kotlin", `dataOnClick($$"$count++")`);
+    assert.match(scopeOf(dsl, "count"), /variable\.other\.constant\.signal\.datastar/);
+    const free = await tokens("source.kotlin", `val row = $$"""<li data-show="$open"></li>"""`);
+    assert.match(scopeOf(free, "show"), /entity\.other\.attribute-name\.datastar\.plugin/);
+  });
+
   it("highlights html in strings that open with a tag, wherever they are", async () => {
     const t = await tokens("source.kotlin", `val row = """<li data-on:click="$n++">x</li>""" + "<b data-ignore>"`);
     assert.match(scopeOf(t, "li"), /entity\.name\.tag\.html/);

@@ -126,6 +126,8 @@ describe("completion provider", () => {
     assert.deepEqual(complete(kdoc, 5, 25, index), [], "nothing in a string that is not html");
     const call = new MockDocument(`s.patchElements("""<li data-""")`, "kotlin");
     assert.ok(complete(call, 0, 28, index).some((i) => i.label === "data-on"), "attributes inside patchElements");
+    const typing = new MockDocument(`fun side() = $$"""\n<div data-`, "kotlin");
+    assert.ok(complete(typing, 1, 10, index).some((i) => i.label === "data-on"), "while the string is still being typed");
   });
 });
 

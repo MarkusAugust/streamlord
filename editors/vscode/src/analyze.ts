@@ -80,6 +80,8 @@ const HELPERS: [RegExp, (n: string) => string][] = [
 
 function interpolationIssues(s: KotlinString, src: string): Issue[] {
   const issues: Issue[] = [];
+  // In a multi-dollar literal a single $ is text, so there is no trap: every template there is deliberate.
+  if (s.dollars > 1) return issues;
   for (const ip of s.interpolations) {
     if (ip.kind !== "simple") continue;
     const fixes: Fix[] = [{ title: `Escape as \${'$'}${ip.text}`, start: ip.start, end: ip.start + 1, text: "${'$'}" }];

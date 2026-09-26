@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.ktor
 
 import io.github.markusaugust.streamlord.core.SignalsTooLargeException
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
+import io.github.markusaugust.streamlord.core.domain.InterpolatedExpressionException
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.core.json.JsonWriter
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
@@ -17,6 +18,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.application.install
 import io.ktor.server.response.respond
+import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
@@ -108,6 +110,34 @@ class KtorAdapterTest {
         assertEquals(HttpStatusCode.PayloadTooLarge, big.status)
         assertEquals("too large: 10008", big.bodyAsText())
         assertEquals("ok", client.post("/s") { setBody("{\"a\":1}") }.bodyAsText())
+    }
+
+    @Test
+    fun `the elements guard reaches streams and responses through the plugin`() = testApplication {
+        install(StreamlordPlugin) { guardElements = true }
+        val broken = """<li id="a" data-text=""></li>"""
+        routing {
+            get("/el") {
+                try {
+                    call.respondElements(broken)
+                } catch (e: InterpolatedExpressionException) {
+                    call.respondText("caught ${e.attribute}")
+                }
+            }
+            get("/stream") {
+                call.respondDatastar {
+                    try {
+                        patchElements(broken)
+                    } catch (e: InterpolatedExpressionException) {
+                        comment("caught ${e.attribute}")
+                    }
+                    patchElements("""<li id="a" data-text="${'$'}count"></li>""")
+                }
+            }
+        }
+        assertEquals("caught data-text", client.get("/el").bodyAsText())
+        val stream = client.get("/stream").bodyAsText()
+        assertEquals(": caught data-text\n\nevent: datastar-patch-elements\ndata: elements <li id=\"a\" data-text=\"\$count\"></li>\n\n", stream)
     }
 
     @Test

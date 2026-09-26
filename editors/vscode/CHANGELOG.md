@@ -11,6 +11,10 @@ All notable changes to the Streamlord extension are recorded here.
   attributes, modifiers, signals and actions, hover documentation and syntax highlighting.
 - Kotlin interpolation inside a `data-*` expression in an HTML string (`data-text="$count"`)
   is an error with the escape as quick fix; in element text it stays a hint.
+- Multi-dollar literals (`$$"..."`, `$$"""..."""`, Kotlin 2.2+) are read as Kotlin reads them:
+  a single `$` is text, only `$$name` is a template. No interpolation diagnostics there, since
+  there is no trap; the expression, markup and attribute checks, completion and highlighting
+  apply as in any other string, including as an argument of the DSL calls.
 - Signal names declared in HTML strings in Kotlin (`data-signals:draft`, `data-bind="search"`)
   feed signal completion.
 - Template languages of the JVM: JTE and kte, FreeMarker, Velocity and Mustache are on the

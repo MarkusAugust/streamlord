@@ -286,7 +286,8 @@ to flag it.
 The DSL guards its own expressions. For HTML that arrives as a string, opt in:
 
 ```kotlin
-Streamlord(guardElements = true)             // one instance, in the Ktor plugin or as a Spring bean
+install(StreamlordPlugin) { guardElements = true }     // Ktor
+Streamlord(guardElements = true)                       // the instance behind a Spring bean, or anywhere
 ```
 
 Every element patch and elements response that leaves through that instance is walked by

@@ -26,7 +26,9 @@ function that returns HTML, a `val` holding a fragment), and in `.html` and temp
 
 A string counts as HTML when it opens with a tag, a comment or a doctype, or when it carries
 IntelliJ's injection marker: `@Language("HTML")` on the function or property, or a
-`// language=HTML` comment just before it. Free-standing strings get the attribute checks of a
+`// language=HTML` comment just before it. Multi-dollar literals (`$$"""..."""`, Kotlin 2.2+)
+are read as Kotlin reads them: a single `$` is text, so `$count` there is a signal and draws
+no interpolation warning. Free-standing strings get the attribute checks of a
 template file; the id and completeness rules apply only where the string is handed to
 `patchElements` and its kin, because only there is the patch mode known.
 

@@ -20,9 +20,16 @@ public class StreamlordPluginConfig {
     /** Upper bound for incoming signal payloads: bytes for bodies, characters for the query parameter. */
     public var maxSignalsSize: Int = Streamlord.DEFAULT_MAX_SIGNALS_SIZE
 
+    /**
+     * Run [io.github.markusaugust.streamlord.core.domain.ElementsGuard] over every element patch
+     * and elements response, for HTML written as strings or rendered by a template engine.
+     */
+    public var guardElements: Boolean = false
+
     internal fun build(): Streamlord = streamlord ?: Streamlord(
         codec = codec ?: Streamlord.Default.codec,
         maxSignalsSize = maxSignalsSize,
+        guardElements = guardElements,
     )
 }
 

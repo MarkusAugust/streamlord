@@ -32,6 +32,21 @@ describe("kotlin strings", () => {
     expect(s.end).toBe(src.length - 1);
   });
 
+  it("reads multi-dollar literals, where a single dollar is text", () => {
+    const src = 'f($$"a$b$$c$${e}${\'$\'}$$$d")';
+    const s = readKotlinStringAt(src, 2)!;
+    expect(s.dollars).toBe(2);
+    expect(s.start).toBe(2);
+    expect(s.text).toBe("a$b__kt____kt__${'$'}$__kt__");
+    expect(s.interpolations.map((i) => [i.kind, i.text])).toEqual([["simple", "c"], ["braced", "e"], ["simple", "d"]]);
+    expect(src.slice(s.interpolations[0]!.start, s.interpolations[0]!.end)).toBe("$$c");
+    expect(src.slice(s.interpolations[2]!.start, s.interpolations[2]!.end)).toBe("$$d");
+    const raw = readKotlinStringAt('$$"""<i>$x</i>"""', 0)!;
+    expect(raw.raw).toBe(true);
+    expect(raw.text).toBe("<i>$x</i>");
+    expect(readKotlinStringAt("$$x", 0)).toBeNull();
+  });
+
   it("reads raw strings and stops at the last quote of a run", () => {
     const src = 'f("""<div id="a">"</div>"""")';
     const s = readKotlinStringAt(src, 2)!;
@@ -185,6 +200,19 @@ dataText("$count")`;
     expect(at("data-onn:x")?.raw).toBe(true);
     expect(at('"$count")')).toBeNull();
     expect(htmlStringAt(src, src.indexOf("fun side"))).toBeNull();
+  });
+
+  it("trusts multi-dollar literals: no trap, but everything else is still checked", () => {
+    const free = 'fun side() = $$"""<div data-text="$count" data-signals="{n: $$n}" data-onn:x="1"></div>"""';
+    expect(codes(analyzeKotlin(free, opts))).toEqual(["unknown-attribute"]);
+    const call = 's.patchElements($$"""<div id="a" data-text="$count +"></div>""")';
+    const [syntax] = analyzeKotlin(call, opts);
+    expect(codes([syntax!])).toEqual(["expression-syntax"]);
+    expect(call.slice(syntax!.start, syntax!.end).length).toBeGreaterThan(0);
+    expect(syntax!.start).toBeGreaterThan(call.indexOf("$count"));
+    expect(codes(analyzeKotlin('dataOnClick($$"$count++"); dataOn("keydown", $$"$open = !$open")', opts))).toEqual([]);
+    expect(codes(analyzeKotlin('dataOnClick($$"$count +")', opts))).toEqual(["expression-syntax"]);
+    expect(findCallSites('s.patchElements($$"""<b></b>""", selector = "#x")', new Set(["patchElements"]))[0]!.args.map((a) => a.string !== null)).toEqual([true, true]);
   });
 
   it("honours the injection marker without a leading tag", () => {

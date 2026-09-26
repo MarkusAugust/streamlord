@@ -1,4 +1,4 @@
-import { readKotlinStringAt, type KotlinString } from "./kotlinStrings.ts";
+import { isStringStart, readKotlinStringAt, type KotlinString } from "./kotlinStrings.ts";
 
 /**
  * Finds calls to known DSL functions in Kotlin source and splits their arguments, without a
@@ -62,7 +62,7 @@ function parseArgs(src: string, openParen: number): { closeParen: number; args: 
   };
   while (i < src.length) {
     const c = src[i] ?? "";
-    if (c === '"') {
+    if ((c === '"' || c === "$") && isStringStart(src, i)) {
       const s = readKotlinStringAt(src, i);
       i = s ? Math.max(s.end, i + 1) : i + 1;
       continue;
@@ -113,7 +113,7 @@ function makeArg(src: string, from: number, to: number): Arg {
     while (start < end && /\s/.test(src[start] ?? "")) start++;
   }
   let string: KotlinString | null = null;
-  if (src[start] === '"') {
+  if (isStringStart(src, start)) {
     const s = readKotlinStringAt(src, start);
     if (s && s.end === end) string = s;
   }
@@ -130,7 +130,7 @@ export function codeMask(src: string): Uint8Array {
   const blank = (from: number, to: number) => mask.fill(0, from, Math.min(to, src.length));
   while (i < src.length) {
     const c = src[i];
-    if (c === '"') {
+    if ((c === '"' || c === "$") && isStringStart(src, i)) {
       const s = readKotlinStringAt(src, i);
       const end = s ? Math.max(s.end, i + 1) : i + 1;
       blank(i, end);
@@ -180,7 +180,7 @@ export function findKotlinStrings(src: string): KotlinString[] {
   let i = 0;
   while (i < src.length) {
     const c = src[i];
-    if (c === '"') {
+    if ((c === '"' || c === "$") && isStringStart(src, i)) {
       const s = readKotlinStringAt(src, i);
       if (s) out.push(s);
       i = s ? Math.max(s.end, i + 1) : i + 1;

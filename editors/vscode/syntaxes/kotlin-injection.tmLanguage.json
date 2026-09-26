@@ -58,7 +58,7 @@
           ]
         },
         {
-          "begin": "(\"\"\")(?=\\s*<(?:[A-Za-z]|!--|!(?i:doctype)))",
+          "begin": "(\\$*\"\"\")(?=\\s*<(?:[A-Za-z]|!--|!(?i:doctype)))",
           "beginCaptures": {
             "1": {
               "name": "punctuation.definition.string.begin.kotlin string.quoted.triple.kotlin"
@@ -82,7 +82,7 @@
           ]
         },
         {
-          "begin": "(\")(?=<(?:[A-Za-z]|!--))",
+          "begin": "(\\$*\")(?=<(?:[A-Za-z]|!--))",
           "beginCaptures": {
             "1": {
               "name": "punctuation.definition.string.begin.kotlin string.quoted.double.kotlin"
@@ -107,7 +107,7 @@
       ]
     },
     "html-triple-string": {
-      "begin": "(\"\"\")",
+      "begin": "(\\$*\"\"\")",
       "beginCaptures": {
         "1": {
           "name": "punctuation.definition.string.begin.kotlin string.quoted.triple.kotlin"
@@ -131,7 +131,7 @@
       ]
     },
     "html-double-string": {
-      "begin": "(\")",
+      "begin": "(\\$*\")",
       "beginCaptures": {
         "1": {
           "name": "punctuation.definition.string.begin.kotlin string.quoted.double.kotlin"
@@ -167,7 +167,7 @@
     },
     "expression-call-first-arg": {
       "comment": "dataOnClick(\"...\"), dataText(\"...\"), dataInit(\"...\") and friends: the first string is a Datastar expression.",
-      "begin": "\\b(dataOnClick|dataOnSubmit|dataOnChange|dataOnInput|dataOnKeydown|dataOnFetch|dataOnIntersect|dataOnInterval|dataOnSignalPatch|dataInit|dataEffect|dataText|dataShow|dataOnRaf|dataOnResize|dataCustomValidity|dataReplaceUrl|dataViewTransition|peek|clipboardExpr)(\\s*\\(\\s*)(\")",
+      "begin": "\\b(dataOnClick|dataOnSubmit|dataOnChange|dataOnInput|dataOnKeydown|dataOnFetch|dataOnIntersect|dataOnInterval|dataOnSignalPatch|dataInit|dataEffect|dataText|dataShow|dataOnRaf|dataOnResize|dataCustomValidity|dataReplaceUrl|dataViewTransition|peek|clipboardExpr)(\\s*\\(\\s*\\$*)(\")",
       "beginCaptures": {
         "1": {
           "name": "entity.name.function.kotlin"
@@ -194,7 +194,7 @@
     },
     "expression-call-second-arg": {
       "comment": "dataOn(\"click\", \"...\"), dataComputed(\"name\", \"...\"), dataClass(\"name\", \"...\"): the second string is the expression.",
-      "begin": "\\b(dataOn|dataComputed|dataClass|dataStyle|dataAttr|dataSignals|dataAnimate|setExpr)(\\s*\\(\\s*)(\"[^\"\\n]*\")(\\s*,\\s*)(\")",
+      "begin": "\\b(dataOn|dataComputed|dataClass|dataStyle|dataAttr|dataSignals|dataAnimate|setExpr)(\\s*\\(\\s*\\$*)(\"[^\"\\n]*\")(\\s*,\\s*\\$*)(\")",
       "beginCaptures": {
         "1": {
           "name": "entity.name.function.kotlin"
@@ -226,7 +226,7 @@
       "comment": "patchElements(\"\"\"<div>...</div>\"\"\") and friends: HTML inside the string.",
       "patterns": [
         {
-          "begin": "\\b(patchElements|respondElements|datastarElements|PatchElements|ElementsResponse)(\\s*\\(\\s*(?:elements\\s*=\\s*)?)(\"\"\")",
+          "begin": "\\b(patchElements|respondElements|datastarElements|PatchElements|ElementsResponse)(\\s*\\(\\s*(?:elements\\s*=\\s*)?\\$*)(\"\"\")",
           "beginCaptures": {
             "1": {
               "name": "entity.name.function.kotlin"
@@ -253,7 +253,7 @@
           ]
         },
         {
-          "begin": "\\b(patchElements|respondElements|datastarElements|PatchElements|ElementsResponse)(\\s*\\(\\s*(?:elements\\s*=\\s*)?)(\")",
+          "begin": "\\b(patchElements|respondElements|datastarElements|PatchElements|ElementsResponse)(\\s*\\(\\s*(?:elements\\s*=\\s*)?\\$*)(\")",
           "beginCaptures": {
             "1": {
               "name": "entity.name.function.kotlin"
@@ -284,7 +284,7 @@
       "comment": "executeScript(\"\"\"...\"\"\"): JavaScript inside the string.",
       "patterns": [
         {
-          "begin": "\\b(executeScript|respondScript|datastarScript|ExecuteScript)(\\s*\\(\\s*(?:script\\s*=\\s*)?)(\"\"\")",
+          "begin": "\\b(executeScript|respondScript|datastarScript|ExecuteScript)(\\s*\\(\\s*(?:script\\s*=\\s*)?\\$*)(\"\"\")",
           "beginCaptures": {
             "1": {
               "name": "entity.name.function.kotlin"
@@ -311,7 +311,7 @@
           ]
         },
         {
-          "begin": "\\b(executeScript|respondScript|datastarScript|ExecuteScript)(\\s*\\(\\s*(?:script\\s*=\\s*)?)(\")",
+          "begin": "\\b(executeScript|respondScript|datastarScript|ExecuteScript)(\\s*\\(\\s*(?:script\\s*=\\s*)?\\$*)(\")",
           "beginCaptures": {
             "1": {
               "name": "entity.name.function.kotlin"

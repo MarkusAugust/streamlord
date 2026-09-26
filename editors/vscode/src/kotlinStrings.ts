@@ -22,11 +22,17 @@ export interface Interpolation {
 }
 
 export interface KotlinString {
-  /** Source offset of the opening quote. */
+  /** Source offset where the literal starts: the opening quote, or the first `$` of a multi-dollar prefix. */
   start: number;
   /** Source offset just past the closing quote(s). */
   end: number;
   raw: boolean;
+  /**
+   * How many dollars open a template: 1 in an ordinary literal, 2 or more in a multi-dollar
+   * literal (`$$"..."`, Kotlin 2.2+), where shorter runs are plain text and `$count` reaches
+   * the browser untouched.
+   */
+  dollars: number;
   contentStart: number;
   contentEnd: number;
   /** The runtime text, with `__kt__` in place of each template. */
@@ -49,11 +55,24 @@ function isIdentPart(c: string): boolean {
   return /[A-Za-z0-9_]/.test(c);
 }
 
-/** Read the string literal whose opening quote is at `at`. Returns null if there is no quote there. */
+/** Does a string literal start at `at`: a quote, or a run of dollars followed by a quote? */
+export function isStringStart(src: string, at: number): boolean {
+  let i = at;
+  while (src[i] === "$") i++;
+  return src[i] === '"';
+}
+
+/**
+ * Read the string literal that starts at `at`: at its opening quote, or at the first `$` of a
+ * multi-dollar prefix. Returns null if no literal starts there.
+ */
 export function readKotlinStringAt(src: string, at: number): KotlinString | null {
-  if (src[at] !== '"') return null;
-  const raw = src.startsWith('"""', at);
-  const contentStart = raw ? at + 3 : at + 1;
+  let quote = at;
+  while (src[quote] === "$") quote++;
+  if (src[quote] !== '"') return null;
+  const dollars = Math.max(1, quote - at);
+  const raw = src.startsWith('"""', quote);
+  const contentStart = raw ? quote + 3 : quote + 1;
   let i = contentStart;
   let out = "";
   const map: number[] = [];
@@ -75,12 +94,12 @@ export function readKotlinStringAt(src: string, at: number): KotlinString | null
         const extra = j - i - 3;
         for (let k = 0; k < extra; k++) push('"', i + k);
         map.push(j);
-        return { start: at, end: j, raw, contentStart, contentEnd: j - 3, text: out, map, interpolations, unterminated: false };
+        return { start: at, end: j, raw, dollars, contentStart, contentEnd: j - 3, text: out, map, interpolations, unterminated: false };
       }
     } else {
       if (c === '"') {
         map.push(i);
-        return { start: at, end: i + 1, raw, contentStart, contentEnd: i, text: out, map, interpolations, unterminated: false };
+        return { start: at, end: i + 1, raw, dollars, contentStart, contentEnd: i, text: out, map, interpolations, unterminated: false };
       }
       if (c === "\n") break;
       if (c === "\\") {
@@ -96,16 +115,27 @@ export function readKotlinStringAt(src: string, at: number): KotlinString | null
       }
     }
     if (c === "$") {
-      const n = src[i + 1] ?? "";
+      // A template opens with exactly `dollars` dollars; a shorter run is text. In a longer
+      // run the first ones are text and the last `dollars` open the template.
+      let run = 0;
+      while (src[i + run] === "$") run++;
+      if (run < dollars) {
+        for (let k = 0; k < run; k++) push("$", i + k);
+        i += run;
+        continue;
+      }
+      for (let k = 0; k < run - dollars; k++) push("$", i + k);
+      i += run - dollars;
+      const n = src[i + dollars] ?? "";
       if (n === "{") {
         // ${'$'} is the idiom for a literal dollar; anything else is an opaque template.
-        if (src.startsWith("${'$'}", i)) {
+        if (dollars === 1 && src.startsWith("${'$'}", i)) {
           push("$", i);
           i += 6;
           continue;
         }
         let depth = 1;
-        let j = i + 2;
+        let j = i + dollars + 1;
         while (j < src.length && depth > 0) {
           const cj = src[j];
           if (cj === "{") depth++;
@@ -119,15 +149,15 @@ export function readKotlinStringAt(src: string, at: number): KotlinString | null
           }
           j++;
         }
-        interpolations.push({ start: i, end: j, kind: "braced", text: src.slice(i + 2, j - 1), decodedStart: out.length });
+        interpolations.push({ start: i, end: j, kind: "braced", text: src.slice(i + dollars + 1, j - 1), decodedStart: out.length });
         push(PLACEHOLDER, i);
         i = j;
         continue;
       }
       if (isIdentStart(n)) {
-        let j = i + 1;
+        let j = i + dollars;
         while (j < src.length && isIdentPart(src[j] ?? "")) j++;
-        interpolations.push({ start: i, end: j, kind: "simple", text: src.slice(i + 1, j), decodedStart: out.length });
+        interpolations.push({ start: i, end: j, kind: "simple", text: src.slice(i + dollars, j), decodedStart: out.length });
         push(PLACEHOLDER, i);
         i = j;
         continue;
@@ -137,7 +167,7 @@ export function readKotlinStringAt(src: string, at: number): KotlinString | null
     i++;
   }
   map.push(i);
-  return { start: at, end: i, raw, contentStart, contentEnd: i, text: out, map, interpolations, unterminated: true };
+  return { start: at, end: i, raw, dollars, contentStart, contentEnd: i, text: out, map, interpolations, unterminated: true };
 }
 
 /** Map a decoded range back to source offsets. */

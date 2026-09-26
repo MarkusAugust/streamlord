@@ -4,6 +4,7 @@ import io.github.markusaugust.streamlord.core.SignalsTooLargeException
 import io.github.markusaugust.streamlord.core.application.Streamlord
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.ExecuteScript
+import io.github.markusaugust.streamlord.core.domain.InterpolatedExpressionException
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
@@ -105,6 +106,18 @@ class SpringAdapterTest {
 
         val js = datastarScript("1", mapOf("type" to "module"))
         assertEquals("""{"type":"module"}""", js.headers.getFirst("datastar-script-attributes"))
+    }
+
+    @Test
+    fun `the elements guard reaches response entities and reactive events`() = runTest {
+        val guarded = Streamlord(guardElements = true)
+        val broken = """<li id="a" data-text=""></li>"""
+        val e = assertFailsWith<InterpolatedExpressionException> { datastarElements(broken, streamlord = guarded) }
+        assertEquals("data-text", e.attribute)
+        assertFailsWith<InterpolatedExpressionException> { flowOf(PatchElements(broken)).asServerSentEvents(guarded).toList() }
+        assertEquals(broken, datastarElements(broken).body)
+        assertEquals(1, flowOf(PatchElements(broken)).asServerSentEvents().toList().size)
+        assertEquals(1, flowOf(PatchElements("""<li id="a" data-text="${'$'}count"></li>""")).asServerSentEvents(guarded).toList().size)
     }
 
     @Test
