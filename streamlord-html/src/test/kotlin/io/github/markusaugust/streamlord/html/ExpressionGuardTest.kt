@@ -59,6 +59,15 @@ class ExpressionGuardTest {
     }
 
     @Test
+    @Suppress("DEPRECATION")
+    fun `the 0_1_1 names in this package still resolve`() {
+        val e = assertFailsWith<io.github.markusaugust.streamlord.html.InterpolatedExpressionException> {
+            io.github.markusaugust.streamlord.html.ExpressionGuard.check("++")
+        }
+        assertEquals("++", e.expression)
+    }
+
+    @Test
     fun `multi-dollar strings keep their signals`() {
         // Kotlin 2.2+: in a $$"..." literal a single $ is just a character.
         assertEquals("""<button data-on:click="${'$'}count++"></button>""", elements { button { dataOnClick($$"$count++") } })

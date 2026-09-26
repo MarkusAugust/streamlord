@@ -127,6 +127,8 @@ describe("kotlin injection grammar", () => {
       assert.match(scopeOf(lines[3]!, `"""`), /string\.quoted\.triple\.kotlin/, marker);
       assert.ok(lines[5]!.every((x) => !x.scopes.some((s) => s.includes("html"))), `${marker}: the marker reaches one string only`);
     }
+    const param = await tokenLines("source.kotlin", [`fun wrap(@Language("HTML") html: String, title: String) {`, `    val x = "not <html>"`]);
+    assert.ok(param[1]!.every((x) => !x.scopes.some((s) => s.includes("html"))), "a parameter annotation does not reach the body");
   });
 });
 

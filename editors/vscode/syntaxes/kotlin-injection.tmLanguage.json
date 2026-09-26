@@ -30,7 +30,8 @@
               "name": "storage.type.annotation.kotlin"
             }
           },
-          "end": "(?<=\")",
+          "comment": "Ends after the next string literal, or at once when the annotation sits on a parameter (`html: String,`).",
+          "end": "(?<=\")|:\\s*String\\??\\s*(?=[,)])",
           "patterns": [
             {
               "include": "#html-triple-string"

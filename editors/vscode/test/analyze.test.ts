@@ -221,6 +221,8 @@ dataText("$count")`;
     expect(codes(analyzeKotlin(marked.replace("// language=HTML\n", ""), opts))).toEqual([]);
     const annotated = `@Language("html")\nprivate val head = """\n  \${'$'}{title}<title data-text="$t"></title>\n"""`;
     expect(codes(analyzeKotlin(annotated, opts))).toEqual(["kotlin-interpolation"]);
+    const param = `fun wrap(@Language("HTML") html: String) = "a <b data-onn:x='1'>" + html`;
+    expect(analyzeKotlin(param, opts)).toEqual([]);
   });
 });
 

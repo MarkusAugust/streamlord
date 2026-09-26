@@ -29,7 +29,9 @@ All notable changes to Streamlord are recorded here. The format follows
   template paths can use them without the DSL. `InterpolatedExpressionException` gained an
   `attribute` property.
 - `datastarElements` (Spring) and `asServerSentEvents` (Spring WebFlux) take an optional
-  `streamlord` parameter, last, for the guard.
+  `streamlord` parameter, last, for the guard. `Streamlord` gained the `guardElements`
+  constructor parameter, also last. Kotlin callers recompile unchanged; Java callers of the
+  full constructor pass one more argument.
 
 ### Deprecated
 

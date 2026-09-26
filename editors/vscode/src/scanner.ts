@@ -247,7 +247,10 @@ export function isHtmlString(src: string, s: KotlinString): boolean {
   const markers = [...before.matchAll(HTML_MARKER)];
   const last = markers[markers.length - 1];
   if (!last) return false;
-  return !before.slice(last.index + last[0].length).includes('"');
+  const after = before.slice(last.index + last[0].length);
+  // `fun f(@Language("HTML") html: String, ...)` annotates a parameter, not the next literal.
+  if (/:\s*String\??\s*[,)]/.test(after)) return false;
+  return !after.includes('"');
 }
 
 /** Pick the string argument a call-site spec points at. */
