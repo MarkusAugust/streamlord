@@ -1,12 +1,12 @@
 # Streamlord
 
-> *The elders of the Bloodmarch asked Gorvek what a warrior wants of a stream.*
+> *The elders of the Emberwastes asked Gorvek what a warrior wants of a stream.*
 > *"That it flows when I say flow. That it stops when I say stop. That it carries my will to
 > the far shore, and nothing else."*
 > *"And the JavaScript?"*
 > *"I do not know the word."*
 >
-> — Gorvek, who walked out of the Blood Mist with iron in his hand
+> — Gorvek, who walked out of the Ashfall with iron in his hand
 
 **Streamlord** is a Kotlin SDK for [Datastar](https://data-star.dev) 1.0.4. It speaks the
 Datastar Server-Sent Events protocol exactly, reads the signals the browser sends back, and
@@ -25,15 +25,15 @@ get("/feed") {
 }
 ```
 
-> *Every soul in the Ravenland knows my name, and not one knows my face. I took three rubies
-> from the crown of Stanengist and the land fell apart in my hands. Now I will take one thing
+> *Every soul in the Hollow March knows my name, and not one knows my face. I took three rubies
+> from the Iron Crown of Kell and the land fell apart in my hands. Now I will take one thing
 > from you: the belief that the browser must be bought with JavaScript.*
 >
 > *Sit. Read. The stream was always yours to bend.*
 >
-> — Merigall, whom the river-priests of Flow call the Lord of Streams
+> — Velmoraine the Faceless, whom the river-priests of Ithe call the Lord of Streams
 
-What follows is Merigall's grimoire. The code is deadly serious; the voice is not ours.
+What follows is Velmoraine's grimoire. The code is deadly serious; the voice is not ours.
 
 ---
 
@@ -68,7 +68,7 @@ dependencies {
 ## The Protocol, As It Truly Is
 
 *You were told there were five rites. Whoever told you that read a grimoire from before the
-Blood Mist.* Datastar 1.0 knows only **two** SSE events. Older grimoires speak of
+Ashfall.* Datastar 1.0 knows only **two** SSE events. Older grimoires speak of
 `merge-fragments`, `remove-fragments`, `merge-signals` and `remove-signals`; those spells
 died with 0.x.
 
@@ -246,7 +246,7 @@ The core never imports a framework. A new realm (Vert.x, http4k, a plain `HttpSe
 
 ## Wards Against the Dark
 
-*Enterprise is a siege. I have watched the Rust Brothers take a village with a single open
+*Enterprise is a siege. I have watched the Greycloaks take a village with a single open
 gate; Streamlord leaves none.*
 
 * **No SSE injection.** Selectors, event ids, header values and script attribute names are
@@ -303,6 +303,5 @@ JDK 21 builds it; the artifacts target JDK 17.
 
 MIT. Take it, wield it, and may your streams never buffer.
 
-*Forbidden Lands, the Ravenland, Merigall and the rest of the legend belong to Free League
-Publishing. Streamlord is an unaffiliated homage by people who have spent too many nights at
-that table. Gorvek is ours.*
+*Gorvek, Velmoraine, the Hollow March and every other name in this grimoire are our own
+invention. Any resemblance to legends told at other tables is the mead's doing.*
