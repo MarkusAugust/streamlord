@@ -3,7 +3,7 @@
   "displayName": "Streamlord",
   "description": "Datastar tooling for the Streamlord Kotlin SDK: expression and markup diagnostics, completions, hover docs, and a live SSE stream inspector.",
   "version": "0.1.0",
-  "publisher": "markusaugust",
+  "publisher": "MarkusAugust",
   "license": "MIT",
   "private": true,
   "repository": {
