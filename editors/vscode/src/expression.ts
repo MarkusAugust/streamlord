@@ -59,6 +59,26 @@ export function attributeDoc(name: string): string {
 
 const ACTION = /@([A-Za-z_][A-Za-z0-9_]*)\s*\(/g;
 
+function parseScript(js: string): void {
+  Parser.parse(js, {
+    ecmaVersion: "latest",
+    sourceType: "script",
+    allowReturnOutsideFunction: true,
+    allowAwaitOutsideFunction: true,
+    allowHashBang: false,
+  });
+}
+
+function objectLiteralParses(js: string): boolean {
+  if (!js.trimStart().startsWith("{")) return false;
+  try {
+    parseScript(`(${js})`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function validateExpression(text: string): Issue[] {
   const issues: Issue[] = [];
   if (text.trim().length === 0) {
@@ -66,19 +86,18 @@ export function validateExpression(text: string): Issue[] {
   }
   const js = text.replace(/@/g, "_");
   try {
-    Parser.parse(js, {
-      ecmaVersion: "latest",
-      sourceType: "script",
-      allowReturnOutsideFunction: true,
-      allowAwaitOutsideFunction: true,
-      allowHashBang: false,
-    });
+    parseScript(js);
   } catch (e) {
-    const err = e as { pos?: number; raisedAt?: number; message?: string };
-    const pos = Math.min(err.pos ?? 0, text.length);
-    const end = Math.max(pos + 1, Math.min(err.raisedAt ?? pos + 1, text.length));
-    const msg = (err.message ?? "Syntax error").replace(/\s*\(\d+:\d+\)$/, "");
-    issues.push({ start: pos, end, message: `Datastar expression: ${msg}`, severity: "error", code: "expression-syntax", link: DOCS.expressions });
+    // An expression that opens with `{` is an object literal to Datastar, which wraps the last
+    // statement in `return (...)` for the attributes that take a value; to a script parser it is a
+    // block. When the script parse fails, the text is tried once more inside parentheses.
+    if (!objectLiteralParses(js)) {
+      const err = e as { pos?: number; raisedAt?: number; message?: string };
+      const pos = Math.min(err.pos ?? 0, text.length);
+      const end = Math.max(pos + 1, Math.min(err.raisedAt ?? pos + 1, text.length));
+      const msg = (err.message ?? "Syntax error").replace(/\s*\(\d+:\d+\)$/, "");
+      issues.push({ start: pos, end, message: `Datastar expression: ${msg}`, severity: "error", code: "expression-syntax", link: DOCS.expressions });
+    }
   }
   KEBAB_SIGNAL.lastIndex = 0;
   let k: RegExpExecArray | null;

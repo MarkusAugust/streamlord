@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The dark palette for the Datastar tokens only, following the Dark+ conventions the VS Code
+  extension recommends: signals const-blue, actions purple, scope variables keyword-blue italic,
+  keys teal, durations number-green, sigils muted. No yellow, and no token of another language.
+-->
+<list>
+  <option name="STREAMLORD_SIGNAL">
+    <value>
+      <option name="FOREGROUND" value="4fc1ff" />
+      <option name="FONT_TYPE" value="1" />
+    </value>
+  </option>
+  <option name="STREAMLORD_SIGNAL_PATH">
+    <value>
+      <option name="FOREGROUND" value="9cdcfe" />
+    </value>
+  </option>
+  <option name="STREAMLORD_ACTION_BACKEND">
+    <value>
+      <option name="FOREGROUND" value="c586c0" />
+      <option name="FONT_TYPE" value="1" />
+    </value>
+  </option>
+  <option name="STREAMLORD_ACTION">
+    <value>
+      <option name="FOREGROUND" value="c586c0" />
+    </value>
+  </option>
+  <option name="STREAMLORD_SCOPE_VARIABLE">
+    <value>
+      <option name="FOREGROUND" value="569cd6" />
+      <option name="FONT_TYPE" value="2" />
+    </value>
+  </option>
+  <option name="STREAMLORD_OPTION_KEY">
+    <value>
+      <option name="FOREGROUND" value="9cdcfe" />
+      <option name="FONT_TYPE" value="1" />
+    </value>
+  </option>
+  <option name="STREAMLORD_DURATION">
+    <value>
+      <option name="FOREGROUND" value="b5cea8" />
+    </value>
+  </option>
+  <option name="STREAMLORD_KOTLIN_DOLLAR_ESCAPE">
+    <value>
+      <option name="FOREGROUND" value="d7ba7d" />
+    </value>
+  </option>
+  <option name="STREAMLORD_ATTRIBUTE_PREFIX">
+    <value>
+      <option name="FOREGROUND" value="808080" />
+    </value>
+  </option>
+  <option name="STREAMLORD_ATTRIBUTE_PLUGIN">
+    <value>
+      <option name="FOREGROUND" value="c586c0" />
+      <option name="FONT_TYPE" value="1" />
+    </value>
+  </option>
+  <option name="STREAMLORD_ATTRIBUTE_KEY">
+    <value>
+      <option name="FOREGROUND" value="4ec9b0" />
+    </value>
+  </option>
+  <option name="STREAMLORD_MODIFIER">
+    <value>
+      <option name="FOREGROUND" value="569cd6" />
+    </value>
+  </option>
+  <option name="STREAMLORD_MODIFIER_SIGIL">
+    <value>
+      <option name="FOREGROUND" value="808080" />
+    </value>
+  </option>
+  <option name="STREAMLORD_MODIFIER_ARG">
+    <value>
+      <option name="FOREGROUND" value="4ec9b0" />
+    </value>
+  </option>
+</list>

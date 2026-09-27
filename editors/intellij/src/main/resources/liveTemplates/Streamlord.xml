@@ -1,0 +1,69 @@
+<templateSet group="Streamlord">
+  <template name="ktor-datastar-route" value="$VERB$(&quot;$PATH$&quot;) {&#10;    call.respondDatastar {&#10;        patchElements(selector = &quot;#$TARGET$&quot;, mode = ElementPatchMode.$MODE$) {&#10;            $END$&#10;        }&#10;    }&#10;}" description="Ktor Datastar route" toReformat="true" toShortenFQNames="true">
+    <variable name="VERB" expression="enum(&quot;get&quot;, &quot;post&quot;, &quot;put&quot;, &quot;patch&quot;, &quot;delete&quot;)" defaultValue="&quot;get&quot;" alwaysStopAt="true" />
+    <variable name="PATH" expression="" defaultValue="&quot;/path&quot;" alwaysStopAt="true" />
+    <variable name="TARGET" expression="" defaultValue="&quot;target&quot;" alwaysStopAt="true" />
+    <variable name="MODE" expression="enum(&quot;OUTER&quot;, &quot;INNER&quot;, &quot;APPEND&quot;, &quot;PREPEND&quot;, &quot;REPLACE&quot;, &quot;BEFORE&quot;, &quot;AFTER&quot;)" defaultValue="&quot;OUTER&quot;" alwaysStopAt="true" />
+    <context><option name="KOTLIN_STATEMENT" value="true" /><option name="KOTLIN_EXPRESSION" value="true" /></context>
+  </template>
+  <template name="ktor-datastar-signals" value="post(&quot;$PATH$&quot;) {&#10;    val signals = call.readSignals&lt;$SIGNALS$&gt;() ?: $SIGNALS$()&#10;    call.respondDatastar {&#10;        patchSignals(signals.copy($END$))&#10;    }&#10;}" description="Ktor Datastar route with typed signals" toReformat="true" toShortenFQNames="true">
+    <variable name="PATH" expression="" defaultValue="&quot;/path&quot;" alwaysStopAt="true" />
+    <variable name="SIGNALS" expression="" defaultValue="&quot;Signals&quot;" alwaysStopAt="true" />
+    <context><option name="KOTLIN_STATEMENT" value="true" /><option name="KOTLIN_EXPRESSION" value="true" /></context>
+  </template>
+  <template name="ktor-datastar-flow" value="get(&quot;$PATH$&quot;) {&#10;    call.respondDatastar($EVENTS$.map { patchElements { $END$ } })&#10;}" description="Ktor long-lived stream from a Flow" toReformat="true" toShortenFQNames="true">
+    <variable name="PATH" expression="" defaultValue="&quot;/stream&quot;" alwaysStopAt="true" />
+    <variable name="EVENTS" expression="" defaultValue="&quot;events&quot;" alwaysStopAt="true" />
+    <context><option name="KOTLIN_STATEMENT" value="true" /><option name="KOTLIN_EXPRESSION" value="true" /></context>
+  </template>
+  <template name="spring-datastar-endpoint" value="@$MAPPING$(&quot;$PATH$&quot;)&#10;fun $NAME$(request: HttpServletRequest, response: HttpServletResponse): StreamingResponseBody =&#10;    response.datastarStream(streamlord) {&#10;        patchElements(&quot;&quot;&quot;$HTML$&quot;&quot;&quot;)&#10;    }" description="Spring WebMVC Datastar endpoint" toReformat="true" toShortenFQNames="true">
+    <variable name="MAPPING" expression="enum(&quot;GetMapping&quot;, &quot;PostMapping&quot;)" defaultValue="&quot;GetMapping&quot;" alwaysStopAt="true" />
+    <variable name="PATH" expression="" defaultValue="&quot;/path&quot;" alwaysStopAt="true" />
+    <variable name="NAME" expression="" defaultValue="&quot;name&quot;" alwaysStopAt="true" />
+    <variable name="HTML" expression="" defaultValue="&quot;&lt;div id=\&quot;target\&quot;&gt;&lt;/div&gt;&quot;" alwaysStopAt="true" />
+    <context><option name="KOTLIN_CLASS" value="true" /><option name="KOTLIN_TOPLEVEL" value="true" /></context>
+  </template>
+  <template name="patchElements" value="patchElements(selector = &quot;#$TARGET$&quot;, mode = ElementPatchMode.$MODE$) {&#10;    $END$&#10;}" description="patchElements with the DSL" toReformat="true" toShortenFQNames="true">
+    <variable name="TARGET" expression="" defaultValue="&quot;target&quot;" alwaysStopAt="true" />
+    <variable name="MODE" expression="enum(&quot;OUTER&quot;, &quot;INNER&quot;, &quot;APPEND&quot;, &quot;PREPEND&quot;)" defaultValue="&quot;OUTER&quot;" alwaysStopAt="true" />
+    <context><option name="KOTLIN_STATEMENT" value="true" /><option name="KOTLIN_EXPRESSION" value="true" /></context>
+  </template>
+  <template name="patchElementsHtml" value="patchElements(&quot;&quot;&quot;&lt;$TAG$ id=&quot;$ID$&quot;&gt;$END$&lt;/$TAG$&gt;&quot;&quot;&quot;)" description="patchElements with an HTML string" toReformat="false" toShortenFQNames="true">
+    <variable name="TAG" expression="" defaultValue="&quot;div&quot;" alwaysStopAt="true" />
+    <variable name="ID" expression="" defaultValue="&quot;id&quot;" alwaysStopAt="true" />
+    <context><option name="KOTLIN_STATEMENT" value="true" /><option name="KOTLIN_EXPRESSION" value="true" /></context>
+  </template>
+  <template name="htmlFunction" value="@Language(&quot;HTML&quot;)&#10;fun $NAME$($PARAMS$): String = $$&quot;&quot;&quot;&#10;    &lt;$TAG$ id=&quot;$ID$&quot;&gt;$END$&lt;/$TAG$&gt;&#10;&quot;&quot;&quot;.trimIndent()" description="Function returning HTML as a $$ string" toReformat="false" toShortenFQNames="true">
+    <variable name="NAME" expression="" defaultValue="&quot;name&quot;" alwaysStopAt="true" />
+    <variable name="PARAMS" expression="" defaultValue="" alwaysStopAt="true" />
+    <variable name="TAG" expression="" defaultValue="&quot;div&quot;" alwaysStopAt="true" />
+    <variable name="ID" expression="" defaultValue="&quot;id&quot;" alwaysStopAt="true" />
+    <context><option name="KOTLIN_CLASS" value="true" /><option name="KOTLIN_TOPLEVEL" value="true" /></context>
+  </template>
+  <template name="patchSignals" value="patchSignals(&quot;$NAME$&quot; to $VALUE$)" description="patchSignals" toReformat="false" toShortenFQNames="true">
+    <variable name="NAME" expression="" defaultValue="&quot;name&quot;" alwaysStopAt="true" />
+    <variable name="VALUE" expression="" defaultValue="&quot;value&quot;" alwaysStopAt="true" />
+    <context><option name="KOTLIN_STATEMENT" value="true" /><option name="KOTLIN_EXPRESSION" value="true" /></context>
+  </template>
+  <template name="removeElements" value="removeElements(&quot;#$ID$&quot;)" description="removeElements" toReformat="false" toShortenFQNames="true">
+    <variable name="ID" expression="" defaultValue="&quot;id&quot;" alwaysStopAt="true" />
+    <context><option name="KOTLIN_STATEMENT" value="true" /><option name="KOTLIN_EXPRESSION" value="true" /></context>
+  </template>
+  <template name="executeScript" value="executeScript(&quot;&quot;&quot;$SCRIPT$&quot;&quot;&quot;)" description="executeScript" toReformat="false" toShortenFQNames="true">
+    <variable name="SCRIPT" expression="" defaultValue="&quot;console.log('x')&quot;" alwaysStopAt="true" />
+    <context><option name="KOTLIN_STATEMENT" value="true" /><option name="KOTLIN_EXPRESSION" value="true" /></context>
+  </template>
+  <template name="dataOnClick" value="dataOnClick(post(&quot;$PATH$&quot;))" description="dataOnClick with @post" toReformat="false" toShortenFQNames="true">
+    <variable name="PATH" expression="" defaultValue="&quot;/path&quot;" alwaysStopAt="true" />
+    <context><option name="KOTLIN_STATEMENT" value="true" /><option name="KOTLIN_EXPRESSION" value="true" /></context>
+  </template>
+  <template name="dataSignals" value="dataSignals(&quot;$NAME$&quot; to $VALUE$)" description="dataSignals" toReformat="false" toShortenFQNames="true">
+    <variable name="NAME" expression="" defaultValue="&quot;name&quot;" alwaysStopAt="true" />
+    <variable name="VALUE" expression="" defaultValue="&quot;value&quot;" alwaysStopAt="true" />
+    <context><option name="KOTLIN_STATEMENT" value="true" /><option name="KOTLIN_EXPRESSION" value="true" /></context>
+  </template>
+  <template name="dataInit" value="dataInit(get(&quot;$PATH$&quot;))" description="dataInit opening a stream" toReformat="false" toShortenFQNames="true">
+    <variable name="PATH" expression="" defaultValue="&quot;/stream&quot;" alwaysStopAt="true" />
+    <context><option name="KOTLIN_STATEMENT" value="true" /><option name="KOTLIN_EXPRESSION" value="true" /></context>
+  </template>
+</templateSet>

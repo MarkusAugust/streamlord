@@ -4,6 +4,33 @@ All notable changes to Streamlord are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-09-27
+
+### Added
+
+- `streamlord-analysis`: the editor-independent analysis behind the editor tooling, as a Kotlin
+  module with no dependency beyond `streamlord-core`. `Analyzer().analyzeKotlin(source)` and
+  `analyzeHtml(source)` return every issue with its offset, severity, message, reference link and
+  quick fixes: the Kotlin `$` interpolation trap, expression syntax (an in-house JavaScript
+  parser, positioned like acorn), unknown and Pro actions, the markup rules of a patch, the
+  `data-*` attribute rules, the casing rules and the wire hint. Also there: the Kotlin string
+  reader (escapes, templates, multi-dollar literals, an offset map), the call-site scanner, the
+  signal and selector collectors, the Ktor and Spring route finder, the Stream Inspector's file
+  format and curl export, the SSE parser and the JSON merge patch, the hover documentation and the
+  highlighting tokenizer. Tested against the cases of the VS Code extension, so the two editors
+  agree.
+- `editors/intellij`: the Streamlord plugin for IntelliJ IDEA 2026.1 and newer, Community and
+  Ultimate. Inspections with quick fixes, completion, hover documentation, highlighting of the
+  Datastar tokens, HTML injection into marker-less HTML strings, live templates, and the Stream
+  Inspector as a tool window with saved requests shared with VS Code, variables, gutter icons on
+  routes and curl export. Published to the JetBrains Marketplace from CI on an `intellij-v*` tag.
+
+### Fixed
+
+- An expression that opens with `{` is read as the object literal Datastar makes of it
+  (`return ({count: 0, name: ''})`), in the VS Code extension and the analysis alike; a script
+  parser saw a block and flagged `data-signals="{count: 0, name: ''}"` as a syntax error.
+
 ## [0.2.0] - 2026-09-27
 
 ### Added

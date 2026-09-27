@@ -1,0 +1,583 @@
+package io.github.markusaugust.streamlord.analysis
+
+/*
+ * Markup checks for the HTML Datastar patches: complete elements, ids where the protocol needs
+ * them, and well-formed `data-*` attributes. A deliberately small tokenizer, not a browser.
+ */
+
+private val VOID = setOf("area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr")
+private val RAW_TEXT = setOf("script", "style")
+
+/**
+ * Where a template engine or a Kotlin template will substitute text, the expression cannot be
+ * judged before rendering: Pebble, Twig, Jinja, Handlebars and Mustache (`{{ }}`, `{% %}`),
+ * ERB, EJS and JTE comments (`<% %>`), Kotlin, Thymeleaf, FreeMarker, JTE, kte and Velocity
+ * (`${ }`, and JTE's `!{ }` for unescaped output), Thymeleaf's `*{ }`, `#{ }` and `@{ }`,
+ * FreeMarker's square-bracket syntax (`[# ]`, `[= ]`), JTE's control flow (`@if`, `@for`,
+ * ...), Velocity's (`#if`, `#foreach`, ...), and the placeholder for a Kotlin interpolation.
+ */
+public val TEMPLATE_SYNTAX: Regex =
+    Regex(
+        """\{\{|\{%|<%|[$!*#@]\{|\[#|\[=|(?:^|[\s>])@(?:if|elseif|else|endif|for|endfor|template|import|param|raw|endraw)\b|""" +
+            """(?:^|[\s>])#(?:if|elseif|else|end|foreach|set|macro|parse|include)\b|__kt__""",
+    )
+
+/**
+ * Tags that belong to a template engine, not to the document: FreeMarker directives and macro
+ * calls (`<#if>`, `</#if>`, `<@row/>`), and its `<#-- -->` comments. Skipped like `<!DOCTYPE>`.
+ */
+private val TEMPLATE_TAG = Regex("""^</?[#@]""")
+private val TAG_OPEN = Regex("""^<(/?)([A-Za-z][A-Za-z0-9:-]*)""")
+private val ATTR_NAME = Regex("""^[^\s"'>/=]+""")
+private val UNQUOTED_VALUE = Regex("""^[^\s>]*""")
+private val DURATION = Regex("""^\d+(ms|s)$""")
+private val IDENT = Regex("""^[A-Za-z_][A-Za-z0-9_-]*$""")
+private val SIGNAL_NAME = Regex("""^[A-Za-z_$][A-Za-z0-9_.$-]*$""")
+private val HAS_CAPITAL = Regex("""[A-Z]""")
+private val LEADING_CAPITAL = Regex("""^[A-Z]""")
+
+public data class Attribute(
+    val name: String,
+    val nameStart: Int,
+    val value: String?,
+    val valueStart: Int,
+    val quoted: Boolean,
+) {
+    val nameEnd: Int get() = nameStart + name.length
+    val valueEnd: Int get() = valueStart + (value?.length ?: 0)
+}
+
+public data class Tag(
+    val name: String,
+    val start: Int,
+    val end: Int,
+    val closing: Boolean,
+    val selfClosing: Boolean,
+    val attributes: List<Attribute>,
+)
+
+public data class TextRun(
+    val start: Int,
+    val end: Int,
+)
+
+public data class Tokens(
+    val tags: List<Tag>,
+    val topLevelText: List<TextRun>,
+)
+
+public data class MarkupOptions(
+    /** Each top-level element must carry an id (no selector given, mode is outer/replace). */
+    val requireIds: Boolean,
+    /** Attribute prefix of the Datastar bundle. */
+    val prefix: String,
+    /** Validate data-* attributes and their expressions. */
+    val checkAttributes: Boolean,
+)
+
+public fun tokenize(html: String): Tokens {
+    val tags = ArrayList<Tag>()
+    val topLevelText = ArrayList<TextRun>()
+    var i = 0
+    var depth = 0
+    var textStart = -1
+
+    fun flushText(end: Int) {
+        if (textStart >= 0 && depth == 0) {
+            val t = html.substring(textStart, end)
+            if (t.isNotBlank()) {
+                val lead = t.length - t.trimStart().length
+                topLevelText += TextRun(textStart + lead, textStart + t.trimEnd().length)
+            }
+        }
+        textStart = -1
+    }
+    while (i < html.length) {
+        if (html.startsWith("<!--", i) || html.startsWith("<#--", i)) {
+            flushText(i)
+            val close = html.indexOf("-->", i + 4)
+            i = if (close < 0) html.length else close + 3
+            continue
+        }
+        if (html.startsWith("<%--", i)) {
+            flushText(i)
+            val close = html.indexOf("--%>", i + 4)
+            i = if (close < 0) html.length else close + 4
+            continue
+        }
+        if (html[i] == '<' &&
+            (
+                html.startsWith("<!", i) || html.startsWith("<?", i) ||
+                    TEMPLATE_TAG.containsMatchIn(html.substring(i, minOf(html.length, i + 3)))
+            )
+        ) {
+            flushText(i)
+            val close = html.indexOf('>', i)
+            i = if (close < 0) html.length else close + 1
+            continue
+        }
+        val tagMatch = if (html[i] == '<') TAG_OPEN.find(html.substring(i, minOf(html.length, i + 64))) else null
+        if (tagMatch != null) {
+            flushText(i)
+            val closing = tagMatch.groupValues[1] == "/"
+            val name = tagMatch.groupValues[2].lowercase()
+            var j = i + tagMatch.value.length
+            val attributes = ArrayList<Attribute>()
+            var selfClosing = false
+            while (j < html.length && html[j] != '>') {
+                val c = html[j]
+                if (c.isWhitespace()) {
+                    j++
+                    continue
+                }
+                if (c == '/') {
+                    selfClosing = true
+                    j++
+                    continue
+                }
+                val am = ATTR_NAME.find(html.substring(j))
+                if (am == null) {
+                    j++
+                    continue
+                }
+                val attrName = am.value
+                val nameStart = j
+                j += attrName.length
+                var k = j
+                while (k < html.length && html[k].isWhitespace()) k++
+                var value: String? = null
+                var valueStart = -1
+                var quoted = false
+                if (k < html.length && html[k] == '=') {
+                    k++
+                    while (k < html.length && html[k].isWhitespace()) k++
+                    val q = html.getOrNull(k)
+                    if (q == '"' || q == '\'') {
+                        val close = html.indexOf(q, k + 1)
+                        valueStart = k + 1
+                        value = html.substring(k + 1, if (close < 0) html.length else close)
+                        quoted = true
+                        j = if (close < 0) html.length else close + 1
+                    } else {
+                        val vm = UNQUOTED_VALUE.find(html.substring(minOf(k, html.length)))
+                        valueStart = k
+                        value = vm?.value ?: ""
+                        j = k + value.length
+                    }
+                }
+                attributes += Attribute(attrName, nameStart, value, valueStart, quoted)
+            }
+            val end = minOf(j + 1, html.length)
+            tags += Tag(name, i, end, closing, selfClosing || name in VOID, attributes)
+            if (!closing && !selfClosing && name !in VOID) {
+                if (name in RAW_TEXT) {
+                    val closeIdx = html.lowercase().indexOf("</$name", end)
+                    i = if (closeIdx < 0) html.length else closeIdx
+                    depth++
+                    continue
+                }
+                depth++
+            } else if (closing) {
+                depth = maxOf(0, depth - 1)
+            }
+            i = end
+            continue
+        }
+        if (textStart < 0) textStart = i
+        i++
+    }
+    flushText(html.length)
+    return Tokens(tags, topLevelText)
+}
+
+/** `fooBar` -> `foo-bar`, one hyphen per capital, which Datastar's camel conversion turns back into `fooBar`. */
+public fun kebab(name: String): String {
+    val out = HAS_CAPITAL.replace(name) { "-" + it.value.lowercase() }
+    // Only the hyphen a leading capital introduced is dropped; a CSS custom property keeps its `--`.
+    return if (LEADING_CAPITAL.containsMatchIn(name)) out.removePrefix("-") else out
+}
+
+/**
+ * The key to write, and the `__case` to add, so that a key the author typed with capitals comes
+ * back as that name: `foo-bar` for a signal (Datastar reads it as camelCase), `widget-loaded__case.camel`
+ * for an event or class (kebab by default), `aria-label` where the key is used as it is. An
+ * explicit `__case` is kept: the key is still kebab-cased, because the browser lowercases it
+ * either way. Shared by the HTML warning and the Kotlin wire hint.
+ */
+public fun wireKey(
+    key: String,
+    keyCase: KeyCase?,
+    explicitCase: String?,
+): String {
+    val base = kebab(key)
+    if (explicitCase != null) return "${base}__case.$explicitCase"
+    val wanted = if (LEADING_CAPITAL.containsMatchIn(key)) "pascal" else "camel"
+    if (keyCase == KeyCase.RAW) return base
+    val defaultCase = if (keyCase == KeyCase.CAMEL) "camel" else "kebab"
+    return if (wanted == defaultCase) base else "${base}__case.$wanted"
+}
+
+/** What a key is to Datastar: the noun the messages and the hover use, from `keyCase` in the catalog. */
+public enum class KeyKind { SIGNAL, EVENT, CLASS, RAW }
+
+public fun keyKind(spec: AttributeSpec): KeyKind =
+    when (spec.keyCase) {
+        KeyCase.CAMEL -> KeyKind.SIGNAL
+        KeyCase.KEBAB -> if (spec.name == "on") KeyKind.EVENT else KeyKind.CLASS
+        else -> KeyKind.RAW
+    }
+
+/**
+ * How Datastar reads a key written as [wire]: "the signal $fooBar", "the event widgetLoaded",
+ * "the class isOpen", or, for a raw key, the key itself. One wording for the HTML warning, the
+ * Kotlin wire hint and the hover note.
+ */
+public fun keyReading(
+    spec: AttributeSpec,
+    name: String,
+    wire: String,
+): String =
+    when (keyKind(spec)) {
+        KeyKind.SIGNAL -> "the signal \$$name"
+        KeyKind.EVENT -> "the event $name"
+        KeyKind.CLASS -> "the class $name"
+        KeyKind.RAW -> "the ${if (spec.name == "style") "property" else "attribute"} ${wire.substringBefore("__")}"
+    }
+
+/** For a raw key the only way to keep a capital is the object form; said once, where it applies. */
+public fun rawKeyNote(
+    spec: AttributeSpec,
+    prefix: String,
+    key: String,
+): String =
+    if (keyKind(spec) == KeyKind.RAW && spec.valueKind == ValueKind.EXPRESSION) {
+        " For a name that really has capitals, such as SVG's viewBox, use the object form: $prefix${spec.name}=\"{$key: ...}\"."
+    } else {
+        ""
+    }
+
+/** The markup and attribute rules, bound to one catalog. */
+public class MarkupValidator(
+    private val catalog: Catalog = Catalog.default,
+) {
+    private val expressions = ExpressionValidator(catalog)
+
+    public fun validateMarkup(
+        html: String,
+        opts: MarkupOptions,
+    ): List<Issue> {
+        val issues = ArrayList<Issue>()
+        val (tags, topLevelText) = tokenize(html)
+        val stack = ArrayList<Tag>()
+        val topLevel = ArrayList<Tag>()
+        for (tag in tags) {
+            if (tag.closing) {
+                val idx = stack.indexOfLast { it.name == tag.name }
+                if (idx < 0) {
+                    issues += Issue(tag.start, tag.end, "Stray closing tag </${tag.name}>.", Severity.ERROR, "stray-close")
+                } else {
+                    for (unclosed in stack.subList(idx + 1, stack.size)) {
+                        issues += Issue(unclosed.start, unclosed.end, "<${unclosed.name}> is never closed.", Severity.ERROR, "unclosed")
+                    }
+                    while (stack.size > idx) stack.removeAt(stack.size - 1)
+                }
+                continue
+            }
+            if (stack.isEmpty()) topLevel += tag
+            if (!tag.selfClosing) stack += tag
+            if (opts.checkAttributes) issues += validateAttributes(tag, opts.prefix)
+        }
+        for (unclosed in stack) {
+            issues += Issue(unclosed.start, unclosed.end, "<${unclosed.name}> is never closed.", Severity.ERROR, "unclosed")
+        }
+        for (t in topLevelText) {
+            if (TEMPLATE_SYNTAX.containsMatchIn(html.substring(t.start, t.end))) continue
+            issues +=
+                Issue(
+                    t.start,
+                    t.end,
+                    "Datastar patches complete elements, not text fragments. Wrap this in an element.",
+                    Severity.WARNING,
+                    "top-level-text",
+                )
+        }
+        if (opts.requireIds) {
+            for (tag in topLevel) {
+                if (tag.name == "html" || tag.name == "body" || tag.name == "head") continue
+                if (tag.attributes.none { it.name.equals("id", ignoreCase = true) }) {
+                    val afterName = tag.start + 1 + tag.name.length
+                    issues +=
+                        Issue(
+                            start = tag.start,
+                            end = tag.end,
+                            message =
+                                "<${tag.name}> has no id. Without a selector, Datastar matches top-level elements by id " +
+                                    "and silently ignores the rest.",
+                            severity = Severity.WARNING,
+                            code = "missing-id",
+                            link = Docs.SSE,
+                            fixes = listOf(Fix("Add id=\"${tag.name}\"", afterName, afterName, " id=\"${tag.name}\"")),
+                        )
+                }
+            }
+        }
+        return issues
+    }
+
+    /** Validate the Datastar attributes on one tag. */
+    public fun validateAttributes(
+        tag: Tag,
+        prefix: String,
+    ): List<Issue> {
+        val issues = ArrayList<Issue>()
+        for (attr in tag.attributes) {
+            val lower = attr.name.lowercase()
+            if (prefix == "data-" && lower.startsWith("data-star-")) {
+                issues +=
+                    Issue(
+                        attr.nameStart,
+                        attr.nameEnd,
+                        "This is an aliased Datastar attribute, but the prefix is set to data-. Check the Streamlord attribute prefix setting.",
+                        Severity.WARNING,
+                        "prefix-mismatch",
+                    )
+                continue
+            }
+            if (!lower.startsWith(prefix)) continue
+            val parsed = catalog.parseAttributeName(lower, prefix) ?: continue
+            val nameEnd = attr.nameEnd
+            val spec = parsed.spec
+            if (spec == null) {
+                val near =
+                    catalog.attributes
+                        .map { it to distance(parsed.base, it.name) }
+                        .filter { it.second in 1..2 }
+                        .minByOrNull { it.second }
+                        ?.first
+                if (near != null) {
+                    val baseEnd = attr.nameStart + prefix.length + parsed.base.length
+                    issues +=
+                        Issue(
+                            start = attr.nameStart,
+                            end = nameEnd,
+                            message = "Unknown Datastar attribute $prefix${parsed.base}. Did you mean $prefix${near.name}?",
+                            severity = Severity.WARNING,
+                            code = "unknown-attribute",
+                            link = Docs.attribute(near.name),
+                            fixes = listOf(Fix("Change to $prefix${near.name}", attr.nameStart, baseEnd, "$prefix${near.name}")),
+                        )
+                }
+                continue
+            }
+            val link = Docs.attribute(spec.name)
+            if (spec.pro) {
+                issues +=
+                    Issue(
+                        attr.nameStart,
+                        nameEnd,
+                        "$prefix${spec.name} is a Datastar Pro attribute; it needs the Pro bundle.",
+                        Severity.HINT,
+                        "pro-attribute",
+                        link,
+                    )
+            }
+            if (spec.keyRequired && parsed.key.isNullOrEmpty()) {
+                issues +=
+                    Issue(
+                        attr.nameStart,
+                        nameEnd,
+                        "$prefix${spec.name} needs a key, e.g. ${spec.forms.firstOrNull() ?: ""}.",
+                        Severity.ERROR,
+                        "missing-key",
+                        link,
+                    )
+            }
+            if (!spec.keyed && parsed.key != null) {
+                issues += Issue(attr.nameStart, nameEnd, "$prefix${spec.name} does not take a key.", Severity.ERROR, "unexpected-key", link)
+            }
+            if (parsed.key != null) issues += validateKeyCase(attr, parsed, spec, prefix)
+            if (spec.onlyOn != null && tag.name !in spec.onlyOn) {
+                issues +=
+                    Issue(
+                        attr.nameStart,
+                        nameEnd,
+                        "$prefix${spec.name} only works on <${spec.onlyOn.joinToString(">, <")}>.",
+                        Severity.WARNING,
+                        "wrong-element",
+                    )
+            }
+            for (mod in parsed.modifiers) {
+                val mstart = attr.nameStart + mod.offset
+                val mend = mstart + mod.text.length
+                val mspec = spec.modifiers.firstOrNull { it.name == mod.name }
+                if (mspec == null) {
+                    val near = spec.modifiers.map { it.name }.firstOrNull { distance(it, mod.name) <= 2 }
+                    issues +=
+                        Issue(
+                            start = mstart,
+                            end = mend,
+                            message =
+                                if (near != null) {
+                                    "Unknown modifier __${mod.name} on $prefix${spec.name}. Did you mean __$near?"
+                                } else {
+                                    "Unknown modifier __${mod.name} on $prefix${spec.name}."
+                                },
+                            severity = Severity.ERROR,
+                            code = "unknown-modifier",
+                            link = link,
+                            fixes =
+                                if (near !=
+                                    null
+                                ) {
+                                    listOf(Fix("Change to __$near", mstart, mstart + mod.name.length, near))
+                                } else {
+                                    emptyList()
+                                },
+                        )
+                    continue
+                }
+                issues += validateModifierArgs(mspec, mod.args, mstart, mend).map { it.copy(link = link) }
+            }
+            val value = attr.value
+            if (value != null && spec.valueKind == ValueKind.EXPRESSION && value.isNotBlank() && !TEMPLATE_SYNTAX.containsMatchIn(value)) {
+                for (issue in expressions.validate(value)) {
+                    issues +=
+                        issue.copy(
+                            start = attr.valueStart + issue.start,
+                            end = attr.valueStart + issue.end,
+                            fixes = issue.fixes.map { it.copy(start = attr.valueStart + it.start, end = attr.valueStart + it.end) },
+                        )
+                }
+            }
+            if (value != null && spec.valueKind == ValueKind.SIGNAL && value.isNotBlank() && !TEMPLATE_SYNTAX.containsMatchIn(value) &&
+                !SIGNAL_NAME.matches(value.trim())
+            ) {
+                issues +=
+                    Issue(
+                        attr.valueStart,
+                        attr.valueEnd,
+                        "$prefix${spec.name} takes a signal name, not an expression.",
+                        Severity.WARNING,
+                        "signal-name-expected",
+                    )
+            }
+            if (spec.valueKind == ValueKind.NONE && value != null && value.isNotBlank()) {
+                issues += Issue(attr.valueStart, attr.valueEnd, "$prefix${spec.name} takes no value.", Severity.WARNING, "unexpected-value")
+            }
+        }
+        return issues
+    }
+
+    /**
+     * The browser lowercases attribute names, so a capital letter in a key never reaches Datastar:
+     * `data-signals:fooBar` declares `$foobar`, `data-on:widgetLoaded` listens to `widgetloaded`.
+     * The fix writes the key as [wireKey] says, so that the name the author typed is the name the
+     * browser ends up with.
+     */
+    private fun validateKeyCase(
+        attr: Attribute,
+        parsed: ParsedAttribute,
+        spec: AttributeSpec,
+        prefix: String,
+    ): List<Issue> {
+        val colon = attr.name.indexOf(':')
+        if (colon < 0 || spec.keyCase == null) return emptyList()
+        val key = attr.name.substring(colon + 1).substringBefore("__")
+        if (!HAS_CAPITAL.containsMatchIn(key)) return emptyList()
+        val keyStart = attr.nameStart + colon + 1
+        val name = prefix + spec.name
+        val existing = parsed.modifiers.firstOrNull { it.name == "case" }
+        // With an explicit __case already there, only the key itself changes.
+        val fixed = if (existing != null) kebab(key) else wireKey(key, spec.keyCase, null)
+        val reaches = keyReading(spec, key.lowercase(), key.lowercase())
+        val keep =
+            if (existing !=
+                null
+            ) {
+                "__" + existing.name + (if (existing.args.isNotEmpty()) "." + existing.args.joinToString(".") else "")
+            } else {
+                ""
+            }
+        val camelNote = if (keyKind(spec) == KeyKind.SIGNAL) ", and Datastar reads a kebab-case signal key as camelCase" else ""
+        return listOf(
+            Issue(
+                start = keyStart,
+                end = keyStart + key.length,
+                message =
+                    "The browser lowercases attribute names, so this reaches Datastar as $reaches, not $key. " +
+                        "Write $name:$fixed$keep: keys are kebab-case$camelNote.${rawKeyNote(spec, prefix, key)}",
+                severity = Severity.WARNING,
+                code = "key-case",
+                link = Docs.attribute(spec.name),
+                fixes = listOf(Fix("Change to $fixed", keyStart, keyStart + key.length, fixed)),
+            ),
+        )
+    }
+
+    private fun validateModifierArgs(
+        spec: Modifier,
+        args: List<String>,
+        start: Int,
+        end: Int,
+    ): List<Issue> {
+        val issues = ArrayList<Issue>()
+
+        fun fail(
+            message: String,
+            fixes: List<Fix> = emptyList(),
+        ) {
+            issues += Issue(start, end, message, Severity.ERROR, "modifier-args", fixes = fixes)
+        }
+        when (spec.type) {
+            ModifierType.FLAG -> {
+                if (args.isNotEmpty()) fail("__${spec.name} takes no arguments.")
+            }
+
+            ModifierType.DURATION -> {
+                val d = args.firstOrNull()
+                if (d == null || !DURATION.matches(d)) {
+                    val at = start + spec.name.length
+                    fail(
+                        "__${spec.name} needs a duration such as __${spec.name}.500ms or __${spec.name}.1s.",
+                        if (d == null) listOf(Fix("Add .500ms", at, at, ".500ms")) else emptyList(),
+                    )
+                }
+                for (f in args.drop(1)) {
+                    if (f !in spec.flags) {
+                        fail(
+                            "Unknown flag .$f for __${spec.name}. Allowed: ${spec.flags.joinToString(", ") { ".$it" }.ifEmpty { "none" }}.",
+                        )
+                    }
+                }
+            }
+
+            ModifierType.ENUM -> {
+                val v = args.firstOrNull()
+                if (v == null || v !in spec.values) fail("__${spec.name} needs one of: ${spec.values.joinToString(", ") { ".$it" }}.")
+                if (args.size > 1) fail("__${spec.name} takes a single value.")
+            }
+
+            ModifierType.INT -> {
+                val n = args.firstOrNull()?.toIntOrNull()
+                if (n == null || (spec.min != null && n < spec.min) || (spec.max != null && n > spec.max)) {
+                    val range = if (spec.min != null) " between ${spec.min} and ${spec.max}" else ""
+                    fail("__${spec.name} needs an integer$range, e.g. __${spec.name}.50.")
+                }
+                if (args.size > 1) fail("__${spec.name} takes a single value.")
+            }
+
+            ModifierType.IDENT -> {
+                val v = args.firstOrNull()
+                if (v == null || !IDENT.matches(v)) fail("__${spec.name} needs a name, e.g. __${spec.name}.value.")
+                if (args.size > 1) fail("__${spec.name} takes a single name.")
+            }
+
+            ModifierType.IDENTS -> {
+                if (args.isEmpty() || args.any { !IDENT.matches(it) }) {
+                    fail("__${spec.name} needs one or more names, e.g. __${spec.name}.input.blur.")
+                }
+            }
+        }
+        return issues
+    }
+}

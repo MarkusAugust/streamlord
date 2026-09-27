@@ -76,6 +76,13 @@ describe("expressions", () => {
     expect(validateExpression("evt.key === 'Escape' && ($open = false)")).toEqual([]);
     expect(validateExpression("@peek(() => $a.b)")).toEqual([]);
   });
+  it("reads an object literal the way datastar does", () => {
+    expect(validateExpression("{count: 0, name: '', nested: {a: [1, 2, 3]}}")).toEqual([]);
+    expect(validateExpression("{count: 0}")).toEqual([]);
+    expect(validateExpression("{count: }").map((i) => i.start)).toEqual([8]);
+    expect(validateExpression("{n: , m: 1}").map((i) => i.start)).toEqual([4]);
+    expect(analyzeHtml(`<div data-signals="{count: 0, name: ''}"></div>`, opts)).toEqual([]);
+  });
   it("reports syntax errors with positions and unknown actions", () => {
     const bad = validateExpression("@post('/x'");
     expect(bad[0]?.severity).toBe("error");

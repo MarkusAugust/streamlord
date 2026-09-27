@@ -24,6 +24,10 @@ Thumbs.db
 local.properties
 *.log
 
+# IntelliJ plugin build
+editors/intellij/.intellijPlatform/
+editors/intellij/.kotlin/
+
 # Node / VS Code extension
 node_modules/
 editors/vscode/dist/

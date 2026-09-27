@@ -1,0 +1,4 @@
+# Platform tests are JUnit 3: a test is a method whose name starts with "test", and the
+# backtick names carry no annotation for ktlint to recognise.
+[*.kt]
+ktlint_standard_function-naming = disabled

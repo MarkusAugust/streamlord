@@ -1,0 +1,5 @@
+<idea-plugin>
+    <extensions defaultExtensionNs="JavaScript.JsonSchema">
+        <ProviderFactory implementation="io.github.markusaugust.streamlord.intellij.inspector.InspectorSchemaProviderFactory" />
+    </extensions>
+</idea-plugin>

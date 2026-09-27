@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The light palette for the Datastar tokens only, in the spirit of IntelliJ Light: signals in the
+  scheme's constant blue, actions purple, scope variables keyword-blue italic, keys teal. Nothing
+  here touches a token that belongs to Kotlin, HTML or JavaScript, so the user's theme stays theirs.
+-->
+<list>
+  <option name="STREAMLORD_SIGNAL">
+    <value>
+      <option name="FOREGROUND" value="0070c1" />
+      <option name="FONT_TYPE" value="1" />
+    </value>
+  </option>
+  <option name="STREAMLORD_SIGNAL_PATH">
+    <value>
+      <option name="FOREGROUND" value="001080" />
+    </value>
+  </option>
+  <option name="STREAMLORD_ACTION_BACKEND">
+    <value>
+      <option name="FOREGROUND" value="af00db" />
+      <option name="FONT_TYPE" value="1" />
+    </value>
+  </option>
+  <option name="STREAMLORD_ACTION">
+    <value>
+      <option name="FOREGROUND" value="af00db" />
+    </value>
+  </option>
+  <option name="STREAMLORD_SCOPE_VARIABLE">
+    <value>
+      <option name="FOREGROUND" value="0000ff" />
+      <option name="FONT_TYPE" value="2" />
+    </value>
+  </option>
+  <option name="STREAMLORD_OPTION_KEY">
+    <value>
+      <option name="FOREGROUND" value="001080" />
+      <option name="FONT_TYPE" value="1" />
+    </value>
+  </option>
+  <option name="STREAMLORD_DURATION">
+    <value>
+      <option name="FOREGROUND" value="098658" />
+    </value>
+  </option>
+  <option name="STREAMLORD_KOTLIN_DOLLAR_ESCAPE">
+    <value>
+      <option name="FOREGROUND" value="ee0000" />
+    </value>
+  </option>
+  <option name="STREAMLORD_ATTRIBUTE_PREFIX">
+    <value>
+      <option name="FOREGROUND" value="8e8e8e" />
+    </value>
+  </option>
+  <option name="STREAMLORD_ATTRIBUTE_PLUGIN">
+    <value>
+      <option name="FOREGROUND" value="af00db" />
+      <option name="FONT_TYPE" value="1" />
+    </value>
+  </option>
+  <option name="STREAMLORD_ATTRIBUTE_KEY">
+    <value>
+      <option name="FOREGROUND" value="267f99" />
+    </value>
+  </option>
+  <option name="STREAMLORD_MODIFIER">
+    <value>
+      <option name="FOREGROUND" value="0000ff" />
+    </value>
+  </option>
+  <option name="STREAMLORD_MODIFIER_SIGIL">
+    <value>
+      <option name="FOREGROUND" value="8e8e8e" />
+    </value>
+  </option>
+  <option name="STREAMLORD_MODIFIER_ARG">
+    <value>
+      <option name="FOREGROUND" value="267f99" />
+    </value>
+  </option>
+</list>

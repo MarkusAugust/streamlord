@@ -1,0 +1,15 @@
+<html>
+<body>
+Reports a Kotlin string template where a Datastar signal was meant: <code>"$count++"</code> becomes <code>"++"</code> at runtime,
+and the browser never sees a signal.
+<p>
+In a Datastar expression handed to the DSL this is an error. Inside an HTML string a template in a <code>data-*</code> expression is a
+warning, since a server value there works as often as it is the trap; in element text it is a hint, since there it is usually meant.
+</p>
+<p>
+Quick fixes: the DSL helper (<code>increment("count")</code>, <code>signal("count")</code>, <code>toggle("open")</code>), a
+<code>$$"..."</code> literal (Kotlin 2.2+) where a single dollar is text, or the <code>${'$'}count</code> escape.
+</p>
+<!-- tooltip end -->
+</body>
+</html>

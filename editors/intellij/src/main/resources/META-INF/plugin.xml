@@ -1,0 +1,142 @@
+<idea-plugin>
+    <id>io.github.markusaugust.streamlord</id>
+    <name>Streamlord</name>
+    <vendor url="https://github.com/MarkusAugust/streamlord">MarkusAugust</vendor>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.lang</depends>
+    <depends>com.intellij.modules.xml</depends>
+    <depends>org.jetbrains.kotlin</depends>
+    <depends optional="true" config-file="streamlord-json.xml">com.intellij.modules.json</depends>
+
+    <extensions defaultExtensionNs="org.jetbrains.kotlin">
+        <supportsKotlinPluginMode supportsK2="true" />
+    </extensions>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <projectService serviceImplementation="io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings" />
+        <projectService serviceImplementation="io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis" />
+        <projectService serviceImplementation="io.github.markusaugust.streamlord.intellij.index.SignalIndex" />
+        <completion.contributor
+            language="kotlin"
+            order="first, before KotlinCompletionContributor"
+            implementationClass="io.github.markusaugust.streamlord.intellij.completion.StreamlordCompletionContributor" />
+        <completion.contributor
+            language="HTML"
+            order="first"
+            implementationClass="io.github.markusaugust.streamlord.intellij.completion.StreamlordCompletionContributor" />
+        <completion.contributor
+            language="TEXT"
+            order="first"
+            implementationClass="io.github.markusaugust.streamlord.intellij.completion.StreamlordCompletionContributor" />
+        <typedHandler order="first" implementation="io.github.markusaugust.streamlord.intellij.completion.DatastarTypedHandler" />
+        <completion.confidence
+            language="kotlin"
+            order="first"
+            implementationClass="io.github.markusaugust.streamlord.intellij.completion.DatastarCompletionConfidence" />
+        <completion.confidence
+            language="HTML"
+            order="first"
+            implementationClass="io.github.markusaugust.streamlord.intellij.completion.DatastarCompletionConfidence" />
+        <completion.confidence
+            language="TEXT"
+            order="first"
+            implementationClass="io.github.markusaugust.streamlord.intellij.completion.DatastarCompletionConfidence" />
+
+        <lang.documentationProvider
+            language="kotlin"
+            order="first"
+            implementationClass="io.github.markusaugust.streamlord.intellij.documentation.StreamlordDocumentationProvider" />
+        <lang.documentationProvider
+            language="HTML"
+            order="first"
+            implementationClass="io.github.markusaugust.streamlord.intellij.documentation.StreamlordDocumentationProvider" />
+        <lang.documentationProvider
+            language="TEXT"
+            order="first"
+            implementationClass="io.github.markusaugust.streamlord.intellij.documentation.StreamlordDocumentationProvider" />
+
+        <annotator language="HTML" implementationClass="io.github.markusaugust.streamlord.intellij.highlighting.HtmlDatastarAnnotator" />
+        <annotator language="kotlin" implementationClass="io.github.markusaugust.streamlord.intellij.highlighting.KotlinDatastarAnnotator" />
+        <annotator language="TEXT" implementationClass="io.github.markusaugust.streamlord.intellij.highlighting.TemplateTextAnnotator" />
+        <colorSettingsPage implementation="io.github.markusaugust.streamlord.intellij.highlighting.DatastarColorSettingsPage" />
+        <additionalTextAttributes scheme="Default" file="colorSchemes/StreamlordDefault.xml" />
+        <additionalTextAttributes scheme="Darcula" file="colorSchemes/StreamlordDarcula.xml" />
+
+        <multiHostInjector implementation="io.github.markusaugust.streamlord.intellij.injection.HtmlStringInjector" />
+        <defaultLiveTemplates file="/liveTemplates/Streamlord.xml" />
+        <defaultLiveTemplates file="/liveTemplates/StreamlordHtml.xml" />
+        <notificationGroup id="Streamlord" displayType="BALLOON" />
+
+        <projectService serviceImplementation="io.github.markusaugust.streamlord.intellij.inspector.InspectorState" />
+        <projectService serviceImplementation="io.github.markusaugust.streamlord.intellij.inspector.RequestStore" />
+        <projectService serviceImplementation="io.github.markusaugust.streamlord.intellij.inspector.InspectorService" />
+        <toolWindow
+            id="Streamlord"
+            anchor="right"
+            icon="AllIcons.Actions.Lightning"
+            factoryClass="io.github.markusaugust.streamlord.intellij.inspector.InspectorToolWindowFactory" />
+        <codeInsight.lineMarkerProvider
+            language="kotlin"
+            implementationClass="io.github.markusaugust.streamlord.intellij.inspector.RouteLineMarkerProvider" />
+    </extensions>
+
+    <actions>
+        <group id="Streamlord.Tools" text="Streamlord" popup="true">
+            <add-to-group group-id="ToolsMenu" anchor="last" />
+            <action
+                id="Streamlord.OpenInspector"
+                class="io.github.markusaugust.streamlord.intellij.inspector.OpenInspectorAction"
+                text="Open Stream Inspector"
+                description="Connect to a running Datastar endpoint and watch the events arrive, decoded" />
+            <action
+                id="Streamlord.ReindexSignals"
+                class="io.github.markusaugust.streamlord.intellij.actions.ReindexSignalsAction"
+                text="Re-index Signals"
+                description="Read every Kotlin and HTML file again for signal names, ids and classes" />
+        </group>
+    </actions>
+    <extensions defaultExtensionNs="com.intellij">
+        <projectConfigurable
+            parentId="tools"
+            instance="io.github.markusaugust.streamlord.intellij.settings.StreamlordConfigurable"
+            id="io.github.markusaugust.streamlord.settings"
+            displayName="Streamlord" />
+
+        <localInspection
+            shortName="KotlinInterpolationInspection"
+            displayName="Kotlin interpolation of a Datastar signal"
+            groupName="Streamlord"
+            enabledByDefault="true"
+            level="ERROR"
+            implementationClass="io.github.markusaugust.streamlord.intellij.inspections.KotlinInterpolationInspection" />
+        <localInspection
+            shortName="DatastarExpressionInspection"
+            displayName="Datastar expression"
+            groupName="Streamlord"
+            enabledByDefault="true"
+            level="ERROR"
+            implementationClass="io.github.markusaugust.streamlord.intellij.inspections.DatastarExpressionInspection" />
+        <localInspection
+            shortName="DatastarAttributeInspection"
+            displayName="Datastar attribute"
+            groupName="Streamlord"
+            enabledByDefault="true"
+            level="WARNING"
+            implementationClass="io.github.markusaugust.streamlord.intellij.inspections.DatastarAttributeInspection" />
+        <localInspection
+            shortName="DatastarKeyCaseInspection"
+            displayName="Datastar key casing"
+            groupName="Streamlord"
+            enabledByDefault="true"
+            level="WARNING"
+            implementationClass="io.github.markusaugust.streamlord.intellij.inspections.DatastarKeyCaseInspection" />
+        <localInspection
+            shortName="StreamlordMarkupInspection"
+            displayName="Streamlord patch markup"
+            groupName="Streamlord"
+            enabledByDefault="true"
+            level="WARNING"
+            implementationClass="io.github.markusaugust.streamlord.intellij.inspections.StreamlordMarkupInspection" />
+    </extensions>
+</idea-plugin>

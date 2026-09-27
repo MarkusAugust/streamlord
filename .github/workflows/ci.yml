@@ -3,7 +3,7 @@ name: CI
 on:
   push:
     branches: [master]
-    tags: ["vscode-v*", "v*"]
+    tags: ["vscode-v*", "intellij-v*", "v*"]
   pull_request:
   workflow_dispatch:
 
@@ -61,6 +61,38 @@ jobs:
           name: streamlord-vsix
           path: editors/vscode/*.vsix
 
+  intellij:
+    name: IntelliJ plugin
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: editors/intellij
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build, test and verify
+        run: ./gradlew buildPlugin test verifyPlugin --no-daemon
+
+      - name: Upload plugin archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: streamlord-intellij
+          path: editors/intellij/build/distributions/*.zip
+
+      - name: Upload verifier reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: intellij-verifier-reports
+          path: editors/intellij/build/reports/pluginVerifier/**
+
   publish-vscode:
     name: Publish VS Code extension
     if: startsWith(github.ref, 'refs/tags/vscode-v')
@@ -92,6 +124,38 @@ jobs:
         run: npx vsce publish --no-dependencies -p "$VSCE_PAT"
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+  publish-intellij:
+    name: Publish IntelliJ plugin
+    if: startsWith(github.ref, 'refs/tags/intellij-v')
+    needs: [intellij]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: editors/intellij
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Check that the tag matches gradle.properties
+        run: |
+          tag="${GITHUB_REF_NAME#intellij-v}"
+          version="$(grep '^pluginVersion=' gradle.properties | cut -d= -f2)"
+          if [ "$tag" != "$version" ]; then echo "tag $tag != pluginVersion $version"; exit 1; fi
+
+      - name: Publish to the JetBrains Marketplace
+        run: ./gradlew publishPlugin --no-daemon
+        env:
+          JETBRAINS_MARKETPLACE_TOKEN: ${{ secrets.JETBRAINS_MARKETPLACE_TOKEN }}
+          JETBRAINS_CERTIFICATE_CHAIN: ${{ secrets.JETBRAINS_CERTIFICATE_CHAIN }}
+          JETBRAINS_PRIVATE_KEY: ${{ secrets.JETBRAINS_PRIVATE_KEY }}
+          JETBRAINS_PRIVATE_KEY_PASSWORD: ${{ secrets.JETBRAINS_PRIVATE_KEY_PASSWORD }}
 
   publish-maven-central:
     name: Publish to Maven Central

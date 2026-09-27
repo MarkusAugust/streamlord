@@ -1,3 +1,4 @@
+import { PLACEHOLDER } from "./kotlinStrings.ts";
 import { findCallSites } from "./scanner.ts";
 
 /**
@@ -70,6 +71,8 @@ export function collectSignals(src: string, language: "kotlin" | "html"): Set<st
       while ((p = PROPERTY.exec(body)) !== null) if (p[1]) out.add(p[1]);
     }
   }
+  // The placeholder the analysis writes for a Kotlin template is never a signal, whatever file it turns up in.
+  for (const name of out) if (name.includes(PLACEHOLDER)) out.delete(name);
   return out;
 }
 

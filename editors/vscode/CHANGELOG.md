@@ -2,6 +2,12 @@
 
 All notable changes to the Streamlord extension are recorded here.
 
+## 0.3.1
+
+- An expression that opens with `{` is read as the object literal Datastar makes of it, which
+  wraps the last statement in `return (...)`: `data-signals="{count: 0, name: ''}"` no longer
+  draws a syntax error. To a script parser it was a block.
+
 ## 0.3.0
 
 - The wire hint also covers `dataBind`, `dataRef` and `dataIndicator` once a `case` is given

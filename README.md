@@ -57,9 +57,9 @@ data classes as signals.
 
 ```kotlin
 dependencies {
-    implementation("io.github.markusaugust.streamlord:streamlord-ktor:0.2.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-html:0.2.0")          // optional
-    implementation("io.github.markusaugust.streamlord:streamlord-json-kotlinx:0.2.0")  // optional
+    implementation("io.github.markusaugust.streamlord:streamlord-ktor:0.3.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-html:0.3.0")          // optional
+    implementation("io.github.markusaugust.streamlord:streamlord-json-kotlinx:0.3.0")  // optional
 }
 ```
 
@@ -357,28 +357,39 @@ expression (which reads as `$foo` minus `bar`) with the camelCase fix.
 |---|---|---|---|
 | Passed to the SDK as | `div { }` blocks | `String` | `String` |
 | `$` trap | caught by the helpers | `$$"""` avoids it; `guardElements` catches it | none |
-| IntelliJ | Kotlin plugin: completion, KDoc, types | `@Language("HTML")` + Datastar plugin: attribute completion | Datastar plugin: attribute completion |
+| IntelliJ | Kotlin plugin: completion, KDoc, types; Streamlord plugin: expression diagnostics, completion, hover, the wire hint | Streamlord plugin: markup and attribute diagnostics, completion, hover, highlighting, HTML injection | the same, per template plugin |
 | VS Code | expression diagnostics, completion, hover | markup and attribute diagnostics, completion, hover, highlighting | the same, per language |
 
 ---
 
-## The Eye: VS Code
+## The Eye: VS Code and IntelliJ IDEA
 
-`editors/vscode` holds the Streamlord extension, on the Marketplace as `MarkusAugust.streamlord`:
+`editors/vscode` holds the Streamlord extension, on the Marketplace as `MarkusAugust.streamlord`;
+`editors/intellij` holds the plugin for IntelliJ IDEA 2026.1 and newer, Community and Ultimate,
+on the JetBrains Marketplace as `io.github.markusaugust.streamlord`. Both see the same things:
 diagnostics with quick fixes for Datastar expressions and markup inside Kotlin strings, whether
 handed to the DSL or free-standing, and in HTML and template files (Kotlin `$` interpolation
-traps, syntax errors with the right column, missing ids, unknown attributes and modifiers),
-completions for signals, actions, attributes, modifiers, ids and classes, snippets, hover docs,
-syntax highlighting, and a Stream Inspector that shows a live SSE stream decoded with saved
-requests and route code lenses. The template languages of the JVM (JTE, kte, FreeMarker,
-Velocity, Mustache, Pebble; Thymeleaf is plain HTML) are on by default. Everything it knows
-comes from `catalog/datastar-1.0.4.json`, which the SDK's own tests bind to the DSL.
+traps, syntax errors with the right column, missing ids, unknown attributes and modifiers,
+capitals in keys), completions for signals, actions, attributes, modifiers, ids and classes,
+snippets, hover docs, syntax highlighting of the Datastar tokens only, and a Stream Inspector
+that shows a live SSE stream decoded, with saved requests in `.streamlord/inspector.json` that
+the two editors share, and route code lenses or gutter icons. The template languages of the JVM
+(JTE, kte, FreeMarker, Velocity, Mustache, Pebble; Thymeleaf is plain HTML) are covered.
 
-IntelliJ IDEA gives you the DSL itself for free through the Kotlin plugin: completion, KDoc
-and type errors for every call. Inside strings, `@Language("HTML")` on Streamlord's parameters
-turns on HTML injection, and the official Datastar plugin adds attribute completion there and
-in template files (it needs the JavaScript plugin, so IntelliJ IDEA Ultimate). A Streamlord
-plugin for IntelliJ, with the expression checks and actions, is still planned.
+Everything they know comes from `catalog/datastar-1.0.4.json`, which the SDK's own tests bind to
+the DSL. The checks themselves live once, in `streamlord-analysis`: a Kotlin module with no
+dependency beyond `streamlord-core`, holding the Kotlin string reader, the JavaScript syntax
+check, the markup and attribute rules, the signal and selector collectors, the route finder and
+the inspector's file format. The IntelliJ plugin calls it; the VS Code extension mirrors it in
+TypeScript, and the two are tested against the same cases. You can call it too, for example in
+the tests of your markup functions: `Analyzer().analyzeHtml(html)` returns every issue with its
+offset, message and fix.
+
+In IntelliJ the plugin adds what the IDE does not have on its own: the Kotlin plugin already
+gives you completion, KDoc and type errors for the DSL, and `@Language("HTML")` on Streamlord's
+parameters turns on HTML injection; the plugin brings the Datastar checks, injects HTML into the
+strings that carry no annotation, and steps aside for the official Datastar plugin's attribute
+completion when it is installed.
 
 ## The Hexagon
 

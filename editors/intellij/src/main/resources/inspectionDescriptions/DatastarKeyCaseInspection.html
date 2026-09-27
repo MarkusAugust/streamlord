@@ -1,0 +1,11 @@
+<html>
+<body>
+The browser lowercases attribute names, so a capital letter in a key never reaches Datastar: <code>data-signals:fooBar</code> declares
+<code>$foobar</code>. The quick fix writes the kebab-case key that comes back as the intended name, with <code>__case.camel</code>
+where Datastar's default is not camel.
+<p>
+In the DSL the SDK writes a camelCase key correctly on its own; a hint on the call says what goes on the wire, so nothing is hidden.
+</p>
+<!-- tooltip end -->
+</body>
+</html>
