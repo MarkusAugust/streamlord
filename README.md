@@ -257,7 +257,8 @@ Two things make this comfortable:
   Without it, `$count` either fails to compile or, when a `count` happens to be in scope,
   silently ships `data-text=""`. On older Kotlin, write `${'$'}count`.
 * **`@Language("HTML")`** from `org.intellij.lang.annotations`, which your build already has
-  through the Kotlin standard library. IntelliJ then treats the string as HTML: highlighting,
+  through the Kotlin standard library (Streamlord declares it `compileOnly`; nothing new
+  reaches you). IntelliJ then treats the string as HTML: highlighting,
   tag completion, and, with the official [Datastar plugin](https://plugins.jetbrains.com/plugin/26072),
   completion of every `data-*` attribute. Streamlord's own parameters (`patchElements`,
   `PatchElements`, `respondElements`, `datastarElements`, `ElementsResponse`; `JSON` for

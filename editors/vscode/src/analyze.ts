@@ -22,10 +22,21 @@ const ALL_SITE_NAMES: ReadonlySet<string> = new Set([
 
 const HTML_SITE_NAMES: ReadonlySet<string> = new Set(Object.keys(catalog.callSites.html));
 
+/** Keyed helpers that take a key but no expression, so the catalog's expression sites do not list them. */
+const KEY_ONLY_HELPERS: ReadonlySet<string> = new Set(["dataMatchMedia", "dataPersist"]);
+for (const name of KEY_ONLY_HELPERS) (ALL_SITE_NAMES as Set<string>).add(name);
+
+/** The last source lexed, so a hover or completion right after a diagnostics pass does not lex the file again. */
+let lastLex: { src: string; lex: ReturnType<typeof lexKotlin> } | null = null;
+function lexCached(src: string): ReturnType<typeof lexKotlin> {
+  if (lastLex?.src !== src) lastLex = { src, lex: lexKotlin(src) };
+  return lastLex.lex;
+}
+
 export function analyzeKotlin(src: string, opts: AnalyzeOptions): Issue[] {
   const issues: Issue[] = [];
   const claimed = new Set<number>();
-  const lex = lexKotlin(src);
+  const lex = lexCached(src);
   for (const site of findCallSites(src, ALL_SITE_NAMES, lex.mask)) {
     const expr = catalog.callSites.expression[site.name];
     if (expr) issues.push(...checkExpressionSite(site, expr, src));
@@ -51,7 +62,7 @@ export function analyzeKotlin(src: string, opts: AnalyzeOptions): Issue[] {
  * it to give Kotlin the HTML side.
  */
 export function htmlStringAt(src: string, offset: number): KotlinString | null {
-  const lex = lexKotlin(src);
+  const lex = lexCached(src);
   const s = stringAt(src, offset, lex.strings);
   if (!s) return null;
   if (isHtmlString(src, s)) return s;
@@ -149,6 +160,8 @@ function interpolationHints(s: KotlinString, src: string, prefix: string): Issue
         if (a.value === null || decoded < a.valueStart || decoded >= a.valueStart + a.value.length) continue;
         const parsed = parseAttributeName(a.name.toLowerCase(), prefix);
         if (parsed?.spec?.valueKind !== "expression") return null;
+        // data-signals:count="$initial" seeds a signal from the server, like the object form does.
+        if (parsed.spec.name === "signals") return "part";
         return a.value.trim() === PLACEHOLDER ? "whole" : "part";
       }
     }
@@ -235,13 +248,17 @@ function checkHtmlSite(site: CallSite, spec: CallSiteSpec, opts: AnalyzeOptions,
 function checkKeyCaseSite(site: CallSite, src: string): Issue[] {
   const spec = catalog.attributesByKotlin.get(site.name);
   if (!spec?.keyed || !spec.keyCase) return [];
-  // dataOnClick("expr") { ... } and friends: the first string is the expression, not a key.
-  if (catalog.callSites.expression[site.name]?.arg === 0) return [];
+  // Only helpers whose first parameter is a key: those whose expression is a later argument
+  // (dataOn, dataSignals, dataClass, ...), plus the two Pro helpers that take a key and no
+  // expression. dataOnClick("expr"), dataRef("name") and dataBind("name") pass a value, never a key.
+  const expr = catalog.callSites.expression[site.name];
+  if (expr ? expr.arg === 0 : !KEY_ONLY_HELPERS.has(site.name)) return [];
   const positional = site.args.filter((a) => a.named === null);
   const key = positional[0]?.string;
   if (positional.length < 2 || !key || key.interpolations.length > 0) return [];
   const name = key.text;
-  if (!/[A-Z]/.test(name)) return [];
+  // dataSignals("{fooBar: 1}", ...) is the object form: an expression, not a key.
+  if (!/[A-Z]/.test(name) || /^\s*[{\[]/.test(name)) return [];
   const named = site.args.find((a) => a.named === "case")?.text;
   const explicit = named ? /Case\.([A-Z]+)/.exec(named) : /\bcase\s*=\s*Case\.([A-Z]+)/.exec(trailingLambdaText(site, src));
   const explicitCase = explicit?.[1]?.toLowerCase() ?? null;

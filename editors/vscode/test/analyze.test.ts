@@ -146,10 +146,15 @@ describe("markup", () => {
       dataOnClick("@post('/Add')", { once = true })
       dataOnFetch("evt.detail.type === 'Started'") { window = true }
       dataAttr("viewBox", "$box")
+      dataRef("myRef", Case.CAMEL)
+      dataIndicator("isLoading", Case.CAMEL)
+      dataSignals("{fooBar: 1}", Case.CAMEL)
+      dataPersist("myKey", null)
+      dataMatchMedia("isMobile", "(max-width: 600px)")
     }`;
     const hints = analyzeKotlin(src, opts).filter((i) => i.code === "key-case-wire");
     expect(hints.every((i) => i.severity === "hint")).toBe(true);
-    expect(hints.map((i) => src.slice(i.start, i.end))).toEqual(['"fooBar"', '"widgetLoaded"', '"isOpen"', '"ariaLabel"', '"MySignal"', '"fooBar"', '"customEvent"', '"viewBox"']);
+    expect(hints.map((i) => src.slice(i.start, i.end))).toEqual(['"fooBar"', '"widgetLoaded"', '"isOpen"', '"ariaLabel"', '"MySignal"', '"fooBar"', '"customEvent"', '"viewBox"', '"myKey"', '"isMobile"']);
     expect(hints.map((i) => /as (data-[a-z-]+:[^,]+),/.exec(i.message)![1])).toEqual([
       "data-signals:foo-bar",
       "data-on:widget-loaded__case.camel",
@@ -159,15 +164,17 @@ describe("markup", () => {
       "data-signals:foo-bar__case.kebab",
       "data-on:custom-event__case.kebab",
       "data-attr:view-box",
+      "data-persist:my-key",
+      "data-match-media:is-mobile",
     ]);
     expect(hints[0]!.message).toContain("$fooBar");
     expect(hints[7]!.message).toContain('data-attr="{viewBox: ...}"');
   });
 
   it("warns, not errors, when the template is only part of an expression", () => {
-    const src = `fun seed(initial: Int) = """<div data-signals="{count: $initial}" data-text="$initial"></div>"""`;
+    const src = `fun seed(initial: Int) = """<div data-signals="{count: $initial}" data-signals:count="$initial" data-text="$initial"></div>"""`;
     const issues = analyzeKotlin(src, opts).filter((i) => i.code === "kotlin-interpolation");
-    expect(issues.map((i) => i.severity)).toEqual(["warning", "error"]);
+    expect(issues.map((i) => i.severity)).toEqual(["warning", "warning", "error"]);
     expect(issues[0]!.message).toContain("server value");
     expect(issues[0]!.fixes!.map((f) => f.title)).toEqual(["Make it a $$ literal, where $initial is a signal", "Escape as ${'$'}initial"]);
   });

@@ -30,14 +30,14 @@
               "name": "storage.type.annotation.kotlin"
             }
           },
-          "comment": "Ends after the next string literal, or at once when the annotation sits on a parameter (`html: String,`).",
-          "end": "(?<=\")|:\\s*String\\??\\s*(?:=[^,)\"]*)?(?=[,)])",
+          "comment": "Ends after the next triple-quoted literal, after a double-quoted literal that ends the line (`val x = \"<b>\"`), or at once when the annotation sits on a parameter (`html: String,`). A double-quoted string before that, such as a parameter default, is a plain string.",
+          "end": "(?<=\"\"\")|(?<=\")\\s*$|:\\s*String\\??\\s*(?:=[^,)\"]*)?(?=[,)])",
           "patterns": [
             {
               "include": "#html-triple-string"
             },
             {
-              "include": "#html-double-string"
+              "include": "#plain-double-string"
             }
           ]
         },
@@ -48,13 +48,13 @@
               "name": "comment.line.double-slash.kotlin"
             }
           },
-          "end": "(?<=\")",
+          "end": "(?<=\"\"\")|(?<=\")\\s*$",
           "patterns": [
             {
               "include": "#html-triple-string"
             },
             {
-              "include": "#html-double-string"
+              "include": "#plain-double-string"
             }
           ]
         },
@@ -125,6 +125,30 @@
         {
           "match": "\\$\\{'\\$'\\}",
           "name": "constant.character.escape.dollar.kotlin"
+        },
+        {
+          "include": "text.html.basic"
+        }
+      ]
+    },
+    "plain-double-string": {
+      "comment": "A double-quoted literal under an HTML marker that is not the HTML: a parameter default. Kept a string; a leading `<` still gets the fallback rule.",
+      "begin": "(\\$*\")(?=<(?:[A-Za-z]|!--))",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.string.begin.kotlin string.quoted.double.kotlin"
+        }
+      },
+      "end": "(\")",
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.string.end.kotlin string.quoted.double.kotlin"
+        }
+      },
+      "contentName": "meta.embedded.block.html",
+      "patterns": [
+        {
+          "include": "#kotlin-escapes"
         },
         {
           "include": "text.html.basic"

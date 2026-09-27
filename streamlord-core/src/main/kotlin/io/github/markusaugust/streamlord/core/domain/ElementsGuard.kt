@@ -79,16 +79,14 @@ public object ElementsGuard {
     @Volatile
     public var prefixes: List<String> = listOf("data-star-", "data-")
 
-    private val ENTITIES =
-        listOf("&amp;" to "&", "&lt;" to "<", "&gt;" to ">", "&quot;" to "\"", "&#39;" to "'", "&apos;" to "'", "&#34;" to "\"")
+    private val ENTITY = Regex("&(amp|lt|gt|quot|apos|#39|#34);")
+    private val ENTITIES = mapOf("amp" to "&", "lt" to "<", "gt" to ">", "quot" to "\"", "apos" to "'", "#39" to "'", "#34" to "\"")
 
-    /** kotlinx.html and every template engine escape attribute values; the expression is what the browser decodes. */
-    private fun decode(value: String): String {
-        if ('&' !in value) return value
-        var out = value
-        for ((entity, char) in ENTITIES) out = out.replace(entity, char)
-        return out
-    }
+    /**
+     * kotlinx.html and every template engine escape attribute values; the expression is what the
+     * browser decodes. One pass, as the browser does it, so `&amp;lt;` is `&lt;` and not `<`.
+     */
+    private fun decode(value: String): String = if ('&' in value) ENTITY.replace(value) { ENTITIES.getValue(it.groupValues[1]) } else value
 
     /** Returns [elements] untouched, or throws [InterpolatedExpressionException] for the first broken attribute. */
     public fun check(elements: String): String {

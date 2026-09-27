@@ -109,6 +109,9 @@ class ElementsGuardTest {
         assertFailsWith<InterpolatedExpressionException> { ElementsGuard.check("""<div data-show=" &lt; 10"></div>""") }
         val fine = """<div data-show="${'$'}a &amp;&amp; ${'$'}b &lt; 10" data-text="&quot;x&quot; + ${'$'}y"></div>"""
         assertEquals(fine, ElementsGuard.check(fine))
+        // Decoded once, as the browser does: &amp;lt; is the text &lt;, not an operator.
+        val doubly = """<div data-show="&amp;lt; 10" data-text="'&amp;quot;'"></div>"""
+        assertEquals(doubly, ElementsGuard.check(doubly))
         assertEquals("""<div data-ds-text=""></div>""", ElementsGuard.check("""<div data-ds-text=""></div>"""))
         val before = ElementsGuard.prefixes
         try {

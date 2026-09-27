@@ -114,7 +114,7 @@ public object ExpressionGuard {
     private val ONLY_BRACKETS = Regex("^[\\s\\[\\]{}]+$")
 
     /**
-     * A statement that is nothing but `++` or `--`; an operator that needs a left operand right
+     * A statement that is nothing but `++` or `--` (`$count ++`, with its operand, is fine); an operator that needs a left operand right
      * after an opening `(`, `[`, `{` or a `,`; or an operator that needs a right operand right
      * before a closing `)`, `]`, `}` or a `,`. That last shape is what `{count: $count}` and
      * `@post('/x', {n: $n})` leave behind: `{count: }`. A `.` counts unless it starts a spread
@@ -122,7 +122,7 @@ public object ExpressionGuard {
      */
     private val ORPHANS =
         Regex(
-            "(?:^|[\\s;(])(\\+\\+|--)(?=\\s*(?:;|$))" +
+            "(?:^|[;(])\\s*(\\+\\+|--)(?=\\s*(?:;|$))" +
                 "|[(\\[{,](?:\\s*)(===|!==|==|!=|<=|>=|&&|\\|\\||\\?\\?|[=?:*/%<>,]|\\.(?![.\\d]))" +
                 "|(?<![+\\-])([:=*%<>&|?!@]|[+\\-](?![+\\-]))(?:\\s*)(?=[)\\]},])",
         )

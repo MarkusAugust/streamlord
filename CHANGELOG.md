@@ -26,16 +26,19 @@ All notable changes to Streamlord are recorded here. The format follows
   which it refused before as operator-only or dangling, and now catches what an eaten signal
   leaves inside a literal or argument list (`{count: }`, `{n: , m: 1}`, `[, 1]`), a missing
   left operand of `<` and a missing right operand of `+` or `-` (`'Hello, ' + `), which it let
-  through before. `ElementsGuard` decodes the HTML entities kotlinx.html and template engines
-  write (`&amp;&amp;`, `&lt;`) before judging a value, and `ElementsGuard.prefixes` takes a
-  custom bundle alias. `Flow<DatastarEvent>.asSse()` takes the instance too.
+  through before, while `$count ++` with a space, valid JavaScript, is no longer refused.
+  `ElementsGuard` decodes the HTML entities kotlinx.html and template engines write
+  (`&amp;&amp;`, `&lt;`) once, as the browser does, before judging a value, and
+  `ElementsGuard.prefixes` takes a custom bundle alias. `Flow<DatastarEvent>.asSse()` takes
+  the instance too.
 - `catalog/datastar-1.0.4.json`: `keyCase` on every keyed attribute (`camel`, `kebab` or
   `raw`), the one place the casing rule is written; the catalog test binds `Casing` to it and
   the extension reads it.
 - `@Language("HTML")`, `@Language("JSON")` and `@Language("JavaScript")` on every `elements`,
   `signals` and `script` parameter in core, Ktor and Spring, so IntelliJ injects the right
-  language into a literal passed straight in. The annotation comes with the Kotlin standard
-  library; no new dependency.
+  language into a literal passed straight in. The annotation's artifact,
+  `org.jetbrains:annotations`, is declared `compileOnly`, so nothing new reaches a consumer;
+  kotlin-stdlib ships the same artifact anyway.
 - README: "Three ways to write markup", covering the DSL, strings (`$$"""..."""`,
   `@Language("HTML")`) and templates as equals, with what each gets from the SDK and the editors.
 - `streamlord-html`: `Casing`, the casing rules of Datastar applied so that the name you write

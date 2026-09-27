@@ -7,6 +7,7 @@ description = "Streamlord Ktor adapter: the Sword. Brings nothing you do not alr
 dependencies {
     api(project(":streamlord-core"))
     compileOnly(libs.ktor.server.core)
+    compileOnly(libs.jetbrains.annotations) // @Language on the response helpers, see streamlord-core
 
     testImplementation(kotlin("test"))
     testImplementation(libs.ktor.server.core)

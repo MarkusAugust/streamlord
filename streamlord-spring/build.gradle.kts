@@ -3,6 +3,7 @@ description = "Streamlord Spring adapter: the Shield. Spring and the servlet API
 dependencies {
     api(project(":streamlord-core"))
     compileOnly(libs.spring.web)
+    compileOnly(libs.jetbrains.annotations) // @Language on the response helpers, see streamlord-core
     compileOnly(libs.spring.webmvc)
     compileOnly(libs.jakarta.servlet)
 
