@@ -2,7 +2,7 @@
   "name": "streamlord",
   "displayName": "Streamlord",
   "description": "Datastar tooling for the Streamlord Kotlin SDK: expression and markup diagnostics, completions, hover docs, and a live SSE stream inspector.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "MarkusAugust",
   "license": "MIT",
   "private": true,
@@ -103,7 +103,7 @@
         "streamlord.inspector.codeLens": {
           "type": "boolean",
           "default": true,
-          "description": "Show \u201cOpen in Stream Inspector\u201d above Ktor and Spring routes."
+          "description": "Show “Open in Stream Inspector” above Ktor and Spring routes."
         },
         "streamlord.languages": {
           "type": "array",

@@ -2,7 +2,7 @@
 
 All notable changes to the Streamlord extension are recorded here.
 
-## Unreleased
+## 0.3.0
 
 - HTML strings that are not handed to a Streamlord call get the HTML side too: a function
   that returns markup, a `val` with a fragment. A string counts as HTML when it opens with a

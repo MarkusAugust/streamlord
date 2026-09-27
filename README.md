@@ -57,9 +57,9 @@ data classes as signals.
 
 ```kotlin
 dependencies {
-    implementation("io.github.markusaugust.streamlord:streamlord-ktor:0.1.1")
-    implementation("io.github.markusaugust.streamlord:streamlord-html:0.1.1")          // optional
-    implementation("io.github.markusaugust.streamlord:streamlord-json-kotlinx:0.1.1")  // optional
+    implementation("io.github.markusaugust.streamlord:streamlord-ktor:0.2.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-html:0.2.0")          // optional
+    implementation("io.github.markusaugust.streamlord:streamlord-json-kotlinx:0.2.0")  // optional
 }
 ```
 
