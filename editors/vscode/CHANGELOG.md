@@ -4,6 +4,9 @@ All notable changes to the Streamlord extension are recorded here.
 
 ## 0.3.0
 
+- The wire hint also covers `dataBind`, `dataRef` and `dataIndicator` once a `case` is given
+  (named, positional or in the trailing lambda), since the SDK then moves the name into the
+  key: `dataRef("myRef", Case.CAMEL)` says `data-ref:my-ref__case.camel`.
 - HTML strings that are not handed to a Streamlord call get the HTML side too: a function
   that returns markup, a `val` with a fragment. A string counts as HTML when it opens with a
   tag, a comment or a doctype, or when `@Language("HTML")` or `// language=HTML` sits just
