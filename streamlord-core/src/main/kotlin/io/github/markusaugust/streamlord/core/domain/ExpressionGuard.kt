@@ -84,8 +84,16 @@ public object ExpressionGuard {
 
     private val ONLY_OPERATORS = Regex("^[\\s=!<>&|?:.+\\-*/%,()\\[\\]{}]*$")
 
-    /** A statement that is nothing but `++` or `--`, or an operator that needs a left operand right after an opening `(`. */
-    private val ORPHANS = Regex("(?:^|[\\s;(])(\\+\\+|--)(?=\\s*(?:;|$))|\\((?:\\s*)(===|!==|==|!=|<=|>=|&&|\\|\\||\\?\\?|[=?:*/%>,.])")
+    /** `[]`, `{}`, `[{}]`: empty literals are operands, the usual way to start a list or object signal. */
+    private val ONLY_BRACKETS = Regex("^[\\s\\[\\]{}]+$")
+
+    /**
+     * A statement that is nothing but `++` or `--`, or an operator that needs a left operand
+     * right after an opening `(`. A `.` counts unless it starts a spread (`...$items`) or a
+     * decimal (`.5`).
+     */
+    private val ORPHANS =
+        Regex("(?:^|[\\s;(])(\\+\\+|--)(?=\\s*(?:;|$))|\\((?:\\s*)(===|!==|==|!=|<=|>=|&&|\\|\\||\\?\\?|[=?:*/%>,]|\\.(?![.\\d]))")
 
     /** Returns [expression] untouched, or throws [InterpolatedExpressionException]. */
     public fun check(expression: String): String = check(expression, null)
@@ -100,8 +108,10 @@ public object ExpressionGuard {
     ): String {
         val t = expression.trim()
         if (t.isEmpty()) throw InterpolatedExpressionException(expression, "is empty", attribute)
+        if (ONLY_BRACKETS.matches(t)) return expression
         if (ONLY_OPERATORS.matches(t)) throw InterpolatedExpressionException(expression, "contains no operands, only operators", attribute)
-        NEEDS_LEFT.firstOrNull { t.startsWith(it) }?.let {
+        val leadingDotIsFine = t.startsWith("...") || (t.startsWith(".") && t.getOrNull(1)?.isDigit() == true)
+        NEEDS_LEFT.firstOrNull { t.startsWith(it) && !(it == "." && leadingDotIsFine) }?.let {
             throw InterpolatedExpressionException(expression, "starts with '$it', which needs something on its left", attribute)
         }
         val tail = t.trimEnd(';')

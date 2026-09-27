@@ -17,8 +17,15 @@ All notable changes to Streamlord are recorded here. The format follows
   `install(StreamlordPlugin) { guardElements = true }`. The same guard catches a mistyped
   attribute: a `data-*` name one letter away from a Datastar attribute (`data-onn:click`,
   `data-signal:x`) throws `MistypedAttributeException` naming the attribute it resembles,
-  while names further away are taken to be your own and left alone. `ElementsGuard.attributes`
-  lists every Datastar attribute name, bound to the catalog by test.
+  while names further away are taken to be your own and left alone. A bare name without key
+  or modifier is only judged against Datastar names of six letters or more, so `data-test`,
+  `data-kind` and `data-once` pass. `<script>` and `<style>` bodies are skipped.
+  `ElementsGuard.attributes` lists every Datastar attribute name, bound to the catalog by test.
+- `ExpressionGuard` accepts `[]`, `{}`, spread (`...$items`) and leading-dot decimals (`.5`),
+  which it refused before as operator-only or dangling.
+- `catalog/datastar-1.0.4.json`: `keyCase` on every keyed attribute (`camel`, `kebab` or
+  `raw`), the one place the casing rule is written; the catalog test binds `Casing` to it and
+  the extension reads it.
 - `@Language("HTML")`, `@Language("JSON")` and `@Language("JavaScript")` on every `elements`,
   `signals` and `script` parameter in core, Ktor and Spring, so IntelliJ injects the right
   language into a literal passed straight in. The annotation comes with the Kotlin standard
@@ -32,8 +39,9 @@ All notable changes to Streamlord are recorded here. The format follows
   `dataClass` where Datastar's default is kebab, and `__case.pascal` for a leading capital.
   `dataAttr`, `dataStyle` and `dataAnimate` write the key in kebab-case. `signal()` and the
   other expression helpers read a kebab-case key the way Datastar names it (`signal("foo-bar")`
-  is `$fooBar`). `InvalidSignalNameException` for a blank name or one with characters no signal
-  can carry. An explicit `case =` is left alone.
+  is `$fooBar`). `InvalidSignalNameException` for a blank name or one with whitespace, quotes
+  or a character that ends an attribute; `hover:bg-red-500`, `xlink:href`, `--brand` and
+  `items[0].name` are fine. An explicit `case =` is kept, with the key still in kebab-case.
 
 ### Changed
 
@@ -41,8 +49,9 @@ All notable changes to Streamlord are recorded here. The format follows
   `streamlord-core` (`io.github.markusaugust.streamlord.core.domain`), so the string and
   template paths can use them without the DSL. `InterpolatedExpressionException` gained an
   `attribute` property.
-- `datastarElements` (Spring) and `asServerSentEvents` (Spring WebFlux) take an optional
-  `streamlord` parameter, last, for the guard. `Streamlord` gained the `guardElements`
+- `datastarElements`, `DatastarResponse.toResponseEntity` (Spring), `asServerSentEvents` and
+  `DatastarEvent.toServerSentEvent` (Spring WebFlux) take an optional `streamlord` parameter,
+  last, for the guard; Spring has no auto-configuration, so pass your bean. `Streamlord` gained the `guardElements`
   constructor parameter, also last. Kotlin callers recompile unchanged; Java callers of the
   full constructor pass one more argument.
 

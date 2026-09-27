@@ -91,9 +91,22 @@ public object ElementsGuard {
                 continue
             }
             i = scanTag(elements, lt + 1)
+            // Inside <script> and <style> a '<' is text, not a tag: skip to the closing tag.
+            RAW_TEXT
+                .firstOrNull {
+                    elements.regionMatches(lt + 1, it, 0, it.length, ignoreCase = true) &&
+                        !elements.getOrNull(lt + 1 + it.length).isNamePart()
+                }?.let { tag ->
+                    val close = elements.indexOf("</$tag", i, ignoreCase = true)
+                    i = if (close < 0) n else close
+                }
         }
         return elements
     }
+
+    private val RAW_TEXT = listOf("script", "style")
+
+    private fun Char?.isNamePart(): Boolean = this != null && (isLetterOrDigit() || this == '-')
 
     /** Walks the attributes of one tag, starting after `<`, checking as it goes; returns the offset past `>`. */
     private fun scanTag(
@@ -150,9 +163,14 @@ public object ElementsGuard {
     ) {
         val lower = name.lowercase()
         val prefix = PREFIXES.firstOrNull { lower.startsWith(it) } ?: return
-        val plugin = lower.substring(prefix.length).substringBefore(':').substringBefore("__")
+        val rest = lower.substring(prefix.length)
+        val plugin = rest.substringBefore(':').substringBefore("__")
         if (plugin !in attributes) {
-            attributes.firstOrNull { distance(plugin, it) == 1 }?.let { near ->
+            // A key or modifier (data-onn:click, data-signal__ifmissing) makes a custom attribute implausible,
+            // so any one-letter neighbour is a typo. A bare name (data-test, data-kind) is only a typo when the
+            // neighbour is long enough that the two could not both be words: data-indicater, data-signal.
+            val qualified = rest.length > plugin.length
+            attributes.firstOrNull { oneEditAway(plugin, it) && (qualified || it.length >= LONG_NAME) }?.let { near ->
                 throw MistypedAttributeException(name, prefix + near + name.substring(prefix.length + plugin.length))
             }
             return
@@ -161,24 +179,31 @@ public object ElementsGuard {
         ExpressionGuard.check(value ?: "", name)
     }
 
-    /** Levenshtein distance, capped at 2 since only 1 matters. */
-    private fun distance(
+    /** Below this length a Datastar name has too many honest neighbours (test, kind, once, unit) to judge a bare `data-*`. */
+    private const val LONG_NAME = 6
+
+    /** One insertion, deletion or substitution apart; no allocation. */
+    private fun oneEditAway(
         a: String,
         b: String,
-    ): Int {
-        if (kotlin.math.abs(a.length - b.length) > 1) return 2
-        var prev = IntArray(b.length + 1) { it }
-        var cur = IntArray(b.length + 1)
-        for (i in 1..a.length) {
-            cur[0] = i
-            for (j in 1..b.length) {
-                cur[j] = minOf(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + if (a[i - 1] == b[j - 1]) 0 else 1)
+    ): Boolean {
+        if (a == b) return false
+        val (short, long) = if (a.length <= b.length) a to b else b to a
+        if (long.length - short.length > 1) return false
+        var i = 0
+        var j = 0
+        var edits = 0
+        while (i < short.length && j < long.length) {
+            if (short[i] == long[j]) {
+                i++
+                j++
+                continue
             }
-            val t = prev
-            prev = cur
-            cur = t
+            if (++edits > 1) return false
+            if (short.length == long.length) i++
+            j++
         }
-        return prev[b.length]
+        return edits + (long.length - j) <= 1
     }
 }
 

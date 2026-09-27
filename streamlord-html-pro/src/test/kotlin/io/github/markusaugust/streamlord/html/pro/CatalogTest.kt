@@ -6,6 +6,8 @@ import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
+import io.github.markusaugust.streamlord.html.Case
+import io.github.markusaugust.streamlord.html.Casing
 import io.github.markusaugust.streamlord.html.DatastarAttributes
 import io.github.markusaugust.streamlord.html.FetchEventType
 import io.github.markusaugust.streamlord.html.FetchOptions
@@ -135,6 +137,25 @@ class CatalogTest {
                 .toSet(),
             ElementsGuard.attributes,
         )
+    }
+
+    /** `keyCase` in the catalog is what [Casing] assumes per attribute; the DSL output for a camelCase key proves it. */
+    @Test
+    fun `key casing in the catalog matches what the DSL writes`() {
+        val byCase =
+            catalog
+                .array("attributes")!!
+                .objects()
+                .filter { it.boolean("keyed") == true }
+                .groupBy({ it.string("keyCase") ?: "missing" }, { it.string("name")!! })
+                .mapValues { it.value.toSet() }
+        assertEquals(setOf("signals", "computed", "bind", "ref", "indicator", "match-media"), byCase["camel"])
+        assertEquals(setOf("on", "class"), byCase["kebab"])
+        assertEquals(setOf("attr", "style", "animate", "persist"), byCase["raw"])
+        assertEquals(null, byCase["missing"])
+        assertEquals("foo-bar" to null, Casing.key("fooBar", null, Case.CAMEL))
+        assertEquals("foo-bar" to Case.CAMEL, Casing.key("fooBar", null, Case.KEBAB))
+        assertEquals("foo-bar", Casing.plainKey("fooBar"))
     }
 
     @Test

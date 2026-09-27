@@ -173,9 +173,8 @@ class HtmlDslTest {
         assertEquals(
             """@get("/x", {payload: {id: ${'$'}selected}, responseOverrides: {onlyIfMissing: true}})""",
             get("/x") {
-                payloadExpr =
-                    "{id: ${'$'}selected}"
-                ; responseOverrides { onlyIfMissing = true }
+                payloadExpr = "{id: ${'$'}selected}"
+                responseOverrides { onlyIfMissing = true }
             },
         )
     }
@@ -272,7 +271,7 @@ class HtmlDslTest {
         )
         // Already kebab, snake or lower-case: written as given. An explicit case is never second-guessed.
         assertEquals(
-            """<div data-signals:foo-bar="1" data-signals:foo_bar="2" data-on:my-event="x()" data-signals:fooBar__case.kebab="3"></div>""",
+            """<div data-signals:foo-bar="1" data-signals:foo_bar="2" data-on:my-event="x()" data-signals:foo-bar__case.kebab="3"></div>""",
             elements {
                 div {
                     dataSignals("foo-bar", "1")
@@ -311,5 +310,18 @@ class HtmlDslTest {
         assertFailsWith<InvalidSignalNameException> { signal("") }
         assertFailsWith<InvalidSignalNameException> { signal("my signal") }
         assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("a b", "1") } } }
+        // Index and bracket references, Tailwind variants and namespaced attributes are keys and names too.
+        assertEquals("${'$'}items[0].name", signal("items[0].name"))
+        assertEquals("${'$'}counts[1]++", increment("counts[1]"))
+        assertEquals(
+            """<div data-class:hover:bg-red-500="${'$'}danger" data-attr:xlink:href="${'$'}href" data-style:--brand="'red'"></div>""",
+            elements {
+                div {
+                    dataClass("hover:bg-red-500", signal("danger"))
+                    dataAttr("xlink:href", signal("href"))
+                    dataStyle("--brand", "'red'")
+                }
+            },
+        )
     }
 }

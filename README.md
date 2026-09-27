@@ -295,10 +295,15 @@ Every element patch and elements response that leaves through that instance is w
 through `ExpressionGuard`. A `data-text=""` that a Kotlin template left behind throws
 `InterpolatedExpressionException` naming the attribute, instead of reaching the browser. The same
 walk catches a mistyped attribute: `data-onn:click` is one letter from `data-on:click`, and
-throws `MistypedAttributeException` saying so, while `data-size` and `data-theme` are yours and
-pass. It is a small, allocation-free scan, off by default so that the choice is yours;
-`ElementsGuard.check(html)` is also there to call directly, for example in the tests of your
-markup functions. In IntelliJ, where nothing flags an unknown `data-*` name, this is the check.
+throws `MistypedAttributeException` saying so. A bare name without key or modifier is only
+judged against the long Datastar names (`data-signal`, `data-indicater`), because short ones
+have too many honest neighbours: `data-test`, `data-kind`, `data-size` and `data-theme` are
+yours and pass. It is a small, allocation-free scan that skips `<script>` and `<style>` bodies,
+off by default so that the choice is yours; `ElementsGuard.check(html)` is also there to call
+directly, for example in the tests of your markup functions. In IntelliJ, where nothing flags
+an unknown `data-*` name, this is the check. Spring has no auto-configuration, so its helpers
+take the bean: `datastarElements(html, streamlord = bean)`, `response.toResponseEntity(streamlord = bean)`,
+`events.asServerSentEvents(bean)`; with `Streamlord.Default` the guard is off.
 
 ### Casing: keys in kebab-case, signals in camelCase
 
@@ -321,10 +326,15 @@ dataAttr("ariaLabel", "'x'")          // data-attr:aria-label
 signal("foo-bar")                     // $fooBar, because that is what Datastar calls it
 ```
 
-An explicit `case =` is never second-guessed. A name with characters no signal can carry
-throws `InvalidSignalNameException` at render time. Handled is not hidden: the VS Code
+An explicit `case =` is kept, but the key is still written in kebab-case, because the browser
+lowercases it either way: `dataSignals("fooBar", "1", case = Case.KEBAB)` is
+`data-signals:foo-bar__case.kebab`. Keys that are not signal names keep their own characters
+(`dataClass("hover:bg-red-500", ...)`, `dataAttr("xlink:href", ...)`, `dataStyle("--brand", ...)`),
+and references may index (`signal("items[0].name")`). A blank name, or one with whitespace or
+quotes, throws `InvalidSignalNameException` at render time. Handled is not hidden: the VS Code
 extension puts a hint on every such call saying what goes on the wire, so the rule is learned
-where it applies. For strings and templates, the VS Code
+where it applies. The default per attribute lives in the catalog as `keyCase`, which the SDK
+test and the extension both follow. For strings and templates, the VS Code
 extension flags a capital letter in a key (with the kebab-case fix) and a `$foo-bar` in an
 expression (which reads as `$foo` minus `bar`) with the camelCase fix.
 

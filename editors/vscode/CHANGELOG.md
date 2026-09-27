@@ -31,7 +31,9 @@ All notable changes to the Streamlord extension are recorded here.
   and Datastar would name the signal `$foobar`; the quick fix writes the kebab-case key that
   comes back as the intended name, with `__case.camel` or `__case.pascal` where needed. A
   `$foo-bar` in an expression, which reads as `$foo` minus `bar`, is a warning with `$fooBar`
-  as the fix. Hover documentation of every keyed attribute states its casing rule. In the DSL
+  as the fix. An explicit `__case` does not excuse a capital in the key, since the browser
+  lowercases it first; the fix keeps the modifier and kebab-cases the key. Hover documentation
+  of every keyed attribute states its casing rule, read from `keyCase` in the catalog. In the DSL
   the SDK writes a camelCase key correctly by itself; a hint on the call says what goes on the
   wire (`dataSignals("fooBar", ...)` is `data-signals:foo-bar`), so nothing is hidden and the
   rule is learned where it applies.

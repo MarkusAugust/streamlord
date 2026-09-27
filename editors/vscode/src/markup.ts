@@ -295,61 +295,49 @@ export function validateAttributes(tag: Tag, prefix: string): Issue[] {
   return issues;
 }
 
-/** Attributes whose key names a signal: Datastar reads it in camelCase, so `foo-bar` is `$fooBar`. */
-const SIGNAL_KEYED = new Set(["signals", "computed", "bind", "ref", "indicator", "match-media"]);
-
-/** Attributes that take `__case`, with a kebab default: the key is used as written unless told otherwise. */
-const CASE_KEYED = new Set(["on", "class"]);
-
 /** `fooBar` -> `foo-bar`, one hyphen per capital, which Datastar's camel conversion turns back into `fooBar`. */
 export function kebab(name: string): string {
   return name.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase()).replace(/^-/, "");
 }
 
 /**
+ * The key to write, and the `__case` to add, so that a key the author typed with capitals comes
+ * back as that name: `foo-bar` for a signal (Datastar reads it as camelCase), `widget-loaded__case.camel`
+ * for an event or class (kebab by default), `aria-label` where the key is used as it is. An
+ * explicit `__case` is kept: the key is still kebab-cased, because the browser lowercases it
+ * either way. Shared by the HTML warning and the Kotlin wire hint.
+ */
+export function wireKey(key: string, keyCase: AttributeSpec["keyCase"], explicitCase: string | null): string {
+  const base = kebab(key);
+  if (explicitCase) return `${base}__case.${explicitCase}`;
+  const wanted = /^[A-Z]/.test(key) ? "pascal" : "camel";
+  if (keyCase === "raw") return base;
+  const defaultCase = keyCase === "camel" ? "camel" : "kebab";
+  return wanted === defaultCase ? base : `${base}__case.${wanted}`;
+}
+
+/**
  * The browser lowercases attribute names, so a capital letter in a key never reaches Datastar:
  * `data-signals:fooBar` declares `$foobar`, `data-on:widgetLoaded` listens to `widgetloaded`.
- * The fix writes the key in kebab-case, plus `__case.camel` where Datastar would otherwise keep
- * the kebab, so that the name the author typed is the name the browser ends up with.
+ * The fix writes the key as [wireKey] says, so that the name the author typed is the name the
+ * browser ends up with.
  */
-function validateKeyCase(attr: Attribute, parsed: { key: string | null; base: string; modifiers: { name: string }[] }, spec: AttributeSpec, prefix: string): Issue[] {
+function validateKeyCase(attr: Attribute, parsed: { key: string | null; base: string; modifiers: { name: string; args: string[] }[] }, spec: AttributeSpec, prefix: string): Issue[] {
   const colon = attr.name.indexOf(":");
-  if (colon < 0) return [];
+  if (colon < 0 || !spec.keyCase) return [];
   const key = attr.name.slice(colon + 1).split("__")[0] ?? "";
-  if (!/[A-Z]/.test(key) || parsed.modifiers.some((m) => m.name === "case")) return [];
+  if (!/[A-Z]/.test(key)) return [];
   const keyStart = attr.nameStart + colon + 1;
   const lowered = key.toLowerCase();
   const name = prefix + spec.name;
-  if (SIGNAL_KEYED.has(spec.name)) {
-    const camel = /^[A-Z]/.test(key) ? kebab(key) + "__case.pascal" : kebab(key);
-    return [{
-      start: keyStart,
-      end: keyStart + key.length,
-      message: `The browser lowercases attribute names, so this declares the signal $${lowered}, not $${key}. Write ${name}:${camel}; Datastar reads a kebab-case key as camelCase.`,
-      severity: "warning",
-      code: "key-case",
-      link: attributeDoc(spec.name),
-      fixes: [{ title: `Change to ${camel}`, start: keyStart, end: keyStart + key.length, text: camel }],
-    }];
-  }
-  if (CASE_KEYED.has(spec.name)) {
-    const what = spec.name === "on" ? "event" : "class";
-    const fixed = kebab(key) + (/^[A-Z]/.test(key) ? "__case.pascal" : "__case.camel");
-    return [{
-      start: keyStart,
-      end: keyStart + key.length,
-      message: `The browser lowercases attribute names, so this ${what} is ${lowered}, not ${key}. Write ${name}:${fixed} to get ${key}.`,
-      severity: "warning",
-      code: "key-case",
-      link: attributeDoc(spec.name),
-      fixes: [{ title: `Change to ${fixed}`, start: keyStart, end: keyStart + key.length, text: fixed }],
-    }];
-  }
-  const fixed = kebab(key);
+  const existing = parsed.modifiers.find((m) => m.name === "case");
+  // With an explicit __case already there, only the key itself changes.
+  const fixed = existing ? kebab(key) : wireKey(key, spec.keyCase, null);
+  const what = spec.keyCase === "camel" ? `the signal $${lowered}, not $${key}` : spec.name === "on" ? `the event ${lowered}, not ${key}` : spec.name === "class" ? `the class ${lowered}, not ${key}` : `${lowered}, not ${key}`;
   return [{
     start: keyStart,
     end: keyStart + key.length,
-    message: `The browser lowercases attribute names, so this key reaches Datastar as ${lowered}. Write it in kebab-case: ${name}:${fixed}.`,
+    message: `The browser lowercases attribute names, so this reaches Datastar as ${what}. Write ${name}:${fixed}${existing ? "__" + existing.name + (existing.args.length ? "." + existing.args.join(".") : "") : ""}: keys are kebab-case${spec.keyCase === "camel" ? ", and Datastar reads a kebab-case signal key as camelCase" : ""}.`,
     severity: "warning",
     code: "key-case",
     link: attributeDoc(spec.name),

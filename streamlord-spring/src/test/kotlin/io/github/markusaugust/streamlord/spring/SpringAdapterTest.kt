@@ -3,6 +3,7 @@ package io.github.markusaugust.streamlord.spring
 import io.github.markusaugust.streamlord.core.SignalsTooLargeException
 import io.github.markusaugust.streamlord.core.application.Streamlord
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
+import io.github.markusaugust.streamlord.core.domain.ElementsResponse
 import io.github.markusaugust.streamlord.core.domain.ExecuteScript
 import io.github.markusaugust.streamlord.core.domain.InterpolatedExpressionException
 import io.github.markusaugust.streamlord.core.domain.PatchElements
@@ -127,6 +128,10 @@ class SpringAdapterTest {
             val e = assertFailsWith<InterpolatedExpressionException> { datastarElements(broken, streamlord = guarded) }
             assertEquals("data-text", e.attribute)
             assertFailsWith<InterpolatedExpressionException> { flowOf(PatchElements(broken)).asServerSentEvents(guarded).toList() }
+            assertFailsWith<InterpolatedExpressionException> { ElementsResponse(broken).toResponseEntity(streamlord = guarded) }
+            assertFailsWith<InterpolatedExpressionException> { PatchElements(broken).toServerSentEvent(guarded) }
+            assertEquals(broken, ElementsResponse(broken).toResponseEntity().body)
+            assertEquals("elements $broken", PatchElements(broken).toServerSentEvent().data())
             assertEquals(broken, datastarElements(broken).body)
             assertEquals(1, flowOf(PatchElements(broken)).asServerSentEvents().toList().size)
             assertEquals(1, flowOf(PatchElements("""<li id="a" data-text="${'$'}count"></li>""")).asServerSentEvents(guarded).toList().size)

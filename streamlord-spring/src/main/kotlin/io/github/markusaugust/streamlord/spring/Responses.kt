@@ -18,7 +18,11 @@ import kotlin.reflect.typeOf
  */
 
 /** This response as a [ResponseEntity] with the right content type and `datastar-*` headers. */
-public fun DatastarResponse.toResponseEntity(status: HttpStatus = HttpStatus.OK): ResponseEntity<String> {
+public fun DatastarResponse.toResponseEntity(
+    status: HttpStatus = HttpStatus.OK,
+    streamlord: Streamlord = Streamlord.Default,
+): ResponseEntity<String> {
+    streamlord.guard(this)
     val builder = ResponseEntity.status(status).contentType(MediaType.parseMediaType(contentType))
     for ((name, value) in headers) builder.header(name, value)
     return builder.body(body)
@@ -38,8 +42,7 @@ public fun datastarElements(
     useViewTransition: Boolean = false,
     status: HttpStatus = HttpStatus.OK,
     streamlord: Streamlord = Streamlord.Default,
-): ResponseEntity<String> =
-    streamlord.guard(ElementsResponse(elements, selector, mode, namespace, useViewTransition)).toResponseEntity(status)
+): ResponseEntity<String> = ElementsResponse(elements, selector, mode, namespace, useViewTransition).toResponseEntity(status, streamlord)
 
 /** A JSON object to be patched as signals, without opening a stream. */
 public fun datastarSignals(

@@ -1,7 +1,7 @@
 import { catalog, parseAttributeName, type CallSiteSpec } from "./catalog.ts";
 import { attributeDoc, DOCS, validateExpression, type Fix, type Issue } from "./expression.ts";
 import { PLACEHOLDER, toSource, type Interpolation, type KotlinString } from "./kotlinStrings.ts";
-import { kebab, tokenize, validateAttributes, validateMarkup } from "./markup.ts";
+import { kebab, tokenize, validateAttributes, validateMarkup, wireKey } from "./markup.ts";
 import { findCallSites, findKotlinStrings, isHtmlString, namedArgText, selectStringArg, stringAt, type CallSite } from "./scanner.ts";
 
 /**
@@ -66,7 +66,7 @@ export function htmlStringAt(src: string, offset: number): KotlinString | null {
  * only the attributes are checked, as in a template file; ids and completeness are not.
  */
 function checkFreeHtmlString(s: KotlinString, opts: AnalyzeOptions, src: string): Issue[] {
-  const issues: Issue[] = interpolationHints(s, src);
+  const issues: Issue[] = interpolationHints(s, src, opts.prefix);
   if (opts.checkHtmlAttributes) issues.push(...mapIssues(s, analyzeHtml(s.text, opts)));
   return issues;
 }
@@ -138,13 +138,13 @@ function interpolationIssues(s: KotlinString, src: string): Issue[] {
  * not an error, unless it sits in a `data-*` attribute that takes an expression: there the
  * browser expects a signal and gets whatever Kotlin evaluated.
  */
-function interpolationHints(s: KotlinString, src: string): Issue[] {
+function interpolationHints(s: KotlinString, src: string, prefix: string): Issue[] {
   const tags = tokenize(s.text).tags;
   const inExpression = (decoded: number) =>
     tags.some((t) =>
       t.attributes.some((a) => {
         if (a.value === null || decoded < a.valueStart || decoded >= a.valueStart + a.value.length) return false;
-        const parsed = a.name.toLowerCase().startsWith("data-") ? parseAttributeName(a.name.toLowerCase(), "data-") : null;
+        const parsed = parseAttributeName(a.name.toLowerCase(), prefix);
         return parsed?.spec?.valueKind === "expression";
       }),
     );
@@ -191,7 +191,7 @@ function checkHtmlSite(site: CallSite, spec: CallSiteSpec, opts: AnalyzeOptions,
   const modeArg = spec.modeArg ? site.args.find((a) => a.named === spec.modeArg) : undefined;
   const modeText = modeArg?.text ?? null;
   const mode = modeText ? /\.([A-Z]+)\s*$/.exec(modeText)?.[1]?.toLowerCase() ?? null : null;
-  const issues: Issue[] = interpolationHints(s, src);
+  const issues: Issue[] = interpolationHints(s, src, opts.prefix);
   if (mode && mode !== "outer" && mode !== "replace" && !selector && modeArg) {
     const at = modeArg.start - (spec.modeArg?.length ?? 0) - src.slice(0, modeArg.start).match(/\s*=\s*$/)![0].length;
     issues.push({
@@ -209,8 +209,6 @@ function checkHtmlSite(site: CallSite, spec: CallSiteSpec, opts: AnalyzeOptions,
   return issues;
 }
 
-const SIGNAL_KEYED = new Set(["signals", "computed", "bind", "ref", "indicator", "match-media"]);
-
 /**
  * The DSL writes a camelCase key as the kebab-case key Datastar reads back as that name, with
  * `__case` where Datastar's default is not camel. That is handled, but not hidden: a hint on
@@ -219,20 +217,18 @@ const SIGNAL_KEYED = new Set(["signals", "computed", "bind", "ref", "indicator",
  */
 function checkKeyCaseSite(site: CallSite, src: string): Issue[] {
   const spec = catalog.attributesByKotlin.get(site.name);
-  if (!spec?.keyed) return [];
+  if (!spec?.keyed || !spec.keyCase) return [];
   const positional = site.args.filter((a) => a.named === null);
   const key = positional[0]?.string;
   if (positional.length < 2 || !key || key.interpolations.length > 0) return [];
   const name = key.text;
   if (!/[A-Z]/.test(name)) return [];
-  if (site.args.some((a) => a.named === "case") || /\bcase\s*=/.test(trailingLambdaText(site, src))) return [];
-  const pascal = /^[A-Z]/.test(name);
-  const wire = SIGNAL_KEYED.has(spec.name)
-    ? kebab(name) + (pascal ? "__case.pascal" : "")
-    : spec.name === "on" || spec.name === "class"
-      ? kebab(name) + (pascal ? "__case.pascal" : "__case.camel")
-      : kebab(name);
-  const what = SIGNAL_KEYED.has(spec.name) ? `the signal $${name}` : spec.name === "on" ? `the event ${name}` : spec.name === "class" ? `the class ${name}` : `${name}`;
+  const named = site.args.find((a) => a.named === "case")?.text;
+  const explicit = named ? /Case\.([A-Z]+)/.exec(named) : /\bcase\s*=\s*Case\.([A-Z]+)/.exec(trailingLambdaText(site, src));
+  const explicitCase = explicit?.[1]?.toLowerCase() ?? null;
+  const wire = wireKey(name, spec.keyCase, explicitCase);
+  const read = explicitCase ? `${explicitCase}-cased` : spec.keyCase === "camel" ? `the signal $${name}` : spec.name === "on" ? `the event ${name}` : spec.name === "class" ? `the class ${name}` : `${kebab(name)}`;
+  const what = explicitCase ? `a ${read} name` : read;
   return [{
     start: key.start,
     end: key.end,

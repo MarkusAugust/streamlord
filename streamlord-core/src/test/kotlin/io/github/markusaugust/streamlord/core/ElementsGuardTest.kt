@@ -69,9 +69,16 @@ class ElementsGuardTest {
             mapOf(
                 """<div data-onn:click="x()"></div>""" to ("data-onn:click" to "data-on:click"),
                 """<div data-signal:foo="1"></div>""" to ("data-signal:foo" to "data-signals:foo"),
-                """<div data-txt="1"></div>""" to ("data-txt" to "data-text"),
+                """<div data-txt:x="1"></div>""" to ("data-txt:x" to "data-text:x"),
+                """<div data-indicater="busy"></div>""" to ("data-indicater" to "data-indicator"),
+                """<div data-signal="{a: 1}"></div>""" to ("data-signal" to "data-signals"),
+                """<div data-txt="1"></div>""" to null,
+                """<div data-test="submit" data-kind="x" data-once data-none data-styles="a"></div>""" to null,
+                """<div data-unit="kg" data-attrs="b" data-red data-of="x"></div>""" to null,
                 """<div data-on-intersec__once="x()"></div>""" to ("data-on-intersec__once" to "data-on-intersect__once"),
-                """<div data-star-shw="1"></div>""" to ("data-star-shw" to "data-star-show"),
+                """<div data-star-signal="1"></div>""" to ("data-star-signal" to "data-star-signals"),
+                """<div data-star-shw:x="1"></div>""" to ("data-star-shw:x" to "data-star-show:x"),
+                """<div data-star-shw="1"></div>""" to null,
                 """<div data-Bind="x"></div>""" to null,
             )
         for ((html, expected) in typos) {
@@ -90,6 +97,18 @@ class ElementsGuardTest {
                 """data-picker="styled" data-frist="1" data-nede="false" data-klokke data-alle="0" data-server-na="1" """ +
                 """data-on-load="x()" data-ref-id="7"></div>"""
         assertEquals(own, ElementsGuard.check(own))
+    }
+
+    @Test
+    fun `script and style bodies are text, not tags`() {
+        val html =
+            """<div id="a"><script>el.innerHTML = '<span data-text=""></span>'; if (a<b) run();</script>""" +
+                """<style>a<b { color: red }</style><STYLE>x</STYLE><p data-text=""></p></div>"""
+        val e = assertFailsWith<InterpolatedExpressionException> { ElementsGuard.check(html) }
+        assertEquals("data-text", e.attribute)
+        val fine = html.replace("""<p data-text=""></p>""", "")
+        assertEquals(fine, ElementsGuard.check(fine))
+        assertEquals("""<scripter data-text="x"></scripter>""", ElementsGuard.check("""<scripter data-text="x"></scripter>"""))
     }
 
     @Test

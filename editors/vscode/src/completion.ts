@@ -204,18 +204,13 @@ export function docFor(a: AttributeSpec, prefix: string): string {
 
 /** The browser lowercases attribute names; how Datastar reads the key differs per attribute. */
 function casingNote(a: AttributeSpec): string {
-  switch (a.name) {
-    case "signals":
-    case "computed":
-    case "bind":
-    case "ref":
-    case "indicator":
-    case "match-media":
+  switch (a.keyCase) {
+    case "camel":
       return "the browser lowercases attribute names, and Datastar reads the key as camelCase: `foo-bar` is the signal `$fooBar`. Write keys in kebab-case; `__case` changes the conversion.";
-    case "on":
-      return "the key is the event name, lowercased by the browser. For a camelCase event write `widget-loaded__case.camel`.";
-    case "class":
-      return "the key is the class name, lowercased by the browser. For a camelCase class write `is-open__case.camel`.";
+    case "kebab":
+      return a.name === "on"
+        ? "the key is the event name, lowercased by the browser. For a camelCase event write `widget-loaded__case.camel`."
+        : "the key is the class name, lowercased by the browser. For a camelCase class write `is-open__case.camel`.";
     default:
       return "the key is used as written, after the browser has lowercased it. Write it in kebab-case.";
   }

@@ -118,8 +118,15 @@ describe("markup", () => {
     expect(issues.map((i) => i.fixes![0]!.text)).toEqual(["foo-bar", "full-name", "my-signal__case.pascal", "widget-loaded__case.camel", "is-open__case.camel", "aria-label", "background-color"]);
     expect(issues[0]!.message).toContain("$foobar");
     expect(src.slice(issues[0]!.start, issues[0]!.end)).toBe("fooBar");
-    const fine = `<div data-signals:foo-bar="1" data-signals:fooBar__case.kebab="1" data-on:widgetLoaded__case.camel="x()" data-bind="fooBar" data-signals="{fooBar: 1}"></div>`;
+    const fine = `<div data-signals:foo-bar="1" data-on:widget-loaded__case.camel="x()" data-bind="fooBar" data-signals="{fooBar: 1}" data-class:hover:bg-red-500="$x"></div>`;
     expect(analyzeHtml(fine, opts)).toEqual([]);
+    // An explicit __case does not save a capital in the key: the browser lowercases it first.
+    const explicit = analyzeHtml(`<div data-signals:fooBar__case.kebab="1" data-on:widgetLoaded__case.camel="x()"></div>`, opts);
+    expect(codes(explicit)).toEqual(["key-case", "key-case"]);
+    expect(explicit.map((i) => i.fixes![0]!.text)).toEqual(["foo-bar", "widget-loaded"]);
+    expect(explicit[0]!.message).toContain("foo-bar__case.kebab");
+    // The aliased prefix gets the same treatment when configured.
+    expect(codes(analyzeHtml(`<div data-star-signals:fooBar="1"></div>`, { prefix: "data-star-", checkHtmlAttributes: true }))).toEqual(["key-case"]);
   });
 
   it("hints what the dsl writes on the wire for a camelCase key", () => {
@@ -137,15 +144,24 @@ describe("markup", () => {
     }`;
     const hints = analyzeKotlin(src, opts).filter((i) => i.code === "key-case-wire");
     expect(hints.every((i) => i.severity === "hint")).toBe(true);
-    expect(hints.map((i) => src.slice(i.start, i.end))).toEqual(['"fooBar"', '"widgetLoaded"', '"isOpen"', '"ariaLabel"', '"MySignal"']);
+    expect(hints.map((i) => src.slice(i.start, i.end))).toEqual(['"fooBar"', '"widgetLoaded"', '"isOpen"', '"ariaLabel"', '"MySignal"', '"fooBar"', '"customEvent"']);
     expect(hints.map((i) => /as (data-[a-z-]+:[^,]+),/.exec(i.message)![1])).toEqual([
       "data-signals:foo-bar",
       "data-on:widget-loaded__case.camel",
       "data-class:is-open__case.camel",
       "data-attr:aria-label",
       "data-signals:my-signal__case.pascal",
+      "data-signals:foo-bar__case.kebab",
+      "data-on:custom-event__case.kebab",
     ]);
     expect(hints[0]!.message).toContain("$fooBar");
+  });
+
+  it("treats interpolation in an aliased-prefix expression as the same error", () => {
+    const src = `fun f(count: Int) = """<p data-star-text="$count"></p>"""`;
+    const aliased = { prefix: "data-star-", checkHtmlAttributes: true };
+    expect(analyzeKotlin(src, aliased).find((i) => i.code === "kotlin-interpolation")!.severity).toBe("error");
+    expect(analyzeKotlin(src, opts).find((i) => i.code === "kotlin-interpolation")!.severity).toBe("hint");
   });
 
   it("warns about kebab-case where a camelCase signal belongs", () => {

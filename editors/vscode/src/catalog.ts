@@ -17,6 +17,12 @@ export interface AttributeSpec {
   forms: string[];
   keyed: boolean;
   keyRequired: boolean;
+  /**
+   * How Datastar reads the key, which the browser has lowercased: `camel` turns `foo-bar` into
+   * the signal `fooBar`; `kebab` keeps it unless `__case` says otherwise (events, classes);
+   * `raw` uses it as it is (attributes, style properties). Absent on keyless attributes.
+   */
+  keyCase?: "camel" | "kebab" | "raw";
   valueKind: "expression" | "signal" | "filter" | "text" | "none";
   kotlin: string[];
   modifiers: Modifier[];
@@ -92,6 +98,7 @@ function build(): Catalog {
     forms: a.forms as string[],
     keyed: a.keyed as boolean,
     keyRequired: (a.keyRequired as boolean | undefined) ?? false,
+    keyCase: a.keyCase as AttributeSpec["keyCase"],
     valueKind: a.valueKind as AttributeSpec["valueKind"],
     kotlin: a.kotlin as string[],
     modifiers: expandModifiers(a.modifiers as RawModifier[], groups),
