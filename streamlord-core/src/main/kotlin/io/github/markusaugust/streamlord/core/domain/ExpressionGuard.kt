@@ -49,7 +49,31 @@ public class InterpolatedExpressionException(
 public object ExpressionGuard {
     /** Operators that need an operand on their left, longest first so `===` wins over `=`. */
     private val NEEDS_LEFT =
-        listOf("===", "!==", "==", "!=", "<=", ">=", "&&", "||", "??", "?.", "=", "?", ":", ")", "]", "}", ".", "*", "/", "%", ">", ",")
+        listOf(
+            "===",
+            "!==",
+            "==",
+            "!=",
+            "<=",
+            ">=",
+            "&&",
+            "||",
+            "??",
+            "?.",
+            "=",
+            "?",
+            ":",
+            ")",
+            "]",
+            "}",
+            ".",
+            "*",
+            "/",
+            "%",
+            "<",
+            ">",
+            ",",
+        )
 
     /** Operators that need an operand on their right, longest first. Postfix `++`/`--` are not here: `$count++` is fine. */
     private val NEEDS_RIGHT =
@@ -88,12 +112,18 @@ public object ExpressionGuard {
     private val ONLY_BRACKETS = Regex("^[\\s\\[\\]{}]+$")
 
     /**
-     * A statement that is nothing but `++` or `--`, or an operator that needs a left operand
-     * right after an opening `(`. A `.` counts unless it starts a spread (`...$items`) or a
-     * decimal (`.5`).
+     * A statement that is nothing but `++` or `--`; an operator that needs a left operand right
+     * after an opening `(`, `[`, `{` or a `,`; or an operator that needs a right operand right
+     * before a closing `)`, `]`, `}` or a `,`. That last shape is what `{count: $count}` and
+     * `@post('/x', {n: $n})` leave behind: `{count: }`. A `.` counts unless it starts a spread
+     * (`...$items`) or a decimal (`.5`); a trailing comma (`[1, 2,]`) is valid and not counted.
      */
     private val ORPHANS =
-        Regex("(?:^|[\\s;(])(\\+\\+|--)(?=\\s*(?:;|$))|\\((?:\\s*)(===|!==|==|!=|<=|>=|&&|\\|\\||\\?\\?|[=?:*/%>,]|\\.(?![.\\d]))")
+        Regex(
+            "(?:^|[\\s;(])(\\+\\+|--)(?=\\s*(?:;|$))" +
+                "|[(\\[{,](?:\\s*)(===|!==|==|!=|<=|>=|&&|\\|\\||\\?\\?|[=?:*/%<>,]|\\.(?![.\\d]))" +
+                "|(?<![+\\-])([:=*%<>&|?!@]|[+\\-](?![+\\-]))(?:\\s*)(?=[)\\]},])",
+        )
 
     /** Returns [expression] untouched, or throws [InterpolatedExpressionException]. */
     public fun check(expression: String): String = check(expression, null)
@@ -123,7 +153,7 @@ public object ExpressionGuard {
         ORPHANS.find(t)?.let {
             throw InterpolatedExpressionException(
                 expression,
-                "has a dangling '${it.groupValues.drop(1).first { g -> g.isNotEmpty() }}' with nothing to apply it to",
+                "has a dangling '${it.groupValues.drop(1).first { g -> g.isNotEmpty() }.trim()}' with nothing to apply it to",
                 attribute,
             )
         }

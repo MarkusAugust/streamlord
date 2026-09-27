@@ -38,7 +38,7 @@ public object Casing {
     public fun kebab(name: String): String {
         val out = name.replace(UPPER) { "-" + it.value.lowercase() }
         // Only the hyphen a leading capital introduced is dropped; a CSS custom property keeps its `--`.
-        return if (name.first().isUpperCase()) out.removePrefix("-") else out
+        return if (name.firstOrNull()?.isUpperCase() == true) out.removePrefix("-") else out
     }
 
     /** Datastar's own reading of a key: `-x` becomes `X`. */

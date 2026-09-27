@@ -24,6 +24,11 @@ class ExpressionGuardTest {
             " ? 'a' : 'b'" to "\"\$on ? 'a' : 'b'\"",
             "evt.key === 'Escape' && ( = false)" to "\"evt.key === 'Escape' && (\$open = false)\"",
             "; ++" to "\"\$a; \$b++\"",
+            " < 10" to "\"\$count < 10\"",
+            "@post('/x', {count: })" to "\"@post('/x', {count: \$count})\"",
+            "{n: , m: 1}" to "\"{n: \$seed, m: 1}\"",
+            "[, 1]" to "\"[\$first, 1]\"",
+            "\$a && " to "\"\$a && \$b\"",
         )
 
     @Test
@@ -59,6 +64,14 @@ class ExpressionGuardTest {
             "42",
             "{a: 1}",
             "[1, 2]",
+            "[1, 2,]",
+            "fn(a, )",
+            "{a, b}",
+            "(x++)",
+            "(--\$n)",
+            "\$a ? 1 : 2",
+            "@setAll(false, {include: /^menu\\./})",
+            "{include: /re/, exclude: /x/}",
             "[]",
             "{}",
             "[{}]",

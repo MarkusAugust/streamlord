@@ -11,7 +11,7 @@ const expect = (actual: unknown) => ({
 import { readFileSync } from "node:fs";
 import { analyzeHtml, analyzeKotlin, htmlStringAt } from "../src/analyze.ts";
 import { readKotlinStringAt } from "../src/kotlinStrings.ts";
-import { findCallSites } from "../src/scanner.ts";
+import { findCallSites, findKotlinStrings } from "../src/scanner.ts";
 import { validateExpression } from "../src/expression.ts";
 import { validateMarkup } from "../src/markup.ts";
 import { collectSignals } from "../src/signals.ts";
@@ -125,6 +125,8 @@ describe("markup", () => {
     expect(codes(explicit)).toEqual(["key-case", "key-case"]);
     expect(explicit.map((i) => i.fixes![0]!.text)).toEqual(["foo-bar", "widget-loaded"]);
     expect(explicit[0]!.message).toContain("foo-bar__case.kebab");
+    const custom = analyzeHtml(`<div data-style:--myColor="$c"></div>`, opts);
+    expect(custom.map((i) => i.fixes![0]!.text)).toEqual(["--my-color"]);
     // The aliased prefix gets the same treatment when configured.
     expect(codes(analyzeHtml(`<div data-star-signals:fooBar="1"></div>`, { prefix: "data-star-", checkHtmlAttributes: true }))).toEqual(["key-case"]);
   });
@@ -157,6 +159,20 @@ describe("markup", () => {
     expect(hints[0]!.message).toContain("$fooBar");
   });
 
+  it("warns, not errors, when the template is only part of an expression", () => {
+    const src = `fun seed(initial: Int) = """<div data-signals="{count: $initial}" data-text="$initial"></div>"""`;
+    const issues = analyzeKotlin(src, opts).filter((i) => i.code === "kotlin-interpolation");
+    expect(issues.map((i) => i.severity)).toEqual(["warning", "error"]);
+    expect(issues[0]!.message).toContain("server value");
+    expect(issues[0]!.fixes!.map((f) => f.title)).toEqual(["Make it a $$ literal, where $initial is a signal", "Escape as ${'$'}initial"]);
+  });
+
+  it("does not read a parameter annotation with a default as a marker for the next string", () => {
+    const src = `fun render(@Language("HTML") html: String? = null, title: String = "Untitled $x") = title`;
+    expect(analyzeKotlin(src, opts)).toEqual([]);
+    expect(findKotlinStrings(`val c = '\\u0041'; val s = "<b data-onn:x=\\"1\\">"`).map((s) => s.text)).toEqual(['<b data-onn:x="1">']);
+  });
+
   it("treats interpolation in an aliased-prefix expression as the same error", () => {
     const src = `fun f(count: Int) = """<p data-star-text="$count"></p>"""`;
     const aliased = { prefix: "data-star-", checkHtmlAttributes: true };
@@ -169,6 +185,8 @@ describe("markup", () => {
     expect(codes(issues)).toEqual(["signal-kebab", "signal-kebab"]);
     expect(issues.map((i) => i.fixes![0]!.text)).toEqual(["$fooBar", "$form.firstNameX"]);
     expect(validateExpression("$fooBar && $a-$b")).toEqual([]);
+    expect(validateExpression("($total-el.offsetWidth) + 'px'; $count-evt.detail.delta; $n-fn(1); $m-arr[0]")).toEqual([]);
+    expect(validateExpression("@get('/item/$id-preview') && $x")).toEqual([]);
     expect(codes(analyzeKotlin(`dataText("\${'$'}foo-bar")`, opts))).toEqual(["signal-kebab"]);
   });
 

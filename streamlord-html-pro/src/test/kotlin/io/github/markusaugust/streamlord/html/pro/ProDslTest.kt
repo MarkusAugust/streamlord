@@ -42,6 +42,11 @@ class ProDslTest {
     }
 
     @Test
+    fun `persist writes its key in kebab-case like the other raw keys`() {
+        assertEquals("""<div data-persist:my-key=""></div>""", elements { div { dataPersist("myKey") } })
+    }
+
+    @Test
     fun `pro attributes honour the aliased prefix`() {
         DatastarAttributes.prefix = "data-star-"
         try {

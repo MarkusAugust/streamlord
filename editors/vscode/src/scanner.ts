@@ -125,13 +125,29 @@ function makeArg(src: string, from: number, to: number): Arg {
  * comments. Built once per scan; Kotlin block comments nest, raw strings span lines.
  */
 export function codeMask(src: string): Uint8Array {
+  return lexKotlin(src).mask;
+}
+
+/** Every string literal in the source that is not inside a comment, in order. */
+export function findKotlinStrings(src: string): KotlinString[] {
+  return lexKotlin(src).strings;
+}
+
+/**
+ * One pass over Kotlin source: the string literals, and a mask of which offsets are code as
+ * opposed to string literals, character literals and comments. Kotlin block comments nest,
+ * raw strings span lines, and a character literal may hold an escape such as `'A'`.
+ */
+export function lexKotlin(src: string): { strings: KotlinString[]; mask: Uint8Array } {
+  const strings: KotlinString[] = [];
   const mask = new Uint8Array(src.length).fill(1);
-  let i = 0;
   const blank = (from: number, to: number) => mask.fill(0, from, Math.min(to, src.length));
+  let i = 0;
   while (i < src.length) {
     const c = src[i];
     if ((c === '"' || c === "$") && isStringStart(src, i)) {
       const s = readKotlinStringAt(src, i);
+      if (s) strings.push(s);
       const end = s ? Math.max(s.end, i + 1) : i + 1;
       blank(i, end);
       i = end;
@@ -139,7 +155,7 @@ export function codeMask(src: string): Uint8Array {
     }
     if (c === "'") {
       let j = i + 1;
-      if (src[j] === "\\") j += 2;
+      if (src[j] === "\\") j += src[j + 1] === "u" ? 6 : 2;
       else j += 1;
       if (src[j] === "'") j++;
       blank(i, j);
@@ -171,52 +187,7 @@ export function codeMask(src: string): Uint8Array {
     }
     i++;
   }
-  return mask;
-}
-
-/** Every string literal in the source that is not inside a comment, in order. */
-export function findKotlinStrings(src: string): KotlinString[] {
-  const out: KotlinString[] = [];
-  let i = 0;
-  while (i < src.length) {
-    const c = src[i];
-    if ((c === '"' || c === "$") && isStringStart(src, i)) {
-      const s = readKotlinStringAt(src, i);
-      if (s) out.push(s);
-      i = s ? Math.max(s.end, i + 1) : i + 1;
-      continue;
-    }
-    if (c === "'") {
-      let j = i + 1;
-      if (src[j] === "\\") j += 2;
-      else j += 1;
-      if (src[j] === "'") j++;
-      i = j;
-      continue;
-    }
-    if (c === "/" && src[i + 1] === "/") {
-      const nl = src.indexOf("\n", i);
-      i = nl < 0 ? src.length : nl;
-      continue;
-    }
-    if (c === "/" && src[i + 1] === "*") {
-      let depth = 1;
-      let j = i + 2;
-      while (j < src.length && depth > 0) {
-        if (src.startsWith("/*", j)) {
-          depth++;
-          j += 2;
-        } else if (src.startsWith("*/", j)) {
-          depth--;
-          j += 2;
-        } else j++;
-      }
-      i = j;
-      continue;
-    }
-    i++;
-  }
-  return out;
+  return { strings, mask };
 }
 
 /**
@@ -248,8 +219,8 @@ export function isHtmlString(src: string, s: KotlinString): boolean {
   const last = markers[markers.length - 1];
   if (!last) return false;
   const after = before.slice(last.index + last[0].length);
-  // `fun f(@Language("HTML") html: String, ...)` annotates a parameter, not the next literal.
-  if (/:\s*String\??\s*[,)]/.test(after)) return false;
+  // `fun f(@Language("HTML") html: String? = null, ...)` annotates a parameter, not the next literal.
+  if (/:\s*String\??\s*(?:=[^,)]*)?[,)]/.test(after)) return false;
   return !after.includes('"');
 }
 

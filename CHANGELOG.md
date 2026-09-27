@@ -18,11 +18,14 @@ All notable changes to Streamlord are recorded here. The format follows
   attribute: a `data-*` name one letter away from a Datastar attribute (`data-onn:click`,
   `data-signal:x`) throws `MistypedAttributeException` naming the attribute it resembles,
   while names further away are taken to be your own and left alone. A bare name without key
-  or modifier is only judged against Datastar names of six letters or more, so `data-test`,
-  `data-kind` and `data-once` pass. `<script>` and `<style>` bodies are skipped.
+  or modifier is only judged when a letter is swapped in a long name (`data-indicater`,
+  `data-computer`), so `data-test`, `data-kind`, `data-animated` and `data-effects` pass.
+  `<script>` and `<style>` bodies are skipped.
   `ElementsGuard.attributes` lists every Datastar attribute name, bound to the catalog by test.
 - `ExpressionGuard` accepts `[]`, `{}`, spread (`...$items`) and leading-dot decimals (`.5`),
-  which it refused before as operator-only or dangling.
+  which it refused before as operator-only or dangling, and now catches what an eaten signal
+  leaves inside a literal or argument list (`{count: }`, `{n: , m: 1}`, `[, 1]`) and a missing
+  left operand of `<`, which it let through before.
 - `catalog/datastar-1.0.4.json`: `keyCase` on every keyed attribute (`camel`, `kebab` or
   `raw`), the one place the casing rule is written; the catalog test binds `Casing` to it and
   the extension reads it.
@@ -37,7 +40,7 @@ All notable changes to Streamlord are recorded here. The format follows
   camelCase name as the kebab-case key Datastar reads back as that name (`dataSignals("fooBar")`
   is `data-signals:foo-bar`, the signal `$fooBar`), adding `__case.camel` for `dataOn` and
   `dataClass` where Datastar's default is kebab, and `__case.pascal` for a leading capital.
-  `dataAttr`, `dataStyle` and `dataAnimate` write the key in kebab-case. `signal()` and the
+  `dataAttr`, `dataStyle`, `dataAnimate` and `dataPersist` write the key in kebab-case. `signal()` and the
   other expression helpers read a kebab-case key the way Datastar names it (`signal("foo-bar")`
   is `$fooBar`). `InvalidSignalNameException` for a blank name or one with whitespace, quotes
   or a character that ends an attribute; `hover:bg-red-500`, `xlink:href`, `--brand` and

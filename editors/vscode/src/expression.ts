@@ -37,6 +37,22 @@ export const DOCS = {
 /** `$foo-bar`: a kebab-case key written where the camelCase signal belongs. */
 const KEBAB_SIGNAL = /\$[A-Za-z_][A-Za-z0-9_.]*(?:-[a-z][A-Za-z0-9_]*)+/g;
 
+/** Is the offset inside a single- or double-quoted JavaScript string literal? */
+function insideQuotes(text: string, offset: number): boolean {
+  let quote: string | null = null;
+  for (let i = 0; i < offset; i++) {
+    const c = text[i];
+    if (c === "\\") {
+      i++;
+      continue;
+    }
+    if (quote) {
+      if (c === quote) quote = null;
+    } else if (c === "'" || c === '"' || c === "`") quote = c;
+  }
+  return quote !== null;
+}
+
 export function attributeDoc(name: string): string {
   return `${DOCS.attributes}#${name.startsWith("data-") ? name : "data-" + name}`;
 }
@@ -68,6 +84,11 @@ export function validateExpression(text: string): Issue[] {
   let k: RegExpExecArray | null;
   while ((k = KEBAB_SIGNAL.exec(text)) !== null) {
     const written = k[0];
+    const after = text[k.index + written.length] ?? "";
+    // `$total-el.offsetWidth` and `$count-evt.detail.delta` are subtractions of a scope variable;
+    // a `$id-preview` inside a quoted string is text.
+    if (after === "." || after === "(" || after === "[") continue;
+    if (insideQuotes(text, k.index)) continue;
     const camel = written.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
     issues.push({
       start: k.index,

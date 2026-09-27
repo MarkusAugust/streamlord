@@ -140,22 +140,37 @@ function interpolationIssues(s: KotlinString, src: string): Issue[] {
  */
 function interpolationHints(s: KotlinString, src: string, prefix: string): Issue[] {
   const tags = tokenize(s.text).tags;
-  const inExpression = (decoded: number) =>
-    tags.some((t) =>
-      t.attributes.some((a) => {
-        if (a.value === null || decoded < a.valueStart || decoded >= a.valueStart + a.value.length) return false;
+  /** `whole` when the template is the entire attribute value, `part` when it sits inside a larger expression. */
+  const inExpression = (decoded: number): "whole" | "part" | null => {
+    for (const t of tags) {
+      for (const a of t.attributes) {
+        if (a.value === null || decoded < a.valueStart || decoded >= a.valueStart + a.value.length) continue;
         const parsed = parseAttributeName(a.name.toLowerCase(), prefix);
-        return parsed?.spec?.valueKind === "expression";
-      }),
-    );
+        if (parsed?.spec?.valueKind !== "expression") return null;
+        return a.value.trim() === PLACEHOLDER ? "whole" : "part";
+      }
+    }
+    return null;
+  };
   return interpolationIssues(s, src).map((i) => {
     const ip = s.interpolations.find((x) => x.start === i.start);
     const name = ip?.text ?? "";
-    if (ip && inExpression(ip.decodedStart)) {
+    const where = ip ? inExpression(ip.decodedStart) : null;
+    const fixes = i.fixes?.filter((f) => f.title.startsWith("Make it") || f.title.startsWith("Escape"));
+    if (where === "whole") {
       return {
         ...i,
-        fixes: i.fixes?.filter((f) => f.title.startsWith("Make it") || f.title.startsWith("Escape")),
-        message: `Kotlin interpolates $${name} here, inside a Datastar expression; the browser will never see a signal. Make the whole literal $$"""...""" (Kotlin 2.2+), or escape as \${'$'}${name}.`,
+        fixes,
+        message: `Kotlin interpolates $${name} here, as the whole Datastar expression; the browser will never see a signal. Make the whole literal $$"""...""" (Kotlin 2.2+), or escape as \${'$'}${name}.`,
+      };
+    }
+    if (where === "part") {
+      // `data-signals="{count: $initialCount}"` seeds a signal from a server value as often as it is the trap.
+      return {
+        ...i,
+        severity: "warning" as const,
+        fixes,
+        message: `Kotlin interpolates $${name} inside a Datastar expression. Meant as a server value, that is fine; meant as the signal $${name}, make the literal $$"""...""" (Kotlin 2.2+) or escape as \${'$'}${name}.`,
       };
     }
     return { ...i, severity: "hint" as const, fixes: undefined, message: `Kotlin interpolates $${name} into the HTML. Make sure it is escaped.` };

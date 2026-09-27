@@ -167,19 +167,23 @@ public object ElementsGuard {
         val plugin = rest.substringBefore(':').substringBefore("__")
         if (plugin !in attributes) {
             // A key or modifier (data-onn:click, data-signal__ifmissing) makes a custom attribute implausible,
-            // so any one-letter neighbour is a typo. A bare name (data-test, data-kind) is only a typo when the
-            // neighbour is long enough that the two could not both be words: data-indicater, data-signal.
+            // so any one-letter neighbour is a typo. A bare name is a different matter: data-test, data-kind,
+            // data-animated and data-effects are honest words a letter away from Datastar's. Only a swapped
+            // letter in a long name (data-indicater, data-computer) is judged there; plurals and past tenses,
+            // which add a letter, are left alone.
             val qualified = rest.length > plugin.length
-            attributes.firstOrNull { oneEditAway(plugin, it) && (qualified || it.length >= LONG_NAME) }?.let { near ->
-                throw MistypedAttributeException(name, prefix + near + name.substring(prefix.length + plugin.length))
-            }
+            attributes
+                .firstOrNull { oneEditAway(plugin, it) && (qualified || (it.length >= LONG_NAME && it.length == plugin.length)) }
+                ?.let { near ->
+                    throw MistypedAttributeException(name, prefix + near + name.substring(prefix.length + plugin.length))
+                }
             return
         }
         if (plugin !in expressionAttributes) return
         ExpressionGuard.check(value ?: "", name)
     }
 
-    /** Below this length a Datastar name has too many honest neighbours (test, kind, once, unit) to judge a bare `data-*`. */
+    /** Below this length a Datastar name has too many honest neighbours (test, kind, once, unit) to judge a bare `data-*` at all. */
     private const val LONG_NAME = 6
 
     /** One insertion, deletion or substitution apart; no allocation. */

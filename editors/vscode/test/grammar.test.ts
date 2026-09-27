@@ -129,6 +129,8 @@ describe("kotlin injection grammar", () => {
     }
     const param = await tokenLines("source.kotlin", [`fun wrap(@Language("HTML") html: String, title: String) {`, `    val x = "not <html>"`]);
     assert.ok(param[1]!.every((x) => !x.scopes.some((s) => s.includes("html"))), "a parameter annotation does not reach the body");
+    const withDefault = await tokenLines("source.kotlin", [`fun wrap(@Language("HTML") html: String? = null, title: String) {`, `    val x = "not <b>"`]);
+    assert.ok(withDefault[1]!.every((x) => !x.scopes.some((s) => s.includes("entity.name.tag"))), "nor with a default value");
   });
 });
 

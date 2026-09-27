@@ -151,7 +151,7 @@ public fun HTMLTag.dataPersist(
     val name =
         buildString {
             append(ds("persist"))
-            key?.let { append(':').append(it) }
+            key?.let { append(':').append(Casing.plainKey(it)) }
             if (session) append("__session")
         }
     attributes[name] = filter?.toJs() ?: ""

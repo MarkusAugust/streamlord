@@ -297,7 +297,9 @@ export function validateAttributes(tag: Tag, prefix: string): Issue[] {
 
 /** `fooBar` -> `foo-bar`, one hyphen per capital, which Datastar's camel conversion turns back into `fooBar`. */
 export function kebab(name: string): string {
-  return name.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase()).replace(/^-/, "");
+  const out = name.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase());
+  // Only the hyphen a leading capital introduced is dropped; a CSS custom property keeps its `--`.
+  return /^[A-Z]/.test(name) ? out.replace(/^-/, "") : out;
 }
 
 /**
