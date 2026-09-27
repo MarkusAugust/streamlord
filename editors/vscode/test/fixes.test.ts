@@ -21,11 +21,20 @@ describe("quick fixes in kotlin", () => {
     assert.equal(apply(src, issue!.fixes![3]!), `dataOnClick("\\$count++")`);
   });
 
+  it("uses one more dollar than the longest run already in the text", () => {
+    const src = `dataOnClick("a $$count++ and $$$x")`;
+    const issues = withCode(analyzeKotlin(src, opts), "kotlin-interpolation");
+    const onCount = issues.find((i) => src.slice(i.start, i.end) === "$count")!;
+    const fix = onCount.fixes!.find((f) => f.title.startsWith("Make it"))!;
+    assert.equal(fix.title, "Make it a $$$$ literal, where $count is a signal");
+    assert.equal(apply(src, fix), `dataOnClick($$$$"a $$count++ and $$$$x")`);
+  });
+
   it("turns an html string into a $$ literal, keeping the kotlin templates kotlin", () => {
     const src = `fun f(d: String, t: String) = """<h2>$t \${'$'}x \${t.length}</h2><span data-text="$d"></span>"""`;
     const issues = withCode(analyzeKotlin(src, opts), "kotlin-interpolation");
     const onD = issues.find((i) => src.slice(i.start, i.end) === "$d")!;
-    assert.equal(onD.severity, "error");
+    assert.equal(onD.severity, "warning");
     assert.deepEqual(onD.fixes!.map((f) => f.title), ["Make it a $$ literal, where $d is a signal", "Escape as ${'$'}d"]);
     assert.equal(apply(src, onD.fixes![0]!), `fun f(d: String, t: String) = $$"""<h2>$$t $x $\${t.length}</h2><span data-text="$d"></span>"""`);
     assert.deepEqual(analyzeKotlin(apply(src, onD.fixes![0]!), opts), [], "the result is clean");

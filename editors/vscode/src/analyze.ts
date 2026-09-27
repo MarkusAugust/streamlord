@@ -32,7 +32,7 @@ for (const name of KEY_ONLY_HELPERS) (ALL_SITE_NAMES as Set<string>).add(name);
  */
 const LEX_CACHE_CAP = 256 * 1024;
 let lastLex: { src: string; lex: ReturnType<typeof lexKotlin> } | null = null;
-function lexCached(src: string): ReturnType<typeof lexKotlin> {
+export function lexCached(src: string): ReturnType<typeof lexKotlin> {
   if (src.length > LEX_CACHE_CAP) return lexKotlin(src);
   if (lastLex === null || lastLex.src.length !== src.length || lastLex.src !== src) lastLex = { src, lex: lexKotlin(src) };
   return lastLex.lex;
@@ -103,11 +103,23 @@ const HELPERS: [RegExp, (n: string) => string][] = [
  * `${'$'}` idiom becomes the plain dollar it always meant.
  */
 function multiDollarFix(s: KotlinString, src: string, signal: Interpolation): Fix {
-  const keep = new Set(s.interpolations.filter((ip) => ip !== signal).map((ip) => ip.start));
-  let out = "$$" + src.slice(s.start, s.contentStart);
+  const content = src.slice(s.contentStart, s.contentEnd);
+  // Enough dollars that no run already in the text opens a template: one more than the longest run.
+  const longestRun = Math.max(0, ...(content.match(/\$+/g) ?? []).map((r) => r.length));
+  const dollars = Math.max(2, longestRun + 1);
+  const prefix = "$".repeat(dollars);
+  // A kept template is padded to the new run length; the flagged one keeps its run, which is now text.
+  const runBefore = (at: number) => {
+    let n = 0;
+    while (src[at - 1 - n] === "$") n++;
+    return n;
+  };
+  const keep = new Map(s.interpolations.filter((ip) => ip !== signal).map((ip) => [ip.start, dollars - 1 - runBefore(ip.start)]));
+  let out = prefix + src.slice(s.start, s.contentStart).replace(/^\$+/, "");
   let i = s.contentStart;
   while (i < s.contentEnd) {
-    if (keep.has(i)) out += "$";
+    const pad = keep.get(i);
+    if (pad !== undefined && pad > 0) out += "$".repeat(pad);
     if (src.startsWith("${'$'}", i)) {
       out += "$";
       i += 6;
@@ -117,7 +129,7 @@ function multiDollarFix(s: KotlinString, src: string, signal: Interpolation): Fi
     i++;
   }
   out += src.slice(s.contentEnd, s.end);
-  return { title: `Make it a $$ literal, where $${signal.text} is a signal`, start: s.start, end: s.end, text: out };
+  return { title: `Make it a ${prefix} literal, where $${signal.text} is a signal`, start: s.start, end: s.end, text: out };
 }
 
 function interpolationIssues(s: KotlinString, src: string): Issue[] {
@@ -178,10 +190,12 @@ function interpolationHints(s: KotlinString, src: string, prefix: string): Issue
     const where = ip ? inExpression(ip.decodedStart) : null;
     const fixes = i.fixes?.filter((f) => f.title.startsWith("Make it") || f.title.startsWith("Escape"));
     if (where === "whole") {
+      // data-show="$isAdmin" renders as data-show="true", which works; meant as the signal $isAdmin, it is the trap.
       return {
         ...i,
+        severity: "warning" as const,
         fixes,
-        message: `Kotlin interpolates $${name} here, as the whole Datastar expression; the browser will never see a signal. Make the whole literal $$"""...""" (Kotlin 2.2+), or escape as \${'$'}${name}.`,
+        message: `Kotlin interpolates $${name} here, as the whole Datastar expression. Meant as a server value, that is fine; meant as the signal $${name}, make the whole literal $$"""...""" (Kotlin 2.2+), or escape as \${'$'}${name}.`,
       };
     }
     if (where === "part") {

@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { htmlStringAt } from "./analyze.ts";
+import { htmlStringAt, lexCached } from "./analyze.ts";
 import { catalog, parseAttributeName, type AttributeSpec } from "./catalog.ts";
 import { actionPrefixAt, signalPrefixAt } from "./expression.ts";
 import { keyKind } from "./markup.ts";
@@ -34,7 +34,7 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
     // HTML in a string, handed to patchElements or free-standing: the HTML side applies.
     const html = htmlStringAt(src, offset);
     if (html && offset > html.contentStart && offset <= html.contentEnd) return this.html(src, offset, document, position);
-    const site = findCallSites(src, EXPRESSION_SITES).find((s) => s.openParen < offset && offset <= s.closeParen);
+    const site = findCallSites(src, EXPRESSION_SITES, lexCached(src).mask).find((s) => s.openParen < offset && offset <= s.closeParen);
     if (!site) return [];
     const spec = catalog.callSites.expression[site.name];
     if (!spec) return [];
@@ -46,7 +46,7 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
 
   /** `selector = "#|"` on any DSL call, or the first argument of removeElements: ids and classes from the workspace. */
   private selectorItems(src: string, offset: number, document: vscode.TextDocument, position: vscode.Position): vscode.CompletionItem[] | null {
-    const site = findCallSites(src, ALL_SITES).find((s) => s.openParen < offset && offset <= s.closeParen);
+    const site = findCallSites(src, ALL_SITES, lexCached(src).mask).find((s) => s.openParen < offset && offset <= s.closeParen);
     if (!site) return null;
     const arg = site.args.find((a) => a.string && a.string.start < offset && offset <= a.string.contentEnd + (a.string.unterminated ? 1 : 0));
     if (!arg?.string) return null;

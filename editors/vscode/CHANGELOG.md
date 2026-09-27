@@ -9,11 +9,12 @@ All notable changes to the Streamlord extension are recorded here.
   tag, a comment or a doctype, or when `@Language("HTML")` or `// language=HTML` sits just
   before it. Diagnostics for the `data-*` attributes and their expressions, completion of
   attributes, modifiers, signals and actions, hover documentation and syntax highlighting.
-- Kotlin interpolation as the whole of a `data-*` expression in an HTML string
-  (`data-text="$count"`) is an error; inside a larger expression
-  (`data-signals="{count: $initial}"`, which seeds a signal from the server as often as it is
-  the trap) it is a warning; in element text it stays a hint. The `$$` and escape fixes are
-  offered on both.
+- Kotlin interpolation inside a `data-*` expression in an HTML string (`data-text="$count"`,
+  `data-signals="{count: $initial}"`) is a warning with the `$$` and escape fixes: a server
+  value there works (`data-show="true"`) as often as it is the trap; in element text it stays
+  a hint. In the DSL's own expression arguments (`dataText("$count")`) it remains an error.
+- The `$$` fix uses one more dollar than the longest run already in the literal, so a `$$name`
+  template in a plain string becomes text under a `$$$` literal, as the fix promises.
 - New quick fix on every `$` interpolation trap: "Make it a `$$` literal", which rewrites the
   whole literal so the flagged `$name` stays a signal, every other template becomes `$$name`
   and stays Kotlin, and `${'$'}` becomes a plain dollar. Offered right after the DSL helper.

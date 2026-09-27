@@ -78,14 +78,27 @@ public object ElementsGuard {
      */
     public val defaultPrefixes: List<String> = listOf("data-star-", "data-")
 
-    private val ENTITY = Regex("&(amp|lt|gt|quot|apos|#39|#34);")
-    private val ENTITIES = mapOf("amp" to "&", "lt" to "<", "gt" to ">", "quot" to "\"", "apos" to "'", "#39" to "'", "#34" to "\"")
+    private val ENTITY = Regex("&(?:(amp|lt|gt|quot|apos)|#(\\d+)|#[xX]([0-9a-fA-F]+));")
+    private val NAMED_ENTITIES = mapOf("amp" to "&", "lt" to "<", "gt" to ">", "quot" to "\"", "apos" to "'")
 
     /**
-     * kotlinx.html and every template engine escape attribute values; the expression is what the
-     * browser decodes. One pass, as the browser does it, so `&amp;lt;` is `&lt;` and not `<`.
+     * kotlinx.html and every template engine escape attribute values, some with numeric entities
+     * (`&#x27;`, `&#61;`); the expression is what the browser decodes. One pass, as the browser
+     * does it, so `&amp;lt;` is `&lt;` and not `<`.
      */
-    private fun decode(value: String): String = if ('&' in value) ENTITY.replace(value) { ENTITIES.getValue(it.groupValues[1]) } else value
+    private fun decode(value: String): String =
+        if ('&' !in value) {
+            value
+        } else {
+            ENTITY.replace(value) { m ->
+                val (named, decimal, hex) = m.destructured
+                when {
+                    named.isNotEmpty() -> NAMED_ENTITIES.getValue(named)
+                    decimal.isNotEmpty() -> decimal.toIntOrNull()?.let { Character.toString(it) } ?: m.value
+                    else -> hex.toIntOrNull(16)?.let { Character.toString(it) } ?: m.value
+                }
+            }
+        }
 
     /**
      * Returns [elements] untouched, or throws for the first broken attribute:
@@ -97,6 +110,8 @@ public object ElementsGuard {
         elements: String,
         prefixes: List<String> = defaultPrefixes,
     ): String {
+        // Longest first, so `data-x-` is tried before `data-` whatever order the caller used.
+        val ordered = if (prefixes === defaultPrefixes) prefixes else prefixes.sortedByDescending { it.length }
         var i = 0
         val n = elements.length
         while (i < n) {
@@ -112,7 +127,7 @@ public object ElementsGuard {
                 i = lt + 1
                 continue
             }
-            i = scanTag(elements, lt + 1, prefixes)
+            i = scanTag(elements, lt + 1, ordered)
             // Inside <script> and <style> a '<' is text, not a tag: skip to the closing tag.
             RAW_TEXT
                 .firstOrNull {
@@ -126,7 +141,8 @@ public object ElementsGuard {
         return elements
     }
 
-    private val RAW_TEXT = listOf("script", "style")
+    /** Elements whose body is text to the browser: `<` inside them opens no tag. */
+    private val RAW_TEXT = listOf("script", "style", "textarea", "title")
 
     private fun Char?.isNamePart(): Boolean = this != null && (isLetterOrDigit() || this == '-')
 

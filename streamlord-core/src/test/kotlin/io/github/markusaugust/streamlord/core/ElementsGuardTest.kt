@@ -112,6 +112,17 @@ class ElementsGuardTest {
         // Decoded once, as the browser does: &amp;lt; is the text &lt;, not an operator.
         val doubly = """<div data-show="&amp;lt; 10" data-text="'&amp;quot;'"></div>"""
         assertEquals(doubly, ElementsGuard.check(doubly))
+        // Numeric entities, as Handlebars and Mustache escapers write them.
+        val numeric = """<div data-text="&#x27;:)&#x27;" data-show="&#36;a &#x26;&#x26; &#x24;b" data-on:click="&#x24;x &#61; 1"></div>"""
+        assertEquals(numeric, ElementsGuard.check(numeric))
+        assertFailsWith<InterpolatedExpressionException> { ElementsGuard.check("""<div data-show="&#x26;&#x26; ${'$'}b"></div>""") }
+        // The caller's prefix order does not matter: the longest alias wins.
+        assertFailsWith<InterpolatedExpressionException> {
+            ElementsGuard.check(
+                """<div data-x-text=""></div>""",
+                listOf("data-", "data-x-"),
+            )
+        }
         assertEquals("""<div data-ds-text=""></div>""", ElementsGuard.check("""<div data-ds-text=""></div>"""))
         val aliased = listOf("data-ds-") + ElementsGuard.defaultPrefixes
         assertFailsWith<InterpolatedExpressionException> { ElementsGuard.check("""<div data-ds-text=""></div>""", aliased) }
@@ -130,6 +141,11 @@ class ElementsGuardTest {
         val fine = html.replace("""<p data-text=""></p>""", "")
         assertEquals(fine, ElementsGuard.check(fine))
         assertEquals("""<scripter data-text="x"></scripter>""", ElementsGuard.check("""<scripter data-text="x"></scripter>"""))
+        // So are <textarea> and <title>: markup shown inside them is text to the browser.
+        val shown =
+            """<textarea id="src"><div data-text=""></div></textarea>""" +
+                """<title><b data-show=""></b></title><p data-text="${'$'}x"></p>"""
+        assertEquals(shown, ElementsGuard.check(shown))
     }
 
     @Test

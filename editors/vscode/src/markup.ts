@@ -17,7 +17,8 @@ const RAW_TEXT = new Set(["script", "style"]);
  * FreeMarker's square-bracket syntax (`[# ]`, `[= ]`), JTE's control flow (`@if`, `@for`,
  * ...), Velocity's (`#if`, `#foreach`, ...), and the placeholder for a Kotlin interpolation.
  */
-const TEMPLATE_SYNTAX = /\{\{|\{%|<%|[$!*#@]\{|\[#|\[=|@(?:if|elseif|else|endif|for|endfor|template|import|param|raw|endraw)\b|#(?:if|elseif|else|end|foreach|set|macro|parse|include)\b|__kt__/;
+const TEMPLATE_SYNTAX =
+  /\{\{|\{%|<%|[$!*#@]\{|\[#|\[=|(?:^|[\s>])@(?:if|elseif|else|endif|for|endfor|template|import|param|raw|endraw)\b|(?:^|[\s>])#(?:if|elseif|else|end|foreach|set|macro|parse|include)\b|__kt__/;
 
 /**
  * Tags that belong to a template engine, not to the document: FreeMarker directives and macro

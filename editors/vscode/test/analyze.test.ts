@@ -174,7 +174,7 @@ describe("markup", () => {
   it("warns, not errors, when the template is only part of an expression", () => {
     const src = `fun seed(initial: Int) = """<div data-signals="{count: $initial}" data-signals:count="$initial" data-text="$initial"></div>"""`;
     const issues = analyzeKotlin(src, opts).filter((i) => i.code === "kotlin-interpolation");
-    expect(issues.map((i) => i.severity)).toEqual(["warning", "warning", "error"]);
+    expect(issues.map((i) => i.severity)).toEqual(["warning", "warning", "warning"]);
     expect(issues[0]!.message).toContain("server value");
     expect(issues[0]!.fixes!.map((f) => f.title)).toEqual(["Make it a $$ literal, where $initial is a signal", "Escape as ${'$'}initial"]);
   });
@@ -188,7 +188,7 @@ describe("markup", () => {
   it("treats interpolation in an aliased-prefix expression as the same error", () => {
     const src = `fun f(count: Int) = """<p data-star-text="$count"></p>"""`;
     const aliased = { prefix: "data-star-", checkHtmlAttributes: true };
-    expect(analyzeKotlin(src, aliased).find((i) => i.code === "kotlin-interpolation")!.severity).toBe("error");
+    expect(analyzeKotlin(src, aliased).find((i) => i.code === "kotlin-interpolation")!.severity).toBe("warning");
     expect(analyzeKotlin(src, opts).find((i) => i.code === "kotlin-interpolation")!.severity).toBe("hint");
   });
 
@@ -275,7 +275,7 @@ dataText("$count")`;
     expect(codes(issues)).toEqual(["unknown-attribute", "missing-id", "kotlin-interpolation", "kotlin-interpolation", "kotlin-interpolation", "unknown-modifier", "unknown-attribute"]);
     const [inExpression, inText] = issues.filter((i) => i.code === "kotlin-interpolation" && src.slice(i.start, i.end) !== "$count");
     expect(src.slice(inExpression!.start, inExpression!.end)).toBe("$navn");
-    expect(inExpression!.severity).toBe("error");
+    expect(inExpression!.severity).toBe("warning");
     expect(inExpression!.fixes!.map((f) => f.title)).toEqual(["Make it a $$ literal, where $navn is a signal", "Escape as ${'$'}navn"]);
     expect(inText!.severity).toBe("hint");
     expect(inText!.fixes).toBe(undefined);
@@ -332,6 +332,11 @@ describe("analyzeHtml", () => {
     expect(fixture("template.ftl")).toEqual(["unknown-attribute", "missing-key"]);
     expect(fixture("template.vm")).toEqual(["modifier-args"]);
     expect(fixture("template.mustache")).toEqual(["pro-attribute", "expression-syntax"]);
+  });
+
+  it("only treats a template keyword as such at the start of a value or after whitespace", () => {
+    expect(codes(analyzeHtml(`<a data-on:click="@get('/docs#include') +" data-text="'#end' +"></a>`, opts))).toEqual(["expression-syntax", "expression-syntax"]);
+    expect(analyzeHtml(`<a data-on:click="#if($a) x() #end" data-text="@if(x) 1 @endif"></a>`, opts)).toEqual([]);
   });
 
   it("skips template tags and comments when checking completeness", () => {
