@@ -21,14 +21,17 @@ import kotlin.test.assertTrue
  * DSL and the catalog ever disagree, this test is the wall they break against.
  */
 class CatalogTest {
-
     private val catalog: JsonObject = JsonParser.parseObject(File("../catalog/datastar-${DatastarProtocol.VERSION}.json").readText())
 
     /** JVM names with inline-class mangling (`name-hash`) and synthetic suffixes (`name$default`) removed. */
     private fun jvmName(name: String): String = name.substringBefore('-').substringBefore('$')
 
     private fun methods(className: String): Set<String> =
-        Class.forName(className).methods.map { jvmName(it.name) }.toSet()
+        Class
+            .forName(className)
+            .methods
+            .map { jvmName(it.name) }
+            .toSet()
 
     private val freeAttributeFns = methods("io.github.markusaugust.streamlord.html.AttributesKt")
     private val proAttributeFns = methods("io.github.markusaugust.streamlord.html.pro.ProAttributesKt")
@@ -67,13 +70,19 @@ class CatalogTest {
 
     @Test
     fun `on and intersect modifiers are all settable on their builders`() {
-        fun properties(klass: Class<*>) = klass.methods.filter { it.name.startsWith("set") }.map { jvmName(it.name).removePrefix("set").lowercase() }.toSet()
+        fun properties(klass: Class<*>) =
+            klass.methods
+                .filter { it.name.startsWith("set") }
+                .map { jvmName(it.name).removePrefix("set").lowercase() }
+                .toSet()
         val onProps = properties(OnModifiers::class.java)
         val intersectProps = properties(IntersectModifiers::class.java)
         val groups = catalog.obj("modifierGroups")!!
-        fun expand(mods: List<JsonObject>): List<String> = mods.flatMap { m ->
-            m.string("\$ref")?.let { ref -> groups.array(ref)!!.objects().map { it.string("name")!! } } ?: listOf(m.string("name")!!)
-        }
+
+        fun expand(mods: List<JsonObject>): List<String> =
+            mods.flatMap { m ->
+                m.string("\$ref")?.let { ref -> groups.array(ref)!!.objects().map { it.string("name")!! } } ?: listOf(m.string("name")!!)
+            }
         val attrs = catalog.array("attributes")!!.objects().associateBy { it.string("name")!! }
         for (name in expand(attrs.getValue("on").array("modifiers")!!.objects())) {
             assertTrue(name in onProps, "OnModifiers lacks a property for __$name")
@@ -85,11 +94,22 @@ class CatalogTest {
 
     @Test
     fun `fetch options, events, modes and namespaces match`() {
-        val optionProps = FetchOptions::class.java.methods.filter { it.name.startsWith("set") }.map { jvmName(it.name).removePrefix("set").replaceFirstChar { c -> c.lowercase() } }.toSet()
+        val optionProps =
+            FetchOptions::class.java.methods
+                .filter { it.name.startsWith("set") }
+                .map {
+                    jvmName(it.name).removePrefix("set").replaceFirstChar { c ->
+                        c.lowercase()
+                    }
+                }.toSet()
         for (opt in catalog.array("fetchOptions")!!.objects()) {
             assertTrue(opt.string("name") in optionProps, "FetchOptions lacks ${opt.string("name")}")
         }
-        val events = FetchEventType::class.java.fields.filter { it.type == String::class.java }.map { it.get(null) as String }.toSet()
+        val events =
+            FetchEventType::class.java.fields
+                .filter { it.type == String::class.java }
+                .map { it.get(null) as String }
+                .toSet()
         assertEquals(events, catalog.array("fetchEvents")!!.strings().toSet())
         val sse = catalog.obj("sse")!!
         assertEquals(ElementPatchMode.entries.map { it.wire }, sse.array("patchModes")!!.strings())
@@ -99,21 +119,40 @@ class CatalogTest {
 
     @Test
     fun `the elements guard checks exactly the expression-valued attributes`() {
-        val expression = catalog.array("attributes")!!.objects()
-            .filter { it.string("valueKind") == "expression" }
-            .map { it.string("name")!! }
-            .toSet()
+        val expression =
+            catalog
+                .array("attributes")!!
+                .objects()
+                .filter { it.string("valueKind") == "expression" }
+                .map { it.string("name")!! }
+                .toSet()
         assertEquals(expression, ElementsGuard.expressionAttributes)
-        assertEquals(catalog.array("attributes")!!.objects().map { it.string("name")!! }.toSet(), ElementsGuard.attributes)
+        assertEquals(
+            catalog
+                .array("attributes")!!
+                .objects()
+                .map { it.string("name")!! }
+                .toSet(),
+            ElementsGuard.attributes,
+        )
     }
 
     @Test
     fun `every kotlin call site the editor validates exists`() {
         val sites = catalog.obj("kotlinCallSites")!!
-        val known = freeAttributeFns + proAttributeFns + freeActionFns + proActionFns + expressionFns +
-            methods("io.github.markusaugust.streamlord.html.ElementsKt") +
-            methods("io.github.markusaugust.streamlord.core.port.driving.DatastarStream") +
-            setOf("PatchElements", "ElementsResponse", "ExecuteScript", "respondElements", "respondScript", "datastarElements", "datastarScript")
+        val known =
+            freeAttributeFns + proAttributeFns + freeActionFns + proActionFns + expressionFns +
+                methods("io.github.markusaugust.streamlord.html.ElementsKt") +
+                methods("io.github.markusaugust.streamlord.core.port.driving.DatastarStream") +
+                setOf(
+                    "PatchElements",
+                    "ElementsResponse",
+                    "ExecuteScript",
+                    "respondElements",
+                    "respondScript",
+                    "datastarElements",
+                    "datastarScript",
+                )
         for (group in listOf("expression", "html", "script", "selector")) {
             for (fn in sites.obj(group)!!.keys) {
                 assertTrue(fn in known, "call site $fn in group $group does not exist in the SDK")

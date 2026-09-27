@@ -109,7 +109,11 @@ public interface DatastarStream {
     }
 
     /** Remove signals by name. Sugar for patching them to `null`. */
-    public suspend fun removeSignals(vararg names: String, eventId: String? = null, retry: Duration? = null) {
+    public suspend fun removeSignals(
+        vararg names: String,
+        eventId: String? = null,
+        retry: Duration? = null,
+    ) {
         send(PatchSignals(JsonWriter.write(names.associateWith { null }), eventId = eventId, retry = retry))
     }
 

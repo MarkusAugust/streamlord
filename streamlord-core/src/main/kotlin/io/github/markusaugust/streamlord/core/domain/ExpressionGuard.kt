@@ -18,7 +18,11 @@ public class InterpolatedExpressionException(
     public val attribute: String? = null,
 ) : StreamlordException(message(expression, reason, attribute)) {
     private companion object {
-        fun message(expression: String, reason: String, attribute: String?): String =
+        fun message(
+            expression: String,
+            reason: String,
+            attribute: String?,
+        ): String =
             if (attribute == null) {
                 "Datastar expression \"$expression\" $reason. This is what a Kotlin string template leaves behind when " +
                     "it interpolates a signal such as \$count. Write the signal with the helpers " +
@@ -44,10 +48,39 @@ public class InterpolatedExpressionException(
  */
 public object ExpressionGuard {
     /** Operators that need an operand on their left, longest first so `===` wins over `=`. */
-    private val NEEDS_LEFT = listOf("===", "!==", "==", "!=", "<=", ">=", "&&", "||", "??", "?.", "=", "?", ":", ")", "]", "}", ".", "*", "/", "%", ">", ",")
+    private val NEEDS_LEFT =
+        listOf("===", "!==", "==", "!=", "<=", ">=", "&&", "||", "??", "?.", "=", "?", ":", ")", "]", "}", ".", "*", "/", "%", ">", ",")
 
     /** Operators that need an operand on their right, longest first. Postfix `++`/`--` are not here: `$count++` is fine. */
-    private val NEEDS_RIGHT = listOf("===", "!==", "==", "!=", "<=", ">=", "&&", "||", "??", "?.", "=>", "=", "?", ":", "(", "[", "{", ".", "*", "/", "%", "<", ">", ",", "!", "@")
+    private val NEEDS_RIGHT =
+        listOf(
+            "===",
+            "!==",
+            "==",
+            "!=",
+            "<=",
+            ">=",
+            "&&",
+            "||",
+            "??",
+            "?.",
+            "=>",
+            "=",
+            "?",
+            ":",
+            "(",
+            "[",
+            "{",
+            ".",
+            "*",
+            "/",
+            "%",
+            "<",
+            ">",
+            ",",
+            "!",
+            "@",
+        )
 
     private val ONLY_OPERATORS = Regex("^[\\s=!<>&|?:.+\\-*/%,()\\[\\]{}]*$")
 
@@ -61,7 +94,10 @@ public object ExpressionGuard {
      * Returns [expression] untouched, or throws [InterpolatedExpressionException] that names the
      * [attribute] the expression was found in.
      */
-    public fun check(expression: String, attribute: String?): String {
+    public fun check(
+        expression: String,
+        attribute: String?,
+    ): String {
         val t = expression.trim()
         if (t.isEmpty()) throw InterpolatedExpressionException(expression, "is empty", attribute)
         if (ONLY_OPERATORS.matches(t)) throw InterpolatedExpressionException(expression, "contains no operands, only operators", attribute)

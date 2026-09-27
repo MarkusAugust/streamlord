@@ -36,18 +36,19 @@ public class ResizeModifiers {
     public var throttleNoLeading: Boolean = false
     public var throttleTrailing: Boolean = false
 
-    internal fun build(): String = buildString {
-        debounce?.let {
-            append("__debounce.").append(it.ms())
-            if (debounceLeading) append(".leading")
-            if (debounceNoTrailing) append(".notrailing")
+    internal fun build(): String =
+        buildString {
+            debounce?.let {
+                append("__debounce.").append(it.ms())
+                if (debounceLeading) append(".leading")
+                if (debounceNoTrailing) append(".notrailing")
+            }
+            throttle?.let {
+                append("__throttle.").append(it.ms())
+                if (throttleNoLeading) append(".noleading")
+                if (throttleTrailing) append(".trailing")
+            }
         }
-        throttle?.let {
-            append("__throttle.").append(it.ms())
-            if (throttleNoLeading) append(".noleading")
-            if (throttleTrailing) append(".trailing")
-        }
-    }
 }
 
 /** Modifiers for `data-on-raf`. */
@@ -56,30 +57,50 @@ public class RafModifiers {
     public var throttleNoLeading: Boolean = false
     public var throttleTrailing: Boolean = false
 
-    internal fun build(): String = buildString {
-        throttle?.let {
-            append("__throttle.").append(it.ms())
-            if (throttleNoLeading) append(".noleading")
-            if (throttleTrailing) append(".trailing")
+    internal fun build(): String =
+        buildString {
+            throttle?.let {
+                append("__throttle.").append(it.ms())
+                if (throttleNoLeading) append(".noleading")
+                if (throttleTrailing) append(".trailing")
+            }
         }
-    }
 }
 
 /** Scroll behaviour for `data-scroll-into-view`. */
-public enum class ScrollBehavior(internal val modifier: String) { SMOOTH("__smooth"), INSTANT("__instant"), AUTO("__auto") }
+public enum class ScrollBehavior(
+    internal val modifier: String,
+) {
+    SMOOTH("__smooth"),
+    INSTANT("__instant"),
+    AUTO("__auto"),
+}
 
 /** Horizontal alignment for `data-scroll-into-view`. */
-public enum class HorizontalAlign(internal val modifier: String) {
-    START("__hstart"), CENTER("__hcenter"), END("__hend"), NEAREST("__hnearest")
+public enum class HorizontalAlign(
+    internal val modifier: String,
+) {
+    START("__hstart"),
+    CENTER("__hcenter"),
+    END("__hend"),
+    NEAREST("__hnearest"),
 }
 
 /** Vertical alignment for `data-scroll-into-view`. */
-public enum class VerticalAlign(internal val modifier: String) {
-    START("__vstart"), CENTER("__vcenter"), END("__vend"), NEAREST("__vnearest")
+public enum class VerticalAlign(
+    internal val modifier: String,
+) {
+    START("__vstart"),
+    CENTER("__vcenter"),
+    END("__vend"),
+    NEAREST("__vnearest"),
 }
 
 /** `data-animate:attribute="expression"` (Pro): animate an attribute whenever its signals change. */
-public fun HTMLTag.dataAnimate(attribute: String, expression: String) {
+public fun HTMLTag.dataAnimate(
+    attribute: String,
+    expression: String,
+) {
     attributes[ds("animate:${Casing.plainKey(attribute)}")] = ExpressionGuard.check(expression)
 }
 
@@ -89,19 +110,29 @@ public fun HTMLTag.dataCustomValidity(expression: String) {
 }
 
 /** `data-match-media:signal="'(query)'"` (Pro): a boolean signal that follows a media query. */
-public fun HTMLTag.dataMatchMedia(signal: String, mediaQuery: String, case: Case? = null) {
+public fun HTMLTag.dataMatchMedia(
+    signal: String,
+    mediaQuery: String,
+    case: Case? = null,
+) {
     val (key, mod) = Casing.key(signal, case, Case.CAMEL)
     val mods = mod?.let { "__case.${it.wire}" } ?: ""
     attributes[ds("match-media:$key$mods")] = "'$mediaQuery'"
 }
 
 /** `data-on-raf="expression"` (Pro): run on every animation frame. */
-public fun HTMLTag.dataOnRaf(expression: String, modifiers: RafModifiers.() -> Unit = {}) {
+public fun HTMLTag.dataOnRaf(
+    expression: String,
+    modifiers: RafModifiers.() -> Unit = {},
+) {
     attributes[ds("on-raf${RafModifiers().apply(modifiers).build()}")] = ExpressionGuard.check(expression)
 }
 
 /** `data-on-resize="expression"` (Pro): run when the element's size changes. */
-public fun HTMLTag.dataOnResize(expression: String, modifiers: ResizeModifiers.() -> Unit = {}) {
+public fun HTMLTag.dataOnResize(
+    expression: String,
+    modifiers: ResizeModifiers.() -> Unit = {},
+) {
     attributes[ds("on-resize${ResizeModifiers().apply(modifiers).build()}")] = ExpressionGuard.check(expression)
 }
 
@@ -112,12 +143,17 @@ public fun HTMLTag.dataOnResize(expression: String, modifiers: ResizeModifiers.(
  * @param filter Which signals to persist.
  * @param session Use `sessionStorage` instead of `localStorage`.
  */
-public fun HTMLTag.dataPersist(key: String? = null, filter: SignalFilter? = null, session: Boolean = false) {
-    val name = buildString {
-        append(ds("persist"))
-        key?.let { append(':').append(it) }
-        if (session) append("__session")
-    }
+public fun HTMLTag.dataPersist(
+    key: String? = null,
+    filter: SignalFilter? = null,
+    session: Boolean = false,
+) {
+    val name =
+        buildString {
+            append(ds("persist"))
+            key?.let { append(':').append(it) }
+            if (session) append("__session")
+        }
     attributes[name] = filter?.toJs() ?: ""
 }
 
@@ -128,12 +164,17 @@ public fun HTMLTag.dataPersist(key: String? = null, filter: SignalFilter? = null
  * @param omitEmpty The `__filter` modifier: leave empty values out of the query string.
  * @param history The `__history` modifier: push a history entry on every change.
  */
-public fun HTMLTag.dataQueryString(filter: SignalFilter? = null, omitEmpty: Boolean = false, history: Boolean = false) {
-    val name = buildString {
-        append(ds("query-string"))
-        if (omitEmpty) append("__filter")
-        if (history) append("__history")
-    }
+public fun HTMLTag.dataQueryString(
+    filter: SignalFilter? = null,
+    omitEmpty: Boolean = false,
+    history: Boolean = false,
+) {
+    val name =
+        buildString {
+            append(ds("query-string"))
+            if (omitEmpty) append("__filter")
+            if (history) append("__history")
+        }
     attributes[name] = filter?.toJs() ?: ""
 }
 
@@ -149,13 +190,14 @@ public fun HTMLTag.dataScrollIntoView(
     vertical: VerticalAlign? = null,
     focus: Boolean = false,
 ) {
-    val name = buildString {
-        append(ds("scroll-into-view"))
-        behavior?.let { append(it.modifier) }
-        horizontal?.let { append(it.modifier) }
-        vertical?.let { append(it.modifier) }
-        if (focus) append("__focus")
-    }
+    val name =
+        buildString {
+            append(ds("scroll-into-view"))
+            behavior?.let { append(it.modifier) }
+            horizontal?.let { append(it.modifier) }
+            vertical?.let { append(it.modifier) }
+            if (focus) append("__focus")
+        }
     attributes[name] = ""
 }
 

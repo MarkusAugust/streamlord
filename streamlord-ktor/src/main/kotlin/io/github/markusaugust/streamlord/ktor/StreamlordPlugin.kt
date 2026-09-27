@@ -26,11 +26,12 @@ public class StreamlordPluginConfig {
      */
     public var guardElements: Boolean = false
 
-    internal fun build(): Streamlord = streamlord ?: Streamlord(
-        codec = codec ?: Streamlord.Default.codec,
-        maxSignalsSize = maxSignalsSize,
-        guardElements = guardElements,
-    )
+    internal fun build(): Streamlord =
+        streamlord ?: Streamlord(
+            codec = codec ?: Streamlord.Default.codec,
+            maxSignalsSize = maxSignalsSize,
+            guardElements = guardElements,
+        )
 }
 
 internal val StreamlordKey: AttributeKey<Streamlord> = AttributeKey("Streamlord")

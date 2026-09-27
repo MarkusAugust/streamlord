@@ -81,11 +81,12 @@ public class Streamlord(
      * Applies the protocol rule: query parameter `datastar` for GET and DELETE, body otherwise.
      */
     public suspend fun readSignalsJson(request: IncomingRequest): String? {
-        val raw = if (request.carriesSignalsInQuery) {
-            request.queryParameter(DatastarProtocol.SIGNALS_PARAMETER)
-        } else {
-            request.bodyText(maxSignalsSize)
-        }
+        val raw =
+            if (request.carriesSignalsInQuery) {
+                request.queryParameter(DatastarProtocol.SIGNALS_PARAMETER)
+            } else {
+                request.bodyText(maxSignalsSize)
+            }
         val text = raw?.takeIf { it.isNotBlank() } ?: return null
         if (text.length > maxSignalsSize) throw SignalsTooLargeException(text.length.toLong(), maxSignalsSize)
         return text
@@ -96,7 +97,10 @@ public class Streamlord(
         readSignalsJson(request)?.let { JsonParser.parseObject(it) } ?: JsonObject.EMPTY
 
     /** The signals decoded into [type] by the codec, or `null` when the request carried none. */
-    public suspend fun <T : Any> readSignals(request: IncomingRequest, type: KType): T? {
+    public suspend fun <T : Any> readSignals(
+        request: IncomingRequest,
+        type: KType,
+    ): T? {
         val json = readSignalsJson(request) ?: return null
         return try {
             codec.decode(json, type)
@@ -117,8 +121,7 @@ public class Streamlord(
 }
 
 /** The signals decoded into [T], or `null` when the request carried none. */
-public suspend inline fun <reified T : Any> Streamlord.readSignals(request: IncomingRequest): T? =
-    readSignals(request, typeOf<T>())
+public suspend inline fun <reified T : Any> Streamlord.readSignals(request: IncomingRequest): T? = readSignals(request, typeOf<T>())
 
 /** Encode this flow of events into SSE frames using the default encoder. */
 public fun Flow<DatastarEvent>.asSse(): Flow<String> = map(SseEncoder::encode)

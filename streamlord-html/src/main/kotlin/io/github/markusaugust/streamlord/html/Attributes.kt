@@ -41,7 +41,11 @@ private fun ds(suffix: String): String = DatastarAttributes.name(suffix)
 // ---- Signals ----------------------------------------------------------------------------------
 
 /** `data-signals="{...}"` from a JavaScript object expression. */
-public fun HTMLTag.dataSignals(expression: String, case: Case? = null, ifMissing: Boolean = false) {
+public fun HTMLTag.dataSignals(
+    expression: String,
+    case: Case? = null,
+    ifMissing: Boolean = false,
+) {
     attributes[ds("signals${signalMods(case, ifMissing)}")] = ExpressionGuard.check(expression)
 }
 
@@ -49,7 +53,12 @@ public fun HTMLTag.dataSignals(expression: String, case: Case? = null, ifMissing
  * `data-signals:name="expression"`. Dotted names create nested signals. A camelCase [name] is
  * written in kebab-case, which Datastar reads back as the same camelCase signal; see [Casing].
  */
-public fun HTMLTag.dataSignals(name: String, expression: String, case: Case? = null, ifMissing: Boolean = false) {
+public fun HTMLTag.dataSignals(
+    name: String,
+    expression: String,
+    case: Case? = null,
+    ifMissing: Boolean = false,
+) {
     val (key, mod) = Casing.key(name, case, Case.CAMEL)
     attributes[ds("signals:$key${signalMods(mod, ifMissing)}")] = ExpressionGuard.check(expression)
 }
@@ -61,30 +70,47 @@ public fun HTMLTag.dataSignals(name: String, expression: String, case: Case? = n
  * div { dataSignals("count" to 0, "user" to mapOf("name" to "")) }
  * ```
  */
-public fun HTMLTag.dataSignals(vararg signals: Pair<String, Any?>, case: Case? = null, ifMissing: Boolean = false) {
+public fun HTMLTag.dataSignals(
+    vararg signals: Pair<String, Any?>,
+    case: Case? = null,
+    ifMissing: Boolean = false,
+) {
     attributes[ds("signals${signalMods(case, ifMissing)}")] = JsonWriter.write(signals.toMap())
 }
 
 /** `data-computed="{...}"`. */
-public fun HTMLTag.dataComputed(expression: String, case: Case? = null) {
+public fun HTMLTag.dataComputed(
+    expression: String,
+    case: Case? = null,
+) {
     attributes[ds("computed${caseMod(case)}")] = ExpressionGuard.check(expression)
 }
 
 /** `data-computed:name="expression"`. */
-public fun HTMLTag.dataComputed(name: String, expression: String, case: Case? = null) {
+public fun HTMLTag.dataComputed(
+    name: String,
+    expression: String,
+    case: Case? = null,
+) {
     val (key, mod) = Casing.key(name, case, Case.CAMEL)
     attributes[ds("computed:$key${caseMod(mod)}")] = ExpressionGuard.check(expression)
 }
 
 /** `data-json-signals`: renders the signal store as JSON into the element. Handy while debugging. */
-public fun HTMLTag.dataJsonSignals(filter: SignalFilter? = null, terse: Boolean = false) {
+public fun HTMLTag.dataJsonSignals(
+    filter: SignalFilter? = null,
+    terse: Boolean = false,
+) {
     attributes[ds(if (terse) "json-signals__terse" else "json-signals")] = filter?.toJs() ?: ""
 }
 
 // ---- Lifecycle --------------------------------------------------------------------------------
 
 /** `data-init="expression"`, run once when the element enters the DOM. */
-public fun HTMLTag.dataInit(expression: String, modifiers: InitModifiers.() -> Unit = {}) {
+public fun HTMLTag.dataInit(
+    expression: String,
+    modifiers: InitModifiers.() -> Unit = {},
+) {
     attributes[ds("init${InitModifiers().apply(modifiers).build()}")] = ExpressionGuard.check(expression)
 }
 
@@ -100,34 +126,50 @@ public fun HTMLTag.dataEffect(expression: String) {
  * `widgetLoaded` is written as `widget-loaded__case.camel`, which is how Datastar listens to
  * it; see [Casing].
  */
-public fun HTMLTag.dataOn(event: String, expression: String, modifiers: OnModifiers.() -> Unit = {}) {
+public fun HTMLTag.dataOn(
+    event: String,
+    expression: String,
+    modifiers: OnModifiers.() -> Unit = {},
+) {
     val mods = OnModifiers().apply(modifiers)
     val (key, mod) = Casing.key(event, mods.case, Case.KEBAB)
     mods.case = mod
     attributes[ds("on:$key${mods.build()}")] = ExpressionGuard.check(expression)
 }
 
-public fun HTMLTag.dataOnClick(expression: String, modifiers: OnModifiers.() -> Unit = {}): Unit =
-    dataOn("click", expression, modifiers)
+public fun HTMLTag.dataOnClick(
+    expression: String,
+    modifiers: OnModifiers.() -> Unit = {},
+): Unit = dataOn("click", expression, modifiers)
 
-public fun HTMLTag.dataOnSubmit(expression: String, modifiers: OnModifiers.() -> Unit = {}): Unit =
-    dataOn("submit", expression, modifiers)
+public fun HTMLTag.dataOnSubmit(
+    expression: String,
+    modifiers: OnModifiers.() -> Unit = {},
+): Unit = dataOn("submit", expression, modifiers)
 
-public fun HTMLTag.dataOnChange(expression: String, modifiers: OnModifiers.() -> Unit = {}): Unit =
-    dataOn("change", expression, modifiers)
+public fun HTMLTag.dataOnChange(
+    expression: String,
+    modifiers: OnModifiers.() -> Unit = {},
+): Unit = dataOn("change", expression, modifiers)
 
-public fun HTMLTag.dataOnInput(expression: String, modifiers: OnModifiers.() -> Unit = {}): Unit =
-    dataOn("input", expression, modifiers)
+public fun HTMLTag.dataOnInput(
+    expression: String,
+    modifiers: OnModifiers.() -> Unit = {},
+): Unit = dataOn("input", expression, modifiers)
 
-public fun HTMLTag.dataOnKeydown(expression: String, modifiers: OnModifiers.() -> Unit = {}): Unit =
-    dataOn("keydown", expression, modifiers)
+public fun HTMLTag.dataOnKeydown(
+    expression: String,
+    modifiers: OnModifiers.() -> Unit = {},
+): Unit = dataOn("keydown", expression, modifiers)
 
 /**
  * `data-on:datastar-fetch="expression"`: react to fetch lifecycle events. Inside the expression,
  * `evt.detail.type` is one of [FetchEventType].
  */
-public fun HTMLTag.dataOnFetch(expression: String, modifiers: OnModifiers.() -> Unit = {}): Unit =
-    dataOn("datastar-fetch", expression, modifiers)
+public fun HTMLTag.dataOnFetch(
+    expression: String,
+    modifiers: OnModifiers.() -> Unit = {},
+): Unit = dataOn("datastar-fetch", expression, modifiers)
 
 /** The `evt.detail.type` values of the `datastar-fetch` event. */
 public object FetchEventType {
@@ -149,29 +191,44 @@ public fun HTMLTag.dataOnSignalPatch(
 }
 
 /** `data-on-interval`. */
-public fun HTMLTag.dataOnInterval(expression: String, modifiers: IntervalModifiers.() -> Unit = {}) {
+public fun HTMLTag.dataOnInterval(
+    expression: String,
+    modifiers: IntervalModifiers.() -> Unit = {},
+) {
     attributes[ds("on-interval${IntervalModifiers().apply(modifiers).build()}")] = ExpressionGuard.check(expression)
 }
 
 /** `data-on-intersect`. */
-public fun HTMLTag.dataOnIntersect(expression: String, modifiers: IntersectModifiers.() -> Unit = {}) {
+public fun HTMLTag.dataOnIntersect(
+    expression: String,
+    modifiers: IntersectModifiers.() -> Unit = {},
+) {
     attributes[ds("on-intersect${IntersectModifiers().apply(modifiers).build()}")] = ExpressionGuard.check(expression)
 }
 
 // ---- Binding and references -------------------------------------------------------------------
 
 /** `data-bind="signal"`: two-way binding between an input and a signal. */
-public fun HTMLTag.dataBind(signal: String, modifiers: BindModifiers.() -> Unit = {}) {
+public fun HTMLTag.dataBind(
+    signal: String,
+    modifiers: BindModifiers.() -> Unit = {},
+) {
     attributes[ds("bind${BindModifiers().apply(modifiers).build()}")] = signal
 }
 
 /** `data-ref="name"`: expose the element as a signal. */
-public fun HTMLTag.dataRef(name: String, case: Case? = null) {
+public fun HTMLTag.dataRef(
+    name: String,
+    case: Case? = null,
+) {
     attributes[ds("ref${caseMod(case)}")] = name
 }
 
 /** `data-indicator="signal"`: a boolean signal that is `true` while a fetch is in flight. */
-public fun HTMLTag.dataIndicator(signal: String, case: Case? = null) {
+public fun HTMLTag.dataIndicator(
+    signal: String,
+    case: Case? = null,
+) {
     attributes[ds("indicator${caseMod(case)}")] = signal
 }
 
@@ -186,12 +243,19 @@ public fun HTMLTag.dataShow(expression: String) {
 }
 
 /** `data-class="{name: expression}"`. */
-public fun HTMLTag.dataClass(expression: String, case: Case? = null) {
+public fun HTMLTag.dataClass(
+    expression: String,
+    case: Case? = null,
+) {
     attributes[ds("class${caseMod(case)}")] = ExpressionGuard.check(expression)
 }
 
 /** `data-class:name="expression"`. A camelCase [name] is written as `is-open__case.camel`, so the class stays `isOpen`; see [Casing]. */
-public fun HTMLTag.dataClass(name: String, expression: String, case: Case? = null) {
+public fun HTMLTag.dataClass(
+    name: String,
+    expression: String,
+    case: Case? = null,
+) {
     val (key, mod) = Casing.key(name, case, Case.KEBAB)
     attributes[ds("class:$key${caseMod(mod)}")] = ExpressionGuard.check(expression)
 }
@@ -202,7 +266,10 @@ public fun HTMLTag.dataStyle(expression: String) {
 }
 
 /** `data-style:property="expression"`. A camelCase [property] such as `backgroundColor` is written as `background-color`. */
-public fun HTMLTag.dataStyle(property: String, expression: String) {
+public fun HTMLTag.dataStyle(
+    property: String,
+    expression: String,
+) {
     attributes[ds("style:${Casing.plainKey(property)}")] = ExpressionGuard.check(expression)
 }
 
@@ -216,7 +283,10 @@ public fun HTMLTag.dataAttr(expression: String) {
  * `aria-label`. An attribute that really is camelCase (SVG's `viewBox`) cannot travel in a key,
  * since the browser lowercases it; use the object form, `dataAttr("{viewBox: ...}")`.
  */
-public fun HTMLTag.dataAttr(name: String, expression: String) {
+public fun HTMLTag.dataAttr(
+    name: String,
+    expression: String,
+) {
     attributes[ds("attr:${Casing.plainKey(name)}")] = ExpressionGuard.check(expression)
 }
 
@@ -249,7 +319,11 @@ public fun HTMLTag.dataNonce(nonce: String) {
 
 private fun caseMod(case: Case?): String = case?.let { "__case.${it.wire}" } ?: ""
 
-private fun signalMods(case: Case?, ifMissing: Boolean): String = buildString {
-    case?.let { append("__case.").append(it.wire) }
-    if (ifMissing) append("__ifmissing")
-}
+private fun signalMods(
+    case: Case?,
+    ifMissing: Boolean,
+): String =
+    buildString {
+        case?.let { append("__case.").append(it.wire) }
+        if (ifMissing) append("__ifmissing")
+    }

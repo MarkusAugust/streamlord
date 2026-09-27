@@ -19,35 +19,44 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 class HtmlDslTest {
-
     @Test
     fun `elements renders compact html`() {
-        assertEquals("""<div id="a"><span>x</span></div>""", elements { div { id = "a"; span { +"x" } } })
-    }
-
-    @Test
-    fun `patchElements from the dsl goes straight to the stream`() = runTest {
-        val sink = BufferedSseSink()
-        Streamlord.Default.stream(sink).patchElements(selector = "#feed", mode = ElementPatchMode.APPEND) {
-            li { +"one" }
-            li { +"two" }
-        }
         assertEquals(
-            "event: datastar-patch-elements\ndata: selector #feed\ndata: mode append\ndata: elements <li>one</li><li>two</li>\n\n",
-            sink.text(),
+            """<div id="a"><span>x</span></div>""",
+            elements {
+                div {
+                    id = "a"
+                    span { +"x" }
+                }
+            },
         )
     }
 
     @Test
-    fun `signals attributes`() {
-        val html = elements {
-            div {
-                dataSignals("count" to 0, "user" to mapOf("name" to "Gorvek"), ifMissing = true)
-                dataSignals("open", "false", case = Case.KEBAB)
-                dataComputed("double", "${'$'}count * 2")
-                dataJsonSignals(SignalFilter.include("^user"), terse = true)
+    fun `patchElements from the dsl goes straight to the stream`() =
+        runTest {
+            val sink = BufferedSseSink()
+            Streamlord.Default.stream(sink).patchElements(selector = "#feed", mode = ElementPatchMode.APPEND) {
+                li { +"one" }
+                li { +"two" }
             }
+            assertEquals(
+                "event: datastar-patch-elements\ndata: selector #feed\ndata: mode append\ndata: elements <li>one</li><li>two</li>\n\n",
+                sink.text(),
+            )
         }
+
+    @Test
+    fun `signals attributes`() {
+        val html =
+            elements {
+                div {
+                    dataSignals("count" to 0, "user" to mapOf("name" to "Gorvek"), ifMissing = true)
+                    dataSignals("open", "false", case = Case.KEBAB)
+                    dataComputed("double", "${'$'}count * 2")
+                    dataJsonSignals(SignalFilter.include("^user"), terse = true)
+                }
+            }
         assertEquals(
             """<div data-signals__ifmissing="{&quot;count&quot;:0,&quot;user&quot;:{&quot;name&quot;:&quot;Gorvek&quot;}}" """ +
                 """data-signals:open__case.kebab="false" data-computed:double="${'$'}count * 2" """ +
@@ -58,16 +67,31 @@ class HtmlDslTest {
 
     @Test
     fun `event attributes with modifiers`() {
-        val html = elements {
-            button {
-                dataOnClick(post("/add")) { debounce = 300.milliseconds; debounceLeading = true; prevent = true; viewTransition = true }
-                dataOn("keydown", "evt.key === 'Escape' && (${set("open", false)})") { window = true; once = true }
-                dataOnInterval(get("/tick")) { duration = 2.seconds; leading = true }
-                dataOnIntersect(get("/more")) { once = true; threshold = 50 }
-                dataOnSignalPatch("console.log(patch)", SignalFilter.exclude("^_")) { throttle = 1.seconds }
-                dataIndicator("busy")
+        val html =
+            elements {
+                button {
+                    dataOnClick(post("/add")) {
+                        debounce = 300.milliseconds
+                        debounceLeading = true
+                        prevent = true
+                        viewTransition = true
+                    }
+                    dataOn("keydown", "evt.key === 'Escape' && (${set("open", false)})") {
+                        window = true
+                        once = true
+                    }
+                    dataOnInterval(get("/tick")) {
+                        duration = 2.seconds
+                        leading = true
+                    }
+                    dataOnIntersect(get("/more")) {
+                        once = true
+                        threshold = 50
+                    }
+                    dataOnSignalPatch("console.log(patch)", SignalFilter.exclude("^_")) { throttle = 1.seconds }
+                    dataIndicator("busy")
+                }
             }
-        }
         assertEquals(
             """<button data-on:click__debounce.300ms.leading__viewtransition__prevent="@post(&quot;/add&quot;)" """ +
                 """data-on:keydown__once__window="evt.key === 'Escape' &amp;&amp; (${'$'}open = false)" """ +
@@ -81,22 +105,26 @@ class HtmlDslTest {
 
     @Test
     fun `binding display and morph attributes`() {
-        val html = elements {
-            input {
-                dataBind("search") { case = Case.CAMEL; events = listOf("input", "blur") }
-                dataRef("box")
-                dataText(signal("search"))
-                dataShow(not("hidden"))
-                dataClass("active", signal("on"))
-                dataStyle("color", "'red'")
-                dataAttr("disabled", signal("busy"))
-                dataIgnore(self = true)
-                dataIgnoreMorph()
-                dataPreserveAttr("open", "class")
-                dataInit(set("count", 1)) { delay = 500.milliseconds }
-                dataEffect(increment("count"))
+        val html =
+            elements {
+                input {
+                    dataBind("search") {
+                        case = Case.CAMEL
+                        events = listOf("input", "blur")
+                    }
+                    dataRef("box")
+                    dataText(signal("search"))
+                    dataShow(not("hidden"))
+                    dataClass("active", signal("on"))
+                    dataStyle("color", "'red'")
+                    dataAttr("disabled", signal("busy"))
+                    dataIgnore(self = true)
+                    dataIgnoreMorph()
+                    dataPreserveAttr("open", "class")
+                    dataInit(set("count", 1)) { delay = 500.milliseconds }
+                    dataEffect(increment("count"))
+                }
             }
-        }
         assertEquals(
             """<input data-bind__case.camel__event.input.blur="search" data-ref="box" data-text="${'$'}search" """ +
                 """data-show="!${'$'}hidden" data-class:active="${'$'}on" data-style:color="'red'" data-attr:disabled="${'$'}busy" """ +
@@ -135,10 +163,21 @@ class HtmlDslTest {
             """@post("/x", {payload: {"id":7}, responseOverrides: {selector: "#out", mode: "inner", useViewTransition: true}})""",
             post("/x") {
                 payload = mapOf("id" to 7)
-                responseOverrides { selector = "#out"; mode = ElementPatchMode.INNER; useViewTransition = true }
+                responseOverrides {
+                    selector = "#out"
+                    mode = ElementPatchMode.INNER
+                    useViewTransition = true
+                }
             },
         )
-        assertEquals("""@get("/x", {payload: {id: ${'$'}selected}, responseOverrides: {onlyIfMissing: true}})""", get("/x") { payloadExpr = "{id: ${'$'}selected}"; responseOverrides { onlyIfMissing = true } })
+        assertEquals(
+            """@get("/x", {payload: {id: ${'$'}selected}, responseOverrides: {onlyIfMissing: true}})""",
+            get("/x") {
+                payloadExpr =
+                    "{id: ${'$'}selected}"
+                ; responseOverrides { onlyIfMissing = true }
+            },
+        )
     }
 
     @Test
@@ -155,7 +194,14 @@ class HtmlDslTest {
         try {
             assertEquals(
                 """<div data-star-signals="{&quot;n&quot;:1}" data-star-on:click__once="x()" data-star-ignore__self="" data-star-json-signals=""></div>""",
-                elements { div { dataSignals("n" to 1); dataOnClick("x()") { once = true }; dataIgnore(self = true); dataJsonSignals() } },
+                elements {
+                    div {
+                        dataSignals("n" to 1)
+                        dataOnClick("x()") { once = true }
+                        dataIgnore(self = true)
+                        dataJsonSignals()
+                    }
+                },
             )
         } finally {
             DatastarAttributes.prefix = "data-"
@@ -164,15 +210,20 @@ class HtmlDslTest {
 
     @Test
     fun `remaining event sugar, nonce, verbs and responses`() {
-        val html = elements {
-            html {
-                dataNonce("n0nce")
-                form {
-                    dataOnSubmit(post("/save"))
-                    input { dataOnInput(put("/draft")); dataOnChange(patch("/field")); dataOnKeydown("evt.key") }
+        val html =
+            elements {
+                html {
+                    dataNonce("n0nce")
+                    form {
+                        dataOnSubmit(post("/save"))
+                        input {
+                            dataOnInput(put("/draft"))
+                            dataOnChange(patch("/field"))
+                            dataOnKeydown("evt.key")
+                        }
+                    }
                 }
             }
-        }
         assertEquals(
             """<html data-nonce="n0nce"><form data-on:submit="@post(&quot;/save&quot;)">""" +
                 """<input data-on:input="@put(&quot;/draft&quot;)" data-on:change="@patch(&quot;/field&quot;)" data-on:keydown="evt.key"></form></html>""",
@@ -186,7 +237,10 @@ class HtmlDslTest {
 
     @Test
     fun `expression helpers`() {
-        assertEquals("${'$'}user.name = \"Gorvek\"; ${'$'}open = !${'$'}open; ${'$'}n--", statements(set("user.name", "Gorvek"), toggle("open"), decrement("n")))
+        assertEquals(
+            "${'$'}user.name = \"Gorvek\"; ${'$'}open = !${'$'}open; ${'$'}n--",
+            statements(set("user.name", "Gorvek"), toggle("open"), decrement("n")),
+        )
         assertEquals("${'$'}a = ${'$'}b + 1", setExpr("a", "${'$'}b + 1"))
     }
 
@@ -197,19 +251,21 @@ class HtmlDslTest {
      */
     @Test
     fun `camelCase names survive the attribute key`() {
-        val html = elements {
-            div {
-                dataSignals("fooBar", "1")
-                dataSignals("form.firstName", "''", ifMissing = true)
-                dataComputed("fullName", "${'$'}first + ${'$'}last")
-                dataOn("widgetLoaded", "x()") { once = true }
-                dataClass("isOpen", "${'$'}open")
-                dataStyle("backgroundColor", "'red'")
-                dataAttr("ariaLabel", "'x'")
+        val html =
+            elements {
+                div {
+                    dataSignals("fooBar", "1")
+                    dataSignals("form.firstName", "''", ifMissing = true)
+                    dataComputed("fullName", "${'$'}first + ${'$'}last")
+                    dataOn("widgetLoaded", "x()") { once = true }
+                    dataClass("isOpen", "${'$'}open")
+                    dataStyle("backgroundColor", "'red'")
+                    dataAttr("ariaLabel", "'x'")
+                }
             }
-        }
         assertEquals(
-            """<div data-signals:foo-bar="1" data-signals:form.first-name__ifmissing="''" data-computed:full-name="${'$'}first + ${'$'}last" """ +
+            """<div data-signals:foo-bar="1" data-signals:form.first-name__ifmissing="''" """ +
+                """data-computed:full-name="${'$'}first + ${'$'}last" """ +
                 """data-on:widget-loaded__once__case.camel="x()" data-class:is-open__case.camel="${'$'}open" """ +
                 """data-style:background-color="'red'" data-attr:aria-label="'x'"></div>""",
             html,
@@ -217,12 +273,35 @@ class HtmlDslTest {
         // Already kebab, snake or lower-case: written as given. An explicit case is never second-guessed.
         assertEquals(
             """<div data-signals:foo-bar="1" data-signals:foo_bar="2" data-on:my-event="x()" data-signals:fooBar__case.kebab="3"></div>""",
-            elements { div { dataSignals("foo-bar", "1"); dataSignals("foo_bar", "2"); dataOn("my-event", "x()"); dataSignals("fooBar", "3", case = Case.KEBAB) } },
+            elements {
+                div {
+                    dataSignals("foo-bar", "1")
+                    dataSignals("foo_bar", "2")
+                    dataOn("my-event", "x()")
+                    dataSignals("fooBar", "3", case = Case.KEBAB)
+                }
+            },
         )
         // A leading capital needs __case.pascal to come back as written.
-        assertEquals("""<div data-signals:my-signal__case.pascal="1" data-on:my-event__case.pascal="x()"></div>""", elements { div { dataSignals("MySignal", "1"); dataOn("MyEvent", "x()") } })
+        assertEquals(
+            """<div data-signals:my-signal__case.pascal="1" data-on:my-event__case.pascal="x()"></div>""",
+            elements {
+                div {
+                    dataSignals("MySignal", "1")
+                    dataOn("MyEvent", "x()")
+                }
+            },
+        )
         // Capitals that Datastar's own kebab would merge (myURL) still come back exactly.
-        assertEquals("""<div data-signals:my-u-r-l="1" data-signals:item2-name="2"></div>""", elements { div { dataSignals("myURL", "1"); dataSignals("item2Name", "2") } })
+        assertEquals(
+            """<div data-signals:my-u-r-l="1" data-signals:item2-name="2"></div>""",
+            elements {
+                div {
+                    dataSignals("myURL", "1")
+                    dataSignals("item2Name", "2")
+                }
+            },
+        )
         assertEquals("myURL", Casing.camel(Casing.kebab("myURL")))
         assertEquals("item2Name", Casing.camel(Casing.kebab("item2Name")))
         // Helpers read a kebab key the way Datastar names the signal.

@@ -6,8 +6,10 @@ import io.github.markusaugust.streamlord.core.StreamlordException
  * Raised for a name no signal can carry: blank, or with characters that are neither letters,
  * digits, `_`, `$`, `.` nor `-`.
  */
-public class InvalidSignalNameException(public val name: String, reason: String) :
-    StreamlordException("Signal name \"$name\" $reason.")
+public class InvalidSignalNameException(
+    public val name: String,
+    reason: String,
+) : StreamlordException("Signal name \"$name\" $reason.")
 
 /**
  * The casing rules of Datastar, applied so that the name you write is the name you get.
@@ -46,7 +48,11 @@ public object Casing {
      * The key and the `__case` to write so that the client derives exactly [name].
      * [default] is what the client applies to the key when no `__case` is given.
      */
-    public fun key(name: String, case: Case?, default: Case): Pair<String, Case?> {
+    public fun key(
+        name: String,
+        case: Case?,
+        default: Case,
+    ): Pair<String, Case?> {
         validate(name)
         if (case != null || !UPPER.containsMatchIn(name)) return name to case
         val wanted = if (name.first().isUpperCase()) Case.PASCAL else Case.CAMEL

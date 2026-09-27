@@ -45,12 +45,13 @@ public data class ElementsResponse(
     override val contentType: String get() = DatastarProtocol.CONTENT_TYPE_HTML
     override val body: String get() = elements
     override val headers: Map<String, String>
-        get() = buildMap {
-            selector?.let { put(DatastarProtocol.Headers.SELECTOR, it) }
-            if (mode != ElementPatchMode.DEFAULT) put(DatastarProtocol.Headers.MODE, mode.wire)
-            if (namespace != ElementNamespace.DEFAULT) put(DatastarProtocol.Headers.NAMESPACE, namespace.wire)
-            if (useViewTransition) put(DatastarProtocol.Headers.USE_VIEW_TRANSITION, "true")
-        }
+        get() =
+            buildMap {
+                selector?.let { put(DatastarProtocol.Headers.SELECTOR, it) }
+                if (mode != ElementPatchMode.DEFAULT) put(DatastarProtocol.Headers.MODE, mode.wire)
+                if (namespace != ElementNamespace.DEFAULT) put(DatastarProtocol.Headers.NAMESPACE, namespace.wire)
+                if (useViewTransition) put(DatastarProtocol.Headers.USE_VIEW_TRANSITION, "true")
+            }
 }
 
 /** An `application/json` body patched as signals. Mirrors [PatchSignals]. */
@@ -82,9 +83,10 @@ public data class ScriptResponse(
     override val contentType: String get() = DatastarProtocol.CONTENT_TYPE_JAVASCRIPT
     override val body: String get() = script
     override val headers: Map<String, String>
-        get() = if (attributes.isEmpty()) {
-            emptyMap()
-        } else {
-            mapOf(DatastarProtocol.Headers.SCRIPT_ATTRIBUTES to JsonWriter.write(attributes))
-        }
+        get() =
+            if (attributes.isEmpty()) {
+                emptyMap()
+            } else {
+                mapOf(DatastarProtocol.Headers.SCRIPT_ATTRIBUTES to JsonWriter.write(attributes))
+            }
 }

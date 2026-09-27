@@ -10,28 +10,29 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class ExpressionGuardTest {
-
     /** What the DSL receives when a Kotlin template ate the signal, and what the author wrote. */
-    private val eaten = mapOf(
-        "" to "\"\$count\"",
-        "++" to "\"\$count++\"",
-        "--" to "\"\$count--\"",
-        " = !" to "\"\$open = !\$open\"",
-        ".name" to "\"\$user.name\"",
-        " + " to "\"\$a + \$b\"",
-        "@post('/x') && " to "\"@post('/x') && \$ok\"",
-        " === 'x'" to "\"\$mode === 'x'\"",
-        " ? 'a' : 'b'" to "\"\$on ? 'a' : 'b'\"",
-        "evt.key === 'Escape' && ( = false)" to "\"evt.key === 'Escape' && (\$open = false)\"",
-        "; ++" to "\"\$a; \$b++\"",
-    )
+    private val eaten =
+        mapOf(
+            "" to "\"\$count\"",
+            "++" to "\"\$count++\"",
+            "--" to "\"\$count--\"",
+            " = !" to "\"\$open = !\$open\"",
+            ".name" to "\"\$user.name\"",
+            " + " to "\"\$a + \$b\"",
+            "@post('/x') && " to "\"@post('/x') && \$ok\"",
+            " === 'x'" to "\"\$mode === 'x'\"",
+            " ? 'a' : 'b'" to "\"\$on ? 'a' : 'b'\"",
+            "evt.key === 'Escape' && ( = false)" to "\"evt.key === 'Escape' && (\$open = false)\"",
+            "; ++" to "\"\$a; \$b++\"",
+        )
 
     @Test
     fun `the traces of an interpolated signal are refused with a helpful message`() {
         for ((received, written) in eaten) {
-            val e = assertFailsWith<InterpolatedExpressionException>("should refuse what $written becomes: \"$received\"") {
-                ExpressionGuard.check(received)
-            }
+            val e =
+                assertFailsWith<InterpolatedExpressionException>("should refuse what $written becomes: \"$received\"") {
+                    ExpressionGuard.check(received)
+                }
             assertTrue(e.message!!.contains("signal(\"count\")"), e.message)
             assertTrue(e.message!!.contains("\$\$\""), e.message)
         }
@@ -40,10 +41,27 @@ class ExpressionGuardTest {
     @Test
     fun `working expressions pass untouched`() {
         for (ok in listOf(
-            "\$count++", "++\$count", "--\$n", "-1", "!\$open", "\$open = !\$open", "\$user.name",
-            "@post('/x')", "@post('/x', {contentType: 'form'})", "evt.key === 'Escape' && (\$open = false)",
-            "el.value", "\$items.length > 0 ? 'some' : 'none'", "console.log(patch)", "\$a + \$b", "'x'", "42", "{a: 1}", "[1, 2]",
-            "window.location.href = '/x'", "\$count = 0; \$open = false", "@peek(() => \$a.b)",
+            "\$count++",
+            "++\$count",
+            "--\$n",
+            "-1",
+            "!\$open",
+            "\$open = !\$open",
+            "\$user.name",
+            "@post('/x')",
+            "@post('/x', {contentType: 'form'})",
+            "evt.key === 'Escape' && (\$open = false)",
+            "el.value",
+            "\$items.length > 0 ? 'some' : 'none'",
+            "console.log(patch)",
+            "\$a + \$b",
+            "'x'",
+            "42",
+            "{a: 1}",
+            "[1, 2]",
+            "window.location.href = '/x'",
+            "\$count = 0; \$open = false",
+            "@peek(() => \$a.b)",
         )) {
             assertEquals(ok, ExpressionGuard.check(ok))
         }
@@ -61,9 +79,11 @@ class ExpressionGuardTest {
     @Test
     @Suppress("DEPRECATION")
     fun `the 0_1_1 names in this package still resolve`() {
-        val e = assertFailsWith<io.github.markusaugust.streamlord.html.InterpolatedExpressionException> {
-            io.github.markusaugust.streamlord.html.ExpressionGuard.check("++")
-        }
+        val e =
+            assertFailsWith<io.github.markusaugust.streamlord.html.InterpolatedExpressionException> {
+                io.github.markusaugust.streamlord.html.ExpressionGuard
+                    .check("++")
+            }
         assertEquals("++", e.expression)
     }
 

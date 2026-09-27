@@ -69,13 +69,14 @@ public data class PatchElements(
             useViewTransition: Boolean = false,
             eventId: String? = null,
             retry: Duration? = null,
-        ): PatchElements = PatchElements(
-            selector = selector,
-            mode = ElementPatchMode.REMOVE,
-            useViewTransition = useViewTransition,
-            eventId = eventId,
-            retry = retry,
-        )
+        ): PatchElements =
+            PatchElements(
+                selector = selector,
+                mode = ElementPatchMode.REMOVE,
+                useViewTransition = useViewTransition,
+                eventId = eventId,
+                retry = retry,
+            )
     }
 }
 
@@ -122,28 +123,37 @@ public data class ExecuteScript(
 
     /** The script element exactly as it is sent to the browser. */
     public val scriptTag: String
-        get() = buildString {
-            append("<script")
-            for ((name, value) in attributes) {
-                append(' ').append(name).append("=\"").append(Wire.escapeAttribute(value)).append('"')
+        get() =
+            buildString {
+                append("<script")
+                for ((name, value) in attributes) {
+                    append(' ')
+                        .append(name)
+                        .append("=\"")
+                        .append(Wire.escapeAttribute(value))
+                        .append('"')
+                }
+                if (autoRemove) append(" data-effect=\"el.remove()\"")
+                append('>')
+                append(Wire.escapeScriptBody(script))
+                append("</script>")
             }
-            if (autoRemove) append(" data-effect=\"el.remove()\"")
-            append('>')
-            append(Wire.escapeScriptBody(script))
-            append("</script>")
-        }
 
     /** The wire-level event this script becomes. */
-    public fun toPatchElements(): PatchElements = PatchElements(
-        elements = scriptTag,
-        selector = "body",
-        mode = ElementPatchMode.APPEND,
-        eventId = eventId,
-        retry = retry,
-    )
+    public fun toPatchElements(): PatchElements =
+        PatchElements(
+            elements = scriptTag,
+            selector = "body",
+            mode = ElementPatchMode.APPEND,
+            eventId = eventId,
+            retry = retry,
+        )
 }
 
-private fun validateCommon(eventId: String?, retry: Duration?) {
+private fun validateCommon(
+    eventId: String?,
+    retry: Duration?,
+) {
     eventId?.let {
         if (it.isEmpty()) throw DatastarEventValidationException("eventId must not be empty")
         Wire.singleLine(it, "eventId")

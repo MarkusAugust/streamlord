@@ -7,10 +7,10 @@ import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.ElementsResponse
 import io.github.markusaugust.streamlord.core.domain.ScriptResponse
 import io.github.markusaugust.streamlord.core.domain.SignalsResponse
+import org.intellij.lang.annotations.Language
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
-import org.intellij.lang.annotations.Language
 import kotlin.reflect.typeOf
 
 /*

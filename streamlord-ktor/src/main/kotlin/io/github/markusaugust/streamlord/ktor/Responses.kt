@@ -109,7 +109,10 @@ public suspend fun ApplicationCall.respondScript(
 }
 
 /** An [SseSink] over Ktor's response channel. */
-internal class ChannelSseSink(private val channel: ByteWriteChannel) : SseSink {
+internal class ChannelSseSink(
+    private val channel: ByteWriteChannel,
+) : SseSink {
     override suspend fun write(text: String) = channel.writeStringUtf8(text)
+
     override suspend fun flush() = channel.flush()
 }

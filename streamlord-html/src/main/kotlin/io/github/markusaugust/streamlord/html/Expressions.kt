@@ -13,10 +13,16 @@ import io.github.markusaugust.streamlord.core.json.JsonWriter
 public fun signal(name: String): String = "$" + Casing.reference(name)
 
 /** `$name = value`, with [value] serialised as JSON (which is valid JavaScript). */
-public fun set(name: String, value: Any?): String = "${signal(name)} = ${JsonWriter.write(value)}"
+public fun set(
+    name: String,
+    value: Any?,
+): String = "${signal(name)} = ${JsonWriter.write(value)}"
 
 /** `$name = expression`, with a raw JavaScript expression on the right. */
-public fun setExpr(name: String, expression: String): String = "${signal(name)} = $expression"
+public fun setExpr(
+    name: String,
+    expression: String,
+): String = "${signal(name)} = $expression"
 
 /** `$name++`. */
 public fun increment(name: String): String = "${signal(name)}++"
