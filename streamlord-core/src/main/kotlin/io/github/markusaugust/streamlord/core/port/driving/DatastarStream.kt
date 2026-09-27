@@ -128,9 +128,13 @@ public interface DatastarStream {
         send(ExecuteScript(script, autoRemove, attributes, eventId, retry))
     }
 
-    /** Send the browser to another page. The URL is safely quoted. */
+    /**
+     * Send the browser to another page. The URL is safely quoted. The navigation runs from a
+     * `setTimeout`, as the official SDKs do, so the script element is applied and removed before
+     * the page unloads.
+     */
     public suspend fun redirect(url: String) {
-        executeScript("window.location.href = ${JsonWriter.writeString(url)}")
+        executeScript("setTimeout(() => { window.location.href = ${JsonWriter.writeString(url)} })")
     }
 }
 

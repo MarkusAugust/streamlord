@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.core.domain
 
 import io.github.markusaugust.streamlord.core.DatastarEventValidationException
+import io.github.markusaugust.streamlord.core.protocol.DatastarAttributes
 import org.intellij.lang.annotations.Language
 import kotlin.time.Duration
 
@@ -105,7 +106,9 @@ public data class PatchSignals(
  * `<script>` element to `body`, exactly as the Datastar SDK specification prescribes.
  *
  * @property script One or more lines of JavaScript. `</script` inside it is neutralised.
- * @property autoRemove Add `data-effect="el.remove()"` so the script tag vanishes after it runs.
+ * @property autoRemove Add `data-effect="el.remove()"` so the script tag vanishes after it runs. The
+ *   attribute follows [io.github.markusaugust.streamlord.core.protocol.DatastarAttributes.prefix], so the
+ *   aliased bundle gets `data-star-effect`.
  * @property attributes Extra attributes for the script tag, e.g. `type` or a CSP `nonce`.
  */
 public data class ExecuteScript(
@@ -133,7 +136,7 @@ public data class ExecuteScript(
                         .append(Wire.escapeAttribute(value))
                         .append('"')
                 }
-                if (autoRemove) append(" data-effect=\"el.remove()\"")
+                if (autoRemove) append(' ').append(DatastarAttributes.name("effect")).append("=\"el.remove()\"")
                 append('>')
                 append(Wire.escapeScriptBody(script))
                 append("</script>")

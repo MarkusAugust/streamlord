@@ -93,10 +93,10 @@ class HtmlDslTest {
                 }
             }
         assertEquals(
-            """<button data-on:click__debounce.300ms.leading__viewtransition__prevent="@post(&quot;/add&quot;)" """ +
+            """<button data-on:click__debounce.300ms.leading__viewtransition__prevent="@post('/add')" """ +
                 """data-on:keydown__once__window="evt.key === 'Escape' &amp;&amp; (${'$'}open = false)" """ +
-                """data-on-interval__duration.2000ms.leading="@get(&quot;/tick&quot;)" """ +
-                """data-on-intersect__once__threshold.50="@get(&quot;/more&quot;)" """ +
+                """data-on-interval__duration.2000ms.leading="@get('/tick')" """ +
+                """data-on-intersect__once__threshold.50="@get('/more')" """ +
                 """data-on-signal-patch__throttle.1000ms="console.log(patch)" data-on-signal-patch-filter="{exclude: /^_/}" """ +
                 """data-indicator="busy"></button>""",
             html,
@@ -126,7 +126,7 @@ class HtmlDslTest {
                 }
             }
         assertEquals(
-            """<input data-bind__case.camel__event.input.blur="search" data-ref="box" data-text="${'$'}search" """ +
+            """<input data-bind:search__case.camel__event.input.blur="" data-ref="box" data-text="${'$'}search" """ +
                 """data-show="!${'$'}hidden" data-class:active="${'$'}on" data-style:color="'red'" data-attr:disabled="${'$'}busy" """ +
                 """data-ignore__self="" data-ignore-morph="" data-preserve-attr="open class" """ +
                 """data-init__delay.500ms="${'$'}count = 1" data-effect="${'$'}count++">""",
@@ -136,11 +136,11 @@ class HtmlDslTest {
 
     @Test
     fun `actions render options only when set and quote uris safely`() {
-        assertEquals("""@get("/a")""", get("/a"))
-        assertEquals("""@delete("/x?y='1'")""", delete("/x?y='1'"))
-        assertEquals("""@query("/search")""", query("/search"))
+        assertEquals("""@get('/a')""", get("/a"))
+        assertEquals("""@delete('/x?y=\'1\'')""", delete("/x?y='1'"))
+        assertEquals("""@query('/search')""", query("/search"))
         assertEquals(
-            """@post("/form", {contentType: "form", filterSignals: {include: /^form\//}, selector: "#f", headers: {"X-Csrf-Token":"t"}, openWhenHidden: true, retry: "never", retryInterval: 500, requestCancellation: "cleanup"})""",
+            """@post('/form', {contentType: 'form', filterSignals: {include: /^form\//}, selector: '#f', headers: {'X-Csrf-Token': 't'}, openWhenHidden: true, retry: 'never', retryInterval: 500, requestCancellation: 'cleanup'})""",
             post("/form") {
                 contentType = FetchOptions.ContentType.FORM
                 filterSignals = SignalFilter.include("^form/")
@@ -153,14 +153,16 @@ class HtmlDslTest {
             },
         )
         assertEquals("@setAll(false, {include: /^menu\\./})", setAll(false, SignalFilter.include("^menu\\.")))
+        assertEquals("@setAll('x', {include: /.*/, exclude: /_temp$/})", setAll("x", SignalFilter.exclude("_temp$")))
         assertEquals("@toggleAll()", toggleAll())
+        assertEquals("@toggleAll({include: /.*/, exclude: /^is/})", toggleAll(SignalFilter.exclude("^is")))
         assertEquals("@peek(() => ${'$'}count)", peek(signal("count")))
     }
 
     @Test
     fun `payload and response overrides`() {
         assertEquals(
-            """@post("/x", {payload: {"id":7}, responseOverrides: {selector: "#out", mode: "inner", useViewTransition: true}})""",
+            """@post('/x', {payload: {id: 7}, responseOverrides: {selector: '#out', mode: 'inner', useViewTransition: true}})""",
             post("/x") {
                 payload = mapOf("id" to 7)
                 responseOverrides {
@@ -171,7 +173,7 @@ class HtmlDslTest {
             },
         )
         assertEquals(
-            """@get("/x", {payload: {id: ${'$'}selected}, responseOverrides: {onlyIfMissing: true}})""",
+            """@get('/x', {payload: {id: ${'$'}selected}, responseOverrides: {onlyIfMissing: true}})""",
             get("/x") {
                 payloadExpr = "{id: ${'$'}selected}"
                 responseOverrides { onlyIfMissing = true }
@@ -224,11 +226,11 @@ class HtmlDslTest {
                 }
             }
         assertEquals(
-            """<html data-nonce="n0nce"><form data-on:submit="@post(&quot;/save&quot;)">""" +
-                """<input data-on:input="@put(&quot;/draft&quot;)" data-on:change="@patch(&quot;/field&quot;)" data-on:keydown="evt.key"></form></html>""",
+            """<html data-nonce="n0nce"><form data-on:submit="@post('/save')">""" +
+                """<input data-on:input="@put('/draft')" data-on:change="@patch('/field')" data-on:keydown="evt.key"></form></html>""",
             html,
         )
-        assertEquals("\"a'b\"", js("a'b"))
+        assertEquals("""'a\'b'""", js("a'b"))
         val response = elementsResponse(selector = "#out", mode = ElementPatchMode.INNER) { span { +"x" } }
         assertEquals("<span>x</span>", response.body)
         assertEquals(mapOf("datastar-selector" to "#out", "datastar-mode" to "inner"), response.headers)
@@ -237,7 +239,7 @@ class HtmlDslTest {
     @Test
     fun `expression helpers`() {
         assertEquals(
-            "${'$'}user.name = \"Gorvek\"; ${'$'}open = !${'$'}open; ${'$'}n--",
+            "${'$'}user.name = 'Gorvek'; ${'$'}open = !${'$'}open; ${'$'}n--",
             statements(set("user.name", "Gorvek"), toggle("open"), decrement("n")),
         )
         assertEquals("${'$'}a = ${'$'}b + 1", setExpr("a", "${'$'}b + 1"))
@@ -325,6 +327,93 @@ class HtmlDslTest {
                     dataStyle("--brand", "'red'")
                 }
             },
+        )
+    }
+
+    /**
+     * `data-bind`, `data-ref` and `data-indicator` take the signal name in the value, which keeps
+     * its case, or in the key, which is the only place Datastar applies `__case`. The helpers
+     * write the value unless a case is asked for, and read a kebab-case name as Datastar does.
+     */
+    @Test
+    fun `bind, ref and indicator write the value unless a case is asked for`() {
+        assertEquals(
+            """<input data-bind="fooBar" data-ref="box" data-indicator="isBusy" data-bind__prop.checked__event.change="fooBar">""",
+            elements {
+                input {
+                    dataBind("foo-bar")
+                    dataRef("box")
+                    dataIndicator("isBusy")
+                    dataBind("fooBar") {
+                        prop = "checked"
+                        events = listOf("change")
+                    }
+                }
+            },
+        )
+        assertEquals(
+            """<input data-bind:foo-bar__case.kebab__event.input="" data-ref:my-ref__case.pascal="" data-indicator:busy__case.snake="">""",
+            elements {
+                input {
+                    dataBind("fooBar") {
+                        case = Case.KEBAB
+                        events = listOf("input")
+                    }
+                    dataRef("MyRef", case = Case.PASCAL)
+                    dataIndicator("busy", case = Case.SNAKE)
+                }
+            },
+        )
+        assertFailsWith<InvalidSignalNameException> { elements { input { dataBind("a b") } } }
+    }
+
+    @Test
+    fun `regex filters carry their flags and keep escaped slashes`() {
+        assertEquals("/^user/i", SignalFilter.regexLiteral(Regex("^user", RegexOption.IGNORE_CASE)))
+        assertEquals(
+            "/^a$/ims",
+            SignalFilter.regexLiteral(Regex("^a$", setOf(RegexOption.IGNORE_CASE, RegexOption.MULTILINE, RegexOption.DOT_MATCHES_ALL))),
+        )
+        assertEquals("""/a\/b/""", SignalFilter.regexLiteral(Regex("a/b")))
+        assertEquals("""/a\/b\\\/c/""", SignalFilter.regexLiteral(Regex("""a\/b\\/c""")))
+        assertEquals("{include: /form/i}", SignalFilter(include = Regex("form", RegexOption.IGNORE_CASE)).toJs())
+        assertFailsWith<IllegalArgumentException> { SignalFilter.regexLiteral(Regex("a b", RegexOption.COMMENTS)) }
+    }
+
+    /** Everything the helpers quote is single-quoted, so it survives a double-quoted attribute written by hand. */
+    @Test
+    fun `javascript literals use single quotes and bare keys`() {
+        assertEquals("'it\\'s <\\/script>\\n'", JsLiteral.string("it's </script>\n"))
+        assertEquals(
+            "{id: 7, tags: ['a', 'b'], 'x-y': null, ok: true, n: 1.5}",
+            JsLiteral.write(
+                mapOf(
+                    "id" to 7,
+                    "tags" to listOf("a", "b"),
+                    "x-y" to null,
+                    "ok" to true,
+                    "n" to 1.5,
+                ),
+            ),
+        )
+        assertEquals("['CAMEL', 'B']", JsLiteral.write(arrayOf(Case.CAMEL.name, "B")))
+        assertEquals(
+            """<button data-on:click="@post('/x', {headers: {'X-Csrf-Token': 't'}})">x</button>""",
+            elements {
+                button {
+                    dataOnClick(
+                        post("/x") {
+                            headers =
+                                mapOf("X-Csrf-Token" to "t")
+                        },
+                    )
+                    ; +"x"
+                }
+            },
+        )
+        assertEquals(
+            """<div data-on:click="${'$'}user.name = 'O\'Neil'"></div>""",
+            elements { div { dataOnClick(set("user.name", "O'Neil")) } },
         )
     }
 }

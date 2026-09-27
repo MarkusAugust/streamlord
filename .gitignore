@@ -34,3 +34,6 @@ playground/
 
 # Stream Inspector secrets and local hosts (saved requests in .streamlord/inspector.json are shareable)
 .streamlord/env.json
+
+# Datastar reference files (local copy of the client source, never committed)
+datastar-reference

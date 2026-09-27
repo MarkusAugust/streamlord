@@ -27,6 +27,13 @@ const KEY_ONLY_HELPERS: ReadonlySet<string> = new Set(["dataMatchMedia", "dataPe
 for (const name of KEY_ONLY_HELPERS) (ALL_SITE_NAMES as Set<string>).add(name);
 
 /**
+ * Helpers that write the signal name in the value, which keeps its case, unless a `case` is
+ * given: Datastar applies `__case` to a key only, so then the name moves into the key.
+ */
+const VALUE_UNLESS_CASED_HELPERS: ReadonlySet<string> = new Set(["dataBind", "dataRef", "dataIndicator"]);
+for (const name of VALUE_UNLESS_CASED_HELPERS) (ALL_SITE_NAMES as Set<string>).add(name);
+
+/**
  * The last source lexed, so a hover or completion right after a diagnostics pass does not lex
  * the file again. Bounded: a file past the cap is lexed each time rather than kept resident.
  */
@@ -268,10 +275,12 @@ function checkKeyCaseSite(site: CallSite, src: string): Issue[] {
   const spec = catalog.attributesByKotlin.get(site.name);
   if (!spec?.keyed || !spec.keyCase) return [];
   // Only helpers whose first parameter is a key: those whose expression is a later argument
-  // (dataOn, dataSignals, dataClass, ...), plus the two Pro helpers that take a key and no
-  // expression. dataOnClick("expr"), dataRef("name") and dataBind("name") pass a value, never a key.
+  // (dataOn, dataSignals, dataClass, ...), the two Pro helpers that take a key and no
+  // expression, and dataBind, dataRef and dataIndicator once a case moves their name into the
+  // key. dataOnClick("expr") passes an expression, never a key.
   const expr = catalog.callSites.expression[site.name];
-  if (expr ? expr.arg === 0 : !KEY_ONLY_HELPERS.has(site.name)) return [];
+  const valueUnlessCased = VALUE_UNLESS_CASED_HELPERS.has(site.name);
+  if (expr ? expr.arg === 0 : !(KEY_ONLY_HELPERS.has(site.name) || valueUnlessCased)) return [];
   const positional = site.args.filter((a) => a.named === null);
   const key = positional[0]?.string;
   // With an expression helper, one positional string is the object form (dataClass("{...}")); the key form has two.
@@ -279,9 +288,11 @@ function checkKeyCaseSite(site: CallSite, src: string): Issue[] {
   const name = key.text;
   // dataSignals("{fooBar: 1}", ...) is the object form: an expression, not a key.
   if (!/[A-Z]/.test(name) || /^\s*[{\[]/.test(name)) return [];
-  const named = site.args.find((a) => a.named === "case")?.text;
+  // `case = Case.X`, a positional `Case.X` (dataRef("name", Case.CAMEL)) or `case = Case.X` in the trailing lambda.
+  const named = site.args.find((a) => a.named === "case" || (a.named === null && /^\s*Case\.[A-Z]+\s*$/.test(a.text)))?.text;
   const explicit = named ? /Case\.([A-Z]+)/.exec(named) : /\bcase\s*=\s*Case\.([A-Z]+)/.exec(trailingLambdaText(site, src));
   const explicitCase = explicit?.[1]?.toLowerCase() ?? null;
+  if (valueUnlessCased && !explicitCase) return [];
   const wire = wireKey(name, spec.keyCase, explicitCase);
   const what = explicitCase ? `a ${explicitCase}-cased name` : keyReading(spec, name, wire);
   return [{

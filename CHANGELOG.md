@@ -73,6 +73,48 @@ All notable changes to Streamlord are recorded here. The format follows
 - The `streamlord-html` names `ExpressionGuard` and `InterpolatedExpressionException` remain as
   type aliases of the core ones.
 
+### Fixed
+
+An audit of the DSL against the Datastar 1.0.4 client source and bundles found these; the
+protocol layer came through it unchanged.
+
+- `streamlord-html`: `js()`, `set()`, `setAll()`, the fetch options (`headers`, `payload`) and
+  the Pro actions (`clipboard()`, `intl()`) write JavaScript literals in single quotes through
+  the new `JsLiteral`, as the Datastar documentation does: `@get('/x')`, `$name = 'Gorvek'`,
+  `{headers: {'X-Csrf-Token': 't'}}`. The JSON they wrote before survived only the kotlinx.html
+  DSL, which escapes double quotes; pasted into a double-quoted attribute in a string or a
+  template, it ended the attribute. `dataSignals(vararg)` still writes JSON, which is an
+  attribute value only.
+- `streamlord-html`: `dataBind`, `dataRef` and `dataIndicator` wrote `__case` on the value form
+  (`data-bind__case.kebab="foo"`), where Datastar ignores it, since casing applies to a key
+  only. With a `case` they now write the key form (`data-bind:foo__case.kebab`), through
+  `Casing.key`; without one they write the value, reading a kebab-case name as Datastar names
+  the signal (`dataBind("foo-bar")` is `data-bind="fooBar"`, matching `signal("foo-bar")`).
+  The `case` parameter of the object forms `dataSignals("{...}")`, `dataComputed("{...}")`
+  and `dataClass("{...}")` was equally inert and is removed; the keys of the object are used
+  as written.
+- `streamlord-html`: `SignalFilter.regexLiteral` dropped the `RegexOption`s, so
+  `Regex("user", IGNORE_CASE)` reached the browser as `/user/`. `IGNORE_CASE`, `MULTILINE`
+  and `DOT_MATCHES_ALL` become the `i`, `m` and `s` flags; the options with no JavaScript
+  equivalent throw `IllegalArgumentException`. A `/` that the pattern had already escaped is
+  no longer escaped twice.
+- `streamlord-html`: `setAll()` and `toggleAll()` write `include: /.*/` in front of a filter
+  that only excludes, matching the documented signature of the two actions.
+- `streamlord-html-pro`: `dataMatchMedia` wrapped the query in bare quotes; a `'` in the query
+  broke the expression. It is quoted with `js()`.
+- `streamlord-core`: `ExecuteScript`'s `data-effect="el.remove()"` follows the attribute
+  prefix, so the aliased bundle gets `data-star-effect` and the script tags are removed as
+  intended. The switch is `DatastarAttributes.prefix` in `core.protocol`, and the
+  `streamlord-html` object of the same name now sets it.
+- `streamlord-core`: `redirect()` navigates from a `setTimeout`, as the official SDKs do, so the
+  script element is applied and removed before the page unloads.
+- `streamlord-spring`: `datastarStream` and `prepareForSse` take an optional
+  `HttpServletRequest`; with it, `Connection: keep-alive` is only set for HTTP/1.1, as the SDK
+  specification says and HTTP/2 requires.
+- Documentation: the default `filterSignals` exclusion is `/(^|\.)_/`, which also drops nested
+  `_` keys such as `user._token`; and Datastar Rocket, the separate beta bundle with a
+  web-component API, is stated to be outside what the DSL covers.
+
 ## [0.1.1] - 2026-09-26
 
 ### Added

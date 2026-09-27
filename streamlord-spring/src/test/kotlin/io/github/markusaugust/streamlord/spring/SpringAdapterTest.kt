@@ -158,4 +158,30 @@ class SpringAdapterTest {
     fun `patch mode converter binds wire tokens`() {
         assertEquals(ElementPatchMode.APPEND, ElementPatchModeConverter().convert("append"))
     }
+
+    @Test
+    fun `keep-alive is an HTTP 1_1 header`() {
+        val http2 = MockHttpServletResponse()
+        http2
+            .datastarStream(
+                streamlord,
+                MockHttpServletRequest("GET", "/x").apply {
+                    protocol = "HTTP/2.0"
+                },
+            ) { comment() }
+            .writeTo(http2.outputStream)
+        assertEquals(null, http2.getHeader("Connection"))
+        assertEquals("no-cache", http2.getHeader("Cache-Control"))
+
+        val http11 = MockHttpServletResponse()
+        http11
+            .datastarStream(
+                streamlord,
+                MockHttpServletRequest("GET", "/x").apply {
+                    protocol = "HTTP/1.1"
+                },
+            ) { comment() }
+            .writeTo(http11.outputStream)
+        assertEquals("keep-alive", http11.getHeader("Connection"))
+    }
 }

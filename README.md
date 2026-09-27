@@ -218,11 +218,19 @@ Backend actions render their options only when you set them:
 
 ```kotlin
 post("/form") { contentType = FetchOptions.ContentType.FORM; retry = FetchOptions.Retry.NEVER }
-// @post("/form", {contentType: "form", retry: "never"})
+// @post('/form', {contentType: 'form', retry: 'never'})
 ```
 
+Everything the helpers quote (`js()`, `set()`, `setAll()`, the fetch options, the Pro actions)
+is written as a JavaScript literal in single quotes, the way the Datastar documentation writes
+it, so the same text works in the DSL, in a string and in a template. `SignalFilter` writes
+its patterns as regex literals with the `i`, `m` and `s` flags the `RegexOption`s translate to.
+
 Every attribute plugin, modifier and action of the 1.0.4 client is covered, audited against its
-source. Using the aliased bundle? Set `DatastarAttributes.prefix = "data-star-"` once at startup.
+source. Using the aliased bundle? Set `DatastarAttributes.prefix = "data-star-"` once at startup;
+it also reaches the `data-effect="el.remove()"` the core writes on a script event. Datastar
+Rocket, the separate `datastar-rocket.js` bundle with its web-component API (`data-if`,
+`data-for` and friends, which only work inside a Rocket template), is in beta and not covered.
 
 The DSL also feeds events and streams directly: `stream.patchElements(selector = "#x") { ... }`,
 `patchElements { ... }` for a `Flow`, and `elementsResponse { ... }` for a non-SSE reply.
@@ -329,7 +337,11 @@ signal("foo-bar")                     // $fooBar, because that is what Datastar 
 
 An explicit `case =` is kept, but the key is still written in kebab-case, because the browser
 lowercases it either way: `dataSignals("fooBar", "1", case = Case.KEBAB)` is
-`data-signals:foo-bar__case.kebab`. Keys that are not signal names keep their own characters
+`data-signals:foo-bar__case.kebab`. `dataBind`, `dataRef` and `dataIndicator` write the name
+in the value, which keeps its case, unless you ask for a `case`: Datastar applies `__case` to a
+key only, so `dataRef("myRef", case = Case.KEBAB)` becomes `data-ref:my-ref__case.kebab`. The
+object forms (`dataSignals("{...}")`, `dataComputed("{...}")`, `dataClass("{...}")`) use the
+keys of the object as written and take no `case`. Keys that are not signal names keep their own characters
 (`dataClass("hover:bg-red-500", ...)`, `dataAttr("xlink:href", ...)`, `dataStyle("--brand", ...)`),
 and references may index (`signal("items[0].name")`). A blank name, or one with whitespace or
 quotes, throws `InvalidSignalNameException` at render time. Handled is not hidden: the VS Code
@@ -398,7 +410,8 @@ gate; Streamlord leaves none.*
 * **No SSE injection.** Selectors, event ids, header values and script attribute names are
   validated at construction. A selector carrying `\n` cannot forge a `data: elements` line.
 * **No script breakout.** `ExecuteScript` neutralises `</script` inside the script body and
-  HTML-escapes attribute values. `redirect()` quotes the URL as a JSON string literal.
+  HTML-escapes attribute values. `redirect()` quotes the URL as a JSON string literal and
+  navigates from a `setTimeout`, as the official SDKs do.
 * **JavaScript-safe JSON.** The built-in writer escapes U+2028, U+2029 and `</`, because
   `data-signals` is evaluated as an expression on the client.
 * **Bounded input.** Incoming signals are capped (1 MiB by default, configurable) *while being

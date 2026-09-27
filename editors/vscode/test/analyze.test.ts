@@ -154,7 +154,7 @@ describe("markup", () => {
     }`;
     const hints = analyzeKotlin(src, opts).filter((i) => i.code === "key-case-wire");
     expect(hints.every((i) => i.severity === "hint")).toBe(true);
-    expect(hints.map((i) => src.slice(i.start, i.end))).toEqual(['"fooBar"', '"widgetLoaded"', '"isOpen"', '"ariaLabel"', '"MySignal"', '"fooBar"', '"customEvent"', '"viewBox"', '"myKey"', '"isMobile"']);
+    expect(hints.map((i) => src.slice(i.start, i.end))).toEqual(['"fooBar"', '"widgetLoaded"', '"isOpen"', '"ariaLabel"', '"MySignal"', '"fooBar"', '"customEvent"', '"viewBox"', '"myRef"', '"isLoading"', '"myKey"', '"isMobile"']);
     expect(hints.map((i) => /as (data-[a-z-]+:[^,]+),/.exec(i.message)![1])).toEqual([
       "data-signals:foo-bar",
       "data-on:widget-loaded__case.camel",
@@ -164,6 +164,8 @@ describe("markup", () => {
       "data-signals:foo-bar__case.kebab",
       "data-on:custom-event__case.kebab",
       "data-attr:view-box",
+      "data-ref:my-ref__case.camel",
+      "data-indicator:is-loading__case.camel",
       "data-persist:my-key",
       "data-match-media:is-mobile",
     ]);

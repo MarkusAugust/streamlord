@@ -3,7 +3,9 @@ package io.github.markusaugust.streamlord.html
 import kotlin.time.Duration
 
 /** Casing applied by `__case` modifiers when a signal or event name is derived from an attribute key. */
-public enum class Case(public val wire: String) {
+public enum class Case(
+    public val wire: String,
+) {
     CAMEL("camel"),
     KEBAB("kebab"),
     SNAKE("snake"),
@@ -13,22 +15,58 @@ public enum class Case(public val wire: String) {
 /**
  * A regex filter of the shape Datastar expects: `{include: /.../, exclude: /.../}`.
  * Used by `data-json-signals`, `data-on-signal-patch-filter`, `filterSignals` and `@setAll`.
+ *
+ * The patterns are written as JavaScript regex literals, so they must be valid in both
+ * dialects. [RegexOption.IGNORE_CASE], [RegexOption.MULTILINE] and [RegexOption.DOT_MATCHES_ALL]
+ * become the `i`, `m` and `s` flags; the other options have no JavaScript equivalent and are refused.
  */
-public data class SignalFilter(val include: Regex? = null, val exclude: Regex? = null) {
+public data class SignalFilter(
+    val include: Regex? = null,
+    val exclude: Regex? = null,
+) {
     /** Render as a JavaScript object literal with regex literals. */
-    public fun toJs(): String = buildList {
-        include?.let { add("include: ${regexLiteral(it)}") }
-        exclude?.let { add("exclude: ${regexLiteral(it)}") }
-    }.joinToString(", ", "{", "}")
+    public fun toJs(): String =
+        buildList {
+            include?.let { add("include: ${regexLiteral(it)}") }
+            exclude?.let { add("exclude: ${regexLiteral(it)}") }
+        }.joinToString(", ", "{", "}")
 
     override fun toString(): String = toJs()
 
     public companion object {
         public fun include(pattern: String): SignalFilter = SignalFilter(include = Regex(pattern))
+
         public fun exclude(pattern: String): SignalFilter = SignalFilter(exclude = Regex(pattern))
 
-        /** A JavaScript regex literal. Forward slashes in the pattern are escaped so the literal stays intact. */
-        public fun regexLiteral(regex: Regex): String = "/" + regex.pattern.replace("/", "\\/") + "/"
+        /**
+         * A JavaScript regex literal with the flags the options translate to. An unescaped `/` in
+         * the pattern is escaped so the literal stays intact; one already escaped is left alone.
+         */
+        public fun regexLiteral(regex: Regex): String {
+            val flags =
+                regex.options.joinToString("") { option ->
+                    when (option) {
+                        RegexOption.IGNORE_CASE -> "i"
+                        RegexOption.MULTILINE -> "m"
+                        RegexOption.DOT_MATCHES_ALL -> "s"
+                        else -> throw IllegalArgumentException("Regex option $option has no JavaScript equivalent")
+                    }
+                }
+            return "/" + escapeSlashes(regex.pattern) + "/" + flags
+        }
+
+        private fun escapeSlashes(pattern: String): String =
+            buildString(pattern.length + 4) {
+                var escaped = false
+                for (ch in pattern) {
+                    when {
+                        escaped -> escaped = false
+                        ch == '\\' -> escaped = true
+                        ch == '/' -> append('\\')
+                    }
+                    append(ch)
+                }
+            }
     }
 }
 
@@ -77,19 +115,20 @@ public class OnModifiers : TimingModifiers() {
     public var prevent: Boolean = false
     public var stop: Boolean = false
 
-    override fun build(): String = buildString {
-        if (once) append("__once")
-        if (passive) append("__passive")
-        if (capture) append("__capture")
-        case?.let { append("__case.").append(it.wire) }
-        appendTiming(this)
-        if (viewTransition) append("__viewtransition")
-        if (window) append("__window")
-        if (document) append("__document")
-        if (outside) append("__outside")
-        if (prevent) append("__prevent")
-        if (stop) append("__stop")
-    }
+    override fun build(): String =
+        buildString {
+            if (once) append("__once")
+            if (passive) append("__passive")
+            if (capture) append("__capture")
+            case?.let { append("__case.").append(it.wire) }
+            appendTiming(this)
+            if (viewTransition) append("__viewtransition")
+            if (window) append("__window")
+            if (document) append("__document")
+            if (outside) append("__outside")
+            if (prevent) append("__prevent")
+            if (stop) append("__stop")
+        }
 }
 
 /** Modifiers for `data-on-intersect`. */
@@ -103,18 +142,19 @@ public class IntersectModifiers : TimingModifiers() {
     public var threshold: Int? = null
     public var viewTransition: Boolean = false
 
-    override fun build(): String = buildString {
-        if (once) append("__once")
-        if (exit) append("__exit")
-        if (half) append("__half")
-        if (full) append("__full")
-        threshold?.let {
-            require(it in 0..100) { "threshold must be between 0 and 100" }
-            append("__threshold.").append(it)
+    override fun build(): String =
+        buildString {
+            if (once) append("__once")
+            if (exit) append("__exit")
+            if (half) append("__half")
+            if (full) append("__full")
+            threshold?.let {
+                require(it in 0..100) { "threshold must be between 0 and 100" }
+                append("__threshold.").append(it)
+            }
+            appendTiming(this)
+            if (viewTransition) append("__viewtransition")
         }
-        appendTiming(this)
-        if (viewTransition) append("__viewtransition")
-    }
 }
 
 /** Modifiers for `data-on-interval`. */
@@ -125,17 +165,22 @@ public class IntervalModifiers {
     public var leading: Boolean = false
     public var viewTransition: Boolean = false
 
-    internal fun build(): String = buildString {
-        duration?.let {
-            append("__duration.").append(it.toModifier())
-            if (leading) append(".leading")
+    internal fun build(): String =
+        buildString {
+            duration?.let {
+                append("__duration.").append(it.toModifier())
+                if (leading) append(".leading")
+            }
+            if (viewTransition) append("__viewtransition")
         }
-        if (viewTransition) append("__viewtransition")
-    }
 }
 
 /** Modifiers for `data-bind`. */
 public class BindModifiers {
+    /**
+     * Casing of the signal name. Datastar applies `__case` only to a name written in the key,
+     * so setting this switches the helper to `data-bind:name__case.x`; see [Casing].
+     */
     public var case: Case? = null
 
     /** Bind to a specific element property instead of the default. */
@@ -144,14 +189,15 @@ public class BindModifiers {
     /** Events that sync the element back into the signal. */
     public var events: List<String> = emptyList()
 
-    internal fun build(): String = buildString {
-        case?.let { append("__case.").append(it.wire) }
-        prop?.let { append("__prop.").append(it) }
-        if (events.isNotEmpty()) {
-            append("__event")
-            events.forEach { append('.').append(it) }
+    internal fun build(): String =
+        buildString {
+            case?.let { append("__case.").append(it.wire) }
+            prop?.let { append("__prop.").append(it) }
+            if (events.isNotEmpty()) {
+                append("__event")
+                events.forEach { append('.').append(it) }
+            }
         }
-    }
 }
 
 /** Modifiers for `data-init`. */
@@ -159,8 +205,9 @@ public class InitModifiers {
     public var delay: Duration? = null
     public var viewTransition: Boolean = false
 
-    internal fun build(): String = buildString {
-        delay?.let { append("__delay.").append(it.toModifier()) }
-        if (viewTransition) append("__viewtransition")
-    }
+    internal fun build(): String =
+        buildString {
+            delay?.let { append("__delay.").append(it.toModifier()) }
+            if (viewTransition) append("__viewtransition")
+        }
 }

@@ -83,6 +83,8 @@ class ExpressionGuardTest {
             "(\$a + \$b) / 2",
             "!\$email.match(/^\\S+@\\S+$/)",
             "\$s.split(/,/)",
+            "/^[a-z]+$/.test(\$slug)",
+            "/\\d+/.exec(\$id)[0]",
             "\$mood = ':)'",
             "\$x = 'a, ' + \$y",
             "@post('/x', {q: '=)'})",

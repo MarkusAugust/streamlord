@@ -5,6 +5,7 @@ import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.ExecuteScript
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
+import io.github.markusaugust.streamlord.core.protocol.DatastarAttributes
 import io.github.markusaugust.streamlord.core.protocol.SseEncoder
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -13,7 +14,6 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 class SseEncoderTest {
-
     @Test
     fun `minimal patch elements writes only the elements line`() {
         val out = SseEncoder.encode(PatchElements("""<div id="a">x</div>"""))
@@ -22,18 +22,19 @@ class SseEncoderTest {
 
     @Test
     fun `all options are written in specification order`() {
-        val out = SseEncoder.encode(
-            PatchElements(
-                elements = "<div>\n  <span>1</span>\n</div>",
-                selector = "#feed",
-                mode = ElementPatchMode.INNER,
-                namespace = ElementNamespace.SVG,
-                useViewTransition = true,
-                viewTransitionSelector = "#main",
-                eventId = "123",
-                retry = 2.seconds,
-            ),
-        )
+        val out =
+            SseEncoder.encode(
+                PatchElements(
+                    elements = "<div>\n  <span>1</span>\n</div>",
+                    selector = "#feed",
+                    mode = ElementPatchMode.INNER,
+                    namespace = ElementNamespace.SVG,
+                    useViewTransition = true,
+                    viewTransitionSelector = "#main",
+                    eventId = "123",
+                    retry = 2.seconds,
+                ),
+            )
         assertEquals(
             """
             |event: datastar-patch-elements
@@ -154,5 +155,15 @@ class SseEncoderTest {
         assertEquals(ElementPatchMode.APPEND, ElementPatchMode.fromWire("Append"))
         assertEquals(ElementNamespace.MATHML, ElementNamespace.fromWire("mathml"))
         assertFailsWith<DatastarEventValidationException> { ElementPatchMode.fromWire("merge") }
+    }
+
+    @Test
+    fun `execute script follows the attribute prefix of the aliased bundle`() {
+        DatastarAttributes.prefix = "data-star-"
+        try {
+            assertEquals("<script data-star-effect=\"el.remove()\">x()</script>", ExecuteScript("x()").scriptTag)
+        } finally {
+            DatastarAttributes.prefix = "data-"
+        }
     }
 }

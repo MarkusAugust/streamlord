@@ -7,6 +7,7 @@ import io.github.markusaugust.streamlord.html.Case
 import io.github.markusaugust.streamlord.html.Casing
 import io.github.markusaugust.streamlord.html.DatastarAttributes
 import io.github.markusaugust.streamlord.html.SignalFilter
+import io.github.markusaugust.streamlord.html.js
 import kotlinx.html.HTMLTag
 import kotlin.time.Duration
 
@@ -117,7 +118,7 @@ public fun HTMLTag.dataMatchMedia(
 ) {
     val (key, mod) = Casing.key(signal, case, Case.CAMEL)
     val mods = mod?.let { "__case.${it.wire}" } ?: ""
-    attributes[ds("match-media:$key$mods")] = "'$mediaQuery'"
+    attributes[ds("match-media:$key$mods")] = js(mediaQuery)
 }
 
 /** `data-on-raf="expression"` (Pro): run on every animation frame. */

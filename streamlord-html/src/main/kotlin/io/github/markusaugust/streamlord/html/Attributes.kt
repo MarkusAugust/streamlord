@@ -5,6 +5,7 @@ package io.github.markusaugust.streamlord.html
 import io.github.markusaugust.streamlord.core.domain.ExpressionGuard
 import io.github.markusaugust.streamlord.core.json.JsonWriter
 import kotlinx.html.HTMLTag
+import io.github.markusaugust.streamlord.core.protocol.DatastarAttributes as CoreDatastarAttributes
 
 /**
  * The prefix every Datastar attribute starts with.
@@ -12,15 +13,20 @@ import kotlinx.html.HTMLTag
  * The standard bundle reads `data-*`. The aliased bundle (`datastar-aliased.js`), built for
  * pages where another library already claims those names, reads `data-star-*` instead. Set
  * [prefix] once at startup to match the bundle you load; every helper in this module and in
- * `streamlord-html-pro` honours it.
+ * `streamlord-html-pro` honours it, and so does the core where it writes an attribute itself
+ * (`ExecuteScript`'s `data-effect="el.remove()"`). This object is the same switch as
+ * [CoreDatastarAttributes] in `streamlord-core`, kept here so DSL code needs one import.
  */
 public object DatastarAttributes {
     /** `"data-"` for the standard bundle, `"data-star-"` for the aliased one. */
-    @Volatile
-    public var prefix: String = "data-"
+    public var prefix: String
+        get() = CoreDatastarAttributes.prefix
+        set(value) {
+            CoreDatastarAttributes.prefix = value
+        }
 
     /** The full attribute name for a Datastar attribute such as `on:click__once`. */
-    public fun name(suffix: String): String = prefix + suffix
+    public fun name(suffix: String): String = CoreDatastarAttributes.name(suffix)
 }
 
 private fun ds(suffix: String): String = DatastarAttributes.name(suffix)
@@ -40,13 +46,16 @@ private fun ds(suffix: String): String = DatastarAttributes.name(suffix)
 
 // ---- Signals ----------------------------------------------------------------------------------
 
-/** `data-signals="{...}"` from a JavaScript object expression. */
+/**
+ * `data-signals="{...}"` from a JavaScript object expression. The keys of the object are used
+ * as written, so there is no `case` here: Datastar applies `__case` to a key in the attribute
+ * name only.
+ */
 public fun HTMLTag.dataSignals(
     expression: String,
-    case: Case? = null,
     ifMissing: Boolean = false,
 ) {
-    attributes[ds("signals${signalMods(case, ifMissing)}")] = ExpressionGuard.check(expression)
+    attributes[ds("signals${signalMods(null, ifMissing)}")] = ExpressionGuard.check(expression)
 }
 
 /**
@@ -72,18 +81,14 @@ public fun HTMLTag.dataSignals(
  */
 public fun HTMLTag.dataSignals(
     vararg signals: Pair<String, Any?>,
-    case: Case? = null,
     ifMissing: Boolean = false,
 ) {
-    attributes[ds("signals${signalMods(case, ifMissing)}")] = JsonWriter.write(signals.toMap())
+    attributes[ds("signals${signalMods(null, ifMissing)}")] = JsonWriter.write(signals.toMap())
 }
 
-/** `data-computed="{...}"`. */
-public fun HTMLTag.dataComputed(
-    expression: String,
-    case: Case? = null,
-) {
-    attributes[ds("computed${caseMod(case)}")] = ExpressionGuard.check(expression)
+/** `data-computed="{name: () => expression}"`: the values are callables. The keys are used as written; see [dataSignals]. */
+public fun HTMLTag.dataComputed(expression: String) {
+    attributes[ds("computed")] = ExpressionGuard.check(expression)
 }
 
 /** `data-computed:name="expression"`. */
@@ -208,28 +213,59 @@ public fun HTMLTag.dataOnIntersect(
 
 // ---- Binding and references -------------------------------------------------------------------
 
-/** `data-bind="signal"`: two-way binding between an input and a signal. */
+/**
+ * `data-bind="signal"`: two-way binding between an input and a signal. Written as
+ * `data-bind:signal__case.x` when a `case` is set, because Datastar applies `__case` to a key
+ * only; see [signalNameAttribute].
+ */
 public fun HTMLTag.dataBind(
     signal: String,
     modifiers: BindModifiers.() -> Unit = {},
 ) {
-    attributes[ds("bind${BindModifiers().apply(modifiers).build()}")] = signal
+    val mods = BindModifiers().apply(modifiers)
+    signalNameAttribute("bind", signal, mods.case) {
+        mods.case = it
+        mods.build()
+    }
 }
 
-/** `data-ref="name"`: expose the element as a signal. */
+/** `data-ref="name"`: expose the element as a signal. Written as `data-ref:name__case.x` when [case] is set; see [signalNameAttribute]. */
 public fun HTMLTag.dataRef(
     name: String,
     case: Case? = null,
 ) {
-    attributes[ds("ref${caseMod(case)}")] = name
+    signalNameAttribute("ref", name, case) { caseMod(it) }
 }
 
-/** `data-indicator="signal"`: a boolean signal that is `true` while a fetch is in flight. */
+/**
+ * `data-indicator="signal"`: a boolean signal that is `true` while a fetch is in flight. Written
+ * as `data-indicator:signal__case.x` when [case] is set; see [signalNameAttribute].
+ */
 public fun HTMLTag.dataIndicator(
     signal: String,
     case: Case? = null,
 ) {
-    attributes[ds("indicator${caseMod(case)}")] = signal
+    signalNameAttribute("indicator", signal, case) { caseMod(it) }
+}
+
+/**
+ * The attributes that take a signal name either in the key or in the value. The value keeps its
+ * case and is used as written, so without a `case` the name goes there, read the way Datastar
+ * names a signal (`foo-bar` is `$fooBar`, as with [signal]). Datastar applies `__case` to a key
+ * only, so with a `case` the name goes into the key, through [Casing.key].
+ */
+private fun HTMLTag.signalNameAttribute(
+    attribute: String,
+    name: String,
+    case: Case?,
+    modifiers: (Case?) -> String,
+) {
+    if (case == null) {
+        attributes[ds("$attribute${modifiers(null)}")] = Casing.camel(Casing.validate(name))
+    } else {
+        val (key, mod) = Casing.key(name, case, Case.CAMEL)
+        attributes[ds("$attribute:$key${modifiers(mod)}")] = ""
+    }
 }
 
 // ---- Display ----------------------------------------------------------------------------------
@@ -242,12 +278,9 @@ public fun HTMLTag.dataShow(expression: String) {
     attributes[ds("show")] = ExpressionGuard.check(expression)
 }
 
-/** `data-class="{name: expression}"`. */
-public fun HTMLTag.dataClass(
-    expression: String,
-    case: Case? = null,
-) {
-    attributes[ds("class${caseMod(case)}")] = ExpressionGuard.check(expression)
+/** `data-class="{name: expression}"`. The keys are used as written; see [dataSignals]. */
+public fun HTMLTag.dataClass(expression: String) {
+    attributes[ds("class")] = ExpressionGuard.check(expression)
 }
 
 /** `data-class:name="expression"`. A camelCase [name] is written as `is-open__case.camel`, so the class stays `isOpen`; see [Casing]. */

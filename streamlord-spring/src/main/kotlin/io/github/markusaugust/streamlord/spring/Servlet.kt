@@ -40,12 +40,15 @@ import kotlin.reflect.typeOf
  * ```
  *
  * @param streamlord The configured instance, typically a Spring bean. Defaults to [Streamlord.Default].
+ * @param request The request being answered, when you have it: `Connection: keep-alive` is an
+ *   HTTP/1.1 header, and with the request at hand it is only set for HTTP/1.1.
  */
 public fun HttpServletResponse.datastarStream(
     streamlord: Streamlord = Streamlord.Default,
+    request: HttpServletRequest? = null,
     block: suspend DatastarStream.() -> Unit,
 ): StreamingResponseBody {
-    prepareForSse()
+    prepareForSse(request)
     return StreamingResponseBody { output ->
         val writer = OutputStreamWriter(output, StandardCharsets.UTF_8)
         runBlocking { streamlord.stream(ServletSseSink(writer, this@datastarStream)).block() }
@@ -57,14 +60,22 @@ public fun HttpServletResponse.datastarStream(
 public fun HttpServletResponse.datastarStream(
     events: Flow<DatastarEvent>,
     streamlord: Streamlord = Streamlord.Default,
-): StreamingResponseBody = datastarStream(streamlord) { sendAll(events) }
+    request: HttpServletRequest? = null,
+): StreamingResponseBody = datastarStream(streamlord, request) { sendAll(events) }
 
-/** Set the headers an SSE response needs and disable buffering. Called by [datastarStream]. */
-public fun HttpServletResponse.prepareForSse() {
+/**
+ * Set the headers an SSE response needs and disable buffering. Called by [datastarStream].
+ *
+ * `Connection: keep-alive` belongs to HTTP/1.1 only; HTTP/2 forbids connection-specific
+ * headers. With [request] given it is set only when the request came over HTTP/1.1; without
+ * it, the header is set, as almost every servlet deployment still speaks HTTP/1.1 and the
+ * HTTP/2 containers drop it themselves.
+ */
+public fun HttpServletResponse.prepareForSse(request: HttpServletRequest? = null) {
     contentType = DatastarProtocol.CONTENT_TYPE_EVENT_STREAM
     characterEncoding = StandardCharsets.UTF_8.name()
     for ((name, value) in DatastarProtocol.SSE_RESPONSE_HEADERS) setHeader(name, value)
-    setHeader("Connection", "keep-alive")
+    if (request == null || request.protocol.equals("HTTP/1.1", ignoreCase = true)) setHeader("Connection", "keep-alive")
     bufferSize = 0
 }
 
@@ -73,7 +84,10 @@ public fun HttpServletResponse.prepareForSse() {
  * keeps its own buffer (Tomcat's is 8 KiB by default) and small events would never leave the
  * server without `flushBuffer()`.
  */
-public class ServletSseSink(private val writer: Writer, private val response: HttpServletResponse) : SseSink {
+public class ServletSseSink(
+    private val writer: Writer,
+    private val response: HttpServletResponse,
+) : SseSink {
     public constructor(output: OutputStream, response: HttpServletResponse) :
         this(OutputStreamWriter(output, StandardCharsets.UTF_8), response)
 
@@ -94,9 +108,13 @@ public class ServletSseSink(private val writer: Writer, private val response: Ht
  * above the limit is rejected before a byte is read, and a chunked body is cut off one byte past
  * the limit. Nothing larger than the limit ever sits in memory.
  */
-public class ServletIncomingRequest(private val request: HttpServletRequest) : IncomingRequest {
+public class ServletIncomingRequest(
+    private val request: HttpServletRequest,
+) : IncomingRequest {
     override val method: String get() = request.method
+
     override fun queryParameter(name: String): String? = request.getParameter(name)
+
     override fun header(name: String): String? = request.getHeader(name)
 
     override suspend fun bodyText(maxBytes: Int): String {
@@ -128,5 +146,7 @@ public inline fun <reified T : Any> HttpServletRequest.readSignals(streamlord: S
     runBlocking { streamlord.readSignals<T>(asIncomingRequest(), typeOf<T>()) }
 
 /** The signals decoded into [T], or [default] when the request carried none. */
-public inline fun <reified T : Any> HttpServletRequest.readSignalsOr(default: T, streamlord: Streamlord = Streamlord.Default): T =
-    readSignals<T>(streamlord) ?: default
+public inline fun <reified T : Any> HttpServletRequest.readSignalsOr(
+    default: T,
+    streamlord: Streamlord = Streamlord.Default,
+): T = readSignals<T>(streamlord) ?: default
