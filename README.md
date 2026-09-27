@@ -293,9 +293,12 @@ Streamlord(guardElements = true)                       // the instance behind a 
 Every element patch and elements response that leaves through that instance is walked by
 `ElementsGuard`, which finds each `data-*` attribute whose value is an expression and runs it
 through `ExpressionGuard`. A `data-text=""` that a Kotlin template left behind throws
-`InterpolatedExpressionException` naming the attribute, instead of reaching the browser. It is
-a small, allocation-free scan, off by default so that the choice is yours; `ElementsGuard.check(html)`
-is also there to call directly, for example in the tests of your markup functions.
+`InterpolatedExpressionException` naming the attribute, instead of reaching the browser. The same
+walk catches a mistyped attribute: `data-onn:click` is one letter from `data-on:click`, and
+throws `MistypedAttributeException` saying so, while `data-size` and `data-theme` are yours and
+pass. It is a small, allocation-free scan, off by default so that the choice is yours;
+`ElementsGuard.check(html)` is also there to call directly, for example in the tests of your
+markup functions. In IntelliJ, where nothing flags an unknown `data-*` name, this is the check.
 
 ### Casing: keys in kebab-case, signals in camelCase
 

@@ -14,7 +14,11 @@ All notable changes to Streamlord are recorded here. The format follows
   applies it to every element patch and elements response that leaves through that instance:
   streams, `encode(flow)`, Ktor's `respondDatastar(response)`, Spring's `datastarElements` and
   `asServerSentEvents`. Off by default. The Ktor plugin takes it as
-  `install(StreamlordPlugin) { guardElements = true }`.
+  `install(StreamlordPlugin) { guardElements = true }`. The same guard catches a mistyped
+  attribute: a `data-*` name one letter away from a Datastar attribute (`data-onn:click`,
+  `data-signal:x`) throws `MistypedAttributeException` naming the attribute it resembles,
+  while names further away are taken to be your own and left alone. `ElementsGuard.attributes`
+  lists every Datastar attribute name, bound to the catalog by test.
 - `@Language("HTML")`, `@Language("JSON")` and `@Language("JavaScript")` on every `elements`,
   `signals` and `script` parameter in core, Ktor and Spring, so IntelliJ injects the right
   language into a literal passed straight in. The annotation comes with the Kotlin standard

@@ -104,6 +104,7 @@ class CatalogTest {
             .map { it.string("name")!! }
             .toSet()
         assertEquals(expression, ElementsGuard.expressionAttributes)
+        assertEquals(catalog.array("attributes")!!.objects().map { it.string("name")!! }.toSet(), ElementsGuard.attributes)
     }
 
     @Test

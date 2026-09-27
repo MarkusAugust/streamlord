@@ -4,6 +4,7 @@ import io.github.markusaugust.streamlord.core.application.Streamlord
 import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 import io.github.markusaugust.streamlord.core.domain.ElementsResponse
 import io.github.markusaugust.streamlord.core.domain.InterpolatedExpressionException
+import io.github.markusaugust.streamlord.core.domain.MistypedAttributeException
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.port.driven.BufferedSseSink
 import kotlinx.coroutines.flow.flowOf
@@ -59,6 +60,31 @@ class ElementsGuardTest {
             assertTrue(e.message!!.contains("$attribute=\""), e.message)
             assertTrue(e.message!!.contains("\$\$\"\"\""), e.message)
         }
+    }
+
+    @Test
+    fun `a name one letter from a datastar attribute is a typo, further away is yours`() {
+        val typos = mapOf(
+            """<div data-onn:click="x()"></div>""" to ("data-onn:click" to "data-on:click"),
+            """<div data-signal:foo="1"></div>""" to ("data-signal:foo" to "data-signals:foo"),
+            """<div data-txt="1"></div>""" to ("data-txt" to "data-text"),
+            """<div data-on-intersec__once="x()"></div>""" to ("data-on-intersec__once" to "data-on-intersect__once"),
+            """<div data-star-shw="1"></div>""" to ("data-star-shw" to "data-star-show"),
+            """<div data-Bind="x"></div>""" to null,
+        )
+        for ((html, expected) in typos) {
+            if (expected == null) {
+                assertEquals(html, ElementsGuard.check(html))
+                continue
+            }
+            val e = assertFailsWith<MistypedAttributeException>("should refuse $html") { ElementsGuard.check(html) }
+            assertEquals(expected.first, e.attribute)
+            assertEquals(expected.second, e.suggestion)
+            assertTrue(e.message!!.contains("Did you mean"), e.message)
+        }
+        // Your own data-* attributes, as a design system uses them, pass untouched.
+        val own = """<div data-size="xs" data-color="success" data-theme="dark" data-state="invalid" data-variant="plain" data-picker="styled" data-frist="1" data-nede="false" data-klokke data-alle="0" data-server-na="1" data-on-load="x()" data-ref-id="7"></div>"""
+        assertEquals(own, ElementsGuard.check(own))
     }
 
     @Test

@@ -30,6 +30,17 @@ public object ElementsGuard {
         "animate", "custom-validity", "match-media", "on-raf", "on-resize", "replace-url", "view-transition",
     )
 
+    /**
+     * Every Datastar attribute name, free and Pro, as the catalog lists them. A `data-*` name
+     * that is one letter away from one of these, and is not itself one of them, is a typo the
+     * browser would ignore without a word: `data-onn:click`, `data-signal:x`, `data-txt`.
+     * Anything further away is taken to be your own attribute and left alone.
+     */
+    public val attributes: Set<String> = expressionAttributes + setOf(
+        "bind", "ignore", "ignore-morph", "indicator", "json-signals", "on-signal-patch-filter", "preserve-attr", "ref", "nonce",
+        "persist", "query-string", "scroll-into-view",
+    )
+
     private val PREFIXES = listOf("data-star-", "data-")
 
     /** Returns [elements] untouched, or throws [InterpolatedExpressionException] for the first broken attribute. */
@@ -98,7 +109,43 @@ public object ElementsGuard {
         val lower = name.lowercase()
         val prefix = PREFIXES.firstOrNull { lower.startsWith(it) } ?: return
         val plugin = lower.substring(prefix.length).substringBefore(':').substringBefore("__")
+        if (plugin !in attributes) {
+            attributes.firstOrNull { distance(plugin, it) == 1 }?.let { near ->
+                throw MistypedAttributeException(name, prefix + near + name.substring(prefix.length + plugin.length))
+            }
+            return
+        }
         if (plugin !in expressionAttributes) return
         ExpressionGuard.check(value ?: "", name)
     }
+
+    /** Levenshtein distance, capped at 2 since only 1 matters. */
+    private fun distance(a: String, b: String): Int {
+        if (kotlin.math.abs(a.length - b.length) > 1) return 2
+        var prev = IntArray(b.length + 1) { it }
+        var cur = IntArray(b.length + 1)
+        for (i in 1..a.length) {
+            cur[0] = i
+            for (j in 1..b.length) {
+                cur[j] = minOf(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + if (a[i - 1] == b[j - 1]) 0 else 1)
+            }
+            val t = prev
+            prev = cur
+            cur = t
+        }
+        return prev[b.length]
+    }
 }
+
+/**
+ * Raised by [ElementsGuard] for a `data-*` attribute one letter away from a Datastar attribute,
+ * such as `data-onn:click`. The browser would ignore it silently; Datastar never sees it.
+ *
+ * @property attribute The attribute as written.
+ * @property suggestion The attribute it is one letter away from, with the same key and modifiers.
+ */
+public class MistypedAttributeException(public val attribute: String, public val suggestion: String) :
+    io.github.markusaugust.streamlord.core.StreamlordException(
+        "Attribute $attribute is not a Datastar attribute, but is one letter away from $suggestion. " +
+            "Did you mean that? The browser ignores an unknown data-* attribute without a word.",
+    )
