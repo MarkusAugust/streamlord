@@ -1,7 +1,7 @@
 import { catalog, parseAttributeName, type CallSiteSpec } from "./catalog.ts";
-import { DOCS, validateExpression, type Fix, type Issue } from "./expression.ts";
+import { attributeDoc, DOCS, validateExpression, type Fix, type Issue } from "./expression.ts";
 import { PLACEHOLDER, toSource, type Interpolation, type KotlinString } from "./kotlinStrings.ts";
-import { tokenize, validateAttributes, validateMarkup } from "./markup.ts";
+import { kebab, tokenize, validateAttributes, validateMarkup } from "./markup.ts";
 import { findCallSites, findKotlinStrings, isHtmlString, namedArgText, selectStringArg, stringAt, type CallSite } from "./scanner.ts";
 
 /**
@@ -34,6 +34,7 @@ export function analyzeKotlin(src: string, opts: AnalyzeOptions): Issue[] {
     if (script) issues.push(...checkScriptSite(site, script));
     const selector = catalog.callSites.selector[site.name];
     if (selector) issues.push(...checkSelectorSite(site, selector));
+    issues.push(...checkKeyCaseSite(site, src));
     for (const a of site.args) if (a.string) claimed.add(a.string.start);
   }
   for (const s of findKotlinStrings(src)) {
@@ -206,6 +207,54 @@ function checkHtmlSite(site: CallSite, spec: CallSiteSpec, opts: AnalyzeOptions,
   const requireIds = !selector && (mode === null || mode === "outer");
   issues.push(...mapIssues(s, validateMarkup(s.text, { requireIds, prefix: opts.prefix, checkAttributes: opts.checkHtmlAttributes })));
   return issues;
+}
+
+const SIGNAL_KEYED = new Set(["signals", "computed", "bind", "ref", "indicator", "match-media"]);
+
+/**
+ * The DSL writes a camelCase key as the kebab-case key Datastar reads back as that name, with
+ * `__case` where Datastar's default is not camel. That is handled, but not hidden: a hint on
+ * the call says what goes on the wire, because in HTML and templates the author writes it
+ * that way themselves.
+ */
+function checkKeyCaseSite(site: CallSite, src: string): Issue[] {
+  const spec = catalog.attributesByKotlin.get(site.name);
+  if (!spec?.keyed) return [];
+  const positional = site.args.filter((a) => a.named === null);
+  const key = positional[0]?.string;
+  if (positional.length < 2 || !key || key.interpolations.length > 0) return [];
+  const name = key.text;
+  if (!/[A-Z]/.test(name)) return [];
+  if (site.args.some((a) => a.named === "case") || /\bcase\s*=/.test(trailingLambdaText(site, src))) return [];
+  const pascal = /^[A-Z]/.test(name);
+  const wire = SIGNAL_KEYED.has(spec.name)
+    ? kebab(name) + (pascal ? "__case.pascal" : "")
+    : spec.name === "on" || spec.name === "class"
+      ? kebab(name) + (pascal ? "__case.pascal" : "__case.camel")
+      : kebab(name);
+  const what = SIGNAL_KEYED.has(spec.name) ? `the signal $${name}` : spec.name === "on" ? `the event ${name}` : spec.name === "class" ? `the class ${name}` : `${name}`;
+  return [{
+    start: key.start,
+    end: key.end,
+    message: `Written on the wire as data-${spec.name}:${wire}, which Datastar reads back as ${what}: the browser lowercases attribute names, so a key is kebab-case. In HTML or a template you write it that way yourself.`,
+    severity: "hint",
+    code: "key-case-wire",
+    link: attributeDoc(spec.name),
+  }];
+}
+
+/** The text of the trailing lambda `{ ... }` after a call, braces balanced; empty when there is none. */
+function trailingLambdaText(site: CallSite, src: string): string {
+  if (!site.trailingLambda) return "";
+  const open = src.indexOf("{", site.closeParen + 1);
+  if (open < 0) return "";
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    const c = src[i];
+    if (c === "{") depth++;
+    else if (c === "}" && --depth === 0) return src.slice(open, i + 1);
+  }
+  return src.slice(open);
 }
 
 function checkScriptSite(site: CallSite, spec: CallSiteSpec): Issue[] {

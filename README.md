@@ -319,7 +319,9 @@ signal("foo-bar")                     // $fooBar, because that is what Datastar 
 ```
 
 An explicit `case =` is never second-guessed. A name with characters no signal can carry
-throws `InvalidSignalNameException` at render time. For strings and templates, the VS Code
+throws `InvalidSignalNameException` at render time. Handled is not hidden: the VS Code
+extension puts a hint on every such call saying what goes on the wire, so the rule is learned
+where it applies. For strings and templates, the VS Code
 extension flags a capital letter in a key (with the kebab-case fix) and a `$foo-bar` in an
 expression (which reads as `$foo` minus `bar`) with the camelCase fix.
 

@@ -122,6 +122,32 @@ describe("markup", () => {
     expect(analyzeHtml(fine, opts)).toEqual([]);
   });
 
+  it("hints what the dsl writes on the wire for a camelCase key", () => {
+    const src = `div {
+      dataSignals("fooBar", "1")
+      dataOn("widgetLoaded", "x()") { once = true }
+      dataClass("isOpen", "$" + "open")
+      dataAttr("ariaLabel", "'x'")
+      dataSignals("MySignal", "1")
+      dataSignals("fooBar", "1", case = Case.KEBAB)
+      dataOn("customEvent", "x()") { case = Case.KEBAB }
+      dataSignals("foo-bar", "1")
+      dataSignals("{fooBar: 1}")
+      dataBind("fooBar")
+    }`;
+    const hints = analyzeKotlin(src, opts).filter((i) => i.code === "key-case-wire");
+    expect(hints.every((i) => i.severity === "hint")).toBe(true);
+    expect(hints.map((i) => src.slice(i.start, i.end))).toEqual(['"fooBar"', '"widgetLoaded"', '"isOpen"', '"ariaLabel"', '"MySignal"']);
+    expect(hints.map((i) => /as (data-[a-z-]+:[^,]+),/.exec(i.message)![1])).toEqual([
+      "data-signals:foo-bar",
+      "data-on:widget-loaded__case.camel",
+      "data-class:is-open__case.camel",
+      "data-attr:aria-label",
+      "data-signals:my-signal__case.pascal",
+    ]);
+    expect(hints[0]!.message).toContain("$fooBar");
+  });
+
   it("warns about kebab-case where a camelCase signal belongs", () => {
     const issues = validateExpression("$foo-bar + $form.first-name-x + $a - $b + $count-1");
     expect(codes(issues)).toEqual(["signal-kebab", "signal-kebab"]);
