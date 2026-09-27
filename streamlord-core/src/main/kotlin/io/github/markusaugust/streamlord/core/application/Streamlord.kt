@@ -123,5 +123,8 @@ public class Streamlord(
 /** The signals decoded into [T], or `null` when the request carried none. */
 public suspend inline fun <reified T : Any> Streamlord.readSignals(request: IncomingRequest): T? = readSignals(request, typeOf<T>())
 
-/** Encode this flow of events into SSE frames using the default encoder. */
-public fun Flow<DatastarEvent>.asSse(): Flow<String> = map(SseEncoder::encode)
+/**
+ * Encode this flow of events into SSE frames. With [Streamlord.Default] the elements guard is
+ * off; pass your configured instance to have it applied.
+ */
+public fun Flow<DatastarEvent>.asSse(streamlord: Streamlord = Streamlord.Default): Flow<String> = streamlord.encode(this)

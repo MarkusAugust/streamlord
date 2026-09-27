@@ -73,6 +73,17 @@ public object Casing {
     /** The key for an attribute whose key is used as written (`attr`, `style`, `animate`): `ariaLabel` -> `aria-label`. */
     public fun plainKey(name: String): String = kebab(validate(name))
 
-    /** The name as an expression refers to it: `foo-bar` -> `fooBar`, `form.first-name` -> `form.firstName`, `items[0]` untouched. */
-    public fun reference(name: String): String = camel(validate(name))
+    /**
+     * The name as an expression refers to it: `foo-bar` -> `fooBar`, `form.first-name` -> `form.firstName`,
+     * `items[0]` and `items['sub-total']` untouched. A reference is JavaScript, so only blank
+     * names and whitespace are refused.
+     */
+    public fun reference(name: String): String {
+        if (name.isBlank()) throw InvalidSignalNameException(name, "is blank")
+        if (name.any { it.isWhitespace() }) throw InvalidSignalNameException(name, "contains whitespace")
+        return name.replace(KEBAB_OUTSIDE_BRACKETS) { it.groupValues[1].uppercase() }
+    }
+
+    /** `-x` outside `[...]`: inside brackets a quoted key such as `['sub-total']` is text. */
+    private val KEBAB_OUTSIDE_BRACKETS = Regex("-([a-z])(?![^\\[]*\\])")
 }

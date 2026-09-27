@@ -75,7 +75,7 @@ public object ExpressionGuard {
             ",",
         )
 
-    /** Operators that need an operand on their right, longest first. Postfix `++`/`--` are not here: `$count++` is fine. */
+    /** Operators that need an operand on their right, longest first. A trailing `++`/`--` is checked first, so `$count++` is fine. */
     private val NEEDS_RIGHT =
         listOf(
             "===",
@@ -104,6 +104,8 @@ public object ExpressionGuard {
             ",",
             "!",
             "@",
+            "+",
+            "-",
         )
 
     private val ONLY_OPERATORS = Regex("^[\\s=!<>&|?:.+\\-*/%,()\\[\\]{}]*$")

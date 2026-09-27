@@ -25,6 +25,8 @@ class ExpressionGuardTest {
             "evt.key === 'Escape' && ( = false)" to "\"evt.key === 'Escape' && (\$open = false)\"",
             "; ++" to "\"\$a; \$b++\"",
             " < 10" to "\"\$count < 10\"",
+            "'Hello, ' + " to "\"'Hello, ' + \$name\"",
+            "\$total - " to "\"\$total - \$discount\"",
             "@post('/x', {count: })" to "\"@post('/x', {count: \$count})\"",
             "{n: , m: 1}" to "\"{n: \$seed, m: 1}\"",
             "[, 1]" to "\"[\$first, 1]\"",

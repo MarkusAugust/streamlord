@@ -29,9 +29,8 @@ export interface CallSite {
 
 const IDENT = /\b([A-Za-z_][A-Za-z0-9_]*)\s*\(/g;
 
-export function findCallSites(src: string, names: ReadonlySet<string>): CallSite[] {
+export function findCallSites(src: string, names: ReadonlySet<string>, mask: Uint8Array = codeMask(src)): CallSite[] {
   const sites: CallSite[] = [];
-  const mask = codeMask(src);
   IDENT.lastIndex = 0;
   let m: RegExpExecArray | null;
   while ((m = IDENT.exec(src)) !== null) {
@@ -195,8 +194,8 @@ export function lexKotlin(src: string): { strings: KotlinString[]; mask: Uint8Ar
  * than backwards from the offset: a quote inside a raw HTML string (`data-text="$count"`) is
  * not the start of a literal, and only a forward scan knows that.
  */
-export function stringAt(src: string, offset: number): KotlinString | null {
-  for (const s of findKotlinStrings(src)) {
+export function stringAt(src: string, offset: number, strings: KotlinString[] = findKotlinStrings(src)): KotlinString | null {
+  for (const s of strings) {
     if (s.start >= offset) return null;
     if (offset <= s.end) return s;
   }

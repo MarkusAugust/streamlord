@@ -324,22 +324,53 @@ export function wireKey(key: string, keyCase: AttributeSpec["keyCase"], explicit
  * The fix writes the key as [wireKey] says, so that the name the author typed is the name the
  * browser ends up with.
  */
+/** What a key is to Datastar: the noun the messages and the hover use, from `keyCase` in the catalog. */
+export function keyKind(spec: AttributeSpec): "signal" | "event" | "class" | "raw" {
+  if (spec.keyCase === "camel") return "signal";
+  if (spec.keyCase === "kebab") return spec.name === "on" ? "event" : "class";
+  return "raw";
+}
+
+/**
+ * How Datastar reads a key written as [wire]: "the signal $fooBar", "the event widgetLoaded",
+ * "the class isOpen", or, for a raw key, the key itself. One wording for the HTML warning, the
+ * Kotlin wire hint and the hover note.
+ */
+export function keyReading(spec: AttributeSpec, name: string, wire: string): string {
+  switch (keyKind(spec)) {
+    case "signal":
+      return `the signal $${name}`;
+    case "event":
+      return `the event ${name}`;
+    case "class":
+      return `the class ${name}`;
+    default:
+      return `the ${spec.name === "style" ? "property" : "attribute"} ${wire.split("__")[0]}`;
+  }
+}
+
+/** For a raw key the only way to keep a capital is the object form; said once, where it applies. */
+export function rawKeyNote(spec: AttributeSpec, prefix: string, key: string): string {
+  return keyKind(spec) === "raw" && spec.valueKind === "expression"
+    ? ` For a name that really has capitals, such as SVG's viewBox, use the object form: ${prefix}${spec.name}="{${key}: ...}".`
+    : "";
+}
+
 function validateKeyCase(attr: Attribute, parsed: { key: string | null; base: string; modifiers: { name: string; args: string[] }[] }, spec: AttributeSpec, prefix: string): Issue[] {
   const colon = attr.name.indexOf(":");
   if (colon < 0 || !spec.keyCase) return [];
   const key = attr.name.slice(colon + 1).split("__")[0] ?? "";
   if (!/[A-Z]/.test(key)) return [];
   const keyStart = attr.nameStart + colon + 1;
-  const lowered = key.toLowerCase();
   const name = prefix + spec.name;
   const existing = parsed.modifiers.find((m) => m.name === "case");
   // With an explicit __case already there, only the key itself changes.
   const fixed = existing ? kebab(key) : wireKey(key, spec.keyCase, null);
-  const what = spec.keyCase === "camel" ? `the signal $${lowered}, not $${key}` : spec.name === "on" ? `the event ${lowered}, not ${key}` : spec.name === "class" ? `the class ${lowered}, not ${key}` : `${lowered}, not ${key}`;
+  const reaches = keyReading(spec, key.toLowerCase(), key.toLowerCase());
   return [{
     start: keyStart,
     end: keyStart + key.length,
-    message: `The browser lowercases attribute names, so this reaches Datastar as ${what}. Write ${name}:${fixed}${existing ? "__" + existing.name + (existing.args.length ? "." + existing.args.join(".") : "") : ""}: keys are kebab-case${spec.keyCase === "camel" ? ", and Datastar reads a kebab-case signal key as camelCase" : ""}.`,
+    message: `The browser lowercases attribute names, so this reaches Datastar as ${reaches}, not ${key}. Write ${name}:${fixed}${existing ? "__" + existing.name + (existing.args.length ? "." + existing.args.join(".") : "") : ""}: keys are kebab-case${keyKind(spec) === "signal" ? ", and Datastar reads a kebab-case signal key as camelCase" : ""}.${rawKeyNote(spec, prefix, key)}`,
     severity: "warning",
     code: "key-case",
     link: attributeDoc(spec.name),

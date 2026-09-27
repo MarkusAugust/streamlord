@@ -1,8 +1,8 @@
 import { catalog, parseAttributeName, type CallSiteSpec } from "./catalog.ts";
 import { attributeDoc, DOCS, validateExpression, type Fix, type Issue } from "./expression.ts";
 import { PLACEHOLDER, toSource, type Interpolation, type KotlinString } from "./kotlinStrings.ts";
-import { kebab, tokenize, validateAttributes, validateMarkup, wireKey } from "./markup.ts";
-import { findCallSites, findKotlinStrings, isHtmlString, namedArgText, selectStringArg, stringAt, type CallSite } from "./scanner.ts";
+import { keyReading, rawKeyNote, tokenize, validateAttributes, validateMarkup, wireKey } from "./markup.ts";
+import { findCallSites, isHtmlString, lexKotlin, namedArgText, selectStringArg, stringAt, type CallSite } from "./scanner.ts";
 
 /**
  * Editor-independent analysis: Kotlin source in, issues with source offsets out.
@@ -25,7 +25,8 @@ const HTML_SITE_NAMES: ReadonlySet<string> = new Set(Object.keys(catalog.callSit
 export function analyzeKotlin(src: string, opts: AnalyzeOptions): Issue[] {
   const issues: Issue[] = [];
   const claimed = new Set<number>();
-  for (const site of findCallSites(src, ALL_SITE_NAMES)) {
+  const lex = lexKotlin(src);
+  for (const site of findCallSites(src, ALL_SITE_NAMES, lex.mask)) {
     const expr = catalog.callSites.expression[site.name];
     if (expr) issues.push(...checkExpressionSite(site, expr, src));
     const html = catalog.callSites.html[site.name];
@@ -37,7 +38,7 @@ export function analyzeKotlin(src: string, opts: AnalyzeOptions): Issue[] {
     issues.push(...checkKeyCaseSite(site, src));
     for (const a of site.args) if (a.string) claimed.add(a.string.start);
   }
-  for (const s of findKotlinStrings(src)) {
+  for (const s of lex.strings) {
     if (claimed.has(s.start) || s.unterminated || !isHtmlString(src, s)) continue;
     issues.push(...checkFreeHtmlString(s, opts, src));
   }
@@ -50,10 +51,11 @@ export function analyzeKotlin(src: string, opts: AnalyzeOptions): Issue[] {
  * it to give Kotlin the HTML side.
  */
 export function htmlStringAt(src: string, offset: number): KotlinString | null {
-  const s = stringAt(src, offset);
+  const lex = lexKotlin(src);
+  const s = stringAt(src, offset, lex.strings);
   if (!s) return null;
   if (isHtmlString(src, s)) return s;
-  const site = findCallSites(src, HTML_SITE_NAMES).find((c) => c.openParen < s.start && s.end <= c.closeParen + 1);
+  const site = findCallSites(src, HTML_SITE_NAMES, lex.mask).find((c) => c.openParen < s.start && s.end <= c.closeParen + 1);
   if (!site) return null;
   const spec = catalog.callSites.html[site.name];
   const arg = spec ? selectStringArg(site, spec.arg, spec.named) : null;
@@ -233,6 +235,8 @@ function checkHtmlSite(site: CallSite, spec: CallSiteSpec, opts: AnalyzeOptions,
 function checkKeyCaseSite(site: CallSite, src: string): Issue[] {
   const spec = catalog.attributesByKotlin.get(site.name);
   if (!spec?.keyed || !spec.keyCase) return [];
+  // dataOnClick("expr") { ... } and friends: the first string is the expression, not a key.
+  if (catalog.callSites.expression[site.name]?.arg === 0) return [];
   const positional = site.args.filter((a) => a.named === null);
   const key = positional[0]?.string;
   if (positional.length < 2 || !key || key.interpolations.length > 0) return [];
@@ -242,12 +246,11 @@ function checkKeyCaseSite(site: CallSite, src: string): Issue[] {
   const explicit = named ? /Case\.([A-Z]+)/.exec(named) : /\bcase\s*=\s*Case\.([A-Z]+)/.exec(trailingLambdaText(site, src));
   const explicitCase = explicit?.[1]?.toLowerCase() ?? null;
   const wire = wireKey(name, spec.keyCase, explicitCase);
-  const read = explicitCase ? `${explicitCase}-cased` : spec.keyCase === "camel" ? `the signal $${name}` : spec.name === "on" ? `the event ${name}` : spec.name === "class" ? `the class ${name}` : `${kebab(name)}`;
-  const what = explicitCase ? `a ${read} name` : read;
+  const what = explicitCase ? `a ${explicitCase}-cased name` : keyReading(spec, name, wire);
   return [{
     start: key.start,
     end: key.end,
-    message: `Written on the wire as data-${spec.name}:${wire}, which Datastar reads back as ${what}: the browser lowercases attribute names, so a key is kebab-case. In HTML or a template you write it that way yourself.`,
+    message: `Written on the wire as data-${spec.name}:${wire}, which Datastar reads back as ${what}: the browser lowercases attribute names, so a key is kebab-case. In HTML or a template you write it that way yourself.${rawKeyNote(spec, "data-", name)}`,
     severity: "hint",
     code: "key-case-wire",
     link: attributeDoc(spec.name),

@@ -143,10 +143,13 @@ describe("markup", () => {
       dataSignals("foo-bar", "1")
       dataSignals("{fooBar: 1}")
       dataBind("fooBar")
+      dataOnClick("@post('/Add')", { once = true })
+      dataOnFetch("evt.detail.type === 'Started'") { window = true }
+      dataAttr("viewBox", "$box")
     }`;
     const hints = analyzeKotlin(src, opts).filter((i) => i.code === "key-case-wire");
     expect(hints.every((i) => i.severity === "hint")).toBe(true);
-    expect(hints.map((i) => src.slice(i.start, i.end))).toEqual(['"fooBar"', '"widgetLoaded"', '"isOpen"', '"ariaLabel"', '"MySignal"', '"fooBar"', '"customEvent"']);
+    expect(hints.map((i) => src.slice(i.start, i.end))).toEqual(['"fooBar"', '"widgetLoaded"', '"isOpen"', '"ariaLabel"', '"MySignal"', '"fooBar"', '"customEvent"', '"viewBox"']);
     expect(hints.map((i) => /as (data-[a-z-]+:[^,]+),/.exec(i.message)![1])).toEqual([
       "data-signals:foo-bar",
       "data-on:widget-loaded__case.camel",
@@ -155,8 +158,10 @@ describe("markup", () => {
       "data-signals:my-signal__case.pascal",
       "data-signals:foo-bar__case.kebab",
       "data-on:custom-event__case.kebab",
+      "data-attr:view-box",
     ]);
     expect(hints[0]!.message).toContain("$fooBar");
+    expect(hints[7]!.message).toContain('data-attr="{viewBox: ...}"');
   });
 
   it("warns, not errors, when the template is only part of an expression", () => {
@@ -334,8 +339,8 @@ describe("signals", () => {
     expect([...collectSignals(kt, "kotlin")].sort()).toEqual(["away", "count", "gone", "name", "open", "page", "query", "search", "user"]);
     const html = `<div data-signals="{count: 1, open: false}" data-bind:first-name data-text="$other.x"></div>`;
     expect([...collectSignals(html, "html")].sort()).toEqual(["count", "firstName", "open", "other.x"]);
-    const raw = `fun side() = """<div data-signals="{draft: ''}" data-bind:search data-indicator="busy" data-text="$kotlinTemplate"></div>"""`;
-    expect([...collectSignals(raw, "kotlin")].sort()).toEqual(["busy", "draft", "search"]);
+    const raw = `fun side() = """<div data-signals="{draft: ''}" data-bind:search data-indicator="busy" data-text="$kotlinTemplate" data-signals:foo-bar__ifmissing="1" data-computed:total__case.camel="1"></div>"""`;
+    expect([...collectSignals(raw, "kotlin")].sort()).toEqual(["busy", "draft", "fooBar", "search", "total"]);
   });
 });
 

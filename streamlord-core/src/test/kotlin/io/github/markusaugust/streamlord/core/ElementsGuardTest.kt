@@ -103,6 +103,23 @@ class ElementsGuardTest {
     }
 
     @Test
+    fun `entities are decoded and a custom prefix can be added`() {
+        // kotlinx.html and template engines escape attribute values; the browser decodes them before Datastar reads.
+        assertFailsWith<InterpolatedExpressionException> { ElementsGuard.check("""<div data-show=" &amp;&amp; ${'$'}b"></div>""") }
+        assertFailsWith<InterpolatedExpressionException> { ElementsGuard.check("""<div data-show=" &lt; 10"></div>""") }
+        val fine = """<div data-show="${'$'}a &amp;&amp; ${'$'}b &lt; 10" data-text="&quot;x&quot; + ${'$'}y"></div>"""
+        assertEquals(fine, ElementsGuard.check(fine))
+        assertEquals("""<div data-ds-text=""></div>""", ElementsGuard.check("""<div data-ds-text=""></div>"""))
+        val before = ElementsGuard.prefixes
+        try {
+            ElementsGuard.prefixes = listOf("data-ds-") + before
+            assertFailsWith<InterpolatedExpressionException> { ElementsGuard.check("""<div data-ds-text=""></div>""") }
+        } finally {
+            ElementsGuard.prefixes = before
+        }
+    }
+
+    @Test
     fun `script and style bodies are text, not tags`() {
         val html =
             """<div id="a"><script>el.innerHTML = '<span data-text=""></span>'; if (a<b) run();</script>""" +

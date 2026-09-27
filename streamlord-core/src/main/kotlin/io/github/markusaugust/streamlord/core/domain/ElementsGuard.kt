@@ -71,7 +71,24 @@ public object ElementsGuard {
                 "scroll-into-view",
             )
 
-    private val PREFIXES = listOf("data-star-", "data-")
+    /**
+     * The attribute prefixes the guard recognises, longest first. `data-` for the standard bundle
+     * and `data-star-` for the aliased one; add your own alias here if you build a bundle with
+     * another, and set `DatastarAttributes.prefix` in `streamlord-html` to match.
+     */
+    @Volatile
+    public var prefixes: List<String> = listOf("data-star-", "data-")
+
+    private val ENTITIES =
+        listOf("&amp;" to "&", "&lt;" to "<", "&gt;" to ">", "&quot;" to "\"", "&#39;" to "'", "&apos;" to "'", "&#34;" to "\"")
+
+    /** kotlinx.html and every template engine escape attribute values; the expression is what the browser decodes. */
+    private fun decode(value: String): String {
+        if ('&' !in value) return value
+        var out = value
+        for ((entity, char) in ENTITIES) out = out.replace(entity, char)
+        return out
+    }
 
     /** Returns [elements] untouched, or throws [InterpolatedExpressionException] for the first broken attribute. */
     public fun check(elements: String): String {
@@ -162,7 +179,7 @@ public object ElementsGuard {
         value: String?,
     ) {
         val lower = name.lowercase()
-        val prefix = PREFIXES.firstOrNull { lower.startsWith(it) } ?: return
+        val prefix = prefixes.firstOrNull { lower.startsWith(it) } ?: return
         val rest = lower.substring(prefix.length)
         val plugin = rest.substringBefore(':').substringBefore("__")
         if (plugin !in attributes) {
@@ -180,7 +197,7 @@ public object ElementsGuard {
             return
         }
         if (plugin !in expressionAttributes) return
-        ExpressionGuard.check(value ?: "", name)
+        ExpressionGuard.check(decode(value ?: ""), name)
     }
 
     /** Below this length a Datastar name has too many honest neighbours (test, kind, once, unit) to judge a bare `data-*` at all. */

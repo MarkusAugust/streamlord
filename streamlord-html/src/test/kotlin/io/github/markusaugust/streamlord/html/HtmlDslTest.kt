@@ -312,6 +312,9 @@ class HtmlDslTest {
         assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("a b", "1") } } }
         // Index and bracket references, Tailwind variants and namespaced attributes are keys and names too.
         assertEquals("${'$'}items[0].name", signal("items[0].name"))
+        assertEquals("${'$'}items['sub-total']", signal("items['sub-total']"))
+        assertEquals("${'$'}prefs['dark-mode'] = true", set("prefs['dark-mode']", true))
+        assertEquals("${'$'}form.firstName['x-y']", signal("form.first-name['x-y']"))
         assertEquals("${'$'}counts[1]++", increment("counts[1]"))
         assertEquals(
             """<div data-class:hover:bg-red-500="${'$'}danger" data-attr:xlink:href="${'$'}href" data-style:--brand="'red'"></div>""",

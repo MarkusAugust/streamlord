@@ -24,8 +24,11 @@ All notable changes to Streamlord are recorded here. The format follows
   `ElementsGuard.attributes` lists every Datastar attribute name, bound to the catalog by test.
 - `ExpressionGuard` accepts `[]`, `{}`, spread (`...$items`) and leading-dot decimals (`.5`),
   which it refused before as operator-only or dangling, and now catches what an eaten signal
-  leaves inside a literal or argument list (`{count: }`, `{n: , m: 1}`, `[, 1]`) and a missing
-  left operand of `<`, which it let through before.
+  leaves inside a literal or argument list (`{count: }`, `{n: , m: 1}`, `[, 1]`), a missing
+  left operand of `<` and a missing right operand of `+` or `-` (`'Hello, ' + `), which it let
+  through before. `ElementsGuard` decodes the HTML entities kotlinx.html and template engines
+  write (`&amp;&amp;`, `&lt;`) before judging a value, and `ElementsGuard.prefixes` takes a
+  custom bundle alias. `Flow<DatastarEvent>.asSse()` takes the instance too.
 - `catalog/datastar-1.0.4.json`: `keyCase` on every keyed attribute (`camel`, `kebab` or
   `raw`), the one place the casing rule is written; the catalog test binds `Casing` to it and
   the extension reads it.
@@ -43,8 +46,9 @@ All notable changes to Streamlord are recorded here. The format follows
   `dataAttr`, `dataStyle`, `dataAnimate` and `dataPersist` write the key in kebab-case. `signal()` and the
   other expression helpers read a kebab-case key the way Datastar names it (`signal("foo-bar")`
   is `$fooBar`). `InvalidSignalNameException` for a blank name or one with whitespace, quotes
-  or a character that ends an attribute; `hover:bg-red-500`, `xlink:href`, `--brand` and
-  `items[0].name` are fine. An explicit `case =` is kept, with the key still in kebab-case.
+  or a character that ends an attribute; `hover:bg-red-500`, `xlink:href` and `--brand` are
+  fine as keys, and a reference is JavaScript, so `items[0].name` and `items['sub-total']`
+  are fine there. An explicit `case =` is kept, with the key still in kebab-case.
 
 ### Changed
 
