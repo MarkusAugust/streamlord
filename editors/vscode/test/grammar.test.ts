@@ -131,6 +131,8 @@ describe("kotlin injection grammar", () => {
     assert.ok(param[1]!.every((x) => !x.scopes.some((s) => s.includes("html"))), "a parameter annotation does not reach the body");
     const withDefault = await tokenLines("source.kotlin", [`fun wrap(@Language("HTML") html: String? = null, title: String) {`, `    val x = "not <b>"`]);
     assert.ok(withDefault[1]!.every((x) => !x.scopes.some((s) => s.includes("entity.name.tag"))), "nor with a default value");
+    const onFunction = await tokenLines("source.kotlin", [`@Language("HTML")`, `fun greeting(name: String): String = """`, `Hello <b data-onn:click="x()">$name</b>`, `"""`]);
+    assert.match(scopeOf(onFunction[2]!, "b"), /entity\.name\.tag\.html/, "a function's own parameters do not cancel the marker");
     const paramDefault = await tokens("source.kotlin", `@Language("HTML") fun row(label: String = "Untitled"): String = """<tr data-text="$x"></tr>"""`);
     assert.ok(!scopeOf(paramDefault, "Untitled").includes("html"), "a parameter default before the literal stays a string");
     assert.match(scopeOf(paramDefault, "tr"), /entity\.name\.tag\.html/);

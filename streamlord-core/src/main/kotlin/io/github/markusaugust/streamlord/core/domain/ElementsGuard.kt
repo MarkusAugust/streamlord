@@ -72,12 +72,11 @@ public object ElementsGuard {
             )
 
     /**
-     * The attribute prefixes the guard recognises, longest first. `data-` for the standard bundle
-     * and `data-star-` for the aliased one; add your own alias here if you build a bundle with
-     * another, and set `DatastarAttributes.prefix` in `streamlord-html` to match.
+     * The attribute prefixes recognised unless told otherwise, longest first: `data-` for the
+     * standard bundle and `data-star-` for the aliased one. A bundle built with another alias
+     * passes its own list to [check], or sets `attributePrefixes` on `Streamlord`.
      */
-    @Volatile
-    public var prefixes: List<String> = listOf("data-star-", "data-")
+    public val defaultPrefixes: List<String> = listOf("data-star-", "data-")
 
     private val ENTITY = Regex("&(amp|lt|gt|quot|apos|#39|#34);")
     private val ENTITIES = mapOf("amp" to "&", "lt" to "<", "gt" to ">", "quot" to "\"", "apos" to "'", "#39" to "'", "#34" to "\"")
@@ -88,8 +87,16 @@ public object ElementsGuard {
      */
     private fun decode(value: String): String = if ('&' in value) ENTITY.replace(value) { ENTITIES.getValue(it.groupValues[1]) } else value
 
-    /** Returns [elements] untouched, or throws [InterpolatedExpressionException] for the first broken attribute. */
-    public fun check(elements: String): String {
+    /**
+     * Returns [elements] untouched, or throws for the first broken attribute:
+     * [InterpolatedExpressionException] for an expression a Kotlin template ate,
+     * [MistypedAttributeException] for a `data-*` name one letter from a Datastar one. Both are
+     * [io.github.markusaugust.streamlord.core.StreamlordException]s.
+     */
+    public fun check(
+        elements: String,
+        prefixes: List<String> = defaultPrefixes,
+    ): String {
         var i = 0
         val n = elements.length
         while (i < n) {
@@ -105,7 +112,7 @@ public object ElementsGuard {
                 i = lt + 1
                 continue
             }
-            i = scanTag(elements, lt + 1)
+            i = scanTag(elements, lt + 1, prefixes)
             // Inside <script> and <style> a '<' is text, not a tag: skip to the closing tag.
             RAW_TEXT
                 .firstOrNull {
@@ -127,6 +134,7 @@ public object ElementsGuard {
     private fun scanTag(
         html: String,
         from: Int,
+        prefixes: List<String>,
     ): Int {
         var i = from
         val n = html.length
@@ -155,16 +163,16 @@ public object ElementsGuard {
                         if (q == '"' || q == '\'') {
                             val close = html.indexOf(q, k + 1)
                             val end = if (close < 0) n else close
-                            checkAttribute(name, html.substring(k + 1, end))
+                            checkAttribute(name, html.substring(k + 1, end), prefixes)
                             i = if (close < 0) n else close + 1
                         } else {
                             val start = k
                             while (k < n && !html[k].isWhitespace() && html[k] != '>') k++
-                            checkAttribute(name, html.substring(start, k))
+                            checkAttribute(name, html.substring(start, k), prefixes)
                             i = k
                         }
                     } else {
-                        checkAttribute(name, null)
+                        checkAttribute(name, null, prefixes)
                     }
                 }
             }
@@ -175,6 +183,7 @@ public object ElementsGuard {
     private fun checkAttribute(
         name: String,
         value: String?,
+        prefixes: List<String>,
     ) {
         val lower = name.lowercase()
         val prefix = prefixes.firstOrNull { lower.startsWith(it) } ?: return

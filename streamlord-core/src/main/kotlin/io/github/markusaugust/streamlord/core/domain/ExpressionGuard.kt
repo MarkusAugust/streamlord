@@ -118,14 +118,19 @@ public object ExpressionGuard {
      * after an opening `(`, `[`, `{` or a `,`; or an operator that needs a right operand right
      * before a closing `)`, `]`, `}` or a `,`. That last shape is what `{count: $count}` and
      * `@post('/x', {n: $n})` leave behind: `{count: }`. A `.` counts unless it starts a spread
-     * (`...$items`) or a decimal (`.5`); a trailing comma (`[1, 2,]`) is valid and not counted.
+     * (`...$items`) or a decimal (`.5`); a trailing comma (`[1, 2,]`) is valid and not counted;
+     * a `/` after an opening bracket is a regex literal (`replace(/-/g, ' ')`), not division.
+     * String literals are blanked first, so their contents never count.
      */
     private val ORPHANS =
         Regex(
             "(?:^|[;(])\\s*(\\+\\+|--)(?=\\s*(?:;|$))" +
-                "|[(\\[{,](?:\\s*)(===|!==|==|!=|<=|>=|&&|\\|\\||\\?\\?|[=?:*/%<>,]|\\.(?![.\\d]))" +
+                "|[(\\[{,](?:\\s*)(===|!==|==|!=|<=|>=|&&|\\|\\||\\?\\?|[=?:*%<>,]|\\.(?![.\\d]))" +
                 "|(?<![+\\-])([:=*%<>&|?!@]|[+\\-](?![+\\-]))(?:\\s*)(?=[)\\]},])",
         )
+
+    /** A string literal in the expression: its contents are text, not operators (`':)'`, `'a, '`). */
+    private val STRING_LITERAL = Regex("'(?:[^'\\\\]|\\\\.)*'|\"(?:[^\"\\\\]|\\\\.)*\"|`(?:[^`\\\\]|\\\\.)*`")
 
     /** Returns [expression] untouched, or throws [InterpolatedExpressionException]. */
     public fun check(expression: String): String = check(expression, null)
@@ -138,7 +143,7 @@ public object ExpressionGuard {
         expression: String,
         attribute: String?,
     ): String {
-        val t = expression.trim()
+        val t = expression.trim().replace(STRING_LITERAL, "'s'")
         if (t.isEmpty()) throw InterpolatedExpressionException(expression, "is empty", attribute)
         if (ONLY_BRACKETS.matches(t)) return expression
         if (ONLY_OPERATORS.matches(t)) throw InterpolatedExpressionException(expression, "contains no operands, only operators", attribute)

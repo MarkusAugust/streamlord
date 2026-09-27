@@ -24,17 +24,29 @@
       "comment": "HTML in a string that is not handed to a Streamlord call: a function that returns markup, a val with a fragment. Recognised by its first character, or by IntelliJ's injection marker (@Language(\"HTML\") or // language=HTML) before it.",
       "patterns": [
         {
+          "comment": "The annotation on a parameter (`@Language(\"HTML\") html: String,`): consumed, reaches nothing.",
+          "match": "(@Language\\(\\s*\"(?i:html)\"\\s*\\))(?=\\s*(?:va[lr]\\s+)?[A-Za-z_][A-Za-z0-9_]*\\s*:)",
+          "captures": {
+            "1": {
+              "name": "storage.type.annotation.kotlin"
+            }
+          }
+        },
+        {
           "begin": "(@Language\\(\\s*\"(?i:html)\"\\s*\\))",
           "beginCaptures": {
             "1": {
               "name": "storage.type.annotation.kotlin"
             }
           },
-          "comment": "Ends after the next triple-quoted literal, after a double-quoted literal that ends the line (`val x = \"<b>\"`), or at once when the annotation sits on a parameter (`html: String,`). A double-quoted string before that, such as a parameter default, is a plain string.",
-          "end": "(?<=\"\"\")|(?<=\")\\s*$|:\\s*String\\??\\s*(?:=[^,)\"]*)?(?=[,)])",
+          "comment": "The annotation on a function or property: ends after the next triple-quoted literal, or after a double-quoted literal that ends the line (`val x = \"<b>\"`). A double-quoted string before that, such as a parameter default, is a plain string.",
+          "end": "(?<=\"\"\")|(?<=\")\\s*$",
           "patterns": [
             {
               "include": "#html-triple-string"
+            },
+            {
+              "include": "#html-double-string"
             },
             {
               "include": "#plain-double-string"
@@ -52,6 +64,9 @@
           "patterns": [
             {
               "include": "#html-triple-string"
+            },
+            {
+              "include": "#html-double-string"
             },
             {
               "include": "#plain-double-string"
@@ -131,8 +146,8 @@
         }
       ]
     },
-    "plain-double-string": {
-      "comment": "A double-quoted literal under an HTML marker that is not the HTML: a parameter default. Kept a string; a leading `<` still gets the fallback rule.",
+    "html-double-string": {
+      "comment": "A double-quoted literal that opens with a tag, under an HTML marker: HTML.",
       "begin": "(\\$*\")(?=<(?:[A-Za-z]|!--))",
       "beginCaptures": {
         "1": {
@@ -155,26 +170,24 @@
         }
       ]
     },
-    "html-double-string": {
+    "plain-double-string": {
+      "comment": "Any other double-quoted literal under an HTML marker, such as a parameter default: a string, nothing more. Listed after html-double-string, which wins at the same quote.",
       "begin": "(\\$*\")",
       "beginCaptures": {
         "1": {
-          "name": "punctuation.definition.string.begin.kotlin string.quoted.double.kotlin"
+          "name": "punctuation.definition.string.begin.kotlin"
         }
       },
       "end": "(\")",
       "endCaptures": {
         "1": {
-          "name": "punctuation.definition.string.end.kotlin string.quoted.double.kotlin"
+          "name": "punctuation.definition.string.end.kotlin"
         }
       },
-      "contentName": "meta.embedded.block.html",
+      "name": "string.quoted.double.kotlin",
       "patterns": [
         {
           "include": "#kotlin-escapes"
-        },
-        {
-          "include": "text.html.basic"
         }
       ]
     },

@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.ktor
 
 import io.github.markusaugust.streamlord.core.application.Streamlord
+import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 import io.github.markusaugust.streamlord.core.port.driven.SignalsCodec
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.createApplicationPlugin
@@ -21,16 +22,22 @@ public class StreamlordPluginConfig {
     public var maxSignalsSize: Int = Streamlord.DEFAULT_MAX_SIGNALS_SIZE
 
     /**
-     * Run [io.github.markusaugust.streamlord.core.domain.ElementsGuard] over every element patch
-     * and elements response, for HTML written as strings or rendered by a template engine.
+     * Run [ElementsGuard] over every element patch and elements response, for HTML written as
+     * strings or rendered by a template engine. It throws `InterpolatedExpressionException` for
+     * an eaten expression and `MistypedAttributeException` for a `data-*` name one letter from a
+     * Datastar one; both are `StreamlordException`s.
      */
     public var guardElements: Boolean = false
+
+    /** The `data-*` prefixes the guard recognises; `data-` and `data-star-` unless you alias the bundle. */
+    public var attributePrefixes: List<String> = ElementsGuard.defaultPrefixes
 
     internal fun build(): Streamlord =
         streamlord ?: Streamlord(
             codec = codec ?: Streamlord.Default.codec,
             maxSignalsSize = maxSignalsSize,
             guardElements = guardElements,
+            attributePrefixes = attributePrefixes,
         )
 }
 

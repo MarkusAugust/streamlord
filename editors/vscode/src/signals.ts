@@ -48,8 +48,9 @@ export function collectSignals(src: string, language: "kotlin" | "html"): Set<st
     re.lastIndex = 0;
     let m: RegExpExecArray | null;
     while ((m = re.exec(src)) !== null) {
-      // A keyed attribute may carry modifiers after the key: data-signals:foo-bar__ifmissing.
-      const captured = (m[1] ?? "").split("__")[0] ?? "";
+      // A keyed attribute may carry modifiers after the key: data-signals:foo-bar__ifmissing. The
+      // object form's body is captured whole, `__` and all.
+      const captured = re === HTML_ATTRIBUTE_PATTERNS[0] ? (m[1] ?? "").split("__")[0] ?? "" : (m[1] ?? "");
       if (re.source.includes("signals(?:__")) {
         for (const key of captured.matchAll(/(?:^|[{,])\s*([A-Za-z_][A-Za-z0-9_]*)\s*:/g)) {
           if (key[1]) out.add(key[1]);

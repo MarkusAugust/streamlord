@@ -28,9 +28,10 @@ All notable changes to Streamlord are recorded here. The format follows
   left operand of `<` and a missing right operand of `+` or `-` (`'Hello, ' + `), which it let
   through before, while `$count ++` with a space, valid JavaScript, is no longer refused.
   `ElementsGuard` decodes the HTML entities kotlinx.html and template engines write
-  (`&amp;&amp;`, `&lt;`) once, as the browser does, before judging a value, and
-  `ElementsGuard.prefixes` takes a custom bundle alias. `Flow<DatastarEvent>.asSse()` takes
-  the instance too.
+  (`&amp;&amp;`, `&lt;`) once, as the browser does, before judging a value, and string literals
+  and regex literals inside an expression (`':)'`, `replace(/-/g, ' ')`) are never read as
+  operators. `Streamlord(attributePrefixes = ...)` and `ElementsGuard.check(html, prefixes)`
+  take a custom bundle alias. `Flow<DatastarEvent>.asSse()` takes the instance too.
 - `catalog/datastar-1.0.4.json`: `keyCase` on every keyed attribute (`camel`, `kebab` or
   `raw`), the one place the casing rule is written; the catalog test binds `Casing` to it and
   the extension reads it.

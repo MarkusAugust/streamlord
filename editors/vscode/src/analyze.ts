@@ -26,10 +26,15 @@ const HTML_SITE_NAMES: ReadonlySet<string> = new Set(Object.keys(catalog.callSit
 const KEY_ONLY_HELPERS: ReadonlySet<string> = new Set(["dataMatchMedia", "dataPersist"]);
 for (const name of KEY_ONLY_HELPERS) (ALL_SITE_NAMES as Set<string>).add(name);
 
-/** The last source lexed, so a hover or completion right after a diagnostics pass does not lex the file again. */
+/**
+ * The last source lexed, so a hover or completion right after a diagnostics pass does not lex
+ * the file again. Bounded: a file past the cap is lexed each time rather than kept resident.
+ */
+const LEX_CACHE_CAP = 256 * 1024;
 let lastLex: { src: string; lex: ReturnType<typeof lexKotlin> } | null = null;
 function lexCached(src: string): ReturnType<typeof lexKotlin> {
-  if (lastLex?.src !== src) lastLex = { src, lex: lexKotlin(src) };
+  if (src.length > LEX_CACHE_CAP) return lexKotlin(src);
+  if (lastLex === null || lastLex.src.length !== src.length || lastLex.src !== src) lastLex = { src, lex: lexKotlin(src) };
   return lastLex.lex;
 }
 
@@ -255,7 +260,8 @@ function checkKeyCaseSite(site: CallSite, src: string): Issue[] {
   if (expr ? expr.arg === 0 : !KEY_ONLY_HELPERS.has(site.name)) return [];
   const positional = site.args.filter((a) => a.named === null);
   const key = positional[0]?.string;
-  if (positional.length < 2 || !key || key.interpolations.length > 0) return [];
+  // With an expression helper, one positional string is the object form (dataClass("{...}")); the key form has two.
+  if (!key || key.interpolations.length > 0 || (expr && positional.length < 2)) return [];
   const name = key.text;
   // dataSignals("{fooBar: 1}", ...) is the object form: an expression, not a key.
   if (!/[A-Z]/.test(name) || /^\s*[{\[]/.test(name)) return [];

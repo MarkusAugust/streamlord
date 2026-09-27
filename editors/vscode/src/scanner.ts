@@ -218,8 +218,10 @@ export function isHtmlString(src: string, s: KotlinString): boolean {
   const last = markers[markers.length - 1];
   if (!last) return false;
   const after = before.slice(last.index + last[0].length);
-  // `fun f(@Language("HTML") html: String? = null, ...)` annotates a parameter, not the next literal.
-  if (/:\s*String\??\s*(?:=[^,)]*)?[,)]/.test(after)) return false;
+  // `fun f(@Language("HTML") html: String? = null, ...)` annotates a parameter, not the next literal:
+  // the marker is followed at once by a parameter declaration. A function's own parameters
+  // further on (`fun greeting(name: String): String = """..."""`) do not count.
+  if (/^\s*(?:va[lr]\s+)?[A-Za-z_][A-Za-z0-9_]*\s*:\s*String\??\s*(?:=[^,)]*)?[,)]/.test(after)) return false;
   return !after.includes('"');
 }
 

@@ -149,8 +149,8 @@ describe("markup", () => {
       dataRef("myRef", Case.CAMEL)
       dataIndicator("isLoading", Case.CAMEL)
       dataSignals("{fooBar: 1}", Case.CAMEL)
-      dataPersist("myKey", null)
-      dataMatchMedia("isMobile", "(max-width: 600px)")
+      dataPersist("myKey")
+      dataMatchMedia("isMobile", mediaQuery = "(max-width: 600px)")
     }`;
     const hints = analyzeKotlin(src, opts).filter((i) => i.code === "key-case-wire");
     expect(hints.every((i) => i.severity === "hint")).toBe(true);
@@ -314,6 +314,9 @@ dataText("$count")`;
     expect(codes(analyzeKotlin(annotated, opts))).toEqual(["kotlin-interpolation"]);
     const param = `fun wrap(@Language("HTML") html: String) = "a <b data-onn:x='1'>" + html`;
     expect(analyzeKotlin(param, opts)).toEqual([]);
+    // On a function, the function's own String parameters do not cancel the marker.
+    const onFunction = `@Language("HTML")\nfun greeting(name: String): String = """Hello <b data-onn:click="x()">$name</b>"""`;
+    expect(codes(analyzeKotlin(onFunction, opts))).toEqual(["kotlin-interpolation", "unknown-attribute"]);
   });
 });
 
@@ -346,8 +349,8 @@ describe("signals", () => {
     expect([...collectSignals(kt, "kotlin")].sort()).toEqual(["away", "count", "gone", "name", "open", "page", "query", "search", "user"]);
     const html = `<div data-signals="{count: 1, open: false}" data-bind:first-name data-text="$other.x"></div>`;
     expect([...collectSignals(html, "html")].sort()).toEqual(["count", "firstName", "open", "other.x"]);
-    const raw = `fun side() = """<div data-signals="{draft: ''}" data-bind:search data-indicator="busy" data-text="$kotlinTemplate" data-signals:foo-bar__ifmissing="1" data-computed:total__case.camel="1"></div>"""`;
-    expect([...collectSignals(raw, "kotlin")].sort()).toEqual(["busy", "draft", "fooBar", "search", "total"]);
+    const raw = `fun side() = """<div data-signals="{draft: '', __step: 1, label: 'a__b', count: 0}" data-bind:search data-indicator="busy" data-text="$kotlinTemplate" data-signals:foo-bar__ifmissing="1" data-computed:total__case.camel="1"></div>"""`;
+    expect([...collectSignals(raw, "kotlin")].sort()).toEqual(["__step", "busy", "count", "draft", "fooBar", "label", "search", "total"]);
   });
 });
 

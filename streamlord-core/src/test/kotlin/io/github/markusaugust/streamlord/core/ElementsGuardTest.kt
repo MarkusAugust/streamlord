@@ -113,13 +113,11 @@ class ElementsGuardTest {
         val doubly = """<div data-show="&amp;lt; 10" data-text="'&amp;quot;'"></div>"""
         assertEquals(doubly, ElementsGuard.check(doubly))
         assertEquals("""<div data-ds-text=""></div>""", ElementsGuard.check("""<div data-ds-text=""></div>"""))
-        val before = ElementsGuard.prefixes
-        try {
-            ElementsGuard.prefixes = listOf("data-ds-") + before
-            assertFailsWith<InterpolatedExpressionException> { ElementsGuard.check("""<div data-ds-text=""></div>""") }
-        } finally {
-            ElementsGuard.prefixes = before
-        }
+        val aliased = listOf("data-ds-") + ElementsGuard.defaultPrefixes
+        assertFailsWith<InterpolatedExpressionException> { ElementsGuard.check("""<div data-ds-text=""></div>""", aliased) }
+        val guarded = Streamlord(guardElements = true, attributePrefixes = aliased)
+        assertFailsWith<InterpolatedExpressionException> { guarded.guard(PatchElements("""<div data-ds-text=""></div>""")) }
+        Streamlord(guardElements = true).guard(PatchElements("""<div data-ds-text=""></div>"""))
     }
 
     @Test

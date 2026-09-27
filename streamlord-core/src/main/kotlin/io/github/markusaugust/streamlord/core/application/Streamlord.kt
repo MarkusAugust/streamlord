@@ -42,14 +42,20 @@ public typealias Signals = JsonObject
  * @property guardElements Run [ElementsGuard] over the HTML of every element patch and elements
  *   response that leaves through this instance, so a `data-*` attribute whose expression a
  *   Kotlin string template ate (`data-text="$count"` shipping as `data-text=""`) throws
- *   [io.github.markusaugust.streamlord.core.domain.InterpolatedExpressionException] instead of
- *   reaching the browser. Off by default; the kotlinx.html DSL guards its own expressions
- *   regardless. Meant for HTML written as strings or rendered by a template engine.
+ *   [io.github.markusaugust.streamlord.core.domain.InterpolatedExpressionException], and a
+ *   `data-*` name one letter from a Datastar one (`data-onn:click`) throws
+ *   [io.github.markusaugust.streamlord.core.domain.MistypedAttributeException], instead of
+ *   reaching the browser. Both are [StreamlordException]s. Off by default; the kotlinx.html DSL
+ *   guards its own expressions regardless. Meant for HTML written as strings or rendered by a
+ *   template engine.
+ * @property attributePrefixes The `data-*` prefixes the guard recognises: `data-` and the
+ *   aliased `data-star-` by default. A bundle built with another alias lists it here.
  */
 public class Streamlord(
     public val codec: SignalsCodec = BuiltInSignalsCodec,
     public val maxSignalsSize: Int = DEFAULT_MAX_SIGNALS_SIZE,
     public val guardElements: Boolean = false,
+    public val attributePrefixes: List<String> = ElementsGuard.defaultPrefixes,
 ) {
     init {
         require(maxSignalsSize > 0) { "maxSignalsSize must be positive" }
@@ -66,13 +72,13 @@ public class Streamlord(
      * has passed [ElementsGuard] first. Adapters call this before anything reaches the wire.
      */
     public fun guard(event: DatastarEvent): DatastarEvent {
-        if (guardElements && event is PatchElements) event.elements?.let(ElementsGuard::check)
+        if (guardElements && event is PatchElements) event.elements?.let { ElementsGuard.check(it, attributePrefixes) }
         return event
     }
 
     /** The response, unchanged; with [guardElements] on, an [ElementsResponse] has passed [ElementsGuard] first. */
     public fun guard(response: DatastarResponse): DatastarResponse {
-        if (guardElements && response is ElementsResponse) ElementsGuard.check(response.elements)
+        if (guardElements && response is ElementsResponse) ElementsGuard.check(response.elements, attributePrefixes)
         return response
     }
 
