@@ -348,8 +348,9 @@ quotes, throws `InvalidSignalNameException` at render time. Handled is not hidde
 extension puts a hint on every such call saying what goes on the wire, so the rule is learned
 where it applies. The default per attribute lives in the catalog as `keyCase`, which the SDK
 test and the extension both follow. For strings and templates, the VS Code
-extension flags a capital letter in a key (with the kebab-case fix) and a `$foo-bar` in an
-expression (which reads as `$foo` minus `bar`) with the camelCase fix.
+extension flags a capital letter in a key (with the kebab-case fix) and a hyphen after a
+signal in an expression (`$foo-bar`, `$count-1`, which Datastar reads as one signal name) with
+the camelCase or the spaced-subtraction fix.
 
 ### What each gets
 

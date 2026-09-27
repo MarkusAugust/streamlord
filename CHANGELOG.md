@@ -4,6 +4,15 @@ All notable changes to Streamlord are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- `streamlord-analysis`: a hyphen after a signal is read by Datastar 1.0.4 as part of the name
+  (`$foo-bar` is `$['foo-bar']`, `$count-1` is `$['count-1']`; only `$a-$b` is a subtraction).
+  The `signal-kebab` issue now says so, covers `$count-1` and the scope-variable cases it
+  excused before, and offers the spaced subtraction beside the camelCase signal.
+
 ## [0.3.0] - 2026-09-27
 
 ### Added

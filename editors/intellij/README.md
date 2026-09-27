@@ -23,7 +23,8 @@ function that returns HTML, a `val` holding a fragment), and in HTML and templat
 - `data-*` attributes: unknown names with "did you mean", unknown modifiers, wrong modifier
   arguments (`__debounce` without a duration, `__threshold.150`), missing or unexpected keys.
 - Casing: a capital letter in a key (`data-signals:fooBar`), which the browser lowercases so the
-  signal becomes `$foobar`, and `$foo-bar` in an expression. Both come with the fix. In the DSL
+  signal becomes `$foobar`, and a hyphen after a signal in an expression (`$foo-bar`,
+  `$count-1`), which Datastar swallows into one signal name. Both come with the fix. In the DSL
   the SDK writes a camelCase key correctly on its own, and a weak warning on the call shows what
   goes on the wire.
 

@@ -2,6 +2,12 @@
 
 All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here.
 
+## 0.1.1
+
+- A hyphen after a signal is read by Datastar 1.0.4 as part of the name (`$count-1` is
+  `$['count-1']`, only `$a-$b` is a subtraction); the warning says so, covers the cases it
+  excused before, and offers the spaced subtraction beside the camelCase signal.
+
 ## 0.1.0
 
 The first forging. What the VS Code extension does, in IntelliJ IDEA 2026.1 and newer, Community

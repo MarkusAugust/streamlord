@@ -201,12 +201,17 @@ describe("markup", () => {
     expect(analyzeKotlin(src, opts).find((i) => i.code === "kotlin-interpolation")!.severity).toBe("hint");
   });
 
-  it("warns about kebab-case where a camelCase signal belongs", () => {
+  it("warns about a hyphen after a signal, which datastar swallows into the name", () => {
     const issues = validateExpression("$foo-bar + $form.first-name-x + $a - $b + $count-1");
-    expect(codes(issues)).toEqual(["signal-kebab", "signal-kebab"]);
-    expect(issues.map((i) => i.fixes![0]!.text)).toEqual(["$fooBar", "$form.firstNameX"]);
-    expect(validateExpression("$fooBar && $a-$b")).toEqual([]);
-    expect(validateExpression("($total-el.offsetWidth) + 'px'; $count-evt.detail.delta; $n-fn(1); $m-arr[0]")).toEqual([]);
+    expect(codes(issues)).toEqual(["signal-kebab", "signal-kebab", "signal-kebab"]);
+    expect(issues.map((i) => i.fixes![0]!.text)).toEqual(["$fooBar", "$form.firstNameX", "$count - 1"]);
+    expect(issues[0]!.fixes!.map((f) => f.title)).toEqual(["Change to $fooBar", "Write $foo - bar"]);
+    expect(issues[2]!.message).toContain("one signal named count-1");
+    expect(validateExpression("$fooBar && $a-$b && $n - 1")).toEqual([]);
+    // `$total-el.offsetWidth` is `$['total-el']['offsetWidth']` to Datastar: the subtraction the author meant needs spaces.
+    const scope = validateExpression("($total-el.offsetWidth) + 'px'; $count-evt.detail.delta; $n-fn(1); $m-arr[0]");
+    expect(scope.length).toBe(4);
+    expect(scope[0]!.fixes!.map((f) => f.text)).toEqual(["$totalEl.offsetWidth", "$total - el.offsetWidth"]);
     expect(validateExpression("@get('/item/$id-preview') && $x")).toEqual([]);
     expect(codes(analyzeKotlin(`dataText("\${'$'}foo-bar")`, opts))).toEqual(["signal-kebab"]);
   });

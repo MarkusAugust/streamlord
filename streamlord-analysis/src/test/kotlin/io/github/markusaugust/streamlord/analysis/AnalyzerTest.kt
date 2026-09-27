@@ -294,12 +294,17 @@ class AnalyzerTest {
     }
 
     @Test
-    fun `warns about kebab-case where a camelCase signal belongs`() {
+    fun `warns about a hyphen after a signal which datastar swallows into the name`() {
         val issues = expr("\$foo-bar + \$form.first-name-x + \$a - \$b + \$count-1")
-        assertEquals(listOf("signal-kebab", "signal-kebab"), codes(issues))
-        assertEquals(listOf("\$fooBar", "\$form.firstNameX"), issues.map { it.fixes[0].text })
-        assertEquals(emptyList(), expr("\$fooBar && \$a-\$b"))
-        assertEquals(emptyList(), expr("(\$total-el.offsetWidth) + 'px'; \$count-evt.detail.delta; \$n-fn(1); \$m-arr[0]"))
+        assertEquals(listOf("signal-kebab", "signal-kebab", "signal-kebab"), codes(issues))
+        assertEquals(listOf("\$fooBar", "\$form.firstNameX", "\$count - 1"), issues.map { it.fixes[0].text })
+        assertEquals(listOf("Change to \$fooBar", "Write \$foo - bar"), issues[0].fixes.map { it.title })
+        assertContains(issues[2].message, "one signal named count-1")
+        assertEquals(emptyList(), expr("\$fooBar && \$a-\$b && \$n - 1"))
+        // `$total-el.offsetWidth` is `$['total-el']['offsetWidth']` to Datastar: the subtraction the author meant needs spaces.
+        val scope = expr("(\$total-el.offsetWidth) + 'px'; \$count-evt.detail.delta; \$n-fn(1); \$m-arr[0]")
+        assertEquals(4, scope.size)
+        assertEquals(listOf("\$totalEl.offsetWidth", "\$total - el.offsetWidth"), scope[0].fixes.map { it.text })
         assertEquals(emptyList(), expr("@get('/item/\$id-preview') && \$x"))
         assertEquals(listOf("signal-kebab"), codes(analyzer.analyzeKotlin("dataText(\"\${'\$'}foo-bar\")", opts)))
     }

@@ -2,6 +2,15 @@
 
 All notable changes to the Streamlord extension are recorded here.
 
+## 0.3.2
+
+- A hyphen after a signal is read by Datastar 1.0.4 as part of the name: `$foo-bar` is
+  `$['foo-bar']`, `$count-1` is `$['count-1']` and `$total-el.offsetWidth` is
+  `$['total-el']['offsetWidth']`; only `$a-$b` is a subtraction. The warning now says so, covers
+  `$count-1` and the scope-variable cases it excused before, and offers the spaced subtraction
+  (`$count - 1`) beside the camelCase signal. The old wording, "reads as `$foo` minus `bar`",
+  described a JavaScript that never ran.
+
 ## 0.3.1
 
 - An expression that opens with `{` is read as the object literal Datastar makes of it, which

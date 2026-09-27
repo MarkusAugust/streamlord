@@ -6,8 +6,12 @@ package io.github.markusaugust.streamlord.analysis
  * every `@` with `_` yields JavaScript of identical length, so the parser's positions map 1:1.
  */
 
-/** `$foo-bar`: a kebab-case key written where the camelCase signal belongs. */
-private val KEBAB_SIGNAL = Regex("""\$[A-Za-z_][A-Za-z0-9_.]*(?:-[a-z][A-Za-z0-9_]*)+""")
+/**
+ * `$foo-bar`, `$count-1`, `$total-el.offsetWidth`: Datastar reads a signal with the pattern `\$(\w+(?:[.-]\w+)*)`,
+ * so a hyphen followed by a word character is swallowed into the name. Only `$a-$b` is a subtraction.
+ */
+private val HYPHENATED_SIGNAL = Regex("""\$[A-Za-z_][A-Za-z0-9_.]*(?:-[A-Za-z0-9_][A-Za-z0-9_.]*)+""")
+private val HYPHEN_WORD = Regex("""-([A-Za-z0-9_])""")
 private val ACTION = Regex("""@([A-Za-z_][A-Za-z0-9_]*)\s*\(""")
 private val SIGNAL_PREFIX = Regex("""\$([A-Za-z_][A-Za-z0-9_.]*)?$""")
 private val ACTION_PREFIX = Regex("""@([A-Za-z_][A-Za-z0-9_]*)?$""")
@@ -55,25 +59,36 @@ public class ExpressionValidator(
             val end = maxOf(pos + 1, minOf(err.raisedAt, text.length))
             issues += Issue(pos, end, "Datastar expression: ${err.message}", Severity.ERROR, "expression-syntax", Docs.EXPRESSIONS)
         }
-        for (k in KEBAB_SIGNAL.findAll(text)) {
+        for (k in HYPHENATED_SIGNAL.findAll(text)) {
             val written = k.value
-            val after = text.getOrNull(k.range.last + 1)
-            // `$total-el.offsetWidth` and `$count-evt.detail.delta` are subtractions of a scope variable;
-            // a `$id-preview` inside a quoted string is text.
-            if (after == '.' || after == '(' || after == '[') continue
             if (insideQuotes(text, k.range.first)) continue
+            val head = written.substringBefore('-')
+            val rest = written.substringAfter('-')
+            // `-1`, `-2px`: nobody names a signal that; the author subtracts. `-bar`: a kebab-case key, or a subtraction of a variable.
+            val subtraction = rest.first().isDigit()
             val camel = toCamel(written)
+            val spaced = written.replace(HYPHEN_WORD) { " - " + it.groupValues[1] }
+            val fixes = ArrayList<Fix>()
+            if (!subtraction) fixes += Fix("Change to $camel", k.range.first, k.range.last + 1, camel)
+            fixes += Fix("Write $spaced", k.range.first, k.range.last + 1, spaced)
             issues +=
                 Issue(
                     start = k.range.first,
                     end = k.range.last + 1,
                     message =
-                        "$written reads as ${written.substringBefore('-')} minus the rest. " +
-                            "Datastar names signals in camelCase: a key foo-bar is the signal \$fooBar.",
+                        if (subtraction) {
+                            "Datastar reads $written as one signal named ${written.substring(1)}, not as $head minus $rest. " +
+                                "For a subtraction write $spaced, with spaces."
+                        } else {
+                            "Datastar reads $written as one signal named ${written.substring(1)}, which no key declares: " +
+                                "a key ${head.substring(
+                                    1,
+                                )}-${rest.substringBefore('.')} is the signal $camel. For a subtraction write $spaced, with spaces."
+                        },
                     severity = Severity.WARNING,
                     code = "signal-kebab",
                     link = Docs.SIGNALS,
-                    fixes = listOf(Fix("Change to $camel", k.range.first, k.range.last + 1, camel)),
+                    fixes = fixes,
                 )
         }
         for (m in ACTION.findAll(text)) {

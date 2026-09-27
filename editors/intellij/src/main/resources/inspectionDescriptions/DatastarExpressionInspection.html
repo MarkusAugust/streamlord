@@ -1,8 +1,8 @@
 <html>
 <body>
 Checks Datastar expressions with a JavaScript parser: syntax errors at the right column, unknown actions such as <code>@Post</code>
-with the right name as a quick fix, Datastar Pro actions (a hint: they need the Pro bundle), and <code>$foo-bar</code> where the
-camelCase signal <code>$fooBar</code> belongs.
+with the right name as a quick fix, Datastar Pro actions (a hint: they need the Pro bundle), and a hyphen after a signal (<code>$foo-bar</code>,
+<code>$count-1</code>), which Datastar swallows into one signal name: the fix is the camelCase signal or the spaced subtraction.
 <!-- tooltip end -->
 </body>
 </html>

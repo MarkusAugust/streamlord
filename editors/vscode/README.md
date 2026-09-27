@@ -24,9 +24,10 @@ function that returns HTML, a `val` holding a fragment), and in `.html` and temp
 - `data-*` attributes: unknown names with "did you mean", unknown modifiers, wrong modifier
   arguments (`__debounce` without a duration, `__threshold.150`), missing or unexpected keys.
 - Casing: a capital letter in a key (`data-signals:fooBar`), which the browser lowercases so
-  the signal becomes `$foobar`, and `$foo-bar` in an expression, which reads as `$foo` minus
-  `bar`. Both come with the fix: the kebab-case key (plus `__case.camel` for `data-on` and
-  `data-class`) and the camelCase signal. In the DSL the SDK writes a camelCase key correctly
+  the signal becomes `$foobar`, and a hyphen after a signal in an expression (`$foo-bar`,
+  `$count-1`), which Datastar swallows into one signal name. Both come with the fix: the
+  kebab-case key (plus `__case.camel` for `data-on` and `data-class`), and the camelCase signal
+  or the spaced subtraction. In the DSL the SDK writes a camelCase key correctly
   on its own, and a hint on the call shows what goes on the wire.
 
 A string counts as HTML when it opens with a tag, a comment or a doctype, or when it carries

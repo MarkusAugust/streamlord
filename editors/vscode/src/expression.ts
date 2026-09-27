@@ -34,8 +34,11 @@ export const DOCS = {
   signals: "https://data-star.dev/guide/reactive_signals",
 };
 
-/** `$foo-bar`: a kebab-case key written where the camelCase signal belongs. */
-const KEBAB_SIGNAL = /\$[A-Za-z_][A-Za-z0-9_.]*(?:-[a-z][A-Za-z0-9_]*)+/g;
+/**
+ * `$foo-bar`, `$count-1`, `$total-el.offsetWidth`: Datastar reads a signal with the pattern `\$(\w+(?:[.-]\w+)*)`,
+ * so a hyphen followed by a word character is swallowed into the name. Only `$a-$b` is a subtraction.
+ */
+const HYPHENATED_SIGNAL = /\$[A-Za-z_][A-Za-z0-9_.]*(?:-[A-Za-z0-9_][A-Za-z0-9_.]*)+/g;
 
 /** Is the offset inside a single- or double-quoted JavaScript string literal? */
 function insideQuotes(text: string, offset: number): boolean {
@@ -99,24 +102,31 @@ export function validateExpression(text: string): Issue[] {
       issues.push({ start: pos, end, message: `Datastar expression: ${msg}`, severity: "error", code: "expression-syntax", link: DOCS.expressions });
     }
   }
-  KEBAB_SIGNAL.lastIndex = 0;
+  HYPHENATED_SIGNAL.lastIndex = 0;
   let k: RegExpExecArray | null;
-  while ((k = KEBAB_SIGNAL.exec(text)) !== null) {
+  while ((k = HYPHENATED_SIGNAL.exec(text)) !== null) {
     const written = k[0];
-    const after = text[k.index + written.length] ?? "";
-    // `$total-el.offsetWidth` and `$count-evt.detail.delta` are subtractions of a scope variable;
-    // a `$id-preview` inside a quoted string is text.
-    if (after === "." || after === "(" || after === "[") continue;
     if (insideQuotes(text, k.index)) continue;
-    const camel = written.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+    const head = written.slice(0, written.indexOf("-"));
+    const rest = written.slice(written.indexOf("-") + 1);
+    // `-1`, `-2px`: nobody names a signal that; the author subtracts. `-bar`: a kebab-case key, or a subtraction of a variable.
+    const subtraction = /^[0-9]/.test(rest);
+    const camel = written.replace(/-([A-Za-z0-9_])/g, (_, c: string) => c.toUpperCase());
+    const spaced = written.replace(/-([A-Za-z0-9_])/g, (_, c: string) => ` - ${c}`);
+    const end = k.index + written.length;
+    const fixes: Fix[] = [];
+    if (!subtraction) fixes.push({ title: `Change to ${camel}`, start: k.index, end, text: camel });
+    fixes.push({ title: `Write ${spaced}`, start: k.index, end, text: spaced });
     issues.push({
       start: k.index,
-      end: k.index + written.length,
-      message: `${written} reads as ${written.split("-")[0]} minus the rest. Datastar names signals in camelCase: a key foo-bar is the signal $fooBar.`,
+      end,
+      message: subtraction
+        ? `Datastar reads ${written} as one signal named ${written.slice(1)}, not as ${head} minus ${rest}. For a subtraction write ${spaced}, with spaces.`
+        : `Datastar reads ${written} as one signal named ${written.slice(1)}, which no key declares: a key ${head.slice(1)}-${rest.split(".")[0]} is the signal ${camel}. For a subtraction write ${spaced}, with spaces.`,
       severity: "warning",
       code: "signal-kebab",
       link: DOCS.signals,
-      fixes: [{ title: `Change to ${camel}`, start: k.index, end: k.index + written.length, text: camel }],
+      fixes,
     });
   }
   ACTION.lastIndex = 0;
