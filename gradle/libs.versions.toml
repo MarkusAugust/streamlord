@@ -37,5 +37,7 @@ jackson2-kotlin = { module = "com.fasterxml.jackson.module:jackson-module-kotlin
 
 [plugins]
 maven-publish = { id = "com.vanniktech.maven.publish", version = "0.37.0" }
+# Used only by :demo, to build streamlord-live as a native image.
+graalvm-native = { id = "org.graalvm.buildtools.native", version = "1.1.14" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
