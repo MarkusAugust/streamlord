@@ -71,6 +71,7 @@ abstract class ExtractDocSamples : DefaultTask() {
         import kotlinx.coroutines.flow.*
         import kotlinx.html.*
         import kotlinx.serialization.Serializable
+        import kotlin.reflect.typeOf
         import kotlin.time.Duration.Companion.milliseconds
         import kotlin.time.Duration.Companion.seconds
         """.trimIndent()
