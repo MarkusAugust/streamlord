@@ -137,6 +137,21 @@ const { title, description, slug, headings } = Astro.props
         gap: var(--size-4);
         padding: var(--size-3) var(--size-5);
       }
+      /*
+       * The ghost button fills on hover instead of tinting.
+       *
+       * Its own hover is --semantic-interactive-background, which in the dark theme is
+       * #004869 — measured at 1.00:1 against this band, the same luminance, so the hover was
+       * invisible. Brightening the background alone does not help: the label is #88d1ff, and
+       * the lighter steps of the scale converge with it (#00b1fa leaves the text at 1.45:1).
+       * Swapping both is what works — step 30 behind step 100 is 5.92:1 for the label and
+       * 5.94:1 against the band, so the state is unmistakable from either direction.
+       */
+      .masthead .fs-button[data-variant="ghost"]:hover {
+        background: var(--palette-interactive-30);
+        color: var(--palette-interactive-100);
+      }
+
       .masthead__brand {
         display: flex;
         align-items: center;
