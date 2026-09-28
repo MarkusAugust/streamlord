@@ -1,5 +1,6 @@
 ---
 import { Code } from "astro:components"
+import CodeBlock from "../components/CodeBlock.astro"
 import Logo from "../components/Logo.astro"
 import { FAVICON } from "../icon"
 import { NAVIGATION } from "../navigation"
@@ -44,8 +45,12 @@ const SAMPLE = `get("/feed") {
       The hero keeps its dark ground in both themes. Neon needs somewhere dark to be neon,
       and a muted variant for the light theme would lose the colour exactly where it is
       doing the work. The rest of the page follows the reader's choice as usual.
+
+      data-theme="dark" on the band rather than colours written by hand: Fristil scopes its
+      tokens to a bare [data-theme], not to :root, so the island switches buttons, text and
+      code inside it while the page around keeps whatever the reader chose.
     -->
-    <header class="hero">
+    <header class="hero" data-theme="dark">
       <div class="hero__inner">
         <Logo size={72} />
         <h1 class="hero__word">Streamlord</h1>
@@ -86,11 +91,13 @@ const SAMPLE = `get("/feed") {
       }
     </main>
 
+    <CodeBlock />
+
     <style>
       .hero {
-        /* The dark ground, in both themes. */
+        /* Deeper than the page's own dark surface: this is the ground the mark was drawn on. */
         background: #0c0d14;
-        color: #f1f5ff;
+        color: var(--semantic-page-foreground);
         border-block-end: 1px solid rgba(0, 177, 250, 0.25);
       }
       .hero__inner {
@@ -113,12 +120,12 @@ const SAMPLE = `get("/feed") {
       .hero__line {
         margin: 0;
         font-size: var(--font-size-l);
-        color: #f1f5ff;
+        color: var(--semantic-page-foreground);
       }
       .hero__sub {
         margin: 0;
         max-width: 46ch;
-        color: #a7b4c6;
+        color: var(--semantic-muted-foreground);
         line-height: var(--semantic-line-height-article);
       }
       .hero__sample {
