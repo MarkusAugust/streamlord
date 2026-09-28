@@ -97,23 +97,29 @@ graalvmNative {
             )
 
             /*
-             * Mostly static, on Linux: --static-nolibc links in every library the image needs,
-             * including zlib and the JDK's own static libraries, and leaves only glibc dynamic.
-             * That is the documented option for a distroless container
-             * (graalvm.org/latest/reference-manual/native-image/guides/build-static-executables).
+             * Mostly static, on Linux: every library the image needs is linked in, zlib and the
+             * JDK's own static libraries with it, and only glibc is left to the container. That
+             * is the documented option for a distroless base image, which carries glibc and
+             * nothing else.
              *
-             * Without it the binary links zlib dynamically, and the first deployment died in a
-             * way no build step could see: the image built, pushed and deployed green, and the
-             * container then exited with "libz.so.1: cannot open shared object file". The
-             * distroless base carries glibc and not zlib, so the missing piece only exists at
-             * the moment the process starts.
+             * Without it the binary links zlib dynamically and the deployment died where no
+             * build step could see it: the image built, pushed and deployed green, and the
+             * container exited with "libz.so.1: cannot open shared object file". The missing
+             * piece only existed at the moment the process started.
              *
-             * Linux only. The flag is a property of ELF linking and native-image rejects it on
-             * macOS, where this module is also compiled by hand to check that the image runs
-             * at all before any of it reaches CI.
+             * The flag is version-specific and the documentation is not, which cost a build:
+             * graalvm.org/latest names --static-nolibc, and GraalVM for JDK 21 — what CI
+             * installs and what the plugin here is pinned for — has no such option and says so
+             * by name. It is -H:+StaticExecutableWithDynamicLibC there, per
+             * graalvm.org/jdk21/reference-manual/native-image/guides/build-static-executables,
+             * and the option is defined under that name in the jdk-21.0.2 sources. Read the
+             * guide for the version in the toolchain, not the one at /latest.
+             *
+             * Linux only: this is a property of ELF linking and native-image rejects it on
+             * macOS, where the image is compiled by hand to see that the service runs at all.
              */
             if (System.getProperty("os.name").startsWith("Linux")) {
-                buildArgs.add("--static-nolibc")
+                buildArgs.add("-H:+StaticExecutableWithDynamicLibC")
             }
         }
     }

@@ -13,9 +13,9 @@
 #   /app/streamlord-live: error while loading shared libraries: libz.so.1
 #
 # The answer is not a fatter base image but a thinner binary: demo/build.gradle.kts passes
-# --static-nolibc on Linux, which links zlib and the JDK's static libraries in and leaves
-# only glibc to the container. CI checks the binary's dynamic dependencies against that
-# promise, and starts the image and calls it, before anything is pushed.
+# -H:+StaticExecutableWithDynamicLibC on Linux, which links zlib and the JDK's static
+# libraries in and leaves only glibc to the container. CI measures the binary's dynamic
+# dependencies against that promise, and starts the image and calls it, before it is pushed.
 #
 # Locally, with a GraalVM 21 on JAVA_HOME:
 #   ./gradlew :demo:nativeCompile
