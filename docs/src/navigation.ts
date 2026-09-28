@@ -44,6 +44,7 @@ export const NAVIGATION: Section[] = [
     title: "Beyond",
     pages: [
       { slug: "security", title: "Security" },
+      { slug: "native-image", title: "Native image" },
       { slug: "datastar-pro", title: "Datastar Pro" },
       { slug: "editors", title: "The editors" },
       { slug: "architecture", title: "Architecture" },
