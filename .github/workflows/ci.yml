@@ -185,6 +185,58 @@ jobs:
           npm install -g @railway/cli
           railway redeploy --service streamlord-live --from-source --yes
 
+      # redeploy returns as soon as Railway accepts the request, so a green job so far
+      # means the image was handed over, not that anything answers. Every failure in this
+      # phase has been of that shape: right in one place, invisible in another, silent in
+      # between. This is where the job stops being able to lie about it.
+      - name: Check that it answers
+        if: env.RAILWAY_TOKEN != ''
+        env:
+          SERVICE: https://streamlord-live-production.up.railway.app
+          ORIGIN: https://streamlord-docs.netlify.app
+        run: |
+          set -euo pipefail
+
+          echo "Waiting for the new deployment to serve /health"
+          for attempt in $(seq 1 60); do
+            if [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$SERVICE/health")" = "200" ]; then
+              echo "  healthy after ${attempt} attempt(s)"
+              break
+            fi
+            if [ "$attempt" = "60" ]; then
+              echo "::error::$SERVICE/health never returned 200"
+              exit 1
+            fi
+            sleep 5
+          done
+
+          # The documentation's origin specifically: a service that answers curl and refuses
+          # the site is exactly the state this phase shipped twice.
+          preflight=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
+            -X OPTIONS \
+            -H "Origin: $ORIGIN" \
+            -H 'Access-Control-Request-Method: GET' \
+            -H 'Access-Control-Request-Headers: datastar-request' \
+            "$SERVICE/search")
+          if [ "$preflight" != "200" ]; then
+            echo "::error::CORS preflight from $ORIGIN returned $preflight, not 200"
+            exit 1
+          fi
+          echo "  preflight from the documentation: 200"
+
+          # A real search, not a ping. The index is built into the image, so an empty result
+          # here means the image shipped without one.
+          body=$(curl -s --max-time 15 \
+            -H "Origin: $ORIGIN" \
+            -H 'Accept: text/event-stream' \
+            "$SERVICE/search?datastar=%7B%22query%22%3A%22readSignals%22%7D")
+
+          echo "$body" | grep -q '^event: datastar-patch-elements' \
+            || { echo "::error::no patch-elements frame in the response"; echo "$body" | head -5; exit 1; }
+          echo "$body" | grep -q 'fs-link' \
+            || { echo "::error::the search returned no hits — is the index in the image?"; exit 1; }
+          echo "  a search for readSignals came back with hits"
+
   publish-vscode:
     name: Publish VS Code extension
     if: startsWith(github.ref, 'refs/tags/vscode-v')
