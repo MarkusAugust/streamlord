@@ -72,8 +72,12 @@ graalvmNative {
                 "--initialize-at-build-time=io.ktor,kotlin",
                 "--initialize-at-build-time=org.slf4j.LoggerFactory",
                 "--initialize-at-build-time=org.slf4j.helpers.Reporter",
-                "--initialize-at-build-time=kotlinx.io.bytestring.ByteString",
-                "--initialize-at-build-time=kotlinx.io.SegmentPool",
+                // The sample names two classes here; this build also reaches
+                // kotlinx.io.files.PathsJvmKt and FileSystemJvmKt, which arrive with Ktor
+                // and which nothing in this service uses — it reads its index from the
+                // classpath, not the filesystem. The package, in the same form the list
+                // already uses for io.ktor and kotlin, rather than a fifth and sixth class.
+                "--initialize-at-build-time=kotlinx.io",
                 "--initialize-at-build-time=kotlinx.serialization.json.Json",
                 "--initialize-at-build-time=kotlinx.serialization.json.JsonImpl",
                 "--initialize-at-build-time=kotlinx.serialization.json.ClassDiscriminatorMode",
