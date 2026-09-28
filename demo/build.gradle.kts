@@ -55,12 +55,18 @@ graalvmNative {
                 "--no-fallback",
                 // Say what could not be resolved, not merely that something could not.
                 "-H:+ReportExceptionStackTraces",
+                /*
+                 * Something initialized at build time reaches kotlin.DeprecationLevel, which
+                 * native-image expects to be a run-time class, and it refuses rather than
+                 * choose. This says the enum may be settled early, which for a four-constant
+                 * enum with no state costs nothing.
+                 *
+                 * Narrow on purpose. --initialize-at-build-time=kotlin would take the whole
+                 * standard library on one error's word, and the list should grow only for
+                 * classes a build has actually named.
+                 */
+                "--initialize-at-build-time=kotlin.DeprecationLevel",
             )
-            // Nothing about class initialization here on purpose. The first attempt asked
-            // for --initialize-at-build-time=org.slf4j on the assumption that Ktor and SLF4J
-            // would want it; naming any class switches native-image into a stricter mode,
-            // and the build died on kotlin.DeprecationLevel being initialized without
-            // permission. The default is correct until something proves otherwise.
         }
     }
 }
