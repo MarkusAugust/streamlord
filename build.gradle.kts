@@ -18,19 +18,26 @@ plugins {
  * mode so that nothing leaves the walls of a module by accident.
  */
 subprojects {
+    /*
+     * Modules that exist for the build itself and never leave it. They are not
+     * published, they are not held to explicit API mode, and an unused value in
+     * a documentation sample is not worth failing a release over.
+     */
+    val internal = name in setOf("docs-samples")
+
     apply(plugin = "org.jetbrains.kotlin.jvm")
     apply(plugin = "java-library")
-    apply(plugin = "com.vanniktech.maven.publish")
+    if (!internal) apply(plugin = "com.vanniktech.maven.publish")
 
     group = rootProject.group
     version = rootProject.version
 
     extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension> {
-        explicitApi()
+        if (!internal) explicitApi()
         jvmToolchain(21)
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
-            allWarningsAsErrors.set(true)
+            allWarningsAsErrors.set(!internal)
             freeCompilerArgs.addAll("-Xjdk-release=17", "-Xjsr305=strict")
         }
     }
@@ -50,6 +57,8 @@ subprojects {
             exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
         }
     }
+
+    if (internal) return@subprojects
 
     /*
      * Maven Central, through Sonatype's Central Portal. Credentials and the signing key come
