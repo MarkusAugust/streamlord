@@ -217,14 +217,20 @@ val generateDocSamples =
 kotlin.sourceSets.named("main") { kotlin.srcDir(generateDocSamples.map { it.target }) }
 
 /*
- * A name to run on its own, and a name that reads clearly in a CI log. The root
- * `build` task already reaches it through `assemble`, so CI needs no extra step.
+ * A name to run on its own, and a name that reads clearly in a CI log.
+ *
+ * `check` has to be told about it. `build` reaches `compileKotlin` through `assemble`, so the
+ * examples were compiled either way — but the dependency trees, the transcripts and the
+ * coordinates hang off this task, and nothing asked for it. They went unchecked in CI until
+ * a --dry-run showed which tasks `build` actually runs.
  */
 tasks.register("checkDocSamples") {
-    description = "Compiles every Kotlin example in the documentation."
+    description = "Checks everything the documentation asserts: examples, coordinates, transcripts, trees."
     group = "verification"
     dependsOn(tasks.named("compileKotlin"))
 }
+
+tasks.named("check") { dependsOn(tasks.named("checkDocSamples")) }
 
 
 /*
@@ -459,3 +465,83 @@ val applyWireTranscripts =
     }
 
 tasks.named("checkDocSamples") { dependsOn(applyWireTranscripts) }
+
+
+/*
+ * Writes the project's version into every coordinate the documentation prints.
+ *
+ * Fourteen of them were typed by hand and nothing tied them to gradle.properties, so a
+ * version bump that forgot the pages would have left the site telling readers to depend on
+ * a release that had been superseded — the same shape of rot the dependency trees had, and
+ * the same answer: make the build do it rather than ask a person to remember.
+ *
+ * Both spellings are covered, the Gradle coordinate and the Maven element, because the
+ * install page carries a tab for each.
+ *
+ * It does not close the window between bumping the version and the tag finishing its
+ * publish, during which the pages name a release Maven Central has not seen yet. Closing
+ * that would mean tracking the last successful publish separately, which is more machinery
+ * than the minutes are worth; bumping and tagging in one push, as the README already
+ * prescribes, keeps it short.
+ */
+abstract class ApplyProjectVersion : DefaultTask() {
+    @get:Input
+    abstract val version: Property<String>
+
+    /** The Maven group. Not called `group`: a Task already has one, and it is its own. */
+    @get:Input
+    abstract val coordinateGroup: Property<String>
+
+    /** Rewritten in place, so neither an input nor an output. See ApplyWireTranscripts. */
+    @get:Internal
+    abstract val pages: DirectoryProperty
+
+    @get:Internal
+    abstract val extraPages: ConfigurableFileCollection
+
+    @TaskAction
+    fun apply() {
+        val version = version.get()
+        val group = coordinateGroup.get()
+
+        val gradleCoordinate = Regex("""(${Regex.escape(group)}:[\w-]+:)[\w.\-]+""")
+        val mavenDependency = Regex(
+            """(<groupId>${Regex.escape(group)}</groupId>\s*<artifactId>[\w-]+</artifactId>\s*<version>)[^<]+(</version>)""",
+        )
+
+        val files =
+            pages.get().asFile.walkTopDown().filter { it.extension == "md" } + extraPages.files
+        var changed = 0
+
+        for (page in files) {
+            val before = page.readText()
+            val after =
+                before
+                    .replace(gradleCoordinate) { "${it.groupValues[1]}$version" }
+                    .replace(mavenDependency) { "${it.groupValues[1]}$version${it.groupValues[2]}" }
+
+            if (after != before) {
+                page.writeText(after)
+                changed++
+            }
+        }
+
+        logger.lifecycle(
+            if (changed == 0) "Documented coordinates already name $version."
+            else "Rewrote the coordinates to $version on $changed file(s). Commit the change.",
+        )
+    }
+}
+
+val applyProjectVersion =
+    tasks.register<ApplyProjectVersion>("applyProjectVersion") {
+        description = "Writes the project's version into every coordinate the documentation prints."
+        group = "verification"
+        version.set(rootProject.version.toString())
+        coordinateGroup.set(rootProject.group.toString())
+        pages.set(rootProject.layout.projectDirectory.dir("docs/src/content/docs"))
+        extraPages.from(rootProject.layout.projectDirectory.file("README.md"))
+        outputs.upToDateWhen { false }
+    }
+
+tasks.named("checkDocSamples") { dependsOn(applyProjectVersion) }

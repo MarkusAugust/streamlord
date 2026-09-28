@@ -70,9 +70,10 @@ only, and a Stream Inspector. See [The editors](https://streamlord-docs.netlify.
 ./gradlew build
 ```
 
-JDK 21 builds it; the artifacts target JDK 17. `build` also compiles every example in the
-documentation and checks that the dependency trees and wire transcripts it prints still match
-what the build resolves and encodes.
+JDK 21 builds it; the artifacts target JDK 17. `build` also holds the documentation to what
+this build actually does: every Kotlin example is compiled against the modules, and the
+coordinates, dependency trees and wire transcripts the pages print are rewritten from the
+project's own version, resolution and encoder. A page that has gone stale turns the build red.
 
 Releases go to Maven Central from CI only: bump `version` in `gradle.properties`, commit, push
 a tag `v<version>`. The `publish-maven-central` job checks that the tag matches, then signs and
