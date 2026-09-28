@@ -388,6 +388,18 @@ jobs:
             || { echo "::error::/muster sent no field faults"; exit 1; }
           echo "  the form was checked and the faults came back"
 
+          # A remove, which is the one event that carries no elements at all. If the encoder
+          # ever starts writing an empty elements line, the protocol is wrong in a way the
+          # golden files would catch but a running service would not.
+          removed=$(curl -s --max-time 5 \
+            'http://localhost:8080/modes?datastar=%7B%22mode%22%3A%22remove%22%7D')
+
+          echo "$removed" | grep -q '^data: mode remove' \
+            || { echo "::error::/modes did not send a remove"; echo "$removed" | head -8; exit 1; }
+          echo "$removed" | head -4 | grep -q '^data: elements' \
+            && { echo "::error::the remove carried elements, which it must not"; exit 1; }
+          echo "  a remove went out as a selector and a mode"
+
       - uses: docker/login-action@v4
         with:
           registry: ghcr.io

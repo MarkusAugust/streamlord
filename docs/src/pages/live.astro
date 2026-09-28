@@ -115,6 +115,102 @@ import "../styles/global.css"
         </section>
 
         <!--
+          The eight patch modes, each one a press.
+
+          Every button sets a signal and asks the same endpoint, so what differs between them is
+          one word on the wire. The stone carries an input on purpose: morphing keeps what you
+          typed into it and replacing does not, which is the difference between the two halves
+          of the table on the protocol page and is invisible in prose.
+        -->
+        <section class="panel panel--wide" data-signals="{mode: 'inner', lastMode: ''}">
+          <h2 class="panel__title">The eight patch modes</h2>
+          <p class="panel__note">
+            One endpoint, one word of difference. Type into the stone, then press Outer and
+            Replace: a morph keeps what you wrote, a replacement does not.
+          </p>
+
+          <div class="gallery__modes">
+            <button
+              class="fs-button"
+              data-variant="secondary"
+              type="button"
+              data-on:click={`$mode = 'inner'; @get('${SERVICE}/modes')`}
+              data-attr:aria-pressed="$lastMode === 'inner'"
+            >Inner</button>
+            <button
+              class="fs-button"
+              data-variant="secondary"
+              type="button"
+              data-on:click={`$mode = 'outer'; @get('${SERVICE}/modes')`}
+              data-attr:aria-pressed="$lastMode === 'outer'"
+            >Outer</button>
+            <button
+              class="fs-button"
+              data-variant="secondary"
+              type="button"
+              data-on:click={`$mode = 'replace'; @get('${SERVICE}/modes')`}
+              data-attr:aria-pressed="$lastMode === 'replace'"
+            >Replace</button>
+            <button
+              class="fs-button"
+              data-variant="secondary"
+              type="button"
+              data-on:click={`$mode = 'prepend'; @get('${SERVICE}/modes')`}
+              data-attr:aria-pressed="$lastMode === 'prepend'"
+            >Prepend</button>
+            <button
+              class="fs-button"
+              data-variant="secondary"
+              type="button"
+              data-on:click={`$mode = 'append'; @get('${SERVICE}/modes')`}
+              data-attr:aria-pressed="$lastMode === 'append'"
+            >Append</button>
+            <button
+              class="fs-button"
+              data-variant="secondary"
+              type="button"
+              data-on:click={`$mode = 'before'; @get('${SERVICE}/modes')`}
+              data-attr:aria-pressed="$lastMode === 'before'"
+            >Before</button>
+            <button
+              class="fs-button"
+              data-variant="secondary"
+              type="button"
+              data-on:click={`$mode = 'after'; @get('${SERVICE}/modes')`}
+              data-attr:aria-pressed="$lastMode === 'after'"
+            >After</button>
+            <button
+              class="fs-button"
+              data-variant="secondary"
+              type="button"
+              data-on:click={`$mode = 'remove'; @get('${SERVICE}/modes')`}
+              data-attr:aria-pressed="$lastMode === 'remove'"
+            >Remove</button>
+            <button
+              class="fs-button"
+              data-variant="ghost"
+              type="button"
+              data-on:click={`$mode = 'reset'; @get('${SERVICE}/modes')`}
+            >Rebuild the wall</button>
+          </div>
+
+          <div class="gallery">
+            <div id="wall" class="gallery__wall">
+              <p id="stone" class="gallery__stone">
+                <span class="gallery__says">A stone in the wall. Aim the eight modes at it.</span>
+                <input class="fs-input gallery__chisel" id="chisel" placeholder="Type here, then press Outer and Replace" />
+              </p>
+            </div>
+
+            <div id="modes-said" class="gallery__said-box">
+              <p class="fs-paragraph" data-size="small">
+                What the server sent will appear here: the mode, the selector, and the elements.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!--
           Validation, decided where it has to be decided anyway.
 
           The inputs are never patched. Replacing an element somebody is typing into moves
@@ -322,6 +418,70 @@ import "../styles/global.css"
       .panel__body {
         min-height: 3rem;
       }
+      .gallery__modes {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--size-2);
+      }
+      .gallery {
+        margin-block-start: var(--size-4);
+        display: grid;
+        gap: var(--size-4);
+        grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+        align-items: start;
+      }
+      .gallery__wall {
+        display: grid;
+        gap: var(--size-2);
+        align-content: start;
+        min-block-size: 8rem;
+        padding: var(--size-4);
+        border: 1px dashed var(--semantic-divider-30);
+        border-radius: var(--size-1);
+      }
+      .gallery :global(.gallery__stone) {
+        margin: 0;
+        display: grid;
+        gap: var(--size-2);
+        padding: var(--size-3);
+        border-radius: var(--size-1);
+        background: var(--semantic-neutral-background);
+      }
+      .gallery :global(.gallery__course) {
+        margin: 0;
+        padding: var(--size-2) var(--size-3);
+        border-inline-start: var(--size-1) solid var(--palette-interactive-50);
+        color: var(--semantic-muted-foreground);
+        font-size: var(--font-size-s);
+      }
+      .gallery :global(.gallery__said) {
+        margin: 0 0 var(--size-2);
+        font-size: var(--font-size-xs);
+        color: var(--semantic-muted-foreground);
+      }
+      .gallery :global(.gallery__wire) {
+        color: var(--palette-interactive-50);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      .gallery :global(.gallery__chisel) {
+        inline-size: 100%;
+      }
+      /*
+       * The frame the server sent, wrapped. Without this the `pre` is one long line, the page
+       * grows a horizontal scrollbar, and every section on it is dragged sideways with it.
+       */
+      .gallery__said-box :global(.wire__frame) {
+        margin: 0;
+        padding: var(--size-3);
+        background: #1a1b26;
+        border-radius: var(--size-1);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: var(--font-size-xs);
+        line-height: var(--semantic-line-height-compact);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+
       .muster {
         display: grid;
         gap: var(--size-4);

@@ -1,8 +1,10 @@
 package io.github.markusaugust.streamlord.demo
 
+import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import kotlinx.html.TagConsumer
 import kotlinx.html.a
 import kotlinx.html.div
+import kotlinx.html.input
 import kotlinx.html.li
 import kotlinx.html.p
 import kotlinx.html.pre
@@ -131,5 +133,51 @@ public fun TagConsumer<*>.summary(
                 }
             }
         }
+    }
+}
+
+/** The stone, whole: the element the modes are aimed at. */
+public fun TagConsumer<*>.stone(says: String) {
+    p("gallery__stone") {
+        attributes["id"] = "stone"
+        stoneInside(says)
+    }
+}
+
+/**
+ * What is inside the stone.
+ *
+ * Written apart from [stone] because `inner` sends this and `outer` sends the element around
+ * it, and a reader comparing the two should be comparing the same words.
+ *
+ * The input is the point. Morphing keeps it and what you typed into it; replacing does not.
+ */
+public fun TagConsumer<*>.stoneInside(says: String) {
+    span("gallery__says") { +says }
+    input(classes = "fs-input gallery__chisel") {
+        attributes["id"] = "chisel"
+        placeholder = "Type here, then press Outer and Replace"
+    }
+}
+
+/** A course of stone laid beside or inside the wall — what the four insert modes deliver. */
+public fun TagConsumer<*>.course(says: String) {
+    p("gallery__course") { +says }
+}
+
+/** What the server sent, in the protocol's own words. */
+public fun TagConsumer<*>.said(
+    mode: ElementPatchMode,
+    selector: String?,
+    elements: String,
+) {
+    p("gallery__said") {
+        +"mode "
+        span("gallery__wire") { +mode.wire }
+        +" · selector "
+        span("gallery__wire") { +(selector ?: "none") }
+    }
+    pre("wire__frame") {
+        +if (elements.isBlank()) "No elements. A remove is a selector and a mode." else elements
     }
 }

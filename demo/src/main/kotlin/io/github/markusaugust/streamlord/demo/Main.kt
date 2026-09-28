@@ -164,6 +164,15 @@ public fun Application.live() {
             call.respondDatastar(validationEvents(call.readSignalsOr(MusterSignals())).asFlow())
         }
 
+        /*
+         * The eight patch modes, one press at a time. A GET, because the press asks for
+         * something rather than sends it, and because the mode rides in the signals like
+         * every other piece of state on these pages.
+         */
+        get("/modes") {
+            call.respondDatastar(modeEvents(call.readSignalsOr(ModeSignals())).asFlow())
+        }
+
         get("/counter") {
             call.respondDatastar(counterEvents(call.readSignalsOr(CounterSignals())))
         }
