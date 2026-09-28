@@ -7,16 +7,13 @@ import { NAVIGATION } from "../navigation"
 import { datastarLangs, hangingIndent, shikiThemes } from "../shiki"
 import "../styles/global.css"
 
-// Written narrow on purpose: the longest line decides whether a phone has to scroll this
-// block sideways, and 74 characters meant it did. Broken at the arguments, the widest line
-// is 50 and the poster reads without a gesture.
+// Written the way it would be written, not the way a phone would like it. A narrow screen
+// wraps the long line with a hanging indent — see hangingIndent in src/shiki.ts — and this
+// block is a poster on every screen wide enough to hold it, which is most of them.
 const SAMPLE = `get("/feed") {
     call.respondDatastar {
-        patchElements(
-            selector = "#feed",
-            mode = ElementPatchMode.APPEND,
-        ) {
-            li { +"A new head on the wall" }
+        patchElements(selector = "#feed", mode = ElementPatchMode.APPEND) {
+            li { +"A new head hangs on the wall" }
         }
         patchSignals("heads" to 13)
     }
