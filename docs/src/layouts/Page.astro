@@ -119,10 +119,16 @@ const { title, description, slug, headings } = Astro.props
 
     <style>
       .masthead {
-        /* Dark in both themes, like the hero on the landing page: the mark was drawn on this
-           ground, and a header that changes colour under a logo that does not is worse than
-           either. data-theme rather than hand-written colours, so everything inside follows. */
-        background: #0c0d14;
+        /* Dark in both themes, because the mark was drawn on a dark ground and a header that
+           changes colour under a logo that does not is worse than either. data-theme rather
+           than hand-written colours, so everything inside follows.
+
+           Denim rather than the hero's near-black: against a white page #0c0d14 is a ~19:1
+           edge, which is as hard as an edge can be. #2c436b is the deck's own --denim-100 and
+           roughly halves it to ~9.5:1, while white text on it still measures ~8.6:1 and the
+           neon focus ring ~3.9:1, past the 3:1 a focus indicator needs. In dark mode it reads
+           as a raised surface above the page rather than a hole in it. */
+        background: #2c436b;
         color: var(--semantic-page-foreground);
         border-block-end: 1px solid rgba(0, 177, 250, 0.25);
         display: flex;
