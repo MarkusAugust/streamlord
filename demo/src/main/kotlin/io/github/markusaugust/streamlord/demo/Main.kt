@@ -31,6 +31,9 @@ import kotlinx.serialization.Serializable
 @Serializable
 public data class SearchSignals(val query: String = "")
 
+/** Where the documentation is served from. Not configuration: it is our own site. */
+private val DOCS_HOSTS = listOf("streamlord-docs.netlify.app", "localhost:4321")
+
 /**
  * streamlord-live: the service the documentation talks to.
  *
@@ -60,10 +63,21 @@ public fun Application.live() {
      * the page — the search field simply does nothing, with an empty console.
      */
     install(CORS) {
-        allowHost(
-            System.getenv("ALLOWED_HOST") ?: "localhost:4321",
-            schemes = listOf("http", "https"),
-        )
+        /*
+         * The documentation's own origin is a constant, so it is a default rather than
+         * configuration. An environment variable that has to be remembered is a way for the
+         * search to disappear from the whole site with an empty console — which is what
+         * happened the first time this was deployed, and the failure looks identical to the
+         * missing header above. ALLOWED_HOST adds one more for a preview or a fork.
+         *
+         * localhost stays allowed in production on purpose: developing the pages against the
+         * deployed service is useful, and this endpoint reads a search index and holds no
+         * credentials, no cookies and nothing to steal.
+         */
+        for (host in DOCS_HOSTS + listOfNotNull(System.getenv("ALLOWED_HOST"))) {
+            allowHost(host, schemes = listOf("http", "https"))
+        }
+
         allowHeader("Datastar-Request")
         allowHeader(HttpHeaders.ContentType)
         allowHeader(HttpHeaders.Accept)
