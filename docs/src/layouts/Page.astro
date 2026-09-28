@@ -1,10 +1,11 @@
 ---
 import type { MarkdownHeading } from "astro"
-import { ROOT_PAGE, href } from "../navigation"
 import CodeBlock from "../components/CodeBlock.astro"
+import Logo from "../components/Logo.astro"
 import Pager from "../components/Pager.astro"
 import Sidebar from "../components/Sidebar.astro"
 import Toc from "../components/Toc.astro"
+import { FAVICON } from "../icon"
 import "../styles/global.css"
 
 interface Props {
@@ -25,6 +26,7 @@ const { title, description, slug, headings } = Astro.props
     <title>{title} — Streamlord</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site)} />
+    <link rel="icon" href={FAVICON} type="image/svg+xml" />
     <script is:inline>
       // Inline and before paint, so the page never flashes the wrong theme.
       // Datastar takes the toggle over; this one only restores the choice.
@@ -40,7 +42,10 @@ const { title, description, slug, headings } = Astro.props
     <a class="fs-skip-link" href="#content">Skip to content</a>
 
     <header class="masthead">
-      <a class="masthead__brand" href={href(ROOT_PAGE)}>Streamlord</a>
+      <a class="masthead__brand" href="/">
+          <Logo size={26} />
+          <span>Streamlord</span>
+        </a>
       <div class="masthead__tools">
         <!-- The search field lands here in phase 2, talking to
              streamlord-docs-service. -->
@@ -122,6 +127,9 @@ const { title, description, slug, headings } = Astro.props
         border-block-end: 1px solid var(--semantic-divider-30);
       }
       .masthead__brand {
+        display: flex;
+        align-items: center;
+        gap: var(--size-2);
         font-weight: var(--font-weight-bold);
         font-size: var(--font-size-l);
         color: var(--semantic-page-foreground);

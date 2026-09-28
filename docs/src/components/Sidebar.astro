@@ -1,5 +1,5 @@
 ---
-import { NAVIGATION, href } from "../navigation"
+import { href, NAVIGATION } from "../navigation"
 
 interface Props {
   current: string
@@ -83,13 +83,13 @@ const { current } = Astro.props
     background: var(--semantic-neutral-background);
   }
   .sidebar__link:focus-visible {
-    outline: 2px solid var(--semantic-focus-ring);
+    outline: var(--semantic-focus-ring);
     outline-offset: 2px;
   }
   .sidebar__link[aria-current="page"] {
-    border-inline-start-color: var(--semantic-interactive-main);
+    border-inline-start-color: var(--palette-interactive-50);
     background: var(--semantic-interactive-background);
-    color: var(--semantic-interactive-main);
+    color: var(--palette-interactive-50);
     font-weight: var(--font-weight-medium);
   }
 

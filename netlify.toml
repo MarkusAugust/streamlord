@@ -12,10 +12,3 @@
 
 [build.environment]
   NODE_VERSION = "22.23.0"
-
-# The introduction is served at the root, not at a second address of its own. This is for
-# anyone who followed the link the README carried for the hour before it was corrected.
-[[redirects]]
-  from = "/introduction/"
-  to = "/"
-  status = 301

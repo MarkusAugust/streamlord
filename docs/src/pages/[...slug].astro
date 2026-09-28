@@ -1,15 +1,12 @@
 ---
 import { getCollection, render } from "astro:content"
 import Page from "../layouts/Page.astro"
-import { READING_ORDER, ROOT_PAGE } from "../navigation"
+import { READING_ORDER } from "../navigation"
 
 export async function getStaticPaths() {
   const entries = await getCollection("docs")
-  // The first page in the reading order is the site's front page. A root that only
-  // redirects is a root nobody decided on, and in a static build it is a white flash
-  // of meta-refresh before the real page.
   return entries.map((entry) => ({
-    params: { slug: entry.id === ROOT_PAGE ? undefined : entry.id },
+    params: { slug: entry.id },
     props: { entry },
   }))
 }

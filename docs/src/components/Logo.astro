@@ -1,0 +1,23 @@
+---
+import { MARK } from "../icon"
+
+interface Props {
+  size?: number
+}
+
+const { size = 32 } = Astro.props
+---
+
+<span class="logo" style={`--logo-size: ${size}px`} set:html={MARK} aria-hidden="true" />
+
+<style>
+  .logo {
+    display: inline-flex;
+    flex: none;
+  }
+  .logo :global(svg) {
+    inline-size: var(--logo-size);
+    block-size: var(--logo-size);
+    border-radius: calc(var(--logo-size) / 6);
+  }
+</style>
