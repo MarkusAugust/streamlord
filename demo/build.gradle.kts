@@ -49,23 +49,38 @@ graalvmNative {
             imageName.set("streamlord-live")
             mainClass.set("io.github.markusaugust.streamlord.demo.MainKt")
 
+            // A build that cannot be native should fail, not quietly produce a JVM image
+            // with none of the startup or the memory this exists for.
+            fallback.set(false)
+            verbose.set(true)
+
+            /*
+             * Copied from Ktor's own GraalVM sample rather than assembled by guesswork:
+             * github.com/ktorio/ktor-samples/tree/main/graalvm, on the same Kotlin 2.4.20
+             * and Ktor 3.6.0 as this module.
+             *
+             * Three attempts here were spent adding one flag at a time on a theory about
+             * what the error meant, and each theory was wrong. The list below is the
+             * ecosystem's answer, and it contradicts what I kept reaching for: initializing
+             * the whole `kotlin` package at build time is the documented position, not a
+             * blunt instrument to be narrowed.
+             *
+             * ch.qos.logback is in the sample and not here, because this service has no
+             * logging backend. Add it with the dependency, not before.
+             */
             buildArgs.addAll(
-                // Fail rather than quietly fall back to a JVM image: a "native" build that
-                // is not one would cost the startup and the memory this exists for.
-                "--no-fallback",
-                // Say what could not be resolved, not merely that something could not.
+                "--initialize-at-build-time=io.ktor,kotlin",
+                "--initialize-at-build-time=org.slf4j.LoggerFactory",
+                "--initialize-at-build-time=org.slf4j.helpers.Reporter",
+                "--initialize-at-build-time=kotlinx.io.bytestring.ByteString",
+                "--initialize-at-build-time=kotlinx.io.SegmentPool",
+                "--initialize-at-build-time=kotlinx.serialization.json.Json",
+                "--initialize-at-build-time=kotlinx.serialization.json.JsonImpl",
+                "--initialize-at-build-time=kotlinx.serialization.json.ClassDiscriminatorMode",
+                "--initialize-at-build-time=kotlinx.serialization.modules.SerializersModuleKt",
+                "-H:+InstallExitHandlers",
+                "-H:+ReportUnsupportedElementsAtRuntime",
                 "-H:+ReportExceptionStackTraces",
-                /*
-                 * Something initialized at build time reaches kotlin.DeprecationLevel, which
-                 * native-image expects to be a run-time class, and it refuses rather than
-                 * choose. This says the enum may be settled early, which for a four-constant
-                 * enum with no state costs nothing.
-                 *
-                 * Narrow on purpose. --initialize-at-build-time=kotlin would take the whole
-                 * standard library on one error's word, and the list should grow only for
-                 * classes a build has actually named.
-                 */
-                "--initialize-at-build-time=kotlin.DeprecationLevel",
             )
         }
     }
