@@ -1,0 +1,177 @@
+---
+import { fs } from "@fristil/designsystem"
+import { SERVICE } from "../config"
+import { NAVIGATION, href } from "../navigation"
+
+// The search in the masthead, on every page.
+//
+// It is the same endpoint the live page uses and the same markup comes back, so a reader
+// searching the documentation is running the library that the documentation describes.
+//
+// The panel starts out holding every page, written at build time. That is the fallback: the
+// service sleeps on a free tier and wakes in a second or two, and if it never wakes — or the
+// reader is offline, or on a preview build with no service at all — the panel is a table of
+// contents rather than an empty box. Datastar only replaces what it is given, so a request
+// that never answers leaves the list exactly as it was.
+---
+
+<!--
+  `datastar-fetch` is dispatched on the document and does not bubble, so the listener says
+  __document — Datastar's own modifier for exactly this. With the service unreachable the type
+  is `retrying`, not `error`: it retries a stream before it gives up. A request that succeeds
+  ends on `finished`, which sets the signal back to false, so the line below comes and goes with
+  the service rather than latching on the first hiccup.
+-->
+<div
+  class="search"
+  role="search"
+  data-signals="{query: '', searching: false, offline: false}"
+  data-on:datastar-fetch__document={"$offline = ['error', 'retrying', 'retries-failed'].includes(evt.detail.type)"}
+>
+  <label class="fs-sr-only" for="site-search">Search the documentation</label>
+  <input
+    {...fs.search()}
+    id="site-search"
+    class="fs-input fs-search search__field"
+    placeholder="Search"
+    autocomplete="off"
+    data-bind:query
+    data-indicator:searching
+    data-on:input__debounce.300ms={`@get('${SERVICE}/search')`}
+    data-on:keydown={"evt.key === 'Escape' && ($query = '')"}
+  />
+
+  <!--
+    Shown once there is something to search for, and never before: a panel that appears empty
+    while the service wakes up reads as a broken page rather than a slow one.
+
+    aria-live, because the server replaces these silently. Without it a reader using a screen
+    reader types, an answer arrives, and nothing says so. aria-busy follows the indicator, so
+    the announcement waits for the answer instead of reading a half-filled list.
+  -->
+  <div
+    class="search__panel"
+    data-show="$query"
+    data-attr:aria-busy="$searching"
+    aria-live="polite"
+  >
+    <!--
+      Why the list below is not an answer to what was typed. Without it the panel holds either
+      every page or the hits from a previous word, and both read as a search that got it wrong
+      rather than a service that is asleep.
+    -->
+    <p class="search__offline" data-show="$offline">
+      The search service is not answering.
+    </p>
+
+    <div id="results" class="search__results">
+      <p class="search__all">Every page</p>
+      <ul class="fs-list hits" data-variant="plain">
+        {
+          NAVIGATION.flatMap((section) =>
+            section.pages.map((page) => (
+              <li>
+                <a class="fs-link hits__where" href={href(page.slug)}>
+                  {page.title}
+                  <span class="hits__heading"> · {section.title}</span>
+                </a>
+              </li>
+            )),
+          )
+        }
+      </ul>
+    </div>
+  </div>
+</div>
+
+<style>
+  .search {
+    position: relative;
+    flex: 1 1 auto;
+    max-inline-size: 22rem;
+  }
+  .search__field {
+    inline-size: 100%;
+  }
+  .search__panel {
+    position: absolute;
+    /*
+     * Wider than the field, hanging from its right edge: a hit is a page, a heading and a line
+     * of the text it was found in, and at the width of the field that line wraps four times and
+     * stops being a glance.
+     */
+    inset-inline-end: 0;
+    /*
+     * It hangs from the right edge of the field and grows leftwards, so its width is limited by
+     * what is to the left of that edge, not by the window. At 32rem it reached 24px past the
+     * left of a 645px window and cut the first letter off every hit. 28rem clears the narrowest
+     * window that still gets this layout, and the viewport term catches the rest.
+     */
+    inline-size: min(28rem, calc(100vw - 4rem));
+    inset-block-start: calc(100% + var(--size-2));
+    z-index: 20;
+    /*
+     * The page's own surface, not the masthead's dark band: the panel belongs to what you are
+     * reading, not to the furniture above it. A fixed ceiling with its own scroll, because a
+     * panel that grows and shrinks with every keystroke reads as a page coming apart.
+     */
+    background: var(--semantic-page-background);
+    color: var(--semantic-page-foreground);
+    border: 1px solid var(--semantic-divider-30);
+    border-radius: var(--size-1);
+    box-shadow: 0 12px 32px rgb(0 0 0 / 0.35);
+    max-block-size: min(60vh, 32rem);
+    overflow-y: auto;
+    padding: var(--size-3);
+  }
+  .search__offline {
+    margin: 0 0 var(--size-2);
+    padding: var(--size-2);
+    border-radius: var(--size-1);
+    background: var(--semantic-neutral-background);
+    color: var(--semantic-muted-foreground);
+    font-size: var(--font-size-xs);
+  }
+  .search__all {
+    margin: 0 0 var(--size-2);
+    font-size: var(--font-size-xxs);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--semantic-muted-foreground);
+  }
+
+  /* The server writes these, so they are styled here rather than where they are built. */
+  .search__results :global(.hits) {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: var(--size-2);
+  }
+  .search__results :global(.hits__heading) {
+    color: var(--semantic-muted-foreground);
+    font-weight: var(--font-weight-regular);
+  }
+  .search__results :global(.hits__excerpt) {
+    margin: var(--size-1) 0 0;
+    color: var(--semantic-muted-foreground);
+  }
+
+  /*
+   * On a phone the field takes a row of its own under the brand, and the panel spans it.
+   * Three things on one row at 390px is a masthead nobody can hit with a thumb.
+   */
+  @media (max-width: 40rem) {
+    .search {
+      order: 3;
+      flex-basis: 100%;
+      max-inline-size: none;
+    }
+    /* Full width under a full-width field, and the screen is the only ceiling. */
+    .search__panel {
+      inline-size: auto;
+      inset-inline: 0;
+    }
+  }
+</style>

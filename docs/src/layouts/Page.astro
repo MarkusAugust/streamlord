@@ -3,6 +3,7 @@ import type { MarkdownHeading } from "astro"
 import CodeBlock from "../components/CodeBlock.astro"
 import Logo from "../components/Logo.astro"
 import Pager from "../components/Pager.astro"
+import Search from "../components/Search.astro"
 import Sidebar from "../components/Sidebar.astro"
 import Toc from "../components/Toc.astro"
 import { FAVICON } from "../icon"
@@ -27,6 +28,17 @@ const { title, description, slug, headings } = Astro.props
     <meta name="description" content={description} />
     <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site)} />
     <link rel="icon" href={FAVICON} type="image/svg+xml" />
+    <!--
+      Datastar, on every page, because the search in the masthead is on every page. It is the
+      only script the documentation loads that is not its own, and it is the library this
+      documentation is about: the search field is an attribute and a signal, and there is no
+      code of ours between the keystroke and the server.
+    -->
+    <script
+      type="module"
+      src="https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.4/bundles/datastar.js"
+    ></script>
+
     <script is:inline>
       // Inline and before paint, so the page never flashes the wrong theme.
       // Datastar takes the toggle over; this one only restores the choice.
@@ -46,9 +58,10 @@ const { title, description, slug, headings } = Astro.props
         <Logo size={26} />
         <span>Streamlord</span>
       </a>
+      <!-- Between the mark and the tools, so a phone can drop it to a row of its own
+           without pushing the theme button down with it. -->
+      <Search />
       <div class="masthead__tools">
-        <!-- The search field lands here in phase 2, talking to
-             streamlord-docs-service. -->
         <button class="fs-button" data-variant="ghost" data-theme-toggle>
           Theme
         </button>
@@ -139,7 +152,8 @@ const { title, description, slug, headings } = Astro.props
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: var(--size-4);
+        flex-wrap: wrap;
+        gap: var(--size-3) var(--size-4);
         padding: var(--size-3) var(--size-5);
       }
       @media (prefers-color-scheme: dark) {
@@ -178,7 +192,7 @@ const { title, description, slug, headings } = Astro.props
       }
       .masthead__tools {
         display: flex;
-        gap: var(--size-2);
+        gap: var(--size-2) var(--size-3);
         align-items: center;
       }
 

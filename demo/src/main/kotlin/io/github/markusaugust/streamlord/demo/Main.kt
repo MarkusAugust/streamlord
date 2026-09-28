@@ -35,6 +35,15 @@ import kotlin.reflect.typeOf
 @Serializable
 public data class SearchSignals(
     val query: String = "",
+    /**
+     * Whether the caller has somewhere to show the frames.
+     *
+     * Only the live page has. The search in the masthead is on twenty-two other pages with no
+     * `#wire` element, and a patch aimed at a selector that matches nothing is a warning in the
+     * reader's console on every keystroke. The page says what it can display; the server does
+     * not guess.
+     */
+    val wire: Boolean = false,
 )
 
 /** Where the documentation is served from. Not configuration: it is our own site. */
@@ -154,14 +163,18 @@ public fun Application.live() {
                 }
             val totals = PatchSignals("""{"total": ${hits.size}}""")
             val wire =
-                patchElements(selector = "#wire", mode = ElementPatchMode.INNER) {
-                    frames(listOf(results, totals).map { SseEncoder.encode(it) })
+                if (!signals.wire) {
+                    null
+                } else {
+                    patchElements(selector = "#wire", mode = ElementPatchMode.INNER) {
+                        frames(listOf(results, totals).map { SseEncoder.encode(it) })
+                    }
                 }
 
             call.respondDatastar {
                 send(results)
                 send(totals)
-                send(wire)
+                wire?.let { send(it) }
             }
         }
     }
