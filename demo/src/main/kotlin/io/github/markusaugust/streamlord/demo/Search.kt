@@ -34,8 +34,13 @@ public data class Hit(
  * the memory of a phone. The point of this endpoint is that Streamlord answers it, not that
  * the ranking is clever.
  */
-public class SearchIndex(private val sections: List<Section>) {
-    public fun search(query: String, limit: Int = 8): List<Hit> {
+public class SearchIndex(
+    private val sections: List<Section>,
+) {
+    public fun search(
+        query: String,
+        limit: Int = 8,
+    ): List<Hit> {
         val tokens = tokenise(query)
         if (tokens.isEmpty()) return emptyList()
 
@@ -52,7 +57,10 @@ public class SearchIndex(private val sections: List<Section>) {
      * Requiring all of them rather than any keeps a two-word query from returning half the
      * site, which on a corpus this small is what "any" amounts to.
      */
-    private fun score(section: Section, tokens: List<String>): Int? {
+    private fun score(
+        section: Section,
+        tokens: List<String>,
+    ): Int? {
         val title = section.title.lowercase()
         val heading = section.heading.lowercase()
         val text = section.text.lowercase()
@@ -72,7 +80,10 @@ public class SearchIndex(private val sections: List<Section>) {
         return total
     }
 
-    private fun hit(section: Section, tokens: List<String>): Hit =
+    private fun hit(
+        section: Section,
+        tokens: List<String>,
+    ): Hit =
         Hit(
             title = section.title,
             heading = section.heading,
@@ -81,14 +92,20 @@ public class SearchIndex(private val sections: List<Section>) {
         )
 
     /** A window around the first token, cut at word boundaries so it reads as a sentence. */
-    private fun excerpt(text: String, tokens: List<String>, width: Int = 150): String {
+    private fun excerpt(
+        text: String,
+        tokens: List<String>,
+        width: Int = 150,
+    ): String {
         val at = tokens.minOfOrNull { text.lowercase().indexOf(it) }?.takeIf { it >= 0 } ?: 0
-        val from = (at - width / 3).coerceAtLeast(0).let { start ->
-            if (start == 0) 0 else text.indexOf(' ', start).takeIf { it in 0..(start + 20) } ?: start
-        }
-        val to = (from + width).coerceAtMost(text.length).let { end ->
-            if (end == text.length) end else text.lastIndexOf(' ', end).takeIf { it > from } ?: end
-        }
+        val from =
+            (at - width / 3).coerceAtLeast(0).let { start ->
+                if (start == 0) 0 else text.indexOf(' ', start).takeIf { it in 0..(start + 20) } ?: start
+            }
+        val to =
+            (from + width).coerceAtMost(text.length).let { end ->
+                if (end == text.length) end else text.lastIndexOf(' ', end).takeIf { it > from } ?: end
+            }
 
         return buildString {
             if (from > 0) append("… ")
@@ -98,7 +115,8 @@ public class SearchIndex(private val sections: List<Section>) {
     }
 
     private fun tokenise(query: String): List<String> =
-        query.lowercase()
+        query
+            .lowercase()
             .split(Regex("""[^\p{L}\p{N}$@._-]+"""))
             .filter { it.length >= 2 }
             .distinct()

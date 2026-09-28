@@ -16,7 +16,10 @@ import kotlinx.html.ul
  * it lands. That is the whole argument for patching elements rather than sending JSON — the
  * server owns the markup, and there is no second model of the page to keep in step.
  */
-public fun TagConsumer<*>.results(hits: List<Hit>, query: String) {
+public fun TagConsumer<*>.results(
+    hits: List<Hit>,
+    query: String,
+) {
     if (query.isBlank()) {
         p("fs-paragraph") {
             attributes["data-size"] = "small"
