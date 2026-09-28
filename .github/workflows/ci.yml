@@ -373,6 +373,21 @@ jobs:
           done
           echo "  the counter streamed over time"
 
+          # A POST, which reads the signals from the body rather than the query, and a form
+          # that fails on purpose. The reply is two events: the faults as signals, and the
+          # summary as markup in a design system's classes the service cannot see.
+          muster=$(curl -s --max-time 5 -X POST \
+            -H 'Content-Type: application/json' \
+            -H "Origin: $ORIGIN" \
+            -d '{"banner":"Ox","swords":"x"}' \
+            http://localhost:8080/muster)
+
+          echo "$muster" | grep -q 'fs-error-summary' \
+            || { echo "::error::no error summary came back from /muster"; echo "$muster" | head -8; exit 1; }
+          echo "$muster" | grep -q '"bannerFault"' \
+            || { echo "::error::/muster sent no field faults"; exit 1; }
+          echo "  the form was checked and the faults came back"
+
       - uses: docker/login-action@v4
         with:
           registry: ghcr.io

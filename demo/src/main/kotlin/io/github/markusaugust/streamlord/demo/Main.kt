@@ -19,7 +19,9 @@ import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
+import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
+import kotlinx.coroutines.flow.asFlow
 import kotlinx.serialization.Serializable
 import kotlin.reflect.typeOf
 
@@ -151,6 +153,17 @@ public fun Application.live() {
          * this exists to show: a stream is a Flow of events, and the adapter drains it until
          * it completes or the client goes away.
          */
+        /*
+         * The form, checked where it has to be checked anyway.
+         *
+         * POST rather than GET, because this is the one demo where the request carries the
+         * data rather than asks for something — and because it exercises the other half of
+         * readSignals, which reads the body instead of the query.
+         */
+        post("/muster") {
+            call.respondDatastar(validationEvents(call.readSignalsOr(MusterSignals())).asFlow())
+        }
+
         get("/counter") {
             call.respondDatastar(counterEvents(call.readSignalsOr(CounterSignals())))
         }

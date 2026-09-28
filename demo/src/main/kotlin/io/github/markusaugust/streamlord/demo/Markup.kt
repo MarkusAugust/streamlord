@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.demo
 
 import kotlinx.html.TagConsumer
 import kotlinx.html.a
+import kotlinx.html.div
 import kotlinx.html.li
 import kotlinx.html.p
 import kotlinx.html.pre
@@ -88,6 +89,47 @@ public fun TagConsumer<*>.counter(
             stopped -> "Stopped at $count. The connection closed the moment you asked."
             running -> "Counting. One connection, open since you pressed Start."
             else -> "Finished at $count. The server closed the stream; nothing was polled."
+        }
+    }
+}
+
+/**
+ * Fristil's error summary, written by a server that has never seen Fristil.
+ *
+ * The classes and the shape are the design system's: `fs-error-summary` with `role="alert"`
+ * and `tabindex="-1"` so it can be focused, a title, and a list of links into the fields that
+ * failed. The page already carries the stylesheet, so this arrives styled and announced.
+ *
+ * When nothing is wrong it says so instead of disappearing, because a summary that vanishes
+ * has told the reader nothing about whether the form was checked.
+ */
+public fun TagConsumer<*>.summary(
+    faults: List<Fault>,
+    signals: MusterSignals,
+) {
+    if (faults.isEmpty()) {
+        p("fs-paragraph muster__ok") {
+            attributes["data-size"] = "small"
+            +"“${signals.banner.trim()}” musters ${signals.swords.trim()} swords. Ready to ride."
+        }
+        return
+    }
+
+    div("fs-error-summary") {
+        attributes["role"] = "alert"
+        attributes["tabindex"] = "-1"
+        p("fs-error-summary__title") {
+            +if (faults.size == 1) "One thing is wrong:" else "${faults.size} things are wrong:"
+        }
+        ul("fs-list") {
+            attributes["data-variant"] = "plain"
+            faults.forEach { fault ->
+                li {
+                    // No fs-link: Fristil styles `a` inside the summary itself, in the danger
+                    // pair that belongs to that background. Ours would fight it and lose.
+                    a(href = "#${fault.field}") { +fault.says }
+                }
+            }
         }
     }
 }

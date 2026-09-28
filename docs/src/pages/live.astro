@@ -115,6 +115,80 @@ import "../styles/global.css"
         </section>
 
         <!--
+          Validation, decided where it has to be decided anyway.
+
+          The inputs are never patched. Replacing an element somebody is typing into moves
+          their caret, so the server sends the *text* of each fault as a signal and the page
+          binds it: data-text for the message, data-attr for aria-invalid. The summary is the
+          opposite case and arrives as markup, because it only exists when something is wrong
+          and it is built from Fristil classes the server has never seen.
+        -->
+        <section
+          class="panel panel--wide"
+          data-signals="{banner: '', swords: '', bannerFault: '', swordsFault: '', mustered: false}"
+        >
+          <h2 class="panel__title">A form, checked on the server</h2>
+          <p class="panel__note">
+            The rules live in Kotlin, once. Nothing that arrives over a network may be trusted,
+            so the server has to check anyway — and a second copy of the rules in the browser is
+            a copy that goes out of step.
+          </p>
+
+          <form class="muster" data-on:submit__prevent={`@post('${SERVICE}/muster')`}>
+            <div class="fs-field muster__field">
+              <label class="fs-label" for="banner">Name of the banner</label>
+              <input
+                class="fs-input"
+                id="banner"
+                type="text"
+                placeholder="The Ashen Vow"
+                data-bind:banner
+                data-attr:aria-invalid="$bannerFault ? 'true' : null"
+                data-attr:aria-describedby="$bannerFault ? 'banner-error' : null"
+                data-on:input__debounce.400ms={`@post('${SERVICE}/muster')`}
+              />
+              <p
+                class="fs-error-text"
+                id="banner-error"
+                data-show="$bannerFault"
+                data-text="$bannerFault"
+              ></p>
+            </div>
+
+            <div class="fs-field muster__field">
+              <label class="fs-label" for="swords">Sworn swords</label>
+              <input
+                class="fs-input"
+                id="swords"
+                type="text"
+                inputmode="numeric"
+                placeholder="120"
+                data-bind:swords
+                data-attr:aria-invalid="$swordsFault ? 'true' : null"
+                data-attr:aria-describedby="$swordsFault ? 'swords-error' : null"
+                data-on:input__debounce.400ms={`@post('${SERVICE}/muster')`}
+              />
+              <p
+                class="fs-error-text"
+                id="swords-error"
+                data-show="$swordsFault"
+                data-text="$swordsFault"
+              ></p>
+            </div>
+
+            <button class="fs-button" type="submit">Muster</button>
+          </form>
+
+          <!-- Written by the server, in the design system's own classes. -->
+          <div id="muster-summary" class="muster__summary">
+            <p class="fs-paragraph" data-size="small">
+              Nothing has been sent yet. Type, and the server will answer every four hundred
+              milliseconds.
+            </p>
+          </div>
+        </section>
+
+        <!--
           The counter: one connection, thirty numbers, and a button that stops it.
 
           The button is both Start and Stop, and that is not a shortcut — it is how Datastar
@@ -248,6 +322,29 @@ import "../styles/global.css"
       .panel__body {
         min-height: 3rem;
       }
+      .muster {
+        display: grid;
+        gap: var(--size-4);
+        justify-items: start;
+        max-inline-size: 26rem;
+      }
+      .muster__field {
+        display: grid;
+        gap: var(--size-1);
+        inline-size: 100%;
+      }
+      .muster__summary {
+        margin-block-start: var(--size-4);
+      }
+      .muster__summary :global(.fs-error-summary) {
+        display: grid;
+        gap: var(--size-2);
+      }
+      .muster__summary :global(.muster__ok) {
+        margin: 0;
+        color: var(--palette-interactive-50);
+      }
+
       .counter {
         display: grid;
         gap: var(--size-3);
