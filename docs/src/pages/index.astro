@@ -4,13 +4,19 @@ import CodeBlock from "../components/CodeBlock.astro"
 import Logo from "../components/Logo.astro"
 import { FAVICON } from "../icon"
 import { NAVIGATION } from "../navigation"
-import { datastarLangs, shikiThemes } from "../shiki"
+import { datastarLangs, hangingIndent, shikiThemes } from "../shiki"
 import "../styles/global.css"
 
+// Written narrow on purpose: the longest line decides whether a phone has to scroll this
+// block sideways, and 74 characters meant it did. Broken at the arguments, the widest line
+// is 50 and the poster reads without a gesture.
 const SAMPLE = `get("/feed") {
     call.respondDatastar {
-        patchElements(selector = "#feed", mode = ElementPatchMode.APPEND) {
-            li { +"A new head hangs on the wall" }
+        patchElements(
+            selector = "#feed",
+            mode = ElementPatchMode.APPEND,
+        ) {
+            li { +"A new head on the wall" }
         }
         patchSignals("heads" to 13)
     }
@@ -61,7 +67,13 @@ const SAMPLE = `get("/feed") {
         </p>
 
         <div class="hero__sample">
-          <Code code={SAMPLE} lang="kotlin" themes={shikiThemes} langs={datastarLangs} />
+          <Code
+            code={SAMPLE}
+            lang="kotlin"
+            themes={shikiThemes}
+            langs={datastarLangs}
+            transformers={[hangingIndent]}
+          />
         </div>
 
         <div class="hero__actions">
@@ -111,7 +123,8 @@ const SAMPLE = `get("/feed") {
       }
       .hero__word {
         margin: 0;
-        font-size: clamp(2.5rem, 9vw, 4.5rem);
+        /* The floor is a phone: at 2.5rem the word alone measured 330px of a 390px screen. */
+        font-size: clamp(2rem, 9vw, 4.5rem);
         line-height: 1;
         letter-spacing: 0.12em;
         text-transform: uppercase;
@@ -132,6 +145,18 @@ const SAMPLE = `get("/feed") {
       .hero__sample {
         inline-size: 100%;
         margin-block-start: var(--size-3);
+        /*
+         * A grid item may not shrink below its content by default, and `pre` does not wrap,
+         * so this one measured 666px inside a 390px phone. The column grew to fit it, the
+         * document became 686px wide, and `.hero` — which is only as wide as the viewport —
+         * covered a little over half of it: the dark ground ended mid-screen and the rest of
+         * the page showed through beside it. `overflow-x: auto` on the block never engaged,
+         * because nothing was ever too narrow for it.
+         *
+         * Zero minimum, and the column can be as narrow as the phone. Then the code scrolls
+         * inside its own box, which is what it was always meant to do.
+         */
+        min-inline-size: 0;
       }
       .hero__sample :global(pre) {
         margin: 0;
@@ -139,11 +164,34 @@ const SAMPLE = `get("/feed") {
         border-radius: var(--size-1);
         border: 1px solid rgba(0, 177, 250, 0.2);
         overflow-x: auto;
-        font-size: var(--font-size-s);
+        /*
+         * Down a step on a phone and no further: below about 11px a monospace font stops
+         * being read and starts being decoded. The sample is written narrow enough that this
+         * is the whole of it — the scroll below is a safety net, not the plan.
+         */
+        font-size: clamp(0.7rem, 2.9vw, var(--font-size-s));
       }
       .hero__sample :global(code) {
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       }
+      /* The same hanging indent the articles use, for a screen narrower than this sample. */
+      .hero__sample :global(pre code) {
+        white-space: normal;
+      }
+      .hero__sample :global(pre .line) {
+        display: block;
+        white-space: pre;
+        min-block-size: 1lh;
+      }
+      @media (max-width: 40rem) {
+        .hero__sample :global(pre .line) {
+          white-space: pre-wrap;
+          overflow-wrap: break-word;
+          padding-inline-start: calc(var(--indent, 0) * 1ch + 2ch);
+          text-indent: calc((var(--indent, 0) * 1ch + 2ch) * -1);
+        }
+      }
+
       .hero__actions {
         display: flex;
         flex-wrap: wrap;

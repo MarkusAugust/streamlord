@@ -4,7 +4,7 @@
  * Extracted from astro.config.ts so the landing page can highlight its example with the
  * same rules as every markdown fence. One definition, two callers.
  */
-import type { ThemeRegistration } from "shiki"
+import type { ShikiTransformer, ThemeRegistration } from "shiki"
 import lightPlus from "shiki/themes/light-plus.mjs"
 import tokyoNight from "shiki/themes/tokyo-night.mjs"
 
@@ -105,6 +105,48 @@ const withStreamlordRules = (
 export const shikiThemes = {
   light: withStreamlordRules(lightPlus, LIGHT_RULES),
   dark: withStreamlordRules(tokyoNight, DARK_RULES),
+}
+
+/**
+ * Marks every line with the depth it was written at.
+ *
+ * Shiki has no answer for this and neither has CSS on its own: a `pre` either scrolls
+ * sideways or wraps its lines back to column zero, and wrapped Kotlin that starts at column
+ * zero reads like a different statement. The shape of the code is half of what it says.
+ *
+ * So each line carries `--indent`, counted in characters, and the stylesheet turns that into a
+ * hanging indent on a phone: the line starts where it was written, and what wraps is pushed two
+ * characters past it. Nothing is added to or taken from the text, so a reader who copies the
+ * block still gets their indentation.
+ *
+ * A transformer rather than a dependency: Astro passes these straight to Shiki, and
+ * `@shikijs/transformers` has fifteen of them, none of which is this one.
+ */
+export const hangingIndent: ShikiTransformer = {
+  name: "streamlord:hanging-indent",
+  line(node) {
+    const text = textOf(node)
+    const indent = text.length - text.trimStart().length
+    if (indent > 0) {
+      node.properties = { ...node.properties, style: `--indent:${indent}` }
+    }
+  },
+}
+
+/** Every character a line holds, leading whitespace included — Shiki nests it in spans. */
+function textOf(node: { children?: unknown[] }): string {
+  if (!node.children) return ""
+  return node.children
+    .map((child) => {
+      const part = child as {
+        type?: string
+        value?: string
+        children?: unknown[]
+      }
+      if (part.type === "text") return part.value ?? ""
+      return part.children ? textOf(part) : ""
+    })
+    .join("")
 }
 
 export { datastarLangs }
