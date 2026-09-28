@@ -144,6 +144,17 @@ public fun Application.live() {
     routing {
         get("/health") { call.respondText(BUILD) }
 
+        /*
+         * One connection that stays open and writes to the page for twelve seconds.
+         *
+         * The Flow is built in Counter.kt and handed to the adapter whole, which is the API
+         * this exists to show: a stream is a Flow of events, and the adapter drains it until
+         * it completes or the client goes away.
+         */
+        get("/counter") {
+            call.respondDatastar(counterEvents(call.readSignalsOr(CounterSignals())))
+        }
+
         get("/search") {
             val signals = call.readSignalsOr(SearchSignals())
             val hits = index.search(signals.query)

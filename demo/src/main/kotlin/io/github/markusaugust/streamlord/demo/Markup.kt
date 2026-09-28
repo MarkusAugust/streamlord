@@ -67,3 +67,27 @@ public fun TagConsumer<*>.frames(encoded: List<String>) {
         pre("wire__frame") { +frame }
     }
 }
+
+/**
+ * The counter's own corner of the page, rewritten on every tick.
+ *
+ * Thirty numbers means thirty of these, each one an `inner` patch of the same element. The
+ * number is in the markup rather than bound to the signal on purpose: a reader watching this
+ * is watching elements arrive, and the signals panel beside it shows the same count arriving
+ * the other way. Two mechanisms, one connection, visibly in step.
+ */
+public fun TagConsumer<*>.counter(
+    count: Int,
+    running: Boolean,
+    stopped: Boolean,
+) {
+    p("counter__number") { +"$count" }
+    p("fs-paragraph counter__state") {
+        attributes["data-size"] = "small"
+        +when {
+            stopped -> "Stopped at $count. The connection closed the moment you asked."
+            running -> "Counting. One connection, open since you pressed Start."
+            else -> "Finished at $count. The server closed the stream; nothing was polled."
+        }
+    }
+}

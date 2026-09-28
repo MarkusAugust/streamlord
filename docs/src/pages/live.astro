@@ -114,6 +114,42 @@ import "../styles/global.css"
           <pre class="panel__body panel__json" data-json-signals></pre>
         </section>
 
+        <!--
+          The counter: one connection, thirty numbers, and a button that stops it.
+
+          The button is both Start and Stop, and that is not a shortcut — it is how Datastar
+          cancels. A request keeps an AbortController per element and per URL, so asking the
+          same endpoint from the same button aborts the stream that is still open before the
+          new request is sent. The server reads `running` from the signals it was sent, sees
+          that a stream was already going, and answers by putting the page back in order
+          instead of starting another one. No state on this page, and no JavaScript.
+        -->
+        <section class="panel panel--wide" data-signals="{running: false, count: 0}">
+          <h2 class="panel__title">
+            A stream that stays open
+            <span class="panel__count" data-text="$running ? `${$count}` : ''"></span>
+          </h2>
+          <p class="panel__note">
+            One <code>Flow</code>, one connection, twelve seconds. Every number is an element
+            patch and a signal patch on the same open response — nothing here is polled.
+          </p>
+
+          <div class="counter">
+            <button
+              class="fs-button"
+              type="button"
+              data-on:click={`@get('${SERVICE}/counter')`}
+              data-text="$running ? 'Stop' : 'Start counting'"></button>
+
+            <div id="counter" class="counter__face" aria-live="polite">
+              <p class="counter__number">0</p>
+              <p class="fs-paragraph counter__state" data-size="small">
+                Press Start. The server will hold the connection open and write here.
+              </p>
+            </div>
+          </div>
+        </section>
+
         <section class="panel panel--wide">
           <h2 class="panel__title">On the wire</h2>
           <p class="panel__note">
@@ -212,6 +248,29 @@ import "../styles/global.css"
       .panel__body {
         min-height: 3rem;
       }
+      .counter {
+        display: grid;
+        gap: var(--size-3);
+        justify-items: start;
+      }
+      .counter__face {
+        inline-size: 100%;
+        display: grid;
+        gap: var(--size-1);
+      }
+      .counter :global(.counter__number) {
+        margin: 0;
+        font-size: var(--font-size-xxl);
+        font-weight: var(--font-weight-bold);
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+        color: var(--palette-interactive-50);
+      }
+      .counter :global(.counter__state) {
+        margin: 0;
+        color: var(--semantic-muted-foreground);
+      }
+
       .panel__json,
       .panel__body :global(.wire__frame) {
         margin: 0;

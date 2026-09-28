@@ -359,6 +359,20 @@ jobs:
             || { echo "::error::the search returned no hits — is the index in the image?"; exit 1; }
           echo "  a search for readSignals came back with hits"
 
+          # A stream, which is a different thing from a response: the counter holds one
+          # connection open and writes to it over time. Four seconds is about nine numbers,
+          # so two of them arriving apart in time is the whole assertion. A native image
+          # that answers a request but cannot hold a stream would pass every check above.
+          counter=$(curl -s --max-time 4 \
+            -H 'Accept: text/event-stream' \
+            'http://localhost:8080/counter?datastar=%7B%22running%22%3Afalse%7D' || true)
+
+          for n in 1 5; do
+            echo "$counter" | grep -q "\"count\": $n" \
+              || { echo "::error::the counter never reached $n"; echo "$counter" | head -8; exit 1; }
+          done
+          echo "  the counter streamed over time"
+
       - uses: docker/login-action@v4
         with:
           registry: ghcr.io
