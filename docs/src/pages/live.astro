@@ -1,0 +1,246 @@
+---
+import { fs } from "@fristil/designsystem"
+import Logo from "../components/Logo.astro"
+import { SERVICE } from "../config"
+import { FAVICON } from "../icon"
+import "../styles/global.css"
+
+// A page that runs the library rather than describing it. Everything below the search field
+// is written by streamlord-live: the results, the frames, and the signal the count lives in.
+---
+
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Live — Streamlord</title>
+    <meta
+      name="description"
+      content="The documentation's search, answered by Streamlord over Server-Sent Events, with the frames it sent beside it."
+    />
+    <link rel="icon" href={FAVICON} type="image/svg+xml" />
+    <script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.4/bundles/datastar.js"
+    ></script>
+  </head>
+
+  <body>
+    <a class="fs-skip-link" href="#content">Skip to content</a>
+
+    <header class="masthead">
+      <a class="masthead__brand" href="/">
+        <Logo size={26} />
+        <span>Streamlord</span>
+      </a>
+      <span class="masthead__where">Live</span>
+    </header>
+
+    <main class="page" id="content" data-signals="{query: '', total: 0}">
+      <h1 class="fs-heading" data-size="l">The search, answered by Streamlord</h1>
+      <p class="fs-paragraph" data-variant="lead">
+        Every keystroke is a real request. The server reads the signal the browser sends,
+        searches the documentation, and patches the results into this page. Nothing here is
+        recorded, and there is no JavaScript of ours on the page.
+      </p>
+
+      <!--
+        fs.search() rather than the classes by hand. Fristil's search field is an fs-input
+        with room for a magnifier, so it needs both classes, and writing only fs-search gets
+        you a half-styled field with no error anywhere — which is exactly what happened here
+        before this line. The builder sets both, and type="search" with them.
+
+        role="search" makes the row a landmark, so a screen reader finds the field without
+        tabbing to it.
+      -->
+      <div class="search" role="search">
+        <label class="fs-label" for="q">Search the documentation</label>
+        <div class="fs-search-row">
+          <input
+            {...fs.search()}
+            id="q"
+            placeholder="patch mode, casing, readSignals…"
+            data-bind:query
+            data-indicator:searching
+            data-on:input__debounce.300ms={`@get('${SERVICE}/search')`}
+          />
+          <!--
+            A real button, because the cross the browser draws inside a type="search" field
+            is a pseudo-element and Chrome does not let the keyboard reach it. Firefox draws
+            none at all. This one is a tab stop, clears the bound signal — which empties the
+            field, since the binding runs both ways — and asks for the empty result.
+          -->
+          <button
+            class="fs-button"
+            data-variant="secondary"
+            type="button"
+            data-show="$query"
+            data-on:click={`$query = ''; @get('${SERVICE}/search')`}
+          >
+            Clear
+          </button>
+        </div>
+      </div>
+
+      <div class="panels">
+        <section class="panel">
+          <h2 class="panel__title" id="results-title">
+            Results <span class="panel__count" data-text="$total ? `(${$total})` : ''"></span>
+            <span class="panel__busy" data-show="$searching">…</span>
+          </h2>
+          <!--
+            A live region, because the server patches these in silently. Datastar replaces the
+            contents and the page says nothing: a keyboard or screen-reader user types, an
+            answer arrives, and nothing announces it. aria-live is how a patched DOM is made
+            perceivable, and aria-busy follows the indicator so the announcement waits for the
+            request to finish rather than reading a half-filled panel.
+          -->
+          <div
+            id="results"
+            class="panel__body"
+            role="region"
+            aria-labelledby="results-title"
+            aria-live="polite"
+            data-attr:aria-busy="$searching"
+          >
+            <p class="fs-paragraph" data-size="small">Type to search the documentation.</p>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2 class="panel__title">Signals</h2>
+          <p class="panel__note">
+            Datastar's own store, rendered by <code>data-json-signals</code>. No code of ours.
+          </p>
+          <pre class="panel__body panel__json" data-json-signals></pre>
+        </section>
+
+        <section class="panel panel--wide">
+          <h2 class="panel__title">On the wire</h2>
+          <p class="panel__note">
+            The frames the server sent, encoded by the same <code>SseEncoder</code> the
+            golden-file tests verify. Not a description of them — the frames.
+          </p>
+          <div id="wire" class="panel__body">
+            <p class="fs-paragraph" data-size="small">Nothing sent yet.</p>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <style>
+      .masthead {
+        display: flex;
+        align-items: center;
+        gap: var(--size-3);
+        padding: var(--size-3) var(--size-5);
+        background: #0c0d14;
+        border-block-end: 1px solid rgba(0, 177, 250, 0.25);
+      }
+      .masthead__brand {
+        display: flex;
+        align-items: center;
+        gap: var(--size-2);
+        font-weight: var(--font-weight-bold);
+        font-size: var(--font-size-l);
+        color: var(--semantic-page-foreground);
+        text-decoration: none;
+      }
+      .masthead__where {
+        color: var(--palette-interactive-50);
+        font-size: var(--font-size-s);
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .page {
+        max-width: 72rem;
+        margin: 0 auto;
+        padding: var(--size-8) var(--size-5) var(--size-16);
+        display: grid;
+        gap: var(--size-4);
+      }
+      .page > p {
+        max-width: 60ch;
+        margin: 0;
+      }
+
+      .search {
+        display: grid;
+        gap: var(--size-1);
+        max-width: 32rem;
+        margin-block-start: var(--size-4);
+      }
+      /* Ours replaces it, and two crosses in one field is one too many. */
+      .search :global(.fs-search::-webkit-search-cancel-button) {
+        display: none;
+      }
+
+      .panels {
+        margin-block-start: var(--size-6);
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+        gap: var(--size-5);
+      }
+      .panel {
+        display: grid;
+        gap: var(--size-2);
+        align-content: start;
+        padding: var(--size-4);
+        border: 1px solid var(--semantic-divider-30);
+        border-radius: var(--size-1);
+      }
+      .panel--wide {
+        grid-column: 1 / -1;
+      }
+      .panel__title {
+        margin: 0;
+        font-size: var(--font-size-xxs);
+        font-weight: var(--font-weight-semibold);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--semantic-muted-foreground);
+      }
+      .panel__count,
+      .panel__busy {
+        color: var(--palette-interactive-50);
+      }
+      .panel__note {
+        margin: 0;
+        font-size: var(--font-size-xs);
+        color: var(--semantic-muted-foreground);
+      }
+      .panel__body {
+        min-height: 3rem;
+      }
+      .panel__json,
+      .panel__body :global(.wire__frame) {
+        margin: 0;
+        padding: var(--size-3);
+        overflow-x: auto;
+        background: #1a1b26;
+        border-radius: var(--size-1);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: var(--font-size-xs);
+        line-height: var(--semantic-line-height-compact);
+        white-space: pre-wrap;
+      }
+      .panel__body :global(.wire__frame + .wire__frame) {
+        margin-block-start: var(--size-2);
+      }
+      .panel__body :global(.hits) {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: var(--size-3);
+      }
+      .panel__body :global(.hits__heading) {
+        color: var(--semantic-muted-foreground);
+      }
+      .panel__body :global(.hits__excerpt) {
+        margin: var(--size-1) 0 0;
+        color: var(--semantic-muted-foreground);
+      }
+    </style>
+  </body>
+</html>

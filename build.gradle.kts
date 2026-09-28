@@ -23,7 +23,7 @@ subprojects {
      * published, they are not held to explicit API mode, and an unused value in
      * a documentation sample is not worth failing a release over.
      */
-    val internal = name in setOf("docs-samples")
+    val internal = name in setOf("docs-samples", "demo")
 
     apply(plugin = "org.jetbrains.kotlin.jvm")
     apply(plugin = "java-library")

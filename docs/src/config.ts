@@ -4,4 +4,6 @@
  */
 export const SERVICE =
   import.meta.env.PUBLIC_SERVICE_URL ??
-  "https://streamlord-docs-service.up.railway.app"
+  (import.meta.env.DEV
+    ? "http://localhost:8080"
+    : "https://streamlord-live.up.railway.app")

@@ -14,6 +14,7 @@ dependencyResolutionManagement {
 rootProject.name = "streamlord"
 
 include(
+    "demo",
     "docs-samples",
     "streamlord-core",
     "streamlord-analysis",
