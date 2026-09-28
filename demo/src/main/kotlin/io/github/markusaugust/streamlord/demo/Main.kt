@@ -35,6 +35,18 @@ public data class SearchSignals(val query: String = "")
 private val DOCS_HOSTS = listOf("streamlord-docs.netlify.app", "localhost:4321")
 
 /**
+ * Which build is answering, baked into the image by the Dockerfile.
+ *
+ * `/health` returns it rather than "ok", so a caller can tell this deployment from the one it
+ * replaced. That distinction is the whole reason it exists: the deploy step asks Railway to
+ * redeploy and returns as soon as the request is accepted, while the previous container keeps
+ * serving for another half minute. A health check that only looks for 200 passes against it, and
+ * CI went green on a deployment that never started. Comparing this against the commit that was
+ * pushed is what makes the check about the new image instead of about the endpoint.
+ */
+private val BUILD: String = System.getenv("BUILD_SHA") ?: "dev"
+
+/**
  * streamlord-live: the service the documentation talks to.
  *
  * CIO rather than Netty, because it is pure Kotlin and goes through a GraalVM native image
@@ -98,7 +110,7 @@ public fun Application.live() {
     }
 
     routing {
-        get("/health") { call.respondText("ok") }
+        get("/health") { call.respondText(BUILD) }
 
         get("/search") {
             val signals = call.readSignalsOr(SearchSignals())

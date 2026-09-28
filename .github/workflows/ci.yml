@@ -152,29 +152,130 @@ jobs:
       - name: Compile the native image
         run: ./gradlew :demo:nativeCompile --no-daemon
 
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       # GHCR takes only lowercase, and the account is MarkusAugust. Computed rather than
       # written out, so a renamed account or a fork still pushes to the right place.
       - name: Lowercase the owner
         id: owner
         run: echo "name=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
 
-      # No build cache. The image is a JRE base layer and one COPY of the distribution,
-      # and that layer changes on every build by definition — a cache would buy nothing
-      # and cost a buildx driver step, which is what the first attempt failed on.
-      - uses: docker/build-push-action@v6
+      # What the binary still expects from the world outside it.
+      #
+      # --static-nolibc promises that the answer is glibc and nothing else, and the
+      # distroless base carries glibc and nothing else. When those two disagree the image
+      # builds, pushes and deploys green, and the container exits on its first instruction
+      # with a missing libz.so.1 — a failure that is invisible to every step before it.
+      # Twenty lines here turn that into a build error naming the library.
+      - name: Check what the binary links against
+        run: |
+          set -euo pipefail
+          binary=demo/build/native/nativeCompile/streamlord-live
+
+          file "$binary"
+          needed=$(objdump -p "$binary" | awk '/NEEDED/ { print $2 }' | sort)
+          echo "Dynamically linked against:"
+          echo "$needed" | sed 's/^/  /'
+
+          # glibc, in the forms it is packaged in. Anything else — libz, libstdc++,
+          # libgcc_s — is a library the base image does not have.
+          allowed="libc.so.6 libm.so.6 libdl.so.2 libpthread.so.0 librt.so.1"
+          missing=""
+          for lib in $needed; do
+            case " $allowed " in
+              *" $lib "*) ;;
+              *) missing="$missing $lib" ;;
+            esac
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::the binary needs$missing, which gcr.io/distroless/base-debian12 does not carry"
+            exit 1
+          fi
+          echo "  glibc only, as --static-nolibc promises"
+
+      # The image, built here and not pushed yet.
+      #
+      # docker build rather than build-push-action, because the next step has to run this
+      # exact image before anyone else sees it, and that is worth more than the action's
+      # conveniences. There is no layer cache to lose: the image is a base layer and one
+      # COPY of a binary that changes on every build by definition.
+      - name: Build the image
+        env:
+          IMAGE: ghcr.io/${{ steps.owner.outputs.name }}/streamlord-live
+        run: |
+          docker build \
+            --build-arg "BUILD_SHA=$GITHUB_SHA" \
+            -t "$IMAGE:$GITHUB_SHA" \
+            -t "$IMAGE:latest" \
+            -f demo/Dockerfile .
+
+      # Run it here, before pushing. This is the step the libz failure was missing: the
+      # container starts or it does not, in a runner, on the same image that would have
+      # gone to Railway, and a binary that cannot start fails the job with its own log
+      # instead of becoming a 502 on the documentation site.
+      #
+      # It also asks the questions that only the running service can answer: whether the
+      # search index made it into the image, and whether the documentation's origin gets
+      # through CORS. Both have shipped broken before, and both are free to check here.
+      - name: Start the image and call it
+        env:
+          IMAGE: ghcr.io/${{ steps.owner.outputs.name }}/streamlord-live
+          ORIGIN: https://streamlord-docs.netlify.app
+        run: |
+          set -euo pipefail
+          trap 'docker logs streamlord-live 2>&1 | tail -40; docker rm -f streamlord-live >/dev/null 2>&1 || true' EXIT
+
+          docker run -d --name streamlord-live -p 8080:8080 "$IMAGE:$GITHUB_SHA"
+
+          echo "Waiting for the container to answer /health"
+          health=""
+          for attempt in $(seq 1 30); do
+            health=$(curl -s --max-time 2 http://localhost:8080/health || true)
+            [ -n "$health" ] && break
+            sleep 1
+          done
+
+          # /health returns the commit it was built from, so this also proves the image
+          # carries the build it says it does.
+          if [ "$health" != "$GITHUB_SHA" ]; then
+            echo "::error::/health returned '${health:-nothing}', expected $GITHUB_SHA"
+            exit 1
+          fi
+          echo "  up, and reporting $GITHUB_SHA"
+
+          preflight=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 \
+            -X OPTIONS \
+            -H "Origin: $ORIGIN" \
+            -H 'Access-Control-Request-Method: GET' \
+            -H 'Access-Control-Request-Headers: datastar-request' \
+            http://localhost:8080/search)
+          if [ "$preflight" != "200" ]; then
+            echo "::error::CORS preflight from $ORIGIN returned $preflight, not 200"
+            exit 1
+          fi
+          echo "  preflight from the documentation: 200"
+
+          body=$(curl -s --max-time 10 \
+            -H "Origin: $ORIGIN" \
+            -H 'Accept: text/event-stream' \
+            'http://localhost:8080/search?datastar=%7B%22query%22%3A%22readSignals%22%7D')
+
+          echo "$body" | grep -q '^event: datastar-patch-elements' \
+            || { echo "::error::no patch-elements frame in the response"; echo "$body" | head -5; exit 1; }
+          echo "$body" | grep -q 'fs-link' \
+            || { echo "::error::the search returned no hits — is the index in the image?"; exit 1; }
+          echo "  a search for readSignals came back with hits"
+
+      - uses: docker/login-action@v3
         with:
-          context: .
-          file: demo/Dockerfile
-          push: true
-          tags: |
-            ghcr.io/${{ steps.owner.outputs.name }}/streamlord-live:latest
-            ghcr.io/${{ steps.owner.outputs.name }}/streamlord-live:${{ github.sha }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push the image
+        env:
+          IMAGE: ghcr.io/${{ steps.owner.outputs.name }}/streamlord-live
+        run: |
+          docker push "$IMAGE:$GITHUB_SHA"
+          docker push "$IMAGE:latest"
 
       # Railway pins the digest it deployed with, so a new :latest in the registry is a
       # tag nothing is watching: the service kept answering from an image two commits
@@ -188,57 +289,43 @@ jobs:
           npm install -g @railway/cli
           railway redeploy --service streamlord-live --from-source --yes
 
-      # redeploy returns as soon as Railway accepts the request, so a green job so far
-      # means the image was handed over, not that anything answers. Every failure in this
-      # phase has been of that shape: right in one place, invisible in another, silent in
-      # between. This is where the job stops being able to lie about it.
-      - name: Check that it answers
+      # redeploy returns as soon as Railway accepts the request, and the container it
+      # replaces keeps serving while the new one starts. A check that asks for 200 gets it
+      # from the old deployment and says the new one is fine — which is how a container
+      # that never started once passed this step. So it waits for /health to name the
+      # commit being deployed, and nothing else counts as arrived.
+      - name: Check that the deployment answers
         if: env.RAILWAY_TOKEN != ''
         env:
           SERVICE: https://streamlord-live-production.up.railway.app
-          ORIGIN: https://streamlord-docs.netlify.app
         run: |
           set -euo pipefail
 
-          echo "Waiting for the new deployment to serve /health"
+          echo "Waiting for $GITHUB_SHA to be the build answering /health"
           for attempt in $(seq 1 60); do
-            if [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$SERVICE/health")" = "200" ]; then
-              echo "  healthy after ${attempt} attempt(s)"
+            health=$(curl -s --max-time 10 "$SERVICE/health" || true)
+            if [ "$health" = "$GITHUB_SHA" ]; then
+              echo "  serving $GITHUB_SHA after ${attempt} attempt(s)"
               break
             fi
             if [ "$attempt" = "60" ]; then
-              echo "::error::$SERVICE/health never returned 200"
+              echo "::error::after five minutes /health still returns '${health:-nothing}', not $GITHUB_SHA"
               exit 1
             fi
             sleep 5
           done
 
-          # The documentation's origin specifically: a service that answers curl and refuses
-          # the site is exactly the state this phase shipped twice.
-          preflight=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
-            -X OPTIONS \
-            -H "Origin: $ORIGIN" \
-            -H 'Access-Control-Request-Method: GET' \
-            -H 'Access-Control-Request-Headers: datastar-request' \
-            "$SERVICE/search")
-          if [ "$preflight" != "200" ]; then
-            echo "::error::CORS preflight from $ORIGIN returned $preflight, not 200"
-            exit 1
-          fi
-          echo "  preflight from the documentation: 200"
-
-          # A real search, not a ping. The index is built into the image, so an empty result
-          # here means the image shipped without one.
+          # The image was exercised in full before it was pushed, so this is deliberately
+          # thin: one real search, to prove the deployment is reachable from outside
+          # Railway rather than to re-test the service.
           body=$(curl -s --max-time 15 \
-            -H "Origin: $ORIGIN" \
+            -H 'Origin: https://streamlord-docs.netlify.app' \
             -H 'Accept: text/event-stream' \
             "$SERVICE/search?datastar=%7B%22query%22%3A%22readSignals%22%7D")
 
-          echo "$body" | grep -q '^event: datastar-patch-elements' \
-            || { echo "::error::no patch-elements frame in the response"; echo "$body" | head -5; exit 1; }
           echo "$body" | grep -q 'fs-link' \
-            || { echo "::error::the search returned no hits — is the index in the image?"; exit 1; }
-          echo "  a search for readSignals came back with hits"
+            || { echo "::error::the deployed search returned no hits"; echo "$body" | head -5; exit 1; }
+          echo "  the deployment answers a search"
 
   publish-vscode:
     name: Publish VS Code extension

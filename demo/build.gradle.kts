@@ -95,6 +95,26 @@ graalvmNative {
                 "-H:+ReportUnsupportedElementsAtRuntime",
                 "-H:+ReportExceptionStackTraces",
             )
+
+            /*
+             * Mostly static, on Linux: --static-nolibc links in every library the image needs,
+             * including zlib and the JDK's own static libraries, and leaves only glibc dynamic.
+             * That is the documented option for a distroless container
+             * (graalvm.org/latest/reference-manual/native-image/guides/build-static-executables).
+             *
+             * Without it the binary links zlib dynamically, and the first deployment died in a
+             * way no build step could see: the image built, pushed and deployed green, and the
+             * container then exited with "libz.so.1: cannot open shared object file". The
+             * distroless base carries glibc and not zlib, so the missing piece only exists at
+             * the moment the process starts.
+             *
+             * Linux only. The flag is a property of ELF linking and native-image rejects it on
+             * macOS, where this module is also compiled by hand to check that the image runs
+             * at all before any of it reaches CI.
+             */
+            if (System.getProperty("os.name").startsWith("Linux")) {
+                buildArgs.add("--static-nolibc")
+            }
         }
     }
 }
