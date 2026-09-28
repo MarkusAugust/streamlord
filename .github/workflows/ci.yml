@@ -151,6 +151,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # No build cache. The image is a JRE base layer and one COPY of the distribution,
+      # and that layer changes on every build by definition — a cache would buy nothing
+      # and cost a buildx driver step, which is what the first attempt failed on.
       - uses: docker/build-push-action@v6
         with:
           context: .
@@ -159,8 +162,6 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository_owner }}/streamlord-live:latest
             ghcr.io/${{ github.repository_owner }}/streamlord-live:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   publish-vscode:
     name: Publish VS Code extension
