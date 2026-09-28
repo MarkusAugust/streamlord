@@ -27,6 +27,17 @@ import kotlinx.serialization.Serializable
  *
  * `data-bind-query` on the input is the whole of the client side: the browser keeps the value
  * in a signal, ships the store with the request, and this class is the other end of it.
+ *
+ * Registered in src/main/resources/META-INF/native-image/reflect-config.json, and it has to be.
+ * [SignalsCodec] is a KType port, so it can host Jackson as well as kotlinx.serialization, and
+ * kotlinx.serialization answers a KType by reading the class: `getDeclaredField("Companion")`,
+ * then `serializer()` on it, with kotlin-reflect reading the Kotlin metadata on the way. None of
+ * that is visible in the bytecode, so native-image drops all of it and the call fails at runtime
+ * with "Unresolved class: class SearchSignals (kind = CLASS)" — a service that starts, answers
+ * /health, passes CORS and then has nothing to say about a search.
+ *
+ * Any application that puts this SDK in a native image needs the same three lines for its own
+ * signals classes. Nothing about it is specific to the search.
  */
 @Serializable
 public data class SearchSignals(val query: String = "")

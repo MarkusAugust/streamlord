@@ -1,0 +1,21 @@
+[
+  {
+    "name": "io.github.markusaugust.streamlord.demo.SearchSignals",
+    "allDeclaredConstructors": true,
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true,
+    "allDeclaredClasses": true
+  },
+  {
+    "name": "io.github.markusaugust.streamlord.demo.SearchSignals$Companion",
+    "allDeclaredConstructors": true,
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "io.github.markusaugust.streamlord.demo.SearchSignals$$serializer",
+    "allDeclaredConstructors": true,
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true
+  }
+]
