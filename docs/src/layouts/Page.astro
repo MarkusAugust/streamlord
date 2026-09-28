@@ -43,9 +43,9 @@ const { title, description, slug, headings } = Astro.props
 
     <header class="masthead" data-theme="dark">
       <a class="masthead__brand" href="/">
-          <Logo size={26} />
-          <span>Streamlord</span>
-        </a>
+        <Logo size={26} />
+        <span>Streamlord</span>
+      </a>
       <div class="masthead__tools">
         <!-- The search field lands here in phase 2, talking to
              streamlord-docs-service. -->
@@ -119,15 +119,20 @@ const { title, description, slug, headings } = Astro.props
 
     <style>
       .masthead {
-        /* Dark in both themes, because the mark was drawn on a dark ground and a header that
-           changes colour under a logo that does not is worse than either. data-theme rather
-           than hand-written colours, so everything inside follows.
+        /* Dark under both themes, because the mark was drawn on a dark ground and a header
+           that changes colour under a logo that does not is worse than either. The island
+           carries data-theme="dark" rather than hand-written colours, so the label, the
+           button and its states all follow the tokens.
 
-           Denim rather than the hero's near-black: against a white page #0c0d14 is a ~19:1
-           edge, which is as hard as an edge can be. #2c436b is the deck's own --denim-100 and
-           roughly halves it to ~9.5:1, while white text on it still measures ~8.6:1 and the
-           neon focus ring ~3.9:1, past the 3:1 a focus indicator needs. In dark mode it reads
-           as a raised surface above the page rather than a hole in it. */
+           Two grounds, though, because the page underneath is two pages. Over white, near-black is a
+           ~19:1 edge — as hard as an edge gets — so the light theme takes #2c436b, the deck's
+           own --denim-100, which roughly halves it to ~9.5:1. Over the dark page that softer
+           band would be *lighter* than the surface and float forward, so the dark theme keeps
+           #0c0d14: the ground the mark was drawn on, the same one the landing page uses, and
+           at 1.12:1 against the surface it anchors the top while the border does the parting.
+
+           The band is a data-theme="dark" island either way, so these two selectors key off
+           the root's theme rather than its own. */
         background: #2c436b;
         color: var(--semantic-page-foreground);
         border-block-end: 1px solid rgba(0, 177, 250, 0.25);
@@ -137,6 +142,15 @@ const { title, description, slug, headings } = Astro.props
         gap: var(--size-4);
         padding: var(--size-3) var(--size-5);
       }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) .masthead {
+          background: #0c0d14;
+        }
+      }
+      :root[data-theme="dark"] .masthead {
+        background: #0c0d14;
+      }
+
       /*
        * The ghost button fills on hover instead of tinting.
        *
