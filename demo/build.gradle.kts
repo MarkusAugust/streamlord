@@ -55,6 +55,15 @@ graalvmNative {
             verbose.set(true)
 
             /*
+             * An executable, said out loud. Without it the plugin passed --shared and the
+             * compile happily produced streamlord-live.so, a shared library with a C header
+             * beside it; the failure surfaced two steps later as a Dockerfile unable to find
+             * a file that had never been written. Ktor's sample does not set this because it
+             * applies io.ktor.plugin, which does.
+             */
+            sharedLibrary.set(false)
+
+            /*
              * Copied from Ktor's own GraalVM sample rather than assembled by guesswork:
              * github.com/ktorio/ktor-samples/tree/main/graalvm, on the same Kotlin 2.4.20
              * and Ktor 3.6.0 as this module.
