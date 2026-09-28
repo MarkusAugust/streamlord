@@ -1,5 +1,5 @@
 ---
-import { NAVIGATION } from "../navigation"
+import { NAVIGATION, href } from "../navigation"
 
 interface Props {
   current: string
@@ -22,7 +22,7 @@ const { current } = Astro.props
               <li>
                 <a
                   class="sidebar__link"
-                  href={`/${page.slug}/`}
+                  href={href(page.slug)}
                   aria-current={page.slug === current ? "page" : undefined}
                 >
                   {page.title}

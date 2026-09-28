@@ -53,6 +53,14 @@ export const NAVIGATION: Section[] = [
 ]
 
 /** Every page in reading order, which is what the pager walks. */
+/** The page served at `/`. It keeps no second address of its own. */
+export const ROOT_PAGE = "introduction"
+
+/** Where a page lives. Everything that writes a link asks this, so it is decided once. */
+export function href(slug: string): string {
+  return slug === ROOT_PAGE ? "/" : `/${slug}/`
+}
+
 export const READING_ORDER = NAVIGATION.flatMap((section) => section.pages)
 
 export function neighbours(slug: string) {

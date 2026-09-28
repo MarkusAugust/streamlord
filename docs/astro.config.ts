@@ -76,7 +76,7 @@ const withStreamlordRules = (
 })
 
 export default defineConfig({
-  site: "https://streamlord.netlify.app",
+  site: "https://streamlord-docs.netlify.app",
   markdown: {
     remarkPlugins: [remarkTabs],
     rehypePlugins: [rehypeTables],

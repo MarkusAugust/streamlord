@@ -1,5 +1,5 @@
 ---
-import { neighbours } from "../navigation"
+import { neighbours, href } from "../navigation"
 
 interface Props {
   current: string
@@ -12,7 +12,7 @@ const { previous, next } = neighbours(Astro.props.current)
   (previous || next) && (
     <nav class="pager" aria-label="Previous and next page">
       {previous ? (
-        <a class="pager__link" href={`/${previous.slug}/`} rel="prev">
+        <a class="pager__link" href={href(previous.slug)} rel="prev">
           <span class="pager__direction">Previous</span>
           <span class="pager__title">{previous.title}</span>
         </a>
@@ -20,7 +20,7 @@ const { previous, next } = neighbours(Astro.props.current)
         <span />
       )}
       {next && (
-        <a class="pager__link" data-next href={`/${next.slug}/`} rel="next">
+        <a class="pager__link" data-next href={href(next.slug)} rel="next">
           <span class="pager__direction">Next</span>
           <span class="pager__title">{next.title}</span>
         </a>

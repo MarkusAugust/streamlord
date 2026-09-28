@@ -1,5 +1,6 @@
 ---
 import type { MarkdownHeading } from "astro"
+import { ROOT_PAGE, href } from "../navigation"
 import CodeBlock from "../components/CodeBlock.astro"
 import Pager from "../components/Pager.astro"
 import Sidebar from "../components/Sidebar.astro"
@@ -39,7 +40,7 @@ const { title, description, slug, headings } = Astro.props
     <a class="fs-skip-link" href="#content">Skip to content</a>
 
     <header class="masthead">
-      <a class="masthead__brand" href="/introduction/">Streamlord</a>
+      <a class="masthead__brand" href={href(ROOT_PAGE)}>Streamlord</a>
       <div class="masthead__tools">
         <!-- The search field lands here in phase 2, talking to
              streamlord-docs-service. -->

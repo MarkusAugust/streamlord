@@ -25,12 +25,12 @@ get("/feed") {
 }
 ```
 
-## 📖 [Documentation](https://streamlord.netlify.app)
+## 📖 [Documentation](https://streamlord-docs.netlify.app)
 
 Everything lives there: the protocol, both adapters, the three ways to write markup, the
-security model, the editors, and the architecture. Start with
-[Introduction](https://streamlord.netlify.app/introduction/) or go straight to
-[Your first stream](https://streamlord.netlify.app/first-stream/).
+security model, the editors, and the architecture. Go straight to
+[your first stream](https://streamlord-docs.netlify.app/first-stream/) if you would rather
+start by writing one.
 
 ## Install
 
@@ -45,14 +45,14 @@ dependencies {
 ```
 
 There are eight modules and you will never want all of them.
-[Install and modules](https://streamlord.netlify.app/install/) explains which and why.
+[Install and modules](https://streamlord-docs.netlify.app/install/) explains which and why.
 
 ## The editors
 
 A VS Code extension (`MarkusAugust.streamlord`) and an IntelliJ IDEA plugin
 (`io.github.markusaugust.streamlord`) read Datastar as a language: diagnostics with quick fixes
 inside Kotlin strings and template files, completion, hover, highlighting of the Datastar tokens
-only, and a Stream Inspector. See [The editors](https://streamlord.netlify.app/editors/).
+only, and a Stream Inspector. See [The editors](https://streamlord-docs.netlify.app/editors/).
 
 ## Repository layout
 
@@ -83,7 +83,7 @@ IntelliJ plugin `intellij-v<version>`.
 ## Changelog
 
 [CHANGELOG.md](CHANGELOG.md), and the entries that change how you write code are summarised on
-[the changelog page](https://streamlord.netlify.app/changelog/).
+[the changelog page](https://streamlord-docs.netlify.app/changelog/).
 
 ## License
 
