@@ -3,15 +3,28 @@ package io.github.markusaugust.streamlord.json.kotlinx
 import io.github.markusaugust.streamlord.core.SignalsCodecException
 import io.github.markusaugust.streamlord.core.port.driven.decode
 import io.github.markusaugust.streamlord.core.port.driven.encode
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.descriptors.buildClassSerialDescriptor
+import kotlinx.serialization.descriptors.element
+import kotlinx.serialization.encoding.CompositeDecoder
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.encoding.decodeStructure
+import kotlinx.serialization.encoding.encodeStructure
+import kotlin.reflect.typeOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class KotlinxSignalsCodecTest {
-
     @Serializable
-    data class Signals(val search: String = "", val count: Int = 0, val gone: String? = null)
+    data class Signals(
+        val search: String = "",
+        val count: Int = 0,
+        val gone: String? = null,
+    )
 
     private val codec = KotlinxSignalsCodec()
 
@@ -25,9 +38,65 @@ class KotlinxSignalsCodecTest {
         assertEquals(Signals("x", 2), codec.decode<Signals>("""{"search":"x","count":2,"_private":true}"""))
     }
 
+    /*
+     * The reason the parameter exists is GraalVM, where the reflective lookup finds nothing, and
+     * that cannot be asserted from a JVM test. What can: that a named serializer is the one used,
+     * which is the whole mechanism. If this passes, the native image is using the generated
+     * serializer rather than reading the class.
+     */
+    @Test
+    fun `a named serializer is used instead of the reflective lookup`() {
+        val named = KotlinxSignalsCodec(serializers = mapOf(typeOf<Signals>() to ShoutingSignals))
+
+        assertEquals("""{"search":"ASH"}""", named.encode(Signals(search = "ash")))
+        assertEquals(Signals(search = "ash"), named.decode<Signals>("""{"search":"ASH"}"""))
+    }
+
+    @Test
+    fun `types that are not named still resolve themselves`() {
+        val named = KotlinxSignalsCodec(serializers = mapOf(typeOf<Signals>() to ShoutingSignals))
+
+        assertEquals("""{"name":"gorvek"}""", named.encode(Other("gorvek")))
+    }
+
     @Test
     fun `wraps failures`() {
         assertFailsWith<SignalsCodecException> { codec.decode<Signals>("""{"count":"not a number"}""") }
         assertFailsWith<SignalsCodecException> { codec.decode<Signals>("not json") }
+    }
+
+    @Serializable
+    data class Other(
+        val name: String,
+    )
+
+    /** Writes the search in capitals, so the test can tell which serializer ran. */
+    private object ShoutingSignals : KSerializer<Signals> {
+        override val descriptor: SerialDescriptor =
+            buildClassSerialDescriptor("Shouting") {
+                element<String>("search")
+            }
+
+        override fun serialize(
+            encoder: Encoder,
+            value: Signals,
+        ) {
+            encoder.encodeStructure(descriptor) {
+                encodeStringElement(descriptor, 0, value.search.uppercase())
+            }
+        }
+
+        override fun deserialize(decoder: Decoder): Signals =
+            decoder.decodeStructure(descriptor) {
+                var search = ""
+                while (true) {
+                    when (val index = decodeElementIndex(descriptor)) {
+                        0 -> search = decodeStringElement(descriptor, 0).lowercase()
+                        CompositeDecoder.DECODE_DONE -> break
+                        else -> error("Unexpected index $index")
+                    }
+                }
+                Signals(search = search)
+            }
     }
 }
