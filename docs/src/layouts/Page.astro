@@ -1,0 +1,217 @@
+---
+import type { MarkdownHeading } from "astro"
+import CodeBlock from "../components/CodeBlock.astro"
+import Pager from "../components/Pager.astro"
+import Sidebar from "../components/Sidebar.astro"
+import Toc from "../components/Toc.astro"
+import "../styles/global.css"
+
+interface Props {
+  title: string
+  description: string
+  slug: string
+  headings: MarkdownHeading[]
+}
+
+const { title, description, slug, headings } = Astro.props
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title} — Streamlord</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site)} />
+    <script is:inline>
+      // Inline and before paint, so the page never flashes the wrong theme.
+      // Datastar takes the toggle over; this one only restores the choice.
+      try {
+        const saved = localStorage.getItem("theme")
+        if (saved === "light" || saved === "dark") {
+          document.documentElement.dataset.theme = saved
+        }
+      } catch {}
+    </script>
+  </head>
+  <body>
+    <a class="fs-skip-link" href="#content">Skip to content</a>
+
+    <header class="masthead">
+      <a class="masthead__brand" href="/introduction/">Streamlord</a>
+      <div class="masthead__tools">
+        <!-- The search field lands here in phase 2, talking to
+             streamlord-docs-service. -->
+        <button class="fs-button" data-variant="ghost" data-theme-toggle>
+          Theme
+        </button>
+      </div>
+    </header>
+
+    <div class="shell">
+      <aside class="shell__sidebar">
+        <Sidebar current={slug} />
+      </aside>
+
+      <main class="shell__main" id="content">
+        <article class="prose">
+          <h1 class="fs-heading" data-size="xl">{title}</h1>
+          <p class="fs-paragraph" data-variant="lead">{description}</p>
+          <slot />
+        </article>
+        <Pager current={slug} />
+      </main>
+
+      <aside class="shell__toc">
+        <Toc headings={headings} />
+      </aside>
+    </div>
+
+    <CodeBlock />
+
+    <script>
+      import { defineFsTabs } from "@fristil/designsystem/tabs"
+
+      // Once for the whole page, not once per tab set.
+      defineFsTabs()
+
+      /*
+       * Tab sets follow each other. A reader who picks Maven on one block means Maven
+       * everywhere, on this page and the next: the choice is about them, not about the
+       * block. Kept in localStorage because it is a per-reader convenience and nothing
+       * depends on it surviving.
+       */
+      const KEY = "tab-choice"
+      let syncing = false
+
+      const pick = (label: string) => {
+        if (syncing) return
+        syncing = true
+        try {
+          localStorage.setItem(KEY, label)
+        } catch {}
+
+        for (const button of document.querySelectorAll<HTMLButtonElement>("[data-tab-label]")) {
+          if (button.dataset.tabLabel === label && button.getAttribute("aria-selected") !== "true") {
+            button.click()
+          }
+        }
+        syncing = false
+      }
+
+      document.addEventListener("click", (event) => {
+        const button = (event.target as HTMLElement)?.closest<HTMLButtonElement>("[data-tab-label]")
+        if (button?.dataset.tabLabel) pick(button.dataset.tabLabel)
+      })
+
+      try {
+        const saved = localStorage.getItem(KEY)
+        if (saved) pick(saved)
+      } catch {}
+    </script>
+
+    <style>
+      .masthead {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--size-4);
+        padding: var(--size-3) var(--size-5);
+        border-block-end: 1px solid var(--semantic-divider-30);
+      }
+      .masthead__brand {
+        font-weight: var(--font-weight-bold);
+        font-size: var(--font-size-l);
+        color: var(--semantic-page-foreground);
+        text-decoration: none;
+        letter-spacing: -0.01em;
+      }
+      .masthead__tools {
+        display: flex;
+        gap: var(--size-2);
+        align-items: center;
+      }
+
+      .shell {
+        display: grid;
+        grid-template-columns: 16rem minmax(0, 1fr) 14rem;
+        gap: var(--size-8);
+        max-width: 84rem;
+        margin: 0 auto;
+        padding: var(--size-6) var(--size-5) var(--size-16);
+      }
+      .shell__sidebar {
+        align-self: start;
+        position: sticky;
+        top: var(--size-6);
+      }
+      .shell__main {
+        min-width: 0;
+      }
+
+      @media (max-width: 75rem) {
+        .shell {
+          grid-template-columns: 16rem minmax(0, 1fr);
+        }
+      }
+      @media (max-width: 60rem) {
+        .shell {
+          grid-template-columns: minmax(0, 1fr);
+          gap: var(--size-5);
+          padding-inline: var(--size-4);
+        }
+        .shell__sidebar {
+          position: static;
+        }
+      }
+    </style>
+
+    <style is:global>
+      .prose h1 {
+        margin-block-end: var(--size-2);
+      }
+      .prose h2 {
+        margin-block-start: var(--size-8);
+        font-size: var(--font-size-l);
+        line-height: var(--semantic-line-height-heading);
+      }
+      .prose h3 {
+        margin-block-start: var(--size-6);
+        font-size: var(--font-size-m);
+      }
+      .prose p,
+      .prose li {
+        line-height: var(--semantic-line-height-article);
+      }
+      .prose a {
+        color: var(--semantic-interactive-main);
+      }
+      .prose table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+    </style>
+
+    <script>
+      // Cycles light, dark and back to the system choice.
+      const root = document.documentElement
+      const button = document.querySelector("[data-theme-toggle]")
+
+      button?.addEventListener("click", () => {
+        const now = root.dataset.theme
+        const next = now === "dark" ? "light" : now === "light" ? undefined : "dark"
+
+        try {
+          if (next) {
+            root.dataset.theme = next
+            localStorage.setItem("theme", next)
+          } else {
+            delete root.dataset.theme
+            localStorage.removeItem("theme")
+          }
+        } catch {}
+      })
+    </script>
+  </body>
+</html>

@@ -1,0 +1,125 @@
+---
+import type { MarkdownHeading } from "astro"
+
+interface Props {
+  headings: MarkdownHeading[]
+}
+
+// Only h2 and h3. An article that needs four levels needs an editor, not a
+// deeper table of contents.
+const { headings } = Astro.props
+const entries = headings.filter((h) => h.depth === 2 || h.depth === 3)
+---
+
+{
+  entries.length > 0 && (
+    <nav class="toc" aria-labelledby="toc-title">
+      <h2 class="toc__title" id="toc-title">
+        On this page
+      </h2>
+      <ul class="toc__list">
+        {entries.map((heading) => (
+          <li data-depth={heading.depth}>
+            <a class="toc__link" href={`#${heading.slug}`}>
+              {heading.text}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  )
+}
+
+<style>
+  .toc {
+    position: sticky;
+    top: var(--size-6);
+    display: grid;
+    gap: var(--size-2);
+    align-content: start;
+  }
+  .toc__title {
+    margin: 0;
+    font-size: var(--font-size-xxs);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--semantic-muted-foreground);
+  }
+  .toc__list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: var(--size-px);
+    border-inline-start: 1px solid var(--semantic-divider-30);
+  }
+  .toc__list li[data-depth="3"] {
+    padding-inline-start: var(--size-3);
+  }
+  .toc__link {
+    display: block;
+    padding: var(--size-1) var(--size-3);
+    margin-inline-start: -1px;
+    border-inline-start: 1px solid transparent;
+    color: var(--semantic-muted-foreground);
+    text-decoration: none;
+    font-size: var(--font-size-s);
+  }
+  .toc__link:hover {
+    color: var(--semantic-page-foreground);
+  }
+  .toc__link:focus-visible {
+    outline: 2px solid var(--semantic-focus-ring);
+    outline-offset: 2px;
+  }
+  .toc__link[data-active] {
+    border-inline-start-color: var(--semantic-interactive-main);
+    color: var(--semantic-interactive-main);
+  }
+
+  @media (max-width: 75rem) {
+    .toc {
+      display: none;
+    }
+  }
+</style>
+
+<script>
+  // Mark the heading the reader is at. An IntersectionObserver rather than a
+  // scroll handler, so the browser does the work it is already doing.
+  const links = new Map<string, HTMLAnchorElement>()
+  for (const link of document.querySelectorAll<HTMLAnchorElement>(".toc__link")) {
+    links.set(decodeURIComponent(link.hash.slice(1)), link)
+  }
+
+  if (links.size > 0) {
+    const seen = new Set<string>()
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) seen.add(entry.target.id)
+          else seen.delete(entry.target.id)
+        }
+
+        let active: HTMLAnchorElement | undefined
+        for (const [id, link] of links) {
+          if (seen.has(id)) {
+            active = link
+            break
+          }
+        }
+
+        for (const link of links.values()) delete link.dataset.active
+        if (active) active.dataset.active = ""
+      },
+      { rootMargin: "0px 0px -70% 0px" },
+    )
+
+    for (const id of links.keys()) {
+      const heading = document.getElementById(id)
+      if (heading) observer.observe(heading)
+    }
+  }
+</script>

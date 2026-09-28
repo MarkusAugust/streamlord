@@ -1,0 +1,33 @@
+---
+import { getCollection, render } from "astro:content"
+import Page from "../layouts/Page.astro"
+import { READING_ORDER } from "../navigation"
+
+export async function getStaticPaths() {
+  const entries = await getCollection("docs")
+  return entries.map((entry) => ({
+    params: { slug: entry.id },
+    props: { entry },
+  }))
+}
+
+const { entry } = Astro.props
+const { Content, headings } = await render(entry)
+
+// A page that exists on disk but not in the navigation would be unreachable
+// from the sidebar and invisible to the pager. Fail the build instead.
+if (!READING_ORDER.some((page) => page.slug === entry.id)) {
+  throw new Error(
+    `src/content/docs/${entry.id}.md is not listed in src/navigation.ts`,
+  )
+}
+---
+
+<Page
+  title={entry.data.title}
+  description={entry.data.description}
+  slug={entry.id}
+  headings={headings}
+>
+  <Content />
+</Page>

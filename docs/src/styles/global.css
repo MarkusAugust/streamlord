@@ -1,0 +1,15 @@
+/* Fristil first, the theme after. The theme declares the layer order itself,
+   so it wins over the package defaults regardless of import order. */
+@import "@fristil/designsystem/fristil.css";
+@import "./theme.css";
+
+/* Fristil deliberately sets nothing on body: it is a design system, not a
+   reset. The font stack is the one from the design-system-architecture deck —
+   no webfont, no extra request. */
+body {
+  margin: 0;
+  background: var(--semantic-page-background);
+  color: var(--semantic-page-foreground);
+  font-family: Helvetica, Arial, sans-serif;
+  line-height: var(--semantic-line-height-default);
+}

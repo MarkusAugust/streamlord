@@ -1,0 +1,105 @@
+---
+// Frames every code block in the article: a copy button, a scrollable body,
+// and a border that follows the theme. Included once by the layout rather than
+// wrapped around each block, because the blocks come from markdown fences and
+// there is nothing to wrap them in.
+//
+// Step 5 replaces the highlighting underneath with Shiki fed by the grammars
+// from editors/vscode/syntaxes. The frame here does not change when it does.
+---
+
+<style is:global>
+  .prose pre {
+    position: relative;
+    margin-block: var(--size-5);
+    padding: var(--size-4);
+    overflow-x: auto;
+    border: 1px solid var(--semantic-divider-30);
+    border-radius: var(--size-1);
+    font-size: var(--font-size-s);
+    line-height: var(--semantic-line-height-compact);
+  }
+  .prose :not(pre) > code {
+    padding: 0.15em 0.4em;
+    border-radius: 3px;
+    background: var(--semantic-neutral-background);
+    font-size: 0.9em;
+  }
+  .prose code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  /* Shiki writes the light colour inline and the dark one as a custom
+     property, so switching themes is a CSS job. The selector shape is Fristil's:
+     the system preference wins unless the reader has explicitly chosen light,
+     and an explicit dark choice wins over the system. */
+  .astro-code,
+  .astro-code span {
+    font-weight: var(--shiki-light-font-weight);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .astro-code,
+    :root:not([data-theme="light"]) .astro-code span {
+      color: var(--shiki-dark) !important;
+      font-weight: var(--shiki-dark-font-weight);
+    }
+    :root:not([data-theme="light"]) .astro-code {
+      background-color: var(--shiki-dark-bg) !important;
+    }
+  }
+  :root[data-theme="dark"] .astro-code,
+  :root[data-theme="dark"] .astro-code span {
+    color: var(--shiki-dark) !important;
+    font-weight: var(--shiki-dark-font-weight);
+  }
+  :root[data-theme="dark"] .astro-code {
+    background-color: var(--shiki-dark-bg) !important;
+  }
+
+  .prose fs-tabs {
+    display: block;
+    margin-block: var(--size-5);
+  }
+  /* The panel already has the code block's own margin; a second one doubles it. */
+  .prose .fs-tabs__panel > pre {
+    margin-block: 0;
+  }
+
+  .copy {
+    position: absolute;
+    top: var(--size-2);
+    inset-inline-end: var(--size-2);
+    opacity: 0;
+    transition: opacity 120ms;
+  }
+  pre:hover .copy,
+  .copy:focus-visible {
+    opacity: 1;
+  }
+</style>
+
+<script>
+  // Every code block gets a copy button. It is added here rather than written
+  // into the markdown so that a fenced block in any page gets one for free.
+  for (const block of document.querySelectorAll<HTMLPreElement>(".prose pre")) {
+    const button = document.createElement("button")
+    button.className = "fs-button copy"
+    button.dataset.variant = "secondary"
+    button.type = "button"
+    button.textContent = "Copy"
+
+    button.addEventListener("click", async () => {
+      const code = block.querySelector("code")?.textContent ?? ""
+      try {
+        await navigator.clipboard.writeText(code)
+        button.textContent = "Copied"
+      } catch {
+        button.textContent = "Press Cmd+C"
+      }
+      setTimeout(() => {
+        button.textContent = "Copy"
+      }, 1500)
+    })
+
+    block.append(button)
+  }
+</script>

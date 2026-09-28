@@ -1,0 +1,134 @@
+/*
+ * Generert av @fristil/designsystem. Rediger oppskriften, ikke denne fila.
+ *
+ * Overstyrer verdiene i tokens.css. Det som ikke står i oppskriften, står
+ * fortsatt der.
+ *
+ * Laget er erklært etter «fristil», så temaet vinner over pakkens
+ * standardverdier uansett hvilken rekkefølge stilarkene lastes i. Din egen
+ * CSS er usortert, og vinner fortsatt over begge.
+ */
+
+@layer fristil, fristil-tema;
+
+@layer fristil-tema {
+  :root {
+    --palette-interactive-5: #edf7fe;
+    --palette-interactive-10: #d1ecff;
+    --palette-interactive-30: #88d1ff;
+    --palette-interactive-50: #00b1fa;
+    --palette-interactive-70: #007aaf;
+    --palette-interactive-100: #004869;
+    --palette-danger-5: #fff1f3;
+    --palette-danger-10: #ffdee2;
+    --palette-danger-30: #ffadb9;
+    --palette-danger-50: #fb718c;
+    --palette-danger-70: #bb3f5c;
+    --palette-danger-100: #761a33;
+    --palette-success-5: #f0f8ef;
+    --palette-success-10: #daefd7;
+    --palette-success-30: #a3d89c;
+    --palette-success-50: #60be54;
+    --palette-success-70: #2e8722;
+    --palette-success-100: #095100;
+    --palette-warning-5: #fbf4eb;
+    --palette-warning-10: #f7e5cc;
+    --palette-warning-30: #ecbf7c;
+    --palette-warning-50: #d99500;
+    --palette-warning-70: #976700;
+    --palette-warning-100: #5a3b00;
+    --palette-visited-5: #edf7fe;
+    --palette-visited-10: #d1ecff;
+    --palette-visited-30: #88d1ff;
+    --palette-visited-50: #00b1fa;
+    --palette-visited-70: #007aaf;
+    --palette-visited-100: #004869;
+    --palette-neutral-0: #ffffff;
+    --palette-neutral-5: #f1f5ff;
+    --palette-neutral-10: #dfe4f2;
+    --palette-neutral-30: #acb1be;
+    --palette-neutral-50: #707481;
+    --palette-neutral-70: #494d58;
+    --palette-neutral-100: #171a24;
+    --semantic-page-background: #ffffff;
+    --semantic-danger-background: #ffdee2;
+    --semantic-warning-background: #f7e5cc;
+    --semantic-success-background: #daefd7;
+    --semantic-neutral-background: #dfe4f2;
+    --semantic-interactive-background: #d1ecff;
+    --semantic-disabled-background: #dfe4f2;
+    --semantic-disabled-foreground: #707481;
+    --semantic-field-border-hover: #494d58;
+    --semantic-divider-30: #acb1be;
+    --semantic-divider-100: #171a24;
+    --semantic-interactive-contrast: #ffffff;
+    --semantic-danger-contrast: #ffffff;
+    --semantic-page-foreground: #171a24;
+    --semantic-muted-foreground: #707481;
+    --semantic-interactive-main: #006e9e;
+    --semantic-interactive-foreground: #004869;
+    --semantic-interactive-visited: #004869;
+    --semantic-danger-foreground: #761a33;
+    --semantic-warning-foreground: #5a3b00;
+    --semantic-success-foreground: #095100;
+    --semantic-neutral-foreground: #494d58;
+    --semantic-danger-main: #bb3f5c;
+    --semantic-field-border: #707481;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --semantic-page-background: #171a24;
+      --semantic-danger-background: #761a33;
+      --semantic-warning-background: #5a3b00;
+      --semantic-success-background: #095100;
+      --semantic-neutral-background: #494d58;
+      --semantic-interactive-background: #004869;
+      --semantic-disabled-background: #494d58;
+      --semantic-disabled-foreground: #acb1be;
+      --semantic-field-border-hover: #acb1be;
+      --semantic-divider-30: #494d58;
+      --semantic-divider-100: #f1f5ff;
+      --semantic-interactive-contrast: #171a24;
+      --semantic-danger-contrast: #171a24;
+      --semantic-page-foreground: #f1f5ff;
+      --semantic-muted-foreground: #acb1be;
+      --semantic-interactive-main: #88d1ff;
+      --semantic-interactive-foreground: #d1ecff;
+      --semantic-interactive-visited: #d1ecff;
+      --semantic-danger-foreground: #ffadb9;
+      --semantic-warning-foreground: #ecbf7c;
+      --semantic-success-foreground: #a3d89c;
+      --semantic-neutral-foreground: #dfe4f2;
+      --semantic-danger-main: #ffadb9;
+      --semantic-field-border: #707481;
+    }
+  }
+
+  [data-theme="dark"] {
+    --semantic-page-background: #171a24;
+    --semantic-danger-background: #761a33;
+    --semantic-warning-background: #5a3b00;
+    --semantic-success-background: #095100;
+    --semantic-neutral-background: #494d58;
+    --semantic-interactive-background: #004869;
+    --semantic-disabled-background: #494d58;
+    --semantic-disabled-foreground: #acb1be;
+    --semantic-field-border-hover: #acb1be;
+    --semantic-divider-30: #494d58;
+    --semantic-divider-100: #f1f5ff;
+    --semantic-interactive-contrast: #171a24;
+    --semantic-danger-contrast: #171a24;
+    --semantic-page-foreground: #f1f5ff;
+    --semantic-muted-foreground: #acb1be;
+    --semantic-interactive-main: #88d1ff;
+    --semantic-interactive-foreground: #d1ecff;
+    --semantic-interactive-visited: #d1ecff;
+    --semantic-danger-foreground: #ffadb9;
+    --semantic-warning-foreground: #ecbf7c;
+    --semantic-success-foreground: #a3d89c;
+    --semantic-neutral-foreground: #dfe4f2;
+    --semantic-danger-main: #ffadb9;
+    --semantic-field-border: #707481;
+  }
+}

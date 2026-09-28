@@ -1,0 +1,111 @@
+---
+import { NAVIGATION } from "../navigation"
+
+interface Props {
+  current: string
+}
+
+const { current } = Astro.props
+---
+
+<details class="sidebar" open>
+  <summary class="sidebar__summary">
+    <span class="fs-button" data-variant="secondary">Contents</span>
+  </summary>
+  <nav class="sidebar__nav" aria-label="Documentation">
+    {
+      NAVIGATION.map((section) => (
+        <div class="sidebar__section">
+          <h2 class="sidebar__title">{section.title}</h2>
+          <ul class="sidebar__list">
+            {section.pages.map((page) => (
+              <li>
+                <a
+                  class="sidebar__link"
+                  href={`/${page.slug}/`}
+                  aria-current={page.slug === current ? "page" : undefined}
+                >
+                  {page.title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))
+    }
+  </nav>
+</details>
+
+<style>
+  .sidebar__summary {
+    display: none;
+    cursor: pointer;
+    margin-block-end: var(--size-3);
+  }
+  .sidebar__summary::marker,
+  .sidebar__summary::-webkit-details-marker {
+    content: "";
+    display: none;
+  }
+  .sidebar__nav {
+    display: grid;
+    gap: var(--size-6);
+  }
+  .sidebar__section {
+    display: grid;
+    gap: var(--size-2);
+  }
+  .sidebar__title {
+    margin: 0;
+    font-size: var(--font-size-xxs);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--semantic-muted-foreground);
+  }
+  .sidebar__list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: var(--size-px);
+  }
+  .sidebar__link {
+    display: block;
+    padding: var(--size-1) var(--size-3);
+    border-radius: var(--size-1);
+    border-inline-start: 2px solid transparent;
+    color: var(--semantic-page-foreground);
+    text-decoration: none;
+    font-size: var(--font-size-s);
+  }
+  .sidebar__link:hover {
+    background: var(--semantic-neutral-background);
+  }
+  .sidebar__link:focus-visible {
+    outline: 2px solid var(--semantic-focus-ring);
+    outline-offset: 2px;
+  }
+  .sidebar__link[aria-current="page"] {
+    border-inline-start-color: var(--semantic-interactive-main);
+    background: var(--semantic-interactive-background);
+    color: var(--semantic-interactive-main);
+    font-weight: var(--font-weight-medium);
+  }
+
+  @media (max-width: 60rem) {
+    .sidebar__summary {
+      display: block;
+    }
+  }
+</style>
+
+<script>
+  // The sidebar is open by default so it works without JavaScript. On a narrow
+  // screen that is nineteen links in the way, so we fold it once on load.
+  // Datastar takes this over together with the rest of the interactivity.
+  const details = document.querySelector<HTMLDetailsElement>(".sidebar")
+  if (details && window.matchMedia("(max-width: 60rem)").matches) {
+    details.open = false
+  }
+</script>

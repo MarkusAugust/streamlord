@@ -1,0 +1,70 @@
+---
+import { neighbours } from "../navigation"
+
+interface Props {
+  current: string
+}
+
+const { previous, next } = neighbours(Astro.props.current)
+---
+
+{
+  (previous || next) && (
+    <nav class="pager" aria-label="Previous and next page">
+      {previous ? (
+        <a class="pager__link" href={`/${previous.slug}/`} rel="prev">
+          <span class="pager__direction">Previous</span>
+          <span class="pager__title">{previous.title}</span>
+        </a>
+      ) : (
+        <span />
+      )}
+      {next && (
+        <a class="pager__link" data-next href={`/${next.slug}/`} rel="next">
+          <span class="pager__direction">Next</span>
+          <span class="pager__title">{next.title}</span>
+        </a>
+      )}
+    </nav>
+  )
+}
+
+<style>
+  .pager {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--size-3);
+    margin-block-start: var(--size-12);
+    padding-block-start: var(--size-6);
+    border-block-start: 1px solid var(--semantic-divider-30);
+  }
+  .pager__link {
+    display: grid;
+    gap: var(--size-1);
+    padding: var(--size-3) var(--size-4);
+    border: 1px solid var(--semantic-divider-30);
+    border-radius: var(--size-1);
+    text-decoration: none;
+    color: var(--semantic-page-foreground);
+  }
+  .pager__link[data-next] {
+    text-align: end;
+  }
+  .pager__link:hover {
+    border-color: var(--semantic-interactive-main);
+  }
+  .pager__link:focus-visible {
+    outline: 2px solid var(--semantic-focus-ring);
+    outline-offset: 2px;
+  }
+  .pager__direction {
+    font-size: var(--font-size-xxs);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--semantic-muted-foreground);
+  }
+  .pager__title {
+    color: var(--semantic-interactive-main);
+    font-weight: var(--font-weight-medium);
+  }
+</style>

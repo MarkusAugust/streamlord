@@ -1,0 +1,14 @@
+# The documentation site. Base at the repository root rather than in docs/, because the
+# Astro config reads the TextMate grammars and the editor's token colours out of
+# editors/vscode — a build confined to docs/ would not have them.
+#
+# Gradle is not needed here. The wire transcripts and the dependency trees are written into
+# the markdown by :docs-samples and committed, so this build is Bun and nothing else.
+
+[build]
+  base = "."
+  command = "cd docs && bun install && npx astro build"
+  publish = "docs/dist"
+
+[build.environment]
+  NODE_VERSION = "22.23.0"

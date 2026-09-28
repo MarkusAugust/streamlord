@@ -1,0 +1,23 @@
+{
+  "name": "@streamlord/docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bunx --bun astro dev",
+    "build": "bunx --bun astro build",
+    "preview": "bunx --bun astro preview",
+    "tema": "bunx @fristil/designsystem tema fristil.tema.json --ut=src/styles/theme.css",
+    "lint": "biome check .",
+    "typecheck": "tsc --noEmit",
+    "check:links": "bun scripts/check-links.ts"
+  },
+  "dependencies": {
+    "astro": "6.4.2",
+    "@fristil/designsystem": "0.18.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.16",
+    "@types/bun": "^1.4.2",
+    "typescript": "^5.9.0"
+  }
+}
