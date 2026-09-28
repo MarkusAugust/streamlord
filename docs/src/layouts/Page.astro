@@ -41,7 +41,7 @@ const { title, description, slug, headings } = Astro.props
   <body>
     <a class="fs-skip-link" href="#content">Skip to content</a>
 
-    <header class="masthead">
+    <header class="masthead" data-theme="dark">
       <a class="masthead__brand" href="/">
           <Logo size={26} />
           <span>Streamlord</span>
@@ -119,12 +119,17 @@ const { title, description, slug, headings } = Astro.props
 
     <style>
       .masthead {
+        /* Dark in both themes, like the hero on the landing page: the mark was drawn on this
+           ground, and a header that changes colour under a logo that does not is worse than
+           either. data-theme rather than hand-written colours, so everything inside follows. */
+        background: #0c0d14;
+        color: var(--semantic-page-foreground);
+        border-block-end: 1px solid rgba(0, 177, 250, 0.25);
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: var(--size-4);
         padding: var(--size-3) var(--size-5);
-        border-block-end: 1px solid var(--semantic-divider-30);
       }
       .masthead__brand {
         display: flex;
@@ -203,24 +208,38 @@ const { title, description, slug, headings } = Astro.props
     </style>
 
     <script>
-      // Cycles light, dark and back to the system choice.
+      /*
+       * Flips what the reader is actually looking at.
+       *
+       * The first version cycled dark, light, system and read the attribute rather than the
+       * result. With the system set to dark and nothing chosen yet, the attribute is unset,
+       * so the first press wrote data-theme="dark" and changed nothing anyone could see. Two
+       * presses to leave dark, one to leave light. Reading the effective theme removes the
+       * dead press, at the cost of "follow the system" being a default rather than a state
+       * to cycle back into — which is the right trade for a button with one label.
+       */
       const root = document.documentElement
       const button = document.querySelector("[data-theme-toggle]")
+      const systemDark = window.matchMedia("(prefers-color-scheme: dark)")
+
+      const shown = () => root.dataset.theme ?? (systemDark.matches ? "dark" : "light")
+
+      const describe = () => {
+        const next = shown() === "dark" ? "light" : "dark"
+        button?.setAttribute("aria-label", `Switch to the ${next} theme`)
+      }
 
       button?.addEventListener("click", () => {
-        const now = root.dataset.theme
-        const next = now === "dark" ? "light" : now === "light" ? undefined : "dark"
-
+        const next = shown() === "dark" ? "light" : "dark"
+        root.dataset.theme = next
         try {
-          if (next) {
-            root.dataset.theme = next
-            localStorage.setItem("theme", next)
-          } else {
-            delete root.dataset.theme
-            localStorage.removeItem("theme")
-          }
+          localStorage.setItem("theme", next)
         } catch {}
+        describe()
       })
+
+      systemDark.addEventListener("change", describe)
+      describe()
     </script>
   </body>
 </html>

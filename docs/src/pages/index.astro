@@ -18,7 +18,16 @@ const SAMPLE = `get("/feed") {
 ---
 
 <!doctype html>
-<html lang="en">
+<!--
+  The landing page is dark, always, whatever the reader or their system has chosen. It is one
+  page and it is a poster: the mark, the neon and the deep ground were drawn for each other,
+  and a light variant of them is a different poster. Every other page follows the reader.
+
+  The consequence is honest and worth naming: someone who prefers light gets dark here and
+  light from the next click onward. The masthead on those pages keeps the same dark band, so
+  the top of the screen at least stays continuous.
+-->
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -29,28 +38,18 @@ const SAMPLE = `get("/feed") {
     />
     <link rel="canonical" href={Astro.site} />
     <link rel="icon" href={FAVICON} type="image/svg+xml" />
-    <script is:inline>
-      try {
-        const saved = localStorage.getItem("theme")
-        if (saved === "light" || saved === "dark") {
-          document.documentElement.dataset.theme = saved
-        }
-      } catch {}
-    </script>
   </head>
   <body>
     <a class="fs-skip-link" href="#content">Skip to content</a>
 
     <!--
-      The hero keeps its dark ground in both themes. Neon needs somewhere dark to be neon,
-      and a muted variant for the light theme would lose the colour exactly where it is
-      doing the work. The rest of the page follows the reader's choice as usual.
+      Neon needs somewhere dark to be neon, and a muted variant for a light theme would lose
+      the colour exactly where it is doing the work.
 
-      data-theme="dark" on the band rather than colours written by hand: Fristil scopes its
-      tokens to a bare [data-theme], not to :root, so the island switches buttons, text and
-      code inside it while the page around keeps whatever the reader chose.
+      The band is deeper than the page's own dark surface because that is the ground the mark
+      was drawn on. Everything else reads its colours from the tokens.
     -->
-    <header class="hero" data-theme="dark">
+    <header class="hero">
       <div class="hero__inner">
         <Logo size={72} />
         <h1 class="hero__word">Streamlord</h1>
