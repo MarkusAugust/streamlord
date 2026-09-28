@@ -61,6 +61,11 @@ completion when that one is installed.
 
 ## And on this site
 
-The code blocks on these pages are highlighted by the extension's own TextMate grammars, with its
-own recommended colours. When the extension's palette changes, the next build of this site
-follows. What you read here is what your editor shows you.
+The code blocks on these pages are highlighted by the extension's own TextMate grammars, with the
+same recommended colours it offers you. When the extension's palette changes, the next build of
+this site follows.
+
+That holds for the Datastar tokens, which are what these grammars are for. It does not hold for
+Kotlin itself: your editor colours Kotlin with the language server's semantic tokens, and a
+static site has only the TextMate grammar, which says far less. Code here is greyer than code in
+your IDE, and that is why.

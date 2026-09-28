@@ -1,7 +1,7 @@
 import type { ShikiConfig } from "astro"
 import { defineConfig } from "astro/config"
 import type { ThemeRegistration } from "shiki"
-import darkPlus from "shiki/themes/dark-plus.mjs"
+import tokyoNight from "shiki/themes/tokyo-night.mjs"
 import lightPlus from "shiki/themes/light-plus.mjs"
 import {
   DARK_RULES,
@@ -63,17 +63,36 @@ const datastarLangs = [
 /**
  * A bundled theme with the Streamlord rules appended.
  *
+ * Tokyo Night rather than Dark+ for the dark side. Measured on a real Kotlin block, every
+ * bundled theme leaves 53–56% of the characters in its default foreground, because readable
+ * code is mostly monochrome — a theme cannot make Kotlin colourful, since Shiki has the
+ * TextMate grammar and not the language server's semantic tokens. What a theme does change
+ * is the ground it sits on, and #1a1b26 carries the blue-black of the rest of this site
+ * where #1E1E1E is the most neutral grey there is.
+ *
  * Only the concepts Datastar adds get a rule. Everything that is ordinary
  * Kotlin or HTML keeps the theme's own colours, which is why a reader who uses
  * VS Code sees the code the way their editor would show it.
  */
-const withStreamlordRules = (
-  theme: ThemeRegistration,
-  rules: Rule[],
-): ThemeRegistration => ({
-  ...theme,
-  settings: [...(theme.settings ?? []), ...rules],
-})
+const withStreamlordRules = (theme: ThemeRegistration, rules: Rule[]): ThemeRegistration => {
+  // A bundled theme keeps its rules in `tokenColors`; a raw TextMate theme uses `settings`.
+  // Shiki normalises both, so reading only one silently produces a theme with nothing in it
+  // but our sixteen Datastar rules — every Kotlin keyword, string and type left uncoloured,
+  // and no error anywhere. That is exactly what happened, so the shape is checked here.
+  const base = theme as ThemeRegistration & { tokenColors?: ThemeRegistration["settings"] }
+  const own = base.tokenColors ?? base.settings
+
+  if (!own?.length) {
+    throw new Error(
+      `The theme "${base.name ?? "?"}" has neither tokenColors nor settings. ` +
+        "Appending the Streamlord rules to it would throw its own colours away.",
+    )
+  }
+
+  return base.tokenColors
+    ? { ...base, tokenColors: [...base.tokenColors, ...rules] }
+    : { ...base, settings: [...own, ...rules] }
+}
 
 export default defineConfig({
   site: "https://streamlord-docs.netlify.app",
@@ -83,7 +102,7 @@ export default defineConfig({
     shikiConfig: {
       themes: {
         light: withStreamlordRules(lightPlus, LIGHT_RULES),
-        dark: withStreamlordRules(darkPlus, DARK_RULES),
+        dark: withStreamlordRules(tokyoNight, DARK_RULES),
       },
       langs: datastarLangs,
       wrap: false,

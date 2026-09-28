@@ -3,5 +3,6 @@
   "fare": "#ff2d6f",
   "suksess": "#39ff14",
   "advarsel": "#ffb000",
-  "noytral": "#0b0f1c"
+  "noytral": "#0b0f1c",
+  "maksMetning": 0.32
 }

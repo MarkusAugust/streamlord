@@ -22,18 +22,18 @@
     --palette-danger-5: #fff1f3;
     --palette-danger-10: #ffdee2;
     --palette-danger-30: #ffadb9;
-    --palette-danger-50: #fb718c;
-    --palette-danger-70: #bb3f5c;
-    --palette-danger-100: #761a33;
-    --palette-success-5: #f0f8ef;
-    --palette-success-10: #daefd7;
-    --palette-success-30: #a3d89c;
-    --palette-success-50: #60be54;
-    --palette-success-70: #2e8722;
-    --palette-success-100: #095100;
-    --palette-warning-5: #fbf4eb;
-    --palette-warning-10: #f7e5cc;
-    --palette-warning-30: #ecbf7c;
+    --palette-danger-50: #ff6c8b;
+    --palette-danger-70: #d10054;
+    --palette-danger-100: #7f0030;
+    --palette-success-5: #ecfaea;
+    --palette-success-10: #cff4ca;
+    --palette-success-30: #7fe373;
+    --palette-success-50: #25c600;
+    --palette-success-70: #168a00;
+    --palette-success-100: #085200;
+    --palette-warning-5: #fbf4ea;
+    --palette-warning-10: #f8e5ca;
+    --palette-warning-30: #efbe76;
     --palette-warning-50: #d99500;
     --palette-warning-70: #976700;
     --palette-warning-100: #5a3b00;
@@ -52,8 +52,8 @@
     --palette-neutral-100: #171a24;
     --semantic-page-background: #ffffff;
     --semantic-danger-background: #ffdee2;
-    --semantic-warning-background: #f7e5cc;
-    --semantic-success-background: #daefd7;
+    --semantic-warning-background: #f8e5ca;
+    --semantic-success-background: #cff4ca;
     --semantic-neutral-background: #dfe4f2;
     --semantic-interactive-background: #d1ecff;
     --semantic-disabled-background: #dfe4f2;
@@ -68,20 +68,20 @@
     --semantic-interactive-main: #006e9e;
     --semantic-interactive-foreground: #004869;
     --semantic-interactive-visited: #004869;
-    --semantic-danger-foreground: #761a33;
+    --semantic-danger-foreground: #7f0030;
     --semantic-warning-foreground: #5a3b00;
-    --semantic-success-foreground: #095100;
+    --semantic-success-foreground: #085200;
     --semantic-neutral-foreground: #494d58;
-    --semantic-danger-main: #bb3f5c;
+    --semantic-danger-main: #d10054;
     --semantic-field-border: #707481;
   }
 
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --semantic-page-background: #171a24;
-      --semantic-danger-background: #761a33;
+      --semantic-danger-background: #7f0030;
       --semantic-warning-background: #5a3b00;
-      --semantic-success-background: #095100;
+      --semantic-success-background: #085200;
       --semantic-neutral-background: #494d58;
       --semantic-interactive-background: #004869;
       --semantic-disabled-background: #494d58;
@@ -97,8 +97,8 @@
       --semantic-interactive-foreground: #d1ecff;
       --semantic-interactive-visited: #d1ecff;
       --semantic-danger-foreground: #ffadb9;
-      --semantic-warning-foreground: #ecbf7c;
-      --semantic-success-foreground: #a3d89c;
+      --semantic-warning-foreground: #efbe76;
+      --semantic-success-foreground: #7fe373;
       --semantic-neutral-foreground: #dfe4f2;
       --semantic-danger-main: #ffadb9;
       --semantic-field-border: #707481;
@@ -107,9 +107,9 @@
 
   [data-theme="dark"] {
     --semantic-page-background: #171a24;
-    --semantic-danger-background: #761a33;
+    --semantic-danger-background: #7f0030;
     --semantic-warning-background: #5a3b00;
-    --semantic-success-background: #095100;
+    --semantic-success-background: #085200;
     --semantic-neutral-background: #494d58;
     --semantic-interactive-background: #004869;
     --semantic-disabled-background: #494d58;
@@ -125,8 +125,8 @@
     --semantic-interactive-foreground: #d1ecff;
     --semantic-interactive-visited: #d1ecff;
     --semantic-danger-foreground: #ffadb9;
-    --semantic-warning-foreground: #ecbf7c;
-    --semantic-success-foreground: #a3d89c;
+    --semantic-warning-foreground: #efbe76;
+    --semantic-success-foreground: #7fe373;
     --semantic-neutral-foreground: #dfe4f2;
     --semantic-danger-main: #ffadb9;
     --semantic-field-border: #707481;
