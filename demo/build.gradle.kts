@@ -35,6 +35,10 @@ application {
  * dollar. The JVM image came first on purpose — proving the deploy chain and proving a native
  * image at the same time is how you end up debugging both at once.
  *
+ * src/main/resources/META-INF/native-image/resource-config.json names index.json, because
+ * nothing in the bytecode mentions that file — it is read by name at startup — and the image
+ * would otherwise ship without it, start cleanly and find nothing.
+ *
  * Built in CI: the compile wants 6–8 GB and several minutes, and no GraalVM is installed here.
  * The smoke test that follows the deploy is what makes that acceptable. A binary that starts
  * and cannot serve fails the job before it reaches the site.
@@ -46,16 +50,17 @@ graalvmNative {
             mainClass.set("io.github.markusaugust.streamlord.demo.MainKt")
 
             buildArgs.addAll(
-                // The index is read from the jar at startup, and nothing in the bytecode
-                // names it, so the image would ship without it. See resource-config.json.
-                "-H:+UnlockExperimentalVMOptions",
-                // Ktor and SLF4J both want to be settled before the image is written rather
-                // than discovered at runtime.
-                "--initialize-at-build-time=org.slf4j",
+                // Fail rather than quietly fall back to a JVM image: a "native" build that
+                // is not one would cost the startup and the memory this exists for.
                 "--no-fallback",
-                // A failure here should say what it could not resolve, not just that it failed.
+                // Say what could not be resolved, not merely that something could not.
                 "-H:+ReportExceptionStackTraces",
             )
+            // Nothing about class initialization here on purpose. The first attempt asked
+            // for --initialize-at-build-time=org.slf4j on the assumption that Ktor and SLF4J
+            // would want it; naming any class switches native-image into a stricter mode,
+            // and the build died on kotlin.DeprecationLevel being initialized without
+            // permission. The default is correct until something proves otherwise.
         }
     }
 }

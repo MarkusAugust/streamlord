@@ -1,10 +1,7 @@
 {
   "resources": {
     "includes": [
-      {
-        "pattern": "\\Qindex.json\\E",
-        "comment": "The search index. It is read by name at startup and nothing in the bytecode mentions it, so native-image would leave it out and the service would start and find nothing."
-      }
+      { "pattern": "\\Qindex.json\\E" }
     ]
   }
 }
