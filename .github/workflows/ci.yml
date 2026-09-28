@@ -130,6 +130,10 @@ jobs:
     permissions:
       contents: read
       packages: write
+    # On the job, not the step: the secrets context is not available in a step's `if`, and
+    # a step's own env is not reliably visible to its own condition.
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -168,6 +172,18 @@ jobs:
           tags: |
             ghcr.io/${{ steps.owner.outputs.name }}/streamlord-live:latest
             ghcr.io/${{ steps.owner.outputs.name }}/streamlord-live:${{ github.sha }}
+
+      # Railway pins the digest it deployed with, so a new :latest in the registry is a
+      # tag nothing is watching: the service kept answering from an image two commits
+      # old, and nothing said so. --from-source is the flag that pulls the tag again
+      # rather than re-running the same digest.
+      #
+      # Skipped, not failed, when the secret is absent, so a fork still builds an image.
+      - name: Redeploy streamlord-live
+        if: env.RAILWAY_TOKEN != ''
+        run: |
+          npm install -g @railway/cli
+          railway redeploy --service streamlord-live --from-source --yes
 
   publish-vscode:
     name: Publish VS Code extension
