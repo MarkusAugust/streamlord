@@ -151,6 +151,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # GHCR takes only lowercase, and the account is MarkusAugust. Computed rather than
+      # written out, so a renamed account or a fork still pushes to the right place.
+      - name: Lowercase the owner
+        id: owner
+        run: echo "name=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
       # No build cache. The image is a JRE base layer and one COPY of the distribution,
       # and that layer changes on every build by definition — a cache would buy nothing
       # and cost a buildx driver step, which is what the first attempt failed on.
@@ -160,8 +166,8 @@ jobs:
           file: demo/Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/streamlord-live:latest
-            ghcr.io/${{ github.repository_owner }}/streamlord-live:${{ github.sha }}
+            ghcr.io/${{ steps.owner.outputs.name }}/streamlord-live:latest
+            ghcr.io/${{ steps.owner.outputs.name }}/streamlord-live:${{ github.sha }}
 
   publish-vscode:
     name: Publish VS Code extension
