@@ -77,6 +77,26 @@ class KotlinxSignalsCodecTest {
     }
 
     @Test
+    fun `strict lets through what a native image can resolve on its own`() {
+        val strict = KotlinxSignalsCodec(serializers = mapOf(typeOf<Signals>() to ShoutingSignals), strict = true)
+
+        // Answered from kotlinx's own table, not by reading a class: safe in an image, so
+        // refusing them would be refusing something that works.
+        assertEquals(""""ash"""", strict.encode("ash"))
+        assertEquals("""["ash","vow"]""", strict.encode(listOf("ash", "vow")))
+        assertEquals("""{"heads":13}""", strict.encode(mapOf("heads" to 13)))
+    }
+
+    @Test
+    fun `strict follows a type into what it contains`() {
+        val strict = KotlinxSignalsCodec(serializers = mapOf(typeOf<Signals>() to ShoutingSignals), strict = true)
+
+        // A list of a class nobody named fails for the same reason the class would.
+        val refused = assertFailsWith<SignalsCodecException> { strict.encode(listOf(Other("gorvek"))) }
+        assertTrue(refused.message!!.contains("Other"))
+    }
+
+    @Test
     fun `wraps failures`() {
         assertFailsWith<SignalsCodecException> { codec.decode<Signals>("""{"count":"not a number"}""") }
         assertFailsWith<SignalsCodecException> { codec.decode<Signals>("not json") }

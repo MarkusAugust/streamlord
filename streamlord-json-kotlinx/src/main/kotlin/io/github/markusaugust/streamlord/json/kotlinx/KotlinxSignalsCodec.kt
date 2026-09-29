@@ -6,6 +6,7 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
+import kotlin.reflect.KClass
 import kotlin.reflect.KType
 
 /**
@@ -83,6 +84,30 @@ public class KotlinxSignalsCodec(
      */
 
     /**
+     * Whether this type is one that has to be named.
+     *
+     * Not everything does, and a strict mode that refused everything would be refusing types
+     * that work: `String`, `Int`, `List`, `Map` and the rest are answered from a table inside
+     * kotlinx.serialization that is in the bytecode like any other code. What cannot survive a
+     * native image is the lookup that reads *your* class to find the serializer the compiler
+     * plugin generated beside it.
+     *
+     * So the rule is the boundary between the two: anything outside `kotlin`, `kotlinx` and
+     * `java` has to be named, and a container has to be named if what it holds does — a
+     * `List<Signals>` fails for the same reason `Signals` does.
+     */
+    private fun needsNaming(type: KType): Boolean {
+        if (serializers.containsKey(type)) return false
+
+        val own = (type.classifier as? KClass<*>)?.qualifiedName
+        val ownNeedsNaming =
+            own == null ||
+                !(own.startsWith("kotlin.") || own.startsWith("kotlinx.") || own.startsWith("java."))
+
+        return ownNeedsNaming || type.arguments.any { argument -> argument.type?.let { needsNaming(it) } == true }
+    }
+
+    /**
      * What to add to a failure for a type nobody named.
      *
      * The reflective lookup is the likeliest thing to have failed, and it is the one that fails
@@ -111,7 +136,7 @@ public class KotlinxSignalsCodec(
          * the first request that carries it. This is that silence, broken, where a test can hear
          * it: this project's own service shipped exactly that bug, twice, before this existed.
          */
-        if (strict) {
+        if (strict && needsNaming(type)) {
             throw SignalsCodecException(
                 "No serializer was named for $type, and this codec is strict. Add " +
                     "typeOf<$type>() to KotlinxSignalsCodec(serializers = ...) — a reflective " +

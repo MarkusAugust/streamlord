@@ -73,8 +73,12 @@ KotlinxSignalsCodec(
 )
 ```
 
-That is worth doing the day you add the second signals class, because the failure it prevents is a
-silent one. Leave it out and the codec falls back to asking kotlinx.serialization to find the
+It asks only for what an image cannot resolve by itself: your own classes, and containers holding
+them. `String`, `Int`, `List<String>` and the rest are answered from a table inside
+kotlinx.serialization that ships in the bytecode like any other code, so strict lets them through.
+
+It is worth turning on the day you add the second signals class, because the failure it prevents is
+a silent one. Leave it out and the codec falls back to asking kotlinx.serialization to find the
 serializer by reading the class, which native-image cannot see. The build is green, the service
 starts, the health check answers, and the first read fails:
 
