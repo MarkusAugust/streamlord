@@ -6,13 +6,13 @@
     "dev": "bunx --bun astro dev",
     "build": "bunx --bun astro build",
     "preview": "bunx --bun astro preview",
-    "tema": "bunx @fristil/designsystem tema fristil.tema.json --ut=src/styles/theme.css",
+    "tema": "bun scripts/build-theme.ts",
     "lint": "biome check .",
     "typecheck": "tsc --noEmit",
     "check:links": "bun scripts/check-links.ts"
   },
   "dependencies": {
-    "@fristil/designsystem": "0.19.0",
+    "@fristil/designsystem": "0.22.0",
     "astro": "6.4.2"
   },
   "devDependencies": {

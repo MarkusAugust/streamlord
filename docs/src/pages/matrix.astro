@@ -1,0 +1,355 @@
+---
+import "../styles/global.css"
+
+// An internal review page for the colours, noindex and linked from nowhere. It exists so
+// that every cell the theme generates can be looked at in both themes at once, which is
+// the only way to catch a colour that is technically passing and still wrong.
+
+// Family by role is the whole colour system in 0.22: there are no scales and no steps, so
+// this grid is exhaustive apart from the two layers below it.
+const families = [
+  "accent",
+  "visited",
+  "brand1",
+  "brand2",
+  "brand3",
+  "neutral",
+  "danger",
+  "warning",
+  "success",
+]
+
+const roles = [
+  "surface",
+  "border-subtle",
+  "border",
+  "border-strong",
+  "fill",
+  "content",
+  "text",
+  "text-subtle",
+  "text-strong",
+]
+
+// The neutral family alone carries the page, so it has these three in addition to its
+// roles. They are what every text and border promise is measured against.
+const grounds = ["canvas", "surface", "raised"]
+
+// The colours from the design-system-architecture deck, which are not part of the theme.
+// They stay here because the site's own look came from them, and drift shows up fastest
+// side by side.
+const deckColors = [
+  { name: "--flate", value: "#10161f" },
+  { name: "--flate-kort", value: "#171f2b" },
+  { name: "--tekst", value: "#f2f5f9" },
+  { name: "--azure-70", value: "#1362ae" },
+  { name: "--forest-100", value: "#2b6940" },
+  { name: "--ochre-100", value: "#6b492c" },
+  { name: "--burgundy-100", value: "#6f2c3f" },
+]
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Matrix | Streamlord</title>
+    <meta name="robots" content="noindex" />
+  </head>
+  <body>
+    <header class="top">
+      <h1 class="fs-heading" data-size="m">Matrix</h1>
+      <div class="row" role="group" aria-label="Theme">
+        <button class="fs-button" data-variant="secondary" data-set="light">Light</button>
+        <button class="fs-button" data-variant="secondary" data-set="dark">Dark</button>
+        <button class="fs-button" data-variant="ghost" data-set="system">System</button>
+      </div>
+    </header>
+
+    <main class="page">
+      <section>
+        <h2 class="fs-heading" data-size="s">Family by role</h2>
+        <div class="matrix" style={`--columns:${roles.length}`}>
+          <span></span>
+          {roles.map((role) => <span class="matrix__role">{role}</span>)}
+          {
+            families.map((family) => (
+              <>
+                <span class="matrix__family">{family}</span>
+                {roles.map((role) => (
+                  <div class="cell" style={`background:var(--fs-color-${family}-${role})`}>
+                    <code class="cell__hex" data-hex></code>
+                  </div>
+                ))}
+              </>
+            ))
+          }
+        </div>
+      </section>
+
+      <section>
+        <h2 class="fs-heading" data-size="s">The three grounds</h2>
+        <div class="row">
+          {
+            grounds.map((ground) => (
+              <div class="sample">
+                <div
+                  class="sample__face"
+                  style={`background:var(--fs-color-neutral-${ground})`}
+                >
+                  <code class="cell__hex" data-hex></code>
+                </div>
+                <code>{ground}</code>
+              </div>
+            ))
+          }
+        </div>
+      </section>
+
+      <section>
+        <h2 class="fs-heading" data-size="s">Text on every ground</h2>
+        <p class="fs-paragraph">
+          The promises are about these pairings, so this is where a colour that passes on
+          paper and reads badly shows itself.
+        </p>
+        <div class="grounds">
+          {
+            grounds.map((ground) => (
+              <div
+                class="ground"
+                style={`background:var(--fs-color-neutral-${ground})`}
+              >
+                <code class="ground__name">{ground}</code>
+                {families.map((family) => (
+                  <p class="ground__line">
+                    <span style={`color:var(--fs-color-${family}-text)`}>{family} text</span>
+                    <span style={`color:var(--fs-color-${family}-text-subtle)`}>subtle</span>
+                    <span style={`color:var(--fs-color-${family}-text-strong)`}>strong</span>
+                  </p>
+                ))}
+              </div>
+            ))
+          }
+        </div>
+      </section>
+
+      <section>
+        <h2 class="fs-heading" data-size="s">Buttons, links and badges</h2>
+        <div class="row">
+          <button class="fs-button">Primary</button>
+          <button class="fs-button" data-variant="secondary">Secondary</button>
+          <button class="fs-button" data-variant="ghost">Ghost</button>
+          <button class="fs-button" data-variant="danger">Danger</button>
+          <button class="fs-button" aria-disabled="true">Disabled</button>
+        </div>
+        <p class="fs-paragraph">
+          A <a class="fs-link" href="#">link in running text</a> and an
+          <a class="fs-link" href="https://data-star.dev">external one</a>.
+        </p>
+        <div class="row">
+          <span class="fs-badge">New</span>
+          <span class="fs-badge" data-color="success">Verified</span>
+          <span class="fs-badge" data-color="warning">Draft</span>
+          <span class="fs-badge" data-color="danger">Rejected</span>
+          <span class="fs-badge" data-color="neutral">0.3.0</span>
+        </div>
+      </section>
+
+      <section>
+        <h2 class="fs-heading" data-size="s">Messages</h2>
+        <div class="stack">
+          <div class="fs-alert" data-color="info">
+            Datastar 1.0 knows only two SSE events.
+          </div>
+          <div class="fs-alert" data-color="success">
+            The encoder is verified against the official golden files.
+          </div>
+          <div class="fs-alert" data-color="warning">
+            Every mode except <code>outer</code> and <code>replace</code> requires a selector.
+          </div>
+          <div class="fs-alert" data-color="danger">
+            The signal was refused: the name contains a hyphen.
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2 class="fs-heading" data-size="s">Against the deck</h2>
+        <div class="row">
+          {
+            deckColors.map((colour) => (
+              <div class="sample">
+                <div class="sample__face" style={`background:${colour.value}`} />
+                <code>{colour.name}</code>
+              </div>
+            ))
+          }
+        </div>
+      </section>
+    </main>
+
+    <style>
+      .top,
+      .page {
+        max-width: 72rem;
+        margin: 0 auto;
+        padding-inline: var(--fs-spacing-4);
+      }
+      .top {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--fs-spacing-4);
+        align-items: center;
+        justify-content: space-between;
+        padding-block-start: var(--fs-spacing-6);
+      }
+      .page {
+        display: grid;
+        gap: var(--fs-spacing-10);
+        padding-block: var(--fs-spacing-6) var(--fs-spacing-16);
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--fs-spacing-3);
+        align-items: center;
+      }
+      .stack {
+        display: grid;
+        gap: var(--fs-spacing-3);
+      }
+      .matrix {
+        display: grid;
+        /* The family name needs a fixed column so the cells below a role stay in one line. */
+        grid-template-columns: 6rem repeat(var(--columns), 1fr);
+        gap: var(--fs-spacing-1);
+        align-items: center;
+        margin-block-start: var(--fs-spacing-3);
+        /* Nine roles do not fit a phone, and a squeezed swatch says nothing. */
+        overflow-x: auto;
+      }
+      .matrix__role,
+      .matrix__family {
+        font-size: var(--font-size-xxs);
+        color: var(--fs-color-neutral-text-subtle);
+      }
+      .matrix__role {
+        /* Role names are long enough to collide, so they break rather than push the grid. */
+        overflow-wrap: anywhere;
+      }
+      .cell {
+        aspect-ratio: 3 / 2;
+        border-radius: var(--fs-spacing-1);
+        border: 1px solid var(--fs-color-neutral-border-subtle);
+        display: grid;
+        place-items: center;
+      }
+      .cell__hex {
+        /* On the page's own background, so a hex over a dark cell stays readable. */
+        background: var(--fs-color-neutral-canvas);
+        color: var(--fs-color-neutral-text-strong);
+        padding-inline: 0.25em;
+        border-radius: 2px;
+        font-size: var(--font-size-xxs);
+        opacity: 0.8;
+      }
+      .grounds {
+        display: grid;
+        gap: var(--fs-spacing-3);
+        margin-block-start: var(--fs-spacing-3);
+      }
+      .ground {
+        padding: var(--fs-spacing-4);
+        border-radius: var(--fs-spacing-1);
+        border: 1px solid var(--fs-color-neutral-border-subtle);
+      }
+      .ground__name {
+        display: block;
+        margin-block-end: var(--fs-spacing-2);
+        font-size: var(--font-size-xxs);
+        color: var(--fs-color-neutral-text-subtle);
+      }
+      .ground__line {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--fs-spacing-3);
+        margin: 0;
+        font-size: var(--font-size-s);
+        line-height: var(--fs-line-height-compact);
+      }
+      .sample {
+        display: grid;
+        gap: var(--fs-spacing-1);
+        justify-items: center;
+      }
+      .sample__face {
+        inline-size: 6rem;
+        block-size: 3rem;
+        border-radius: var(--fs-spacing-1);
+        border: 1px solid var(--fs-color-neutral-border-subtle);
+        display: grid;
+        place-items: center;
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: var(--font-size-xxs);
+      }
+    </style>
+
+    <script>
+      const root = document.documentElement
+
+      /*
+       * The hex beside each swatch, read back from the browser rather than written here.
+       *
+       * The theme is generated, so a hex typed into this page would be a copy that goes
+       * stale. getComputedStyle returns the resolved colour, which is the value actually
+       * in force, including whatever the theme toggle just changed it to.
+       */
+      const hex = (colour: string): string => {
+        const parts = colour.match(/\d+(\.\d+)?/g)
+        if (!parts || parts.length < 3) return colour
+        return `#${parts
+          .slice(0, 3)
+          .map((part) => Number(part).toString(16).padStart(2, "0"))
+          .join("")}`
+      }
+
+      const labelSwatches = () => {
+        for (const label of document.querySelectorAll<HTMLElement>("[data-hex]")) {
+          const face = label.parentElement
+          if (!face) continue
+          label.textContent = hex(getComputedStyle(face).backgroundColor)
+        }
+      }
+
+      labelSwatches()
+
+      try {
+        const saved = localStorage.getItem("theme")
+        if (saved === "light" || saved === "dark") root.dataset.theme = saved
+      } catch {}
+      labelSwatches()
+
+      for (const button of document.querySelectorAll<HTMLButtonElement>("[data-set]")) {
+        button.addEventListener("click", () => {
+          const choice = button.dataset.set
+          try {
+            if (choice === "system") {
+              delete root.dataset.theme
+              localStorage.removeItem("theme")
+            } else if (choice) {
+              root.dataset.theme = choice
+              localStorage.setItem("theme", choice)
+            }
+          } catch {}
+          labelSwatches()
+        })
+      }
+
+      // The system setting can change while the page is open, and the hexes go stale with it.
+      matchMedia("(prefers-color-scheme: dark)").addEventListener("change", labelSwatches)
+    </script>
+  </body>
+</html>

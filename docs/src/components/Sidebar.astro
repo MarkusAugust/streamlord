@@ -40,7 +40,7 @@ const { current } = Astro.props
   .sidebar__summary {
     display: none;
     cursor: pointer;
-    margin-block-end: var(--size-3);
+    margin-block-end: var(--fs-spacing-3);
   }
   .sidebar__summary::marker,
   .sidebar__summary::-webkit-details-marker {
@@ -49,11 +49,11 @@ const { current } = Astro.props
   }
   .sidebar__nav {
     display: grid;
-    gap: var(--size-6);
+    gap: var(--fs-spacing-6);
   }
   .sidebar__section {
     display: grid;
-    gap: var(--size-2);
+    gap: var(--fs-spacing-2);
   }
   .sidebar__title {
     margin: 0;
@@ -61,35 +61,35 @@ const { current } = Astro.props
     font-weight: var(--font-weight-semibold);
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--semantic-muted-foreground);
+    color: var(--fs-color-neutral-text-subtle);
   }
   .sidebar__list {
     margin: 0;
     padding: 0;
     list-style: none;
     display: grid;
-    gap: var(--size-px);
+    gap: var(--fs-spacing-px);
   }
   .sidebar__link {
     display: block;
-    padding: var(--size-1) var(--size-3);
-    border-radius: var(--size-1);
+    padding: var(--fs-spacing-1) var(--fs-spacing-3);
+    border-radius: var(--fs-spacing-1);
     border-inline-start: 2px solid transparent;
-    color: var(--semantic-page-foreground);
+    color: var(--fs-color-neutral-text-strong);
     text-decoration: none;
     font-size: var(--font-size-s);
   }
   .sidebar__link:hover {
-    background: var(--semantic-neutral-background);
+    background: var(--fs-color-neutral-surface);
   }
   .sidebar__link:focus-visible {
-    outline: var(--semantic-focus-ring);
+    outline: var(--fs-focus-ring);
     outline-offset: 2px;
   }
   .sidebar__link[aria-current="page"] {
-    border-inline-start-color: var(--palette-interactive-50);
-    background: var(--semantic-interactive-background);
-    color: var(--palette-interactive-50);
+    border-inline-start-color: var(--fs-color-accent-fill);
+    background: var(--fs-color-accent-surface);
+    color: var(--fs-color-accent-fill);
     font-weight: var(--font-weight-medium);
   }
 

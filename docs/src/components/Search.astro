@@ -120,7 +120,7 @@ const { class: fristilClasses, ...searchAttributes } = fs.search()
        to draw the magnifier, and the icon vanished without a word. */
     background-color: rgb(255 255 255 / 0.1);
     border-color: rgb(255 255 255 / 0.28);
-    color: var(--semantic-page-foreground);
+    color: var(--fs-color-neutral-text-strong);
   }
   .search__field:hover {
     background-color: rgb(255 255 255 / 0.16);
@@ -148,52 +148,53 @@ const { class: fristilClasses, ...searchAttributes } = fs.search()
      * window that still gets this layout, and the viewport term catches the rest.
      */
     inline-size: min(28rem, calc(100vw - 4rem));
-    inset-block-start: calc(100% + var(--size-2));
+    inset-block-start: calc(100% + var(--fs-spacing-2));
     z-index: 20;
     /*
      * The page's theme, taken back from the masthead's.
      *
      * The panel belongs to what you are reading, not to the furniture above it, but it is a
-     * child of a data-theme="dark" island, so every semantic colour inside it, down to the link
-     * colour Fristil gives .fs-link, was the dark theme's, and the panel arrived as a black box
-     * over a white article. Re-declaring the six that the panel and its contents use, from the
-     * page values captured on :root, hands the whole subtree back to the page.
+     * child of a data-theme="dark" island, so every colour inside it, down to the link colour
+     * Fristil gives .fs-link, was the dark theme's, and the panel arrived as a black box over a
+     * white article. Re-declaring the eight that the panel and its contents use, from the page
+     * values captured on :root, hands the whole subtree back to the page.
      *
      * A fixed ceiling with its own scroll, because a panel that grows and shrinks with every
      * keystroke reads as a page coming apart.
      */
-    --semantic-page-background: var(--page-background);
-    --semantic-page-foreground: var(--page-foreground);
-    --semantic-muted-foreground: var(--page-muted);
-    --semantic-divider-30: var(--page-divider);
-    --semantic-neutral-background: var(--page-neutral);
-    --semantic-interactive-main: var(--page-interactive);
-    --semantic-interactive-visited: var(--page-interactive-visited);
+    --fs-color-neutral-canvas: var(--page-background);
+    --fs-color-neutral-text-strong: var(--page-foreground);
+    --fs-color-neutral-text-subtle: var(--page-muted);
+    --fs-color-neutral-border-subtle: var(--page-divider);
+    --fs-color-neutral-surface: var(--page-neutral);
+    --fs-color-accent-text: var(--page-interactive);
+    --fs-color-accent-text-strong: var(--page-interactive-hover);
+    --fs-color-visited-text: var(--page-interactive-visited);
     color-scheme: var(--page-color-scheme);
-    background: var(--semantic-page-background);
-    color: var(--semantic-page-foreground);
-    border: 1px solid var(--semantic-divider-30);
-    border-radius: var(--size-1);
+    background: var(--fs-color-neutral-canvas);
+    color: var(--fs-color-neutral-text-strong);
+    border: 1px solid var(--fs-color-neutral-border-subtle);
+    border-radius: var(--fs-spacing-1);
     box-shadow: 0 12px 32px rgb(0 0 0 / 0.35);
     max-block-size: min(60vh, 32rem);
     overflow-y: auto;
-    padding: var(--size-3);
+    padding: var(--fs-spacing-3);
   }
   .search__offline {
-    margin: 0 0 var(--size-2);
-    padding: var(--size-2);
-    border-radius: var(--size-1);
-    background: var(--semantic-neutral-background);
-    color: var(--semantic-muted-foreground);
+    margin: 0 0 var(--fs-spacing-2);
+    padding: var(--fs-spacing-2);
+    border-radius: var(--fs-spacing-1);
+    background: var(--fs-color-neutral-surface);
+    color: var(--fs-color-neutral-text-subtle);
     font-size: var(--font-size-xs);
   }
   .search__all {
-    margin: 0 0 var(--size-2);
+    margin: 0 0 var(--fs-spacing-2);
     font-size: var(--font-size-xxs);
     font-weight: var(--font-weight-semibold);
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--semantic-muted-foreground);
+    color: var(--fs-color-neutral-text-subtle);
   }
 
   /* The server writes these, so they are styled here rather than where they are built. */
@@ -202,15 +203,15 @@ const { class: fristilClasses, ...searchAttributes } = fs.search()
     padding: 0;
     list-style: none;
     display: grid;
-    gap: var(--size-2);
+    gap: var(--fs-spacing-2);
   }
   .search__results :global(.hits__heading) {
-    color: var(--semantic-muted-foreground);
+    color: var(--fs-color-neutral-text-subtle);
     font-weight: var(--font-weight-regular);
   }
   .search__results :global(.hits__excerpt) {
-    margin: var(--size-1) 0 0;
-    color: var(--semantic-muted-foreground);
+    margin: var(--fs-spacing-1) 0 0;
+    color: var(--fs-color-neutral-text-subtle);
   }
 
   /*

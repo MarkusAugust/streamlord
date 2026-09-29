@@ -33,9 +33,9 @@ const entries = headings.filter((h) => h.depth === 2 || h.depth === 3)
 <style>
   .toc {
     position: sticky;
-    top: var(--size-6);
+    top: var(--fs-spacing-6);
     display: grid;
-    gap: var(--size-2);
+    gap: var(--fs-spacing-2);
     align-content: start;
   }
   .toc__title {
@@ -44,38 +44,38 @@ const entries = headings.filter((h) => h.depth === 2 || h.depth === 3)
     font-weight: var(--font-weight-semibold);
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--semantic-muted-foreground);
+    color: var(--fs-color-neutral-text-subtle);
   }
   .toc__list {
     margin: 0;
     padding: 0;
     list-style: none;
     display: grid;
-    gap: var(--size-px);
-    border-inline-start: 1px solid var(--semantic-divider-30);
+    gap: var(--fs-spacing-px);
+    border-inline-start: 1px solid var(--fs-color-neutral-border-subtle);
   }
   .toc__list li[data-depth="3"] {
-    padding-inline-start: var(--size-3);
+    padding-inline-start: var(--fs-spacing-3);
   }
   .toc__link {
     display: block;
-    padding: var(--size-1) var(--size-3);
+    padding: var(--fs-spacing-1) var(--fs-spacing-3);
     margin-inline-start: -1px;
     border-inline-start: 1px solid transparent;
-    color: var(--semantic-muted-foreground);
+    color: var(--fs-color-neutral-text-subtle);
     text-decoration: none;
     font-size: var(--font-size-s);
   }
   .toc__link:hover {
-    color: var(--semantic-page-foreground);
+    color: var(--fs-color-neutral-text-strong);
   }
   .toc__link:focus-visible {
-    outline: var(--semantic-focus-ring);
+    outline: var(--fs-focus-ring);
     outline-offset: 2px;
   }
   .toc__link[data-active] {
-    border-inline-start-color: var(--semantic-interactive-main);
-    color: var(--semantic-interactive-main);
+    border-inline-start-color: var(--fs-color-accent-text);
+    color: var(--fs-color-accent-text);
   }
 
   @media (max-width: 75rem) {

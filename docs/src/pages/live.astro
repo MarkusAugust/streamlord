@@ -1,6 +1,8 @@
 ---
 import { fs } from "@fristil/designsystem"
 import Logo from "../components/Logo.astro"
+import ThemeRestore from "../components/ThemeRestore.astro"
+import ThemeToggle from "../components/ThemeToggle.astro"
 import { SERVICE } from "../config"
 import { FAVICON } from "../icon"
 import "../styles/global.css"
@@ -10,7 +12,7 @@ import "../styles/global.css"
 ---
 
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -22,17 +24,22 @@ import "../styles/global.css"
     <link rel="icon" href={FAVICON} type="image/svg+xml" />
     <script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.4/bundles/datastar.js"
     ></script>
+
+    <ThemeRestore />
   </head>
 
   <body>
     <a class="fs-skip-link" href="#content">Skip to content</a>
 
-    <header class="masthead">
+    <header class="masthead" data-theme="dark">
       <a class="masthead__brand" href="/">
         <Logo size={26} />
         <span>Streamlord</span>
       </a>
       <span class="masthead__where">Live</span>
+      <div class="masthead__tools">
+        <ThemeToggle />
+      </div>
     </header>
 
     <main class="page" id="content" data-signals="{query: '', total: 0, wire: true}">
@@ -334,25 +341,44 @@ import "../styles/global.css"
     </main>
 
     <style>
+      /* The same band as the documentation shell, down to the two grounds: the reason for
+         each one is written out over .masthead in Page.astro. */
       .masthead {
         display: flex;
         align-items: center;
-        gap: var(--size-3);
-        padding: var(--size-3) var(--size-5);
+        gap: var(--fs-spacing-3);
+        padding: var(--fs-spacing-3) var(--fs-spacing-5);
+        background: #2c436b;
+        border-block-end: 1px solid
+          color-mix(in oklab, var(--fs-color-accent-fill) 25%, transparent);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) .masthead {
+          background: #0c0d14;
+        }
+      }
+      :root[data-theme="dark"] .masthead {
         background: #0c0d14;
-        border-block-end: 1px solid rgba(0, 177, 250, 0.25);
+      }
+      .masthead__tools {
+        margin-inline-start: auto;
+      }
+      /* Same swap as the shell's masthead, and for the same reason. */
+      .masthead .fs-button[data-variant="ghost"]:hover {
+        background: var(--fs-color-accent-text);
+        color: var(--fs-color-accent-surface);
       }
       .masthead__brand {
         display: flex;
         align-items: center;
-        gap: var(--size-2);
+        gap: var(--fs-spacing-2);
         font-weight: var(--font-weight-bold);
         font-size: var(--font-size-l);
-        color: var(--semantic-page-foreground);
+        color: var(--fs-color-neutral-text-strong);
         text-decoration: none;
       }
       .masthead__where {
-        color: var(--palette-interactive-50);
+        color: var(--fs-color-accent-fill);
         font-size: var(--font-size-s);
         letter-spacing: 0.12em;
         text-transform: uppercase;
@@ -361,9 +387,9 @@ import "../styles/global.css"
       .page {
         max-width: 72rem;
         margin: 0 auto;
-        padding: var(--size-8) var(--size-5) var(--size-16);
+        padding: var(--fs-spacing-8) var(--fs-spacing-5) var(--fs-spacing-16);
         display: grid;
-        gap: var(--size-4);
+        gap: var(--fs-spacing-4);
       }
       .page > p {
         max-width: 60ch;
@@ -372,9 +398,9 @@ import "../styles/global.css"
 
       .search {
         display: grid;
-        gap: var(--size-1);
+        gap: var(--fs-spacing-1);
         max-width: 32rem;
-        margin-block-start: var(--size-4);
+        margin-block-start: var(--fs-spacing-4);
       }
       /* Ours replaces it, and two crosses in one field is one too many. */
       .search :global(.fs-search::-webkit-search-cancel-button) {
@@ -382,18 +408,18 @@ import "../styles/global.css"
       }
 
       .panels {
-        margin-block-start: var(--size-6);
+        margin-block-start: var(--fs-spacing-6);
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
-        gap: var(--size-5);
+        gap: var(--fs-spacing-5);
       }
       .panel {
         display: grid;
-        gap: var(--size-2);
+        gap: var(--fs-spacing-2);
         align-content: start;
-        padding: var(--size-4);
-        border: 1px solid var(--semantic-divider-30);
-        border-radius: var(--size-1);
+        padding: var(--fs-spacing-4);
+        border: 1px solid var(--fs-color-neutral-border-subtle);
+        border-radius: var(--fs-spacing-1);
       }
       .panel--wide {
         grid-column: 1 / -1;
@@ -404,16 +430,16 @@ import "../styles/global.css"
         font-weight: var(--font-weight-semibold);
         letter-spacing: 0.08em;
         text-transform: uppercase;
-        color: var(--semantic-muted-foreground);
+        color: var(--fs-color-neutral-text-subtle);
       }
       .panel__count,
       .panel__busy {
-        color: var(--palette-interactive-50);
+        color: var(--fs-color-accent-fill);
       }
       .panel__note {
         margin: 0;
         font-size: var(--font-size-xs);
-        color: var(--semantic-muted-foreground);
+        color: var(--fs-color-neutral-text-subtle);
       }
       .panel__body {
         min-height: 3rem;
@@ -421,46 +447,46 @@ import "../styles/global.css"
       .gallery__modes {
         display: flex;
         flex-wrap: wrap;
-        gap: var(--size-2);
+        gap: var(--fs-spacing-2);
       }
       .gallery {
-        margin-block-start: var(--size-4);
+        margin-block-start: var(--fs-spacing-4);
         display: grid;
-        gap: var(--size-4);
+        gap: var(--fs-spacing-4);
         grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
         align-items: start;
       }
       .gallery__wall {
         display: grid;
-        gap: var(--size-2);
+        gap: var(--fs-spacing-2);
         align-content: start;
         min-block-size: 8rem;
-        padding: var(--size-4);
-        border: 1px dashed var(--semantic-divider-30);
-        border-radius: var(--size-1);
+        padding: var(--fs-spacing-4);
+        border: 1px dashed var(--fs-color-neutral-border-subtle);
+        border-radius: var(--fs-spacing-1);
       }
       .gallery :global(.gallery__stone) {
         margin: 0;
         display: grid;
-        gap: var(--size-2);
-        padding: var(--size-3);
-        border-radius: var(--size-1);
-        background: var(--semantic-neutral-background);
+        gap: var(--fs-spacing-2);
+        padding: var(--fs-spacing-3);
+        border-radius: var(--fs-spacing-1);
+        background: var(--fs-color-neutral-surface);
       }
       .gallery :global(.gallery__course) {
         margin: 0;
-        padding: var(--size-2) var(--size-3);
-        border-inline-start: var(--size-1) solid var(--palette-interactive-50);
-        color: var(--semantic-muted-foreground);
+        padding: var(--fs-spacing-2) var(--fs-spacing-3);
+        border-inline-start: var(--fs-spacing-1) solid var(--fs-color-accent-fill);
+        color: var(--fs-color-neutral-text-subtle);
         font-size: var(--font-size-s);
       }
       .gallery :global(.gallery__said) {
-        margin: 0 0 var(--size-2);
+        margin: 0 0 var(--fs-spacing-2);
         font-size: var(--font-size-xs);
-        color: var(--semantic-muted-foreground);
+        color: var(--fs-color-neutral-text-subtle);
       }
       .gallery :global(.gallery__wire) {
-        color: var(--palette-interactive-50);
+        color: var(--fs-color-accent-fill);
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       }
       .gallery :global(.gallery__chisel) {
@@ -472,48 +498,48 @@ import "../styles/global.css"
        */
       .gallery__said-box :global(.wire__frame) {
         margin: 0;
-        padding: var(--size-3);
-        background: #1a1b26;
-        border-radius: var(--size-1);
+        padding: var(--fs-spacing-3);
+        background: var(--fs-color-neutral-surface);
+        border-radius: var(--fs-spacing-1);
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         font-size: var(--font-size-xs);
-        line-height: var(--semantic-line-height-compact);
+        line-height: var(--fs-line-height-compact);
         white-space: pre-wrap;
         overflow-wrap: anywhere;
       }
 
       .muster {
         display: grid;
-        gap: var(--size-4);
+        gap: var(--fs-spacing-4);
         justify-items: start;
         max-inline-size: 26rem;
       }
       .muster__field {
         display: grid;
-        gap: var(--size-1);
+        gap: var(--fs-spacing-1);
         inline-size: 100%;
       }
       .muster__summary {
-        margin-block-start: var(--size-4);
+        margin-block-start: var(--fs-spacing-4);
       }
       .muster__summary :global(.fs-error-summary) {
         display: grid;
-        gap: var(--size-2);
+        gap: var(--fs-spacing-2);
       }
       .muster__summary :global(.muster__ok) {
         margin: 0;
-        color: var(--palette-interactive-50);
+        color: var(--fs-color-accent-fill);
       }
 
       .counter {
         display: grid;
-        gap: var(--size-3);
+        gap: var(--fs-spacing-3);
         justify-items: start;
       }
       .counter__face {
         inline-size: 100%;
         display: grid;
-        gap: var(--size-1);
+        gap: var(--fs-spacing-1);
       }
       .counter :global(.counter__number) {
         margin: 0;
@@ -521,41 +547,41 @@ import "../styles/global.css"
         font-weight: var(--font-weight-bold);
         line-height: 1;
         font-variant-numeric: tabular-nums;
-        color: var(--palette-interactive-50);
+        color: var(--fs-color-accent-fill);
       }
       .counter :global(.counter__state) {
         margin: 0;
-        color: var(--semantic-muted-foreground);
+        color: var(--fs-color-neutral-text-subtle);
       }
 
       .panel__json,
       .panel__body :global(.wire__frame) {
         margin: 0;
-        padding: var(--size-3);
+        padding: var(--fs-spacing-3);
         overflow-x: auto;
-        background: #1a1b26;
-        border-radius: var(--size-1);
+        background: var(--fs-color-neutral-surface);
+        border-radius: var(--fs-spacing-1);
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         font-size: var(--font-size-xs);
-        line-height: var(--semantic-line-height-compact);
+        line-height: var(--fs-line-height-compact);
         white-space: pre-wrap;
       }
       .panel__body :global(.wire__frame + .wire__frame) {
-        margin-block-start: var(--size-2);
+        margin-block-start: var(--fs-spacing-2);
       }
       .panel__body :global(.hits) {
         margin: 0;
         padding: 0;
         list-style: none;
         display: grid;
-        gap: var(--size-3);
+        gap: var(--fs-spacing-3);
       }
       .panel__body :global(.hits__heading) {
-        color: var(--semantic-muted-foreground);
+        color: var(--fs-color-neutral-text-subtle);
       }
       .panel__body :global(.hits__excerpt) {
-        margin: var(--size-1) 0 0;
-        color: var(--semantic-muted-foreground);
+        margin: var(--fs-spacing-1) 0 0;
+        color: var(--fs-color-neutral-text-subtle);
       }
     </style>
   </body>

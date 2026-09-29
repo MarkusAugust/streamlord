@@ -33,38 +33,38 @@ const { previous, next } = neighbours(Astro.props.current)
   .pager {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: var(--size-3);
-    margin-block-start: var(--size-12);
-    padding-block-start: var(--size-6);
-    border-block-start: 1px solid var(--semantic-divider-30);
+    gap: var(--fs-spacing-3);
+    margin-block-start: var(--fs-spacing-12);
+    padding-block-start: var(--fs-spacing-6);
+    border-block-start: 1px solid var(--fs-color-neutral-border-subtle);
   }
   .pager__link {
     display: grid;
-    gap: var(--size-1);
-    padding: var(--size-3) var(--size-4);
-    border: 1px solid var(--semantic-divider-30);
-    border-radius: var(--size-1);
+    gap: var(--fs-spacing-1);
+    padding: var(--fs-spacing-3) var(--fs-spacing-4);
+    border: 1px solid var(--fs-color-neutral-border-subtle);
+    border-radius: var(--fs-spacing-1);
     text-decoration: none;
-    color: var(--semantic-page-foreground);
+    color: var(--fs-color-neutral-text-strong);
   }
   .pager__link[data-next] {
     text-align: end;
   }
   .pager__link:hover {
-    border-color: var(--semantic-interactive-main);
+    border-color: var(--fs-color-accent-text);
   }
   .pager__link:focus-visible {
-    outline: var(--semantic-focus-ring);
+    outline: var(--fs-focus-ring);
     outline-offset: 2px;
   }
   .pager__direction {
     font-size: var(--font-size-xxs);
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: var(--semantic-muted-foreground);
+    color: var(--fs-color-neutral-text-subtle);
   }
   .pager__title {
-    color: var(--semantic-interactive-main);
+    color: var(--fs-color-accent-text);
     font-weight: var(--font-weight-medium);
   }
 </style>

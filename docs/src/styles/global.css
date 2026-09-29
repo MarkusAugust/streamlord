@@ -8,43 +8,45 @@
    no webfont, no extra request. */
 body {
   margin: 0;
-  background: var(--semantic-page-background);
-  color: var(--semantic-page-foreground);
+  background: var(--fs-color-neutral-canvas);
+  color: var(--fs-color-neutral-text-strong);
   font-family: Helvetica, Arial, sans-serif;
-  line-height: var(--semantic-line-height-default);
+  line-height: var(--fs-line-height-default);
 }
 
 /* The focus ring and the active page in the sidebar are the two places the site is allowed
-   to glow. Both take palette step 50 rather than the semantic interactive colour, which
-   picks the pale step 30 so that body-sized links stay calm. Measured at 7.17:1 on the dark
-   surface, so the brighter colour costs nothing in contrast. */
+   to glow. Both take accent-fill rather than Fristil's own accent-border-strong: fill is the
+   role carrying the brand at full chroma, and it measures 5.19:1 on the light canvas and
+   5.96:1 on the dark one, so the brighter colour costs nothing in contrast. */
 :root {
-  --semantic-focus-ring: 2px solid var(--palette-interactive-50);
+  --fs-focus-ring: 2px solid var(--fs-color-accent-fill);
 }
 
 /*
  * The page's own colours, captured where the masthead cannot reach them.
  *
  * The masthead is a data-theme="dark" island on both themes, so anything rendered inside it,
- * including the search panel that hangs below the field, reads the dark theme's semantic
- * colours even when the page around it is light. The panel then arrives as a black box over a
- * white article.
+ * including the search panel that hangs below the field, reads the dark theme's colours even
+ * when the page around it is light. The panel then arrives as a black box over a white article.
  *
- * A custom property resolves its var() on the element that declares it, so these six compute
+ * A custom property resolves its var() on the element that declares it, so these eight compute
  * here, on :root, against the page's theme, and keep those values when they are read from
- * inside the island. Verified in a browser before it was written: --semantic-page-background is
- * #171a24 inside the masthead and #ffffff in a variable captured here.
+ * inside the island. Verified in a browser: --fs-color-neutral-canvas is #0d111e inside the
+ * masthead and #ffffff in a variable captured here.
+ *
+ * The three link colours are the roles .fs-link actually reads, so all three have to be
+ * captured. A link inside the panel wore the dark theme's colour on a white surface otherwise,
+ * which is what "pale and washed out" looked like.
  */
 :root {
-  --page-background: var(--semantic-page-background);
-  --page-foreground: var(--semantic-page-foreground);
-  --page-muted: var(--semantic-muted-foreground);
-  --page-divider: var(--semantic-divider-30);
-  --page-neutral: var(--semantic-neutral-background);
-  --page-interactive: var(--semantic-interactive-main);
-  /* .fs-link:visited reads this one, and a visited link inside the panel was wearing the dark
-     theme's colour on a white surface, which is what "pale and washed out" looked like. */
-  --page-interactive-visited: var(--semantic-interactive-visited);
+  --page-background: var(--fs-color-neutral-canvas);
+  --page-foreground: var(--fs-color-neutral-text-strong);
+  --page-muted: var(--fs-color-neutral-text-subtle);
+  --page-divider: var(--fs-color-neutral-border-subtle);
+  --page-neutral: var(--fs-color-neutral-surface);
+  --page-interactive: var(--fs-color-accent-text);
+  --page-interactive-hover: var(--fs-color-accent-text-strong);
+  --page-interactive-visited: var(--fs-color-visited-text);
 }
 
 /*
@@ -74,8 +76,8 @@ body {
      id broke mid-word, and shortening it would have been hiding the thing a reader came for. */
   grid-template-columns: 1fr;
   max-inline-size: 34rem;
-  gap: var(--size-3);
-  margin-block: var(--size-5);
+  gap: var(--fs-spacing-3);
+  margin-block: var(--fs-spacing-5);
 }
 .marketplace {
   display: grid;
@@ -83,18 +85,18 @@ body {
   /* Top-aligned, so the two titles sit on one line even when an id wraps and one card
      grows taller than the other. The mark stays centred against the text beside it. */
   align-items: start;
-  gap: 0 var(--size-3);
-  padding: var(--size-3) var(--size-4);
-  border: 1px solid var(--semantic-divider-30);
-  border-radius: var(--size-1);
-  color: var(--semantic-page-foreground);
+  gap: 0 var(--fs-spacing-3);
+  padding: var(--fs-spacing-3) var(--fs-spacing-4);
+  border: 1px solid var(--fs-color-neutral-border-subtle);
+  border-radius: var(--fs-spacing-1);
+  color: var(--fs-color-neutral-text-strong);
   text-decoration: none;
 }
 .marketplace:hover {
-  border-color: var(--palette-interactive-50);
+  border-color: var(--fs-color-accent-fill);
 }
 .marketplace:focus-visible {
-  outline: var(--semantic-focus-ring);
+  outline: var(--fs-focus-ring);
   outline-offset: 2px;
 }
 /*
@@ -106,10 +108,10 @@ body {
 .marketplace__mark {
   grid-row: span 2;
   align-self: center;
-  inline-size: var(--size-7);
-  block-size: var(--size-7);
-  padding: var(--size-1);
-  border-radius: var(--size-1);
+  inline-size: var(--fs-spacing-7);
+  block-size: var(--fs-spacing-7);
+  padding: var(--fs-spacing-1);
+  border-radius: var(--fs-spacing-1);
   background: #fff;
   box-sizing: content-box;
 }
@@ -118,6 +120,6 @@ body {
 }
 .marketplace__id {
   font-size: var(--font-size-xs);
-  color: var(--semantic-muted-foreground);
+  color: var(--fs-color-neutral-text-subtle);
   word-break: break-all;
 }
