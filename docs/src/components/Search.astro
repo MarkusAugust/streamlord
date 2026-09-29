@@ -21,11 +21,16 @@ import { href, NAVIGATION } from "../navigation"
   is `retrying`, not `error`: it retries a stream before it gives up. A request that succeeds
   ends on `finished`, which sets the signal back to false, so the line below comes and goes with
   the service rather than latching on the first hiccup.
+
+  `wire` starts false and the panel at the foot of the article turns it on when it is opened. It
+  is what asks the service to encode the frames it sent and patch them in, and the frames are
+  2.4 times the size of the answer they describe — worth it for a reader who opened the panel to
+  look at them, and pure waste on every search of every page for everyone else.
 -->
 <div
   class="search"
   role="search"
-  data-signals="{query: '', searching: false, offline: false}"
+  data-signals="{query: '', searching: false, offline: false, wire: false}"
   data-on:datastar-fetch__document={"$offline = ['error', 'retrying', 'retries-failed'].includes(evt.detail.type)"}
 >
   <label class="fs-sr-only" for="site-search">Search the documentation</label>

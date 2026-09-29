@@ -6,6 +6,7 @@ import Pager from "../components/Pager.astro"
 import Search from "../components/Search.astro"
 import Sidebar from "../components/Sidebar.astro"
 import Toc from "../components/Toc.astro"
+import Wire from "../components/Wire.astro"
 import { FAVICON } from "../icon"
 import "../styles/global.css"
 
@@ -79,6 +80,7 @@ const { title, description, slug, headings } = Astro.props
           <p class="fs-paragraph" data-variant="lead">{description}</p>
           <slot />
         </article>
+        <Wire />
         <Pager current={slug} />
       </main>
 

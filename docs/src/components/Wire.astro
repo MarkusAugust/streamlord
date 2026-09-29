@@ -1,0 +1,77 @@
+---
+import { SERVICE } from "../config"
+
+// The frames, on the page that describes them.
+//
+// Every search from the masthead is a real request to a Ktor service running this library, and
+// the service can encode what it sent with the same SseEncoder the golden-file tests verify. So
+// a reader who has just read about `datastar-patch-elements` can search for something, open this,
+// and see the event — not a printed example of one, the one their own keystrokes produced.
+//
+// Closed by default, and at the foot of the article: a reader who wants the protocol will look,
+// and a reader who wants the prose is not made to scroll past a panel of machinery.
+//
+// And closed means closed, on the wire too. Asking for the frames with every search made each
+// answer 2.4 times larger — measured, 2617 bytes against 6224 — on every page, for a panel
+// almost nobody has open. So opening this is what turns them on: `toggle` sets the signal the
+// service reads, and asks again for the search that is already in the field, so the panel has
+// something in it the moment it opens rather than after the next keystroke.
+---
+
+<details class="wire" data-on:toggle={`$wire = evt.target.open; $wire && $query && @get('${SERVICE}/search')`}>
+  <summary class="wire__summary">What went over the wire</summary>
+
+  <p class="wire__note">
+    The frames your last search produced, encoded by the same <code>SseEncoder</code> the
+    golden-file tests check. Not a description of them — the frames.
+  </p>
+
+  <div id="wire" class="wire__frames">
+    <p class="fs-paragraph" data-size="small">
+      Nothing yet. Search from the top of the page, and what the server sends will appear here.
+    </p>
+  </div>
+</details>
+
+<style>
+  .wire {
+    margin-block-start: var(--size-10);
+    padding-block-start: var(--size-4);
+    border-block-start: 1px solid var(--semantic-divider-30);
+  }
+  .wire__summary {
+    cursor: pointer;
+    font-size: var(--font-size-s);
+    font-weight: var(--font-weight-semibold);
+    color: var(--semantic-muted-foreground);
+  }
+  .wire__summary:hover {
+    color: var(--semantic-page-foreground);
+  }
+  .wire__summary:focus-visible {
+    outline: var(--semantic-focus-ring);
+    outline-offset: 2px;
+  }
+  .wire__note {
+    margin: var(--size-3) 0;
+    font-size: var(--font-size-xs);
+    color: var(--semantic-muted-foreground);
+  }
+  .wire__frames {
+    display: grid;
+    gap: var(--size-2);
+  }
+  /* The server writes these, so they are styled here rather than where they are built. */
+  .wire__frames :global(.wire__frame) {
+    margin: 0;
+    padding: var(--size-3);
+    overflow-x: auto;
+    background: #1a1b26;
+    border-radius: var(--size-1);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: var(--font-size-xs);
+    line-height: var(--semantic-line-height-compact);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+</style>
