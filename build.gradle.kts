@@ -8,6 +8,7 @@ plugins {
     alias(libs.plugins.kotlin.jvm) apply false
     alias(libs.plugins.kotlin.serialization) apply false
     alias(libs.plugins.maven.publish) apply false
+    alias(libs.plugins.dokka) apply false
 }
 
 /*
@@ -28,6 +29,7 @@ subprojects {
     apply(plugin = "org.jetbrains.kotlin.jvm")
     apply(plugin = "java-library")
     if (!internal) apply(plugin = "com.vanniktech.maven.publish")
+    if (!internal) apply(plugin = "org.jetbrains.dokka")
 
     group = rootProject.group
     version = rootProject.version
@@ -68,7 +70,24 @@ subprojects {
     extensions.configure<MavenPublishBaseExtension> {
         publishToMavenCentral(automaticRelease = true)
         if (providers.gradleProperty("signingInMemoryKey").isPresent) signAllPublications()
-        configure(KotlinJvm(javadocJar = JavadocJar.Empty(), sourcesJar = true))
+        /*
+         * A real API reference in the javadoc jar, not an empty one.
+         *
+         * Every module carried JavadocJar.Empty() until now, which meant javadoc.io showed a
+         * blank page for a library whose source holds 445 KDoc blocks. IntelliJ users never
+         * noticed, because the sources jar is published too and the IDE reads the comments from
+         * there; everyone else got nothing.
+         *
+         * The task name is Dokka 2's. `dokkaHtml` is a v1 task and the plugin now reports it as
+         * disabled, which is the sort of thing that builds a jar with nothing in it and says
+         * BUILD SUCCESSFUL — so it was read from `gradlew tasks`, not from a guide.
+         */
+        configure(
+            KotlinJvm(
+                javadocJar = JavadocJar.Dokka("dokkaGeneratePublicationHtml"),
+                sourcesJar = true,
+            ),
+        )
         coordinates(rootProject.group.toString(), project.name, rootProject.version.toString())
         pom {
             name.set(project.name)

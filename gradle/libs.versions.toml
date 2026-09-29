@@ -42,5 +42,8 @@ maven-publish = { id = "com.vanniktech.maven.publish", version = "0.37.0" }
 # build's toolchain is 21 with artifacts targeting 17. Following the plugin would mean
 # dragging the whole build forward for one module.
 graalvm-native = { id = "org.graalvm.buildtools.native", version = "0.11.5" }
+# The API reference, generated from the KDoc that is already in the source. Used for the
+# javadoc jar every published module carries, which was empty until now.
+dokka = { id = "org.jetbrains.dokka", version = "2.2.0" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
