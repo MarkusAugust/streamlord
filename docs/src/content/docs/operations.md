@@ -48,7 +48,15 @@ a handler under load does not buy you a retry; it buys you a dead stream.
 | `auto` (default) | network errors only |
 | `error` | network errors, and 4xx/5xx |
 | `always` | anything that is not 204 or a redirect, including a clean end |
-| `never` | nothing |
+| `never` | network errors only, the same as `auto` |
+
+That last row is not a typo. `'never'` is read in exactly one place in the client, the branch
+that decides what to do about a response that is not a 200 (`fetch.ts:594`), and `auto` declines
+to retry there anyway. A transport failure is handled somewhere else entirely, in the `catch`
+around the request, and that path calls `retryRequest()` without consulting the setting at all
+(`fetch.ts:686`). So `never` still reconnects after a dropped connection, up to `retryMaxCount`
+times, with the same backoff as any other value. If you need a stream that truly gives up, count
+the attempts on your own side; the option name promises more than the client delivers.
 
 Backoff is `retryInterval` (1000 ms) multiplied by `retryScaler` (2) up to `retryMaxWait`
 (30 000 ms), for at most `retryMaxCount` (10) attempts. All five are typed:
