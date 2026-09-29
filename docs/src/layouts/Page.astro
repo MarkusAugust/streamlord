@@ -256,6 +256,31 @@ const { title, description, slug, headings } = Astro.props
         width: 100%;
         border-collapse: collapse;
       }
+
+      /*
+       * The epigraph that opens seven of these pages, given the same blue edge the creed has
+       * on the landing page, so the voice looks like one voice wherever it speaks.
+       *
+       * The landing page damps the edge to 35% because it sits on #0c0d14, the deep ground
+       * the mark was drawn on. These pages follow the reader, and their dark surface is
+       * #171a24, which is lighter: the same 35% measured invisible against it. So the colour
+       * is the token in both themes and only the strength moves, enough on dark to read as a
+       * deliberate rule rather than a rendering artefact.
+       */
+      .prose blockquote {
+        margin: var(--size-6) 0;
+        padding-inline-start: var(--size-4);
+        border-inline-start: 2px solid var(--palette-interactive-50);
+        color: var(--semantic-muted-foreground);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) .prose blockquote {
+          border-inline-start-color: rgba(0, 177, 250, 0.7);
+        }
+      }
+      :root[data-theme="dark"] .prose blockquote {
+        border-inline-start-color: rgba(0, 177, 250, 0.7);
+      }
     </style>
 
     <script>
