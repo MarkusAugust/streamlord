@@ -10,6 +10,10 @@ import "../styles/global.css"
 // Written the way it would be written, not the way a phone would like it. A narrow screen
 // wraps the long line with a hanging indent (see hangingIndent in src/shiki.ts), and this
 // block is a poster on every screen wide enough to hold it, which is most of them.
+// The one section of the list the hero has just made a promise about, so the eye should find
+// it without being shouted at. Named here rather than in the markup, because it is a choice.
+const FEATURED = "The tooling"
+
 const SAMPLE = `get("/feed") {
     call.respondDatastar {
         patchElements(selector = "#feed", mode = ElementPatchMode.APPEND) {
@@ -73,11 +77,17 @@ const SAMPLE = `get("/feed") {
           />
         </div>
 
+        <!--
+          The reader here has chosen Datastar and is choosing a library for it, so the row
+          reads as the journey they are actually on: proof that this one works, then the
+          reason to take it over the official SDK, then the way in. Install is a need you
+          have after deciding, and it is one screen down in the list below.
+        -->
         <div class="hero__actions">
-          <a class="fs-button" href="/first-stream/">Your first stream</a>
-          <a class="fs-button" data-variant="secondary" href="/install/">Install and modules</a>
           <!-- Linked only now that the service it talks to exists outside this machine. -->
-          <a class="fs-button" data-variant="ghost" href="/live/">See it run</a>
+          <a class="fs-button" href="/live/">See it run</a>
+          <a class="fs-button" data-variant="secondary" href="/editors/">The editors</a>
+          <a class="fs-button" data-variant="ghost" href="/first-stream/">Your first stream</a>
         </div>
 
         <!--
@@ -105,7 +115,7 @@ const SAMPLE = `get("/feed") {
     <main class="page" id="content">
       {
         NAVIGATION.map((section) => (
-          <section class="section">
+          <section class="section" data-featured={section.title === FEATURED ? "" : undefined}>
             <h2 class="fs-heading" data-size="s">{section.title}</h2>
             <ul class="fs-list" data-variant="plain">
               {section.pages.map((page) => (
@@ -259,6 +269,10 @@ const SAMPLE = `get("/feed") {
         gap: var(--size-2);
         break-inside: avoid;
         margin-block-end: var(--size-8);
+      }
+      /* The heading only, in the wordmark's blue. Enough to find, not enough to look broken. */
+      .section[data-featured] h2 {
+        color: var(--palette-interactive-50);
       }
       .section ul {
         margin: 0;
