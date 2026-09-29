@@ -5,7 +5,7 @@ import { href, NAVIGATION } from "../navigation"
 
 // Fristil's own classes for a search field, with ours appended rather than spread beside them.
 //
-// `{...fs.search()}` sets `class`, and the spread wins over a `class` written after it — so an
+// `{...fs.search()}` sets `class`, and the spread wins over a `class` written after it, so an
 // input carrying both ended up with Fristil's two classes and not ours, silently. Every rule
 // written for `.search__field` matched nothing until this was pulled apart.
 const { class: fristilClasses, ...searchAttributes } = fs.search()
@@ -16,22 +16,22 @@ const { class: fristilClasses, ...searchAttributes } = fs.search()
 // searching the documentation is running the library that the documentation describes.
 //
 // The panel starts out holding every page, written at build time. That is the fallback: the
-// service sleeps on a free tier and wakes in a second or two, and if it never wakes — or the
-// reader is offline, or on a preview build with no service at all — the panel is a table of
+// service sleeps on a free tier and wakes in a second or two, and if it never wakes (or the
+// reader is offline, or on a preview build with no service at all) the panel is a table of
 // contents rather than an empty box. Datastar only replaces what it is given, so a request
 // that never answers leaves the list exactly as it was.
 ---
 
 <!--
   `datastar-fetch` is dispatched on the document and does not bubble, so the listener says
-  __document — Datastar's own modifier for exactly this. With the service unreachable the type
+  __document, Datastar's own modifier for exactly this. With the service unreachable the type
   is `retrying`, not `error`: it retries a stream before it gives up. A request that succeeds
   ends on `finished`, which sets the signal back to false, so the line below comes and goes with
   the service rather than latching on the first hiccup.
 
   `wire` starts false and the panel at the foot of the article turns it on when it is opened. It
   is what asks the service to encode the frames it sent and patch them in, and the frames are
-  2.4 times the size of the answer they describe — worth it for a reader who opened the panel to
+  2.4 times the size of the answer they describe, worth it for a reader who opened the panel to
   look at them, and pure waste on every search of every page for everyone else.
 -->
 <div
@@ -106,7 +106,7 @@ const { class: fristilClasses, ...searchAttributes } = fs.search()
    * The field lifts off the band it sits on, rather than carrying a colour of its own.
    *
    * The masthead is a data-theme="dark" island on both themes, so Fristil gave the input the
-   * dark theme's surface — rgb(23, 26, 36). Against the dark band that is a gentle lift, but
+   * dark theme's surface, rgb(23, 26, 36). Against the dark band that is a gentle lift, but
    * the light theme's band is the deck's denim, rgb(44, 67, 107), and a near-black field on it
    * reads as a hole punched through the header.
    *
@@ -128,7 +128,7 @@ const { class: fristilClasses, ...searchAttributes } = fs.search()
   /*
    * The label is there for a screen reader and hidden from the eye, so the placeholder is the
    * only visible name this field has. Fristil's muted grey measured 3.45:1 against the lifted
-   * surface — fine for decoration, thin for the only thing that says what the box is for.
+   * surface, fine for decoration, thin for the only thing that says what the box is for.
    */
   .search__field::placeholder {
     color: rgb(255 255 255 / 0.72);
@@ -153,7 +153,7 @@ const { class: fristilClasses, ...searchAttributes } = fs.search()
     /*
      * The page's theme, taken back from the masthead's.
      *
-     * The panel belongs to what you are reading, not to the furniture above it — but it is a
+     * The panel belongs to what you are reading, not to the furniture above it, but it is a
      * child of a data-theme="dark" island, so every semantic colour inside it, down to the link
      * colour Fristil gives .fs-link, was the dark theme's, and the panel arrived as a black box
      * over a white article. Re-declaring the six that the panel and its contents use, from the

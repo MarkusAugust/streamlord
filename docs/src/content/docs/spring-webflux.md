@@ -35,8 +35,8 @@ fun guarded(
 
 ## Reading signals
 
-There is no `HttpServletRequest` here. Take the signals the way WebFlux gives them to you — a
-`@RequestParam` named `datastar` on a `GET`, or the request body on a `POST` — and hand the JSON
+There is no `HttpServletRequest` here. Take the signals the way WebFlux gives them to you, either a
+`@RequestParam` named `datastar` on a `GET` or the request body on a `POST`, and hand the JSON
 to the codec yourself. The protocol rule for *where* the signals live is the same as everywhere;
 only the plumbing differs.
 

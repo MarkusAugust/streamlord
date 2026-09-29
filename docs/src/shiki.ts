@@ -35,7 +35,7 @@ import kotlinInjection from "../../editors/vscode/syntaxes/kotlin-injection.tmLa
  * The Kotlin injection includes `text.html.basic`, so that HTML inside a
  * triple-quoted Kotlin string is highlighted as HTML. If Shiki compiles the
  * Kotlin grammar before the HTML one, `text.html.basic` is built as a
- * dependency with no injections attached, and the compiled grammar is cached —
+ * dependency with no injections attached, and the compiled grammar is cached,
  * after which our HTML injection never applies and every `data-*` attribute in
  * an HTML block renders as a plain attribute. Loading the base HTML language
  * first means it is compiled with the injection in place.
@@ -67,8 +67,8 @@ const datastarLangs = [
  * A bundled theme with the Streamlord rules appended.
  *
  * Tokyo Night rather than Dark+ for the dark side. Measured on a real Kotlin block, every
- * bundled theme leaves 53–56% of the characters in its default foreground, because readable
- * code is mostly monochrome — a theme cannot make Kotlin colourful, since Shiki has the
+ * bundled theme leaves 53 to 56% of the characters in its default foreground, because readable
+ * code is mostly monochrome. A theme cannot make Kotlin colourful, since Shiki has the
  * TextMate grammar and not the language server's semantic tokens. What a theme does change
  * is the ground it sits on, and #1a1b26 carries the blue-black of the rest of this site
  * where #1E1E1E is the most neutral grey there is.
@@ -83,7 +83,7 @@ const withStreamlordRules = (
 ): ThemeRegistration => {
   // A bundled theme keeps its rules in `tokenColors`; a raw TextMate theme uses `settings`.
   // Shiki normalises both, so reading only one silently produces a theme with nothing in it
-  // but our sixteen Datastar rules — every Kotlin keyword, string and type left uncoloured,
+  // but our sixteen Datastar rules, every Kotlin keyword, string and type left uncoloured,
   // and no error anywhere. That is exactly what happened, so the shape is checked here.
   const base = theme as ThemeRegistration & {
     tokenColors?: ThemeRegistration["settings"]
@@ -133,7 +133,7 @@ export const hangingIndent: ShikiTransformer = {
   },
 }
 
-/** Every character a line holds, leading whitespace included — Shiki nests it in spans. */
+/** Every character a line holds, leading whitespace included, since Shiki nests it in spans. */
 function textOf(node: { children?: unknown[] }): string {
   if (!node.children) return ""
   return node.children

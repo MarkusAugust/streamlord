@@ -5,10 +5,10 @@ description: "respondDatastar, readSignals, and the plugin that wires them toget
 
 > *That it flows when I say flow. That it stops when I say stop.*
 >
-> — Gorvek of Bonereach
+> Gorvek of Bonereach
 
 Ktor is the Sword. The adapter adds three extension functions to `ApplicationCall` and a plugin,
-and brings no Ktor version of its own — Ktor is `compileOnly`, so you stay on whatever you had.
+and brings no Ktor version of its own. Ktor is `compileOnly`, so you stay on whatever you had.
 
 ## The plugin
 
@@ -42,8 +42,8 @@ post("/search") {
 }
 ```
 
-This is the shape most endpoints take. It is a stream in the protocol sense — it is a
-`text/event-stream` response that can carry many frames — but it lives for milliseconds.
+This is the shape most endpoints take. It is a stream in the protocol sense, a
+`text/event-stream` response that can carry many frames, but it lives for milliseconds.
 
 ## Long-lived streams
 

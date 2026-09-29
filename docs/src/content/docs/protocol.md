@@ -15,7 +15,7 @@ Older documentation speaks of `merge-fragments`, `remove-fragments`, `merge-sign
 | `datastar-patch-signals` | Merge-patch the signal store, by RFC 7386 | `PatchSignals` |
 
 Removal is not a third event: it is a `PatchElements` with mode `remove`. A signal does not get
-deleted either — it is patched to `null`, and RFC 7386 says a null member is a removal.
+deleted either. It is patched to `null`, and RFC 7386 says a null member is a removal.
 
 `ExecuteScript` looks like a third event and is not. The SDK specification defines it as sugar on
 top of `patch-elements`: a `<script>` appended to `body`, which removes itself once it has run.
@@ -52,9 +52,9 @@ data: mode append
 data: elements <li>x</li>
 ```
 
-The blank line ends the frame. Those bytes are not typed out here — they are written by
+The blank line ends the frame. Those bytes are not typed out here. They are written by
 Streamlord's own encoder during the build, from the event above. Single-line fields are guarded so that a selector carrying a
-newline cannot forge a second `data:` line — see [Security](/security/).
+newline cannot forge a second `data:` line. See [Security](/security/).
 
 ## How it is verified
 

@@ -39,7 +39,7 @@
    *
    * So each line hangs from where it was written: --indent, counted by the transformer in
    * src/shiki.ts, is the depth of the line, and what wraps is pushed two characters past it.
-   * A long unbroken token — a URL, a signal name — still has to break somewhere, which is what
+   * A long unbroken token (a URL, a signal name) still has to break somewhere, which is what
    * overflow-wrap is for, and the block keeps overflow-x for the cases that defeat both.
    */
   /*

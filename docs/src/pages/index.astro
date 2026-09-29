@@ -8,7 +8,7 @@ import { datastarLangs, hangingIndent, shikiThemes } from "../shiki"
 import "../styles/global.css"
 
 // Written the way it would be written, not the way a phone would like it. A narrow screen
-// wraps the long line with a hanging indent — see hangingIndent in src/shiki.ts — and this
+// wraps the long line with a hanging indent (see hangingIndent in src/shiki.ts), and this
 // block is a poster on every screen wide enough to hold it, which is most of them.
 const SAMPLE = `get("/feed") {
     call.respondDatastar {
@@ -34,7 +34,7 @@ const SAMPLE = `get("/feed") {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Streamlord — a Kotlin SDK for Datastar</title>
+    <title>Streamlord: a Kotlin SDK for Datastar</title>
     <meta
       name="description"
       content="Streamlord speaks the Datastar 1.0.4 Server-Sent Events protocol from Kotlin, over Ktor and Spring, and brings nothing you do not already carry."
@@ -145,7 +145,7 @@ const SAMPLE = `get("/feed") {
         /*
          * A grid item may not shrink below its content by default, and `pre` does not wrap,
          * so this one measured 666px inside a 390px phone. The column grew to fit it, the
-         * document became 686px wide, and `.hero` — which is only as wide as the viewport —
+         * document became 686px wide, and `.hero`, which is only as wide as the viewport,
          * covered a little over half of it: the dark ground ended mid-screen and the rest of
          * the page showed through beside it. `overflow-x: auto` on the block never engaged,
          * because nothing was ever too narrow for it.
@@ -164,7 +164,7 @@ const SAMPLE = `get("/feed") {
         /*
          * Down a step on a phone and no further: below about 11px a monospace font stops
          * being read and starts being decoded. The sample is written narrow enough that this
-         * is the whole of it — the scroll below is a safety net, not the plan.
+         * is the whole of it. The scroll below is a safety net, not the plan.
          */
         font-size: clamp(0.7rem, 2.9vw, var(--font-size-s));
       }

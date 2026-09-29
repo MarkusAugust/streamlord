@@ -6,7 +6,7 @@
 > *"And the JavaScript?"*
 > *"I do not know the word."*
 >
-> — Gorvek of Bonereach, who walked out of the Ashfall with iron in his hand
+> Gorvek of Bonereach, who walked out of the Ashfall with iron in his hand
 
 **Streamlord** is a Kotlin SDK for [Datastar](https://data-star.dev) 1.0.4. It speaks the
 Datastar Server-Sent Events protocol exactly, reads the signals the browser sends back, and

@@ -4,7 +4,7 @@ description: "A function that returns HTML is a first-class way to write markup 
 ---
 
 Every place Streamlord takes HTML takes a `String`. A function returning a triple-quoted literal
-is not a fallback for people who have not learned the DSL — it is one of the three supported
+is not a fallback for people who have not learned the DSL. It is one of the three supported
 ways, and the editor tooling treats it as such.
 
 ```kotlin sample=declarations
@@ -31,8 +31,8 @@ Two things make this comfortable.
 Kotlin 2.2 and newer. In a multi-dollar string a single `$` is just a dollar, so `$count` reaches
 the browser as the signal it is, and `$$count` is the Kotlin template.
 
-Without it you are back in [the `$` trap](/dollar-trap/): `$count` either fails to compile, or —
-when a `count` happens to be in scope — silently ships `data-text=""`. On older Kotlin, write
+Without it you are back in [the `$` trap](/dollar-trap/): `$count` either fails to compile or,
+when a `count` happens to be in scope, silently ships `data-text=""`. On older Kotlin, write
 `${'$'}count`.
 
 ## `@Language("HTML")`
@@ -40,8 +40,8 @@ when a `count` happens to be in scope — silently ships `data-text=""`. On olde
 From `org.intellij.lang.annotations`, which your build already has through the Kotlin standard
 library. Streamlord declares it `compileOnly`, so nothing new reaches you.
 
-IntelliJ then treats the string as HTML: highlighting, tag completion, and — with the official
-Datastar plugin — completion of every `data-*` attribute. Streamlord's own parameters already
+IntelliJ then treats the string as HTML: highlighting, tag completion, and, with the official
+Datastar plugin, completion of every `data-*` attribute. Streamlord's own parameters already
 carry the annotation (`patchElements`, `PatchElements`, `respondElements`, `datastarElements`,
 `ElementsResponse`; `JSON` for signals, `JavaScript` for scripts), so a literal passed straight in
 is injected without you writing anything. On your own functions, add it yourself.
@@ -53,7 +53,7 @@ diagnostics, completions, hover and highlighting as a template file.
 ## The guard
 
 The DSL guards its own expressions because it builds them. A string arrives finished, so the
-guard has to walk it — and that is opt-in:
+guard has to walk it, and that is opt-in:
 
 ```kotlin sample=ktor-application
 install(StreamlordPlugin) { guardElements = true }
@@ -66,7 +66,7 @@ With it on, every element patch and elements response leaving that instance is w
 
 The same walk catches a mistyped attribute. `data-onn:click` is one letter from `data-on:click`
 and throws `MistypedAttributeException` saying so. A bare name with no key or modifier is only
-judged against the long Datastar names — `data-signal`, `data-indicater` — because the short ones
+judged against the long Datastar names (`data-signal`, `data-indicater`) because the short ones
 have too many honest neighbours: `data-test`, `data-kind`, `data-size` and `data-theme` are yours
 and pass untouched.
 

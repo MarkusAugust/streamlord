@@ -14,7 +14,7 @@ import "../styles/global.css"
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Live — Streamlord</title>
+    <title>Live | Streamlord</title>
     <meta
       name="description"
       content="The documentation's search, answered by Streamlord over Server-Sent Events, with the frames it sent beside it."
@@ -46,7 +46,7 @@ import "../styles/global.css"
       <!--
         fs.search() rather than the classes by hand. Fristil's search field is an fs-input
         with room for a magnifier, so it needs both classes, and writing only fs-search gets
-        you a half-styled field with no error anywhere — which is exactly what happened here
+        you a half-styled field with no error anywhere, which is exactly what happened here
         before this line. The builder sets both, and type="search" with them.
 
         role="search" makes the row a landmark, so a screen reader finds the field without
@@ -66,8 +66,8 @@ import "../styles/global.css"
           <!--
             A real button, because the cross the browser draws inside a type="search" field
             is a pseudo-element and Chrome does not let the keyboard reach it. Firefox draws
-            none at all. This one is a tab stop, clears the bound signal — which empties the
-            field, since the binding runs both ways — and asks for the empty result.
+            none at all. This one is a tab stop, clears the bound signal (which empties the
+            field, since the binding runs both ways) and asks for the empty result.
           -->
           <button
             class="fs-button"
@@ -226,7 +226,7 @@ import "../styles/global.css"
           <h2 class="panel__title">A form, checked on the server</h2>
           <p class="panel__note">
             The rules live in Kotlin, once. Nothing that arrives over a network may be trusted,
-            so the server has to check anyway — and a second copy of the rules in the browser is
+            so the server has to check anyway, and a second copy of the rules in the browser is
             a copy that goes out of step.
           </p>
 
@@ -287,7 +287,7 @@ import "../styles/global.css"
         <!--
           The counter: one connection, thirty numbers, and a button that stops it.
 
-          The button is both Start and Stop, and that is not a shortcut — it is how Datastar
+          The button is both Start and Stop, and that is not a shortcut. It is how Datastar
           cancels. A request keeps an AbortController per element and per URL, so asking the
           same endpoint from the same button aborts the stream that is still open before the
           new request is sent. The server reads `running` from the signals it was sent, sees
@@ -301,7 +301,7 @@ import "../styles/global.css"
           </h2>
           <p class="panel__note">
             One <code>Flow</code>, one connection, twelve seconds. Every number is an element
-            patch and a signal patch on the same open response — nothing here is polled.
+            patch and a signal patch on the same open response. Nothing here is polled.
           </p>
 
           <div class="counter">
@@ -324,7 +324,7 @@ import "../styles/global.css"
           <h2 class="panel__title">On the wire</h2>
           <p class="panel__note">
             The frames the server sent, encoded by the same <code>SseEncoder</code> the
-            golden-file tests verify. Not a description of them — the frames.
+            golden-file tests verify. Not a description of them. The frames.
           </p>
           <div id="wire" class="panel__body">
             <p class="fs-paragraph" data-size="small">Nothing sent yet.</p>

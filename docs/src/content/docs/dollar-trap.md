@@ -12,7 +12,7 @@ dataText("$user.name")      // sends ".name"
 ```
 
 If `count` is not in scope, that line does not compile and you find out immediately. If a `count`
-*is* in scope — and in a handler that has just read signals, one often is — it compiles, ships,
+*is* in scope (and in a handler that has just read signals, one often is), it compiles, ships,
 and Datastar ignores the malformed expression **without a word**. The page simply does nothing.
 
 ## What Streamlord does about it
@@ -32,7 +32,7 @@ In order of preference:
 button { dataOnClick(increment("count")) }
 ```
 
-The helpers — `signal`, `set`, `toggle`, `not`, `increment`, `decrement`, `statements` — build the
+The helpers (`signal`, `set`, `toggle`, `not`, `increment`, `decrement`, `statements`) build the
 expression for you, and there is no dollar in your source at all. This is the one to reach for.
 
 ```kotlin sample=html
@@ -52,7 +52,7 @@ older compiler.
 ## For strings and templates
 
 The DSL guards its own expressions because it builds them. HTML that arrives as a string has to
-be walked instead, and that is [`guardElements`](/strings/) — opt-in, because walking every patch
+be walked instead, and that is [`guardElements`](/strings/), which is opt-in, because walking every patch
 is a choice you should make rather than inherit.
 
 Templates have no trap at all: the template engine owns the file, and Kotlin never sees the
@@ -61,5 +61,5 @@ dollar.
 ## In the editors
 
 Both the VS Code extension and the IntelliJ plugin flag the trap while you type, with a quick fix
-that rewrites the line into one of the three forms above. That is the cheapest place to catch it —
+that rewrites the line into one of the three forms above. That is the cheapest place to catch it:
 before the code exists, rather than in a stack trace or, worse, in a page that does nothing.

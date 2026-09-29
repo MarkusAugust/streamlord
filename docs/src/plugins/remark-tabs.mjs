@@ -9,7 +9,7 @@
  * Why remark and not rehype: Astro's Shiki replaces the whole `<pre>` element, so
  * properties put on the code node do not survive to the HTML. Measured, not assumed.
  * Emitting raw `html` nodes around the code nodes leaves the fences untouched, so
- * Shiki still highlights them and — more importantly — `:docs-samples` still reads
+ * Shiki still highlights them and, more importantly, `:docs-samples` still reads
  * them exactly as it did before. The Gradle task must never have to learn what a tab is.
  *
  * `fs-tabs` is a wrapper component: give it a `.fs-tabs__list` of buttons and one

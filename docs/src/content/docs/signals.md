@@ -79,7 +79,7 @@ val codec = KotlinxSignalsCodec(
 ```
 
 Types you leave out still resolve themselves, so this costs nothing on the JVM. The rest of what
-an image needs — the build file, the resources, the container — is on [Native image](/native-image/).
+an image needs (the build file, the resources, the container) is on [Native image](/native-image/).
 
 ## Patching signals back
 
@@ -101,4 +101,4 @@ is not a quirk of Streamlord; it is what the protocol says, and it is how you de
 Incoming signals are capped at 1 MiB by default, and the cap is applied *while reading*. A
 declared `Content-Length` above the limit is rejected before a byte is read; a chunked body is
 cut off one byte past it. Nothing larger than the cap ever sits in memory. Map
-`SignalsTooLargeException` to `413` in your framework's error handling — see [Security](/security/).
+`SignalsTooLargeException` to `413` in your framework's error handling. See [Security](/security/).

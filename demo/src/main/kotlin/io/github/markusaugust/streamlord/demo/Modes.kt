@@ -18,7 +18,7 @@ public data class ModeSignals(
  *
  * `prepend` and `append` put elements inside the target, so they act on the wall. `before` and
  * `after` put them beside it, so they act on the stone. `remove` takes the stone away and needs
- * no elements at all — only a selector, which is the one thing the table in the protocol page
+ * no elements at all, only a selector, which is the one thing the table in the protocol page
  * cannot show you.
  *
  * The stone carries an input, and that is the whole reason this is worth building. `outer` and
@@ -28,7 +28,7 @@ public data class ModeSignals(
  */
 public fun modeEvents(signals: ModeSignals): List<DatastarEvent> {
     /*
-     * Rebuilding the wall is itself a patch — `inner` on the wall with a fresh stone — so the
+     * Rebuilding the wall is itself a patch (`inner` on the wall with a fresh stone) so the
      * reset button is not an exception to the demo but the ninth example in it.
      */
     if (signals.mode == "reset") {
@@ -99,7 +99,7 @@ public fun modeEvents(signals: ModeSignals): List<DatastarEvent> {
 
     /*
      * What was sent, in the words the protocol uses. The page shows this beside the wall, so a
-     * reader can see the selector and the mode that produced what they are looking at — and
+     * reader can see the selector and the mode that produced what they are looking at, and
      * that `remove` carried no elements, because it needs none.
      */
     val said =

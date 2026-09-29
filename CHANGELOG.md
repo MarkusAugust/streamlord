@@ -13,7 +13,7 @@ All notable changes to Streamlord are recorded here. The format follows
 - `streamlord-json-kotlinx`: `KotlinxSignalsCodec` takes the serializers it should use, by the
   type they handle, and consults them before the reflective lookup. A named serializer is the one
   the compiler plugin generated, resolved at the call site, so it is visible to a GraalVM native
-  image — where reading a class to find its serializer cannot work. Passing none keeps the old
+  image, where reading a class to find its serializer cannot work. Passing none keeps the old
   behaviour exactly.
 - `streamlord-json-kotlinx`: `strict = true` refuses the reflective lookup for a type that was not
   named, so the omission fails on the JVM with the name of the class instead of inside an image on

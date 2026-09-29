@@ -6,7 +6,7 @@
 # distroless rather than alpine, because native-image links against glibc by default and
 # alpine ships musl. The :nonroot tag runs as uid 65532 without a useradd step.
 #
-# distroless carries glibc and nothing else — no zlib, no libstdc++. The first deployment
+# distroless carries glibc and nothing else: no zlib, no libstdc++. The first deployment
 # died on exactly that: the binary linked zlib dynamically, the image built and pushed and
 # deployed without complaint, and the container exited with
 #
@@ -29,7 +29,7 @@ WORKDIR /app
 COPY --chown=nonroot:nonroot demo/build/native/nativeCompile/streamlord-live /app/streamlord-live
 
 # Which commit is inside. /health returns it, so a caller can tell this deployment from the
-# one it replaces — see Main.kt. Defaulted, so a local `docker build` needs no argument.
+# one it replaces. See Main.kt. Defaulted, so a local `docker build` needs no argument.
 ARG BUILD_SHA=dev
 ENV BUILD_SHA=$BUILD_SHA
 

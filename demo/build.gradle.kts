@@ -32,14 +32,14 @@ application {
 /*
  * The service as a native image: ~60 MB and a hundred millisecond start against ~300 MB and
  * several seconds on the JVM, which is what makes Railway's sleep usable and the bill under a
- * dollar. The JVM image came first on purpose — proving the deploy chain and proving a native
+ * dollar. The JVM image came first on purpose, proving the deploy chain and proving a native
  * image at the same time is how you end up debugging both at once.
  *
  * src/main/resources/META-INF/native-image/resource-config.json names index.json, because
- * nothing in the bytecode mentions that file — it is read by name at startup — and the image
+ * nothing in the bytecode mentions that file (it is read by name at startup) and the image
  * would otherwise ship without it, start cleanly and find nothing.
  *
- * Built in CI: the compile wants 6–8 GB and several minutes, and no GraalVM is installed here.
+ * Built in CI: the compile wants 6 to 8 GB and several minutes, and no GraalVM is installed here.
  * The smoke test that follows the deploy is what makes that acceptable. A binary that starts
  * and cannot serve fails the job before it reaches the site.
  */
@@ -83,7 +83,7 @@ graalvmNative {
                 "--initialize-at-build-time=org.slf4j.helpers.Reporter",
                 // The sample names two classes here; this build also reaches
                 // kotlinx.io.files.PathsJvmKt and FileSystemJvmKt, which arrive with Ktor
-                // and which nothing in this service uses — it reads its index from the
+                // and which nothing in this service uses, since it reads its index from the
                 // classpath, not the filesystem. The package, in the same form the list
                 // already uses for io.ktor and kotlin, rather than a fifth and sixth class.
                 "--initialize-at-build-time=kotlinx.io",
@@ -108,8 +108,8 @@ graalvmNative {
              * piece only existed at the moment the process started.
              *
              * The flag is version-specific and the documentation is not, which cost a build:
-             * graalvm.org/latest names --static-nolibc, and GraalVM for JDK 21 — what CI
-             * installs and what the plugin here is pinned for — has no such option and says so
+             * graalvm.org/latest names --static-nolibc, and GraalVM for JDK 21, which is what CI
+             * installs and what the plugin here is pinned for, has no such option and says so
              * by name. It is -H:+StaticExecutableWithDynamicLibC there, per
              * graalvm.org/jdk21/reference-manual/native-image/guides/build-static-executables,
              * and the option is defined under that name in the jdk-21.0.2 sources. Read the

@@ -55,8 +55,8 @@ data: elements <li>A new head hangs on the wall</li>
 ```
 
 That is the whole exchange. The browser appends the `<li>` to `#feed` and nothing else on the
-page is touched. You will rarely construct a `PatchElements` yourself — `patchElements { }` does
-it for you — but it is the thing the protocol carries, and worth seeing once.
+page is touched. You will rarely construct a `PatchElements` yourself, since `patchElements { }` does
+it for you, but it is the thing the protocol carries, and worth seeing once.
 
 ## Adding state
 
@@ -82,5 +82,5 @@ learned what the page looks like.
 
 The stream above closes immediately. It does not have to: hand `respondDatastar` a `Flow` and it
 stays open for as long as the flow produces, which is how you build a counter, a progress bar or
-a live log. That, the plugin, and reading signals back are on the [Ktor](/ktor/) page — or
+a live log. That, the plugin, and reading signals back are on the [Ktor](/ktor/) page, or
 [Spring WebMVC](/spring-webmvc/) if that is your realm.

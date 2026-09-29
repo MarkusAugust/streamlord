@@ -21,7 +21,7 @@ javadoc.io had nothing to show for a library whose source is mostly documentatio
 release it carries the API reference generated from the KDoc.
 
 **A hyphen after a signal is part of the name.** Datastar 1.0.4 reads `$foo-bar` as the signal
-`foo-bar`, and `$count-1` as the signal `count-1` — not as subtraction. Only `$a-$b` subtracts.
+`foo-bar`, and `$count-1` as the signal `count-1`, not as subtraction. Only `$a-$b` subtracts.
 The editors now say so, and offer both fixes: a camelCase signal name, or the subtraction written
 with spaces. See [Casing](/casing/).
 
@@ -29,7 +29,7 @@ with spaces. See [Casing](/casing/).
 
 **`streamlord-analysis`.** The analysis behind the editor tooling, extracted into a Kotlin module
 that depends on nothing beyond `streamlord-core`. `Analyzer().analyzeKotlin(source)` and
-`analyzeHtml(source)` return every issue with its offset, severity, message and quick fixes — and
+`analyzeHtml(source)` return every issue with its offset, severity, message and quick fixes, and
 you can call it yourself, which is worth doing in the tests of your markup functions. See
 [The editors](/editors/).
 
