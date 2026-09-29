@@ -91,7 +91,8 @@ subprojects {
         coordinates(rootProject.group.toString(), project.name, rootProject.version.toString())
         pom {
             name.set(project.name)
-            description.set(project.provider { project.description ?: "Streamlord: a Kotlin SDK for Datastar." })
+            // Every published module sets its own, so this only catches a new one that forgot.
+            description.set(project.provider { project.description ?: "Streamlord: a Datastar toolchain for Kotlin." })
             url.set("https://github.com/MarkusAugust/streamlord")
             inceptionYear.set("2026")
             licenses {

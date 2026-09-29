@@ -1,6 +1,6 @@
 ---
 title: "Introduction"
-description: "A Kotlin SDK for Datastar that brings nothing you do not already carry."
+description: "A Datastar toolchain for Kotlin: an SDK for Ktor and Spring, and editors that read Datastar as a language."
 ---
 
 > *Every soul in Gallowmark knows my name, and not one knows my face. I took three rubies from
@@ -9,10 +9,14 @@ description: "A Kotlin SDK for Datastar that brings nothing you do not already c
 >
 > Sarn the Faceless, whom the river-priests of Thurn call the Lord of Streams
 
-Streamlord speaks the [Datastar](https://data-star.dev) 1.0.4 Server-Sent Events protocol from
-Kotlin. Your server sends HTML and signal patches down one connection; the browser applies them.
-There is no client bundle of yours to build, no JSON API to design, and no second model of your
-page living in a framework.
+Streamlord is a [Datastar](https://data-star.dev) toolchain for Kotlin, and it comes in two
+halves. The SDK speaks the Datastar 1.0.4 Server-Sent Events protocol: your server sends HTML and
+signal patches down one connection, and the browser applies them. There is no client bundle of
+yours to build, no JSON API to design, and no second model of your page living in a framework.
+
+The other half is the one no other Datastar library on the JVM has. Datastar lives inside
+attribute values and inside Kotlin strings, where no compiler looks, so Streamlord looks instead:
+in your editor as you type, when the event is built, and before a byte reaches the browser.
 
 ```kotlin sample=ktor-routing
 get("/feed") {
