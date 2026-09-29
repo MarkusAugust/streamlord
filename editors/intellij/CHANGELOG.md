@@ -4,6 +4,9 @@ All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here
 
 ## 0.1.1
 
+- The plugin icon fills its tile. The mark was drawn at half the width of the square and sat low
+  in it, which at the size a marketplace listing shows it reads as a small badge in a large dark
+  square. Same drawing, scaled about its own centre and centred in the tile.
 - A hyphen after a signal is read by Datastar 1.0.4 as part of the name (`$count-1` is
   `$['count-1']`, only `$a-$b` is a subtraction); the warning says so, covers the cases it
   excused before, and offers the spaced subtraction beside the camelCase signal.
