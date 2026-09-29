@@ -34,10 +34,10 @@ const SAMPLE = `get("/feed") {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Streamlord: a Kotlin SDK for Datastar</title>
+    <title>Streamlord: a Datastar toolchain for Kotlin</title>
     <meta
       name="description"
-      content="Streamlord speaks the Datastar 1.0.4 Server-Sent Events protocol from Kotlin, over Ktor and Spring, and brings nothing you do not already carry."
+      content="Datastar lives in strings your compiler never reads. Streamlord checks them in your editor, when the event is built, and before a byte reaches the browser, with adapters for Ktor and Spring."
     />
     <link rel="canonical" href={Astro.site} />
     <link rel="icon" href={FAVICON} type="image/svg+xml" />
@@ -56,11 +56,11 @@ const SAMPLE = `get("/feed") {
       <div class="hero__inner">
         <Logo size={72} />
         <h1 class="hero__word">Streamlord</h1>
-        <p class="hero__line">A Kotlin SDK for Datastar 1.0.4.</p>
+        <p class="hero__line">A Datastar toolchain for Kotlin.</p>
         <p class="hero__sub">
-          It speaks the Server-Sent Events protocol exactly, reads the signals the browser
-          sends back, and serves Ktor and Spring without favour. It brings nothing you do not
-          already carry.
+          Datastar lives in strings your compiler never reads. Streamlord checks them anyway:
+          in your editor as you type, when the event is built, and before a byte reaches the
+          browser. Ktor and Spring included.
         </p>
 
         <div class="hero__sample">
@@ -79,6 +79,26 @@ const SAMPLE = `get("/feed") {
           <!-- Linked only now that the service it talks to exists outside this machine. -->
           <a class="fs-button" data-variant="ghost" href="/live/">See it run</a>
         </div>
+
+        <!--
+          The creed the README opens with, which the site itself had nowhere to put. It belongs
+          on the poster and not on a reference page: the last two lines are the whole argument
+          for Datastar, and they make it faster than the paragraph above ever could.
+        -->
+        <figure class="creed">
+          <blockquote class="creed__words">
+            <p>The elders of Bonereach asked Gorvek what a warrior wants of a stream.</p>
+            <p>
+              "That it flows when I say flow. That it stops when I say stop. That it carries
+              my will to the far shore, and nothing else."
+            </p>
+            <p>"And the JavaScript?"</p>
+            <p>"I do not know the word."</p>
+          </blockquote>
+          <figcaption class="creed__who">
+            Gorvek of Bonereach, who walked out of the Ashfall with iron in his hand
+          </figcaption>
+        </figure>
       </div>
     </header>
 
@@ -194,6 +214,31 @@ const SAMPLE = `get("/feed") {
         flex-wrap: wrap;
         gap: var(--size-3);
         margin-block-start: var(--size-2);
+      }
+
+      /* Quiet, and set off by the same neon the border above uses, at a quarter strength. */
+      .creed {
+        margin: var(--size-6) 0 0;
+        max-width: 46ch;
+        padding-inline-start: var(--size-4);
+        border-inline-start: 2px solid rgba(0, 177, 250, 0.35);
+        color: var(--semantic-muted-foreground);
+      }
+      .creed__words {
+        margin: 0;
+        font-style: italic;
+        line-height: var(--semantic-line-height-article);
+      }
+      .creed__words p {
+        margin: 0 0 var(--size-2);
+      }
+      .creed__words p:last-child {
+        margin-block-end: 0;
+      }
+      .creed__who {
+        margin: var(--size-3) 0 0;
+        font-size: var(--font-size-s);
+        font-style: normal;
       }
 
       /*
