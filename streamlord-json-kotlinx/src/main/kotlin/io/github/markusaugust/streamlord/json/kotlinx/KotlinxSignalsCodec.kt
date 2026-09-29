@@ -29,12 +29,18 @@ import kotlin.reflect.KType
  * )
  * ```
  *
+ * Pass `strict = true` with them and a type that was left out fails here, on the JVM, with the
+ * name of the class — rather than in the image, on the first request, as a decode that cannot
+ * find a serializer it was never given.
+ *
  * @param json the configuration to encode and decode with.
  * @param serializers serializers by the type they handle, consulted before the reflective lookup.
+ * @param strict refuse the reflective lookup, so a type missing from [serializers] fails at once.
  */
 public class KotlinxSignalsCodec(
     private val json: Json = DefaultJson,
     private val serializers: Map<KType, KSerializer<*>> = emptyMap(),
+    private val strict: Boolean = false,
 ) : SignalsCodec {
     override fun encode(
         value: Any?,
@@ -43,7 +49,7 @@ public class KotlinxSignalsCodec(
         try {
             json.encodeToString(serializerFor(type), value)
         } catch (e: SerializationException) {
-            throw SignalsCodecException("Could not encode $type as signals", e)
+            throw SignalsCodecException("Could not encode $type as signals.${hint(type)}", e)
         }
 
     override fun <T : Any> decode(
@@ -54,9 +60,9 @@ public class KotlinxSignalsCodec(
             @Suppress("UNCHECKED_CAST")
             this.json.decodeFromString(serializerFor(type), json) as T
         } catch (e: SerializationException) {
-            throw SignalsCodecException("Could not decode signals into $type", e)
+            throw SignalsCodecException("Could not decode signals into $type.${hint(type)}", e)
         } catch (e: IllegalArgumentException) {
-            throw SignalsCodecException("Could not decode signals into $type", e)
+            throw SignalsCodecException("Could not decode signals into $type.${hint(type)}", e)
         }
 
     /*
@@ -75,9 +81,46 @@ public class KotlinxSignalsCodec(
      * Map lookup and nothing more: KType equality compares the classifier and the arguments, and
      * reads no metadata to do it.
      */
+
+    /**
+     * What to add to a failure for a type nobody named.
+     *
+     * The reflective lookup is the likeliest thing to have failed, and it is the one that fails
+     * differently in different places: it works on a JVM and cannot work inside a GraalVM native
+     * image, where the class metadata it reads is not there. A message that says only "could not
+     * decode" sends the reader looking at their JSON. This one sends them to the fix.
+     */
+    private fun hint(type: KType): String =
+        if (serializers.containsKey(type)) {
+            ""
+        } else {
+            " No serializer was named for it: pass typeOf<$type>() to " +
+                "KotlinxSignalsCodec(serializers = ...) if this is a GraalVM native image."
+        }
+
     @Suppress("UNCHECKED_CAST")
-    private fun serializerFor(type: KType): KSerializer<Any?> =
-        (serializers[type] ?: json.serializersModule.serializer(type)) as KSerializer<Any?>
+    private fun serializerFor(type: KType): KSerializer<Any?> {
+        serializers[type]?.let { return it as KSerializer<Any?> }
+
+        /*
+         * The point of strict mode.
+         *
+         * An application that names its serializers for a native image has one list to keep in
+         * step with its routes, and nothing notices when a type is added to the second and not
+         * the first — the JVM resolves it reflectively and says nothing, and the image fails on
+         * the first request that carries it. This is that silence, broken, where a test can hear
+         * it: this project's own service shipped exactly that bug, twice, before this existed.
+         */
+        if (strict) {
+            throw SignalsCodecException(
+                "No serializer was named for $type, and this codec is strict. Add " +
+                    "typeOf<$type>() to KotlinxSignalsCodec(serializers = ...) — a reflective " +
+                    "lookup would work here and fail in a GraalVM native image.",
+            )
+        }
+
+        return json.serializersModule.serializer(type)
+    }
 
     public companion object {
         /** The configuration used when none is given. */

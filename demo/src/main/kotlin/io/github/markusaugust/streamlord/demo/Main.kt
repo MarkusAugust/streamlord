@@ -76,6 +76,30 @@ public fun main() {
     embeddedServer(CIO, port = port, host = "0.0.0.0", module = Application::live).start(wait = true)
 }
 
+/**
+ * Every signals class this service reads, named rather than looked up.
+ *
+ * One entry per type that reaches `readSignals`, and `strict` so that a type which is not here
+ * fails on the JVM with its own name instead of in the native image on the first request that
+ * carries it. That is not hypothetical: three of these four were missing after the demos were
+ * written, the JVM resolved them reflectively without a word, and CI caught it only when it
+ * started the image and called it.
+ *
+ * SignalsTest walks this map, so adding a route with a new signals class and forgetting this
+ * line fails a test here rather than a container there.
+ */
+internal val SIGNALS: KotlinxSignalsCodec =
+    KotlinxSignalsCodec(
+        serializers =
+            mapOf(
+                typeOf<SearchSignals>() to SearchSignals.serializer(),
+                typeOf<CounterSignals>() to CounterSignals.serializer(),
+                typeOf<MusterSignals>() to MusterSignals.serializer(),
+                typeOf<ModeSignals>() to ModeSignals.serializer(),
+            ),
+        strict = true,
+    )
+
 public fun Application.live() {
     val index = SearchIndex.load()
 
@@ -94,10 +118,7 @@ public fun Application.live() {
      * what one line of Kotlin can state.
      */
     install(StreamlordPlugin) {
-        codec =
-            KotlinxSignalsCodec(
-                serializers = mapOf(typeOf<SearchSignals>() to SearchSignals.serializer()),
-            )
+        codec = SIGNALS
     }
 
     /*

@@ -63,9 +63,20 @@ One entry per class you read signals into. `SearchSignals.serializer()` is gener
 kotlinx.serialization compiler plugin and resolved where you write it, so the image can see it in
 the bytecode.
 
-Leave this out and the codec falls back to asking kotlinx.serialization to find the serializer by
-reading the class, which native-image cannot see. The build is green, the service starts, the
-health check answers, and the first read fails:
+Add `strict = true` beside them, and a type you forgot fails on the JVM — in a test, with the name
+of the class — instead of in the image on the first request that carries it:
+
+```kotlin sample=none
+KotlinxSignalsCodec(
+    serializers = mapOf(typeOf<SearchSignals>() to SearchSignals.serializer()),
+    strict = true,
+)
+```
+
+That is worth doing the day you add the second signals class, because the failure it prevents is a
+silent one. Leave it out and the codec falls back to asking kotlinx.serialization to find the
+serializer by reading the class, which native-image cannot see. The build is green, the service
+starts, the health check answers, and the first read fails:
 
 ```text
 Unresolved class: class SearchSignals (kind = CLASS)

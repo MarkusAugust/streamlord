@@ -17,6 +17,7 @@ import kotlin.reflect.typeOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class KotlinxSignalsCodecTest {
     @Serializable
@@ -57,6 +58,22 @@ class KotlinxSignalsCodecTest {
         val named = KotlinxSignalsCodec(serializers = mapOf(typeOf<Signals>() to ShoutingSignals))
 
         assertEquals("""{"name":"gorvek"}""", named.encode(Other("gorvek")))
+    }
+
+    /*
+     * Strict mode turns the one failure this module can hide into the one it cannot: a type
+     * that was never named resolves reflectively on a JVM and fails inside a native image, so
+     * a codec that refuses the fallback moves the error to where a test can see it.
+     */
+    @Test
+    fun `strict refuses a type nobody named`() {
+        val strict = KotlinxSignalsCodec(serializers = mapOf(typeOf<Signals>() to ShoutingSignals), strict = true)
+
+        assertEquals("""{"search":"ASH"}""", strict.encode(Signals(search = "ash")))
+
+        val refused = assertFailsWith<SignalsCodecException> { strict.encode(Other("gorvek")) }
+        assertTrue(refused.message!!.contains("Other"), "the message names the type that is missing")
+        assertTrue(refused.message!!.contains("native image"), "and says why it matters")
     }
 
     @Test
