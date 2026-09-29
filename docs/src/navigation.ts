@@ -43,6 +43,7 @@ export const NAVIGATION: Section[] = [
     title: "The tooling",
     pages: [
       { slug: "dollar-trap", title: "The $ trap" },
+      { slug: "testing", title: "Testing" },
       { slug: "editors", title: "The editors" },
     ],
   },
