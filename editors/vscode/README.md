@@ -5,8 +5,10 @@
 >
 > Sarn the Faceless
 
-Editor support for the [Streamlord](https://github.com/MarkusAugust/streamlord) Kotlin SDK and
-the Datastar 1.0.4 protocol.
+Datastar 1.0.4 as a language in your editor. Half of the
+[Streamlord](https://github.com/MarkusAugust/streamlord) toolchain, and the half that needs no
+part of the other: it reads your HTML and template files whatever answers them, and your Kotlin
+strings alongside the Streamlord SDK.
 
 ## What it does
 

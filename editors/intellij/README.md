@@ -6,8 +6,10 @@
 > Sarn the Faceless
 
 <!-- description -->
-Editor support for the [Streamlord](https://github.com/MarkusAugust/streamlord) Kotlin SDK and
-the Datastar 1.0.4 protocol, in IntelliJ IDEA (Community and Ultimate), 2026.1 and newer.
+Datastar 1.0.4 as a language in IntelliJ IDEA (Community and Ultimate), 2026.1 and newer. Half of
+the [Streamlord](https://github.com/MarkusAugust/streamlord) toolchain, and the half that needs no
+part of the other: it reads your HTML and template files whatever answers them, and your Kotlin
+strings alongside the Streamlord SDK.
 
 **Inspections** in Kotlin strings, whether passed to a Streamlord call or free-standing (a
 function that returns HTML, a `val` holding a fragment), and in HTML and template files:

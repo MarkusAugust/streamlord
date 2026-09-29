@@ -8,11 +8,16 @@
 >
 > Gorvek of Bonereach, who walked out of the Ashfall with iron in his hand
 
-**Streamlord** is a Kotlin SDK for [Datastar](https://data-star.dev) 1.0.4. It speaks the
-Datastar Server-Sent Events protocol exactly, reads the signals the browser sends back, and
-serves two realms without favour: **Ktor** (the Sword) and **Spring** (the Shield). It is built
-on ports and adapters, carries almost no dependencies, and treats every byte from the browser
-as the untrusted thing it is.
+**Streamlord** is a Datastar toolchain for Kotlin. Datastar lives in strings your compiler never
+reads, and Streamlord checks them anyway: in your editor as you type, when the event is built,
+and before a byte reaches the browser.
+
+It comes in two halves. The **SDK** speaks the [Datastar](https://data-star.dev) 1.0.4
+Server-Sent Events protocol exactly, reads the signals the browser sends back, and serves two
+realms without favour: **Ktor** (the Sword) and **Spring** (the Shield). It is built on ports and
+adapters, carries almost no dependencies, and treats every byte from the browser as the untrusted
+thing it is. The **editors** read Datastar as a language wherever you write it, and need no part
+of the SDK to do it.
 
 ```kotlin sample=ktor-routing
 get("/feed") {
@@ -80,6 +85,29 @@ a tag `v<version>`. The `publish-maven-central` job checks that the tag matches,
 publishes every module under `io.github.markusaugust.streamlord` through the Central Portal
 with automatic release. The VS Code extension has its own tag, `vscode-v<version>`, and the
 IntelliJ plugin `intellij-v<version>`.
+
+## Running the documentation site locally
+
+Two processes, in two terminals. The site alone is not enough: its search and the wire panel at
+the foot of every page are answered by the demo service, and in development they look for it on
+`localhost:8080`.
+
+```
+./gradlew :demo:run
+```
+
+```
+cd docs && bun install && bun run dev
+```
+
+The site is then on `http://localhost:4321`. Skip the first command and the pages still render,
+but searching does nothing and the wire panel stays empty, which looks like a bug and is not one.
+`docs/src/config.ts` is where that address is decided: `localhost:8080` in development, the
+deployed service in production, and `PUBLIC_SERVICE_URL` overrides both.
+
+Before pushing, `bun run lint`, `bun run typecheck` and `bun run check:links` in `docs/`, and
+`./gradlew :docs-samples:checkDocSamples` from the root, which compiles every Kotlin example the
+pages show.
 
 ## Changelog
 
