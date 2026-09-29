@@ -15,7 +15,6 @@ dependencies {
     implementation(project(":streamlord-spring"))
     implementation(project(":streamlord-json-kotlinx"))
     implementation(project(":streamlord-json-jackson"))
-    implementation(project(":streamlord-analysis"))
 
     // The testing page shows tests, so its samples need what a test needs. They compile here
     // as ordinary main sources, which is enough to catch a renamed assertion or a changed
