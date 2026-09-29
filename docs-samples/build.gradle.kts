@@ -68,6 +68,7 @@ abstract class ExtractDocSamples : DefaultTask() {
         import io.github.markusaugust.streamlord.spring.*
         import io.github.markusaugust.streamlord.json.kotlinx.*
         import io.github.markusaugust.streamlord.json.jackson.*
+        import kotlinx.coroutines.*
         import kotlinx.coroutines.flow.*
         import kotlinx.html.*
         import kotlinx.serialization.Serializable

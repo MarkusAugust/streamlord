@@ -196,18 +196,24 @@ const SAMPLE = `get("/feed") {
         margin-block-start: var(--size-2);
       }
 
+      /*
+       * Multi-column, not a grid: the sections are lists of very different lengths, and a
+       * grid row is only as short as its tallest cell. Columns balance the height instead,
+       * so a one-page section beside a six-page one leaves no hole. `columns: 13rem 3` is
+       * "at most three, none narrower than 13rem", which collapses to one on a phone.
+       */
       .page {
         max-width: 60rem;
         margin: 0 auto;
         padding: var(--size-10) var(--size-5) var(--size-16);
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
-        gap: var(--size-8);
-        align-items: start;
+        columns: 13rem 3;
+        column-gap: var(--size-8);
       }
       .section {
         display: grid;
         gap: var(--size-2);
+        break-inside: avoid;
+        margin-block-end: var(--size-8);
       }
       .section ul {
         margin: 0;
