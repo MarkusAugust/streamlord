@@ -14,6 +14,18 @@ dependencies {
     implementation(project(":streamlord-spring"))
     implementation(project(":streamlord-json-kotlinx"))
     implementation(project(":streamlord-json-jackson"))
+    implementation(project(":streamlord-analysis"))
+
+    // The testing page shows tests, so its samples need what a test needs. They compile here
+    // as ordinary main sources, which is enough to catch a renamed assertion or a changed
+    // signature; nothing on the page is executed.
+    // The JUnit 5 variant by name: kotlin("test") resolves by the test framework of a test
+    // source set, and these samples compile as main sources, where kotlin.test.Test would not
+    // be the annotation.
+    implementation(kotlin("test-junit5"))
+    implementation(libs.ktor.server.test.host)
+    implementation(libs.spring.test)
+    implementation(libs.kotlinx.coroutines.test)
 
     // The adapters keep their frameworks compileOnly. The samples need them for real.
     implementation(libs.ktor.server.core)
@@ -96,13 +108,26 @@ abstract class ExtractDocSamples : DefaultTask() {
                     "import jakarta.servlet.http.HttpServletRequest\n" +
                     "import jakarta.servlet.http.HttpServletResponse\n$imports\n\n" +
                     "class $name {\n$body\n}\n"
+            /*
+             * A test class. The client and test-host imports live here rather than in the shared
+             * block because `io.ktor.client.request.get` and `io.ktor.server.routing.get` would
+             * then both be in scope of every Ktor sample on every other page, for no gain.
+             */
+            "test" ->
+                "import kotlin.test.*\n" +
+                    "import io.ktor.server.application.*\nimport io.ktor.server.routing.*\n" +
+                    "import io.ktor.server.testing.*\n" +
+                    "import io.ktor.client.request.*\nimport io.ktor.client.statement.*\n" +
+                    "import org.springframework.mock.web.*\n" +
+                    "import io.github.markusaugust.streamlord.analysis.*\n$imports\n\n" +
+                    "class $name {\n$body\n}\n"
             "html" -> "$imports\n\nfun kotlinx.html.FlowContent.$name() {\n$body\n}\n"
             "statements" -> "$imports\n\nsuspend fun $name() {\n$body\n}\n"
             "declarations" -> "$imports\n\n$body\n"
             else -> null
         }
 
-    private val known = listOf("declarations", "html", "ktor-application", "ktor-routing", "spring", "statements")
+    private val known = listOf("declarations", "html", "ktor-application", "ktor-routing", "spring", "statements", "test")
 
     @TaskAction
     fun extract() {
