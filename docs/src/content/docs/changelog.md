@@ -9,6 +9,17 @@ with a sentence about what to do.
 
 ## Unreleased
 
+## 0.3.1
+
+**Name your serializers for a native image.** `KotlinxSignalsCodec` now takes them by the type
+they handle and consults them before the reflective lookup, and `strict = true` refuses that
+fallback so a type you forgot fails on the JVM rather than inside the image. Nothing changes if
+you pass none. See [Native image](/native-image/).
+
+**The javadoc jar is no longer empty.** Every module up to 0.3.0 published an empty one, so
+javadoc.io had nothing to show for a library whose source is mostly documentation. From this
+release it carries the API reference generated from the KDoc.
+
 **A hyphen after a signal is part of the name.** Datastar 1.0.4 reads `$foo-bar` as the signal
 `foo-bar`, and `$count-1` as the signal `count-1` — not as subtraction. Only `$a-$b` subtracts.
 The editors now say so, and offer both fixes: a camelCase signal name, or the subtraction written

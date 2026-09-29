@@ -6,8 +6,28 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-29
+
+### Added
+
+- `streamlord-json-kotlinx`: `KotlinxSignalsCodec` takes the serializers it should use, by the
+  type they handle, and consults them before the reflective lookup. A named serializer is the one
+  the compiler plugin generated, resolved at the call site, so it is visible to a GraalVM native
+  image — where reading a class to find its serializer cannot work. Passing none keeps the old
+  behaviour exactly.
+- `streamlord-json-kotlinx`: `strict = true` refuses the reflective lookup for a type that was not
+  named, so the omission fails on the JVM with the name of the class instead of inside an image on
+  the first request that carries it. It asks only for what an image cannot resolve by itself: your
+  own classes, and containers holding them.
+
 ### Fixed
 
+- Every module published an empty javadoc jar. The jar now carries the API reference generated
+  from the KDoc in the source, so javadoc.io has something to show. Releases up to and including
+  0.3.0 are on Maven Central with the empty one and cannot be changed.
+- `streamlord-json-kotlinx`: a failure to encode or decode now says when no serializer was named
+  for the type, and what to add. It used to say only that the value could not be decoded, which
+  sends a reader to look at their JSON rather than at their codec.
 - `streamlord-analysis`: a hyphen after a signal is read by Datastar 1.0.4 as part of the name
   (`$foo-bar` is `$['foo-bar']`, `$count-1` is `$['count-1']`; only `$a-$b` is a subtraction).
   The `signal-kebab` issue now says so, covers `$count-1` and the scope-variable cases it
