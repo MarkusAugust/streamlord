@@ -247,3 +247,93 @@ val buildSearchIndex =
 sourceSets.main {
     resources.srcDir(buildSearchIndex.map { it.target.get().asFile.parentFile })
 }
+/*
+ * Holds the native-image page to the arguments this module is compiled with.
+ *
+ * It lives here rather than with the other documentation checks in :docs-samples because the
+ * arguments are resolved from the `graalvmNative` extension, which exists only in this project.
+ * Resolving them is the point: comparing the text of two build files would pass on a flag that
+ * some condition never adds.
+ *
+ * A block on the page opts in with `buildargs=demo`, beside the `sample=none` that :docs-samples
+ * requires on every Kotlin block.
+ */
+abstract class CheckDocBuildArgs : DefaultTask() {
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val page: RegularFileProperty
+
+    /** What `nativeCompile` would really pass, resolved from the extension. */
+    @get:Input
+    abstract val resolved: ListProperty<String>
+
+    /**
+     * Arguments the page documents under another heading, and which must therefore not appear in
+     * the build-file block. The container flag is one: added only on Linux, explained in step 4.
+     */
+    @get:Input
+    abstract val documentedElsewhere: SetProperty<String>
+
+    @TaskAction
+    fun check() {
+        val expected = resolved.get().filterNot { it in documentedElsewhere.get() }
+
+        val lines = page.get().asFile.readLines()
+        var claimed: List<String>? = null
+        var index = 0
+        while (index < lines.size) {
+            val info = lines[index].takeIf { it.startsWith("```") }?.removePrefix("```")?.trim()
+            if (info == null) {
+                index++
+                continue
+            }
+            val end = lines.drop(index + 1).indexOfFirst { it.startsWith("```") }
+            if (end < 0) break
+            val body = lines.subList(index + 1, index + 1 + end)
+            index += end + 2
+
+            if (info.split(" ").none { it == "buildargs=demo" }) continue
+            // Every double-quoted string opening with a dash, so imageName.set("my-service")
+            // stays a presentation choice.
+            claimed = body.flatMap { line -> Regex("\"(-[^\"]+)\"").findAll(line).map { it.groupValues[1] }.toList() }
+        }
+
+        if (claimed == null) {
+            throw GradleException(
+                "${page.get().asFile.name}: no block is marked buildargs=demo, so the build arguments " +
+                    "it prints are unchecked. Mark the build-file block, or delete this task.",
+            )
+        }
+
+        if (claimed != expected) {
+            val missing = expected - claimed.toSet()
+            val invented = claimed - expected.toSet()
+            throw GradleException(
+                buildString {
+                    appendLine("The native-image page no longer prints the arguments this module builds with:")
+                    for (item in missing) appendLine("  the page does not pass $item")
+                    for (item in invented) appendLine("  the page passes $item, which this build does not")
+                    if (missing.isEmpty() && invented.isEmpty()) {
+                        appendLine("  the same arguments in a different order; the page says \"in this order\"")
+                        appendLine("  build: $expected")
+                        appendLine("  page:  $claimed")
+                    }
+                    append("\nThe arguments are in demo/build.gradle.kts. Copy them, do not retype them.")
+                },
+            )
+        }
+
+        logger.lifecycle("The native-image page prints all ${expected.size} of this module's build arguments.")
+    }
+}
+
+val checkDocBuildArgs =
+    tasks.register<CheckDocBuildArgs>("checkDocBuildArgs") {
+        description = "Fails when the build arguments printed on the native-image page have gone stale."
+        group = "verification"
+        page.set(rootProject.layout.projectDirectory.file("docs/src/content/docs/native-image.md"))
+        resolved.set(graalvmNative.binaries.named("main").flatMap { it.buildArgs })
+        documentedElsewhere.set(setOf("-H:+StaticExecutableWithDynamicLibC"))
+    }
+
+tasks.named("check") { dependsOn(checkDocBuildArgs) }

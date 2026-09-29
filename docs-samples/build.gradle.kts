@@ -235,6 +235,14 @@ tasks.register("checkDocSamples") {
     description = "Checks everything the documentation asserts: examples, coordinates, transcripts, trees."
     group = "verification"
     dependsOn(tasks.named("compileKotlin"))
+
+    /*
+     * The one documentation check that cannot live here. The native-image page prints the build
+     * arguments of :demo, and those are resolved from a Gradle extension that exists only in that
+     * project. It is named here anyway, so that the task whose description says "everything the
+     * documentation asserts" is not quietly missing one.
+     */
+    dependsOn(":demo:checkDocBuildArgs")
 }
 
 tasks.named("check") { dependsOn(tasks.named("checkDocSamples")) }
