@@ -110,9 +110,15 @@ are tested against the same cases.
 
 **You can call it too**, which is worth doing in the tests of your own markup functions:
 
-```kotlin sample=none
-Analyzer().analyzeHtml(html)   // every issue, with offset, message and fix
+```kotlin sample=statements
+Analyzer().analyzeHtml(html)     // a template: attributes and expressions
+Analyzer().analyzeKotlin(source) // a Kotlin file: the strings and the DSL calls in it
 ```
+
+Each returns a list of `Issue`, and an issue carries the range it covers, a message, a severity,
+a link into the Datastar reference and its quick fixes. `analyzeHtml` judges a template, so it
+checks attributes and expressions and leaves the id and completeness rules alone; those belong to
+markup handed to a patch, and `validateMarkup` is where they live.
 
 ## In IntelliJ specifically
 

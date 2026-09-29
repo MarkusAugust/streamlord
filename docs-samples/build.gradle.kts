@@ -8,6 +8,7 @@ description =
 
 dependencies {
     implementation(project(":streamlord-core"))
+    implementation(project(":streamlord-analysis"))
     implementation(project(":streamlord-html"))
     implementation(project(":streamlord-html-pro"))
     implementation(project(":streamlord-ktor"))
@@ -64,6 +65,11 @@ abstract class ExtractDocSamples : DefaultTask() {
         import io.github.markusaugust.streamlord.core.port.driven.*
         import io.github.markusaugust.streamlord.core.port.driving.*
         import io.github.markusaugust.streamlord.html.*
+        import io.github.markusaugust.streamlord.html.pro.*
+        // Named rather than starred: the analysis module declares a Tag, an Attribute and a
+        // Modifier of its own, and a star import of it would make those ambiguous against
+        // kotlinx.html in every sample that builds markup.
+        import io.github.markusaugust.streamlord.analysis.Analyzer
         import io.github.markusaugust.streamlord.ktor.*
         import io.github.markusaugust.streamlord.spring.*
         import io.github.markusaugust.streamlord.json.kotlinx.*
