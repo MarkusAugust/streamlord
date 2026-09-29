@@ -1,0 +1,41 @@
+---
+// The button and the script that drives it, kept together so a page cannot end up with one
+// and not the other.
+---
+
+<button class="fs-button" data-variant="ghost" data-theme-toggle> Theme </button>
+
+<script>
+  /*
+   * Flips what the reader is actually looking at.
+   *
+   * The first version cycled dark, light, system and read the attribute rather than the
+   * result. With the system set to dark and nothing chosen yet, the attribute is unset,
+   * so the first press wrote data-theme="dark" and changed nothing anyone could see. Two
+   * presses to leave dark, one to leave light. Reading the effective theme removes the
+   * dead press, at the cost of "follow the system" being a default rather than a state
+   * to cycle back into, which is the right trade for a button with one label.
+   */
+  const root = document.documentElement
+  const button = document.querySelector("[data-theme-toggle]")
+  const systemDark = window.matchMedia("(prefers-color-scheme: dark)")
+
+  const shown = () => root.dataset.theme ?? (systemDark.matches ? "dark" : "light")
+
+  const describe = () => {
+    const next = shown() === "dark" ? "light" : "dark"
+    button?.setAttribute("aria-label", `Switch to the ${next} theme`)
+  }
+
+  button?.addEventListener("click", () => {
+    const next = shown() === "dark" ? "light" : "dark"
+    root.dataset.theme = next
+    try {
+      localStorage.setItem("theme", next)
+    } catch {}
+    describe()
+  })
+
+  systemDark.addEventListener("change", describe)
+  describe()
+</script>

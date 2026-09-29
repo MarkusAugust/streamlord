@@ -1,0 +1,15 @@
+---
+// Belongs in <head>. Every page that has a theme needs it, so it is a component rather than
+// a block copied into each shell.
+---
+
+<script is:inline>
+  // Inline and before paint, so the page never flashes the wrong theme.
+  // Datastar takes the toggle over; this one only restores the choice.
+  try {
+    const saved = localStorage.getItem("theme")
+    if (saved === "light" || saved === "dark") {
+      document.documentElement.dataset.theme = saved
+    }
+  } catch {}
+</script>

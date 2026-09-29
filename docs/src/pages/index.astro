@@ -137,16 +137,16 @@ const SAMPLE = `get("/feed") {
       .hero {
         /* Deeper than the page's own dark surface: this is the ground the mark was drawn on. */
         background: #0c0d14;
-        color: var(--semantic-page-foreground);
+        color: var(--fs-color-neutral-text-strong);
         border-block-end: 1px solid rgba(0, 177, 250, 0.25);
       }
       .hero__inner {
         max-width: 60rem;
         margin: 0 auto;
-        padding: var(--size-12) var(--size-5) var(--size-10);
+        padding: var(--fs-spacing-12) var(--fs-spacing-5) var(--fs-spacing-10);
         display: grid;
         justify-items: start;
-        gap: var(--size-4);
+        gap: var(--fs-spacing-4);
       }
       .hero__word {
         margin: 0;
@@ -156,22 +156,22 @@ const SAMPLE = `get("/feed") {
         letter-spacing: 0.12em;
         text-transform: uppercase;
         /* Flat, so the logo beside it is the only gradient on the screen. */
-        color: var(--palette-interactive-50);
+        color: var(--fs-color-accent-fill);
       }
       .hero__line {
         margin: 0;
         font-size: var(--font-size-l);
-        color: var(--semantic-page-foreground);
+        color: var(--fs-color-neutral-text-strong);
       }
       .hero__sub {
         margin: 0;
         max-width: 46ch;
-        color: var(--semantic-muted-foreground);
-        line-height: var(--semantic-line-height-article);
+        color: var(--fs-color-neutral-text-subtle);
+        line-height: var(--fs-line-height-article);
       }
       .hero__sample {
         inline-size: 100%;
-        margin-block-start: var(--size-3);
+        margin-block-start: var(--fs-spacing-3);
         /*
          * A grid item may not shrink below its content by default, and `pre` does not wrap,
          * so this one measured 666px inside a 390px phone. The column grew to fit it, the
@@ -187,8 +187,8 @@ const SAMPLE = `get("/feed") {
       }
       .hero__sample :global(pre) {
         margin: 0;
-        padding: var(--size-4);
-        border-radius: var(--size-1);
+        padding: var(--fs-spacing-4);
+        border-radius: var(--fs-spacing-1);
         border: 1px solid rgba(0, 177, 250, 0.2);
         overflow-x: auto;
         /*
@@ -222,31 +222,31 @@ const SAMPLE = `get("/feed") {
       .hero__actions {
         display: flex;
         flex-wrap: wrap;
-        gap: var(--size-3);
-        margin-block-start: var(--size-2);
+        gap: var(--fs-spacing-3);
+        margin-block-start: var(--fs-spacing-2);
       }
 
       /* Quiet, and set off by the same neon the border above uses, at a quarter strength. */
       .creed {
-        margin: var(--size-6) 0 0;
+        margin: var(--fs-spacing-6) 0 0;
         max-width: 46ch;
-        padding-inline-start: var(--size-4);
+        padding-inline-start: var(--fs-spacing-4);
         border-inline-start: 2px solid rgba(0, 177, 250, 0.35);
-        color: var(--semantic-muted-foreground);
+        color: var(--fs-color-neutral-text-subtle);
       }
       .creed__words {
         margin: 0;
         font-style: italic;
-        line-height: var(--semantic-line-height-article);
+        line-height: var(--fs-line-height-article);
       }
       .creed__words p {
-        margin: 0 0 var(--size-2);
+        margin: 0 0 var(--fs-spacing-2);
       }
       .creed__words p:last-child {
         margin-block-end: 0;
       }
       .creed__who {
-        margin: var(--size-3) 0 0;
+        margin: var(--fs-spacing-3) 0 0;
         font-size: var(--font-size-s);
         font-style: normal;
       }
@@ -260,26 +260,26 @@ const SAMPLE = `get("/feed") {
       .page {
         max-width: 60rem;
         margin: 0 auto;
-        padding: var(--size-10) var(--size-5) var(--size-16);
+        padding: var(--fs-spacing-10) var(--fs-spacing-5) var(--fs-spacing-16);
         columns: 13rem 3;
-        column-gap: var(--size-8);
+        column-gap: var(--fs-spacing-8);
       }
       .section {
         display: grid;
-        gap: var(--size-2);
+        gap: var(--fs-spacing-2);
         break-inside: avoid;
-        margin-block-end: var(--size-8);
+        margin-block-end: var(--fs-spacing-8);
       }
       /* The heading only, in the wordmark's blue. Enough to find, not enough to look broken. */
       .section[data-featured] h2 {
-        color: var(--palette-interactive-50);
+        color: var(--fs-color-accent-fill);
       }
       .section ul {
         margin: 0;
         padding: 0;
         list-style: none;
         display: grid;
-        gap: var(--size-1);
+        gap: var(--fs-spacing-1);
       }
     </style>
   </body>

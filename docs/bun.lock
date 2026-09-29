@@ -5,7 +5,7 @@
     "": {
       "name": "@streamlord/docs",
       "dependencies": {
-        "@fristil/designsystem": "0.19.0",
+        "@fristil/designsystem": "0.22.0",
         "astro": "6.4.2",
       },
       "devDependencies": {
@@ -112,7 +112,7 @@
 
     "@esbuild/win32-x64": ["@esbuild/win32-x64@0.27.7", "", { "os": "win32", "cpu": "x64" }, "sha512-56hiAJPhwQ1R4i+21FVF7V8kSD5zZTdHcVuRFMW0hn753vVfQN8xlx4uOPT4xoGH0Z/oVATuR82AiqSTDIpaHg=="],
 
-    "@fristil/designsystem": ["@fristil/designsystem@0.19.0", "", { "bin": { "fristil": "dist/cli.js" } }, "sha512-qWVt4XvHsXVlXYdBd2YIrNKsuRGmyarrkbi68qC+/CTtmIxw6XhttvZRP6QZrITsrihYi2nSsknNHTnnICVGlw=="],
+    "@fristil/designsystem": ["@fristil/designsystem@0.22.0", "", { "bin": { "fristil": "dist/cli.js" } }, "sha512-1A6iJFvAxwuwCaVlXYsZX0E3ux6qHYPOfnWdtxxcs7jhkKlVjhZiowLXkUn10n9sk1mmhZKh6v0lTVsbThEPzw=="],
 
     "@img/colour": ["@img/colour@1.1.0", "", {}, "sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ=="],
 

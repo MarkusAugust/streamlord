@@ -35,42 +35,42 @@ import { SERVICE } from "../config"
 
 <style>
   .wire {
-    margin-block-start: var(--size-10);
-    padding-block-start: var(--size-4);
-    border-block-start: 1px solid var(--semantic-divider-30);
+    margin-block-start: var(--fs-spacing-10);
+    padding-block-start: var(--fs-spacing-4);
+    border-block-start: 1px solid var(--fs-color-neutral-border-subtle);
   }
   .wire__summary {
     cursor: pointer;
     font-size: var(--font-size-s);
     font-weight: var(--font-weight-semibold);
-    color: var(--semantic-muted-foreground);
+    color: var(--fs-color-neutral-text-subtle);
   }
   .wire__summary:hover {
-    color: var(--semantic-page-foreground);
+    color: var(--fs-color-neutral-text-strong);
   }
   .wire__summary:focus-visible {
-    outline: var(--semantic-focus-ring);
+    outline: var(--fs-focus-ring);
     outline-offset: 2px;
   }
   .wire__note {
-    margin: var(--size-3) 0;
+    margin: var(--fs-spacing-3) 0;
     font-size: var(--font-size-xs);
-    color: var(--semantic-muted-foreground);
+    color: var(--fs-color-neutral-text-subtle);
   }
   .wire__frames {
     display: grid;
-    gap: var(--size-2);
+    gap: var(--fs-spacing-2);
   }
   /* The server writes these, so they are styled here rather than where they are built. */
   .wire__frames :global(.wire__frame) {
     margin: 0;
-    padding: var(--size-3);
+    padding: var(--fs-spacing-3);
     overflow-x: auto;
-    background: #1a1b26;
-    border-radius: var(--size-1);
+    background: var(--fs-color-neutral-surface);
+    border-radius: var(--fs-spacing-1);
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: var(--font-size-xs);
-    line-height: var(--semantic-line-height-compact);
+    line-height: var(--fs-line-height-compact);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }

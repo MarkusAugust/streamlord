@@ -5,6 +5,8 @@ import Logo from "../components/Logo.astro"
 import Pager from "../components/Pager.astro"
 import Search from "../components/Search.astro"
 import Sidebar from "../components/Sidebar.astro"
+import ThemeRestore from "../components/ThemeRestore.astro"
+import ThemeToggle from "../components/ThemeToggle.astro"
 import Toc from "../components/Toc.astro"
 import Wire from "../components/Wire.astro"
 import { FAVICON } from "../icon"
@@ -40,16 +42,7 @@ const { title, description, slug, headings } = Astro.props
       src="https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.4/bundles/datastar.js"
     ></script>
 
-    <script is:inline>
-      // Inline and before paint, so the page never flashes the wrong theme.
-      // Datastar takes the toggle over; this one only restores the choice.
-      try {
-        const saved = localStorage.getItem("theme")
-        if (saved === "light" || saved === "dark") {
-          document.documentElement.dataset.theme = saved
-        }
-      } catch {}
-    </script>
+    <ThemeRestore />
   </head>
   <body>
     <a class="fs-skip-link" href="#content">Skip to content</a>
@@ -63,9 +56,7 @@ const { title, description, slug, headings } = Astro.props
            without pushing the theme button down with it. -->
       <Search />
       <div class="masthead__tools">
-        <button class="fs-button" data-variant="ghost" data-theme-toggle>
-          Theme
-        </button>
+        <ThemeToggle />
       </div>
     </header>
 
@@ -149,14 +140,14 @@ const { title, description, slug, headings } = Astro.props
            The band is a data-theme="dark" island either way, so these two selectors key off
            the root's theme rather than its own. */
         background: #2c436b;
-        color: var(--semantic-page-foreground);
-        border-block-end: 1px solid rgba(0, 177, 250, 0.25);
+        color: var(--fs-color-neutral-text-strong);
+        border-block-end: 1px solid color-mix(in oklab, var(--fs-color-accent-fill) 25%, transparent);
         display: flex;
         align-items: center;
         justify-content: space-between;
         flex-wrap: wrap;
-        gap: var(--size-3) var(--size-4);
-        padding: var(--size-3) var(--size-5);
+        gap: var(--fs-spacing-3) var(--fs-spacing-4);
+        padding: var(--fs-spacing-3) var(--fs-spacing-5);
       }
       @media (prefers-color-scheme: dark) {
         :root:not([data-theme="light"]) .masthead {
@@ -170,46 +161,47 @@ const { title, description, slug, headings } = Astro.props
       /*
        * The ghost button fills on hover instead of tinting.
        *
-       * Its own hover is --semantic-interactive-background, which in the dark theme is
-       * #004869, measured at 1.00:1 against this band, the same luminance, so the hover was
-       * invisible. Brightening the background alone does not help: the label is #88d1ff, and
-       * the lighter steps of the scale converge with it (#00b1fa leaves the text at 1.45:1).
-       * Swapping both is what works: step 30 behind step 100 is 5.92:1 for the label and
-       * 5.94:1 against the band, so the state is unmistakable from either direction.
+       * Its own hover is accent-surface, which inside this always-dark island is #122733 and
+       * sits within a hair of the band's own luminance, so the hover was invisible. The two
+       * roles are swapped instead: accent-text is the lightest accent the dark theme has, and
+       * accent-surface is what reads on top of it. That measures 8.94:1 for the label and
+       * 5.74:1 against the lighter of the two bands, so the state carries from either
+       * direction. Off-contract on purpose, since a light fill inside a dark island is not a
+       * pairing the matrix makes promises about.
        */
       .masthead .fs-button[data-variant="ghost"]:hover {
-        background: var(--palette-interactive-30);
-        color: var(--palette-interactive-100);
+        background: var(--fs-color-accent-text);
+        color: var(--fs-color-accent-surface);
       }
 
       .masthead__brand {
         display: flex;
         align-items: center;
-        gap: var(--size-2);
+        gap: var(--fs-spacing-2);
         font-weight: var(--font-weight-bold);
         font-size: var(--font-size-l);
-        color: var(--semantic-page-foreground);
+        color: var(--fs-color-neutral-text-strong);
         text-decoration: none;
         letter-spacing: -0.01em;
       }
       .masthead__tools {
         display: flex;
-        gap: var(--size-2) var(--size-3);
+        gap: var(--fs-spacing-2) var(--fs-spacing-3);
         align-items: center;
       }
 
       .shell {
         display: grid;
         grid-template-columns: 16rem minmax(0, 1fr) 14rem;
-        gap: var(--size-8);
+        gap: var(--fs-spacing-8);
         max-width: 84rem;
         margin: 0 auto;
-        padding: var(--size-6) var(--size-5) var(--size-16);
+        padding: var(--fs-spacing-6) var(--fs-spacing-5) var(--fs-spacing-16);
       }
       .shell__sidebar {
         align-self: start;
         position: sticky;
-        top: var(--size-6);
+        top: var(--fs-spacing-6);
       }
       .shell__main {
         min-width: 0;
@@ -223,8 +215,8 @@ const { title, description, slug, headings } = Astro.props
       @media (max-width: 60rem) {
         .shell {
           grid-template-columns: minmax(0, 1fr);
-          gap: var(--size-5);
-          padding-inline: var(--size-4);
+          gap: var(--fs-spacing-5);
+          padding-inline: var(--fs-spacing-4);
         }
         .shell__sidebar {
           position: static;
@@ -234,23 +226,23 @@ const { title, description, slug, headings } = Astro.props
 
     <style is:global>
       .prose h1 {
-        margin-block-end: var(--size-2);
+        margin-block-end: var(--fs-spacing-2);
       }
       .prose h2 {
-        margin-block-start: var(--size-8);
+        margin-block-start: var(--fs-spacing-8);
         font-size: var(--font-size-l);
-        line-height: var(--semantic-line-height-heading);
+        line-height: var(--fs-line-height-heading);
       }
       .prose h3 {
-        margin-block-start: var(--size-6);
+        margin-block-start: var(--fs-spacing-6);
         font-size: var(--font-size-m);
       }
       .prose p,
       .prose li {
-        line-height: var(--semantic-line-height-article);
+        line-height: var(--fs-line-height-article);
       }
       .prose a {
-        color: var(--semantic-interactive-main);
+        color: var(--fs-color-accent-text);
       }
       .prose table {
         width: 100%;
@@ -261,61 +253,25 @@ const { title, description, slug, headings } = Astro.props
        * The epigraph that opens seven of these pages, given the same blue edge the creed has
        * on the landing page, so the voice looks like one voice wherever it speaks.
        *
-       * The landing page damps the edge to 35% because it sits on #0c0d14, the deep ground
-       * the mark was drawn on. These pages follow the reader, and their dark surface is
-       * #171a24, which is lighter: the same 35% measured invisible against it. So the colour
-       * is the token in both themes and only the strength moves, enough on dark to read as a
-       * deliberate rule rather than a rendering artefact.
+       * The colour is the token in both themes and only the strength moves. On dark the edge
+       * is damped to 70%, because at the 35% the landing page uses it measures 1.73:1 against
+       * the ground and reads as a rendering artefact rather than a deliberate rule.
        */
       .prose blockquote {
-        margin: var(--size-6) 0;
-        padding-inline-start: var(--size-4);
-        border-inline-start: 2px solid var(--palette-interactive-50);
-        color: var(--semantic-muted-foreground);
+        margin: var(--fs-spacing-6) 0;
+        padding-inline-start: var(--fs-spacing-4);
+        border-inline-start: 2px solid var(--fs-color-accent-fill);
+        color: var(--fs-color-neutral-text-subtle);
       }
       @media (prefers-color-scheme: dark) {
         :root:not([data-theme="light"]) .prose blockquote {
-          border-inline-start-color: rgba(0, 177, 250, 0.7);
+          border-inline-start-color: color-mix(in oklab, var(--fs-color-accent-fill) 70%, transparent);
         }
       }
       :root[data-theme="dark"] .prose blockquote {
-        border-inline-start-color: rgba(0, 177, 250, 0.7);
+        border-inline-start-color: color-mix(in oklab, var(--fs-color-accent-fill) 70%, transparent);
       }
     </style>
 
-    <script>
-      /*
-       * Flips what the reader is actually looking at.
-       *
-       * The first version cycled dark, light, system and read the attribute rather than the
-       * result. With the system set to dark and nothing chosen yet, the attribute is unset,
-       * so the first press wrote data-theme="dark" and changed nothing anyone could see. Two
-       * presses to leave dark, one to leave light. Reading the effective theme removes the
-       * dead press, at the cost of "follow the system" being a default rather than a state
-       * to cycle back into, which is the right trade for a button with one label.
-       */
-      const root = document.documentElement
-      const button = document.querySelector("[data-theme-toggle]")
-      const systemDark = window.matchMedia("(prefers-color-scheme: dark)")
-
-      const shown = () => root.dataset.theme ?? (systemDark.matches ? "dark" : "light")
-
-      const describe = () => {
-        const next = shown() === "dark" ? "light" : "dark"
-        button?.setAttribute("aria-label", `Switch to the ${next} theme`)
-      }
-
-      button?.addEventListener("click", () => {
-        const next = shown() === "dark" ? "light" : "dark"
-        root.dataset.theme = next
-        try {
-          localStorage.setItem("theme", next)
-        } catch {}
-        describe()
-      })
-
-      systemDark.addEventListener("change", describe)
-      describe()
-    </script>
   </body>
 </html>
