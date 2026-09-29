@@ -451,17 +451,57 @@ jobs:
             sleep 5
           done
 
-          # The image was exercised in full before it was pushed, so this is deliberately
-          # thin: one real search, to prove the deployment is reachable from outside
-          # Railway rather than to re-test the service.
+          # The image was exercised in full before it was pushed, so what is left to check
+          # here is what a deployment can break and a container cannot: the proxy in front
+          # of it. Each of these failed differently in production and nowhere else.
+          origin='https://streamlord-docs.netlify.app'
+
+          # A search: reachable from outside Railway at all.
           body=$(curl -s --max-time 15 \
-            -H 'Origin: https://streamlord-docs.netlify.app' \
+            -H "Origin: $origin" \
             -H 'Accept: text/event-stream' \
             "$SERVICE/search?datastar=%7B%22query%22%3A%22readSignals%22%7D")
 
           echo "$body" | grep -q 'fs-link' \
             || { echo "::error::the deployed search returned no hits"; echo "$body" | head -5; exit 1; }
-          echo "  the deployment answers a search"
+          echo "  a search came back with hits"
+
+          # A stream, cut off deliberately. The counter runs for twelve seconds and this
+          # waits six, so a proxy that buffers the response instead of flushing it would
+          # hand back nothing at all. Two numbers arriving inside the window is the proof
+          # that Railway passes Server-Sent Events through as they are written.
+          counter=$(curl -s --max-time 6 \
+            -H 'Accept: text/event-stream' \
+            "$SERVICE/counter?datastar=%7B%22running%22%3Afalse%7D" || true)
+
+          for n in 1 5; do
+            echo "$counter" | grep -q "\"count\": $n" \
+              || { echo "::error::the deployed counter never reached $n — is the stream buffered?";
+                   echo "$counter" | head -6; exit 1; }
+          done
+          echo "  the counter streamed through the proxy"
+
+          # A POST with a body, which is the only request here that carries its signals
+          # rather than asking for something, and the only one whose content type a proxy
+          # has any opinion about.
+          muster=$(curl -s --max-time 15 -X POST \
+            -H 'Content-Type: application/json' \
+            -H "Origin: $origin" \
+            -d '{"banner":"Ox","swords":"x"}' \
+            "$SERVICE/muster")
+
+          echo "$muster" | grep -q 'fs-error-summary' \
+            || { echo "::error::the deployed form sent no error summary"; echo "$muster" | head -6; exit 1; }
+          echo "  the form answered a POST"
+
+          # And the one event that carries no elements, which is the shape a proxy or a
+          # rewrite would be most likely to quietly fill in.
+          removed=$(curl -s --max-time 15 \
+            "$SERVICE/modes?datastar=%7B%22mode%22%3A%22remove%22%7D")
+
+          echo "$removed" | grep -q '^data: mode remove' \
+            || { echo "::error::the deployed gallery did not send a remove"; echo "$removed" | head -6; exit 1; }
+          echo "  a remove arrived as a selector and a mode"
 
   publish-vscode:
     name: Publish VS Code extension
