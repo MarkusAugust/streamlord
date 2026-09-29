@@ -25,7 +25,7 @@ const { title, description, slug, headings } = Astro.props
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{title} — Streamlord</title>
+    <title>{title} | Streamlord</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site)} />
     <link rel="icon" href={FAVICON} type="image/svg+xml" />
@@ -140,7 +140,7 @@ const { title, description, slug, headings } = Astro.props
            button and its states all follow the tokens.
 
            Two grounds, though, because the page underneath is two pages. Over white, near-black is a
-           ~19:1 edge — as hard as an edge gets — so the light theme takes #2c436b, the deck's
+           ~19:1 edge (as hard as an edge gets) so the light theme takes #2c436b, the deck's
            own --denim-100, which roughly halves it to ~9.5:1. Over the dark page that softer
            band would be *lighter* than the surface and float forward, so the dark theme keeps
            #0c0d14: the ground the mark was drawn on, the same one the landing page uses, and
@@ -171,10 +171,10 @@ const { title, description, slug, headings } = Astro.props
        * The ghost button fills on hover instead of tinting.
        *
        * Its own hover is --semantic-interactive-background, which in the dark theme is
-       * #004869 — measured at 1.00:1 against this band, the same luminance, so the hover was
+       * #004869, measured at 1.00:1 against this band, the same luminance, so the hover was
        * invisible. Brightening the background alone does not help: the label is #88d1ff, and
        * the lighter steps of the scale converge with it (#00b1fa leaves the text at 1.45:1).
-       * Swapping both is what works — step 30 behind step 100 is 5.92:1 for the label and
+       * Swapping both is what works: step 30 behind step 100 is 5.92:1 for the label and
        * 5.94:1 against the band, so the state is unmistakable from either direction.
        */
       .masthead .fs-button[data-variant="ghost"]:hover {
@@ -267,7 +267,7 @@ const { title, description, slug, headings } = Astro.props
        * so the first press wrote data-theme="dark" and changed nothing anyone could see. Two
        * presses to leave dark, one to leave light. Reading the effective theme removes the
        * dead press, at the cost of "follow the system" being a default rather than a state
-       * to cycle back into — which is the right trade for a button with one label.
+       * to cycle back into, which is the right trade for a button with one label.
        */
       const root = document.documentElement
       const button = document.querySelector("[data-theme-toggle]")

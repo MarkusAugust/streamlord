@@ -68,6 +68,7 @@ abstract class ExtractDocSamples : DefaultTask() {
         import io.github.markusaugust.streamlord.spring.*
         import io.github.markusaugust.streamlord.json.kotlinx.*
         import io.github.markusaugust.streamlord.json.jackson.*
+        import kotlinx.coroutines.*
         import kotlinx.coroutines.flow.*
         import kotlinx.html.*
         import kotlinx.serialization.Serializable
@@ -221,7 +222,7 @@ kotlin.sourceSets.named("main") { kotlin.srcDir(generateDocSamples.map { it.targ
  * A name to run on its own, and a name that reads clearly in a CI log.
  *
  * `check` has to be told about it. `build` reaches `compileKotlin` through `assemble`, so the
- * examples were compiled either way — but the dependency trees, the transcripts and the
+ * examples were compiled either way, but the dependency trees, the transcripts and the
  * coordinates hang off this task, and nothing asked for it. They went unchecked in CI until
  * a --dry-run showed which tasks `build` actually runs.
  */
@@ -360,7 +361,7 @@ tasks.named("checkDocSamples") { dependsOn(checkDocDependencies) }
 
 /*
  * Runs the generated dispatcher, so the bytes on the page are the bytes Streamlord's own
- * encoder produces — the same encoder the golden-file tests verify on this build.
+ * encoder produces, the same encoder the golden-file tests verify on this build.
  */
 val generateWireTranscripts =
     tasks.register<JavaExec>("generateWireTranscripts") {
@@ -473,7 +474,7 @@ tasks.named("checkDocSamples") { dependsOn(applyWireTranscripts) }
  *
  * Fourteen of them were typed by hand and nothing tied them to gradle.properties, so a
  * version bump that forgot the pages would have left the site telling readers to depend on
- * a release that had been superseded — the same shape of rot the dependency trees had, and
+ * a release that had been superseded, the same shape of rot the dependency trees had, and
  * the same answer: make the build do it rather than ask a person to remember.
  *
  * Both spellings are covered, the Gradle coordinate and the Maven element, because the

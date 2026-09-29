@@ -7,7 +7,7 @@ description: "A Kotlin SDK for Datastar that brings nothing you do not already c
 > the Iron Crown of Kell and the land fell apart in my hands. Now I will take one thing from you:
 > the belief that the browser must be bought with JavaScript.*
 >
-> — Sarn the Faceless, whom the river-priests of Thurn call the Lord of Streams
+> Sarn the Faceless, whom the river-priests of Thurn call the Lord of Streams
 
 Streamlord speaks the [Datastar](https://data-star.dev) 1.0.4 Server-Sent Events protocol from
 Kotlin. Your server sends HTML and signal patches down one connection; the browser applies them.
@@ -46,7 +46,7 @@ misspelled. The code on this site is highlighted by the very same grammars.
 ## What it costs you
 
 Almost nothing, and that is deliberate. The core carries the Kotlin standard library and
-coroutines, and nothing else — not even a JSON library, because it has its own strict RFC 8259
+coroutines, and nothing else, not even a JSON library, because it has its own strict RFC 8259
 parser and writer. The framework adapters compile against your framework and add no version of
 their own. You reach for a codec module only when you want data classes as signals.
 
@@ -61,7 +61,7 @@ dependencies {
 ## What it does not do
 
 It does not render your pages for you, and it has no opinion about how you build HTML beyond
-giving you three ways to do it. It does not ship Datastar itself — the client bundle is yours to
+giving you three ways to do it. It does not ship Datastar itself: the client bundle is yours to
 include, from a CDN or from your own static files. It does not ship Datastar Pro, and it never
 will; the Pro helpers emit the documented attribute names and nothing more, and the bundle and
 the licence are yours to bring.

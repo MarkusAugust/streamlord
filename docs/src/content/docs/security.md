@@ -11,7 +11,7 @@ description: "Every byte from the browser is untrusted, and the protocol has mor
 Selectors, event ids, header values and script attribute names are validated **at construction**.
 A selector carrying a newline cannot forge a second `data:` line and smuggle in an event you did
 not send. The guard is called `Wire`, it lives in `core.domain`, and it refuses rather than
-sanitises — a selector with a line break is a bug in your code, not something to quietly fix.
+sanitises. A selector with a line break is a bug in your code, not something to quietly fix.
 
 ## No script breakout
 
@@ -27,7 +27,7 @@ but not in JSON. A string containing one, written naively, ends the expression.
 
 ## Bounded input
 
-Incoming signals are capped — 1 MiB by default, configurable — and the cap applies *while
+Incoming signals are capped (1 MiB by default, configurable) and the cap applies *while
 reading*:
 
 - a declared `Content-Length` above the limit is rejected before a single byte is read;

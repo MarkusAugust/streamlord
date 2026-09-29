@@ -13,7 +13,7 @@
   <!--
     The mark, scaled to the tile it sits in.
 
-    Drawn at the size below, the crown was 128 of 256 pixels wide — half the icon — and the
+    Drawn at the size below, the crown was 128 of 256 pixels wide, half the icon, and the
     whole mark sat low, with more air above it than below. At the size a marketplace shows a
     listing, that reads as a small badge in a large dark square. This scales the mark about its
     own centre and lifts it five pixels so the centre of the drawing is the centre of the tile:

@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 
 /**
  * The counter is a function from signals to a flow of events, so the interesting half of it can
- * be tested without a server, a browser or a clock — `runTest` skips the delays.
+ * be tested without a server, a browser or a clock, since `runTest` skips the delays.
  */
 class CounterTest {
     @Test

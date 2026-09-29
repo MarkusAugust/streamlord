@@ -103,7 +103,7 @@ No, and it is worth one paragraph to say why.
 
 You would get `streamlord-json-kotlinx`, `streamlord-json-jackson` **and**
 `streamlord-json-jackson2`: three JSON libraries doing one job. On Spring that is not merely
-wasteful — Jackson 2 and Jackson 3 are different packages, and the wrong codec compiles happily
+wasteful: Jackson 2 and Jackson 3 are different packages, and the wrong codec compiles happily
 and then fails at runtime on an `ObjectMapper` that is not the one Spring configured.
 
 You would also get both adapters, one of which has no framework to bind to.
@@ -117,7 +117,7 @@ There is no `streamlord-all` for the same reason. A single artifact would have t
 one you must take, and it brings `streamlord-core` with it.
 
 **How do you write HTML?** Take `streamlord-html` for the kotlinx.html DSL. Skip it if you write
-markup as strings or render it from templates — both work with the adapter alone, and both are
+markup as strings or render it from templates. Both work with the adapter alone, and both are
 [first-class](/choosing-a-style/).
 
 **Do you want signals as data classes?** Take one codec module. Skip it and the built-in reader
@@ -149,7 +149,7 @@ streamlord-json-kotlinx
     └── org.jetbrains.kotlinx:kotlinx-serialization-core 1.11.0
 ```
 
-**`streamlord-json-jackson`** — Jackson 3
+**`streamlord-json-jackson`**: Jackson 3
 
 ```deps=streamlord-json-jackson sample=none
 streamlord-json-jackson
@@ -158,7 +158,7 @@ streamlord-json-jackson
     └── com.fasterxml.jackson.core:jackson-annotations 2.22
 ```
 
-**`streamlord-json-jackson2`** — Jackson 2
+**`streamlord-json-jackson2`**: Jackson 2
 
 ```deps=streamlord-json-jackson2 sample=none
 streamlord-json-jackson2
@@ -172,7 +172,7 @@ not something Streamlord does.
 
 ### Do we pin your Jackson version?
 
-No. Every dependency is published as a **soft** requirement — `requires` in the Gradle module
+No. Every dependency is published as a **soft** requirement: `requires` in the Gradle module
 metadata, a plain `<version>` in the POM, never `strictly` and never a range. You can always
 override it. But soft means different things to the two build tools, and it is worth knowing
 which one you are using.
@@ -182,7 +182,7 @@ through a transitive dependency, so the Jackson you get is the Jackson Boot chos
 ignored.
 
 **Gradle.** The highest version wins. Spring Boot's plugin applies its BOM as a *platform*, which
-contributes constraints rather than enforcement — so if Boot pins a Jackson older than the one
+contributes constraints rather than enforcement, so if Boot pins a Jackson older than the one
 this release was built against, adding the codec **raises** your Jackson version. If Boot's pin is
 newer, Boot's wins and nothing changes.
 
@@ -204,7 +204,7 @@ our side is strict.
 
 The trees above are what the codec pulls *if nothing else has pulled it already*. On Spring Boot,
 Jackson is on your classpath before you add anything of ours, so the codec adds **one small jar**
-and the rest resolves to a version already present — possibly bumped, as above. The same goes for
+and the rest resolves to a version already present, possibly bumped, as above. The same goes for
 `streamlord-json-kotlinx` in a project that already serializes with kotlinx.
 
 That is the whole reason there are three codec modules instead of one with a JSON library baked
@@ -222,8 +222,8 @@ you check that.
 |---|---|
 | `streamlord-core` | `kotlin-stdlib`, `kotlinx-coroutines-core` |
 | `streamlord-html` | `kotlinx-html` |
-| `streamlord-ktor` | nothing — Ktor is `compileOnly` |
-| `streamlord-spring` | nothing — Spring and the servlet API are `compileOnly` |
+| `streamlord-ktor` | nothing, Ktor is `compileOnly` |
+| `streamlord-spring` | nothing, Spring and the servlet API are `compileOnly` |
 | `streamlord-json-kotlinx` | `kotlinx-serialization-json` |
 | `streamlord-json-jackson` | `jackson-databind` 3 |
 | `streamlord-json-jackson2` | `jackson-databind` 2 |

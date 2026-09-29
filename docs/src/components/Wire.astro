@@ -6,13 +6,13 @@ import { SERVICE } from "../config"
 // Every search from the masthead is a real request to a Ktor service running this library, and
 // the service can encode what it sent with the same SseEncoder the golden-file tests verify. So
 // a reader who has just read about `datastar-patch-elements` can search for something, open this,
-// and see the event — not a printed example of one, the one their own keystrokes produced.
+// and see the event, not a printed example of one, but the one their own keystrokes produced.
 //
 // Closed by default, and at the foot of the article: a reader who wants the protocol will look,
 // and a reader who wants the prose is not made to scroll past a panel of machinery.
 //
 // And closed means closed, on the wire too. Asking for the frames with every search made each
-// answer 2.4 times larger — measured, 2617 bytes against 6224 — on every page, for a panel
+// answer 2.4 times larger (measured, 2617 bytes against 6224) on every page, for a panel
 // almost nobody has open. So opening this is what turns them on: `toggle` sets the signal the
 // service reads, and asks again for the search that is already in the field, so the panel has
 // something in it the moment it opens rather than after the next keystroke.
@@ -23,7 +23,7 @@ import { SERVICE } from "../config"
 
   <p class="wire__note">
     The frames your last search produced, encoded by the same <code>SseEncoder</code> the
-    golden-file tests check. Not a description of them — the frames.
+    golden-file tests check. Not a description of them. The frames.
   </p>
 
   <div id="wire" class="wire__frames">

@@ -4,7 +4,7 @@
 @import "./theme.css";
 
 /* Fristil deliberately sets nothing on body: it is a design system, not a
-   reset. The font stack is the one from the design-system-architecture deck —
+   reset. The font stack is the one from the design-system-architecture deck,
    no webfont, no extra request. */
 body {
   margin: 0;
@@ -25,13 +25,13 @@ body {
 /*
  * The page's own colours, captured where the masthead cannot reach them.
  *
- * The masthead is a data-theme="dark" island on both themes, so anything rendered inside it —
- * including the search panel that hangs below the field — reads the dark theme's semantic
+ * The masthead is a data-theme="dark" island on both themes, so anything rendered inside it,
+ * including the search panel that hangs below the field, reads the dark theme's semantic
  * colours even when the page around it is light. The panel then arrives as a black box over a
  * white article.
  *
  * A custom property resolves its var() on the element that declares it, so these six compute
- * here, on :root, against the page's theme — and keep those values when they are read from
+ * here, on :root, against the page's theme, and keep those values when they are read from
  * inside the island. Verified in a browser before it was written: --semantic-page-background is
  * #171a24 inside the masthead and #ffffff in a variable captured here.
  */
@@ -43,14 +43,14 @@ body {
   --page-neutral: var(--semantic-neutral-background);
   --page-interactive: var(--semantic-interactive-main);
   /* .fs-link:visited reads this one, and a visited link inside the panel was wearing the dark
-     theme's colour on a white surface — which is what "pale and washed out" looked like. */
+     theme's colour on a white surface, which is what "pale and washed out" looked like. */
   --page-interactive-visited: var(--semantic-interactive-visited);
 }
 
 /*
  * Which scheme the page is in, in the same three rules Fristil uses for the themes themselves.
  *
- * color-scheme is not a custom property, so it cannot be captured like the colours above — but
+ * color-scheme is not a custom property, so it cannot be captured like the colours above, but
  * the island sets it to dark, and a scrollbar inside the search panel was drawn black on a white
  * panel because of it. The panel reads this instead.
  */
@@ -98,7 +98,7 @@ body {
   outline-offset: 2px;
 }
 /*
- * The marks are the publishers' own files, so they carry their own colours — and the darkest
+ * The marks are the publishers' own files, so they carry their own colours, and the darkest
  * part of the JetBrains one is #293896, which vanishes against a near-black card. A logo is
  * drawn for a surface that contrasts with it, so it gets one: a white plate, the same for both,
  * which is invisible on the light theme's card and a canvas on the dark one.

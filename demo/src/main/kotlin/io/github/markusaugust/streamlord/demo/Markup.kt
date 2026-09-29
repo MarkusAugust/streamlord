@@ -16,7 +16,7 @@ import kotlinx.html.ul
  *
  * The service writes markup for a design system it does not ship and cannot see: the page
  * already carries `fristil.css`, so a `fs-list` arriving over the wire is styled the instant
- * it lands. That is the whole argument for patching elements rather than sending JSON — the
+ * it lands. That is the whole argument for patching elements rather than sending JSON. The
  * server owns the markup, and there is no second model of the page to keep in step.
  */
 public fun TagConsumer<*>.results(
@@ -61,7 +61,7 @@ public fun TagConsumer<*>.results(
 /**
  * The frames, as they went over the wire.
  *
- * Datastar documents no way to read the SSE frames from the client — the actions reference
+ * Datastar documents no way to read the SSE frames from the client. The actions reference
  * says so outright, and the one tool that does is a Pro feature. So the server shows them,
  * which is the better answer anyway: it has the encoder, and these strings come out of it.
  */
@@ -160,7 +160,7 @@ public fun TagConsumer<*>.stoneInside(says: String) {
     }
 }
 
-/** A course of stone laid beside or inside the wall — what the four insert modes deliver. */
+/** A course of stone laid beside or inside the wall, which is what the four insert modes deliver. */
 public fun TagConsumer<*>.course(says: String) {
     p("gallery__course") { +says }
 }

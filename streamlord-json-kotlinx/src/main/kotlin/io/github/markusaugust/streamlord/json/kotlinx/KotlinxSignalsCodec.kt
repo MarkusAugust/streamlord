@@ -31,7 +31,7 @@ import kotlin.reflect.KType
  * ```
  *
  * Pass `strict = true` with them and a type that was left out fails here, on the JVM, with the
- * name of the class — rather than in the image, on the first request, as a decode that cannot
+ * name of the class, rather than in the image, on the first request, as a decode that cannot
  * find a serializer it was never given.
  *
  * @param json the configuration to encode and decode with.
@@ -74,7 +74,7 @@ public class KotlinxSignalsCodec(
      * serializer() on the result, with kotlin-reflect reading the Kotlin metadata on the way.
      *
      * None of that is in the bytecode, so a GraalVM native image drops it and the call fails at
-     * runtime with "Unresolved class: class Signals (kind = CLASS)" — an application that starts
+     * runtime with "Unresolved class: class Signals (kind = CLASS)", an application that starts
      * and then cannot read a single signal. A serializer named here is the plugin-generated one,
      * resolved at compile time and plainly visible to the image, which is what makes this module
      * usable in a native image without hand-written reflection metadata.
@@ -93,7 +93,7 @@ public class KotlinxSignalsCodec(
      * plugin generated beside it.
      *
      * So the rule is the boundary between the two: anything outside `kotlin`, `kotlinx` and
-     * `java` has to be named, and a container has to be named if what it holds does — a
+     * `java` has to be named, and a container has to be named if what it holds does, so a
      * `List<Signals>` fails for the same reason `Signals` does.
      */
     private fun needsNaming(type: KType): Boolean {
@@ -132,14 +132,14 @@ public class KotlinxSignalsCodec(
          *
          * An application that names its serializers for a native image has one list to keep in
          * step with its routes, and nothing notices when a type is added to the second and not
-         * the first — the JVM resolves it reflectively and says nothing, and the image fails on
+         * the first. The JVM resolves it reflectively and says nothing, and the image fails on
          * the first request that carries it. This is that silence, broken, where a test can hear
          * it: this project's own service shipped exactly that bug, twice, before this existed.
          */
         if (strict && needsNaming(type)) {
             throw SignalsCodecException(
                 "No serializer was named for $type, and this codec is strict. Add " +
-                    "typeOf<$type>() to KotlinxSignalsCodec(serializers = ...) — a reflective " +
+                    "typeOf<$type>() to KotlinxSignalsCodec(serializers = ...), a reflective " +
                     "lookup would work here and fail in a GraalVM native image.",
             )
         }

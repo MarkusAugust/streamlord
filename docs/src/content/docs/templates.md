@@ -31,8 +31,8 @@ apply to you.
 ## What the editors give you
 
 IntelliJ with the official Datastar plugin completes `data-*` attributes in Thymeleaf, FreeMarker
-and JTE files. The Streamlord VS Code extension covers all of the above — JTE, kte, FreeMarker,
-Velocity, Mustache, Pebble, and Thymeleaf, which is plain HTML — and understands each engine's
+and JTE files. The Streamlord VS Code extension covers all of the above (JTE, kte, FreeMarker,
+Velocity, Mustache, Pebble, and Thymeleaf, which is plain HTML) and understands each engine's
 syntax well enough not to flag its own tags as errors.
 
 ## The guard

@@ -39,8 +39,8 @@ public data class CounterSignals(
  * cancels the coroutine, which is why there is no bookkeeping here and nothing to leak: the
  * `flow` builder simply stops being collected.
  *
- * The second request still arrives, though, and it is the one that puts the page back in order —
- * it reports what the counter reached and turns the button back into Start. The server decides
+ * The second request still arrives, though, and it is the one that puts the page back in order.
+ * It reports what the counter reached and turns the button back into Start. The server decides
  * that from the signals it was sent, so the page holds no state of its own and there is no
  * JavaScript anywhere in it.
  */

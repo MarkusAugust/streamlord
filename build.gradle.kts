@@ -80,7 +80,7 @@ subprojects {
          *
          * The task name is Dokka 2's. `dokkaHtml` is a v1 task and the plugin now reports it as
          * disabled, which is the sort of thing that builds a jar with nothing in it and says
-         * BUILD SUCCESSFUL — so it was read from `gradlew tasks`, not from a guide.
+         * BUILD SUCCESSFUL, so it was read from `gradlew tasks`, not from a guide.
          */
         configure(
             KotlinJvm(

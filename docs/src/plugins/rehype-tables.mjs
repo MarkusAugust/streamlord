@@ -1,7 +1,7 @@
 /**
  * Gives every markdown table Fristil's table, inside Fristil's scroll wrapper.
  *
- * Markdown writes a bare `<table>`, and Fristil styles `.fs-table` — so without this
+ * Markdown writes a bare `<table>`, and Fristil styles `.fs-table`, so without this
  * the documentation's tables render with no padding, no header weight and no row
  * rules. This adds the class rather than restyling `table` in our own CSS, so the
  * tables look like the design system's tables and follow it when it changes.

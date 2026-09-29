@@ -2,7 +2,7 @@
  * The mark, read from the VS Code extension so there is one of it.
  *
  * The crown is the Iron Crown of Kell from the grimoire's own story, and the gradient over
- * the three streams is `#4fc1ff` to `#c586c0` — the signal blue and the action purple the
+ * the three streams is `#4fc1ff` to `#c586c0`, the signal blue and the action purple the
  * extension recommends for `$signal` and `@get`. The logo, the editors and the lore already
  * agree; nothing here should be allowed to drift from that file.
  */

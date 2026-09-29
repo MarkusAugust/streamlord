@@ -3,7 +3,7 @@
 > *The forge is one thing. The eye that sees the flaw before the blade is quenched is another.
 > I have both, and I lend them to you for nothing. Ask yourself why.*
 >
-> — Sarn the Faceless
+> Sarn the Faceless
 
 <!-- description -->
 Editor support for the [Streamlord](https://github.com/MarkusAugust/streamlord) Kotlin SDK and

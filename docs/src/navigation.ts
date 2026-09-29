@@ -35,18 +35,30 @@ export const NAVIGATION: Section[] = [
       { slug: "html-dsl", title: "The kotlinx.html DSL" },
       { slug: "strings", title: "Strings" },
       { slug: "templates", title: "Templates" },
-      { slug: "dollar-trap", title: "The $ trap" },
       { slug: "casing", title: "Casing" },
       { slug: "choosing-a-style", title: "Choosing a style" },
     ],
   },
   {
+    title: "The tooling",
+    pages: [
+      { slug: "dollar-trap", title: "The $ trap" },
+      { slug: "editors", title: "The editors" },
+    ],
+  },
+  {
+    title: "Running it",
+    pages: [
+      { slug: "operations", title: "Operations" },
+      { slug: "security", title: "Security" },
+    ],
+  },
+  {
     title: "Beyond",
     pages: [
-      { slug: "security", title: "Security" },
       { slug: "native-image", title: "Native image" },
       { slug: "datastar-pro", title: "Datastar Pro" },
-      { slug: "editors", title: "The editors" },
+      { slug: "java", title: "Java" },
       { slug: "architecture", title: "Architecture" },
       { slug: "changelog", title: "Changelog" },
     ],

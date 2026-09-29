@@ -36,7 +36,7 @@ div {
 
 An explicit `case =` is kept, but the key is still written in kebab-case, because the browser
 lowercases it either way. `dataBind`, `dataRef` and `dataIndicator` write the name in the
-*value*, which keeps its case — unless you ask for a `case`, since Datastar applies `__case` to a
+*value*, which keeps its case, unless you ask for a `case`, since Datastar applies `__case` to a
 key only.
 
 The object forms (`dataSignals("{...}")`, `dataComputed("{...}")`, `dataClass("{...}")`) use the

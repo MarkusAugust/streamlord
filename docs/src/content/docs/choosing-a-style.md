@@ -23,7 +23,7 @@ Pick what your team reads best. The SDK and both editor extensions serve all thr
 
 ## How to choose
 
-**Take the DSL** when the markup is small, generated, or close to the data — a list of rows, a
+**Take the DSL** when the markup is small, generated, or close to the data: a list of rows, a
 fragment that differs by a field, anything a loop builds. Type safety is worth most exactly where
 markup and logic are entangled, and that is where the DSL is pleasant.
 

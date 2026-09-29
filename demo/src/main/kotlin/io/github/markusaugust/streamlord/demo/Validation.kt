@@ -26,7 +26,7 @@ private const val SWORDS_MAX = 999
  * The rules, in one place, on the server.
  *
  * That is the point of the demo rather than a detail of it. The same rules would have to exist
- * on the server anyway — nothing that arrives over a network may be trusted — so writing them
+ * on the server anyway, because nothing that arrives over a network may be trusted, so writing them
  * once and letting the page display what the server decided removes the copy, not the check.
  * There is no validation library here and no schema shared with the browser, because there is
  * no second implementation to keep in step with this one.
@@ -67,7 +67,7 @@ public fun faults(signals: MusterSignals): List<Fault> =
  *
  * The inputs are never patched, and that is deliberate: replacing an element the reader is
  * typing into would move their caret, so what the server sends is the *text* of each fault as
- * a signal, and the page binds it — `data-text` for the message, `data-attr` for aria-invalid.
+ * a signal, and the page binds it: `data-text` for the message, `data-attr` for aria-invalid.
  *
  * The summary is the opposite case and is patched as markup, because it is a list that exists
  * only when something is wrong, it is built from Fristil's classes the server cannot see, and

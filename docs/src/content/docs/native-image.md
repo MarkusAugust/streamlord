@@ -41,7 +41,7 @@ graalvmNative {
 
 `fallback.set(false)` so a build that cannot be native fails instead of quietly producing a JVM
 image with none of the startup you are doing this for. `sharedLibrary.set(false)` because the
-plugin otherwise passes `--shared` and hands you a `.so` with a C header beside it — apply
+plugin otherwise passes `--shared` and hands you a `.so` with a C header beside it. Apply
 `io.ktor.plugin` and it sets this for you.
 
 The `--initialize-at-build-time` list is Ktor's, from
@@ -63,8 +63,8 @@ One entry per class you read signals into. `SearchSignals.serializer()` is gener
 kotlinx.serialization compiler plugin and resolved where you write it, so the image can see it in
 the bytecode.
 
-Add `strict = true` beside them, and a type you forgot fails on the JVM — in a test, with the name
-of the class — instead of in the image on the first request that carries it:
+Add `strict = true` beside them, and a type you forgot fails on the JVM (in a test, with the name
+of the class) instead of in the image on the first request that carries it:
 
 ```kotlin sample=none
 KotlinxSignalsCodec(
@@ -87,7 +87,7 @@ Unresolved class: class SearchSignals (kind = CLASS)
 ```
 
 With Jackson the same applies and there is no equivalent shortcut: register your signals classes
-for reflection, or let Spring's AOT processing do it — see [Spring WebMVC](/spring-webmvc/).
+for reflection, or let Spring's AOT processing do it. See [Spring WebMVC](/spring-webmvc/).
 
 ## 3. Resources you read by name
 
@@ -147,5 +147,5 @@ curl -fsS -H 'Accept: text/event-stream' 'localhost:8080/search?datastar=%7B%22q
 docker rm -f check
 ```
 
-Those four lines belong in your pipeline, before the push. A health check alone is not enough — it
+Those four lines belong in your pipeline, before the push. A health check alone is not enough: it
 answers before a single signal has been read, which is precisely the part that breaks.

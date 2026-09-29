@@ -51,7 +51,7 @@ button {
 That renders `@post('/form', {contentType: 'form'})`. An option you do not set does not appear,
 so the attribute stays as short as what you actually asked for.
 
-Everything the helpers quote — `js()`, `set()`, `setAll()`, the fetch options, the Pro actions —
+Everything the helpers quote (`js()`, `set()`, `setAll()`, the fetch options, the Pro actions)
 is written as a JavaScript literal in single quotes, the way the Datastar documentation writes
 it. The same text therefore works unchanged in the DSL, in a string and in a template.
 
@@ -85,7 +85,7 @@ event.
 
 ## What this page does not cover
 
-Datastar Rocket — the separate `datastar-rocket.js` bundle with `data-if`, `data-for` and its
-web-component API — is in beta and not covered by the DSL. And the DSL is one of
+Datastar Rocket, the separate `datastar-rocket.js` bundle with `data-if`, `data-for` and its
+web-component API, is in beta and not covered by the DSL. And the DSL is one of
 [three ways to write markup](/choosing-a-style/), not the way; if your team reads strings or
 templates better, those are served as equals.

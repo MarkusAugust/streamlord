@@ -13,7 +13,7 @@ dependencies {
  * resolve the DSL inside it. That made `./gradlew build` red on any machine where the
  * folder had content, and not by accident: most of what lives there is deliberately
  * wrong. It is the bench the editors' diagnostics are tried against, with the expected
- * squiggle written in a comment beside each line — `APPEND` without a selector, a `<p>`
+ * squiggle written in a comment beside each line: `APPEND` without a selector, a `<p>`
  * that is never closed, `__debunce` for `__debounce`. Code that is broken on purpose must
  * not be able to fail the build, and a build that is always red teaches everyone to stop
  * reading it.
@@ -23,7 +23,7 @@ dependencies {
  * reach it: neither depends on a source set that nothing else asks for.
  *
  * `./gradlew :streamlord-html-pro:playgroundClasses` compiles it if you ask, and will
- * usually fail — that is the bench reporting the errors it was written to provoke, which
+ * usually fail, because that is the bench reporting the errors it was written to provoke, which
  * is occasionally what you want to see.
  */
 val playground: SourceSet by sourceSets.creating {

@@ -3,7 +3,7 @@ title: "The editors"
 description: "A VS Code extension and an IntelliJ plugin that read Datastar as a language."
 ---
 
-Datastar lives inside attribute values and inside Kotlin strings — two places where no editor
+Datastar lives inside attribute values and inside Kotlin strings, two places where no editor
 checks anything on its own. That is what these are for.
 
 <!--
@@ -14,7 +14,7 @@ checks anything on its own. That is what these are for.
   fight the palette, at a width the page cannot reserve.
 
   These are the publishers' own files, in their own colours, unmodified except that the ids
-  inside them are prefixed — two logos on one page would otherwise both define a gradient called
+  inside them are prefixed, because two logos on one page would otherwise both define a gradient called
   "a" and the second would win. They link to the publishers' own listings and nothing else.
 -->
 <div class="marketplaces">
@@ -78,7 +78,7 @@ IntelliJ IDEA 2026.1 and newer, Community and Ultimate alike.
 
 ## What they see
 
-**Diagnostics with quick fixes** for Datastar expressions and markup — inside Kotlin strings,
+**Diagnostics with quick fixes** for Datastar expressions and markup: inside Kotlin strings,
 whether handed to the DSL or standing free, and in HTML and template files. Kotlin `$`
 interpolation traps, syntax errors with the right column, missing ids, unknown attributes and
 modifiers, capitals in keys.
@@ -86,7 +86,7 @@ modifiers, capitals in keys.
 **Completions** for signals, actions, attributes, modifiers, ids and classes, collected from the
 file you are in.
 
-**Hover documentation**, snippets, and syntax highlighting of the Datastar tokens only — never
+**Hover documentation**, snippets, and syntax highlighting of the Datastar tokens only, never
 of your Kotlin or your HTML, which belong to your theme.
 
 **A Stream Inspector** that shows a live SSE stream decoded rather than as raw text, with saved
@@ -100,7 +100,7 @@ Thymeleaf is plain HTML and needs nothing special.
 ## One implementation, two editors
 
 Everything they know comes from `catalog/datastar-1.0.4.json`, which the SDK's own tests bind to
-the DSL — so the catalog cannot drift from the library without a test failing.
+the DSL, so the catalog cannot drift from the library without a test failing.
 
 The checks live once, in `streamlord-analysis`: a Kotlin module with no dependency beyond
 `streamlord-core`, holding the Kotlin string reader, the JavaScript syntax check, the markup and
