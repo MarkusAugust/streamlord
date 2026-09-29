@@ -3,6 +3,13 @@ import { fs } from "@fristil/designsystem"
 import { SERVICE } from "../config"
 import { href, NAVIGATION } from "../navigation"
 
+// Fristil's own classes for a search field, with ours appended rather than spread beside them.
+//
+// `{...fs.search()}` sets `class`, and the spread wins over a `class` written after it — so an
+// input carrying both ended up with Fristil's two classes and not ours, silently. Every rule
+// written for `.search__field` matched nothing until this was pulled apart.
+const { class: fristilClasses, ...searchAttributes } = fs.search()
+
 // The search in the masthead, on every page.
 //
 // It is the same endpoint the live page uses and the same markup comes back, so a reader
@@ -35,9 +42,9 @@ import { href, NAVIGATION } from "../navigation"
 >
   <label class="fs-sr-only" for="site-search">Search the documentation</label>
   <input
-    {...fs.search()}
+    {...searchAttributes}
     id="site-search"
-    class="fs-input fs-search search__field"
+    class={`${fristilClasses} search__field`}
     placeholder="Search"
     autocomplete="off"
     data-bind:query
@@ -95,8 +102,36 @@ import { href, NAVIGATION } from "../navigation"
     flex: 1 1 auto;
     max-inline-size: 22rem;
   }
+  /*
+   * The field lifts off the band it sits on, rather than carrying a colour of its own.
+   *
+   * The masthead is a data-theme="dark" island on both themes, so Fristil gave the input the
+   * dark theme's surface — rgb(23, 26, 36). Against the dark band that is a gentle lift, but
+   * the light theme's band is the deck's denim, rgb(44, 67, 107), and a near-black field on it
+   * reads as a hole punched through the header.
+   *
+   * A translucent white does the same job on both: about rgb(36, 37, 43) over the dark band and
+   * rgb(65, 86, 122) over the denim. The label stays near-white in both, so the text keeps its
+   * contrast either way.
+   */
   .search__field {
     inline-size: 100%;
+    /* background-color, not background: the shorthand wipes the background-image Fristil uses
+       to draw the magnifier, and the icon vanished without a word. */
+    background-color: rgb(255 255 255 / 0.1);
+    border-color: rgb(255 255 255 / 0.28);
+    color: var(--semantic-page-foreground);
+  }
+  .search__field:hover {
+    background-color: rgb(255 255 255 / 0.16);
+  }
+  /*
+   * The label is there for a screen reader and hidden from the eye, so the placeholder is the
+   * only visible name this field has. Fristil's muted grey measured 3.45:1 against the lifted
+   * surface — fine for decoration, thin for the only thing that says what the box is for.
+   */
+  .search__field::placeholder {
+    color: rgb(255 255 255 / 0.72);
   }
   .search__panel {
     position: absolute;
@@ -116,10 +151,25 @@ import { href, NAVIGATION } from "../navigation"
     inset-block-start: calc(100% + var(--size-2));
     z-index: 20;
     /*
-     * The page's own surface, not the masthead's dark band: the panel belongs to what you are
-     * reading, not to the furniture above it. A fixed ceiling with its own scroll, because a
-     * panel that grows and shrinks with every keystroke reads as a page coming apart.
+     * The page's theme, taken back from the masthead's.
+     *
+     * The panel belongs to what you are reading, not to the furniture above it — but it is a
+     * child of a data-theme="dark" island, so every semantic colour inside it, down to the link
+     * colour Fristil gives .fs-link, was the dark theme's, and the panel arrived as a black box
+     * over a white article. Re-declaring the six that the panel and its contents use, from the
+     * page values captured on :root, hands the whole subtree back to the page.
+     *
+     * A fixed ceiling with its own scroll, because a panel that grows and shrinks with every
+     * keystroke reads as a page coming apart.
      */
+    --semantic-page-background: var(--page-background);
+    --semantic-page-foreground: var(--page-foreground);
+    --semantic-muted-foreground: var(--page-muted);
+    --semantic-divider-30: var(--page-divider);
+    --semantic-neutral-background: var(--page-neutral);
+    --semantic-interactive-main: var(--page-interactive);
+    --semantic-interactive-visited: var(--page-interactive-visited);
+    color-scheme: var(--page-color-scheme);
     background: var(--semantic-page-background);
     color: var(--semantic-page-foreground);
     border: 1px solid var(--semantic-divider-30);

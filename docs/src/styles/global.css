@@ -22,11 +22,58 @@ body {
   --semantic-focus-ring: 2px solid var(--palette-interactive-50);
 }
 
+/*
+ * The page's own colours, captured where the masthead cannot reach them.
+ *
+ * The masthead is a data-theme="dark" island on both themes, so anything rendered inside it —
+ * including the search panel that hangs below the field — reads the dark theme's semantic
+ * colours even when the page around it is light. The panel then arrives as a black box over a
+ * white article.
+ *
+ * A custom property resolves its var() on the element that declares it, so these six compute
+ * here, on :root, against the page's theme — and keep those values when they are read from
+ * inside the island. Verified in a browser before it was written: --semantic-page-background is
+ * #171a24 inside the masthead and #ffffff in a variable captured here.
+ */
+:root {
+  --page-background: var(--semantic-page-background);
+  --page-foreground: var(--semantic-page-foreground);
+  --page-muted: var(--semantic-muted-foreground);
+  --page-divider: var(--semantic-divider-30);
+  --page-neutral: var(--semantic-neutral-background);
+  --page-interactive: var(--semantic-interactive-main);
+  /* .fs-link:visited reads this one, and a visited link inside the panel was wearing the dark
+     theme's colour on a white surface — which is what "pale and washed out" looked like. */
+  --page-interactive-visited: var(--semantic-interactive-visited);
+}
+
+/*
+ * Which scheme the page is in, in the same three rules Fristil uses for the themes themselves.
+ *
+ * color-scheme is not a custom property, so it cannot be captured like the colours above — but
+ * the island sets it to dark, and a scrollbar inside the search panel was drawn black on a white
+ * panel because of it. The panel reads this instead.
+ */
+:root {
+  --page-color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page-color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --page-color-scheme: dark;
+}
+
 /* The two install links on the editors page. They live in markdown, so the rules are here
    rather than in a component: a page of content cannot carry a scoped stylesheet. */
 .marketplaces {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  /* One per row. Two columns and an id thirty-three characters long do not fit together: the
+     id broke mid-word, and shortening it would have been hiding the thing a reader came for. */
+  grid-template-columns: 1fr;
+  max-inline-size: 34rem;
   gap: var(--size-3);
   margin-block: var(--size-5);
 }
@@ -50,11 +97,21 @@ body {
   outline: var(--semantic-focus-ring);
   outline-offset: 2px;
 }
+/*
+ * The marks are the publishers' own files, so they carry their own colours — and the darkest
+ * part of the JetBrains one is #293896, which vanishes against a near-black card. A logo is
+ * drawn for a surface that contrasts with it, so it gets one: a white plate, the same for both,
+ * which is invisible on the light theme's card and a canvas on the dark one.
+ */
 .marketplace__mark {
   grid-row: span 2;
   align-self: center;
   inline-size: var(--size-7);
   block-size: var(--size-7);
+  padding: var(--size-1);
+  border-radius: var(--size-1);
+  background: #fff;
+  box-sizing: content-box;
 }
 .marketplace__where {
   font-weight: var(--font-weight-semibold);

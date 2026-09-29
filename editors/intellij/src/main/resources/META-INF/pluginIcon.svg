@@ -10,6 +10,16 @@
     </linearGradient>
   </defs>
   <rect width="256" height="256" rx="44" fill="url(#bg)"/>
+  <!--
+    The mark, scaled to the tile it sits in.
+
+    Drawn at the size below, the crown was 128 of 256 pixels wide — half the icon — and the
+    whole mark sat low, with more air above it than below. At the size a marketplace shows a
+    listing, that reads as a small badge in a large dark square. This scales the mark about its
+    own centre and lifts it five pixels so the centre of the drawing is the centre of the tile:
+    about 83% of the width, leaving the margin a rounded icon wants and no more.
+  -->
+  <g transform="translate(128,128) scale(1.12) translate(-128,-133)">
   <!-- the crown: three iron spikes -->
   <path d="M64 92 L84 52 L104 84 L128 40 L152 84 L172 52 L192 92 Z" fill="#d7ba7d" opacity="0.95"/>
   <rect x="64" y="92" width="128" height="14" rx="3" fill="#d7ba7d"/>
@@ -18,5 +28,6 @@
     <path d="M40 140 C 80 120, 112 160, 152 140 S 216 120, 216 140"/>
     <path d="M40 176 C 80 156, 112 196, 152 176 S 216 156, 216 176"/>
     <path d="M40 212 C 80 192, 112 232, 152 212 S 216 192, 216 212"/>
+  </g>
   </g>
 </svg>
