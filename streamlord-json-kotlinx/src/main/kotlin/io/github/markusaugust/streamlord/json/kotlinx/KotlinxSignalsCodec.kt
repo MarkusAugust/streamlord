@@ -69,15 +69,10 @@ public class KotlinxSignalsCodec(
     /*
      * The one given for this type, or the one kotlinx.serialization finds by reading the class.
      *
-     * The reflective lookup is the convenient default and the reason this module exists: a KType
-     * arrives from the call site and kotlinx answers it with getDeclaredField("Companion") and
-     * serializer() on the result, with kotlin-reflect reading the Kotlin metadata on the way.
-     *
-     * None of that is in the bytecode, so a GraalVM native image drops it and the call fails at
-     * runtime with "Unresolved class: class Signals (kind = CLASS)", an application that starts
-     * and then cannot read a single signal. A serializer named here is the plugin-generated one,
-     * resolved at compile time and plainly visible to the image, which is what makes this module
-     * usable in a native image without hand-written reflection metadata.
+     * The reflective lookup answers a KType with getDeclaredField("Companion") and serializer(),
+     * none of which is in the bytecode, so a GraalVM native image drops it and the call fails at
+     * runtime with "Unresolved class". A serializer named here is the plugin-generated one,
+     * resolved at compile time and visible to the image.
      *
      * Map lookup and nothing more: KType equality compares the classifier and the arguments, and
      * reads no metadata to do it.
@@ -128,13 +123,10 @@ public class KotlinxSignalsCodec(
         serializers[type]?.let { return it as KSerializer<Any?> }
 
         /*
-         * The point of strict mode.
-         *
-         * An application that names its serializers for a native image has one list to keep in
-         * step with its routes, and nothing notices when a type is added to the second and not
-         * the first. The JVM resolves it reflectively and says nothing, and the image fails on
-         * the first request that carries it. This is that silence, broken, where a test can hear
-         * it: this project's own service shipped exactly that bug, twice, before this existed.
+         * The point of strict mode. An application that names its serializers has one list to
+         * keep in step with its routes, and nothing notices a type added to the second and not
+         * the first: the JVM resolves it reflectively in silence, and the image fails on the
+         * first request that carries it. Here that silence breaks where a test can hear it.
          */
         if (strict && needsNaming(type)) {
             throw SignalsCodecException(

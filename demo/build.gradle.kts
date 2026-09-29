@@ -30,18 +30,15 @@ application {
 }
 
 /*
- * The service as a native image: ~60 MB and a hundred millisecond start against ~300 MB and
- * several seconds on the JVM, which is what makes Railway's sleep usable and the bill under a
- * dollar. The JVM image came first on purpose, proving the deploy chain and proving a native
- * image at the same time is how you end up debugging both at once.
+ * The service as a native image: 60 MB and a hundred millisecond start against 300 MB and
+ * several seconds on the JVM, which is what makes Railway's sleep usable.
  *
- * src/main/resources/META-INF/native-image/resource-config.json names index.json, because
- * nothing in the bytecode mentions that file (it is read by name at startup) and the image
- * would otherwise ship without it, start cleanly and find nothing.
+ * Built in CI only: the compile wants 6 to 8 GB and several minutes, and no GraalVM is installed
+ * here. The smoke test that follows the deploy is what makes that acceptable, because a binary
+ * that starts and cannot serve fails the job before it reaches the site.
  *
- * Built in CI: the compile wants 6 to 8 GB and several minutes, and no GraalVM is installed here.
- * The smoke test that follows the deploy is what makes that acceptable. A binary that starts
- * and cannot serve fails the job before it reaches the site.
+ * META-INF/native-image/resource-config.json names index.json, which is read by name and so
+ * appears nowhere in the bytecode.
  */
 graalvmNative {
     binaries {
@@ -54,28 +51,21 @@ graalvmNative {
             fallback.set(false)
             verbose.set(true)
 
-            /*
-             * An executable, said out loud. Without it the plugin passed --shared and the
-             * compile happily produced streamlord-live.so, a shared library with a C header
-             * beside it; the failure surfaced two steps later as a Dockerfile unable to find
-             * a file that had never been written. Ktor's sample does not set this because it
-             * applies io.ktor.plugin, which does.
-             */
+            // An executable, said out loud: the plugin otherwise passes --shared and produces
+            // a .so with a C header beside it. Ktor's sample omits this because io.ktor.plugin
+            // sets it.
             sharedLibrary.set(false)
 
             /*
-             * Copied from Ktor's own GraalVM sample rather than assembled by guesswork:
-             * github.com/ktorio/ktor-samples/tree/main/graalvm, on the same Kotlin 2.4.20
-             * and Ktor 3.6.0 as this module.
+             * Ktor's own GraalVM sample, taken whole and not narrowed flag by flag:
+             * github.com/ktorio/ktor-samples/tree/main/graalvm, on the same Kotlin 2.4.20 and
+             * Ktor 3.6.0 as this module. Initializing the whole `kotlin` package at build time
+             * is the documented position there, not a blunt instrument to be refined.
              *
-             * Three attempts here were spent adding one flag at a time on a theory about
-             * what the error meant, and each theory was wrong. The list below is the
-             * ecosystem's answer, and it contradicts what I kept reaching for: initializing
-             * the whole `kotlin` package at build time is the documented position, not a
-             * blunt instrument to be narrowed.
+             * ch.qos.logback is in the sample and not here, because this service has no logging
+             * backend. Add it with the dependency, not before.
              *
-             * ch.qos.logback is in the sample and not here, because this service has no
-             * logging backend. Add it with the dependency, not before.
+             * checkDocBuildArgs, below, holds the native-image page to this list.
              */
             buildArgs.addAll(
                 "--initialize-at-build-time=io.ktor,kotlin",
@@ -98,25 +88,17 @@ graalvmNative {
 
             /*
              * Mostly static, on Linux: every library the image needs is linked in, zlib and the
-             * JDK's own static libraries with it, and only glibc is left to the container. That
-             * is the documented option for a distroless base image, which carries glibc and
-             * nothing else.
+             * JDK's static libraries with it, and only glibc is left to the container. That is
+             * the documented option for a distroless base image, which carries glibc and nothing
+             * else. Without it the binary links zlib dynamically and the container exits at
+             * startup with "libz.so.1: cannot open shared object file", which no build step sees.
              *
-             * Without it the binary links zlib dynamically and the deployment died where no
-             * build step could see it: the image built, pushed and deployed green, and the
-             * container exited with "libz.so.1: cannot open shared object file". The missing
-             * piece only existed at the moment the process started.
-             *
-             * The flag is version-specific and the documentation is not, which cost a build:
-             * graalvm.org/latest names --static-nolibc, and GraalVM for JDK 21, which is what CI
-             * installs and what the plugin here is pinned for, has no such option and says so
-             * by name. It is -H:+StaticExecutableWithDynamicLibC there, per
-             * graalvm.org/jdk21/reference-manual/native-image/guides/build-static-executables,
-             * and the option is defined under that name in the jdk-21.0.2 sources. Read the
+             * The flag name is version-specific. GraalVM for JDK 21, which CI installs and which
+             * the plugin here is pinned for, calls it -H:+StaticExecutableWithDynamicLibC;
+             * graalvm.org/latest names --static-nolibc, which JDK 21 rejects by name. Read the
              * guide for the version in the toolchain, not the one at /latest.
              *
-             * Linux only: this is a property of ELF linking and native-image rejects it on
-             * macOS, where the image is compiled by hand to see that the service runs at all.
+             * Linux only: native-image rejects it on macOS.
              */
             if (System.getProperty("os.name").startsWith("Linux")) {
                 buildArgs.add("-H:+StaticExecutableWithDynamicLibC")
