@@ -21,3 +21,46 @@ body {
 :root {
   --semantic-focus-ring: 2px solid var(--palette-interactive-50);
 }
+
+/* The two install links on the editors page. They live in markdown, so the rules are here
+   rather than in a component: a page of content cannot carry a scoped stylesheet. */
+.marketplaces {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: var(--size-3);
+  margin-block: var(--size-5);
+}
+.marketplace {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  /* Top-aligned, so the two titles sit on one line even when an id wraps and one card
+     grows taller than the other. The mark stays centred against the text beside it. */
+  align-items: start;
+  gap: 0 var(--size-3);
+  padding: var(--size-3) var(--size-4);
+  border: 1px solid var(--semantic-divider-30);
+  border-radius: var(--size-1);
+  color: var(--semantic-page-foreground);
+  text-decoration: none;
+}
+.marketplace:hover {
+  border-color: var(--palette-interactive-50);
+}
+.marketplace:focus-visible {
+  outline: var(--semantic-focus-ring);
+  outline-offset: 2px;
+}
+.marketplace__mark {
+  grid-row: span 2;
+  align-self: center;
+  inline-size: var(--size-7);
+  block-size: var(--size-7);
+}
+.marketplace__where {
+  font-weight: var(--font-weight-semibold);
+}
+.marketplace__id {
+  font-size: var(--font-size-xs);
+  color: var(--semantic-muted-foreground);
+  word-break: break-all;
+}
