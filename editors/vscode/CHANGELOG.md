@@ -2,6 +2,12 @@
 
 All notable changes to the Streamlord extension are recorded here.
 
+## 0.3.3
+
+- The icon fills its tile. The mark was drawn at half the width of the square and sat low in it,
+  which on a marketplace listing reads as a small badge in a large dark square. Same drawing,
+  scaled about its own centre and centred in the tile.
+
 ## 0.3.2
 
 - A hyphen after a signal is read by Datastar 1.0.4 as part of the name: `$foo-bar` is
