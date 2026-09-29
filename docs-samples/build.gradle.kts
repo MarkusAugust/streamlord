@@ -8,13 +8,13 @@ description =
 
 dependencies {
     implementation(project(":streamlord-core"))
+    implementation(project(":streamlord-analysis"))
     implementation(project(":streamlord-html"))
     implementation(project(":streamlord-html-pro"))
     implementation(project(":streamlord-ktor"))
     implementation(project(":streamlord-spring"))
     implementation(project(":streamlord-json-kotlinx"))
     implementation(project(":streamlord-json-jackson"))
-    implementation(project(":streamlord-analysis"))
 
     // The testing page shows tests, so its samples need what a test needs. They compile here
     // as ordinary main sources, which is enough to catch a renamed assertion or a changed
@@ -76,6 +76,11 @@ abstract class ExtractDocSamples : DefaultTask() {
         import io.github.markusaugust.streamlord.core.port.driven.*
         import io.github.markusaugust.streamlord.core.port.driving.*
         import io.github.markusaugust.streamlord.html.*
+        import io.github.markusaugust.streamlord.html.pro.*
+        // Named rather than starred: the analysis module declares a Tag, an Attribute and a
+        // Modifier of its own, and a star import of it would make those ambiguous against
+        // kotlinx.html in every sample that builds markup.
+        import io.github.markusaugust.streamlord.analysis.Analyzer
         import io.github.markusaugust.streamlord.ktor.*
         import io.github.markusaugust.streamlord.spring.*
         import io.github.markusaugust.streamlord.json.kotlinx.*
@@ -255,6 +260,14 @@ tasks.register("checkDocSamples") {
     description = "Checks everything the documentation asserts: examples, coordinates, transcripts, trees."
     group = "verification"
     dependsOn(tasks.named("compileKotlin"))
+
+    /*
+     * The one documentation check that cannot live here. The native-image page prints the build
+     * arguments of :demo, and those are resolved from a Gradle extension that exists only in that
+     * project. It is named here anyway, so that the task whose description says "everything the
+     * documentation asserts" is not quietly missing one.
+     */
+    dependsOn(":demo:checkDocBuildArgs")
 }
 
 tasks.named("check") { dependsOn(tasks.named("checkDocSamples")) }

@@ -12,7 +12,7 @@ A separate artifact, so that using it is an explicit choice rather than somethin
 with a transitive dependency. It contains nothing but kotlinx.html helpers that write the
 publicly documented Pro attribute names and action strings.
 
-```kotlin sample=none
+```kotlin sample=html
 div {
     dataPersist("draft", SignalFilter.include("^form"), session = true)
     dataQueryString(history = true)
@@ -48,5 +48,5 @@ It brings nothing beyond `streamlord-html`.
 ## If you do not hold a licence
 
 Then you do not need this module, and nothing else in Streamlord changes. The free Datastar
-bundle is what the other seven modules speak, and every page on this site other than this one
+bundle is what the other eight modules speak, and every page on this site other than this one
 applies to it.

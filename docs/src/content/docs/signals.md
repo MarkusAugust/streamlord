@@ -28,11 +28,12 @@ get("/page") {
 }
 ```
 
-`Signals` has `string`, `int`, `long`, `double`, `boolean`, `obj` for a nested object, and `path`
-for reaching through several levels. Every accessor returns null rather than throwing, because a
-signal the browser never set is a normal thing and not an error.
+`Signals` has `string`, `int`, `long`, `double`, `decimal` for an exact `BigDecimal`, `boolean`,
+`obj` for a nested object, `array` for a nested list, `has` to ask whether a key is there at all,
+and `path` for reaching through several levels. Every accessor returns null rather than throwing,
+because a signal the browser never set is a normal thing and not an error.
 
-This is the whole API, and for many endpoints it is enough. Reading two fields out of a request
+That is the whole of it, and for many endpoints it is enough. Reading two fields out of a request
 does not need a class.
 
 ## With a codec
