@@ -207,8 +207,8 @@ abstract class ExtractDocSamples : DefaultTask() {
 
         /*
          * The dispatcher, written rather than reflected over: the task already knows every
-         * transcript's name, and a generated `main` that names them is easier to debug than
-         * a scan of the classpath.
+         * transcript's name, and a generated `main` naming them is easier to debug than a
+         * classpath scan.
          */
         val entries = transcripts.joinToString(",\n") { (name, fn) -> "        \"$name\" to ::$fn" }
         out.resolve("WireTranscripts.kt").writeText(
@@ -249,12 +249,11 @@ val generateDocSamples =
 kotlin.sourceSets.named("main") { kotlin.srcDir(generateDocSamples.map { it.target }) }
 
 /*
- * A name to run on its own, and a name that reads clearly in a CI log.
+ * One name to run, and one that reads clearly in a CI log.
  *
  * `check` has to be told about it. `build` reaches `compileKotlin` through `assemble`, so the
- * examples were compiled either way, but the dependency trees, the transcripts and the
- * coordinates hang off this task, and nothing asked for it. They went unchecked in CI until
- * a --dry-run showed which tasks `build` actually runs.
+ * examples compile either way, but the dependency trees, the transcripts and the coordinates
+ * hang off this task and nothing else asks for it.
  */
 tasks.register("checkDocSamples") {
     description = "Checks everything the documentation asserts: examples, coordinates, transcripts, trees."
@@ -274,9 +273,9 @@ tasks.named("check") { dependsOn(tasks.named("checkDocSamples")) }
 
 
 /*
- * The dependency trees the install page prints are resolved facts, and a fact in
- * markdown rots the moment someone bumps a version in libs.versions.toml. This
- * resolves each module the way a consumer would and fails when the page disagrees.
+ * The dependency trees the install page prints are resolved facts, and a fact in markdown rots
+ * the moment someone bumps a version in libs.versions.toml. This resolves each module the way a
+ * consumer would and fails when the page disagrees.
  *
  * A block opts in by naming its module:
  *
@@ -415,14 +414,10 @@ val generateWireTranscripts =
 /**
  * Writes the encoder's bytes straight into the `wire=` fences of the pages.
  *
- * The first design left them in a generated folder and injected them with a remark plugin.
- * A negative test killed it: Astro caches a rendered markdown file, so removing the
- * transcript left the build green and, worse, a changed encoder would not have reached the
- * page until somebody happened to edit the prose. Silent staleness is exactly what this
- * whole task exists to prevent.
- *
- * In the markdown the bytes are therefore real text: `git diff` shows a protocol change,
- * a reviewer can see it, and Astro invalidates its cache because the file changed.
+ * Into the markdown itself, not a generated folder injected at render time: Astro caches a
+ * rendered markdown file, so a changed encoder would not reach the page until somebody edited
+ * the prose. As real text, `git diff` shows a protocol change and Astro invalidates its cache
+ * because the file changed.
  */
 abstract class ApplyWireTranscripts : DefaultTask() {
     @get:InputDirectory
@@ -508,21 +503,16 @@ tasks.named("checkDocSamples") { dependsOn(applyWireTranscripts) }
 
 
 /*
- * Writes the project's version into every coordinate the documentation prints.
+ * Writes the project's version into every coordinate the documentation prints, so that a version
+ * bump cannot leave the pages naming a superseded release.
  *
- * Fourteen of them were typed by hand and nothing tied them to gradle.properties, so a
- * version bump that forgot the pages would have left the site telling readers to depend on
- * a release that had been superseded, the same shape of rot the dependency trees had, and
- * the same answer: make the build do it rather than ask a person to remember.
+ * Both spellings are covered, the Gradle coordinate and the Maven element, because the install
+ * page carries a tab for each.
  *
- * Both spellings are covered, the Gradle coordinate and the Maven element, because the
- * install page carries a tab for each.
- *
- * It does not close the window between bumping the version and the tag finishing its
- * publish, during which the pages name a release Maven Central has not seen yet. Closing
- * that would mean tracking the last successful publish separately, which is more machinery
- * than the minutes are worth; bumping and tagging in one push, as the README already
- * prescribes, keeps it short.
+ * It does not close the window between bumping the version and the tag finishing its publish,
+ * during which the pages name a release Maven Central has not seen yet. Closing that would mean
+ * tracking the last successful publish separately; bumping and tagging in one push, as the
+ * README prescribes, keeps the window short instead.
  */
 abstract class ApplyProjectVersion : DefaultTask() {
     @get:Input
