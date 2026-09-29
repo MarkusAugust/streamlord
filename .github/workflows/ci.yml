@@ -572,6 +572,10 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v') && !startsWith(github.ref, 'refs/tags/vscode-v')
     needs: [sdk]
     runs-on: ubuntu-latest
+    # On this job alone, because it is the only one that writes anything to the repository:
+    # the release it announces at the end. The other seven keep the read-only default.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v7
 
@@ -588,6 +592,37 @@ jobs:
           version="$(grep '^version=' gradle.properties | cut -d= -f2)"
           if [ "$tag" != "$version" ]; then echo "tag $tag != gradle.properties $version"; exit 1; fi
 
+      # Before publishing, because a version on Maven Central cannot be changed and a missing
+      # changelog section almost always means the release was not prepared. Failing here costs
+      # a tag; failing after the upload costs a version number.
+      - name: Take the release notes from the changelog
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+
+          # The section for this version, from its heading to the next one, with the blank
+          # lines at either end trimmed off.
+          awk -v v="$version" '
+            $0 ~ "^## \\[" v "\\]" { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md \
+            | awk 'NF { seen = 1 } seen { print }' \
+            | awk '{ lines[NR] = $0 }
+                   END { last = NR
+                         while (last > 0 && lines[last] == "") last--
+                         for (i = 1; i <= last; i++) print lines[i] }' \
+            > "$RUNNER_TEMP/notes.md"
+
+          if [ ! -s "$RUNNER_TEMP/notes.md" ]; then
+            echo "::error::CHANGELOG.md has no section for $version. Write it before tagging: the"
+            echo "::error::release notes are that text, and nothing is published without them."
+            exit 1
+          fi
+
+          echo "Release notes for $version, $(wc -l < "$RUNNER_TEMP/notes.md" | tr -d ' ') lines:"
+          sed 's/^/  /' "$RUNNER_TEMP/notes.md"
+
       - name: Publish all modules, signed, with automatic release
         run: ./gradlew publishToMavenCentral --no-daemon --no-configuration-cache
         env:
@@ -595,6 +630,33 @@ jobs:
           ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_PASSWORD }}
+
+      # Last, and only if the upload was accepted: a release page that points at something
+      # nobody can download is worse than no release page.
+      #
+      # No jars attached. Maven Central is where this is distributed from, and a second copy
+      # on GitHub is a second thing to keep in step. A version with a hyphen in it — 0.4.0-rc1
+      # — is marked a pre-release so a candidate never takes the "latest" label.
+      #
+      # This is the step that was missing: 0.1.1, 0.2.0 and 0.3.0 were tagged, published, and
+      # never announced, and the repository showed 0.1.0 as the latest release for four days.
+      - name: Announce the release on GitHub
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+
+          case "$version" in
+            *-*) kind="--prerelease" ;;
+            *)   kind="--latest" ;;
+          esac
+
+          gh release create "$GITHUB_REF_NAME" \
+            --title "Streamlord $version" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
+            --verify-tag \
+            $kind
 
   verify-signing:
     name: Verify signing secrets (manual)
