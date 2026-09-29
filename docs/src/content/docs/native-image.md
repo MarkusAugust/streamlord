@@ -12,7 +12,7 @@ service is built exactly this way, with no hand-written reflection metadata at a
 
 ## 1. The build file
 
-```kotlin sample=none
+```kotlin buildargs=demo sample=none
 // build.gradle.kts
 plugins {
     id("org.graalvm.buildtools.native") version "0.11.5"
@@ -33,6 +33,13 @@ graalvmNative {
                 "--initialize-at-build-time=org.slf4j.LoggerFactory",
                 "--initialize-at-build-time=org.slf4j.helpers.Reporter",
                 "--initialize-at-build-time=kotlinx.io",
+                "--initialize-at-build-time=kotlinx.serialization.json.Json",
+                "--initialize-at-build-time=kotlinx.serialization.json.JsonImpl",
+                "--initialize-at-build-time=kotlinx.serialization.json.ClassDiscriminatorMode",
+                "--initialize-at-build-time=kotlinx.serialization.modules.SerializersModuleKt",
+                "-H:+InstallExitHandlers",
+                "-H:+ReportUnsupportedElementsAtRuntime",
+                "-H:+ReportExceptionStackTraces",
             )
         }
     }
@@ -44,10 +51,17 @@ image with none of the startup you are doing this for. `sharedLibrary.set(false)
 plugin otherwise passes `--shared` and hands you a `.so` with a C header beside it. Apply
 `io.ktor.plugin` and it sets this for you.
 
-The `--initialize-at-build-time` list is Ktor's, from
-[ktor-samples/graalvm](https://github.com/ktorio/ktor-samples/tree/main/graalvm). Take it whole
-rather than adding entries one at a time against a theory of what an error means. Add
-`ch.qos.logback` with the logging backend if you use one.
+The list of build arguments is Ktor's, from
+[ktor-samples/graalvm](https://github.com/ktorio/ktor-samples/tree/main/graalvm), and this is it
+whole. It is also, in this order, every build argument the service behind this site uses, bar the
+container flag that step 4 adds on Linux. Take it whole rather than adding entries one at a time
+against a theory of what an error means: three attempts here were spent doing that, and each
+theory was wrong.
+
+Two deliberate differences from the sample. Add `ch.qos.logback` back with the logging backend if
+you use one. And where the sample names `kotlinx.io.bytestring.ByteString` and
+`kotlinx.io.SegmentPool`, this names the `kotlinx.io` package, which covers those two and the
+further classes Ktor reaches through the filesystem.
 
 ## 2. Name your serializers
 

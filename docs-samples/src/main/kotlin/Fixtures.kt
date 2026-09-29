@@ -36,3 +36,7 @@ object pebble {
     fun render(template: String, values: Map<String, Any>): String =
         "<li>$template ${values.size}</li>"
 }
+
+/** A markup string and a Kotlin file, for the page that shows the analysis being called directly. */
+val html: String = """<div id="a" data-text="${'$'}count"></div>"""
+val source: String = """fun row() = div { dataText(signal("count")) }"""

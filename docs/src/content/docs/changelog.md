@@ -29,9 +29,9 @@ with spaces. See [Casing](/casing/).
 
 **`streamlord-analysis`.** The analysis behind the editor tooling, extracted into a Kotlin module
 that depends on nothing beyond `streamlord-core`. `Analyzer().analyzeKotlin(source)` and
-`analyzeHtml(source)` return every issue with its offset, severity, message and quick fixes, and
-you can call it yourself, which is worth doing in the tests of your markup functions. See
-[The editors](/editors/).
+`analyzeHtml(source)` return the issues they find, each with its range, severity, message and
+quick fixes. You can call it yourself, which is worth doing in the tests of your markup
+functions. See [The editors](/editors/).
 
 **The IntelliJ plugin**, for IDEA 2026.1 and newer, Community and Ultimate. Inspections,
 completion, hover, highlighting, HTML injection into marker-less strings, and the Stream

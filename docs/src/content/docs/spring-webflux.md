@@ -15,8 +15,9 @@ fun counter(): kotlinx.coroutines.flow.Flow<org.springframework.http.codec.Serve
         .asServerSentEvents()
 ```
 
-That is the entire API surface for WebFlux: `asServerSentEvents()` on a `Flow<DatastarEvent>`.
-Everything before it is your flow, and everything after it is Spring's.
+That is the entire API surface for WebFlux: `asServerSentEvents()` on a `Flow<DatastarEvent>`,
+and `toServerSentEvent()` on a single `DatastarEvent` for the times you are not holding a flow.
+Everything before them is your flow, and everything after is Spring's.
 
 ## The guard
 

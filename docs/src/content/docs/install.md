@@ -213,7 +213,7 @@ in: the library is yours, and we would rather use it than ship a second copy of 
 **Taking no codec adds nothing at all.** The built-in reader is part of `streamlord-core` and has
 its own RFC 8259 parser and writer, and `signals.string("query")` needs no library.
 
-## All eight, for reference
+## All nine, for reference
 
 The first law is that Streamlord brings nothing you do not already carry. This column is where
 you check that.
@@ -228,6 +228,7 @@ you check that.
 | `streamlord-json-jackson` | `jackson-databind` 3 |
 | `streamlord-json-jackson2` | `jackson-databind` 2 |
 | `streamlord-html-pro` | nothing beyond `streamlord-html` |
+| `streamlord-analysis` | nothing beyond `streamlord-core` |
 
 **The Soul** is `streamlord-core`: the protocol, the events, the encoder, a strict JSON engine and
 the ports. It has no JSON library because it has its own RFC 8259 parser and writer.
@@ -241,6 +242,11 @@ wire are identical.
 
 `streamlord-html-pro` is a separate, opt-in artifact for [Datastar Pro](/datastar-pro/). It
 contains no Pro code and is inert without the bundle you licensed.
+
+`streamlord-analysis` is the analysis behind the editor tooling: the Kotlin string reader, the
+expression and markup rules, the signal and selector collectors. The editors are its first
+consumers, and you never need it to write a stream. Take it when you want to run the same checks
+yourself, for example over your own markup functions in a test. See [The editors](/editors/).
 
 ## What you still have to bring
 

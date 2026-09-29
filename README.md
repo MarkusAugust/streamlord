@@ -49,7 +49,7 @@ dependencies {
 }
 ```
 
-There are eight modules and you will never want all of them.
+There are nine modules and you will never want all of them.
 [Install and modules](https://streamlord-docs.netlify.app/install/) explains which and why.
 
 ## The editors
@@ -63,7 +63,7 @@ only, and a Stream Inspector. See [The editors](https://streamlord-docs.netlify.
 
 | Path | What it is |
 |---|---|
-| `streamlord-*` | the eight published modules |
+| `streamlord-*` | the nine published modules |
 | `editors/vscode`, `editors/intellij` | the two editor extensions |
 | `catalog/` | `datastar-1.0.4.json`, the shared source of truth for both editors |
 | `docs/` | this project's documentation site (Astro, Fristil, Datastar) |

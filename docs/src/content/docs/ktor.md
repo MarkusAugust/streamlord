@@ -7,8 +7,12 @@ description: "respondDatastar, readSignals, and the plugin that wires them toget
 >
 > Gorvek of Bonereach
 
-Ktor is the Sword. The adapter adds three extension functions to `ApplicationCall` and a plugin,
-and brings no Ktor version of its own. Ktor is `compileOnly`, so you stay on whatever you had.
+Ktor is the Sword. The adapter is one plugin and a set of extension functions on
+`ApplicationCall`: four that answer (`respondDatastar`, `respondElements`, `respondSignals`,
+`respondScript`), four that read (`readSignals`, `readSignalsOr`, `readSignalsJson`,
+`asIncomingRequest`), several of them with overloads, and the `streamlord` and
+`isDatastarRequest` properties. It brings no Ktor version of its own. Ktor is `compileOnly`, so
+you stay on whatever you had.
 
 ## The plugin
 
@@ -89,9 +93,10 @@ get("/page") {
 }
 ```
 
-`Signals` is dependency-free: `string`, `int`, `long`, `double`, `boolean`, `obj` and `path` for
-reaching into nested objects. With a codec configured, `call.readSignals<T>()` gives you a data
-class instead, and `call.readSignalsOr(default)` gives you one without the null check.
+`Signals` is dependency-free: `string`, `int`, `long`, `double`, `decimal`, `boolean`, `obj`,
+`array`, `has`, and `path` for reaching into nested objects. With a codec configured,
+`call.readSignals<T>()` gives you a data class instead, and `call.readSignalsOr(default)` gives
+you one without the null check.
 
 ## What this page does not cover
 
