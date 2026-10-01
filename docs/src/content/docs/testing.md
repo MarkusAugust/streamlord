@@ -149,6 +149,43 @@ dependencies {
 }
 ```
 
+## Signals the pages never declare
+
+A handler reads signals into a type. The pages declare them in markup. Nothing holds the two
+together, so a rename that reaches one and not the other compiles, deploys, and hands the handler
+a default on every request without a word.
+
+`signalDrift` compares them. It wants the whole project, because the page that declares a signal
+is almost never the file that reads it:
+
+```kotlin sample=test
+@Test
+fun `every signal a handler reads is declared by a page`() {
+    val facts = buildMap {
+        java.io.File("src/main/kotlin").walkTopDown().filter { it.extension == "kt" }.forEach {
+            put(it.path, collectSignalFacts(it.readText(), SourceLanguage.KOTLIN))
+        }
+        java.io.File("src/main/resources/templates").walkTopDown().filter { it.extension == "html" }.forEach {
+            put(it.path, collectSignalFacts(it.readText(), SourceLanguage.HTML))
+        }
+    }
+
+    assertEquals(emptyMap(), signalDrift(facts))
+}
+```
+
+Give it every file that declares markup, whatever the markup is written in: Kotlin strings, the
+DSL, a template, an Astro page. A file it never sees is a file whose declarations cannot count,
+and a missing declaration is what the check reports.
+
+It reports one direction only. A signal the pages declare and nobody reads is harmless by
+construction, since it sits in the browser's store and comes back untouched. A signal a handler
+reads that nothing declares is always a mistake, and that is the `signal-never-declared` warning,
+pointing at the property or the lookup that will never see a value.
+
+Only classes something actually reads signals into are examined, so the rest of your
+`@Serializable` classes are left alone.
+
 ## The guard, at runtime
 
 `streamlord-analysis` reads source text. `ElementsGuard` reads the HTML an event is actually

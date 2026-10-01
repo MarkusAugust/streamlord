@@ -1,6 +1,6 @@
 ---
 title: "Roadmap"
-description: "Three pieces of security work that are planned but not shipped, in the order they will land, and what to write in your own code until each one does."
+description: "Two pieces of security work that are planned but not shipped, in the order they will land, and what to write in your own code until each one does."
 ---
 
 > *A promise is a debt, and I pay mine in iron.*
@@ -13,38 +13,11 @@ wait for it, and know what to write today instead. Each one will be opt-in when 
 
 | Order | Planned | What it governs | What you write today |
 |---|---|---|---|
-| 1 | [Typed signal reading](#typed-signal-reading) | what the server believes | a signal type per handler |
-| 2 | [Continuous authorisation](#continuous-authorisation) | who may still receive a stream | your own check in the stream |
-| 3 | [Concurrent stream limits](#concurrent-stream-limits) | how much one reader may hold open | your framework's rate limiting |
+| 1 | [Continuous authorisation](#continuous-authorisation) | who may still receive a stream | your own check in the stream |
+| 2 | [Concurrent stream limits](#concurrent-stream-limits) | how much one reader may hold open | your framework's rate limiting |
 
-The order is the order of the work, not a schedule. The last one lands after the others because
-it is the least Datastar-specific thing on the list.
-
-## Typed signal reading
-
-Signals are client-side state. They are visible in page source, and the browser sends them back on
-every request, after the reader has had every opportunity to edit them. A signal arriving at a
-handler is a request body from a stranger, not an argument.
-
-This is not a departure from Datastar practice, it is Datastar practice: the server holds the
-truth. What trips people up is ergonomics. Signals arrive neatly deserialised, so they feel
-trustworthy, and unlike a JSON API nobody sat down and decided what the request contains. Signals
-accumulate: one for a toggle, one for a filter, and they all travel back together.
-
-Planned: not a new way to read, but a way to see the drift. The markup walker already knows every
-signal a page declares, so `streamlord-analysis` can compare that set against the signals a handler
-actually reads and warn when they part company. Alongside it, a strict mode that fails on an
-unknown signal instead of ignoring it, which is useful in a test and probably too brittle in
-production.
-
-### Until then
-
-Declare a type per handler and read into it. This already narrows the input surface the way the
-proposal describes, because the codec ignores unknown keys: a page may carry fifteen signals while
-the handler that reads two sees two. The calls are on [Signals and codecs](/signals/).
-
-An unread signal is harmless by construction. The danger is only ever a signal that is read and
-then trusted, so the type is the place where you decide what this handler accepts.
+The order is the order of the work, not a schedule. The second lands after the first because it
+is the least Datastar-specific thing on the list, and because the two share their plumbing.
 
 ## Continuous authorisation
 
@@ -134,6 +107,6 @@ Three defences stay where they are, and no release will move them:
 
 ## Open questions
 
-Nothing on the three above is undecided enough to change their shape. If you have an opinion on
+Nothing on the two above is undecided enough to change their shape. If you have an opinion on
 any of them, the [issue tracker](https://github.com/MarkusAugust/streamlord/issues) is the place
 for it.

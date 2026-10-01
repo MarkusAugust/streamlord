@@ -26,7 +26,12 @@ private val OBJECT_KEY = Regex("""(?:^|[{,])\s*([A-Za-z_][A-Za-z0-9_]*)\s*:""")
 /** A bare `$name` is a signal in markup; in Kotlin it is a template, so it stays out of the Kotlin list. */
 private val BARE_SIGNAL = Regex("""\$([A-Za-z_][A-Za-z0-9_.]*)""")
 
-private val SERIALIZABLE_CLASS = Regex("""@Serializable\s*(?:\([^)]*\))?\s*(?:data\s+)?class\s+\w+\s*\(([^)]*)\)""")
+// Any modifier may stand between the annotation and `class`: an explicit-API module writes
+// `@Serializable public data class`, and a pattern that only allowed `data` saw none of those.
+private val SERIALIZABLE_CLASS =
+    Regex(
+        """@Serializable\s*(?:\([^)]*\))?\s*(?:(?:public|internal|private|protected|open|final|abstract|sealed|value|inline|data)\s+)*class\s+\w+\s*\(([^)]*)\)""",
+    )
 private val PROPERTY = Regex("""\b(?:val|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:""")
 
 private val PAIR_CALLS = setOf("dataSignals", "patchSignals", "removeSignals", "respondSignals", "datastarSignals")
@@ -34,6 +39,26 @@ private val PAIR = Regex(""""([A-Za-z_][A-Za-z0-9_.]*)"\s+to\b""")
 private val NAME = Regex("""^"([A-Za-z_][A-Za-z0-9_.]*)"$""")
 
 public fun collectSignals(
+    src: String,
+    language: SourceLanguage,
+): Set<String> {
+    val out = LinkedHashSet(collectDeclaredSignals(src, language))
+    if (language == SourceLanguage.KOTLIN) {
+        for (m in SERIALIZABLE_CLASS.findAll(src)) for (p in PROPERTY.findAll(m.groupValues[1])) out += p.groupValues[1]
+    }
+    out.removeAll { PLACEHOLDER in it }
+    return out
+}
+
+/**
+ * The signals this source puts on a page: the markup attributes that declare them, and the DSL
+ * calls that write them.
+ *
+ * A property of a `@Serializable` class is left out, which is what separates this from
+ * [collectSignals]: a signals class names what a handler reads, and a handler reading a name is
+ * not a page declaring it. The drift check in [signalDrift] turns on exactly that difference.
+ */
+public fun collectDeclaredSignals(
     src: String,
     language: SourceLanguage,
 ): Set<String> {
@@ -60,9 +85,6 @@ public fun collectSignals(
     for (m in OBJECT_ATTRIBUTE.findAll(src)) for (key in OBJECT_KEY.findAll(m.groupValues[1])) out += key.groupValues[1]
     if (language == SourceLanguage.HTML) {
         for (m in BARE_SIGNAL.findAll(src)) out += toCamel(m.groupValues[1])
-    }
-    if (language == SourceLanguage.KOTLIN) {
-        for (m in SERIALIZABLE_CLASS.findAll(src)) for (p in PROPERTY.findAll(m.groupValues[1])) out += p.groupValues[1]
     }
     // The placeholder the analysis writes for a Kotlin template is never a signal, whatever file it turns up in.
     out.removeAll { PLACEHOLDER in it }

@@ -22,6 +22,7 @@ dependencies {
 
     testImplementation(kotlin("test"))
     testImplementation(libs.ktor.server.test.host)
+    testImplementation(project(":streamlord-analysis"))
     testImplementation(libs.kotlinx.coroutines.test)
 }
 
