@@ -9,6 +9,8 @@ with a sentence about what to do.
 
 ## Unreleased
 
+## 0.5.0
+
 **Values from outside, put into markup safely.** `interpolate("""<li>%s</li>""", name)` fills the
 holes you leave and decides what to do with each value by where it landed. Text and ordinary
 attributes are escaped; a `data-*` attribute Datastar reads, a tag or attribute name, an unquoted

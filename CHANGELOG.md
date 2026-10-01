@@ -6,6 +6,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-01
+
 ### Added
 
 - `streamlord-core`: `interpolate(format, vararg values)` writes values into markup at its `%s`
