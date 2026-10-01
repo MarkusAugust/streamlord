@@ -6,6 +6,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-01
+
 ### Added
 
 - `streamlord-core`: `CspNonce` in `core.domain` holds the half of Datastar's CSP mode that is the
