@@ -6,6 +6,25 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `streamlord-core`: `interpolate(format, vararg values)` writes values into markup at its `%s`
+  holes and decides what to do with each by where it landed, not by where it came from. Element
+  text and ordinary quoted attributes are escaped. A hole in a `data-*` attribute Datastar reads,
+  in a tag name, an attribute name, an unquoted value, or inside a `<script>` or `<style>` is
+  refused with `UnsafeInterpolationException`, because escaping cannot make those safe. A number
+  or a boolean is admitted into a Datastar attribute, so a server-rendered initial signal needs no
+  waiver, and `Trusted(html)` waives both the escaping and the refusals for a fragment you
+  rendered yourself.
+- `streamlord-core`: `Position`, the five places a value can land, which
+  `UnsafeInterpolationException` reports.
+
+### Changed
+
+- `streamlord-core`: `ElementsGuard` now walks markup through the same scanner `interpolate` uses,
+  so there is one parser rather than two. Its behaviour is unchanged; it allocates one visitor per
+  call where it previously allocated none.
+
 ## [0.4.0] - 2026-10-01
 
 ### Added

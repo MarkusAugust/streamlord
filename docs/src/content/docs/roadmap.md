@@ -1,6 +1,6 @@
 ---
 title: "Roadmap"
-description: "Four pieces of security work that are planned but not shipped, in the order they will land, and what to write in your own code until each one does."
+description: "Three pieces of security work that are planned but not shipped, in the order they will land, and what to write in your own code until each one does."
 ---
 
 > *A promise is a debt, and I pay mine in iron.*
@@ -13,39 +13,12 @@ wait for it, and know what to write today instead. Each one will be opt-in when 
 
 | Order | Planned | What it governs | What you write today |
 |---|---|---|---|
-| 1 | [The interpolation guard](#the-interpolation-guard) | what reaches a Datastar expression | the editors catch it as you type |
-| 2 | [Typed signal reading](#typed-signal-reading) | what the server believes | a signal type per handler |
-| 3 | [Continuous authorisation](#continuous-authorisation) | who may still receive a stream | your own check in the stream |
-| 4 | [Concurrent stream limits](#concurrent-stream-limits) | how much one reader may hold open | your framework's rate limiting |
+| 1 | [Typed signal reading](#typed-signal-reading) | what the server believes | a signal type per handler |
+| 2 | [Continuous authorisation](#continuous-authorisation) | who may still receive a stream | your own check in the stream |
+| 3 | [Concurrent stream limits](#concurrent-stream-limits) | how much one reader may hold open | your framework's rate limiting |
 
-The order is the order of the work, not a schedule. The first two are a pair: what reaches an
-expression, and what the server believes of what comes back. The last one lands after the others
-because it is the least Datastar-specific thing on the list.
-
-## The interpolation guard
-
-Content Security Policy does nothing about user input that flows into markup you patch over the
-wire. If that input lands inside a `data-*` attribute, the attacker is writing a Datastar
-expression rather than a script tag, and your own nonce blesses it, because your server generated
-that HTML.
-
-Planned: a render-time check of where a value landed, not of where it came from. At render time it
-is known which spans of output the template produced literally and which came from interpolation.
-An interpolated span inside a `data-*` attribute value is an error. No content heuristics to tune
-and no wrapper type to remember, just a positional fact.
-
-This is the rule [the editors](/editors/) already enforce as you type, where interpolation inside a
-`data-*` expression is an error. The work is moving it to runtime, on the markup walker in
-`ElementsGuard` and [`streamlord-analysis`](/editors/) that already knows where a data attribute
-starts and ends.
-
-### Until then
-
-The editors catch it in your own source, and `Analyzer().analyzeHtml(source)` catches it in CI
-without an editor open, which is on [Testing](/testing/). Neither sees a string that only exists at
-request time with a user's name already in it. For that there is one rule, and it is the one on
-[Security](/security/): escape in the templating layer, and wrap raw user HTML in `data-ignore` so
-Datastar skips the element and everything under it.
+The order is the order of the work, not a schedule. The last one lands after the others because
+it is the least Datastar-specific thing on the list.
 
 ## Typed signal reading
 
@@ -133,8 +106,8 @@ vanishes, since streams multiplex over one connection. So the default will be lo
 reader, and documented as low on purpose, or someone on HTTP/2 will hit it and conclude it is
 arbitrary.
 
-Whether it belongs in Streamlord at all is the open part. The interpolation guard is
-Datastar-specific, continuous authorisation is at least SSE-specific, and this is general
+Whether it belongs in Streamlord at all is the open part. Continuous authorisation is at least
+SSE-specific, and this is general
 server hygiene that Ktor and Spring both have facilities for. The narrow case for it: Streamlord
 knows which responses are streams, so it can count the right thing without wiring. That is
 convenience, not capability, which is why it is last.
@@ -151,8 +124,9 @@ want to cap is how many streams are open at once, not how many were opened this 
 
 Three defences stay where they are, and no release will move them:
 
-- **Escaping untrusted values belongs in the templating layer.** By the time Streamlord sees a
-  string, the provenance is gone.
+- **Escaping belongs wherever the interpolation happens.** Hand Streamlord the holes and that is
+  Streamlord, which is what [`interpolate`](/strings/) is for. Hand it a finished string and the
+  provenance is already gone, so the escaping was your engine's job and stays there.
 - **Raw user HTML is wrapped in `data-ignore`**, which tells Datastar to skip that element and its
   descendants. That is a decision in your markup, not a setting.
 - **Authentication, authorisation, CSRF tokens and audit logging are yours.** Nothing enters your
@@ -160,8 +134,6 @@ Three defences stay where they are, and no release will move them:
 
 ## Open questions
 
-One thing is genuinely undecided, and it changes the shape of the API: does the interpolation
-guard refuse at render time, or log and continue behind a flag?
-
-If you have an opinion, the [issue tracker](https://github.com/MarkusAugust/streamlord/issues) is
-the place for it.
+Nothing on the three above is undecided enough to change their shape. If you have an opinion on
+any of them, the [issue tracker](https://github.com/MarkusAugust/streamlord/issues) is the place
+for it.

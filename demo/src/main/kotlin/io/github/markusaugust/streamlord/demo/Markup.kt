@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.demo
 
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
+import io.github.markusaugust.streamlord.core.domain.interpolate
 import kotlinx.html.TagConsumer
 import kotlinx.html.a
 import kotlinx.html.div
@@ -32,9 +33,14 @@ public fun TagConsumer<*>.results(
     }
 
     if (hits.isEmpty()) {
-        p("fs-paragraph") {
-            attributes["data-size"] = "small"
-            +"Nothing matches “$query”."
+        /*
+         * The one place a reader's own words reach the page, so it is written as a string and
+         * filled by `interpolate` rather than by the DSL. The hole lands in element text, which
+         * escaping makes safe; a hole in a `data-*` attribute would be refused here instead of
+         * becoming a Datastar expression the server signed.
+         */
+        onTagContentUnsafe {
+            +interpolate("""<p class="fs-paragraph" data-size="small">Nothing matches “%s”.</p>""", query)
         }
         return
     }
