@@ -56,6 +56,30 @@ post("/search") {
 saves you the elvis. Defaults on the data class matter more than usual here, because the browser
 sends only the signals it has.
 
+## The type is the input surface
+
+A page carries every signal it has ever set, and the browser sends the whole store back on every
+request, after the reader has had every chance to edit it. A signal arriving at a handler is a
+request body from a stranger.
+
+The type you read into is where you decide what this handler accepts. It is a narrowing, not a
+registry: a page may carry fifteen signals while a handler that names two sees two, because the
+codecs ignore keys the type does not name. Declare it per handler rather than once for the
+application, and the handler documents its own input at the point of use.
+
+An unread signal is harmless by construction. The danger is only ever a signal that is read and
+then trusted, which is why the type is worth keeping small.
+
+The failure that is not harmless is the opposite one: a signal a handler reads that no page ever
+declares. That compiles, deploys, and hands the handler a default on every request. `signalDrift`
+in `streamlord-analysis` compares the two sets across your whole project and reports it, which is
+on [Testing](/testing/).
+
+If you also want it to fail at request time, that is your codec's own setting rather than
+something Streamlord adds: `KotlinxSignalsCodec(json = Json { ignoreUnknownKeys = false })`
+refuses a body carrying anything the type does not name. It is worth a test and a poor fit for
+production, because it makes every handler fail the moment any page gains a signal.
+
 ## Which codec
 
 | Module | Codec | Use it when |

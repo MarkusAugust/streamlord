@@ -9,6 +9,12 @@ with a sentence about what to do.
 
 ## Unreleased
 
+**A signal your handler reads that no page declares is now findable.** `signalDrift` in
+`streamlord-analysis` takes your whole project, compares the signals handlers read against the
+signals markup declares, and reports the ones that will always be a default. It is a test you
+write once; see [Testing](/testing/). Signal classes written `public data class` also contribute
+to completion again, which an over-strict pattern had excluded.
+
 ## 0.5.0
 
 **Values from outside, put into markup safely.** `interpolate("""<li>%s</li>""", name)` fills the

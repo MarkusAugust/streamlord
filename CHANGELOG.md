@@ -6,6 +6,23 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `streamlord-analysis`: `signalDrift(facts)` reports every signal a handler reads that no markup
+  in the project declares, which is the failure that compiles, deploys and then hands the handler
+  a default on every request. `collectSignalFacts(src, language)` reads one file for it, and the
+  check runs across the set, because the page that declares a signal is almost never the file
+  that reads it. Only classes something reads signals into are examined; the drift in the other
+  direction is not reported, since a signal nobody reads is harmless.
+- `streamlord-analysis`: `collectDeclaredSignals(src, language)`, the declarations alone.
+  `collectSignals` is unchanged and is still those plus the properties of `@Serializable` classes.
+
+### Fixed
+
+- `streamlord-analysis`: a `@Serializable` class carrying any modifier before `class` was not
+  seen, so `public data class` signal classes, which is what an `explicitApi()` module writes,
+  contributed no property names to completion.
+
 ## [0.5.0] - 2026-10-01
 
 ### Added
