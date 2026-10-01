@@ -170,9 +170,19 @@ fun `every signal a handler reads is declared by a page`() {
         }
     }
 
-    assertEquals(emptyMap(), signalDrift(facts))
+    val report = signalDrift(facts)
+
+    // An empty result means nothing if the check recognised no reads at all.
+    assertTrue(report.read.isNotEmpty(), "no signal reads were found; are the paths right?")
+    assertEquals(emptyMap(), report.issues)
 }
 ```
+
+Assert on both. `report.issues` being empty is the good answer only when `report.read` is not, because
+a check that matched nothing reports exactly the same empty map as a project in perfect order. That
+is not hypothetical: the first version of this check called a 45-file corpus clean because its
+pattern for a signals class did not allow a modifier before `class`, so every `@Serializable public
+data class` in it was invisible.
 
 Give it every file that declares markup, whatever the markup is written in: Kotlin strings, the
 DSL, a template, an Astro page. A file it never sees is a file whose declarations cannot count,

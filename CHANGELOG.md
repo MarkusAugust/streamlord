@@ -6,6 +6,24 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- `streamlord-analysis`: `signalDrift` returns a `SignalDriftReport` rather than the issue map
+  alone. An empty result means nothing unless the check recognised reads at all, and the report's
+  `read` and `declared` sets are how a caller tells a clean project from a check that matched
+  nothing. That failure is why this exists: the first version called a 45-file corpus clean
+  because its pattern missed every signals class.
+- `streamlord-json-kotlinx`: `KotlinxSignalsCodec(strict = ...)` is now `requireNamedSerializers`.
+  It never had anything to do with refusing unknown signals, which is the `Json` configuration's
+  `ignoreUnknownKeys`, and a flag called `strict` on a signals codec reads as though it did.
+
+### Fixed
+
+- `streamlord-core`: `ExecuteScript`'s documentation offered its attribute map as a place for a
+  CSP nonce. Under CSP mode Datastar re-creates every script it patches in and sets the nonce
+  itself from the page's, so one passed there is overwritten, and with CSP mode off it does
+  nothing. The nonce that matters is the one on the document's `<html>`.
+
 ## [0.6.0] - 2026-10-01
 
 ### Added

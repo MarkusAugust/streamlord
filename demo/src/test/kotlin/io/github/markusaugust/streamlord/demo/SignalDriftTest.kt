@@ -38,14 +38,11 @@ class SignalDriftTest {
 
     @Test
     fun `every signal this service reads is declared by a page`() {
-        val facts = corpus()
+        val report = signalDrift(corpus())
 
-        assertTrue(facts.size > 20, "the corpus is ${facts.size} files; the paths are wrong")
-        assertEquals(
-            emptyMap(),
-            signalDrift(facts),
-            "a signal is read here that no page declares",
-        )
+        // An empty result means nothing only if the check had something to judge.
+        assertTrue(report.read.isNotEmpty(), "no signal reads were recognised at all")
+        assertEquals(emptyMap(), report.issues, "a signal is read here that no page declares")
     }
 
     /** The check is only worth running if it would fail, so this proves it would. */
@@ -59,7 +56,7 @@ class SignalDriftTest {
                 SourceLanguage.KOTLIN,
             )
 
-        val issues = signalDrift(facts).values.flatten()
+        val issues = signalDrift(facts).issues.values.flatten()
 
         assertEquals(1, issues.size, issues.toString())
         assertTrue(issues[0].message.contains("SearchSignals.querry"), issues[0].message)

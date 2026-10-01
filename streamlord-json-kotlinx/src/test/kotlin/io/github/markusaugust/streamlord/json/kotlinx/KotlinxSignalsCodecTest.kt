@@ -61,38 +61,38 @@ class KotlinxSignalsCodecTest {
     }
 
     /*
-     * Strict mode turns the one failure this module can hide into the one it cannot: a type
+     * Requiring named serializers turns the one failure this module can hide into the one it cannot: a type
      * that was never named resolves reflectively on a JVM and fails inside a native image, so
      * a codec that refuses the fallback moves the error to where a test can see it.
      */
     @Test
-    fun `strict refuses a type nobody named`() {
-        val strict = KotlinxSignalsCodec(serializers = mapOf(typeOf<Signals>() to ShoutingSignals), strict = true)
+    fun `naming required refuses a type nobody named`() {
+        val codec = KotlinxSignalsCodec(serializers = mapOf(typeOf<Signals>() to ShoutingSignals), requireNamedSerializers = true)
 
-        assertEquals("""{"search":"ASH"}""", strict.encode(Signals(search = "ash")))
+        assertEquals("""{"search":"ASH"}""", codec.encode(Signals(search = "ash")))
 
-        val refused = assertFailsWith<SignalsCodecException> { strict.encode(Other("gorvek")) }
+        val refused = assertFailsWith<SignalsCodecException> { codec.encode(Other("gorvek")) }
         assertTrue(refused.message!!.contains("Other"), "the message names the type that is missing")
         assertTrue(refused.message!!.contains("native image"), "and says why it matters")
     }
 
     @Test
-    fun `strict lets through what a native image can resolve on its own`() {
-        val strict = KotlinxSignalsCodec(serializers = mapOf(typeOf<Signals>() to ShoutingSignals), strict = true)
+    fun `naming required lets through what a native image can resolve on its own`() {
+        val codec = KotlinxSignalsCodec(serializers = mapOf(typeOf<Signals>() to ShoutingSignals), requireNamedSerializers = true)
 
         // Answered from kotlinx's own table, not by reading a class: safe in an image, so
         // refusing them would be refusing something that works.
-        assertEquals(""""ash"""", strict.encode("ash"))
-        assertEquals("""["ash","vow"]""", strict.encode(listOf("ash", "vow")))
-        assertEquals("""{"heads":13}""", strict.encode(mapOf("heads" to 13)))
+        assertEquals(""""ash"""", codec.encode("ash"))
+        assertEquals("""["ash","vow"]""", codec.encode(listOf("ash", "vow")))
+        assertEquals("""{"heads":13}""", codec.encode(mapOf("heads" to 13)))
     }
 
     @Test
-    fun `strict follows a type into what it contains`() {
-        val strict = KotlinxSignalsCodec(serializers = mapOf(typeOf<Signals>() to ShoutingSignals), strict = true)
+    fun `naming required follows a type into what it contains`() {
+        val codec = KotlinxSignalsCodec(serializers = mapOf(typeOf<Signals>() to ShoutingSignals), requireNamedSerializers = true)
 
         // A list of a class nobody named fails for the same reason the class would.
-        val refused = assertFailsWith<SignalsCodecException> { strict.encode(listOf(Other("gorvek"))) }
+        val refused = assertFailsWith<SignalsCodecException> { codec.encode(listOf(Other("gorvek"))) }
         assertTrue(refused.message!!.contains("Other"))
     }
 

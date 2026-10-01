@@ -83,7 +83,7 @@ public fun main() {
 /**
  * Every signals class this service reads, named rather than looked up.
  *
- * One entry per type that reaches `readSignals`, and `strict` so that a type which is not here
+ * One entry per type that reaches `readSignals`, and `requireNamedSerializers` so that one not here
  * fails on the JVM with its own name instead of in the native image on the first request that
  * carries it. That is not hypothetical: three of these four were missing after the demos were
  * written, the JVM resolved them reflectively without a word, and CI caught it only when it
@@ -101,7 +101,7 @@ internal val SIGNALS: KotlinxSignalsCodec =
                 typeOf<MusterSignals>() to MusterSignals.serializer(),
                 typeOf<ModeSignals>() to ModeSignals.serializer(),
             ),
-        strict = true,
+        requireNamedSerializers = true,
     )
 
 public fun Application.live() {

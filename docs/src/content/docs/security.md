@@ -146,6 +146,19 @@ Patched-in scripts are the exception that needs no work from you: Datastar re-cr
 `<script>` it patches in and gives it the page's nonce. Never put a stream response's nonce on an
 injected script, because the policy that governs it is the one that came with the document.
 
+### CSP mode needs a server that answers the document
+
+A nonce is per response, so the document itself has to be generated per request. A site served
+from static files or a CDN cannot have one: every reader would get the same value out of the same
+file, which is a constant, and a constant is not a nonce. This documentation site is in exactly
+that position, which is why it runs Datastar without CSP while the page below, served by a Ktor
+route, runs under a real policy.
+
+If your pages are static, the honest answer is that Datastar's CSP mode is not available to you,
+since the client has no hash-based alternative to `data-nonce`. What is still worth doing is the
+rest of a policy, `object-src 'none'` and `base-uri 'self'` and a tight `default-src`, set as
+headers by your host, with the expression compiler left out of it.
+
 ### A page that really runs under one
 
 [streamlord-live/csp](https://streamlord-live-production.up.railway.app/csp) is served by the
@@ -171,6 +184,26 @@ frames, so a half-written `data: elements` line cannot appear in the middle of a
 
 Every published module is compiled with `explicitApi()` and warnings as errors. Nothing leaves a
 module by accident, which means the surface you can depend on is the surface that was meant.
+
+## Raw user HTML
+
+If you patch in HTML that a user wrote, wrap it in `data-ignore`. Datastar then skips that element
+and everything under it, so a `data-*` attribute smuggled in through a comment field is markup and
+never an expression.
+
+```kotlin sample=html
+val fromTheUser = "<p>whatever they typed</p>"
+
+div {
+    dataIgnore()
+    unsafe { +fromTheUser }
+}
+```
+
+Escaping is the other half, and it belongs wherever the interpolation happens. Hand Streamlord the
+holes and that is Streamlord, which is what [`interpolate`](/strings/) does. Hand it a finished
+string and the provenance is already gone, so the escaping was your template engine's job and
+stays there.
 
 ## What is still yours
 

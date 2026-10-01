@@ -9,6 +9,18 @@ with a sentence about what to do.
 
 ## Unreleased
 
+**`signalDrift` now reports what it saw.** It returns a `SignalDriftReport`; assert that
+`report.read` is not empty as well as that `report.issues` is, because a check that matched
+nothing looks exactly like a project in order. See [Testing](/testing/).
+
+**`KotlinxSignalsCodec(strict = ...)` is now `requireNamedSerializers`.** Same behaviour, a name
+that says what it does. Refusing unknown signals was never this flag; that is `ignoreUnknownKeys`
+on the `Json` you pass.
+
+**Do not put a CSP nonce on a script event.** Datastar re-creates every script it patches in and
+sets the nonce from the page's, so one you pass is overwritten under CSP mode and ignored without
+it. The KDoc used to suggest otherwise. See [Security](/security/).
+
 ## 0.6.0
 
 **A signal your handler reads that no page declares is now findable.** `signalDrift` in
@@ -39,7 +51,7 @@ yourself. See [Security](/security/), which links to a page running under a real
 ## 0.3.1
 
 **Name your serializers for a native image.** `KotlinxSignalsCodec` now takes them by the type
-they handle and consults them before the reflective lookup, and `strict = true` refuses that
+they handle and consults them before the reflective lookup, and `requireNamedSerializers = true` refuses that
 fallback so a type you forgot fails on the JVM rather than inside the image. Nothing changes if
 you pass none. See [Native image](/native-image/).
 
