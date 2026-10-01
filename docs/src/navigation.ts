@@ -62,6 +62,7 @@ export const NAVIGATION: Section[] = [
       { slug: "java", title: "Java" },
       { slug: "architecture", title: "Architecture" },
       { slug: "changelog", title: "Changelog" },
+      { slug: "roadmap", title: "Roadmap" },
     ],
   },
 ]
