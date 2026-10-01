@@ -185,6 +185,26 @@ frames, so a half-written `data: elements` line cannot appear in the middle of a
 Every published module is compiled with `explicitApi()` and warnings as errors. Nothing leaves a
 module by accident, which means the surface you can depend on is the surface that was meant.
 
+## Raw user HTML
+
+If you patch in HTML that a user wrote, wrap it in `data-ignore`. Datastar then skips that element
+and everything under it, so a `data-*` attribute smuggled in through a comment field is markup and
+never an expression.
+
+```kotlin sample=html
+val fromTheUser = "<p>whatever they typed</p>"
+
+div {
+    dataIgnore()
+    unsafe { +fromTheUser }
+}
+```
+
+Escaping is the other half, and it belongs wherever the interpolation happens. Hand Streamlord the
+holes and that is Streamlord, which is what [`interpolate`](/strings/) does. Hand it a finished
+string and the provenance is already gone, so the escaping was your template engine's job and
+stays there.
+
 ## What is still yours
 
 Authentication, authorisation, CSRF tokens, rate limiting and audit logging. Streamlord takes no

@@ -178,19 +178,6 @@ shows what the client would have held at that point. This needs no new capture a
 work: every frame is kept with its arguments, `mergePatch` is a pure function, so the store at any
 index is a fold from the start. The work is the control and the wiring, in both plugins.
 
-### What the inspector cannot do
-
-Simulating latency or a dropped connection to test how the Datastar client copes. The inspector is
-not the client. It is a separate HTTP client inside the editor, so slowing it down tells you
-nothing about the browser's behaviour, and the browser's own throttling already does that job
-properly.
-
-The useful half of that idea points the other way, at the server. Cutting a stream off mid-flight
-and seeing whether the handler notices and stops is a real question, it is what
-[Operations](/operations/) is about, and the inspector can already do it with the Stop button.
-What it could do better is say what happened afterwards: how long the server kept writing, and
-whether it ever stopped.
-
 ## Concurrent stream limits
 
 Framing first, because it matters: this is a sensible default, not a security feature. It will not
@@ -253,20 +240,28 @@ SSE, a stream held open for twelve seconds, the eight patch modes, form validati
 served under a Content Security Policy. It is a module in a Gradle build rather than a template,
 so copying it means copying a directory and its build file, but nothing in it is a toy.
 
-## What is not planned
+## Considered, not prioritised
 
-Three defences stay where they are, and no release will move them:
+Weighed and set aside for now, with the reason, so the same ground is not covered twice:
 
-- **Escaping belongs wherever the interpolation happens.** Hand Streamlord the holes and that is
-  Streamlord, which is what [`interpolate`](/strings/) is for. Hand it a finished string and the
-  provenance is already gone, so the escaping was your engine's job and stays there.
-- **Raw user HTML is wrapped in `data-ignore`**, which tells Datastar to skip that element and its
-  descendants. That is a decision in your markup, not a setting.
-- **Authentication, authorisation, CSRF tokens and audit logging are yours.** Nothing enters your
-  chain that you did not install. See [Security](/security/) for the line as it stands today.
+- **A runtime mode that refuses unknown signals.** It would catch the same drift that
+  [`signalDrift`](/testing/) catches without a request in flight, and it fails every handler the
+  moment any page gains a signal. If you want it anyway it is your codec's setting, not ours:
+  `KotlinxSignalsCodec(json = Json { ignoreUnknownKeys = false })`.
+- **Simulating latency or a dropped connection in the Stream Inspector.** The inspector is a
+  client inside the editor, not the browser, so slowing it down says nothing about how the
+  Datastar client copes; the browser's own throttling does that properly. Cutting a stream off to
+  see whether the *server* notices is the useful half, and the Stop button already does it.
+- **Escaping on the way out of the DSL.** kotlinx.html escapes text and attribute values already.
+  What it cannot do is refuse a value in an expression position, which is
+  [its own entry](#untrusted-values-in-the-dsl) rather than a second escaping layer.
 
 ## Open questions
 
-Nothing on the three above is undecided enough to change their shape. If you have an opinion on
-any of them, the [issue tracker](https://github.com/MarkusAugust/streamlord/issues) is the place
-for it.
+One thing is genuinely undecided: what a concurrent stream limit should do at the limit. Refusing
+the new stream is safer and breaks the innocent case, where a reader opens a fresh tab and it
+quietly does not work; closing the oldest favours the tab they are looking at. Everything else
+above is decided enough to build.
+
+If you have an opinion on any of it, the
+[issue tracker](https://github.com/MarkusAugust/streamlord/issues) is the place for it.
