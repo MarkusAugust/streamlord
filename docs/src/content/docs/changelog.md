@@ -9,6 +9,8 @@ with a sentence about what to do.
 
 ## Unreleased
 
+## 0.6.0
+
 **A signal your handler reads that no page declares is now findable.** `signalDrift` in
 `streamlord-analysis` takes your whole project, compares the signals handlers read against the
 signals markup declares, and reports the ones that will always be a default. It is a test you
