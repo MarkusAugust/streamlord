@@ -73,10 +73,74 @@ judged on any one-letter slip, because `data-signal:name` is nobody's own attrib
 `data-signal` is left alone, because `data-animated` and `data-effects` are honest words in the
 same shape.
 
-It is a small allocation-free scan that skips `<script>` and `<style>` bodies. `ElementsGuard.check(html)`
-is also there to call directly, which is worth doing in the tests of your markup functions.
+It is a small scan that builds no tree and copies no markup, and it skips `<script>` and `<style>`
+bodies. `ElementsGuard.check(html)` is also there to call directly, which is worth doing in the
+tests of your markup functions.
 
 In IntelliJ, where nothing flags an unknown `data-*` name on its own, this guard is the check.
+
+## Values from outside
+
+`guardElements` walks a finished string, so it can tell you an expression was eaten. What it
+cannot tell you is where a value came from, because by then Kotlin has concatenated everything.
+`interpolate` turns that around: leave the holes standing and Streamlord fills them, which means
+it knows exactly where each value landed.
+
+```kotlin sample=declarations
+fun hit(title: String, url: String): String =
+    interpolate("""<li><a class="fs-link" href="%s">%s</a></li>""", url, title)
+```
+
+`%s` is a hole and `%%` writes one `%`. Every other `%` is literal, so `width: 50%` and `/a%20b`
+need no ceremony. A miscounted hole throws rather than shipping a half-filled page.
+
+What happens to a value is decided by where it landed, not by where it came from:
+
+| Where the hole is | What happens to the value |
+|---|---|
+| Element text | Escaped |
+| A quoted attribute that is not Datastar's | Escaped |
+| A `data-*` attribute Datastar reads | **Refused**, unless it is a number or a boolean |
+| A tag name, an attribute name, an unquoted value | **Refused** |
+| Inside `<script>` or `<style>` | **Refused** |
+
+The refusals are the point. Escaping cannot save those three: a value in a `data-*` attribute
+becomes part of a Datastar expression, and your own server signed the page it arrived on; a value
+in an attribute name or an unquoted value can add attributes beside itself, because escaping does
+not escape a space; and HTML escaping inside a `<script>` is meaningless. `UnsafeInterpolationException`
+says which value, where it landed, and what to do instead.
+
+```kotlin sample=statements
+val name = "Gorvek"
+
+interpolate("""<li data-text="%s"></li>""", name)        // throws
+interpolate("""<li data-signals="{n: %s}"></li>""", 3)   // passes: a number carries no expression
+```
+
+A number or a boolean is let into a Datastar attribute because its text is digits, a dot, a sign
+or `true`/`false`. No string renders that way and also closes a quote, so the common honest case
+of a server-rendered initial signal needs no waiver.
+
+### When you mean it to be markup
+
+Wrap it in `Trusted`, which writes the value as it stands wherever it lands:
+
+```kotlin sample=statements
+val hits = repository.search("gate")
+
+interpolate("""<ul class="fs-list">%s</ul>""", Trusted(renderResults(hits)))
+```
+
+That waives both the escaping and the refusals, which is right for a fragment you rendered
+yourself and wrong for anything that came out of a request. It is a word in your source that a
+reviewer can search for, which is the whole reason it is a type and not a flag.
+
+### This is the editors' rule, at run time
+
+The editors already refuse a Kotlin `${'$'}{...}` inside a `data-*` expression attribute, because
+they read your source and can see it. At run time the source is gone and only the finished string
+arrives, so the holes have to be left standing for the same question to be asked. That is the
+whole of what `interpolate` wants from you.
 
 ## On Spring
 

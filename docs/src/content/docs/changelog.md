@@ -9,6 +9,12 @@ with a sentence about what to do.
 
 ## Unreleased
 
+**Values from outside, put into markup safely.** `interpolate("""<li>%s</li>""", name)` fills the
+holes you leave and decides what to do with each value by where it landed. Text and ordinary
+attributes are escaped; a `data-*` attribute Datastar reads, a tag or attribute name, an unquoted
+value and a script body are refused, because escaping cannot save those. `Trusted(...)` waives it
+for markup you rendered yourself. See [Strings](/strings/).
+
 ## 0.4.0
 
 **The CSP nonce is Streamlord's job now.** `install(CspNoncePlugin)` on Ktor, or a

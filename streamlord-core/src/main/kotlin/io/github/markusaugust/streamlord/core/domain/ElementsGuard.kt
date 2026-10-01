@@ -6,8 +6,8 @@ package io.github.markusaugust.streamlord.core.domain
  * A Kotlin template such as `"""<div data-text="$count">"""` compiles whenever a `count` happens
  * to be in scope, and then ships `data-text=""`, which the browser ignores without a word. This
  * guard walks the tags of the HTML, finds every `data-*` attribute whose value Datastar
- * evaluates as an expression, and runs [ExpressionGuard] over it. The scan is small and pure:
- * no DOM, no allocation beyond the substrings it checks.
+ * evaluates as an expression, and runs [ExpressionGuard] over it. The walk is the one in
+ * [scanMarkup]: no DOM, and no copy of the markup.
  *
  * It is off by default. Turn it on with `Streamlord(guardElements = true)`, which applies it to
  * every element patch that leaves through that instance, or call [check] yourself, for example
@@ -112,88 +112,18 @@ public object ElementsGuard {
     ): String {
         // Longest first, so `data-x-` is tried before `data-` whatever order the caller used.
         val ordered = if (prefixes === defaultPrefixes) prefixes else prefixes.sortedByDescending { it.length }
-        var i = 0
-        val n = elements.length
-        while (i < n) {
-            val lt = elements.indexOf('<', i)
-            if (lt < 0) break
-            if (elements.startsWith("<!--", lt)) {
-                val close = elements.indexOf("-->", lt + 4)
-                i = if (close < 0) n else close + 3
-                continue
-            }
-            val first = elements.getOrNull(lt + 1)
-            if (first == null || !first.isLetter()) {
-                i = lt + 1
-                continue
-            }
-            i = scanTag(elements, lt + 1, ordered)
-            // Inside <script> and <style> a '<' is text, not a tag: skip to the closing tag.
-            RAW_TEXT
-                .firstOrNull {
-                    elements.regionMatches(lt + 1, it, 0, it.length, ignoreCase = true) &&
-                        !elements.getOrNull(lt + 1 + it.length).isNamePart()
-                }?.let { tag ->
-                    val close = elements.indexOf("</$tag", i, ignoreCase = true)
-                    i = if (close < 0) n else close
-                }
-        }
+        scanMarkup(
+            elements,
+            object : MarkupVisitor {
+                override fun attribute(
+                    name: String,
+                    valueStart: Int,
+                    valueEnd: Int,
+                    quoted: Boolean,
+                ) = checkAttribute(name, if (valueStart < 0) null else elements.substring(valueStart, valueEnd), ordered)
+            },
+        )
         return elements
-    }
-
-    /** Elements whose body is text to the browser: `<` inside them opens no tag. */
-    private val RAW_TEXT = listOf("script", "style", "textarea", "title")
-
-    private fun Char?.isNamePart(): Boolean = this != null && (isLetterOrDigit() || this == '-')
-
-    /** Walks the attributes of one tag, starting after `<`, checking as it goes; returns the offset past `>`. */
-    private fun scanTag(
-        html: String,
-        from: Int,
-        prefixes: List<String>,
-    ): Int {
-        var i = from
-        val n = html.length
-        while (i < n && !html[i].isWhitespace() && html[i] != '>' && html[i] != '/') i++
-        while (i < n) {
-            val c = html[i]
-            when {
-                c == '>' -> {
-                    return i + 1
-                }
-
-                c.isWhitespace() || c == '/' -> {
-                    i++
-                }
-
-                else -> {
-                    val nameStart = i
-                    while (i < n && !html[i].isWhitespace() && html[i] != '>' && html[i] != '=' && html[i] != '/') i++
-                    val name = html.substring(nameStart, i)
-                    var k = i
-                    while (k < n && html[k].isWhitespace()) k++
-                    if (k < n && html[k] == '=') {
-                        k++
-                        while (k < n && html[k].isWhitespace()) k++
-                        val q = html.getOrNull(k)
-                        if (q == '"' || q == '\'') {
-                            val close = html.indexOf(q, k + 1)
-                            val end = if (close < 0) n else close
-                            checkAttribute(name, html.substring(k + 1, end), prefixes)
-                            i = if (close < 0) n else close + 1
-                        } else {
-                            val start = k
-                            while (k < n && !html[k].isWhitespace() && html[k] != '>') k++
-                            checkAttribute(name, html.substring(start, k), prefixes)
-                            i = k
-                        }
-                    } else {
-                        checkAttribute(name, null, prefixes)
-                    }
-                }
-            }
-        }
-        return n
     }
 
     private fun checkAttribute(
