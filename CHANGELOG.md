@@ -6,6 +6,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-01
+
 ### Changed
 
 - `streamlord-analysis`: `signalDrift` returns a `SignalDriftReport` rather than the issue map

@@ -9,6 +9,8 @@ with a sentence about what to do.
 
 ## Unreleased
 
+## 0.7.0
+
 **`signalDrift` now reports what it saw.** It returns a `SignalDriftReport`; assert that
 `report.read` is not empty as well as that `report.issues` is, because a check that matched
 nothing looks exactly like a project in order. See [Testing](/testing/).
