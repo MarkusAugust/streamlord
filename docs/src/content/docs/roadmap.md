@@ -7,7 +7,7 @@ description: "Three pieces of security work that are planned but not shipped, in
 >
 > Gorvek of Bonereach
 
-None of this is in 0.4.0. It is written down so you can see what is coming, decide whether to
+None of this is in 0.5.0. It is written down so you can see what is coming, decide whether to
 wait for it, and know what to write today instead. Each one will be opt-in when it lands, the way
 [`guardElements`](/strings/) is, and none of them will change code that does not ask for them.
 
