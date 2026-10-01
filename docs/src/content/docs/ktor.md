@@ -26,6 +26,10 @@ The plugin is where the configured `Streamlord` instance lives. Everything below
 the call. The codec is optional: without one, the built-in codec handles maps and raw JSON
 perfectly well, and you read signals by name rather than into a data class.
 
+There is a second plugin, `CspNoncePlugin`, which is independent of this one and off unless you
+install it. It owns the Content Security Policy nonce at both ends; it is on
+[Security](/security/).
+
 ## One-shot streams
 
 The response opens, your block runs, and the response closes when the block returns.

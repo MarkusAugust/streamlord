@@ -1,6 +1,6 @@
 ---
 title: "Roadmap"
-description: "Five pieces of security work that are planned but not shipped, in the order they will land, and what to write in your own code until each one does."
+description: "Four pieces of security work that are planned but not shipped, in the order they will land, and what to write in your own code until each one does."
 ---
 
 > *A promise is a debt, and I pay mine in iron.*
@@ -13,88 +13,14 @@ wait for it, and know what to write today instead. Each one will be opt-in when 
 
 | Order | Planned | What it governs | What you write today |
 |---|---|---|---|
-| 1 | [The nonce plugin](#the-nonce-plugin) | what may execute in the browser | the nonce and the header, by hand |
-| 2 | [The interpolation guard](#the-interpolation-guard) | what reaches a Datastar expression | the editors catch it as you type |
-| 3 | [Typed signal reading](#typed-signal-reading) | what the server believes | a signal type per handler |
-| 4 | [Continuous authorisation](#continuous-authorisation) | who may still receive a stream | your own check in the stream |
-| 5 | [Concurrent stream limits](#concurrent-stream-limits) | how much one reader may hold open | your framework's rate limiting |
+| 1 | [The interpolation guard](#the-interpolation-guard) | what reaches a Datastar expression | the editors catch it as you type |
+| 2 | [Typed signal reading](#typed-signal-reading) | what the server believes | a signal type per handler |
+| 3 | [Continuous authorisation](#continuous-authorisation) | who may still receive a stream | your own check in the stream |
+| 4 | [Concurrent stream limits](#concurrent-stream-limits) | how much one reader may hold open | your framework's rate limiting |
 
-The order is the order of the work, not a schedule. The first three are one set: what may run, what
-reaches an expression, what the server trusts. The last one lands after them because it is the
-least Datastar-specific thing on the list.
-
-## The nonce plugin
-
-Streamlord gives you `dataNonce(nonce)` for the `<html>` element, and script events and responses
-take a `nonce`. What it does not do is generate the nonce or write the
-`Content-Security-Policy` header, so nothing enforces that the value in the header and the value
-in the markup are the same. When they drift, the browser blocks every Datastar expression and no
-part of the stack says why.
-
-Planned: a Ktor plugin and a Spring filter that own both ends. A nonce per call from
-`SecureRandom`, stored in the call attributes, appended to the header, and handed back through an
-extension property that you pass to `dataNonce`. The SDK will own the nonce. It will not own your
-policy, because image sources, fonts and analytics are yours; a default policy may ship as a
-labelled starting point rather than as the answer.
-
-### Until then, own both ends in one place
-
-The point of writing it as a plugin rather than inline in the handler is that the header and the
-attribute are then generated from the same variable, once per call.
-
-```kotlin sample=ktor-application
-val nonceKey = io.ktor.util.AttributeKey<String>("CspNonce")
-
-install(
-    createApplicationPlugin("CspNonce") {
-        onCall { call ->
-            val bytes = ByteArray(16)
-            java.security.SecureRandom().nextBytes(bytes)
-            val nonce = java.util.Base64.getEncoder().encodeToString(bytes)
-
-            call.attributes.put(nonceKey, nonce)
-            call.response.header(
-                "Content-Security-Policy",
-                "default-src 'self'; script-src 'self' 'nonce-$nonce'",
-            )
-        }
-    },
-)
-
-routing {
-    get("/dashboard") {
-        val nonce = call.attributes[nonceKey]
-
-        call.respondText(contentType = io.ktor.http.ContentType.Text.Html) {
-            kotlinx.html.stream.createHTML().html {
-                dataNonce(nonce)
-                body {
-                    div { dataSignals("count" to 0) }
-                }
-            }
-        }
-    }
-}
-```
-
-Three things about the client are worth knowing before you ship that, all of them read out of
-`engine/csp.ts` in Datastar 1.0.4:
-
-- **The nonce is read once, from `<html>`, when the client loads**, and the attribute is removed
-  immediately afterwards. A nonce patched into the page later does nothing, because CSP mode was
-  already decided.
-- **An empty `data-nonce` throws.** The client raises `NonceRequired` rather than guessing.
-- **A missing `data-nonce` fails quietly.** The client compiles expressions with `Function(...)`
-  as it always has, and your `script-src` is what blocks them. Nothing in Datastar announces the
-  fallback, so a page that loads is not evidence that the nonce arrived.
-
-That last one is why this is the check most worth writing. Request a page from the test host, the
-way [Testing](/testing/) shows, and assert three things about the one response:
-
-- the body carries a `data-nonce` attribute at all, because without it CSP mode never turns on;
-- the `Content-Security-Policy` header contains `'nonce-'` followed by that same value;
-- a second request gets a different value, because a nonce reused across requests is a constant,
-  and a constant is not a nonce.
+The order is the order of the work, not a schedule. The first two are a pair: what reaches an
+expression, and what the server believes of what comes back. The last one lands after the others
+because it is the least Datastar-specific thing on the list.
 
 ## The interpolation guard
 
@@ -155,10 +81,10 @@ revokes access, a subscription lapses or a role changes. Nobody asks again, so t
 on. How much that matters depends on what you are pushing: public dashboard numbers, little;
 another team's documents after someone left that team, rather more.
 
-Planned: not a plugin. The nonce plugin is a plugin because it touches every response, and this
-concerns only the handlers that open a stream, so it belongs on the stream builder. You will pass
-a suspending check alongside the usual arguments, Streamlord will call it with the context it needs
-and act on the verdict, and the rest of the call site will not move. The refinements that make it
+Planned: not a plugin. [`CspNoncePlugin`](/security/) is a plugin because it touches every
+response, and this concerns only the handlers that open a stream, so it belongs on the stream
+builder. You will pass a suspending check alongside the usual arguments, Streamlord will call it
+with the context it needs and act on the verdict, and the rest of the call site will not move. The refinements that make it
 usable: a boolean verdict by default with an optional reason, so the client can be told the session
 expired rather than merely dropped; an interval rather than a check before every patch, since a
 chatty stream makes a database check expensive; the first check at open, which is the cheapest
@@ -207,8 +133,8 @@ vanishes, since streams multiplex over one connection. So the default will be lo
 reader, and documented as low on purpose, or someone on HTTP/2 will hit it and conclude it is
 arbitrary.
 
-Whether it belongs in Streamlord at all is the open part. The nonce plugin and the interpolation
-guard are Datastar-specific, continuous authorisation is at least SSE-specific, and this is general
+Whether it belongs in Streamlord at all is the open part. The interpolation guard is
+Datastar-specific, continuous authorisation is at least SSE-specific, and this is general
 server hygiene that Ktor and Spring both have facilities for. The narrow case for it: Streamlord
 knows which responses are streams, so it can count the right thing without wiring. That is
 convenience, not capability, which is why it is last.
@@ -229,16 +155,13 @@ Three defences stay where they are, and no release will move them:
   string, the provenance is gone.
 - **Raw user HTML is wrapped in `data-ignore`**, which tells Datastar to skip that element and its
   descendants. That is a decision in your markup, not a setting.
-- **Authentication, authorisation, CSRF tokens and audit logging are yours.** Streamlord registers
-  no interceptors and takes no view. See [Security](/security/) for the line as it stands today.
+- **Authentication, authorisation, CSRF tokens and audit logging are yours.** Nothing enters your
+  chain that you did not install. See [Security](/security/) for the line as it stands today.
 
 ## Open questions
 
-Two things are genuinely undecided, and both change the shape of the API:
-
-- Does the nonce plugin ship inside `streamlord-ktor` and `streamlord-spring`, or as modules of its
-  own?
-- Does the interpolation guard refuse at render time, or log and continue behind a flag?
+One thing is genuinely undecided, and it changes the shape of the API: does the interpolation
+guard refuse at render time, or log and continue behind a flag?
 
 If you have an opinion, the [issue tracker](https://github.com/MarkusAugust/streamlord/issues) is
 the place for it.
