@@ -10,7 +10,7 @@ import kotlin.test.assertEquals
  * This test exists because of a specific failure. The codec names its serializers so that the
  * service can be a native image; three classes were added with the demos and not named; the JVM
  * resolved them reflectively and said nothing; and the first sign of trouble was a container in
- * CI failing to decode a counter. The codec is strict now, so a type that is not named throws
+ * CI failing to decode a counter. The codec requires named serializers now, so a type that is
  * here, on a JVM, in a second, with the name of the class.
  *
  * A route with a new signals class belongs in this list. If that is forgotten, this fails.

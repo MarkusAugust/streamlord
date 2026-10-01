@@ -109,7 +109,10 @@ public data class PatchSignals(
  * @property autoRemove Add `data-effect="el.remove()"` so the script tag vanishes after it runs. The
  *   attribute follows [io.github.markusaugust.streamlord.core.protocol.DatastarAttributes.prefix], so the
  *   aliased bundle gets `data-star-effect`.
- * @property attributes Extra attributes for the script tag, e.g. `type` or a CSP `nonce`.
+ * @property attributes Extra attributes for the script tag, such as `type`. Not a CSP nonce:
+ *   under CSP mode Datastar re-creates every script it patches in and sets the nonce itself,
+ *   from the one the page was loaded with, so a nonce passed here is overwritten. With CSP mode
+ *   off it is simply ignored. The nonce that matters is the one on the document's `<html>`.
  */
 public data class ExecuteScript(
     @Language("JavaScript") val script: String,

@@ -77,13 +77,13 @@ One entry per class you read signals into. `SearchSignals.serializer()` is gener
 kotlinx.serialization compiler plugin and resolved where you write it, so the image can see it in
 the bytecode.
 
-Add `strict = true` beside them, and a type you forgot fails on the JVM (in a test, with the name
+Add `requireNamedSerializers = true` beside them, and a type you forgot fails on the JVM (in a test, with the name
 of the class) instead of in the image on the first request that carries it:
 
 ```kotlin sample=none
 KotlinxSignalsCodec(
     serializers = mapOf(typeOf<SearchSignals>() to SearchSignals.serializer()),
-    strict = true,
+    requireNamedSerializers = true,
 )
 ```
 

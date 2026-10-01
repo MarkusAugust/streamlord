@@ -30,18 +30,22 @@ import kotlin.reflect.KType
  * )
  * ```
  *
- * Pass `strict = true` with them and a type that was left out fails here, on the JVM, with the
- * name of the class, rather than in the image, on the first request, as a decode that cannot
- * find a serializer it was never given.
+ * Pass `requireNamedSerializers = true` with them and a type that was left out fails here, on the
+ * JVM, with the name of the class, rather than in the image, on the first request, as a decode
+ * that cannot find a serializer it was never given.
+ *
+ * It is about serializers and nothing else. Whether a body carrying signals the type does not
+ * name is refused is [json]'s `ignoreUnknownKeys`, which defaults to ignoring them.
  *
  * @param json the configuration to encode and decode with.
  * @param serializers serializers by the type they handle, consulted before the reflective lookup.
- * @param strict refuse the reflective lookup, so a type missing from [serializers] fails at once.
+ * @param requireNamedSerializers refuse the reflective lookup, so a type missing from
+ *   [serializers] fails at once. Nothing to do with unknown keys; that is [json]'s business.
  */
 public class KotlinxSignalsCodec(
     private val json: Json = DefaultJson,
     private val serializers: Map<KType, KSerializer<*>> = emptyMap(),
-    private val strict: Boolean = false,
+    private val requireNamedSerializers: Boolean = false,
 ) : SignalsCodec {
     override fun encode(
         value: Any?,
@@ -81,7 +85,7 @@ public class KotlinxSignalsCodec(
     /**
      * Whether this type is one that has to be named.
      *
-     * Not everything does, and a strict mode that refused everything would be refusing types
+     * Not everything does, and a rule that refused everything would be refusing types
      * that work: `String`, `Int`, `List`, `Map` and the rest are answered from a table inside
      * kotlinx.serialization that is in the bytecode like any other code. What cannot survive a
      * native image is the lookup that reads *your* class to find the serializer the compiler
@@ -123,14 +127,14 @@ public class KotlinxSignalsCodec(
         serializers[type]?.let { return it as KSerializer<Any?> }
 
         /*
-         * The point of strict mode. An application that names its serializers has one list to
+         * The point of requiring them. An application that names its serializers has one list to
          * keep in step with its routes, and nothing notices a type added to the second and not
          * the first: the JVM resolves it reflectively in silence, and the image fails on the
          * first request that carries it. Here that silence breaks where a test can hear it.
          */
-        if (strict && needsNaming(type)) {
+        if (requireNamedSerializers && needsNaming(type)) {
             throw SignalsCodecException(
-                "No serializer was named for $type, and this codec is strict. Add " +
+                "No serializer was named for $type, and this codec requires named serializers. Add " +
                     "typeOf<$type>() to KotlinxSignalsCodec(serializers = ...), a reflective " +
                     "lookup would work here and fail in a GraalVM native image.",
             )

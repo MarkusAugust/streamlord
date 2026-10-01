@@ -1,6 +1,6 @@
 ---
 title: "Roadmap"
-description: "Two pieces of security work that are planned but not shipped, in the order they will land, and what to write in your own code until each one does."
+description: "Three pieces of security work that are planned but not shipped, in the order they will land, and what to write in your own code until each one does."
 ---
 
 > *A promise is a debt, and I pay mine in iron.*
@@ -14,10 +14,11 @@ wait for it, and know what to write today instead. Each one will be opt-in when 
 | Order | Planned | What it governs | What you write today |
 |---|---|---|---|
 | 1 | [Continuous authorisation](#continuous-authorisation) | who may still receive a stream | your own check in the stream |
-| 2 | [Concurrent stream limits](#concurrent-stream-limits) | how much one reader may hold open | your framework's rate limiting |
+| 2 | [Untrusted values in the DSL](#untrusted-values-in-the-dsl) | what reaches an expression built by the DSL | keep request data out of expression attributes |
+| 3 | [Concurrent stream limits](#concurrent-stream-limits) | how much one reader may hold open | your framework's rate limiting |
 
-The order is the order of the work, not a schedule. The second lands after the first because it
-is the least Datastar-specific thing on the list, and because the two share their plumbing.
+The order is the order of the work, not a schedule. The last one lands after the others because
+it is the least Datastar-specific thing on the list, and the least certain to belong here at all.
 
 ## Continuous authorisation
 
@@ -58,6 +59,31 @@ get("/feed") {
 What the reader's browser does next depends on how the stream was opened, and the rules are on
 [Operations](/operations/): the default `retry: 'auto'` does not reconnect when a 200 stream ends
 cleanly, which is what you want here.
+
+## Untrusted values in the DSL
+
+[`interpolate`](/strings/) asks where a value landed, which it can only do because the holes are
+still standing in the format string. The DSL has no holes: `dataText(expression)` takes a `String`
+and the call itself is the position, so `dataText(userName)` is the original hazard with nothing
+in the way. Markup written as a string or rendered by a template is covered; markup built by the
+DSL is not, and it is the style the documentation leads with.
+
+Planned: expression-valued attributes stop taking a bare `String`. They take a type that only the
+expression helpers build, `signal()`, `set()`, `toggle()`, `js()` and the rest, with one explicit
+constructor for an expression you wrote yourself. The guard becomes the compiler: a value from a
+request cannot reach `dataText` without someone writing the word that says they meant it, which
+is the same bargain `Trusted` makes on the string side.
+
+It is the one item here that breaks an API. Every `dataText("$count * 2")` written as a raw string
+has to become the explicit form. That is a day of mechanical edits with the compiler pointing at
+each one, and the editors can offer the fix.
+
+### Until then
+
+Keep request data out of expression attributes in the DSL, and put it in element text or an
+ordinary attribute, where kotlinx.html escapes it for you. When a value really has to reach an
+expression, patch it into a signal from the server rather than writing it into the markup, which
+is what signals are for.
 
 ## Concurrent stream limits
 
@@ -107,6 +133,6 @@ Three defences stay where they are, and no release will move them:
 
 ## Open questions
 
-Nothing on the two above is undecided enough to change their shape. If you have an opinion on
+Nothing on the three above is undecided enough to change their shape. If you have an opinion on
 any of them, the [issue tracker](https://github.com/MarkusAugust/streamlord/issues) is the place
 for it.

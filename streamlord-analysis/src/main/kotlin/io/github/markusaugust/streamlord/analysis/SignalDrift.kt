@@ -119,6 +119,29 @@ private fun matchingParen(
 }
 
 /**
+ * What the drift check saw, and what it found.
+ *
+ * [issues] being empty is the good answer only when [read] is not. A check that recognised no
+ * reads at all reports exactly the same empty map as a project in perfect order, and the two are
+ * worth telling apart: the collectors are patterns over source text, so a signals class written
+ * in a shape they do not match contributes nothing and takes the finding with it. That is not a
+ * hypothetical. The first version of this check called a 45-file corpus clean because its pattern
+ * for a signals class did not allow a modifier before `class`, and every `@Serializable public
+ * data class` in it was invisible.
+ *
+ * So assert on both. `report.read` tells you the check had something to judge.
+ *
+ * @property issues Findings by file, empty when nothing drifted.
+ * @property declared Every signal name the files declare, from markup and from the DSL.
+ * @property read Every signal name the files read, through a signals class or a lookup.
+ */
+public data class SignalDriftReport(
+    val issues: Map<String, List<Issue>>,
+    val declared: Set<String>,
+    val read: Set<String>,
+)
+
+/**
  * Signals read in one file that nothing in [facts] declares.
  *
  * [facts] is every file of the project, keyed by whatever the caller calls a file: the union of
@@ -129,9 +152,10 @@ private fun matchingParen(
  * other serializable classes are its own business, and a request body that happens to be one is
  * not a signal.
  */
-public fun signalDrift(facts: Map<String, SignalFacts>): Map<String, List<Issue>> {
+public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
     val declared = facts.values.flatMapTo(LinkedHashSet()) { it.declared }
     val signalTypes = facts.values.flatMapTo(LinkedHashSet()) { it.signalTypes }
+    val read = LinkedHashSet<String>()
 
     val out = LinkedHashMap<String, List<Issue>>()
     for ((file, one) in facts) {
@@ -140,6 +164,7 @@ public fun signalDrift(facts: Map<String, SignalFacts>): Map<String, List<Issue>
         for ((type, properties) in one.classes) {
             if (type !in signalTypes) continue
             for (property in properties) {
+                read += property.name
                 if (property.name in declared) continue
                 issues +=
                     Issue(
@@ -156,6 +181,7 @@ public fun signalDrift(facts: Map<String, SignalFacts>): Map<String, List<Issue>
         }
 
         for (lookup in one.lookups) {
+            read += lookup.name
             if (lookup.name in declared) continue
             issues +=
                 Issue(
@@ -172,5 +198,5 @@ public fun signalDrift(facts: Map<String, SignalFacts>): Map<String, List<Issue>
 
         if (issues.isNotEmpty()) out[file] = issues
     }
-    return out
+    return SignalDriftReport(out, declared, read)
 }

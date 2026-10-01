@@ -23,11 +23,29 @@ class SignalDriftTest {
         }
         """.trimIndent()
 
-    private fun drift(vararg files: Pair<String, SignalFacts>) = signalDrift(files.toMap())
+    private fun drift(vararg files: Pair<String, SignalFacts>) = signalDrift(files.toMap()).issues
 
     private fun kotlin(src: String) = collectSignalFacts(src, SourceLanguage.KOTLIN)
 
     private fun html(src: String) = collectSignalFacts(src, SourceLanguage.HTML)
+
+    @Test
+    fun `the report says what it had to judge, so an empty result can be believed`() {
+        val report = signalDrift(mapOf("page.html" to html(page), "Routes.kt" to kotlin(handler)))
+
+        assertEquals(emptyMap(), report.issues)
+        assertEquals(setOf("query", "draft"), report.read, "nothing was recognised as a read")
+        assertTrue("total" in report.declared)
+    }
+
+    /** A corpus the patterns do not match reports clean, and the report is how you tell. */
+    @Test
+    fun `a project with no recognisable reads is clean and says so`() {
+        val report = signalDrift(mapOf("page.html" to html(page)))
+
+        assertEquals(emptyMap(), report.issues)
+        assertTrue(report.read.isEmpty(), "there was nothing to judge")
+    }
 
     @Test
     fun `a signals class whose names the page declares is quiet`() {
