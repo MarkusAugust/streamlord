@@ -49,6 +49,9 @@ anything past the frame it is writing.
 
 ## What this page does not cover
 
+Content Security Policy is on [Security](/security/), including the three lines that put a nonce
+on an exchange from a `WebFilter` of your own.
+
 Backpressure strategy, schedulers and the rest of the reactive toolbox are Spring's, and the
 adapter deliberately does not reach into them. If your flow is hot and fast, the usual
 `buffer`, `conflate` and `sample` operators apply before `asServerSentEvents()`, unchanged.

@@ -12,6 +12,7 @@ dependencies {
     testImplementation(libs.spring.webmvc)
     testImplementation(libs.spring.test)
     testImplementation(libs.jakarta.servlet)
+    testImplementation(libs.reactor.core)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(project(":streamlord-json-jackson"))
     testImplementation(libs.jackson.kotlin)

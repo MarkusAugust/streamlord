@@ -8,6 +8,7 @@ spring = "6.2.19"
 spring7 = "7.0.9"
 servlet = "6.0.0"
 servlet61 = "6.1.0"
+reactor = "3.7.15"
 jackson = "3.2.3"
 jackson2 = "2.22.3"
 
@@ -30,6 +31,10 @@ spring-web = { module = "org.springframework:spring-web", version.ref = "spring"
 spring-webmvc = { module = "org.springframework:spring-webmvc", version.ref = "spring" }
 spring-test = { module = "org.springframework:spring-test", version.ref = "spring" }
 jakarta-servlet = { module = "jakarta.servlet:jakarta.servlet-api", version.ref = "servlet" }
+# Test-only, for :streamlord-spring. The WebFlux mocks in spring-test touch Publisher, so a
+# test of the nonce helper needs Reactor on the runtime classpath. The main source does not:
+# the helper takes a ServerWebExchange and returns a String, which is why no WebFilter ships.
+reactor-core = { module = "io.projectreactor:reactor-core", version.ref = "reactor" }
 jackson-databind = { module = "tools.jackson.core:jackson-databind", version.ref = "jackson" }
 jackson-kotlin = { module = "tools.jackson.module:jackson-module-kotlin", version.ref = "jackson" }
 jackson2-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson2" }

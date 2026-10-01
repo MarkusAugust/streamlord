@@ -6,6 +6,22 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `streamlord-core`: `CspNonce` in `core.domain` holds the half of Datastar's CSP mode that is the
+  same in every framework: `generate()` for a per-response nonce of 16 bytes from `SecureRandom`,
+  `starterPolicy(nonce)` for somewhere to start, `checked(nonce)` for a nonce from a generator of
+  your own, and the two header names.
+- `streamlord-ktor`: `CspNoncePlugin` generates one nonce per call, writes the
+  `Content-Security-Policy` header from it, and hands the same value back through
+  `call.cspNonce` for `dataNonce` on the `<html>` element. Both ends come from one variable, so
+  they cannot drift apart, which until now nothing enforced. The policy is configurable, `null`
+  writes no header, and `reportOnly = true` writes the report-only header instead.
+- `streamlord-spring`: `CspNonceFilter` does the same for WebMVC, with `request.cspNonce` to read
+  it back. For WebFlux, `exchange.installCspNonce()` writes both ends from inside a `WebFilter`
+  you register yourself; the adapter ships no `WebFilter` of its own, because one would put
+  Reactor on its compile classpath.
+
 ## [0.3.1] - 2026-09-29
 
 ### Added

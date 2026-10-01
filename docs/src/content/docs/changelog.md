@@ -9,6 +9,13 @@ with a sentence about what to do.
 
 ## Unreleased
 
+**The CSP nonce is Streamlord's job now.** `install(CspNoncePlugin)` on Ktor, or a
+`CspNonceFilter` bean on Spring WebMVC, generates one nonce per response, writes the
+`Content-Security-Policy` header from it, and hands the same value to `call.cspNonce` or
+`request.cspNonce` for `dataNonce` on your `<html>`. Nothing used to enforce that the header and
+the markup agreed, and when they drift Datastar fails silently. WebFlux gets
+`exchange.installCspNonce()` for a `WebFilter` you register yourself. See [Security](/security/).
+
 ## 0.3.1
 
 **Name your serializers for a native image.** `KotlinxSignalsCodec` now takes them by the type
