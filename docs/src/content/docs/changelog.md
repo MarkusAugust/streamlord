@@ -9,6 +9,8 @@ with a sentence about what to do.
 
 ## Unreleased
 
+## 0.4.0
+
 **The CSP nonce is Streamlord's job now.** `install(CspNoncePlugin)` on Ktor, or a
 `CspNonceFilter` bean on Spring WebMVC, generates one nonce per response, writes the
 `Content-Security-Policy` header from it, and hands the same value to `call.cspNonce` or

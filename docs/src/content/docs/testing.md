@@ -145,7 +145,7 @@ Add the artifact where your tests can see it:
 
 ```kotlin sample=none
 dependencies {
-    testImplementation("io.github.markusaugust.streamlord:streamlord-analysis:0.3.1")
+    testImplementation("io.github.markusaugust.streamlord:streamlord-analysis:0.4.0")
 }
 ```
 

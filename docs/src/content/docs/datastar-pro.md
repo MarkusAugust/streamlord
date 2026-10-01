@@ -39,7 +39,7 @@ Add the artifact, load your licensed bundle, and write the attributes:
 
 ```kotlin sample=none
 dependencies {
-    implementation("io.github.markusaugust.streamlord:streamlord-html-pro:0.3.1")
+    implementation("io.github.markusaugust.streamlord:streamlord-html-pro:0.4.0")
 }
 ```
 
