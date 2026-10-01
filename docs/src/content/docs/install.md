@@ -13,9 +13,9 @@ know why.
 
 ```kotlin tab="Gradle" group=install label="Build tool" sample=none
 dependencies {
-    implementation("io.github.markusaugust.streamlord:streamlord-ktor:0.5.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-html:0.5.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-json-kotlinx:0.5.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-ktor:0.6.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-html:0.6.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-json-kotlinx:0.6.0")
 }
 ```
 
@@ -23,17 +23,17 @@ dependencies {
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-ktor</artifactId>
-  <version>0.5.0</version>
+  <version>0.6.0</version>
 </dependency>
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-html</artifactId>
-  <version>0.5.0</version>
+  <version>0.6.0</version>
 </dependency>
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-json-kotlinx</artifactId>
-  <version>0.5.0</version>
+  <version>0.6.0</version>
 </dependency>
 ```
 
@@ -41,9 +41,9 @@ dependencies {
 
 ```kotlin tab="Gradle" group=install label="Build tool" sample=none
 dependencies {
-    implementation("io.github.markusaugust.streamlord:streamlord-spring:0.5.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-html:0.5.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-json-jackson:0.5.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-spring:0.6.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-html:0.6.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-json-jackson:0.6.0")
 }
 ```
 
@@ -51,17 +51,17 @@ dependencies {
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-spring</artifactId>
-  <version>0.5.0</version>
+  <version>0.6.0</version>
 </dependency>
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-html</artifactId>
-  <version>0.5.0</version>
+  <version>0.6.0</version>
 </dependency>
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-json-jackson</artifactId>
-  <version>0.5.0</version>
+  <version>0.6.0</version>
 </dependency>
 ```
 
@@ -69,9 +69,9 @@ dependencies {
 
 ```kotlin tab="Gradle" group=install label="Build tool" sample=none
 dependencies {
-    implementation("io.github.markusaugust.streamlord:streamlord-spring:0.5.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-html:0.5.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-json-jackson2:0.5.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-spring:0.6.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-html:0.6.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-json-jackson2:0.6.0")
 }
 ```
 
@@ -79,17 +79,17 @@ dependencies {
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-spring</artifactId>
-  <version>0.5.0</version>
+  <version>0.6.0</version>
 </dependency>
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-html</artifactId>
-  <version>0.5.0</version>
+  <version>0.6.0</version>
 </dependency>
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-json-jackson2</artifactId>
-  <version>0.5.0</version>
+  <version>0.6.0</version>
 </dependency>
 ```
 
@@ -191,7 +191,7 @@ That is rarely a problem, and it is never a surprise you cannot undo:
 ```kotlin sample=none
 dependencies {
     // Take Boot's Jackson, whatever it is.
-    implementation("io.github.markusaugust.streamlord:streamlord-json-jackson2:0.5.0") {
+    implementation("io.github.markusaugust.streamlord:streamlord-json-jackson2:0.6.0") {
         exclude(group = "com.fasterxml.jackson.core")
     }
 }
