@@ -54,6 +54,9 @@ install(StatusPages) {
 accept a `nonce` attribute. Streamlord has no opinion about your policy beyond giving you the
 place to put the nonce.
 
+Generating the nonce and writing the header are still yours. [The roadmap](/roadmap/) has the
+plugin that will take both, and the code to write until it does.
+
 ## Ordered delivery
 
 One mutex per stream. Concurrent coroutines writing to the same stream never interleave their
