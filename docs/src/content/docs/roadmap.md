@@ -1,6 +1,6 @@
 ---
 title: "Roadmap"
-description: "Three pieces of security work that are planned but not shipped, in the order they will land, and what to write in your own code until each one does."
+description: "What is planned but not shipped, in the order it will land, and what to do in your own code until each one does."
 ---
 
 > *A promise is a debt, and I pay mine in iron.*
@@ -8,17 +8,21 @@ description: "Three pieces of security work that are planned but not shipped, in
 > Gorvek of Bonereach
 
 None of this is in 0.6.0. It is written down so you can see what is coming, decide whether to
-wait for it, and know what to write today instead. Each one will be opt-in when it lands, the way
-[`guardElements`](/strings/) is, and none of them will change code that does not ask for them.
+wait for it, and know what to do today instead. Everything that touches your code is opt-in when
+it lands, the way [`guardElements`](/strings/) is, with one exception that is marked as such.
 
-| Order | Planned | What it governs | What you write today |
+| Order | Planned | What it changes | What you do today |
 |---|---|---|---|
 | 1 | [Continuous authorisation](#continuous-authorisation) | who may still receive a stream | your own check in the stream |
-| 2 | [Untrusted values in the DSL](#untrusted-values-in-the-dsl) | what reaches an expression built by the DSL | keep request data out of expression attributes |
-| 3 | [Concurrent stream limits](#concurrent-stream-limits) | how much one reader may hold open | your framework's rate limiting |
+| 2 | [Assert on events, not on strings](#assert-on-events-not-on-strings) | what a test of an endpoint looks like | compare the wire text, as [Testing](/testing/) shows |
+| 3 | [The happy path, documented](#the-happy-path-documented) | what a reader sees first | [Introduction](/introduction/) and [Your first stream](/first-stream/) |
+| 4 | [Untrusted values in the DSL](#untrusted-values-in-the-dsl) | what reaches an expression built by the DSL | keep request data out of expression attributes |
+| 5 | [Replay in the Stream Inspector](#replay-in-the-stream-inspector) | what you can see of a stream after it ran | watch it arrive live |
+| 6 | [Concurrent stream limits](#concurrent-stream-limits) | how much one reader may hold open | your framework's rate limiting |
+| 7 | [Starter templates](#starter-templates) | how long it takes to get a first page running | copy the `demo` module |
 
-The order is the order of the work, not a schedule. The last one lands after the others because
-it is the least Datastar-specific thing on the list, and the least certain to belong here at all.
+The order is the order of the work, not a schedule. The last one waits for 1.0 on purpose: a
+template that lags the API it demonstrates teaches the wrong thing, and the API is still moving.
 
 ## Continuous authorisation
 
@@ -60,6 +64,79 @@ What the reader's browser does next depends on how the stream was opened, and th
 [Operations](/operations/): the default `retry: 'auto'` does not reconnect when a 200 stream ends
 cleanly, which is what you want here.
 
+## Assert on events, not on strings
+
+[Testing](/testing/) already shows how to test an endpoint, and the examples on it say what is
+wrong: they compare the whole response body as one string.
+
+```
+event: datastar-patch-elements
+data: selector #feed
+data: mode append
+data: elements <li>A new head</li>
+```
+
+That is exact, and it breaks for reasons that are not bugs. Add an event id, emit two patches in
+the other order, change one class in the markup, and every assertion in the suite goes red at
+once. A test that cries wolf is a test people stop writing.
+
+Planned: a small module that parses the body and lets you assert on what you meant. The selector
+and mode of a patch, that a signal became 5, that a stream sent three events and no more, with
+order mattering only where you say it does.
+
+Most of it exists already. `SseParser`, `decodeDatastar` and `DatastarFrame` live in
+`streamlord-analysis`, written for the Stream Inspector, which has been parsing real streams for
+several releases. `mergePatch` is there too, the RFC 7386 merge the client applies to its store,
+so a test can also ask what the signals would be after the stream rather than what each patch
+said. What is missing is the layer above: frames back into the typed events of
+`streamlord-core`, and assertions that read like the thing being checked.
+
+### Until then
+
+The parser is public. If you already take `streamlord-analysis` as a test dependency for the
+drift check, you can feed it the body and assert on frames today:
+
+```kotlin sample=test
+@Test
+fun `the feed appends one item`() =
+    testApplication {
+        routing {
+            get("/feed") {
+                call.respondDatastar {
+                    patchElements("<li>A new head</li>", selector = "#feed", mode = ElementPatchMode.APPEND)
+                }
+            }
+        }
+
+        val frames = SseParser().feed(client.get("/feed").bodyAsText()).map { decodeDatastar(it) }
+
+        assertEquals(1, frames.size)
+        assertEquals("datastar-patch-elements", frames[0].event)
+        assertEquals("#feed", frames[0].args["selector"])
+        assertEquals("<li>A new head</li>", frames[0].args["elements"])
+    }
+```
+
+That is the shape the module will have; what it will add is doing this for you and saying
+something useful when it fails.
+
+## The happy path, documented
+
+This site explains the mechanism well and the point badly. The evidence is specific: a developer
+who read it came back asking for a typesafe kotlinx.html layer with Datastar attributes and
+completion, which is [`streamlord-html`](/html-dsl/), the flagship module, shipped since the first
+release. If someone can read the documentation and not find the headline feature, the
+documentation is the thing at fault.
+
+Planned: a before and after at the top, in the README and on the first page. The same endpoint
+written by hand against the protocol, and written with Streamlord, side by side. A screenshot of
+the editor refusing `data-text="$count"` before the code compiles, because the thing that is hard
+to believe until you see it is that a string gets checked at all. The three ways to write markup
+named in the first screen rather than four pages in.
+
+Nothing to configure and nothing to wait for. It is the cheapest item here and the one with the
+most evidence behind it.
+
 ## Untrusted values in the DSL
 
 [`interpolate`](/strings/) asks where a value landed, which it can only do because the holes are
@@ -84,6 +161,35 @@ Keep request data out of expression attributes in the DSL, and put it in element
 ordinary attribute, where kotlinx.html escapes it for you. When a value really has to reach an
 expression, patch it into a signal from the server rather than writing it into the markup, which
 is what signals are for.
+
+## Replay in the Stream Inspector
+
+The inspector opens a real Datastar request, exactly as the browser client would, parses the
+stream, and keeps every frame it decoded. It also keeps the signal store, applying each
+`datastar-patch-signals` as an RFC 7386 merge and honouring `__ifMissing`, so what it shows is
+what the client would hold.
+
+What it does not keep is the store at each step. `signals = mergePatch(signals, patch)` overwrites,
+so there is one running value and no way back. When a handler emits fifteen frames in half a
+second, you watch the number settle and cannot ask what it was at frame nine.
+
+Planned: a position control over the frames already on screen. Step back, and the store panel
+shows what the client would have held at that point. This needs no new capture and no protocol
+work: every frame is kept with its arguments, `mergePatch` is a pure function, so the store at any
+index is a fold from the start. The work is the control and the wiring, in both plugins.
+
+### What the inspector cannot do
+
+Simulating latency or a dropped connection to test how the Datastar client copes. The inspector is
+not the client. It is a separate HTTP client inside the editor, so slowing it down tells you
+nothing about the browser's behaviour, and the browser's own throttling already does that job
+properly.
+
+The useful half of that idea points the other way, at the server. Cutting a stream off mid-flight
+and seeing whether the handler notices and stops is a real question, it is what
+[Operations](/operations/) is about, and the inspector can already do it with the Stop button.
+What it could do better is say what happened afterwards: how long the server kept writing, and
+whether it ever stopped.
 
 ## Concurrent stream limits
 
@@ -111,13 +217,41 @@ server hygiene that Ktor and Spring both have facilities for. The narrow case fo
 knows which responses are streams, so it can count the right thing without wiring. That is
 convenience, not capability, which is why it is last.
 
-It shares plumbing with continuous authorisation. Both need to know which streams an identity holds
-right now, and both need the same clean shutdown path. Building one makes the other cheaper.
+It shares less with continuous authorisation than it looks. That check is per stream, made inside
+the stream's own write path, and needs no shared state at all. This one needs a registry of which
+streams an identity holds right now, and a counter that decrements on every way out: a clean end, a
+disconnect, an exception, a cancelled coroutine. One missed decrement locks a reader out of their
+own page for good, and nothing announces it. What the two do share is the clean shutdown path, so
+that a client reacts instead of sitting idle.
 
 ### Until then
 
 Use your framework's rate limiting, keyed by user rather than by route, and remember that what you
 want to cap is how many streams are open at once, not how many were opened this minute.
+
+## Starter templates
+
+After 1.0, not before.
+
+A hypermedia library is judged in the first ten minutes, and ten minutes is about what it takes to
+wire Ktor or Spring Boot up from nothing. A repository with a running page, a search box that
+answers over the wire, and a "Use this template" button removes that, and "show, don't tell" is
+the right instinct.
+
+Planned: one template, not two. Two repositories is two things to keep in step with every release,
+and a template that has fallen a version behind teaches the wrong API with full confidence. One
+repository covering both adapters, or the `demo` module documented as the thing to copy, carries
+the same weight for a fraction of the upkeep.
+
+It waits for 1.0 because the API is still moving. Three releases this week changed the surface,
+and each of them would have aged a template silently.
+
+### Until then
+
+`demo` in this repository is a real application that runs the real library: a search answered over
+SSE, a stream held open for twelve seconds, the eight patch modes, form validation, and a page
+served under a Content Security Policy. It is a module in a Gradle build rather than a template,
+so copying it means copying a directory and its build file, but nothing in it is a toy.
 
 ## What is not planned
 
