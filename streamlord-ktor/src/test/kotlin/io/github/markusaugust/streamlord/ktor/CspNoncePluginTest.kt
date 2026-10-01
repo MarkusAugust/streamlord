@@ -9,6 +9,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.install
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
+import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import kotlinx.html.body
@@ -109,6 +110,25 @@ class CspNoncePluginTest {
 
             assertEquals(HttpStatusCode.InternalServerError, response.status)
             assertNull(response.headers[CspNonce.HEADER], "no policy is written from a nonce that was refused")
+        }
+
+    /** An application that serves documents from some routes and streams from others. */
+    @Test
+    fun `installed on a route, it leaves every other route alone`() =
+        testApplication {
+            routing {
+                route("/app") {
+                    install(CspNoncePlugin)
+                    get("/dashboard") { call.respondText(call.cspNonce) }
+                }
+                get("/feed") { call.respondText("stream") }
+            }
+
+            val document = client.get("/app/dashboard")
+            val stream = client.get("/feed")
+
+            assertTrue(document.headers[CspNonce.HEADER]!!.contains("'nonce-${document.bodyAsText()}'"))
+            assertNull(stream.headers[CspNonce.HEADER], "a stream response carries no policy")
         }
 
     @Test

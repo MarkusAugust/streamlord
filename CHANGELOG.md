@@ -15,8 +15,10 @@ All notable changes to Streamlord are recorded here. The format follows
 - `streamlord-ktor`: `CspNoncePlugin` generates one nonce per call, writes the
   `Content-Security-Policy` header from it, and hands the same value back through
   `call.cspNonce` for `dataNonce` on the `<html>` element. Both ends come from one variable, so
-  they cannot drift apart, which until now nothing enforced. The policy is configurable, `null`
-  writes no header, and `reportOnly = true` writes the report-only header instead.
+  they cannot drift apart, which until now nothing enforced. It is route-scoped, so an
+  application that serves documents from some routes and streams from others installs it where
+  the documents are. The policy is configurable, `null` writes no header, and `reportOnly = true`
+  writes the report-only header instead.
 - `streamlord-spring`: `CspNonceFilter` does the same for WebMVC, with `request.cspNonce` to read
   it back. For WebFlux, `exchange.installCspNonce()` writes both ends from inside a `WebFilter`
   you register yourself; the adapter ships no `WebFilter` of its own, because one would put

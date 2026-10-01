@@ -6,9 +6,12 @@ import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.core.protocol.SseEncoder
 import io.github.markusaugust.streamlord.html.patchElements
 import io.github.markusaugust.streamlord.json.kotlinx.KotlinxSignalsCodec
+import io.github.markusaugust.streamlord.ktor.CspNoncePlugin
 import io.github.markusaugust.streamlord.ktor.StreamlordPlugin
+import io.github.markusaugust.streamlord.ktor.cspNonce
 import io.github.markusaugust.streamlord.ktor.readSignalsOr
 import io.github.markusaugust.streamlord.ktor.respondDatastar
+import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
@@ -20,6 +23,7 @@ import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
+import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.serialization.Serializable
@@ -155,6 +159,24 @@ public fun Application.live() {
 
     routing {
         get("/health") { call.respondText(BUILD) }
+
+        /*
+         * The one route that serves a document, and so the only one that wants a nonce. The
+         * plugin is route-scoped, so the stream endpoints below are not asked to generate one
+         * and carry no policy header; a header on a response the browser fetches rather than
+         * navigates to governs nothing anyway.
+         *
+         * The policy is this service's, not the SDK's: jsdelivr serves the client, one style
+         * element is on the page, and the stream is same-origin. Csp.kt spells out why each
+         * source is there.
+         */
+        route("/csp") {
+            install(CspNoncePlugin) { policy = ::policy }
+
+            get {
+                call.respondText(cspPage(call.cspNonce), ContentType.Text.Html)
+            }
+        }
 
         // POST, because this is the demo where the request carries the data rather than asks
         // for something, and so exercises the half of readSignals that reads the body.

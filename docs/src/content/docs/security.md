@@ -146,6 +146,14 @@ Patched-in scripts are the exception that needs no work from you: Datastar re-cr
 `<script>` it patches in and gives it the page's nonce. Never put a stream response's nonce on an
 injected script, because the policy that governs it is the one that came with the document.
 
+### A page that really runs under one
+
+[streamlord-live/csp](https://streamlord-live-production.up.railway.app/csp) is served by the
+service behind this site, under a policy with no `unsafe-eval` and no `unsafe-inline`, with the
+nonce generated per response by the plugin above. The button's label, its click handler and the
+counter are all Datastar expressions, so if it counts, every one of them was compiled through a
+nonce-bearing script element. The policy it is served under is printed on the page.
+
 ### The test worth writing
 
 Request the page from the test host, the way [Testing](/testing/) shows, and assert three things

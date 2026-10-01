@@ -2,8 +2,8 @@ package io.github.markusaugust.streamlord.ktor
 
 import io.github.markusaugust.streamlord.core.domain.CspNonce
 import io.ktor.server.application.ApplicationCall
-import io.ktor.server.application.ApplicationPlugin
-import io.ktor.server.application.createApplicationPlugin
+import io.ktor.server.application.RouteScopedPlugin
+import io.ktor.server.application.createRouteScopedPlugin
 import io.ktor.server.response.header
 import io.ktor.util.AttributeKey
 
@@ -55,12 +55,24 @@ internal val CspNonceKey: AttributeKey<String> = AttributeKey<String>("Streamlor
  * }
  * ```
  *
+ * It is route-scoped, so an application that serves documents from some routes and streams from
+ * others can install it where the documents are:
+ *
+ * ```kotlin
+ * routing {
+ *     route("/app") {
+ *         install(CspNoncePlugin)
+ *         get("/dashboard") { ... }
+ *     }
+ * }
+ * ```
+ *
  * The nonce belongs to the response that carried the document. Scripts that arrive later in an
  * element patch do not need this call's nonce and must not be given it: Datastar re-creates every
  * patched `<script>` with the nonce the page was loaded with.
  */
-public val CspNoncePlugin: ApplicationPlugin<CspNonceConfig> =
-    createApplicationPlugin("StreamlordCspNonce", ::CspNonceConfig) {
+public val CspNoncePlugin: RouteScopedPlugin<CspNonceConfig> =
+    createRouteScopedPlugin("StreamlordCspNonce", ::CspNonceConfig) {
         val generate = pluginConfig.nonce
         val policy = pluginConfig.policy
         val header = if (pluginConfig.reportOnly) CspNonce.REPORT_ONLY_HEADER else CspNonce.HEADER

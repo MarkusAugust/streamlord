@@ -13,8 +13,10 @@ with a sentence about what to do.
 `CspNonceFilter` bean on Spring WebMVC, generates one nonce per response, writes the
 `Content-Security-Policy` header from it, and hands the same value to `call.cspNonce` or
 `request.cspNonce` for `dataNonce` on your `<html>`. Nothing used to enforce that the header and
-the markup agreed, and when they drift Datastar fails silently. WebFlux gets
-`exchange.installCspNonce()` for a `WebFilter` you register yourself. See [Security](/security/).
+the markup agreed, and when they drift Datastar fails silently. The Ktor plugin is route-scoped,
+so an application that serves documents from some routes and streams from others installs it
+where the documents are. WebFlux gets `exchange.installCspNonce()` for a `WebFilter` you register
+yourself. See [Security](/security/), which links to a page running under a real policy.
 
 ## 0.3.1
 
