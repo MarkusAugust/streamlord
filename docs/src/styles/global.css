@@ -123,3 +123,108 @@ body {
   color: var(--fs-color-neutral-text-subtle);
   word-break: break-all;
 }
+
+/*
+ * The ports-and-adapters drawing on the architecture page.
+ *
+ * Small boxes so the whole shape fits across the column, and each one a <details> so the
+ * explanation is a press away rather than printed. The breakpoint is a container query on the
+ * figure, not a media query, so the drawing follows the column it sits in and not the window.
+ */
+.hex {
+  container-type: inline-size;
+  margin-block: var(--fs-spacing-5);
+  margin-inline: 0;
+}
+.hex__flow {
+  display: grid;
+  grid-template-columns: 1fr;
+  /* Boxes grow downwards when opened, so they hang from the top rather than recentring. */
+  align-items: start;
+  gap: var(--fs-spacing-2);
+}
+.hex__stack {
+  display: grid;
+  gap: var(--fs-spacing-2);
+}
+.hex__box {
+  padding: var(--fs-spacing-2) var(--fs-spacing-3);
+  border: 1px solid var(--fs-color-neutral-border-subtle);
+  border-radius: var(--fs-spacing-1);
+}
+.hex__box--core {
+  border-color: var(--fs-color-accent-fill);
+}
+.hex__box--port {
+  border-style: dashed;
+}
+.hex__box > summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
+  /* The default triangle sits on the first line and pushes the role label about. */
+  list-style: none;
+}
+.hex__box > summary::-webkit-details-marker {
+  display: none;
+}
+.hex__box > summary:focus-visible {
+  outline: var(--fs-focus-ring);
+  outline-offset: 2px;
+}
+.hex__role {
+  color: var(--fs-color-neutral-text-subtle);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.hex__name {
+  font-weight: var(--font-weight-semibold);
+}
+/* A hint that there is more, and which way it goes, without a script to turn it. */
+.hex__name::after {
+  content: " +";
+  color: var(--fs-color-neutral-text-subtle);
+  font-weight: normal;
+}
+.hex__box[open] .hex__name::after {
+  content: " \2212";
+}
+.hex__box > p {
+  margin: var(--fs-spacing-2) 0 0;
+  font-size: var(--font-size-s);
+}
+.hex__arrow {
+  justify-self: center;
+  align-self: center;
+  color: var(--fs-color-neutral-text-subtle);
+  line-height: 1;
+}
+.hex__arrow::before {
+  content: "\2193";
+}
+.hex figcaption {
+  margin-block-start: var(--fs-spacing-3);
+  color: var(--fs-color-neutral-text-subtle);
+  font-size: var(--font-size-s);
+}
+/*
+ * 43rem, not a round number: below 680px the longest name, IncomingRequest, breaks across two
+ * lines and the box grows half again as tall. Measured, not guessed. The article column is about
+ * 704px at full width, 832px when the table of contents drops, and 912px when the sidebar moves
+ * above the text, so every desktop case gets the row and only a phone gets the stack.
+ */
+@container (min-width: 43rem) {
+  .hex__flow {
+    grid-template-columns: 1fr auto 1fr auto 1fr auto 1fr;
+  }
+  .hex__arrow {
+    /* The arrows sit beside the first box of a column, not halfway down an opened one. */
+    align-self: start;
+    margin-block-start: var(--fs-spacing-4);
+  }
+  .hex__arrow::before {
+    content: "\2192";
+  }
+}

@@ -3,12 +3,53 @@ title: "Architecture"
 description: "Ports and adapters, and why the core imports no framework."
 ---
 
-```sample=none
-                 driving port                       driven ports
-   your code ──▶ DatastarStream ──▶ [ core ] ──▶ SseSink        ◀── Ktor channel / servlet stream
-                                     │            SignalsCodec   ◀── kotlinx / Jackson / built-in
-                 Streamlord.readSignals ──────▶ IncomingRequest  ◀── ApplicationCall / HttpServletRequest
-```
+<!--
+  Drawn as elements rather than as text art. The ASCII version wrapped on a phone into a column
+  of single letters, because a code block here wraps by design: indentation is how Kotlin says
+  what belongs to what, so a line that wraps hangs from where it started. A drawing has no
+  indentation to preserve and nothing sensible to wrap to.
+
+  Each box is a <details>, so the shape stays small enough to take in at a glance and the
+  explanation is one press away. No script: the element already carries the keyboard handling,
+  aria-expanded, and find-in-page opening the box it matched.
+
+  No blank lines inside the figure. Markdown ends a raw HTML block at the first one, and the
+  rest of it arrives in the page as an indented code block.
+-->
+<figure class="hex">
+  <div class="hex__flow">
+    <details class="hex__box">
+      <summary><span class="hex__role">your code</span><span class="hex__name">handlers and markup</span></summary>
+      <p>Streamlord is called from here and calls nothing back. You keep your routing, your templates and your domain; the SDK is a library you call, not a framework you sit inside.</p>
+    </details>
+    <div class="hex__arrow" aria-hidden="true"></div>
+    <details class="hex__box hex__box--port">
+      <summary><span class="hex__role">driving port</span><span class="hex__name"><code>DatastarStream</code></span></summary>
+      <p>The way in. <code>patchElements</code>, <code>patchSignals</code>, <code>executeScript</code> and <code>redirect</code> are all on this one interface, and <code>respondDatastar</code> hands you one. <code>Streamlord.readSignals</code> is the other direction of the same door.</p>
+    </details>
+    <div class="hex__arrow" aria-hidden="true"></div>
+    <details class="hex__box hex__box--core">
+      <summary><span class="hex__role">the core</span><span class="hex__name"><code>streamlord-core</code></span></summary>
+      <p>The protocol, the events, the pure encoder, the guards and a strict JSON engine. It imports no framework and depends on nothing but the standard library and coroutines, which is what lets Ktor and Spring put identical bytes on the wire.</p>
+    </details>
+    <div class="hex__arrow" aria-hidden="true"></div>
+    <div class="hex__stack">
+      <details class="hex__box hex__box--port">
+        <summary><span class="hex__role">driven port</span><span class="hex__name"><code>SseSink</code></span></summary>
+        <p>Where frames are written. Ktor writes into a response channel, the servlet adapter into an output stream. One mutex per stream means concurrent coroutines never interleave their frames.</p>
+      </details>
+      <details class="hex__box hex__box--port">
+        <summary><span class="hex__role">driven port</span><span class="hex__name"><code>SignalsCodec</code></span></summary>
+        <p>How signals become JSON and back. kotlinx.serialization, Jackson 2 or Jackson 3, or the built-in reader that needs no JSON library at all.</p>
+      </details>
+      <details class="hex__box hex__box--port">
+        <summary><span class="hex__role">driven port</span><span class="hex__name"><code>IncomingRequest</code></span></summary>
+        <p>Where signals are read from, with the size cap applied while reading. An <code>ApplicationCall</code> on Ktor, an <code>HttpServletRequest</code> on Spring.</p>
+      </details>
+    </div>
+  </div>
+  <figcaption>Press a box for what it is. Your code calls the driving port, the core calls the driven ports, and the adapters implement them. Nothing points the other way, which is why the core imports no framework.</figcaption>
+</figure>
 
 ## The layers
 
