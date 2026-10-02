@@ -6,6 +6,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-02
+
 ### Added
 
 - `streamlord-test`, a new module: `datastarEvents(wire)` reads a Datastar response back into the
