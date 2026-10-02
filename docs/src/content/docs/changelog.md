@@ -9,6 +9,8 @@ with a sentence about what to do.
 
 ## Unreleased
 
+## 0.10.0
+
 **Assert on events, not on strings.** The new `streamlord-test` module reads a response back into
 the events it carried: `datastarEvents(body).assertPatchElements(selector = "#feed")` and
 `assertSignal("heads", 13)`. Assertions ignore what they did not ask about, so a test survives a
