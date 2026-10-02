@@ -197,6 +197,66 @@ Make them virtual instead:
 spring.threads.virtual.enabled=true
 ```
 
+## Asking again while the stream runs
+
+A request is authorised once and is over in milliseconds. A stream is authorised once and then
+lives for minutes or hours, patching the whole time, while the reader logs out, an administrator
+revokes access, a subscription lapses or a role changes. Nobody asks again, so the stream carries
+on. How much that matters depends on what you are pushing: public dashboard numbers, little;
+another team's documents after someone left that team, rather more.
+
+Pass a `StreamAuthorisation` where you open the stream:
+
+```kotlin sample=ktor-routing
+get("/feed") {
+    val session = call.request.headers["Authorization"]
+
+    call.respondDatastar(
+        authorisation = StreamAuthorisation(every = 10.seconds) { session != null },
+    ) {
+        ticks.collect { tick -> patchSignals("tick" to tick) }
+    }
+}
+```
+
+The check is your own Kotlin, compiled with the rest of your application. It never reaches the
+browser and is never named in markup. Look in a database, read a cached token, ask your session
+store; Streamlord fixes the contract and not the logic.
+
+Four things it does, each for a reason:
+
+- **It asks at the open, before your handler runs.** The cheapest place to refuse a connection is
+  before it starts, and a refusal there writes nothing at all.
+- **It asks again on an interval, not before every patch.** A chatty stream would otherwise cost
+  one database round trip per patch. The verdict stands for `every`, five seconds by default.
+- **A refusal ends the stream** rather than letting it fall silent, so the client sees a finished
+  response instead of an idle server. Your handler stops where it stood; nothing after the refused
+  write runs.
+- **You get the last word.** `onRefused` runs on the still-open stream, so the reader can be told
+  rather than dropped:
+
+```kotlin sample=ktor-routing
+get("/feed") {
+    call.respondDatastar(
+        authorisation =
+            StreamAuthorisation(
+                onRefused = { patchElements("""<p id="notice">Your session expired</p>""") },
+            ) { false },
+    ) {
+        ticks.collect { tick -> patchSignals("tick" to tick) }
+    }
+}
+```
+
+`redirect("/login")` works there too, and so does anything else the stream can send.
+
+What the client does next is the rule from [further up this page](#when-datastar-reconnects-and-when-it-does-not):
+a 200 stream that ends cleanly does not reconnect under the default `retry: 'auto'`, which is what
+you want. A reader who should be let back in reloads or follows your redirect; one who should not
+is not hammering your endpoint in the meantime.
+
+On Spring the parameter is the same, on `datastarStream(streamlord, request, authorisation) { }`.
+
 ## Not covered here yet
 
 None of the following has been measured, so none of it is written down as advice:

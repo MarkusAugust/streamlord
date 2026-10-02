@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.ktor
 
+import io.github.markusaugust.streamlord.core.application.StreamAuthorisation
 import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.domain.DatastarResponse
 import io.github.markusaugust.streamlord.core.domain.ElementNamespace
@@ -41,13 +42,14 @@ import kotlin.reflect.typeOf
  */
 public suspend fun ApplicationCall.respondDatastar(
     status: HttpStatusCode = HttpStatusCode.OK,
+    authorisation: StreamAuthorisation? = null,
     block: suspend DatastarStream.() -> Unit,
 ) {
     val streamlord = this.streamlord
     for ((name, value) in DatastarProtocol.SSE_RESPONSE_HEADERS) response.header(name, value)
     if (request.httpVersion == "HTTP/1.1") response.header("Connection", "keep-alive")
     respondBytesWriter(contentType = ContentType.Text.EventStream, status = status) {
-        streamlord.stream(ChannelSseSink(this)).block()
+        streamlord.stream(ChannelSseSink(this), authorisation, block)
     }
 }
 
@@ -55,8 +57,9 @@ public suspend fun ApplicationCall.respondDatastar(
 public suspend fun ApplicationCall.respondDatastar(
     events: Flow<DatastarEvent>,
     status: HttpStatusCode = HttpStatusCode.OK,
+    authorisation: StreamAuthorisation? = null,
 ) {
-    respondDatastar(status) { sendAll(events) }
+    respondDatastar(status, authorisation) { sendAll(events) }
 }
 
 /** Respond with a single non-SSE Datastar response: `text/html`, `application/json` or `text/javascript`. */
