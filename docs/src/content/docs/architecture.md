@@ -12,17 +12,24 @@ description: "Ports and adapters, and why the core imports no framework."
 
 ## The layers
 
-**Domain** (`core.domain`): `DatastarEvent` as a sealed hierarchy, `ElementPatchMode`,
-`ElementNamespace`, `DatastarResponse`, and `Wire`, the guard that keeps line breaks out of
-single-line fields.
+**Domain** (`core.domain`): `DatastarEvent` as a sealed hierarchy with `PatchElements`,
+`PatchSignals` and `ExecuteScript`; `ElementPatchMode` and `ElementNamespace`; the non-SSE
+`DatastarResponse` types; and the guards, which are the part that makes this an SDK rather than
+an encoder. `Wire` keeps line breaks out of single-line fields, `ExpressionGuard` and
+`ElementsGuard` hunt the `$` trap, `interpolate` asks where a value landed, and `CspNonce` holds
+the nonce half of Datastar's CSP mode.
 
-**Protocol** (`core.protocol`): `SseEncoder`, which is pure, `SseFrame`, and every constant of
-Datastar 1.0.4.
+**Protocol** (`core.protocol`): `SseEncoder`, which is pure, `SseFrame`, `DatastarAttributes` and
+every constant of Datastar 1.0.4.
 
 **Ports** (`core.port`): the driving `DatastarStream`; the driven `SseSink`, `SignalsCodec` and
 `IncomingRequest`.
 
-**Application** (`core.application`): `Streamlord`, the configured facade the adapters call.
+**JSON** (`core.json`): `JsonParser`, `JsonWriter` and the `JsonValue` hierarchy. It is here
+because the core refuses a JSON dependency, not because anybody wanted to write one.
+
+**Application** (`core.application`): `Streamlord`, the configured facade the adapters call, and
+`StreamAuthorisation`, which a stream carries for as long as it runs.
 
 **Adapters**: everything outside `streamlord-core`.
 

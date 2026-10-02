@@ -186,7 +186,7 @@ from the handler's own coroutine, and `asServerSentEvents` is a `Flow` mapping t
 reactively.
 
 **Spring WebMVC** does hold one. `datastarStream` returns a `StreamingResponseBody` and bridges
-into the suspending core with `runBlocking` (`Servlet.kt:54`), which occupies the executing thread
+into the suspending core with `runBlocking`, inside `datastarStream`, which occupies the executing thread
 for as long as the stream is open. Which thread that is belongs to Spring, not to Streamlord: it
 is the MVC async task executor. Boot's default creates a new platform thread per request with no
 upper bound, so a thousand open streams are a thousand platform threads.
