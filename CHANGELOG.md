@@ -6,6 +6,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-02
+
 ### Removed
 
 - `streamlord-core`: `Flow<DatastarEvent>.asSse()`. Of 244 public names across the published
