@@ -25,4 +25,5 @@ include(
     "streamlord-json-jackson2",
     "streamlord-ktor",
     "streamlord-spring",
+    "streamlord-test",
 )

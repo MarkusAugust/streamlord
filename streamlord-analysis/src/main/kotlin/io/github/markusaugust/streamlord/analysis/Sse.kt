@@ -1,6 +1,5 @@
 package io.github.markusaugust.streamlord.analysis
 
-import io.github.markusaugust.streamlord.core.json.JsonNull
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonValue
 
@@ -98,18 +97,4 @@ public fun decodeDatastar(
             msg.data.forEach { add("data: $it") }
         }.joinToString("\n")
     return DatastarFrame(msg.event, msg.id, msg.retry, args, raw, receivedAt)
-}
-
-/** RFC 7386 JSON merge patch, as the Datastar client applies signal patches. */
-public fun mergePatch(
-    target: JsonValue,
-    patch: JsonValue,
-): JsonValue {
-    if (patch !is JsonObject) return patch
-    val result = LinkedHashMap<String, JsonValue>()
-    if (target is JsonObject) result.putAll(target)
-    for ((k, v) in patch) {
-        if (v is JsonNull) result.remove(k) else result[k] = mergePatch(result[k] ?: JsonNull, v)
-    }
-    return JsonObject(result)
 }

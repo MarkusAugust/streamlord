@@ -229,6 +229,7 @@ you check that.
 | `streamlord-json-jackson2` | `jackson-databind` 2 |
 | `streamlord-html-pro` | nothing beyond `streamlord-html` |
 | `streamlord-analysis` | nothing beyond `streamlord-core` |
+| `streamlord-test` | nothing beyond `streamlord-core`, and no test framework |
 
 **The Soul** is `streamlord-core`: the protocol, the events, the encoder, a strict JSON engine and
 the ports. It has no JSON library because it has its own RFC 8259 parser and writer.
@@ -242,6 +243,11 @@ wire are identical.
 
 `streamlord-html-pro` is a separate, opt-in artifact for [Datastar Pro](/datastar-pro/). It
 contains no Pro code and is inert without the bundle you licensed.
+
+`streamlord-test` is assertions for your tests: it reads a Datastar response back into the
+events it carried so a test can say what it means rather than compare the whole body as a string.
+It binds no test framework, so it works under kotlin.test, JUnit, Kotest or TestNG alike. Take it
+as a `testImplementation` and nowhere else. It is on [Testing](/testing/).
 
 `streamlord-analysis` is the analysis behind the editor tooling: the Kotlin string reader, the
 expression and markup rules, the signal and selector collectors. The editors are its first

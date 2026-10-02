@@ -15,6 +15,7 @@ Neither needs a browser.
 ## Assert what the endpoint sent, in Ktor
 
 `testApplication` runs your routes in the same process, and the response body is the wire.
+`datastarEvents` reads that body back into the events it carried, so a test says what it means:
 
 ```kotlin sample=test
 @Test
@@ -29,23 +30,68 @@ fun `the feed appends one item and sets the count`() =
             }
         }
 
-        assertEquals(
-            "event: datastar-patch-elements\n" +
-                "data: selector #feed\n" +
-                "data: mode append\n" +
-                "data: elements <li>A new head</li>\n\n" +
-                "event: datastar-patch-signals\n" +
-                "data: signals {\"heads\":13}\n\n",
-            client.get("/feed").bodyAsText(),
-        )
+        val events = datastarEvents(client.get("/feed").bodyAsText())
+
+        events.assertPatchElements(selector = "#feed", mode = ElementPatchMode.APPEND, containing = "A new head")
+        events.assertSignal("heads", 13)
     }
 ```
 
-That string is the whole contract. It is the same shape the [protocol](/protocol/) page prints,
-and those bytes are written there by the encoder during the build rather than typed out, so if
-you want the exact frame for an event, that page is generated proof of it.
+Needs `ktor-server-test-host` and `streamlord-test` in `testImplementation`.
 
-Needs `ktor-server-test-host` in `testImplementation`.
+### Every assertion ignores what it did not ask about
+
+That is the point of them. Add a signal patch to the handler above and the assertion about markup
+stays green, because it was never about the whole stream. The alternative, comparing the entire
+body as one string, goes red when a patch is reordered or a class changes in the markup, and a
+test that cries wolf is a test people stop writing.
+
+When the whole stream genuinely is the point, say so:
+
+```kotlin sample=statements
+val events = datastarEvents(wire)
+
+events.assertExactly(
+    PatchElements("<li>A new head</li>", selector = "#feed", mode = ElementPatchMode.APPEND),
+    PatchSignals("""{"heads":13}"""),
+)
+```
+
+### Signals read as what the stream left them
+
+`assertSignal` folds every signal patch the way the browser does, with the RFC 7386 merge the
+protocol specifies. So a signal set and then changed reads as its last value, a signal removed
+with `null` is gone, and `onlyIfMissing` does not overwrite what was already there. A nested one
+is reached with dots:
+
+```kotlin sample=statements
+val events = datastarEvents(wire)
+
+events.assertSignal("heads", 13)
+events.assertSignal("address.city", "Thurn")
+events.assertNoSignal("draft")
+```
+
+### It is a list, and it binds no test framework
+
+`datastarEvents` returns a `List<DatastarEvent>`, so your own assertions work on it unchanged and
+these are a convenience rather than a cage. `events.messages` has the raw SSE messages too, for a
+test about a heartbeat comment or a resume id.
+
+Nothing in `streamlord-test` depends on a test framework. A failure is an `AssertionError`, which
+every runner understands, so kotlin.test, JUnit 4 and 5, Kotest and TestNG all work and none of
+them is imposed on you. The module's only dependency is `streamlord-core`.
+
+A failure prints the stream, because the first question is always what the handler actually sent:
+
+```
+No element patch with selector #missing.
+
+The stream carried 3 events:
+  event: datastar-patch-elements | data: selector #feed | data: mode append | data: elements <li>A new head</li>
+  event: datastar-patch-signals | data: signals {"heads":12,"open":true}
+  event: datastar-patch-signals | data: signals {"heads":13}
+```
 
 ## The same, in Spring WebMVC
 

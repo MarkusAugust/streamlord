@@ -13,72 +13,15 @@ it lands, the way [`guardElements`](/strings/) is, with one exception that is ma
 
 | Order | Planned | What it changes | What you do today |
 |---|---|---|---|
-| 1 | [Assert on events, not on strings](#assert-on-events-not-on-strings) | what a test of an endpoint looks like | compare the wire text, as [Testing](/testing/) shows |
-| 2 | [The happy path, documented](#the-happy-path-documented) | what a reader sees first | [Introduction](/introduction/) and [Your first stream](/first-stream/) |
-| 3 | [Untrusted values in the DSL](#untrusted-values-in-the-dsl) | what reaches an expression built by the DSL | keep request data out of expression attributes |
-| 4 | [Replay in the Stream Inspector](#replay-in-the-stream-inspector) | what you can see of a stream after it ran | watch it arrive live |
-| 5 | [Delimiters the analysis has not met](#delimiters-the-analysis-has-not-met) | a false error on a correct template file | nothing, for `data-bind` and its kind |
-| 6 | [Concurrent stream limits](#concurrent-stream-limits) | how much one reader may hold open | your framework's rate limiting |
-| 7 | [Starter templates](#starter-templates) | how long it takes to get a first page running | copy the `demo` module |
+| 1 | [The happy path, documented](#the-happy-path-documented) | what a reader sees first | [Introduction](/introduction/) and [Your first stream](/first-stream/) |
+| 2 | [Untrusted values in the DSL](#untrusted-values-in-the-dsl) | what reaches an expression built by the DSL | keep request data out of expression attributes |
+| 3 | [Replay in the Stream Inspector](#replay-in-the-stream-inspector) | what you can see of a stream after it ran | watch it arrive live |
+| 4 | [Delimiters the analysis has not met](#delimiters-the-analysis-has-not-met) | a false error on a correct template file | nothing, for `data-bind` and its kind |
+| 5 | [Concurrent stream limits](#concurrent-stream-limits) | how much one reader may hold open | your framework's rate limiting |
+| 6 | [Starter templates](#starter-templates) | how long it takes to get a first page running | copy the `demo` module |
 
 The order is the order of the work, not a schedule. The last one waits for 1.0 on purpose: a
 template that lags the API it demonstrates teaches the wrong thing, and the API is still moving.
-
-## Assert on events, not on strings
-
-[Testing](/testing/) already shows how to test an endpoint, and the examples on it say what is
-wrong: they compare the whole response body as one string.
-
-```
-event: datastar-patch-elements
-data: selector #feed
-data: mode append
-data: elements <li>A new head</li>
-```
-
-That is exact, and it breaks for reasons that are not bugs. Add an event id, emit two patches in
-the other order, change one class in the markup, and every assertion in the suite goes red at
-once. A test that cries wolf is a test people stop writing.
-
-Planned: a small module that parses the body and lets you assert on what you meant. The selector
-and mode of a patch, that a signal became 5, that a stream sent three events and no more, with
-order mattering only where you say it does.
-
-Most of it exists already. `SseParser`, `decodeDatastar` and `DatastarFrame` live in
-`streamlord-analysis`, written for the Stream Inspector, which has been parsing real streams for
-several releases. `mergePatch` is there too, the RFC 7386 merge the client applies to its store,
-so a test can also ask what the signals would be after the stream rather than what each patch
-said. What is missing is the layer above: frames back into the typed events of
-`streamlord-core`, and assertions that read like the thing being checked.
-
-### Until then
-
-The parser is public. If you already take `streamlord-analysis` as a test dependency for the
-drift check, you can feed it the body and assert on frames today:
-
-```kotlin sample=test
-@Test
-fun `the feed appends one item`() =
-    testApplication {
-        routing {
-            get("/feed") {
-                call.respondDatastar {
-                    patchElements("<li>A new head</li>", selector = "#feed", mode = ElementPatchMode.APPEND)
-                }
-            }
-        }
-
-        val frames = SseParser().feed(client.get("/feed").bodyAsText()).map { decodeDatastar(it) }
-
-        assertEquals(1, frames.size)
-        assertEquals("datastar-patch-elements", frames[0].event)
-        assertEquals("#feed", frames[0].args["selector"])
-        assertEquals("<li>A new head</li>", frames[0].args["elements"])
-    }
-```
-
-That is the shape the module will have; what it will add is doing this for you and saying
-something useful when it fails.
 
 ## The happy path, documented
 
