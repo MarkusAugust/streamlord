@@ -9,6 +9,8 @@ with a sentence about what to do.
 
 ## Unreleased
 
+## 0.8.0
+
 **A stream can be asked again whether it may still run.** `StreamAuthorisation` goes where you
 open the stream: Streamlord asks at the open and then on an interval, a refusal lets you say
 something to the reader through `onRefused` and then ends the response rather than going quiet,
