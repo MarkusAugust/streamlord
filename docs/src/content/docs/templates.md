@@ -35,6 +35,22 @@ and JTE files. The Streamlord VS Code extension covers all of the above (JTE, kt
 Velocity, Mustache, Pebble, and Thymeleaf, which is plain HTML) and understands each engine's
 syntax well enough not to flag its own tags as errors.
 
+## Your engine does not have to be on any list
+
+The extension names a dozen engines above, which invites the question of what happens to the
+thirteenth. Nothing: it works, and the tooling stays quiet about it.
+
+The analysis carries a set of delimiter *shapes*, not engine names, so `{{ }}`, `{% %}`, `${ }`,
+`<% %>`, `[# ]` and the control-flow keywords cover most of what exists whatever it is called. An
+engine outside all of them was measured rather than assumed: Qute's `{#if}` and `{name}`,
+Closure's `{$name}` and Rocker's `@name` were each run through `analyzeHtml`, and each produced
+no findings at all, while a genuine mistake in the same snippet, `data-txt`, was still caught.
+
+The reason is that completeness checking, the part that could be confused by an unfamiliar block
+syntax, runs on HTML strings written inside Kotlin, where template syntax never appears. Your
+template file is judged on its `data-*` attributes and their expressions, and those look the same
+in every engine.
+
 ## The guard
 
 Template output is a string like any other, so [`guardElements`](/strings/) walks it the same way
