@@ -1,18 +1,20 @@
 /*
  * The imaginary world the documentation's examples live in.
  *
- * An example that reads well needs a domain: a repository to search, a hit to render, a
- * signal class to deserialise into. Declaring them once here does two things. The samples
- * compile, and every page tells the same story instead of inventing a new domain per page.
+ * An example that reads well needs a domain: a repository to search, a hit to render, some
+ * markup rendered elsewhere. Declaring them once here does two things. The samples compile,
+ * and every page tells the same story instead of inventing a new domain per page.
  *
  * Add to this only what a page genuinely needs. A fixture nobody uses is a lie about what
  * the documentation shows.
  */
 
-import kotlinx.serialization.Serializable
-
-@Serializable
-data class SearchSignals(val query: String = "")
+/*
+ * SearchSignals is not here. The signals page declares it, in the example that teaches it, and
+ * every other page's examples compile against that one. A fixture copy would mean the class a
+ * reader sees and the class the examples use were two different things, which is how the page
+ * came to declare a `Search` and then read a `SearchSignals`.
+ */
 
 data class Hit(val title: String, val url: String)
 

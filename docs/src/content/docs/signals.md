@@ -38,12 +38,25 @@ does not need a class.
 
 ## With a codec
 
-When the shape is worth naming, configure a codec and read into it:
+When the shape is worth naming, it takes three things: a codec on the instance, a class, and a
+read into that class.
+
+**One.** The codec, installed once for the application. The built-in reader cannot build a data
+class, so this is what makes the rest of this section possible:
+
+```kotlin sample=ktor-application
+install(StreamlordPlugin) { codec = KotlinxSignalsCodec() }
+```
+
+**Two.** The class, which names the signals this handler accepts. It is an ordinary
+`@Serializable` data class and nothing about it is Streamlord's:
 
 ```kotlin sample=declarations
 @Serializable
-data class Search(val query: String = "", val page: Int = 1)
+data class SearchSignals(val query: String = "", val page: Int = 1)
 ```
+
+**Three.** The read, which hands that class to the codec from step one:
 
 ```kotlin sample=ktor-routing
 post("/search") {
@@ -52,9 +65,13 @@ post("/search") {
 }
 ```
 
+`signals` is a `SearchSignals` now, so `signals.query` is a `String` the compiler knows about,
+and the JSON the browser sent never appears in your code.
+
 `readSignals<T>()` returns null when the request carried no signals at all; `readSignalsOr(default)`
 saves you the elvis. Defaults on the data class matter more than usual here, because the browser
-sends only the signals it has.
+sends only the signals it has: a page that never set `page` sends no `page`, and the default is
+what the handler gets.
 
 ## The type is the input surface
 
