@@ -35,21 +35,27 @@ and JTE files. The Streamlord VS Code extension covers all of the above (JTE, kt
 Velocity, Mustache, Pebble, and Thymeleaf, which is plain HTML) and understands each engine's
 syntax well enough not to flag its own tags as errors.
 
-## Your engine does not have to be on any list
+## If your engine is not one of those
 
-The extension names a dozen engines above, which invites the question of what happens to the
-thirteenth. Nothing: it works, and the tooling stays quiet about it.
+The list above is of engines someone tested. What the analysis actually carries is a set of
+delimiter *shapes*, not names: `{{ }}`, `{% %}`, `${ }`, `<% %>`, `[# ]` and the control-flow
+keywords of JTE and Velocity. Any engine using one of those shapes is covered whatever it is
+called, which is most of them.
 
-The analysis carries a set of delimiter *shapes*, not engine names, so `{{ }}`, `{% %}`, `${ }`,
-`<% %>`, `[# ]` and the control-flow keywords cover most of what exists whatever it is called. An
-engine outside all of them was measured rather than assumed: Qute's `{#if}` and `{name}`,
-Closure's `{$name}` and Rocker's `@name` were each run through `analyzeHtml`, and each produced
-no findings at all, while a genuine mistake in the same snippet, `data-txt`, was still caught.
+For an engine outside all of them, Qute's `{name}`, Closure's `{$name}`, Rocker's `@name`, the
+answer is measured rather than guessed, and it splits in two.
 
-The reason is that completeness checking, the part that could be confused by an unfamiliar block
-syntax, runs on HTML strings written inside Kotlin, where template syntax never appears. Your
-template file is judged on its `data-*` attributes and their expressions, and those look the same
-in every engine.
+**Expression attributes are fine.** `data-text="{name}"` and the rest produce no findings. The
+expression check only fires on shapes no working Datastar expression has, and an unfamiliar
+delimiter is not one of them.
+
+**Attributes that take a signal name are not.** `data-bind="{name}"`, `data-indicator="{name}"`
+and their kind report `signal-name-expected`, because a signal name is held to a strict pattern
+and a brace is not in it. The error is wrong and there is currently no way to tell the analysis
+otherwise. It is on [the roadmap](/roadmap/).
+
+Nothing about rendering is affected either way. This is the editor's opinion of your file, not
+Streamlord's opinion of your markup.
 
 ## The guard
 
