@@ -6,6 +6,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-02
+
 ### Added
 
 - `streamlord-core`: `StreamAuthorisation`, a check a stream carries for as long as it runs. A
