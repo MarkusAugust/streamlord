@@ -13,56 +13,15 @@ it lands, the way [`guardElements`](/strings/) is, with one exception that is ma
 
 | Order | Planned | What it changes | What you do today |
 |---|---|---|---|
-| 1 | [Continuous authorisation](#continuous-authorisation) | who may still receive a stream | your own check in the stream |
-| 2 | [Assert on events, not on strings](#assert-on-events-not-on-strings) | what a test of an endpoint looks like | compare the wire text, as [Testing](/testing/) shows |
-| 3 | [The happy path, documented](#the-happy-path-documented) | what a reader sees first | [Introduction](/introduction/) and [Your first stream](/first-stream/) |
-| 4 | [Untrusted values in the DSL](#untrusted-values-in-the-dsl) | what reaches an expression built by the DSL | keep request data out of expression attributes |
-| 5 | [Replay in the Stream Inspector](#replay-in-the-stream-inspector) | what you can see of a stream after it ran | watch it arrive live |
-| 6 | [Concurrent stream limits](#concurrent-stream-limits) | how much one reader may hold open | your framework's rate limiting |
-| 7 | [Starter templates](#starter-templates) | how long it takes to get a first page running | copy the `demo` module |
+| 1 | [Assert on events, not on strings](#assert-on-events-not-on-strings) | what a test of an endpoint looks like | compare the wire text, as [Testing](/testing/) shows |
+| 2 | [The happy path, documented](#the-happy-path-documented) | what a reader sees first | [Introduction](/introduction/) and [Your first stream](/first-stream/) |
+| 3 | [Untrusted values in the DSL](#untrusted-values-in-the-dsl) | what reaches an expression built by the DSL | keep request data out of expression attributes |
+| 4 | [Replay in the Stream Inspector](#replay-in-the-stream-inspector) | what you can see of a stream after it ran | watch it arrive live |
+| 5 | [Concurrent stream limits](#concurrent-stream-limits) | how much one reader may hold open | your framework's rate limiting |
+| 6 | [Starter templates](#starter-templates) | how long it takes to get a first page running | copy the `demo` module |
 
 The order is the order of the work, not a schedule. The last one waits for 1.0 on purpose: a
 template that lags the API it demonstrates teaches the wrong thing, and the API is still moving.
-
-## Continuous authorisation
-
-An ordinary request is authorised once and is over in milliseconds. A stream is authorised once and
-then lives for minutes or hours, patching the whole time, while the reader logs out, an admin
-revokes access, a subscription lapses or a role changes. Nobody asks again, so the stream carries
-on. How much that matters depends on what you are pushing: public dashboard numbers, little;
-another team's documents after someone left that team, rather more.
-
-Planned: not a plugin. [`CspNoncePlugin`](/security/) is a plugin because it touches every
-response, and this concerns only the handlers that open a stream, so it belongs on the stream
-builder. You will pass a suspending check alongside the usual arguments, Streamlord will call it
-with the context it needs and act on the verdict, and the rest of the call site will not move. The refinements that make it
-usable: a boolean verdict by default with an optional reason, so the client can be told the session
-expired rather than merely dropped; an interval rather than a check before every patch, since a
-chatty stream makes a database check expensive; the first check at open, which is the cheapest
-place to refuse; and a clean close on failure, so the client re-authenticates instead of assuming
-the server went quiet.
-
-### Until then
-
-Do the check inside the stream and end the flow when it fails. Ending it is the part that matters:
-a stream that goes silent looks to the client like an idle server.
-
-```kotlin sample=ktor-routing
-get("/feed") {
-    // Your own check: a session lookup, a cached token, a query. Called before each patch.
-    val stillAuthorised: suspend () -> Boolean = { true }
-
-    call.respondDatastar {
-        ticks
-            .takeWhile { stillAuthorised() }
-            .collect { tick -> patchSignals("tick" to tick) }
-    }
-}
-```
-
-What the reader's browser does next depends on how the stream was opened, and the rules are on
-[Operations](/operations/): the default `retry: 'auto'` does not reconnect when a 200 stream ends
-cleanly, which is what you want here.
 
 ## Assert on events, not on strings
 
@@ -204,8 +163,8 @@ server hygiene that Ktor and Spring both have facilities for. The narrow case fo
 knows which responses are streams, so it can count the right thing without wiring. That is
 convenience, not capability, which is why it is last.
 
-It shares less with continuous authorisation than it looks. That check is per stream, made inside
-the stream's own write path, and needs no shared state at all. This one needs a registry of which
+It shares less with [continuous authorisation](/operations/) than it looks. That check is per
+stream, made inside the stream's own write path, and needs no shared state at all. This one needs a registry of which
 streams an identity holds right now, and a counter that decrements on every way out: a clean end, a
 disconnect, an exception, a cancelled coroutine. One missed decrement locks a reader out of their
 own page for good, and nothing announces it. What the two do share is the clean shutdown path, so

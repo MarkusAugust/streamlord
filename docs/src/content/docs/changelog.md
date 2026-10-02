@@ -9,6 +9,11 @@ with a sentence about what to do.
 
 ## Unreleased
 
+**A stream can be asked again whether it may still run.** `StreamAuthorisation` goes where you
+open the stream: Streamlord asks at the open and then on an interval, a refusal lets you say
+something to the reader through `onRefused` and then ends the response rather than going quiet,
+and the check is ordinary Kotlin that never reaches the browser. See [Operations](/operations/).
+
 ## 0.7.0
 
 **`signalDrift` now reports what it saw.** It returns a `SignalDriftReport`; assert that

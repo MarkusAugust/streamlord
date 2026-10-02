@@ -197,11 +197,150 @@ Make them virtual instead:
 spring.threads.virtual.enabled=true
 ```
 
+### `runBlocking` does not pin a carrier, measured
+
+That only helps if `runBlocking` releases its carrier thread while the stream waits. If it pinned
+one, virtual threads would buy nothing and a thousand streams would still be a thousand carriers.
+
+It does not pin. Two hundred virtual threads, each running `runBlocking { delay(500.milliseconds) }`,
+on eight carriers:
+
+| What each virtual thread did | Wall time for 200 |
+|---|---|
+| `Thread.sleep(500)` | 517 ms |
+| `runBlocking { delay(500) } ` | **554 ms** |
+| `synchronized(ownLock) { Thread.sleep(500) }` | 12 675 ms |
+
+The third row is the control, and it is the one that proves the measurement can see pinning at all:
+`synchronized` around a blocking call does pin on JDK 21, so 200 tasks over 8 carriers take
+200 ÷ 8 × 500 ms. Each task holds a lock nobody else wants, so that number is pinning alone and
+not contention. `runBlocking` lands with plain `Thread.sleep`, which means all 200 ran at once.
+**Measured on JDK 21.0.2.**
+
+What this does not measure is your container's write. `runBlocking` releases the carrier while the
+stream waits; whether the servlet output stream blocks in a way that pins is Tomcat's business and
+depends on the JDK, since `synchronized` stopped pinning in JDK 24. The part that belongs to
+Streamlord is clear.
+
+## What a deploy does to an open stream
+
+A rolling deploy sends `SIGTERM` and starts a new instance. With a stream open, measured against
+this project's own service on Ktor CIO:
+
+- the process was gone **1.1 seconds** after the signal;
+- the client saw a **severed connection**, not a finished stream. `curl` ended with exit 18,
+  `CURLE_PARTIAL_FILE`: the body stopped mid-response with no clean end.
+
+Adding a shutdown hook does not fix it, which is the part worth knowing before you write one:
+
+```kotlin sample=none
+server.addShutdownHook { server.stop(gracePeriodMillis = 3_000, timeoutMillis = 10_000) }
+```
+
+The hook runs. `stop()` returned after **1026 ms** of a three second grace period and the stream
+was severed exactly as before. The grace period drains requests that are about to finish; a
+response that intends to stay open for an hour is not something it waits for.
+
+So a deploy cuts your streams, and that is the behaviour to design around rather than configure
+away. The good news is in the table [further up](#when-datastar-reconnects-and-when-it-does-not):
+a severed connection is a transport failure, and a transport failure is the one case the default
+`retry: 'auto'` does reconnect from. Your readers come back on the new instance after the one
+second base interval, all of them, together. If that herd is a problem, raise `retryInterval`
+where you open the stream.
+
+To end streams cleanly instead, the handler has to know the server is going down. Watch Ktor's
+`ApplicationStopPreparing` event and finish your flows from there; nothing in Streamlord can do it
+for you, because only your handler knows what a half-finished stream owes its reader.
+
+## Six streams, and the page stalls
+
+Browsers cap connections per origin on HTTP/1.1, and an open stream holds one for its whole life.
+The number is exactly six in Chrome, and the cost of exceeding it is not subtle. Twelve
+`EventSource`s against one origin, then an ordinary `fetch` of a trivial endpoint:
+
+| | HTTP/1.1 | HTTP/2 |
+|---|---|---|
+| Streams open, of 12 | **6** | 12 |
+| Still connecting | 6 | 0 |
+| `fetch("/health")` while they run | **21 350 ms** | 34 ms |
+| The same fetch with nothing open | 3 to 7 ms | |
+
+**Measured**, in Chrome, against this project's service: the HTTP/1.1 column locally, the HTTP/2
+column against the deployed instance. The twenty-one seconds is not the server being slow. It is
+the request sitting in a queue behind six streams that have no intention of ending, on a server
+that answers in three milliseconds when asked.
+
+So over HTTP/1.1 a page can starve itself with its own streams, and nothing warns it. Two or three
+concurrent streams is the honest ceiling there. Over HTTP/2 and HTTP/3 they multiplex onto one
+connection and the limit stops mattering, which is the strongest argument on this page for
+terminating HTTP/2 in front of your service.
+
+## Asking again while the stream runs
+
+A request is authorised once and is over in milliseconds. A stream is authorised once and then
+lives for minutes or hours, patching the whole time, while the reader logs out, an administrator
+revokes access, a subscription lapses or a role changes. Nobody asks again, so the stream carries
+on. How much that matters depends on what you are pushing: public dashboard numbers, little;
+another team's documents after someone left that team, rather more.
+
+Pass a `StreamAuthorisation` where you open the stream:
+
+```kotlin sample=ktor-routing
+get("/feed") {
+    val session = call.request.headers["Authorization"]
+
+    call.respondDatastar(
+        authorisation = StreamAuthorisation(every = 10.seconds) { session != null },
+    ) {
+        ticks.collect { tick -> patchSignals("tick" to tick) }
+    }
+}
+```
+
+The check is your own Kotlin, compiled with the rest of your application. It never reaches the
+browser and is never named in markup. Look in a database, read a cached token, ask your session
+store; Streamlord fixes the contract and not the logic.
+
+Four things it does, each for a reason:
+
+- **It asks at the open, before your handler runs.** The cheapest place to refuse a connection is
+  before it starts, and a refusal there writes nothing at all.
+- **It asks again on an interval, not before every patch.** A chatty stream would otherwise cost
+  one database round trip per patch. The verdict stands for `every`, five seconds by default.
+- **A refusal ends the stream** rather than letting it fall silent, so the client sees a finished
+  response instead of an idle server. Your handler stops where it stood; nothing after the refused
+  write runs.
+- **You get the last word.** `onRefused` runs on the still-open stream, so the reader can be told
+  rather than dropped:
+
+```kotlin sample=ktor-routing
+get("/feed") {
+    call.respondDatastar(
+        authorisation =
+            StreamAuthorisation(
+                onRefused = { patchElements("""<p id="notice">Your session expired</p>""") },
+            ) { false },
+    ) {
+        ticks.collect { tick -> patchSignals("tick" to tick) }
+    }
+}
+```
+
+`redirect("/login")` works there too, and so does anything else the stream can send.
+
+What the client does next is the rule from [further up this page](#when-datastar-reconnects-and-when-it-does-not):
+a 200 stream that ends cleanly does not reconnect under the default `retry: 'auto'`, which is what
+you want. A reader who should be let back in reloads or follows your redirect; one who should not
+is not hammering your endpoint in the meantime.
+
+On Spring the parameter is the same, on `datastarStream(streamlord, request, authorisation) { }`.
+
 ## Not covered here yet
 
-None of the following has been measured, so none of it is written down as advice:
-
-- whether `runBlocking` pins a carrier thread on the JDK you run
-- graceful shutdown with open streams during a rolling deploy
-- Micrometer metrics and tracing across a long-lived stream
-- the browser's per-origin connection limit over HTTP/1.1
+One thing is still unmeasured, so it is not written down as advice: Micrometer metrics and
+tracing across a long-lived stream. The open question is narrow and worth naming. A request timer
+records the whole call, and a stream that is open for an hour is one call, so a handful of streams
+can move a latency percentile more than every other endpoint combined. Whether the Ktor and Spring
+Micrometer integrations let you exclude a streaming route from that histogram, and what a tracing
+span across an hour does to a backend that expects milliseconds, is what someone has to sit down
+and measure.

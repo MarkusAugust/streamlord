@@ -6,6 +6,21 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `streamlord-core`: `StreamAuthorisation`, a check a stream carries for as long as it runs. A
+  stream is authorised once and then lives for minutes while the reader logs out or an
+  administrator revokes access, and nobody asks again. Pass one where you open the stream and
+  Streamlord asks before writing, at the open and then no more often than `every` (five seconds by
+  default), so a chatty stream does not cost a database round trip per patch. A refusal runs
+  `onRefused` on the still-open stream, so the reader is told rather than dropped, and then ends
+  the response rather than letting it fall silent.
+- `streamlord-ktor`: `respondDatastar(authorisation = ...)` on both the block and the flow forms.
+- `streamlord-spring`: `datastarStream(streamlord, request, authorisation) { }`, likewise.
+- `streamlord-core`: `Streamlord.stream(sink, authorisation, block)` runs a stream to the end and
+  reports whether it got there. `StreamRefusedException` is what ends a refused one; the adapters
+  catch it where they opened the stream.
+
 ## [0.7.0] - 2026-10-01
 
 ### Changed

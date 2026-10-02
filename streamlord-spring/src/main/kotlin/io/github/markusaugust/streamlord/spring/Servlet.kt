@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.spring
 
 import io.github.markusaugust.streamlord.core.SignalsTooLargeException
 import io.github.markusaugust.streamlord.core.application.Signals
+import io.github.markusaugust.streamlord.core.application.StreamAuthorisation
 import io.github.markusaugust.streamlord.core.application.Streamlord
 import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.port.driven.IncomingRequest
@@ -46,12 +47,13 @@ import kotlin.reflect.typeOf
 public fun HttpServletResponse.datastarStream(
     streamlord: Streamlord = Streamlord.Default,
     request: HttpServletRequest? = null,
+    authorisation: StreamAuthorisation? = null,
     block: suspend DatastarStream.() -> Unit,
 ): StreamingResponseBody {
     prepareForSse(request)
     return StreamingResponseBody { output ->
         val writer = OutputStreamWriter(output, StandardCharsets.UTF_8)
-        runBlocking { streamlord.stream(ServletSseSink(writer, this@datastarStream)).block() }
+        runBlocking { streamlord.stream(ServletSseSink(writer, this@datastarStream), authorisation, block) }
         writer.flush()
     }
 }
@@ -61,7 +63,8 @@ public fun HttpServletResponse.datastarStream(
     events: Flow<DatastarEvent>,
     streamlord: Streamlord = Streamlord.Default,
     request: HttpServletRequest? = null,
-): StreamingResponseBody = datastarStream(streamlord, request) { sendAll(events) }
+    authorisation: StreamAuthorisation? = null,
+): StreamingResponseBody = datastarStream(streamlord, request, authorisation) { sendAll(events) }
 
 /**
  * Set the headers an SSE response needs and disable buffering. Called by [datastarStream].

@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.core.application
 
 import io.github.markusaugust.streamlord.core.SignalsCodecException
 import io.github.markusaugust.streamlord.core.SignalsTooLargeException
+import io.github.markusaugust.streamlord.core.StreamRefusedException
 import io.github.markusaugust.streamlord.core.StreamlordException
 import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.domain.DatastarResponse
@@ -63,6 +64,32 @@ public class Streamlord(
 
     /** Open a [DatastarStream] over a sink. Adapters call this; you rarely need to. */
     public fun stream(sink: SseSink): DatastarStream = SseDatastarStream(sink, codec, ::guard)
+
+    /**
+     * Open a stream, run [block] against it, and close when it returns.
+     *
+     * With an [authorisation], [StreamAuthorisation.allows] is asked once before [block] starts,
+     * which is the cheapest place to refuse a connection, and again before each write once
+     * [StreamAuthorisation.every] has passed. A refusal runs
+     * [StreamAuthorisation.onRefused] on the still-open stream and then ends it: [block] stops
+     * where it was, and the response finishes rather than falling silent.
+     *
+     * Adapters call this. Returns whether the stream ran to the end of [block].
+     */
+    public suspend fun stream(
+        sink: SseSink,
+        authorisation: StreamAuthorisation?,
+        block: suspend DatastarStream.() -> Unit,
+    ): Boolean {
+        val stream = SseDatastarStream(sink, codec, ::guard, authorisation)
+        return try {
+            stream.authorise()
+            stream.block()
+            true
+        } catch (_: StreamRefusedException) {
+            false
+        }
+    }
 
     /** Encode a flow of events into a flow of SSE frames, one string per event. */
     public fun encode(events: Flow<DatastarEvent>): Flow<String> = events.map { SseEncoder.encode(guard(it)) }
