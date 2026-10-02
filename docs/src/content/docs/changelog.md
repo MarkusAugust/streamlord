@@ -9,6 +9,10 @@ with a sentence about what to do.
 
 ## Unreleased
 
+**`asSse()` is gone.** One line of sugar over `Streamlord.encode(flow)`, which stays. It was the
+only public name in the whole SDK with no caller anywhere and no page describing it, so nothing
+you have written can be using it. If something is, call `encode` directly.
+
 ## 0.8.0
 
 **A stream can be asked again whether it may still run.** `StreamAuthorisation` goes where you
