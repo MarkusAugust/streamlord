@@ -13,6 +13,7 @@ dependencies {
     implementation(project(":streamlord-html-pro"))
     implementation(project(":streamlord-ktor"))
     implementation(project(":streamlord-spring"))
+    implementation(project(":streamlord-test"))
     implementation(project(":streamlord-json-kotlinx"))
     implementation(project(":streamlord-json-jackson"))
 
@@ -81,6 +82,7 @@ abstract class ExtractDocSamples : DefaultTask() {
         // Modifier of its own, and a star import of it would make those ambiguous against
         // kotlinx.html in every sample that builds markup.
         import io.github.markusaugust.streamlord.analysis.Analyzer
+        import io.github.markusaugust.streamlord.test.*
         import io.github.markusaugust.streamlord.ktor.*
         import io.github.markusaugust.streamlord.spring.*
         import io.github.markusaugust.streamlord.json.kotlinx.*

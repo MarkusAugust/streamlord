@@ -9,6 +9,15 @@ with a sentence about what to do.
 
 ## Unreleased
 
+**Assert on events, not on strings.** The new `streamlord-test` module reads a response back into
+the events it carried: `datastarEvents(body).assertPatchElements(selector = "#feed")` and
+`assertSignal("heads", 13)`. Assertions ignore what they did not ask about, so a test survives a
+handler gaining an event, and `assertExactly` is there for when the whole stream is the point. It
+binds no test framework. See [Testing](/testing/).
+
+**`mergePatch` moved** from `streamlord-analysis` to `streamlord-core`, into `core.json`. Change
+the import if you used it; nothing else about it changed.
+
 ## 0.9.0
 
 **`asSse()` is gone.** One line of sugar over `Streamlord.encode(flow)`, which stays. It was the

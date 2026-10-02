@@ -26,7 +26,7 @@ import com.intellij.util.ui.JBUI
 import io.github.markusaugust.streamlord.analysis.DatastarFrame
 import io.github.markusaugust.streamlord.analysis.Requests
 import io.github.markusaugust.streamlord.analysis.SavedRequest
-import io.github.markusaugust.streamlord.analysis.mergePatch
+import io.github.markusaugust.streamlord.core.json.mergePatch
 import io.github.markusaugust.streamlord.core.json.JsonNull
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser

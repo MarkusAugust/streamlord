@@ -6,6 +6,26 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `streamlord-test`, a new module: `datastarEvents(wire)` reads a Datastar response back into the
+  events it carried, and asserts on what a handler meant rather than on the bytes it produced.
+  `assertPatchElements`, `assertPatchSignals`, `assertSignal`, `assertNoSignal`, `assertNoEvents`
+  and `assertExactly`. Every assertion but the last is satisfied by one matching event and ignores
+  the rest, so a test about markup does not go red because a handler started patching a signal.
+  `assertSignal` folds the whole stream the way the browser does, so it reports what a signal
+  ended up as. It depends on `streamlord-core` and nothing else, and binds no test framework: a
+  failure is an `AssertionError`, so kotlin.test, JUnit, Kotest and TestNG all work and none is
+  imposed.
+- `streamlord-core`: `SseDecoder`, the inverse of `SseEncoder`. `decode(text)` gives the events a
+  stream carried and `messages(text)` the raw SSE messages, for a test about a heartbeat comment
+  or a resume id. It is held to the same twenty official golden files as the encoder, in both
+  directions.
+- `streamlord-core`: `mergePatch` moves here from `streamlord-analysis`, into `core.json`. RFC
+  7386 is how the protocol defines a signal patch, so anything asking what the browser ends up
+  holding has to fold them the same way, and that is no longer the editor tooling's private
+  business.
+
 ## [0.9.0] - 2026-10-02
 
 ### Removed
