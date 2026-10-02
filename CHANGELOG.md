@@ -6,6 +6,20 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Removed
+
+- `streamlord-core`: `Flow<DatastarEvent>.asSse()`. Of 244 public names across the published
+  modules it was the only one with no caller anywhere: not in the tests, the demo, the editors,
+  the documentation's examples or the core itself, and no page ever mentioned it. It was one line
+  of sugar over `Streamlord.encode(flow)`, which is still there. `explicitApi()` makes you write
+  the word `public`; it does not ask whether you meant it.
+
+### Added
+
+- `streamlord-core`: tests for `Streamlord.encode(flow)`, which `asSse` was the only caller of and
+  which nothing had exercised: the frames it produces, an empty flow, and that `guardElements`
+  stops an eaten expression before it becomes one.
+
 ## [0.8.0] - 2026-10-02
 
 ### Added
