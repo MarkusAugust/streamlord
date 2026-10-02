@@ -17,8 +17,9 @@ it lands, the way [`guardElements`](/strings/) is, with one exception that is ma
 | 2 | [The happy path, documented](#the-happy-path-documented) | what a reader sees first | [Introduction](/introduction/) and [Your first stream](/first-stream/) |
 | 3 | [Untrusted values in the DSL](#untrusted-values-in-the-dsl) | what reaches an expression built by the DSL | keep request data out of expression attributes |
 | 4 | [Replay in the Stream Inspector](#replay-in-the-stream-inspector) | what you can see of a stream after it ran | watch it arrive live |
-| 5 | [Concurrent stream limits](#concurrent-stream-limits) | how much one reader may hold open | your framework's rate limiting |
-| 6 | [Starter templates](#starter-templates) | how long it takes to get a first page running | copy the `demo` module |
+| 5 | [Bring your own template engine](#bring-your-own-template-engine) | what happens when the tooling has never heard of your engine | turn off `checkHtmlAttributes`, and lose the checking with it |
+| 6 | [Concurrent stream limits](#concurrent-stream-limits) | how much one reader may hold open | your framework's rate limiting |
+| 7 | [Starter templates](#starter-templates) | how long it takes to get a first page running | copy the `demo` module |
 
 The order is the order of the work, not a schedule. The last one waits for 1.0 on purpose: a
 template that lags the API it demonstrates teaches the wrong thing, and the API is still moving.
@@ -137,6 +138,36 @@ shows what the client would have held at that point. This needs no new capture a
 work: every frame is kept with its arguments, `mergePatch` is a pure function, so the store at any
 index is a fold from the start. The work is the control and the wiring, in both plugins.
 
+## Bring your own template engine
+
+Rendering with a template engine needs no recipe: render, pass the string, done. That really is
+the whole of [Templates](/templates/), and an `ElementsRenderer` port to formalise it was weighed
+and dropped, for the reasons at the foot of this page.
+
+What does need one is the case that page does not cover. The editors and `streamlord-analysis`
+know a dozen template syntaxes so they do not flag an engine's own tags as errors: Pebble, Twig,
+Jinja, Handlebars, Mustache, ERB, EJS, Thymeleaf, FreeMarker, JTE, kte and Velocity. That list is
+hardcoded. `AnalyzeOptions` carries a `prefix` and a `checkHtmlAttributes` flag and nothing else,
+so if you render with Rocker, Qute, Jinjava or something you wrote yourself, its delimiters are
+not markup to the analysis and you get errors on correct files. The only lever is turning
+`checkHtmlAttributes` off, which also turns off the checking you installed the thing for.
+
+Planned, in this order because the second is worthless without the first:
+
+1. A way to tell the analysis about your delimiters. `AnalyzeOptions` takes the pairs your engine
+   uses, the editors read them from a setting, and your tags stop being errors without silencing
+   the attribute checks.
+2. The recipe itself: one page that goes from an engine nobody has heard of to a checked,
+   guarded, tested stream. Where the render call goes, what `guardElements` sees and what it
+   cannot, how to run `Analyzer().analyzeHtml` over template files in CI, and how to cache a
+   compiled template when a stream patches from it in a loop.
+
+### Until then
+
+Your engine works. It was never the rendering that needed help, only the tooling's opinion of
+your syntax, and `AnalyzeOptions(checkHtmlAttributes = false)` buys silence at the price of the
+`data-*` checks. If your engine is one of the dozen above, none of this applies to you.
+
 ## Concurrent stream limits
 
 Framing first, because it matters: this is a sensible default, not a security feature. It will not
@@ -211,6 +242,13 @@ Weighed and set aside for now, with the reason, so the same ground is not covere
   client inside the editor, not the browser, so slowing it down says nothing about how the
   Datastar client copes; the browser's own throttling does that properly. Cutting a stream off to
   see whether the *server* notices is the useful half, and the Stop button already does it.
+- **An `ElementsRenderer` port.** The 0.1.0 roadmap planned one for 0.3: template engines behind
+  an interface, configured once, rather than called at each site. Five releases went past it and
+  the argument got weaker each time. It would buy no new ability, only move `pebble.render(...)`
+  from the call site into a configuration, and it would cost a module per engine to version and
+  keep in step. Worse, it would make the engines we wrote adapters for first-class and everything
+  else a thing you glue together yourself, when today any engine works, including one you wrote
+  yesterday, because Streamlord only ever wanted a `String`.
 - **Escaping on the way out of the DSL.** kotlinx.html escapes text and attribute values already.
   What it cannot do is refuse a value in an expression position, which is
   [its own entry](#untrusted-values-in-the-dsl) rather than a second escaping layer.

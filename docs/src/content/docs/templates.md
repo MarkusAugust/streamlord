@@ -40,9 +40,3 @@ syntax well enough not to flag its own tags as errors.
 Template output is a string like any other, so [`guardElements`](/strings/) walks it the same way
 and catches the same mistyped attributes. What it will not catch is a mistake inside the template
 language itself; that belongs to your engine's own checks.
-
-## A note on the roadmap
-
-An `ElementsRenderer` port is planned, so that an engine can be plugged in behind an interface
-rather than called at each site. It changes nothing about the above: passing a rendered string
-will keep working, because it is the simplest thing that can work.
