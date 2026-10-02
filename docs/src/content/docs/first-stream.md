@@ -14,7 +14,7 @@ no build step, no bundle of yours.
 ```html
 <script type="module" src="/static/datastar.js"></script>
 
-<button data-on-click="@get('/feed')">Load the feed</button>
+<button data-on:click="@get('/feed')">Load the feed</button>
 <ul id="feed"></ul>
 ```
 

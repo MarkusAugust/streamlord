@@ -7,11 +7,11 @@ description: "respondDatastar, readSignals, and the plugin that wires them toget
 >
 > Gorvek of Bonereach
 
-Ktor is the Sword. The adapter is one plugin and a set of extension functions on
+Ktor is the Sword. The adapter is two plugins and a set of extension functions on
 `ApplicationCall`: four that answer (`respondDatastar`, `respondElements`, `respondSignals`,
 `respondScript`), four that read (`readSignals`, `readSignalsOr`, `readSignalsJson`,
-`asIncomingRequest`), several of them with overloads, and the `streamlord` and
-`isDatastarRequest` properties. It brings no Ktor version of its own. Ktor is `compileOnly`, so
+`asIncomingRequest`), several of them with overloads, and three properties, `streamlord`,
+`isDatastarRequest` and `cspNonce`. It brings no Ktor version of its own. Ktor is `compileOnly`, so
 you stay on whatever you had.
 
 ## The plugin
@@ -26,9 +26,10 @@ The plugin is where the configured `Streamlord` instance lives. Everything below
 the call. The codec is optional: without one, the built-in codec handles maps and raw JSON
 perfectly well, and you read signals by name rather than into a data class.
 
-There is a second plugin, `CspNoncePlugin`, which is independent of this one and off unless you
-install it. It owns the Content Security Policy nonce at both ends; it is on
-[Security](/security/).
+The second plugin is `CspNoncePlugin`, independent of this one and off unless you install it. It
+owns the Content Security Policy nonce at both ends and gives `call.cspNonce` its value; it is on
+[Security](/security/). `respondDatastar` also takes an `authorisation`, for a stream that should
+be asked again whether it may still run, which is on [Operations](/operations/).
 
 ## One-shot streams
 
