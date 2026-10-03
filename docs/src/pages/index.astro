@@ -139,6 +139,15 @@ const SAMPLE = `get("/feed") {
     <CodeBlock />
 
     <style>
+      /* The foot of the page: a rule and real room above it, so the mark reads as a signature
+         under the content rather than as another line of it. */
+      .colophon {
+        max-width: 60rem;
+        margin: var(--fs-spacing-16) auto var(--fs-spacing-10);
+        padding: var(--fs-spacing-5) var(--fs-spacing-6) 0;
+        border-top: 1px solid var(--fs-color-neutral-border-subtle);
+      }
+
             /* The Søbernetics mark. Small on purpose, and small is the whole of how it stays quiet: the
          opacity this first had took it to 3.5:1 against the ground, which is below the contrast
          required of a link, and on one page left it all but invisible. Subtlety is size, not a
@@ -164,7 +173,11 @@ const SAMPLE = `get("/feed") {
         color: var(--fs-color-neutral-text-strong);
       }
 
-      .sobernetics svg {
+      /* `:global` because the mark arrives through `set:html`. Astro stamps its scope id on
+         elements it can see in the template, and an injected child is not one of them, so a
+         plain descendant selector here reaches nothing and the drawing collapses to no height
+         at all. This is the one rule that has to cross the scope. */
+      .sobernetics :global(svg) {
         display: block;
         height: 18px;
         width: auto;
