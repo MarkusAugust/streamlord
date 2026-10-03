@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>io.github.markusaugust.streamlord</id>
     <name>Streamlord</name>
-    <vendor url="https://github.com/MarkusAugust/streamlord">MarkusAugust</vendor>
+    <vendor url="https://github.com/MarkusAugust/streamlord">August Søberg-Klyver</vendor>
 
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.lang</depends>
