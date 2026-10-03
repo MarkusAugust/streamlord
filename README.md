@@ -120,3 +120,12 @@ MIT. Take it, wield it, and may your streams never buffer.
 
 *Gorvek, Sarn, Gallowmark and every other name in this grimoire are our own
 invention. Any resemblance to legends told at other tables is the mead's doing.*
+
+---
+
+<a href="https://sobernetics.no">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/sobernetics-dark.svg">
+    <img alt="Søbernetics" src=".github/sobernetics-light.svg" height="18">
+  </picture>
+</a>

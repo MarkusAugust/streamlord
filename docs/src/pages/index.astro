@@ -1,5 +1,6 @@
 ---
 import { Code } from "astro:components"
+import sobernetics from "../assets/sobernetics.svg?raw"
 import CodeBlock from "../components/CodeBlock.astro"
 import Logo from "../components/Logo.astro"
 import { FAVICON } from "../icon"
@@ -131,9 +132,48 @@ const SAMPLE = `get("/feed") {
       }
     </main>
 
+    <footer class="colophon">
+      <a class="sobernetics" href="https://sobernetics.no"><Fragment set:html={sobernetics} /></a>
+    </footer>
+
     <CodeBlock />
 
     <style>
+      /*
+       * The Søbernetics mark. Small on purpose: it says who made this, it is not a headline.
+       * The letters take the colour of the text around them and the slashed O takes the accent
+       * token, so one file serves both themes.
+       */
+      .colophon {
+        max-width: 60rem;
+        margin: var(--fs-spacing-16) auto var(--fs-spacing-10);
+        padding: var(--fs-spacing-5) var(--fs-spacing-6) 0;
+        border-top: 1px solid var(--fs-color-neutral-border-subtle);
+      }
+
+      .sobernetics {
+        display: inline-block;
+        color: var(--fs-color-neutral-text);
+        opacity: 0.5;
+        transition: opacity 120ms ease;
+      }
+
+      .sobernetics:hover,
+      .sobernetics:focus-visible {
+        opacity: 1;
+      }
+
+      .sobernetics svg {
+        display: block;
+        height: 18px;
+        width: auto;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .sobernetics {
+          transition: none;
+        }
+      }
       .hero {
         /* Deeper than the page's own dark surface: this is the ground the mark was drawn on. */
         background: #0c0d14;

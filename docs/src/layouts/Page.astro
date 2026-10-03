@@ -1,5 +1,6 @@
 ---
 import type { MarkdownHeading } from "astro"
+import sobernetics from "../assets/sobernetics.svg?raw"
 import CodeBlock from "../components/CodeBlock.astro"
 import Logo from "../components/Logo.astro"
 import Pager from "../components/Pager.astro"
@@ -73,6 +74,10 @@ const { title, description, slug, headings } = Astro.props
         </article>
         <Wire />
         <Pager current={slug} />
+
+        <footer class="colophon">
+          <a class="sobernetics" href="https://sobernetics.no"><Fragment set:html={sobernetics} /></a>
+        </footer>
       </main>
 
       <aside class="shell__toc">
@@ -270,6 +275,41 @@ const { title, description, slug, headings } = Astro.props
       }
       :root[data-theme="dark"] .prose blockquote {
         border-inline-start-color: color-mix(in oklab, var(--fs-color-accent-fill) 70%, transparent);
+      }
+
+      /*
+       * The Søbernetics mark, at the foot of every page. Small on purpose: it says who made this,
+       * it is not a headline. The letters take the colour of the text around them and the slashed
+       * O takes the accent token, so one file serves both themes.
+       */
+      .colophon {
+        margin-top: var(--fs-spacing-12);
+        padding-top: var(--fs-spacing-5);
+        border-top: 1px solid var(--fs-color-neutral-border-subtle);
+      }
+
+      .sobernetics {
+        display: inline-block;
+        color: var(--fs-color-neutral-text);
+        opacity: 0.5;
+        transition: opacity 120ms ease;
+      }
+
+      .sobernetics:hover,
+      .sobernetics:focus-visible {
+        opacity: 1;
+      }
+
+      .sobernetics svg {
+        display: block;
+        height: 18px;
+        width: auto;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .sobernetics {
+          transition: none;
+        }
       }
     </style>
 
