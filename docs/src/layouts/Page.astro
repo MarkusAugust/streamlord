@@ -277,6 +277,14 @@ const { title, description, slug, headings } = Astro.props
         border-inline-start-color: color-mix(in oklab, var(--fs-color-accent-fill) 70%, transparent);
       }
 
+      /* The foot of the page: a rule and real room above it, so the mark reads as a signature
+         under the content rather than as another line of it. */
+      .colophon {
+        margin-top: var(--fs-spacing-12);
+        padding-top: var(--fs-spacing-5);
+        border-top: 1px solid var(--fs-color-neutral-border-subtle);
+      }
+
             /* The Søbernetics mark. Small on purpose, and small is the whole of how it stays quiet: the
          opacity this first had took it to 3.5:1 against the ground, which is below the contrast
          required of a link, and on one page left it all but invisible. Subtlety is size, not a
