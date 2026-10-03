@@ -1,5 +1,6 @@
 ---
 import { Code } from "astro:components"
+import sobernetics from "../assets/sobernetics.svg?raw"
 import CodeBlock from "../components/CodeBlock.astro"
 import Logo from "../components/Logo.astro"
 import { FAVICON } from "../icon"
@@ -131,9 +132,44 @@ const SAMPLE = `get("/feed") {
       }
     </main>
 
+    <footer class="colophon">
+      <a class="sobernetics" href="https://sobernetics.no"><Fragment set:html={sobernetics} /></a>
+    </footer>
+
     <CodeBlock />
 
     <style>
+            /* The Søbernetics mark. Small on purpose, and small is the whole of how it stays quiet: the
+         opacity this first had took it to 3.5:1 against the ground, which is below the contrast
+         required of a link, and on one page left it all but invisible. Subtlety is size, not a
+         washed-out colour.
+
+         The red is Søbernetics' own, set here per theme rather than taken from the host's accent
+         token. Streamlord's accent is a blue, so the mark arrived there wearing Streamlord's colour,
+         and a mark that changes hue per project is not a mark. */
+      .sobernetics {
+        --sobernetics-accent: #c8102e;
+        display: inline-block;
+        color: var(--fs-color-neutral-text-subtle);
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) .sobernetics { --sobernetics-accent: #f44851; }
+      }
+
+      :root[data-theme="dark"] .sobernetics { --sobernetics-accent: #f44851; }
+
+      .sobernetics:hover,
+      .sobernetics:focus-visible {
+        color: var(--fs-color-neutral-text-strong);
+      }
+
+      .sobernetics svg {
+        display: block;
+        height: 18px;
+        width: auto;
+      }
+
       .hero {
         /* Deeper than the page's own dark surface: this is the ground the mark was drawn on. */
         background: #0c0d14;
