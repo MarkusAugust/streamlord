@@ -32,7 +32,7 @@ import kotlin.reflect.typeOf
 /**
  * The signals the search field sends back.
  *
- * `data-bind-query` on the input is the whole of the client side: the browser keeps the value
+ * `data-bind:query` on the input is the whole of the client side: the browser keeps the value
  * in a signal, ships the store with the request, and this class is the other end of it.
  *
  * Its serializer is named where the codec is installed below, which is what lets this service be

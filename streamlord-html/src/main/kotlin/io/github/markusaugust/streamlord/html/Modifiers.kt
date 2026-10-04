@@ -52,8 +52,16 @@ public data class SignalFilter(
                         else -> throw IllegalArgumentException("Regex option $option has no JavaScript equivalent")
                     }
                 }
-            return "/" + escapeSlashes(regex.pattern) + "/" + flags
+            // Kotlin's inline flags have no spelling in a JavaScript literal, which would refuse the group.
+            require(!INLINE_FLAGS.containsMatchIn(regex.pattern)) {
+                "Inline flags such as (?i) are not JavaScript; pass RegexOption.IGNORE_CASE to Regex(...) instead"
+            }
+            // An empty literal is `//`, which JavaScript reads as the start of a comment.
+            if (regex.pattern.isEmpty()) return "/(?:)/$flags"
+            return "/" + escapeSlashes(regex.pattern).replace("\n", "\\n").replace("\r", "\\r") + "/" + flags
         }
+
+        private val INLINE_FLAGS = Regex("""\(\?[a-zA-Z-]+[:)]""")
 
         private fun escapeSlashes(pattern: String): String =
             buildString(pattern.length + 4) {
@@ -71,7 +79,16 @@ public data class SignalFilter(
 }
 
 /** Render a duration the way Datastar modifiers want it: whole milliseconds with a `ms` suffix. */
-internal fun Duration.toModifier(): String = "${inWholeMilliseconds}ms"
+internal fun Duration.toModifier(): String = "${wholeMilliseconds()}ms"
+
+/**
+ * Datastar counts in whole milliseconds. A shorter positive duration would be written as zero,
+ * which says something other than what was asked for, so it is refused instead.
+ */
+internal fun Duration.wholeMilliseconds(): Long {
+    require(!isPositive() || inWholeMilliseconds > 0) { "$this is shorter than a millisecond, the smallest duration Datastar reads" }
+    return inWholeMilliseconds
+}
 
 /**
  * The `__delay`, `__debounce` and `__throttle` modifiers shared by several attributes.
@@ -192,7 +209,8 @@ public class BindModifiers {
     internal fun build(): String =
         buildString {
             case?.let { append("__case.").append(it.wire) }
-            prop?.let { append("__prop.").append(it) }
+            // The browser lowercases attribute names and the client camel-cases the modifier back.
+            prop?.let { append("__prop.").append(Casing.kebab(it)) }
             if (events.isNotEmpty()) {
                 append("__event")
                 events.forEach { append('.').append(it) }

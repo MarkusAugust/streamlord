@@ -295,8 +295,8 @@ import "../styles/global.css"
           The counter: one connection, thirty numbers, and a button that stops it.
 
           The button is both Start and Stop, and that is not a shortcut. It is how Datastar
-          cancels. A request keeps an AbortController per element and per URL, so asking the
-          same endpoint from the same button aborts the stream that is still open before the
+          cancels. A request keeps an AbortController per method and URL, so asking the
+          same endpoint again, from this button or any other, aborts the stream that is still open before the
           new request is sent. The server reads `running` from the signals it was sent, sees
           that a stream was already going, and answers by putting the page back in order
           instead of starting another one. No state on this page, and no JavaScript.

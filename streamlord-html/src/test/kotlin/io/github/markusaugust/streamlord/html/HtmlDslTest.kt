@@ -15,6 +15,7 @@ import kotlinx.html.span
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.time.Duration.Companion.microseconds
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -425,5 +426,43 @@ class HtmlDslTest {
                 .createHTML()
                 .html { dataNonce("") }
         }
+    }
+
+    // The browser lowercases the attribute name; the client camel-cases the modifier back.
+    @Test
+    fun `a bind property is written in kebab case`() {
+        val html =
+            kotlinx.html.stream
+                .createHTML()
+                .input { dataBind("n") { prop = "valueAsNumber" } }
+
+        assertEquals("""<input data-bind__prop.value-as-number="n">""", html)
+    }
+
+    @Test
+    fun `a name holding two underscores is refused, because Datastar reads modifiers from there`() {
+        assertFailsWith<InvalidSignalNameException> {
+            kotlinx.html.stream
+                .createHTML()
+                .div { dataOn("my__event", "x()") }
+        }
+    }
+
+    @Test
+    fun `a duration shorter than a millisecond is refused rather than written as zero`() {
+        assertFailsWith<IllegalArgumentException> {
+            kotlinx.html.stream
+                .createHTML()
+                .button { dataOnClick("x()") { debounce = 500.microseconds } }
+        }
+        assertFailsWith<IllegalArgumentException> { get("/x") { retryInterval = 500.microseconds } }
+        assertFailsWith<IllegalArgumentException> { get("/x") { retryScaler = Double.NaN } }
+    }
+
+    @Test
+    fun `a signal filter is always a regex literal JavaScript can read`() {
+        assertEquals("/(?:)/", SignalFilter.regexLiteral(Regex("")))
+        assertEquals("/a\\nb/", SignalFilter.regexLiteral(Regex("a\nb")))
+        assertFailsWith<IllegalArgumentException> { SignalFilter.regexLiteral(Regex("(?i)a")) }
     }
 }

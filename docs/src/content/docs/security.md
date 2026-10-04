@@ -34,8 +34,9 @@ reading*:
 - a chunked body is cut off one byte past the limit;
 - nothing larger than the cap ever sits in memory.
 
-The parser caps nesting depth at 64, rejects everything RFC 8259 rejects, and is fuzzed on every
-build.
+The parser caps nesting depth at 64 and the length of a number at 1000 characters, rejects
+everything RFC 8259 rejects, and is fuzzed on every build. The second cap is there because a
+million digits fit inside one mebibyte, and turning them into a number took over twenty seconds.
 
 **You have two things to do here:** map `SignalsTooLargeException` to `413`, and map a body that
 is not the signals you expected to `400`. The second is `JsonParseException` from the built-in

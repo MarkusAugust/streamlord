@@ -50,6 +50,8 @@ public object Casing {
         if (FORBIDDEN.containsMatchIn(name)) {
             throw InvalidSignalNameException(name, "contains whitespace, quotes or a character that ends an attribute")
         }
+        // Datastar splits an attribute name at the first `__`: what follows is read as modifiers.
+        if ("__" in name) throw InvalidSignalNameException(name, "contains __, where Datastar starts reading modifiers")
         return name
     }
 

@@ -136,10 +136,22 @@ public object ExpressionGuard {
      * A regex literal, which can only follow the start, an opening bracket or an operator, never
      * an operand: `split(/[,;]/)`, `= /(?:a|b)/g`. Its contents are a pattern, not operators.
      */
-    private val REGEX_LITERAL = Regex("(^|[(,=:\\[!&|?{};]\\s*)/(?:[^/\\\\\\n\\[]|\\\\.|\\[(?:[^\\]\\\\]|\\\\.)*\\])+/[gimsuy]*")
+    private val REGEX_LITERAL = Regex("(^|[(,=:\\[!&|?{};>]\\s*)/(?:[^/\\\\\\n\\[]|\\\\.|\\[(?:[^\\]\\\\]|\\\\.)*\\])+/[gimsuy]*")
 
     /** The expression with every string and regex literal blanked to a harmless operand. */
-    private fun blankLiterals(t: String): String = t.replace(STRING_LITERAL, "'s'").replace(REGEX_LITERAL) { "${it.groupValues[1]}'r'" }
+    private fun blankLiterals(t: String): String =
+        t
+            .replace(STRING_LITERAL, "'s'")
+            .replace(COMMENT, " ")
+            .replace(REGEX_LITERAL) { "${it.groupValues[1]}'r'" }
+            .trim()
+
+    /**
+     * A comment, which is neither an operand nor an operator. Read after the strings, so `'//'`
+     * is text, and before the regex literals, which would otherwise take a leading block comment
+     * for a pattern. The slash it opens with is never an escaped one, so `/a\//` stays a regex.
+     */
+    private val COMMENT = Regex("(?<!\\\\)/\\*[\\s\\S]*?\\*/|(?<!\\\\)//[^\\n]*")
 
     /** Returns [expression] untouched, or throws [InterpolatedExpressionException]. */
     public fun check(expression: String): String = check(expression, null)
@@ -162,7 +174,9 @@ public object ExpressionGuard {
         }
         val tail = t.trimEnd(';')
         if (!(tail.endsWith("++") || tail.endsWith("--"))) {
-            NEEDS_RIGHT.firstOrNull { tail.endsWith(it) }?.let {
+            // `1.` is a number, the one place a trailing dot needs nothing after it.
+            val number = tail.endsWith(".") && tail.dropLast(1).lastOrNull()?.isDigit() == true
+            NEEDS_RIGHT.firstOrNull { tail.endsWith(it) && !(it == "." && number) }?.let {
                 throw InterpolatedExpressionException(expression, "ends with '$it', which needs something on its right", attribute)
             }
         }

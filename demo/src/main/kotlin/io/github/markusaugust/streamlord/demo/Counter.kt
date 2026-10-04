@@ -34,7 +34,7 @@ public data class CounterSignals(
  * which is the thing Server-Sent Events are for and the reason the adapter takes a [Flow].
  *
  * The cancel button is Datastar's own doing, not ours. A request keeps an AbortController per
- * element and per URL, so when the same button asks for the same endpoint again, the browser
+ * method and URL, so when anything on the page asks for the same endpoint again, the browser
  * aborts the stream that is still running before it sends anything. Ktor sees the disconnect and
  * cancels the coroutine, which is why there is no bookkeeping here and nothing to leak: the
  * `flow` builder simply stops being collected.

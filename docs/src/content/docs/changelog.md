@@ -38,6 +38,15 @@ are a `500` until you do. See [Security](/security/).
 
 **`dataNonce("")` throws**, as the plugin always did for an empty nonce.
 
+**A test may go red that used to be green.** `streamlord-test` now reads a response the way the
+browser does. A frame with no blank line after it is not an event, `mode APPEND` in capitals is
+malformed, and `assertSignal` follows the client's merge for `onlyIfMissing`. If a test of yours
+fails after upgrading, the browser was not doing what the test said. `assertSignal("heads", 13.0)`
+now matches a `13` on the wire.
+
+**Import `ExpressionGuard` and `InterpolatedExpressionException` from `core.domain`.** The
+aliases in `streamlord-html`, deprecated since 0.2.0, are gone.
+
 ## 0.10.0
 
 **Assert on events, not on strings.** The new `streamlord-test` module reads a response back into
