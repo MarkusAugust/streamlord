@@ -81,8 +81,16 @@ export function htmlStringAt(src: string, offset: number): KotlinString | null {
   const site = findCallSites(src, HTML_SITE_NAMES, lex.mask).find((c) => c.openParen < s.start && s.end <= c.closeParen + 1);
   if (!site) return null;
   const spec = catalog.callSites.html[site.name];
-  const arg = spec ? selectStringArg(site, spec.arg, spec.named) : null;
+  const arg = spec ? markupString(site, spec) : null;
   return arg && arg.start === s.start ? s : null;
+}
+
+/**
+ * The markup handed to an HTML call site, or null when the markup is a trailing lambda: in the
+ * kotlinx.html form, `patchElements(selector, mode, ...) { li { } }`, the first string is the selector.
+ */
+function markupString(site: CallSite, spec: CallSiteSpec): KotlinString | null {
+  return site.trailingLambda ? null : selectStringArg(site, spec.arg, spec.named);
 }
 
 /**
@@ -252,19 +260,21 @@ function checkExpressionSite(site: CallSite, spec: CallSiteSpec, src: string): I
 }
 
 function checkHtmlSite(site: CallSite, spec: CallSiteSpec, opts: AnalyzeOptions, src: string): Issue[] {
-  const s = selectStringArg(site, spec.arg, spec.named);
-  if (!s || s.unterminated) return [];
-  // In every signature the selector and the mode follow the elements, so they may be given by position.
+  const s = markupString(site, spec);
+  if (!s && !site.trailingLambda) return [];
+  if (s?.unterminated) return [];
+  // In every signature the selector and the mode follow the elements, so they may be given by
+  // position. A trailing lambda holds the elements, so the selector comes first.
   const named = (name?: string) => (name ? site.args.find((a) => a.named === name) : undefined);
   const positional = site.args.filter((a) => a.named === null);
-  const elements = named(spec.named) ? null : spec.arg === "last" ? 0 : spec.arg;
+  const elements = !s ? -1 : named(spec.named) ? null : spec.arg === "last" ? 0 : spec.arg;
   const selectorArg = named(spec.selectorArg) ?? (elements === null ? undefined : positional[elements + 1]);
   const selector = selectorArg && selectorArg.text !== "null" ? selectorArg.text : null;
   const modeArg = named(spec.modeArg) ?? (elements === null ? undefined : positional[elements + 2]);
   // `ElementPatchMode.APPEND`, or `APPEND` when the constant is imported. Anything else is a value not known here.
   const modeName = modeArg ? (/(?:^|\.)([A-Z]+)\s*$/.exec(modeArg.text)?.[1]?.toLowerCase() ?? null) : null;
   const mode = modeName === "default" ? "outer" : modeName !== null && catalog.patchModes.includes(modeName) ? modeName : null;
-  const issues: Issue[] = interpolationHints(s, src, opts.prefix);
+  const issues: Issue[] = s ? interpolationHints(s, src, opts.prefix) : [];
   if (mode && mode !== "outer" && mode !== "replace" && selector === null && modeArg) {
     const at = modeArg.start - (modeArg.named?.length ?? 0) - (src.slice(0, modeArg.start).match(/\s*=\s*$/)?.[0].length ?? 0);
     issues.push({
@@ -279,7 +289,7 @@ function checkHtmlSite(site: CallSite, spec: CallSiteSpec, opts: AnalyzeOptions,
   }
   // A mode that cannot be read here (a variable) may be one that needs no ids.
   const requireIds = selector === null && (!modeArg || mode === "outer");
-  issues.push(...mapIssues(s, src, validateMarkup(s.text, { requireIds, prefix: opts.prefix, checkAttributes: opts.checkHtmlAttributes })));
+  if (s) issues.push(...mapIssues(s, src, validateMarkup(s.text, { requireIds, prefix: opts.prefix, checkAttributes: opts.checkHtmlAttributes })));
   return issues;
 }
 

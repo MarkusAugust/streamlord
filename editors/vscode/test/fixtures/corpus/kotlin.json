@@ -20,6 +20,7 @@
     {"name":"a syntax error at the end of a raw string","source":"dataOnClick(\"\"\"@get('/x') +\"\"\")","issues":[{"code":"expression-syntax","start":27,"end":28}]},
     {"name":"a brace in a character literal inside a template","source":"dataOnClick(\"${if (c == '}') 1 else 2} +\")","issues":[{"code":"expression-syntax","start":40,"end":41}]},
     {"name":"a template with a non-ascii name","source":"dataOnClick(\"$år + 1\")","issues":[{"code":"kotlin-interpolation","start":13,"end":16,"fixes":["dataOnClick($$\"$år + 1\")","dataOnClick(\"${'$'}år + 1\")","dataOnClick(\"\\$år + 1\")"]}]},
-    {"name":"the end of a script after a character whose lowercase form is longer","source":"executeScript(\"İİ x</SCRIPT>\")","issues":[{"code":"script-close","start":19,"end":27}]}
+    {"name":"the end of a script after a character whose lowercase form is longer","source":"executeScript(\"İİ x</SCRIPT>\")","issues":[{"code":"script-close","start":19,"end":27}]},
+    {"name":"markup in a trailing lambda, where the first string is the selector","source":"patchElements(\"#rows\") { li { +\"x\" } }\npatchElements(mode = ElementPatchMode.APPEND) { li { } }","issues":[{"code":"mode-needs-selector","start":39,"end":52,"fixes":["patchElements(\"#rows\") { li { +\"x\" } }\npatchElements(selector = \"\", mode = ElementPatchMode.APPEND) { li { } }"]}]}
   ]
 }

@@ -117,9 +117,18 @@ public class Analyzer(
         val site =
             findCallSites(src, htmlSiteNames, lex).firstOrNull { it.openParen < s.start && s.end <= it.closeParen + 1 } ?: return null
         val spec = catalog.htmlCallSites[site.name] ?: return null
-        val arg = site.selectString(spec)
+        val arg = markupString(site, spec)
         return if (arg != null && arg.start == s.start) s else null
     }
+
+    /**
+     * The markup handed to an HTML call site, or null when the markup is a trailing lambda: in the
+     * kotlinx.html form, `patchElements(selector, mode, ...) { li { } }`, the first string is the selector.
+     */
+    private fun markupString(
+        site: CallSite,
+        spec: CallSiteSpec,
+    ): KotlinString? = if (site.trailingLambda) null else site.selectString(spec)
 
     /** Analyse an HTML document (a template): attributes and expressions only, no id or completeness rules. */
     public fun analyzeHtml(
@@ -360,10 +369,13 @@ public class Analyzer(
         opts: AnalyzeOptions,
         src: String,
     ): List<Issue> {
-        val s = site.selectString(spec) ?: return emptyList()
-        if (s.unterminated) return emptyList()
-        // In every signature the selector and the mode follow the elements, so they may be given by position.
-        val elements = (spec.arg ?: 0).takeIf { spec.named == null || site.named(spec.named) == null }
+        val s = markupString(site, spec)
+        if (s == null && !site.trailingLambda) return emptyList()
+        if (s != null && s.unterminated) return emptyList()
+        // In every signature the selector and the mode follow the elements, so they may be given by
+        // position. A trailing lambda holds the elements, so the selector comes first.
+        val elements =
+            if (s == null) -1 else (spec.arg ?: 0).takeIf { spec.named == null || site.named(spec.named) == null }
         val selectorArg = spec.selectorArg?.let { site.named(it) } ?: elements?.let { site.positional.getOrNull(it + 1) }
         val selector = selectorArg?.text?.takeIf { it != "null" }
         val modeArg = spec.modeArg?.let { site.named(it) } ?: elements?.let { site.positional.getOrNull(it + 2) }
@@ -378,7 +390,7 @@ public class Analyzer(
                         ?.lowercase()
                 if (name == "default") "outer" else name?.takeIf { it in catalog.patchModes }
             }
-        val issues = ArrayList(interpolationHints(s, src, opts.prefix))
+        val issues = ArrayList(s?.let { interpolationHints(it, src, opts.prefix) }.orEmpty())
         if (modeArg != null && mode != null && mode != "outer" && mode != "replace" && selector == null) {
             val assign = ASSIGN_BEFORE.find(src.substring(0, modeArg.start))?.value?.length ?: 0
             val at = modeArg.start - (modeArg.named?.length ?: 0) - assign
@@ -395,7 +407,9 @@ public class Analyzer(
         }
         // A mode that cannot be read here (a variable) may be one that needs no ids.
         val requireIds = selector == null && (modeArg == null || mode == "outer")
-        issues += mapIssues(s, src, markup.validateMarkup(s.text, MarkupOptions(requireIds, opts.prefix, opts.checkHtmlAttributes)))
+        if (s != null) {
+            issues += mapIssues(s, src, markup.validateMarkup(s.text, MarkupOptions(requireIds, opts.prefix, opts.checkHtmlAttributes)))
+        }
         return issues
     }
 
