@@ -6,6 +6,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-10-04
+
 ### Fixed
 
 - `streamlord-spring` on Spring Boot: every `readSignals` and `datastarStream` threw

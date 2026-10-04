@@ -9,9 +9,11 @@ with a sentence about what to do.
 
 ## Unreleased
 
+## 0.10.1
+
 **Spring Boot works again.** On 0.10.0 every `readSignals` and `datastarStream` under Spring Boot
 throws `NoSuchMethodError`, because Boot pins an older kotlinx-coroutines than the one that
-release was compiled against. Upgrade when this is released; until then, put
+release was compiled against. Upgrade to this release. If you cannot yet, put
 `ext["kotlin-coroutines.version"] = "1.11.0"` in your build.
 
 **Take the `Streamlord` bean through the constructor on Spring.** The samples used to take it as

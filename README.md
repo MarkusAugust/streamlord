@@ -44,8 +44,8 @@ kotlinx.html DSL.
 
 ```kotlin sample=none
 dependencies {
-    implementation("io.github.markusaugust.streamlord:streamlord-ktor:0.10.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-html:0.10.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-ktor:0.10.1")
+    implementation("io.github.markusaugust.streamlord:streamlord-html:0.10.1")
 }
 ```
 
