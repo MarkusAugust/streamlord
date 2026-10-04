@@ -83,6 +83,25 @@ All notable changes to Streamlord are recorded here. The format follows
 - `streamlord-core`: `ExpressionGuard` no longer refuses an expression holding a comment, a regex
   after `=>`, or a number ending in a dot.
 
+- `streamlord-analysis`, and with it both editors, from a review that reproduced each of these:
+  ordinary attributes such as `data-id`, `data-test` and `data-href` were flagged as misspelt
+  Datastar attributes, with a fix that rewrote them; HTML with optional end tags (`<li>a<li>b`)
+  was an error; `__debounce.500`, `$foo.0.name`, HTML entities in an attribute value and an `@`
+  inside a string were all refused though Datastar accepts them; a string followed by
+  `.trimIndent()` was not checked at a call site, so the CI check for the `$` trap missed it; a
+  positional selector in `patchElements` was not seen; a quick fix on an escaped dollar wrote a
+  live Kotlin template; U+0130 in the text shifted every later offset; a CRLF split across two
+  chunks broke an SSE message in two; and `map.get("key")` was reported as a route. New errors
+  say what the Datastar client refuses at run time: `action-space`, `missing-value`,
+  `key-and-value` and `missing-key-or-value`.
+- `streamlord-analysis`: the JavaScript parser is now a port of acorn, the parser the VS Code
+  extension uses. Over a corpus of 682 expressions the two disagreed on the verdict for 67 and
+  now disagree on none.
+- VS Code extension: a quick fix for an expression inside an HTML attribute edited the start of
+  the tag instead of the expression.
+- `signalDrift` collects JSON-form declarations, honours `@SerialName`, and counts an accessor
+  as a signal read only on a value that came from `readSignals`.
+
 ### Removed
 
 - `streamlord-html`: the deprecated aliases `html.ExpressionGuard` and

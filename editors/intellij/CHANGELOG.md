@@ -2,6 +2,22 @@
 
 All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here.
 
+## Unreleased
+
+- Ordinary attributes such as `data-id`, `data-test` and `data-href` are no longer flagged as
+  misspelt Datastar attributes. A bare name is judged only when it is a long Datastar name with a
+  letter swapped, such as `data-indicater`.
+- Valid markup that was refused is accepted: optional end tags (`<li>a<li>b`), `__debounce.500`,
+  `$foo.0.name`, HTML entities in an attribute value, and an `@` inside a string or a comment.
+- A string followed by `.trimIndent()` or `.trimMargin()` is checked like any other argument, and
+  a positional selector in `patchElements` is seen.
+- New errors for what the Datastar client refuses at run time: `@get ('/x')` with a space, an
+  attribute that needs a value and has none, and `data-bind` with both a key and a value.
+- The quick fix for a hyphenated signal keeps an escaped dollar escaped.
+- Both editors now run one shared corpus of cases, and agree on every one.
+- The JavaScript check is a port of acorn, the parser the VS Code extension uses, so the two
+  editors give the same verdict on an expression.
+
 ## 0.1.1
 
 - The plugin icon fills its tile. The mark was drawn at half the width of the square and sat low

@@ -189,8 +189,8 @@ fun `no source file interpolates a signal into Datastar`() {
 `analyzeHtml(source)` does the same for template and HTML files, checking attributes and
 expressions; the id and completeness rules belong to `validateMarkup`. Both return a list of
 `Issue`, each carrying the range it covers as `start` and `end`, a `severity`, a `code`, a
-`message`, a `link` into the Datastar reference and its quick fixes, which is exactly what the
-two editors render.
+`message`, its quick fixes and, where the Datastar reference has a page for it, a `link`, which is
+exactly what the two editors render.
 
 Add the artifact where your tests can see it:
 
