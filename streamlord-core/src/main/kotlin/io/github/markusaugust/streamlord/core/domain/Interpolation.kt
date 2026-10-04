@@ -24,8 +24,17 @@ public enum class Position {
     /** Element text. Escaping is enough. */
     TEXT,
 
-    /** A quoted attribute value that is not Datastar's. Escaping is enough. */
+    /** A quoted attribute value that is not Datastar's and not one the browser acts on. Escaping is enough. */
     ATTRIBUTE,
+
+    /**
+     * The start of an attribute that holds a URL, such as `href` or `src`. Escaping keeps the
+     * value inside the attribute and does nothing about `javascript:`, so the scheme is checked.
+     */
+    URL,
+
+    /** A `style` attribute. Escaped CSS is still CSS, so only a number is let in. */
+    STYLE,
 
     /** A `data-*` attribute Datastar reads. The value would be part of a Datastar expression. */
     DATASTAR,
@@ -33,7 +42,10 @@ public enum class Position {
     /** A tag name, an attribute name, or an unquoted value: the shape of the markup itself. */
     STRUCTURE,
 
-    /** The body of a `<script>` or `<style>`, which the browser runs rather than displays. */
+    /**
+     * Something the browser runs rather than displays: the body of a `<script>` or `<style>`, an
+     * event handler attribute such as `onclick`, or `srcdoc`, which is parsed as a document.
+     */
     CODE,
 }
 
@@ -42,7 +54,7 @@ public enum class Position {
  *
  * @property position Where it landed.
  * @property index Which value, counting the holes from zero.
- * @property attribute The attribute it landed in, for [Position.DATASTAR].
+ * @property attribute The attribute it landed in, when it landed in one.
  */
 public class UnsafeInterpolationException(
     public val position: Position,
@@ -57,16 +69,47 @@ public class UnsafeInterpolationException(
         ): String {
             val where =
                 when (position) {
-                    Position.DATASTAR -> "inside $attribute, which Datastar reads as an expression"
-                    Position.STRUCTURE -> "in the markup's own structure: a tag name, an attribute name, or an unquoted value"
-                    Position.CODE -> "inside a script or style element, where the browser runs it"
-                    else -> "in a position that cannot be escaped"
+                    Position.DATASTAR -> {
+                        "inside $attribute, which Datastar reads as an expression"
+                    }
+
+                    Position.STRUCTURE -> {
+                        "in the markup's own structure: a tag name, an attribute name, or an unquoted value"
+                    }
+
+                    Position.CODE -> {
+                        if (attribute == null) {
+                            "inside a script or style element, where the browser runs it"
+                        } else {
+                            "inside $attribute, which the browser runs"
+                        }
+                    }
+
+                    Position.URL -> {
+                        "at the start of $attribute with a scheme the browser may run, such as javascript:"
+                    }
+
+                    Position.STYLE -> {
+                        "inside $attribute, where it would be read as CSS"
+                    }
+
+                    else -> {
+                        "in a position that cannot be escaped"
+                    }
                 }
             val fix =
                 when (position) {
                     Position.DATASTAR -> {
                         "Put the value in a signal and reference it from the expression, or pass a Number or Boolean, " +
                             "which cannot carry an expression."
+                    }
+
+                    Position.URL -> {
+                        "Pass a relative URL or one that starts with http, https, mailto or tel."
+                    }
+
+                    Position.STYLE -> {
+                        "Pass a Number and write the unit in the markup, or set the style from a class."
                     }
 
                     else -> {
@@ -95,7 +138,15 @@ public class UnsafeInterpolationException(
  * interpolate("""<li data-text="%s"></li>""", name)         // throws: a Datastar expression
  * interpolate("""<li data-signals="{n: %s}"></li>""", 3)    // a Number cannot carry one, so it passes
  * interpolate("""<li %s="x"></li>""", name)                 // throws: an attribute name
+ * interpolate("""<a href="%s">x</a>""", url)                // throws if url is javascript:...
+ * interpolate("""<a onclick="%s">x</a>""", name)            // throws: the browser runs it
  * ```
+ *
+ * Three kinds of attribute are held to more than escaping, because the browser acts on what
+ * they contain. An event handler (`on*`) and `srcdoc` are refused like a script body. `style`
+ * takes a number only. A URL attribute (`href`, `src`, `action` and the like) whose value
+ * begins with the hole takes a relative URL or an `http`, `https`, `mailto` or `tel` one, and
+ * a hole further in, as in `href="/heads/%s"`, is an ordinary attribute.
  *
  * `%%` writes one `%`. A `%` followed by anything else is literal, so CSS and escaped URLs need
  * no ceremony; a hole is only ever `%s`, and a miscounted one fails here rather than quietly.
@@ -131,8 +182,9 @@ public fun interpolate(
     }
     if (holes.isEmpty()) return format.replace("%%", "%")
 
-    val landscape = Landscape(prefixes)
-    scanMarkup(shadow(format, holes), landscape)
+    val shadow = shadow(format, holes)
+    val landscape = Landscape(prefixes, shadow)
+    scanMarkup(shadow, landscape)
 
     val out = StringBuilder(format.length + values.size * 16)
     var cut = 0
@@ -193,8 +245,24 @@ private fun Position.admits(value: Any?): Boolean =
     when (this) {
         Position.TEXT, Position.ATTRIBUTE -> true
         Position.DATASTAR -> value is Number || value is Boolean
+        Position.STYLE -> value is Number
+        Position.URL -> value == null || safeUrl(value.toString())
         Position.STRUCTURE, Position.CODE -> false
     }
+
+private val SCHEME = Regex("^([A-Za-z][A-Za-z0-9+.-]*):")
+private val SAFE_SCHEMES = setOf("http", "https", "mailto", "tel")
+
+/**
+ * Whether a URL is relative or carries a scheme that only navigates. Read the way a browser
+ * reads it: tabs and line breaks are dropped wherever they are and leading control characters
+ * and spaces are skipped, which is how `java\tscript:` gets past a naive check.
+ */
+private fun safeUrl(url: String): Boolean {
+    val read = url.filterNot { it == '\t' || it == '\n' || it == '\r' }.trimStart { it <= ' ' }
+    val scheme = SCHEME.find(read)?.groupValues?.get(1) ?: return true
+    return scheme.lowercase() in SAFE_SCHEMES
+}
 
 private fun StringBuilder.escaped(value: Any?) {
     val text = value?.toString() ?: ""
@@ -258,8 +326,12 @@ private fun holes(format: String): List<Int> {
  * The shape of the markup around the holes: which spans are quoted attribute values, which are
  * inside a tag, and which are the body of a script or a style.
  */
+private val URL_ATTRIBUTES =
+    setOf("href", "src", "action", "formaction", "xlink:href", "poster", "data", "cite", "background", "ping", "manifest")
+
 private class Landscape(
     private val prefixes: List<String>,
+    private val markup: String,
 ) : MarkupVisitor {
     private val attributeNames = ArrayList<String>()
     private val attributeStarts = ArrayList<Int>()
@@ -302,7 +374,19 @@ private class Landscape(
     fun positionOf(hole: Int): Position {
         val attribute = indexOfSpan(hole, attributeStarts, attributeEnds)
         if (attribute >= 0) {
-            return if (datastar(attributeNames[attribute])) Position.DATASTAR else Position.ATTRIBUTE
+            val name = attributeNames[attribute].lowercase()
+            return when {
+                datastar(name) -> Position.DATASTAR
+
+                name.startsWith("on") || name == "srcdoc" -> Position.CODE
+
+                name == "style" -> Position.STYLE
+
+                // Only a value that begins with the hole can choose the scheme.
+                name in URL_ATTRIBUTES && markup.substring(attributeStarts[attribute], hole).isBlank() -> Position.URL
+
+                else -> Position.ATTRIBUTE
+            }
         }
         if (indexOfSpan(hole, tagStarts, tagEnds) >= 0) return Position.STRUCTURE
         if (indexOfSpan(hole, codeStarts, codeEnds) >= 0) return Position.CODE
@@ -311,8 +395,7 @@ private class Landscape(
 
     fun attributeAt(hole: Int): String? = indexOfSpan(hole, attributeStarts, attributeEnds).takeIf { it >= 0 }?.let { attributeNames[it] }
 
-    private fun datastar(name: String): Boolean {
-        val lower = name.lowercase()
+    private fun datastar(lower: String): Boolean {
         val prefix = prefixes.firstOrNull { lower.startsWith(it) } ?: return false
         val rest = lower.substring(prefix.length)
         return rest.substringBefore(':').substringBefore("__") in ElementsGuard.attributes

@@ -94,11 +94,14 @@ public object ElementsGuard {
                 val (named, decimal, hex) = m.destructured
                 when {
                     named.isNotEmpty() -> NAMED_ENTITIES.getValue(named)
-                    decimal.isNotEmpty() -> decimal.toIntOrNull()?.let { Character.toString(it) } ?: m.value
-                    else -> hex.toIntOrNull(16)?.let { Character.toString(it) } ?: m.value
+                    decimal.isNotEmpty() -> codePoint(decimal.toIntOrNull()) ?: m.value
+                    else -> codePoint(hex.toIntOrNull(16)) ?: m.value
                 }
             }
         }
+
+    /** The character a numeric reference names, or `null` for a number that names none, which is left as written. */
+    private fun codePoint(value: Int?): String? = value?.takeIf(Character::isValidCodePoint)?.let { Character.toString(it) }
 
     /**
      * Returns [elements] untouched, or throws for the first broken attribute:

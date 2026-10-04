@@ -32,6 +32,11 @@ subprojects {
     if (!internal) apply(plugin = "org.jetbrains.dokka")
 
     group = rootProject.group
+
+    // MIT asks that the notice and the licence text travel with every copy, and a jar is a copy.
+    tasks.withType<Jar>().configureEach {
+        from(rootProject.layout.projectDirectory.file("LICENSE")) { into("META-INF") }
+    }
     version = rootProject.version
 
     extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension> {

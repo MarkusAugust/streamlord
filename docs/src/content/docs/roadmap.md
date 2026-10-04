@@ -16,7 +16,7 @@ it lands, the way [`guardElements`](/strings/) is, with one exception that is ma
 | 1 | [The happy path, documented](#the-happy-path-documented) | what a reader sees first | [Introduction](/introduction/) and [Your first stream](/first-stream/) |
 | 2 | [Untrusted values in the DSL](#untrusted-values-in-the-dsl) | what reaches an expression built by the DSL | keep request data out of expression attributes |
 | 3 | [Replay in the Stream Inspector](#replay-in-the-stream-inspector) | what you can see of a stream after it ran | watch it arrive live |
-| 4 | [Delimiters the analysis has not met](#delimiters-the-analysis-has-not-met) | a false error on a correct template file | nothing, for `data-bind` and its kind |
+| 4 | [Delimiters the analysis has not met](#delimiters-the-analysis-has-not-met) | a false warning on a correct template file | nothing, for `data-bind` and its kind |
 | 5 | [Concurrent stream limits](#concurrent-stream-limits) | how much one reader may hold open | your framework's rate limiting |
 | 6 | [Starter templates](#starter-templates) | how long it takes to get a first page running | copy the `demo` module |
 
@@ -69,7 +69,7 @@ is what signals are for.
 
 The inspector opens a real Datastar request, exactly as the browser client would, parses the
 stream, and keeps every frame it decoded. It also keeps the signal store, applying each
-`datastar-patch-signals` as an RFC 7386 merge and honouring `__ifMissing`, so what it shows is
+`datastar-patch-signals` as an RFC 7386 merge and honouring `onlyIfMissing`, so what it shows is
 what the client would hold.
 
 What it does not keep is the store at each step. `signals = mergePatch(signals, patch)` overwrites,
@@ -180,7 +180,7 @@ Weighed and set aside for now, with the reason, so the same ground is not covere
   Datastar client copes; the browser's own throttling does that properly. Cutting a stream off to
   see whether the *server* notices is the useful half, and the Stop button already does it.
 - **An `ElementsRenderer` port.** The 0.1.0 roadmap planned one for 0.3: template engines behind
-  an interface, configured once, rather than called at each site. Five releases went past it and
+  an interface, configured once, rather than called at each site. Eight releases went past it and
   the argument got weaker each time. It would buy no new ability, only move `pebble.render(...)`
   from the call site into a configuration, and it would cost a module per engine to version and
   keep in step. Worse, it would make the engines we wrote adapters for first-class and everything

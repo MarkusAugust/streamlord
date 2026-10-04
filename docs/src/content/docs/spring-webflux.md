@@ -8,31 +8,41 @@ Spring knows how to turn `ServerSentEvent` into a response. The adapter's whole 
 between: turning Streamlord's `DatastarEvent` into Spring's `ServerSentEvent`.
 
 ```kotlin sample=spring
-@GetMapping("/counter", produces = [org.springframework.http.MediaType.TEXT_EVENT_STREAM_VALUE])
-fun counter(): kotlinx.coroutines.flow.Flow<org.springframework.http.codec.ServerSentEvent<String>> =
+@GetMapping("/counter")
+fun counter(): org.springframework.http.ResponseEntity<kotlinx.coroutines.flow.Flow<org.springframework.http.codec.ServerSentEvent<String>>> =
     ticks
         .map { n -> PatchElements("""<span id="counter">$n</span>""") }
-        .asServerSentEvents()
+        .asDatastarResponse()
 ```
 
-That is the entire API surface for WebFlux: `asServerSentEvents()` on a `Flow<DatastarEvent>`,
-and `toServerSentEvent()` on a single `DatastarEvent` for the times you are not holding a flow.
-Everything before them is your flow, and everything after is Spring's.
+`asDatastarResponse()` is the flow of server-sent events in a `ResponseEntity` that carries the
+content type and the two headers a stream needs on its way through a proxy,
+`Cache-Control: no-cache` and `X-Accel-Buffering: no`. They are on [Operations](/operations/).
+
+Two smaller pieces sit under it: `asServerSentEvents()` on a `Flow<DatastarEvent>` gives you the
+bare flow, for when you build the response yourself, and `toServerSentEvent()` converts a single
+event. Return the bare flow from a controller and Spring sets the content type and no other
+header, so prefer the response. Everything before these is your flow, and everything after is
+Spring's.
+
+The frames are written by Spring's own encoder, so they are spelled Spring's way: `event:` with
+no space after the colon, and `id:` ahead of `event:`. The fields and the data are the ones Ktor
+and WebMVC send, and the Datastar client reads both spellings alike.
 
 ## The guard
 
-`asServerSentEvents()` uses `Streamlord.Default`, which has the elements guard switched off. To
+`asDatastarResponse()` uses `Streamlord.Default`, which has the elements guard switched off. To
 run your HTML through [the guard](/strings/), pass the bean you declared. It arrives through the
 controller's constructor:
 
 ```kotlin sample=spring-controller
 @RestController
 class CounterController(private val streamlord: Streamlord) {
-    @GetMapping("/counter", produces = [org.springframework.http.MediaType.TEXT_EVENT_STREAM_VALUE])
-    fun guarded(): kotlinx.coroutines.flow.Flow<org.springframework.http.codec.ServerSentEvent<String>> =
+    @GetMapping("/counter")
+    fun guarded(): org.springframework.http.ResponseEntity<kotlinx.coroutines.flow.Flow<org.springframework.http.codec.ServerSentEvent<String>>> =
         ticks
             .map { n -> PatchElements("""<span id="counter">$n</span>""") }
-            .asServerSentEvents(streamlord)
+            .asDatastarResponse(streamlord)
 }
 ```
 
@@ -60,4 +70,4 @@ on an exchange from a `WebFilter` of your own.
 
 Backpressure strategy, schedulers and the rest of the reactive toolbox are Spring's, and the
 adapter deliberately does not reach into them. If your flow is hot and fast, the usual
-`buffer`, `conflate` and `sample` operators apply before `asServerSentEvents()`, unchanged.
+`buffer`, `conflate` and `sample` operators apply before `asDatastarResponse()`, unchanged.

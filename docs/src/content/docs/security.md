@@ -37,13 +37,22 @@ reading*:
 The parser caps nesting depth at 64, rejects everything RFC 8259 rejects, and is fuzzed on every
 build.
 
-**You have one thing to do here:** map `SignalsTooLargeException` to `413` in your framework's
-error handling. Streamlord will not register a handler behind your back.
+**You have two things to do here:** map `SignalsTooLargeException` to `413`, and map a body that
+is not the signals you expected to `400`. The second is `JsonParseException` from the built-in
+reader and `SignalsCodecException` from a codec, and unmapped they are a `500`: a stranger posting
+`query=gate` where JSON was expected gets a stack trace's worth of blame put on your server.
+Streamlord will not register a handler behind your back.
 
 ```kotlin sample=ktor-application
 install(StatusPages) {
     exception<SignalsTooLargeException> { call, _ ->
         call.respond(io.ktor.http.HttpStatusCode.PayloadTooLarge)
+    }
+    exception<JsonParseException> { call, _ ->
+        call.respond(io.ktor.http.HttpStatusCode.BadRequest)
+    }
+    exception<SignalsCodecException> { call, _ ->
+        call.respond(io.ktor.http.HttpStatusCode.BadRequest)
     }
 }
 ```
@@ -138,9 +147,9 @@ All three are in Datastar 1.0.4's `engine/csp.ts`, and none of them announce the
 - **A missing `data-nonce` fails quietly.** The client stays on `Function(...)` and your
   `script-src` is what blocks the expressions. A page that loads is not evidence that the nonce
   arrived, which is why the test below is worth writing.
-- **An empty `data-nonce` throws `NonceRequired`** and the client does not start. Streamlord
-  refuses an empty nonce before it reaches the markup, so this one can only happen if you write
-  the attribute yourself.
+- **An empty `data-nonce` throws `NonceRequired`** and the client does not start. The plugin, the
+  filter and `dataNonce` all refuse an empty nonce before it reaches the markup, so this one can
+  only happen if you write the attribute yourself.
 
 Patched-in scripts are the exception that needs no work from you: Datastar re-creates every
 `<script>` it patches in and gives it the page's nonce. Never put a stream response's nonce on an

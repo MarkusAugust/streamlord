@@ -54,8 +54,12 @@ div {
 }
 ```
 
-References may index: `signal("items[0].name")`. A blank name, or one with whitespace or quotes,
-throws `InvalidSignalNameException` at render time.
+References may index: `signal("items[0].name")` and `signal("items['sub-total']")`. A reference
+is JavaScript, so `signal`, `set` and the other expression helpers refuse only a blank name or
+one with whitespace. A name that becomes a key or an attribute value, as in `dataBind`,
+`dataSignals` and `dataClass`, also refuses quotes and the characters that end an attribute. Both
+throw `InvalidSignalNameException` at render time. Neither makes a name from a request safe to
+pass in: a reference is written into an expression as it stands.
 
 ## The hyphen after a signal
 

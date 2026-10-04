@@ -48,5 +48,5 @@ It brings nothing beyond `streamlord-html`.
 ## If you do not hold a licence
 
 Then you do not need this module, and nothing else in Streamlord changes. The free Datastar
-bundle is what the other eight modules speak, and every page on this site other than this one
+bundle is what the other nine modules speak, and every page on this site other than this one
 applies to it.

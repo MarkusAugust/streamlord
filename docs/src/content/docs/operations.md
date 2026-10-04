@@ -142,7 +142,8 @@ own proxy's.
 
 ## Through the proxy
 
-Streamlord sets two headers on every stream:
+Streamlord sets two headers on every stream it opens, which is `respondDatastar` on Ktor,
+`datastarStream` on WebMVC and `asDatastarResponse` on WebFlux:
 
 | Header | Why |
 |---|---|
@@ -167,6 +168,11 @@ fun feed(
 Without the request the header is set anyway, which is right for the servlet containers that
 still speak HTTP/1.1 and harmless for the ones that drop it themselves.
 
+On WebFlux the headers belong to the response and a `Flow` is only its body. Return the bare flow
+from `asServerSentEvents` and Spring sets the content type and nothing else, so behind nginx the
+events are held back until the stream ends. `asDatastarResponse` returns the same flow with both
+headers on it; see [Spring WebFlux](/spring-webflux/).
+
 ### One proxy, measured
 
 Railway does not buffer Server-Sent Events. That is not a guess. The CI run that deploys this
@@ -188,10 +194,13 @@ reactively.
 **Spring WebMVC** does hold one. `datastarStream` returns a `StreamingResponseBody` and bridges
 into the suspending core with `runBlocking`, inside `datastarStream`, which occupies the executing thread
 for as long as the stream is open. Which thread that is belongs to Spring, not to Streamlord: it
-is the MVC async task executor. Boot's default creates a new platform thread per request with no
-upper bound, so a thousand open streams are a thousand platform threads.
+is the MVC async task executor. Boot's default is a pool of **eight** platform threads with an
+unbounded queue behind it, so the ninth stream does not get a thread. It waits in the queue with
+its response open and nothing written, for as long as the first eight stay open, and nothing logs
+it. Twenty streams opened against a default Boot 4.0 application: eight were running after two and
+a half seconds, and twelve were waiting. **Measured.**
 
-Make them virtual instead:
+Make the threads virtual instead, and all twenty run:
 
 ```
 spring.threads.virtual.enabled=true

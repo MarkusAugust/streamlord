@@ -126,7 +126,7 @@ takes a body or a `datastar` query parameter like the real thing.
 ## Without a framework at all
 
 When what you are testing is the event rather than the route, skip both. `SseEncoder` is a pure
-function from an event to bytes, and it is the same one both adapters use.
+function from an event to text, and it is the same one both adapters use.
 
 ```kotlin sample=test
 @Test

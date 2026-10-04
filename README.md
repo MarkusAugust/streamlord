@@ -49,7 +49,7 @@ dependencies {
 }
 ```
 
-There are nine modules and you will never want all of them.
+There are ten modules and you will never want all of them.
 [Install and modules](https://streamlord-docs.netlify.app/install/) explains which and why.
 
 ## The editors
@@ -63,7 +63,7 @@ only, and a Stream Inspector. See [The editors](https://streamlord-docs.netlify.
 
 | Path | What it is |
 |---|---|
-| `streamlord-*` | the nine published modules |
+| `streamlord-*` | the ten published modules |
 | `editors/vscode`, `editors/intellij` | the two editor extensions |
 | `catalog/` | `datastar-1.0.4.json`, the shared source of truth for both editors |
 | `docs/` | this project's documentation site (Astro, Fristil, Datastar) |
@@ -76,9 +76,11 @@ only, and a Stream Inspector. See [The editors](https://streamlord-docs.netlify.
 ```
 
 JDK 21 builds it; the artifacts target JDK 17. `build` also holds the documentation to what
-this build actually does: every Kotlin example is compiled against the modules, and the
-coordinates, dependency trees and wire transcripts the pages print are rewritten from the
-project's own version, resolution and encoder. A page that has gone stale turns the build red.
+this build actually does. Every Kotlin example is compiled against the modules, and the
+dependency trees the pages print are compared with what the build resolves; a page that has gone
+stale on either turns the build red. The coordinates and the wire transcripts are rewritten in
+place from the project's own version and encoder, and the build says which page it changed so you
+can commit it.
 
 Releases go to Maven Central from CI only: bump `version` in `gradle.properties`, commit, push
 a tag `v<version>`. The `publish-maven-central` job checks that the tag matches, then signs and

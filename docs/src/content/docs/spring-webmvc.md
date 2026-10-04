@@ -89,7 +89,8 @@ the rest.
 
 ## What this page does not cover
 
-`SignalsTooLargeException` should be mapped to `413` in your `@ControllerAdvice`; Streamlord does
+`SignalsTooLargeException` should be mapped to `413` in your `@ControllerAdvice`, and
+`JsonParseException` and `SignalsCodecException` to `400`; Streamlord does
 not register one, because registering exception handlers behind your back is exactly the kind of
 help that turns into a fight. For reactive endpoints, see [Spring WebFlux](/spring-webflux/). The
 one filter the adapter offers, `CspNonceFilter`, is a bean you declare like any other, and it is

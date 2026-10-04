@@ -106,5 +106,6 @@ you one without the null check.
 ## What this page does not cover
 
 Error handling is yours. `SignalsTooLargeException` is thrown while the body is being read, and
-you will want it mapped to `413` in a `StatusPages` block. Authentication, rate limiting and
+you will want it mapped to `413` in a `StatusPages` block, with `JsonParseException` and
+`SignalsCodecException` mapped to `400` beside it; [Security](/security/) has the block. Authentication, rate limiting and
 tracing are Ktor's, unchanged; Streamlord adds no interceptors and has no opinion about them.

@@ -51,23 +51,27 @@ public class KotlinxSignalsCodec(
         value: Any?,
         type: KType,
     ): String =
-        try {
-            json.encodeToString(serializerFor(type), value)
-        } catch (e: SerializationException) {
-            throw SignalsCodecException("Could not encode $type as signals.${hint(type)}", e)
+        serializerFor(type).let { serializer ->
+            try {
+                json.encodeToString(serializer, value)
+            } catch (e: SerializationException) {
+                throw SignalsCodecException("Could not encode $type as signals", e)
+            }
         }
 
     override fun <T : Any> decode(
         json: String,
         type: KType,
     ): T =
-        try {
-            @Suppress("UNCHECKED_CAST")
-            this.json.decodeFromString(serializerFor(type), json) as T
-        } catch (e: SerializationException) {
-            throw SignalsCodecException("Could not decode signals into $type.${hint(type)}", e)
-        } catch (e: IllegalArgumentException) {
-            throw SignalsCodecException("Could not decode signals into $type.${hint(type)}", e)
+        serializerFor(type).let { serializer ->
+            try {
+                @Suppress("UNCHECKED_CAST")
+                this.json.decodeFromString(serializer, json) as T
+            } catch (e: SerializationException) {
+                throw SignalsCodecException("Could not decode signals into $type", e)
+            } catch (e: IllegalArgumentException) {
+                throw SignalsCodecException("Could not decode signals into $type", e)
+            }
         }
 
     /*
@@ -114,14 +118,6 @@ public class KotlinxSignalsCodec(
      * image, where the class metadata it reads is not there. A message that says only "could not
      * decode" sends the reader looking at their JSON. This one sends them to the fix.
      */
-    private fun hint(type: KType): String =
-        if (serializers.containsKey(type)) {
-            ""
-        } else {
-            " No serializer was named for it: pass typeOf<$type>() to " +
-                "KotlinxSignalsCodec(serializers = ...) if this is a GraalVM native image."
-        }
-
     @Suppress("UNCHECKED_CAST")
     private fun serializerFor(type: KType): KSerializer<Any?> {
         serializers[type]?.let { return it as KSerializer<Any?> }
@@ -140,8 +136,20 @@ public class KotlinxSignalsCodec(
             )
         }
 
-        return json.serializersModule.serializer(type)
+        // The hint belongs to this lookup alone. A body that does not fit the type is a different
+        // failure, and telling its reader to name a serializer sends them the wrong way.
+        return try {
+            json.serializersModule.serializer(type)
+        } catch (e: SerializationException) {
+            throw SignalsCodecException(lookupFailed(type), e)
+        } catch (e: IllegalArgumentException) {
+            throw SignalsCodecException(lookupFailed(type), e)
+        }
     }
+
+    private fun lookupFailed(type: KType): String =
+        "No serializer could be found for $type. In a GraalVM native image, pass typeOf<$type>() to " +
+            "KotlinxSignalsCodec(serializers = ...)."
 
     public companion object {
         /** The configuration used when none is given. */

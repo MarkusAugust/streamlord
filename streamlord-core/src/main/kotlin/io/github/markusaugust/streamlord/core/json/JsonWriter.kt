@@ -112,9 +112,9 @@ public object JsonWriter {
                 '\r' -> sb.append("\\r")
                 '\t' -> sb.append("\\t")
                 '\b' -> sb.append("\\b")
-                '' -> sb.append("\\f")
-                ' ' -> sb.append("\\u2028")
-                ' ' -> sb.append("\\u2029")
+                '\u000C' -> sb.append("\\f")
+                '\u2028' -> sb.append("\\u2028")
+                '\u2029' -> sb.append("\\u2029")
                 '/' -> if (previous == '<') sb.append("\\/") else sb.append('/')
                 else -> if (c < ' ') sb.append("\\u%04x".format(c.code)) else sb.append(c)
             }
