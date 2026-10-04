@@ -2,7 +2,7 @@
 
 All notable changes to the Streamlord extension are recorded here.
 
-## Unreleased
+## 0.4.0
 
 - Ordinary attributes such as `data-id`, `data-test` and `data-href` are no longer flagged as
   misspelt Datastar attributes. A bare name is judged only when it is a long Datastar name with a
