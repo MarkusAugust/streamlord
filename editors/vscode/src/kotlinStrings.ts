@@ -48,11 +48,21 @@ export const PLACEHOLDER = "__kt__";
 
 const SIMPLE_ESCAPES: Record<string, string> = { n: "\n", t: "\t", b: "\b", r: "\r", '"': '"', "'": "'", "\\": "\\", $: "$" };
 
+/** A Kotlin identifier may use any letter: `$år` is a template as much as `$year` is. */
 function isIdentStart(c: string): boolean {
-  return /[A-Za-z_]/.test(c);
+  return /[\p{L}_]/u.test(c);
 }
 function isIdentPart(c: string): boolean {
-  return /[A-Za-z0-9_]/.test(c);
+  return /[\p{L}\p{Nd}_]/u.test(c);
+}
+
+/** The offset just past the character literal that opens at `at`: `'a'`, `'\n'`, `'\u0041'`. */
+export function charLiteralEnd(src: string, at: number): number {
+  let j = at + 1;
+  if (src[j] === "\\") j += src[j + 1] === "u" ? 6 : 2;
+  else j += 1;
+  if (src[j] === "'") j++;
+  return j;
 }
 
 /** Does a string literal start at `at`: a quote, or a run of dollars followed by a quote? */
@@ -93,7 +103,8 @@ export function readKotlinStringAt(src: string, at: number): KotlinString | null
         while (src[j] === '"') j++;
         const extra = j - i - 3;
         for (let k = 0; k < extra; k++) push('"', i + k);
-        map.push(j);
+        // The end of the text is where the closing quotes start, as in an ordinary literal.
+        map.push(j - 3);
         return { start: at, end: j, raw, dollars, contentStart, contentEnd: j - 3, text: out, map, interpolations, unterminated: false };
       }
     } else {
@@ -146,6 +157,10 @@ export function readKotlinStringAt(src: string, at: number): KotlinString | null
               j = inner.end;
               continue;
             }
+          } else if (cj === "'") {
+            // A brace in a character literal ('}') is not the end of the template.
+            j = charLiteralEnd(src, j);
+            continue;
           }
           j++;
         }

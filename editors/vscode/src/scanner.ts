@@ -1,4 +1,4 @@
-import { isStringStart, readKotlinStringAt, type KotlinString } from "./kotlinStrings.ts";
+import { charLiteralEnd, isStringStart, readKotlinStringAt, type KotlinString } from "./kotlinStrings.ts";
 
 /**
  * Finds calls to known DSL functions in Kotlin source and splits their arguments, without a
@@ -29,6 +29,25 @@ export interface CallSite {
 
 const IDENT = /\b([A-Za-z_][A-Za-z0-9_]*)\s*\(/g;
 
+/** `.trimIndent()` and `.trimMargin()` change the indentation of a literal, not what it says. */
+const TRIM_CALL = /\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)/y;
+
+/** The offset of the first character from `from` that is neither whitespace nor part of a comment. */
+function skipTrivia(src: string, from: number, to: number): number {
+  let i = from;
+  while (i < to) {
+    if (/\s/.test(src[i] ?? "")) i++;
+    else if (src.startsWith("//", i)) {
+      const nl = src.indexOf("\n", i);
+      i = nl < 0 || nl > to ? to : nl;
+    } else if (src.startsWith("/*", i)) {
+      const close = src.indexOf("*/", i + 2);
+      i = close < 0 || close + 2 > to ? to : close + 2;
+    } else break;
+  }
+  return i;
+}
+
 export function findCallSites(src: string, names: ReadonlySet<string>, mask: Uint8Array = codeMask(src)): CallSite[] {
   const sites: CallSite[] = [];
   IDENT.lastIndex = 0;
@@ -54,9 +73,8 @@ function parseArgs(src: string, openParen: number): { closeParen: number; args: 
   let i = openParen + 1;
   let argStart = i;
   const finish = (end: number) => {
-    const text = src.slice(argStart, end);
-    if (text.trim().length === 0 && args.length === 0 && end === argStart) return;
-    if (text.trim().length === 0) return;
+    // A comment after the last comma is not an argument.
+    if (skipTrivia(src, argStart, end) === end) return;
     args.push(makeArg(src, argStart, end));
   };
   while (i < src.length) {
@@ -100,21 +118,26 @@ function parseArgs(src: string, openParen: number): { closeParen: number; args: 
 }
 
 function makeArg(src: string, from: number, to: number): Arg {
-  let start = from;
-  while (start < to && /\s/.test(src[start] ?? "")) start++;
   let end = to;
-  while (end > start && /\s/.test(src[end - 1] ?? "")) end--;
+  while (end > from && /\s/.test(src[end - 1] ?? "")) end--;
+  let start = skipTrivia(src, from, end);
   let named: string | null = null;
   const nm = /^([A-Za-z_][A-Za-z0-9_]*)\s*=(?!=)/.exec(src.slice(start, end));
   if (nm) {
     named = nm[1] ?? null;
-    start += nm[0].length;
-    while (start < end && /\s/.test(src[start] ?? "")) start++;
+    start = skipTrivia(src, start + nm[0].length, end);
   }
   let string: KotlinString | null = null;
   if (isStringStart(src, start)) {
     const s = readKotlinStringAt(src, start);
-    if (s && s.end === end) string = s;
+    if (s) {
+      // The argument is still one literal with a trim call or a comment after it.
+      let after = skipTrivia(src, s.end, end);
+      TRIM_CALL.lastIndex = after;
+      const trim = TRIM_CALL.exec(src);
+      if (trim) after = skipTrivia(src, after + trim[0].length, end);
+      if (after === end) string = s;
+    }
   }
   return { start, end, named, text: src.slice(start, end), string };
 }
@@ -153,10 +176,7 @@ export function lexKotlin(src: string): { strings: KotlinString[]; mask: Uint8Ar
       continue;
     }
     if (c === "'") {
-      let j = i + 1;
-      if (src[j] === "\\") j += src[j + 1] === "u" ? 6 : 2;
-      else j += 1;
-      if (src[j] === "'") j++;
+      const j = charLiteralEnd(src, i);
       blank(i, j);
       i = j;
       continue;

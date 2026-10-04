@@ -71,6 +71,32 @@ private val FUN_BEFORE = Regex("""\bfun\s+(?:[A-Za-z_][A-Za-z0-9_<>.,?* ]*\.)?$"
 private val NAMED_ARG = Regex("""^([A-Za-z_][A-Za-z0-9_]*)\s*=(?!=)""")
 private val TRAILING_LAMBDA = Regex("""^\s*\{""")
 
+/** `.trimIndent()` and `.trimMargin()` change the indentation of a literal, not what it says. */
+private val TRIM_CALL = Regex("""\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)""")
+
+/** The offset of the first character from [from] that is neither whitespace nor part of a comment. */
+private fun skipTrivia(
+    src: String,
+    from: Int,
+    to: Int,
+): Int {
+    var i = from
+    while (i < to) {
+        if (src[i].isWhitespace()) {
+            i++
+        } else if (src.startsWith("//", i)) {
+            val nl = src.indexOf('\n', i)
+            i = if (nl < 0 || nl > to) to else nl
+        } else if (src.startsWith("/*", i)) {
+            val close = src.indexOf("*/", i + 2)
+            i = if (close < 0 || close + 2 > to) to else close + 2
+        } else {
+            break
+        }
+    }
+    return i
+}
+
 public fun findCallSites(
     src: String,
     names: Set<String>,
@@ -125,8 +151,8 @@ private fun parseArgs(
     var argStart = i
 
     fun finish(end: Int) {
-        val text = src.substring(argStart, end)
-        if (text.isBlank()) return
+        // A comment after the last comma is not an argument.
+        if (skipTrivia(src, argStart, end) == end) return
         args += makeArg(src, argStart, end)
     }
     while (i < src.length) {
@@ -181,21 +207,24 @@ private fun makeArg(
     from: Int,
     to: Int,
 ): Arg {
-    var start = from
-    while (start < to && src[start].isWhitespace()) start++
     var end = to
-    while (end > start && src[end - 1].isWhitespace()) end--
+    while (end > from && src[end - 1].isWhitespace()) end--
+    var start = skipTrivia(src, from, end)
     var named: String? = null
     val nm = NAMED_ARG.find(src.substring(start, end))
     if (nm != null) {
         named = nm.groupValues[1]
-        start += nm.value.length
-        while (start < end && src[start].isWhitespace()) start++
+        start = skipTrivia(src, start + nm.value.length, end)
     }
     var string: KotlinString? = null
     if (isStringStart(src, start)) {
         val s = readKotlinStringAt(src, start)
-        if (s != null && s.end == end) string = s
+        if (s != null) {
+            // The argument is still one literal with a trim call or a comment after it.
+            var after = skipTrivia(src, s.end, end)
+            TRIM_CALL.matchAt(src, after)?.let { after = skipTrivia(src, it.range.last + 1, end) }
+            if (after == end) string = s
+        }
     }
     return Arg(start, end, named, src.substring(start, end), string)
 }
@@ -227,9 +256,7 @@ public fun lexKotlin(src: String): KotlinLex {
             continue
         }
         if (c == '\'') {
-            var j = i + 1
-            if (src.getOrNull(j) == '\\') j += if (src.getOrNull(j + 1) == 'u') 6 else 2 else j += 1
-            if (src.getOrNull(j) == '\'') j++
+            val j = charLiteralEnd(src, i)
             blank(i, j)
             i = j
             continue
