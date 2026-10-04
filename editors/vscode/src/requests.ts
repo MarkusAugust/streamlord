@@ -186,6 +186,17 @@ export function requestUrl(url: string, method: string, signalsJson: string): st
 const HEADER_SPACE = "[\\t-\\r \\u001c-\\u001f\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]+";
 const HEADER_TRIM = new RegExp(`^${HEADER_SPACE}|${HEADER_SPACE}$`, "g");
 
+/** Parse `Name: value` lines into a header map. A name given twice is sent once, with its last value. */
+export function parseHeaderLines(text: string): Record<string, string> {
+  const out = new Map<string, string>();
+  for (const line of text.split("\n")) {
+    const idx = line.indexOf(":");
+    if (idx > 0) out.set(line.slice(0, idx).replace(HEADER_TRIM, ""), line.slice(idx + 1).replace(HEADER_TRIM, ""));
+  }
+  // Own properties even for a name such as `__proto__`, which an assignment would take as the prototype.
+  return Object.fromEntries(out);
+}
+
 /** A curl command equivalent to what the inspector sends. Variables must already be resolved. */
 export function toCurl(r: SavedRequest): string {
   const bodyless = r.method === "GET" || r.method === "DELETE";
@@ -193,15 +204,59 @@ export function toCurl(r: SavedRequest): string {
   const parts = ["curl", "-N", "-X", r.method];
   parts.push(shellQuote(requestUrl(r.url, r.method, signalsJson)));
   parts.push("-H", shellQuote("Accept: text/event-stream"), "-H", shellQuote("Datastar-Request: true"));
-  // A name given twice is sent once, with its last value: the request itself is built from a map.
-  const headers = new Map<string, string>();
-  for (const line of r.headers.split("\n")) {
-    const idx = line.indexOf(":");
-    if (idx > 0) headers.set(line.slice(0, idx).replace(HEADER_TRIM, ""), line.slice(idx + 1).replace(HEADER_TRIM, ""));
-  }
-  for (const [k, v] of headers) parts.push("-H", shellQuote(`${k}: ${v}`));
+  for (const [k, v] of Object.entries(parseHeaderLines(r.headers))) parts.push("-H", shellQuote(`${k}: ${v}`));
   if (!bodyless) parts.push("-H", shellQuote("Content-Type: application/json"), "--data", shellQuote(signalsJson));
   return parts.join(" ");
+}
+
+const NOT_SENDABLE = `"<>\\^\`|`;
+const PATH_PARAM_TEXT = /\{[^{}]*\}/;
+
+/**
+ * The URL of the curl line as the inspector sends it, or why it cannot be sent as written. The
+ * text goes out unchanged but for two things every client does alike: the fragment is dropped,
+ * and a character beyond ASCII is sent as UTF-8 escapes. Anything curl refuses, globs away or the
+ * IntelliJ client's java.net.URI rejects is refused here, so both inspectors refuse the same URLs.
+ */
+export function sendableUrl(url: string): { url: string } | { error: string } {
+  const scheme = /^([A-Za-z][A-Za-z0-9+.-]*):\/\//.exec(url)?.[1];
+  if (scheme === undefined) return { error: `Not an absolute URL: ${url}. Start it with http:// or https://, or with {{baseUrl}}.` };
+  if (scheme.toLowerCase() !== "http" && scheme.toLowerCase() !== "https") return { error: `Only http:// and https:// URLs can be sent: ${url}` };
+  const hash = url.indexOf("#");
+  const target = hash < 0 ? url : url.slice(0, hash);
+  const start = scheme.length + 3;
+  const slash = target.slice(start).search(/[/?]/);
+  const authorityEnd = slash < 0 ? target.length : start + slash;
+  if (authorityEnd === start) return { error: `No host in ${url}.` };
+  const queryStart = target.indexOf("?") < 0 ? target.length : target.indexOf("?");
+  let out = target.slice(0, start);
+  for (let i = start; i < target.length; i++) {
+    const c = target[i] ?? "";
+    const code = c.charCodeAt(0);
+    if (code <= 0x20 || code === 0x7f) return { error: "The URL holds a space or a control character, which cannot be sent. Write a space as %20." };
+    if (c === "{" || c === "}") return { error: `The URL still holds ${PATH_PARAM_TEXT.exec(target)?.[0] ?? c}. Fill in the path parameter before sending.` };
+    // Brackets are an IPv6 host, and java.net.URI takes them in a query but not in a path.
+    if (NOT_SENDABLE.includes(c) || ((c === "[" || c === "]") && i >= authorityEnd && i < queryStart)) {
+      return { error: `The URL holds ${c}, which cannot be sent as written. Write it as ${escape(c)}.` };
+    }
+    if (c === "%" && !/^[0-9A-Fa-f]{2}$/.test(target.slice(i + 1, i + 3))) return { error: "The URL holds a % that starts no escape. Write it as %25." };
+    if (code > 0x7f) {
+      const cp = target.codePointAt(i) ?? code;
+      // A surrogate without its partner goes out as U+FFFD, as TextEncoder sends it.
+      const char = cp >= 0xd800 && cp <= 0xdfff ? "�" : String.fromCodePoint(cp);
+      if (i < authorityEnd) return { error: `The host holds ${char}, which cannot be sent as written. Write the host in its xn-- form.` };
+      out += escape(char);
+      i += char.length - 1;
+      continue;
+    }
+    out += c;
+  }
+  return { url: out };
+}
+
+/** UTF-8 escapes in capitals; a surrogate without its partner is encoded as U+FFFD, as TextEncoder does. */
+function escape(s: string): string {
+  return [...new TextEncoder().encode(s)].map((b) => `%${b.toString(16).toUpperCase().padStart(2, "0")}`).join("");
 }
 
 /** Path parameters such as `{id}` or Ktor's optional `{id?}`. */

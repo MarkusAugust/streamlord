@@ -356,24 +356,21 @@ class InspectorPanel(
             )
             return
         }
-        val signalsJson =
-            if (request.signals.isBlank()) {
-                "{}"
-            } else {
-                try {
-                    JsonParser.parse(request.signals).toJson()
-                } catch (e: Exception) {
-                    error("Signals are not valid JSON: ${e.message}")
-                    return
-                }
+        if (request.signals.isNotBlank()) {
+            try {
+                JsonParser.parse(request.signals)
+            } catch (e: Exception) {
+                error("Signals are not valid JSON: ${e.message}")
+                return
             }
+        }
         store.addRecent(raw)
         pushRequests(null)
         connection =
             client.open(
                 request.url,
                 request.method,
-                signalsJson,
+                request.signals,
                 Requests.parseHeaderLines(request.headers),
                 object : StreamClient.Handlers {
                     override fun onStatus(

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { fillPath, parseEnvFile, parseRequestsFile, pathParams, pushRecent, remove, resolveRequest, serializeRequestsFile, substitute, toCurl, upsert, type SavedRequest } from "../src/requests.ts";
+import { fillPath, parseEnvFile, parseRequestsFile, pathParams, pushRecent, remove, resolveRequest, sendableUrl, serializeRequestsFile, substitute, toCurl, upsert, type SavedRequest } from "../src/requests.ts";
 import { findRoutes } from "../src/routes.ts";
 
 const req = (over: Partial<SavedRequest> = {}): SavedRequest => ({ name: "counter", url: "{{baseUrl}}/api/counter-stream", method: "GET", signals: "", headers: "", ...over });
@@ -161,5 +161,33 @@ class FeedController {
       findRoutes(src).map((r) => `${r.method} ${r.path} ${r.framework}`),
       ["GET /api/feed spring", "POST /api/search spring", "PUT /api/legacy spring", "DELETE /api spring"],
     );
+  });
+});
+
+// The same cases, character for character, as `sends the url of the curl line or says why not` in the
+// analysis module's `RequestsTest.kt`: both inspectors refuse the same URLs with the same words.
+describe("sendable url", () => {
+  it("sends the url of the curl line or says why not", () => {
+    const cases: [string, string | null, string | null][] = [
+      ["http://h:8080/api/x?flag&q=a%20b+c&s='x'&a[]=1#frag", "http://h:8080/api/x?flag&q=a%20b+c&s='x'&a[]=1", null],
+      ["HTTPS://h/søk/\u{1F600}", "HTTPS://h/s%C3%B8k/%F0%9F%98%80", null],
+      ["http://[::1]:8080/x", "http://[::1]:8080/x", null],
+      ["http://h/x\uD83D", "http://h/x%EF%BF%BD", null],
+      ["/api/x", null, "Not an absolute URL: /api/x. Start it with http:// or https://, or with {{baseUrl}}."],
+      ["{{base}}/x", null, "Not an absolute URL: {{base}}/x. Start it with http:// or https://, or with {{baseUrl}}."],
+      ["localhost:8080/x", null, "Not an absolute URL: localhost:8080/x. Start it with http:// or https://, or with {{baseUrl}}."],
+      ["ftp://h/x", null, "Only http:// and https:// URLs can be sent: ftp://h/x"],
+      ["http:///x", null, "No host in http:///x."],
+      ["http://h/a b", null, "The URL holds a space or a control character, which cannot be sent. Write a space as %20."],
+      ["http://h/users/{id}/x", null, "The URL still holds {id}. Fill in the path parameter before sending."],
+      ["http://h/p\"q", null, "The URL holds \", which cannot be sent as written. Write it as %22."],
+      ["http://h/p|q", null, "The URL holds |, which cannot be sent as written. Write it as %7C."],
+      ["http://h/x/[y]", null, "The URL holds [, which cannot be sent as written. Write it as %5B."],
+      ["http://h/p%zz", null, "The URL holds a % that starts no escape. Write it as %25."],
+      ["http://bø.no/x", null, "The host holds ø, which cannot be sent as written. Write the host in its xn-- form."],
+    ];
+    for (const [url, sent, error] of cases) {
+      assert.deepEqual(sendableUrl(url), sent !== null ? { url: sent } : { error }, url);
+    }
   });
 });

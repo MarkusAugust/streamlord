@@ -1,17 +1,18 @@
+import { compactSignals, requestUrl, sendableUrl } from "./requests.ts";
 import { decodeDatastar, SseParser, type DatastarFrame } from "./sse.ts";
 
 /**
  * The network half of the Stream Inspector, free of any editor API so it can be tested against a
  * real server. Opens a Datastar request exactly as the browser client would (signals in the
  * query string for GET and DELETE, in the body otherwise, `Datastar-Request: true`) and reports
- * what comes back.
+ * what comes back. The URL and the signals are the ones the curl export writes.
  */
 
 export interface StreamRequest {
   url: string;
   method: string;
-  /** Signals as a JSON object; `undefined` sends `{}`. */
-  signals?: unknown;
+  /** Signals as JSON text, as the user wrote them; empty or `undefined` sends `{}`. */
+  signals?: string;
   headers?: Record<string, string>;
 }
 
@@ -23,38 +24,24 @@ export interface StreamHandlers {
   onError?: (message: string) => void;
 }
 
-export function buildRequest(req: StreamRequest): { url: URL; init: RequestInit } {
+export function buildRequest(req: StreamRequest): { url: string; init: RequestInit } | { error: string } {
+  // Judged as written, so the message shows the user's URL and not the one with the signals added.
+  const written = sendableUrl(req.url);
+  if ("error" in written) return written;
+  const signalsJson = compactSignals(req.signals ?? "");
+  const sendable = sendableUrl(requestUrl(req.url, req.method, signalsJson));
+  if ("error" in sendable) return sendable;
   const headers: Record<string, string> = { Accept: "text/event-stream", "Datastar-Request": "true", ...(req.headers ?? {}) };
-  const url = new URL(req.url);
-  const signals = req.signals ?? {};
   const bodyless = req.method === "GET" || req.method === "DELETE";
-  let body: string | undefined;
-  if (bodyless) {
-    url.searchParams.set("datastar", JSON.stringify(signals));
-  } else {
-    headers["Content-Type"] = "application/json";
-    body = JSON.stringify(signals);
-  }
-  return { url, init: { method: req.method, headers, body } };
-}
-
-/** Parse `Name: value` lines into a header map. */
-export function parseHeaderLines(text: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const line of text.split("\n")) {
-    const idx = line.indexOf(":");
-    if (idx > 0) out[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
-  }
-  return out;
+  if (!bodyless) headers["Content-Type"] = "application/json";
+  return { url: sendable.url, init: { method: req.method, headers, body: bodyless ? undefined : signalsJson } };
 }
 
 /** Open the stream and pump events to the handlers until it closes, errors or is aborted. */
 export async function openStream(req: StreamRequest, handlers: StreamHandlers, signal: AbortSignal): Promise<void> {
-  let built: { url: URL; init: RequestInit };
-  try {
-    built = buildRequest(req);
-  } catch {
-    handlers.onError?.(`Not a valid URL: ${req.url}`);
+  const built = buildRequest(req);
+  if ("error" in built) {
+    handlers.onError?.(built.error);
     return;
   }
   handlers.onStatus?.("connecting");
