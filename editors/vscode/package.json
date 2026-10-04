@@ -2,7 +2,7 @@
   "name": "streamlord",
   "displayName": "Streamlord",
   "description": "Datastar as a language in your editor: expression and markup diagnostics with quick fixes, completion, hover docs and a live SSE stream inspector, in HTML, template files and Kotlin strings. Half of the Streamlord toolchain, and it needs no part of the other.",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "publisher": "MarkusAugust",
   "license": "MIT",
   "private": true,

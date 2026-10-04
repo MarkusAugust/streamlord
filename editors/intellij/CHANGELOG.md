@@ -2,7 +2,7 @@
 
 All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here.
 
-## Unreleased
+## 0.2.0
 
 - Ordinary attributes such as `data-id`, `data-test` and `data-href` are no longer flagged as
   misspelt Datastar attributes. A bare name is judged only when it is a long Datastar name with a
