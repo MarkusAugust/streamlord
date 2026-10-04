@@ -1,6 +1,12 @@
 [versions]
 kotlin = "2.4.20"
-coroutines = "1.11.0"
+# A floor, not a preference. Spring Boot pins coroutines in its BOM (3.5 pins 1.8.1, 4.0 and 4.1 pin
+# 1.10.2) and downgrades anything newer, so code compiled against a later release fails there with
+# NoSuchMethodError: 1.11 compiles runBlocking to a symbol the older jars do not have. Compiling
+# against the oldest pin runs on all of them. Raise it only when the oldest supported Boot does.
+coroutines = "1.8.1"
+coroutinesBoot4 = "1.10.2"
+coroutinesNewest = "1.11.0"
 serialization = "1.11.0"
 kotlinxHtml = "0.12.0"
 ktor = "3.6.0"
