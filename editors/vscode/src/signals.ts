@@ -17,14 +17,22 @@ const KOTLIN_PATTERNS: RegExp[] = [
 const HTML_ATTRIBUTE_PATTERNS: RegExp[] = [
   /data-(?:star-)?(?:signals|bind|indicator|ref|computed|match-media):([A-Za-z_][A-Za-z0-9_.-]*)/g,
   /data-(?:star-)?(?:bind|indicator|ref)(?:__[^=\s]*)?="([A-Za-z_][A-Za-z0-9_.]*)"/g,
-  /data-(?:star-)?signals(?:__[^=\s]*)?="\{([^"]*)\}"/g,
+  // The object form may sit in either kind of quote: JSON written by hand is `data-signals='{"query": ""}'`.
+  /data-(?:star-)?signals(?:__[^=\s]*)?=(?:"\{([^"]*)\}"|'\{([^']*)\}')/g,
 ];
+
+/** A key of the object form: bare or quoted, and inside a Kotlin string quoted with escaped quotes. */
+const OBJECT_KEY = /(?:^|[{,])\s*(?:\\?["'])?([A-Za-z_][A-Za-z0-9_]*)(?:\\?["'])?\s*:/g;
 
 /** A bare `$name` is a signal in markup; in Kotlin it is a template, so it stays out of the Kotlin list. */
 const HTML_PATTERNS: RegExp[] = [...HTML_ATTRIBUTE_PATTERNS, /\$([A-Za-z_][A-Za-z0-9_.]*)/g];
 
-const SERIALIZABLE_CLASS = /@Serializable\s*(?:\([^)]*\))?\s*(?:data\s+)?class\s+\w+\s*\(([^)]*)\)/g;
-const PROPERTY = /\b(?:val|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:/g;
+// Any modifier may stand between the annotation and `class`: an explicit-API module writes
+// `@Serializable public data class`.
+const SERIALIZABLE_CLASS = /@Serializable\s*(?:\([^)]*\))?\s*(?:(?:public|internal|private|protected|open|final|abstract|sealed|value|inline|data)\s+)*class\s+[A-Za-z_][A-Za-z0-9_]*\s*\(/g;
+// `@SerialName` renames the signal, so it is read with whatever annotations and modifiers stand
+// between it and the property.
+const PROPERTY = /(?:@SerialName\(\s*(?:value\s*=\s*)?"([^"]*)"\s*\)\s*(?:@\w+(?:\([^)]*\))?\s*)*(?:\w+\s+)*?)?\b(?:val|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:/g;
 
 const PAIR_CALLS: ReadonlySet<string> = new Set(["dataSignals", "patchSignals", "removeSignals", "respondSignals", "datastarSignals"]);
 const PAIR = /"([A-Za-z_][A-Za-z0-9_.]*)"\s+to\b/g;
@@ -51,9 +59,9 @@ export function collectSignals(src: string, language: "kotlin" | "html"): Set<st
     while ((m = re.exec(src)) !== null) {
       // A keyed attribute may carry modifiers after the key: data-signals:foo-bar__ifmissing. The
       // object form's body is captured whole, `__` and all.
-      const captured = re === HTML_ATTRIBUTE_PATTERNS[0] ? (m[1] ?? "").split("__")[0] ?? "" : (m[1] ?? "");
+      const captured = re === HTML_ATTRIBUTE_PATTERNS[0] ? (m[1] ?? "").split("__")[0] ?? "" : (m[1] ?? m[2] ?? "");
       if (re.source.includes("signals(?:__")) {
-        for (const key of captured.matchAll(/(?:^|[{,])\s*([A-Za-z_][A-Za-z0-9_]*)\s*:/g)) {
+        for (const key of captured.matchAll(OBJECT_KEY)) {
           if (key[1]) out.add(key[1]);
         }
       } else if (captured) {
@@ -65,15 +73,25 @@ export function collectSignals(src: string, language: "kotlin" | "html"): Set<st
     SERIALIZABLE_CLASS.lastIndex = 0;
     let m: RegExpExecArray | null;
     while ((m = SERIALIZABLE_CLASS.exec(src)) !== null) {
-      PROPERTY.lastIndex = 0;
-      let p: RegExpExecArray | null;
-      const body = m[1] ?? "";
-      while ((p = PROPERTY.exec(body)) !== null) if (p[1]) out.add(p[1]);
+      const open = m.index + m[0].length - 1;
+      const close = matchingParen(src, open);
+      if (close < 0) continue;
+      for (const p of src.slice(open, close).matchAll(PROPERTY)) out.add(p[1] ?? p[2] ?? "");
     }
   }
   // The placeholder the analysis writes for a Kotlin template is never a signal, whatever file it turns up in.
   for (const name of out) if (name.includes(PLACEHOLDER)) out.delete(name);
   return out;
+}
+
+/** The offset of the `)` that closes the `(` at `open`, or -1. Nesting only; a parenthesis in a string is rare here. */
+function matchingParen(src: string, open: number): number {
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === "(") depth++;
+    else if (src[i] === ")" && --depth === 0) return i;
+  }
+  return -1;
 }
 
 /** Datastar exposes kebab-case keys as camelCase signals by default. */

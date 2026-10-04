@@ -162,4 +162,59 @@ class SignalDriftTest {
         // The page declares total and draft; nothing reads them, and nothing is said.
         assertEquals(emptyMap(), drift("page.html" to html(page), "Routes.kt" to kotlin(quiet)))
     }
+
+    @Test
+    fun `signals declared as JSON, with quoted keys, count`() {
+        val json = """<div data-signals='{"query": "", "draft": ""}'></div>"""
+        val single = """<div data-signals="{'query': '', 'draft': ''}"></div>"""
+
+        assertEquals(setOf("query", "draft"), html(json).declared)
+        assertEquals(emptyMap(), drift("page.html" to html(json), "Search.kt" to kotlin(handler)))
+        assertEquals(emptyMap(), drift("page.html" to html(single), "Search.kt" to kotlin(handler)))
+    }
+
+    @Test
+    fun `a property is judged by its serial name`() {
+        val renamed =
+            """
+            @Serializable
+            data class PageSignals(
+                val query: String = "",
+                @SerialName("page_no") val page: Int = 0,
+                val tags: List<String> = listOf(),
+            )
+
+            fun route() {
+                val signals = call.readSignalsOr(PageSignals())
+            }
+            """.trimIndent()
+
+        val right = """<div data-signals="{query: '', page_no: 1, tags: []}"></div>"""
+        assertEquals(emptyMap(), drift("page.html" to html(right), "Page.kt" to kotlin(renamed)))
+
+        val wrong = """<div data-signals="{query: '', page: 1, tags: []}"></div>"""
+        val issues = drift("page.html" to html(wrong), "Page.kt" to kotlin(renamed))["Page.kt"]!!
+        assertEquals(listOf("page_no"), issues.map { renamed.substring(it.start, it.end) })
+    }
+
+    @Test
+    fun `an accessor of the same name on something else is not a signal read`() {
+        val mixed =
+            """
+            fun route(row: ResultSet, typed: Signals) {
+                val x = map.string("x")
+                val y = json.int("y")
+                val z = row.has("z")
+                val w = call.readSignals<PageSignals>()?.string("w")
+                val a = call.readSignals().string("a")
+                val b = typed.int("b")
+                val mine = call.readSignals()
+                val c = mine.has("c")
+                val d = signals?.boolean("d")
+                val e = mine.obj("e")?.string("inner")
+            }
+            """.trimIndent()
+
+        assertEquals(listOf("a", "b", "c", "d", "e"), kotlin(mixed).lookups.map { it.name })
+    }
 }
