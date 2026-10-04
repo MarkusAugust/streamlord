@@ -57,7 +57,8 @@ public class JsonObject(fields: Map<String, JsonValue>) : JsonValue, Map<String,
     }
 
     override fun toKotlin(): Map<String, Any?> = fields.mapValues { it.value.toKotlin() }
-    override fun equals(other: Any?): Boolean = other is JsonObject && other.fields == fields
+    // Map equality, so that it holds in both directions against any other Map.
+    override fun equals(other: Any?): Boolean = fields == other
     override fun hashCode(): Int = fields.hashCode()
     override fun toString(): String = toJson()
 
@@ -75,7 +76,7 @@ public class JsonArray(items: List<JsonValue>) : JsonValue, List<JsonValue> by i
     public fun objects(): List<JsonObject> = filterIsInstance<JsonObject>()
 
     override fun toKotlin(): List<Any?> = items.map { it.toKotlin() }
-    override fun equals(other: Any?): Boolean = other is JsonArray && other.items == items
+    override fun equals(other: Any?): Boolean = items == other
     override fun hashCode(): Int = items.hashCode()
     override fun toString(): String = toJson()
 }

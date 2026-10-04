@@ -27,7 +27,7 @@ public object JsonWriter {
     public fun writeString(value: String): String = StringBuilder(value.length + 2).also { appendString(it, value) }.toString()
 
     private fun appendValue(sb: StringBuilder, value: Any?, depth: Int, maxDepth: Int) {
-        if (depth > maxDepth) throw SignalsCodecException("JSON nesting deeper than $maxDepth levels (cyclic structure?)")
+        if (depth >= maxDepth && isContainer(value)) throw SignalsCodecException("JSON nesting deeper than $maxDepth levels (cyclic structure?)")
         when (value) {
             null, JsonNull -> sb.append("null")
             is JsonValue -> appendJsonValue(sb, value, depth, maxDepth)
@@ -65,10 +65,14 @@ public object JsonWriter {
     private fun appendMap(sb: StringBuilder, map: Map<*, *>, depth: Int, maxDepth: Int) {
         sb.append('{')
         var first = true
+        // Only a map with keys that are not strings can repeat one once they are written as text.
+        val written = if (map.keys.all { it is String }) null else HashSet<String>()
         for ((key, v) in map) {
             if (!first) sb.append(',')
             first = false
-            appendString(sb, key.toString())
+            val name = key.toString()
+            if (written != null && !written.add(name)) throw SignalsCodecException("Two keys of the map are written as \"$name\"")
+            appendString(sb, name)
             sb.append(':')
             appendValue(sb, v, depth + 1, maxDepth)
         }
@@ -86,12 +90,20 @@ public object JsonWriter {
         sb.append(']')
     }
 
+    private const val PLAIN_SCALE = 100
+
+    private fun isContainer(value: Any?): Boolean =
+        value is Map<*, *> || value is Iterable<*> || value is Sequence<*> || value is Array<*> ||
+            value is IntArray || value is LongArray || value is DoubleArray || value is BooleanArray
+
     private fun appendNumber(sb: StringBuilder, n: Number) {
         when (n) {
             is Int, is Long, is Short, is Byte, is BigInteger -> sb.append(n.toString())
             is Double -> sb.append(finite(n))
-            is Float -> sb.append(finite(n.toDouble()))
-            is BigDecimal -> sb.append(n.toPlainString())
+            // Its own shortest form: widened to a Double, 0.1f is written as 0.10000000149011612.
+            is Float -> finite(n.toDouble()).let { sb.append(n.toString()) }
+            // Plain notation reads better, and for a scale like 2000000000 it is two billion zeros.
+            is BigDecimal -> sb.append(if (n.scale() in -PLAIN_SCALE..PLAIN_SCALE) n.toPlainString() else n.toString())
             else -> sb.append(finite(n.toDouble()))
         }
     }

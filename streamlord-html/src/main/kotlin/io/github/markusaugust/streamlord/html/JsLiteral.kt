@@ -94,7 +94,8 @@ public object JsLiteral {
             if (!first) sb.append(", ")
             first = false
             val name = key.toString()
-            sb.append(if (IDENTIFIER.matches(name)) name else string(name)).append(": ")
+            // An unquoted __proto__ sets the prototype of the object literal instead of a key.
+            sb.append(if (IDENTIFIER.matches(name) && name != "__proto__") name else string(name)).append(": ")
             appendValue(sb, v)
         }
         sb.append('}')
