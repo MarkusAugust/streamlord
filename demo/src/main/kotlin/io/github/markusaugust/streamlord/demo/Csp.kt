@@ -88,7 +88,7 @@ private val CSS =
  * A page that really runs under a Content Security Policy, served by this service so the nonce
  * is generated per response rather than written into a file.
  *
- * Everything on it is a Datastar expression: the button's `data-on-click`, its `data-text`, the
+ * Everything on it is a Datastar expression: the button's `data-on:click`, its `data-text`, the
  * signals on `<main>`. Under this policy none of them can be compiled with `new Function`, so if
  * the button counts, CSP mode is working and the nonce in `<html>` matched the one in the header.
  *

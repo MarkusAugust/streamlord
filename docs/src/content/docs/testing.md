@@ -59,10 +59,11 @@ events.assertExactly(
 
 ### Signals read as what the stream left them
 
-`assertSignal` folds every signal patch the way the browser does, with the RFC 7386 merge the
-protocol specifies. So a signal set and then changed reads as its last value, a signal removed
-with `null` is gone, and `onlyIfMissing` does not overwrite what was already there. A nested one
-is reached with dots:
+`assertSignal` folds every signal patch the way the Datastar client merges one. So a signal set
+and then changed reads as its last value, a signal removed with `null` is gone, and
+`onlyIfMissing` does not overwrite what was already there, leaf by leaf. Numbers are compared by
+value, so `13` and `13.0` are the same signal, as they are in the browser. A nested one is reached
+with dots:
 
 ```kotlin sample=statements
 val events = datastarEvents(wire)
@@ -73,6 +74,10 @@ events.assertNoSignal("draft")
 ```
 
 ### It is a list, and it binds no test framework
+
+The decoder reads the body the way the browser does, so a test cannot pass on a response the
+client would not act on: a last frame with no blank line after it is not an event, and a frame the
+client would reject fails the test instead of being read charitably.
 
 `datastarEvents` returns a `List<DatastarEvent>`, so your own assertions work on it unchanged and
 these are a convenience rather than a cage. `events.messages` has the raw SSE messages too, for a

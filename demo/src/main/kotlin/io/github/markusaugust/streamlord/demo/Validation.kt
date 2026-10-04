@@ -3,6 +3,7 @@ package io.github.markusaugust.streamlord.demo
 import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
+import io.github.markusaugust.streamlord.core.json.JsonWriter
 import io.github.markusaugust.streamlord.html.patchElements
 import kotlinx.serialization.Serializable
 
@@ -79,8 +80,8 @@ public fun validationEvents(signals: MusterSignals): List<DatastarEvent> {
 
     return listOf(
         PatchSignals(
-            """{"bannerFault": ${quote(says("banner"))}, """ +
-                """"swordsFault": ${quote(says("swords"))}, """ +
+            """{"bannerFault": ${JsonWriter.writeString(says("banner"))}, """ +
+                """"swordsFault": ${JsonWriter.writeString(says("swords"))}, """ +
                 """"mustered": ${faults.isEmpty()}}""",
         ),
         patchElements(selector = "#muster-summary", mode = ElementPatchMode.INNER) {
@@ -88,18 +89,3 @@ public fun validationEvents(signals: MusterSignals): List<DatastarEvent> {
         },
     )
 }
-
-/** JSON string, escaped. The service ships no JSON library and needs none for this. */
-private fun quote(value: String): String =
-    buildString {
-        append('"')
-        for (character in value) {
-            when (character) {
-                '"' -> append("\\\"")
-                '\\' -> append("\\\\")
-                '\n' -> append("\\n")
-                else -> if (character < ' ') append("\\u%04x".format(character.code)) else append(character)
-            }
-        }
-        append('"')
-    }

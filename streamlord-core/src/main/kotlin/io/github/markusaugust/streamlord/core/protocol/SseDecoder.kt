@@ -6,6 +6,7 @@ import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
+import io.github.markusaugust.streamlord.core.domain.Wire
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol.DataLines
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -30,9 +31,14 @@ public object SseDecoder {
     /**
      * Every Datastar event in [text], in the order the stream carried them.
      *
-     * @throws DatastarEventValidationException if a frame names a mode or namespace that does
-     *   not exist, or carries a `retry` that is not a number. A malformed frame is a bug in
-     *   whatever wrote it, and reporting it is more use than dropping it.
+     * It reads a stream the way the browser does, so that a test cannot pass on a response the
+     * client would not act on. A last message with no blank line after it is not an event, mode
+     * and namespace tokens are matched exactly as written, and a signal patch needs its signals.
+     *
+     * @throws DatastarEventValidationException if a Datastar frame names a mode or namespace that
+     *   does not exist, has no `signals` where it needs them, or carries a `retry` that is not a
+     *   number. A malformed frame is a bug in whatever wrote it, and reporting it is more use
+     *   than dropping it.
      */
     public fun decode(text: String): List<DatastarEvent> = messages(text).mapNotNull(::toEvent)
 
@@ -69,8 +75,11 @@ public object SseDecoder {
             comments.clear()
         }
 
-        for (raw in text.split("\n")) {
-            val line = raw.removeSuffix("\r")
+        // One leading byte order mark is not part of the stream, and a line ends at CRLF, CR or LF.
+        val lines = Wire.lines(text.removePrefix("\uFEFF"))
+        // Text that ends in a line break splits into one empty piece too many: it is the end of
+        // the last line, not a blank line after it.
+        for (line in if (lines.last().isEmpty()) lines.dropLast(1) else lines) {
             if (line.isEmpty()) {
                 flush()
                 continue
@@ -91,32 +100,40 @@ public object SseDecoder {
                 else -> Unit // An unknown field is ignored, as the SSE grammar says to.
             }
         }
-        flush()
+        // Comments are kept whatever follows them; fields with no blank line after them are an
+        // unfinished message, which the SSE grammar discards and the client never dispatches.
+        if (event == null && id == null && retry == null && data.isEmpty()) flush()
         return out
     }
 
     private fun toEvent(message: SseMessage): DatastarEvent? {
+        // Nothing of a message is judged until its event name says it is Datastar's.
+        if (message.event != DatastarProtocol.Events.PATCH_ELEMENTS && message.event != DatastarProtocol.Events.PATCH_SIGNALS) return null
         val args = group(message.data)
         val retry = message.retry?.let(::parseRetry)
+        // An empty id is valid SSE and means "no id"; the client drops its last-event-id on one.
+        val id = message.id?.takeIf { it.isNotEmpty() }
         return when (message.event) {
             DatastarProtocol.Events.PATCH_ELEMENTS -> {
                 PatchElements(
                     elements = args[DataLines.ELEMENTS],
                     selector = args[DataLines.SELECTOR],
-                    mode = args[DataLines.MODE]?.let(ElementPatchMode::fromWire) ?: ElementPatchMode.DEFAULT,
+                    mode = args[DataLines.MODE]?.let(::mode) ?: ElementPatchMode.DEFAULT,
                     namespace = args[DataLines.NAMESPACE]?.let(::namespace) ?: ElementNamespace.DEFAULT,
                     useViewTransition = args[DataLines.USE_VIEW_TRANSITION] == "true",
                     viewTransitionSelector = args[DataLines.VIEW_TRANSITION_SELECTOR],
-                    eventId = message.id,
+                    eventId = id,
                     retry = retry,
                 )
             }
 
             DatastarProtocol.Events.PATCH_SIGNALS -> {
                 PatchSignals(
-                    signals = args[DataLines.SIGNALS] ?: "{}",
+                    signals =
+                        args[DataLines.SIGNALS]
+                            ?: throw DatastarEventValidationException("A signal patch carried no signals line; the client rejects it"),
                     onlyIfMissing = args[DataLines.ONLY_IF_MISSING] == "true",
-                    eventId = message.id,
+                    eventId = id,
                     retry = retry,
                 )
             }
@@ -146,8 +163,13 @@ public object SseDecoder {
         value.toLongOrNull()?.milliseconds
             ?: throw DatastarEventValidationException("retry must be a whole number of milliseconds, not '$value'")
 
+    // Exact, where ElementPatchMode.fromWire is forgiving: the client compares these tokens as written.
+    private fun mode(wire: String): ElementPatchMode =
+        ElementPatchMode.entries.firstOrNull { it.wire == wire }
+            ?: throw DatastarEventValidationException("Unknown element patch mode: '$wire'")
+
     private fun namespace(wire: String): ElementNamespace =
-        ElementNamespace.entries.firstOrNull { it.wire.equals(wire, ignoreCase = true) }
+        ElementNamespace.entries.firstOrNull { it.wire == wire }
             ?: throw DatastarEventValidationException("Unknown element namespace: '$wire'")
 }
 

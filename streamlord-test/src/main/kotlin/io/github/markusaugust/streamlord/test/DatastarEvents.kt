@@ -1,14 +1,18 @@
 package io.github.markusaugust.streamlord.test
 
+import io.github.markusaugust.streamlord.core.JsonParseException
 import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
+import io.github.markusaugust.streamlord.core.domain.Wire
+import io.github.markusaugust.streamlord.core.json.JsonArray
+import io.github.markusaugust.streamlord.core.json.JsonNull
+import io.github.markusaugust.streamlord.core.json.JsonNumber
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonValue
 import io.github.markusaugust.streamlord.core.json.JsonWriter
-import io.github.markusaugust.streamlord.core.json.mergePatch
 import io.github.markusaugust.streamlord.core.protocol.SseDecoder
 import io.github.markusaugust.streamlord.core.protocol.SseEncoder
 import io.github.markusaugust.streamlord.core.protocol.SseMessage
@@ -40,25 +44,65 @@ public class DatastarEvents(
 ) : List<DatastarEvent> by events {
     /**
      * The signal store as the browser would hold it once the whole stream has been applied:
-     * every [PatchSignals] folded in with the RFC 7386 merge the client uses, in order.
+     * every [PatchSignals] folded in the way the Datastar client merges one, in order.
      *
      * So a signal patched twice reads as its last value, and one patched to `null` is gone,
-     * which is what a test usually means when it asks what a signal ended up as.
+     * which is what a test usually means when it asks what a signal ended up as. `onlyIfMissing`
+     * is honoured leaf by leaf, as the client honours it: a nested object is still walked, and
+     * only the values that are already there are left alone.
+     *
+     * @throws AssertionError if a patch carried signals that are not a JSON object.
      */
     public val signals: JsonObject by lazy {
-        var store: JsonValue = JsonObject.EMPTY
+        var store = JsonObject.EMPTY
         for (event in events.filterIsInstance<PatchSignals>()) {
-            val patch = JsonParser.parse(event.signals)
-            val applied =
-                if (!event.onlyIfMissing || patch !is JsonObject) {
-                    patch
-                } else {
-                    val existing = store as? JsonObject ?: JsonObject.EMPTY
-                    JsonObject(patch.filterKeys { !existing.containsKey(it) })
+            val patch =
+                try {
+                    JsonParser.parseObject(event.signals)
+                } catch (e: JsonParseException) {
+                    fail("A signal patch is not a JSON object (${e.message}): ${event.signals}")
                 }
-            store = mergePatch(store, applied)
+            store = fold(store, patch, event.onlyIfMissing)
         }
-        store as? JsonObject ?: JsonObject.EMPTY
+        store
+    }
+
+    /** One level of the client's merge: `mergePatch` and `mergeInner` in Datastar's `signals.ts`. */
+    private fun fold(
+        target: JsonObject,
+        patch: JsonObject,
+        ifMissing: Boolean,
+    ): JsonObject {
+        val out = LinkedHashMap<String, JsonValue>(target)
+        for ((key, value) in patch) {
+            val existing = out[key]
+            when {
+                value is JsonNull -> if (!ifMissing) out.remove(key)
+                value is JsonObject && existing is JsonArray -> out[key] = foldIntoArray(existing, value, ifMissing)
+                value is JsonObject -> out[key] = fold(existing as? JsonObject ?: JsonObject.EMPTY, value, ifMissing)
+                !(ifMissing && key in out) -> out[key] = value
+            }
+        }
+        return JsonObject(out)
+    }
+
+    /** The client keeps an array an array when an object is patched onto it, and reads the keys as indices. */
+    private fun foldIntoArray(
+        target: JsonArray,
+        patch: JsonObject,
+        ifMissing: Boolean,
+    ): JsonValue {
+        val items = target.toMutableList()
+        for ((key, value) in patch) {
+            val index = key.toIntOrNull()?.takeIf { it in 0..items.size } ?: continue
+            when {
+                value is JsonNull -> Unit
+                index == items.size -> items += value
+                value is JsonObject && items[index] is JsonObject -> items[index] = fold(items[index] as JsonObject, value, ifMissing)
+                !ifMissing -> items[index] = value
+            }
+        }
+        return JsonArray(items)
     }
 
     /**
@@ -88,7 +132,7 @@ public class DatastarEvents(
         return events.filterIsInstance<PatchElements>().firstOrNull { patch ->
             (selector == null || patch.selector == selector) &&
                 (mode == null || patch.mode == mode) &&
-                (elements == null || patch.elements == elements) &&
+                (elements == null || patch.elements == onWire(elements)) &&
                 (containing == null || patch.elements?.contains(containing) == true)
         } ?: fail("No element patch with ${wanted.ifEmpty { listOf("any shape") }.joinToString(", ")}")
     }
@@ -120,8 +164,12 @@ public class DatastarEvents(
     /**
      * The value a signal ended up with once the whole stream was applied.
      *
-     * [expected] is compared as JSON, so `13`, `"ash"`, `true` and `null` all say what they look
-     * like, and a nested path is reached with dots: `assertSignal("address.city", "Thurn")`.
+     * [expected] is compared as JSON, so `13`, `"ash"` and `true` say what they look like, and
+     * numbers are compared by value: `13`, `13.0` and `1.3e1` are one number, as they are in the
+     * browser. A nested path is reached with dots: `assertSignal("address.city", "Thurn")`.
+     *
+     * `null` means the signal is not there, which is all a `null` ever leaves behind: patching a
+     * signal to `null` removes it. It is the same question [assertNoSignal] asks.
      */
     public fun assertSignal(
         name: String,
@@ -129,7 +177,11 @@ public class DatastarEvents(
     ) {
         val actual = path(name)
         val wanted = JsonParser.parse(JsonWriter.write(expected))
-        if (actual != wanted) {
+        if (wanted is JsonNull) {
+            if (actual != null) fail("Signal '$name' is ${actual.toJson()}, expected it not to be set")
+            return
+        }
+        if (actual == null || !same(actual, wanted)) {
             fail("Signal '$name' is ${actual?.toJson() ?: "not set"}, expected ${wanted.toJson()}")
         }
     }
@@ -150,9 +202,13 @@ public class DatastarEvents(
      *
      * The strict counterpart to the rest of this class, for a handler where the number of events
      * is the point: the counter that must send thirty and not thirty-one.
+     *
+     * Two events are the same when they put the same frame on the wire. So an `ExecuteScript` is
+     * the element patch it is sent as, a `retry` of the protocol default is no `retry` at all, and
+     * signals are compared as JSON rather than as text.
      */
     public fun assertExactly(vararg expected: DatastarEvent) {
-        if (events != expected.toList()) {
+        if (events.map(::frame) != expected.map(::frame)) {
             fail(
                 "Expected exactly ${expected.size} ${if (expected.size == 1) "event" else "events"}:\n" +
                     expected.joinToString("\n") { "  " + describe(it) },
@@ -160,14 +216,49 @@ public class DatastarEvents(
         }
     }
 
-    /** The value at a dotted path in the folded store, or `null` when nothing is there. */
-    private fun path(name: String): JsonValue? {
-        var here: JsonValue? = signals
-        for (segment in name.split('.')) {
-            here = (here as? JsonObject)?.get(segment) ?: return null
+    /**
+     * The value at a dotted path in the folded store, or `null` when nothing is there. A key may
+     * itself hold a dot, so at each level the longest key that exists is taken first.
+     */
+    private fun path(name: String): JsonValue? = path(signals, name.split('.'))
+
+    private fun path(
+        here: JsonValue,
+        segments: List<String>,
+    ): JsonValue? {
+        if (segments.isEmpty()) return here
+        val fields = here as? JsonObject ?: return null
+        for (taken in segments.size downTo 1) {
+            val next = fields[segments.subList(0, taken).joinToString(".")] ?: continue
+            path(next, segments.subList(taken, segments.size))?.let { return it }
         }
-        return here
+        return null
     }
+
+    /** JSON equality with numbers compared by value, so `13` is `13.0`. */
+    private fun same(
+        a: JsonValue,
+        b: JsonValue,
+    ): Boolean =
+        when {
+            a is JsonNumber && b is JsonNumber -> a.toBigDecimalOrNull()?.let { x -> b.toBigDecimalOrNull()?.compareTo(x) == 0 } ?: (a == b)
+            a is JsonObject && b is JsonObject -> a.keys == b.keys && a.all { (key, value) -> same(value, b.getValue(key)) }
+            a is JsonArray && b is JsonArray -> a.size == b.size && a.indices.all { same(a[it], b[it]) }
+            else -> a == b
+        }
+
+    /** The frame an event puts on the wire, with its signals in one spelling. */
+    private fun frame(event: DatastarEvent): String =
+        SseEncoder.encode(
+            if (event is PatchSignals) {
+                event.copy(signals = runCatching { JsonParser.parse(event.signals).toJson() }.getOrDefault(event.signals))
+            } else {
+                event
+            },
+        )
+
+    /** Markup as the wire carries it: every kind of line break arrives as `\n`. */
+    private fun onWire(elements: String): String = Wire.lines(elements).joinToString("\n")
 
     /** Every failure prints the stream, because the first question is always what it did send. */
     private fun fail(what: String): Nothing =

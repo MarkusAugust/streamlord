@@ -117,20 +117,22 @@ class ExpressionGuardTest {
     }
 
     @Test
-    @Suppress("DEPRECATION")
-    fun `the 0_1_1 names in this package still resolve`() {
-        val e =
-            assertFailsWith<io.github.markusaugust.streamlord.html.InterpolatedExpressionException> {
-                io.github.markusaugust.streamlord.html.ExpressionGuard
-                    .check("++")
-            }
-        assertEquals("++", e.expression)
-    }
-
-    @Test
     fun `multi-dollar strings keep their signals`() {
         // Kotlin 2.2+: in a $$"..." literal a single $ is just a character.
         assertEquals("""<button data-on:click="${'$'}count++"></button>""", elements { button { dataOnClick($$"$count++") } })
         assertEquals("""<div data-text="${'$'}user.name"></div>""", elements { div { dataText($$"$user.name") } })
+    }
+
+    @Test
+    fun `comments, a regex after an arrow and a number ending in a dot are working expressions`() {
+        for (ok in listOf("// raise it\n\$count++", "\$x /* trailing */", "x => /a/", "\$n = 1.")) {
+            assertEquals(ok, ExpressionGuard.check(ok))
+        }
+    }
+
+    // A comment is not an operand, so an expression that is only a comment and an operator is still eaten.
+    @Test
+    fun `a comment does not hide an eaten signal`() {
+        assertFailsWith<InterpolatedExpressionException> { ExpressionGuard.check("/* raise */ ++") }
     }
 }

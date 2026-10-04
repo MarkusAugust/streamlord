@@ -44,7 +44,14 @@ public class FetchOptions {
     /** Send this raw JavaScript expression as the payload, e.g. `"{id: ${'$'}selected}"`. Overrides [payload]. */
     public var payloadExpr: String? = null
 
-    /** Options the client applies to a non-SSE response regardless of its `datastar-*` headers. */
+    /**
+     * Options the client applies to a non-SSE response regardless of its `datastar-*` headers.
+     *
+     * Datastar 1.0.4 documents this option and its client does not act on it: `fetch.ts` never
+     * reads `responseOverrides` from the action's arguments, so the response is patched by its
+     * headers alone. It is written out as documented and takes effect when the client reads it.
+     * Until then, set the `datastar-*` headers on the response, which `respondElements` does.
+     */
     public var responseOverrides: ResponseOverrides? = null
 
     /** Configure [responseOverrides] inline. */
@@ -110,9 +117,12 @@ public class FetchOptions {
                 if (headers.isNotEmpty()) add("headers: ${JsLiteral.write(headers)}")
                 openWhenHidden?.let { add("openWhenHidden: $it") }
                 retry?.let { add("retry: ${js(it.wire)}") }
-                retryInterval?.let { add("retryInterval: ${it.inWholeMilliseconds}") }
-                retryScaler?.let { add("retryScaler: $it") }
-                retryMaxWait?.let { add("retryMaxWait: ${it.inWholeMilliseconds}") }
+                retryInterval?.let { add("retryInterval: ${it.wholeMilliseconds()}") }
+                retryScaler?.let {
+                    require(it.isFinite()) { "retryScaler must be a finite number, not $it" }
+                    add("retryScaler: $it")
+                }
+                retryMaxWait?.let { add("retryMaxWait: ${it.wholeMilliseconds()}") }
                 retryMaxCount?.let { add("retryMaxCount: $it") }
                 requestCancellation?.let { add("requestCancellation: ${js(it.wire)}") }
                 (payloadExpr ?: payload?.let { JsLiteral.write(it) })?.let { add("payload: $it") }

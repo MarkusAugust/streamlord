@@ -115,8 +115,8 @@ class SseDecoderTest {
     }
 
     @Test
-    fun `carriage returns and a missing trailing blank line are tolerated`() {
-        val wire = "event: datastar-patch-signals\r\ndata: signals {\"a\":1}"
+    fun `carriage returns are tolerated`() {
+        val wire = "event: datastar-patch-signals\r\ndata: signals {\"a\":1}\r\n\r\n"
 
         assertEquals(PatchSignals("""{"a":1}"""), SseDecoder.decodeOne(wire))
     }

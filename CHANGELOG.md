@@ -55,6 +55,40 @@ All notable changes to Streamlord are recorded here. The format follows
   transcripts are rewritten rather than failing the build; completion collects signals from the
   whole project; and four smaller corrections on the roadmap and changelog pages.
 
+- `streamlord-core`: a number of a million digits in a signal fits inside the default size limit
+  and cost over twenty seconds of CPU the first time `int`, `long` or `decimal` read it. The
+  parser now refuses a number longer than `JsonParser.MAX_NUMBER_LENGTH`, 1000 characters.
+- `streamlord-core`: `JsonWriter` wrote a `BigDecimal` with an enormous exponent in plain
+  notation, two billion zeros for `1E+2000000000`. It now keeps scientific notation past a scale
+  of 100. A `Float` is written in its own shortest form, a map whose keys are written alike is
+  refused, and the writer stops at the depth the parser stops at. The parser no longer takes the
+  digits of other scripts in a `\u` escape. `JsonObject` and `JsonArray` equality against a plain
+  `Map` or `List` now holds in both directions.
+- `streamlord-core`: `SseDecoder` read streams the browser would not act on. A last message with
+  no blank line after it is no longer an event, a line may end in a bare CR, a leading byte order
+  mark is dropped, mode and namespace are matched as written, a signal patch with no `signals` is
+  malformed, an event that is not Datastar's is skipped whatever its fields hold, and an empty
+  `id` is no id.
+- `streamlord-test`: `assertSignal` honours `onlyIfMissing` leaf by leaf, as the client's merge
+  does; compares numbers by value, so `13` is `13.0`; takes `null` to mean the signal is not
+  there; finds a key that holds a dot; and fails with an `AssertionError` on signals that are not
+  JSON. `assertExactly` compares the frames two events put on the wire, so it takes the
+  `ExecuteScript` that was sent and ignores a `retry` of the protocol default.
+- `streamlord-html`: `dataBind { prop = "valueAsNumber" }` wrote the property in camelCase into
+  the attribute name, which the browser lowercases; it is written `value-as-number`, which the
+  client turns back. A name holding `__` is refused, because Datastar reads modifiers from there.
+  A positive duration shorter than a millisecond is refused instead of written as zero.
+  `SignalFilter.regexLiteral` writes an empty pattern as `/(?:)/`, escapes a line break, and
+  refuses inline flags. `JsLiteral` quotes `__proto__`.
+- `streamlord-core`: `ExpressionGuard` no longer refuses an expression holding a comment, a regex
+  after `=>`, or a number ending in a dot.
+
+### Removed
+
+- `streamlord-html`: the deprecated aliases `html.ExpressionGuard` and
+  `html.InterpolatedExpressionException`, left from 0.1.1. With both `core.domain.*` and `html.*`
+  imported they made either name ambiguous. Import them from `core.domain`.
+
 ### Added
 
 - `streamlord-spring`: `Flow<DatastarEvent>.asDatastarResponse(streamlord)`, the WebFlux stream

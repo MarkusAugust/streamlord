@@ -13,6 +13,14 @@ public object JsonParser {
     /** Nesting deeper than this is treated as an attack, not as data. */
     public const val DEFAULT_MAX_DEPTH: Int = 64
 
+    /**
+     * A number written with more characters than this is refused. RFC 8259 lets a parser set
+     * limits on range and precision, and this one has to: turning a million digits into a
+     * `BigDecimal` takes tens of seconds, and a million digits fit inside the default signal
+     * size limit. No honest signal comes near it.
+     */
+    public const val MAX_NUMBER_LENGTH: Int = 1000
+
     /** Parse any JSON value. */
     public fun parse(text: String, maxDepth: Int = DEFAULT_MAX_DEPTH): JsonValue = Cursor(text, maxDepth).parseDocument()
 
@@ -135,7 +143,9 @@ public object JsonParser {
             if (i + 4 > s.length) fail("Truncated unicode escape")
             var code = 0
             repeat(4) {
-                val d = Character.digit(s[i++], 16)
+                // Character.digit also accepts the digits of other scripts, which RFC 8259 does not.
+                val c = s[i++]
+                val d = if (c < '\u0080') Character.digit(c, 16) else -1
                 if (d < 0) fail("Invalid hex digit in unicode escape")
                 code = (code shl 4) or d
             }
@@ -160,6 +170,10 @@ public object JsonParser {
                 if (peek() == '+' || peek() == '-') i++
                 if (peek()?.isAsciiDigit() != true) fail("Invalid number: digit expected in exponent")
                 while (peek()?.isAsciiDigit() == true) i++
+            }
+            if (i - start > MAX_NUMBER_LENGTH) {
+                i = start
+                fail("Number longer than $MAX_NUMBER_LENGTH characters")
             }
             return JsonNumber(s.substring(start, i))
         }
