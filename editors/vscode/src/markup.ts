@@ -1,5 +1,5 @@
 import { catalog, distance, parseAttributeName, type AttributeSpec } from "./catalog.ts";
-import { attributeDoc, DOCS, validateExpression, type Issue } from "./expression.ts";
+import { attributeDoc, DOCS, quoteAt, validateExpression, type Issue } from "./expression.ts";
 
 /**
  * Markup checks for the HTML Datastar patches: complete elements, ids where the protocol needs
@@ -7,7 +7,29 @@ import { attributeDoc, DOCS, validateExpression, type Issue } from "./expression
  */
 
 const VOID = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"]);
-const RAW_TEXT = new Set(["script", "style"]);
+
+/** Elements whose content is text, whatever it looks like: a `<div>` in a `<textarea>` or a `<title>` is not a tag. */
+const RAW_TEXT = new Set(["script", "style", "textarea", "title"]);
+
+/**
+ * The elements whose end tag HTML lets the author leave out, each with the start tags that close
+ * it. `<p>` is closed by another `<p>` only: the block elements that also close it in a browser
+ * are left alone, so that `<p><div></div></p>` reads the way its author meant it.
+ */
+const OPTIONAL_END: Record<string, readonly string[]> = Object.assign(Object.create(null), {
+  li: ["li"],
+  p: ["p"],
+  dt: ["dt", "dd"],
+  dd: ["dt", "dd"],
+  option: ["option", "optgroup"],
+  optgroup: ["optgroup"],
+  td: ["td", "th"],
+  th: ["td", "th"],
+  tr: ["tr"],
+  thead: ["tbody", "tfoot"],
+  tbody: ["tbody", "tfoot"],
+  tfoot: ["tbody"],
+});
 
 /**
  * Where a template engine or a Kotlin template will substitute text, the expression cannot be
@@ -25,6 +47,89 @@ const TEMPLATE_SYNTAX =
  * calls (`<#if>`, `</#if>`, `<@row/>`), and its `<#-- -->` comments. Skipped like `<!DOCTYPE>`.
  */
 const TEMPLATE_TAG = /^<\/?[#@]/;
+
+/**
+ * Lowercases A to Z and nothing else, so the result is as long as the input: `toLowerCase()`
+ * turns U+0130 into two characters and moves every offset after it.
+ */
+export function asciiLowercase(s: string): string {
+  return s.replace(/[A-Z]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 32));
+}
+
+/** `indexOf` that ignores the case of A to Z; `needle` is given in lowercase. */
+export function indexOfAsciiIgnoreCase(s: string, needle: string, from: number): number {
+  return asciiLowercase(s).indexOf(needle, from);
+}
+
+const ENTITY = /&(?:(amp|lt|gt|quot|apos)|#(\d{1,7})|#[xX]([0-9A-Fa-f]{1,6}));/y;
+const NAMED_ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
+
+function codePoint(cp: number): string | null {
+  return cp === 0 || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff) ? null : String.fromCodePoint(cp);
+}
+
+/**
+ * The attribute value as the browser hands it to Datastar: `&amp;&amp;` is `&&` by then. The
+ * named references a value needs (amp, lt, gt, quot, apos) and the numeric ones are decoded.
+ * `map` has, for every decoded index, the offset it came from: `text.length + 1` entries.
+ */
+export function decodeEntities(value: string): { text: string; map: number[] } {
+  let text = "";
+  const map: number[] = [];
+  let i = 0;
+  while (i < value.length) {
+    ENTITY.lastIndex = i;
+    const m = value[i] === "&" ? ENTITY.exec(value) : null;
+    const decoded = !m ? null : m[1] ? (NAMED_ENTITIES[m[1]] ?? null) : codePoint(m[2] ? parseInt(m[2], 10) : parseInt(m[3] ?? "", 16));
+    if (!m || decoded === null) {
+      text += value[i];
+      map.push(i);
+      i++;
+      continue;
+    }
+    for (let k = 0; k < decoded.length; k++) map.push(i);
+    text += decoded;
+    i += m[0].length;
+  }
+  map.push(value.length);
+  return { text, map };
+}
+
+/**
+ * Does the value hold template syntax, so that it cannot be judged before rendering? A `${`
+ * inside a JavaScript template literal is JavaScript's own and does not count.
+ */
+export function hasTemplateSyntax(value: string): boolean {
+  for (const m of value.matchAll(new RegExp(TEMPLATE_SYNTAX.source, "g"))) {
+    if (m[0] !== "${" || quoteAt(value, m.index) !== "`") return true;
+  }
+  return false;
+}
+
+/**
+ * Where a template construct that starts at `at` inside a tag ends, or `at` when none starts
+ * there: `<% %>`, `{{ }}`, `{% %}`, `{# #}`, a FreeMarker directive, or a JTE or Velocity
+ * directive with its parenthesised condition. Its `>` does not end the tag.
+ */
+function templateConstructEnd(html: string, at: number): number {
+  const after = (close: string, from: number) => {
+    const idx = html.indexOf(close, from);
+    return idx < 0 ? at : idx + close.length;
+  };
+  if (html.startsWith("<%", at)) return after("%>", at + 2);
+  if (html.startsWith("{{", at)) return after("}}", at + 2);
+  if (html.startsWith("{%", at)) return after("%}", at + 2);
+  if (html.startsWith("{#", at)) return after("#}", at + 2);
+  if (html.startsWith("<#", at) || html.startsWith("</#", at) || html.startsWith("<@", at)) return after(">", at + 2);
+  const call = /^[@#][A-Za-z]+\s*\(/.exec(html.slice(at, at + 32));
+  if (!call) return at;
+  let depth = 0;
+  for (let i = at + call[0].length - 1; i < html.length; i++) {
+    if (html[i] === "(") depth++;
+    else if (html[i] === ")" && --depth === 0) return i + 1;
+  }
+  return at;
+}
 
 export interface Attribute {
   name: string;
@@ -78,6 +183,15 @@ export function tokenize(html: string): { tags: Tag[]; topLevelText: { start: nu
       i = close < 0 ? html.length : close + 4;
       continue;
     }
+    // Pebble and Twig comments, and Mustache and Handlebars ones. Skipped only when they close,
+    // because `{#` also opens a block in other template languages.
+    const commentClose = html.startsWith("{#", i) ? "#}" : html.startsWith("{{!--", i) ? "--}}" : html.startsWith("{{!", i) ? "}}" : null;
+    const commentEnd = commentClose === null ? -1 : html.indexOf(commentClose, i + 2);
+    if (commentClose !== null && commentEnd >= 0) {
+      flushText(i);
+      i = commentEnd + commentClose.length;
+      continue;
+    }
     if (html[i] === "<" && (html.startsWith("<!", i) || html.startsWith("<?", i) || TEMPLATE_TAG.test(html.slice(i, i + 3)))) {
       flushText(i);
       const close = html.indexOf(">", i);
@@ -88,7 +202,7 @@ export function tokenize(html: string): { tags: Tag[]; topLevelText: { start: nu
     if (html[i] === "<" && tagMatch) {
       flushText(i);
       const closing = tagMatch[1] === "/";
-      const name = (tagMatch[2] ?? "").toLowerCase();
+      const name = asciiLowercase(tagMatch[2] ?? "");
       let j = i + tagMatch[0].length;
       const attributes: Attribute[] = [];
       let selfClosing = false;
@@ -103,7 +217,13 @@ export function tokenize(html: string): { tags: Tag[]; topLevelText: { start: nu
           j++;
           continue;
         }
-        const am = /^([^\s"'>\/=]+)/.exec(html.slice(j));
+        const constructEnd = templateConstructEnd(html, j);
+        if (constructEnd > j) {
+          j = constructEnd;
+          continue;
+        }
+        // A name also ends where a template construct starts: `data-x{{/if}}`, `data-x</#if>`.
+        const am = /^([^\s"'<>\/={]+)/.exec(html.slice(j));
         if (!am) {
           j++;
           continue;
@@ -139,7 +259,7 @@ export function tokenize(html: string): { tags: Tag[]; topLevelText: { start: nu
       tags.push({ name, start: i, end, closing, selfClosing: selfClosing || VOID.has(name), attributes });
       if (!closing && !selfClosing && !VOID.has(name)) {
         if (RAW_TEXT.has(name)) {
-          const closeIdx = html.toLowerCase().indexOf(`</${name}`, end);
+          const closeIdx = indexOfAsciiIgnoreCase(html, `</${name}`, end);
           i = closeIdx < 0 ? html.length : closeIdx;
           depth++;
           continue;
@@ -170,17 +290,20 @@ export function validateMarkup(html: string, opts: MarkupOptions): Issue[] {
         issues.push({ start: tag.start, end: tag.end, message: `Stray closing tag </${tag.name}>.`, severity: "error", code: "stray-close" });
       } else {
         for (const unclosed of stack.splice(idx + 1)) {
+          if (unclosed.name in OPTIONAL_END) continue;
           issues.push({ start: unclosed.start, end: unclosed.end, message: `<${unclosed.name}> is never closed.`, severity: "error", code: "unclosed" });
         }
         stack.pop();
       }
       continue;
     }
+    closeImplied(stack, tag.name);
     if (stack.length === 0) topLevel.push(tag);
     if (!tag.selfClosing) stack.push(tag);
     if (opts.checkAttributes) issues.push(...validateAttributes(tag, opts.prefix));
   }
   for (const unclosed of stack) {
+    if (unclosed.name in OPTIONAL_END) continue;
     issues.push({ start: unclosed.start, end: unclosed.end, message: `<${unclosed.name}> is never closed.`, severity: "error", code: "unclosed" });
   }
   for (const t of topLevelText) {
@@ -213,14 +336,31 @@ export function validateMarkup(html: string, opts: MarkupOptions): Issue[] {
   return issues;
 }
 
-const DURATION = /^\d+(ms|s)$/;
+/**
+ * A start tag closes the open elements whose end tag was left out: `<li>` closes the `<li>`
+ * before it, `<tbody>` closes the cell, the row and the `<thead>` above it. The search stops
+ * at the first element that needs its end tag.
+ */
+function closeImplied(stack: Tag[], opening: string): void {
+  for (let i = stack.length - 1; i >= 0; i--) {
+    const closers = OPTIONAL_END[stack[i]!.name];
+    if (!closers) return;
+    if (closers.includes(opening)) stack.length = i;
+  }
+}
+
+/** Datastar reads `500ms`, `1s`, and a bare number as milliseconds. */
+const DURATION = /^\d+(ms|s)?$/;
+
+/** Below this length a Datastar name has too many honest neighbours (test, kind, once) to judge a bare `data-*` at all. */
+const LONG_NAME = 6;
 const IDENT = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 
 /** Validate the Datastar attributes on one tag. */
 export function validateAttributes(tag: Tag, prefix: string): Issue[] {
   const issues: Issue[] = [];
   for (const attr of tag.attributes) {
-    const lower = attr.name.toLowerCase();
+    const lower = asciiLowercase(attr.name);
     if (prefix === "data-" && lower.startsWith("data-star-")) {
       issues.push({ start: attr.nameStart, end: attr.nameStart + attr.name.length, message: "This is an aliased Datastar attribute, but the prefix is set to data-. Check streamlord.attributePrefix.", severity: "warning", code: "prefix-mismatch" });
       continue;
@@ -230,10 +370,12 @@ export function validateAttributes(tag: Tag, prefix: string): Issue[] {
     if (!parsed) continue;
     const nameEnd = attr.nameStart + attr.name.length;
     if (!parsed.spec) {
-      const near = catalog.attributes
-        .map((a) => ({ a, d: distance(parsed.base, a.name) }))
-        .filter((x) => x.d > 0 && x.d <= 2)
-        .sort((x, y) => x.d - y.d)[0];
+      // The rule of the runtime guard. A key or a modifier makes a custom attribute implausible, so
+      // any one-letter neighbour is a typo. A bare name (data-test, data-kind, data-effects) is an
+      // honest word more often than not: only a swapped letter in a long name is judged.
+      const qualified = parsed.key !== null || parsed.modifiers.length > 0;
+      const found = catalog.attributes.find((a) => distance(parsed.base, a.name) === 1 && (qualified || (a.name.length >= LONG_NAME && a.name.length === parsed.base.length)));
+      const near = found ? { a: found } : undefined;
       if (near) {
         const baseEnd = attr.nameStart + prefix.length + parsed.base.length;
         issues.push({
@@ -259,12 +401,30 @@ export function validateAttributes(tag: Tag, prefix: string): Issue[] {
       issues.push({ start: attr.nameStart, end: nameEnd, message: `${prefix}${spec.name} does not take a key.`, severity: "error", code: "unexpected-key", link: attributeDoc(spec.name) });
     }
     if (parsed.key !== null) issues.push(...validateKeyCase(attr, parsed, spec, prefix));
+    const hasKey = !!parsed.key;
+    const hasValue = !!attr.value;
+    if (spec.requires === "value" && !hasValue) {
+      issues.push({ start: attr.nameStart, end: nameEnd, message: `${prefix}${spec.name} needs a value; without one Datastar raises ValueRequired.`, severity: "error", code: "missing-value", link: attributeDoc(spec.name) });
+    }
+    if (spec.requires === "exclusive" && hasKey === hasValue) {
+      issues.push({
+        start: attr.nameStart,
+        end: nameEnd,
+        message: hasKey
+          ? `${prefix}${spec.name} takes the signal as a key or as a value, not both; Datastar raises KeyAndValueProvided.`
+          : `${prefix}${spec.name} needs a signal, as a key or as a value; without one Datastar raises KeyOrValueRequired.`,
+        severity: "error",
+        code: hasKey ? "key-and-value" : "missing-key-or-value",
+        link: attributeDoc(spec.name),
+      });
+    }
     if (spec.onlyOn && !spec.onlyOn.includes(tag.name)) {
       issues.push({ start: attr.nameStart, end: nameEnd, message: `${prefix}${spec.name} only works on <${spec.onlyOn.join(">, <")}>.`, severity: "warning", code: "wrong-element" });
     }
     for (const mod of parsed.modifiers) {
-      const mstart = attr.nameStart + mod.offset;
-      const mend = mstart + mod.text.length;
+      const mend = attr.nameStart + mod.offset + mod.text.length;
+      // An empty modifier has no text to underline: the `__` that opens it is marked.
+      const mstart = mod.text.length === 0 ? mend - 2 : mend - mod.text.length;
       const mspec = spec.modifiers.find((m) => m.name === mod.name);
       if (!mspec) {
         const near = spec.modifiers.map((m) => m.name).find((n) => distance(n, mod.name) <= 2);
@@ -281,12 +441,19 @@ export function validateAttributes(tag: Tag, prefix: string): Issue[] {
       }
       issues.push(...validateModifierArgs(mspec, mod.args, mstart, mend, prefix + spec.name).map((i) => ({ ...i, link: attributeDoc(spec.name) })));
     }
-    if (attr.value !== null && spec.valueKind === "expression" && attr.value.trim().length > 0 && !TEMPLATE_SYNTAX.test(attr.value)) {
-      for (const issue of validateExpression(attr.value)) {
-        issues.push({ ...issue, start: attr.valueStart + issue.start, end: attr.valueStart + issue.end });
+    if (attr.value !== null && spec.valueKind === "expression" && attr.value.trim().length > 0 && !hasTemplateSyntax(attr.value)) {
+      const decoded = decodeEntities(attr.value);
+      const at = (i: number) => decoded.map[Math.min(Math.max(i, 0), decoded.map.length - 1)] ?? 0;
+      const source = (start: number, end: number) => {
+        const from = at(start);
+        return { start: attr.valueStart + from, end: attr.valueStart + (end > start ? Math.max(at(end), from + 1) : from) };
+      };
+      for (const issue of validateExpression(decoded.text)) {
+        const fixes = issue.fixes?.map((f) => ({ ...f, ...source(f.start, f.end) }));
+        issues.push({ ...issue, ...source(issue.start, issue.end), ...(fixes ? { fixes } : {}) });
       }
     }
-    if (attr.value !== null && spec.valueKind === "signal" && attr.value.trim().length > 0 && !TEMPLATE_SYNTAX.test(attr.value) && !/^[A-Za-z_$][A-Za-z0-9_.$-]*$/.test(attr.value.trim())) {
+    if (attr.value !== null && spec.valueKind === "signal" && attr.value.trim().length > 0 && !hasTemplateSyntax(attr.value) && !/^[A-Za-z_$][A-Za-z0-9_.$-]*$/.test(attr.value.trim())) {
       issues.push({ start: attr.valueStart, end: attr.valueStart + attr.value.length, message: `${prefix}${spec.name} takes a signal name, not an expression.`, severity: "warning", code: "signal-name-expected" });
     }
     if (spec.valueKind === "none" && attr.value !== null && attr.value.trim().length > 0) {
@@ -362,6 +529,8 @@ function validateKeyCase(attr: Attribute, parsed: { key: string | null; base: st
   if (colon < 0 || !spec.keyCase) return [];
   const key = attr.name.slice(colon + 1).split("__")[0] ?? "";
   if (!/[A-Z]/.test(key)) return [];
+  // HTML written in capitals (DATA-ON:CLICK) is not camelCase: lowercased, the key is what the author meant.
+  if (key.length > 1 && !/[a-z]/.test(key)) return [];
   const keyStart = attr.nameStart + colon + 1;
   const name = prefix + spec.name;
   const existing = parsed.modifiers.find((m) => m.name === "case");

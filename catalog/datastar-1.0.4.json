@@ -31,6 +31,7 @@
       "keyed": true,
       "keyCase": "raw",
       "valueKind": "expression",
+      "requires": "value",
       "kotlin": ["dataAttr"],
       "modifiers": [],
       "doc": "Sets one or more attributes from expressions."
@@ -41,6 +42,7 @@
       "keyed": true,
       "keyCase": "camel",
       "valueKind": "signal",
+      "requires": "exclusive",
       "kotlin": ["dataBind"],
       "modifiers": [
         { "$ref": "case" },
@@ -55,6 +57,7 @@
       "keyed": true,
       "keyCase": "kebab",
       "valueKind": "expression",
+      "requires": "value",
       "kotlin": ["dataClass"],
       "modifiers": [{ "$ref": "case" }],
       "doc": "Toggles CSS classes from boolean expressions."
@@ -65,6 +68,7 @@
       "keyed": true,
       "keyCase": "camel",
       "valueKind": "expression",
+      "requires": "value",
       "kotlin": ["dataComputed"],
       "modifiers": [{ "$ref": "case" }],
       "doc": "A read-only signal derived from other signals."
@@ -74,6 +78,7 @@
       "forms": ["data-effect=\"expr\""],
       "keyed": false,
       "valueKind": "expression",
+      "requires": "value",
       "kotlin": ["dataEffect"],
       "modifiers": [],
       "doc": "Runs an expression whenever a signal it reads changes."
@@ -102,6 +107,7 @@
       "keyed": true,
       "keyCase": "camel",
       "valueKind": "signal",
+      "requires": "exclusive",
       "kotlin": ["dataIndicator"],
       "modifiers": [{ "$ref": "case" }],
       "doc": "A boolean signal that is true while a fetch from this element is in flight."
@@ -111,6 +117,7 @@
       "forms": ["data-init=\"expr\""],
       "keyed": false,
       "valueKind": "expression",
+      "requires": "value",
       "kotlin": ["dataInit"],
       "modifiers": [{ "name": "delay", "type": "duration" }, { "$ref": "viewtransition" }],
       "doc": "Runs an expression once when the element enters the DOM."
@@ -131,6 +138,7 @@
       "keyCase": "kebab",
       "keyRequired": true,
       "valueKind": "expression",
+      "requires": "value",
       "kotlin": ["dataOn", "dataOnClick", "dataOnSubmit", "dataOnChange", "dataOnInput", "dataOnKeydown", "dataOnFetch"],
       "modifiers": [
         { "name": "once", "type": "flag" },
@@ -152,6 +160,7 @@
       "forms": ["data-on-intersect=\"expr\""],
       "keyed": false,
       "valueKind": "expression",
+      "requires": "value",
       "kotlin": ["dataOnIntersect"],
       "modifiers": [
         { "name": "once", "type": "flag" },
@@ -169,6 +178,7 @@
       "forms": ["data-on-interval=\"expr\""],
       "keyed": false,
       "valueKind": "expression",
+      "requires": "value",
       "kotlin": ["dataOnInterval"],
       "modifiers": [
         { "name": "duration", "type": "duration", "flags": ["leading"] },
@@ -181,6 +191,7 @@
       "forms": ["data-on-signal-patch=\"expr\""],
       "keyed": false,
       "valueKind": "expression",
+      "requires": "value",
       "kotlin": ["dataOnSignalPatch"],
       "modifiers": [{ "$ref": "timing" }],
       "doc": "Runs an expression whenever signals are patched. `patch` holds the patch."
@@ -209,6 +220,7 @@
       "keyed": true,
       "keyCase": "camel",
       "valueKind": "signal",
+      "requires": "exclusive",
       "kotlin": ["dataRef"],
       "modifiers": [{ "$ref": "case" }],
       "doc": "Exposes the element as a signal."
@@ -218,6 +230,7 @@
       "forms": ["data-show=\"expr\""],
       "keyed": false,
       "valueKind": "expression",
+      "requires": "value",
       "kotlin": ["dataShow"],
       "modifiers": [],
       "doc": "Shows the element when the expression is truthy."
@@ -238,6 +251,7 @@
       "keyed": true,
       "keyCase": "raw",
       "valueKind": "expression",
+      "requires": "value",
       "kotlin": ["dataStyle"],
       "modifiers": [],
       "doc": "Sets inline styles from expressions."
@@ -247,6 +261,7 @@
       "forms": ["data-text=\"expr\""],
       "keyed": false,
       "valueKind": "expression",
+      "requires": "value",
       "kotlin": ["dataText"],
       "modifiers": [],
       "doc": "Sets the element's text content from an expression."

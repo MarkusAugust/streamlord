@@ -6,7 +6,30 @@ package io.github.markusaugust.streamlord.analysis
  */
 
 private val VOID = setOf("area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr")
-private val RAW_TEXT = setOf("script", "style")
+
+/** Elements whose content is text, whatever it looks like: a `<div>` in a `<textarea>` or a `<title>` is not a tag. */
+private val RAW_TEXT = setOf("script", "style", "textarea", "title")
+
+/**
+ * The elements whose end tag HTML lets the author leave out, each with the start tags that close
+ * it. `<p>` is closed by another `<p>` only: the block elements that also close it in a browser
+ * are left alone, so that `<p><div></div></p>` reads the way its author meant it.
+ */
+private val OPTIONAL_END: Map<String, Set<String>> =
+    mapOf(
+        "li" to setOf("li"),
+        "p" to setOf("p"),
+        "dt" to setOf("dt", "dd"),
+        "dd" to setOf("dt", "dd"),
+        "option" to setOf("option", "optgroup"),
+        "optgroup" to setOf("optgroup"),
+        "td" to setOf("td", "th"),
+        "th" to setOf("td", "th"),
+        "tr" to setOf("tr"),
+        "thead" to setOf("tbody", "tfoot"),
+        "tbody" to setOf("tbody", "tfoot"),
+        "tfoot" to setOf("tbody"),
+    )
 
 /**
  * Where a template engine or a Kotlin template will substitute text, the expression cannot be
@@ -28,13 +51,148 @@ public val TEMPLATE_SYNTAX: Regex =
  */
 private val TEMPLATE_TAG = Regex("""^</?[#@]""")
 private val TAG_OPEN = Regex("""^<(/?)([A-Za-z][A-Za-z0-9:-]*)""")
-private val ATTR_NAME = Regex("""^[^\s"'>/=]+""")
+
+/** A name also ends where a template construct starts: `data-x{{/if}}`, `data-x</#if>`. */
+private val ATTR_NAME = Regex("""^[^\s"'<>/={]+""")
 private val UNQUOTED_VALUE = Regex("""^[^\s>]*""")
-private val DURATION = Regex("""^\d+(ms|s)$""")
+
+/** Datastar reads `500ms`, `1s`, and a bare number as milliseconds. */
+private val DURATION = Regex("""^\d+(ms|s)?$""")
 private val IDENT = Regex("""^[A-Za-z_][A-Za-z0-9_-]*$""")
 private val SIGNAL_NAME = Regex("""^[A-Za-z_$][A-Za-z0-9_.$-]*$""")
 private val HAS_CAPITAL = Regex("""[A-Z]""")
 private val LEADING_CAPITAL = Regex("""^[A-Z]""")
+private val HAS_LOWERCASE = Regex("""[a-z]""")
+private val ENTITY = Regex("""&(?:(amp|lt|gt|quot|apos)|#(\d{1,7})|#[xX]([0-9A-Fa-f]{1,6}));""")
+private val NAMED_ENTITIES = mapOf("amp" to "&", "lt" to "<", "gt" to ">", "quot" to "\"", "apos" to "'")
+private val TEMPLATE_CALL = Regex("""^[@#][A-Za-z]+\s*\(""")
+
+/** Below this length a Datastar name has too many honest neighbours (test, kind, once) to judge a bare `data-*` at all. */
+private const val LONG_NAME = 6
+
+/**
+ * Lowercases A to Z and nothing else, so the result is as long as the input: `lowercase()` turns
+ * U+0130 into two characters and moves every offset after it.
+ */
+internal fun String.asciiLowercase(): String {
+    if (none { it in 'A'..'Z' }) return this
+    val out = StringBuilder(length)
+    for (c in this) out.append(if (c in 'A'..'Z') c + 32 else c)
+    return out.toString()
+}
+
+/** `indexOf` that ignores the case of A to Z; [needle] is given in lowercase. */
+internal fun String.indexOfAsciiIgnoreCase(
+    needle: String,
+    from: Int,
+): Int {
+    for (i in maxOf(0, from)..length - needle.length) {
+        var k = 0
+        while (k < needle.length && (this[i + k].let { if (it in 'A'..'Z') it + 32 else it }) == needle[k]) k++
+        if (k == needle.length) return i
+    }
+    return -1
+}
+
+/** Text with its character references decoded, and for every decoded index the offset it came from. Has `text.length + 1` entries. */
+internal class DecodedValue(
+    val text: String,
+    val map: IntArray,
+) {
+    fun toSource(decoded: Int): Int = map[decoded.coerceIn(0, map.size - 1)]
+}
+
+/**
+ * The attribute value as the browser hands it to Datastar: `&amp;&amp;` is `&&` by then. The
+ * named references a value needs (amp, lt, gt, quot, apos) and the numeric ones are decoded.
+ */
+internal fun decodeEntities(value: String): DecodedValue {
+    if ('&' !in value) return DecodedValue(value, IntArray(value.length + 1) { it })
+    val out = StringBuilder()
+    val map = ArrayList<Int>()
+    var i = 0
+    while (i < value.length) {
+        val m = if (value[i] == '&') ENTITY.matchAt(value, i) else null
+        val decoded =
+            when {
+                m == null -> null
+                m.groupValues[1].isNotEmpty() -> NAMED_ENTITIES[m.groupValues[1]]
+                else -> codePoint(m.groupValues[2].toIntOrNull() ?: m.groupValues[3].toIntOrNull(16))
+            }
+        if (m == null || decoded == null) {
+            out.append(value[i])
+            map += i
+            i++
+            continue
+        }
+        for (c in decoded) {
+            out.append(c)
+            map += i
+        }
+        i += m.value.length
+    }
+    map += value.length
+    return DecodedValue(out.toString(), map.toIntArray())
+}
+
+private fun codePoint(cp: Int?): String? =
+    if (cp == null || cp == 0 || cp > 0x10FFFF || cp in 0xD800..0xDFFF) null else String(Character.toChars(cp))
+
+/**
+ * Does the value hold template syntax, so that it cannot be judged before rendering? A `${`
+ * inside a JavaScript template literal is JavaScript's own and does not count.
+ */
+public fun hasTemplateSyntax(value: String): Boolean =
+    TEMPLATE_SYNTAX.findAll(value).any { it.value != "\${" || quoteAt(value, it.range.first) != '`' }
+
+/**
+ * Where a template construct that starts at [at] inside a tag ends, or [at] when none starts
+ * there: `<% %>`, `{{ }}`, `{% %}`, `{# #}`, a FreeMarker directive, or a JTE or Velocity
+ * directive with its parenthesised condition. Its `>` does not end the tag.
+ */
+private fun templateConstructEnd(
+    html: String,
+    at: Int,
+): Int {
+    fun after(
+        close: String,
+        from: Int,
+    ): Int = html.indexOf(close, from).let { if (it < 0) at else it + close.length }
+    return when {
+        html.startsWith("<%", at) -> {
+            after("%>", at + 2)
+        }
+
+        html.startsWith("{{", at) -> {
+            after("}}", at + 2)
+        }
+
+        html.startsWith("{%", at) -> {
+            after("%}", at + 2)
+        }
+
+        html.startsWith("{#", at) -> {
+            after("#}", at + 2)
+        }
+
+        html.startsWith("<#", at) || html.startsWith("</#", at) || html.startsWith("<@", at) -> {
+            after(">", at + 2)
+        }
+
+        else -> {
+            val call = TEMPLATE_CALL.find(html.substring(at, minOf(html.length, at + 32))) ?: return at
+            var depth = 0
+            for (i in at + call.value.length - 1 until html.length) {
+                if (html[i] == '(') {
+                    depth++
+                } else if (html[i] == ')' && --depth == 0) {
+                    return i + 1
+                }
+            }
+            at
+        }
+    }
+}
 
 public data class Attribute(
     val name: String,
@@ -105,6 +263,21 @@ public fun tokenize(html: String): Tokens {
             i = if (close < 0) html.length else close + 4
             continue
         }
+        // Pebble and Twig comments, and Mustache and Handlebars ones. Skipped only when they close,
+        // because `{#` also opens a block in other template languages.
+        val commentClose =
+            when {
+                html.startsWith("{#", i) -> "#}"
+                html.startsWith("{{!--", i) -> "--}}"
+                html.startsWith("{{!", i) -> "}}"
+                else -> null
+            }
+        val commentEnd = if (commentClose == null) -1 else html.indexOf(commentClose, i + 2)
+        if (commentClose != null && commentEnd >= 0) {
+            flushText(i)
+            i = commentEnd + commentClose.length
+            continue
+        }
         if (html[i] == '<' &&
             (
                 html.startsWith("<!", i) || html.startsWith("<?", i) ||
@@ -120,7 +293,7 @@ public fun tokenize(html: String): Tokens {
         if (tagMatch != null) {
             flushText(i)
             val closing = tagMatch.groupValues[1] == "/"
-            val name = tagMatch.groupValues[2].lowercase()
+            val name = tagMatch.groupValues[2].asciiLowercase()
             var j = i + tagMatch.value.length
             val attributes = ArrayList<Attribute>()
             var selfClosing = false
@@ -133,6 +306,11 @@ public fun tokenize(html: String): Tokens {
                 if (c == '/') {
                     selfClosing = true
                     j++
+                    continue
+                }
+                val constructEnd = templateConstructEnd(html, j)
+                if (constructEnd > j) {
+                    j = constructEnd
                     continue
                 }
                 val am = ATTR_NAME.find(html.substring(j))
@@ -171,7 +349,7 @@ public fun tokenize(html: String): Tokens {
             tags += Tag(name, i, end, closing, selfClosing || name in VOID, attributes)
             if (!closing && !selfClosing && name !in VOID) {
                 if (name in RAW_TEXT) {
-                    val closeIdx = html.lowercase().indexOf("</$name", end)
+                    val closeIdx = html.indexOfAsciiIgnoreCase("</$name", end)
                     i = if (closeIdx < 0) html.length else closeIdx
                     depth++
                     continue
@@ -277,17 +455,20 @@ public class MarkupValidator(
                     issues += Issue(tag.start, tag.end, "Stray closing tag </${tag.name}>.", Severity.ERROR, "stray-close")
                 } else {
                     for (unclosed in stack.subList(idx + 1, stack.size)) {
+                        if (unclosed.name in OPTIONAL_END) continue
                         issues += Issue(unclosed.start, unclosed.end, "<${unclosed.name}> is never closed.", Severity.ERROR, "unclosed")
                     }
                     while (stack.size > idx) stack.removeAt(stack.size - 1)
                 }
                 continue
             }
+            closeImplied(stack, tag.name)
             if (stack.isEmpty()) topLevel += tag
             if (!tag.selfClosing) stack += tag
             if (opts.checkAttributes) issues += validateAttributes(tag, opts.prefix)
         }
         for (unclosed in stack) {
+            if (unclosed.name in OPTIONAL_END) continue
             issues += Issue(unclosed.start, unclosed.end, "<${unclosed.name}> is never closed.", Severity.ERROR, "unclosed")
         }
         for (t in topLevelText) {
@@ -324,6 +505,25 @@ public class MarkupValidator(
         return issues
     }
 
+    /**
+     * A start tag closes the open elements whose end tag was left out: `<li>` closes the `<li>`
+     * before it, `<tbody>` closes the cell, the row and the `<thead>` above it. The search stops
+     * at the first element that needs its end tag.
+     */
+    private fun closeImplied(
+        stack: MutableList<Tag>,
+        opening: String,
+    ) {
+        var i = stack.size - 1
+        while (i >= 0) {
+            val closers = OPTIONAL_END[stack[i].name] ?: return
+            if (opening in closers) {
+                while (stack.size > i) stack.removeAt(stack.size - 1)
+            }
+            i--
+        }
+    }
+
     /** Validate the Datastar attributes on one tag. */
     public fun validateAttributes(
         tag: Tag,
@@ -331,7 +531,7 @@ public class MarkupValidator(
     ): List<Issue> {
         val issues = ArrayList<Issue>()
         for (attr in tag.attributes) {
-            val lower = attr.name.lowercase()
+            val lower = attr.name.asciiLowercase()
             if (prefix == "data-" && lower.startsWith("data-star-")) {
                 issues +=
                     Issue(
@@ -348,12 +548,15 @@ public class MarkupValidator(
             val nameEnd = attr.nameEnd
             val spec = parsed.spec
             if (spec == null) {
+                // The rule of the runtime guard. A key or a modifier makes a custom attribute implausible, so
+                // any one-letter neighbour is a typo. A bare name (data-test, data-kind, data-effects) is an
+                // honest word more often than not: only a swapped letter in a long name is judged.
+                val qualified = parsed.key != null || parsed.modifiers.isNotEmpty()
                 val near =
-                    catalog.attributes
-                        .map { it to distance(parsed.base, it.name) }
-                        .filter { it.second in 1..2 }
-                        .minByOrNull { it.second }
-                        ?.first
+                    catalog.attributes.firstOrNull {
+                        distance(parsed.base, it.name) == 1 &&
+                            (qualified || (it.name.length >= LONG_NAME && it.name.length == parsed.base.length))
+                    }
                 if (near != null) {
                     val baseEnd = attr.nameStart + prefix.length + parsed.base.length
                     issues +=
@@ -396,6 +599,34 @@ public class MarkupValidator(
                 issues += Issue(attr.nameStart, nameEnd, "$prefix${spec.name} does not take a key.", Severity.ERROR, "unexpected-key", link)
             }
             if (parsed.key != null) issues += validateKeyCase(attr, parsed, spec, prefix)
+            val hasKey = !parsed.key.isNullOrEmpty()
+            val hasValue = !attr.value.isNullOrEmpty()
+            if (spec.requires == Requires.VALUE && !hasValue) {
+                issues +=
+                    Issue(
+                        attr.nameStart,
+                        nameEnd,
+                        "$prefix${spec.name} needs a value; without one Datastar raises ValueRequired.",
+                        Severity.ERROR,
+                        "missing-value",
+                        link,
+                    )
+            }
+            if (spec.requires == Requires.EXCLUSIVE && hasKey == hasValue) {
+                issues +=
+                    Issue(
+                        attr.nameStart,
+                        nameEnd,
+                        if (hasKey) {
+                            "$prefix${spec.name} takes the signal as a key or as a value, not both; Datastar raises KeyAndValueProvided."
+                        } else {
+                            "$prefix${spec.name} needs a signal, as a key or as a value; without one Datastar raises KeyOrValueRequired."
+                        },
+                        Severity.ERROR,
+                        if (hasKey) "key-and-value" else "missing-key-or-value",
+                        link,
+                    )
+            }
             if (spec.onlyOn != null && tag.name !in spec.onlyOn) {
                 issues +=
                     Issue(
@@ -407,8 +638,9 @@ public class MarkupValidator(
                     )
             }
             for (mod in parsed.modifiers) {
-                val mstart = attr.nameStart + mod.offset
-                val mend = mstart + mod.text.length
+                val mend = attr.nameStart + mod.offset + mod.text.length
+                // An empty modifier has no text to underline: the `__` that opens it is marked.
+                val mstart = if (mod.text.isEmpty()) mend - 2 else mend - mod.text.length
                 val mspec = spec.modifiers.firstOrNull { it.name == mod.name }
                 if (mspec == null) {
                     val near = spec.modifiers.map { it.name }.firstOrNull { distance(it, mod.name) <= 2 }
@@ -439,17 +671,27 @@ public class MarkupValidator(
                 issues += validateModifierArgs(mspec, mod.args, mstart, mend).map { it.copy(link = link) }
             }
             val value = attr.value
-            if (value != null && spec.valueKind == ValueKind.EXPRESSION && value.isNotBlank() && !TEMPLATE_SYNTAX.containsMatchIn(value)) {
-                for (issue in expressions.validate(value)) {
+            if (value != null && spec.valueKind == ValueKind.EXPRESSION && value.isNotBlank() && !hasTemplateSyntax(value)) {
+                val decoded = decodeEntities(value)
+
+                fun source(
+                    start: Int,
+                    end: Int,
+                ): Pair<Int, Int> {
+                    val from = decoded.toSource(start)
+                    return attr.valueStart + from to attr.valueStart + if (end > start) maxOf(decoded.toSource(end), from + 1) else from
+                }
+                for (issue in expressions.validate(decoded.text)) {
+                    val (start, end) = source(issue.start, issue.end)
                     issues +=
                         issue.copy(
-                            start = attr.valueStart + issue.start,
-                            end = attr.valueStart + issue.end,
-                            fixes = issue.fixes.map { it.copy(start = attr.valueStart + it.start, end = attr.valueStart + it.end) },
+                            start = start,
+                            end = end,
+                            fixes = issue.fixes.map { source(it.start, it.end).let { (s, e) -> it.copy(start = s, end = e) } },
                         )
                 }
             }
-            if (value != null && spec.valueKind == ValueKind.SIGNAL && value.isNotBlank() && !TEMPLATE_SYNTAX.containsMatchIn(value) &&
+            if (value != null && spec.valueKind == ValueKind.SIGNAL && value.isNotBlank() && !hasTemplateSyntax(value) &&
                 !SIGNAL_NAME.matches(value.trim())
             ) {
                 issues +=
@@ -484,6 +726,8 @@ public class MarkupValidator(
         if (colon < 0 || spec.keyCase == null) return emptyList()
         val key = attr.name.substring(colon + 1).substringBefore("__")
         if (!HAS_CAPITAL.containsMatchIn(key)) return emptyList()
+        // HTML written in capitals (DATA-ON:CLICK) is not camelCase: lowercased, the key is what the author meant.
+        if (key.length > 1 && !HAS_LOWERCASE.containsMatchIn(key)) return emptyList()
         val keyStart = attr.nameStart + colon + 1
         val name = prefix + spec.name
         val existing = parsed.modifiers.firstOrNull { it.name == "case" }

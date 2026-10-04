@@ -120,7 +120,7 @@ class AnalyzerTest {
 
     @Test
     fun `finds unclosed and stray tags and top-level text`() {
-        assertEquals(listOf("unclosed"), codes(html("<div id=\"a\"><p>x</div>", markup.copy(requireIds = true))))
+        assertEquals(listOf("unclosed"), codes(html("<div id=\"a\"><span>x</div>", markup.copy(requireIds = true))))
         assertEquals(listOf("stray-close"), codes(html("</div>")))
         assertEquals(listOf("top-level-text"), codes(html("Hello <b>x</b>")))
         assertEquals(emptyList(), html("<input id=\"i\"><br><script>if (a < b) {}</script>"))
@@ -352,7 +352,7 @@ class AnalyzerTest {
             s.patchElements("<li>x</li>", mode = ElementPatchMode.APPEND)
             val c = '"'
             /* outer /* inner */ still comment: patchElements("<p>") */
-            s.patchElements(""${'"'}<div id="a"><p>x</div>""${'"'})
+            s.patchElements(""${'"'}<div id="a"><span>x</div>""${'"'})
             s.removeElements(" ")
             """.trimIndent()
         assertEquals(listOf("missing-id", "mode-needs-selector", "unclosed", "blank-selector"), codes(analyzer.analyzeKotlin(src, opts)))

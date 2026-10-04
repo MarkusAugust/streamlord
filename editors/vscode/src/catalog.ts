@@ -28,6 +28,11 @@ export interface AttributeSpec {
   modifiers: Modifier[];
   onlyOn?: string[];
   doc: string;
+  /**
+   * What Datastar insists on before it applies the attribute: `value` raises an error without a
+   * value; `exclusive` wants the signal as a key or as a value, exactly one of the two.
+   */
+  requires?: "value" | "exclusive";
 }
 
 export interface ActionSpec {
@@ -104,6 +109,7 @@ function build(): Catalog {
     modifiers: expandModifiers(a.modifiers as RawModifier[], groups),
     onlyOn: a.onlyOn as string[] | undefined,
     doc: a.doc as string,
+    requires: a.requires as AttributeSpec["requires"],
   }));
   const actions: ActionSpec[] = (raw.actions as unknown as Record<string, unknown>[]).map((a) => ({
     name: a.name as string,
