@@ -23,6 +23,35 @@ All notable changes to Streamlord are recorded here. The format follows
   injecting the bean, so the configured codec and `guardElements` were silently ignored. The
   samples now take the bean through the controller's constructor, and the build refuses a
   sample that does otherwise.
+- `streamlord-core`: `interpolate` let a value into attributes the browser acts on. It now
+  refuses a value in an event handler (`on*`) or `srcdoc`, takes only a number in `style`, and at
+  the start of a URL attribute (`href`, `src`, `action` and the like) takes a relative URL or an
+  `http`, `https`, `mailto` or `tel` one. `Position` gains `URL` and `STYLE`.
+- `streamlord-html`: `dataNonce` refuses an empty or malformed nonce, as the plugin and the
+  filter already did.
+- `streamlord-core`: `ElementsGuard` threw `IllegalArgumentException` on a numeric character
+  reference that names no character, such as `&#99999999;`. It is left as written.
+- `streamlord-json-jackson2`: `Jackson2SignalsCodec.default()` refused a body carrying a signal
+  the type does not name, which is every body from a page with more signals than one handler
+  reads. It now ignores unknown properties, as Spring's mapper and the other codecs do.
+- `streamlord-json-kotlinx`: a body of the wrong shape was reported with a hint to name a
+  serializer for a native image. The hint now comes only with a failed serializer lookup.
+- `streamlord-spring`: a WebFlux event wrote `retry: 1000`, the protocol default the encoder
+  leaves off.
+- Documentation, each checked by running it: the `$` trap ships the variable's value, not an
+  empty string, and the runtime guard catches only the empty case; `signal()` and the other
+  expression helpers refuse blank names and whitespace, not quotes; under Spring Boot's
+  dependency-management plugin Boot's Jackson version wins in Gradle too; a body that will not
+  parse is a `500` unless you map it; ten modules are published, not nine; and the bytes on the
+  wire are identical on Ktor and WebMVC, while WebFlux writes the same frames in Spring's
+  spelling.
+
+### Added
+
+- `streamlord-spring`: `Flow<DatastarEvent>.asDatastarResponse(streamlord)`, the WebFlux stream
+  as a `ResponseEntity` carrying `Cache-Control: no-cache` and `X-Accel-Buffering: no`. A
+  controller returning the bare flow from `asServerSentEvents` sent neither, so nginx held the
+  events back until the stream ended.
 
 ## [0.10.0] - 2026-10-02
 

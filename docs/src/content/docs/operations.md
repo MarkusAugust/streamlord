@@ -142,7 +142,8 @@ own proxy's.
 
 ## Through the proxy
 
-Streamlord sets two headers on every stream:
+Streamlord sets two headers on every stream it opens, which is `respondDatastar` on Ktor,
+`datastarStream` on WebMVC and `asDatastarResponse` on WebFlux:
 
 | Header | Why |
 |---|---|
@@ -166,6 +167,11 @@ fun feed(
 
 Without the request the header is set anyway, which is right for the servlet containers that
 still speak HTTP/1.1 and harmless for the ones that drop it themselves.
+
+On WebFlux the headers belong to the response and a `Flow` is only its body. Return the bare flow
+from `asServerSentEvents` and Spring sets the content type and nothing else, so behind nginx the
+events are held back until the stream ends. `asDatastarResponse` returns the same flow with both
+headers on it; see [Spring WebFlux](/spring-webflux/).
 
 ### One proxy, measured
 

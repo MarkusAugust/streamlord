@@ -181,12 +181,17 @@ which one you are using.
 through a transitive dependency, so the Jackson you get is the Jackson Boot chose, and ours is
 ignored.
 
-**Gradle.** The highest version wins. Spring Boot's plugin applies its BOM as a *platform*, which
-contributes constraints rather than enforcement, so if Boot pins a Jackson older than the one
-this release was built against, adding the codec **raises** your Jackson version. If Boot's pin is
-newer, Boot's wins and nothing changes.
+**Gradle, with `io.spring.dependency-management`.** The same as Maven, and this is the setup
+start.spring.io generates. That plugin pins every managed version, downwards as well as upwards,
+so the Jackson you get is Boot's. Resolved under Boot 4.0.8, the codec's `jackson-databind 3.2.3`
+becomes Boot's `3.1.5`.
 
-That is rarely a problem, and it is never a surprise you cannot undo:
+**Gradle, with `platform(SpringBootPlugin.BOM_COORDINATES)`.** The highest version wins. A
+platform contributes constraints rather than enforcement, so if Boot pins a Jackson older than the
+one this release was built against, adding the codec **raises** your Jackson version: the same
+build resolves `3.2.3`. If Boot's pin is newer, Boot's wins and nothing changes.
+
+Both were resolved rather than reasoned about, and neither is a surprise you cannot undo:
 
 ```kotlin sample=none
 dependencies {
@@ -199,6 +204,13 @@ dependencies {
 
 Or pin it yourself, or use `enforcedPlatform` for Boot's BOM. All three work, because nothing on
 our side is strict.
+
+### And coroutines
+
+Boot pins kotlinx-coroutines the same way: 1.8.1 under Boot 3.5, 1.10.2 under Boot 4.0 and 4.1.
+Streamlord is compiled against 1.8.1, the oldest of those, so whichever version your build
+settles on is one it runs on. A Ktor application resolves a newer one through Ktor and that is
+fine too; the Spring adapter's tests run on all three.
 
 ### In practice you add few new jars
 
@@ -213,7 +225,7 @@ in: the library is yours, and we would rather use it than ship a second copy of 
 **Taking no codec adds nothing at all.** The built-in reader is part of `streamlord-core` and has
 its own RFC 8259 parser and writer, and `signals.string("query")` needs no library.
 
-## All nine, for reference
+## All ten, for reference
 
 The first law is that Streamlord brings nothing you do not already carry. This column is where
 you check that.
@@ -235,8 +247,9 @@ you check that.
 the ports. It has no JSON library because it has its own RFC 8259 parser and writer.
 
 **The Sword** is `streamlord-ktor` and **the Shield** is `streamlord-spring`. Neither is the port
-the other was bolted onto; both are adapters over the same core, and the bytes they put on the
-wire are identical.
+the other was bolted onto; both are adapters over the same core, and Ktor and Spring WebMVC put
+identical bytes on the wire. On WebFlux the frames are written by Spring's own encoder: the same
+fields and the same data, in Spring's spelling.
 
 **The Tongue** is `streamlord-html`: every `data-*` attribute, action and modifier of Datastar
 1.0.4 as typed extension functions.

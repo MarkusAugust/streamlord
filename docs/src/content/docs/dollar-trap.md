@@ -7,19 +7,26 @@ Datastar reads `$count` as a signal. Kotlin reads `$count` as a string template.
 string, Kotlin wins:
 
 ```kotlin sample=none
-dataOnClick("$count++")     // sends "++" to the browser
-dataText("$user.name")      // sends ".name"
+dataOnClick("$count++")     // sends the value of count, then "++": "3++", or "++" if it is empty
+dataText("$user.name")      // sends user.toString(), then ".name"
 ```
 
 If `count` is not in scope, that line does not compile and you find out immediately. If a `count`
-*is* in scope (and in a handler that has just read signals, one often is), it compiles, ships,
-and Datastar ignores the malformed expression **without a word**. The page simply does nothing.
+*is* in scope (and in a handler that has just read signals, one often is), it compiles and ships
+whatever the variable held at that moment. The browser gets `3++`, which is not an expression
+about a signal at all, and the page simply does nothing.
 
 ## What Streamlord does about it
 
 Every expression helper runs the text through `ExpressionGuard`, which throws
-`InterpolatedExpressionException` at render time when the text has the shape only an eaten signal
-leaves behind: empty, only operators, or an operator with a missing side.
+`InterpolatedExpressionException` at render time when the text has the shape an eaten signal
+leaves behind when the variable was empty: nothing at all, only operators, or an operator with a
+missing side. That is the common case in a handler, where the value Kotlin substituted is an empty
+query or a blank field.
+
+It cannot catch the other case. When the variable held `3`, the text is `3++`, and nothing in
+that string says a signal was meant. Only something that reads your source can see it, which is
+what [the editors](#in-the-editors) and the same analysis [run in CI](/testing/) are for.
 
 A stack trace is not a fix, but it is an enormous improvement on a page that quietly does
 nothing.

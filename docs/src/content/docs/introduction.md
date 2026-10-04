@@ -32,8 +32,8 @@ get("/feed") {
 ## What you get
 
 **Two realms, served without favour.** Ktor is the Sword, Spring is the Shield. Neither is the
-port the other was bolted onto: both are adapters over the same core, and the bytes they put on
-the wire are identical.
+port the other was bolted onto: both are adapters over the same core, and Ktor and Spring WebMVC
+put identical bytes on the wire.
 
 **An encoder that cannot be talked into lying.** Eight patch modes exist, and every mode except
 `outer` and `replace` requires a selector. Streamlord refuses to construct an event the client

@@ -30,7 +30,7 @@ description: "Ports and adapters, and why the core imports no framework."
     <div class="hex__arrow" aria-hidden="true"></div>
     <details class="hex__box hex__box--core">
       <summary><span class="hex__role">the core</span><span class="hex__name"><code>streamlord-core</code></span></summary>
-      <p>The protocol, the events, the pure encoder, the guards and a strict JSON engine. It imports no framework and depends on nothing but the standard library and coroutines, which is what lets Ktor and Spring put identical bytes on the wire.</p>
+      <p>The protocol, the events, the pure encoder, the guards and a strict JSON engine. It imports no framework and depends on nothing but the standard library and coroutines, which is what lets Ktor and Spring WebMVC put identical bytes on the wire.</p>
     </details>
     <div class="hex__arrow" aria-hidden="true"></div>
     <div class="hex__stack">

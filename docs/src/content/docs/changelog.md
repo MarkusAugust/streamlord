@@ -23,6 +23,21 @@ injecting yours. If you copied them, your codec and `guardElements` are being ig
 and carried on used to keep writing. Every write after a refusal is now refused again. Nothing
 to change in your code.
 
+**Return `asDatastarResponse()` from a WebFlux controller.** The bare flow from
+`asServerSentEvents()` went out without `Cache-Control: no-cache` and `X-Accel-Buffering: no`,
+because a `Flow` cannot carry headers. The new function returns it in a `ResponseEntity` that
+does. See [Spring WebFlux](/spring-webflux/).
+
+**`interpolate` refuses more.** A value in `onclick` or another event handler, in `srcdoc`, a
+string in `style`, and a `javascript:` URL at the start of `href` or `src` now throw
+`UnsafeInterpolationException`. If one of yours throws, the value was reaching something the
+browser runs; wrap it in `Trusted` only if you wrote it yourself. See [Strings](/strings/).
+
+**Map a body that will not parse to `400`.** `JsonParseException` and `SignalsCodecException`
+are a `500` until you do. See [Security](/security/).
+
+**`dataNonce("")` throws**, as the plugin always did for an empty nonce.
+
 ## 0.10.0
 
 **Assert on events, not on strings.** The new `streamlord-test` module reads a response back into

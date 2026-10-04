@@ -32,8 +32,8 @@ Kotlin 2.2 and newer. In a multi-dollar string a single `$` is just a dollar, so
 the browser as the signal it is, and `$$count` is the Kotlin template.
 
 Without it you are back in [the `$` trap](/dollar-trap/): `$count` either fails to compile or,
-when a `count` happens to be in scope, silently ships `data-text=""`. On older Kotlin, write
-`${'$'}count`.
+when a `count` happens to be in scope, silently ships its value, `data-text="3"`, or
+`data-text=""` when it was empty. On older Kotlin, write `${'$'}count`.
 
 ## `@Language("HTML")`
 
@@ -61,7 +61,7 @@ install(StreamlordPlugin) { guardElements = true }
 
 With it on, every element patch and elements response leaving that instance is walked by
 `ElementsGuard`. It finds each `data-*` attribute whose value is an expression and runs it through
-`ExpressionGuard`, so a `data-text=""` left behind by an eaten template throws
+`ExpressionGuard`, so a `data-text=""` left behind by a template that ate an empty value throws
 `InterpolatedExpressionException` **naming the attribute** instead of reaching the browser.
 
 The same walk catches a mistyped attribute. `data-onn:click` is one letter from `data-on:click`
@@ -100,14 +100,23 @@ What happens to a value is decided by where it landed, not by where it came from
 |---|---|
 | Element text | Escaped |
 | A quoted attribute that is not Datastar's | Escaped |
+| The start of a URL attribute: `href`, `src`, `action` | Escaped, and **refused** unless it is relative, `http`, `https`, `mailto` or `tel` |
+| A `style` attribute | **Refused**, unless it is a number |
 | A `data-*` attribute Datastar reads | **Refused**, unless it is a number or a boolean |
+| An event handler such as `onclick`, or `srcdoc` | **Refused** |
 | A tag name, an attribute name, an unquoted value | **Refused** |
 | Inside `<script>` or `<style>` | **Refused** |
 
-The refusals are the point. Escaping cannot save those three: a value in a `data-*` attribute
+So the `url` in the example above may be `/heads/1` or `https://thurn.example/`, and a
+`javascript:` URL throws instead of becoming a link that runs. A hole further into the value,
+such as the last segment of a path the markup begins, is an ordinary attribute, because the
+markup already chose where it points.
+
+The refusals are the point. Escaping cannot save these: a value in a `data-*` attribute
 becomes part of a Datastar expression, and your own server signed the page it arrived on; a value
 in an attribute name or an unquoted value can add attributes beside itself, because escaping does
-not escape a space; and HTML escaping inside a `<script>` is meaningless. `UnsafeInterpolationException`
+not escape a space; HTML escaping inside a `<script>` is meaningless; and an escaped value in
+`onclick` or at the head of an `href` is still something the browser runs. `UnsafeInterpolationException`
 says which value, where it landed, and what to do instead.
 
 ```kotlin sample=statements
@@ -145,5 +154,5 @@ whole of what `interpolate` wants from you.
 ## On Spring
 
 Spring has no auto-configuration, so the helpers take the bean: `datastarElements(html, streamlord = bean)`,
-`response.toResponseEntity(streamlord = bean)`, `events.asServerSentEvents(bean)`. With
+`response.toResponseEntity(streamlord = bean)`, `events.asDatastarResponse(bean)`. With
 `Streamlord.Default` the guard is off.
