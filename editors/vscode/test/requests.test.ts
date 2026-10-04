@@ -233,9 +233,9 @@ describe("inspector variables", () => {
     assert.deepEqual(defaults, [{ name: "baseUrl", value: "http://localhost:8080", source: "default" }]);
     assert.equal(
       describeVariables(vars),
-      'baseUrl = http://127.0.0.1:8081   (.streamlord/env.json)\nsignals = {"search":"ash","n":1.0,"s":"\\u00e9</p>"}   (.streamlord/env.json)\nheaders = Authorization: Bearer x; X-Csrf-Token: abc   (.streamlord/env.json)',
+      'baseUrl = http://127.0.0.1:8081\nsignals = {"search":"ash","n":1.0,"s":"\\u00e9</p>"}\nheaders = Authorization: Bearer x; X-Csrf-Token: abc',
     );
-    assert.equal(describeVariables(mergeVariables("http://h", parseEnv('{"signals": {}, "headers": {}}'))), "baseUrl = http://h   (default)\nsignals = {}   (.streamlord/env.json)\nheaders = (none)   (.streamlord/env.json)");
+    assert.equal(describeVariables(mergeVariables("http://h", parseEnv('{"signals": {}, "headers": {}}'))), "baseUrl = http://h   (default)\nsignals = {}\nheaders = (none)");
   });
 
   it("fill a request, each variable in its own field", () => {

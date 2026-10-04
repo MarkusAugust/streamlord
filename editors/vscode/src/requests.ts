@@ -235,9 +235,9 @@ export function variableValues(vars: Variable[]): Record<string, string> {
   return Object.fromEntries(vars.map((v) => [v.name, v.value]));
 }
 
-/** One line per variable, with where it was set. */
+/** One line per variable; only a value the env file does not set is marked, as the default. */
 export function describeVariables(vars: Variable[]): string {
-  return vars.map((v) => `${v.name} = ${v.value === "" ? "(none)" : v.value.split("\n").join("; ")}   (${v.source === "env" ? ENV_FILE : "default"})`).join("\n");
+  return vars.map((v) => `${v.name} = ${v.value === "" ? "(none)" : v.value.split("\n").join("; ")}${v.source === "default" ? "   (default)" : ""}`).join("\n");
 }
 
 /** Replace `{{name}}` with values; unknown names are left in place and reported. */

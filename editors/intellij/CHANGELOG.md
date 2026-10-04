@@ -9,8 +9,8 @@ All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here
   (an object of texts, one `Name: value` line in the headers field). Any other key, or a value of
   the wrong kind, is reported by name instead of silently dropped, and the file has a JSON
   schema. Typing `{{` in the URL, signals or headers offers the variables that are set. The
-  Variables box shows each value and where it was set, and **Edit variables** opens the file,
-  creating it with `baseUrl` filled in. A refused connection says which `{{baseUrl}}` it went to
+  Variables box shows each value, marking a default `baseUrl`, and **Edit variables** opens the
+  file, creating it with `baseUrl` filled in. A refused connection says which `{{baseUrl}}` it went to
   and where that value came from. The variables in the settings are gone; only the default base
   URL setting remains.
 - Stream Inspector: the "edit file" button is gone. Saved requests are picked from the Request

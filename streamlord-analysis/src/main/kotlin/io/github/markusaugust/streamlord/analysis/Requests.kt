@@ -308,11 +308,11 @@ public object Requests {
     /** The values by name, for substitution. */
     public fun variableValues(vars: List<Variable>): Map<String, String> = vars.associate { it.name to it.value }
 
-    /** One line per variable, with where it was set. */
+    /** One line per variable; only a value the env file does not set is marked, as the default. */
     public fun describeVariables(vars: List<Variable>): String =
         vars.joinToString("\n") {
             val value = if (it.value.isEmpty()) "(none)" else it.value.split("\n").joinToString("; ")
-            "${it.name} = $value   (${if (it.source == VariableSource.ENV) ENV_FILE else "default"})"
+            "${it.name} = $value" + if (it.source == VariableSource.DEFAULT) "   (default)" else ""
         }
 
     public data class Substituted(

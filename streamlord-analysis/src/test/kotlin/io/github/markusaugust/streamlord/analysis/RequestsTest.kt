@@ -204,13 +204,13 @@ class RequestsTest {
     fun `variables say where each value comes from`() {
         assertEquals(listOf(Requests.Variable("baseUrl", "http://localhost:8080", Requests.VariableSource.DEFAULT)), defaults)
         assertEquals(
-            "baseUrl = http://127.0.0.1:8081   (.streamlord/env.json)\n" +
-                "signals = {\"search\":\"ash\",\"n\":1.0,\"s\":\"\\u00e9</p>\"}   (.streamlord/env.json)\n" +
-                "headers = Authorization: Bearer x; X-Csrf-Token: abc   (.streamlord/env.json)",
+            "baseUrl = http://127.0.0.1:8081\n" +
+                "signals = {\"search\":\"ash\",\"n\":1.0,\"s\":\"\\u00e9</p>\"}\n" +
+                "headers = Authorization: Bearer x; X-Csrf-Token: abc",
             Requests.describeVariables(vars),
         )
         assertEquals(
-            "baseUrl = http://h   (default)\nsignals = {}   (.streamlord/env.json)\nheaders = (none)   (.streamlord/env.json)",
+            "baseUrl = http://h   (default)\nsignals = {}\nheaders = (none)",
             Requests.describeVariables(Requests.mergeVariables("http://h", Requests.parseEnv("""{"signals": {}, "headers": {}}"""))),
         )
     }

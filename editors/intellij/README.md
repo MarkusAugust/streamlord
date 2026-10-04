@@ -97,12 +97,13 @@ the client would keep it. Non-SSE Datastar responses are shown with their `datas
   `{{baseUrl}}` is the Default base URL setting, which is `http://localhost:8080` unless you
   change it.
 
-  The Variables box in the panel lists each value and where it was set. **Edit variables** opens
-  the file, creating it with `baseUrl` filled in, and the panel picks up the file as you save
-  it. Any other key, or a value of the wrong kind, is reported by name and stops the request
-  until it is fixed; the file also has a JSON schema, so the editor marks it as you type. The
-  file is the place for local hosts and tokens, so keep it out of version control. A server
-  that cannot be reached is reported together with the `{{baseUrl}}` it was reached through.
+  The Variables box in the panel lists each value, and marks `baseUrl` when it is the default.
+  **Edit variables** opens the file, creating it with `baseUrl` filled in, and the panel picks
+  up the file as you save it. Any other key, or a value of the wrong kind, is reported by name
+  and stops the request until it is fixed; the file also has a JSON schema, so the editor marks
+  it as you type. The file is the place for local hosts and tokens, so keep it out of version
+  control. A server that cannot be reached is reported together with the `{{baseUrl}}` it was
+  reached through.
 - **Gutter icons** on every Ktor route (`route("/api") { get("/feed") }`) and Spring mapping
   (`@GetMapping("/feed")` under a class `@RequestMapping`): "Open in Stream Inspector" prefills
   method and `{{baseUrl}}` + path, asking for `{id}` parameters.
