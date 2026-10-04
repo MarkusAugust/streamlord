@@ -309,7 +309,8 @@ Four things it does, each for a reason:
   one database round trip per patch. The verdict stands for `every`, five seconds by default.
 - **A refusal ends the stream** rather than letting it fall silent, so the client sees a finished
   response instead of an idle server. Your handler stops where it stood; nothing after the refused
-  write runs.
+  write runs. A handler that catches the exception and carries on gains nothing by it: every
+  later write is refused again, so nothing more reaches the reader.
 - **You get the last word.** `onRefused` runs on the still-open stream, so the reader can be told
   rather than dropped:
 

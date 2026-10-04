@@ -9,6 +9,20 @@ with a sentence about what to do.
 
 ## Unreleased
 
+**Spring Boot works again.** On 0.10.0 every `readSignals` and `datastarStream` under Spring Boot
+throws `NoSuchMethodError`, because Boot pins an older kotlinx-coroutines than the one that
+release was compiled against. Upgrade when this is released; until then, put
+`ext["kotlin-coroutines.version"] = "1.11.0"` in your build.
+
+**Take the `Streamlord` bean through the constructor on Spring.** The samples used to take it as
+a parameter of the handler method, where Spring builds a new default instance instead of
+injecting yours. If you copied them, your codec and `guardElements` are being ignored. See
+[Spring WebMVC](/spring-webmvc/).
+
+**A refused stream stays refused.** A handler that caught the refusal of a `StreamAuthorisation`
+and carried on used to keep writing. Every write after a refusal is now refused again. Nothing
+to change in your code.
+
 ## 0.10.0
 
 **Assert on events, not on strings.** The new `streamlord-test` module reads a response back into

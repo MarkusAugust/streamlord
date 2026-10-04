@@ -33,6 +33,9 @@ internal class SseDatastarStream(
     private var asked: TimeSource.Monotonic.ValueTimeMark? = null
     private val refused = AtomicBoolean(false)
 
+    /** Whether the authorisation has answered no. A handler may have swallowed the exception. */
+    internal val isRefused: Boolean get() = refused.get()
+
     override suspend fun send(event: DatastarEvent) {
         write(SseEncoder.encode(guard(event)))
     }
@@ -44,21 +47,29 @@ internal class SseDatastarStream(
     private suspend fun write(text: String) {
         authorise()
         lock.withLock {
-            sink.write(text)
-            sink.flush()
+            // Asked again under the lock: a writer that passed the check before another
+            // coroutine was refused must not get its frame out after the last words.
+            if (refused.get()) throw StreamRefusedException()
+            emit(text)
         }
+    }
+
+    private suspend fun emit(text: String) {
+        sink.write(text)
+        sink.flush()
     }
 
     /**
      * Ask again if the last answer has expired, and end the stream if the answer is no.
      *
-     * Called before taking the write lock, because [StreamAuthorisation.onRefused] writes to this
-     * same stream and a mutex that is already held would deadlock it. Once refused, this returns
-     * at once, which is what lets the refusal block write its last words.
+     * Called before taking the write lock, so a slow verdict never holds up another writer.
+     * Once refused, every write through this stream throws again. A handler that catches the
+     * exception and carries on therefore sends nothing more, which is the whole point: the
+     * refusal has to hold even when the handler does not stop.
      */
     internal suspend fun authorise() {
         val authorisation = authorisation ?: return
-        if (refused.get()) return
+        if (refused.get()) throw StreamRefusedException()
 
         val due =
             gate.withLock {
@@ -72,9 +83,28 @@ internal class SseDatastarStream(
             }
         if (!due || authorisation.allows()) return
 
-        // Set before the block runs: its own writes come back through here.
-        if (!refused.compareAndSet(false, true)) return
-        authorisation.onRefused(this)
+        if (!refused.compareAndSet(false, true)) throw StreamRefusedException()
+        authorisation.onRefused(LastWords())
         throw StreamRefusedException()
+    }
+
+    /**
+     * What [StreamAuthorisation.onRefused] writes through. It is a separate stream because the
+     * stream itself is closed to everyone by then, and the refusal block is the one caller that
+     * may still speak. It takes the same lock, so its frames do not interleave with a write that
+     * was already under way.
+     */
+    private inner class LastWords : DatastarStream {
+        override val codec: SignalsCodec get() = this@SseDatastarStream.codec
+
+        override suspend fun send(event: DatastarEvent) {
+            val text = SseEncoder.encode(guard(event))
+            lock.withLock { emit(text) }
+        }
+
+        override suspend fun comment(text: String) {
+            val encoded = SseEncoder.comment(text)
+            lock.withLock { emit(encoded) }
+        }
     }
 }

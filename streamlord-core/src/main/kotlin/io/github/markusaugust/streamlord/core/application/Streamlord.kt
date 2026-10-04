@@ -74,7 +74,10 @@ public class Streamlord(
      * [StreamAuthorisation.onRefused] on the still-open stream and then ends it: [block] stops
      * where it was, and the response finishes rather than falling silent.
      *
-     * Adapters call this. Returns whether the stream ran to the end of [block].
+     * A [block] that catches the refusal and carries on sends nothing more: every later write is
+     * refused again.
+     *
+     * Adapters call this. Returns whether the stream ran to the end of [block] without a refusal.
      */
     public suspend fun stream(
         sink: SseSink,
@@ -85,7 +88,7 @@ public class Streamlord(
         return try {
             stream.authorise()
             stream.block()
-            true
+            !stream.isRefused
         } catch (_: StreamRefusedException) {
             false
         }
