@@ -9,6 +9,14 @@ with a sentence about what to do.
 
 ## Unreleased
 
+## 0.11.0
+
+**The inspector's variables are three, in `.streamlord/env.json`.** Only if you call
+`Requests` in `streamlord-analysis` yourself: `parseEnvFile` is gone, read the file with
+`parseEnv`, which reports anything but `baseUrl`, `signals` and `headers`, and pass
+`mergeVariables(defaultUrl, env)` to `resolveRequest`, which now returns errors and the keys that
+are not set instead of a list of missing names. The editors are updated to match.
+
 ## 0.10.1
 
 **Spring Boot works again.** On 0.10.0 every `readSignals` and `datastarStream` under Spring Boot
