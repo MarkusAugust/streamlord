@@ -111,6 +111,79 @@ export function parseEnvFile(text: string): Record<string, string> {
 
 const VARIABLE = /\{\{\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\}\}/g;
 
+export type VariableSource = "default" | "settings" | "env";
+
+/** A `{{name}}` value and where it was set, so the inspector can say both. */
+export interface Variable {
+  name: string;
+  value: string;
+  source: VariableSource;
+}
+
+const SOURCE_LABEL: Record<VariableSource, string> = { default: "default", settings: "settings", env: ENV_FILE };
+const SOURCE_PHRASE: Record<VariableSource, string> = { default: "the default", settings: "from the settings", env: `from ${ENV_FILE}` };
+
+/**
+ * `baseUrl` from the default, then the settings, then `.streamlord/env.json`; a later source
+ * replaces the value of an earlier one and keeps its place in the list.
+ */
+export function mergeVariables(defaultUrl: string, settings: Record<string, string>, env: Record<string, string>): Variable[] {
+  const out = new Map<string, Variable>();
+  out.set("baseUrl", { name: "baseUrl", value: defaultUrl.replace(/\/+$/, ""), source: "default" });
+  for (const [name, value] of Object.entries(settings)) out.set(name, { name, value, source: "settings" });
+  for (const [name, value] of Object.entries(env)) out.set(name, { name, value, source: "env" });
+  return [...out.values()];
+}
+
+/** The values by name, for substitution. */
+export function variableValues(vars: Variable[]): Record<string, string> {
+  return Object.fromEntries(vars.map((v) => [v.name, v.value]));
+}
+
+/** One line per variable, with where it was set. */
+export function describeVariables(vars: Variable[]): string {
+  return vars.map((v) => `${v.name} = ${v.value === "" ? '""' : v.value}   (${SOURCE_LABEL[v.source]})`).join("\n");
+}
+
+/**
+ * The text of `.streamlord/env.json` with `names` added, empty, after what is there. A missing
+ * file is written with `baseUrl` first, so it is there to change. The text is extended rather
+ * than written anew, so the user's own layout and values stay as they were; null when it is not
+ * a JSON object and cannot be extended safely.
+ */
+export function withEnvVariables(text: string | null, names: string[], baseUrl: string): string | null {
+  if (text === null) {
+    const entries = [["baseUrl", baseUrl], ...names.filter((n) => n !== "baseUrl").map((n) => [n, ""])];
+    return `{\n${entries.map(([k, v]) => `  ${jsonString(k ?? "")}: ${jsonString(v ?? "")}`).join(",\n")}\n}\n`;
+  }
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const missing = [...new Set(names)].filter((n) => !Object.hasOwn(raw as object, n));
+  if (missing.length === 0) return text;
+  const close = text.lastIndexOf("}");
+  const before = text.slice(0, close).replace(/[ \t\n\r]+$/, "");
+  const added = missing.map((n) => `  ${jsonString(n)}: ""`).join(",\n");
+  return `${before}${before.endsWith("{") ? "\n" : ",\n"}${added}\n${text.slice(close)}`;
+}
+
+/**
+ * What the variables in a URL were, for a server that could not be reached: a `baseUrl` left at
+ * its default is the usual reason, and nothing on screen said so.
+ */
+export function unreachableHint(url: string, vars: Variable[]): string | null {
+  const byName = new Map(vars.map((v) => [v.name, v]));
+  const used = [...new Set([...url.matchAll(VARIABLE)].map((m) => m[1] ?? ""))].flatMap((n) => byName.get(n) ?? []);
+  if (used.length === 0) return null;
+  const parts = used.map((v) => `{{${v.name}}} is ${v.value}, ${SOURCE_PHRASE[v.source]}.`);
+  if (used.some((v) => v.source === "default")) parts.push(`Set baseUrl in ${ENV_FILE} if your server listens elsewhere.`);
+  return parts.join(" ");
+}
+
 /** Replace `{{name}}` with values; unknown names are left in place and reported. */
 export function substitute(text: string, vars: Record<string, string>): { text: string; missing: string[] } {
   const missing = new Set<string>();

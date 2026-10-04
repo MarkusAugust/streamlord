@@ -169,6 +169,96 @@ public object Requests {
         return out
     }
 
+    public enum class VariableSource(
+        internal val label: String,
+        internal val phrase: String,
+    ) {
+        DEFAULT("default", "the default"),
+        SETTINGS("settings", "from the settings"),
+        ENV(ENV_FILE, "from $ENV_FILE"),
+    }
+
+    /** A `{{name}}` value and where it was set, so the inspector can say both. */
+    public data class Variable(
+        val name: String,
+        val value: String,
+        val source: VariableSource,
+    )
+
+    /**
+     * `baseUrl` from the default, then the settings, then `.streamlord/env.json`; a later source
+     * replaces the value of an earlier one and keeps its place in the list.
+     */
+    public fun mergeVariables(
+        defaultUrl: String,
+        settings: Map<String, String>,
+        env: Map<String, String>,
+    ): List<Variable> {
+        val out = LinkedHashMap<String, Variable>()
+        out["baseUrl"] = Variable("baseUrl", defaultUrl.trimEnd('/'), VariableSource.DEFAULT)
+        for ((name, value) in settings) out[name] = Variable(name, value, VariableSource.SETTINGS)
+        for ((name, value) in env) out[name] = Variable(name, value, VariableSource.ENV)
+        return out.values.toList()
+    }
+
+    /** The values by name, for substitution. */
+    public fun variableValues(vars: List<Variable>): Map<String, String> = vars.associate { it.name to it.value }
+
+    /** One line per variable, with where it was set. */
+    public fun describeVariables(vars: List<Variable>): String =
+        vars.joinToString("\n") { "${it.name} = ${it.value.ifEmpty { "\"\"" }}   (${it.source.label})" }
+
+    /**
+     * The text of `.streamlord/env.json` with [names] added, empty, after what is there. A missing
+     * file is written with `baseUrl` first, so it is there to change. The text is extended rather
+     * than written anew, so the user's own layout and values stay as they were; null when it is
+     * not a JSON object and cannot be extended safely.
+     */
+    public fun withEnvVariables(
+        text: String?,
+        names: List<String>,
+        baseUrl: String,
+    ): String? {
+        if (text == null) {
+            val entries = listOf("baseUrl" to baseUrl) + names.filter { it != "baseUrl" }.map { it to "" }
+            return entries.joinToString(",\n", "{\n", "\n}\n") { (k, v) -> "  ${JsonString(k).toJson()}: ${JsonString(v).toJson()}" }
+        }
+        val raw =
+            try {
+                JsonParser.parse(text) as? JsonObject ?: return null
+            } catch (_: Exception) {
+                return null
+            }
+        val missing = names.distinct().filter { it !in raw }
+        if (missing.isEmpty()) return text
+        val close = text.lastIndexOf('}')
+        val before = text.substring(0, close).trimEnd(' ', '\t', '\n', '\r')
+        val added = missing.joinToString(",\n") { "  ${JsonString(it).toJson()}: \"\"" }
+        return before + (if (before.endsWith("{")) "\n" else ",\n") + added + "\n" + text.substring(close)
+    }
+
+    /**
+     * What the variables in a URL were, for a server that could not be reached: a `baseUrl` left
+     * at its default is the usual reason, and nothing on screen said so.
+     */
+    public fun unreachableHint(
+        url: String,
+        vars: List<Variable>,
+    ): String? {
+        val byName = vars.associateBy { it.name }
+        val used =
+            VARIABLE
+                .findAll(url)
+                .map { it.groupValues[1] }
+                .distinct()
+                .mapNotNull { byName[it] }
+                .toList()
+        if (used.isEmpty()) return null
+        val parts = used.map { "{{${it.name}}} is ${it.value}, ${it.source.phrase}." }.toMutableList()
+        if (used.any { it.source == VariableSource.DEFAULT }) parts += "Set baseUrl in $ENV_FILE if your server listens elsewhere."
+        return parts.joinToString(" ")
+    }
+
     public data class Substituted(
         val text: String,
         val missing: List<String>,

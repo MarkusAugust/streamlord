@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { fillPath, parseEnvFile, parseRequestsFile, pathParams, pushRecent, remove, resolveRequest, sendableUrl, serializeRequestsFile, substitute, toCurl, upsert, type SavedRequest } from "../src/requests.ts";
+import { fillPath, parseEnvFile, parseRequestsFile, pathParams, pushRecent, describeVariables, mergeVariables, remove, resolveRequest, sendableUrl, serializeRequestsFile, unreachableHint, withEnvVariables, substitute, toCurl, upsert, type SavedRequest } from "../src/requests.ts";
 import { findRoutes } from "../src/routes.ts";
 
 const req = (over: Partial<SavedRequest> = {}): SavedRequest => ({ name: "counter", url: "{{baseUrl}}/api/counter-stream", method: "GET", signals: "", headers: "", ...over });
@@ -190,5 +190,45 @@ describe("sendable url", () => {
     for (const [url, sent, error] of cases) {
       assert.deepEqual(sendableUrl(url), sent !== null ? { url: sent } : { error }, url);
     }
+  });
+});
+
+// The same cases, character for character, as the variable tests in the analysis module's
+// `RequestsTest.kt`: both inspectors show the same lines and write the same env file.
+describe("inspector variables", () => {
+  const vars = mergeVariables("http://localhost:8080//", { csrf: "s1", baseUrl: "http://s" }, { csrf: "e1", token: "" });
+
+  it("say where each value comes from, the env file last", () => {
+    assert.deepEqual(vars, [
+      { name: "baseUrl", value: "http://s", source: "settings" },
+      { name: "csrf", value: "e1", source: "env" },
+      { name: "token", value: "", source: "env" },
+    ]);
+    assert.deepEqual(mergeVariables("http://localhost:8080/", {}, {}), [{ name: "baseUrl", value: "http://localhost:8080", source: "default" }]);
+    assert.equal(
+      describeVariables([...mergeVariables("http://localhost:8080/", {}, {}), ...vars.slice(1)]),
+      'baseUrl = http://localhost:8080   (default)\ncsrf = e1   (.streamlord/env.json)\ntoken = ""   (.streamlord/env.json)',
+    );
+  });
+
+  it("add names to the env file without touching what is there", () => {
+    assert.equal(withEnvVariables(null, [], "http://localhost:8080"), '{\n  "baseUrl": "http://localhost:8080"\n}\n');
+    assert.equal(withEnvVariables(null, ["csrf", "baseUrl"], "http://h"), '{\n  "baseUrl": "http://h",\n  "csrf": ""\n}\n');
+    assert.equal(withEnvVariables("{}", ["csrf"], "http://h"), '{\n  "csrf": ""\n}');
+    assert.equal(withEnvVariables('{ "baseUrl": "http://x", "n": 1 }\n', ["csrf", "n", "token"], "http://h"), '{ "baseUrl": "http://x", "n": 1,\n  "csrf": "",\n  "token": ""\n}\n');
+    assert.equal(withEnvVariables('{"a": "1"}', ["a"], "http://h"), '{"a": "1"}');
+    assert.equal(withEnvVariables("not json", ["a"], "http://h"), null);
+    assert.equal(withEnvVariables("[]", ["a"], "http://h"), null);
+  });
+
+  it("explain an unreachable server by the variables in its url", () => {
+    const defaults = mergeVariables("http://localhost:8080", {}, {});
+    assert.equal(
+      unreachableHint("{{baseUrl}}/hendelser", defaults),
+      "{{baseUrl}} is http://localhost:8080, the default. Set baseUrl in .streamlord/env.json if your server listens elsewhere.",
+    );
+    assert.equal(unreachableHint("{{ baseUrl }}/x?t={{csrf}}&u={{baseUrl}}", vars), "{{baseUrl}} is http://s, from the settings. {{csrf}} is e1, from .streamlord/env.json.");
+    assert.equal(unreachableHint("http://127.0.0.1:8081/x", defaults), null);
+    assert.equal(unreachableHint("{{missing}}/x", defaults), null);
   });
 });

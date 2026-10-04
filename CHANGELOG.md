@@ -6,6 +6,12 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `streamlord-analysis`: `Requests.mergeVariables`, `describeVariables`, `withEnvVariables` and
+  `unreachableHint`, which the Stream Inspector in both editors uses to show where each
+  `{{name}}` was set and to add it to `.streamlord/env.json`.
+
 ### Fixed
 
 - `streamlord-analysis`, for both editors: a Spring method took the `@RequestMapping` prefix of

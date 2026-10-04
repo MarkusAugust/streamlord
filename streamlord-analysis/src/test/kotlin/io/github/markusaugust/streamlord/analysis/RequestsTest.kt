@@ -158,6 +158,66 @@ class RequestsTest {
         }
     }
 
+    private val vars =
+        Requests.mergeVariables(
+            "http://localhost:8080//",
+            mapOf("csrf" to "s1", "baseUrl" to "http://s"),
+            mapOf("csrf" to "e1", "token" to ""),
+        )
+
+    @Test
+    fun `variables say where each value comes from, the env file last`() {
+        assertEquals(
+            listOf(
+                Requests.Variable("baseUrl", "http://s", Requests.VariableSource.SETTINGS),
+                Requests.Variable("csrf", "e1", Requests.VariableSource.ENV),
+                Requests.Variable("token", "", Requests.VariableSource.ENV),
+            ),
+            vars,
+        )
+        val defaults = Requests.mergeVariables("http://localhost:8080/", emptyMap(), emptyMap())
+        assertEquals(listOf(Requests.Variable("baseUrl", "http://localhost:8080", Requests.VariableSource.DEFAULT)), defaults)
+        assertEquals(
+            "baseUrl = http://localhost:8080   (default)\ncsrf = e1   (.streamlord/env.json)\ntoken = \"\"   (.streamlord/env.json)",
+            Requests.describeVariables(defaults + vars.drop(1)),
+        )
+    }
+
+    @Test
+    fun `variables are added to the env file without touching what is there`() {
+        assertEquals(
+            "{\n  \"baseUrl\": \"http://localhost:8080\"\n}\n",
+            Requests.withEnvVariables(null, emptyList(), "http://localhost:8080"),
+        )
+        assertEquals(
+            "{\n  \"baseUrl\": \"http://h\",\n  \"csrf\": \"\"\n}\n",
+            Requests.withEnvVariables(null, listOf("csrf", "baseUrl"), "http://h"),
+        )
+        assertEquals("{\n  \"csrf\": \"\"\n}", Requests.withEnvVariables("{}", listOf("csrf"), "http://h"))
+        assertEquals(
+            "{ \"baseUrl\": \"http://x\", \"n\": 1,\n  \"csrf\": \"\",\n  \"token\": \"\"\n}\n",
+            Requests.withEnvVariables("{ \"baseUrl\": \"http://x\", \"n\": 1 }\n", listOf("csrf", "n", "token"), "http://h"),
+        )
+        assertEquals("{\"a\": \"1\"}", Requests.withEnvVariables("{\"a\": \"1\"}", listOf("a"), "http://h"))
+        assertEquals(null, Requests.withEnvVariables("not json", listOf("a"), "http://h"))
+        assertEquals(null, Requests.withEnvVariables("[]", listOf("a"), "http://h"))
+    }
+
+    @Test
+    fun `an unreachable server is explained by the variables in its url`() {
+        val defaults = Requests.mergeVariables("http://localhost:8080", emptyMap(), emptyMap())
+        assertEquals(
+            "{{baseUrl}} is http://localhost:8080, the default. Set baseUrl in .streamlord/env.json if your server listens elsewhere.",
+            Requests.unreachableHint("{{baseUrl}}/hendelser", defaults),
+        )
+        assertEquals(
+            "{{baseUrl}} is http://s, from the settings. {{csrf}} is e1, from .streamlord/env.json.",
+            Requests.unreachableHint("{{ baseUrl }}/x?t={{csrf}}&u={{baseUrl}}", vars),
+        )
+        assertEquals(null, Requests.unreachableHint("http://127.0.0.1:8081/x", defaults))
+        assertEquals(null, Requests.unreachableHint("{{missing}}/x", defaults))
+    }
+
     @Test
     fun `saved names sort by lowercase code units, not by locale`() {
         val names = listOf("b", "a", "B", "_x", "Zeta", "éa", "zz", "a-b", "ab", "A", "10", "9", "ΌΣ", "όσ2")

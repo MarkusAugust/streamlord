@@ -77,8 +77,20 @@ the client would keep it. Non-SSE Datastar responses are shown with their `datas
   from the panel, or edit the file; it has a JSON schema.
 - **Recent** requests are remembered automatically, and the last one is prefilled on open.
 - **Variables**: `{{baseUrl}}` and any other `{{name}}` in URL, headers and signals. Values come
-  from Settings | Tools | Streamlord, overridden by `.streamlord/env.json` in the project, which
-  is the place for tokens and should be git-ignored. `{{baseUrl}}` defaults to the setting.
+  from Settings | Tools | Streamlord, overridden by `.streamlord/env.json` in the project.
+  `{{baseUrl}}` defaults to the setting, which is `http://localhost:8080`.
+
+  The Variables box in the panel lists each value and where it was set. To set one, click
+  **Edit variables**: it opens `.streamlord/env.json`, creating it with `baseUrl` filled in, and
+  you change the value there. The panel picks up the file as you save it.
+
+  ```json
+  { "baseUrl": "http://127.0.0.1:8081", "csrf": "dev-token" }
+  ```
+
+  The file is the place for local hosts and tokens, so keep it out of version control. An
+  unknown `{{name}}` gives a link that adds it to the file, and a server that cannot be reached
+  is reported together with the `{{baseUrl}}` it was reached through.
 - **Gutter icons** on every Ktor route (`route("/api") { get("/feed") }`) and Spring mapping
   (`@GetMapping("/feed")` under a class `@RequestMapping`): "Open in Stream Inspector" prefills
   method and `{{baseUrl}}` + path, asking for `{id}` parameters.

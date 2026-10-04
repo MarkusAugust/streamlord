@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.intellij
 
+import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.sun.net.httpserver.HttpServer
 import io.github.markusaugust.streamlord.analysis.DatastarFrame
@@ -223,6 +224,34 @@ class InspectorTest : BasePlatformTestCase() {
         assertEquals("/b", state.lastUsed()?.url)
 
         assertEquals("http://localhost:8080", store.variables()["baseUrl"])
+    }
+
+    fun `test variables say where they come from and are added to the env file`() {
+        val store = RequestStore.getInstance(project)
+        assertEquals(
+            listOf(Requests.Variable("baseUrl", "http://localhost:8080", Requests.VariableSource.DEFAULT)),
+            store.variableList(),
+        )
+        val (file, extended) = store.defineVariables(listOf("csrf"))
+        try {
+            assertTrue(extended)
+            assertTrue(file.path.endsWith("/.streamlord/env.json"))
+            assertEquals("{\n  \"baseUrl\": \"http://localhost:8080\",\n  \"csrf\": \"\"\n}\n", String(file.contentsToByteArray()))
+            assertEquals(
+                listOf(
+                    Requests.Variable("baseUrl", "http://localhost:8080", Requests.VariableSource.ENV),
+                    Requests.Variable("csrf", "", Requests.VariableSource.ENV),
+                ),
+                store.variableList(),
+            )
+            store.defineVariables(listOf("csrf", "token"))
+            assertEquals(
+                "{\n  \"baseUrl\": \"http://localhost:8080\",\n  \"csrf\": \"\",\n  \"token\": \"\"\n}\n",
+                String(file.contentsToByteArray()),
+            )
+        } finally {
+            WriteCommandAction.runWriteCommandAction(project) { file.delete(this) }
+        }
     }
 
     fun `test routes get a gutter marker`() {

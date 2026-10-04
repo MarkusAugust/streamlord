@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { compactSignals, fillPath, parseHeaderLines, pathParams, resolveRequest, toCurl, type SavedRequest } from "./requests.ts";
+import { compactSignals, describeVariables, ENV_FILE, fillPath, parseHeaderLines, pathParams, resolveRequest, toCurl, unreachableHint, variableValues, type SavedRequest } from "./requests.ts";
 import type { RequestStore } from "./requestStore.ts";
 import { mergePatch, type DatastarFrame } from "./sse.ts";
 import { openStream } from "./streamClient.ts";
@@ -55,8 +55,8 @@ export class Inspector {
   }
 
   private async pushRequests(current?: Partial<SavedRequest>): Promise<void> {
-    const [saved, variables] = await Promise.all([this.store.saved(), this.store.variables()]);
-    this.post({ type: "requests", saved, recent: this.store.recent(), variables, current });
+    const [saved, vars] = await Promise.all([this.store.saved(), this.store.variableList()]);
+    this.post({ type: "requests", saved, recent: this.store.recent(), variables: variableValues(vars), variablesText: describeVariables(vars), current });
   }
 
   private stop(): void {
@@ -97,12 +97,22 @@ export class Inspector {
       case "curl": {
         const { request, missing } = resolveRequest(msg.request, await this.store.variables());
         if (missing.length) {
-          this.post({ type: "error", message: `Unknown variables: ${missing.map((m) => `{{${m}}}`).join(", ")}` });
+          this.post({ type: "error", message: `Unknown variables: ${missing.map((m) => `{{${m}}}`).join(", ")}`, define: missing });
           return;
         }
         try {
           await vscode.env.clipboard.writeText(toCurl(request));
           void vscode.window.showInformationMessage("Streamlord: curl command copied.");
+        } catch (e) {
+          this.post({ type: "error", message: (e as Error).message });
+        }
+        return;
+      }
+      case "defineVariables": {
+        try {
+          const { uri, extended } = await this.store.defineVariables(msg.names);
+          await vscode.window.showTextDocument(uri, { viewColumn: vscode.ViewColumn.One });
+          if (!extended) this.post({ type: "error", message: `${ENV_FILE} is not a JSON object, so nothing was added to it.` });
         } catch (e) {
           this.post({ type: "error", message: (e as Error).message });
         }
@@ -127,9 +137,10 @@ export class Inspector {
 
   private async connect(raw: SavedRequest): Promise<void> {
     this.stop();
-    const { request, missing } = resolveRequest(raw, await this.store.variables());
+    const vars = await this.store.variableList();
+    const { request, missing } = resolveRequest(raw, variableValues(vars));
     if (missing.length) {
-      this.post({ type: "error", message: `Unknown variables: ${missing.map((m) => `{{${m}}}`).join(", ")}. Define them in settings (streamlord.inspector.variables) or .streamlord/env.json.` });
+      this.post({ type: "error", message: `Unknown variables: ${missing.map((m) => `{{${m}}}`).join(", ")}. Define them in ${ENV_FILE} or in the settings (streamlord.inspector.variables).`, define: missing });
       return;
     }
     try {
@@ -152,7 +163,8 @@ export class Inspector {
           this.post({ type: "frame", frame });
         },
         onError: (message) => {
-          this.post({ type: "error", message });
+          const hint = /^(Connection refused|Host not found)/.test(message) ? unreachableHint(raw.url, vars) : null;
+          this.post({ type: "error", message: hint ? `${message} ${hint}` : message, define: hint ? [] : undefined });
           this.post({ type: "status", status: "idle" });
         },
       },
@@ -186,6 +198,7 @@ type Message =
   | { type: "save"; request: SavedRequest }
   | { type: "delete"; name: string }
   | { type: "curl"; request: SavedRequest }
+  | { type: "defineVariables"; names: string[] }
   | { type: "openFile" };
 
 function suggestName(r: SavedRequest): string {
@@ -239,7 +252,10 @@ function html(cspSource: string): string {
   .comment { opacity: .6; font-style: italic; margin: 0 0 8px; font-family: var(--vscode-editor-font-family); }
   aside h2 { font-size: 1em; margin: 0 0 6px; }
   aside pre { border: 1px solid var(--vscode-widget-border, #444); border-radius: 4px; padding: 8px; min-height: 60px; }
-  aside details { margin-top: 10px; opacity: .8; }
+  aside details { margin-top: 10px; }
+  aside details pre { opacity: .85; }
+  .note { opacity: .7; font-size: .9em; margin: 6px 0 0; }
+  .error button.link { margin-left: 6px; }
   .error { color: var(--vscode-errorForeground); }
   .empty { opacity: .6; }
 </style>
@@ -274,7 +290,11 @@ function html(cspSource: string): string {
   <section id="frames"><p class="empty">No events yet. The realm is quiet.</p></section>
   <aside>
     <h2>Signal store</h2><pre id="store">{}</pre>
-    <details><summary>Variables</summary><pre id="vars">{}</pre></details>
+    <details open><summary>Variables</summary>
+      <pre id="vars"></pre>
+      <button type="button" class="link" id="editVars" title="Open .streamlord/env.json, creating it with baseUrl">Edit variables</button>
+      <p class="note">{{name}} works in the URL, the signals and the headers. .streamlord/env.json overrides the settings, and is meant for local hosts and tokens: keep it out of version control.</p>
+    </details>
   </aside>
 </main>
 <script>
@@ -322,12 +342,13 @@ function html(cspSource: string): string {
   $('delete').addEventListener('click', () => { const n = loadedName(); if (n) vscode.postMessage({ type: 'delete', name: n }); });
   $('curl').addEventListener('click', () => vscode.postMessage({ type: 'curl', request: fields() }));
   $('openFile').addEventListener('click', () => vscode.postMessage({ type: 'openFile' }));
+  $('editVars').addEventListener('click', () => vscode.postMessage({ type: 'defineVariables', names: [] }));
   $('clear').addEventListener('click', () => { frames.innerHTML = '<p class="empty">Cleared.</p>'; count = 0; });
   window.addEventListener('message', (ev) => {
     const m = ev.data;
     if (m.type === 'requests') {
       saved = m.saved; recent = m.recent; variables = m.variables;
-      $('vars').textContent = JSON.stringify(variables, null, 2);
+      $('vars').textContent = m.variablesText;
       if (m.current) {
         fill(m.current);
         const known = m.current.name && saved.some((r) => r.name === m.current.name);
@@ -340,7 +361,12 @@ function html(cspSource: string): string {
     }
     if (m.type === 'saved') { /* the file watcher refreshes the list; select the saved name once it arrives */ setTimeout(() => { renderList('s:' + m.name); loaded = fields(); refresh(); }, 300); }
     if (m.type === 'status') { const s = $('status'); s.textContent = m.status + (m.http ? ' · ' + m.http : '') + (m.contentType ? ' · ' + m.contentType : ''); s.className = 'status ' + (m.status === 'open' ? 'open' : ''); s.title = m.resolvedUrl ?? ''; }
-    if (m.type === 'error') { clearEmpty(); const p = document.createElement('p'); p.className = 'error'; p.textContent = m.message; frames.prepend(p); $('status').className = 'status error'; $('status').textContent = 'error'; }
+    if (m.type === 'error') {
+      clearEmpty(); const p = document.createElement('p'); p.className = 'error'; p.textContent = m.message;
+      // A missing variable is added to the env file in one click; an unreachable server opens it to change baseUrl.
+      if (m.define) { const b = document.createElement('button'); b.type = 'button'; b.className = 'link'; b.textContent = m.define.length ? 'Add to .streamlord/env.json' : 'Edit variables'; b.addEventListener('click', () => vscode.postMessage({ type: 'defineVariables', names: m.define })); p.append(b); }
+      frames.prepend(p); $('status').className = 'status error'; $('status').textContent = 'error';
+    }
     if (m.type === 'signals') { $('store').textContent = JSON.stringify(m.signals, null, 2); }
     if (m.type === 'comment') { clearEmpty(); const p = document.createElement('p'); p.className = 'comment'; p.textContent = time(m.at) + '  : ' + m.text; frames.prepend(p); }
     if (m.type === 'nonsse') { clearEmpty(); const d = document.createElement('div'); d.className = 'frame'; d.innerHTML = '<header><span class="ev">' + esc(m.http) + '</span><span>' + esc(m.contentType || 'no content-type') + '</span><span class="t">non-SSE response</span></header><dl>' + Object.entries(m.headers).map(([k,v]) => '<dt>' + esc(k) + '</dt><dd><pre>' + esc(v) + '</pre></dd>').join('') + '<dt>body</dt><dd><pre>' + esc(m.body) + '</pre></dd></dl>'; frames.prepend(d); }

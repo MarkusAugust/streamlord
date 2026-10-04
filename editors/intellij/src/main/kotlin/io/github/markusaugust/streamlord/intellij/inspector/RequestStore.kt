@@ -79,17 +79,43 @@ class RequestStore(
     fun lastUsed(): SavedRequest? = InspectorState.getInstance(project).lastUsed()
 
     /** Settings first, `.streamlord/env.json` on top; `baseUrl` always has a value. */
-    fun variables(): Map<String, String> {
-        val out = LinkedHashMap<String, String>()
-        out["baseUrl"] = settings.state.inspectorDefaultUrl.trimEnd('/')
-        out.putAll(settings.state.inspectorVariables)
-        val env = baseDir()?.findFileByRelativePath(Requests.ENV_FILE)
-        if (env !=
-            null
-        ) {
-            out.putAll(ApplicationManager.getApplication().runReadAction(Computable { Requests.parseEnvFile(VfsUtil.loadText(env)) }))
+    fun variables(): Map<String, String> = Requests.variableValues(variableList())
+
+    /** The variables with where each was set, for the inspector to show. */
+    fun variableList(): List<Requests.Variable> {
+        val env = envText()?.let { Requests.parseEnvFile(it) } ?: emptyMap()
+        return Requests.mergeVariables(settings.state.inspectorDefaultUrl, settings.state.inspectorVariables, env)
+    }
+
+    private fun envFile(): VirtualFile? = baseDir()?.findFileByRelativePath(Requests.ENV_FILE)
+
+    private fun envText(): String? =
+        envFile()?.let { env -> ApplicationManager.getApplication().runReadAction(Computable { VfsUtil.loadText(env) }) }
+
+    /**
+     * Add [names] to `.streamlord/env.json`, creating it with `baseUrl` when it is missing, and
+     * return it to be opened. The flag is false when the file is not a JSON object to add to.
+     */
+    fun defineVariables(names: List<String>): Pair<VirtualFile, Boolean> {
+        val base = baseDir() ?: throw IllegalStateException("Open a project to keep variables; they live in ${Requests.ENV_FILE}.")
+        val text = envText()
+        val next = Requests.withEnvVariables(text, names, variables()["baseUrl"] ?: "")
+        envFile()?.let { if (next == null || next == text) return it to (next != null) }
+        val path = Requests.ENV_FILE
+        var file: VirtualFile? = null
+        val run = {
+            WriteCommandAction.runWriteCommandAction(project) {
+                val dir =
+                    VfsUtil.createDirectoryIfMissing(base, path.substringBeforeLast('/'))
+                        ?: throw IllegalStateException("Cannot create the directory for $path")
+                val name = path.substringAfterLast('/')
+                val vf = dir.findChild(name) ?: dir.createChildData(this, name)
+                VfsUtil.saveText(vf, next ?: "")
+                file = vf
+            }
         }
-        return out
+        if (ApplicationManager.getApplication().isDispatchThread) run() else ApplicationManager.getApplication().invokeAndWait(run)
+        return file!! to true
     }
 
     companion object {

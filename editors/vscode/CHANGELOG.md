@@ -4,6 +4,11 @@ All notable changes to the Streamlord extension are recorded here.
 
 ## Unreleased
 
+- Stream Inspector: the Variables box shows where each value was set (the default, the settings
+  or `.streamlord/env.json`), and **Edit variables** opens the env file, creating it with
+  `baseUrl` filled in. An unknown `{{name}}` gives a link that adds it to the file, and a refused
+  connection says which `{{baseUrl}}` it went to and where that value came from, so a
+  `baseUrl` left at its default no longer fails without a word.
 - Stream Inspector: the request goes out as the curl line shows it. The query string and the
   signals are no longer written anew (`?flag` was sent as `?flag=`, `a%20b` as `a+b` and `1.0` as
   `1`), and headers are read as for the curl line. A URL that cannot be sent as written, such as a

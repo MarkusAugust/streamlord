@@ -14,6 +14,7 @@ import com.intellij.openapi.vfs.newvfs.BulkFileListener
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent
 import com.intellij.ui.JBColor
 import com.intellij.ui.OnePixelSplitter
+import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
 import com.intellij.ui.components.JBScrollPane
@@ -218,7 +219,17 @@ class InspectorPanel(
             row { scrollCell(storeView).align(com.intellij.ui.dsl.builder.Align.FILL).resizableColumn() }.resizableRow()
             collapsibleGroup("Variables") {
                 row { scrollCell(variablesView).align(AlignX.FILL) }
-            }
+                row {
+                    link("Edit variables") { editVariables(emptyList()) }
+                        .applyToComponent { toolTipText = "Open ${Requests.ENV_FILE}, creating it with baseUrl" }
+                }
+                row {
+                    comment(
+                        "{{name}} works in the URL, the signals and the headers. ${Requests.ENV_FILE} overrides the settings, " +
+                            "and is meant for local hosts and tokens: keep it out of version control.",
+                    )
+                }
+            }.expanded = true
         }
 
     // ---- state ---------------------------------------------------------------------------------
@@ -255,7 +266,7 @@ class InspectorPanel(
     fun pushRequests(current: SavedRequest?) {
         val saved = store.saved()
         val recent = store.recent()
-        variablesView.text = store.variables().entries.joinToString(",\n", "{\n", "\n}") { "  \"${it.key}\": \"${it.value}\"" }
+        variablesView.text = Requests.describeVariables(store.variableList())
         filling = true
         val model = choices.model as DefaultComboBoxModel<Choice>
         val previous = (choices.selectedItem as? Choice)?.label
@@ -328,7 +339,7 @@ class InspectorPanel(
     private fun copyCurl() {
         val (request, missing) = Requests.resolveRequest(fields(), store.variables())
         if (missing.isNotEmpty()) {
-            error("Unknown variables: ${missing.joinToString(", ") { "{{$it}}" }}")
+            error("Unknown variables: ${missing.joinToString(", ") { "{{$it}}" }}", missing)
             return
         }
         try {
@@ -336,6 +347,17 @@ class InspectorPanel(
             notify("Streamlord: curl command copied.")
         } catch (e: Exception) {
             error(e.message ?: "Could not build the curl command.")
+        }
+    }
+
+    /** Add [names] to the env file, creating it when it is missing, and open it. */
+    private fun editVariables(names: List<String>) {
+        try {
+            val (file, extended) = store.defineVariables(names)
+            FileEditorManager.getInstance(project).openFile(file, true)
+            if (!extended) error("${Requests.ENV_FILE} is not a JSON object, so nothing was added to it.")
+        } catch (e: Exception) {
+            error(e.message ?: "Could not open ${Requests.ENV_FILE}.")
         }
     }
 
@@ -347,13 +369,11 @@ class InspectorPanel(
     private fun connect() {
         stop()
         val raw = fields()
-        val (request, missing) = Requests.resolveRequest(raw, store.variables())
+        val vars = store.variableList()
+        val (request, missing) = Requests.resolveRequest(raw, Requests.variableValues(vars))
         if (missing.isNotEmpty()) {
-            error(
-                "Unknown variables: ${missing.joinToString(
-                    ", ",
-                ) { "{{$it}}" }}. Define them in Settings | Tools | Streamlord or in ${Requests.ENV_FILE}.",
-            )
+            val names = missing.joinToString(", ") { "{{$it}}" }
+            error("Unknown variables: $names. Define them in ${Requests.ENV_FILE} or in Settings | Tools | Streamlord.", missing)
             return
         }
         try {
@@ -390,7 +410,12 @@ class InspectorPanel(
 
                     override fun onNonSse(response: StreamClient.NonSseResponse) = later { addNonSse(response) }
 
-                    override fun onError(message: String) = later { error(message) }
+                    override fun onError(message: String) =
+                        later {
+                            val unreachable = message.startsWith("Connection refused") || message.startsWith("Host not found")
+                            val hint = if (unreachable) Requests.unreachableHint(raw.url, vars) else null
+                            if (hint != null) error("$message $hint", emptyList()) else error(message)
+                        }
                 },
             )
     }
@@ -491,13 +516,27 @@ class InspectorPanel(
         prepend(card(listOf(r.http, r.contentType.ifEmpty { "no content-type" }), JBColor.foreground(), "non-SSE response", rows))
     }
 
-    private fun error(message: String) {
-        prepend(
+    /** An error line; with [define], a link that adds those names to the env file, or opens it when there are none. */
+    private fun error(
+        message: String,
+        define: List<String>? = null,
+    ) {
+        val label =
             JBLabel(message).apply {
                 foreground = JBColor.RED
                 border = JBUI.Borders.empty(2, 4)
-            },
-        )
+            }
+        if (define == null) {
+            prepend(label)
+        } else {
+            val line =
+                JPanel(java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 0, 0)).apply {
+                    isOpaque = false
+                    add(label)
+                    add(ActionLink(if (define.isEmpty()) "Edit variables" else "Add to ${Requests.ENV_FILE}") { editVariables(define) })
+                }
+            prepend(line)
+        }
         setStatus("error", null)
     }
 

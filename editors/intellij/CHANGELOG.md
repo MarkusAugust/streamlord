@@ -4,6 +4,11 @@ All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here
 
 ## Unreleased
 
+- Stream Inspector: the Variables box shows where each value was set (the default, the settings
+  or `.streamlord/env.json`), and **Edit variables** opens the env file, creating it with
+  `baseUrl` filled in. An unknown `{{name}}` gives a link that adds it to the file, and a refused
+  connection says which `{{baseUrl}}` it went to and where that value came from, so a
+  `baseUrl` left at its default no longer fails without a word.
 - Stream Inspector: the request goes out as the curl line shows it. The signals are no longer
   written anew (`\u00e9` was sent as `é` and `</` as `<\/`), and a header the HTTP client will
   not set, such as `Host`, is reported as such instead of as an invalid URL. A URL that cannot be
