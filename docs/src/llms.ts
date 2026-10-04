@@ -6,11 +6,11 @@
  */
 import { getCollection } from "astro:content"
 import { href, NAVIGATION } from "./navigation"
+import { DATASTAR_VERSION, DESCRIPTION, MAVEN_GROUP, TAGLINE } from "./project"
 
-const SUMMARY =
-  "A Datastar toolchain for Kotlin. Datastar lives in strings your compiler never reads; Streamlord checks them in your editor, when the event is built, and before a byte reaches the browser, with adapters for Ktor and Spring."
+const SUMMARY = `${TAGLINE} ${DESCRIPTION}`
 
-const ABOUT = `The SDK speaks the Datastar 1.0.4 Server-Sent Events protocol and is published to Maven Central under \`io.github.markusaugust.streamlord\`. The editors, a VS Code extension and an IntelliJ plugin, read Datastar as a language wherever it is written and need no part of the SDK.`
+const ABOUT = `The SDK speaks the Datastar ${DATASTAR_VERSION} Server-Sent Events protocol and is published to Maven Central under \`${MAVEN_GROUP}\`. The editors, a VS Code extension and an IntelliJ plugin, read Datastar as a language wherever it is written and need no part of the SDK.`
 
 type Page = { slug: string; title: string; description: string; body: string }
 

@@ -5,6 +5,7 @@ import CodeBlock from "../components/CodeBlock.astro"
 import Logo from "../components/Logo.astro"
 import { FAVICON } from "../icon"
 import { NAVIGATION } from "../navigation"
+import { DESCRIPTION, TAGLINE } from "../project"
 import { datastarLangs, hangingIndent, shikiThemes } from "../shiki"
 import "../styles/global.css"
 
@@ -42,7 +43,7 @@ const SAMPLE = `get("/feed") {
     <title>Streamlord: a Datastar toolchain for Kotlin</title>
     <meta
       name="description"
-      content="Datastar lives in strings your compiler never reads. Streamlord checks them in your editor, when the event is built, and before a byte reaches the browser, with adapters for Ktor and Spring."
+      content={DESCRIPTION}
     />
     <link rel="canonical" href={Astro.site} />
     <link rel="icon" href={FAVICON} type="image/svg+xml" />
@@ -61,7 +62,7 @@ const SAMPLE = `get("/feed") {
       <div class="hero__inner">
         <Logo size={72} />
         <h1 class="hero__word">Streamlord</h1>
-        <p class="hero__line">A Datastar toolchain for Kotlin.</p>
+        <p class="hero__line">{TAGLINE}</p>
         <p class="hero__sub">
           Datastar lives in strings your compiler never reads. Streamlord checks them anyway:
           in your editor as you type, when the event is built, and before a byte reaches the
