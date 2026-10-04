@@ -165,4 +165,60 @@ class InterpolationTest {
     fun `a comment is not a tag, so a value in one is text`() {
         assertEquals("<!-- &lt;b&gt; --><li>x</li>", interpolate("<!-- %s --><li>x</li>", "<b>"))
     }
+
+    // Escaping keeps a value inside the attribute. It does nothing about what the browser
+    // then does with an attribute it runs.
+    @Test
+    fun `a value in an event handler or a srcdoc is refused`() {
+        for (markup in listOf("""<a onclick="%s">x</a>""", """<a ONCLICK="%s">x</a>""", """<iframe srcdoc="%s"></iframe>""")) {
+            val e = assertFailsWith<UnsafeInterpolationException>(markup) { interpolate(markup, "alert(1)") }
+            assertEquals(Position.CODE, e.position)
+        }
+    }
+
+    @Test
+    fun `a url attribute takes a relative url or a scheme that only navigates`() {
+        assertEquals("""<a href="/heads/1">x</a>""", interpolate("""<a href="%s">x</a>""", "/heads/1"))
+        assertEquals(
+            """<a href="https://thurn.example/a?b=1&amp;c=2">x</a>""",
+            interpolate("""<a href="%s">x</a>""", "https://thurn.example/a?b=1&c=2"),
+        )
+        assertEquals(
+            """<a href="mailto:gorvek@bonereach.example">x</a>""",
+            interpolate("""<a href="%s">x</a>""", "mailto:gorvek@bonereach.example"),
+        )
+        assertEquals("""<a href="">x</a>""", interpolate("""<a href="%s">x</a>""", null))
+    }
+
+    @Test
+    fun `a url attribute refuses a scheme the browser runs, however it is disguised`() {
+        for (url in listOf(
+            "javascript:alert(1)",
+            "JaVaScRiPt:alert(1)",
+            " javascript:alert(1)",
+            "java\tscript:alert(1)",
+            "\u0001javascript:alert(1)",
+            "data:text/html,x",
+            "vbscript:x",
+        )) {
+            val e = assertFailsWith<UnsafeInterpolationException>(url) { interpolate("""<a href="%s">x</a>""", url) }
+            assertEquals(Position.URL, e.position)
+            assertEquals("href", e.attribute)
+        }
+        assertFailsWith<UnsafeInterpolationException> { interpolate("""<img src=" %s">""", "javascript:alert(1)") }
+        assertFailsWith<UnsafeInterpolationException> { interpolate("""<form action='%s'></form>""", "javascript:alert(1)") }
+    }
+
+    // The markup already chose where the URL points; the value only fills in a part of it.
+    @Test
+    fun `a hole further into a url is an ordinary attribute`() {
+        assertEquals("""<a href="/heads/javascript:1">x</a>""", interpolate("""<a href="/heads/%s">x</a>""", "javascript:1"))
+    }
+
+    @Test
+    fun `a style attribute takes a number and nothing else`() {
+        assertEquals("""<i style="width: 40%">x</i>""", interpolate("""<i style="width: %s%%">x</i>""", 40))
+        val e = assertFailsWith<UnsafeInterpolationException> { interpolate("""<i style="%s">x</i>""", "background:url(//x)") }
+        assertEquals(Position.STYLE, e.position)
+    }
 }
