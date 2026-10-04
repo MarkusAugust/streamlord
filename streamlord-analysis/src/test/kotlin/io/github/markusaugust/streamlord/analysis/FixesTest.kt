@@ -41,7 +41,7 @@ class FixesTest {
         val onCount = issues.first { src.substring(it.start, it.end) == "\$count" }
         val fix = onCount.fixes.first { it.title.startsWith("Make it") }
         assertEquals("Make it a \$\$\$\$ literal, where \$count is a signal", fix.title)
-        assertEquals("dataOnClick(\$\$\$\$\"a \$\$count++ and \$\$\$\$x\")", fix.apply(src))
+        assertEquals("dataOnClick(\$\$\$\$\"a \$\$count++ and \$\$\$\$\$\$x\")", fix.apply(src))
     }
 
     @Test

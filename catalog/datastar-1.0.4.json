@@ -441,17 +441,17 @@
       "setExpr": { "arg": 1 }, "peek": { "arg": 0 }, "clipboardExpr": { "arg": 0 }
     },
     "html": {
-      "patchElements": { "arg": 0, "selectorArg": "selector", "modeArg": "mode" },
-      "respondElements": { "arg": 0, "selectorArg": "selector", "modeArg": "mode" },
+      "patchElements": { "arg": 0, "named": "elements", "selectorArg": "selector", "modeArg": "mode" },
+      "respondElements": { "arg": 0, "named": "elements", "selectorArg": "selector", "modeArg": "mode" },
       "PatchElements": { "arg": 0, "named": "elements", "selectorArg": "selector", "modeArg": "mode" },
       "ElementsResponse": { "arg": 0, "named": "elements", "selectorArg": "selector", "modeArg": "mode" },
-      "datastarElements": { "arg": 0, "selectorArg": "selector", "modeArg": "mode" }
+      "datastarElements": { "arg": 0, "named": "elements", "selectorArg": "selector", "modeArg": "mode" }
     },
     "script": {
-      "executeScript": { "arg": 0 }, "ExecuteScript": { "arg": 0, "named": "script" }, "respondScript": { "arg": 0 }, "datastarScript": { "arg": 0 }
+      "executeScript": { "arg": 0, "named": "script" }, "ExecuteScript": { "arg": 0, "named": "script" }, "respondScript": { "arg": 0, "named": "script" }, "datastarScript": { "arg": 0, "named": "script" }
     },
     "selector": {
-      "removeElements": { "arg": 0 }
+      "removeElements": { "arg": 0, "named": "selector" }
     }
   }
 }
