@@ -75,4 +75,44 @@ class RoutesTest {
             """.trimIndent()
         assertEquals(listOf("GET /api/x", "GET /api", "PUT /d/x", "GET /c/x"), routes(src))
     }
+
+    @Test
+    fun `a spring class without a mapping has no prefix`() {
+        val src =
+            """
+            @RestController
+            @RequestMapping("/api")
+            class A { @GetMapping("/x") fun x() {} }
+            @RestController
+            class B { @GetMapping("/y") fun y() {} }
+            """.trimIndent()
+        assertEquals(listOf("GET /api/x", "GET /y"), routes(src))
+    }
+
+    @Test
+    fun `a spring method takes the prefix of the class it stands in`() {
+        val src =
+            """
+            @RequestMapping("/outer")
+            class O {
+                @RestController @RequestMapping("/inner") class I { @GetMapping("/a") fun a() {} }
+                @GetMapping("/b") fun b() {}
+            }
+            @GetMapping("/top") fun top() {}
+            """.trimIndent()
+        assertEquals(listOf("GET /inner/a", "GET /outer/b", "GET /top"), routes(src))
+    }
+
+    @Test
+    fun `a spring class mapping is not a route whatever annotates the class`() {
+        val src =
+            """
+            @RequestMapping("/api")
+            @PreAuthorize("hasRole('ADMIN')")
+            // the admin endpoints
+            @Tag(name = "admin", description = describe("x"))
+            class A { @GetMapping("/x") fun x() {} }
+            """.trimIndent()
+        assertEquals(listOf("GET /api/x"), routes(src))
+    }
 }

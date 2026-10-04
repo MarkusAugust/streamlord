@@ -58,4 +58,32 @@ interface C {
 }`;
     assert.deepEqual(routes(src), ["GET /api/x", "GET /api", "PUT /d/x", "GET /c/x"]);
   });
+
+  it("a spring class without a mapping has no prefix", () => {
+    const src = `@RestController
+@RequestMapping("/api")
+class A { @GetMapping("/x") fun x() {} }
+@RestController
+class B { @GetMapping("/y") fun y() {} }`;
+    assert.deepEqual(routes(src), ["GET /api/x", "GET /y"]);
+  });
+
+  it("a spring method takes the prefix of the class it stands in", () => {
+    const src = `@RequestMapping("/outer")
+class O {
+    @RestController @RequestMapping("/inner") class I { @GetMapping("/a") fun a() {} }
+    @GetMapping("/b") fun b() {}
+}
+@GetMapping("/top") fun top() {}`;
+    assert.deepEqual(routes(src), ["GET /inner/a", "GET /outer/b", "GET /top"]);
+  });
+
+  it("a spring class mapping is not a route whatever annotates the class", () => {
+    const src = `@RequestMapping("/api")
+@PreAuthorize("hasRole('ADMIN')")
+// the admin endpoints
+@Tag(name = "admin", description = describe("x"))
+class A { @GetMapping("/x") fun x() {} }`;
+    assert.deepEqual(routes(src), ["GET /api/x"]);
+  });
 });
