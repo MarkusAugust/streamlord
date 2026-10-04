@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.spring
 
 import io.github.markusaugust.streamlord.core.SignalsTooLargeException
 import io.github.markusaugust.streamlord.core.application.Streamlord
+import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.ElementsResponse
 import io.github.markusaugust.streamlord.core.domain.ExecuteScript
@@ -183,5 +184,29 @@ class SpringAdapterTest {
             ) { comment() }
             .writeTo(http11.outputStream)
         assertEquals("keep-alive", http11.getHeader("Connection"))
+    }
+
+    // A bare Flow<ServerSentEvent> gets its content type from Spring and no other header.
+    @Test
+    fun `the reactive response carries the stream headers`() =
+        runTest {
+            val response = flowOf<DatastarEvent>(PatchSignals("""{"heads":13}""")).asDatastarResponse()
+
+            assertEquals("text/event-stream", response.headers.contentType.toString())
+            assertEquals("no-cache", response.headers.getFirst("Cache-Control"))
+            assertEquals("no", response.headers.getFirst("X-Accel-Buffering"))
+            assertEquals(
+                "signals {\"heads\":13}",
+                response.body!!
+                    .toList()
+                    .single()
+                    .data(),
+            )
+        }
+
+    @Test
+    fun `the default retry is left off a reactive event, as it is left off the wire`() {
+        assertEquals(null, PatchSignals("{}", retry = 1.seconds).toServerSentEvent().retry())
+        assertEquals(2000, PatchSignals("{}", retry = 2.seconds).toServerSentEvent().retry()!!.toMillis())
     }
 }

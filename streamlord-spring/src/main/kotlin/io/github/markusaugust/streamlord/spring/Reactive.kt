@@ -2,9 +2,12 @@ package io.github.markusaugust.streamlord.spring
 
 import io.github.markusaugust.streamlord.core.application.Streamlord
 import io.github.markusaugust.streamlord.core.domain.DatastarEvent
+import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
 import io.github.markusaugust.streamlord.core.protocol.SseEncoder
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import org.springframework.http.MediaType
+import org.springframework.http.ResponseEntity
 import org.springframework.http.codec.ServerSentEvent
 import java.time.Duration as JavaDuration
 
@@ -26,7 +29,8 @@ public fun DatastarEvent.toServerSentEvent(streamlord: Streamlord = Streamlord.D
     val frame = SseEncoder.frame(streamlord.guard(this))
     val builder = ServerSentEvent.builder(frame.data).event(frame.event)
     frame.id?.let { builder.id(it) }
-    frame.retry?.let { builder.retry(JavaDuration.ofMillis(it.inWholeMilliseconds)) }
+    // The protocol default is left off the wire, as SseFrame.render leaves it off.
+    frame.retry?.takeIf { it != DatastarProtocol.DEFAULT_RETRY }?.let { builder.retry(JavaDuration.ofMillis(it.inWholeMilliseconds)) }
     return builder.build()
 }
 
@@ -44,3 +48,27 @@ public fun DatastarEvent.toServerSentEvent(streamlord: Streamlord = Streamlord.D
  */
 public fun Flow<DatastarEvent>.asServerSentEvents(streamlord: Streamlord = Streamlord.Default): Flow<ServerSentEvent<String>> =
     map { it.toServerSentEvent(streamlord) }
+
+/**
+ * The whole WebFlux response for a flow of Datastar events: the stream, and the headers a
+ * stream needs to get through a proxy.
+ *
+ * ```kotlin
+ * @GetMapping("/feed")
+ * fun feed(): ResponseEntity<Flow<ServerSentEvent<String>>> = ticker().asDatastarResponse(streamlord)
+ * ```
+ *
+ * A controller that returns the bare flow from [asServerSentEvents] gets the content type from
+ * Spring and nothing else. This adds `Cache-Control: no-cache`, which the SDK specification
+ * requires, and `X-Accel-Buffering: no`, without which nginx holds the events back until the
+ * stream ends.
+ *
+ * @param streamlord The configured instance; see [asServerSentEvents].
+ */
+public fun Flow<DatastarEvent>.asDatastarResponse(
+    streamlord: Streamlord = Streamlord.Default,
+): ResponseEntity<Flow<ServerSentEvent<String>>> {
+    val builder = ResponseEntity.ok().contentType(MediaType.TEXT_EVENT_STREAM)
+    for ((name, value) in DatastarProtocol.SSE_RESPONSE_HEADERS) builder.header(name, value)
+    return builder.body(asServerSentEvents(streamlord))
+}
