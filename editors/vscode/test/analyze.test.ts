@@ -100,7 +100,7 @@ describe("markup", () => {
     expect(validateMarkup("<span>y</span>", { requireIds: false, prefix: "data-", checkAttributes: true })).toEqual([]);
   });
   it("finds unclosed and stray tags and top-level text", () => {
-    expect(codes(validateMarkup('<div id="a"><p>x</div>', { requireIds: true, prefix: "data-", checkAttributes: true }))).toEqual(["unclosed"]);
+    expect(codes(validateMarkup('<div id="a"><span>x</div>', { requireIds: true, prefix: "data-", checkAttributes: true }))).toEqual(["unclosed"]);
     expect(codes(validateMarkup("</div>", { requireIds: false, prefix: "data-", checkAttributes: true }))).toEqual(["stray-close"]);
     expect(codes(validateMarkup("Hello <b>x</b>", { requireIds: false, prefix: "data-", checkAttributes: true }))).toEqual(["top-level-text"]);
     expect(validateMarkup('<input id="i"><br><script>if (a < b) {}</script>', { requireIds: false, prefix: "data-", checkAttributes: true })).toEqual([]);
@@ -252,7 +252,7 @@ describe("analyzeKotlin", () => {
       s.patchElements("<li>x</li>", mode = ElementPatchMode.APPEND)
       val c = '"'
       /* outer /* inner */ still comment: patchElements("<p>") */
-      s.patchElements("""<div id="a"><p>x</div>""")
+      s.patchElements("""<div id="a"><span>x</div>""")
       s.removeElements(" ")`;
     expect(codes(analyzeKotlin(src, opts))).toEqual(["missing-id", "mode-needs-selector", "unclosed", "blank-selector"]);
   });

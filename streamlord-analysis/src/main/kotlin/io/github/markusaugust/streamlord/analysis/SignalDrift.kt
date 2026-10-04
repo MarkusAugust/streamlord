@@ -18,7 +18,12 @@ public data class SignalRead(
     val end: Int,
 )
 
-/** A property of a `@Serializable` class, and where its name sits. */
+/**
+ * A property of a `@Serializable` class, and where its name sits.
+ *
+ * The name is the one the signal goes by: under `@SerialName("page_no") val page`, it is `page_no`,
+ * and the offsets are those of the annotation's text.
+ */
 public data class SignalProperty(
     val name: String,
     val start: Int,
@@ -49,10 +54,27 @@ private val SERIALIZABLE_DECLARATION =
     Regex(
         """@Serializable\s*(?:\([^)]*\))?\s*(?:(?:public|internal|private|protected|open|final|abstract|sealed|value|inline|data)\s+)*class\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(""",
     )
-private val PROPERTY_NAME = Regex("""\b(?:val|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:""")
+
+// `@SerialName` renames the signal, so it is read with whatever annotations and modifiers stand
+// between it and the property.
+private val PROPERTY_NAME =
+    Regex(
+        """(?:@SerialName\(\s*(?:value\s*=\s*)?"([^"]*)"\s*\)\s*(?:@\w+(?:\([^)]*\))?\s*)*(?:\w+\s+)*?)?\b(?:val|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:""",
+    )
 
 /** The `Signals` accessors that take a signal name. `path` takes several; its first is the signal. */
 private val LOOKUPS = setOf("string", "boolean", "int", "long", "double", "decimal", "obj", "array", "has", "path")
+
+// A JSON object, a map and a result set have accessors of the same names, so the name of a call is
+// not enough. A lookup counts when it is made on an untyped `readSignals()` call, on a name the
+// file binds to one or declares as `Signals`, or on a name that is plainly `signals`.
+private val SIGNALS_BINDING =
+    Regex(
+        """\b(?:val|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?::\s*Signals\??\s*)?=[^\n;=]*\breadSignals\s*\([^()\n]*\)\s*$""",
+        RegexOption.MULTILINE,
+    )
+private val SIGNALS_TYPED = Regex("""\b([A-Za-z_][A-Za-z0-9_]*)\s*:\s*Signals\b""")
+private val READ_SIGNALS_BEFORE = Regex("""\breadSignals\s*$""")
 
 /**
  * Reads [src] for everything the drift check needs.
@@ -74,8 +96,14 @@ public fun collectSignalFacts(
     for (m in SIGNAL_TYPE_PARAMETER.findAll(src)) types += m.groupValues[1]
     for (m in SIGNAL_TYPE_DEFAULT.findAll(src)) types += m.groupValues[1]
 
+    val bound = hashSetOf("signals")
+    for (re in listOf(SIGNALS_BINDING, SIGNALS_TYPED)) {
+        for (m in re.findAll(src)) if (lex.mask[m.range.first]) bound += m.groupValues[1]
+    }
+
     val lookups = ArrayList<SignalRead>()
     for (site in findCallSites(src, LOOKUPS, lex)) {
+        if (!onSignals(src, site.nameStart, bound)) continue
         val first = site.positional.firstOrNull()?.string ?: continue
         lookups += SignalRead(first.text, first.contentStart, first.contentEnd)
     }
@@ -83,8 +111,38 @@ public fun collectSignalFacts(
     return SignalFacts(collectDeclaredSignals(src, language), types, serializableProperties(src), lookups)
 }
 
+/** Whether the accessor whose name starts at [nameStart] is called on something that holds signals. */
+private fun onSignals(
+    src: String,
+    nameStart: Int,
+    bound: Set<String>,
+): Boolean {
+    var i = nameStart - 1
+    while (i >= 0 && src[i].isWhitespace()) i--
+    if (i < 0 || src[i] != '.') return false
+    i--
+    if (i >= 0 && src[i] == '?') i--
+    while (i >= 0 && src[i] == '!') i--
+    while (i >= 0 && src[i].isWhitespace()) i--
+    if (i < 0) return false
+
+    if (src[i] == ')') {
+        var depth = 0
+        while (i >= 0) {
+            if (src[i] == ')') depth++
+            if (src[i] == '(' && --depth == 0) break
+            i--
+        }
+        return i >= 0 && READ_SIGNALS_BEFORE.containsMatchIn(src.substring(maxOf(0, i - 40), i))
+    }
+
+    val end = i + 1
+    while (i >= 0 && src[i].isIdentPart()) i--
+    return src.substring(i + 1, end) in bound
+}
+
 /** Every `@Serializable` class in the file, with the names and offsets of its constructor properties. */
-private fun serializableProperties(src: String): Map<String, List<SignalProperty>> {
+internal fun serializableProperties(src: String): Map<String, List<SignalProperty>> {
     val out = LinkedHashMap<String, List<SignalProperty>>()
     for (declaration in SERIALIZABLE_DECLARATION.findAll(src)) {
         val name = declaration.groupValues[1]
@@ -95,8 +153,8 @@ private fun serializableProperties(src: String): Map<String, List<SignalProperty
 
         val properties = ArrayList<SignalProperty>()
         for (property in PROPERTY_NAME.findAll(src.substring(open, close))) {
-            val group = property.groups[1] ?: continue
-            properties += SignalProperty(property.groupValues[1], open + group.range.first, open + group.range.last + 1)
+            val group = property.groups[1] ?: property.groups[2] ?: continue
+            properties += SignalProperty(group.value, open + group.range.first, open + group.range.last + 1)
         }
         out[name] = properties
     }

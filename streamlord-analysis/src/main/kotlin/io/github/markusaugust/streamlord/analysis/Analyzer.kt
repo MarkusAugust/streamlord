@@ -9,7 +9,7 @@ public data class AnalyzeOptions(
     val checkHtmlAttributes: Boolean = true,
 )
 
-private val MODE_SUFFIX = Regex("""\.([A-Z]+)\s*$""")
+private val MODE_NAME = Regex("""(?:^|\.)([A-Z]+)\s*$""")
 private val CASE_ARG = Regex("""^\s*Case\.[A-Z]+\s*$""")
 private val CASE_VALUE = Regex("""Case\.([A-Z]+)""")
 private val CASE_IN_LAMBDA = Regex("""\bcase\s*=\s*Case\.([A-Z]+)""")
@@ -18,6 +18,7 @@ private val HAS_CAPITAL = Regex("""[A-Z]""")
 private val DOLLAR_RUNS = Regex("""\$+""")
 private val ASSIGN_BEFORE = Regex("""\s*=\s*$""")
 private val BRACED_TEMPLATE = Regex("""\$\{""")
+private val TRIM_AFTER = Regex("""\s*\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)""")
 
 /** The DSL helper that says the same as a whole-string expression, when there is one. */
 private val HELPERS: List<Pair<Regex, (String) -> String>> =
@@ -152,7 +153,7 @@ public class Analyzer(
         src: String,
     ): List<Issue> {
         val issues = ArrayList(interpolationHints(s, src, opts.prefix))
-        if (opts.checkHtmlAttributes) issues += mapIssues(s, analyzeHtml(s.text, opts))
+        if (opts.checkHtmlAttributes) issues += mapIssues(s, src, analyzeHtml(s.text, opts))
         return issues
     }
 
@@ -172,13 +173,9 @@ public class Analyzer(
         val dollars = maxOf(2, longestRun + 1)
         val prefix = "$".repeat(dollars)
 
-        // A kept template is padded to the new run length; the flagged one keeps its run, which is now text.
-        fun runBefore(at: Int): Int {
-            var n = 0
-            while (at - 1 - n >= 0 && src[at - 1 - n] == '$') n++
-            return n
-        }
-        val keep = s.interpolations.filter { it !== signal }.associate { it.start to dollars - 1 - runBefore(it.start) }
+        // A kept template gains the dollars it now needs; the dollars before it stay text, as they were.
+        // The flagged one keeps its run, which is now text.
+        val keep = s.interpolations.filter { it !== signal }.associate { it.start to dollars - 1 }
         val out = StringBuilder(prefix).append(src.substring(s.start, s.contentStart).trimStart('$'))
         var i = s.contentStart
         while (i < s.contentEnd) {
@@ -212,14 +209,16 @@ public class Analyzer(
             // The literal as the author meant it, with every template read as a signal.
             val meant = src.substring(s.contentStart, s.contentEnd)
             if (!BRACED_TEMPLATE.containsMatchIn(meant)) {
+                // A helper is not a string: it replaces the literal together with the trim call after it.
+                val end = s.end + (TRIM_AFTER.matchAt(src, s.end)?.value?.length ?: 0)
                 for ((re, helper) in HELPERS) {
                     val m = re.find(meant)
-                    if (m != null) fixes.add(0, Fix("Use ${helper(m.groupValues[1])}", s.start, s.end, helper(m.groupValues[1])))
+                    if (m != null) fixes.add(0, Fix("Use ${helper(m.groupValues[1])}", s.start, end, helper(m.groupValues[1])))
                 }
                 val toggle = TOGGLE.find(meant)
                 if (toggle != null) {
                     val n = toggle.groupValues[1]
-                    fixes.add(0, Fix("Use toggle(\"$n\")", s.start, s.end, "toggle(\"$n\")"))
+                    fixes.add(0, Fix("Use toggle(\"$n\")", s.start, end, "toggle(\"$n\")"))
                 }
             }
             issues +=
@@ -258,7 +257,7 @@ public class Analyzer(
                 for (a in t.attributes) {
                     val v = a.value ?: continue
                     if (decoded < a.valueStart || decoded >= a.valueStart + v.length) continue
-                    val parsed = catalog.parseAttributeName(a.name.lowercase(), prefix)
+                    val parsed = catalog.parseAttributeName(a.name.asciiLowercase(), prefix)
                     if (parsed?.spec?.valueKind != ValueKind.EXPRESSION) return null
                     // data-signals:count="$initial" seeds a signal from the server, like the object form does.
                     if (parsed.spec.name == "signals") return Where.PART
@@ -308,6 +307,7 @@ public class Analyzer(
 
     private fun mapIssues(
         s: KotlinString,
+        src: String,
         issues: List<Issue>,
     ): List<Issue> =
         issues.map { i ->
@@ -319,11 +319,25 @@ public class Analyzer(
                         f.copy(start = at, end = at)
                     } else {
                         val fr = s.toSource(f.start, f.end)
-                        f.copy(start = fr.first, end = fr.last + 1)
+                        f.copy(start = fr.first, end = fr.last + 1, text = keepDollarEscape(s, src, f))
                     }
                 }
             i.copy(start = r.first, end = r.last + 1, fixes = fixes)
         }
+
+    /**
+     * A fix that starts on a dollar the source wrote as an escape (`\$`, `${'$'}`) must write the
+     * escape back: a bare `$` before a name would turn the signal into a Kotlin template.
+     */
+    private fun keepDollarEscape(
+        s: KotlinString,
+        src: String,
+        fix: Fix,
+    ): String {
+        if (s.text.getOrNull(fix.start) != '$' || !fix.text.startsWith("$")) return fix.text
+        val escape = src.substring(s.map[fix.start], s.map[fix.start + 1])
+        return if (escape.length > 1) escape + fix.text.substring(1) else fix.text
+    }
 
     private fun checkExpressionSite(
         site: CallSite,
@@ -336,7 +350,7 @@ public class Analyzer(
         val issues = ArrayList(interpolationIssues(s, src))
         val text = s.text
         if (PLACEHOLDER in text && s.interpolations.any { it.kind == InterpolationKind.SIMPLE }) return issues
-        issues += mapIssues(s, expressions.validate(text))
+        issues += mapIssues(s, src, expressions.validate(text))
         return issues
     }
 
@@ -348,20 +362,26 @@ public class Analyzer(
     ): List<Issue> {
         val s = site.selectString(spec) ?: return emptyList()
         if (s.unterminated) return emptyList()
-        val selector = spec.selectorArg?.let { site.named(it)?.text }
-        val modeArg = spec.modeArg?.let { site.named(it) }
+        // In every signature the selector and the mode follow the elements, so they may be given by position.
+        val elements = (spec.arg ?: 0).takeIf { spec.named == null || site.named(spec.named) == null }
+        val selectorArg = spec.selectorArg?.let { site.named(it) } ?: elements?.let { site.positional.getOrNull(it + 1) }
+        val selector = selectorArg?.text?.takeIf { it != "null" }
+        val modeArg = spec.modeArg?.let { site.named(it) } ?: elements?.let { site.positional.getOrNull(it + 2) }
+        // `ElementPatchMode.APPEND`, or `APPEND` when the constant is imported. Anything else is a value not known here.
         val mode =
-            modeArg?.let {
-                MODE_SUFFIX
-                    .find(it.text)
-                    ?.groupValues
-                    ?.get(1)
-                    ?.lowercase()
+            modeArg?.let { arg ->
+                val name =
+                    MODE_NAME
+                        .find(arg.text)
+                        ?.groupValues
+                        ?.get(1)
+                        ?.lowercase()
+                if (name == "default") "outer" else name?.takeIf { it in catalog.patchModes }
             }
         val issues = ArrayList(interpolationHints(s, src, opts.prefix))
         if (modeArg != null && mode != null && mode != "outer" && mode != "replace" && selector == null) {
             val assign = ASSIGN_BEFORE.find(src.substring(0, modeArg.start))?.value?.length ?: 0
-            val at = modeArg.start - spec.modeArg.length - assign
+            val at = modeArg.start - (modeArg.named?.length ?: 0) - assign
             issues +=
                 Issue(
                     start = site.nameStart,
@@ -370,11 +390,12 @@ public class Analyzer(
                     severity = Severity.ERROR,
                     code = "mode-needs-selector",
                     link = Docs.SSE,
-                    fixes = listOf(Fix("Add selector = \"\"", at, at, "selector = \"\", ")),
+                    fixes = if (modeArg.named != null) listOf(Fix("Add selector = \"\"", at, at, "selector = \"\", ")) else emptyList(),
                 )
         }
-        val requireIds = selector == null && (mode == null || mode == "outer")
-        issues += mapIssues(s, markup.validateMarkup(s.text, MarkupOptions(requireIds, opts.prefix, opts.checkHtmlAttributes)))
+        // A mode that cannot be read here (a variable) may be one that needs no ids.
+        val requireIds = selector == null && (modeArg == null || mode == "outer")
+        issues += mapIssues(s, src, markup.validateMarkup(s.text, MarkupOptions(requireIds, opts.prefix, opts.checkHtmlAttributes)))
         return issues
     }
 
@@ -452,7 +473,7 @@ public class Analyzer(
     ): List<Issue> {
         val s = site.selectString(spec) ?: return emptyList()
         if (s.unterminated) return emptyList()
-        val idx = s.text.lowercase().indexOf("</script")
+        val idx = s.text.indexOfAsciiIgnoreCase("</script", 0)
         if (idx < 0) return emptyList()
         val r = s.toSource(idx, idx + 8)
         return listOf(

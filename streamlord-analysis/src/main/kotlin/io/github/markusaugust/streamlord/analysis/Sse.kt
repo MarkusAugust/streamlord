@@ -40,14 +40,22 @@ public class SseParser {
     private val data = ArrayList<String>()
     private val comments = ArrayList<String>()
 
+    // A chunk may end between the CR and the LF of one line ending. The CR ends its line at once,
+    // so nothing waits on a stream that closes there, and the LF that opens the next chunk is dropped.
+    private var afterCr = false
+
     public fun feed(chunk: String): List<SseMessage> {
-        buffer.append(chunk)
+        if (chunk.isEmpty()) return emptyList()
+        buffer.append(chunk, if (afterCr && chunk[0] == '\n') 1 else 0, chunk.length)
+        afterCr = false
         val out = ArrayList<SseMessage>()
         while (true) {
             val idx = buffer.indexOfFirst { it == '\n' || it == '\r' }
             if (idx < 0) break
             val line = buffer.substring(0, idx)
-            val sepLen = if (buffer[idx] == '\r' && idx + 1 < buffer.length && buffer[idx + 1] == '\n') 2 else 1
+            val crLast = buffer[idx] == '\r' && idx + 1 == buffer.length
+            val sepLen = if (buffer[idx] == '\r' && !crLast && buffer[idx + 1] == '\n') 2 else 1
+            if (crLast) afterCr = true
             buffer.delete(0, idx + sepLen)
             if (line.isEmpty()) {
                 val msg = SseMessage(event, id, retry, data.toList(), comments.toList())

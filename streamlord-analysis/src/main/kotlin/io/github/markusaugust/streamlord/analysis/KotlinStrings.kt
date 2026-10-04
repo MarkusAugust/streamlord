@@ -67,6 +67,22 @@ internal fun Char.isIdentStart(): Boolean = this == '_' || this in 'A'..'Z' || t
 
 internal fun Char.isIdentPart(): Boolean = isIdentStart() || this in '0'..'9'
 
+/** A Kotlin identifier may use any letter: `$år` is a template as much as `$year` is. */
+private fun Char.isKotlinIdentStart(): Boolean = this == '_' || isLetter()
+
+private fun Char.isKotlinIdentPart(): Boolean = isKotlinIdentStart() || isDigit()
+
+/** The offset just past the character literal that opens at [at]: `'a'`, `'\n'`, `'\u0041'`. */
+internal fun charLiteralEnd(
+    src: String,
+    at: Int,
+): Int {
+    var j = at + 1
+    if (src.getOrNull(j) == '\\') j += if (src.getOrNull(j + 1) == 'u') 6 else 2 else j += 1
+    if (src.getOrNull(j) == '\'') j++
+    return j
+}
+
 /** Does a string literal start at [at]: a quote, or a run of dollars followed by a quote? */
 public fun isStringStart(
     src: String,
@@ -127,7 +143,8 @@ public fun readKotlinStringAt(
                 while (j < src.length && src[j] == '"') j++
                 val extra = j - i - 3
                 for (k in 0 until extra) d.push('"', i + k)
-                d.map.add(j)
+                // The end of the text is where the closing quotes start, as in an ordinary literal.
+                d.map.add(j - 3)
                 return KotlinString(
                     start = at,
                     end = j,
@@ -208,6 +225,10 @@ public fun readKotlinStringAt(
                             j = inner.end
                             continue
                         }
+                    } else if (cj == '\'') {
+                        // A brace in a character literal ('}') is not the end of the template.
+                        j = charLiteralEnd(src, j)
+                        continue
                     }
                     j++
                 }
@@ -223,9 +244,9 @@ public fun readKotlinStringAt(
                 i = j
                 continue
             }
-            if (n != null && n.isIdentStart()) {
+            if (n != null && n.isKotlinIdentStart()) {
                 var j = i + dollars
-                while (j < src.length && src[j].isIdentPart()) j++
+                while (j < src.length && src[j].isKotlinIdentPart()) j++
                 interpolations +=
                     Interpolation(
                         start = i,

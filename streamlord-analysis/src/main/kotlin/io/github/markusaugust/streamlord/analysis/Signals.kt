@@ -20,19 +20,14 @@ private val KOTLIN_PATTERNS =
 /** Declarations in markup. These also run over Kotlin, where they only ever match inside HTML strings. */
 private val KEYED_ATTRIBUTE = Regex("""data-(?:star-)?(?:signals|bind|indicator|ref|computed|match-media):([A-Za-z_][A-Za-z0-9_.-]*)""")
 private val VALUE_ATTRIBUTE = Regex("""data-(?:star-)?(?:bind|indicator|ref)(?:__[^=\s]*)?="([A-Za-z_][A-Za-z0-9_.]*)"""")
-private val OBJECT_ATTRIBUTE = Regex("""data-(?:star-)?signals(?:__[^=\s]*)?="\{([^"]*)\}"""")
-private val OBJECT_KEY = Regex("""(?:^|[{,])\s*([A-Za-z_][A-Za-z0-9_]*)\s*:""")
+
+// The object form may sit in either kind of quote, and its keys may be bare or quoted: JSON written
+// by hand is `data-signals='{"query": ""}'`. Inside a Kotlin string the key's quotes are escaped.
+private val OBJECT_ATTRIBUTE = Regex("""data-(?:star-)?signals(?:__[^=\s]*)?=(?:"\{([^"]*)\}"|'\{([^']*)\}')""")
+private val OBJECT_KEY = Regex("""(?:^|[{,])\s*(?:\\?["'])?([A-Za-z_][A-Za-z0-9_]*)(?:\\?["'])?\s*:""")
 
 /** A bare `$name` is a signal in markup; in Kotlin it is a template, so it stays out of the Kotlin list. */
 private val BARE_SIGNAL = Regex("""\$([A-Za-z_][A-Za-z0-9_.]*)""")
-
-// Any modifier may stand between the annotation and `class`: an explicit-API module writes
-// `@Serializable public data class`, and a pattern that only allowed `data` saw none of those.
-private val SERIALIZABLE_CLASS =
-    Regex(
-        """@Serializable\s*(?:\([^)]*\))?\s*(?:(?:public|internal|private|protected|open|final|abstract|sealed|value|inline|data)\s+)*class\s+\w+\s*\(([^)]*)\)""",
-    )
-private val PROPERTY = Regex("""\b(?:val|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:""")
 
 private val PAIR_CALLS = setOf("dataSignals", "patchSignals", "removeSignals", "respondSignals", "datastarSignals")
 private val PAIR = Regex(""""([A-Za-z_][A-Za-z0-9_.]*)"\s+to\b""")
@@ -44,7 +39,7 @@ public fun collectSignals(
 ): Set<String> {
     val out = LinkedHashSet(collectDeclaredSignals(src, language))
     if (language == SourceLanguage.KOTLIN) {
-        for (m in SERIALIZABLE_CLASS.findAll(src)) for (p in PROPERTY.findAll(m.groupValues[1])) out += p.groupValues[1]
+        for (properties in serializableProperties(src).values) for (property in properties) out += property.name
     }
     out.removeAll { PLACEHOLDER in it }
     return out
@@ -82,7 +77,10 @@ public fun collectDeclaredSignals(
     // A keyed attribute may carry modifiers after the key: data-signals:foo-bar__ifmissing.
     for (m in KEYED_ATTRIBUTE.findAll(src)) out += toCamel(m.groupValues[1].substringBefore("__"))
     for (m in VALUE_ATTRIBUTE.findAll(src)) out += toCamel(m.groupValues[1])
-    for (m in OBJECT_ATTRIBUTE.findAll(src)) for (key in OBJECT_KEY.findAll(m.groupValues[1])) out += key.groupValues[1]
+    for (m in OBJECT_ATTRIBUTE.findAll(src)) {
+        val body = m.groups[1]?.value ?: m.groupValues[2]
+        for (key in OBJECT_KEY.findAll(body)) out += key.groupValues[1]
+    }
     if (language == SourceLanguage.HTML) {
         for (m in BARE_SIGNAL.findAll(src)) out += toCamel(m.groupValues[1])
     }

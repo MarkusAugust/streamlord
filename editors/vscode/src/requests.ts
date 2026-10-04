@@ -45,24 +45,57 @@ export function parseRequestsFile(text: string): RequestsFile {
       url: item.url,
       method: METHODS.includes(String(item.method ?? "GET").toUpperCase()) ? String(item.method ?? "GET").toUpperCase() : "GET",
       signals: typeof item.signals === "string" ? item.signals : item.signals && typeof item.signals === "object" ? JSON.stringify(item.signals, null, 2) : "",
-      headers: typeof item.headers === "string" ? item.headers : item.headers && typeof item.headers === "object" ? Object.entries(item.headers as Record<string, string>).map(([k, v]) => `${k}: ${v}`).join("\n") : "",
+      headers: typeof item.headers === "string" ? item.headers : item.headers && typeof item.headers === "object" && !Array.isArray(item.headers) ? Object.entries(item.headers as Record<string, unknown>).map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`).join("\n") : "",
     });
   }
   return { version: 1, requests };
 }
 
+/**
+ * Written by hand, not by JSON.stringify: the file is shared with the IntelliJ plugin, and the
+ * two must produce the same bytes or each editor rewrites what the other saved.
+ */
 export function serializeRequestsFile(file: RequestsFile): string {
-  return JSON.stringify({ version: 1, requests: file.requests.map(({ name, url, method, signals, headers }) => ({ name, url, method, signals, headers })) }, null, 2) + "\n";
+  const fields = ["name", "url", "method", "signals", "headers"] as const;
+  const requests = file.requests.map((r) => `    {\n${fields.map((f) => `      "${f}": ${jsonString(r[f])}`).join(",\n")}\n    }`);
+  return `{\n  "version": 1,\n  "requests": [${requests.length ? `\n${requests.join(",\n")}\n  ` : ""}]\n}\n`;
 }
 
-/** Insert or replace by name (case-insensitive), keeping the list sorted by name. */
+const JSON_ESCAPES: Record<string, string> = { '"': '\\"', "\\": "\\\\", "\n": "\\n", "\r": "\\r", "\t": "\\t", "\b": "\\b", "\f": "\\f", "\u2028": "\\u2028", "\u2029": "\\u2029" };
+
+/** A JSON string as the Kotlin SDK's writer spells it: U+2028 and U+2029 escaped, and the slash of `</`. */
+function jsonString(s: string): string {
+  const body = s.replace(/["\\\u0000-\u001f\u2028\u2029]/g, (c) => JSON_ESCAPES[c] ?? `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`).replace(/<\//g, "<\\/");
+  return `"${body}"`;
+}
+
+/**
+ * Insert or replace by name (case-insensitive), keeping the list sorted by name.
+ *
+ * Names are matched and ordered by `nameKey`, never by locale: the IntelliJ plugin applies the
+ * same rule, so the shared file keeps one order whichever editor saves it.
+ */
 export function upsert(file: RequestsFile, request: SavedRequest): RequestsFile {
-  const others = file.requests.filter((r) => r.name.toLowerCase() !== request.name.toLowerCase());
-  return { version: 1, requests: [...others, request].sort((a, b) => a.name.localeCompare(b.name)) };
+  const key = nameKey(request.name);
+  const others = file.requests.filter((r) => nameKey(r.name) !== key);
+  return { version: 1, requests: [...others, request].sort((a, b) => compareText(nameKey(a.name), nameKey(b.name))) };
+}
+
+/**
+ * A name in lowercase, one character at a time, compared code unit by code unit. Lowercasing the
+ * whole string would depend on the runtime: the JVM and V8 disagree on where a sigma is final.
+ */
+function nameKey(name: string): string {
+  return [...name].map((c) => c.toLowerCase()).join("");
+}
+
+function compareText(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 export function remove(file: RequestsFile, name: string): RequestsFile {
-  return { version: 1, requests: file.requests.filter((r) => r.name.toLowerCase() !== name.toLowerCase()) };
+  const key = nameKey(name);
+  return { version: 1, requests: file.requests.filter((r) => nameKey(r.name) !== key) };
 }
 
 /** Parse `{"baseUrl": "..."}`; anything that is not a flat object of strings is ignored. */
@@ -82,7 +115,8 @@ const VARIABLE = /\{\{\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\}\}/g;
 export function substitute(text: string, vars: Record<string, string>): { text: string; missing: string[] } {
   const missing = new Set<string>();
   const out = text.replace(VARIABLE, (whole, name: string) => {
-    if (name in vars) return vars[name] ?? "";
+    // An own key only: `{{constructor}}` is not a variable because every object has a constructor.
+    if (Object.hasOwn(vars, name)) return vars[name] ?? "";
     missing.add(name);
     return whole;
   });
@@ -114,26 +148,58 @@ function shellQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
+/**
+ * The signals as compact JSON; text that is not JSON is passed through trimmed.
+ *
+ * Valid JSON is compacted by dropping the whitespace between its tokens, not by writing it out
+ * again: JSON.stringify would respell numbers and escapes, and the IntelliJ plugin has to arrive
+ * at the same text.
+ */
+export function compactSignals(signals: string): string {
+  const text = signals.replace(/^[ \t\n\r]+|[ \t\n\r]+$/g, "");
+  if (text.length === 0) return "{}";
+  try {
+    JSON.parse(text);
+  } catch {
+    return text;
+  }
+  return text.replace(/"(?:[^"\\]|\\.)*"|[ \t\n\r]+/g, (m) => (m.startsWith('"') ? m : ""));
+}
+
+/** The URL the Datastar client would open: GET and DELETE carry the signals in the query string. */
+export function requestUrl(url: string, method: string, signalsJson: string): string {
+  if (method !== "GET" && method !== "DELETE") return url;
+  // Taken apart as text: a relative URL, or one that still holds an unresolved variable, is one
+  // `new URL` refuses, and the rest of it is passed on exactly as it was written.
+  const hash = url.indexOf("#");
+  const fragment = hash < 0 ? "" : url.slice(hash);
+  const beforeFragment = hash < 0 ? url : url.slice(0, hash);
+  const mark = beforeFragment.indexOf("?");
+  const kept = (mark < 0 ? "" : beforeFragment.slice(mark + 1)).split("&").filter((p) => p.length > 0 && !p.startsWith("datastar="));
+  // URLSearchParams is the form encoding, and unlike encodeURIComponent it never throws.
+  const query = [...kept, new URLSearchParams({ datastar: signalsJson }).toString()].join("&");
+  return `${mark < 0 ? beforeFragment : beforeFragment.slice(0, mark)}?${query}${fragment}`;
+}
+
+// What Kotlin's `trim()` strips, which is not quite what JavaScript's does: the two disagree on
+// U+FEFF and on U+001C to U+001F, and the curl line has to come out the same from both editors.
+const HEADER_SPACE = "[\\t-\\r \\u001c-\\u001f\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]+";
+const HEADER_TRIM = new RegExp(`^${HEADER_SPACE}|${HEADER_SPACE}$`, "g");
+
 /** A curl command equivalent to what the inspector sends. Variables must already be resolved. */
 export function toCurl(r: SavedRequest): string {
   const bodyless = r.method === "GET" || r.method === "DELETE";
-  let signalsJson = "{}";
-  if (r.signals.trim()) {
-    try {
-      signalsJson = JSON.stringify(JSON.parse(r.signals));
-    } catch {
-      signalsJson = r.signals.trim();
-    }
-  }
-  const url = new URL(r.url);
+  const signalsJson = compactSignals(r.signals);
   const parts = ["curl", "-N", "-X", r.method];
-  if (bodyless) url.searchParams.set("datastar", signalsJson);
-  parts.push(shellQuote(url.toString()));
+  parts.push(shellQuote(requestUrl(r.url, r.method, signalsJson)));
   parts.push("-H", shellQuote("Accept: text/event-stream"), "-H", shellQuote("Datastar-Request: true"));
+  // A name given twice is sent once, with its last value: the request itself is built from a map.
+  const headers = new Map<string, string>();
   for (const line of r.headers.split("\n")) {
     const idx = line.indexOf(":");
-    if (idx > 0) parts.push("-H", shellQuote(`${line.slice(0, idx).trim()}: ${line.slice(idx + 1).trim()}`));
+    if (idx > 0) headers.set(line.slice(0, idx).replace(HEADER_TRIM, ""), line.slice(idx + 1).replace(HEADER_TRIM, ""));
   }
+  for (const [k, v] of headers) parts.push("-H", shellQuote(`${k}: ${v}`));
   if (!bodyless) parts.push("-H", shellQuote("Content-Type: application/json"), "--data", shellQuote(signalsJson));
   return parts.join(" ");
 }
@@ -146,6 +212,11 @@ export function pathParams(path: string): { name: string; optional: boolean }[] 
 /** Fill path parameters; an empty value for an optional parameter removes its segment. */
 export function fillPath(path: string, values: Record<string, string>): string {
   return path
-    .replace(/\/\{([A-Za-z_][A-Za-z0-9_]*)\?\}/g, (_, n: string) => (values[n] ? `/${encodeURIComponent(values[n] ?? "")}` : ""))
-    .replace(/\{([A-Za-z_][A-Za-z0-9_]*)\??\}/g, (_, n: string) => encodeURIComponent(values[n] ?? ""));
+    .replace(/\/\{([A-Za-z_][A-Za-z0-9_]*)\?\}/g, (_, n: string) => (own(values, n) ? `/${encodeURIComponent(own(values, n))}` : ""))
+    .replace(/\{([A-Za-z_][A-Za-z0-9_]*)\??\}/g, (_, n: string) => encodeURIComponent(own(values, n)));
+}
+
+/** The value under an own key: a parameter named `constructor` must not read the prototype. */
+function own(values: Record<string, string>, name: string): string {
+  return Object.hasOwn(values, name) ? (values[name] ?? "") : "";
 }

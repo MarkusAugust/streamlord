@@ -27,7 +27,7 @@ describe("quick fixes in kotlin", () => {
     const onCount = issues.find((i) => src.slice(i.start, i.end) === "$count")!;
     const fix = onCount.fixes!.find((f) => f.title.startsWith("Make it"))!;
     assert.equal(fix.title, "Make it a $$$$ literal, where $count is a signal");
-    assert.equal(apply(src, fix), `dataOnClick($$$$"a $$count++ and $$$$x")`);
+    assert.equal(apply(src, fix), `dataOnClick($$$$"a $$count++ and $$$$$$x")`);
   });
 
   it("turns an html string into a $$ literal, keeping the kotlin templates kotlin", () => {

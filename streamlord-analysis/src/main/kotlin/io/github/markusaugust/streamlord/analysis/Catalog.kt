@@ -25,6 +25,12 @@ public enum class KeyCase { CAMEL, KEBAB, RAW }
 
 public enum class ValueKind { EXPRESSION, SIGNAL, FILTER, TEXT, NONE }
 
+/**
+ * What Datastar insists on before it applies an attribute: [VALUE] raises an error without a
+ * value; [EXCLUSIVE] wants the signal as a key or as a value, exactly one of the two.
+ */
+public enum class Requires { VALUE, EXCLUSIVE }
+
 public data class AttributeSpec(
     val name: String,
     val pro: Boolean,
@@ -37,6 +43,7 @@ public data class AttributeSpec(
     val modifiers: List<Modifier>,
     val onlyOn: List<String>?,
     val doc: String,
+    val requires: Requires? = null,
 )
 
 public data class ActionSpec(
@@ -122,6 +129,7 @@ public class Catalog private constructor(
                         },
                     onlyOn = a.array("onlyOn")?.strings(),
                     doc = a.string("doc") ?: "",
+                    requires = a.string("requires")?.let { Requires.valueOf(it.uppercase()) },
                 )
             }
         actions =

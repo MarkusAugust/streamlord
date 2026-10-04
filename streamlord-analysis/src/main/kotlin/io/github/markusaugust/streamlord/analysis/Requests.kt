@@ -6,7 +6,6 @@ import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonString
 import io.github.markusaugust.streamlord.core.json.JsonValue
-import java.net.URI
 import java.net.URLEncoder
 
 /*
@@ -109,19 +108,38 @@ public object Requests {
         return sb.toString()
     }
 
-    /** Insert or replace by name (case-insensitive), keeping the list sorted by name. */
+    /**
+     * Insert or replace by name (case-insensitive), keeping the list sorted by name.
+     *
+     * Names are matched and ordered by [nameKey]. The VS Code extension applies the same rule, so
+     * the shared file keeps one order whichever editor saves it.
+     */
     public fun upsert(
         file: RequestsFile,
         request: SavedRequest,
     ): RequestsFile {
-        val others = file.requests.filter { !it.name.equals(request.name, ignoreCase = true) }
-        return RequestsFile((others + request).sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }))
+        val key = nameKey(request.name)
+        val others = file.requests.filter { nameKey(it.name) != key }
+        return RequestsFile((others + request).sortedBy { nameKey(it.name) })
     }
 
     public fun remove(
         file: RequestsFile,
         name: String,
-    ): RequestsFile = RequestsFile(file.requests.filter { !it.name.equals(name, ignoreCase = true) })
+    ): RequestsFile {
+        val key = nameKey(name)
+        return RequestsFile(file.requests.filter { nameKey(it.name) != key })
+    }
+
+    /**
+     * A name in lowercase, one character at a time, compared code unit by code unit. Lowercasing
+     * the whole string would depend on the runtime: the JVM and V8 disagree on where a sigma is final.
+     */
+    private fun nameKey(name: String): String {
+        val out = StringBuilder(name.length)
+        name.codePoints().forEach { out.append(Character.toString(it).lowercase()) }
+        return out.toString()
+    }
 
     /** Parse `{"baseUrl": "..."}`; anything that is not a flat object of strings or numbers is ignored. */
     public fun parseEnvFile(text: String): Map<String, String> {
@@ -212,14 +230,37 @@ public object Requests {
         return out
     }
 
-    /** The signals as compact JSON; text that is not JSON is passed through trimmed. */
+    /**
+     * The signals as compact JSON; text that is not JSON is passed through trimmed.
+     *
+     * Valid JSON is compacted by dropping the whitespace between its tokens, not by writing it out
+     * again: a second writer would spell numbers and escapes its own way, and the VS Code extension
+     * has to arrive at the same text.
+     */
     public fun compactSignals(signals: String): String {
-        if (signals.isBlank()) return "{}"
-        return try {
-            JsonParser.parse(signals).toJson()
+        val text = signals.trim(' ', '\t', '\n', '\r')
+        if (text.isEmpty()) return "{}"
+        try {
+            JsonParser.parse(text)
         } catch (_: Exception) {
-            signals.trim()
+            return text
         }
+        val out = StringBuilder(text.length)
+        var inString = false
+        var i = 0
+        while (i < text.length) {
+            val c = text[i]
+            if (inString) {
+                out.append(c)
+                if (c == '\\') out.append(text[++i])
+                if (c == '"') inString = false
+            } else if (c != ' ' && c != '\t' && c != '\n' && c != '\r') {
+                out.append(c)
+                inString = c == '"'
+            }
+            i++
+        }
+        return out.toString()
     }
 
     /** The URL the Datastar client would open: GET and DELETE carry the signals in the query string. */
@@ -229,14 +270,31 @@ public object Requests {
         signalsJson: String,
     ): String {
         if (method != "GET" && method != "DELETE") return url
-        val uri = URI(url)
-        val query = uri.rawQuery
-        val encoded = "datastar=" + URLEncoder.encode(signalsJson, Charsets.UTF_8)
-        val kept = query?.split('&')?.filter { it.isNotEmpty() && !it.startsWith("datastar=") } ?: emptyList()
-        val newQuery = (kept + encoded).joinToString("&")
-        val base = url.substringBefore('?').substringBefore('#')
-        val fragment = uri.rawFragment?.let { "#$it" } ?: ""
-        return "$base?$newQuery$fragment"
+        // Taken apart as text: a URL that still holds a `{id}`, a space or an unresolved variable is
+        // one java.net.URI refuses, and the rest of it is passed on exactly as it was written.
+        val hash = url.indexOf('#')
+        val fragment = if (hash < 0) "" else url.substring(hash)
+        val beforeFragment = if (hash < 0) url else url.substring(0, hash)
+        val kept = beforeFragment.substringAfter('?', "").split('&').filter { it.isNotEmpty() && !it.startsWith("datastar=") }
+        val query = (kept + ("datastar=" + URLEncoder.encode(wellFormed(signalsJson), Charsets.UTF_8))).joinToString("&")
+        return "${beforeFragment.substringBefore('?')}?$query$fragment"
+    }
+
+    /** A surrogate without its partner becomes U+FFFD, which is what a browser encodes in its place. */
+    private fun wellFormed(s: String): String {
+        if (s.none { it.isSurrogate() }) return s
+        val out = StringBuilder(s.length)
+        var i = 0
+        while (i < s.length) {
+            val c = s[i]
+            if (c.isHighSurrogate() && i + 1 < s.length && s[i + 1].isLowSurrogate()) {
+                out.append(c).append(s[++i])
+            } else {
+                out.append(if (c.isSurrogate()) '\uFFFD' else c)
+            }
+            i++
+        }
+        return out.toString()
     }
 
     private fun shellQuote(s: String): String = "'" + s.replace("'", "'\\''") + "'"

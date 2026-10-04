@@ -12,16 +12,18 @@ package io.github.markusaugust.streamlord.analysis
  */
 private val HYPHENATED_SIGNAL = Regex("""\$[A-Za-z_][A-Za-z0-9_.]*(?:-[A-Za-z0-9_][A-Za-z0-9_.]*)+""")
 private val HYPHEN_WORD = Regex("""-([A-Za-z0-9_])""")
-private val ACTION = Regex("""@([A-Za-z_][A-Za-z0-9_]*)\s*\(""")
+private val ACTION = Regex("""@([A-Za-z_$][A-Za-z0-9_$]*)(\s*)\(""")
+private val SIGNAL_PATH = Regex("""\$\w+(?:\.\w+)+""")
+private val NUMERIC_SEGMENT = Regex("""\.\d""")
 private val SIGNAL_PREFIX = Regex("""\$([A-Za-z_][A-Za-z0-9_.]*)?$""")
 private val ACTION_PREFIX = Regex("""@([A-Za-z_][A-Za-z0-9_]*)?$""")
 private val KEBAB_PART = Regex("""-([a-z])""")
 
-/** Is the offset inside a single-, double- or backtick-quoted JavaScript string literal? */
-internal fun insideQuotes(
+/** The quote of the single-, double- or backtick-quoted JavaScript string literal the offset is inside, or null. */
+internal fun quoteAt(
     text: String,
     offset: Int,
-): Boolean {
+): Char? {
     var quote: Char? = null
     var i = 0
     while (i < offset) {
@@ -37,7 +39,100 @@ internal fun insideQuotes(
         }
         i++
     }
-    return quote != null
+    return quote
+}
+
+/**
+ * Which offsets of an expression are code: not a string literal, not the text of a template
+ * literal, not a comment. Datastar rewrites signals and actions in code only, and inside the
+ * `${ }` of a template literal, which is code here too. A regular expression literal is not
+ * recognised; a quote inside one opens a string.
+ */
+internal fun jsCodeMask(text: String): BooleanArray {
+    val mask = BooleanArray(text.length) { true }
+    // One entry per open `${`, counting the braces opened inside it.
+    val braces = ArrayList<Int>()
+
+    fun blank(
+        from: Int,
+        to: Int,
+    ): Int {
+        val end = minOf(to, text.length)
+        for (k in from until end) mask[k] = false
+        return end
+    }
+
+    /** From just inside a template literal to just past its closing backtick, or past the `${` that opens code. */
+    fun template(from: Int): Int {
+        var j = from
+        while (j < text.length) {
+            when {
+                text[j] == '\\' -> {
+                    j = blank(j, j + 2)
+                }
+
+                text[j] == '`' -> {
+                    return blank(j, j + 1)
+                }
+
+                text.startsWith("\${", j) -> {
+                    braces += 0
+                    return j + 2
+                }
+
+                else -> {
+                    j = blank(j, j + 1)
+                }
+            }
+        }
+        return j
+    }
+    var i = 0
+    while (i < text.length) {
+        val c = text[i]
+        when {
+            c == '\'' || c == '"' -> {
+                var j = i + 1
+                while (j < text.length && text[j] != c) j += if (text[j] == '\\') 2 else 1
+                i = blank(i, j + 1)
+            }
+
+            c == '`' -> {
+                mask[i] = false
+                i = template(i + 1)
+            }
+
+            c == '/' && text.getOrNull(i + 1) == '/' -> {
+                val nl = text.indexOf('\n', i)
+                i = blank(i, if (nl < 0) text.length else nl)
+            }
+
+            c == '/' && text.getOrNull(i + 1) == '*' -> {
+                val close = text.indexOf("*/", i + 2)
+                i = blank(i, if (close < 0) text.length else close + 2)
+            }
+
+            c == '{' && braces.isNotEmpty() -> {
+                braces[braces.size - 1]++
+                i++
+            }
+
+            c == '}' && braces.isNotEmpty() -> {
+                if (braces.last() == 0) {
+                    braces.removeAt(braces.size - 1)
+                    i = template(i + 1)
+                } else {
+                    braces[braces.size - 1]--
+                    i++
+                }
+            }
+
+            else -> {
+                i++
+            }
+        }
+    }
+    return mask
 }
 
 /** `foo-bar` -> `fooBar`, as Datastar reads a kebab-case key. */
@@ -52,21 +147,24 @@ public class ExpressionValidator(
         if (text.isBlank()) {
             return listOf(Issue(0, maxOf(text.length, 1), "Empty Datastar expression.", Severity.WARNING, "empty-expression"))
         }
-        val js = text.replace('@', '_')
+        // `$foo.0.name` is the path foo, 0, name: Datastar rewrites it to bracket form before the browser
+        // parses it. To a JavaScript parser `.0` is an error, so the digit is read as a letter, at the same width.
+        val js = SIGNAL_PATH.replace(text.replace('@', '_')) { path -> NUMERIC_SEGMENT.replace(path.value, "._") }
         val err = JsParser.error(js)?.takeUnless { objectLiteralParses(js) }
         if (err != null) {
             val pos = minOf(err.pos, text.length)
             val end = maxOf(pos + 1, minOf(err.raisedAt, text.length))
             issues += Issue(pos, end, "Datastar expression: ${err.message}", Severity.ERROR, "expression-syntax", Docs.EXPRESSIONS)
         }
+        val code = jsCodeMask(text)
         for (k in HYPHENATED_SIGNAL.findAll(text)) {
             val written = k.value
-            if (insideQuotes(text, k.range.first)) continue
+            if (!code[k.range.first]) continue
             val head = written.substringBefore('-')
             val rest = written.substringAfter('-')
             // `-1`, `-2px`: nobody names a signal that; the author subtracts. `-bar`: a kebab-case key, or a subtraction of a variable.
             val subtraction = rest.first().isDigit()
-            val camel = toCamel(written)
+            val camel = written.replace(HYPHEN_WORD) { it.groupValues[1].uppercase() }
             val spaced = written.replace(HYPHEN_WORD) { " - " + it.groupValues[1] }
             val fixes = ArrayList<Fix>()
             if (!subtraction) fixes += Fix("Change to $camel", k.range.first, k.range.last + 1, camel)
@@ -96,6 +194,22 @@ public class ExpressionValidator(
             val spec = catalog.actionsByName[name]
             val start = m.range.first
             val end = start + 1 + name.length
+            if (!code[start]) continue
+            if (m.groupValues[2].isNotEmpty()) {
+                issues +=
+                    Issue(
+                        start = start,
+                        end = m.range.last,
+                        message =
+                            "Datastar reads an action only as @$name( with nothing before the parenthesis. " +
+                                "With a space the @ reaches the browser, which cannot parse it.",
+                        severity = Severity.ERROR,
+                        code = "action-space",
+                        link = Docs.ACTIONS,
+                        fixes = listOf(Fix("Remove the space", end, m.range.last, "")),
+                    )
+                continue
+            }
             if (spec == null) {
                 val near = catalog.actions.map { it.name }.firstOrNull { it.equals(name, ignoreCase = true) }
                 issues +=

@@ -24,15 +24,21 @@ export interface DatastarFrame {
 export class SseParser {
   private buffer = "";
   private current: SseMessage = empty();
+  // A chunk may end between the CR and the LF of one line ending. The CR ends its line at once,
+  // so nothing waits on a stream that closes there, and the LF that opens the next chunk is dropped.
+  private afterCr = false;
 
   /** Feed a chunk; returns every complete message it finished. */
   feed(chunk: string): SseMessage[] {
-    this.buffer += chunk;
+    if (chunk.length === 0) return [];
+    this.buffer += this.afterCr && chunk.startsWith("\n") ? chunk.slice(1) : chunk;
+    this.afterCr = false;
     const out: SseMessage[] = [];
     let idx: number;
     while ((idx = this.buffer.search(/\r\n|\r|\n/)) >= 0) {
       const line = this.buffer.slice(0, idx);
       const sepLen = this.buffer.startsWith("\r\n", idx) ? 2 : 1;
+      if (sepLen === 1 && this.buffer[idx] === "\r" && idx + 1 === this.buffer.length) this.afterCr = true;
       this.buffer = this.buffer.slice(idx + sepLen);
       if (line.length === 0) {
         if (this.current.data.length > 0 || this.current.event !== "message" || this.current.id !== null || this.current.comments.length > 0) {
@@ -59,7 +65,8 @@ export class SseParser {
           this.current.id = value;
           break;
         case "retry":
-          if (/^\d+$/.test(value)) this.current.retry = Number(value);
+          // Past a 32-bit int the value is dropped, as the Kotlin parser's Int drops it.
+          if (/^\d+$/.test(value) && Number(value) <= 0x7fffffff) this.current.retry = Number(value);
           break;
         default:
           break;
@@ -74,15 +81,18 @@ function empty(): SseMessage {
 }
 
 export function decodeDatastar(msg: SseMessage): DatastarFrame {
-  const groups: Record<string, string[]> = {};
+  // A Map, and Object.fromEntries after it: a data line may open with `constructor` or `__proto__`,
+  // which a plain object answers from its prototype.
+  const groups = new Map<string, string[]>();
   for (const line of msg.data) {
     const sp = line.indexOf(" ");
     const key = sp < 0 ? line : line.slice(0, sp);
     const value = sp < 0 ? "" : line.slice(sp + 1);
-    (groups[key] ??= []).push(value);
+    const group = groups.get(key);
+    if (group) group.push(value);
+    else groups.set(key, [value]);
   }
-  const args: Record<string, string> = {};
-  for (const [k, v] of Object.entries(groups)) args[k] = v.join("\n");
+  const args: Record<string, string> = Object.fromEntries([...groups].map(([k, v]) => [k, v.join("\n")]));
   const raw = [`event: ${msg.event}`, ...(msg.id !== null ? [`id: ${msg.id}`] : []), ...(msg.retry !== null ? [`retry: ${msg.retry}`] : []), ...msg.data.map((d) => `data: ${d}`)].join("\n");
   return { event: msg.event, id: msg.id, retry: msg.retry, args, raw, receivedAt: Date.now() };
 }

@@ -1,0 +1,25 @@
+{
+  "$comment": "Cases both editors must judge alike. Each case is a source and the issues expected for it, sorted by start, end and code; offsets count UTF-16 code units. An issue without start and end is checked by code only: the two JavaScript parsers do not always place a syntax error on the same character. fixes holds the whole source after each quick fix, in the order offered.",
+  "kind": "kotlin",
+  "cases": [
+    {"name":"an interpolated signal","source":"dataOnClick(\"$count++\")","issues":[{"code":"kotlin-interpolation","start":13,"end":19,"fixes":["dataOnClick(increment(\"count\"))","dataOnClick($$\"$count++\")","dataOnClick(\"${'$'}count++\")","dataOnClick(\"\\$count++\")"]}]},
+    {"name":"a literal followed by trimIndent","source":"dataOnClick(\"\"\"$count++\"\"\".trimIndent())","issues":[{"code":"kotlin-interpolation","start":15,"end":21,"fixes":["dataOnClick(increment(\"count\"))","dataOnClick($$\"\"\"$count++\"\"\".trimIndent())","dataOnClick(\"\"\"${'$'}count++\"\"\".trimIndent())"]}]},
+    {"name":"markup followed by trimIndent","source":"patchElements(\"\"\"<li>x</li>\"\"\".trimIndent(), mode = ElementPatchMode.APPEND)","issues":[{"code":"mode-needs-selector","start":0,"end":13,"fixes":["patchElements(\"\"\"<li>x</li>\"\"\".trimIndent(), selector = \"\", mode = ElementPatchMode.APPEND)"]}]},
+    {"name":"a comment before the literal","source":"dataOnClick(/* why */ \"$a-b\" + \"\")\ndataOnClick(/* why */ $$\"$a-b\")","issues":[{"code":"signal-kebab","start":60,"end":64,"fixes":["dataOnClick(/* why */ \"$a-b\" + \"\")\ndataOnClick(/* why */ $$\"$aB\")","dataOnClick(/* why */ \"$a-b\" + \"\")\ndataOnClick(/* why */ $$\"$a - b\")"]}]},
+    {"name":"a selector and a mode by position","source":"patchElements(\"<tr></tr>\", \"#rows\", ElementPatchMode.APPEND)","issues":[]},
+    {"name":"a mode by position without a selector","source":"patchElements(\"<li>x</li>\", null, ElementPatchMode.APPEND)","issues":[{"code":"mode-needs-selector","start":0,"end":13}]},
+    {"name":"elements by name","source":"patchElements(elements = \"<b>x</b>\")","issues":[{"code":"missing-id","start":26,"end":29,"fixes":["patchElements(elements = \"<b id=\"b\">x</b>\")"]}]},
+    {"name":"a blank selector by name","source":"removeElements(selector = \"\")","issues":[{"code":"blank-selector","start":26,"end":28}]},
+    {"name":"a script by name","source":"executeScript(script = \"x</script>\")","issues":[{"code":"script-close","start":25,"end":33}]},
+    {"name":"an imported mode constant","source":"patchElements(\"<li>x</li>\", mode = APPEND)","issues":[{"code":"mode-needs-selector","start":0,"end":13,"fixes":["patchElements(\"<li>x</li>\", selector = \"\", mode = APPEND)"]}]},
+    {"name":"a mode held in a variable","source":"patchElements(\"<li>x</li>\", mode = someMode)","issues":[]},
+    {"name":"a hyphenated signal after a backslash escape","source":"dataText(\"\\$a-b\")","issues":[{"code":"signal-kebab","start":10,"end":15,"fixes":["dataText(\"\\$aB\")","dataText(\"\\$a - b\")"]}]},
+    {"name":"a hyphenated signal after the dollar idiom","source":"dataText(\"${'$'}a-b\")","issues":[{"code":"signal-kebab","start":10,"end":19,"fixes":["dataText(\"${'$'}aB\")","dataText(\"${'$'}a - b\")"]}]},
+    {"name":"a literal dollar before a template","source":"dataOnClick(\"$a + $$b\")","issues":[{"code":"kotlin-interpolation","start":13,"end":15,"fixes":["dataOnClick($$$\"$a + $$$$b\")","dataOnClick(\"${'$'}a + $$b\")","dataOnClick(\"\\$a + $$b\")"]},{"code":"kotlin-interpolation","start":19,"end":21,"fixes":["dataOnClick($$$\"$$$a + $$b\")","dataOnClick(\"$a + $${'$'}b\")","dataOnClick(\"$a + $\\$b\")"]}]},
+    {"name":"an action fix in markup inside a raw string","source":"val x = \"\"\"<button class=\"btn\" data-on:click=\"@GET('/x')\">go</button>\"\"\"","issues":[{"code":"unknown-action","start":46,"end":50,"fixes":["val x = \"\"\"<button class=\"btn\" data-on:click=\"@get('/x')\">go</button>\"\"\""]}]},
+    {"name":"a syntax error at the end of a raw string","source":"dataOnClick(\"\"\"@get('/x') +\"\"\")","issues":[{"code":"expression-syntax","start":27,"end":28}]},
+    {"name":"a brace in a character literal inside a template","source":"dataOnClick(\"${if (c == '}') 1 else 2} +\")","issues":[{"code":"expression-syntax","start":40,"end":41}]},
+    {"name":"a template with a non-ascii name","source":"dataOnClick(\"$år + 1\")","issues":[{"code":"kotlin-interpolation","start":13,"end":16,"fixes":["dataOnClick($$\"$år + 1\")","dataOnClick(\"${'$'}år + 1\")","dataOnClick(\"\\$år + 1\")"]}]},
+    {"name":"the end of a script after a character whose lowercase form is longer","source":"executeScript(\"İİ x</SCRIPT>\")","issues":[{"code":"script-close","start":19,"end":27}]}
+  ]
+}

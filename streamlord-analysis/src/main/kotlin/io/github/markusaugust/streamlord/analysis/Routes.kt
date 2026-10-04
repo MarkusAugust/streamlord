@@ -26,11 +26,22 @@ private val SPRING_MAPPINGS =
         "DeleteMapping" to "DELETE",
         "RequestMapping" to null,
     )
+
+// `map.get("key")` and `client.post("https://...")` have the shape of a route and are none. A verb
+// counts when it is not called on a receiver, and it either takes a lambda or its path starts with
+// a slash. The path may be followed by more arguments: `route("/v1", HttpMethod.Get) { }`.
 private val KTOR_CALL =
-    Regex("""\b(route|get|post|put|patch|delete)\s*(?:\(\s*"([^"\n]*)"\s*\)\s*)?\{|\b(get|post|put|patch|delete)\s*\(\s*"([^"\n]*)"\s*\)""")
+    Regex(
+        """\b(route|get|post|put|patch|delete)\s*(?:\(\s*"([^"\n]*)"\s*(?:,[^(){}\n]*)?\)\s*)?\{|\b(get|post|put|patch|delete)\s*\(\s*"(/[^"\n]*)"\s*\)""",
+    )
 private val SPRING_ANNOTATION =
     Regex("""@(RequestMapping|GetMapping|PostMapping|PutMapping|PatchMapping|DeleteMapping)\s*(?:\(([^)]*)\))?""")
-private val ON_CLASS = Regex("""^\s*(?:@\w+(?:\([^)]*\))?\s*)*(?:open\s+|abstract\s+)?class\b""")
+
+// Any modifier may stand between the annotation and `class`, and Spring reads a mapping on an interface too.
+private val ON_CLASS =
+    Regex(
+        """^\s*(?:@\w+(?:\([^)]*\))?\s*)*(?:(?:public|internal|private|protected|open|final|abstract|sealed|data|inner)\s+)*(?:class|interface)\b""",
+    )
 private val NAMED_PATH = Regex("""(?:value|path)\s*=\s*(?:\[\s*)?"([^"]*)"""")
 private val POSITIONAL_PATH = Regex("""^\s*(?:\[\s*)?"([^"]*)"""")
 private val REQUEST_METHOD = Regex("""RequestMethod\.([A-Z]+)""")
@@ -79,7 +90,7 @@ private fun findKtorRoutes(src: String): List<Route> {
             continue
         }
         val m = KTOR_CALL.matchAt(src, i)
-        if (m == null) {
+        if (m == null || hasReceiver(src, i)) {
             i++
             continue
         }
@@ -104,6 +115,16 @@ private fun findKtorRoutes(src: String): List<Route> {
         i++
     }
     return routes
+}
+
+/** Whether the call at [start] is made on something: `client.post(...)`, also with the dot on the line above. */
+private fun hasReceiver(
+    src: String,
+    start: Int,
+): Boolean {
+    var i = start - 1
+    while (i >= 0 && src[i] in " \t\r\n") i--
+    return i >= 0 && src[i] == '.'
 }
 
 private fun annotationPath(args: String): String =

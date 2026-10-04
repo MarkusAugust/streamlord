@@ -106,8 +106,11 @@ the DSL, so the catalog cannot drift from the library without a test failing.
 The checks live once, in `streamlord-analysis`: a Kotlin module with no dependency beyond
 `streamlord-core`, holding the Kotlin string reader, the JavaScript syntax check, the markup and
 attribute rules, the signal and selector collectors, the route finder and the inspector's file
-format. The IntelliJ plugin calls it. The VS Code extension mirrors it in TypeScript, and the two
-are tested against the same cases.
+format. The IntelliJ plugin calls it. The VS Code extension mirrors it in TypeScript, and both
+test suites run one shared corpus of expressions, markup, HTML and Kotlin, each case with the
+issue codes, the ranges and the text every quick fix must leave behind. It lives in
+`editors/vscode/test/fixtures/corpus`. The JavaScript check is two parsers, acorn in the extension
+and a port of it in Kotlin, and the corpus is what holds them to the same verdict.
 
 **You can call it too**, which is worth doing in the tests of your own markup functions:
 
@@ -116,8 +119,9 @@ Analyzer().analyzeHtml(html)     // a template: attributes and expressions
 Analyzer().analyzeKotlin(source) // a Kotlin file: the strings and the DSL calls in it
 ```
 
-Each returns a list of `Issue`, and an issue carries the range it covers, a message, a severity,
-a link into the Datastar reference and its quick fixes. `analyzeHtml` judges a template, so it
+Each returns a list of `Issue`, and an issue carries the range it covers, a `code`, a message, a
+severity, its quick fixes, and a link into the Datastar reference where the reference has a page
+for it; an unclosed tag, for one, has none. `analyzeHtml` judges a template, so it
 checks attributes and expressions and leaves the id and completeness rules alone; those belong to
 markup handed to a patch, and `validateMarkup` is where they live.
 

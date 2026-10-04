@@ -1,7 +1,7 @@
 import { catalog, parseAttributeName, type CallSiteSpec } from "./catalog.ts";
 import { attributeDoc, DOCS, validateExpression, type Fix, type Issue } from "./expression.ts";
 import { PLACEHOLDER, toSource, type Interpolation, type KotlinString } from "./kotlinStrings.ts";
-import { keyReading, rawKeyNote, tokenize, validateAttributes, validateMarkup, wireKey } from "./markup.ts";
+import { asciiLowercase, indexOfAsciiIgnoreCase, keyReading, rawKeyNote, tokenize, validateAttributes, validateMarkup, wireKey } from "./markup.ts";
 import { findCallSites, isHtmlString, lexKotlin, namedArgText, selectStringArg, stringAt, type CallSite } from "./scanner.ts";
 
 /**
@@ -92,7 +92,7 @@ export function htmlStringAt(src: string, offset: number): KotlinString | null {
  */
 function checkFreeHtmlString(s: KotlinString, opts: AnalyzeOptions, src: string): Issue[] {
   const issues: Issue[] = interpolationHints(s, src, opts.prefix);
-  if (opts.checkHtmlAttributes) issues.push(...mapIssues(s, analyzeHtml(s.text, opts)));
+  if (opts.checkHtmlAttributes) issues.push(...mapIssues(s, src, analyzeHtml(s.text, opts)));
   return issues;
 }
 
@@ -103,6 +103,8 @@ const HELPERS: [RegExp, (n: string) => string][] = [
   [/^\$([A-Za-z_][A-Za-z0-9_.]*)--$/, (n) => `decrement("${n}")`],
   [/^!\$([A-Za-z_][A-Za-z0-9_.]*)$/, (n) => `not("${n}")`],
 ];
+
+const TRIM_AFTER = /\s*\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)/y;
 
 /**
  * The whole literal rewritten as a `$$` literal (Kotlin 2.2+): the flagged template becomes a
@@ -115,13 +117,9 @@ function multiDollarFix(s: KotlinString, src: string, signal: Interpolation): Fi
   const longestRun = Math.max(0, ...(content.match(/\$+/g) ?? []).map((r) => r.length));
   const dollars = Math.max(2, longestRun + 1);
   const prefix = "$".repeat(dollars);
-  // A kept template is padded to the new run length; the flagged one keeps its run, which is now text.
-  const runBefore = (at: number) => {
-    let n = 0;
-    while (src[at - 1 - n] === "$") n++;
-    return n;
-  };
-  const keep = new Map(s.interpolations.filter((ip) => ip !== signal).map((ip) => [ip.start, dollars - 1 - runBefore(ip.start)]));
+  // A kept template gains the dollars it now needs; the dollars before it stay text, as they were.
+  // The flagged one keeps its run, which is now text.
+  const keep = new Map(s.interpolations.filter((ip) => ip !== signal).map((ip) => [ip.start, dollars - 1]));
   let out = prefix + src.slice(s.start, s.contentStart).replace(/^\$+/, "");
   let i = s.contentStart;
   while (i < s.contentEnd) {
@@ -150,12 +148,15 @@ function interpolationIssues(s: KotlinString, src: string): Issue[] {
     // The literal as the author meant it, with every template read as a signal.
     const meant = src.slice(s.contentStart, s.contentEnd);
     if (!/\$\{/.test(meant)) {
+      // A helper is not a string: it replaces the literal together with the trim call after it.
+      TRIM_AFTER.lastIndex = s.end;
+      const end = s.end + (TRIM_AFTER.exec(src)?.[0].length ?? 0);
       for (const [re, helper] of HELPERS) {
         const m = re.exec(meant);
-        if (m?.[1]) fixes.unshift({ title: `Use ${helper(m[1])}`, start: s.start, end: s.end, text: helper(m[1]) });
+        if (m?.[1]) fixes.unshift({ title: `Use ${helper(m[1])}`, start: s.start, end, text: helper(m[1]) });
       }
       const toggle = /^\$([A-Za-z_][A-Za-z0-9_.]*) = !\$\1$/.exec(meant);
-      if (toggle?.[1]) fixes.unshift({ title: `Use toggle("${toggle[1]}")`, start: s.start, end: s.end, text: `toggle("${toggle[1]}")` });
+      if (toggle?.[1]) fixes.unshift({ title: `Use toggle("${toggle[1]}")`, start: s.start, end, text: `toggle("${toggle[1]}")` });
     }
     issues.push({
       start: ip.start,
@@ -182,7 +183,7 @@ function interpolationHints(s: KotlinString, src: string, prefix: string): Issue
     for (const t of tags) {
       for (const a of t.attributes) {
         if (a.value === null || decoded < a.valueStart || decoded >= a.valueStart + a.value.length) continue;
-        const parsed = parseAttributeName(a.name.toLowerCase(), prefix);
+        const parsed = parseAttributeName(asciiLowercase(a.name), prefix);
         if (parsed?.spec?.valueKind !== "expression") return null;
         // data-signals:count="$initial" seeds a signal from the server, like the object form does.
         if (parsed.spec.name === "signals") return "part";
@@ -218,15 +219,25 @@ function interpolationHints(s: KotlinString, src: string, prefix: string): Issue
   });
 }
 
-function mapIssues(s: KotlinString, issues: Issue[]): Issue[] {
+function mapIssues(s: KotlinString, src: string, issues: Issue[]): Issue[] {
   return issues.map((i) => {
     const r = toSource(s, i.start, i.end);
     const fixes = i.fixes?.map((f) => {
       const fr = f.start === f.end ? { start: toSource(s, f.start, f.start + 1).start, end: toSource(s, f.start, f.start + 1).start } : toSource(s, f.start, f.end);
-      return { ...f, start: fr.start, end: fr.end };
+      return { ...f, start: fr.start, end: fr.end, text: f.start === f.end ? f.text : keepDollarEscape(s, src, f) };
     });
     return { ...i, start: r.start, end: r.end, fixes };
   });
+}
+
+/**
+ * A fix that starts on a dollar the source wrote as an escape (`\$`, `${'$'}`) must write the
+ * escape back: a bare `$` before a name would turn the signal into a Kotlin template.
+ */
+function keepDollarEscape(s: KotlinString, src: string, fix: Fix): string {
+  if (s.text[fix.start] !== "$" || !fix.text.startsWith("$")) return fix.text;
+  const escape = src.slice(s.map[fix.start], s.map[fix.start + 1]);
+  return escape.length > 1 ? escape + fix.text.slice(1) : fix.text;
 }
 
 function checkExpressionSite(site: CallSite, spec: CallSiteSpec, src: string): Issue[] {
@@ -236,20 +247,26 @@ function checkExpressionSite(site: CallSite, spec: CallSiteSpec, src: string): I
   const issues = interpolationIssues(s, src);
   const text = s.text;
   if (text.includes(PLACEHOLDER) && s.interpolations.some((i) => i.kind === "simple")) return issues;
-  issues.push(...mapIssues(s, validateExpression(text)));
+  issues.push(...mapIssues(s, src, validateExpression(text)));
   return issues;
 }
 
 function checkHtmlSite(site: CallSite, spec: CallSiteSpec, opts: AnalyzeOptions, src: string): Issue[] {
   const s = selectStringArg(site, spec.arg, spec.named);
   if (!s || s.unterminated) return [];
-  const selector = spec.selectorArg ? namedArgText(site, spec.selectorArg) : null;
-  const modeArg = spec.modeArg ? site.args.find((a) => a.named === spec.modeArg) : undefined;
-  const modeText = modeArg?.text ?? null;
-  const mode = modeText ? /\.([A-Z]+)\s*$/.exec(modeText)?.[1]?.toLowerCase() ?? null : null;
+  // In every signature the selector and the mode follow the elements, so they may be given by position.
+  const named = (name?: string) => (name ? site.args.find((a) => a.named === name) : undefined);
+  const positional = site.args.filter((a) => a.named === null);
+  const elements = named(spec.named) ? null : spec.arg === "last" ? 0 : spec.arg;
+  const selectorArg = named(spec.selectorArg) ?? (elements === null ? undefined : positional[elements + 1]);
+  const selector = selectorArg && selectorArg.text !== "null" ? selectorArg.text : null;
+  const modeArg = named(spec.modeArg) ?? (elements === null ? undefined : positional[elements + 2]);
+  // `ElementPatchMode.APPEND`, or `APPEND` when the constant is imported. Anything else is a value not known here.
+  const modeName = modeArg ? (/(?:^|\.)([A-Z]+)\s*$/.exec(modeArg.text)?.[1]?.toLowerCase() ?? null) : null;
+  const mode = modeName === "default" ? "outer" : modeName !== null && catalog.patchModes.includes(modeName) ? modeName : null;
   const issues: Issue[] = interpolationHints(s, src, opts.prefix);
-  if (mode && mode !== "outer" && mode !== "replace" && !selector && modeArg) {
-    const at = modeArg.start - (spec.modeArg?.length ?? 0) - src.slice(0, modeArg.start).match(/\s*=\s*$/)![0].length;
+  if (mode && mode !== "outer" && mode !== "replace" && selector === null && modeArg) {
+    const at = modeArg.start - (modeArg.named?.length ?? 0) - (src.slice(0, modeArg.start).match(/\s*=\s*$/)?.[0].length ?? 0);
     issues.push({
       start: site.nameStart,
       end: site.openParen,
@@ -257,11 +274,12 @@ function checkHtmlSite(site: CallSite, spec: CallSiteSpec, opts: AnalyzeOptions,
       severity: "error",
       code: "mode-needs-selector",
       link: DOCS.sse,
-      fixes: [{ title: 'Add selector = ""', start: at, end: at, text: 'selector = "", ' }],
+      fixes: modeArg.named !== null ? [{ title: 'Add selector = ""', start: at, end: at, text: 'selector = "", ' }] : undefined,
     });
   }
-  const requireIds = !selector && (mode === null || mode === "outer");
-  issues.push(...mapIssues(s, validateMarkup(s.text, { requireIds, prefix: opts.prefix, checkAttributes: opts.checkHtmlAttributes })));
+  // A mode that cannot be read here (a variable) may be one that needs no ids.
+  const requireIds = selector === null && (!modeArg || mode === "outer");
+  issues.push(...mapIssues(s, src, validateMarkup(s.text, { requireIds, prefix: opts.prefix, checkAttributes: opts.checkHtmlAttributes })));
   return issues;
 }
 
@@ -323,7 +341,7 @@ function checkScriptSite(site: CallSite, spec: CallSiteSpec): Issue[] {
   const s = selectStringArg(site, spec.arg, spec.named);
   if (!s || s.unterminated) return [];
   const issues: Issue[] = [];
-  const idx = s.text.toLowerCase().indexOf("</script");
+  const idx = indexOfAsciiIgnoreCase(s.text, "</script", 0);
   if (idx >= 0) {
     const r = toSource(s, idx, idx + 8);
     issues.push({ start: r.start, end: r.end, message: "`</script` inside a script body. Streamlord escapes it to `<\\/script`, which only works inside a JavaScript string or regex.", severity: "warning", code: "script-close" });
