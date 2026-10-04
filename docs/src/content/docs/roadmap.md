@@ -7,7 +7,7 @@ description: "What is planned but not shipped, in the order it will land, and wh
 >
 > Gorvek of Bonereach
 
-None of this is in 0.10.1. It is written down so you can see what is coming, decide whether to
+None of this is in 0.11.0. It is written down so you can see what is coming, decide whether to
 wait for it, and know what to do today instead. Everything that touches your code is opt-in when
 it lands, the way [`guardElements`](/strings/) is, with one exception that is marked as such.
 
