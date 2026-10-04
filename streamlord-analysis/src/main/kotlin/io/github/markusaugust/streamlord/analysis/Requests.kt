@@ -144,30 +144,176 @@ public object Requests {
         return out.toString()
     }
 
-    /** Parse `{"baseUrl": "..."}`; anything that is not a flat object of strings or numbers is ignored. */
-    public fun parseEnvFile(text: String): Map<String, String> {
+    /** The first entry of the request list, saying what else is in it, so the list reads as the place to find them. */
+    public fun newRequestLabel(
+        saved: Int,
+        recent: Int,
+    ): String {
+        val counts = listOfNotNull(if (saved > 0) "$saved saved" else null, if (recent > 0) "$recent recent" else null)
+        return if (counts.isEmpty()) "New request…" else "New request… (${counts.joinToString(", ")})"
+    }
+
+    /** The keys `.streamlord/env.json` may hold, in the order the inspector lists them. */
+    public val ENV_KEYS: List<String> = listOf("baseUrl", "signals", "headers")
+
+    private const val INVALID = "$ENV_FILE is not valid"
+
+    /** `.streamlord/env.json` as read: each key that is set and valid, and what is wrong with the rest. */
+    public data class Env(
+        val baseUrl: String?,
+        /** Compact JSON, spelled as in the file. */
+        val signals: String?,
+        val headers: List<Pair<String, String>>?,
+        val errors: List<String>,
+    )
+
+    /**
+     * Read `.streamlord/env.json`. Only `baseUrl` (text), `signals` (an object) and `headers` (an
+     * object of texts) are allowed, and anything else is reported rather than ignored, so a typo
+     * does not quietly leave a value unset.
+     */
+    public fun parseEnv(text: String): Env {
+        val errors = ArrayList<String>()
         val raw =
             try {
-                JsonParser.parse(text) as? JsonObject ?: return emptyMap()
+                JsonParser.parse(text)
             } catch (_: Exception) {
-                return emptyMap()
+                return Env(null, null, null, listOf("$ENV_FILE is not valid JSON."))
             }
-        val out = LinkedHashMap<String, String>()
-        for ((k, v) in raw) {
-            when (v) {
-                is JsonString -> {
-                    out[k] = v.value
+        if (raw !is JsonObject) return Env(null, null, null, listOf("$INVALID: it must be an object with baseUrl, signals or headers."))
+        var baseUrl: String? = null
+        var signals: String? = null
+        var headers: List<Pair<String, String>>? = null
+        for ((key, value) in raw) {
+            when (key) {
+                "baseUrl" -> {
+                    when {
+                        value !is JsonString -> errors += "$INVALID: baseUrl must be text, such as \"http://localhost:8080\"."
+                        !HTTP.containsMatchIn(value.value) -> errors += "$INVALID: baseUrl must start with http:// or https://."
+                        else -> baseUrl = value.value.trimEnd('/')
+                    }
                 }
 
-                is JsonNumber -> {
-                    out[k] = v.text
+                "signals" -> {
+                    // From the text, not written anew, so 1.0 stays 1.0 and the VS Code extension arrives at the same signals.
+                    if (value !is JsonObject) {
+                        errors += "$INVALID: signals must be a JSON object, such as {\"search\": \"ash\"}."
+                    } else {
+                        signals = compactSignals(topLevelValues(text)["signals"] ?: "{}")
+                    }
                 }
 
-                else -> {}
+                "headers" -> {
+                    if (value !is JsonObject) {
+                        errors += "$INVALID: headers must be an object of names and values, such as {\"Authorization\": \"Bearer token\"}."
+                    } else {
+                        val notText = value.filterValues { it !is JsonString }.keys
+                        for (name in notText) errors += "$INVALID: the value of the header \"$name\" must be text."
+                        if (notText.isEmpty()) headers = value.map { (k, v) -> k to (v as JsonString).value }
+                    }
+                }
+
+                else -> {
+                    errors += "$INVALID: \"$key\" is not a known key. Use baseUrl, signals or headers."
+                }
             }
         }
+        return Env(baseUrl, signals, headers, errors)
+    }
+
+    private val HTTP = Regex("""^https?://""", RegexOption.IGNORE_CASE)
+
+    /** The text of each value of the top-level object, by key as written; [text] is known to parse. */
+    private fun topLevelValues(text: String): Map<String, String> {
+        val values = LinkedHashMap<String, String>()
+        var i = text.indexOf('{') + 1
+
+        fun space() {
+            while (i < text.length && text[i] in " \t\n\r") i++
+        }
+        while (i < text.length) {
+            space()
+            if (i >= text.length || text[i] != '"') break
+            val keyEnd = valueEnd(text, i)
+            val key = text.substring(i + 1, keyEnd - 1)
+            i = keyEnd
+            space()
+            i++
+            space()
+            val end = valueEnd(text, i)
+            values[key] = text.substring(i, end)
+            i = end
+            space()
+            if (i < text.length && text[i] == ',') i++
+        }
+        return values
+    }
+
+    /** The end of the JSON value at [start]. */
+    private fun valueEnd(
+        text: String,
+        start: Int,
+    ): Int {
+        var i = start
+        if (text[i] == '"') {
+            i++
+            while (i < text.length && text[i] != '"') i += if (text[i] == '\\') 2 else 1
+            return i + 1
+        }
+        if (text[i] == '{' || text[i] == '[') {
+            var depth = 0
+            while (i < text.length) {
+                val c = text[i]
+                if (c == '"') {
+                    i = valueEnd(text, i) - 1
+                } else if (c == '{' || c == '[') {
+                    depth++
+                } else if ((c == '}' || c == ']') && --depth == 0) {
+                    return i + 1
+                }
+                i++
+            }
+            return text.length
+        }
+        while (i < text.length && text[i] !in ",}] \t\n\r") i++
+        return i
+    }
+
+    public enum class VariableSource { DEFAULT, ENV }
+
+    /** A variable that is set, as text, and where it was set, so the inspector can say both. */
+    public data class Variable(
+        val name: String,
+        val value: String,
+        val source: VariableSource,
+    )
+
+    /** `baseUrl` from the env file or else the default, then `signals` and `headers` when the file sets them. */
+    public fun mergeVariables(
+        defaultUrl: String,
+        env: Env,
+    ): List<Variable> {
+        val out = ArrayList<Variable>()
+        out +=
+            if (env.baseUrl != null) {
+                Variable("baseUrl", env.baseUrl, VariableSource.ENV)
+            } else {
+                Variable("baseUrl", defaultUrl.trimEnd('/'), VariableSource.DEFAULT)
+            }
+        env.signals?.let { out += Variable("signals", it, VariableSource.ENV) }
+        env.headers?.let { h -> out += Variable("headers", h.joinToString("\n") { (k, v) -> "$k: $v" }, VariableSource.ENV) }
         return out
     }
+
+    /** The values by name, for substitution. */
+    public fun variableValues(vars: List<Variable>): Map<String, String> = vars.associate { it.name to it.value }
+
+    /** One line per variable; only a value the env file does not set is marked, as the default. */
+    public fun describeVariables(vars: List<Variable>): String =
+        vars.joinToString("\n") {
+            val value = if (it.value.isEmpty()) "(none)" else it.value.split("\n").joinToString("; ")
+            "${it.name} = $value" + if (it.source == VariableSource.DEFAULT) "   (default)" else ""
+        }
 
     public data class Substituted(
         val text: String,
@@ -193,22 +339,143 @@ public object Requests {
         return Substituted(out, missing.toList())
     }
 
+    public enum class Field(
+        internal val label: String,
+    ) {
+        URL("URL"),
+        SIGNALS("signals"),
+        HEADERS("headers"),
+    }
+
+    /** The one field each variable stands in. */
+    private val HOME = mapOf("baseUrl" to Field.URL, "signals" to Field.SIGNALS, "headers" to Field.HEADERS)
+
+    private fun belongsIn(
+        name: String,
+        field: Field,
+    ): Boolean = HOME[name] == field
+
     public data class Resolved(
         val request: SavedRequest,
-        val missing: List<String>,
+        val errors: List<String>,
+        /** The keys the request needs that the env file does not set, for the inspector to add. */
+        val unset: List<String>,
     )
 
+    /** Fill the variables into a request; anything that cannot be filled is reported. */
     public fun resolveRequest(
         r: SavedRequest,
-        vars: Map<String, String>,
+        vars: List<Variable>,
     ): Resolved {
-        val url = substitute(r.url, vars)
-        val signals = substitute(r.signals, vars)
-        val headers = substitute(r.headers, vars)
-        return Resolved(
-            r.copy(url = url.text, signals = signals.text, headers = headers.text),
-            (url.missing + signals.missing + headers.missing).distinct(),
-        )
+        val values = variableValues(vars)
+        val errors = LinkedHashSet<String>()
+        val unset = LinkedHashSet<String>()
+
+        fun fill(
+            text: String,
+            field: Field,
+        ): String =
+            VARIABLE.replace(text) { m ->
+                val name = m.groupValues[1]
+                when {
+                    name !in ENV_KEYS -> {
+                        errors += "{{$name}} is not a variable. Use {{baseUrl}}, {{signals}} or {{headers}}."
+                        m.value
+                    }
+
+                    !belongsIn(name, field) -> {
+                        errors += "{{$name}} belongs in the ${HOME.getValue(name).label} field."
+                        m.value
+                    }
+
+                    name !in values -> {
+                        errors += "{{$name}} is not set. Add \"$name\" to $ENV_FILE."
+                        unset += name
+                        m.value
+                    }
+
+                    else -> {
+                        values.getValue(name)
+                    }
+                }
+            }
+        val url = fill(r.url, Field.URL)
+        val signals = fill(r.signals, Field.SIGNALS)
+        val headers = fill(r.headers, Field.HEADERS)
+        val request = r.copy(url = url, signals = signals, headers = headers)
+        return Resolved(request, errors.toList(), unset.toList())
+    }
+
+    /**
+     * The text of `.streamlord/env.json` with [keys] added after what is there: `baseUrl` with its
+     * current value, `signals` and `headers` as empty objects to fill in. A missing file is written
+     * with `baseUrl` first. The text is extended rather than written anew, so the user's own layout
+     * and values stay as they were; null when it is not a JSON object and cannot be extended safely.
+     */
+    public fun withEnvVariables(
+        text: String?,
+        keys: List<String>,
+        baseUrl: String,
+    ): String? {
+        fun valueOf(key: String) = if (key == "baseUrl") JsonString(baseUrl).toJson() else "{}"
+        if (text == null) {
+            val entries = listOf("baseUrl") + keys.filter { it != "baseUrl" }
+            return entries.joinToString(",\n", "{\n", "\n}\n") { "  ${JsonString(it).toJson()}: ${valueOf(it)}" }
+        }
+        val raw =
+            try {
+                JsonParser.parse(text) as? JsonObject ?: return null
+            } catch (_: Exception) {
+                return null
+            }
+        val missing = keys.distinct().filter { it !in raw }
+        if (missing.isEmpty()) return text
+        val close = text.lastIndexOf('}')
+        val before = text.substring(0, close).trimEnd(' ', '\t', '\n', '\r')
+        val added = missing.joinToString(",\n") { "  ${JsonString(it).toJson()}: ${valueOf(it)}" }
+        return before + (if (before.endsWith("{")) "\n" else ",\n") + added + "\n" + text.substring(close)
+    }
+
+    private val BASE_URL_VARIABLE = Regex("""\{\{\s*baseUrl\s*\}\}""")
+
+    /**
+     * Where the `{{baseUrl}}` of a URL came from, for a server that could not be reached: a value
+     * left at its default is the usual reason, and nothing on screen said so.
+     */
+    public fun unreachableHint(
+        url: String,
+        vars: List<Variable>,
+    ): String? {
+        val baseUrl = vars.firstOrNull { it.name == "baseUrl" } ?: return null
+        if (!BASE_URL_VARIABLE.containsMatchIn(url)) return null
+        return if (baseUrl.source == VariableSource.DEFAULT) {
+            "{{baseUrl}} is ${baseUrl.value}, the default. Set baseUrl in $ENV_FILE if your server listens elsewhere."
+        } else {
+            "{{baseUrl}} is ${baseUrl.value}, from $ENV_FILE."
+        }
+    }
+
+    /** What to offer after `{{`, and the range to replace with `{{name}}`, closing braces already typed included. */
+    public data class Completion(
+        val from: Int,
+        val to: Int,
+        val items: List<Variable>,
+    )
+
+    private val OPEN_VARIABLE = Regex("""\{\{\s*([A-Za-z]*)$""")
+
+    /** The variables to offer after `{{` at [caret]: those the field takes and the file sets. */
+    public fun variableCompletions(
+        text: String,
+        caret: Int,
+        field: Field,
+        vars: List<Variable>,
+    ): Completion? {
+        val m = OPEN_VARIABLE.find(text.substring(0, caret)) ?: return null
+        val prefix = m.groupValues[1].lowercase()
+        val items = vars.filter { belongsIn(it.name, field) && it.name.lowercase().startsWith(prefix) }
+        if (items.isEmpty()) return null
+        return Completion(m.range.first, if (text.startsWith("}}", caret)) caret + 2 else caret, items)
     }
 
     /** The request as the Datastar client would send it, one identity for the recent list. */

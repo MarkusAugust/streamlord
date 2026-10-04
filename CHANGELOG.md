@@ -6,6 +6,14 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `streamlord-analysis`: `Requests.parseEnv`, which reads `.streamlord/env.json` with its three
+  keys and reports anything else, and `mergeVariables`, `describeVariables`, `withEnvVariables`,
+  `unreachableHint`, `variableCompletions` and `newRequestLabel`, which the Stream Inspector in
+  both editors uses. `resolveRequest` now takes those variables and returns errors and the keys
+  that are not set; `parseEnvFile` is gone.
+
 ### Fixed
 
 - `streamlord-analysis`, for both editors: a Spring method took the `@RequestMapping` prefix of

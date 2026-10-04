@@ -20,7 +20,7 @@
           },
           "url": {
             "type": "string",
-            "description": "May use {{baseUrl}} and other variables."
+            "description": "May use {{baseUrl}}, set in .streamlord/env.json."
           },
           "method": {
             "type": "string",
@@ -39,14 +39,14 @@
               "string",
               "object"
             ],
-            "description": "Signals as JSON text or an object."
+            "description": "Signals as JSON text or an object. May use {{signals}}."
           },
           "headers": {
             "type": [
               "string",
               "object"
             ],
-            "description": "Headers as 'Name: value' lines or an object."
+            "description": "Headers as 'Name: value' lines or an object. May use {{headers}}."
           }
         }
       }

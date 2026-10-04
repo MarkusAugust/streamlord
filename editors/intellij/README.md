@@ -73,12 +73,37 @@ signals and headers; every SSE event arrives decoded, and the signal store is ke
 the client would keep it. Non-SSE Datastar responses are shown with their `datastar-*` headers.
 
 - **Saved requests** live in `.streamlord/inspector.json` in the project, the same file the VS
-  Code extension uses (commit it to share with the team, or ignore it). Save, load and delete
-  from the panel, or edit the file; it has a JSON schema.
+  Code extension uses (commit it to share with the team, or ignore it). Save one with **Save**,
+  and pick it again from the Request list, which also holds the recent ones and says how many
+  of each it has. **Delete** removes the selected one.
 - **Recent** requests are remembered automatically, and the last one is prefilled on open.
-- **Variables**: `{{baseUrl}}` and any other `{{name}}` in URL, headers and signals. Values come
-  from Settings | Tools | Streamlord, overridden by `.streamlord/env.json` in the project, which
-  is the place for tokens and should be git-ignored. `{{baseUrl}}` defaults to the setting.
+- **Variables** live in `.streamlord/env.json` in the project, and there are three:
+
+  ```json
+  {
+    "baseUrl": "http://127.0.0.1:8081",
+    "signals": { "search": "ash" },
+    "headers": { "Authorization": "Bearer dev-token" }
+  }
+  ```
+
+  | Variable | Use it in | Becomes |
+  |---|---|---|
+  | `{{baseUrl}}` | the URL | the text, without a trailing slash |
+  | `{{signals}}` | the signals field | the object, as written in the file |
+  | `{{headers}}` | the headers field | one `Name: value` line per entry |
+
+  Type `{{` in a field to pick from the ones that are set. Without `baseUrl` in the file,
+  `{{baseUrl}}` is the Default base URL setting, which is `http://localhost:8080` unless you
+  change it.
+
+  The Variables box in the panel lists each value, and marks `baseUrl` when it is the default.
+  **Edit variables** opens the file, creating it with `baseUrl` filled in, and the panel picks
+  up the file as you save it. Any other key, or a value of the wrong kind, is reported by name
+  and stops the request until it is fixed; the file also has a JSON schema, so the editor marks
+  it as you type. The file is the place for local hosts and tokens, so keep it out of version
+  control. A server that cannot be reached is reported together with the `{{baseUrl}}` it was
+  reached through.
 - **Gutter icons** on every Ktor route (`route("/api") { get("/feed") }`) and Spring mapping
   (`@GetMapping("/feed")` under a class `@RequestMapping`): "Open in Stream Inspector" prefills
   method and `{{baseUrl}}` + path, asking for `{id}` parameters.
@@ -97,9 +122,8 @@ Settings | Tools | Streamlord:
 | Attribute prefix | `data-` | `data-star-` when you load the aliased bundle. |
 | Inject HTML into Kotlin strings | on | Strings that open with a tag, without `@Language("HTML")`. |
 | Leave attribute names to the Datastar plugin | on | No double listing in HTML files when the official plugin is installed. |
-| Default base URL | `http://localhost:8080/` | `{{baseUrl}}` unless the variables or `.streamlord/env.json` define it. |
+| Default base URL | `http://localhost:8080/` | `{{baseUrl}}` unless `.streamlord/env.json` sets `baseUrl`. |
 | Saved requests file | `.streamlord/inspector.json` | Project-relative. |
-| Variables | none | `name=value` per line, for `{{name}}` placeholders. |
 | Gutter icons on routes | on | "Open in Stream Inspector" on Ktor and Spring routes. |
 
 The inspections are under Settings | Editor | Inspections | Streamlord, one per family

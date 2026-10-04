@@ -1,5 +1,8 @@
 package io.github.markusaugust.streamlord.intellij
 
+import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.sun.net.httpserver.HttpServer
 import io.github.markusaugust.streamlord.analysis.DatastarFrame
@@ -222,7 +225,60 @@ class InspectorTest : BasePlatformTestCase() {
         assertEquals(listOf("GET /b", "GET /a"), state.recent().map { it.name })
         assertEquals("/b", state.lastUsed()?.url)
 
-        assertEquals("http://localhost:8080", store.variables()["baseUrl"])
+        val baseUrl = store.environment().vars.single()
+        assertEquals("http://localhost:8080", baseUrl.value)
+    }
+
+    fun `test variables come from the env file, which is judged and extended`() {
+        val store = RequestStore.getInstance(project)
+        assertEquals(
+            RequestStore.Environment(
+                listOf(Requests.Variable("baseUrl", "http://localhost:8080", Requests.VariableSource.DEFAULT)),
+                emptyList(),
+            ),
+            store.environment(),
+        )
+        val (file, extended) = store.defineVariables(listOf("signals"))
+        try {
+            assertTrue(extended)
+            assertTrue(file.path.endsWith("/.streamlord/env.json"))
+            assertEquals("{\n  \"baseUrl\": \"http://localhost:8080\",\n  \"signals\": {}\n}\n", String(file.contentsToByteArray()))
+            assertEquals(
+                listOf(
+                    Requests.Variable("baseUrl", "http://localhost:8080", Requests.VariableSource.ENV),
+                    Requests.Variable("signals", "{}", Requests.VariableSource.ENV),
+                ),
+                store.environment().vars,
+            )
+            WriteCommandAction.runWriteCommandAction(project) { VfsUtil.saveText(file, "{\"csrf\": \"x\"}") }
+            assertEquals(
+                RequestStore.Environment(
+                    listOf(Requests.Variable("baseUrl", "http://localhost:8080", Requests.VariableSource.DEFAULT)),
+                    listOf(".streamlord/env.json is not valid: \"csrf\" is not a known key. Use baseUrl, signals or headers."),
+                ),
+                store.environment(),
+            )
+        } finally {
+            WriteCommandAction.runWriteCommandAction(project) { file.delete(this) }
+        }
+    }
+
+    fun `test variables follow what an open editor holds, saved or not`() {
+        val store = RequestStore.getInstance(project)
+        val (file, _) = store.defineVariables(emptyList())
+        val documents = FileDocumentManager.getInstance()
+        try {
+            val document = documents.getDocument(file)!!
+            WriteCommandAction.runWriteCommandAction(project) { document.setText("{\"baseUrl\": \"http://unsaved:2\"}") }
+            val baseUrl = store.environment().vars.single()
+            assertEquals("http://unsaved:2", baseUrl.value)
+            store.defineVariables(listOf("signals"))
+            assertEquals("{\"baseUrl\": \"http://unsaved:2\",\n  \"signals\": {}\n}", document.text)
+            assertEquals("{\n  \"baseUrl\": \"http://localhost:8080\"\n}\n", String(file.contentsToByteArray()))
+        } finally {
+            documents.saveAllDocuments()
+            WriteCommandAction.runWriteCommandAction(project) { file.delete(this) }
+        }
     }
 
     fun `test routes get a gutter marker`() {

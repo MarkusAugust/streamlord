@@ -5,6 +5,8 @@ import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.editor.EditorFactory
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
@@ -14,6 +16,7 @@ import com.intellij.openapi.vfs.newvfs.BulkFileListener
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent
 import com.intellij.ui.JBColor
 import com.intellij.ui.OnePixelSplitter
+import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
 import com.intellij.ui.components.JBScrollPane
@@ -84,7 +87,15 @@ class InspectorPanel(
     private val status = JBLabel("idle")
     private val frames = JPanel().apply { layout = BoxLayout(this, BoxLayout.Y_AXIS) }
     private val storeView = JBTextArea("{}").mono().apply { isEditable = false }
-    private val variablesView = JBTextArea("{}").mono().apply { isEditable = false }
+    private val variablesView = JBTextArea("").mono().apply { isEditable = false }
+    private val variableErrors =
+        JBTextArea("").apply {
+            isEditable = false
+            isOpaque = false
+            lineWrap = true
+            wrapStyleWord = true
+            foreground = JBColor.RED
+        }
     private val deleteButton = JButton("Delete")
     private val stopButton = JButton("Stop")
 
@@ -151,8 +162,25 @@ class InspectorPanel(
                 }
             },
         )
+        // The Variables box follows the env file as it is typed, as Connect reads it.
+        EditorFactory.getInstance().eventMulticaster.addDocumentListener(
+            object : com.intellij.openapi.editor.event.DocumentListener {
+                override fun documentChanged(event: com.intellij.openapi.editor.event.DocumentEvent) {
+                    val file = FileDocumentManager.getInstance().getFile(event.document) ?: return
+                    if (file.name == "env.json" && file.parent?.name == ".streamlord") {
+                        ApplicationManager.getApplication().invokeLater { pushRequests(null) }
+                    }
+                }
+            },
+            parentDisposable,
+        )
         com.intellij.openapi.util.Disposer
             .register(parentDisposable) { stop() }
+        val vars = { store.environment().vars }
+        val typing = { !filling }
+        VariableCompletion(url, Requests.Field.URL, vars, typing)
+        VariableCompletion(signalsField, Requests.Field.SIGNALS, vars, typing)
+        VariableCompletion(headersField, Requests.Field.HEADERS, vars, typing)
         pushRequests(store.lastUsed() ?: SavedRequest("", "{{baseUrl}}/"))
     }
 
@@ -183,7 +211,7 @@ class InspectorPanel(
                 scrollCell(signalsField).align(AlignX.FILL).applyToComponent { emptyText.text = "{\"search\": \"ash\"}" }
             }
             row("Headers:") {
-                scrollCell(headersField).align(AlignX.FILL).applyToComponent { emptyText.text = "X-Csrf-Token: {{csrf}}" }
+                scrollCell(headersField).align(AlignX.FILL).applyToComponent { emptyText.text = "Authorization: Bearer token" }
             }
             row {
                 button("Connect") { connect() }.applyToComponent { icon = AllIcons.Actions.Execute }
@@ -200,7 +228,6 @@ class InspectorPanel(
                     storeView.text = "{}"
                 }
                 button("Copy as curl") { copyCurl() }.applyToComponent { toolTipText = "Copy an equivalent curl command" }
-                link("edit file") { openFile() }
                 cell(status).align(AlignX.RIGHT).resizableColumn()
             }
         }
@@ -218,7 +245,19 @@ class InspectorPanel(
             row { scrollCell(storeView).align(com.intellij.ui.dsl.builder.Align.FILL).resizableColumn() }.resizableRow()
             collapsibleGroup("Variables") {
                 row { scrollCell(variablesView).align(AlignX.FILL) }
-            }
+                row { cell(variableErrors).align(AlignX.FILL) }
+                row {
+                    link("Edit variables") { editVariables(emptyList()) }
+                        .applyToComponent { toolTipText = "Open ${Requests.ENV_FILE}, creating it with baseUrl" }
+                }
+                row {
+                    comment(
+                        "Type {{ in a field to pick one. {{baseUrl}} goes in the URL, {{signals}} in the signals and " +
+                            "{{headers}} in the headers. ${Requests.ENV_FILE} holds them, and is meant for local hosts and tokens: " +
+                            "keep it out of version control.",
+                    )
+                }
+            }.expanded = true
         }
 
     // ---- state ---------------------------------------------------------------------------------
@@ -243,7 +282,7 @@ class InspectorPanel(
 
     private fun refresh() {
         if (filling) return
-        val vars = store.variables()
+        val vars = Requests.variableValues(store.environment().vars)
         resolved.text = if ("{{" in url.text) Requests.substitute(url.text, vars).text else ""
         val f = fields()
         val l = loaded
@@ -255,12 +294,15 @@ class InspectorPanel(
     fun pushRequests(current: SavedRequest?) {
         val saved = store.saved()
         val recent = store.recent()
-        variablesView.text = store.variables().entries.joinToString(",\n", "{\n", "\n}") { "  \"${it.key}\": \"${it.value}\"" }
+        val env = store.environment()
+        variablesView.text = Requests.describeVariables(env.vars)
+        variableErrors.text = env.errors.joinToString("\n")
+        variableErrors.isVisible = env.errors.isNotEmpty()
         filling = true
         val model = choices.model as DefaultComboBoxModel<Choice>
         val previous = (choices.selectedItem as? Choice)?.label
         model.removeAllElements()
-        model.addElement(Choice("New request…", null, false))
+        model.addElement(Choice(Requests.newRequestLabel(saved.size, recent.size), null, false))
         for (r in saved) model.addElement(Choice(r.name, r, true))
         for (r in recent) model.addElement(Choice("recent: ${r.name}", r, false))
         if (current != null) {
@@ -325,12 +367,26 @@ class InspectorPanel(
         pushRequests(SavedRequest("", url.text, method.selectedItem as String, signalsField.text, headersField.text))
     }
 
-    private fun copyCurl() {
-        val (request, missing) = Requests.resolveRequest(fields(), store.variables())
-        if (missing.isNotEmpty()) {
-            error("Unknown variables: ${missing.joinToString(", ") { "{{$it}}" }}")
-            return
+    /**
+     * The request with its variables filled in, or null after the reason is shown: an invalid env
+     * file, or a variable that is unknown, misplaced or not set.
+     */
+    private fun resolve(raw: SavedRequest): Pair<SavedRequest, List<Requests.Variable>>? {
+        val env = store.environment()
+        if (env.errors.isNotEmpty()) {
+            error(env.errors.joinToString(" "), emptyList())
+            return null
         }
+        val resolved = Requests.resolveRequest(raw, env.vars)
+        if (resolved.errors.isNotEmpty()) {
+            error(resolved.errors.joinToString(" "), resolved.unset)
+            return null
+        }
+        return resolved.request to env.vars
+    }
+
+    private fun copyCurl() {
+        val (request, _) = resolve(fields()) ?: return
         try {
             CopyPasteManager.getInstance().setContents(java.awt.datatransfer.StringSelection(Requests.toCurl(request)))
             notify("Streamlord: curl command copied.")
@@ -339,23 +395,21 @@ class InspectorPanel(
         }
     }
 
-    private fun openFile() {
-        val file = store.ensureFile() ?: return
-        FileEditorManager.getInstance(project).openFile(file, true)
+    /** Add [names] to the env file, creating it when it is missing, and open it. */
+    private fun editVariables(names: List<String>) {
+        try {
+            val (file, extended) = store.defineVariables(names)
+            FileEditorManager.getInstance(project).openFile(file, true)
+            if (!extended) error("${Requests.ENV_FILE} is not a JSON object, so nothing was added to it.")
+        } catch (e: Exception) {
+            error(e.message ?: "Could not open ${Requests.ENV_FILE}.")
+        }
     }
 
     private fun connect() {
         stop()
         val raw = fields()
-        val (request, missing) = Requests.resolveRequest(raw, store.variables())
-        if (missing.isNotEmpty()) {
-            error(
-                "Unknown variables: ${missing.joinToString(
-                    ", ",
-                ) { "{{$it}}" }}. Define them in Settings | Tools | Streamlord or in ${Requests.ENV_FILE}.",
-            )
-            return
-        }
+        val (request, vars) = resolve(raw) ?: return
         try {
             JsonParser.parse(Requests.compactSignals(request.signals))
         } catch (e: Exception) {
@@ -390,7 +444,12 @@ class InspectorPanel(
 
                     override fun onNonSse(response: StreamClient.NonSseResponse) = later { addNonSse(response) }
 
-                    override fun onError(message: String) = later { error(message) }
+                    override fun onError(message: String) =
+                        later {
+                            val unreachable = message.startsWith("Connection refused") || message.startsWith("Host not found")
+                            val hint = if (unreachable) Requests.unreachableHint(raw.url, vars) else null
+                            if (hint != null) error("$message $hint", emptyList()) else error(message)
+                        }
                 },
             )
     }
@@ -491,13 +550,27 @@ class InspectorPanel(
         prepend(card(listOf(r.http, r.contentType.ifEmpty { "no content-type" }), JBColor.foreground(), "non-SSE response", rows))
     }
 
-    private fun error(message: String) {
-        prepend(
+    /** An error line; with [define], a link that adds those names to the env file, or opens it when there are none. */
+    private fun error(
+        message: String,
+        define: List<String>? = null,
+    ) {
+        val label =
             JBLabel(message).apply {
                 foreground = JBColor.RED
                 border = JBUI.Borders.empty(2, 4)
-            },
-        )
+            }
+        if (define == null) {
+            prepend(label)
+        } else {
+            val line =
+                JPanel(java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 0, 0)).apply {
+                    isOpaque = false
+                    add(label)
+                    add(ActionLink(if (define.isEmpty()) "Edit variables" else "Add to ${Requests.ENV_FILE}") { editVariables(define) })
+                }
+            prepend(line)
+        }
         setStatus("error", null)
     }
 

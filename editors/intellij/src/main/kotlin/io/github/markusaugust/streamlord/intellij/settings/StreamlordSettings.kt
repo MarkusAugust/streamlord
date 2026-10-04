@@ -21,11 +21,8 @@ class StreamlordSettings : PersistentStateComponent<StreamlordSettings.State> {
         /** The attribute prefix of the Datastar bundle you load: `data-`, or `data-star-` for the aliased bundle. */
         var attributePrefix: String = "data-"
 
-        /** Default value of the `{{baseUrl}}` variable when neither the variables nor `.streamlord/env.json` define it. */
+        /** The value of `{{baseUrl}}` in inspector requests when `.streamlord/env.json` does not set baseUrl. */
         var inspectorDefaultUrl: String = "http://localhost:8080/"
-
-        /** Variables for `{{name}}` placeholders in inspector requests; `.streamlord/env.json` overrides these. */
-        var inspectorVariables: MutableMap<String, String> = LinkedHashMap()
 
         /** Project-relative file holding saved inspector requests. */
         var requestsFile: String = Requests.REQUESTS_FILE
