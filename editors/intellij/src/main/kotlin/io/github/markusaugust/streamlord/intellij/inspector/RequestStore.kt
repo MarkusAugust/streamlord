@@ -4,6 +4,7 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.util.Computable
@@ -89,8 +90,13 @@ class RequestStore(
 
     private fun envFile(): VirtualFile? = baseDir()?.findFileByRelativePath(Requests.ENV_FILE)
 
+    /** The env file as an open editor has it, so Connect uses what is on screen, saved or not. */
     private fun envText(): String? =
-        envFile()?.let { env -> ApplicationManager.getApplication().runReadAction(Computable { VfsUtil.loadText(env) }) }
+        envFile()?.let { env ->
+            ApplicationManager.getApplication().runReadAction(
+                Computable { FileDocumentManager.getInstance().getCachedDocument(env)?.text ?: VfsUtil.loadText(env) },
+            )
+        }
 
     /**
      * Add [keys] to `.streamlord/env.json`, creating it with `baseUrl` when it is missing, and
@@ -111,7 +117,9 @@ class RequestStore(
                         ?: throw IllegalStateException("Cannot create the directory for $path")
                 val name = path.substringAfterLast('/')
                 val vf = dir.findChild(name) ?: dir.createChildData(this, name)
-                VfsUtil.saveText(vf, next ?: "")
+                // An open editor gets an edit it can undo, not a write underneath its unsaved text.
+                val document = FileDocumentManager.getInstance().getCachedDocument(vf)
+                if (document != null) document.setText(next ?: "") else VfsUtil.saveText(vf, next ?: "")
                 file = vf
             }
         }

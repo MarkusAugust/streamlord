@@ -82,12 +82,80 @@ export const ConfigurationTarget = { Global: 1, Workspace: 2, WorkspaceFolder: 3
 
 const noop = () => new Disposable();
 
+export class EventEmitter<T> {
+  private readonly listeners: ((e: T) => void)[] = [];
+  readonly event = (listener: (e: T) => void) => {
+    this.listeners.push(listener);
+    return new Disposable();
+  };
+  fire(e: T): void {
+    for (const l of this.listeners) l(e);
+  }
+  dispose(): void {}
+}
+
+export interface MockUri {
+  path: string;
+  toString: () => string;
+}
+
+const uri = (path: string): MockUri => ({ path, toString: () => `file://${path}` });
+
+export const Uri = {
+  file: uri,
+  joinPath: (base: MockUri, ...parts: string[]) => {
+    const segments = [...base.path.split("/"), ...parts.flatMap((p) => p.split("/"))];
+    const out: string[] = [];
+    for (const seg of segments) {
+      if (seg === "..") out.pop();
+      else if (seg !== "" && seg !== ".") out.push(seg);
+    }
+    return uri(`/${out.join("/")}`);
+  },
+};
+
+/** The disk the store reads and writes, by path. A path not here reads as empty, as before. */
+export const files = new Map<string, Uint8Array>();
+
+/** An open editor's document, which may hold text not yet saved to `files`. */
+export interface OpenDocument {
+  uri: MockUri;
+  text: string;
+  getText(): string;
+  positionAt(offset: number): Position;
+  offsetAt(p: Position): number;
+}
+
+export class WorkspaceEdit {
+  readonly replacements: { uri: MockUri; range: Range; text: string }[] = [];
+  replace(u: MockUri, range: Range, text: string): void {
+    this.replacements.push({ uri: u, range, text });
+  }
+}
+
 export const workspace = {
   onDidSaveTextDocument: noop,
   onDidChangeTextDocument: noop,
   onDidDeleteFiles: noop,
+  onDidChangeConfiguration: noop,
+  createFileSystemWatcher: () => ({ onDidChange: noop, onDidCreate: noop, onDidDelete: noop, dispose: () => {} }),
   findFiles: async () => [],
-  fs: { readFile: async () => new Uint8Array() },
+  workspaceFolders: undefined as { uri: MockUri }[] | undefined,
+  textDocuments: [] as OpenDocument[],
+  applyEdit: async (edit: WorkspaceEdit) => {
+    for (const r of edit.replacements) {
+      const doc = workspace.textDocuments.find((d) => d.uri.toString() === r.uri.toString());
+      if (doc) doc.text = doc.text.slice(0, doc.offsetAt(r.range.start)) + r.text + doc.text.slice(doc.offsetAt(r.range.end));
+    }
+    return true;
+  },
+  fs: {
+    readFile: async (u?: MockUri) => (u && files.get(u.path)) ?? new Uint8Array(),
+    writeFile: async (u: MockUri, bytes: Uint8Array) => {
+      files.set(u.path, bytes);
+    },
+    createDirectory: async () => {},
+  },
   getConfiguration: () => ({ get: <T>(_k: string, d: T) => d, update: async () => {} }),
 };
 

@@ -5,6 +5,8 @@ import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.editor.EditorFactory
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
@@ -159,6 +161,18 @@ class InspectorPanel(
                     }
                 }
             },
+        )
+        // The Variables box follows the env file as it is typed, as Connect reads it.
+        EditorFactory.getInstance().eventMulticaster.addDocumentListener(
+            object : com.intellij.openapi.editor.event.DocumentListener {
+                override fun documentChanged(event: com.intellij.openapi.editor.event.DocumentEvent) {
+                    val file = FileDocumentManager.getInstance().getFile(event.document) ?: return
+                    if (file.name == "env.json" && file.parent?.name == ".streamlord") {
+                        ApplicationManager.getApplication().invokeLater { pushRequests(null) }
+                    }
+                }
+            },
+            parentDisposable,
         )
         com.intellij.openapi.util.Disposer
             .register(parentDisposable) { stop() }

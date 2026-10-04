@@ -15,6 +15,8 @@ export class RequestStore implements vscode.Disposable {
     const watcher = vscode.workspace.createFileSystemWatcher("**/.streamlord/*.json");
     this.disposables.push(watcher, watcher.onDidChange(() => this.onChange.fire()), watcher.onDidCreate(() => this.onChange.fire()), watcher.onDidDelete(() => this.onChange.fire()));
     this.disposables.push(vscode.workspace.onDidChangeConfiguration((e) => e.affectsConfiguration("streamlord.inspector") && this.onChange.fire()));
+    // The Variables box follows the env file as it is typed, as Connect reads it.
+    this.disposables.push(vscode.workspace.onDidChangeTextDocument((e) => e.document.uri.path.endsWith(`/${ENV_FILE}`) && this.onChange.fire()));
   }
 
   private folder(): vscode.WorkspaceFolder | undefined {
@@ -85,9 +87,16 @@ export class RequestStore implements vscode.Disposable {
     return { vars: mergeVariables(defaultUrl, env.errors.length ? parseEnv("{}") : env), errors: env.errors };
   }
 
+  /** The env file as an open editor has it, so Connect uses what is on screen, saved or not. */
+  private openEnv(uri: vscode.Uri): vscode.TextDocument | undefined {
+    return vscode.workspace.textDocuments.find((d) => d.uri.toString() === uri.toString());
+  }
+
   private async envText(): Promise<string | null> {
     const uri = this.fileUri(ENV_FILE);
     if (!uri) return null;
+    const doc = this.openEnv(uri);
+    if (doc) return doc.getText();
     try {
       return Buffer.from(await vscode.workspace.fs.readFile(uri)).toString("utf8");
     } catch {
@@ -106,7 +115,14 @@ export class RequestStore implements vscode.Disposable {
     const baseUrl = (await this.environment()).vars.find((v) => v.name === "baseUrl")?.value ?? "";
     const next = withEnvVariables(text, keys, baseUrl);
     if (next === null) return { uri, extended: false };
-    if (next !== text) {
+    if (next === text) return { uri, extended: true };
+    // An open editor gets an edit it can undo, not a write underneath its unsaved text.
+    const doc = this.openEnv(uri);
+    if (doc) {
+      const edit = new vscode.WorkspaceEdit();
+      edit.replace(uri, new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length)), next);
+      await vscode.workspace.applyEdit(edit);
+    } else {
       await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(uri, ".."));
       await vscode.workspace.fs.writeFile(uri, Buffer.from(next, "utf8"));
     }
