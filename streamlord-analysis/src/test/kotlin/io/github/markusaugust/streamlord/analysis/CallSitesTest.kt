@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.analysis
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 /** The cases of the VS Code extension's `callSites.test.ts`. */
 class CallSitesTest {
@@ -37,6 +38,21 @@ class CallSitesTest {
         assertEquals(listOf("mode-needs-selector"), codes("patchElements(\"<li>x</li>\", mode = APPEND)"))
         assertEquals(emptyList(), kotlin("patchElements(\"<li>x</li>\", mode = someMode)"))
         assertEquals(listOf("missing-id"), codes("patchElements(\"<li>x</li>\", mode = ElementPatchMode.DEFAULT)"))
+    }
+
+    @Test
+    fun `reads the selector and the mode by position when the markup is a trailing lambda`() {
+        assertEquals(emptyList(), kotlin("patchElements(\"#rows\") { li { +\"x\" } }"))
+        assertEquals(emptyList(), kotlin("stream.patchElements(\"#feed\", ElementPatchMode.APPEND) { li { } }"))
+        assertEquals(listOf("mode-needs-selector"), codes("patchElements(null, ElementPatchMode.APPEND) { li { } }"))
+        val src = "patchElements(mode = ElementPatchMode.APPEND) { li { } }"
+        val issue = kotlin(src).single()
+        assertEquals("mode-needs-selector", issue.code)
+        assertEquals(
+            "patchElements(selector = \"\", mode = ElementPatchMode.APPEND) { li { } }",
+            fix(issue, "Add selector").let { src.substring(0, it.start) + it.text + src.substring(it.end) },
+        )
+        assertNull(analyzer.htmlStringAt("patchElements(\"#rows\") { li { } }", 16))
     }
 
     @Test

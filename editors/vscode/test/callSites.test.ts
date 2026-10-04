@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { analyzeKotlin } from "../src/analyze.ts";
+import { analyzeKotlin, htmlStringAt } from "../src/analyze.ts";
 import type { Fix, Issue } from "../src/expression.ts";
 
 const opts = { prefix: "data-", checkHtmlAttributes: true };
@@ -25,6 +25,17 @@ describe("patch call sites", () => {
     assert.deepEqual(codes(analyzeKotlin('patchElements("<li>x</li>", mode = APPEND)', opts)), ["mode-needs-selector"]);
     assert.deepEqual(analyzeKotlin('patchElements("<li>x</li>", mode = someMode)', opts), []);
     assert.deepEqual(codes(analyzeKotlin('patchElements("<li>x</li>", mode = ElementPatchMode.DEFAULT)', opts)), ["missing-id"]);
+  });
+
+  it("reads the selector and the mode by position when the markup is a trailing lambda", () => {
+    assert.deepEqual(analyzeKotlin('patchElements("#rows") { li { +"x" } }', opts), []);
+    assert.deepEqual(analyzeKotlin('stream.patchElements("#feed", ElementPatchMode.APPEND) { li { } }', opts), []);
+    assert.deepEqual(codes(analyzeKotlin("patchElements(null, ElementPatchMode.APPEND) { li { } }", opts)), ["mode-needs-selector"]);
+    const src = "patchElements(mode = ElementPatchMode.APPEND) { li { } }";
+    const issues = analyzeKotlin(src, opts);
+    assert.deepEqual(codes(issues), ["mode-needs-selector"]);
+    assert.equal(apply(src, fix(issues[0]!, "Add selector")), 'patchElements(selector = "", mode = ElementPatchMode.APPEND) { li { } }');
+    assert.equal(htmlStringAt('patchElements("#rows") { li { } }', 16), null);
   });
 
   it("finds the end of a script whatever comes before it", () => {

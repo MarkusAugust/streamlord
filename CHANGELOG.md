@@ -6,6 +6,20 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `streamlord-analysis`, for both editors: a Spring method took the `@RequestMapping` prefix of
+  the class before it in the file. A class without `@RequestMapping` now has no prefix, a nested
+  class keeps its mapping to itself, and a class mapping is no longer reported as a route when
+  another annotation with parentheses in a string, such as `@PreAuthorize("hasRole('ADMIN')")`,
+  stands before the class.
+- `streamlord-analysis`, for both editors: `patchElements("#rows") { li { } }`, the kotlinx.html
+  form, had its selector read as markup and flagged as text outside an element, and a mode
+  without a selector went unreported. With a trailing lambda the first string is the selector
+  and the second argument the mode.
+- `streamlord-analysis`: `Requests.sendableUrl` gives the URL the Stream Inspector sends for the
+  URL of a curl line, or the reason it cannot be sent as written.
+
 ## [0.10.1] - 2026-10-04
 
 ### Fixed

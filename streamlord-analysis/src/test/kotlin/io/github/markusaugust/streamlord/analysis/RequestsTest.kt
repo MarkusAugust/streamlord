@@ -124,6 +124,41 @@ class RequestsTest {
     }
 
     @Test
+    fun `sends the url of the curl line or says why not`() {
+        val cases =
+            listOf(
+                Triple(
+                    "http://h:8080/api/x?flag&q=a%20b+c&s='x'&a%5B%5D=1#frag",
+                    "http://h:8080/api/x?flag&q=a%20b+c&s='x'&a%5B%5D=1",
+                    null,
+                ),
+                Triple("http://h/x?filter[name]=1", null, "The URL holds [, which cannot be sent as written. Write it as %5B."),
+                Triple("HTTPS://h/søk/\uD83D\uDE00", "HTTPS://h/s%C3%B8k/%F0%9F%98%80", null),
+                Triple("http://[::1]:8080/x", "http://[::1]:8080/x", null),
+                Triple("http://h/x\uD83D", "http://h/x%EF%BF%BD", null),
+                Triple("/api/x", null, "Not an absolute URL: /api/x. Start it with http:// or https://, or with {{baseUrl}}."),
+                Triple("{{base}}/x", null, "Not an absolute URL: {{base}}/x. Start it with http:// or https://, or with {{baseUrl}}."),
+                Triple(
+                    "localhost:8080/x",
+                    null,
+                    "Not an absolute URL: localhost:8080/x. Start it with http:// or https://, or with {{baseUrl}}.",
+                ),
+                Triple("ftp://h/x", null, "Only http:// and https:// URLs can be sent: ftp://h/x"),
+                Triple("http:///x", null, "No host in http:///x."),
+                Triple("http://h/a b", null, "The URL holds a space or a control character, which cannot be sent. Write a space as %20."),
+                Triple("http://h/users/{id}/x", null, "The URL still holds {id}. Fill in the path parameter before sending."),
+                Triple("http://h/p\"q", null, "The URL holds \", which cannot be sent as written. Write it as %22."),
+                Triple("http://h/p|q", null, "The URL holds |, which cannot be sent as written. Write it as %7C."),
+                Triple("http://h/x/[y]", null, "The URL holds [, which cannot be sent as written. Write it as %5B."),
+                Triple("http://h/p%zz", null, "The URL holds a % that starts no escape. Write it as %25."),
+                Triple("http://bø.no/x", null, "The host holds ø, which cannot be sent as written. Write the host in its xn-- form."),
+            )
+        for ((url, sent, error) in cases) {
+            assertEquals(Requests.SendableUrl(sent, error), Requests.sendableUrl(url), url)
+        }
+    }
+
+    @Test
     fun `saved names sort by lowercase code units, not by locale`() {
         val names = listOf("b", "a", "B", "_x", "Zeta", "éa", "zz", "a-b", "ab", "A", "10", "9", "ΌΣ", "όσ2")
         val file = names.fold(RequestsFile.EMPTY) { acc, name -> Requests.upsert(acc, req(name = name)) }

@@ -42,6 +42,9 @@ public object Requests {
     private val PATH_PARAM = Regex("""\{([A-Za-z_][A-Za-z0-9_]*)(\?)?\}""")
     private val OPTIONAL_SEGMENT = Regex("""/\{([A-Za-z_][A-Za-z0-9_]*)\?\}""")
     private val ANY_PARAM = Regex("""\{([A-Za-z_][A-Za-z0-9_]*)\??\}""")
+    private val ABSOLUTE = Regex("""^([A-Za-z][A-Za-z0-9+.-]*)://""")
+    private val PATH_PARAM_TEXT = Regex("""\{[^{}]*\}""")
+    private const val NOT_SENDABLE = "\"<>\\^`|"
 
     /** Parse the requests file leniently: bad entries are dropped, never fatal. */
     public fun parseRequestsFile(text: String): RequestsFile {
@@ -298,6 +301,80 @@ public object Requests {
     }
 
     private fun shellQuote(s: String): String = "'" + s.replace("'", "'\\''") + "'"
+
+    /** The URL to send, or why it cannot be sent; exactly one of the two is set. */
+    public data class SendableUrl(
+        val url: String?,
+        val error: String?,
+    )
+
+    /**
+     * The URL of the curl line as the inspector sends it, or why it cannot be sent as written. The
+     * text goes out unchanged but for two things every client does alike: the fragment is dropped,
+     * and a character beyond ASCII is sent as UTF-8 escapes. Anything curl refuses, globs away or
+     * java.net.URI rejects is refused here, and the VS Code extension refuses the same URLs.
+     */
+    public fun sendableUrl(url: String): SendableUrl {
+        fun refuse(message: String) = SendableUrl(null, message)
+        val scheme =
+            ABSOLUTE.find(url)?.groupValues?.get(1)
+                ?: return refuse("Not an absolute URL: $url. Start it with http:// or https://, or with {{baseUrl}}.")
+        if (!scheme.equals("http", ignoreCase = true) && !scheme.equals("https", ignoreCase = true)) {
+            return refuse("Only http:// and https:// URLs can be sent: $url")
+        }
+        val target = url.substringBefore('#')
+        val start = scheme.length + 3
+        val authorityEnd = target.indexOfAny(charArrayOf('/', '?'), start).let { if (it < 0) target.length else it }
+        if (authorityEnd == start) return refuse("No host in $url.")
+        val out = StringBuilder(target.substring(0, start))
+        var i = start
+        while (i < target.length) {
+            val c = target[i]
+            when {
+                c <= ' ' || c == '\u007f' -> {
+                    return refuse("The URL holds a space or a control character, which cannot be sent. Write a space as %20.")
+                }
+
+                c == '{' || c == '}' -> {
+                    val param = PATH_PARAM_TEXT.find(target)?.value ?: c.toString()
+                    return refuse("The URL still holds $param. Fill in the path parameter before sending.")
+                }
+
+                // Brackets belong to an IPv6 host. Elsewhere curl reads them as a range to expand.
+                c in NOT_SENDABLE || ((c == '[' || c == ']') && i >= authorityEnd) -> {
+                    return refuse("The URL holds $c, which cannot be sent as written. Write it as ${escape(c.toString())}.")
+                }
+
+                c == '%' && !(i + 2 < target.length && target[i + 1].isHexDigit() && target[i + 2].isHexDigit()) -> {
+                    return refuse("The URL holds a % that starts no escape. Write it as %25.")
+                }
+
+                c.code > 0x7f -> {
+                    val pair = c.isHighSurrogate() && i + 1 < target.length && target[i + 1].isLowSurrogate()
+                    val cp = if (pair) target.codePointAt(i) else c.code
+                    // A surrogate without its partner goes out as U+FFFD, as TextEncoder sends it.
+                    val char = if (Character.isSurrogate(c) && !pair) "\uFFFD" else String(Character.toChars(cp))
+                    if (i < authorityEnd) {
+                        return refuse("The host holds $char, which cannot be sent as written. Write the host in its xn-- form.")
+                    }
+                    out.append(escape(char))
+                    i += Character.charCount(cp)
+                    continue
+                }
+
+                else -> {
+                    out.append(c)
+                }
+            }
+            i++
+        }
+        return SendableUrl(out.toString(), null)
+    }
+
+    private fun Char.isHexDigit(): Boolean = this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'
+
+    /** UTF-8 escapes in capitals. */
+    private fun escape(s: String): String = s.toByteArray(Charsets.UTF_8).joinToString("") { "%%%02X".format(it.toInt() and 0xff) }
 
     /** A curl command equivalent to what the inspector sends. Variables must already be resolved. */
     public fun toCurl(r: SavedRequest): String {

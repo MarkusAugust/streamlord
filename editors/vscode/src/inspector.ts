@@ -1,8 +1,8 @@
 import * as vscode from "vscode";
-import { fillPath, pathParams, resolveRequest, toCurl, type SavedRequest } from "./requests.ts";
+import { compactSignals, fillPath, parseHeaderLines, pathParams, resolveRequest, toCurl, type SavedRequest } from "./requests.ts";
 import type { RequestStore } from "./requestStore.ts";
 import { mergePatch, type DatastarFrame } from "./sse.ts";
-import { openStream, parseHeaderLines } from "./streamClient.ts";
+import { openStream } from "./streamClient.ts";
 
 /**
  * The Stream Inspector: a webview that opens a Datastar request against your running server and
@@ -132,9 +132,8 @@ export class Inspector {
       this.post({ type: "error", message: `Unknown variables: ${missing.map((m) => `{{${m}}}`).join(", ")}. Define them in settings (streamlord.inspector.variables) or .streamlord/env.json.` });
       return;
     }
-    let signals: unknown;
     try {
-      signals = request.signals.trim() ? JSON.parse(request.signals) : {};
+      JSON.parse(compactSignals(request.signals));
     } catch (e) {
       this.post({ type: "error", message: `Signals are not valid JSON: ${(e as Error).message}` });
       return;
@@ -143,7 +142,7 @@ export class Inspector {
     void this.pushRequests();
     this.abort = new AbortController();
     await openStream(
-      { url: request.url, method: request.method, signals, headers: parseHeaderLines(request.headers) },
+      { url: request.url, method: request.method, signals: request.signals, headers: parseHeaderLines(request.headers) },
       {
         onStatus: (status, detail) => this.post({ type: "status", status, resolvedUrl: request.url, ...(detail ?? {}) }),
         onComment: (text) => this.post({ type: "comment", text, at: Date.now() }),

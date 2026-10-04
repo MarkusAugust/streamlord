@@ -2,6 +2,21 @@
 
 All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here.
 
+## Unreleased
+
+- Stream Inspector: the request goes out as the curl line shows it. The signals are no longer
+  written anew (`\u00e9` was sent as `é` and `</` as `<\/`), and a header the HTTP client will
+  not set, such as `Host`, is reported as such instead of as an invalid URL. A URL that cannot be
+  sent as written, such as a relative one, one that still holds `{id}` or one with a space, is
+  refused with the reason and the way to write it, in the same words in both editors.
+- `patchElements("#rows") { li { } }`, the kotlinx.html form, had its selector read as markup
+  and flagged as text outside an element, and a mode without a selector went unreported. With a
+  trailing lambda the first string is the selector and the second argument the mode.
+- Spring routes: a method took the `@RequestMapping` prefix of the class before it in the
+  file. A class without `@RequestMapping` now has no prefix, a nested class keeps its mapping to
+  itself, and a class mapping is no longer reported as a route when another annotation with
+  parentheses in a string, such as `@PreAuthorize("hasRole('ADMIN')")`, stands before the class.
+
 ## 0.2.0
 
 - Ordinary attributes such as `data-id`, `data-test` and `data-href` are no longer flagged as

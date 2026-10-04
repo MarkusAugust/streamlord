@@ -35,13 +35,12 @@ private val KTOR_CALL =
         """\b(route|get|post|put|patch|delete)\s*(?:\(\s*"([^"\n]*)"\s*(?:,[^(){}\n]*)?\)\s*)?\{|\b(get|post|put|patch|delete)\s*\(\s*"(/[^"\n]*)"\s*\)""",
     )
 private val SPRING_ANNOTATION =
-    Regex("""@(RequestMapping|GetMapping|PostMapping|PutMapping|PatchMapping|DeleteMapping)\s*(?:\(([^)]*)\))?""")
+    Regex("""@(RequestMapping|GetMapping|PostMapping|PutMapping|PatchMapping|DeleteMapping)\b\s*(?:\(([^)]*)\))?""")
 
-// Any modifier may stand between the annotation and `class`, and Spring reads a mapping on an interface too.
-private val ON_CLASS =
-    Regex(
-        """^\s*(?:@\w+(?:\([^)]*\))?\s*)*(?:(?:public|internal|private|protected|open|final|abstract|sealed|data|inner)\s+)*(?:class|interface)\b""",
-    )
+private val MODIFIERS = setOf("public", "internal", "private", "protected", "open", "final", "abstract", "sealed", "data", "inner")
+private val DECLARATIONS = setOf("class", "interface", "object", "fun", "val", "var", "typealias")
+private val CLASS_KEYWORD = Regex("""\b(?:class|interface)\b""")
+private val WORD = Regex("""\w+""")
 private val NAMED_PATH = Regex("""(?:value|path)\s*=\s*(?:\[\s*)?"([^"]*)"""")
 private val POSITIONAL_PATH = Regex("""^\s*(?:\[\s*)?"([^"]*)"""")
 private val REQUEST_METHOD = Regex("""RequestMethod\.([A-Z]+)""")
@@ -132,21 +131,126 @@ private fun annotationPath(args: String): String =
 
 private fun annotationMethod(args: String): String? = REQUEST_METHOD.find(args)?.groupValues?.get(1)
 
+/** The offset just past the annotation at [at], arguments included, whatever parentheses its strings hold. */
+private fun annotationEnd(
+    src: String,
+    mask: BooleanArray,
+    at: Int,
+): Int {
+    var i = at + 1
+    while (i < src.length && (src[i].isLetterOrDigit() || src[i] in "_.:")) i++
+    var j = i
+    while (j < src.length && src[j].isWhitespace()) j++
+    if (j >= src.length || src[j] != '(') return i
+    var depth = 0
+    while (j < src.length) {
+        if (mask[j]) {
+            if (src[j] == '(') {
+                depth++
+            } else if (src[j] == ')' && --depth == 0) {
+                return j + 1
+            }
+        }
+        j++
+    }
+    return src.length
+}
+
+/** The offset of `class` or `interface` when what follows [from] is the rest of a class header, else -1. */
+private fun annotatedClass(
+    src: String,
+    mask: BooleanArray,
+    from: Int,
+): Int {
+    var i = from
+    while (true) {
+        while (i < src.length && (!mask[i] || src[i].isWhitespace())) i++
+        if (i < src.length && src[i] == '@') {
+            i = annotationEnd(src, mask, i)
+            continue
+        }
+        val word = WORD.matchAt(src, i)?.value
+        if (word == "class" || word == "interface") return i
+        if (word == null || word !in MODIFIERS) return -1
+        i += word.length
+    }
+}
+
+private class ClassBody(
+    val keyword: Int,
+    val open: Int,
+    val close: Int,
+)
+
+/** Every class and interface with a body. A header ends at the first top level `{`, or at the next declaration when the class has none. */
+private fun classBodies(
+    src: String,
+    mask: BooleanArray,
+): List<ClassBody> {
+    val bodies = ArrayList<ClassBody>()
+    for (m in CLASS_KEYWORD.findAll(src)) {
+        val at = m.range.first
+        if (!mask[at] || src.regionMatches(at - 2, "::", 0, 2)) continue
+        var parens = 0
+        var open = -1
+        var i = m.range.last + 1
+        while (i < src.length && open < 0) {
+            val c = src[i]
+            if (!mask[i]) {
+                i++
+                continue
+            }
+            if (c == '(') {
+                parens++
+            } else if (c == ')') {
+                parens--
+            } else if (c == '{' && parens == 0) {
+                open = i
+            } else if (parens == 0 && c.isIdentStart() && !src[i - 1].isIdentPart()) {
+                val word = WORD.matchAt(src, i)?.value ?: ""
+                if (word in DECLARATIONS) break
+                i += maxOf(0, word.length - 1)
+            }
+            i++
+        }
+        if (open < 0) continue
+        var depth = 0
+        var close = src.length
+        for (k in open until src.length) {
+            if (!mask[k]) continue
+            if (src[k] == '{') {
+                depth++
+            } else if (src[k] == '}' && --depth == 0) {
+                close = k
+                break
+            }
+        }
+        bodies += ClassBody(at, open, close)
+    }
+    return bodies
+}
+
 private fun findSpringRoutes(src: String): List<Route> {
     val routes = ArrayList<Route>()
     val mask = lexKotlin(src).mask
-    var classPrefix = ""
+    val bodies = classBodies(src, mask)
+    // A method takes the mapping of the class it stands in, and only that one: a class without
+    // @RequestMapping has no prefix, and Spring does not join the mapping of an enclosing class.
+    val prefixes = HashMap<Int, String>()
     for (m in SPRING_ANNOTATION.findAll(src)) {
-        if (!mask[m.range.first]) continue
+        val at = m.range.first
+        if (!mask[at]) continue
         val name = m.groupValues[1]
         val args = m.groupValues[2]
-        val after = src.substring(m.range.last + 1, minOf(src.length, m.range.last + 201))
-        if (ON_CLASS.containsMatchIn(after)) {
-            if (name == "RequestMapping") classPrefix = annotationPath(args)
+        val target = annotatedClass(src, mask, annotationEnd(src, mask, at))
+        if (target >= 0) {
+            if (name == "RequestMapping") prefixes[target] = annotationPath(args)
             continue
         }
+        val owner = bodies.lastOrNull { it.open < at && at < it.close }
+        val prefix = owner?.let { prefixes[it.keyword] } ?: ""
         val method = if (name == "RequestMapping") annotationMethod(args) ?: "GET" else SPRING_MAPPINGS[name] ?: "GET"
-        routes += Route(method, joinPath(classPrefix, annotationPath(args)), m.range.first, Framework.SPRING)
+        routes += Route(method, joinPath(prefix, annotationPath(args)), at, Framework.SPRING)
     }
     return routes
 }

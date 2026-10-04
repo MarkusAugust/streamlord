@@ -4,6 +4,7 @@ import io.github.markusaugust.streamlord.analysis.DatastarFrame
 import io.github.markusaugust.streamlord.analysis.Requests
 import io.github.markusaugust.streamlord.analysis.SseParser
 import io.github.markusaugust.streamlord.analysis.decodeDatastar
+import io.github.markusaugust.streamlord.core.json.JsonParser
 import java.io.InputStream
 import java.net.ConnectException
 import java.net.URI
@@ -23,7 +24,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * The network half of the Stream Inspector, free of any editor API so it can be tested against a
  * real server. Opens a Datastar request exactly as the browser client would (signals in the
  * query string for GET and DELETE, in the body otherwise, `Datastar-Request: true`) and reports
- * what comes back.
+ * what comes back. The URL and the signals are the ones the curl export writes.
  */
 class StreamClient(
     private val executor: ExecutorService =
@@ -85,11 +86,11 @@ class StreamClient(
             .connectTimeout(Duration.ofSeconds(10))
             .build()
 
-    /** Open the stream and pump events to the handlers until it closes, errors or is aborted. */
+    /** Open the stream and pump events to the handlers until it closes, errors or is aborted. [signals] is JSON as the user wrote it. */
     fun open(
         url: String,
         method: String,
-        signalsJson: String,
+        signals: String,
         headers: Map<String, String>,
         handlers: Handlers,
     ): Connection {
@@ -97,7 +98,7 @@ class StreamClient(
         val holder = AtomicReferenceStream()
         val future =
             executor.submit {
-                run(url, method, signalsJson, headers, handlers, aborted, holder)
+                run(url, method, signals, headers, handlers, aborted, holder)
             }
         return Connection(future, aborted, holder)
     }
@@ -105,17 +106,37 @@ class StreamClient(
     private fun run(
         url: String,
         method: String,
-        signalsJson: String,
+        signals: String,
         headers: Map<String, String>,
         handlers: Handlers,
         aborted: AtomicBoolean,
         holder: AtomicReferenceStream,
     ) {
+        // Judged as written, so the message shows the user's URL and not the one with the signals added.
+        Requests.sendableUrl(url).error?.let {
+            handlers.onError(it)
+            return
+        }
+        val signalsJson = Requests.compactSignals(signals)
+        // Judged on the compacted text, which is what goes out: a lone no-break space is not blank to it.
+        try {
+            JsonParser.parse(signalsJson)
+        } catch (e: Exception) {
+            handlers.onError("Signals are not valid JSON: ${e.message}")
+            return
+        }
+        val sendable = Requests.sendableUrl(Requests.requestUrl(url, method, signalsJson))
+        val target =
+            sendable.url ?: run {
+                handlers.onError(sendable.error ?: "Cannot send $url")
+                return
+            }
         val request =
             try {
-                build(url, method, signalsJson, headers)
-            } catch (_: Exception) {
-                handlers.onError("Not a valid URL: $url")
+                build(target, method, signalsJson, headers)
+            } catch (e: Exception) {
+                // A header the HTTP client will not set, such as Host, or a port that is not a number.
+                handlers.onError("Cannot send the request: ${e.message ?: e.javaClass.simpleName}")
                 return
             }
         handlers.onStatus(Status.CONNECTING)
@@ -173,10 +194,9 @@ class StreamClient(
         headers: Map<String, String>,
     ): HttpRequest {
         val bodyless = method == "GET" || method == "DELETE"
-        val target = URI(Requests.requestUrl(url, method, signalsJson))
         val builder =
             HttpRequest
-                .newBuilder(target)
+                .newBuilder(URI(url))
                 .header("Accept", "text/event-stream")
                 .header("Datastar-Request", "true")
         for ((k, v) in headers) builder.header(k, v)

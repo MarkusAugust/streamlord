@@ -3,6 +3,7 @@ package io.github.markusaugust.streamlord.intellij
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.sun.net.httpserver.HttpServer
 import io.github.markusaugust.streamlord.analysis.DatastarFrame
+import io.github.markusaugust.streamlord.analysis.Requests
 import io.github.markusaugust.streamlord.analysis.SavedRequest
 import io.github.markusaugust.streamlord.intellij.inspector.InspectorState
 import io.github.markusaugust.streamlord.intellij.inspector.RequestStore
@@ -117,6 +118,86 @@ class InspectorTest : BasePlatformTestCase() {
             )
             assertTrue(failed.await(10, TimeUnit.SECONDS))
             assertEquals("Connection refused at 127.0.0.1:1. Is the server running?", error)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    /** The cases of the VS Code extension's `streamClient.test.ts`: what arrives is what the curl line shows. */
+    fun `test the client sends what the curl line shows`() {
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        val seen = CopyOnWriteArrayList<Pair<String, String>>()
+        server.createContext("/") { exchange ->
+            val uri = exchange.requestURI
+            val body = exchange.requestBody.readBytes().toString(Charsets.UTF_8)
+            seen += (uri.rawPath + (uri.rawQuery?.let { "?$it" } ?: "")) to body
+            exchange.responseHeaders.add("Content-Type", "text/event-stream")
+            exchange.sendResponseHeaders(200, 0)
+            exchange.responseBody.use { it.write("event: datastar-patch-signals\ndata: signals {}\n\n".toByteArray()) }
+        }
+        server.start()
+        try {
+            val base = "http://127.0.0.1:${server.address.port}"
+
+            fun send(r: SavedRequest): Pair<Pair<String, String>?, String?> {
+                val before = seen.size
+                val done = CountDownLatch(1)
+                var error: String? = null
+                StreamClient().open(
+                    r.url,
+                    r.method,
+                    r.signals,
+                    Requests.parseHeaderLines(r.headers),
+                    object : StreamClient.Handlers {
+                        override fun onStatus(
+                            status: StreamClient.Status,
+                            http: String?,
+                            contentType: String?,
+                        ) {
+                            if (status == StreamClient.Status.CLOSED) done.countDown()
+                        }
+
+                        override fun onError(message: String) {
+                            error = message
+                            done.countDown()
+                        }
+                    },
+                )
+                assertTrue(done.await(10, TimeUnit.SECONDS))
+                return seen.getOrNull(before) to error
+            }
+
+            fun curlParts(line: String): Pair<String, String> {
+                val url = Regex("""^curl -N -X \S+ '([^']*)'""").find(line)!!.groupValues[1]
+                val data = Regex("""--data '((?:[^']|'\\'')*)'$""").find(line)?.groupValues?.get(1) ?: ""
+                return url.removePrefix(base) to data.replace("'\\''", "'")
+            }
+
+            val signals = " { \"n\" : 1.0, \"s\": \"\\u00e9 x\" } "
+            for (r in listOf(
+                SavedRequest("", "$base/api/feed?flag&q=a%20b+c&datastar=old", "GET", signals, "X-A: 1"),
+                SavedRequest("", "$base/api/feed?q=1", "POST", signals, ""),
+                SavedRequest("", "$base/api/feed", "DELETE", "", ""),
+            )) {
+                val (got, error) = send(r)
+                assertNull(error)
+                assertEquals(r.method, curlParts(Requests.toCurl(r)), got)
+            }
+
+            assertEquals("/s%C3%B8k", send(SavedRequest("", "$base/s\u00f8k", "POST", "", "")).first?.first)
+            assertEquals(
+                null to "Not an absolute URL: /api/feed. Start it with http:// or https://, or with {{baseUrl}}.",
+                send(SavedRequest("", "/api/feed", "GET", "", "")),
+            )
+            assertEquals(
+                null to "The URL still holds {id}. Fill in the path parameter before sending.",
+                send(SavedRequest("", "$base/users/{id}", "GET", "", "")),
+            )
+            val (blank, notJson) = send(SavedRequest("", "$base/api/feed", "POST", "\u00a0", ""))
+            assertNull(blank)
+            assertTrue(notJson, notJson!!.startsWith("Signals are not valid JSON: "))
+            val (_, restricted) = send(SavedRequest("", "$base/api/feed", "GET", "", "Host: elsewhere"))
+            assertTrue(restricted, restricted!!.startsWith("Cannot send the request: restricted header name"))
         } finally {
             server.stop(0)
         }
