@@ -40,11 +40,11 @@ export const DOCS = {
  */
 const HYPHENATED_SIGNAL = /\$[A-Za-z_][A-Za-z0-9_.]*(?:-[A-Za-z0-9_][A-Za-z0-9_.]*)+/g;
 
-/** Is the offset inside a single- or double-quoted JavaScript string literal? */
-function insideQuotes(text: string, offset: number): boolean {
+/** The quote of the single-, double- or backtick-quoted JavaScript string literal the offset is inside, or null. */
+export function quoteAt(text: string, offset: number): string | null {
   let quote: string | null = null;
   for (let i = 0; i < offset; i++) {
-    const c = text[i];
+    const c = text[i] ?? "";
     if (c === "\\") {
       i++;
       continue;
@@ -53,14 +53,74 @@ function insideQuotes(text: string, offset: number): boolean {
       if (c === quote) quote = null;
     } else if (c === "'" || c === '"' || c === "`") quote = c;
   }
-  return quote !== null;
+  return quote;
+}
+
+/**
+ * Which offsets of an expression are code: not a string literal, not the text of a template
+ * literal, not a comment. Datastar rewrites signals and actions in code only, and inside the
+ * `${ }` of a template literal, which is code here too. A regular expression literal is not
+ * recognised; a quote inside one opens a string.
+ */
+export function jsCodeMask(text: string): Uint8Array {
+  const mask = new Uint8Array(text.length).fill(1);
+  // One entry per open `${`, counting the braces opened inside it.
+  const braces: number[] = [];
+  const blank = (from: number, to: number) => {
+    const end = Math.min(to, text.length);
+    mask.fill(0, from, end);
+    return end;
+  };
+  /** From just inside a template literal to just past its closing backtick, or past the `${` that opens code. */
+  const template = (from: number) => {
+    let j = from;
+    while (j < text.length) {
+      if (text[j] === "\\") j = blank(j, j + 2);
+      else if (text[j] === "`") return blank(j, j + 1);
+      else if (text.startsWith("${", j)) {
+        braces.push(0);
+        return j + 2;
+      } else j = blank(j, j + 1);
+    }
+    return j;
+  };
+  let i = 0;
+  while (i < text.length) {
+    const c = text[i];
+    if (c === "'" || c === '"') {
+      let j = i + 1;
+      while (j < text.length && text[j] !== c) j += text[j] === "\\" ? 2 : 1;
+      i = blank(i, j + 1);
+    } else if (c === "`") {
+      mask[i] = 0;
+      i = template(i + 1);
+    } else if (c === "/" && text[i + 1] === "/") {
+      const nl = text.indexOf("\n", i);
+      i = blank(i, nl < 0 ? text.length : nl);
+    } else if (c === "/" && text[i + 1] === "*") {
+      const close = text.indexOf("*/", i + 2);
+      i = blank(i, close < 0 ? text.length : close + 2);
+    } else if (c === "{" && braces.length > 0) {
+      braces[braces.length - 1]!++;
+      i++;
+    } else if (c === "}" && braces.length > 0) {
+      if (braces[braces.length - 1] === 0) {
+        braces.pop();
+        i = template(i + 1);
+      } else {
+        braces[braces.length - 1]!--;
+        i++;
+      }
+    } else i++;
+  }
+  return mask;
 }
 
 export function attributeDoc(name: string): string {
   return `${DOCS.attributes}#${name.startsWith("data-") ? name : "data-" + name}`;
 }
 
-const ACTION = /@([A-Za-z_][A-Za-z0-9_]*)\s*\(/g;
+const ACTION = /@([A-Za-z_$][A-Za-z0-9_$]*)(\s*)\(/g;
 
 function parseScript(js: string): void {
   Parser.parse(js, {
@@ -87,7 +147,9 @@ export function validateExpression(text: string): Issue[] {
   if (text.trim().length === 0) {
     return [{ start: 0, end: Math.max(text.length, 1), message: "Empty Datastar expression.", severity: "warning", code: "empty-expression" }];
   }
-  const js = text.replace(/@/g, "_");
+  // `$foo.0.name` is the path foo, 0, name: Datastar rewrites it to bracket form before the browser
+  // parses it. To a JavaScript parser `.0` is an error, so the digit is read as a letter, at the same width.
+  const js = text.replace(/@/g, "_").replace(/\$\w+(?:\.\w+)+/g, (path) => path.replace(/\.\d/g, "._"));
   try {
     parseScript(js);
   } catch (e) {
@@ -102,11 +164,12 @@ export function validateExpression(text: string): Issue[] {
       issues.push({ start: pos, end, message: `Datastar expression: ${msg}`, severity: "error", code: "expression-syntax", link: DOCS.expressions });
     }
   }
+  const code = jsCodeMask(text);
   HYPHENATED_SIGNAL.lastIndex = 0;
   let k: RegExpExecArray | null;
   while ((k = HYPHENATED_SIGNAL.exec(text)) !== null) {
     const written = k[0];
-    if (insideQuotes(text, k.index)) continue;
+    if (code[k.index] === 0) continue;
     const head = written.slice(0, written.indexOf("-"));
     const rest = written.slice(written.indexOf("-") + 1);
     // `-1`, `-2px`: nobody names a signal that; the author subtracts. `-bar`: a kebab-case key, or a subtraction of a variable.
@@ -136,6 +199,20 @@ export function validateExpression(text: string): Issue[] {
     const spec = catalog.actionsByName.get(name);
     const start = m.index;
     const end = start + 1 + name.length;
+    if (code[start] === 0) continue;
+    if (m[2]) {
+      const paren = start + m[0].length - 1;
+      issues.push({
+        start,
+        end: paren,
+        message: `Datastar reads an action only as @${name}( with nothing before the parenthesis. With a space the @ reaches the browser, which cannot parse it.`,
+        severity: "error",
+        code: "action-space",
+        link: DOCS.actions,
+        fixes: [{ title: "Remove the space", start: end, end: paren, text: "" }],
+      });
+      continue;
+    }
     if (!spec) {
       const near = catalog.actions.map((a) => a.name).find((n) => n.toLowerCase() === name.toLowerCase());
       issues.push({
