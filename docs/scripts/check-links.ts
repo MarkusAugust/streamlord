@@ -64,6 +64,30 @@ function exists(path: string): boolean {
   }
 }
 
+// llms.txt and llms-full.txt carry full addresses, since they are read away from the
+// site; the ones on this site must reach a page and a heading like any other link.
+const SITE = /site:\s*"([^"]+)"/.exec(
+  readFileSync("astro.config.ts", "utf8"),
+)?.[1]
+if (!SITE) throw new Error("astro.config.ts has no site")
+for (const name of ["llms.txt", "llms-full.txt"]) {
+  const text = readFileSync(join(DIST, name), "utf8")
+  for (const match of text.matchAll(/https?:\/\/[^\s)>]+/g)) {
+    if (!match[0].startsWith(SITE)) continue
+    const url = new URL(match[0])
+    const path = url.pathname
+    const anchor = url.hash.slice(1)
+    const target = path.includes(".")
+      ? join(DIST, path)
+      : join(DIST, path, "index.html")
+    if (!pages.includes(target) && !exists(target)) {
+      problems.push(`/${name} -> ${match[0]} (no such page)`)
+    } else if (anchor && !ids.get(target)?.has(anchor)) {
+      problems.push(`/${name} -> ${match[0]} (page exists, anchor does not)`)
+    }
+  }
+}
+
 if (problems.length > 0) {
   console.error("Broken internal links:")
   for (const problem of [...new Set(problems)].sort())

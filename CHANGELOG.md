@@ -6,6 +6,12 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Documentation: the site serves `/llms.txt`, an index of every page with what it is about, and
+  `/llms-full.txt`, every page in one file, after llmstxt.org. Both are built from the pages and
+  the navigation, and the link check covers their addresses.
+
 ## [0.11.0] - 2026-10-04
 
 ### Added
