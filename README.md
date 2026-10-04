@@ -114,9 +114,19 @@ pages show.
 [CHANGELOG.md](CHANGELOG.md), and the entries that change how you write code are summarised on
 [the changelog page](https://streamlord-docs.netlify.app/changelog/).
 
-## License
+## Licence and name
 
-MIT. Take it, wield it, and may your streams never buffer.
+MIT. Take it, wield it, and may your streams never buffer. It costs nothing, and every released
+version stays MIT: that permission cannot be withdrawn, not even by me. Use it commercially,
+change it, ship it inside something closed. The one condition is that the copyright notice
+travels with it.
+
+The name Streamlord and the mark are not part of that grant. Fork the code freely; do not call
+the result Streamlord.
+
+Contributions: issues are always welcome. Pull requests are taken after a conversation, and
+whoever contributes signs [CLA.md](CLA.md). The whole picture is on
+[the documentation site](https://streamlord.sobernetics.no/licence/).
 
 *Gorvek, Sarn, Gallowmark and every other name in this grimoire are our own
 invention. Any resemblance to legends told at other tables is the mead's doing.*
