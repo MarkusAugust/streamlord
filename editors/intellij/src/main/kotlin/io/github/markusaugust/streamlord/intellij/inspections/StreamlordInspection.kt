@@ -92,7 +92,7 @@ class KotlinInterpolationInspection : StreamlordInspection(setOf("kotlin-interpo
 
 /** Datastar expression syntax, unknown actions, Pro actions, kebab-case signals. */
 class DatastarExpressionInspection :
-    StreamlordInspection(setOf("expression-syntax", "empty-expression", "unknown-action", "pro-action", "signal-kebab"))
+    StreamlordInspection(setOf("expression-syntax", "empty-expression", "unknown-action", "action-space", "pro-action", "signal-kebab"))
 
 /** `data-*` attribute names, keys, modifiers and their arguments, values. */
 class DatastarAttributeInspection :
@@ -106,6 +106,9 @@ class DatastarAttributeInspection :
             "wrong-element",
             "signal-name-expected",
             "unexpected-value",
+            "missing-value",
+            "key-and-value",
+            "missing-key-or-value",
             "pro-attribute",
             "prefix-mismatch",
         ),
@@ -133,7 +136,7 @@ class StreamlordMarkupInspection :
 object InspectionCodes {
     val all: Set<String> =
         setOf("kotlin-interpolation") +
-            setOf("expression-syntax", "empty-expression", "unknown-action", "pro-action", "signal-kebab") +
+            setOf("expression-syntax", "empty-expression", "unknown-action", "action-space", "pro-action", "signal-kebab") +
             setOf(
                 "unknown-attribute",
                 "unknown-modifier",
@@ -143,6 +146,9 @@ object InspectionCodes {
                 "wrong-element",
                 "signal-name-expected",
                 "unexpected-value",
+                "missing-value",
+                "key-and-value",
+                "missing-key-or-value",
                 "pro-attribute",
                 "prefix-mismatch",
             ) +

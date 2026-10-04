@@ -8,9 +8,9 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.xml.XmlAttribute
 import com.intellij.psi.xml.XmlAttributeValue
 import io.github.markusaugust.streamlord.analysis.KotlinString
-import io.github.markusaugust.streamlord.analysis.TEMPLATE_SYNTAX
 import io.github.markusaugust.streamlord.analysis.ValueKind
 import io.github.markusaugust.streamlord.analysis.findCallSites
+import io.github.markusaugust.streamlord.analysis.hasTemplateSyntax
 import io.github.markusaugust.streamlord.analysis.tokenize
 import io.github.markusaugust.streamlord.analysis.tokenizeAttributeName
 import io.github.markusaugust.streamlord.analysis.tokenizeExpression
@@ -42,7 +42,7 @@ class HtmlDatastarAnnotator : Annotator {
         val valueElement: XmlAttributeValue = element.valueElement ?: return
         val range = valueElement.valueTextRange
         val value = valueElement.value
-        if (value.isBlank() || TEMPLATE_SYNTAX.containsMatchIn(value)) return
+        if (value.isBlank() || hasTemplateSyntax(value)) return
         for (t in tokenizeExpression(
             value,
         )) {
@@ -154,7 +154,7 @@ class TemplateTextAnnotator : Annotator {
                 }
                 val spec = analysis.catalog.parseAttributeName(attr.name.lowercase(), prefix)?.spec ?: continue
                 val value = attr.value ?: continue
-                if (spec.valueKind != ValueKind.EXPRESSION || value.isBlank() || TEMPLATE_SYNTAX.containsMatchIn(value)) continue
+                if (spec.valueKind != ValueKind.EXPRESSION || value.isBlank() || hasTemplateSyntax(value)) continue
                 for (t in tokenizeExpression(value)) {
                     paint(holder, TextRange(base + attr.valueStart + t.start, base + attr.valueStart + t.end), DatastarColors.of(t.kind))
                 }
