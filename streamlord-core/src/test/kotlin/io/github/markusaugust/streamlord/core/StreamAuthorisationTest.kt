@@ -151,4 +151,36 @@ class StreamAuthorisationTest {
 
             assertEquals(1, refusals)
         }
+
+    // A loop with a catch-all in it is ordinary handler code, and it must not turn a refusal
+    // into a stream that carries on unchecked.
+    @Test
+    fun `a handler that swallows the refusal sends nothing more`() =
+        runTest {
+            val sink = BufferedSseSink()
+            var asked = 0
+            var caught = 0
+
+            val finished =
+                streamlord.stream(
+                    sink,
+                    StreamAuthorisation(every = always, onRefused = { patchSignals("refused" to true) }) { ++asked <= 2 },
+                ) {
+                    repeat(5) { tick ->
+                        try {
+                            patchSignals("tick" to tick)
+                        } catch (_: StreamRefusedException) {
+                            caught++
+                        }
+                    }
+                }
+
+            assertFalse(finished)
+            assertEquals(4, caught)
+            assertEquals(
+                "event: datastar-patch-signals\ndata: signals {\"tick\":0}\n\n" +
+                    "event: datastar-patch-signals\ndata: signals {\"refused\":true}\n\n",
+                sink.text(),
+            )
+        }
 }

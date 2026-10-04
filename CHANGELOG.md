@@ -6,6 +6,24 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `streamlord-spring` on Spring Boot: every `readSignals` and `datastarStream` threw
+  `NoSuchMethodError: BuildersKt.runBlockingK$default`. Boot pins kotlinx-coroutines in its BOM
+  (1.8.1 under Boot 3.5, 1.10.2 under Boot 4.0 and 4.1) and downgrades anything newer, and 0.10.0
+  was compiled against 1.11.0. Every module is now compiled against 1.8.1, the oldest pin, and the
+  Spring adapter's tests run on 1.8.1, on 1.10.2 with Framework 7, and on the newest release. On
+  0.10.0 the way out is `ext["kotlin-coroutines.version"] = "1.11.0"` in your build.
+- `streamlord-core`: a `StreamAuthorisation` refusal now holds when the handler does not stop.
+  A handler that caught the exception inside a loop went on writing to a reader who had just
+  been refused, with no further check. Every write after a refusal is now refused again, only
+  `onRefused` may still write, and `Streamlord.stream` reports such a stream as refused.
+- Documentation: the Spring WebMVC and WebFlux samples took `Streamlord` as a parameter of the
+  handler method. Spring constructs a new default instance for such a parameter instead of
+  injecting the bean, so the configured codec and `guardElements` were silently ignored. The
+  samples now take the bean through the controller's constructor, and the build refuses a
+  sample that does otherwise.
+
 ## [0.10.0] - 2026-10-02
 
 ### Added
