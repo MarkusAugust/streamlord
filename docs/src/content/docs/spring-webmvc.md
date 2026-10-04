@@ -25,29 +25,39 @@ component scan.
 
 ## Streaming from a controller
 
-```kotlin sample=spring
-@PostMapping("/search")
-fun search(
-    request: HttpServletRequest,
-    response: HttpServletResponse,
-    streamlord: Streamlord,
-): org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody {
-    val signals = request.readSignalsOr(SearchSignals(), streamlord)
-    val hits = repository.search(signals.query)
+The bean arrives through the controller's constructor, like any other bean:
 
-    return response.datastarStream(streamlord) {
-        patchElements(
-            renderResults(hits),
-            selector = "#results",
-            mode = ElementPatchMode.INNER,
-        )
-        patchSignals("total" to hits.size)
+```kotlin sample=spring-controller
+@RestController
+class SearchController(private val streamlord: Streamlord) {
+    @PostMapping("/search")
+    fun search(
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+    ): org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody {
+        val signals = request.readSignalsOr(SearchSignals(), streamlord)
+        val hits = repository.search(signals.query)
+
+        return response.datastarStream(streamlord) {
+            patchElements(
+                renderResults(hits),
+                selector = "#results",
+                mode = ElementPatchMode.INNER,
+            )
+            patchSignals("total" to hits.size)
+        }
     }
 }
 ```
 
 `datastarStream` returns a `StreamingResponseBody`, which is how WebMVC keeps a servlet thread
 from being held for the life of the response. Everything inside the block writes one frame.
+
+**Do not take it as a parameter of the handler method.** `fun search(streamlord: Streamlord)`
+compiles and starts, and Spring then treats the parameter as a model attribute: it constructs a
+new `Streamlord` with every default, for each request, and never looks at your bean. The codec
+you configured is gone, so a typed read fails with `BuiltInSignalsCodec cannot decode into
+SearchSignals`, and `guardElements` is quietly off. The constructor is the only way in.
 
 ## No stream at all
 
@@ -62,12 +72,15 @@ on that HTML, pass the bean: `datastarElements(html, streamlord = bean)`.
 
 ## Reading signals
 
-```kotlin sample=spring
-@GetMapping("/page")
-fun page(request: HttpServletRequest, streamlord: Streamlord): String {
-    val signals = request.readSignals(streamlord)
-    val query = signals.string("search") ?: ""
-    return query
+```kotlin sample=spring-controller
+@RestController
+class PageController(private val streamlord: Streamlord) {
+    @GetMapping("/page")
+    fun page(request: HttpServletRequest): String {
+        val signals = request.readSignals(streamlord)
+        val query = signals.string("search") ?: ""
+        return query
+    }
 }
 ```
 

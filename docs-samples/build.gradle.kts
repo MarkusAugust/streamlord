@@ -116,6 +116,15 @@ abstract class ExtractDocSamples : DefaultTask() {
                     "import jakarta.servlet.http.HttpServletResponse\n$imports\n\n" +
                     "class $name {\n$body\n}\n"
             /*
+             * A whole controller, written at the top level so the page can show its constructor.
+             * That is where the Streamlord bean arrives, and a sample that hides the class
+             * hides the one line a reader has to get right.
+             */
+            "spring-controller" ->
+                "import org.springframework.web.bind.annotation.*\n" +
+                    "import jakarta.servlet.http.HttpServletRequest\n" +
+                    "import jakarta.servlet.http.HttpServletResponse\n$imports\n\n$body\n"
+            /*
              * A test class. The client and test-host imports live here rather than in the shared
              * block because `io.ktor.client.request.get` and `io.ktor.server.routing.get` would
              * then both be in scope of every Ktor sample on every other page, for no gain.
@@ -134,7 +143,17 @@ abstract class ExtractDocSamples : DefaultTask() {
             else -> null
         }
 
-    private val known = listOf("declarations", "html", "ktor-application", "ktor-routing", "spring", "statements", "test")
+    private val known =
+        listOf("declarations", "html", "ktor-application", "ktor-routing", "spring", "spring-controller", "statements", "test")
+
+    /**
+     * A handler method that takes the Streamlord bean as a parameter. It compiles, and Spring
+     * then treats the parameter as a model attribute and constructs a fresh default instance,
+     * so the codec and the guard on the real bean are silently ignored. The bean has to come
+     * through the constructor.
+     */
+    private val handlerTakingTheBean =
+        Regex("""@(?:Get|Post|Put|Patch|Delete|Request)Mapping\b(?:(?!\bfun\b)[\s\S])*?\bfun\s+\w+\s*\([^)]*:\s*Streamlord\b""")
 
     @TaskAction
     fun extract() {
@@ -188,6 +207,17 @@ abstract class ExtractDocSamples : DefaultTask() {
 
                 val context = marker.removePrefix("sample=")
                 if (context == "none") continue
+
+                if (context.startsWith("spring") && handlerTakingTheBean.containsMatchIn(body)) {
+                    problems +=
+                        Problem(
+                            page.name,
+                            fenceLine,
+                            "a handler method takes Streamlord as a parameter. Spring builds a new default instance " +
+                                "for it instead of injecting the bean; take the bean in the controller's constructor.",
+                        )
+                    continue
+                }
 
                 val source = wrap(context, body, "sample_${page.nameWithoutExtension.replace('-', '_')}_$fenceLine")
                 if (source == null) {

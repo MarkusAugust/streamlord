@@ -22,17 +22,23 @@ Everything before them is your flow, and everything after is Spring's.
 ## The guard
 
 `asServerSentEvents()` uses `Streamlord.Default`, which has the elements guard switched off. To
-run your HTML through [the guard](/strings/), pass the bean you declared:
+run your HTML through [the guard](/strings/), pass the bean you declared. It arrives through the
+controller's constructor:
 
-```kotlin sample=spring
-@GetMapping("/counter", produces = [org.springframework.http.MediaType.TEXT_EVENT_STREAM_VALUE])
-fun guarded(
-    streamlord: Streamlord,
-): kotlinx.coroutines.flow.Flow<org.springframework.http.codec.ServerSentEvent<String>> =
-    ticks
-        .map { n -> PatchElements("""<span id="counter">$n</span>""") }
-        .asServerSentEvents(streamlord)
+```kotlin sample=spring-controller
+@RestController
+class CounterController(private val streamlord: Streamlord) {
+    @GetMapping("/counter", produces = [org.springframework.http.MediaType.TEXT_EVENT_STREAM_VALUE])
+    fun guarded(): kotlinx.coroutines.flow.Flow<org.springframework.http.codec.ServerSentEvent<String>> =
+        ticks
+            .map { n -> PatchElements("""<span id="counter">$n</span>""") }
+            .asServerSentEvents(streamlord)
+}
 ```
+
+Not as a parameter of the handler method. Spring builds a new default `Streamlord` for a
+parameter of that type instead of injecting your bean, so the guard you switched on would be off
+again and nothing would say so.
 
 ## Reading signals
 
