@@ -46,6 +46,15 @@ All notable changes to Streamlord are recorded here. The format follows
   wire are identical on Ktor and WebMVC, while WebFlux writes the same frames in Spring's
   spelling.
 
+- Every published jar now carries `META-INF/LICENSE`. The licence page said the licence text
+  travels in the jar, and it did not.
+- Documentation, from a register of 414 claims checked one by one: Spring Boot's default MVC
+  executor runs eight streams at once and queues the rest, where the page said it created a
+  thread per stream without limit; the golden files are compared as an equivalence, not byte for
+  byte; `sharedLibrary.set(false)` is the default without `java-library`; stale coordinates and
+  transcripts are rewritten rather than failing the build; completion collects signals from the
+  whole project; and four smaller corrections on the roadmap and changelog pages.
+
 ### Added
 
 - `streamlord-spring`: `Flow<DatastarEvent>.asDatastarResponse(streamlord)`, the WebFlux stream

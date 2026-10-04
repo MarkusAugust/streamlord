@@ -23,7 +23,7 @@ Everything ordinary, without asking:
 - publish your own version of it
 
 The one condition is that the copyright notice and the licence text travel with copies of the
-software. It is in the jar, so in practice this happens by itself.
+software. Both are in every jar, as `META-INF/LICENSE`, so in practice this happens by itself.
 
 You owe no further credit, no link back, and no notice that you are using it.
 

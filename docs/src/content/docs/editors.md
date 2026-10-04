@@ -83,8 +83,9 @@ whether handed to the DSL or standing free, and in HTML and template files. Kotl
 interpolation traps, syntax errors with the right column, missing ids, unknown attributes and
 modifiers, capitals in keys.
 
-**Completions** for signals, actions, attributes, modifiers, ids and classes, collected from the
-file you are in.
+**Completions** for signals, actions, attributes, modifiers, ids and classes. Signals are
+collected from the whole project, since the page that declares one is rarely the file that reads
+it.
 
 **Hover documentation**, snippets, and syntax highlighting of the Datastar tokens only, never
 of your Kotlin or your HTML, which belong to your theme.

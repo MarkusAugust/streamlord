@@ -77,7 +77,7 @@ because the core refuses a JSON dependency, not because anybody wanted to write 
 ## Why it is shaped this way
 
 The core never imports a framework. That is not architectural taste for its own sake; it is what
-makes three claims on the front page true at once.
+makes three claims on this site true at once.
 
 It is why the core has **no dependencies** but the standard library and coroutines. There is
 nothing in it that needs a JSON library, because `SignalsCodec` is a port and the built-in
@@ -94,9 +94,12 @@ conformance tests apply to the result unchanged.
 
 ## What the pure encoder buys
 
-`SseEncoder` takes a `DatastarEvent` and returns bytes. No IO, no coroutines, no framework. That
-makes it testable against the official SDK golden files byte for byte, which is exactly what the
-build does, and it means a protocol bug can be found without starting a server.
+`SseEncoder` takes a `DatastarEvent` and returns the frame as text. No IO, no coroutines, no
+framework. That makes it testable against the official SDK golden files on every build, and it
+means a protocol bug can be found without starting a server. The comparison is the one the
+official suite makes: the same event, the same data lines grouped by their first word, and the
+same HTML once whitespace is normalised. It is an equivalence the client cannot tell from
+identity, not a comparison of bytes.
 
 ## Where to break it
 

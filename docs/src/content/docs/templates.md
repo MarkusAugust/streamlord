@@ -51,7 +51,7 @@ delimiter is not one of them.
 
 **Attributes that take a signal name are not.** `data-bind="{name}"`, `data-indicator="{name}"`
 and their kind report `signal-name-expected`, because a signal name is held to a strict pattern
-and a brace is not in it. The error is wrong and there is currently no way to tell the analysis
+and a brace is not in it. The warning is wrong and there is currently no way to tell the analysis
 otherwise. It is on [the roadmap](/roadmap/).
 
 Nothing about rendering is affected either way. This is the editor's opinion of your file, not

@@ -194,10 +194,13 @@ reactively.
 **Spring WebMVC** does hold one. `datastarStream` returns a `StreamingResponseBody` and bridges
 into the suspending core with `runBlocking`, inside `datastarStream`, which occupies the executing thread
 for as long as the stream is open. Which thread that is belongs to Spring, not to Streamlord: it
-is the MVC async task executor. Boot's default creates a new platform thread per request with no
-upper bound, so a thousand open streams are a thousand platform threads.
+is the MVC async task executor. Boot's default is a pool of **eight** platform threads with an
+unbounded queue behind it, so the ninth stream does not get a thread. It waits in the queue with
+its response open and nothing written, for as long as the first eight stay open, and nothing logs
+it. Twenty streams opened against a default Boot 4.0 application: eight were running after two and
+a half seconds, and twelve were waiting. **Measured.**
 
-Make them virtual instead:
+Make the threads virtual instead, and all twenty run:
 
 ```
 spring.threads.virtual.enabled=true

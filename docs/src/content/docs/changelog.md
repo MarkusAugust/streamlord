@@ -106,7 +106,7 @@ yourself. See [Security](/security/), which links to a page running under a real
 ## 0.3.1
 
 **Name your serializers for a native image.** `KotlinxSignalsCodec` now takes them by the type
-they handle and consults them before the reflective lookup, and `requireNamedSerializers = true` refuses that
+they handle and consults them before the reflective lookup, and `strict = true`, which 0.7.0 renamed to `requireNamedSerializers`, refuses that
 fallback so a type you forgot fails on the JVM rather than inside the image. Nothing changes if
 you pass none. See [Native image](/native-image/).
 

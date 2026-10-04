@@ -47,9 +47,10 @@ graalvmNative {
 ```
 
 `fallback.set(false)` so a build that cannot be native fails instead of quietly producing a JVM
-image with none of the startup you are doing this for. `sharedLibrary.set(false)` because the
-plugin otherwise passes `--shared` and hands you a `.so` with a C header beside it. Apply
-`io.ktor.plugin` and it sets this for you.
+image with none of the startup you are doing this for. `sharedLibrary.set(false)` is the default
+with the two plugins above and is written out because it stops being the default the day the
+build also applies `java-library`: the plugin then passes `--shared` and hands you a `.so` with a
+C header beside it.
 
 The list of build arguments is Ktor's, from
 [ktor-samples/graalvm](https://github.com/ktorio/ktor-samples/tree/main/graalvm), and this is it
@@ -161,5 +162,5 @@ curl -fsS -H 'Accept: text/event-stream' 'localhost:8080/search?datastar=%7B%22q
 docker rm -f check
 ```
 
-Those four lines belong in your pipeline, before the push. A health check alone is not enough: it
+Those five lines belong in your pipeline, before the push. A health check alone is not enough: it
 answers before a single signal has been read, which is precisely the part that breaks.
