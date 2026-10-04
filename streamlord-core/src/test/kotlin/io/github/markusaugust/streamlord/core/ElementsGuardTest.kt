@@ -188,4 +188,9 @@ class ElementsGuardTest {
             assertEquals(1, guarded.encode(flowOf(PatchElements(fine))).toList().size)
             guarded.guard(PatchElements.remove("#gone"))
         }
+
+    @Test
+    fun `a numeric reference that names no character is left as written`() {
+        ElementsGuard.check("""<b data-text="${'$'}a + '&#99999999;' + '&#x7FFFFFFF;'"></b>""")
+    }
 }

@@ -2,6 +2,7 @@
 
 package io.github.markusaugust.streamlord.html
 
+import io.github.markusaugust.streamlord.core.domain.CspNonce
 import io.github.markusaugust.streamlord.core.domain.ExpressionGuard
 import io.github.markusaugust.streamlord.core.json.JsonWriter
 import kotlinx.html.HTMLTag
@@ -345,7 +346,7 @@ public fun HTMLTag.dataPreserveAttr(vararg names: String) {
  * expressions are compiled through nonce-bearing script elements instead of `eval`.
  */
 public fun HTMLTag.dataNonce(nonce: String) {
-    attributes[ds("nonce")] = nonce
+    attributes[ds("nonce")] = CspNonce.checked(nonce)
 }
 
 // ---- helpers ----------------------------------------------------------------------------------

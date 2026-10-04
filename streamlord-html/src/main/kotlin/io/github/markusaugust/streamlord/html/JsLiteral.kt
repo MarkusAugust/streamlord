@@ -33,9 +33,9 @@ public object JsLiteral {
                     '\r' -> append("\\r")
                     '\t' -> append("\\t")
                     '\b' -> append("\\b")
-                    '' -> append("\\f")
-                    ' ' -> append("\\u2028")
-                    ' ' -> append("\\u2029")
+                    '\u000C' -> append("\\f")
+                    '\u2028' -> append("\\u2028")
+                    '\u2029' -> append("\\u2029")
                     '/' -> if (previous == '<') append("\\/") else append('/')
                     else -> if (c < ' ') append("\\u%04x".format(c.code)) else append(c)
                 }

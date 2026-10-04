@@ -29,4 +29,10 @@ class Jackson2SignalsCodecTest {
         assertFailsWith<SignalsCodecException> { codec.decode<Signals>("""{"count":"no"}""") }
         assertFailsWith<SignalsCodecException> { codec.decode<Signals>("not json") }
     }
+
+    // The browser sends its whole store; the type names only what one handler accepts.
+    @Test
+    fun `ignores the signals the type does not name`() {
+        assertEquals(Signals("x", 2), codec.decode<Signals>("""{"search":"x","count":2,"elsewhere":true}"""))
+    }
 }

@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.json.jackson2
 
 import com.fasterxml.jackson.core.JsonProcessingException
+import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.github.markusaugust.streamlord.core.SignalsCodecException
 import io.github.markusaugust.streamlord.core.port.driven.SignalsCodec
@@ -36,7 +37,15 @@ public class Jackson2SignalsCodec(private val mapper: ObjectMapper) : SignalsCod
     }
 
     public companion object {
-        /** A codec over a fresh mapper with every module on the classpath registered. */
-        public fun default(): Jackson2SignalsCodec = Jackson2SignalsCodec(ObjectMapper().findAndRegisterModules())
+        /**
+         * A codec over a fresh mapper with every module on the classpath registered.
+         *
+         * Unknown properties are ignored, as Spring Boot's own mapper and the other codecs
+         * ignore them. The browser sends its whole store, and a type names only the signals one
+         * handler accepts; Jackson 2's own default would refuse every such request.
+         */
+        public fun default(): Jackson2SignalsCodec = Jackson2SignalsCodec(
+            ObjectMapper().findAndRegisterModules().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false),
+        )
     }
 }

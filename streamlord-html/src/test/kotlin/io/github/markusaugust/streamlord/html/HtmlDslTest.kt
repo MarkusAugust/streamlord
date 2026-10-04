@@ -416,4 +416,14 @@ class HtmlDslTest {
             elements { div { dataOnClick(set("user.name", "O'Neil")) } },
         )
     }
+
+    // Datastar raises NonceRequired for an empty data-nonce and does not start.
+    @Test
+    fun `an empty nonce is refused before it reaches the markup`() {
+        assertFailsWith<IllegalArgumentException> {
+            kotlinx.html.stream
+                .createHTML()
+                .html { dataNonce("") }
+        }
+    }
 }

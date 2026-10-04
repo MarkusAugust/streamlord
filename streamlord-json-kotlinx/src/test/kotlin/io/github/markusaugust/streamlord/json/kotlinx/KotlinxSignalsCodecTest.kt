@@ -17,6 +17,7 @@ import kotlin.reflect.typeOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class KotlinxSignalsCodecTest {
@@ -135,5 +136,12 @@ class KotlinxSignalsCodecTest {
                 }
                 Signals(search = search)
             }
+    }
+
+    // A body that does not fit the type is not a missing serializer, and must not say it is.
+    @Test
+    fun `a body of the wrong shape does not blame the serializers`() {
+        val e = assertFailsWith<SignalsCodecException> { KotlinxSignalsCodec().decode<Map<String, Int>>("""{"a":"no"}""") }
+        assertFalse("serializer" in e.message.orEmpty().lowercase(), e.message)
     }
 }
