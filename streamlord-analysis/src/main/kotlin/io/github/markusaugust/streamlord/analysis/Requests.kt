@@ -326,7 +326,6 @@ public object Requests {
         val start = scheme.length + 3
         val authorityEnd = target.indexOfAny(charArrayOf('/', '?'), start).let { if (it < 0) target.length else it }
         if (authorityEnd == start) return refuse("No host in $url.")
-        val queryStart = target.indexOf('?').let { if (it < 0) target.length else it }
         val out = StringBuilder(target.substring(0, start))
         var i = start
         while (i < target.length) {
@@ -341,8 +340,8 @@ public object Requests {
                     return refuse("The URL still holds $param. Fill in the path parameter before sending.")
                 }
 
-                // Brackets are an IPv6 host, and java.net.URI takes them in a query but not in a path.
-                c in NOT_SENDABLE || ((c == '[' || c == ']') && i in authorityEnd until queryStart) -> {
+                // Brackets belong to an IPv6 host. Elsewhere curl reads them as a range to expand.
+                c in NOT_SENDABLE || ((c == '[' || c == ']') && i >= authorityEnd) -> {
                     return refuse("The URL holds $c, which cannot be sent as written. Write it as ${escape(c.toString())}.")
                 }
 

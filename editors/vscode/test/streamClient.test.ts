@@ -78,6 +78,9 @@ describe("stream client", () => {
       got: undefined,
       error: "Not an absolute URL: /api/feed. Start it with http:// or https://, or with {{baseUrl}}.",
     });
+    const blank = await send(request({ signals: "\u00a0" }));
+    assert.equal(blank.got, undefined);
+    assert.match(blank.error ?? "", /^Signals are not valid JSON: /);
     assert.deepEqual(await send(request({ url: `${base}/users/{id}` })), {
       got: undefined,
       error: "The URL still holds {id}. Fill in the path parameter before sending.",

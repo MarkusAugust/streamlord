@@ -228,15 +228,14 @@ export function sendableUrl(url: string): { url: string } | { error: string } {
   const slash = target.slice(start).search(/[/?]/);
   const authorityEnd = slash < 0 ? target.length : start + slash;
   if (authorityEnd === start) return { error: `No host in ${url}.` };
-  const queryStart = target.indexOf("?") < 0 ? target.length : target.indexOf("?");
   let out = target.slice(0, start);
   for (let i = start; i < target.length; i++) {
     const c = target[i] ?? "";
     const code = c.charCodeAt(0);
     if (code <= 0x20 || code === 0x7f) return { error: "The URL holds a space or a control character, which cannot be sent. Write a space as %20." };
     if (c === "{" || c === "}") return { error: `The URL still holds ${PATH_PARAM_TEXT.exec(target)?.[0] ?? c}. Fill in the path parameter before sending.` };
-    // Brackets are an IPv6 host, and java.net.URI takes them in a query but not in a path.
-    if (NOT_SENDABLE.includes(c) || ((c === "[" || c === "]") && i >= authorityEnd && i < queryStart)) {
+    // Brackets belong to an IPv6 host. Elsewhere curl reads them as a range to expand.
+    if (NOT_SENDABLE.includes(c) || ((c === "[" || c === "]") && i >= authorityEnd)) {
       return { error: `The URL holds ${c}, which cannot be sent as written. Write it as ${escape(c)}.` };
     }
     if (c === "%" && !/^[0-9A-Fa-f]{2}$/.test(target.slice(i + 1, i + 3))) return { error: "The URL holds a % that starts no escape. Write it as %25." };

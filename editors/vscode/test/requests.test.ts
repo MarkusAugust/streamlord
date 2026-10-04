@@ -169,7 +169,8 @@ class FeedController {
 describe("sendable url", () => {
   it("sends the url of the curl line or says why not", () => {
     const cases: [string, string | null, string | null][] = [
-      ["http://h:8080/api/x?flag&q=a%20b+c&s='x'&a[]=1#frag", "http://h:8080/api/x?flag&q=a%20b+c&s='x'&a[]=1", null],
+      ["http://h:8080/api/x?flag&q=a%20b+c&s='x'&a%5B%5D=1#frag", "http://h:8080/api/x?flag&q=a%20b+c&s='x'&a%5B%5D=1", null],
+      ["http://h/x?filter[name]=1", null, "The URL holds [, which cannot be sent as written. Write it as %5B."],
       ["HTTPS://h/søk/\u{1F600}", "HTTPS://h/s%C3%B8k/%F0%9F%98%80", null],
       ["http://[::1]:8080/x", "http://[::1]:8080/x", null],
       ["http://h/x\uD83D", "http://h/x%EF%BF%BD", null],

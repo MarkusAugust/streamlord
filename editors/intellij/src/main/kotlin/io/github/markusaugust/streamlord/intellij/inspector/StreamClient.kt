@@ -4,6 +4,7 @@ import io.github.markusaugust.streamlord.analysis.DatastarFrame
 import io.github.markusaugust.streamlord.analysis.Requests
 import io.github.markusaugust.streamlord.analysis.SseParser
 import io.github.markusaugust.streamlord.analysis.decodeDatastar
+import io.github.markusaugust.streamlord.core.json.JsonParser
 import java.io.InputStream
 import java.net.ConnectException
 import java.net.URI
@@ -117,6 +118,13 @@ class StreamClient(
             return
         }
         val signalsJson = Requests.compactSignals(signals)
+        // Judged on the compacted text, which is what goes out: a lone no-break space is not blank to it.
+        try {
+            JsonParser.parse(signalsJson)
+        } catch (e: Exception) {
+            handlers.onError("Signals are not valid JSON: ${e.message}")
+            return
+        }
         val sendable = Requests.sendableUrl(Requests.requestUrl(url, method, signalsJson))
         val target =
             sendable.url ?: run {

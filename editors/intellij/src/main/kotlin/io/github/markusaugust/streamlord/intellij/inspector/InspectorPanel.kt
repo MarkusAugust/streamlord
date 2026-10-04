@@ -356,13 +356,11 @@ class InspectorPanel(
             )
             return
         }
-        if (request.signals.isNotBlank()) {
-            try {
-                JsonParser.parse(request.signals)
-            } catch (e: Exception) {
-                error("Signals are not valid JSON: ${e.message}")
-                return
-            }
+        try {
+            JsonParser.parse(Requests.compactSignals(request.signals))
+        } catch (e: Exception) {
+            error("Signals are not valid JSON: ${e.message}")
+            return
         }
         store.addRecent(raw)
         pushRequests(null)

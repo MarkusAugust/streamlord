@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { fillPath, parseHeaderLines, pathParams, resolveRequest, toCurl, type SavedRequest } from "./requests.ts";
+import { compactSignals, fillPath, parseHeaderLines, pathParams, resolveRequest, toCurl, type SavedRequest } from "./requests.ts";
 import type { RequestStore } from "./requestStore.ts";
 import { mergePatch, type DatastarFrame } from "./sse.ts";
 import { openStream } from "./streamClient.ts";
@@ -133,7 +133,7 @@ export class Inspector {
       return;
     }
     try {
-      if (request.signals.trim()) JSON.parse(request.signals);
+      JSON.parse(compactSignals(request.signals));
     } catch (e) {
       this.post({ type: "error", message: `Signals are not valid JSON: ${(e as Error).message}` });
       return;

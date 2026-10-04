@@ -29,6 +29,12 @@ export function buildRequest(req: StreamRequest): { url: string; init: RequestIn
   const written = sendableUrl(req.url);
   if ("error" in written) return written;
   const signalsJson = compactSignals(req.signals ?? "");
+  // Judged on the compacted text, which is what goes out: a lone no-break space is not blank to it.
+  try {
+    JSON.parse(signalsJson);
+  } catch (e) {
+    return { error: `Signals are not valid JSON: ${(e as Error).message}` };
+  }
   const sendable = sendableUrl(requestUrl(req.url, req.method, signalsJson));
   if ("error" in sendable) return sendable;
   const headers: Record<string, string> = { Accept: "text/event-stream", "Datastar-Request": "true", ...(req.headers ?? {}) };

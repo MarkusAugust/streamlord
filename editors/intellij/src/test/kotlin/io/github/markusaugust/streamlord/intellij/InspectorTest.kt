@@ -193,6 +193,9 @@ class InspectorTest : BasePlatformTestCase() {
                 null to "The URL still holds {id}. Fill in the path parameter before sending.",
                 send(SavedRequest("", "$base/users/{id}", "GET", "", "")),
             )
+            val (blank, notJson) = send(SavedRequest("", "$base/api/feed", "POST", "\u00a0", ""))
+            assertNull(blank)
+            assertTrue(notJson, notJson!!.startsWith("Signals are not valid JSON: "))
             val (_, restricted) = send(SavedRequest("", "$base/api/feed", "GET", "", "Host: elsewhere"))
             assertTrue(restricted, restricted!!.startsWith("Cannot send the request: restricted header name"))
         } finally {
