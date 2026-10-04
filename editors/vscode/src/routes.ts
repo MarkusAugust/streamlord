@@ -32,7 +32,10 @@ function findKtorRoutes(src: string): Route[] {
   // Stack of { prefix, depth } for enclosing route("...") { } blocks.
   const stack: { prefix: string; depth: number }[] = [];
   let depth = 0;
-  const re = /\b(route|get|post|put|patch|delete)\s*(?:\(\s*"([^"\n]*)"\s*\)\s*)?\{|\b(get|post|put|patch|delete)\s*\(\s*"([^"\n]*)"\s*\)/g;
+  // `map.get("key")` and `client.post("https://...")` have the shape of a route and are none. A verb
+  // counts when it is not called on a receiver, and it either takes a lambda or its path starts with
+  // a slash. The path may be followed by more arguments: `route("/v1", HttpMethod.Get) { }`.
+  const re = /\b(route|get|post|put|patch|delete)\s*(?:\(\s*"([^"\n]*)"\s*(?:,[^(){}\n]*)?\)\s*)?\{|\b(get|post|put|patch|delete)\s*\(\s*"(\/[^"\n]*)"\s*\)/g;
   let i = 0;
   while (i < src.length) {
     const c = src[i];
@@ -53,7 +56,7 @@ function findKtorRoutes(src: string): Route[] {
     }
     re.lastIndex = i;
     const m = re.exec(src);
-    if (!m || m.index !== i) {
+    if (!m || m.index !== i || hasReceiver(src, i)) {
       i++;
       continue;
     }
@@ -80,6 +83,13 @@ function findKtorRoutes(src: string): Route[] {
   return routes;
 }
 
+/** Whether the call at `start` is made on something: `client.post(...)`, also with the dot on the line above. */
+function hasReceiver(src: string, start: number): boolean {
+  let i = start - 1;
+  while (i >= 0 && " \t\r\n".includes(src[i] ?? "x")) i--;
+  return i >= 0 && src[i] === ".";
+}
+
 function annotationPath(args: string): string {
   const named = /(?:value|path)\s*=\s*(?:\[\s*)?"([^"]*)"/.exec(args);
   if (named) return named[1] ?? "";
@@ -103,7 +113,8 @@ function findSpringRoutes(src: string): Route[] {
     const name = m[1] ?? "";
     const args = m[2] ?? "";
     const after = src.slice(m.index + m[0].length, m.index + m[0].length + 200);
-    const onClass = /^\s*(?:@\w+(?:\([^)]*\))?\s*)*(?:open\s+|abstract\s+)?class\b/.test(after);
+    // Any modifier may stand between the annotation and `class`, and Spring reads a mapping on an interface too.
+    const onClass = /^\s*(?:@\w+(?:\([^)]*\))?\s*)*(?:(?:public|internal|private|protected|open|final|abstract|sealed|data|inner)\s+)*(?:class|interface)\b/.test(after);
     if (onClass) {
       if (name === "RequestMapping") classPrefix = annotationPath(args);
       continue;
