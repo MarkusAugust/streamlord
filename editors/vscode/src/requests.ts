@@ -98,41 +98,136 @@ export function remove(file: RequestsFile, name: string): RequestsFile {
   return { version: 1, requests: file.requests.filter((r) => nameKey(r.name) !== key) };
 }
 
-/** Parse `{"baseUrl": "..."}`; anything that is not a flat object of strings is ignored. */
-export function parseEnvFile(text: string): Record<string, string> {
+/** The first entry of the request list, saying what else is in it, so the list reads as the place to find them. */
+export function newRequestLabel(saved: number, recent: number): string {
+  const counts = [saved > 0 ? `${saved} saved` : "", recent > 0 ? `${recent} recent` : ""].filter((c) => c !== "").join(", ");
+  return counts ? `New request… (${counts})` : "New request…";
+}
+
+/** The keys `.streamlord/env.json` may hold, in the order the inspector lists them. */
+export const ENV_KEYS = ["baseUrl", "signals", "headers"] as const;
+export type EnvKey = (typeof ENV_KEYS)[number];
+
+/** `.streamlord/env.json` as read: each key that is set and valid, and what is wrong with the rest. */
+export interface Env {
+  baseUrl: string | null;
+  /** Compact JSON, spelled as in the file. */
+  signals: string | null;
+  headers: [string, string][] | null;
+  errors: string[];
+}
+
+const INVALID = `${ENV_FILE} is not valid`;
+
+/**
+ * Read `.streamlord/env.json`. Only `baseUrl` (text), `signals` (an object) and `headers` (an
+ * object of texts) are allowed, and anything else is reported rather than ignored, so a typo
+ * does not quietly leave a value unset.
+ */
+export function parseEnv(text: string): Env {
+  const env: Env = { baseUrl: null, signals: null, headers: null, errors: [] };
+  let raw: unknown;
   try {
-    const raw = JSON.parse(text) as Record<string, unknown>;
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
-    return Object.fromEntries(Object.entries(raw).filter(([, v]) => typeof v === "string" || typeof v === "number").map(([k, v]) => [k, String(v)]));
+    raw = JSON.parse(text);
   } catch {
-    return {};
+    env.errors.push(`${ENV_FILE} is not valid JSON.`);
+    return env;
   }
+  if (!isObject(raw)) {
+    env.errors.push(`${INVALID}: it must be an object with baseUrl, signals or headers.`);
+    return env;
+  }
+  for (const [key, value] of Object.entries(raw)) {
+    if (key === "baseUrl") {
+      if (typeof value !== "string") env.errors.push(`${INVALID}: baseUrl must be text, such as "http://localhost:8080".`);
+      else if (!/^https?:\/\//i.test(value)) env.errors.push(`${INVALID}: baseUrl must start with http:// or https://.`);
+      else env.baseUrl = value.replace(/\/+$/, "");
+    } else if (key === "signals") {
+      if (!isObject(value)) env.errors.push(`${INVALID}: signals must be a JSON object, such as {"search": "ash"}.`);
+      // From the text, not written anew, so 1.0 stays 1.0 and the IntelliJ plugin arrives at the same signals.
+      else env.signals = compactSignals(topLevelValues(text).get("signals") ?? "{}");
+    } else if (key === "headers") {
+      if (!isObject(value)) {
+        env.errors.push(`${INVALID}: headers must be an object of names and values, such as {"Authorization": "Bearer token"}.`);
+        continue;
+      }
+      const notText = Object.entries(value).filter(([, v]) => typeof v !== "string");
+      for (const [name] of notText) env.errors.push(`${INVALID}: the value of the header "${name}" must be text.`);
+      if (notText.length === 0) env.headers = Object.entries(value as Record<string, string>);
+    } else {
+      env.errors.push(`${INVALID}: "${key}" is not a known key. Use baseUrl, signals or headers.`);
+    }
+  }
+  return env;
+}
+
+function isObject(v: unknown): v is Record<string, unknown> {
+  return v !== null && typeof v === "object" && !Array.isArray(v);
+}
+
+/** The text of each value of the top-level object, by key as written; `text` is known to parse. */
+function topLevelValues(text: string): Map<string, string> {
+  const values = new Map<string, string>();
+  let i = text.indexOf("{") + 1;
+  const space = () => {
+    while (i < text.length && " \t\n\r".includes(text[i] ?? "")) i++;
+  };
+  while (i < text.length) {
+    space();
+    if (text[i] !== '"') break;
+    const keyEnd = valueEnd(text, i);
+    const key = text.slice(i + 1, keyEnd - 1);
+    i = keyEnd;
+    space();
+    i++;
+    space();
+    const end = valueEnd(text, i);
+    values.set(key, text.slice(i, end));
+    i = end;
+    space();
+    if (text[i] === ",") i++;
+  }
+  return values;
+}
+
+/** The end of the JSON value at `i`. */
+function valueEnd(text: string, i: number): number {
+  if (text[i] === '"') {
+    i++;
+    while (i < text.length && text[i] !== '"') i += text[i] === "\\" ? 2 : 1;
+    return i + 1;
+  }
+  if (text[i] === "{" || text[i] === "[") {
+    let depth = 0;
+    for (; i < text.length; i++) {
+      const c = text[i];
+      if (c === '"') i = valueEnd(text, i) - 1;
+      else if (c === "{" || c === "[") depth++;
+      else if ((c === "}" || c === "]") && --depth === 0) return i + 1;
+    }
+    return text.length;
+  }
+  while (i < text.length && !",}] \t\n\r".includes(text[i] ?? "")) i++;
+  return i;
 }
 
 const VARIABLE = /\{\{\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\}\}/g;
 
-export type VariableSource = "default" | "settings" | "env";
+export type VariableSource = "default" | "env";
 
-/** A `{{name}}` value and where it was set, so the inspector can say both. */
+/** A variable that is set, as text, and where it was set, so the inspector can say both. */
 export interface Variable {
-  name: string;
+  name: EnvKey;
   value: string;
   source: VariableSource;
 }
 
-const SOURCE_LABEL: Record<VariableSource, string> = { default: "default", settings: "settings", env: ENV_FILE };
-const SOURCE_PHRASE: Record<VariableSource, string> = { default: "the default", settings: "from the settings", env: `from ${ENV_FILE}` };
-
-/**
- * `baseUrl` from the default, then the settings, then `.streamlord/env.json`; a later source
- * replaces the value of an earlier one and keeps its place in the list.
- */
-export function mergeVariables(defaultUrl: string, settings: Record<string, string>, env: Record<string, string>): Variable[] {
-  const out = new Map<string, Variable>();
-  out.set("baseUrl", { name: "baseUrl", value: defaultUrl.replace(/\/+$/, ""), source: "default" });
-  for (const [name, value] of Object.entries(settings)) out.set(name, { name, value, source: "settings" });
-  for (const [name, value] of Object.entries(env)) out.set(name, { name, value, source: "env" });
-  return [...out.values()];
+/** `baseUrl` from the env file or else the default, then `signals` and `headers` when the file sets them. */
+export function mergeVariables(defaultUrl: string, env: Env): Variable[] {
+  const out: Variable[] = [env.baseUrl !== null ? { name: "baseUrl", value: env.baseUrl, source: "env" } : { name: "baseUrl", value: defaultUrl.replace(/\/+$/, ""), source: "default" }];
+  if (env.signals !== null) out.push({ name: "signals", value: env.signals, source: "env" });
+  if (env.headers !== null) out.push({ name: "headers", value: env.headers.map(([k, v]) => `${k}: ${v}`).join("\n"), source: "env" });
+  return out;
 }
 
 /** The values by name, for substitution. */
@@ -142,46 +237,7 @@ export function variableValues(vars: Variable[]): Record<string, string> {
 
 /** One line per variable, with where it was set. */
 export function describeVariables(vars: Variable[]): string {
-  return vars.map((v) => `${v.name} = ${v.value === "" ? '""' : v.value}   (${SOURCE_LABEL[v.source]})`).join("\n");
-}
-
-/**
- * The text of `.streamlord/env.json` with `names` added, empty, after what is there. A missing
- * file is written with `baseUrl` first, so it is there to change. The text is extended rather
- * than written anew, so the user's own layout and values stay as they were; null when it is not
- * a JSON object and cannot be extended safely.
- */
-export function withEnvVariables(text: string | null, names: string[], baseUrl: string): string | null {
-  if (text === null) {
-    const entries = [["baseUrl", baseUrl], ...names.filter((n) => n !== "baseUrl").map((n) => [n, ""])];
-    return `{\n${entries.map(([k, v]) => `  ${jsonString(k ?? "")}: ${jsonString(v ?? "")}`).join(",\n")}\n}\n`;
-  }
-  let raw: unknown;
-  try {
-    raw = JSON.parse(text);
-  } catch {
-    return null;
-  }
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-  const missing = [...new Set(names)].filter((n) => !Object.hasOwn(raw as object, n));
-  if (missing.length === 0) return text;
-  const close = text.lastIndexOf("}");
-  const before = text.slice(0, close).replace(/[ \t\n\r]+$/, "");
-  const added = missing.map((n) => `  ${jsonString(n)}: ""`).join(",\n");
-  return `${before}${before.endsWith("{") ? "\n" : ",\n"}${added}\n${text.slice(close)}`;
-}
-
-/**
- * What the variables in a URL were, for a server that could not be reached: a `baseUrl` left at
- * its default is the usual reason, and nothing on screen said so.
- */
-export function unreachableHint(url: string, vars: Variable[]): string | null {
-  const byName = new Map(vars.map((v) => [v.name, v]));
-  const used = [...new Set([...url.matchAll(VARIABLE)].map((m) => m[1] ?? ""))].flatMap((n) => byName.get(n) ?? []);
-  if (used.length === 0) return null;
-  const parts = used.map((v) => `{{${v.name}}} is ${v.value}, ${SOURCE_PHRASE[v.source]}.`);
-  if (used.some((v) => v.source === "default")) parts.push(`Set baseUrl in ${ENV_FILE} if your server listens elsewhere.`);
-  return parts.join(" ");
+  return vars.map((v) => `${v.name} = ${v.value === "" ? "(none)" : v.value.split("\n").join("; ")}   (${v.source === "env" ? ENV_FILE : "default"})`).join("\n");
 }
 
 /** Replace `{{name}}` with values; unknown names are left in place and reported. */
@@ -196,14 +252,100 @@ export function substitute(text: string, vars: Record<string, string>): { text: 
   return { text: out, missing: [...missing] };
 }
 
-export function resolveRequest(r: SavedRequest, vars: Record<string, string>): { request: SavedRequest; missing: string[] } {
-  const url = substitute(r.url, vars);
-  const signals = substitute(r.signals, vars);
-  const headers = substitute(r.headers, vars);
-  return {
-    request: { ...r, url: url.text, signals: signals.text, headers: headers.text },
-    missing: [...new Set([...url.missing, ...signals.missing, ...headers.missing])],
+export type Field = "url" | "signals" | "headers";
+
+/** The field a variable may stand in: `baseUrl` anywhere, `signals` and `headers` only in their own. */
+function belongsIn(name: EnvKey, field: Field): boolean {
+  return name === "baseUrl" || name === field;
+}
+
+function isEnvKey(name: string): name is EnvKey {
+  return (ENV_KEYS as readonly string[]).includes(name);
+}
+
+/**
+ * Fill the variables into a request. Anything that cannot be filled is reported, and `unset`
+ * names the keys a request needs that the env file does not set, for the inspector to add.
+ */
+export function resolveRequest(r: SavedRequest, vars: Variable[]): { request: SavedRequest; errors: string[]; unset: EnvKey[] } {
+  const values = new Map(vars.map((v) => [v.name, v.value]));
+  const errors: string[] = [];
+  const unset: EnvKey[] = [];
+  const report = (message: string) => {
+    if (!errors.includes(message)) errors.push(message);
   };
+  const fill = (text: string, field: Field) =>
+    text.replace(VARIABLE, (whole, name: string) => {
+      if (!isEnvKey(name)) {
+        report(`{{${name}}} is not a variable. Use {{baseUrl}}, {{signals}} or {{headers}}.`);
+        return whole;
+      }
+      if (!belongsIn(name, field)) {
+        report(`{{${name}}} belongs in the ${name} field.`);
+        return whole;
+      }
+      const value = values.get(name);
+      if (value === undefined) {
+        report(`{{${name}}} is not set. Add "${name}" to ${ENV_FILE}.`);
+        if (!unset.includes(name)) unset.push(name);
+        return whole;
+      }
+      return value;
+    });
+  const request = { ...r, url: fill(r.url, "url"), signals: fill(r.signals, "signals"), headers: fill(r.headers, "headers") };
+  return { request, errors, unset };
+}
+
+/**
+ * The text of `.streamlord/env.json` with `keys` added after what is there: `baseUrl` with its
+ * current value, `signals` and `headers` as empty objects to fill in. A missing file is written
+ * with `baseUrl` first. The text is extended rather than written anew, so the user's own layout
+ * and values stay as they were; null when it is not a JSON object and cannot be extended safely.
+ */
+export function withEnvVariables(text: string | null, keys: EnvKey[], baseUrl: string): string | null {
+  const valueOf = (key: EnvKey) => (key === "baseUrl" ? jsonString(baseUrl) : "{}");
+  if (text === null) {
+    const entries: EnvKey[] = ["baseUrl", ...keys.filter((k) => k !== "baseUrl")];
+    return `{\n${entries.map((k) => `  ${jsonString(k)}: ${valueOf(k)}`).join(",\n")}\n}\n`;
+  }
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (!isObject(raw)) return null;
+  const missing = [...new Set(keys)].filter((k) => !Object.hasOwn(raw as object, k));
+  if (missing.length === 0) return text;
+  const close = text.lastIndexOf("}");
+  const before = text.slice(0, close).replace(/[ \t\n\r]+$/, "");
+  const added = missing.map((k) => `  ${jsonString(k)}: ${valueOf(k)}`).join(",\n");
+  return `${before}${before.endsWith("{") ? "\n" : ",\n"}${added}\n${text.slice(close)}`;
+}
+
+/**
+ * Where the `{{baseUrl}}` of a URL came from, for a server that could not be reached: a value
+ * left at its default is the usual reason, and nothing on screen said so.
+ */
+export function unreachableHint(url: string, vars: Variable[]): string | null {
+  const baseUrl = vars.find((v) => v.name === "baseUrl");
+  if (!baseUrl || !/\{\{\s*baseUrl\s*\}\}/.test(url)) return null;
+  return baseUrl.source === "default"
+    ? `{{baseUrl}} is ${baseUrl.value}, the default. Set baseUrl in ${ENV_FILE} if your server listens elsewhere.`
+    : `{{baseUrl}} is ${baseUrl.value}, from ${ENV_FILE}.`;
+}
+
+/**
+ * The variables to offer after `{{` at `caret`, those the field takes and the file sets, and
+ * the range to replace with `{{name}}`, closing braces already typed included.
+ */
+export function variableCompletions(text: string, caret: number, field: Field, vars: Variable[]): { from: number; to: number; items: Variable[] } | null {
+  const m = /\{\{\s*([A-Za-z]*)$/.exec(text.slice(0, caret));
+  if (!m) return null;
+  const prefix = (m[1] ?? "").toLowerCase();
+  const items = vars.filter((v) => belongsIn(v.name, field) && v.name.toLowerCase().startsWith(prefix));
+  if (items.length === 0) return null;
+  return { from: m.index, to: text.startsWith("}}", caret) ? caret + 2 : caret, items };
 }
 
 /** The request as the Datastar client would send it, one identity for the recent list. */

@@ -42,22 +42,9 @@ class RequestsTest {
     }
 
     @Test
-    fun `substitutes variables and reports the missing ones`() {
-        val vars = mapOf("baseUrl" to "http://localhost:8080", "token" to "t1")
-        val r =
-            Requests.resolveRequest(
-                req(headers = "X-Csrf-Token: {{token}}\nX-Other: {{ nope }}", signals = "{\"u\":\"{{user}}\"}"),
-                vars,
-            )
-        assertEquals("http://localhost:8080/api/counter-stream", r.request.url)
-        assertEquals("X-Csrf-Token: t1\nX-Other: {{ nope }}", r.request.headers)
-        assertEquals(listOf("user", "nope"), r.missing)
+    fun `substitutes text where a name is not a variable`() {
         assertEquals("no vars", Requests.substitute("no vars", emptyMap()).text)
-        assertEquals(
-            mapOf("baseUrl" to "http://x", "port" to "8080"),
-            Requests.parseEnvFile("""{"baseUrl":"http://x","port":8080,"nested":{"a":1}}"""),
-        )
-        assertEquals(emptyMap(), Requests.parseEnvFile("["))
+        assertEquals("http://h/x", Requests.substitute("{{baseUrl}}/x", mapOf("baseUrl" to "http://h")).text)
     }
 
     @Test
@@ -158,29 +145,103 @@ class RequestsTest {
         }
     }
 
-    private val vars =
-        Requests.mergeVariables(
-            "http://localhost:8080//",
-            mapOf("csrf" to "s1", "baseUrl" to "http://s"),
-            mapOf("csrf" to "e1", "token" to ""),
+    private val invalid = ".streamlord/env.json is not valid"
+    private val env =
+        Requests.parseEnv(
+            """
+            {
+              "baseUrl": "http://127.0.0.1:8081/",
+              "signals": { "search" : "ash", "n": 1.0, "s": "\u00e9</p>" },
+              "headers": { "Authorization": "Bearer x", "X-Csrf-Token": "abc" }
+            }
+            """.trimIndent(),
         )
+    private val vars = Requests.mergeVariables("http://localhost:8080/", env)
+    private val defaults = Requests.mergeVariables("http://localhost:8080/", Requests.parseEnv("{}"))
 
     @Test
-    fun `variables say where each value comes from, the env file last`() {
+    fun `variables read the three keys of the env file, signals as written`() {
+        assertEquals(
+            Requests.Env(
+                baseUrl = "http://127.0.0.1:8081",
+                signals = """{"search":"ash","n":1.0,"s":"\u00e9</p>"}""",
+                headers = listOf("Authorization" to "Bearer x", "X-Csrf-Token" to "abc"),
+                errors = emptyList(),
+            ),
+            env,
+        )
+    }
+
+    @Test
+    fun `variables say what makes the env file invalid`() {
+        assertEquals(listOf(".streamlord/env.json is not valid JSON."), Requests.parseEnv("not json").errors)
+        assertEquals(listOf("$invalid: it must be an object with baseUrl, signals or headers."), Requests.parseEnv("[]").errors)
+        assertEquals(
+            Requests.Env(
+                baseUrl = null,
+                signals = null,
+                headers = null,
+                errors =
+                    listOf(
+                        "$invalid: \"csrf\" is not a known key. Use baseUrl, signals or headers.",
+                        "$invalid: baseUrl must be text, such as \"http://localhost:8080\".",
+                        "$invalid: signals must be a JSON object, such as {\"search\": \"ash\"}.",
+                        "$invalid: the value of the header \"X-A\" must be text.",
+                    ),
+            ),
+            Requests.parseEnv("""{"csrf": "x", "baseUrl": 8080, "signals": [], "headers": {"X-A": 1}}"""),
+        )
         assertEquals(
             listOf(
-                Requests.Variable("baseUrl", "http://s", Requests.VariableSource.SETTINGS),
-                Requests.Variable("csrf", "e1", Requests.VariableSource.ENV),
-                Requests.Variable("token", "", Requests.VariableSource.ENV),
+                "$invalid: baseUrl must start with http:// or https://.",
+                "$invalid: headers must be an object of names and values, such as {\"Authorization\": \"Bearer token\"}.",
             ),
-            vars,
+            Requests.parseEnv("""{"baseUrl": "localhost:8080", "headers": []}""").errors,
         )
-        val defaults = Requests.mergeVariables("http://localhost:8080/", emptyMap(), emptyMap())
+    }
+
+    @Test
+    fun `variables say where each value comes from`() {
         assertEquals(listOf(Requests.Variable("baseUrl", "http://localhost:8080", Requests.VariableSource.DEFAULT)), defaults)
         assertEquals(
-            "baseUrl = http://localhost:8080   (default)\ncsrf = e1   (.streamlord/env.json)\ntoken = \"\"   (.streamlord/env.json)",
-            Requests.describeVariables(defaults + vars.drop(1)),
+            "baseUrl = http://127.0.0.1:8081   (.streamlord/env.json)\n" +
+                "signals = {\"search\":\"ash\",\"n\":1.0,\"s\":\"\\u00e9</p>\"}   (.streamlord/env.json)\n" +
+                "headers = Authorization: Bearer x; X-Csrf-Token: abc   (.streamlord/env.json)",
+            Requests.describeVariables(vars),
         )
+        assertEquals(
+            "baseUrl = http://h   (default)\nsignals = {}   (.streamlord/env.json)\nheaders = (none)   (.streamlord/env.json)",
+            Requests.describeVariables(Requests.mergeVariables("http://h", Requests.parseEnv("""{"signals": {}, "headers": {}}"""))),
+        )
+    }
+
+    @Test
+    fun `variables fill a request, each in its own field`() {
+        val r =
+            Requests.resolveRequest(
+                SavedRequest("", "{{baseUrl}}/x?q={{ baseUrl }}", "POST", "{{signals}}", "{{headers}}\nX-B: {{baseUrl}}"),
+                vars,
+            )
+        assertEquals(emptyList(), r.errors)
+        assertEquals(emptyList(), r.unset)
+        assertEquals("http://127.0.0.1:8081/x?q=http://127.0.0.1:8081", r.request.url)
+        assertEquals("""{"search":"ash","n":1.0,"s":"\u00e9</p>"}""", r.request.signals)
+        assertEquals("Authorization: Bearer x\nX-Csrf-Token: abc\nX-B: http://127.0.0.1:8081", r.request.headers)
+        val bad =
+            Requests.resolveRequest(
+                SavedRequest("", "{{baseUrl}}/{{signals}}", "POST", "{\"a\": \"{{csrf}}\"} {{signals}}", "{{headers}}"),
+                defaults,
+            )
+        assertEquals(
+            listOf(
+                "{{signals}} belongs in the signals field.",
+                "{{csrf}} is not a variable. Use {{baseUrl}}, {{signals}} or {{headers}}.",
+                "{{signals}} is not set. Add \"signals\" to .streamlord/env.json.",
+                "{{headers}} is not set. Add \"headers\" to .streamlord/env.json.",
+            ),
+            bad.errors,
+        )
+        assertEquals(listOf("signals", "headers"), bad.unset)
     }
 
     @Test
@@ -190,32 +251,50 @@ class RequestsTest {
             Requests.withEnvVariables(null, emptyList(), "http://localhost:8080"),
         )
         assertEquals(
-            "{\n  \"baseUrl\": \"http://h\",\n  \"csrf\": \"\"\n}\n",
-            Requests.withEnvVariables(null, listOf("csrf", "baseUrl"), "http://h"),
+            "{\n  \"baseUrl\": \"http://h\",\n  \"headers\": {},\n  \"signals\": {}\n}\n",
+            Requests.withEnvVariables(null, listOf("headers", "signals"), "http://h"),
         )
-        assertEquals("{\n  \"csrf\": \"\"\n}", Requests.withEnvVariables("{}", listOf("csrf"), "http://h"))
+        assertEquals("{\n  \"signals\": {}\n}", Requests.withEnvVariables("{}", listOf("signals"), "http://h"))
         assertEquals(
-            "{ \"baseUrl\": \"http://x\", \"n\": 1,\n  \"csrf\": \"\",\n  \"token\": \"\"\n}\n",
-            Requests.withEnvVariables("{ \"baseUrl\": \"http://x\", \"n\": 1 }\n", listOf("csrf", "n", "token"), "http://h"),
+            "{ \"baseUrl\": \"http://x\",\n  \"signals\": {}\n}\n",
+            Requests.withEnvVariables("{ \"baseUrl\": \"http://x\" }\n", listOf("signals", "baseUrl"), "http://h"),
         )
-        assertEquals("{\"a\": \"1\"}", Requests.withEnvVariables("{\"a\": \"1\"}", listOf("a"), "http://h"))
-        assertEquals(null, Requests.withEnvVariables("not json", listOf("a"), "http://h"))
-        assertEquals(null, Requests.withEnvVariables("[]", listOf("a"), "http://h"))
+        assertEquals("{\"signals\": {}}", Requests.withEnvVariables("{\"signals\": {}}", listOf("signals"), "http://h"))
+        assertEquals(null, Requests.withEnvVariables("not json", listOf("signals"), "http://h"))
+        assertEquals(null, Requests.withEnvVariables("[]", listOf("signals"), "http://h"))
     }
 
     @Test
-    fun `an unreachable server is explained by the variables in its url`() {
-        val defaults = Requests.mergeVariables("http://localhost:8080", emptyMap(), emptyMap())
+    fun `variables explain an unreachable server by its baseUrl`() {
         assertEquals(
             "{{baseUrl}} is http://localhost:8080, the default. Set baseUrl in .streamlord/env.json if your server listens elsewhere.",
             Requests.unreachableHint("{{baseUrl}}/hendelser", defaults),
         )
-        assertEquals(
-            "{{baseUrl}} is http://s, from the settings. {{csrf}} is e1, from .streamlord/env.json.",
-            Requests.unreachableHint("{{ baseUrl }}/x?t={{csrf}}&u={{baseUrl}}", vars),
-        )
+        assertEquals("{{baseUrl}} is http://127.0.0.1:8081, from .streamlord/env.json.", Requests.unreachableHint("{{ baseUrl }}/x", vars))
         assertEquals(null, Requests.unreachableHint("http://127.0.0.1:8081/x", defaults))
-        assertEquals(null, Requests.unreachableHint("{{missing}}/x", defaults))
+    }
+
+    @Test
+    fun `the request list counts what it holds in its first entry`() {
+        assertEquals(
+            listOf("New request…", "New request… (2 saved, 5 recent)", "New request… (1 recent)"),
+            listOf(Requests.newRequestLabel(0, 0), Requests.newRequestLabel(2, 5), Requests.newRequestLabel(0, 1)),
+        )
+    }
+
+    @Test
+    fun `variables complete a name after the braces with what the field takes`() {
+        fun names(c: Requests.Completion?) = c?.let { Triple(it.from, it.to, it.items.map { v -> v.name }) }
+        assertEquals(Triple(0, 2, listOf("baseUrl")), names(Requests.variableCompletions("{{", 2, Requests.Field.URL, vars)))
+        assertEquals(Triple(2, 6, listOf("signals")), names(Requests.variableCompletions("a {{ s", 6, Requests.Field.SIGNALS, vars)))
+        assertEquals(
+            Triple(0, 4, listOf("baseUrl", "headers")),
+            names(Requests.variableCompletions("{{}}", 2, Requests.Field.HEADERS, vars)),
+        )
+        assertEquals(Triple(3, 6, listOf("headers")), names(Requests.variableCompletions("X: {{H", 6, Requests.Field.HEADERS, vars)))
+        assertEquals(null, Requests.variableCompletions("{{x", 3, Requests.Field.URL, vars))
+        assertEquals(null, Requests.variableCompletions("{x", 2, Requests.Field.URL, vars))
+        assertEquals(Triple(0, 2, listOf("baseUrl")), names(Requests.variableCompletions("{{", 2, Requests.Field.SIGNALS, defaults)))
     }
 
     @Test

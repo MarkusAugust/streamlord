@@ -17,8 +17,8 @@ import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
 /**
  * Where inspector requests live: saved ones in `.streamlord/inspector.json` in the project (the
  * same file the VS Code extension reads, so a team shares them), recent ones and the last-used
- * request in the workspace state, variables in the settings merged with `.streamlord/env.json`,
- * which is meant to be git-ignored, for tokens and local hosts.
+ * request in the workspace state, and the variables in `.streamlord/env.json`, which is meant for
+ * local hosts and tokens and stays out of version control.
  */
 @Service(Service.Level.PROJECT)
 class RequestStore(
@@ -48,13 +48,6 @@ class RequestStore(
         write(Requests.remove(read(), name))
     }
 
-    /** Create the file with an empty list when it does not exist yet, and return it. */
-    fun ensureFile(): VirtualFile? {
-        requestsFile()?.let { return it }
-        write(RequestsFile.EMPTY)
-        return requestsFile()
-    }
-
     private fun write(file: RequestsFile) {
         val base = baseDir() ?: throw IllegalStateException("Open a project to save requests; they are stored in the project.")
         val text = Requests.serializeRequestsFile(file)
@@ -78,13 +71,20 @@ class RequestStore(
 
     fun lastUsed(): SavedRequest? = InspectorState.getInstance(project).lastUsed()
 
-    /** Settings first, `.streamlord/env.json` on top; `baseUrl` always has a value. */
-    fun variables(): Map<String, String> = Requests.variableValues(variableList())
+    /** The variables that are set, and what is wrong with `.streamlord/env.json`. */
+    data class Environment(
+        val vars: List<Requests.Variable>,
+        val errors: List<String>,
+    )
 
-    /** The variables with where each was set, for the inspector to show. */
-    fun variableList(): List<Requests.Variable> {
-        val env = envText()?.let { Requests.parseEnvFile(it) } ?: emptyMap()
-        return Requests.mergeVariables(settings.state.inspectorDefaultUrl, settings.state.inspectorVariables, env)
+    /**
+     * The variables `.streamlord/env.json` sets, `baseUrl` from the settings when it does not, and
+     * what is wrong with the file. An invalid file sets nothing: a request is not sent half filled.
+     */
+    fun environment(): Environment {
+        val env = Requests.parseEnv(envText() ?: "{}")
+        val usable = if (env.errors.isEmpty()) env else Requests.parseEnv("{}")
+        return Environment(Requests.mergeVariables(settings.state.inspectorDefaultUrl, usable), env.errors)
     }
 
     private fun envFile(): VirtualFile? = baseDir()?.findFileByRelativePath(Requests.ENV_FILE)
@@ -93,13 +93,14 @@ class RequestStore(
         envFile()?.let { env -> ApplicationManager.getApplication().runReadAction(Computable { VfsUtil.loadText(env) }) }
 
     /**
-     * Add [names] to `.streamlord/env.json`, creating it with `baseUrl` when it is missing, and
+     * Add [keys] to `.streamlord/env.json`, creating it with `baseUrl` when it is missing, and
      * return it to be opened. The flag is false when the file is not a JSON object to add to.
      */
-    fun defineVariables(names: List<String>): Pair<VirtualFile, Boolean> {
+    fun defineVariables(keys: List<String>): Pair<VirtualFile, Boolean> {
         val base = baseDir() ?: throw IllegalStateException("Open a project to keep variables; they live in ${Requests.ENV_FILE}.")
         val text = envText()
-        val next = Requests.withEnvVariables(text, names, variables()["baseUrl"] ?: "")
+        val baseUrl = environment().vars.firstOrNull { it.name == "baseUrl" }?.value ?: ""
+        val next = Requests.withEnvVariables(text, keys, baseUrl)
         envFile()?.let { if (next == null || next == text) return it to (next != null) }
         val path = Requests.ENV_FILE
         var file: VirtualFile? = null

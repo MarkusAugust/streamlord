@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { fillPath, parseEnvFile, parseRequestsFile, pathParams, pushRecent, describeVariables, mergeVariables, remove, resolveRequest, sendableUrl, serializeRequestsFile, unreachableHint, withEnvVariables, substitute, toCurl, upsert, type SavedRequest } from "../src/requests.ts";
+import { describeVariables, fillPath, mergeVariables, newRequestLabel, parseEnv, parseRequestsFile, pathParams, pushRecent, remove, resolveRequest, sendableUrl, serializeRequestsFile, substitute, toCurl, unreachableHint, upsert, variableCompletions, withEnvVariables, type SavedRequest } from "../src/requests.ts";
 import { findRoutes } from "../src/routes.ts";
 
 const req = (over: Partial<SavedRequest> = {}): SavedRequest => ({ name: "counter", url: "{{baseUrl}}/api/counter-stream", method: "GET", signals: "", headers: "", ...over });
@@ -23,16 +23,11 @@ describe("saved requests", () => {
     assert.deepEqual(remove(file, "zeta").requests.map((r) => r.name), ["alpha"]);
   });
 
-  it("substitutes variables and reports the missing ones", () => {
-    const vars = { baseUrl: "http://localhost:8080", token: "t1" };
-    const r = resolveRequest(req({ headers: "X-Csrf-Token: {{token}}\nX-Other: {{ nope }}", signals: '{"u":"{{user}}"}' }), vars);
-    assert.equal(r.request.url, "http://localhost:8080/api/counter-stream");
-    assert.equal(r.request.headers, "X-Csrf-Token: t1\nX-Other: {{ nope }}");
-    assert.deepEqual(r.missing, ["user", "nope"]);
+  it("substitutes text where a name is not a variable", () => {
     assert.equal(substitute("no vars", {}).text, "no vars");
-    assert.deepEqual(parseEnvFile('{"baseUrl":"http://x","port":8080,"nested":{"a":1}}'), { baseUrl: "http://x", port: "8080" });
-    assert.deepEqual(parseEnvFile("["), {});
+    assert.equal(substitute("{{baseUrl}}/x", { baseUrl: "http://h" }).text, "http://h/x");
   });
+
 
   it("keeps a bounded, de-duplicated recent list", () => {
     let recent: SavedRequest[] = [];
@@ -194,41 +189,103 @@ describe("sendable url", () => {
 });
 
 // The same cases, character for character, as the variable tests in the analysis module's
-// `RequestsTest.kt`: both inspectors show the same lines and write the same env file.
+// `RequestsTest.kt`: both inspectors read the env file, judge it and fill a request alike.
 describe("inspector variables", () => {
-  const vars = mergeVariables("http://localhost:8080//", { csrf: "s1", baseUrl: "http://s" }, { csrf: "e1", token: "" });
+  const ENV = ".streamlord/env.json is not valid";
+  const env = parseEnv(`{
+  "baseUrl": "http://127.0.0.1:8081/",
+  "signals": { "search" : "ash", "n": 1.0, "s": "\\u00e9</p>" },
+  "headers": { "Authorization": "Bearer x", "X-Csrf-Token": "abc" }
+}`);
+  const vars = mergeVariables("http://localhost:8080/", env);
+  const defaults = mergeVariables("http://localhost:8080/", parseEnv("{}"));
 
-  it("say where each value comes from, the env file last", () => {
-    assert.deepEqual(vars, [
-      { name: "baseUrl", value: "http://s", source: "settings" },
-      { name: "csrf", value: "e1", source: "env" },
-      { name: "token", value: "", source: "env" },
+  it("read the three keys of the env file, signals as written", () => {
+    assert.deepEqual(env, {
+      baseUrl: "http://127.0.0.1:8081",
+      signals: '{"search":"ash","n":1.0,"s":"\\u00e9</p>"}',
+      headers: [["Authorization", "Bearer x"], ["X-Csrf-Token", "abc"]],
+      errors: [],
+    });
+  });
+
+  it("say what makes the env file invalid", () => {
+    assert.deepEqual(parseEnv("not json").errors, [".streamlord/env.json is not valid JSON."]);
+    assert.deepEqual(parseEnv("[]").errors, [`${ENV}: it must be an object with baseUrl, signals or headers.`]);
+    assert.deepEqual(parseEnv('{"csrf": "x", "baseUrl": 8080, "signals": [], "headers": {"X-A": 1}}'), {
+      baseUrl: null,
+      signals: null,
+      headers: null,
+      errors: [
+        `${ENV}: "csrf" is not a known key. Use baseUrl, signals or headers.`,
+        `${ENV}: baseUrl must be text, such as "http://localhost:8080".`,
+        `${ENV}: signals must be a JSON object, such as {"search": "ash"}.`,
+        `${ENV}: the value of the header "X-A" must be text.`,
+      ],
+    });
+    assert.deepEqual(parseEnv('{"baseUrl": "localhost:8080", "headers": []}').errors, [
+      `${ENV}: baseUrl must start with http:// or https://.`,
+      `${ENV}: headers must be an object of names and values, such as {"Authorization": "Bearer token"}.`,
     ]);
-    assert.deepEqual(mergeVariables("http://localhost:8080/", {}, {}), [{ name: "baseUrl", value: "http://localhost:8080", source: "default" }]);
+  });
+
+  it("say where each value comes from", () => {
+    assert.deepEqual(defaults, [{ name: "baseUrl", value: "http://localhost:8080", source: "default" }]);
     assert.equal(
-      describeVariables([...mergeVariables("http://localhost:8080/", {}, {}), ...vars.slice(1)]),
-      'baseUrl = http://localhost:8080   (default)\ncsrf = e1   (.streamlord/env.json)\ntoken = ""   (.streamlord/env.json)',
+      describeVariables(vars),
+      'baseUrl = http://127.0.0.1:8081   (.streamlord/env.json)\nsignals = {"search":"ash","n":1.0,"s":"\\u00e9</p>"}   (.streamlord/env.json)\nheaders = Authorization: Bearer x; X-Csrf-Token: abc   (.streamlord/env.json)',
     );
+    assert.equal(describeVariables(mergeVariables("http://h", parseEnv('{"signals": {}, "headers": {}}'))), "baseUrl = http://h   (default)\nsignals = {}   (.streamlord/env.json)\nheaders = (none)   (.streamlord/env.json)");
   });
 
-  it("add names to the env file without touching what is there", () => {
+  it("fill a request, each variable in its own field", () => {
+    const r = resolveRequest({ name: "", url: "{{baseUrl}}/x?q={{ baseUrl }}", method: "POST", signals: "{{signals}}", headers: "{{headers}}\nX-B: {{baseUrl}}" }, vars);
+    assert.deepEqual(r.errors, []);
+    assert.deepEqual(r.unset, []);
+    assert.equal(r.request.url, "http://127.0.0.1:8081/x?q=http://127.0.0.1:8081");
+    assert.equal(r.request.signals, '{"search":"ash","n":1.0,"s":"\\u00e9</p>"}');
+    assert.equal(r.request.headers, "Authorization: Bearer x\nX-Csrf-Token: abc\nX-B: http://127.0.0.1:8081");
+    const bad = resolveRequest({ name: "", url: "{{baseUrl}}/{{signals}}", method: "POST", signals: '{"a": "{{csrf}}"} {{signals}}', headers: "{{headers}}" }, defaults);
+    assert.deepEqual(bad.errors, [
+      "{{signals}} belongs in the signals field.",
+      "{{csrf}} is not a variable. Use {{baseUrl}}, {{signals}} or {{headers}}.",
+      '{{signals}} is not set. Add "signals" to .streamlord/env.json.',
+      '{{headers}} is not set. Add "headers" to .streamlord/env.json.',
+    ]);
+    assert.deepEqual(bad.unset, ["signals", "headers"]);
+  });
+
+  it("add keys to the env file without touching what is there", () => {
     assert.equal(withEnvVariables(null, [], "http://localhost:8080"), '{\n  "baseUrl": "http://localhost:8080"\n}\n');
-    assert.equal(withEnvVariables(null, ["csrf", "baseUrl"], "http://h"), '{\n  "baseUrl": "http://h",\n  "csrf": ""\n}\n');
-    assert.equal(withEnvVariables("{}", ["csrf"], "http://h"), '{\n  "csrf": ""\n}');
-    assert.equal(withEnvVariables('{ "baseUrl": "http://x", "n": 1 }\n', ["csrf", "n", "token"], "http://h"), '{ "baseUrl": "http://x", "n": 1,\n  "csrf": "",\n  "token": ""\n}\n');
-    assert.equal(withEnvVariables('{"a": "1"}', ["a"], "http://h"), '{"a": "1"}');
-    assert.equal(withEnvVariables("not json", ["a"], "http://h"), null);
-    assert.equal(withEnvVariables("[]", ["a"], "http://h"), null);
+    assert.equal(withEnvVariables(null, ["headers", "signals"], "http://h"), '{\n  "baseUrl": "http://h",\n  "headers": {},\n  "signals": {}\n}\n');
+    assert.equal(withEnvVariables("{}", ["signals"], "http://h"), '{\n  "signals": {}\n}');
+    assert.equal(withEnvVariables('{ "baseUrl": "http://x" }\n', ["signals", "baseUrl"], "http://h"), '{ "baseUrl": "http://x",\n  "signals": {}\n}\n');
+    assert.equal(withEnvVariables('{"signals": {}}', ["signals"], "http://h"), '{"signals": {}}');
+    assert.equal(withEnvVariables("not json", ["signals"], "http://h"), null);
+    assert.equal(withEnvVariables("[]", ["signals"], "http://h"), null);
   });
 
-  it("explain an unreachable server by the variables in its url", () => {
-    const defaults = mergeVariables("http://localhost:8080", {}, {});
+  it("explain an unreachable server by its baseUrl", () => {
     assert.equal(
       unreachableHint("{{baseUrl}}/hendelser", defaults),
       "{{baseUrl}} is http://localhost:8080, the default. Set baseUrl in .streamlord/env.json if your server listens elsewhere.",
     );
-    assert.equal(unreachableHint("{{ baseUrl }}/x?t={{csrf}}&u={{baseUrl}}", vars), "{{baseUrl}} is http://s, from the settings. {{csrf}} is e1, from .streamlord/env.json.");
+    assert.equal(unreachableHint("{{ baseUrl }}/x", vars), "{{baseUrl}} is http://127.0.0.1:8081, from .streamlord/env.json.");
     assert.equal(unreachableHint("http://127.0.0.1:8081/x", defaults), null);
-    assert.equal(unreachableHint("{{missing}}/x", defaults), null);
+  });
+
+  it("count what the request list holds in its first entry", () => {
+    assert.deepEqual([newRequestLabel(0, 0), newRequestLabel(2, 5), newRequestLabel(0, 1)], ["New request…", "New request… (2 saved, 5 recent)", "New request… (1 recent)"]);
+  });
+
+  it("complete a name after {{ with what the field takes", () => {
+    const names = (c: ReturnType<typeof variableCompletions>) => c && { from: c.from, to: c.to, names: c.items.map((v) => v.name) };
+    assert.deepEqual(names(variableCompletions("{{", 2, "url", vars)), { from: 0, to: 2, names: ["baseUrl"] });
+    assert.deepEqual(names(variableCompletions("a {{ s", 6, "signals", vars)), { from: 2, to: 6, names: ["signals"] });
+    assert.deepEqual(names(variableCompletions("{{}}", 2, "headers", vars)), { from: 0, to: 4, names: ["baseUrl", "headers"] });
+    assert.deepEqual(names(variableCompletions("X: {{H", 6, "headers", vars)), { from: 3, to: 6, names: ["headers"] });
+    assert.equal(variableCompletions("{{x", 3, "url", vars), null);
+    assert.equal(variableCompletions("{x", 2, "url", vars), null);
+    assert.deepEqual(names(variableCompletions("{{", 2, "signals", defaults)), { from: 0, to: 2, names: ["baseUrl"] });
   });
 });

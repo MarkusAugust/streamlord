@@ -67,30 +67,13 @@ class StreamlordConfigurable(
                     textField()
                         .bindText(state::inspectorDefaultUrl)
                         .align(AlignX.FILL)
-                        .comment("The value of {{baseUrl}} unless the variables below or .streamlord/env.json define it.")
+                        .comment("The value of {{baseUrl}} unless .streamlord/env.json sets baseUrl.")
                 }
                 row("Saved requests file:") {
                     textField()
                         .bindText(state::requestsFile)
                         .align(AlignX.FILL)
                         .comment("Project-relative; ${Requests.REQUESTS_FILE} by default. Commit it to share requests with the team.")
-                }
-                row("Variables:") {
-                    textArea()
-                        .bindText(
-                            { state.inspectorVariables.entries.joinToString("\n") { "${it.key}=${it.value}" } },
-                            { text ->
-                                state.inspectorVariables =
-                                    text
-                                        .lines()
-                                        .filter { '=' in it }
-                                        .associateTo(LinkedHashMap()) { it.substringBefore('=').trim() to it.substringAfter('=').trim() }
-                            },
-                        ).align(AlignX.FILL)
-                        .applyToComponent { rows = 4 }
-                        .comment(
-                            "One name=value per line, for {{name}} in URL, headers and signals. Tokens belong in .streamlord/env.json, which is git-ignored.",
-                        )
                 }
                 row {
                     checkBox("Show \"Open in Stream Inspector\" in the gutter of Ktor and Spring routes")

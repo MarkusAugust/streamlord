@@ -80,25 +80,36 @@ exactly as the client would keep it. Non-SSE Datastar responses are shown with t
 `datastar-*` headers.
 
 - **Saved requests** live in `.streamlord/inspector.json` in the workspace (commit it to share
-  with the team, or ignore it). Save, load and delete from the panel, or edit the file; it has
-  a JSON schema.
+  with the team, or ignore it). Save one with **Save**, and pick it again from the Request
+  list, which also holds the recent ones and says how many of each it has. **Delete** removes
+  the selected one.
 - **Recent** requests are remembered automatically, and the last one is prefilled on open.
-- **Variables**: `{{baseUrl}}` and any other `{{name}}` in URL, headers and signals. Values
-  come from `streamlord.inspector.variables` in settings, overridden by
-  `.streamlord/env.json` in the workspace. `{{baseUrl}}` defaults to
-  `streamlord.inspector.defaultUrl`, which is `http://localhost:8080`.
-
-  The Variables box in the panel lists each value and where it was set. To set one, click
-  **Edit variables**: it opens `.streamlord/env.json`, creating it with `baseUrl` filled in, and
-  you change the value there. The panel picks up the file as you save it.
+- **Variables** live in `.streamlord/env.json` in the workspace, and there are three:
 
   ```json
-  { "baseUrl": "http://127.0.0.1:8081", "csrf": "dev-token" }
+  {
+    "baseUrl": "http://127.0.0.1:8081",
+    "signals": { "search": "ash" },
+    "headers": { "Authorization": "Bearer dev-token" }
+  }
   ```
 
-  The file is the place for local hosts and tokens, so keep it out of version control. An
-  unknown `{{name}}` gives a link that adds it to the file, and a server that cannot be reached
-  is reported together with the `{{baseUrl}}` it was reached through.
+  | Variable | Use it in | Becomes |
+  |---|---|---|
+  | `{{baseUrl}}` | any field | the text, without a trailing slash |
+  | `{{signals}}` | the signals field | the object, as written in the file |
+  | `{{headers}}` | the headers field | one `Name: value` line per entry |
+
+  Type `{{` in a field to pick from the ones that are set. Without `baseUrl` in the file,
+  `{{baseUrl}}` is the setting `streamlord.inspector.defaultUrl`, which is
+  `http://localhost:8080` unless you change it.
+
+  The Variables box in the panel lists each value and where it was set. **Edit variables** opens
+  the file, creating it with `baseUrl` filled in, and the panel picks up the file as you save
+  it. Any other key, or a value of the wrong kind, is reported by name and stops the request
+  until it is fixed; the file also has a JSON schema, so the editor marks it as you type. The
+  file is the place for local hosts and tokens, so keep it out of version control. A server
+  that cannot be reached is reported together with the `{{baseUrl}}` it was reached through.
 - **Code lens** above every Ktor route (`route("/api") { get("/feed") }`) and Spring mapping
   (`@GetMapping("/feed")` under a class `@RequestMapping`): “Open in Stream Inspector” prefills
   method and `{{baseUrl}}` + path, asking for `{id}` parameters.
@@ -112,7 +123,7 @@ exactly as the client would keep it. Non-SSE Datastar responses are shown with t
 | `streamlord.diagnostics.html` | `true` | Also validate markup files. |
 | `streamlord.languages` | html, jte, kte, ftl, velocity, mustache, pebble, twig, … | Language ids that get the HTML side. Reload after changing. |
 | `streamlord.attributePrefix` | `data-` | `data-star-` when you load the aliased bundle. |
-| `streamlord.inspector.defaultUrl` | `http://localhost:8080/` | Prefilled in the inspector. |
+| `streamlord.inspector.defaultUrl` | `http://localhost:8080/` | `{{baseUrl}}` unless `.streamlord/env.json` sets `baseUrl`. |
 
 ## Datastar Pro
 

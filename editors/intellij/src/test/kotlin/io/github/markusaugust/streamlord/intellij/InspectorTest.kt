@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.intellij
 
 import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.sun.net.httpserver.HttpServer
 import io.github.markusaugust.streamlord.analysis.DatastarFrame
@@ -223,31 +224,38 @@ class InspectorTest : BasePlatformTestCase() {
         assertEquals(listOf("GET /b", "GET /a"), state.recent().map { it.name })
         assertEquals("/b", state.lastUsed()?.url)
 
-        assertEquals("http://localhost:8080", store.variables()["baseUrl"])
+        val baseUrl = store.environment().vars.single()
+        assertEquals("http://localhost:8080", baseUrl.value)
     }
 
-    fun `test variables say where they come from and are added to the env file`() {
+    fun `test variables come from the env file, which is judged and extended`() {
         val store = RequestStore.getInstance(project)
         assertEquals(
-            listOf(Requests.Variable("baseUrl", "http://localhost:8080", Requests.VariableSource.DEFAULT)),
-            store.variableList(),
+            RequestStore.Environment(
+                listOf(Requests.Variable("baseUrl", "http://localhost:8080", Requests.VariableSource.DEFAULT)),
+                emptyList(),
+            ),
+            store.environment(),
         )
-        val (file, extended) = store.defineVariables(listOf("csrf"))
+        val (file, extended) = store.defineVariables(listOf("signals"))
         try {
             assertTrue(extended)
             assertTrue(file.path.endsWith("/.streamlord/env.json"))
-            assertEquals("{\n  \"baseUrl\": \"http://localhost:8080\",\n  \"csrf\": \"\"\n}\n", String(file.contentsToByteArray()))
+            assertEquals("{\n  \"baseUrl\": \"http://localhost:8080\",\n  \"signals\": {}\n}\n", String(file.contentsToByteArray()))
             assertEquals(
                 listOf(
                     Requests.Variable("baseUrl", "http://localhost:8080", Requests.VariableSource.ENV),
-                    Requests.Variable("csrf", "", Requests.VariableSource.ENV),
+                    Requests.Variable("signals", "{}", Requests.VariableSource.ENV),
                 ),
-                store.variableList(),
+                store.environment().vars,
             )
-            store.defineVariables(listOf("csrf", "token"))
+            WriteCommandAction.runWriteCommandAction(project) { VfsUtil.saveText(file, "{\"csrf\": \"x\"}") }
             assertEquals(
-                "{\n  \"baseUrl\": \"http://localhost:8080\",\n  \"csrf\": \"\",\n  \"token\": \"\"\n}\n",
-                String(file.contentsToByteArray()),
+                RequestStore.Environment(
+                    listOf(Requests.Variable("baseUrl", "http://localhost:8080", Requests.VariableSource.DEFAULT)),
+                    listOf(".streamlord/env.json is not valid: \"csrf\" is not a known key. Use baseUrl, signals or headers."),
+                ),
+                store.environment(),
             )
         } finally {
             WriteCommandAction.runWriteCommandAction(project) { file.delete(this) }

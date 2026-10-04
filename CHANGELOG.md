@@ -8,9 +8,11 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Added
 
-- `streamlord-analysis`: `Requests.mergeVariables`, `describeVariables`, `withEnvVariables` and
-  `unreachableHint`, which the Stream Inspector in both editors uses to show where each
-  `{{name}}` was set and to add it to `.streamlord/env.json`.
+- `streamlord-analysis`: `Requests.parseEnv`, which reads `.streamlord/env.json` with its three
+  keys and reports anything else, and `mergeVariables`, `describeVariables`, `withEnvVariables`,
+  `unreachableHint`, `variableCompletions` and `newRequestLabel`, which the Stream Inspector in
+  both editors uses. `resolveRequest` now takes those variables and returns errors and the keys
+  that are not set; `parseEnvFile` is gone.
 
 ### Fixed
 

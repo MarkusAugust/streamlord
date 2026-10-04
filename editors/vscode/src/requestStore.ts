@@ -1,10 +1,10 @@
 import * as vscode from "vscode";
-import { ENV_FILE, emptyRequestsFile, mergeVariables, parseEnvFile, parseRequestsFile, pushRecent, remove, REQUESTS_FILE, serializeRequestsFile, upsert, variableValues, withEnvVariables, type RequestsFile, type SavedRequest, type Variable } from "./requests.ts";
+import { ENV_FILE, emptyRequestsFile, mergeVariables, parseEnv, parseRequestsFile, pushRecent, remove, REQUESTS_FILE, serializeRequestsFile, upsert, withEnvVariables, type EnvKey, type RequestsFile, type SavedRequest, type Variable } from "./requests.ts";
 
 /**
  * Where inspector requests live: saved ones in `.streamlord/inspector.json` in the workspace,
- * recent ones and the last-used request in the workspace state, variables in settings merged
- * with `.streamlord/env.json` (which is meant to be git-ignored, for tokens and local hosts).
+ * recent ones and the last-used request in the workspace state, and the variables in
+ * `.streamlord/env.json`, which is meant for local hosts and tokens and stays out of version control.
  */
 export class RequestStore implements vscode.Disposable {
   private readonly onChange = new vscode.EventEmitter<void>();
@@ -74,16 +74,15 @@ export class RequestStore implements vscode.Disposable {
     return this.context.workspaceState.get<SavedRequest>("streamlord.inspector.last");
   }
 
-  /** Settings first, `.streamlord/env.json` on top; `baseUrl` always has a value. */
-  async variables(): Promise<Record<string, string>> {
-    return variableValues(await this.variableList());
-  }
-
-  /** The variables with where each was set, for the inspector to show. */
-  async variableList(): Promise<Variable[]> {
-    const config = vscode.workspace.getConfiguration("streamlord");
-    const env = await this.envText();
-    return mergeVariables(config.get<string>("inspector.defaultUrl", "http://localhost:8080/"), config.get<Record<string, string>>("inspector.variables", {}), env === null ? {} : parseEnvFile(env));
+  /**
+   * The variables `.streamlord/env.json` sets, `baseUrl` from the settings when it does not, and
+   * what is wrong with the file. An invalid file sets nothing: a request is not sent half filled.
+   */
+  async environment(): Promise<{ vars: Variable[]; errors: string[] }> {
+    const text = await this.envText();
+    const env = parseEnv(text ?? "{}");
+    const defaultUrl = vscode.workspace.getConfiguration("streamlord").get<string>("inspector.defaultUrl", "http://localhost:8080/");
+    return { vars: mergeVariables(defaultUrl, env.errors.length ? parseEnv("{}") : env), errors: env.errors };
   }
 
   private async envText(): Promise<string | null> {
@@ -97,15 +96,15 @@ export class RequestStore implements vscode.Disposable {
   }
 
   /**
-   * Add `names` to `.streamlord/env.json`, creating it with `baseUrl` when it is missing, and
+   * Add `keys` to `.streamlord/env.json`, creating it with `baseUrl` when it is missing, and
    * return it to be opened. `extended` is false when the file is not a JSON object to add to.
    */
-  async defineVariables(names: string[]): Promise<{ uri: vscode.Uri; extended: boolean }> {
+  async defineVariables(keys: EnvKey[]): Promise<{ uri: vscode.Uri; extended: boolean }> {
     const uri = this.fileUri(ENV_FILE);
     if (!uri) throw new Error(`Open a folder to keep variables; they live in ${ENV_FILE} in the workspace.`);
     const text = await this.envText();
-    const baseUrl = (await this.variables()).baseUrl ?? "";
-    const next = withEnvVariables(text, names, baseUrl);
+    const baseUrl = (await this.environment()).vars.find((v) => v.name === "baseUrl")?.value ?? "";
+    const next = withEnvVariables(text, keys, baseUrl);
     if (next === null) return { uri, extended: false };
     if (next !== text) {
       await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(uri, ".."));

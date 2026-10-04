@@ -85,15 +85,7 @@
         "streamlord.inspector.defaultUrl": {
           "type": "string",
           "default": "http://localhost:8080/",
-          "description": "Default value of the {{baseUrl}} variable when neither settings nor .streamlord/env.json define it."
-        },
-        "streamlord.inspector.variables": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          },
-          "default": {},
-          "description": "Variables for {{name}} placeholders in inspector requests. .streamlord/env.json in the workspace overrides these."
+          "description": "The value of {{baseUrl}} in inspector requests when .streamlord/env.json does not set baseUrl."
         },
         "streamlord.inspector.requestsFile": {
           "type": "string",
@@ -184,6 +176,10 @@
       {
         "fileMatch": ".streamlord/inspector.json",
         "url": "./schemas/inspector.schema.json"
+      },
+      {
+        "fileMatch": ".streamlord/env.json",
+        "url": "./schemas/env.schema.json"
       }
     ],
     "html": {

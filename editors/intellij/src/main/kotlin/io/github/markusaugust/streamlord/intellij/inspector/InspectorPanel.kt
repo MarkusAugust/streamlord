@@ -85,7 +85,15 @@ class InspectorPanel(
     private val status = JBLabel("idle")
     private val frames = JPanel().apply { layout = BoxLayout(this, BoxLayout.Y_AXIS) }
     private val storeView = JBTextArea("{}").mono().apply { isEditable = false }
-    private val variablesView = JBTextArea("{}").mono().apply { isEditable = false }
+    private val variablesView = JBTextArea("").mono().apply { isEditable = false }
+    private val variableErrors =
+        JBTextArea("").apply {
+            isEditable = false
+            isOpaque = false
+            lineWrap = true
+            wrapStyleWord = true
+            foreground = JBColor.RED
+        }
     private val deleteButton = JButton("Delete")
     private val stopButton = JButton("Stop")
 
@@ -154,6 +162,11 @@ class InspectorPanel(
         )
         com.intellij.openapi.util.Disposer
             .register(parentDisposable) { stop() }
+        val vars = { store.environment().vars }
+        val typing = { !filling }
+        VariableCompletion(url, Requests.Field.URL, vars, typing)
+        VariableCompletion(signalsField, Requests.Field.SIGNALS, vars, typing)
+        VariableCompletion(headersField, Requests.Field.HEADERS, vars, typing)
         pushRequests(store.lastUsed() ?: SavedRequest("", "{{baseUrl}}/"))
     }
 
@@ -184,7 +197,7 @@ class InspectorPanel(
                 scrollCell(signalsField).align(AlignX.FILL).applyToComponent { emptyText.text = "{\"search\": \"ash\"}" }
             }
             row("Headers:") {
-                scrollCell(headersField).align(AlignX.FILL).applyToComponent { emptyText.text = "X-Csrf-Token: {{csrf}}" }
+                scrollCell(headersField).align(AlignX.FILL).applyToComponent { emptyText.text = "Authorization: Bearer token" }
             }
             row {
                 button("Connect") { connect() }.applyToComponent { icon = AllIcons.Actions.Execute }
@@ -201,7 +214,6 @@ class InspectorPanel(
                     storeView.text = "{}"
                 }
                 button("Copy as curl") { copyCurl() }.applyToComponent { toolTipText = "Copy an equivalent curl command" }
-                link("edit file") { openFile() }
                 cell(status).align(AlignX.RIGHT).resizableColumn()
             }
         }
@@ -219,14 +231,16 @@ class InspectorPanel(
             row { scrollCell(storeView).align(com.intellij.ui.dsl.builder.Align.FILL).resizableColumn() }.resizableRow()
             collapsibleGroup("Variables") {
                 row { scrollCell(variablesView).align(AlignX.FILL) }
+                row { cell(variableErrors).align(AlignX.FILL) }
                 row {
                     link("Edit variables") { editVariables(emptyList()) }
                         .applyToComponent { toolTipText = "Open ${Requests.ENV_FILE}, creating it with baseUrl" }
                 }
                 row {
                     comment(
-                        "{{name}} works in the URL, the signals and the headers. ${Requests.ENV_FILE} overrides the settings, " +
-                            "and is meant for local hosts and tokens: keep it out of version control.",
+                        "Type {{ in a field to pick one. {{baseUrl}} works in every field, {{signals}} in the signals and " +
+                            "{{headers}} in the headers. ${Requests.ENV_FILE} holds them, and is meant for local hosts and tokens: " +
+                            "keep it out of version control.",
                     )
                 }
             }.expanded = true
@@ -254,7 +268,7 @@ class InspectorPanel(
 
     private fun refresh() {
         if (filling) return
-        val vars = store.variables()
+        val vars = Requests.variableValues(store.environment().vars)
         resolved.text = if ("{{" in url.text) Requests.substitute(url.text, vars).text else ""
         val f = fields()
         val l = loaded
@@ -266,12 +280,15 @@ class InspectorPanel(
     fun pushRequests(current: SavedRequest?) {
         val saved = store.saved()
         val recent = store.recent()
-        variablesView.text = Requests.describeVariables(store.variableList())
+        val env = store.environment()
+        variablesView.text = Requests.describeVariables(env.vars)
+        variableErrors.text = env.errors.joinToString("\n")
+        variableErrors.isVisible = env.errors.isNotEmpty()
         filling = true
         val model = choices.model as DefaultComboBoxModel<Choice>
         val previous = (choices.selectedItem as? Choice)?.label
         model.removeAllElements()
-        model.addElement(Choice("New request…", null, false))
+        model.addElement(Choice(Requests.newRequestLabel(saved.size, recent.size), null, false))
         for (r in saved) model.addElement(Choice(r.name, r, true))
         for (r in recent) model.addElement(Choice("recent: ${r.name}", r, false))
         if (current != null) {
@@ -336,12 +353,26 @@ class InspectorPanel(
         pushRequests(SavedRequest("", url.text, method.selectedItem as String, signalsField.text, headersField.text))
     }
 
-    private fun copyCurl() {
-        val (request, missing) = Requests.resolveRequest(fields(), store.variables())
-        if (missing.isNotEmpty()) {
-            error("Unknown variables: ${missing.joinToString(", ") { "{{$it}}" }}", missing)
-            return
+    /**
+     * The request with its variables filled in, or null after the reason is shown: an invalid env
+     * file, or a variable that is unknown, misplaced or not set.
+     */
+    private fun resolve(raw: SavedRequest): Pair<SavedRequest, List<Requests.Variable>>? {
+        val env = store.environment()
+        if (env.errors.isNotEmpty()) {
+            error(env.errors.joinToString(" "), emptyList())
+            return null
         }
+        val resolved = Requests.resolveRequest(raw, env.vars)
+        if (resolved.errors.isNotEmpty()) {
+            error(resolved.errors.joinToString(" "), resolved.unset)
+            return null
+        }
+        return resolved.request to env.vars
+    }
+
+    private fun copyCurl() {
+        val (request, _) = resolve(fields()) ?: return
         try {
             CopyPasteManager.getInstance().setContents(java.awt.datatransfer.StringSelection(Requests.toCurl(request)))
             notify("Streamlord: curl command copied.")
@@ -361,21 +392,10 @@ class InspectorPanel(
         }
     }
 
-    private fun openFile() {
-        val file = store.ensureFile() ?: return
-        FileEditorManager.getInstance(project).openFile(file, true)
-    }
-
     private fun connect() {
         stop()
         val raw = fields()
-        val vars = store.variableList()
-        val (request, missing) = Requests.resolveRequest(raw, Requests.variableValues(vars))
-        if (missing.isNotEmpty()) {
-            val names = missing.joinToString(", ") { "{{$it}}" }
-            error("Unknown variables: $names. Define them in ${Requests.ENV_FILE} or in Settings | Tools | Streamlord.", missing)
-            return
-        }
+        val (request, vars) = resolve(raw) ?: return
         try {
             JsonParser.parse(Requests.compactSignals(request.signals))
         } catch (e: Exception) {
