@@ -1,0 +1,20 @@
+{
+  "$comment": "Cases both editors must judge alike. Each case is a source and the issues expected for it, sorted by start, end and code; offsets count UTF-16 code units. An issue without start and end is checked by code only: the two JavaScript parsers do not always place a syntax error on the same character. fixes holds the whole source after each quick fix, in the order offered.",
+  "kind": "markup",
+  "cases": [
+    {"name":"a complete element with an id","source":"<div id=\"a\">x</div>","requireIds":true,"issues":[]},
+    {"name":"a top-level element without an id","source":"<div id=\"a\">x</div><span>y</span>","requireIds":true,"issues":[{"code":"missing-id","start":19,"end":25,"fixes":["<div id=\"a\">x</div><span id=\"span\">y</span>"]}]},
+    {"name":"an unclosed element","source":"<div id=\"a\"><span>x</div>","requireIds":true,"issues":[{"code":"unclosed","start":12,"end":18}]},
+    {"name":"a stray closing tag","source":"</div>","issues":[{"code":"stray-close","start":0,"end":6}]},
+    {"name":"top-level text","source":"Hello <b>x</b>","issues":[{"code":"top-level-text","start":0,"end":5}]},
+    {"name":"list items without end tags","source":"<li>a<li>b","issues":[]},
+    {"name":"table cells without end tags","source":"<tr><td>a<td>b","issues":[]},
+    {"name":"options without end tags","source":"<option>a<option>b","issues":[]},
+    {"name":"paragraphs without end tags","source":"<p>one<p>two","issues":[]},
+    {"name":"a table with every optional end tag left out","source":"<table id=\"t\"><thead><tr><th>h<tbody><tr><td>a<td>b<tr><td>c</table>","requireIds":true,"issues":[]},
+    {"name":"a definition list without end tags","source":"<dl id=\"l\"><dt>a<dd>b<dt>c<dd>d</dl>","requireIds":true,"issues":[]},
+    {"name":"an element that needs its end tag among list items","source":"<div id=\"d\"><span>x<li>a<li>b</div>","requireIds":true,"issues":[{"code":"unclosed","start":12,"end":18}]},
+    {"name":"a second top-level list item without an id","source":"<li id=\"a\">a<li>b","requireIds":true,"issues":[{"code":"missing-id","start":12,"end":16,"fixes":["<li id=\"a\">a<li id=\"li\">b"]}]},
+    {"name":"a title inside head","source":"<head><title><b>x</title></head>","issues":[]}
+  ]
+}
