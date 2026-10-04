@@ -89,7 +89,7 @@ the client would keep it. Non-SSE Datastar responses are shown with their `datas
 
   | Variable | Use it in | Becomes |
   |---|---|---|
-  | `{{baseUrl}}` | any field | the text, without a trailing slash |
+  | `{{baseUrl}}` | the URL | the text, without a trailing slash |
   | `{{signals}}` | the signals field | the object, as written in the file |
   | `{{headers}}` | the headers field | one `Name: value` line per entry |
 

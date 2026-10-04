@@ -219,17 +219,23 @@ class RequestsTest {
     fun `variables fill a request, each in its own field`() {
         val r =
             Requests.resolveRequest(
-                SavedRequest("", "{{baseUrl}}/x?q={{ baseUrl }}", "POST", "{{signals}}", "{{headers}}\nX-B: {{baseUrl}}"),
+                SavedRequest("", "{{baseUrl}}/x?q={{ baseUrl }}", "POST", "{{signals}}", "{{headers}}\nX-B: 1"),
                 vars,
             )
         assertEquals(emptyList(), r.errors)
         assertEquals(emptyList(), r.unset)
         assertEquals("http://127.0.0.1:8081/x?q=http://127.0.0.1:8081", r.request.url)
         assertEquals("""{"search":"ash","n":1.0,"s":"\u00e9</p>"}""", r.request.signals)
-        assertEquals("Authorization: Bearer x\nX-Csrf-Token: abc\nX-B: http://127.0.0.1:8081", r.request.headers)
+        assertEquals("Authorization: Bearer x\nX-Csrf-Token: abc\nX-B: 1", r.request.headers)
         val bad =
             Requests.resolveRequest(
-                SavedRequest("", "{{baseUrl}}/{{signals}}", "POST", "{\"a\": \"{{csrf}}\"} {{signals}}", "{{headers}}"),
+                SavedRequest(
+                    name = "",
+                    url = "{{baseUrl}}/{{signals}}",
+                    method = "POST",
+                    signals = "{\"a\": \"{{csrf}}\"} {{signals}}",
+                    headers = "{{headers}}\nOrigin: {{baseUrl}}",
+                ),
                 defaults,
             )
         assertEquals(
@@ -238,6 +244,7 @@ class RequestsTest {
                 "{{csrf}} is not a variable. Use {{baseUrl}}, {{signals}} or {{headers}}.",
                 "{{signals}} is not set. Add \"signals\" to .streamlord/env.json.",
                 "{{headers}} is not set. Add \"headers\" to .streamlord/env.json.",
+                "{{baseUrl}} belongs in the URL field.",
             ),
             bad.errors,
         )
@@ -287,14 +294,12 @@ class RequestsTest {
         fun names(c: Requests.Completion?) = c?.let { Triple(it.from, it.to, it.items.map { v -> v.name }) }
         assertEquals(Triple(0, 2, listOf("baseUrl")), names(Requests.variableCompletions("{{", 2, Requests.Field.URL, vars)))
         assertEquals(Triple(2, 6, listOf("signals")), names(Requests.variableCompletions("a {{ s", 6, Requests.Field.SIGNALS, vars)))
-        assertEquals(
-            Triple(0, 4, listOf("baseUrl", "headers")),
-            names(Requests.variableCompletions("{{}}", 2, Requests.Field.HEADERS, vars)),
-        )
+        assertEquals(Triple(0, 4, listOf("headers")), names(Requests.variableCompletions("{{}}", 2, Requests.Field.HEADERS, vars)))
         assertEquals(Triple(3, 6, listOf("headers")), names(Requests.variableCompletions("X: {{H", 6, Requests.Field.HEADERS, vars)))
         assertEquals(null, Requests.variableCompletions("{{x", 3, Requests.Field.URL, vars))
         assertEquals(null, Requests.variableCompletions("{x", 2, Requests.Field.URL, vars))
-        assertEquals(Triple(0, 2, listOf("baseUrl")), names(Requests.variableCompletions("{{", 2, Requests.Field.SIGNALS, defaults)))
+        assertEquals(null, Requests.variableCompletions("{{", 2, Requests.Field.SIGNALS, defaults))
+        assertEquals(null, Requests.variableCompletions("X: {{b", 6, Requests.Field.HEADERS, vars))
     }
 
     @Test

@@ -39,14 +39,14 @@
               "string",
               "object"
             ],
-            "description": "Signals as JSON text or an object. May use {{signals}} and {{baseUrl}}."
+            "description": "Signals as JSON text or an object. May use {{signals}}."
           },
           "headers": {
             "type": [
               "string",
               "object"
             ],
-            "description": "Headers as 'Name: value' lines or an object. May use {{headers}} and {{baseUrl}}."
+            "description": "Headers as 'Name: value' lines or an object. May use {{headers}}."
           }
         }
       }

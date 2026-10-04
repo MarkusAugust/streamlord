@@ -254,9 +254,12 @@ export function substitute(text: string, vars: Record<string, string>): { text: 
 
 export type Field = "url" | "signals" | "headers";
 
-/** The field a variable may stand in: `baseUrl` anywhere, `signals` and `headers` only in their own. */
+/** The one field each variable stands in. */
+const HOME: Record<EnvKey, Field> = { baseUrl: "url", signals: "signals", headers: "headers" };
+const FIELD_NAME: Record<Field, string> = { url: "URL", signals: "signals", headers: "headers" };
+
 function belongsIn(name: EnvKey, field: Field): boolean {
-  return name === "baseUrl" || name === field;
+  return HOME[name] === field;
 }
 
 function isEnvKey(name: string): name is EnvKey {
@@ -281,7 +284,7 @@ export function resolveRequest(r: SavedRequest, vars: Variable[]): { request: Sa
         return whole;
       }
       if (!belongsIn(name, field)) {
-        report(`{{${name}}} belongs in the ${name} field.`);
+        report(`{{${name}}} belongs in the ${FIELD_NAME[HOME[name]]} field.`);
         return whole;
       }
       const value = values.get(name);

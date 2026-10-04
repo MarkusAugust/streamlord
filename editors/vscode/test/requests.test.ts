@@ -239,18 +239,19 @@ describe("inspector variables", () => {
   });
 
   it("fill a request, each variable in its own field", () => {
-    const r = resolveRequest({ name: "", url: "{{baseUrl}}/x?q={{ baseUrl }}", method: "POST", signals: "{{signals}}", headers: "{{headers}}\nX-B: {{baseUrl}}" }, vars);
+    const r = resolveRequest({ name: "", url: "{{baseUrl}}/x?q={{ baseUrl }}", method: "POST", signals: "{{signals}}", headers: "{{headers}}\nX-B: 1" }, vars);
     assert.deepEqual(r.errors, []);
     assert.deepEqual(r.unset, []);
     assert.equal(r.request.url, "http://127.0.0.1:8081/x?q=http://127.0.0.1:8081");
     assert.equal(r.request.signals, '{"search":"ash","n":1.0,"s":"\\u00e9</p>"}');
-    assert.equal(r.request.headers, "Authorization: Bearer x\nX-Csrf-Token: abc\nX-B: http://127.0.0.1:8081");
-    const bad = resolveRequest({ name: "", url: "{{baseUrl}}/{{signals}}", method: "POST", signals: '{"a": "{{csrf}}"} {{signals}}', headers: "{{headers}}" }, defaults);
+    assert.equal(r.request.headers, "Authorization: Bearer x\nX-Csrf-Token: abc\nX-B: 1");
+    const bad = resolveRequest({ name: "", url: "{{baseUrl}}/{{signals}}", method: "POST", signals: '{"a": "{{csrf}}"} {{signals}}', headers: "{{headers}}\nOrigin: {{baseUrl}}" }, defaults);
     assert.deepEqual(bad.errors, [
       "{{signals}} belongs in the signals field.",
       "{{csrf}} is not a variable. Use {{baseUrl}}, {{signals}} or {{headers}}.",
       '{{signals}} is not set. Add "signals" to .streamlord/env.json.',
       '{{headers}} is not set. Add "headers" to .streamlord/env.json.',
+      "{{baseUrl}} belongs in the URL field.",
     ]);
     assert.deepEqual(bad.unset, ["signals", "headers"]);
   });
@@ -282,10 +283,11 @@ describe("inspector variables", () => {
     const names = (c: ReturnType<typeof variableCompletions>) => c && { from: c.from, to: c.to, names: c.items.map((v) => v.name) };
     assert.deepEqual(names(variableCompletions("{{", 2, "url", vars)), { from: 0, to: 2, names: ["baseUrl"] });
     assert.deepEqual(names(variableCompletions("a {{ s", 6, "signals", vars)), { from: 2, to: 6, names: ["signals"] });
-    assert.deepEqual(names(variableCompletions("{{}}", 2, "headers", vars)), { from: 0, to: 4, names: ["baseUrl", "headers"] });
+    assert.deepEqual(names(variableCompletions("{{}}", 2, "headers", vars)), { from: 0, to: 4, names: ["headers"] });
     assert.deepEqual(names(variableCompletions("X: {{H", 6, "headers", vars)), { from: 3, to: 6, names: ["headers"] });
     assert.equal(variableCompletions("{{x", 3, "url", vars), null);
     assert.equal(variableCompletions("{x", 2, "url", vars), null);
-    assert.deepEqual(names(variableCompletions("{{", 2, "signals", defaults)), { from: 0, to: 2, names: ["baseUrl"] });
+    assert.equal(variableCompletions("{{", 2, "signals", defaults), null);
+    assert.equal(variableCompletions("X: {{b", 6, "headers", vars), null);
   });
 });

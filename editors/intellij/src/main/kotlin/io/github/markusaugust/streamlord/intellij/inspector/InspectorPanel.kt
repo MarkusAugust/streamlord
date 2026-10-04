@@ -238,7 +238,7 @@ class InspectorPanel(
                 }
                 row {
                     comment(
-                        "Type {{ in a field to pick one. {{baseUrl}} works in every field, {{signals}} in the signals and " +
+                        "Type {{ in a field to pick one. {{baseUrl}} goes in the URL, {{signals}} in the signals and " +
                             "{{headers}} in the headers. ${Requests.ENV_FILE} holds them, and is meant for local hosts and tokens: " +
                             "keep it out of version control.",
                     )

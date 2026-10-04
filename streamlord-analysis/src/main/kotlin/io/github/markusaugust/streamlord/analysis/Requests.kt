@@ -339,13 +339,21 @@ public object Requests {
         return Substituted(out, missing.toList())
     }
 
-    public enum class Field { URL, SIGNALS, HEADERS }
+    public enum class Field(
+        internal val label: String,
+    ) {
+        URL("URL"),
+        SIGNALS("signals"),
+        HEADERS("headers"),
+    }
 
-    /** The field a variable may stand in: `baseUrl` anywhere, `signals` and `headers` only in their own. */
+    /** The one field each variable stands in. */
+    private val HOME = mapOf("baseUrl" to Field.URL, "signals" to Field.SIGNALS, "headers" to Field.HEADERS)
+
     private fun belongsIn(
         name: String,
         field: Field,
-    ): Boolean = name == "baseUrl" || name == field.name.lowercase()
+    ): Boolean = HOME[name] == field
 
     public data class Resolved(
         val request: SavedRequest,
@@ -376,7 +384,7 @@ public object Requests {
                     }
 
                     !belongsIn(name, field) -> {
-                        errors += "{{$name}} belongs in the $name field."
+                        errors += "{{$name}} belongs in the ${HOME.getValue(name).label} field."
                         m.value
                     }
 

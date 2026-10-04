@@ -136,7 +136,7 @@ export class Inspector {
       case "complete": {
         const { vars } = await this.store.environment();
         const found = variableCompletions(msg.text, msg.caret, msg.field, vars);
-        const items = found?.items.map((v) => ({ name: v.name, value: v.value, from: v.source === "env" ? ENV_FILE : "default" }));
+        const items = found?.items.map((v) => ({ name: v.name, value: v.value, from: v.source === "default" ? "(default)" : "" }));
         this.post({ type: "completions", seq: msg.seq, field: msg.field, result: found && { from: found.from, to: found.to, items } });
         return;
       }
@@ -312,7 +312,7 @@ function html(cspSource: string): string {
       <pre id="vars"></pre>
       <div id="varErrors"></div>
       <button type="button" class="link" id="editVars" title="Open .streamlord/env.json, creating it with baseUrl">Edit variables</button>
-      <p class="note">Type {{ in a field to pick one. {{baseUrl}} works in every field, {{signals}} in the signals and {{headers}} in the headers. .streamlord/env.json holds them, and is meant for local hosts and tokens: keep it out of version control.</p>
+      <p class="note">Type {{ in a field to pick one. {{baseUrl}} goes in the URL, {{signals}} in the signals and {{headers}} in the headers. .streamlord/env.json holds them, and is meant for local hosts and tokens: keep it out of version control.</p>
     </details>
   </aside>
 </main>

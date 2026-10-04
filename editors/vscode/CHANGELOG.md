@@ -5,7 +5,7 @@ All notable changes to the Streamlord extension are recorded here.
 ## Unreleased
 
 - Stream Inspector: variables live in `.streamlord/env.json` alone, and there are three:
-  `baseUrl` (text, for any field), `signals` (an object, for the signals field) and `headers`
+  `baseUrl` (text, for the URL), `signals` (an object, for the signals field) and `headers`
   (an object of texts, one `Name: value` line in the headers field). Any other key, or a value of
   the wrong kind, is reported by name instead of silently dropped, and the file has a JSON
   schema. Typing `{{` in the URL, signals or headers offers the variables that are set. The

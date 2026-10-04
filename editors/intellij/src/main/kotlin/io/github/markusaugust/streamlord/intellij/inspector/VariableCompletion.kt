@@ -67,8 +67,8 @@ internal class VariableCompletion(
     }
 
     private fun describe(v: Requests.Variable): String {
-        val from = if (v.source == Requests.VariableSource.ENV) Requests.ENV_FILE else "default"
-        return "{{${v.name}}}   ${v.value.replace("\n", "; ")}   $from"
+        val default = if (v.source == Requests.VariableSource.DEFAULT) "   (default)" else ""
+        return "{{${v.name}}}   ${v.value.replace("\n", "; ")}$default"
     }
 
     private fun insert(
