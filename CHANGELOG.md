@@ -6,6 +6,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-10-05
+
 ### Added
 
 - Documentation: the site serves `/llms.txt`, an index of every page with what it is about, and

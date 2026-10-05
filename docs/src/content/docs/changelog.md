@@ -9,6 +9,12 @@ with a sentence about what to do.
 
 ## Unreleased
 
+## 0.11.1
+
+**Nothing to change in your code.** The modules are the same as in 0.11.0; this release carries
+the documentation: the introduction opens with the same endpoint written by hand and with
+Streamlord, and the testing page says where Ktor 3.6.0's test host misleads a test.
+
 ## 0.11.0
 
 **The inspector's variables are three, in `.streamlord/env.json`.** Only if you call
