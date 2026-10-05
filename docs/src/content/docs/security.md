@@ -187,13 +187,61 @@ a nonce.
 
 ## Ordered delivery
 
+Always on, and nothing you configure: every stream Streamlord hands you is locked this way.
 One mutex per stream. Concurrent coroutines writing to the same stream never interleave their
 frames, so a half-written `data: elements` line cannot appear in the middle of another event.
 
+It matters the moment one endpoint feeds two parts of the page at their own pace. Here a clock
+ticks every second while raids are appended to the `<ul id="raids">` already on the page:
+
+```kotlin sample=ktor-routing
+get("/watch") {
+    call.respondDatastar {
+        coroutineScope {
+            launch {
+                repeat(60) { tick ->
+                    patchElements("""<span id="clock">$tick</span>""")
+                    delay(1.seconds)
+                }
+            }
+            launch {
+                repeat(60) { n ->
+                    patchElements(
+                        """<li id="raid-$n">The Greycloaks took a village.</li>""",
+                        selector = "#raids",
+                        mode = ElementPatchMode.APPEND,
+                    )
+                    delay(2.5.seconds)
+                }
+            }
+        }
+    }
+}
+```
+
+Each coroutine keeps its own pace, and when both are due at the same moment, which goes first is
+up to the scheduler. Either way, what reaches the browser is one whole event after another. Two
+and a half seconds in, the first raid lands between the second and third tick:
+
+```text
+event: datastar-patch-elements
+data: elements <span id="clock">2</span>
+
+event: datastar-patch-elements
+data: selector #raids
+data: mode append
+data: elements <li id="raid-1">The Greycloaks took a village.</li>
+
+event: datastar-patch-elements
+data: elements <span id="clock">3</span>
+```
+
 ## Explicit API
 
-Every published module is compiled with `explicitApi()` and warnings as errors. Nothing leaves a
-module by accident, which means the surface you can depend on is the surface that was meant.
+This is about how Streamlord itself is built, so there is nothing for you to turn on; what you
+notice is that autocomplete only offers what was meant to be public. Every published module is
+compiled with `explicitApi()` and warnings as errors. Nothing leaves a module by accident, which
+means the surface you can depend on is the surface that was meant.
 
 ## Raw user HTML
 
