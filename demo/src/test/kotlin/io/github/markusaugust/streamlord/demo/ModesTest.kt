@@ -42,6 +42,19 @@ class ModesTest {
     }
 
     @Test
+    fun `the verdict says kept for a morph and gone for a replacement`() {
+        // The verdict is what tells a reader what to look for, so it must agree with the mode.
+        for (mode in listOf("inner", "outer", "prepend", "append", "before", "after")) {
+            val said = modeEvents(ModeSignals(mode))[1] as PatchElements
+            assertTrue(said.elements.orEmpty().contains("""data-color="success""""), "$mode should say kept")
+        }
+        for (mode in listOf("replace", "remove")) {
+            val said = modeEvents(ModeSignals(mode))[1] as PatchElements
+            assertTrue(said.elements.orEmpty().contains("""data-color="warning""""), "$mode should say gone")
+        }
+    }
+
+    @Test
     fun `an unknown mode falls back rather than failing`() {
         assertEquals(ElementPatchMode.INNER, patch("sideways").mode)
     }
