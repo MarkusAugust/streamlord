@@ -8,6 +8,7 @@ import Sidebar from "../components/Sidebar.astro"
 import ThemeRestore from "../components/ThemeRestore.astro"
 import ThemeToggle from "../components/ThemeToggle.astro"
 import Toc from "../components/Toc.astro"
+import VersionBadge from "../components/VersionBadge.astro"
 import Wire from "../components/Wire.astro"
 import { FAVICON } from "../icon"
 import "../styles/global.css"
@@ -48,10 +49,13 @@ const { title, description, slug, headings } = Astro.props
     <a class="fs-skip-link" href="#content">Skip to content</a>
 
     <header class="masthead" data-theme="dark">
-      <a class="masthead__brand" href="/">
-        <Logo size={26} />
-        <span>Streamlord</span>
-      </a>
+      <div class="masthead__identity">
+        <a class="masthead__brand" href="/">
+          <Logo size={26} />
+          <span>Streamlord</span>
+        </a>
+        <VersionBadge />
+      </div>
       <!-- Between the mark and the tools, so a phone can drop it to a row of its own
            without pushing the theme button down with it. -->
       <Search />
@@ -174,6 +178,13 @@ const { title, description, slug, headings } = Astro.props
         color: var(--fs-color-accent-surface);
       }
 
+      /* The badge beside the brand, never inside the link, and the two stay together when the
+         search drops to a row of its own. */
+      .masthead__identity {
+        display: flex;
+        align-items: center;
+        gap: var(--fs-spacing-3);
+      }
       .masthead__brand {
         display: flex;
         align-items: center;

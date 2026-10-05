@@ -3,6 +3,7 @@ import { Code } from "astro:components"
 import sobernetics from "../assets/sobernetics.svg?raw"
 import CodeBlock from "../components/CodeBlock.astro"
 import Logo from "../components/Logo.astro"
+import VersionBadge from "../components/VersionBadge.astro"
 import { FAVICON } from "../icon"
 import { NAVIGATION } from "../navigation"
 import { DESCRIPTION, TAGLINE } from "../project"
@@ -62,6 +63,7 @@ const SAMPLE = `get("/feed") {
       <div class="hero__inner">
         <Logo size={72} />
         <h1 class="hero__word">Streamlord</h1>
+        <VersionBadge />
         <p class="hero__line">{TAGLINE}</p>
         <p class="hero__sub">
           Datastar lives in strings your compiler never reads. Streamlord checks them anyway:
