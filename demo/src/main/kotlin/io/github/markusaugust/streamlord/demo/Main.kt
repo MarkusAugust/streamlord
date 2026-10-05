@@ -53,7 +53,7 @@ public data class SearchSignals(
 )
 
 /** Where the documentation is served from. Not configuration: it is our own site. */
-private val DOCS_HOSTS = listOf("streamlord-docs.netlify.app", "localhost:4321")
+private val DOCS_HOSTS = listOf("streamlord.sobernetics.no", "streamlord-docs.netlify.app", "localhost:4321")
 
 /**
  * Which build is answering, baked into the image by the Dockerfile.
