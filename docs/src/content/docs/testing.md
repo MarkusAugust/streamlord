@@ -39,6 +39,15 @@ fun `the feed appends one item and sets the count`() =
 
 Needs `ktor-server-test-host` and `streamlord-test` in `testImplementation`.
 
+### Keep a streamed test response under 1 MiB on Ktor 3.6.0
+
+The test host in Ktor 3.6.0 hangs on a streamed response of 1 MiB or more, and the test fails
+after a minute with `UncompletedCoroutinesError`. Streamed means `respondBytesWriter`,
+`respondTextWriter`, and so `respondDatastar`; a plain `respondText` is not affected, and neither
+is a real server. It is a Ktor bug, [KTOR-9968](https://youtrack.jetbrains.com/issue/KTOR-9968).
+Keep the data in a test small enough that the whole stream stays under 1 MiB; it is rare for a
+test to need more than a few events to say what it means.
+
 ### Every assertion ignores what it did not ask about
 
 That is the point of them. Add a signal patch to the handler above and the assertion about markup

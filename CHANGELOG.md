@@ -11,6 +11,11 @@ All notable changes to Streamlord are recorded here. The format follows
 - Documentation: the site serves `/llms.txt`, an index of every page with what it is about, and
   `/llms-full.txt`, every page in one file, after llmstxt.org. Both are built from the pages and
   the navigation, and the link check covers their addresses.
+- Documentation: the introduction and the README open with the same endpoint written by hand
+  against the protocol and with Streamlord, and a screenshot of the editor refusing
+  `dataText("$count")`. The introduction shows the three ways to write markup as tabs, and the
+  README names them. The testing page says that Ktor 3.6.0's test host hangs on a streamed
+  response of 1 MiB or more (KTOR-9968).
 
 ## [0.11.0] - 2026-10-04
 
