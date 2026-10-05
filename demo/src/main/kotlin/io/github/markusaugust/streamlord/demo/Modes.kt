@@ -75,6 +75,8 @@ private val ElementPatchMode.label: String get() = wire.replaceFirstChar { it.up
 @Serializable
 public data class ModeSignals(
     val mode: String = "inner",
+    /** Whether the page has a wire panel to show the frames in. */
+    val wire: Boolean = false,
 )
 
 /**

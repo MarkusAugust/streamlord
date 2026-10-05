@@ -12,6 +12,8 @@ import kotlinx.serialization.Serializable
 public data class MusterSignals(
     val banner: String = "",
     val swords: String = "",
+    /** Whether the page has a wire panel to show the frames in. */
+    val wire: Boolean = false,
 )
 
 /** One field's verdict: which field, and what is wrong with it. */

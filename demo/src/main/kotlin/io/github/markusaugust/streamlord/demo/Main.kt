@@ -181,13 +181,15 @@ public fun Application.live() {
         // POST, because this is the demo where the request carries the data rather than asks
         // for something, and so exercises the half of readSignals that reads the body.
         post("/muster") {
-            call.respondDatastar(validationEvents(call.readSignalsOr(MusterSignals())).asFlow())
+            val signals = call.readSignalsOr(MusterSignals())
+            call.respondDatastar(validationEvents(signals).withFrames(signals.wire).asFlow())
         }
 
         // The eight patch modes, one press at a time. The mode rides in the signals like every
         // other piece of state on these pages.
         get("/modes") {
-            call.respondDatastar(modeEvents(call.readSignalsOr(ModeSignals())).asFlow())
+            val signals = call.readSignalsOr(ModeSignals())
+            call.respondDatastar(modeEvents(signals).withFrames(signals.wire).asFlow())
         }
 
         // One connection held open for twelve seconds. Counter.kt builds the Flow and the
