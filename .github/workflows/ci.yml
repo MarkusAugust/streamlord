@@ -313,7 +313,10 @@ jobs:
       - name: Start the image and call it
         env:
           IMAGE: ghcr.io/${{ steps.owner.outputs.name }}/streamlord-live
-          ORIGIN: https://streamlord-docs.netlify.app
+          # The address readers use. Netlify's own name serves the same site, so the
+          # preflight below is asked from both.
+          ORIGIN: https://streamlord.sobernetics.no
+          NETLIFY_ORIGIN: https://streamlord-docs.netlify.app
         run: |
           set -euo pipefail
           trap 'docker logs streamlord-live 2>&1 | tail -40; docker rm -f streamlord-live >/dev/null 2>&1 || true' EXIT
@@ -336,17 +339,19 @@ jobs:
           fi
           echo "  up, and reporting $GITHUB_SHA"
 
-          preflight=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 \
-            -X OPTIONS \
-            -H "Origin: $ORIGIN" \
-            -H 'Access-Control-Request-Method: GET' \
-            -H 'Access-Control-Request-Headers: datastar-request' \
-            http://localhost:8080/search)
-          if [ "$preflight" != "200" ]; then
-            echo "::error::CORS preflight from $ORIGIN returned $preflight, not 200"
-            exit 1
-          fi
-          echo "  preflight from the documentation: 200"
+          for from in "$ORIGIN" "$NETLIFY_ORIGIN"; do
+            preflight=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 \
+              -X OPTIONS \
+              -H "Origin: $from" \
+              -H 'Access-Control-Request-Method: GET' \
+              -H 'Access-Control-Request-Headers: datastar-request' \
+              http://localhost:8080/search)
+            if [ "$preflight" != "200" ]; then
+              echo "::error::CORS preflight from $from returned $preflight, not 200"
+              exit 1
+            fi
+            echo "  preflight from $from: 200"
+          done
 
           body=$(curl -s --max-time 10 \
             -H "Origin: $ORIGIN" \
@@ -454,7 +459,7 @@ jobs:
           # The image was exercised in full before it was pushed, so what is left to check
           # here is what a deployment can break and a container cannot: the proxy in front
           # of it. Each of these failed differently in production and nowhere else.
-          origin='https://streamlord-docs.netlify.app'
+          origin='https://streamlord.sobernetics.no'
 
           # A search: reachable from outside Railway at all.
           body=$(curl -s --max-time 15 \
