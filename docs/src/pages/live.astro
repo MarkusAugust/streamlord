@@ -132,8 +132,15 @@ import "../styles/global.css"
         <section class="panel panel--wide" data-signals="{mode: 'inner', lastMode: ''}">
           <h2 class="panel__title">The eight patch modes</h2>
           <p class="panel__note">
-            One endpoint, one word of difference. Type into the stone, then press Outer and
-            Replace: a morph keeps what you wrote, a replacement does not.
+            One endpoint, one word of difference. The field in the stone is there to be lost:
+          </p>
+          <ol class="fs-list gallery__steps">
+            <li>Write something in the field.</li>
+            <li>Press <strong>Outer</strong>. The sentence above the field changes, and what you wrote stays. That is a morph.</li>
+            <li>Press <strong>Replace</strong>. What you wrote is gone. That is a replacement.</li>
+          </ol>
+          <p class="panel__note">
+            The other modes lay stones around it or take it away. Rebuild the wall to start over.
           </p>
 
           <div class="gallery__modes">
@@ -205,13 +212,15 @@ import "../styles/global.css"
             <div id="wall" class="gallery__wall">
               <p id="stone" class="gallery__stone">
                 <span class="gallery__says">A stone in the wall. Aim the eight modes at it.</span>
-                <input class="fs-input gallery__chisel" id="chisel" placeholder="Type here, then press Outer and Replace" />
+                <label class="fs-label gallery__label" for="chisel">Write something here. Does it survive?</label>
+                <input class="fs-input gallery__chisel" id="chisel" placeholder="Anything at all" />
               </p>
             </div>
 
             <div id="modes-said" class="gallery__said-box">
               <p class="fs-paragraph" data-size="small">
-                What the server sent will appear here: the mode, the selector, and the elements.
+                Press a mode. Whether what you wrote survived will appear here, and under it what
+                the server sent: the mode, the selector, and the elements.
               </p>
             </div>
           </div>
@@ -330,8 +339,10 @@ import "../styles/global.css"
         <section class="panel panel--wide">
           <h2 class="panel__title">On the wire</h2>
           <p class="panel__note">
-            The frames the server sent, encoded by the same <code>SseEncoder</code> the
-            golden-file tests verify. Not a description of them. The frames.
+            The frames behind the last thing you did on this page, whichever demo it was: a
+            search, a muster, a press of a patch mode, or each tick of the counter as it runs.
+            Encoded by the same <code>SseEncoder</code> the golden-file tests verify. Not a
+            description of them. The frames.
           </p>
           <div id="wire" class="panel__body">
             <p class="fs-paragraph" data-size="small">Nothing sent yet.</p>
@@ -491,6 +502,13 @@ import "../styles/global.css"
       }
       .gallery :global(.gallery__chisel) {
         inline-size: 100%;
+      }
+      .gallery__steps {
+        margin: var(--fs-spacing-2) 0;
+        font-size: var(--font-size-s);
+      }
+      .gallery :global(.gallery__verdict) {
+        margin-block-end: var(--fs-spacing-3);
       }
       /*
        * The frame the server sent, wrapped. Without this the `pre` is one long line, the page

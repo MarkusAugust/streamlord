@@ -24,6 +24,8 @@ private const val EVERY_MS = 400L
 public data class CounterSignals(
     val running: Boolean = false,
     val count: Int = 0,
+    /** Whether the page has a wire panel to show the frames in. The CSP page has none. */
+    val wire: Boolean = false,
 )
 
 /**
@@ -46,9 +48,11 @@ public data class CounterSignals(
  */
 public fun counterEvents(signals: CounterSignals): Flow<DatastarEvent> =
     flow {
+        suspend fun send(vararg events: DatastarEvent) = events.toList().withFrames(signals.wire).forEach { emit(it) }
+
         if (signals.running) {
-            emit(PatchSignals("""{"running": false}"""))
-            emit(
+            send(
+                PatchSignals("""{"running": false}"""),
                 patchElements(selector = "#counter", mode = ElementPatchMode.INNER) {
                     counter(signals.count, running = false, stopped = true)
                 },
@@ -56,15 +60,15 @@ public fun counterEvents(signals: CounterSignals): Flow<DatastarEvent> =
             return@flow
         }
 
-        emit(PatchSignals("""{"running": true}"""))
+        send(PatchSignals("""{"running": true}"""))
         for (n in 1..TICKS) {
             delay(EVERY_MS)
-            emit(PatchSignals("""{"count": $n}"""))
-            emit(
+            send(
+                PatchSignals("""{"count": $n}"""),
                 patchElements(selector = "#counter", mode = ElementPatchMode.INNER) {
                     counter(n, running = n < TICKS, stopped = false)
                 },
             )
         }
-        emit(PatchSignals("""{"running": false}"""))
+        send(PatchSignals("""{"running": false}"""))
     }

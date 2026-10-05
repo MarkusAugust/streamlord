@@ -7,10 +7,76 @@ import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.html.patchElements
 import kotlinx.serialization.Serializable
 
+/**
+ * What a press did to whatever the reader typed, which is the one thing the demo is about.
+ *
+ * [color] is the Fristil alert colour: success when the field survived, warning when it did not.
+ */
+public data class Verdict(
+    val color: String,
+    val title: String,
+    val says: String,
+)
+
+private val REBUILT = Verdict("info", "Rebuilt", "The wall is as it started, with an empty field in the stone.")
+
+/** The verdict for each mode, in the words the reader sees beside the wall. */
+internal fun verdict(mode: ElementPatchMode): Verdict =
+    when (mode) {
+        ElementPatchMode.INNER -> {
+            Verdict(
+                "success",
+                "Kept",
+                "Inner morphed the inside of the stone. The field is the same element, so what you typed is still in it.",
+            )
+        }
+
+        ElementPatchMode.OUTER -> {
+            Verdict(
+                "success",
+                "Kept",
+                "Outer morphed the whole stone. A morph changes only what differs, so the field and what you typed survived.",
+            )
+        }
+
+        ElementPatchMode.REPLACE -> {
+            Verdict(
+                "warning",
+                "Gone",
+                "Replace threw the stone away and set a new one in its place, with an empty field. " +
+                    "Type again and press Outer to compare.",
+            )
+        }
+
+        ElementPatchMode.PREPEND, ElementPatchMode.APPEND -> {
+            Verdict(
+                "success",
+                "Untouched",
+                "${mode.label} laid a course inside the wall and never touched the stone, so what you typed is where you left it.",
+            )
+        }
+
+        ElementPatchMode.BEFORE, ElementPatchMode.AFTER -> {
+            Verdict(
+                "success",
+                "Untouched",
+                "${mode.label} set a course beside the stone and never touched it, so what you typed is where you left it.",
+            )
+        }
+
+        ElementPatchMode.REMOVE -> {
+            Verdict("warning", "Gone", "Remove took the stone away, field and all. Rebuild the wall to get it back.")
+        }
+    }
+
+private val ElementPatchMode.label: String get() = wire.replaceFirstChar { it.uppercase() }
+
 /** Which of the eight the reader pressed. */
 @Serializable
 public data class ModeSignals(
     val mode: String = "inner",
+    /** Whether the page has a wire panel to show the frames in. */
+    val wire: Boolean = false,
 )
 
 /**
@@ -37,7 +103,7 @@ public fun modeEvents(signals: ModeSignals): List<DatastarEvent> {
                 stone("A stone in the wall. Aim the eight modes at it.")
             },
             patchElements(selector = "#modes-said", mode = ElementPatchMode.INNER) {
-                said(ElementPatchMode.INNER, "#wall", "the wall, as it started")
+                said(REBUILT, ElementPatchMode.INNER, "#wall", "the wall, as it started")
             },
             PatchSignals("""{"lastMode": "reset"}"""),
         )
@@ -104,7 +170,7 @@ public fun modeEvents(signals: ModeSignals): List<DatastarEvent> {
      */
     val said =
         patchElements(selector = "#modes-said", mode = ElementPatchMode.INNER) {
-            said(mode, patch.selector, patch.elements.orEmpty())
+            said(verdict(mode), mode, patch.selector, patch.elements.orEmpty())
         }
 
     return listOf(patch, said, PatchSignals("""{"lastMode": "${mode.wire}"}"""))

@@ -6,6 +6,7 @@ import kotlinx.html.TagConsumer
 import kotlinx.html.a
 import kotlinx.html.div
 import kotlinx.html.input
+import kotlinx.html.label
 import kotlinx.html.li
 import kotlinx.html.p
 import kotlinx.html.pre
@@ -160,9 +161,13 @@ public fun TagConsumer<*>.stone(says: String) {
  */
 public fun TagConsumer<*>.stoneInside(says: String) {
     span("gallery__says") { +says }
+    label("fs-label gallery__label") {
+        htmlFor = "chisel"
+        +"Write something here. Does it survive?"
+    }
     input(classes = "fs-input gallery__chisel") {
         attributes["id"] = "chisel"
-        placeholder = "Type here, then press Outer and Replace"
+        placeholder = "Anything at all"
     }
 }
 
@@ -171,12 +176,18 @@ public fun TagConsumer<*>.course(says: String) {
     p("gallery__course") { +says }
 }
 
-/** What the server sent, in the protocol's own words. */
+/** What became of the reader's words, then what the server sent, in the protocol's own words. */
 public fun TagConsumer<*>.said(
+    verdict: Verdict,
     mode: ElementPatchMode,
     selector: String?,
     elements: String,
 ) {
+    div("fs-alert gallery__verdict") {
+        attributes["data-color"] = verdict.color
+        p("fs-alert__title") { +verdict.title }
+        p { +verdict.says }
+    }
     p("gallery__said") {
         +"mode "
         span("gallery__wire") { +mode.wire }
