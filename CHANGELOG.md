@@ -16,6 +16,8 @@ All notable changes to Streamlord are recorded here. The format follows
   `dataText("$count")`. The introduction shows the three ways to write markup as tabs, and the
   README names them. The testing page says that Ktor 3.6.0's test host hangs on a streamed
   response of 1 MiB or more (KTOR-9968).
+- Documentation: the testing page says that on Ktor 3.6.0 an exception thrown inside
+  `respondDatastar` does not fail a test, and which assertions still catch it.
 
 ## [0.11.0] - 2026-10-04
 

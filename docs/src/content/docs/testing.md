@@ -48,6 +48,15 @@ is a real server. It is a Ktor bug, [KTOR-9968](https://youtrack.jetbrains.com/i
 Keep the data in a test small enough that the whole stream stays under 1 MiB; it is rare for a
 test to need more than a few events to say what it means.
 
+### An exception in the stream does not fail the test on Ktor 3.6.0
+
+When the block given to `respondDatastar` throws, the test host answers 200 with the events sent
+before the exception, and the exception reaches neither your route nor the test. A real server
+passes it on and logs it. Make the handler above crash between its two events, and
+`assertPatchElements` still passes; `assertSignal("heads", 13)` is what fails, because the signal
+never came. So assert the last event you expect as well, or the whole stream with
+[`assertExactly`](#every-assertion-ignores-what-it-did-not-ask-about).
+
 ### Every assertion ignores what it did not ask about
 
 That is the point of them. Add a signal patch to the handler above and the assertion about markup
