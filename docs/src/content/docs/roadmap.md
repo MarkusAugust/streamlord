@@ -13,32 +13,14 @@ it lands, the way [`guardElements`](/strings/) is, with one exception that is ma
 
 | Order | Planned | What it changes | What you do today |
 |---|---|---|---|
-| 1 | [The happy path, documented](#the-happy-path-documented) | what a reader sees first | [Introduction](/introduction/) and [Your first stream](/first-stream/) |
-| 2 | [Untrusted values in the DSL](#untrusted-values-in-the-dsl) | what reaches an expression built by the DSL | keep request data out of expression attributes |
-| 3 | [Replay in the Stream Inspector](#replay-in-the-stream-inspector) | what you can see of a stream after it ran | watch it arrive live |
-| 4 | [Delimiters the analysis has not met](#delimiters-the-analysis-has-not-met) | a false warning on a correct template file | nothing, for `data-bind` and its kind |
-| 5 | [Concurrent stream limits](#concurrent-stream-limits) | how much one reader may hold open | your framework's rate limiting |
-| 6 | [Starter templates](#starter-templates) | how long it takes to get a first page running | copy the `demo` module |
+| 1 | [Untrusted values in the DSL](#untrusted-values-in-the-dsl) | what reaches an expression built by the DSL; **breaks the API** | keep request data out of expression attributes |
+| 2 | [Replay in the Stream Inspector](#replay-in-the-stream-inspector) | what you can see of a stream after it ran | watch it arrive live |
+| 3 | [Delimiters the analysis has not met](#delimiters-the-analysis-has-not-met) | a false warning on a correct template file | nothing, for `data-bind` and its kind |
+| 4 | [Concurrent stream limits](#concurrent-stream-limits) | how much one reader may hold open | your framework's rate limiting |
+| 5 | [Starter templates](#starter-templates) | how long it takes to get a first page running | copy the `demo` module |
 
 The order is the order of the work, not a schedule. The last one waits for 1.0 on purpose: a
 template that lags the API it demonstrates teaches the wrong thing, and the API is still moving.
-
-## The happy path, documented
-
-This site explains the mechanism well and the point badly. The evidence is specific: a developer
-who read it came back asking for a typesafe kotlinx.html layer with Datastar attributes and
-completion, which is [`streamlord-html`](/html-dsl/), the flagship module, shipped since the first
-release. If someone can read the documentation and not find the headline feature, the
-documentation is the thing at fault.
-
-Planned: a before and after at the top, in the README and on the first page. The same endpoint
-written by hand against the protocol, and written with Streamlord, side by side. A screenshot of
-the editor refusing `data-text="$count"` before the code compiles, because the thing that is hard
-to believe until you see it is that a string gets checked at all. The three ways to write markup
-named in the first screen rather than four pages in.
-
-Nothing to configure and nothing to wait for. It is the cheapest item here and the one with the
-most evidence behind it.
 
 ## Untrusted values in the DSL
 
@@ -129,7 +111,7 @@ Whether it belongs in Streamlord at all is the open part. Continuous authorisati
 SSE-specific, and this is general
 server hygiene that Ktor and Spring both have facilities for. The narrow case for it: Streamlord
 knows which responses are streams, so it can count the right thing without wiring. That is
-convenience, not capability, which is why it is last.
+convenience, not capability, which is why it sits this low.
 
 It shares less with [continuous authorisation](/operations/) than it looks. That check is per
 stream, made inside the stream's own write path, and needs no shared state at all. This one needs a registry of which

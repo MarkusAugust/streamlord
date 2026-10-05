@@ -103,7 +103,8 @@ abstract class ExtractDocSamples : DefaultTask() {
     private fun wrap(context: String, body: String, name: String): String? =
         when (context) {
             "ktor-routing" ->
-                "import io.ktor.server.application.*\nimport io.ktor.server.routing.*\n$imports\n\n" +
+                "import io.ktor.http.*\nimport io.ktor.server.application.*\nimport io.ktor.server.routing.*\n" +
+                    "import io.ktor.server.response.*\nimport io.ktor.utils.io.*\n$imports\n\n" +
                     "fun io.ktor.server.routing.Route.$name() {\n$body\n}\n"
             "ktor-application" ->
                 "import io.ktor.server.application.*\nimport io.ktor.server.routing.*\n" +
@@ -139,12 +140,13 @@ abstract class ExtractDocSamples : DefaultTask() {
                     "class $name {\n$body\n}\n"
             "html" -> "$imports\n\nfun kotlinx.html.FlowContent.$name() {\n$body\n}\n"
             "statements" -> "$imports\n\nsuspend fun $name() {\n$body\n}\n"
+            "stream" -> "$imports\n\nsuspend fun DatastarStream.$name() {\n$body\n}\n"
             "declarations" -> "$imports\n\n$body\n"
             else -> null
         }
 
     private val known =
-        listOf("declarations", "html", "ktor-application", "ktor-routing", "spring", "spring-controller", "statements", "test")
+        listOf("declarations", "html", "ktor-application", "ktor-routing", "spring", "spring-controller", "statements", "stream", "test")
 
     /**
      * A handler method that takes the Streamlord bean as a parameter. It compiles, and Spring

@@ -12,12 +12,42 @@
 reads, and Streamlord checks them anyway: in your editor as you type, when the event is built,
 and before a byte reaches the browser.
 
+![VS Code with dataText("$count") underlined in red, and the hover: Kotlin interpolates $count here; the browser will never see a signal. Write signal("count").](docs/src/assets/editor-dollar-trap.png)
+
+`dataText("$count")` compiles when `count` is in scope, and sends the browser a number instead of
+the signal. The editor marks it before you build, and the same check runs
+[in CI](https://streamlord-docs.netlify.app/testing/) as a test you add.
+
 It comes in two halves. The **SDK** speaks the [Datastar](https://data-star.dev) 1.0.4
 Server-Sent Events protocol exactly, reads the signals the browser sends back, and serves two
 realms without favour: **Ktor** (the Sword) and **Spring** (the Shield). It is built on ports and
 adapters, carries almost no dependencies, and treats every byte from the browser as the untrusted
 thing it is. The **editors** read Datastar as a language wherever you write it, and need no part
 of the SDK to do it.
+
+## The same endpoint, twice
+
+One route that adds a line to a list and updates a counter. By hand, against the protocol:
+
+```kotlin sample=ktor-routing
+get("/feed") {
+    call.response.header("Cache-Control", "no-cache")
+    call.response.header("X-Accel-Buffering", "no")
+    if (call.request.local.version == "HTTP/1.1") call.response.header("Connection", "keep-alive")
+    call.respondBytesWriter(ContentType.Text.EventStream) {
+        writeStringUtf8("event: datastar-patch-elements\n")
+        writeStringUtf8("data: selector #feed\n")
+        writeStringUtf8("data: mode append\n")
+        writeStringUtf8("data: elements <li>A new head hangs on the wall</li>\n\n")
+        flush()
+        writeStringUtf8("event: datastar-patch-signals\n")
+        writeStringUtf8("data: signals {\"heads\":13}\n\n")
+        flush()
+    }
+}
+```
+
+With Streamlord:
 
 ```kotlin sample=ktor-routing
 get("/feed") {
@@ -29,6 +59,18 @@ get("/feed") {
     }
 }
 ```
+
+Both send the same headers and the same bytes. The first leaves the flushing, the line splitting,
+the selector rules, the JSON and the headers to you; [the introduction](https://streamlord-docs.netlify.app/introduction/)
+lists what each of those costs.
+
+## Three ways to write markup
+
+The kotlinx.html DSL above, HTML in a Kotlin string, or the output of a template engine (Pebble,
+Thymeleaf, JTE, FreeMarker, Velocity, Mustache). Every entry point that takes HTML takes a
+`String`, so all three are equals, and both editors check Datastar in all three. VS Code checks a
+template file once an extension for that engine is installed, since that is what tells VS Code the
+file's language.
 
 ## 📖 [Documentation](https://streamlord-docs.netlify.app)
 
