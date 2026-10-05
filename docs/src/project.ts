@@ -11,6 +11,9 @@ export const TAGLINE = "A Datastar toolchain for Kotlin."
 export const DESCRIPTION =
   "Datastar lives in strings your compiler never reads. Streamlord checks them in your editor, when the event is built, and before a byte reaches the browser, with adapters for Ktor and Spring."
 
+/** The SDK's version, from `gradle.properties`: the release the coordinates on the pages name. */
+export const VERSION = property("version")
+
 /** The Maven group every module is published under, from `gradle.properties`. */
 export const MAVEN_GROUP = property("group")
 

@@ -1,0 +1,42 @@
+---
+import { VERSION } from "../project"
+
+/*
+ * The version is read from gradle.properties when the site is built, so the badge follows a
+ * release without anyone remembering it. It sits beside the brand link and not inside it: a
+ * link inside a link is invalid HTML. The accessible name starts with the visible text, so
+ * someone steering by voice who says "v0.11.1" reaches the link.
+ */
+---
+
+<a class="version-badge" href="/changelog/" aria-label={`v${VERSION}, changelog`} translate="no">v{VERSION}</a>
+
+<style>
+  .version-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--fs-spacing-0-5) var(--fs-spacing-2);
+    border: 1px solid var(--fs-color-neutral-border-subtle);
+    border-radius: 999px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.4;
+    color: inherit;
+    opacity: 0.75;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: opacity 150ms, border-color 150ms;
+  }
+
+  .version-badge:hover {
+    opacity: 1;
+    border-color: var(--fs-color-neutral-border-strong);
+  }
+
+  .version-badge:focus-visible {
+    opacity: 1;
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+  }
+</style>
