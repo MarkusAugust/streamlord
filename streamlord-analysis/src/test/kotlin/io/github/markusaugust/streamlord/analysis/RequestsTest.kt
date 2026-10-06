@@ -358,6 +358,51 @@ class RequestsTest {
         assertEquals(null, Requests.unreachableHint("http://127.0.0.1:8081/x", defaults))
     }
 
+    private val motregning = RunningServer("http://localhost:9102", "Motregning back (dev)")
+
+    @Test
+    fun `a running server is the baseUrl when the env file sets none`() {
+        val found = Requests.mergeVariables("http://localhost:8080/", Requests.parseEnv("{}"), motregning)
+        assertEquals(
+            listOf(Requests.Variable("baseUrl", "http://localhost:9102", Requests.VariableSource.RUNNING, "Motregning back (dev)")),
+            found,
+        )
+        assertEquals("baseUrl = http://localhost:9102   (from Motregning back (dev))", Requests.describeVariables(found))
+        assertEquals(
+            "{{baseUrl}} is http://localhost:9102, where Motregning back (dev) said it started.",
+            Requests.unreachableHint("{{baseUrl}}/x", found, motregning),
+        )
+        assertEquals(null, Requests.baseUrlSuggestion(found, motregning))
+    }
+
+    @Test
+    fun `the env file wins over a running server, which is offered when they differ`() {
+        val set = Requests.mergeVariables("http://localhost:8080/", env, motregning)
+        assertEquals("http://127.0.0.1:8081", set.first().value)
+        assertEquals("http://localhost:9102", Requests.baseUrlSuggestion(set, motregning))
+        assertEquals(
+            "{{baseUrl}} is http://127.0.0.1:8081, from .streamlord/env.json. Motregning back (dev) started on http://localhost:9102.",
+            Requests.unreachableHint("{{baseUrl}}/x", set, motregning),
+        )
+        val agree = Requests.mergeVariables("http://h", Requests.parseEnv("""{"baseUrl": "http://localhost:9102"}"""), motregning)
+        assertEquals(null, Requests.baseUrlSuggestion(agree, motregning))
+        assertEquals(null, Requests.baseUrlSuggestion(set, null))
+    }
+
+    @Test
+    fun `baseUrl is set in the env file without touching the rest`() {
+        assertEquals(
+            "{\n  \"baseUrl\": \"http://localhost:9102\",\n  \"params\": {\"a\": \"1\"}\n}\n",
+            Requests.withBaseUrl(
+                "{\n  \"baseUrl\": \"http://localhost:8080\",\n  \"params\": {\"a\": \"1\"}\n}\n",
+                "http://localhost:9102",
+            ),
+        )
+        assertEquals("{\"params\": {},\n  \"baseUrl\": \"http://x\"\n}", Requests.withBaseUrl("{\"params\": {}}", "http://x"))
+        assertEquals("{\n  \"baseUrl\": \"http://x\"\n}\n", Requests.withBaseUrl(null, "http://x"))
+        assertEquals(null, Requests.withBaseUrl("{\"baseUrl\": ", "http://x"))
+    }
+
     @Test
     fun `the request list counts what it holds in its first entry`() {
         assertEquals(

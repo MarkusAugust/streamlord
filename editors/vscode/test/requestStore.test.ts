@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import * as vscode from "vscode";
 import { files, Position, Uri, workspace, type OpenDocument } from "./vscode-mock.ts";
 import { RequestStore } from "../src/requestStore.ts";
+import { RunningServers } from "../src/serverLog.ts";
 
 const ENV = "/ws/.streamlord/env.json";
 const bytes = (s: string) => new TextEncoder().encode(s);
@@ -27,7 +28,8 @@ function open(text: string): OpenDocument {
   return doc;
 }
 
-const store = () => new RequestStore({ workspaceState: { get: <T>(_k: string, d: T) => d, update: async () => {} } } as unknown as vscode.ExtensionContext);
+const store = (running = new RunningServers()) =>
+  new RequestStore({ workspaceState: { get: <T>(_k: string, d: T) => d, update: async () => {} } } as unknown as vscode.ExtensionContext, running);
 const baseUrl = async (s: RequestStore) => (await s.environment()).vars.find((v) => v.name === "baseUrl")?.value;
 
 describe("request store", () => {
@@ -57,5 +59,17 @@ describe("request store", () => {
   it("writes the disk when no editor has the file open", async () => {
     await store().defineVariables(["headers"]);
     assert.equal(disk(), '{"baseUrl": "http://disk:1",\n  "headers": {}\n}');
+  });
+
+  it("takes a running server's baseUrl when the env file sets none, and sets the file's on request", async () => {
+    const running = new RunningServers();
+    running.feed("1", "Motregning back (dev)", "Tomcat started on port 9102 (http) with context path '/'\n");
+    const s = store(running);
+    assert.equal(await baseUrl(s), "http://disk:1");
+    await s.useBaseUrl("http://localhost:9102");
+    assert.equal(disk(), '{"baseUrl": "http://localhost:9102"}');
+    files.set(ENV, bytes('{"params": {}}'));
+    const found = (await s.environment()).vars[0];
+    assert.deepEqual(found, { name: "baseUrl", value: "http://localhost:9102", source: "running", origin: "Motregning back (dev)" });
   });
 });

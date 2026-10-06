@@ -79,13 +79,15 @@ class RequestStore(
     )
 
     /**
-     * The variables `.streamlord/env.json` sets, `baseUrl` from the settings when it does not, and
-     * what is wrong with the file. An invalid file sets nothing: a request is not sent half filled.
+     * The variables `.streamlord/env.json` sets, `baseUrl` from a server the project started or from
+     * the settings when it does not, and what is wrong with the file. An invalid file sets nothing:
+     * a request is not sent half filled.
      */
     fun environment(): Environment {
         val env = Requests.parseEnv(envText() ?: "{}")
         val usable = if (env.errors.isEmpty()) env else Requests.parseEnv("{}")
-        return Environment(Requests.mergeVariables(settings.state.inspectorDefaultUrl, usable), env.errors)
+        val running = RunningServers.getInstance(project).current()
+        return Environment(Requests.mergeVariables(settings.state.inspectorDefaultUrl, usable, running), env.errors)
     }
 
     private fun envFile(): VirtualFile? = baseDir()?.findFileByRelativePath(Requests.ENV_FILE)
@@ -106,7 +108,22 @@ class RequestStore(
         val base = baseDir() ?: throw IllegalStateException("Open a project to keep variables; they live in ${Requests.ENV_FILE}.")
         val text = envText()
         val baseUrl = environment().vars.firstOrNull { it.name == "baseUrl" }?.value ?: ""
-        val next = Requests.withEnvVariables(text, keys, baseUrl)
+        return write(base, text, Requests.withEnvVariables(text, keys, baseUrl))
+    }
+
+    /** Set `baseUrl` in `.streamlord/env.json` to [url], leaving the rest as written, and return it to be opened. */
+    fun useBaseUrl(url: String): Pair<VirtualFile, Boolean> {
+        val base = baseDir() ?: throw IllegalStateException("Open a project to keep variables; they live in ${Requests.ENV_FILE}.")
+        val text = envText()
+        return write(base, text, Requests.withBaseUrl(text, url))
+    }
+
+    /** Write [next] over the env file's [text], or leave it when nothing changes; false when it could not be changed. */
+    private fun write(
+        base: VirtualFile,
+        text: String?,
+        next: String?,
+    ): Pair<VirtualFile, Boolean> {
         envFile()?.let { if (next == null || next == text) return it to (next != null) }
         val path = Requests.ENV_FILE
         var file: VirtualFile? = null

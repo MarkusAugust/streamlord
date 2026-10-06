@@ -4,6 +4,17 @@ All notable changes to the Streamlord extension are recorded here.
 
 ## Unreleased
 
+- Stream Inspector: `{{baseUrl}}` follows the server you started from a debug session. The
+  inspector reads the line the server logs as it starts, Spring Boot's
+  `Tomcat started on port 9102 (http) with context path '/'` or Ktor's `Responding at …`, so
+  the port and context path are right wherever they were set. `.streamlord/env.json` still comes
+  first, and the default only when nothing runs; the Variables box says which it is.
+- Stream Inspector: when the env file's `baseUrl` is refused and a running server said it
+  started elsewhere, the error says where and offers **Use … in .streamlord/env.json**, which
+  changes that value and nothing else in the file.
+- Stream Inspector: an error response shows the warnings and errors the server logged while
+  answering it, such as Spring's `Required request parameter 'partsnummer' … is not present`,
+  in place of the note that the reason is in the log.
 - Open in Stream Inspector writes the whole URL the handler needs. Each path parameter and each
   required `@RequestParam` becomes a `{{name}}`, and each required `@RequestHeader("X-Id")` a
   line in the headers, so `@GetMapping("/visning")` with a required `partsnummer` opens as

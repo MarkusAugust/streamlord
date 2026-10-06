@@ -4,6 +4,7 @@
  */
 
 import type { Route } from "./routes.ts";
+import type { RunningServer } from "./serverLog.ts";
 
 export interface SavedRequest {
   name: string;
@@ -246,18 +247,31 @@ function valueEnd(text: string, i: number): number {
 
 const VARIABLE = /\{\{\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\}\}/g;
 
-export type VariableSource = "default" | "env";
+/** Where a value came from: the settings, the env file, or the log of a server the editor started. */
+export type VariableSource = "default" | "env" | "running";
 
 /** A variable that is set, as text, and where it was set, so the inspector can say both. */
 export interface Variable {
   name: string;
   value: string;
   source: VariableSource;
+  /** For a value from a running server, the debug session it was started from. */
+  origin?: string;
 }
 
-/** `baseUrl` from the env file or else the default, then `signals`, `headers` and each param when the file sets them. */
-export function mergeVariables(defaultUrl: string, env: Env): Variable[] {
-  const out: Variable[] = [env.baseUrl !== null ? { name: "baseUrl", value: env.baseUrl, source: "env" } : { name: "baseUrl", value: defaultUrl.replace(/\/+$/, ""), source: "default" }];
+/**
+ * `baseUrl` from the env file, or else where `running` said it started, or else the default; then
+ * `signals`, `headers` and each param when the file sets them. The file comes first because it is
+ * what the user wrote down; a server's log only fills in what they did not.
+ */
+export function mergeVariables(defaultUrl: string, env: Env, running: RunningServer | null = null): Variable[] {
+  const baseUrl: Variable =
+    env.baseUrl !== null
+      ? { name: "baseUrl", value: env.baseUrl, source: "env" }
+      : running !== null
+        ? { name: "baseUrl", value: running.url, source: "running", origin: running.name }
+        : { name: "baseUrl", value: defaultUrl.replace(/\/+$/, ""), source: "default" };
+  const out: Variable[] = [baseUrl];
   if (env.signals !== null) out.push({ name: "signals", value: env.signals, source: "env" });
   if (env.headers !== null) out.push({ name: "headers", value: env.headers.map(([k, v]) => `${k}: ${v}`).join("\n"), source: "env" });
   for (const [k, v] of env.params ?? []) out.push({ name: k, value: v, source: "env" });
@@ -271,7 +285,8 @@ export function variableValues(vars: Variable[]): Record<string, string> {
 
 /** One line per variable; only a value the env file does not set is marked, as the default. */
 export function describeVariables(vars: Variable[]): string {
-  return vars.map((v) => `${v.name} = ${v.value === "" ? "(none)" : v.value.split("\n").join("; ")}${v.source === "default" ? "   (default)" : ""}`).join("\n");
+  const from = (v: Variable) => (v.source === "default" ? "   (default)" : v.source === "running" ? `   (from ${v.origin})` : "");
+  return vars.map((v) => `${v.name} = ${v.value === "" ? "(none)" : v.value.split("\n").join("; ")}${from(v)}`).join("\n");
 }
 
 /** Replace `{{name}}` with values; unknown names are left in place and reported. */
@@ -399,12 +414,42 @@ function addParams(text: string, existing: Record<string, unknown>, names: strin
  * Where the `{{baseUrl}}` of a URL came from, for a server that could not be reached: a value
  * left at its default is the usual reason, and nothing on screen said so.
  */
-export function unreachableHint(url: string, vars: Variable[]): string | null {
+export function unreachableHint(url: string, vars: Variable[], running: RunningServer | null = null): string | null {
   const baseUrl = vars.find((v) => v.name === "baseUrl");
   if (!baseUrl || !/\{\{\s*baseUrl\s*\}\}/.test(url)) return null;
-  return baseUrl.source === "default"
-    ? `{{baseUrl}} is ${baseUrl.value}, the default. Set baseUrl in ${ENV_FILE} if your server listens elsewhere.`
-    : `{{baseUrl}} is ${baseUrl.value}, from ${ENV_FILE}.`;
+  if (baseUrl.source === "default") return `{{baseUrl}} is ${baseUrl.value}, the default. Set baseUrl in ${ENV_FILE} if your server listens elsewhere.`;
+  if (baseUrl.source === "running") return `{{baseUrl}} is ${baseUrl.value}, where ${baseUrl.origin} said it started.`;
+  const elsewhere = baseUrlSuggestion(vars, running);
+  return `{{baseUrl}} is ${baseUrl.value}, from ${ENV_FILE}.${elsewhere !== null ? ` ${running?.name} started on ${elsewhere}.` : ""}`;
+}
+
+/**
+ * The URL a running server announced when the env file sets another one, for the inspector to
+ * offer as the file's new `baseUrl`; null when they agree or nothing is running. The file is never
+ * changed without being asked.
+ */
+export function baseUrlSuggestion(vars: Variable[], running: RunningServer | null): string | null {
+  const baseUrl = vars.find((v) => v.name === "baseUrl");
+  if (!baseUrl || running === null || baseUrl.source !== "env" || baseUrl.value === running.url) return null;
+  return running.url;
+}
+
+/**
+ * The text of `.streamlord/env.json` with `baseUrl` set to `url`: its value replaced where it
+ * stands and everything else as written, or added when the file has none. Null when the text is
+ * not a JSON object and cannot be changed safely.
+ */
+export function withBaseUrl(text: string | null, url: string): string | null {
+  let range: [number, number] | undefined;
+  if (text !== null) {
+    try {
+      if (isObject(JSON.parse(text))) range = topLevelRanges(text).get("baseUrl");
+    } catch {
+      return null;
+    }
+  }
+  if (text === null || range === undefined) return withEnvVariables(text, ["baseUrl"], url);
+  return text.slice(0, range[0]) + jsonString(url) + text.slice(range[1]);
 }
 
 /**
