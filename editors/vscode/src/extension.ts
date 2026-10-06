@@ -10,6 +10,7 @@ import { Inspector } from "./inspector.ts";
 import { RequestStore } from "./requestStore.ts";
 import { RouteLensProvider } from "./routeLens.ts";
 import type { Route } from "./routes.ts";
+import { RunningServers } from "./serverLog.ts";
 import { SignalIndex } from "./signalIndex.ts";
 
 /** Languages that get HTML-side support, from the setting; Kotlin always gets the Kotlin side. */
@@ -26,8 +27,20 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const diagnostics = vscode.languages.createDiagnosticCollection("streamlord");
   const signals = new SignalIndex();
-  const store = new RequestStore(context);
-  const inspector = new Inspector(context, store);
+  const running = new RunningServers();
+  // A debug session's output is the one an extension may read, so that is where a server is seen to start.
+  context.subscriptions.push(
+    vscode.debug.registerDebugAdapterTrackerFactory("*", {
+      createDebugAdapterTracker: (session) => ({
+        onDidSendMessage: (m: { type?: string; event?: string; body?: { category?: string; output?: string } }) => {
+          if (m.type === "event" && m.event === "output" && m.body?.output && m.body.category !== "telemetry") running.feed(session.id, session.name, m.body.output);
+        },
+      }),
+    }),
+    vscode.debug.onDidTerminateDebugSession((session) => running.end(session.id)),
+  );
+  const store = new RequestStore(context, running);
+  const inspector = new Inspector(context, store, running);
   const timers = new Map<string, NodeJS.Timeout>();
 
   const lint = (document: vscode.TextDocument) => {

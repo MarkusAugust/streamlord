@@ -141,7 +141,18 @@ class StreamClient(
             }
         handlers.onStatus(Status.CONNECTING)
         try {
-            val response = client.send(request, HttpResponse.BodyHandlers.ofInputStream())
+            val response =
+                try {
+                    client.send(request, HttpResponse.BodyHandlers.ofInputStream())
+                } catch (e: ConnectException) {
+                    /*
+                     * localhost is 127.0.0.1 first, and Java's client tries no other address. A
+                     * server listening on ::1 alone is reached by curl and the browser, and by the
+                     * VS Code inspector, so it is tried here before the refusal is reported.
+                     */
+                    val v6 = ipv6Loopback(target) ?: throw e
+                    client.send(build(v6, method, signalsJson, headers), HttpResponse.BodyHandlers.ofInputStream())
+                }
             val contentType = response.headers().firstValue("content-type").orElse("")
             val http = "${response.statusCode()} ${reason(response.statusCode())}".trim()
             handlers.onStatus(Status.OPEN, http, contentType)
@@ -210,6 +221,11 @@ class StreamClient(
     }
 
     companion object {
+        private val LOCALHOST = Regex("""^(https?://(?:[^@/?#]*@)?)localhost(?=[:/?#]|$)""", RegexOption.IGNORE_CASE)
+
+        /** [url] with its host `localhost` written as `[::1]`, or null when the host is something else. */
+        fun ipv6Loopback(url: String): String? = LOCALHOST.find(url)?.let { url.replaceRange(it.range, "${it.groupValues[1]}[::1]") }
+
         /** `fetch failed` says nothing; the cause underneath usually says everything. */
         fun describe(
             e: Throwable,

@@ -97,16 +97,24 @@ the client would keep it. Non-SSE Datastar responses are shown with their `datas
   | `{{partsnummer}}`, any name in `params` | the URL or the headers | the text, encoded in the URL |
 
   Type `{{` in a field to pick from the ones that are set. Without `baseUrl` in the file,
-  `{{baseUrl}}` is the Default base URL setting, which is `http://localhost:8080` unless you
-  change it.
+  `{{baseUrl}}` is where the server you started from a run configuration said it listens, read
+  from its own log (`Tomcat started on port 9102 (http) with context path '/'`, or Ktor's
+  `Responding at …`), so the port and context path are right wherever they were set. With
+  nothing running, it is the Default base URL setting, `http://localhost:8080` unless you change
+  it.
 
-  The Variables box in the panel lists each value, and marks `baseUrl` when it is the default.
+  The Variables box in the panel lists each value, and says when `baseUrl` is the default or
+  which run configuration it came from.
   **Edit variables** opens the file, creating it with `baseUrl` filled in, and the panel picks
   up the file as you save it. Any other key, or a value of the wrong kind, is reported by name
   and stops the request until it is fixed; the file also has a JSON schema, so the editor marks
   it as you type. The file is the place for local hosts, tokens and test values, so keep it out
   of version control. A server that cannot be reached is reported together with the `{{baseUrl}}` it was
-  reached through.
+  reached through; when the file's `baseUrl` is not where a running server said it started, a
+  link sets the file's value to that one, changing nothing else. `localhost` is tried as `::1`
+  too, as curl and the browser do. An error response is shown with the warnings and errors the
+  server logged while answering it, such as Spring's `Required request parameter 'partsnummer'
+  … is not present`.
 - **Gutter icons** on every Ktor route (`route("/api") { get("/feed") }`) and Spring mapping
   (`@GetMapping("/feed")` under a class `@RequestMapping`): "Open in Stream Inspector" prefills
   the method and the whole URL the handler needs: each path parameter and each required

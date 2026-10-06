@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { describeVariables, emptyBodyHint, mergeVariables, newRequestLabel, parseEnv, parseRequestsFile, pushRecent, remove, resolveRequest, routeHeaders, routeOptional, routeUrl, sendableUrl, serializeRequestsFile, substitute, toCurl, unreachableHint, upsert, variableCompletions, withEnvVariables, type SavedRequest } from "../src/requests.ts";
+import { baseUrlSuggestion, describeVariables, emptyBodyHint, withBaseUrl, mergeVariables, newRequestLabel, parseEnv, parseRequestsFile, pushRecent, remove, resolveRequest, routeHeaders, routeOptional, routeUrl, sendableUrl, serializeRequestsFile, substitute, toCurl, unreachableHint, upsert, variableCompletions, withEnvVariables, type SavedRequest } from "../src/requests.ts";
 import { findRoutes } from "../src/routes.ts";
 
 const req = (over: Partial<SavedRequest> = {}): SavedRequest => ({ name: "counter", url: "{{baseUrl}}/api/counter-stream", method: "GET", signals: "", headers: "", ...over });
@@ -339,6 +339,36 @@ describe("inspector variables", () => {
     assert.equal(variableCompletions("{x", 2, "url", vars), null);
     assert.equal(variableCompletions("{{", 2, "signals", defaults), null);
     assert.equal(variableCompletions("X: {{b", 6, "headers", vars), null);
+  });
+
+  const motregning = { url: "http://localhost:9102", name: "Motregning back (dev)" };
+
+  it("take a running server as the baseUrl when the env file sets none", () => {
+    const found = mergeVariables("http://localhost:8080/", parseEnv("{}"), motregning);
+    assert.deepEqual(found, [{ name: "baseUrl", value: "http://localhost:9102", source: "running", origin: "Motregning back (dev)" }]);
+    assert.equal(describeVariables(found), "baseUrl = http://localhost:9102   (from Motregning back (dev))");
+    assert.equal(unreachableHint("{{baseUrl}}/x", found, motregning), "{{baseUrl}} is http://localhost:9102, where Motregning back (dev) said it started.");
+    assert.equal(baseUrlSuggestion(found, motregning), null);
+  });
+
+  it("let the env file win over a running server, which is offered when they differ", () => {
+    const set = mergeVariables("http://localhost:8080/", env, motregning);
+    assert.equal(set[0]?.value, "http://127.0.0.1:8081");
+    assert.equal(baseUrlSuggestion(set, motregning), "http://localhost:9102");
+    assert.equal(
+      unreachableHint("{{baseUrl}}/x", set, motregning),
+      "{{baseUrl}} is http://127.0.0.1:8081, from .streamlord/env.json. Motregning back (dev) started on http://localhost:9102.",
+    );
+    const agree = mergeVariables("http://h", parseEnv('{"baseUrl": "http://localhost:9102"}'), motregning);
+    assert.equal(baseUrlSuggestion(agree, motregning), null);
+    assert.equal(baseUrlSuggestion(set, null), null);
+  });
+
+  it("set baseUrl in the env file without touching the rest", () => {
+    assert.equal(withBaseUrl('{\n  "baseUrl": "http://localhost:8080",\n  "params": {"a": "1"}\n}\n', "http://localhost:9102"), '{\n  "baseUrl": "http://localhost:9102",\n  "params": {"a": "1"}\n}\n');
+    assert.equal(withBaseUrl('{"params": {}}', "http://x"), '{"params": {},\n  "baseUrl": "http://x"\n}');
+    assert.equal(withBaseUrl(null, "http://x"), '{\n  "baseUrl": "http://x"\n}\n');
+    assert.equal(withBaseUrl('{"baseUrl": ', "http://x"), null);
   });
 
   const withParams = mergeVariables("http://localhost:8080", parseEnv('{"baseUrl": "http://localhost:9102", "params": {"partsnummer": "3000 507", "instans": "m1", "fokus": ""}}'));

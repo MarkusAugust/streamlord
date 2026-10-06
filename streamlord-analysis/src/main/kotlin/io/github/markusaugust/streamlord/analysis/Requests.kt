@@ -334,26 +334,34 @@ public object Requests {
         return i
     }
 
-    public enum class VariableSource { DEFAULT, ENV }
+    /** Where a value came from: the settings, the env file, or the log of a server the editor started. */
+    public enum class VariableSource { DEFAULT, ENV, RUNNING }
 
     /** A variable that is set, as text, and where it was set, so the inspector can say both. */
     public data class Variable(
         val name: String,
         val value: String,
         val source: VariableSource,
+        /** For [VariableSource.RUNNING], the run configuration the server was started from. */
+        val origin: String? = null,
     )
 
-    /** `baseUrl` from the env file or else the default, then `signals`, `headers` and each param when the file sets them. */
+    /**
+     * `baseUrl` from the env file, or else where [running] said it started, or else the default;
+     * then `signals`, `headers` and each param when the file sets them. The file comes first
+     * because it is what the user wrote down; a server's log only fills in what they did not.
+     */
     public fun mergeVariables(
         defaultUrl: String,
         env: Env,
+        running: RunningServer? = null,
     ): List<Variable> {
         val out = ArrayList<Variable>()
         out +=
-            if (env.baseUrl != null) {
-                Variable("baseUrl", env.baseUrl, VariableSource.ENV)
-            } else {
-                Variable("baseUrl", defaultUrl.trimEnd('/'), VariableSource.DEFAULT)
+            when {
+                env.baseUrl != null -> Variable("baseUrl", env.baseUrl, VariableSource.ENV)
+                running != null -> Variable("baseUrl", running.url, VariableSource.RUNNING, running.name)
+                else -> Variable("baseUrl", defaultUrl.trimEnd('/'), VariableSource.DEFAULT)
             }
         env.signals?.let { out += Variable("signals", it, VariableSource.ENV) }
         env.headers?.let { h -> out += Variable("headers", h.joinToString("\n") { (k, v) -> "$k: $v" }, VariableSource.ENV) }
@@ -364,11 +372,16 @@ public object Requests {
     /** The values by name, for substitution. */
     public fun variableValues(vars: List<Variable>): Map<String, String> = vars.associate { it.name to it.value }
 
-    /** One line per variable; only a value the env file does not set is marked, as the default. */
+    /** One line per variable; a value the env file does not set says where it came from instead. */
     public fun describeVariables(vars: List<Variable>): String =
         vars.joinToString("\n") {
             val value = if (it.value.isEmpty()) "(none)" else it.value.split("\n").joinToString("; ")
-            "${it.name} = $value" + if (it.source == VariableSource.DEFAULT) "   (default)" else ""
+            "${it.name} = $value" +
+                when (it.source) {
+                    VariableSource.DEFAULT -> "   (default)"
+                    VariableSource.RUNNING -> "   (from ${it.origin})"
+                    VariableSource.ENV -> ""
+                }
         }
 
     public data class Substituted(
@@ -554,14 +567,53 @@ public object Requests {
     public fun unreachableHint(
         url: String,
         vars: List<Variable>,
+        running: RunningServer? = null,
     ): String? {
         val baseUrl = vars.firstOrNull { it.name == "baseUrl" } ?: return null
         if (!BASE_URL_VARIABLE.containsMatchIn(url)) return null
-        return if (baseUrl.source == VariableSource.DEFAULT) {
-            "{{baseUrl}} is ${baseUrl.value}, the default. Set baseUrl in $ENV_FILE if your server listens elsewhere."
-        } else {
-            "{{baseUrl}} is ${baseUrl.value}, from $ENV_FILE."
+        return when (baseUrl.source) {
+            VariableSource.DEFAULT -> {
+                "{{baseUrl}} is ${baseUrl.value}, the default. Set baseUrl in $ENV_FILE if your server listens elsewhere."
+            }
+
+            VariableSource.RUNNING -> {
+                "{{baseUrl}} is ${baseUrl.value}, where ${baseUrl.origin} said it started."
+            }
+
+            VariableSource.ENV -> {
+                val elsewhere = baseUrlSuggestion(vars, running)
+                "{{baseUrl}} is ${baseUrl.value}, from $ENV_FILE." +
+                    if (elsewhere != null) " ${running?.name} started on $elsewhere." else ""
+            }
         }
+    }
+
+    /**
+     * The URL a running server announced when the env file sets another one, for the inspector to
+     * offer as the file's new `baseUrl`; null when they agree or nothing is running. The file is
+     * never changed without being asked.
+     */
+    public fun baseUrlSuggestion(
+        vars: List<Variable>,
+        running: RunningServer?,
+    ): String? {
+        val baseUrl = vars.firstOrNull { it.name == "baseUrl" } ?: return null
+        if (running == null || baseUrl.source != VariableSource.ENV || baseUrl.value == running.url) return null
+        return running.url
+    }
+
+    /**
+     * The text of `.streamlord/env.json` with `baseUrl` set to [url]: its value replaced where it
+     * stands and everything else as written, or added when the file has none. Null when the text
+     * is not a JSON object and cannot be changed safely.
+     */
+    public fun withBaseUrl(
+        text: String?,
+        url: String,
+    ): String? {
+        val range = text?.let { t -> runCatching { JsonParser.parse(t) as? JsonObject }.getOrNull()?.let { topLevelRanges(t)["baseUrl"] } }
+        if (text == null || range == null) return withEnvVariables(text, listOf("baseUrl"), url)
+        return text.substring(0, range.first) + JsonString(url).toJson() + text.substring(range.last + 1)
     }
 
     /** What to offer after `{{`, and the range to replace with `{{name}}`, closing braces already typed included. */

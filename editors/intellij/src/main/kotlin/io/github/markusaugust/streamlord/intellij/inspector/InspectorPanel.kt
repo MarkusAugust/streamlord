@@ -24,16 +24,17 @@ import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.panel
+import com.intellij.util.concurrency.AppExecutorUtil
 import com.intellij.util.ui.JBFont
 import com.intellij.util.ui.JBUI
 import io.github.markusaugust.streamlord.analysis.DatastarFrame
 import io.github.markusaugust.streamlord.analysis.Requests
 import io.github.markusaugust.streamlord.analysis.SavedRequest
-import io.github.markusaugust.streamlord.core.json.mergePatch
 import io.github.markusaugust.streamlord.core.json.JsonNull
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonValue
+import io.github.markusaugust.streamlord.core.json.mergePatch
 import io.github.markusaugust.streamlord.intellij.Streamlord
 import java.awt.BorderLayout
 import java.awt.Component
@@ -41,6 +42,7 @@ import java.awt.Font
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.TimeUnit
 import javax.swing.BoxLayout
 import javax.swing.DefaultComboBoxModel
 import javax.swing.DefaultListCellRenderer
@@ -63,6 +65,7 @@ class InspectorPanel(
     parentDisposable: Disposable,
 ) : JBPanel<InspectorPanel>(BorderLayout()) {
     private val store = RequestStore.getInstance(project)
+    private val running = RunningServers.getInstance(project)
     private val client = StreamClient()
     private var connection: StreamClient.Connection? = null
     private var signals: JsonValue = JsonObject.EMPTY
@@ -174,6 +177,8 @@ class InspectorPanel(
             },
             parentDisposable,
         )
+        // The Variables box follows a server the project starts or stops, as Connect reads it.
+        running.onChange(parentDisposable) { ApplicationManager.getApplication().invokeLater { pushRequests(null) } }
         com.intellij.openapi.util.Disposer
             .register(parentDisposable) { stop() }
         val vars = { store.environment().vars }
@@ -418,6 +423,7 @@ class InspectorPanel(
         }
         store.addRecent(raw)
         pushRequests(null)
+        val since = System.currentTimeMillis()
         connection =
             client.open(
                 request.url,
@@ -442,13 +448,27 @@ class InspectorPanel(
 
                     override fun onComment(text: String) = later { addComment(text) }
 
-                    override fun onNonSse(response: StreamClient.NonSseResponse) = later { addNonSse(response) }
+                    override fun onNonSse(response: StreamClient.NonSseResponse) {
+                        if ((response.http.substringBefore(' ').toIntOrNull() ?: 0) < 400) return later { addNonSse(response, emptyList()) }
+                        // The server logs the reason as it answers, and a little after; wait for it before drawing the card.
+                        AppExecutorUtil.getAppScheduledExecutorService().schedule(
+                            { later { addNonSse(response, running.problemsSince(since)) } },
+                            LOG_GRACE_MS,
+                            TimeUnit.MILLISECONDS,
+                        )
+                    }
 
                     override fun onError(message: String) =
                         later {
                             val unreachable = message.startsWith("Connection refused") || message.startsWith("Host not found")
-                            val hint = if (unreachable) Requests.unreachableHint(raw.url, vars) else null
-                            if (hint != null) error("$message $hint", emptyList()) else error(message)
+                            val server = running.current()
+                            val hint = if (unreachable) Requests.unreachableHint(raw.url, vars, server) else null
+                            val elsewhere = if (unreachable) Requests.baseUrlSuggestion(vars, server) else null
+                            when {
+                                elsewhere != null -> error("$message $hint", useBaseUrl = elsewhere)
+                                hint != null -> error("$message $hint", emptyList())
+                                else -> error(message)
+                            }
                         }
                 },
             )
@@ -543,36 +563,62 @@ class InspectorPanel(
         )
     }
 
-    private fun addNonSse(r: StreamClient.NonSseResponse) {
+    private fun addNonSse(
+        r: StreamClient.NonSseResponse,
+        problems: List<String>,
+    ) {
         val rows = LinkedHashMap<String, String>()
         rows.putAll(r.headers)
         rows["body"] = r.body
-        Requests.emptyBodyHint(r.http.substringBefore(' ').toIntOrNull() ?: 0, r.body)?.let { rows["note"] = it }
+        // The server's own words come before the note that would send the reader to look for them.
+        if (problems.isNotEmpty()) {
+            rows["server log"] = problems.joinToString("\n")
+        } else {
+            Requests.emptyBodyHint(r.http.substringBefore(' ').toIntOrNull() ?: 0, r.body)?.let { rows["note"] = it }
+        }
         prepend(card(listOf(r.http, r.contentType.ifEmpty { "no content-type" }), JBColor.foreground(), "non-SSE response", rows))
     }
 
-    /** An error line; with [define], a link that adds those names to the env file, or opens it when there are none. */
+    /**
+     * An error line; with [define], a link that adds those names to the env file, or opens it when
+     * there are none; with [useBaseUrl], a link that sets the file's `baseUrl` to it.
+     */
     private fun error(
         message: String,
         define: List<String>? = null,
+        useBaseUrl: String? = null,
     ) {
         val label =
             JBLabel(message).apply {
                 foreground = JBColor.RED
                 border = JBUI.Borders.empty(2, 4)
             }
-        if (define == null) {
+        if (define == null && useBaseUrl == null) {
             prepend(label)
         } else {
             val line =
                 JPanel(java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 0, 0)).apply {
                     isOpaque = false
                     add(label)
-                    add(ActionLink(if (define.isEmpty()) "Edit variables" else "Add to ${Requests.ENV_FILE}") { editVariables(define) })
+                    if (define != null) {
+                        add(ActionLink(if (define.isEmpty()) "Edit variables" else "Add to ${Requests.ENV_FILE}") { editVariables(define) })
+                    }
+                    if (useBaseUrl != null) add(ActionLink("Use $useBaseUrl in ${Requests.ENV_FILE}") { useBaseUrl(useBaseUrl) })
                 }
             prepend(line)
         }
         setStatus("error", null)
+    }
+
+    /** Set the env file's `baseUrl` to [url] and open the file, so the change is seen where it was made. */
+    private fun useBaseUrl(url: String) {
+        try {
+            val (file, changed) = store.useBaseUrl(url)
+            FileEditorManager.getInstance(project).openFile(file, true)
+            if (!changed) error("${Requests.ENV_FILE} is not a JSON object, so baseUrl was not changed.")
+        } catch (e: Exception) {
+            error(e.message ?: "Could not open ${Requests.ENV_FILE}.")
+        }
     }
 
     private fun card(
@@ -641,6 +687,9 @@ class InspectorPanel(
 
     companion object {
         private const val MAX_FRAMES = 500
+
+        /** How long a failed request waits for the server to finish logging why. */
+        private const val LOG_GRACE_MS = 400L
         private val TIME = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
 
         fun time(at: Long): String = TIME.format(Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()))

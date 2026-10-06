@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
-import { compactSignals, describeVariables, emptyBodyHint, ENV_FILE, newRequestLabel, parseHeaderLines, resolveRequest, routeHeaders, routeUrl, toCurl, unreachableHint, variableCompletions, variableValues, type EnvKey, type Field, type SavedRequest, type Variable } from "./requests.ts";
+import { baseUrlSuggestion, compactSignals, describeVariables, emptyBodyHint, ENV_FILE, newRequestLabel, parseHeaderLines, resolveRequest, routeHeaders, routeUrl, toCurl, unreachableHint, variableCompletions, variableValues, type EnvKey, type Field, type SavedRequest, type Variable } from "./requests.ts";
 import type { RequestStore } from "./requestStore.ts";
+import type { RunningServers } from "./serverLog.ts";
 import type { Route } from "./routes.ts";
 import { mergePatch, type DatastarFrame } from "./sse.ts";
 import { openStream } from "./streamClient.ts";
@@ -11,6 +12,9 @@ import { openStream } from "./streamClient.ts";
  * Requests can be saved to the workspace, recalled from the recent list, filled from a route
  * code lens, parameterised with `{{variables}}` and exported as curl.
  */
+/** How long a failed request waits for the server to finish logging why. */
+const LOG_GRACE_MS = 400;
+
 export class Inspector {
   private panel: vscode.WebviewPanel | null = null;
   private abort: AbortController | null = null;
@@ -19,6 +23,7 @@ export class Inspector {
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly store: RequestStore,
+    private readonly running: RunningServers,
   ) {
     context.subscriptions.push(store.onDidChange(() => void this.pushRequests()));
   }
@@ -139,6 +144,16 @@ export class Inspector {
         this.post({ type: "completions", seq: msg.seq, field: msg.field, result: found && { from: found.from, to: found.to, items } });
         return;
       }
+      case "useBaseUrl": {
+        try {
+          const { uri, extended } = await this.store.useBaseUrl(msg.url);
+          await vscode.window.showTextDocument(uri, { viewColumn: vscode.ViewColumn.One });
+          if (!extended) this.post({ type: "error", message: `${ENV_FILE} is not a JSON object, so baseUrl was not changed.` });
+        } catch (e) {
+          this.post({ type: "error", message: (e as Error).message });
+        }
+        return;
+      }
       case "defineVariables": {
         try {
           const { uri, extended } = await this.store.defineVariables(msg.names);
@@ -165,20 +180,33 @@ export class Inspector {
     }
     await this.store.addRecent(raw);
     void this.pushRequests();
+    const since = Date.now();
     this.abort = new AbortController();
     await openStream(
       { url: request.url, method: request.method, signals: request.signals, headers: parseHeaderLines(request.headers) },
       {
         onStatus: (status, detail) => this.post({ type: "status", status, resolvedUrl: request.url, ...(detail ?? {}) }),
         onComment: (text) => this.post({ type: "comment", text, at: Date.now() }),
-        onNonSse: (r) => this.post({ type: "nonsse", ...r, hint: emptyBodyHint(Number.parseInt(r.http, 10), r.body) }),
+        onNonSse: (r) => {
+          const status = Number.parseInt(r.http, 10);
+          if (!(status >= 400)) return this.post({ type: "nonsse", ...r, problems: [], hint: null });
+          // The server logs the reason as it answers, and a little after; wait for it before drawing the card.
+          setTimeout(() => {
+            const problems = this.running.problemsSince(since);
+            this.post({ type: "nonsse", ...r, problems, hint: problems.length ? null : emptyBodyHint(status, r.body) });
+          }, LOG_GRACE_MS);
+        },
         onFrame: (frame) => {
           this.applyFrame(frame);
           this.post({ type: "frame", frame });
         },
         onError: (message) => {
-          const hint = /^(Connection refused|Host not found)/.test(message) ? unreachableHint(raw.url, vars) : null;
-          this.post({ type: "error", message: hint ? `${message} ${hint}` : message, define: hint ? [] : undefined });
+          const unreachable = /^(Connection refused|Host not found)/.test(message);
+          const server = this.running.current();
+          const hint = unreachable ? unreachableHint(raw.url, vars, server) : null;
+          const elsewhere = unreachable ? baseUrlSuggestion(vars, server) : null;
+          if (elsewhere !== null) this.post({ type: "error", message: `${message} ${hint}`, useBaseUrl: elsewhere });
+          else this.post({ type: "error", message: hint ? `${message} ${hint}` : message, define: hint ? [] : undefined });
           this.post({ type: "status", status: "idle" });
         },
       },
@@ -213,6 +241,7 @@ type Message =
   | { type: "delete"; name: string }
   | { type: "curl"; request: SavedRequest }
   | { type: "defineVariables"; names: string[] }
+  | { type: "useBaseUrl"; url: string }
   | { type: "complete"; seq: number; field: Field; text: string; caret: number };
 
 function suggestName(r: SavedRequest): string {
@@ -385,12 +414,13 @@ function html(cspSource: string): string {
       clearEmpty(); const p = document.createElement('p'); p.className = 'error'; p.textContent = m.message;
       // A missing variable is added to the env file in one click; an unreachable server opens it to change baseUrl.
       if (m.define) { const b = document.createElement('button'); b.type = 'button'; b.className = 'link'; b.textContent = m.define.length ? 'Add to .streamlord/env.json' : 'Edit variables'; b.addEventListener('click', () => vscode.postMessage({ type: 'defineVariables', names: m.define })); p.append(b); }
+      if (m.useBaseUrl) { const b = document.createElement('button'); b.type = 'button'; b.className = 'link'; b.textContent = 'Use ' + m.useBaseUrl + ' in .streamlord/env.json'; b.addEventListener('click', () => vscode.postMessage({ type: 'useBaseUrl', url: m.useBaseUrl })); p.append(b); }
       frames.prepend(p); $('status').className = 'status error'; $('status').textContent = 'error';
     }
     if (m.type === 'completions') showCompletions(m);
     if (m.type === 'signals') { $('store').textContent = JSON.stringify(m.signals, null, 2); }
     if (m.type === 'comment') { clearEmpty(); const p = document.createElement('p'); p.className = 'comment'; p.textContent = time(m.at) + '  : ' + m.text; frames.prepend(p); }
-    if (m.type === 'nonsse') { clearEmpty(); const d = document.createElement('div'); d.className = 'frame'; d.innerHTML = '<header><span class="ev">' + esc(m.http) + '</span><span>' + esc(m.contentType || 'no content-type') + '</span><span class="t">non-SSE response</span></header><dl>' + Object.entries(m.headers).map(([k,v]) => '<dt>' + esc(k) + '</dt><dd><pre>' + esc(v) + '</pre></dd>').join('') + '<dt>body</dt><dd><pre>' + esc(m.body) + '</pre></dd>' + (m.hint ? '<dt>note</dt><dd>' + esc(m.hint) + '</dd>' : '') + '</dl>'; frames.prepend(d); }
+    if (m.type === 'nonsse') { clearEmpty(); const d = document.createElement('div'); d.className = 'frame'; d.innerHTML = '<header><span class="ev">' + esc(m.http) + '</span><span>' + esc(m.contentType || 'no content-type') + '</span><span class="t">non-SSE response</span></header><dl>' + Object.entries(m.headers).map(([k,v]) => '<dt>' + esc(k) + '</dt><dd><pre>' + esc(v) + '</pre></dd>').join('') + '<dt>body</dt><dd><pre>' + esc(m.body) + '</pre></dd>' + (m.problems.length ? '<dt>server log</dt><dd><pre>' + esc(m.problems.join('\\n')) + '</pre></dd>' : '') + (m.hint ? '<dt>note</dt><dd>' + esc(m.hint) + '</dd>' : '') + '</dl>'; frames.prepend(d); }
     if (m.type === 'frame') {
       clearEmpty(); count++;
       const f = m.frame; const kind = f.event.endsWith('elements') ? 'elements' : f.event.endsWith('signals') ? 'signals' : '';

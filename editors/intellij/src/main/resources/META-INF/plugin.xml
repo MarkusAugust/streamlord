@@ -96,6 +96,12 @@
                 description="Read every Kotlin and HTML file again for signal names, ids and classes" />
         </group>
     </actions>
+    <projectListeners>
+        <!-- Every process the project starts, so the inspector learns where a server listens from its own log. -->
+        <listener
+            class="io.github.markusaugust.streamlord.intellij.inspector.RunningServersListener"
+            topic="com.intellij.execution.ExecutionListener" />
+    </projectListeners>
     <extensions defaultExtensionNs="com.intellij">
         <projectConfigurable
             parentId="tools"

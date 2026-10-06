@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.intellij
 
+import com.intellij.execution.process.ProcessHandler
+import com.intellij.execution.process.ProcessOutputTypes
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.vfs.VfsUtil
@@ -7,9 +9,11 @@ import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.sun.net.httpserver.HttpServer
 import io.github.markusaugust.streamlord.analysis.DatastarFrame
 import io.github.markusaugust.streamlord.analysis.Requests
+import io.github.markusaugust.streamlord.analysis.RunningServer
 import io.github.markusaugust.streamlord.analysis.SavedRequest
 import io.github.markusaugust.streamlord.intellij.inspector.InspectorState
 import io.github.markusaugust.streamlord.intellij.inspector.RequestStore
+import io.github.markusaugust.streamlord.intellij.inspector.RunningServers
 import io.github.markusaugust.streamlord.intellij.inspector.StreamClient
 import java.net.InetSocketAddress
 import java.util.concurrent.CopyOnWriteArrayList
@@ -303,5 +307,121 @@ class InspectorTest : BasePlatformTestCase() {
                 .getLineMarkers(myFixture.editor.document, project)
         val texts = markers.mapNotNull { it.lineMarkerTooltip }.sorted()
         assertEquals(listOf("Open in Stream Inspector · GET /api/counter", "Open in Stream Inspector · POST /x/y"), texts)
+    }
+
+    /** A process the test writes the output of, as a run configuration's would arrive. */
+    private class FakeProcess : ProcessHandler() {
+        override fun destroyProcessImpl() = notifyProcessTerminated(0)
+
+        override fun detachProcessImpl() = notifyProcessDetached()
+
+        override fun detachIsDefault() = false
+
+        override fun getProcessInput(): java.io.OutputStream? = null
+
+        fun print(text: String) = notifyTextAvailable(text, ProcessOutputTypes.STDOUT)
+    }
+
+    fun `test a server the project starts says where it listens and what went wrong`() {
+        val servers = RunningServers()
+        var changes = 0
+        servers.onChange(testRootDisposable) { changes++ }
+        val process = FakeProcess()
+        servers.track("Motregning back (dev)", process)
+        process.startNotify()
+        process.print("\u001B[32m INFO\u001B[0;39m Starting Application\n2026-10-06 INFO Tomcat started on port 91")
+        assertEquals(null, servers.current())
+        process.print("02 (http) with context path '/'\n")
+        assertEquals(RunningServer("http://localhost:9102", "Motregning back (dev)"), servers.current())
+        val since = System.currentTimeMillis()
+        process.print("INFO all is well\n\u001B[33m WARN\u001B[0;39m Resolved [MissingServletRequestParameterException]\n")
+        assertEquals(listOf(" WARN Resolved [MissingServletRequestParameterException]"), servers.problemsSince(since))
+        process.destroyProcess()
+        process.waitFor()
+        assertEquals(null, servers.current())
+        assertEquals(2, changes)
+    }
+
+    fun `test a running server is the baseUrl unless the env file sets one`() {
+        val process = FakeProcess()
+        RunningServers.getInstance(project).track("Motregning back (dev)", process)
+        process.startNotify()
+        process.print("Tomcat started on port 9102 (http) with context path '/'\n")
+        val store = RequestStore.getInstance(project)
+        try {
+            assertEquals(
+                Requests.Variable("baseUrl", "http://localhost:9102", Requests.VariableSource.RUNNING, "Motregning back (dev)"),
+                store.environment().vars.single(),
+            )
+            val (file, changed) = store.useBaseUrl("http://localhost:9103")
+            assertTrue(changed)
+            FileDocumentManager.getInstance().saveAllDocuments()
+            assertEquals("{\n  \"baseUrl\": \"http://localhost:9103\"\n}\n", String(file.contentsToByteArray()))
+            assertEquals(
+                Requests.VariableSource.ENV,
+                store
+                    .environment()
+                    .vars
+                    .single()
+                    .source,
+            )
+            WriteCommandAction.runWriteCommandAction(project) { file.delete(this) }
+        } finally {
+            process.destroyProcess()
+            process.waitFor()
+        }
+    }
+
+    fun `test the client tries the IPv6 loopback when localhost refuses`() {
+        assertEquals("http://[::1]:8080/x", StreamClient.ipv6Loopback("http://localhost:8080/x"))
+        assertEquals("https://u:p@[::1]/x?localhost", StreamClient.ipv6Loopback("https://u:p@LOCALHOST/x?localhost"))
+        assertEquals(null, StreamClient.ipv6Loopback("http://localhost.example.com/x"))
+        assertEquals(null, StreamClient.ipv6Loopback("http://127.0.0.1:8080/x"))
+
+        val server =
+            try {
+                HttpServer.create(InetSocketAddress(java.net.InetAddress.getByName("::1"), 0), 0)
+            } catch (_: java.io.IOException) {
+                return // No IPv6 loopback on this machine, so nothing to fall back to.
+            }
+        server.createContext("/v6") { exchange ->
+            exchange.responseHeaders.add("Content-Type", "text/event-stream")
+            exchange.sendResponseHeaders(200, 0)
+            exchange.responseBody.use { it.write("event: datastar-patch-signals\ndata: signals {\"v6\":true}\n\n".toByteArray()) }
+        }
+        server.start()
+        try {
+            val frames = CopyOnWriteArrayList<DatastarFrame>()
+            val errors = CopyOnWriteArrayList<String>()
+            val done = CountDownLatch(1)
+            StreamClient().open(
+                "http://localhost:${server.address.port}/v6",
+                "GET",
+                "{}",
+                emptyMap(),
+                object : StreamClient.Handlers {
+                    override fun onFrame(frame: DatastarFrame) {
+                        frames += frame
+                    }
+
+                    override fun onError(message: String) {
+                        errors += message
+                    }
+
+                    override fun onStatus(
+                        status: StreamClient.Status,
+                        http: String?,
+                        contentType: String?,
+                    ) {
+                        if (status == StreamClient.Status.CLOSED) done.countDown()
+                    }
+                },
+            )
+            assertTrue(done.await(10, TimeUnit.SECONDS))
+            assertEquals(emptyList<String>(), errors)
+            assertEquals(listOf("{\"v6\":true}"), frames.map { it.args["signals"] })
+        } finally {
+            server.stop(0)
+        }
     }
 }

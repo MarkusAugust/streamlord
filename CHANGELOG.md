@@ -6,6 +6,15 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `streamlord-analysis`: `ServerLog`, which reads where a server says it started from its log
+  (Spring Boot's Tomcat, Jetty, Undertow and Netty lines in 3.5 and 4.0, Ktor's "Responding at"),
+  context path included, and which lines are warnings or errors; `RunningServer`.
+  `mergeVariables` takes a running server as `baseUrl` when the env file sets none, as the new
+  `VariableSource.RUNNING` with the name it was started under; `baseUrlSuggestion` and
+  `withBaseUrl` offer and write its URL when the file's differs.
+
 ### Changed
 
 - `streamlord-analysis`, for both editors: `Route` carries the `query` parameters and `headers`
