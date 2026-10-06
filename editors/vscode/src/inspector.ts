@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { compactSignals, describeVariables, ENV_FILE, fillPath, newRequestLabel, parseHeaderLines, pathParams, resolveRequest, toCurl, unreachableHint, variableCompletions, variableValues, type EnvKey, type Field, type SavedRequest, type Variable } from "./requests.ts";
+import { compactSignals, describeVariables, emptyBodyHint, ENV_FILE, fillPath, newRequestLabel, parseHeaderLines, pathParams, resolveRequest, toCurl, unreachableHint, variableCompletions, variableValues, type EnvKey, type Field, type SavedRequest, type Variable } from "./requests.ts";
 import type { RequestStore } from "./requestStore.ts";
 import { mergePatch, type DatastarFrame } from "./sse.ts";
 import { openStream } from "./streamClient.ts";
@@ -172,7 +172,7 @@ export class Inspector {
       {
         onStatus: (status, detail) => this.post({ type: "status", status, resolvedUrl: request.url, ...(detail ?? {}) }),
         onComment: (text) => this.post({ type: "comment", text, at: Date.now() }),
-        onNonSse: (r) => this.post({ type: "nonsse", ...r }),
+        onNonSse: (r) => this.post({ type: "nonsse", ...r, hint: emptyBodyHint(Number.parseInt(r.http, 10), r.body) }),
         onFrame: (frame) => {
           this.applyFrame(frame);
           this.post({ type: "frame", frame });
@@ -391,7 +391,7 @@ function html(cspSource: string): string {
     if (m.type === 'completions') showCompletions(m);
     if (m.type === 'signals') { $('store').textContent = JSON.stringify(m.signals, null, 2); }
     if (m.type === 'comment') { clearEmpty(); const p = document.createElement('p'); p.className = 'comment'; p.textContent = time(m.at) + '  : ' + m.text; frames.prepend(p); }
-    if (m.type === 'nonsse') { clearEmpty(); const d = document.createElement('div'); d.className = 'frame'; d.innerHTML = '<header><span class="ev">' + esc(m.http) + '</span><span>' + esc(m.contentType || 'no content-type') + '</span><span class="t">non-SSE response</span></header><dl>' + Object.entries(m.headers).map(([k,v]) => '<dt>' + esc(k) + '</dt><dd><pre>' + esc(v) + '</pre></dd>').join('') + '<dt>body</dt><dd><pre>' + esc(m.body) + '</pre></dd></dl>'; frames.prepend(d); }
+    if (m.type === 'nonsse') { clearEmpty(); const d = document.createElement('div'); d.className = 'frame'; d.innerHTML = '<header><span class="ev">' + esc(m.http) + '</span><span>' + esc(m.contentType || 'no content-type') + '</span><span class="t">non-SSE response</span></header><dl>' + Object.entries(m.headers).map(([k,v]) => '<dt>' + esc(k) + '</dt><dd><pre>' + esc(v) + '</pre></dd>').join('') + '<dt>body</dt><dd><pre>' + esc(m.body) + '</pre></dd>' + (m.hint ? '<dt>note</dt><dd>' + esc(m.hint) + '</dd>' : '') + '</dl>'; frames.prepend(d); }
     if (m.type === 'frame') {
       clearEmpty(); count++;
       const f = m.frame; const kind = f.event.endsWith('elements') ? 'elements' : f.event.endsWith('signals') ? 'signals' : '';

@@ -78,6 +78,16 @@ class O {
     assert.deepEqual(routes(src), ["GET /inner/a", "GET /outer/b", "GET /top"]);
   });
 
+  it("a mapping without its leading slash still makes a path that starts with one", () => {
+    // Spring and Ktor both take "api" for "/api". Without the slash the inspector's URL was
+    // {{baseUrl}}api/hent/visning, and java.net.URI read 8080api as part of the host.
+    const src = `@RestController
+@RequestMapping("api/hent")
+class A { @GetMapping(value = "visning") fun v() {} }
+fun Route.api() { route("api") { get("x") { } } }`;
+    assert.deepEqual(routes(src), ["GET /api/hent/visning", "GET /api/x"]);
+  });
+
   it("a spring class mapping is not a route whatever annotates the class", () => {
     const src = `@RequestMapping("/api")
 @PreAuthorize("hasRole('ADMIN')")

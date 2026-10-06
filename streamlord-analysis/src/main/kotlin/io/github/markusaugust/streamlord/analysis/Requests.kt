@@ -635,7 +635,52 @@ public object Requests {
             }
             i++
         }
+        authorityError(target.substring(start, authorityEnd))?.let { return refuse(it) }
         return SendableUrl(out.toString(), null)
+    }
+
+    /**
+     * What to say under an error response that came without a body, or null when there is a body
+     * or no error. The reason is then only in the server's log: a Spring Boot app missing a request
+     * parameter answered the inspector with a bare 400, because its error page has no
+     * text/event-stream form to write.
+     */
+    public fun emptyBodyHint(
+        status: Int,
+        body: String,
+    ): String? =
+        if (status < 400 || body.isNotBlank()) {
+            null
+        } else {
+            "The server sent no body with this $status, so the reason is in its log. " +
+                "Spring Boot, for one, writes no error body for a request that accepts only text/event-stream."
+        }
+
+    private val PORT = Regex("""^:[0-9]*$""")
+    private val IPV4 = Regex("""^(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])(\.(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])){3}$""")
+    private val LABEL = Regex("""^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?$""")
+
+    /**
+     * Why java.net.URI would read no host in [authority], or null when it reads one.
+     *
+     * It does not fail; it gives up on the host and port, and the HTTP client then refuses the
+     * request with "unsupported URI", which names the URL and not what is wrong with it. A route
+     * whose path lost its slash gave `localhost:8080api`, and that message.
+     */
+    private fun authorityError(authority: String): String? {
+        val hostPort = authority.substringAfterLast('@')
+        val bracketed = hostPort.startsWith('[')
+        val hostEnd = if (bracketed) hostPort.indexOf(']') + 1 else hostPort.indexOf(':').let { if (it < 0) hostPort.length else it }
+        val host = hostPort.substring(0, hostEnd)
+        val port = hostPort.substring(hostEnd)
+        if (port.isNotEmpty() && !PORT.matches(port)) {
+            return "The port in $hostPort is not a number. Is a / missing between the port and the path?"
+        }
+        if (bracketed || IPV4.matches(host)) return null
+        val labels = host.removeSuffix(".").split('.')
+        if (labels.all { LABEL.matches(it) } && (labels.size == 1 || labels.last()[0].isLetter())) return null
+        return "The host $host cannot be sent: " +
+            "a host name holds only letters, digits, hyphens and dots, and its last part starts with a letter."
     }
 
     private fun Char.isHexDigit(): Boolean = this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'

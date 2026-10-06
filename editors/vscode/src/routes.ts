@@ -22,8 +22,10 @@ export function findRoutes(src: string): Route[] {
 }
 
 function joinPath(prefix: string, path: string): string {
-  const joined = `${prefix}/${path}`.replace(/\/{2,}/g, "/");
-  return joined.length > 1 ? joined.replace(/\/$/, "") : joined || "/";
+  // Spring and Ktor both accept a mapping without its leading slash, `@RequestMapping("api")`,
+  // and the inspector puts the path straight after {{baseUrl}}: http://localhost:8080api.
+  const joined = `/${prefix}/${path}`.replace(/\/{2,}/g, "/");
+  return joined.length > 1 ? joined.replace(/\/$/, "") : joined;
 }
 
 function findKtorRoutes(src: string): Route[] {

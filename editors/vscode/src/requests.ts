@@ -468,7 +468,42 @@ export function sendableUrl(url: string): { url: string } | { error: string } {
     }
     out += c;
   }
-  return { url: out };
+  const authority = authorityError(target.slice(start, authorityEnd));
+  return authority !== null ? { error: authority } : { url: out };
+}
+
+/**
+ * What to say under an error response that came without a body, or null when there is a body or
+ * no error. The reason is then only in the server's log: a Spring Boot app missing a request
+ * parameter answered the inspector with a bare 400, because its error page has no
+ * text/event-stream form to write.
+ */
+export function emptyBodyHint(status: number, body: string): string | null {
+  if (status < 400 || body.trim() !== "") return null;
+  return `The server sent no body with this ${status}, so the reason is in its log. Spring Boot, for one, writes no error body for a request that accepts only text/event-stream.`;
+}
+
+const PORT = /^:[0-9]*$/;
+const IPV4 = /^(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])(\.(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])){3}$/;
+const LABEL = /^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?$/;
+
+/**
+ * Why java.net.URI would read no host in `authority`, or null when it reads one. The IntelliJ
+ * client then refuses the request with "unsupported URI"; Node would send some of these, but both
+ * inspectors refuse the same URLs. A route whose path lost its slash gave `localhost:8080api`.
+ */
+function authorityError(authority: string): string | null {
+  const hostPort = authority.slice(authority.lastIndexOf("@") + 1);
+  const bracketed = hostPort.startsWith("[");
+  const colon = hostPort.indexOf(":");
+  const hostEnd = bracketed ? hostPort.indexOf("]") + 1 : colon < 0 ? hostPort.length : colon;
+  const host = hostPort.slice(0, hostEnd);
+  const port = hostPort.slice(hostEnd);
+  if (port !== "" && !PORT.test(port)) return `The port in ${hostPort} is not a number. Is a / missing between the port and the path?`;
+  if (bracketed || IPV4.test(host)) return null;
+  const labels = host.replace(/\.$/, "").split(".");
+  if (labels.every((l) => LABEL.test(l)) && (labels.length === 1 || /^[A-Za-z]/.test(labels[labels.length - 1] ?? ""))) return null;
+  return `The host ${host} cannot be sent: a host name holds only letters, digits, hyphens and dots, and its last part starts with a letter.`;
 }
 
 /** UTF-8 escapes in capitals; a surrogate without its partner is encoded as U+FFFD, as TextEncoder does. */

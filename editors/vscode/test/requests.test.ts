@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { describeVariables, fillPath, mergeVariables, newRequestLabel, parseEnv, parseRequestsFile, pathParams, pushRecent, remove, resolveRequest, sendableUrl, serializeRequestsFile, substitute, toCurl, unreachableHint, upsert, variableCompletions, withEnvVariables, type SavedRequest } from "../src/requests.ts";
+import { describeVariables, emptyBodyHint, fillPath, mergeVariables, newRequestLabel, parseEnv, parseRequestsFile, pathParams, pushRecent, remove, resolveRequest, sendableUrl, serializeRequestsFile, substitute, toCurl, unreachableHint, upsert, variableCompletions, withEnvVariables, type SavedRequest } from "../src/requests.ts";
 import { findRoutes } from "../src/routes.ts";
 
 const req = (over: Partial<SavedRequest> = {}): SavedRequest => ({ name: "counter", url: "{{baseUrl}}/api/counter-stream", method: "GET", signals: "", headers: "", ...over });
@@ -185,6 +185,29 @@ describe("sendable url", () => {
     for (const [url, sent, error] of cases) {
       assert.deepEqual(sendableUrl(url), sent !== null ? { url: sent } : { error }, url);
     }
+  });
+
+  it("refuses a host or port java.net.URI cannot read, and says which", () => {
+    const cases: [string, string][] = [
+      ["http://localhost:8080api/hent/visning", "The port in localhost:8080api is not a number. Is a / missing between the port and the path?"],
+      ["http://localhost:8080:/x", "The port in localhost:8080: is not a number. Is a / missing between the port and the path?"],
+      ["http://my_service:8080/x", "The host my_service cannot be sent: a host name holds only letters, digits, hyphens and dots, and its last part starts with a letter."],
+    ];
+    for (const [url, error] of cases) assert.deepEqual(sendableUrl(url), { error }, url);
+  });
+
+  it("points to the server log when an error came without a body", () => {
+    assert.equal(emptyBodyHint(400, " \n"), "The server sent no body with this 400, so the reason is in its log. Spring Boot, for one, writes no error body for a request that accepts only text/event-stream.");
+    assert.equal(emptyBodyHint(400, "Required request parameter 'partsnummer' is not present"), null);
+    assert.equal(emptyBodyHint(204, ""), null);
+  });
+
+  it("refuses exactly the hosts and ports the IntelliJ inspector refuses", () => {
+    // The same URLs as RequestsTest.kt, which checks each verdict against the JDK's HTTP client.
+    const sent = ["http://localhost:8080/x", "http://localhost:/x", "http://localhost", "http://h?x=1", "http://user:pw@h:1/x", "http://127.0.0.1:8080/x", "http://10.0.0.255/x", "http://[::1]:8080/x", "http://[fe80::1]/x", "http://example.com./x", "http://a-b.example.com/x", "http://x1/x", "http://1x/x", "http://123/x"];
+    const refused = ["http://localhost:8080api/x", "http://localhost:8080:/x", "http://h:-1/x", "http://h:80a", "http://my_service:8080/x", "http://-h/x", "http://h-/x", "http://a..b/x", "http://a.1b/x", "http://1.2.3.999/x", "http://1.2.3/x", "http://a.b-/x", "http://h%41/x", "http://h!/x"];
+    for (const url of sent) assert.ok("url" in sendableUrl(url), url);
+    for (const url of refused) assert.ok("error" in sendableUrl(url), url);
   });
 });
 

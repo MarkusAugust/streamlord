@@ -6,6 +6,19 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `streamlord-analysis`, for both editors: a route whose mapping had no leading slash, such as
+  `@RequestMapping("api/hent")` or Ktor's `route("api")`, was found as `api/hent/visning`, and
+  the Stream Inspector opened it as `http://localhost:8080api/hent/visning`. Every route path now
+  starts with `/`.
+- `streamlord-analysis`: `Requests.sendableUrl` refuses a host or a port that `java.net.URI`
+  cannot read, such as `localhost:8080api`, `localhost:8080:` or `my_service`, and says which.
+  The HTTP client used to refuse them later as "unsupported URI", naming only the URL. A test
+  holds the rule to the JDK's own verdict.
+- `streamlord-analysis`: `Requests.emptyBodyHint`, the note the Stream Inspector shows under an
+  error response that came without a body: the reason is then in the server's log.
+
 ## [0.11.1] - 2026-10-05
 
 ### Added
