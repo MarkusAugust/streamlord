@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
-import { compactSignals, describeVariables, emptyBodyHint, ENV_FILE, fillPath, newRequestLabel, parseHeaderLines, pathParams, resolveRequest, toCurl, unreachableHint, variableCompletions, variableValues, type EnvKey, type Field, type SavedRequest, type Variable } from "./requests.ts";
+import { compactSignals, describeVariables, emptyBodyHint, ENV_FILE, newRequestLabel, parseHeaderLines, resolveRequest, routeHeaders, routeUrl, toCurl, unreachableHint, variableCompletions, variableValues, type EnvKey, type Field, type SavedRequest, type Variable } from "./requests.ts";
 import type { RequestStore } from "./requestStore.ts";
+import type { Route } from "./routes.ts";
 import { mergePatch, type DatastarFrame } from "./sse.ts";
 import { openStream } from "./streamClient.ts";
 
@@ -39,15 +40,13 @@ export class Inspector {
     void this.pushRequests(prefill ?? this.store.lastUsed() ?? { url: "{{baseUrl}}/" });
   }
 
-  /** Open with a route from a code lens: ask for path parameters, then prefill. */
-  async openWithRoute(route: { method: string; path: string }): Promise<void> {
-    const values: Record<string, string> = {};
-    for (const p of pathParams(route.path)) {
-      const v = await vscode.window.showInputBox({ prompt: `Value for {${p.name}}${p.optional ? " (optional, leave empty to omit)" : ""}`, ignoreFocusOut: true });
-      if (v === undefined) return;
-      values[p.name] = v;
-    }
-    this.open({ name: "", method: route.method, url: `{{baseUrl}}${fillPath(route.path, values)}`, signals: "", headers: "" });
+  /**
+   * Open with a route from a code lens. Every parameter the handler needs is a `{{name}}`, and its
+   * value comes from `params` in the env file; one that is not there yet is reported with a link
+   * that adds it, so nothing is asked for in a dialog and nothing is forgotten between runs.
+   */
+  openWithRoute(route: Route): void {
+    this.open({ name: "", method: route.method, url: routeUrl(route), signals: "", headers: routeHeaders(route) });
   }
 
   private post(message: unknown): void {
@@ -213,7 +212,7 @@ type Message =
   | { type: "save"; request: SavedRequest }
   | { type: "delete"; name: string }
   | { type: "curl"; request: SavedRequest }
-  | { type: "defineVariables"; names: EnvKey[] }
+  | { type: "defineVariables"; names: string[] }
   | { type: "complete"; seq: number; field: Field; text: string; caret: number };
 
 function suggestName(r: SavedRequest): string {

@@ -118,6 +118,57 @@ class RoutesTest {
     }
 
     @Test
+    fun `a route knows the query parameters and headers its handler reads`() {
+        fun params(r: Route) =
+            (r.query.map { "?${it.name}${if (it.required) "" else "?"}" } + r.headers.map { "H ${it.name}${if (it.required) "" else "?"}" })
+        val src =
+            """
+            @RestController
+            @RequestMapping("api/hent")
+            class A(private val s: S) {
+                @GetMapping(value = "/visning")
+                open fun visning(
+                    @RequestParam partsnummer: String,
+                    @RequestParam instans: String,
+                    @RequestParam(required = false) fokus: String?,
+                    @RequestHeader headere: Map<String, String>,
+                    request: HttpServletRequest,
+                ): StreamingResponseBody { val x = mapOf(1 to 2) }
+
+                @PostMapping("/b") fun b(
+                    @RequestParam("q") query: String, @RequestParam(name = "p", defaultValue = "1") page: Int,
+                    @RequestParam all: MultiValueMap<String, String>, @RequestHeader("X-Id") id: String,
+                    @RequestHeader(value = "X-Opt", required = false) opt: String, @Valid @RequestParam n: List<Int>,
+                ) {}
+
+                @GetMapping("/none") fun none() {}
+            }
+            fun Route.api() {
+                route("/k/{id}") {
+                    get {
+                        val q = call.request.queryParameters["q"] // read twice
+                        call.request.queryParameters["q"]
+                        call.parameters["id"]
+                        call.parameters.get("page")
+                        "queryParameters[\"inString\"]"
+                    }
+                }
+                get("/l") { }
+            }
+            """.trimIndent()
+        assertEquals(
+            listOf(
+                "GET /api/hent/visning" to listOf("?partsnummer", "?instans", "?fokus?"),
+                "POST /api/hent/b" to listOf("?q", "?p?", "?n", "H X-Id", "H X-Opt?"),
+                "GET /api/hent/none" to emptyList(),
+                "GET /k/{id}" to listOf("?q?", "?page?"),
+                "GET /l" to emptyList(),
+            ),
+            findRoutes(src).map { "${it.method} ${it.path}" to params(it) },
+        )
+    }
+
+    @Test
     fun `a spring class mapping is not a route whatever annotates the class`() {
         val src =
             """

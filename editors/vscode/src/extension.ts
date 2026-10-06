@@ -9,6 +9,7 @@ import { StreamlordHoverProvider } from "./hover.ts";
 import { Inspector } from "./inspector.ts";
 import { RequestStore } from "./requestStore.ts";
 import { RouteLensProvider } from "./routeLens.ts";
+import type { Route } from "./routes.ts";
 import { SignalIndex } from "./signalIndex.ts";
 
 /** Languages that get HTML-side support, from the setting; Kotlin always gets the Kotlin side. */
@@ -68,7 +69,7 @@ export function activate(context: vscode.ExtensionContext): void {
     signals,
     store,
     vscode.languages.registerCodeLensProvider({ language: "kotlin" }, new RouteLensProvider()),
-    vscode.commands.registerCommand("streamlord.inspector.openWith", (route: { method: string; path: string }) => inspector.openWithRoute(route)),
+    vscode.commands.registerCommand("streamlord.inspector.openWith", (route: Route) => inspector.openWithRoute(route)),
     vscode.workspace.onDidOpenTextDocument(schedule),
     vscode.workspace.onDidChangeTextDocument((e) => schedule(e.document)),
     vscode.workspace.onDidCloseTextDocument((d) => {

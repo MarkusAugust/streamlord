@@ -6,6 +6,21 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- `streamlord-analysis`, for both editors: `Route` carries the `query` parameters and `headers`
+  its handler reads, as `RouteParam`s that say whether they are required: Spring's
+  `@RequestParam` and `@RequestHeader` from the parameter list, and Ktor's
+  `queryParameters["x"]` from the handler's block. `Requests.routeUrl`, `routeHeaders` and
+  `routeOptional` turn a route into what "Open in Stream Inspector" writes, a `{{name}}` for each
+  parameter. `pathParams` and `fillPath` are gone with the dialog they served.
+- `streamlord-analysis`: `.streamlord/env.json` takes a fourth key, `params`, an object of texts.
+  Each name in it is a variable for the URL, where its value is encoded, and the headers.
+  `resolveRequest` reports a param that is missing or empty, and `withEnvVariables` adds it to
+  `params` without touching the rest of the file. `Env` has a `params` field.
+- `streamlord-analysis`: an env file that is not valid JSON is reported with where, such as
+  `at line 3, column 1` for a comma after the last value.
+
 ### Fixed
 
 - `streamlord-analysis`, for both editors: a route whose mapping had no leading slash, such as

@@ -77,13 +77,15 @@ the client would keep it. Non-SSE Datastar responses are shown with their `datas
   and pick it again from the Request list, which also holds the recent ones and says how many
   of each it has. **Delete** removes the selected one.
 - **Recent** requests are remembered automatically, and the last one is prefilled on open.
-- **Variables** live in `.streamlord/env.json` in the project, and there are three:
+- **Variables** live in `.streamlord/env.json` in the project: three with a field of their own,
+  and the `params` of your routes:
 
   ```json
   {
     "baseUrl": "http://127.0.0.1:8081",
     "signals": { "search": "ash" },
-    "headers": { "Authorization": "Bearer dev-token" }
+    "headers": { "Authorization": "Bearer dev-token" },
+    "params": { "partsnummer": "3000507723", "instans": "m1" }
   }
   ```
 
@@ -92,6 +94,7 @@ the client would keep it. Non-SSE Datastar responses are shown with their `datas
   | `{{baseUrl}}` | the URL | the text, without a trailing slash |
   | `{{signals}}` | the signals field | the object, as written in the file |
   | `{{headers}}` | the headers field | one `Name: value` line per entry |
+  | `{{partsnummer}}`, any name in `params` | the URL or the headers | the text, encoded in the URL |
 
   Type `{{` in a field to pick from the ones that are set. Without `baseUrl` in the file,
   `{{baseUrl}}` is the Default base URL setting, which is `http://localhost:8080` unless you
@@ -101,12 +104,15 @@ the client would keep it. Non-SSE Datastar responses are shown with their `datas
   **Edit variables** opens the file, creating it with `baseUrl` filled in, and the panel picks
   up the file as you save it. Any other key, or a value of the wrong kind, is reported by name
   and stops the request until it is fixed; the file also has a JSON schema, so the editor marks
-  it as you type. The file is the place for local hosts and tokens, so keep it out of version
-  control. A server that cannot be reached is reported together with the `{{baseUrl}}` it was
+  it as you type. The file is the place for local hosts, tokens and test values, so keep it out
+  of version control. A server that cannot be reached is reported together with the `{{baseUrl}}` it was
   reached through.
 - **Gutter icons** on every Ktor route (`route("/api") { get("/feed") }`) and Spring mapping
   (`@GetMapping("/feed")` under a class `@RequestMapping`): "Open in Stream Inspector" prefills
-  method and `{{baseUrl}}` + path, asking for `{id}` parameters.
+  the method and the whole URL the handler needs: each path parameter and each required
+  `@RequestParam` as a `{{name}}`, and each required `@RequestHeader("X-Id")` as a line in the
+  headers. A value that is not in `params` yet is reported with a link that adds it, empty, for
+  you to fill in; the icon names the optional ones, such as `required = false`, which it leaves out.
 - **Copy as curl** puts an equivalent `curl -N ...` command on the clipboard.
 
 Everything the plugin knows comes from `catalog/datastar-1.0.4.json`, which the SDK's own tests

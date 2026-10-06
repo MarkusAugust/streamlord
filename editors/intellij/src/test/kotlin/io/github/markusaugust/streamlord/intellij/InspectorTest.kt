@@ -254,7 +254,7 @@ class InspectorTest : BasePlatformTestCase() {
             assertEquals(
                 RequestStore.Environment(
                     listOf(Requests.Variable("baseUrl", "http://localhost:8080", Requests.VariableSource.DEFAULT)),
-                    listOf(".streamlord/env.json is not valid: \"csrf\" is not a known key. Use baseUrl, signals or headers."),
+                    listOf(".streamlord/env.json is not valid: \"csrf\" is not a known key. Use baseUrl, signals, headers or params."),
                 ),
                 store.environment(),
             )
