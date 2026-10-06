@@ -2,6 +2,17 @@
 
 All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here.
 
+## Unreleased
+
+- Open in Stream Inspector: a Spring or Ktor mapping without its leading slash, such as
+  `@RequestMapping("api/hent")`, opened as `{{baseUrl}}api/hent/visning`, which the HTTP client
+  refused as "unsupported URI". The path now always starts with `/`.
+- Stream Inspector: a URL whose host or port cannot be read is refused before sending, with what
+  is wrong: `The port in localhost:8080api is not a number. Is a / missing between the port and
+  the path?`, or a host name such as `my_service`.
+- Stream Inspector: an error response without a body, such as the bare `400` Spring Boot sends
+  when a request parameter is missing, carries a note that the reason is in the server's log.
+
 ## 0.3.0
 
 - Stream Inspector: variables live in `.streamlord/env.json` alone, and there are three:

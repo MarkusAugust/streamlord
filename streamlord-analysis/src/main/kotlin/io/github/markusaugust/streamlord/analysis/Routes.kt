@@ -52,8 +52,10 @@ private fun joinPath(
     prefix: String,
     path: String,
 ): String {
-    val joined = SLASHES.replace("$prefix/$path", "/")
-    return if (joined.length > 1) joined.removeSuffix("/") else joined.ifEmpty { "/" }
+    // Spring and Ktor both accept a mapping without its leading slash, `@RequestMapping("api")`,
+    // and the inspector puts the path straight after {{baseUrl}}: http://localhost:8080api.
+    val joined = SLASHES.replace("/$prefix/$path", "/")
+    return if (joined.length > 1) joined.removeSuffix("/") else joined
 }
 
 private class Frame(

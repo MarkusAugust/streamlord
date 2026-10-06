@@ -104,6 +104,20 @@ class RoutesTest {
     }
 
     @Test
+    fun `a mapping without its leading slash still makes a path that starts with one`() {
+        // Spring and Ktor both take "api" for "/api". Without the slash the inspector's URL was
+        // {{baseUrl}}api/hent/visning, and java.net.URI read 8080api as part of the host.
+        val src =
+            """
+            @RestController
+            @RequestMapping("api/hent")
+            class A { @GetMapping(value = "visning") fun v() {} }
+            fun Route.api() { route("api") { get("x") { } } }
+            """.trimIndent()
+        assertEquals(listOf("GET /api/hent/visning", "GET /api/x"), routes(src))
+    }
+
+    @Test
     fun `a spring class mapping is not a route whatever annotates the class`() {
         val src =
             """

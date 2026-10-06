@@ -547,6 +547,7 @@ class InspectorPanel(
         val rows = LinkedHashMap<String, String>()
         rows.putAll(r.headers)
         rows["body"] = r.body
+        Requests.emptyBodyHint(r.http.substringBefore(' ').toIntOrNull() ?: 0, r.body)?.let { rows["note"] = it }
         prepend(card(listOf(r.http, r.contentType.ifEmpty { "no content-type" }), JBColor.foreground(), "non-SSE response", rows))
     }
 
