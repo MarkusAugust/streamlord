@@ -2,7 +2,7 @@
 
 All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here.
 
-## Unreleased
+## 0.4.0
 
 - Stream Inspector: `{{baseUrl}}` follows the server you started from a run configuration. The
   inspector reads the line the server logs as it starts, Spring Boot's
