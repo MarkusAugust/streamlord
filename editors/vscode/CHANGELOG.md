@@ -2,7 +2,7 @@
 
 All notable changes to the Streamlord extension are recorded here.
 
-## Unreleased
+## 0.6.0
 
 - Stream Inspector: `{{baseUrl}}` follows the server you started from a debug session. The
   inspector reads the line the server logs as it starts, Spring Boot's
