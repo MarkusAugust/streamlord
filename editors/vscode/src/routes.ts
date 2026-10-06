@@ -12,6 +12,20 @@ export interface Route {
   /** Source offset of the verb or annotation, for the lens position. */
   offset: number;
   framework: "ktor" | "spring";
+  /** Query parameters the handler reads: Spring's `@RequestParam`, Ktor's `queryParameters["x"]`. */
+  query: RouteParam[];
+  /** Headers the handler reads by name: Spring's `@RequestHeader("X-Id")`. */
+  headers: RouteParam[];
+}
+
+/**
+ * One parameter a handler reads. `required` when the framework refuses the request without it:
+ * a Spring parameter with no `required = false`, no `defaultValue` and a type that is not
+ * nullable. Ktor reads a query parameter as nullable, so none it reads is required.
+ */
+export interface RouteParam {
+  name: string;
+  required: boolean;
 }
 
 const KTOR_VERBS = new Set(["get", "post", "put", "patch", "delete"]);
@@ -69,20 +83,47 @@ function findKtorRoutes(src: string): Route[] {
       if (name === "route") {
         stack.push({ prefix: joinPath(prefix, path), depth: depth + 1 });
       } else if (KTOR_VERBS.has(name) && (path || stack.length > 0)) {
-        routes.push({ method: name.toUpperCase(), path: joinPath(prefix, path), offset: m.index, framework: "ktor" });
+        const full = joinPath(prefix, path);
+        const query = ktorQuery(src, mask, m.index + m[0].length - 1, full);
+        routes.push({ method: name.toUpperCase(), path: full, offset: m.index, framework: "ktor", query, headers: [] });
       }
       depth++;
       i = m.index + m[0].length;
       continue;
     }
     if (m[3] !== undefined) {
-      routes.push({ method: m[3].toUpperCase(), path: joinPath(prefix, m[4] ?? ""), offset: m.index, framework: "ktor" });
+      routes.push({ method: m[3].toUpperCase(), path: joinPath(prefix, m[4] ?? ""), offset: m.index, framework: "ktor", query: [], headers: [] });
       i = m.index + m[0].length;
       continue;
     }
     i++;
   }
   return routes;
+}
+
+/**
+ * The query parameters read in the handler whose body opens at `open`, in the order they are
+ * read. `call.parameters` holds the path parameters too, so a name the path declares is not one.
+ */
+function ktorQuery(src: string, mask: Uint8Array, open: number, path: string): RouteParam[] {
+  let depth = 0;
+  let close = src.length;
+  for (let k = open; k < src.length; k++) {
+    if (mask[k] === 0) continue;
+    if (src[k] === "{") depth++;
+    else if (src[k] === "}" && --depth === 0) {
+      close = k;
+      break;
+    }
+  }
+  const inPath = new Set([...path.matchAll(/\{([A-Za-z_][A-Za-z0-9_]*)/g)].map((p) => p[1]));
+  const names: string[] = [];
+  for (const q of src.slice(open, close).matchAll(/\b(?:queryParameters|parameters)\s*(?:\[\s*"([^"\n]+)"\s*]|\.get\(\s*"([^"\n]+)"\s*\))/g)) {
+    const name = q[1] ?? q[2] ?? "";
+    if (mask[open + (q.index ?? 0)] === 0 || inPath.has(name) || names.includes(name)) continue;
+    names.push(name);
+  }
+  return names.map((name) => ({ name, required: false }));
 }
 
 /** Whether the call at `start` is made on something: `client.post(...)`, also with the dot on the line above. */
@@ -204,7 +245,64 @@ function findSpringRoutes(src: string): Route[] {
     const owner = bodies.filter((b) => b.open < m!.index && m!.index < b.close).at(-1);
     const prefix = owner ? (prefixes.get(owner.keyword) ?? "") : "";
     const method = SPRING_MAPPINGS[name] === null ? (annotationMethod(args) ?? "GET") : (SPRING_MAPPINGS[name] ?? "GET");
-    routes.push({ method, path: joinPath(prefix, annotationPath(args)), offset: m.index, framework: "spring" });
+    const params = handlerParameters(src, mask, annotationEnd(src, mask, m.index)).map(springParam).filter((p) => p !== null);
+    routes.push({
+      method,
+      path: joinPath(prefix, annotationPath(args)),
+      offset: m.index,
+      framework: "spring",
+      query: params.filter((p) => p[0] === "RequestParam").map((p) => p[1]),
+      headers: params.filter((p) => p[0] === "RequestHeader").map((p) => p[1]),
+    });
   }
   return routes;
+}
+
+/**
+ * The parameters of the function the mapping at `from` annotates, each as written, or none when
+ * the next thing in the code is not a function. Split at the top level only: `Map<String, String>`
+ * and `@RequestParam(required = false)` hold commas and parentheses of their own.
+ */
+function handlerParameters(src: string, mask: Uint8Array, from: number): string[] {
+  let i = from;
+  for (; i < src.length; i++) {
+    if (mask[i] === 0) continue;
+    if (src[i] === "{" || src[i] === "}") return [];
+    if (src.startsWith("fun", i) && !/\w/.test(src[i - 1] ?? "") && !/\w/.test(src[i + 3] ?? "")) break;
+  }
+  while (i < src.length && !(mask[i] !== 0 && src[i] === "(")) i++;
+  if (i >= src.length) return [];
+  const params: string[] = [];
+  let depth = 0;
+  let start = i + 1;
+  for (; i < src.length; i++) {
+    if (mask[i] === 0) continue;
+    const c = src[i] ?? "";
+    if ("([{<".includes(c)) depth++;
+    else if (")]}>".includes(c)) {
+      if (--depth === 0) {
+        params.push(src.slice(start, i));
+        break;
+      }
+    } else if (c === "," && depth === 1) {
+      params.push(src.slice(start, i));
+      start = i + 1;
+    }
+  }
+  return params.map((p) => p.trim()).filter((p) => p !== "");
+}
+
+/** A `@RequestParam` or `@RequestHeader` parameter: which of the two, its name on the wire and whether it is required. */
+function springParam(text: string): ["RequestParam" | "RequestHeader", RouteParam] | null {
+  const annotation = /@(RequestParam|RequestHeader)\b\s*(?:\(([^)]*)\))?/.exec(text);
+  if (!annotation) return null;
+  const args = annotation[2] ?? "";
+  const declaration = /^(?:\w+\s+)*(\w+)\s*:\s*([^=]+?)\s*(?:=[\s\S]*)?$/.exec(text.replace(/@[\w.:]+(?:\s*\([^)]*\))?/g, " ").trim());
+  if (!declaration) return null;
+  const type = (declaration[2] ?? "").trim();
+  // Every parameter, in a type that takes them all.
+  if (/^(?:[\w.]*\.)?(?:Map|MultiValueMap|HttpHeaders)\b/.test(type)) return null;
+  const name = /(?:value|name)\s*=\s*"([^"]*)"/.exec(args)?.[1] ?? /^\s*(?:\[\s*)?"([^"]*)"/.exec(args)?.[1] ?? declaration[1] ?? "";
+  const required = !/required\s*=\s*false|defaultValue\s*=/.test(args) && !type.endsWith("?");
+  return [annotation[1] as "RequestParam" | "RequestHeader", { name, required }];
 }

@@ -8,6 +8,7 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.impl.source.tree.LeafPsiElement
 import com.intellij.psi.util.CachedValueProvider
 import com.intellij.psi.util.CachedValuesManager
+import io.github.markusaugust.streamlord.analysis.Requests
 import io.github.markusaugust.streamlord.analysis.Route
 import io.github.markusaugust.streamlord.analysis.findRoutes
 import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
@@ -21,14 +22,18 @@ class RouteLineMarkerProvider : LineMarkerProvider {
         if (!StreamlordSettings.getInstance(file.project).state.routeMarkers) return null
         val offset = element.textRange.startOffset
         val route = routesOf(file).firstOrNull { it.offset == offset } ?: return null
+        val optional = Requests.routeOptional(route)
+        val label =
+            "Open in Stream Inspector · ${route.method} ${route.path}" +
+                if (optional.isEmpty()) "" else " (optional: ${optional.joinToString(", ")})"
         return LineMarkerInfo(
             element,
             element.textRange,
             AllIcons.Actions.Lightning,
-            { "Open in Stream Inspector · ${route.method} ${route.path}" },
+            { label },
             { _, _ -> InspectorService.getInstance(file.project).openWithRoute(route) },
             GutterIconRenderer.Alignment.LEFT,
-            { "Open in Stream Inspector · ${route.method} ${route.path}" },
+            { label },
         )
     }
 

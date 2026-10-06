@@ -236,6 +236,7 @@ class RequestsTest {
                 baseUrl = "http://127.0.0.1:8081",
                 signals = """{"search":"ash","n":1.0,"s":"\u00e9</p>"}""",
                 headers = listOf("Authorization" to "Bearer x", "X-Csrf-Token" to "abc"),
+                params = null,
                 errors = emptyList(),
             ),
             env,
@@ -244,16 +245,22 @@ class RequestsTest {
 
     @Test
     fun `variables say what makes the env file invalid`() {
-        assertEquals(listOf(".streamlord/env.json is not valid JSON."), Requests.parseEnv("not json").errors)
-        assertEquals(listOf("$invalid: it must be an object with baseUrl, signals or headers."), Requests.parseEnv("[]").errors)
+        assertEquals(listOf(".streamlord/env.json is not valid JSON at line 1, column 1."), Requests.parseEnv("not json").errors)
+        // The comma a hand-edited file most often ends up with, after its last value.
+        assertEquals(
+            listOf(".streamlord/env.json is not valid JSON at line 3, column 1."),
+            Requests.parseEnv("{\n  \"baseUrl\": \"http://localhost:9102\",\n}\n").errors,
+        )
+        assertEquals(listOf("$invalid: it must be an object with baseUrl, signals, headers or params."), Requests.parseEnv("[]").errors)
         assertEquals(
             Requests.Env(
                 baseUrl = null,
                 signals = null,
                 headers = null,
+                params = null,
                 errors =
                     listOf(
-                        "$invalid: \"csrf\" is not a known key. Use baseUrl, signals or headers.",
+                        "$invalid: \"csrf\" is not a known key. Use baseUrl, signals, headers or params.",
                         "$invalid: baseUrl must be text, such as \"http://localhost:8080\".",
                         "$invalid: signals must be a JSON object, such as {\"search\": \"ash\"}.",
                         "$invalid: the value of the header \"X-A\" must be text.",
@@ -311,7 +318,7 @@ class RequestsTest {
         assertEquals(
             listOf(
                 "{{signals}} belongs in the signals field.",
-                "{{csrf}} is not a variable. Use {{baseUrl}}, {{signals}} or {{headers}}.",
+                "{{csrf}} cannot stand in the signals field. Use {{signals}} there; a param goes in the URL or the headers.",
                 "{{signals}} is not set. Add \"signals\" to .streamlord/env.json.",
                 "{{headers}} is not set. Add \"headers\" to .streamlord/env.json.",
                 "{{baseUrl}} belongs in the URL field.",
@@ -402,20 +409,134 @@ class RequestsTest {
         val r = Requests.substitute("{{a}} {{constructor}} {{toString}} {{__proto__}}", mapOf("a" to "1"))
         assertEquals("1 {{constructor}} {{toString}} {{__proto__}}", r.text)
         assertEquals(listOf("constructor", "toString", "__proto__"), r.missing)
-        assertEquals("/7/", Requests.fillPath("/{id}/{constructor}/{valueOf?}{toString?}", mapOf("id" to "7")))
+        assertEquals(
+            listOf("{{constructor}} is not set. Add it to params in .streamlord/env.json."),
+            Requests.resolveRequest(SavedRequest("", "{{baseUrl}}/{{constructor}}"), defaults).errors,
+        )
         val loose =
             """{"requests":[{"name":"a","url":"/x","headers":{"A":"b","O":{"k":[1]},"T":true}},{"name":"b","url":"/y","headers":["x"]}]}"""
         assertEquals(listOf("A: b\nO: {\"k\":[1]}\nT: true", ""), Requests.parseRequestsFile(loose).requests.map { it.headers })
     }
 
     @Test
-    fun `handles path parameters`() {
-        assertEquals(
-            listOf(Requests.PathParam("id", false), Requests.PathParam("slug", true)),
-            Requests.pathParams("/users/{id}/posts/{slug?}"),
+    fun `a route opens with a variable for each parameter it needs`() {
+        val src =
+            """
+            @RestController
+            @RequestMapping("api/hent")
+            class Visning {
+                @GetMapping(value = "/visning/{id}")
+                fun visning(
+                    @PathVariable id: String,
+                    @RequestParam partsnummer: String,
+                    @RequestParam instans: String,
+                    @RequestParam(required = false) fokus: String?,
+                    @RequestHeader("Nav-Call-Id") callId: String,
+                    @RequestHeader headere: Map<String, String>,
+                ) {}
+            }
+            fun Route.api() { get("/users/{id}/posts/{slug?}") { call.request.queryParameters["page"] } }
+            """.trimIndent()
+        val (spring, ktor) = findRoutes(src)
+        assertEquals("{{baseUrl}}/api/hent/visning/{{id}}?partsnummer={{partsnummer}}&instans={{instans}}", Requests.routeUrl(spring))
+        assertEquals("Nav-Call-Id: {{Nav-Call-Id}}", Requests.routeHeaders(spring))
+        assertEquals(listOf("fokus"), Requests.routeOptional(spring))
+        assertEquals("{{baseUrl}}/users/{{id}}/posts", Requests.routeUrl(ktor))
+        assertEquals("", Requests.routeHeaders(ktor))
+        assertEquals(listOf("slug", "page"), Requests.routeOptional(ktor))
+        assertEquals("{{baseUrl}}/x/{{id}}", Requests.routeUrl(Route("GET", "/x/{id:\\d+}", 0, Framework.SPRING)))
+    }
+
+    private val withParams =
+        Requests.mergeVariables(
+            "http://localhost:8080",
+            Requests.parseEnv(
+                """{"baseUrl": "http://localhost:9102", "params": {"partsnummer": "3000 507", "instans": "m1", "fokus": ""}}""",
+            ),
         )
-        assertEquals("/users/4%202/posts", Requests.fillPath("/users/{id}/posts/{slug?}", mapOf("id" to "4 2", "slug" to "")))
-        assertEquals("/users/7/posts/x", Requests.fillPath("/users/{id}/posts/{slug?}", mapOf("id" to "7", "slug" to "x")))
+
+    @Test
+    fun `params fill the URL encoded and the headers as written`() {
+        val r =
+            Requests.resolveRequest(
+                SavedRequest("", "{{baseUrl}}/v?partsnummer={{partsnummer}}&instans={{ instans }}", headers = "X-Part: {{partsnummer}}"),
+                withParams,
+            )
+        assertEquals(emptyList(), r.errors)
+        assertEquals("http://localhost:9102/v?partsnummer=3000%20507&instans=m1", r.request.url)
+        assertEquals("X-Part: 3000 507", r.request.headers)
+        assertEquals(
+            "baseUrl = http://localhost:9102\npartsnummer = 3000 507\ninstans = m1\nfokus = (none)",
+            Requests.describeVariables(withParams),
+        )
+    }
+
+    @Test
+    fun `a param that is missing or empty is added to the env file to fill in`() {
+        val r =
+            Requests.resolveRequest(
+                SavedRequest("", "{{baseUrl}}/v?a={{fokus}}&b={{saksnummer}}&c={{baseurl}}", signals = "{{instans}}"),
+                withParams,
+            )
+        assertEquals(
+            listOf(
+                "{{fokus}} is empty. Fill it in under params in .streamlord/env.json.",
+                "{{saksnummer}} is not set. Add it to params in .streamlord/env.json.",
+                "{{baseurl}} is not a variable. Did you mean {{baseUrl}}?",
+                "{{instans}} cannot stand in the signals field. Use {{signals}} there; a param goes in the URL or the headers.",
+            ),
+            r.errors,
+        )
+        assertEquals(listOf("fokus", "saksnummer"), r.unset)
+    }
+
+    @Test
+    fun `params are read with what is wrong with them named`() {
+        assertEquals(
+            listOf(
+                "$invalid: \"headers\" cannot be a param; {{headers}} is a variable of its own.",
+                "$invalid: \"a b\" cannot be a param name; {{a b}} would not be read.",
+                "$invalid: the value of the param \"n\" must be text.",
+            ),
+            Requests.parseEnv("""{"params": {"headers": "x", "a b": "1", "n": 1, "ok": "1"}}""").errors,
+        )
+        assertEquals(
+            listOf("$invalid: params must be an object of names and values, such as {\"partsnummer\": \"123\"}."),
+            Requests.parseEnv("""{"params": []}""").errors,
+        )
+    }
+
+    @Test
+    fun `params are added to the env file without touching what is there`() {
+        assertEquals(
+            "{\n  \"baseUrl\": \"http://h\",\n  \"params\": {\n    \"a\": \"\",\n    \"b\": \"\"\n  }\n}\n",
+            Requests.withEnvVariables(null, listOf("a", "b"), "http://h"),
+        )
+        assertEquals(
+            "{\n  \"baseUrl\": \"http://x\",\n  \"signals\": {},\n  \"params\": {\n    \"a\": \"\"\n  }\n}\n",
+            Requests.withEnvVariables("{\n  \"baseUrl\": \"http://x\"\n}\n", listOf("a", "signals"), "http://h"),
+        )
+        assertEquals(
+            "{\n  \"params\": {\n    \"a\": \"1\",\n    \"b\": \"\"\n  }\n}\n",
+            Requests.withEnvVariables("{\n  \"params\": {\n    \"a\": \"1\"\n  }\n}\n", listOf("a", "b"), "http://h"),
+        )
+        assertEquals(
+            "{\"params\": {\"a\": \"1\", \"b\": \"\"}}",
+            Requests.withEnvVariables("{\"params\": {\"a\": \"1\"}}", listOf("b"), "http://h"),
+        )
+        assertEquals("{\"params\": {\n    \"b\": \"\"\n  }}", Requests.withEnvVariables("{\"params\": {}}", listOf("b"), "http://h"))
+        assertEquals("{\"params\": {\"a\": \"\"}}", Requests.withEnvVariables("{\"params\": {\"a\": \"\"}}", listOf("a"), "http://h"))
+    }
+
+    @Test
+    fun `params complete in the URL and the headers, not in the signals`() {
+        fun names(c: Requests.Completion?) = c?.let { it.items.map { v -> v.name } }
+        assertEquals(
+            listOf("baseUrl", "partsnummer", "instans", "fokus"),
+            names(Requests.variableCompletions("{{", 2, Requests.Field.URL, withParams)),
+        )
+        assertEquals(listOf("instans"), names(Requests.variableCompletions("X: {{i", 6, Requests.Field.HEADERS, withParams)))
+        assertEquals(null, names(Requests.variableCompletions("{{p", 3, Requests.Field.SIGNALS, withParams)))
     }
 
     @Test

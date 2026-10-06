@@ -108,7 +108,7 @@ export class RequestStore implements vscode.Disposable {
    * Add `keys` to `.streamlord/env.json`, creating it with `baseUrl` when it is missing, and
    * return it to be opened. `extended` is false when the file is not a JSON object to add to.
    */
-  async defineVariables(keys: EnvKey[]): Promise<{ uri: vscode.Uri; extended: boolean }> {
+  async defineVariables(keys: string[]): Promise<{ uri: vscode.Uri; extended: boolean }> {
     const uri = this.fileUri(ENV_FILE);
     if (!uri) throw new Error(`Open a folder to keep variables; they live in ${ENV_FILE} in the workspace.`);
     const text = await this.envText();

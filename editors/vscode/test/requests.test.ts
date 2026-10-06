@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { describeVariables, emptyBodyHint, fillPath, mergeVariables, newRequestLabel, parseEnv, parseRequestsFile, pathParams, pushRecent, remove, resolveRequest, sendableUrl, serializeRequestsFile, substitute, toCurl, unreachableHint, upsert, variableCompletions, withEnvVariables, type SavedRequest } from "../src/requests.ts";
+import { describeVariables, emptyBodyHint, mergeVariables, newRequestLabel, parseEnv, parseRequestsFile, pushRecent, remove, resolveRequest, routeHeaders, routeOptional, routeUrl, sendableUrl, serializeRequestsFile, substitute, toCurl, unreachableHint, upsert, variableCompletions, withEnvVariables, type SavedRequest } from "../src/requests.ts";
 import { findRoutes } from "../src/routes.ts";
 
 const req = (over: Partial<SavedRequest> = {}): SavedRequest => ({ name: "counter", url: "{{baseUrl}}/api/counter-stream", method: "GET", signals: "", headers: "", ...over });
@@ -105,15 +105,37 @@ describe("saved requests", () => {
     const r = substitute("{{a}} {{constructor}} {{toString}} {{__proto__}}", { a: "1" });
     assert.equal(r.text, "1 {{constructor}} {{toString}} {{__proto__}}");
     assert.deepEqual(r.missing, ["constructor", "toString", "__proto__"]);
-    assert.equal(fillPath("/{id}/{constructor}/{valueOf?}{toString?}", { id: "7" }), "/7/");
+    assert.deepEqual(resolveRequest(req({ url: "{{baseUrl}}/{{constructor}}" }), mergeVariables("http://h", parseEnv("{}"))).errors, [
+      "{{constructor}} is not set. Add it to params in .streamlord/env.json.",
+    ]);
     const loose = `{"requests":[{"name":"a","url":"/x","headers":{"A":"b","O":{"k":[1]},"T":true}},{"name":"b","url":"/y","headers":["x"]}]}`;
     assert.deepEqual(parseRequestsFile(loose).requests.map((r) => r.headers), ['A: b\nO: {"k":[1]}\nT: true', ""]);
   });
 
-  it("handles path parameters", () => {
-    assert.deepEqual(pathParams("/users/{id}/posts/{slug?}"), [{ name: "id", optional: false }, { name: "slug", optional: true }]);
-    assert.equal(fillPath("/users/{id}/posts/{slug?}", { id: "4 2", slug: "" }), "/users/4%202/posts");
-    assert.equal(fillPath("/users/{id}/posts/{slug?}", { id: "7", slug: "x" }), "/users/7/posts/x");
+  it("a route opens with a variable for each parameter it needs", () => {
+    const src = `@RestController
+@RequestMapping("api/hent")
+class Visning {
+    @GetMapping(value = "/visning/{id}")
+    fun visning(
+        @PathVariable id: String,
+        @RequestParam partsnummer: String,
+        @RequestParam instans: String,
+        @RequestParam(required = false) fokus: String?,
+        @RequestHeader("Nav-Call-Id") callId: String,
+        @RequestHeader headere: Map<String, String>,
+    ) {}
+}
+fun Route.api() { get("/users/{id}/posts/{slug?}") { call.request.queryParameters["page"] } }`;
+    const [spring, ktor] = findRoutes(src);
+    assert.ok(spring && ktor);
+    assert.equal(routeUrl(spring), "{{baseUrl}}/api/hent/visning/{{id}}?partsnummer={{partsnummer}}&instans={{instans}}");
+    assert.equal(routeHeaders(spring), "Nav-Call-Id: {{Nav-Call-Id}}");
+    assert.deepEqual(routeOptional(spring), ["fokus"]);
+    assert.equal(routeUrl(ktor), "{{baseUrl}}/users/{{id}}/posts");
+    assert.equal(routeHeaders(ktor), "");
+    assert.deepEqual(routeOptional(ktor), ["slug", "page"]);
+    assert.equal(routeUrl({ method: "GET", path: "/x/{id:\\d+}", offset: 0, framework: "spring", query: [], headers: [] }), "{{baseUrl}}/x/{{id}}");
   });
 });
 
@@ -228,19 +250,24 @@ describe("inspector variables", () => {
       baseUrl: "http://127.0.0.1:8081",
       signals: '{"search":"ash","n":1.0,"s":"\\u00e9</p>"}',
       headers: [["Authorization", "Bearer x"], ["X-Csrf-Token", "abc"]],
+      params: null,
       errors: [],
     });
   });
 
   it("say what makes the env file invalid", () => {
+    // V8 gives no position for an unexpected token, so this one says less than RequestsTest.kt's.
     assert.deepEqual(parseEnv("not json").errors, [".streamlord/env.json is not valid JSON."]);
-    assert.deepEqual(parseEnv("[]").errors, [`${ENV}: it must be an object with baseUrl, signals or headers.`]);
+    // The comma a hand-edited file most often ends up with, after its last value.
+    assert.deepEqual(parseEnv('{\n  "baseUrl": "http://localhost:9102",\n}\n').errors, [".streamlord/env.json is not valid JSON at line 3, column 1."]);
+    assert.deepEqual(parseEnv("[]").errors, [`${ENV}: it must be an object with baseUrl, signals, headers or params.`]);
     assert.deepEqual(parseEnv('{"csrf": "x", "baseUrl": 8080, "signals": [], "headers": {"X-A": 1}}'), {
       baseUrl: null,
       signals: null,
       headers: null,
+      params: null,
       errors: [
-        `${ENV}: "csrf" is not a known key. Use baseUrl, signals or headers.`,
+        `${ENV}: "csrf" is not a known key. Use baseUrl, signals, headers or params.`,
         `${ENV}: baseUrl must be text, such as "http://localhost:8080".`,
         `${ENV}: signals must be a JSON object, such as {"search": "ash"}.`,
         `${ENV}: the value of the header "X-A" must be text.`,
@@ -271,7 +298,7 @@ describe("inspector variables", () => {
     const bad = resolveRequest({ name: "", url: "{{baseUrl}}/{{signals}}", method: "POST", signals: '{"a": "{{csrf}}"} {{signals}}', headers: "{{headers}}\nOrigin: {{baseUrl}}" }, defaults);
     assert.deepEqual(bad.errors, [
       "{{signals}} belongs in the signals field.",
-      "{{csrf}} is not a variable. Use {{baseUrl}}, {{signals}} or {{headers}}.",
+      "{{csrf}} cannot stand in the signals field. Use {{signals}} there; a param goes in the URL or the headers.",
       '{{signals}} is not set. Add "signals" to .streamlord/env.json.',
       '{{headers}} is not set. Add "headers" to .streamlord/env.json.',
       "{{baseUrl}} belongs in the URL field.",
@@ -312,5 +339,51 @@ describe("inspector variables", () => {
     assert.equal(variableCompletions("{x", 2, "url", vars), null);
     assert.equal(variableCompletions("{{", 2, "signals", defaults), null);
     assert.equal(variableCompletions("X: {{b", 6, "headers", vars), null);
+  });
+
+  const withParams = mergeVariables("http://localhost:8080", parseEnv('{"baseUrl": "http://localhost:9102", "params": {"partsnummer": "3000 507", "instans": "m1", "fokus": ""}}'));
+
+  it("fill params into the URL encoded and into the headers as written", () => {
+    const r = resolveRequest(req({ url: "{{baseUrl}}/v?partsnummer={{partsnummer}}&instans={{ instans }}", headers: "X-Part: {{partsnummer}}" }), withParams);
+    assert.deepEqual(r.errors, []);
+    assert.equal(r.request.url, "http://localhost:9102/v?partsnummer=3000%20507&instans=m1");
+    assert.equal(r.request.headers, "X-Part: 3000 507");
+    assert.equal(describeVariables(withParams), "baseUrl = http://localhost:9102\npartsnummer = 3000 507\ninstans = m1\nfokus = (none)");
+  });
+
+  it("add a param that is missing or empty to the env file to fill in", () => {
+    const r = resolveRequest(req({ url: "{{baseUrl}}/v?a={{fokus}}&b={{saksnummer}}&c={{baseurl}}", signals: "{{instans}}" }), withParams);
+    assert.deepEqual(r.errors, [
+      "{{fokus}} is empty. Fill it in under params in .streamlord/env.json.",
+      "{{saksnummer}} is not set. Add it to params in .streamlord/env.json.",
+      "{{baseurl}} is not a variable. Did you mean {{baseUrl}}?",
+      "{{instans}} cannot stand in the signals field. Use {{signals}} there; a param goes in the URL or the headers.",
+    ]);
+    assert.deepEqual(r.unset, ["fokus", "saksnummer"]);
+  });
+
+  it("read params with what is wrong with them named", () => {
+    assert.deepEqual(parseEnv('{"params": {"headers": "x", "a b": "1", "n": 1, "ok": "1"}}').errors, [
+      `${ENV}: "headers" cannot be a param; {{headers}} is a variable of its own.`,
+      `${ENV}: "a b" cannot be a param name; {{a b}} would not be read.`,
+      `${ENV}: the value of the param "n" must be text.`,
+    ]);
+    assert.deepEqual(parseEnv('{"params": []}').errors, [`${ENV}: params must be an object of names and values, such as {"partsnummer": "123"}.`]);
+  });
+
+  it("add params to the env file without touching what is there", () => {
+    assert.equal(withEnvVariables(null, ["a", "b"], "http://h"), '{\n  "baseUrl": "http://h",\n  "params": {\n    "a": "",\n    "b": ""\n  }\n}\n');
+    assert.equal(withEnvVariables('{\n  "baseUrl": "http://x"\n}\n', ["a", "signals"], "http://h"), '{\n  "baseUrl": "http://x",\n  "signals": {},\n  "params": {\n    "a": ""\n  }\n}\n');
+    assert.equal(withEnvVariables('{\n  "params": {\n    "a": "1"\n  }\n}\n', ["a", "b"], "http://h"), '{\n  "params": {\n    "a": "1",\n    "b": ""\n  }\n}\n');
+    assert.equal(withEnvVariables('{"params": {"a": "1"}}', ["b"], "http://h"), '{"params": {"a": "1", "b": ""}}');
+    assert.equal(withEnvVariables('{"params": {}}', ["b"], "http://h"), '{"params": {\n    "b": ""\n  }}');
+    assert.equal(withEnvVariables('{"params": {"a": ""}}', ["a"], "http://h"), '{"params": {"a": ""}}');
+  });
+
+  it("complete params in the URL and the headers, not in the signals", () => {
+    const names = (c: ReturnType<typeof variableCompletions>) => c && c.items.map((v) => v.name);
+    assert.deepEqual(names(variableCompletions("{{", 2, "url", withParams)), ["baseUrl", "partsnummer", "instans", "fokus"]);
+    assert.deepEqual(names(variableCompletions("X: {{i", 6, "headers", withParams)), ["instans"]);
+    assert.equal(names(variableCompletions("{{p", 3, "signals", withParams)), null);
   });
 });

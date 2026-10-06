@@ -7,7 +7,6 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.openapi.wm.ToolWindowManager
@@ -47,20 +46,13 @@ class InspectorService(
         }
     }
 
-    /** Open with a route from the gutter: ask for path parameters, then prefill. */
+    /**
+     * Open with a route from the gutter. Every parameter the handler needs is a `{{name}}`, and its
+     * value comes from `params` in the env file; one that is not there yet is reported with a link
+     * that adds it, so nothing is asked for in a dialog and nothing is forgotten between runs.
+     */
     fun openWithRoute(route: Route) {
-        val values = LinkedHashMap<String, String>()
-        for (p in Requests.pathParams(route.path)) {
-            val v =
-                Messages.showInputDialog(
-                    project,
-                    "Value for {${p.name}}" + if (p.optional) " (optional, leave empty to omit)" else "",
-                    "Open in Stream Inspector",
-                    null,
-                ) ?: return
-            values[p.name] = v
-        }
-        open(SavedRequest("", "{{baseUrl}}${Requests.fillPath(route.path, values)}", route.method))
+        open(SavedRequest("", Requests.routeUrl(route), route.method, headers = Requests.routeHeaders(route)))
     }
 
     companion object {

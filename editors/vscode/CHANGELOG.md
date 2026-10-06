@@ -4,6 +4,18 @@ All notable changes to the Streamlord extension are recorded here.
 
 ## Unreleased
 
+- Open in Stream Inspector writes the whole URL the handler needs. Each path parameter and each
+  required `@RequestParam` becomes a `{{name}}`, and each required `@RequestHeader("X-Id")` a
+  line in the headers, so `@GetMapping("/visning")` with a required `partsnummer` opens as
+  `{{baseUrl}}/api/hent/visning?partsnummer={{partsnummer}}`. The lens names the optional
+  ones it leaves out. The dialog that asked for `{id}` is gone.
+- Stream Inspector: `.streamlord/env.json` holds the values in `params`, so they are kept between
+  runs and stay out of the shared `inspector.json`. A param that is not there yet is reported
+  with a link that adds it, empty, for you to fill in; one left empty is reported until it is
+  filled. In the URL its value is encoded, in the headers it is sent as written. `{{` offers
+  them in the URL and the headers, and the JSON schema knows the key.
+- Stream Inspector: an env file that is not valid JSON says where, such as `at line 3, column 1`
+  for a comma after the last value.
 - Open in Stream Inspector: a Spring or Ktor mapping without its leading slash, such as
   `@RequestMapping("api/hent")`, opened as `{{baseUrl}}api/hent/visning`. The path now always
   starts with `/`.

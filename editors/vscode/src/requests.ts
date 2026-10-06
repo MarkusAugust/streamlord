@@ -3,6 +3,8 @@
  * list and the curl export. Editor-independent.
  */
 
+import type { Route } from "./routes.ts";
+
 export interface SavedRequest {
   name: string;
   url: string;
@@ -104,9 +106,12 @@ export function newRequestLabel(saved: number, recent: number): string {
   return counts ? `New request… (${counts})` : "New request…";
 }
 
-/** The keys `.streamlord/env.json` may hold, in the order the inspector lists them. */
+/** The variables with a field of their own, in the order the inspector lists them. Every other name is a param. */
 export const ENV_KEYS = ["baseUrl", "signals", "headers"] as const;
 export type EnvKey = (typeof ENV_KEYS)[number];
+
+/** The key in `.streamlord/env.json` that holds the values of the parameters a route reads. */
+export const PARAMS = "params";
 
 /** `.streamlord/env.json` as read: each key that is set and valid, and what is wrong with the rest. */
 export interface Env {
@@ -114,27 +119,30 @@ export interface Env {
   /** Compact JSON, spelled as in the file. */
   signals: string | null;
   headers: [string, string][] | null;
+  /** The values of `{{name}}` in the URL and headers, such as a request parameter of a route. */
+  params: [string, string][] | null;
   errors: string[];
 }
 
 const INVALID = `${ENV_FILE} is not valid`;
 
 /**
- * Read `.streamlord/env.json`. Only `baseUrl` (text), `signals` (an object) and `headers` (an
- * object of texts) are allowed, and anything else is reported rather than ignored, so a typo
- * does not quietly leave a value unset.
+ * Read `.streamlord/env.json`. Only `baseUrl` (text), `signals` (an object), `headers` and
+ * `params` (objects of texts) are allowed, and anything else is reported rather than ignored, so
+ * a typo does not quietly leave a value unset.
  */
 export function parseEnv(text: string): Env {
-  const env: Env = { baseUrl: null, signals: null, headers: null, errors: [] };
+  const env: Env = { baseUrl: null, signals: null, headers: null, params: null, errors: [] };
   let raw: unknown;
   try {
     raw = JSON.parse(text);
-  } catch {
-    env.errors.push(`${ENV_FILE} is not valid JSON.`);
+  } catch (e) {
+    const position = /position (\d+)/.exec((e as Error).message)?.[1];
+    env.errors.push(position !== undefined ? `${ENV_FILE} is not valid JSON ${lineAndColumn(text, Number(position))}.` : `${ENV_FILE} is not valid JSON.`);
     return env;
   }
   if (!isObject(raw)) {
-    env.errors.push(`${INVALID}: it must be an object with baseUrl, signals or headers.`);
+    env.errors.push(`${INVALID}: it must be an object with baseUrl, signals, headers or params.`);
     return env;
   }
   for (const [key, value] of Object.entries(raw)) {
@@ -154,11 +162,31 @@ export function parseEnv(text: string): Env {
       const notText = Object.entries(value).filter(([, v]) => typeof v !== "string");
       for (const [name] of notText) env.errors.push(`${INVALID}: the value of the header "${name}" must be text.`);
       if (notText.length === 0) env.headers = Object.entries(value as Record<string, string>);
+    } else if (key === PARAMS) {
+      if (!isObject(value)) {
+        env.errors.push(`${INVALID}: params must be an object of names and values, such as {"partsnummer": "123"}.`);
+        continue;
+      }
+      const before = env.errors.length;
+      for (const [name, v] of Object.entries(value)) {
+        if (isEnvKey(name)) env.errors.push(`${INVALID}: "${name}" cannot be a param; {{${name}}} is a variable of its own.`);
+        else if (!PARAM_NAME.test(name)) env.errors.push(`${INVALID}: "${name}" cannot be a param name; {{${name}}} would not be read.`);
+        else if (typeof v !== "string") env.errors.push(`${INVALID}: the value of the param "${name}" must be text.`);
+      }
+      if (env.errors.length === before) env.params = Object.entries(value as Record<string, string>);
     } else {
-      env.errors.push(`${INVALID}: "${key}" is not a known key. Use baseUrl, signals or headers.`);
+      env.errors.push(`${INVALID}: "${key}" is not a known key. Use baseUrl, signals, headers or params.`);
     }
   }
   return env;
+}
+
+const PARAM_NAME = /^[A-Za-z_][A-Za-z0-9_.-]*$/;
+
+/** Where `position` falls in `text`, as an editor counts it: "at line 3, column 1". */
+export function lineAndColumn(text: string, position: number): string {
+  const before = text.slice(0, Math.max(0, Math.min(position, text.length)));
+  return `at line ${before.split("\n").length}, column ${position - before.lastIndexOf("\n")}`;
 }
 
 function isObject(v: unknown): v is Record<string, unknown> {
@@ -167,7 +195,12 @@ function isObject(v: unknown): v is Record<string, unknown> {
 
 /** The text of each value of the top-level object, by key as written; `text` is known to parse. */
 function topLevelValues(text: string): Map<string, string> {
-  const values = new Map<string, string>();
+  return new Map([...topLevelRanges(text)].map(([k, [from, to]]) => [k, text.slice(from, to)]));
+}
+
+/** Where each value of the top-level object stands in `text`, from and to, by key as written; `text` is known to parse. */
+function topLevelRanges(text: string): Map<string, [number, number]> {
+  const values = new Map<string, [number, number]>();
   let i = text.indexOf("{") + 1;
   const space = () => {
     while (i < text.length && " \t\n\r".includes(text[i] ?? "")) i++;
@@ -182,7 +215,7 @@ function topLevelValues(text: string): Map<string, string> {
     i++;
     space();
     const end = valueEnd(text, i);
-    values.set(key, text.slice(i, end));
+    values.set(key, [i, end]);
     i = end;
     space();
     if (text[i] === ",") i++;
@@ -217,16 +250,17 @@ export type VariableSource = "default" | "env";
 
 /** A variable that is set, as text, and where it was set, so the inspector can say both. */
 export interface Variable {
-  name: EnvKey;
+  name: string;
   value: string;
   source: VariableSource;
 }
 
-/** `baseUrl` from the env file or else the default, then `signals` and `headers` when the file sets them. */
+/** `baseUrl` from the env file or else the default, then `signals`, `headers` and each param when the file sets them. */
 export function mergeVariables(defaultUrl: string, env: Env): Variable[] {
   const out: Variable[] = [env.baseUrl !== null ? { name: "baseUrl", value: env.baseUrl, source: "env" } : { name: "baseUrl", value: defaultUrl.replace(/\/+$/, ""), source: "default" }];
   if (env.signals !== null) out.push({ name: "signals", value: env.signals, source: "env" });
   if (env.headers !== null) out.push({ name: "headers", value: env.headers.map(([k, v]) => `${k}: ${v}`).join("\n"), source: "env" });
+  for (const [k, v] of env.params ?? []) out.push({ name: k, value: v, source: "env" });
   return out;
 }
 
@@ -254,12 +288,12 @@ export function substitute(text: string, vars: Record<string, string>): { text: 
 
 export type Field = "url" | "signals" | "headers";
 
-/** The one field each variable stands in. */
+/** The one field each of the three stands in. A param stands in the URL or the headers. */
 const HOME: Record<EnvKey, Field> = { baseUrl: "url", signals: "signals", headers: "headers" };
 const FIELD_NAME: Record<Field, string> = { url: "URL", signals: "signals", headers: "headers" };
 
-function belongsIn(name: EnvKey, field: Field): boolean {
-  return HOME[name] === field;
+function belongsIn(name: string, field: Field): boolean {
+  return isEnvKey(name) ? HOME[name] === field : field !== "signals";
 }
 
 function isEnvKey(name: string): name is EnvKey {
@@ -270,30 +304,42 @@ function isEnvKey(name: string): name is EnvKey {
  * Fill the variables into a request. Anything that cannot be filled is reported, and `unset`
  * names the keys a request needs that the env file does not set, for the inspector to add.
  */
-export function resolveRequest(r: SavedRequest, vars: Variable[]): { request: SavedRequest; errors: string[]; unset: EnvKey[] } {
+export function resolveRequest(r: SavedRequest, vars: Variable[]): { request: SavedRequest; errors: string[]; unset: string[] } {
   const values = new Map(vars.map((v) => [v.name, v.value]));
   const errors: string[] = [];
-  const unset: EnvKey[] = [];
+  const unset: string[] = [];
   const report = (message: string) => {
     if (!errors.includes(message)) errors.push(message);
   };
   const fill = (text: string, field: Field) =>
     text.replace(VARIABLE, (whole, name: string) => {
-      if (!isEnvKey(name)) {
-        report(`{{${name}}} is not a variable. Use {{baseUrl}}, {{signals}} or {{headers}}.`);
+      const param = !isEnvKey(name);
+      const meant = ENV_KEYS.find((k) => k.toLowerCase() === name.toLowerCase());
+      if (param && meant !== undefined) {
+        report(`{{${name}}} is not a variable. Did you mean {{${meant}}}?`);
         return whole;
       }
-      if (!belongsIn(name, field)) {
+      if (param && field === "signals") {
+        report(`{{${name}}} cannot stand in the signals field. Use {{signals}} there; a param goes in the URL or the headers.`);
+        return whole;
+      }
+      if (!param && !belongsIn(name, field)) {
         report(`{{${name}}} belongs in the ${FIELD_NAME[HOME[name]]} field.`);
         return whole;
       }
       const value = values.get(name);
       if (value === undefined) {
-        report(`{{${name}}} is not set. Add "${name}" to ${ENV_FILE}.`);
+        report(param ? `{{${name}}} is not set. Add it to ${PARAMS} in ${ENV_FILE}.` : `{{${name}}} is not set. Add "${name}" to ${ENV_FILE}.`);
         if (!unset.includes(name)) unset.push(name);
         return whole;
       }
-      return value;
+      // An empty param is one the inspector added for the user to fill in.
+      if (param && value === "") {
+        report(`{{${name}}} is empty. Fill it in under ${PARAMS} in ${ENV_FILE}.`);
+        if (!unset.includes(name)) unset.push(name);
+        return whole;
+      }
+      return param && field === "url" ? encodeSegment(value) : value;
     });
   const request = { ...r, url: fill(r.url, "url"), signals: fill(r.signals, "signals"), headers: fill(r.headers, "headers") };
   return { request, errors, unset };
@@ -301,14 +347,20 @@ export function resolveRequest(r: SavedRequest, vars: Variable[]): { request: Sa
 
 /**
  * The text of `.streamlord/env.json` with `keys` added after what is there: `baseUrl` with its
- * current value, `signals` and `headers` as empty objects to fill in. A missing file is written
- * with `baseUrl` first. The text is extended rather than written anew, so the user's own layout
- * and values stay as they were; null when it is not a JSON object and cannot be extended safely.
+ * current value, `signals` and `headers` as empty objects to fill in, and any other name as an
+ * empty entry in `params`. A missing file is written with `baseUrl` first. The text is extended
+ * rather than written anew, so the user's own layout and values stay as they were; null when it
+ * is not a JSON object and cannot be extended safely.
  */
-export function withEnvVariables(text: string | null, keys: EnvKey[], baseUrl: string): string | null {
-  const valueOf = (key: EnvKey) => (key === "baseUrl" ? jsonString(baseUrl) : "{}");
+export function withEnvVariables(text: string | null, keys: string[], baseUrl: string): string | null {
+  const distinct = [...new Set(keys)];
+  const own = distinct.filter(isEnvKey);
+  const params = distinct.filter((k) => !isEnvKey(k));
+  const newParams = `{\n${params.map((k) => `    ${jsonString(k)}: ""`).join(",\n")}\n  }`;
+  const valueOf = (key: string) => (key === "baseUrl" ? jsonString(baseUrl) : key === PARAMS ? newParams : "{}");
+  const wanted: string[] = [...own, ...(params.length > 0 ? [PARAMS] : [])];
   if (text === null) {
-    const entries: EnvKey[] = ["baseUrl", ...keys.filter((k) => k !== "baseUrl")];
+    const entries = ["baseUrl", ...wanted.filter((k) => k !== "baseUrl")];
     return `{\n${entries.map((k) => `  ${jsonString(k)}: ${valueOf(k)}`).join(",\n")}\n}\n`;
   }
   let raw: unknown;
@@ -318,12 +370,29 @@ export function withEnvVariables(text: string | null, keys: EnvKey[], baseUrl: s
     return null;
   }
   if (!isObject(raw)) return null;
-  const missing = [...new Set(keys)].filter((k) => !Object.hasOwn(raw as object, k));
-  if (missing.length === 0) return text;
-  const close = text.lastIndexOf("}");
-  const before = text.slice(0, close).replace(/[ \t\n\r]+$/, "");
+  const existing = raw[PARAMS];
+  const withParams = isObject(existing) ? addParams(text, existing, params) : text;
+  const missing = wanted.filter((k) => !Object.hasOwn(raw as object, k));
+  if (missing.length === 0) return withParams;
+  const close = withParams.lastIndexOf("}");
+  const before = withParams.slice(0, close).replace(/[ \t\n\r]+$/, "");
   const added = missing.map((k) => `  ${jsonString(k)}: ${valueOf(k)}`).join(",\n");
-  return `${before}${before.endsWith("{") ? "\n" : ",\n"}${added}\n${text.slice(close)}`;
+  return `${before}${before.endsWith("{") ? "\n" : ",\n"}${added}\n${withParams.slice(close)}`;
+}
+
+/** `text` with each of `names` that `existing`, its `params` object, lacks added as an empty entry at its end. */
+function addParams(text: string, existing: Record<string, unknown>, names: string[]): string {
+  const missing = names.filter((n) => !Object.hasOwn(existing, n));
+  const range = topLevelRanges(text).get(PARAMS);
+  if (range === undefined || missing.length === 0) return text;
+  const close = range[1] - 1;
+  const before = text.slice(0, close).replace(/[ \t\n\r]+$/, "");
+  const multiline = text.slice(range[0], close).includes("\n") || Object.keys(existing).length === 0;
+  const entries = missing.map((n) => `${jsonString(n)}: ""`);
+  const added = multiline
+    ? `${before.endsWith("{") ? "\n" : ",\n"}${entries.map((e) => `    ${e}`).join(",\n")}\n  `
+    : `${before.endsWith("{") ? "" : ", "}${entries.join(", ")}`;
+  return before + added + text.slice(close);
 }
 
 /**
@@ -511,19 +580,41 @@ function escape(s: string): string {
   return [...new TextEncoder().encode(s)].map((b) => `%${b.toString(16).toUpperCase().padStart(2, "0")}`).join("");
 }
 
-/** Path parameters such as `{id}` or Ktor's optional `{id?}`. */
-export function pathParams(path: string): { name: string; optional: boolean }[] {
-  return [...path.matchAll(/\{([A-Za-z_][A-Za-z0-9_]*)(\?)?\}/g)].map((m) => ({ name: m[1] ?? "", optional: m[2] === "?" }));
+const OPTIONAL_SEGMENT = /\/\{([A-Za-z_][A-Za-z0-9_]*)\?\}/g;
+
+/**
+ * The URL "Open in Stream Inspector" writes for `route`: each path parameter and each required
+ * query parameter as a `{{name}}`, filled from `params` in the env file. `{id}`, Spring's
+ * `{id:\d+}` and Ktor's `{id}` are required; Ktor's optional `{id?}` segment is left out, and
+ * `routeOptional` names it instead.
+ */
+export function routeUrl(route: Route): string {
+  const path = route.path.replace(OPTIONAL_SEGMENT, "").replace(/\{([A-Za-z_][A-Za-z0-9_]*)(?::[^{}]*)?\}/g, (_, n: string) => `{{${n}}}`);
+  const query = route.query
+    .filter((q) => q.required && PARAM_NAME.test(q.name))
+    .map((q) => `${encodeSegment(q.name)}={{${q.name}}}`)
+    .join("&");
+  return `{{baseUrl}}${path}${query ? `?${query}` : ""}`;
 }
 
-/** Fill path parameters; an empty value for an optional parameter removes its segment. */
-export function fillPath(path: string, values: Record<string, string>): string {
-  return path
-    .replace(/\/\{([A-Za-z_][A-Za-z0-9_]*)\?\}/g, (_, n: string) => (own(values, n) ? `/${encodeURIComponent(own(values, n))}` : ""))
-    .replace(/\{([A-Za-z_][A-Za-z0-9_]*)\??\}/g, (_, n: string) => encodeURIComponent(own(values, n)));
+/** The headers field for `route`: one `Name: {{Name}}` line per header it requires. */
+export function routeHeaders(route: Route): string {
+  return route.headers
+    .filter((h) => h.required && PARAM_NAME.test(h.name))
+    .map((h) => `${h.name}: {{${h.name}}}`)
+    .join("\n");
 }
 
-/** The value under an own key: a parameter named `constructor` must not read the prototype. */
-function own(values: Record<string, string>, name: string): string {
-  return Object.hasOwn(values, name) ? (values[name] ?? "") : "";
+/** What `routeUrl` and `routeHeaders` leave out because the route can do without it, by name. */
+export function routeOptional(route: Route): string[] {
+  return [
+    ...[...route.path.matchAll(OPTIONAL_SEGMENT)].map((m) => m[1] ?? ""),
+    ...route.query.filter((q) => !q.required).map((q) => q.name),
+    ...route.headers.filter((h) => !h.required).map((h) => h.name),
+  ];
+}
+
+/** `encodeURIComponent`, sending a surrogate without its partner as U+FFFD instead of throwing. */
+function encodeSegment(s: string): string {
+  return encodeURIComponent(s.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "\uFFFD"));
 }

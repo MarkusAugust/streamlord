@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.JsonParseException
 import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonNumber
 import io.github.markusaugust.streamlord.core.json.JsonObject
@@ -39,9 +40,8 @@ public object Requests {
     public val METHODS: List<String> = listOf("GET", "POST", "PUT", "PATCH", "DELETE", "QUERY")
 
     private val VARIABLE = Regex("""\{\{\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\}\}""")
-    private val PATH_PARAM = Regex("""\{([A-Za-z_][A-Za-z0-9_]*)(\?)?\}""")
+    private val PATH_VARIABLE = Regex("""\{([A-Za-z_][A-Za-z0-9_]*)(?::[^{}]*)?\}""")
     private val OPTIONAL_SEGMENT = Regex("""/\{([A-Za-z_][A-Za-z0-9_]*)\?\}""")
-    private val ANY_PARAM = Regex("""\{([A-Za-z_][A-Za-z0-9_]*)\??\}""")
     private val ABSOLUTE = Regex("""^([A-Za-z][A-Za-z0-9+.-]*)://""")
     private val PATH_PARAM_TEXT = Regex("""\{[^{}]*\}""")
     private const val NOT_SENDABLE = "\"<>\\^`|"
@@ -153,8 +153,11 @@ public object Requests {
         return if (counts.isEmpty()) "New request…" else "New request… (${counts.joinToString(", ")})"
     }
 
-    /** The keys `.streamlord/env.json` may hold, in the order the inspector lists them. */
+    /** The variables with a field of their own, in the order the inspector lists them. Every other name is a param. */
     public val ENV_KEYS: List<String> = listOf("baseUrl", "signals", "headers")
+
+    /** The key in `.streamlord/env.json` that holds the values of the parameters a route reads. */
+    public const val PARAMS: String = "params"
 
     private const val INVALID = "$ENV_FILE is not valid"
 
@@ -164,26 +167,33 @@ public object Requests {
         /** Compact JSON, spelled as in the file. */
         val signals: String?,
         val headers: List<Pair<String, String>>?,
+        /** The values of `{{name}}` in the URL and headers, such as a request parameter of a route. */
+        val params: List<Pair<String, String>>?,
         val errors: List<String>,
     )
 
     /**
-     * Read `.streamlord/env.json`. Only `baseUrl` (text), `signals` (an object) and `headers` (an
-     * object of texts) are allowed, and anything else is reported rather than ignored, so a typo
-     * does not quietly leave a value unset.
+     * Read `.streamlord/env.json`. Only `baseUrl` (text), `signals` (an object), `headers` and
+     * `params` (objects of texts) are allowed, and anything else is reported rather than ignored, so
+     * a typo does not quietly leave a value unset.
      */
     public fun parseEnv(text: String): Env {
         val errors = ArrayList<String>()
         val raw =
             try {
                 JsonParser.parse(text)
+            } catch (e: JsonParseException) {
+                return Env(null, null, null, null, listOf("$ENV_FILE is not valid JSON ${lineAndColumn(text, e.position)}."))
             } catch (_: Exception) {
-                return Env(null, null, null, listOf("$ENV_FILE is not valid JSON."))
+                return Env(null, null, null, null, listOf("$ENV_FILE is not valid JSON."))
             }
-        if (raw !is JsonObject) return Env(null, null, null, listOf("$INVALID: it must be an object with baseUrl, signals or headers."))
+        if (raw !is JsonObject) {
+            return Env(null, null, null, null, listOf("$INVALID: it must be an object with baseUrl, signals, headers or params."))
+        }
         var baseUrl: String? = null
         var signals: String? = null
         var headers: List<Pair<String, String>>? = null
+        var params: List<Pair<String, String>>? = null
         for ((key, value) in raw) {
             when (key) {
                 "baseUrl" -> {
@@ -213,19 +223,64 @@ public object Requests {
                     }
                 }
 
+                PARAMS -> {
+                    if (value !is JsonObject) {
+                        errors += "$INVALID: params must be an object of names and values, such as {\"partsnummer\": \"123\"}."
+                    } else {
+                        val before = errors.size
+                        for ((name, v) in value) {
+                            when {
+                                name in ENV_KEYS -> {
+                                    errors += "$INVALID: \"$name\" cannot be a param; {{$name}} is a variable of its own."
+                                }
+
+                                !PARAM_NAME.matches(name) -> {
+                                    errors +=
+                                        "$INVALID: \"$name\" cannot be a param name; {{$name}} would not be read."
+                                }
+
+                                v !is JsonString -> {
+                                    errors += "$INVALID: the value of the param \"$name\" must be text."
+                                }
+                            }
+                        }
+                        if (errors.size == before) params = value.map { (k, v) -> k to (v as JsonString).value }
+                    }
+                }
+
                 else -> {
-                    errors += "$INVALID: \"$key\" is not a known key. Use baseUrl, signals or headers."
+                    errors += "$INVALID: \"$key\" is not a known key. Use baseUrl, signals, headers or params."
                 }
             }
         }
-        return Env(baseUrl, signals, headers, errors)
+        return Env(baseUrl, signals, headers, params, errors)
+    }
+
+    private val PARAM_NAME = Regex("""^[A-Za-z_][A-Za-z0-9_.-]*$""")
+
+    /** Where [position] falls in [text], as an editor counts it: "at line 3, column 1". */
+    public fun lineAndColumn(
+        text: String,
+        position: Int,
+    ): String {
+        val before = text.substring(0, position.coerceIn(0, text.length))
+        return "at line ${before.count { it == '\n' } + 1}, column ${position - before.lastIndexOf('\n')}"
     }
 
     private val HTTP = Regex("""^https?://""", RegexOption.IGNORE_CASE)
 
     /** The text of each value of the top-level object, by key as written; [text] is known to parse. */
-    private fun topLevelValues(text: String): Map<String, String> {
-        val values = LinkedHashMap<String, String>()
+    private fun topLevelValues(text: String): Map<String, String> =
+        topLevelRanges(text).mapValues { (_, r) ->
+            text.substring(
+                r.first,
+                r.last + 1,
+            )
+        }
+
+    /** Where each value of the top-level object stands in [text], by key as written; [text] is known to parse. */
+    private fun topLevelRanges(text: String): Map<String, IntRange> {
+        val values = LinkedHashMap<String, IntRange>()
         var i = text.indexOf('{') + 1
 
         fun space() {
@@ -241,7 +296,7 @@ public object Requests {
             i++
             space()
             val end = valueEnd(text, i)
-            values[key] = text.substring(i, end)
+            values[key] = i until end
             i = end
             space()
             if (i < text.length && text[i] == ',') i++
@@ -288,7 +343,7 @@ public object Requests {
         val source: VariableSource,
     )
 
-    /** `baseUrl` from the env file or else the default, then `signals` and `headers` when the file sets them. */
+    /** `baseUrl` from the env file or else the default, then `signals`, `headers` and each param when the file sets them. */
     public fun mergeVariables(
         defaultUrl: String,
         env: Env,
@@ -302,6 +357,7 @@ public object Requests {
             }
         env.signals?.let { out += Variable("signals", it, VariableSource.ENV) }
         env.headers?.let { h -> out += Variable("headers", h.joinToString("\n") { (k, v) -> "$k: $v" }, VariableSource.ENV) }
+        env.params?.forEach { (k, v) -> out += Variable(k, v, VariableSource.ENV) }
         return out
     }
 
@@ -347,13 +403,13 @@ public object Requests {
         HEADERS("headers"),
     }
 
-    /** The one field each variable stands in. */
+    /** The one field each of the three stands in. A param stands in the URL or the headers. */
     private val HOME = mapOf("baseUrl" to Field.URL, "signals" to Field.SIGNALS, "headers" to Field.HEADERS)
 
     private fun belongsIn(
         name: String,
         field: Field,
-    ): Boolean = HOME[name] == field
+    ): Boolean = HOME[name]?.let { it == field } ?: (field != Field.SIGNALS)
 
     public data class Resolved(
         val request: SavedRequest,
@@ -377,9 +433,17 @@ public object Requests {
         ): String =
             VARIABLE.replace(text) { m ->
                 val name = m.groupValues[1]
+                val param = name !in ENV_KEYS
+                val meant = ENV_KEYS.firstOrNull { it.equals(name, ignoreCase = true) }
                 when {
-                    name !in ENV_KEYS -> {
-                        errors += "{{$name}} is not a variable. Use {{baseUrl}}, {{signals}} or {{headers}}."
+                    param && meant != null -> {
+                        errors += "{{$name}} is not a variable. Did you mean {{$meant}}?"
+                        m.value
+                    }
+
+                    param && field == Field.SIGNALS -> {
+                        errors += "{{$name}} cannot stand in the signals field. " +
+                            "Use {{signals}} there; a param goes in the URL or the headers."
                         m.value
                     }
 
@@ -389,9 +453,21 @@ public object Requests {
                     }
 
                     name !in values -> {
-                        errors += "{{$name}} is not set. Add \"$name\" to $ENV_FILE."
+                        val where = if (param) "it to $PARAMS in" else "\"$name\" to"
+                        errors += "{{$name}} is not set. Add $where $ENV_FILE."
                         unset += name
                         m.value
+                    }
+
+                    // An empty param is one the inspector added for the user to fill in.
+                    param && values.getValue(name).isEmpty() -> {
+                        errors += "{{$name}} is empty. Fill it in under $PARAMS in $ENV_FILE."
+                        unset += name
+                        m.value
+                    }
+
+                    param && field == Field.URL -> {
+                        encodeSegment(values.getValue(name))
                     }
 
                     else -> {
@@ -408,18 +484,28 @@ public object Requests {
 
     /**
      * The text of `.streamlord/env.json` with [keys] added after what is there: `baseUrl` with its
-     * current value, `signals` and `headers` as empty objects to fill in. A missing file is written
-     * with `baseUrl` first. The text is extended rather than written anew, so the user's own layout
-     * and values stay as they were; null when it is not a JSON object and cannot be extended safely.
+     * current value, `signals` and `headers` as empty objects to fill in, and any other name as an
+     * empty entry in `params`. A missing file is written with `baseUrl` first. The text is extended
+     * rather than written anew, so the user's own layout and values stay as they were; null when it
+     * is not a JSON object and cannot be extended safely.
      */
     public fun withEnvVariables(
         text: String?,
         keys: List<String>,
         baseUrl: String,
     ): String? {
-        fun valueOf(key: String) = if (key == "baseUrl") JsonString(baseUrl).toJson() else "{}"
+        val (own, params) = keys.distinct().partition { it in ENV_KEYS }
+        val newParams = params.joinToString(",\n", "{\n", "\n  }") { "    ${JsonString(it).toJson()}: \"\"" }
+
+        fun valueOf(key: String) =
+            when (key) {
+                "baseUrl" -> JsonString(baseUrl).toJson()
+                PARAMS -> newParams
+                else -> "{}"
+            }
+        val wanted = own + if (params.isEmpty()) emptyList() else listOf(PARAMS)
         if (text == null) {
-            val entries = listOf("baseUrl") + keys.filter { it != "baseUrl" }
+            val entries = listOf("baseUrl") + wanted.filter { it != "baseUrl" }
             return entries.joinToString(",\n", "{\n", "\n}\n") { "  ${JsonString(it).toJson()}: ${valueOf(it)}" }
         }
         val raw =
@@ -428,12 +514,35 @@ public object Requests {
             } catch (_: Exception) {
                 return null
             }
-        val missing = keys.distinct().filter { it !in raw }
-        if (missing.isEmpty()) return text
-        val close = text.lastIndexOf('}')
-        val before = text.substring(0, close).trimEnd(' ', '\t', '\n', '\r')
+        val withParams = (raw[PARAMS] as? JsonObject)?.let { existing -> addParams(text, existing, params) } ?: text
+        val missing = wanted.filter { it !in raw }
+        if (missing.isEmpty()) return withParams
+        val close = withParams.lastIndexOf('}')
+        val before = withParams.substring(0, close).trimEnd(' ', '\t', '\n', '\r')
         val added = missing.joinToString(",\n") { "  ${JsonString(it).toJson()}: ${valueOf(it)}" }
-        return before + (if (before.endsWith("{")) "\n" else ",\n") + added + "\n" + text.substring(close)
+        return before + (if (before.endsWith("{")) "\n" else ",\n") + added + "\n" + withParams.substring(close)
+    }
+
+    /** [text] with each of [names] that [existing], its `params` object, lacks added as an empty entry at its end. */
+    private fun addParams(
+        text: String,
+        existing: JsonObject,
+        names: List<String>,
+    ): String {
+        val missing = names.filter { it !in existing }
+        val range = topLevelRanges(text)[PARAMS] ?: return text
+        if (missing.isEmpty()) return text
+        val close = range.last
+        val before = text.substring(0, close).trimEnd(' ', '\t', '\n', '\r')
+        val multiline = text.substring(range.first, close).contains('\n') || existing.isEmpty()
+        val entries = missing.map { "${JsonString(it).toJson()}: \"\"" }
+        val added =
+            if (multiline) {
+                (if (before.endsWith("{")) "\n" else ",\n") + entries.joinToString(",\n") { "    $it" } + "\n  "
+            } else {
+                (if (before.endsWith("{")) "" else ", ") + entries.joinToString(", ")
+            }
+        return before + added + text.substring(close)
     }
 
     private val BASE_URL_VARIABLE = Regex("""\{\{\s*baseUrl\s*\}\}""")
@@ -700,39 +809,35 @@ public object Requests {
         return parts.joinToString(" ")
     }
 
-    public data class PathParam(
-        val name: String,
-        val optional: Boolean,
-    )
-
-    /** Path parameters such as `{id}` or Ktor's optional `{id?}`. */
-    public fun pathParams(path: String): List<PathParam> =
-        PATH_PARAM
-            .findAll(path)
-            .map {
-                PathParam(
-                    it.groupValues[1],
-                    it.groupValues[2] == "?",
-                )
-            }.toList()
-
-    /** Fill path parameters; an empty value for an optional parameter removes its segment. */
-    public fun fillPath(
-        path: String,
-        values: Map<String, String>,
-    ): String {
-        val optional =
-            OPTIONAL_SEGMENT.replace(path) { m ->
-                val v = values[m.groupValues[1]]
-                if (!v.isNullOrEmpty()) "/" + encodeSegment(v) else ""
-            }
-        return ANY_PARAM.replace(optional) { m -> encodeSegment(values[m.groupValues[1]] ?: "") }
+    /**
+     * The URL "Open in Stream Inspector" writes for [route]: each path parameter and each required
+     * query parameter as a `{{name}}`, filled from `params` in the env file. `{id}`, Spring's
+     * `{id:\d+}` and Ktor's `{id}` are required; Ktor's optional `{id?}` segment is left out, and
+     * [routeOptional] names it instead.
+     */
+    public fun routeUrl(route: Route): String {
+        val path = PATH_VARIABLE.replace(OPTIONAL_SEGMENT.replace(route.path, "")) { "{{${it.groupValues[1]}}}" }
+        val query =
+            route.query
+                .filter { it.required && PARAM_NAME.matches(it.name) }
+                .joinToString("&") { "${encodeSegment(it.name)}={{${it.name}}}" }
+        return "{{baseUrl}}$path" + if (query.isEmpty()) "" else "?$query"
     }
+
+    /** The headers field for [route]: one `Name: {{Name}}` line per header it requires. */
+    public fun routeHeaders(route: Route): String =
+        route.headers.filter { it.required && PARAM_NAME.matches(it.name) }.joinToString("\n") { "${it.name}: {{${it.name}}}" }
+
+    /** What [routeUrl] and [routeHeaders] leave out because the route can do without it, by name. */
+    public fun routeOptional(route: Route): List<String> =
+        OPTIONAL_SEGMENT.findAll(route.path).map { it.groupValues[1] }.toList() +
+            route.query.filter { !it.required }.map { it.name } +
+            route.headers.filter { !it.required }.map { it.name }
 
     /** `encodeURIComponent`: percent-encodes everything but the unreserved characters and `!'()*`. */
     private fun encodeSegment(s: String): String =
         URLEncoder
-            .encode(s, Charsets.UTF_8)
+            .encode(wellFormed(s), Charsets.UTF_8)
             .replace("+", "%20")
             .replace("%21", "!")
             .replace("%27", "'")

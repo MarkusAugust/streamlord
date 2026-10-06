@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { findRoutes } from "../src/routes.ts";
+import { findRoutes, type Route } from "../src/routes.ts";
 
 /** The cases of the analysis module's `RoutesTest.kt`. */
 const routes = (src: string): string[] => findRoutes(src).map((r) => `${r.method} ${r.path}`);
@@ -86,6 +86,52 @@ class O {
 class A { @GetMapping(value = "visning") fun v() {} }
 fun Route.api() { route("api") { get("x") { } } }`;
     assert.deepEqual(routes(src), ["GET /api/hent/visning", "GET /api/x"]);
+  });
+
+  it("a route knows the query parameters and headers its handler reads", () => {
+    const params = (r: Route) => [...r.query.map((q) => `?${q.name}${q.required ? "" : "?"}`), ...r.headers.map((h) => `H ${h.name}${h.required ? "" : "?"}`)];
+    const src = `@RestController
+@RequestMapping("api/hent")
+class A(private val s: S) {
+    @GetMapping(value = "/visning")
+    open fun visning(
+        @RequestParam partsnummer: String,
+        @RequestParam instans: String,
+        @RequestParam(required = false) fokus: String?,
+        @RequestHeader headere: Map<String, String>,
+        request: HttpServletRequest,
+    ): StreamingResponseBody { val x = mapOf(1 to 2) }
+
+    @PostMapping("/b") fun b(
+        @RequestParam("q") query: String, @RequestParam(name = "p", defaultValue = "1") page: Int,
+        @RequestParam all: MultiValueMap<String, String>, @RequestHeader("X-Id") id: String,
+        @RequestHeader(value = "X-Opt", required = false) opt: String, @Valid @RequestParam n: List<Int>,
+    ) {}
+
+    @GetMapping("/none") fun none() {}
+}
+fun Route.api() {
+    route("/k/{id}") {
+        get {
+            val q = call.request.queryParameters["q"] // read twice
+            call.request.queryParameters["q"]
+            call.parameters["id"]
+            call.parameters.get("page")
+            "queryParameters[\\"inString\\"]"
+        }
+    }
+    get("/l") { }
+}`;
+    assert.deepEqual(
+      findRoutes(src).map((r) => [`${r.method} ${r.path}`, params(r)]),
+      [
+        ["GET /api/hent/visning", ["?partsnummer", "?instans", "?fokus?"]],
+        ["POST /api/hent/b", ["?q", "?p?", "?n", "H X-Id", "H X-Opt?"]],
+        ["GET /api/hent/none", []],
+        ["GET /k/{id}", ["?q?", "?page?"]],
+        ["GET /l", []],
+      ],
+    );
   });
 
   it("a spring class mapping is not a route whatever annotates the class", () => {
