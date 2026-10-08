@@ -143,6 +143,55 @@ public class Analyzer(
         return issues
     }
 
+    /**
+     * Every signal the Datastar expressions of a Kotlin file read: in the expression handed to a DSL
+     * call, and in the attributes of HTML strings, handed to a call or free-standing. A Kotlin
+     * template (`$count` in a plain literal) is not a signal and is left out; the interpolation
+     * check speaks for it.
+     */
+    public fun signalReferencesInKotlin(
+        src: String,
+        opts: AnalyzeOptions = AnalyzeOptions(),
+    ): List<SignalReference> {
+        val out = ArrayList<SignalReference>()
+        val claimed = HashSet<Int>()
+        val lex = lex(src)
+
+        fun add(
+            s: KotlinString,
+            refs: List<SignalReference>,
+            site: CallSite?,
+        ) {
+            for (ref in refs) {
+                val range = s.toSource(ref.start, ref.end)
+                out += ref.copy(start = range.first, end = range.last + 1, site = site)
+            }
+        }
+        for (site in findCallSites(src, allSiteNames, lex)) {
+            for (a in site.args) a.string?.let { claimed += it.start }
+            catalog.expressionCallSites[site.name]?.let { spec ->
+                if (spec.onlyIfStringArgs && site.args.any { it.named == null && it.string == null }) return@let
+                val s = site.selectString(spec)?.takeUnless { it.unterminated } ?: return@let
+                add(s, expressionSignalReferences(s.text), site)
+            }
+            catalog.htmlCallSites[site.name]?.let { spec ->
+                val s = markupString(site, spec)?.takeUnless { it.unterminated } ?: return@let
+                add(s, markupSignalReferences(s.text, catalog, opts.prefix), site)
+            }
+        }
+        for (s in lex.strings) {
+            if (s.start in claimed || s.unterminated || !isHtmlString(src, s)) continue
+            add(s, markupSignalReferences(s.text, catalog, opts.prefix), null)
+        }
+        return out
+    }
+
+    /** Every signal the Datastar expressions of an HTML document or template read. */
+    public fun signalReferencesInHtml(
+        src: String,
+        opts: AnalyzeOptions = AnalyzeOptions(),
+    ): List<SignalReference> = markupSignalReferences(src, catalog, opts.prefix)
+
     /** The markup rules of one HTML string handed to a patch, with the id rule on or off. */
     public fun validateMarkup(
         html: String,

@@ -13,7 +13,7 @@ export interface AnalyzeOptions {
   checkHtmlAttributes: boolean;
 }
 
-const ALL_SITE_NAMES: ReadonlySet<string> = new Set([
+export const ALL_SITE_NAMES: ReadonlySet<string> = new Set([
   ...Object.keys(catalog.callSites.expression),
   ...Object.keys(catalog.callSites.html),
   ...Object.keys(catalog.callSites.script),
@@ -89,7 +89,7 @@ export function htmlStringAt(src: string, offset: number): KotlinString | null {
  * The markup handed to an HTML call site, or null when the markup is a trailing lambda: in the
  * kotlinx.html form, `patchElements(selector, mode, ...) { li { } }`, the first string is the selector.
  */
-function markupString(site: CallSite, spec: CallSiteSpec): KotlinString | null {
+export function markupString(site: CallSite, spec: CallSiteSpec): KotlinString | null {
   return site.trailingLambda ? null : selectStringArg(site, spec.arg, spec.named);
 }
 

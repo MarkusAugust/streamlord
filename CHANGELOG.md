@@ -8,6 +8,12 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Added
 
+- `streamlord-analysis`, for both editors: `signalReferencesInKotlin` and `signalReferencesInHtml`, every `$name` a
+  Datastar expression reads, with source offsets; `collectSignalDefinitions`, the signals a file
+  defines without the ones it only reads, plus every `$name = ...` an expression assigns; and
+  `unknownSignalIssue`, the `unknown-signal` warning for a read no definition covers, with the
+  nearest defined name as the fix. `isKnownSignal` counts `$user.name` as known when `user` is
+  defined, and `$form` when `form.email` is.
 - `streamlord-analysis`: `ServerLog`, which reads where a server says it started from its log
   (Spring Boot's Tomcat, Jetty, Undertow and Netty lines in 3.5 and 4.0, Ktor's "Responding at"),
   context path included, and which lines are warnings or errors; `RunningServer`.
@@ -16,6 +22,12 @@ All notable changes to Streamlord are recorded here. The format follows
   `withBaseUrl` offer and write its URL when the file's differs.
 
 ### Changed
+
+- `streamlord-analysis`, for both editors: signal collection, for completion, `signalDrift` and
+  the new check alike, honours `__case` on a keyed attribute (`data-signals:my-value__case.snake`
+  is `my_value`, `__case.pascal` gives `MyValue`) and reads the keys of JSON text handed to
+  `patchSignals`, as in `patchSignals("""{"count": 1}""")`. `keyName(key, case)` names the
+  signal a key declares.
 
 - `streamlord-analysis`, for both editors: `Route` carries the `query` parameters and `headers`
   its handler reads, as `RouteParam`s that say whether they are required: Spring's
