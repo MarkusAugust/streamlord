@@ -14,6 +14,11 @@ All notable changes to Streamlord are recorded here. The format follows
   `mergeVariables` takes a running server as `baseUrl` when the env file sets none, as the new
   `VariableSource.RUNNING` with the name it was started under; `baseUrlSuggestion` and
   `withBaseUrl` offer and write its URL when the file's differs.
+- `streamlord-spring`: `StreamlordExceptionHandler`, a `@RestControllerAdvice` that answers
+  `SignalsTooLargeException` with `413` and `JsonParseException` and `SignalsCodecException` with
+  `400`, instead of the `500` they are unmapped. It is not registered for you:
+  `@Import(StreamlordExceptionHandler::class)`. It answers with no body, has the lowest
+  precedence, and works on WebMVC and WebFlux.
 
 ### Changed
 

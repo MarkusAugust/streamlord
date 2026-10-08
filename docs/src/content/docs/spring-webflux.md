@@ -55,7 +55,9 @@ again and nothing would say so.
 There is no `HttpServletRequest` here. Take the signals the way WebFlux gives them to you, either a
 `@RequestParam` named `datastar` on a `GET` or the request body on a `POST`, and hand the JSON
 to the codec yourself. The protocol rule for *where* the signals live is the same as everywhere;
-only the plumbing differs.
+only the plumbing differs. A codec that cannot read them throws `SignalsCodecException`, a `500`
+unless you map it: `@Import(StreamlordExceptionHandler::class)` answers it with `400`, as on
+WebMVC.
 
 ## Cancellation
 

@@ -42,7 +42,8 @@ million digits fit inside one mebibyte, and turning them into a number took over
 is not the signals you expected to `400`. The second is `JsonParseException` from the built-in
 reader and `SignalsCodecException` from a codec, and unmapped they are a `500`: a stranger posting
 `query=gate` where JSON was expected gets a stack trace's worth of blame put on your server.
-Streamlord will not register a handler behind your back.
+Streamlord will not register a handler behind your back. On Spring it ships one you import
+yourself, `StreamlordExceptionHandler`; on Ktor it is three lines of `StatusPages`.
 
 ```kotlin sample=ktor-application
 install(StatusPages) {
@@ -57,6 +58,18 @@ install(StatusPages) {
     }
 }
 ```
+
+On Spring, WebMVC and WebFlux alike, import the advice where you configure the application:
+
+```kotlin sample=spring-controller
+@org.springframework.context.annotation.Configuration
+@org.springframework.context.annotation.Import(StreamlordExceptionHandler::class)
+class WebConfig
+```
+
+It answers with the status and no body, so nothing of a codec's message reaches the client, and
+it has the lowest precedence: an advice of your own with an `@Order` that handles the same
+exceptions decides instead.
 
 ## CSP
 
