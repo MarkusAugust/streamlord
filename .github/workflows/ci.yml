@@ -111,7 +111,7 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
 
       - name: Build and test
         run: ./gradlew build --no-daemon
@@ -168,7 +168,7 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
 
       - name: Build, test and verify
         run: ./gradlew buildPlugin test verifyPlugin --no-daemon
@@ -239,7 +239,7 @@ jobs:
           distribution: graalvm-community
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
 
       # Compiled here rather than inside the image: it wants 6-8 GB and several minutes,
       # the Gradle cache lives in this runner, and a failure belongs in a log somebody
@@ -415,7 +415,7 @@ jobs:
       #
       # Pinned to a commit; security.yml says why.
       - name: Scan the image
-        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ghcr.io/${{ steps.owner.outputs.name }}/streamlord-live:${{ github.sha }}
           severity: HIGH,CRITICAL
@@ -573,7 +573,7 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
 
       - name: Check that the tag matches gradle.properties
         run: |
@@ -606,7 +606,7 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
 
       - name: Check that the tag matches gradle.properties
         run: |
@@ -692,7 +692,7 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
 
       - name: Sign every module with the CI key, publish nothing
         run: ./gradlew signMavenPublication --no-daemon --no-configuration-cache
