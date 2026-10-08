@@ -25,7 +25,50 @@ public data class Issue(
     val link: String? = null,
     /** Quick fixes, the preferred one first. */
     val fixes: List<Fix> = emptyList(),
+) {
+    /** Where [start] falls in [source], the text the issue was found in. */
+    public fun position(source: String): SourcePosition = sourcePosition(source, start)
+
+    /**
+     * The issue as one line in the form compilers write and IDEs and CI make clickable:
+     * `src/main/kotlin/Page.kt:12:5: warning: Kotlin interpolates $count ... [kotlin-interpolation]`.
+     * [file] is written as given; [source] is the text the issue was found in.
+     */
+    public fun format(
+        file: String,
+        source: String,
+    ): String {
+        val (line, column) = position(source)
+        val tag = if (code != null) " [$code]" else ""
+        return "$file:$line:$column: ${severity.name.lowercase()}: $message$tag"
+    }
+}
+
+/**
+ * A place in a text as editors count it: [line] and [column] both start at 1, and a column counts
+ * UTF-16 characters, as the offsets of an [Issue] do. A `\r\n` line ending counts as one line break.
+ */
+public data class SourcePosition(
+    val line: Int,
+    val column: Int,
 )
+
+/** Where [offset] falls in [source]. An offset outside the text is held to its ends. */
+public fun sourcePosition(
+    source: String,
+    offset: Int,
+): SourcePosition {
+    val at = offset.coerceIn(0, source.length)
+    var line = 1
+    var lineStart = 0
+    for (i in 0 until at) {
+        if (source[i] == '\n') {
+            line++
+            lineStart = i + 1
+        }
+    }
+    return SourcePosition(line, at - lineStart + 1)
+}
 
 /** Where the diagnostics point in the Datastar reference. */
 public object Docs {

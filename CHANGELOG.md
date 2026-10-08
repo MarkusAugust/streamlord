@@ -14,6 +14,10 @@ All notable changes to Streamlord are recorded here. The format follows
   `mergeVariables` takes a running server as `baseUrl` when the env file sets none, as the new
   `VariableSource.RUNNING` with the name it was started under; `baseUrlSuggestion` and
   `withBaseUrl` offer and write its URL when the file's differs.
+- `streamlord-analysis`: `Issue.position(source)` gives the line and column an issue starts at,
+  and `Issue.format(file, source)` writes it as `file:line:column: severity: message [code]`, the
+  form IDEs and CI make clickable. `sourcePosition` and `SourcePosition` do the same for any
+  offset.
 
 ### Changed
 

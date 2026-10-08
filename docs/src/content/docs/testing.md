@@ -193,16 +193,21 @@ fun `no source file interpolates a signal into Datastar`() {
         java.io.File("src/main/kotlin")
             .walkTopDown()
             .filter { it.extension == "kt" }
-            .flatMap { file -> analyzer.analyzeKotlin(file.readText()).map { file.name to it } }
-            .filter { (_, issue) -> issue.severity == Severity.ERROR }
-            .toList()
+            .flatMap { file ->
+                val source = file.readText()
+                analyzer
+                    .analyzeKotlin(source)
+                    .filter { it.severity == Severity.ERROR }
+                    .map { it.format(file.path, source) }
+            }.toList()
 
-    assertTrue(
-        offenders.isEmpty(),
-        offenders.joinToString("\n") { (name, issue) -> "$name: ${issue.message}" },
-    )
+    assertTrue(offenders.isEmpty(), offenders.joinToString("\n"))
 }
 ```
+
+`format` writes each finding as `src/main/kotlin/Page.kt:12:5: error: ... [kotlin-interpolation]`,
+the form IDEs and CI logs turn into a link to the line. `position(source)` gives the line and
+column alone.
 
 `analyzeHtml(source)` does the same for template and HTML files, checking attributes and
 expressions; the id and completeness rules belong to `validateMarkup`. Both return a list of

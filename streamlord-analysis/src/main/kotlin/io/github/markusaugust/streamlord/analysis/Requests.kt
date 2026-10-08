@@ -263,8 +263,8 @@ public object Requests {
         text: String,
         position: Int,
     ): String {
-        val before = text.substring(0, position.coerceIn(0, text.length))
-        return "at line ${before.count { it == '\n' } + 1}, column ${position - before.lastIndexOf('\n')}"
+        val (line, column) = sourcePosition(text, position)
+        return "at line $line, column $column"
     }
 
     private val HTTP = Regex("""^https?://""", RegexOption.IGNORE_CASE)
