@@ -8,7 +8,7 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Added
 
-- `streamlord-analysis`: `signalReferencesInKotlin` and `signalReferencesInHtml`, every `$name` a
+- `streamlord-analysis`, for both editors: `signalReferencesInKotlin` and `signalReferencesInHtml`, every `$name` a
   Datastar expression reads, with source offsets; `collectSignalDefinitions`, the signals a file
   defines without the ones it only reads, plus every `$name = ...` an expression assigns; and
   `unknownSignalIssue`, the `unknown-signal` warning for a read no definition covers, with the

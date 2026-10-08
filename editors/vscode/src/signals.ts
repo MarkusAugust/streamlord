@@ -9,9 +9,13 @@ import { findCallSites } from "./scanner.ts";
 const KOTLIN_PATTERNS: RegExp[] = [
   /\b(?:signal|set|setExpr|increment|decrement|toggle|not|dataBind|dataIndicator|dataRef|dataComputed|dataMatchMedia)\(\s*"([A-Za-z_][A-Za-z0-9_.]*)"/g,
   /\bdataSignals\(\s*"([A-Za-z_][A-Za-z0-9_.]*)"\s*,/g,
-  /\$\{'\$'\}([A-Za-z_][A-Za-z0-9_.]*)/g,
-  /\\\$([A-Za-z_][A-Za-z0-9_.]*)/g,
 ];
+
+/** A dollar escaped in a Kotlin string: a signal read, which completion offers and a definition is not. */
+const KOTLIN_READS: RegExp[] = [/\$\{'\$'\}([A-Za-z_][A-Za-z0-9_.]*)/g, /\\\$([A-Za-z_][A-Za-z0-9_.]*)/g];
+
+/** `$name = ...` in an expression: Datastar creates a signal it is assigned to, so the assignment defines it. */
+const ASSIGNED_SIGNAL = /(?:\$|\$\{'\$'\})([A-Za-z_][A-Za-z0-9_.]*)\s*=(?![=>])/g;
 
 /** Declarations in markup. These also run over Kotlin, where they only ever match inside HTML strings. */
 const HTML_ATTRIBUTE_PATTERNS: RegExp[] = [
@@ -39,6 +43,21 @@ const PAIR = /"([A-Za-z_][A-Za-z0-9_.]*)"\s+to\b/g;
 const NAME = /^"([A-Za-z_][A-Za-z0-9_.]*)"$/;
 
 export function collectSignals(src: string, language: "kotlin" | "html"): Set<string> {
+  return collect(src, language, true);
+}
+
+/**
+ * The signals a source defines, which a `$name` in an expression is checked against: what
+ * [collectSignals] finds without the reads (a bare `$name` in markup, a `${'$'}name` in Kotlin),
+ * plus every signal an expression assigns to.
+ */
+export function collectSignalDefinitions(src: string, language: "kotlin" | "html"): Set<string> {
+  const out = collect(src, language, false);
+  for (const m of src.matchAll(ASSIGNED_SIGNAL)) if (m[1] && !m[1].includes(PLACEHOLDER)) out.add(m[1]);
+  return out;
+}
+
+function collect(src: string, language: "kotlin" | "html", reads: boolean): Set<string> {
   const out = new Set<string>();
   if (language === "kotlin") {
     for (const site of findCallSites(src, PAIR_CALLS)) {
@@ -52,7 +71,8 @@ export function collectSignals(src: string, language: "kotlin" | "html"): Set<st
       });
     }
   }
-  const patterns = language === "kotlin" ? [...KOTLIN_PATTERNS, ...HTML_ATTRIBUTE_PATTERNS] : HTML_PATTERNS;
+  const patterns =
+    language === "kotlin" ? [...KOTLIN_PATTERNS, ...(reads ? KOTLIN_READS : []), ...HTML_ATTRIBUTE_PATTERNS] : reads ? HTML_PATTERNS : HTML_ATTRIBUTE_PATTERNS;
   for (const re of patterns) {
     re.lastIndex = 0;
     let m: RegExpExecArray | null;

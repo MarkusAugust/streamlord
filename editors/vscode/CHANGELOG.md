@@ -2,6 +2,15 @@
 
 All notable changes to the Streamlord extension are recorded here.
 
+## Unreleased
+
+- A signal no file in the workspace defines is a warning: `data-on:click="$telefon++"` on a page
+  whose `data-signals:teller` declares `$teller` is underlined. A defined name that is close, such
+  as `$count` for `$coutn`, is the quick fix. Definitions are read from every Kotlin and HTML
+  file, as completion reads its names, and the check waits until the workspace has been read
+  once. A signal set only from a script is reported too; `streamlord.diagnostics.unknownSignals`
+  turns the check off.
+
 ## 0.6.0
 
 - Stream Inspector: `{{baseUrl}}` follows the server you started from a debug session. The

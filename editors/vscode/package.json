@@ -73,6 +73,11 @@
           "default": true,
           "description": "Also validate data-* attributes in .html files (templates)."
         },
+        "streamlord.diagnostics.unknownSignals": {
+          "type": "boolean",
+          "default": true,
+          "description": "Warn on a $name that no Kotlin or HTML file in the workspace defines, such as a misspelt signal. A signal set only from a script is reported too."
+        },
         "streamlord.attributePrefix": {
           "type": "string",
           "default": "data-",

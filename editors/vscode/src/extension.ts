@@ -11,7 +11,9 @@ import { RequestStore } from "./requestStore.ts";
 import { RouteLensProvider } from "./routeLens.ts";
 import type { Route } from "./routes.ts";
 import { RunningServers } from "./serverLog.ts";
+import { signalReferencesInHtml, signalReferencesInKotlin, unknownSignalIssue } from "./signalReferences.ts";
 import { SignalIndex } from "./signalIndex.ts";
+import { collectSignalDefinitions } from "./signals.ts";
 
 /** Languages that get HTML-side support, from the setting; Kotlin always gets the Kotlin side. */
 function markupLanguages(): string[] {
@@ -49,10 +51,13 @@ export function activate(context: vscode.ExtensionContext): void {
       return;
     }
     let found: Issue[];
+    const text = document.getText();
     if (document.languageId === "kotlin") {
-      found = analyzeKotlin(document.getText(), { prefix: prefix(), checkHtmlAttributes: true });
+      found = analyzeKotlin(text, { prefix: prefix(), checkHtmlAttributes: true });
+      found.push(...unknownSignals(signalReferencesInKotlin(text, prefix()), collectSignalDefinitions(text, "kotlin")));
     } else if (markup.has(document.languageId) && config().get<boolean>("diagnostics.html", true)) {
-      found = analyzeHtml(document.getText(), { prefix: prefix(), checkHtmlAttributes: true });
+      found = analyzeHtml(text, { prefix: prefix(), checkHtmlAttributes: true });
+      found.push(...unknownSignals(signalReferencesInHtml(text, prefix()), collectSignalDefinitions(text, "html")));
     } else {
       diagnostics.delete(document.uri);
       issues.delete(document.uri);
@@ -68,6 +73,14 @@ export function activate(context: vscode.ExtensionContext): void {
         return d;
       }),
     );
+  };
+
+  /** A `$name` no file defines. Quiet until the workspace has been read once, and when turned off. */
+  const unknownSignals = (refs: ReturnType<typeof signalReferencesInHtml>, here: Set<string>): Issue[] => {
+    if (refs.length === 0 || !signals.ready || !config().get<boolean>("diagnostics.unknownSignals", true)) return [];
+    const defined = signals.allDefinitions();
+    for (const n of here) defined.add(n);
+    return refs.flatMap((r) => unknownSignalIssue(r, defined) ?? []);
   };
 
   const schedule = (document: vscode.TextDocument) => {
@@ -101,12 +114,14 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("streamlord.colors.remove", () => removeRecommendedColors()),
     vscode.commands.registerCommand("streamlord.reindexSignals", async () => {
       const n = await signals.rebuild();
+      vscode.workspace.textDocuments.forEach(schedule);
       void vscode.window.showInformationMessage(`Streamlord: indexed ${n} signal names.`);
     }),
   );
 
   vscode.workspace.textDocuments.forEach(schedule);
-  void signals.rebuild();
+  // The first lint ran without the index; once it is read, a signal another file defines is known.
+  void signals.rebuild().then(() => vscode.workspace.textDocuments.forEach(schedule));
 }
 
 export function deactivate(): void {

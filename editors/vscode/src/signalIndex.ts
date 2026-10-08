@@ -1,10 +1,12 @@
 import * as vscode from "vscode";
 import { collectSelectors, type Selectors } from "./selectors.ts";
-import { collectSignals } from "./signals.ts";
+import { collectSignalDefinitions, collectSignals } from "./signals.ts";
 
 /** Workspace-wide index of signal names, kept fresh on save. */
 export class SignalIndex implements vscode.Disposable {
   private readonly byFile = new Map<string, Set<string>>();
+  private readonly definitionsByFile = new Map<string, Set<string>>();
+  private built = false;
   private readonly selectorsByFile = new Map<string, Selectors>();
   private readonly disposables: vscode.Disposable[] = [];
 
@@ -15,6 +17,7 @@ export class SignalIndex implements vscode.Disposable {
       vscode.workspace.onDidDeleteFiles((e) =>
         e.files.forEach((f) => {
           this.byFile.delete(f.toString());
+          this.definitionsByFile.delete(f.toString());
           this.selectorsByFile.delete(f.toString());
         }),
       ),
@@ -23,6 +26,7 @@ export class SignalIndex implements vscode.Disposable {
 
   async rebuild(): Promise<number> {
     this.byFile.clear();
+    this.definitionsByFile.clear();
     this.selectorsByFile.clear();
     const files = await vscode.workspace.findFiles("**/*.{kt,html}", "**/{build,node_modules,.gradle,dist,out,target}/**", 5000);
     await Promise.all(
@@ -35,7 +39,13 @@ export class SignalIndex implements vscode.Disposable {
         }
       }),
     );
+    this.built = true;
     return this.all().size;
+  }
+
+  /** Has the workspace been read once? Until then a signal missing from the index may only be unread. */
+  get ready(): boolean {
+    return this.built;
   }
 
   update(document: vscode.TextDocument): void {
@@ -45,6 +55,7 @@ export class SignalIndex implements vscode.Disposable {
 
   private index(key: string, text: string, language: "kotlin" | "html"): void {
     this.byFile.set(key, collectSignals(text, language));
+    this.definitionsByFile.set(key, collectSignalDefinitions(text, language));
     this.selectorsByFile.set(key, collectSelectors(text));
   }
 
@@ -72,6 +83,13 @@ export class SignalIndex implements vscode.Disposable {
   all(): Set<string> {
     const out = new Set<string>();
     for (const s of this.byFile.values()) for (const n of s) out.add(n);
+    return out;
+  }
+
+  /** Every signal defined anywhere in the workspace, which a `$name` is checked against: no reads, as [all] has. */
+  allDefinitions(): Set<string> {
+    const out = new Set<string>();
+    for (const s of this.definitionsByFile.values()) for (const n of s) out.add(n);
     return out;
   }
 
