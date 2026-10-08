@@ -4,7 +4,7 @@ kotlin = "2.4.20"
 # 1.10.2) and downgrades anything newer, so code compiled against a later release fails there with
 # NoSuchMethodError: 1.11 compiles runBlocking to a symbol the older jars do not have. Compiling
 # against the oldest pin runs on all of them. Raise it only when the oldest supported Boot does.
-coroutines = "1.8.1"
+coroutines = "1.11.0"
 coroutinesBoot4 = "1.10.2"
 coroutinesNewest = "1.11.0"
 serialization = "1.11.0"
@@ -12,9 +12,9 @@ kotlinxHtml = "0.12.0"
 ktor = "3.6.0"
 spring = "6.2.19"
 spring7 = "7.0.9"
-servlet = "6.0.0"
+servlet = "6.1.0"
 servlet61 = "6.1.0"
-reactor = "3.7.15"
+reactor = "3.8.7"
 jackson = "3.2.3"
 jackson2 = "2.22.3"
 
