@@ -1,0 +1,117 @@
+name: Security
+
+# What ci.yml does not ask: whether anything this repository depends on has a known
+# vulnerability. Everything here reports to the repository's Security tab rather than failing
+# a build, because an advisory published on a Tuesday is not something a pull request did.
+#
+# The one check that does fail a build is in ci.yml, on the streamlord-live image, just before
+# it is pushed: that is the moment a known vulnerability can still be kept from shipping.
+
+on:
+  push:
+    branches: [master]
+  # Weekly, because a dependency nobody touched can still acquire an advisory, and the image
+  # serving the documentation site is only rebuilt when the code under it changes.
+  schedule:
+    - cron: "17 5 * * 1"
+  # A change to this file is tried before it is merged, since a scan that cannot run reports
+  # nothing and says nothing about it.
+  pull_request:
+    paths: [.github/workflows/security.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gradle-dependencies:
+    name: Gradle dependency graph (${{ matrix.build }})
+    runs-on: ubuntu-latest
+    # Dependabot reads build files, not resolved builds, so without this it sees what
+    # libs.versions.toml names and nothing those libraries bring with them. Submitting the
+    # resolved graph is what lets it raise an alert for a transitive dependency.
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - build: SDK
+            root: .
+          - build: IntelliJ plugin
+            root: editors/intellij
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/dependency-submission@v5
+        with:
+          build-root-directory: ${{ matrix.root }}
+
+  trivy-repository:
+    name: Trivy, repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v7
+
+      # Pinned to a commit rather than a tag. In March 2026 this action's tags were moved to
+      # point at code that read CI secrets, and a tag is only as fixed as whoever can push it.
+      # Dependabot updates the commit and the comment together.
+      #
+      # The lockfiles it reads are editors/vscode/package-lock.json and docs/bun.lock, and it
+      # looks for secrets committed anywhere in the tree.
+      - name: Scan the repository
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-repository.sarif
+
+      - uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-repository.sarif
+          category: trivy-repository
+
+  trivy-image:
+    name: Trivy, streamlord-live as deployed
+    runs-on: ubuntu-latest
+    # The image that is running now, not one built for the occasion. It is scanned before it
+    # is pushed, but a new advisory for the Debian underneath it arrives without a push.
+    if: github.event_name != 'push'
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
+    steps:
+      - name: Lowercase the owner
+        id: owner
+        run: echo "name=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Scan the image
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          image-ref: ghcr.io/${{ steps.owner.outputs.name }}/streamlord-live:latest
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-image.sarif
+
+      - uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-image.sarif
+          category: trivy-image

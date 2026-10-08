@@ -1,0 +1,61 @@
+# Dependabot, for every place in this repository that pins something someone else wrote.
+#
+# Security updates arrive as soon as an advisory names a version in use, whatever the
+# schedule below says. The schedule is for ordinary version bumps, and those come grouped and
+# weekly, because one pull request per patch release across six ecosystems is a queue nobody
+# reads.
+#
+# Gradle sees what the build files and gradle/libs.versions.toml declare. What those pull in
+# transitively is reported separately, by the dependency-submission job in security.yml.
+
+version: 2
+
+updates:
+  # The SDK, the demo and the documentation samples share one build and one version catalog.
+  # The IntelliJ plugin is a build of its own, with its own wrapper and its own platform.
+  - package-ecosystem: gradle
+    directories:
+      - /
+      - /editors/intellij
+    schedule:
+      interval: weekly
+    groups:
+      gradle:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /editors/vscode
+    schedule:
+      interval: weekly
+    groups:
+      vscode:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  # The documentation site, which is built with Bun and has bun.lock rather than a
+  # package-lock.json.
+  - package-ecosystem: bun
+    directory: /docs
+    schedule:
+      interval: weekly
+    groups:
+      docs:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  # The distroless base under streamlord-live. It is the only part of that image this
+  # repository does not compile, and so the only part a new Debian advisory can be about.
+  - package-ecosystem: docker
+    directory: /demo
+    schedule:
+      interval: weekly
+
+  # The actions the workflows run, with the secrets those workflows hold.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

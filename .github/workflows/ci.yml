@@ -405,6 +405,23 @@ jobs:
             && { echo "::error::the remove carried elements, which it must not"; exit 1; }
           echo "  a remove went out as a selector and a mode"
 
+      # Known vulnerabilities in the image that is about to be pushed, and the last point at
+      # which one can still be kept out of production. The binary is scanned in its sources
+      # by security.yml, so what this mostly sees is the Debian under distroless.
+      #
+      # Only HIGH and CRITICAL, and only those with a fixed version: an advisory with no fix
+      # is one this build cannot act on, and failing over it would hold every deployment
+      # hostage to Debian's schedule. security.yml lists the rest in the Security tab.
+      #
+      # Pinned to a commit; security.yml says why.
+      - name: Scan the image
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          image-ref: ghcr.io/${{ steps.owner.outputs.name }}/streamlord-live:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
       - uses: docker/login-action@v4
         with:
           registry: ghcr.io
