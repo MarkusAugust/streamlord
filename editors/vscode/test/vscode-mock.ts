@@ -95,11 +95,12 @@ export class EventEmitter<T> {
 }
 
 export interface MockUri {
+  scheme: string;
   path: string;
   toString: () => string;
 }
 
-const uri = (path: string): MockUri => ({ path, toString: () => `file://${path}` });
+const uri = (path: string): MockUri => ({ scheme: "file", path, toString: () => `file://${path}` });
 
 export const Uri = {
   file: uri,
@@ -138,6 +139,7 @@ export const workspace = {
   onDidChangeTextDocument: noop,
   onDidDeleteFiles: noop,
   onDidRenameFiles: noop,
+  onDidCloseTextDocument: noop,
   onDidChangeConfiguration: noop,
   createFileSystemWatcher: () => ({ onDidChange: noop, onDidCreate: noop, onDidDelete: noop, dispose: () => {} }),
   findFiles: async (): Promise<MockUri[]> => [],

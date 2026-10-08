@@ -2,8 +2,17 @@ import * as vscode from "vscode";
 import { collectSelectors, type Selectors } from "./selectors.ts";
 import { collectSignalDefinitions, collectSignals } from "./signals.ts";
 
-/** Template files read as markup, as the IntelliJ plugin reads them, whatever language an extension gives them. */
-const MARKUP_EXTENSIONS = ["html", "htm", "xhtml", "jte", "kte", "ftl", "ftlh", "vm", "mustache", "peb", "pebble", "twig", "hbs"];
+/** Template files read as markup, as the IntelliJ plugin reads them by default, whatever language an extension gives them. */
+const MARKUP_EXTENSIONS = [
+  "html", "htm", "xhtml", "jte", "kte", "ftl", "ftlh", "vm", "mustache", "hbs", "handlebars", "peb", "pebble", "twig", "jinja", "jinja2", "j2",
+  "cshtml", "razor", "php", "erb", "ejs", "liquid", "njk", "edge", "astro", "svelte", "vue",
+];
+const SOURCE_GLOB = `**/*.{kt,${MARKUP_EXTENSIONS.join(",")}}`;
+const EXCLUDED_GLOB = "**/{build,node_modules,.gradle,dist,out,target}/**";
+const FILE_CAP = 5000;
+
+/** Where a file lives on a disk the workspace reads; a git diff, an untitled buffer or an output channel defines nothing. */
+const INDEXED_SCHEMES: ReadonlySet<string> = new Set(["file", "vscode-remote", "vscode-vfs"]);
 
 interface FileEntry {
   version: number | null;
@@ -29,15 +38,35 @@ export class SignalIndex implements vscode.Disposable {
       this.changed,
       vscode.workspace.onDidSaveTextDocument((d) => this.update(d)),
       vscode.workspace.onDidChangeTextDocument((e) => this.update(e.document)),
+      // A closed document's unsaved edits are gone; what counts is the disk again.
+      vscode.workspace.onDidCloseTextDocument((d) => void this.read(d.uri)),
       vscode.workspace.onDidDeleteFiles((e) => e.files.forEach((f) => this.remove(f.toString()))),
-      vscode.workspace.onDidRenameFiles((e) => e.files.forEach((f) => this.remove(f.oldUri.toString()))),
+      vscode.workspace.onDidRenameFiles((e) =>
+        e.files.forEach((f) => {
+          this.remove(f.oldUri.toString());
+          void this.read(f.newUri);
+        }),
+      ),
+    );
+    // Files changed outside the editor: a git checkout, a generated template, a file created or deleted on disk.
+    const watcher = vscode.workspace.createFileSystemWatcher(SOURCE_GLOB);
+    this.disposables.push(
+      watcher,
+      watcher.onDidCreate((u) => void this.read(u)),
+      watcher.onDidChange((u) => void this.read(u)),
+      watcher.onDidDelete((u) => this.remove(u.toString())),
     );
   }
 
   async rebuild(): Promise<number> {
     // Built aside and swapped in whole, so a check that runs meanwhile still sees the old index.
     const next = new Map<string, FileEntry>();
-    const files = await vscode.workspace.findFiles(`**/*.{kt,${MARKUP_EXTENSIONS.join(",")}}`, "**/{build,node_modules,.gradle,dist,out,target}/**", 5000);
+    // Markup and Kotlin under separate caps, so the pages that define signals are not crowded out by sources.
+    const [markup, kotlin] = await Promise.all([
+      vscode.workspace.findFiles(`**/*.{${MARKUP_EXTENSIONS.join(",")}}`, EXCLUDED_GLOB, FILE_CAP),
+      vscode.workspace.findFiles("**/*.kt", EXCLUDED_GLOB, FILE_CAP),
+    ]);
+    const files = [...markup, ...kotlin];
     await Promise.all(
       files.map(async (uri) => {
         try {
@@ -62,14 +91,33 @@ export class SignalIndex implements vscode.Disposable {
     return this.built;
   }
 
+  /** Read a file from disk, unless an open document holds its text, which the change events keep. */
+  private async read(uri: vscode.Uri): Promise<void> {
+    if (!INDEXED_SCHEMES.has(uri.scheme)) return;
+    const language = languageByExtension(uri);
+    if (!language) return;
+    if (vscode.workspace.textDocuments.some((d) => d.uri.toString() === uri.toString() && !d.isClosed)) return;
+    let text: string;
+    try {
+      text = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString("utf8");
+    } catch {
+      this.remove(uri.toString());
+      return;
+    }
+    this.set(uri.toString(), entry(text, language, null));
+  }
+
   /** Read a document again, unless this version of it is already read. */
   update(document: vscode.TextDocument): void {
     const language = this.languageOf(document);
     if (!language) return;
     const key = document.uri.toString();
+    if (this.byFile.get(key)?.version === document.version) return;
+    this.set(key, entry(document.getText(), language, document.version));
+  }
+
+  private set(key: string, next: FileEntry): void {
     const previous = this.byFile.get(key);
-    if (previous?.version === document.version) return;
-    const next = entry(document.getText(), language, document.version);
     this.byFile.set(key, next);
     if (!previous || !sameSet(previous.definitions, next.definitions)) {
       this.definitionsUnion = null;
@@ -77,21 +125,26 @@ export class SignalIndex implements vscode.Disposable {
     }
   }
 
+  /** Forget a file, or every file under a folder that was deleted or renamed. */
   private remove(key: string): void {
-    const previous = this.byFile.get(key);
-    if (!previous) return;
-    this.byFile.delete(key);
-    if (previous.definitions.size > 0) {
+    const folder = key.endsWith("/") ? key : `${key}/`;
+    let defined = false;
+    for (const [k, e] of this.byFile) {
+      if (k !== key && !k.startsWith(folder)) continue;
+      this.byFile.delete(k);
+      defined ||= e.definitions.size > 0;
+    }
+    if (defined) {
       this.definitionsUnion = null;
       this.changed.fire();
     }
   }
 
   private languageOf(document: vscode.TextDocument): "kotlin" | "html" | null {
+    if (!INDEXED_SCHEMES.has(document.uri.scheme)) return null;
     if (document.languageId === "kotlin") return "kotlin";
     if (document.languageId === "html" || this.markupLanguages.has(document.languageId)) return "html";
-    const extension = document.uri.path.slice(document.uri.path.lastIndexOf(".") + 1).toLowerCase();
-    return MARKUP_EXTENSIONS.includes(extension) ? "html" : null;
+    return languageByExtension(document.uri);
   }
 
   /** Ids and classes declared in one file. */
@@ -133,6 +186,12 @@ export class SignalIndex implements vscode.Disposable {
   dispose(): void {
     this.disposables.forEach((d) => d.dispose());
   }
+}
+
+function languageByExtension(uri: vscode.Uri): "kotlin" | "html" | null {
+  const extension = uri.path.slice(uri.path.lastIndexOf(".") + 1).toLowerCase();
+  if (extension === "kt") return "kotlin";
+  return MARKUP_EXTENSIONS.includes(extension) ? "html" : null;
 }
 
 function entry(text: string, language: "kotlin" | "html", version: number | null): FileEntry {

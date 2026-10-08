@@ -5,8 +5,22 @@ import { files, Uri, workspace } from "./vscode-mock.ts";
 import { SignalIndex } from "../src/signalIndex.ts";
 
 /** An open document as the index reads it: a uri, a language, a version and the text. */
-const doc = (path: string, languageId: string, text: string, version = 1) =>
-  ({ uri: Uri.file(path), languageId, version, getText: () => text }) as unknown as vscode.TextDocument;
+const doc = (path: string, languageId: string, text: string, version = 1, scheme = "file") =>
+  ({ uri: { ...Uri.file(path), scheme }, languageId, version, getText: () => text }) as unknown as vscode.TextDocument;
+
+/** Install a stand-in for a workspace event, and hand back what fires it. */
+function capture<T>(name: "onDidRenameFiles" | "onDidDeleteFiles"): { fire: (e: T) => void; restore: () => void } {
+  const original = workspace[name];
+  let listener: ((e: T) => void) | null = null;
+  (workspace as Record<string, unknown>)[name] = (l: (e: T) => void) => {
+    listener = l;
+    return { dispose: () => {} };
+  };
+  return { fire: (e) => listener?.(e), restore: () => ((workspace as Record<string, unknown>)[name] = original) };
+}
+
+const encode = (text: string) => new TextEncoder().encode(text);
+const settle = () => new Promise((resolve) => setImmediate(resolve));
 
 describe("signal index", () => {
   it("reads a template file as markup, by extension or by a configured language", () => {
@@ -50,5 +64,40 @@ describe("signal index", () => {
       workspace.textDocuments = [];
       files.clear();
     }
+  });
+
+  it("reads a renamed file under its new name", async () => {
+    const rename = capture<{ files: { oldUri: unknown; newUri: unknown }[] }>("onDidRenameFiles");
+    try {
+      const index = new SignalIndex(new Set());
+      index.update(doc("/r/page.html", "html", `<div data-signals:count="0"></div>`));
+      files.set("/r/index.html", encode(`<div data-signals:count="0"></div>`));
+      rename.fire({ files: [{ oldUri: Uri.file("/r/page.html"), newUri: Uri.file("/r/index.html") }] });
+      await settle();
+      assert.deepEqual([...index.allDefinitions()], ["count"]);
+    } finally {
+      rename.restore();
+      files.clear();
+    }
+  });
+
+  it("forgets every file under a deleted folder", () => {
+    const remove = capture<{ files: unknown[] }>("onDidDeleteFiles");
+    try {
+      const index = new SignalIndex(new Set());
+      index.update(doc("/d/templates/form.html", "html", `<div data-signals:email="''"></div>`));
+      index.update(doc("/d/templates-old.html", "html", `<div data-signals:kept="1"></div>`));
+      remove.fire({ files: [Uri.file("/d/templates")] });
+      assert.deepEqual([...index.allDefinitions()], ["kept"]);
+    } finally {
+      remove.restore();
+    }
+  });
+
+  it("leaves a git diff or an untitled buffer out", () => {
+    const index = new SignalIndex(new Set());
+    index.update(doc("/g/page.html", "html", `<div data-signals:oldName="1"></div>`, 1, "git"));
+    index.update(doc("Untitled-1", "html", `<div data-signals:scratch="1"></div>`, 1, "untitled"));
+    assert.deepEqual([...index.allDefinitions()], []);
   });
 });

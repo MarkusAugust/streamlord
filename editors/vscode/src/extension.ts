@@ -53,10 +53,10 @@ export function activate(context: vscode.ExtensionContext): void {
     const text = document.getText();
     if (document.languageId === "kotlin") {
       found = analyzeKotlin(text, { prefix: prefix(), checkHtmlAttributes: true });
-      found.push(...unknownSignals(document, signalReferencesInKotlin(text, prefix())));
+      if (checkSignals()) found.push(...unknownSignals(document, signalReferencesInKotlin(text, prefix())));
     } else if (markup.has(document.languageId) && config().get<boolean>("diagnostics.html", true)) {
       found = analyzeHtml(text, { prefix: prefix(), checkHtmlAttributes: true });
-      found.push(...unknownSignals(document, signalReferencesInHtml(text, prefix())));
+      if (checkSignals()) found.push(...unknownSignals(document, signalReferencesInHtml(text, prefix())));
     } else {
       diagnostics.delete(document.uri);
       issues.delete(document.uri);
@@ -74,9 +74,12 @@ export function activate(context: vscode.ExtensionContext): void {
     );
   };
 
-  /** A `$name` no file defines. Quiet until the workspace has been read once, and when turned off. */
+  /** Is the unknown-signal check on? Not until the workspace has been read once, and not when turned off. */
+  const checkSignals = () => signals.ready && config().get<boolean>("diagnostics.unknownSignals", true);
+
+  /** A `$name` no file defines. */
   const unknownSignals = (document: vscode.TextDocument, refs: SignalReference[]): Issue[] => {
-    if (refs.length === 0 || !signals.ready || !config().get<boolean>("diagnostics.unknownSignals", true)) return [];
+    if (refs.length === 0) return [];
     // The index reads this version of the document once; a lint right after an edit finds it read.
     signals.update(document);
     const defined = signals.allDefinitions();

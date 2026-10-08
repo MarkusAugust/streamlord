@@ -11,8 +11,8 @@ All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here
   names; a signal the index cannot see, set from a script, is reported too, and the inspection
   (Streamlord › Signal no file defines) can be turned off.
 - Signal completion honours `__case` (`data-signals:my-value__case.snake` offers `$my_value`), and
-  reads template files (`.jte`, `.peb`, `.hbs` and the rest) across the project, not only the ones
-  that are open.
+  reads template files across the project, not only the ones that are open: every extension in
+  Settings › Tools › Streamlord's template list, `.njk` and `.vue` included.
 
 ## 0.4.0
 

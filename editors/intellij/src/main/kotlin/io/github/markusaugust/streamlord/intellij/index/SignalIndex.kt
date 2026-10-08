@@ -6,6 +6,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiFile
 import com.intellij.psi.search.FileTypeIndex
 import com.intellij.psi.search.FilenameIndex
@@ -16,6 +17,7 @@ import io.github.markusaugust.streamlord.analysis.SourceLanguage
 import io.github.markusaugust.streamlord.analysis.collectSelectors
 import io.github.markusaugust.streamlord.analysis.collectSignalDefinitions
 import io.github.markusaugust.streamlord.analysis.collectSignals
+import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
 import org.jetbrains.kotlin.idea.KotlinFileType
 import java.util.concurrent.ConcurrentHashMap
 
@@ -42,9 +44,13 @@ class SignalIndex(
     @Volatile
     private var definitionsUnion: Set<String>? = null
 
-    /** The PSI modification count of the last full read, so a pass over many files reads the project once. */
+    /** Bumped with each drop, so a union built from entries that changed meanwhile is not kept. Guarded by [unionLock]. */
+    private var unionGeneration = 0L
+    private val unionLock = Any()
+
+    /** The PSI, VFS and settings counts of the last full read, so a pass over many files reads the project once. */
     @Volatile
-    private var refreshedAt = -1L
+    private var refreshedAt: List<Long> = emptyList()
 
     /** The names declared in one file, from its current text. */
     fun forFile(file: PsiFile): Set<String> = entryFor(file)?.signals ?: emptySet()
@@ -67,10 +73,11 @@ class SignalIndex(
         refresh()
         val own = entryFor(file)?.definitions ?: emptySet()
         definitionsUnion?.let { if (it.containsAll(own)) return it }
+        val generation = synchronized(unionLock) { unionGeneration }
         val out = HashSet<String>()
         for (e in entries.values) out += e.definitions
         out += own
-        definitionsUnion = out
+        synchronized(unionLock) { if (unionGeneration == generation) definitionsUnion = out }
         return out
     }
 
@@ -88,8 +95,8 @@ class SignalIndex(
     /** Forget everything and read the project again; returns the number of signal names found. */
     fun rebuild(): Int {
         entries.clear()
-        definitionsUnion = null
-        refreshedAt = -1
+        dropUnion()
+        refreshedAt = emptyList()
         return all().size
     }
 
@@ -111,7 +118,7 @@ class SignalIndex(
     ): Entry {
         val entry = Entry(stamp, text.length, collectSignals(text, language), collectSignalDefinitions(text, language), collectSelectors(text))
         val previous = entries.put(key, entry)
-        if (previous?.definitions != entry.definitions) definitionsUnion = null
+        if (previous?.definitions != entry.definitions) dropUnion()
         return entry
     }
 
@@ -123,19 +130,26 @@ class SignalIndex(
         ) {
             return
         }
-        // Read the project again only when something in it changed since the last read.
-        val count = PsiModificationTracker.getInstance(project).modificationCount
-        if (count == refreshedAt) return
+        // Read the project again only when something in it changed since the last read: its PSI, a file
+        // on disk (a `git pull` touches files the IDE never parsed), or the template extensions.
+        val counts =
+            listOf(
+                PsiModificationTracker.getInstance(project).modificationCount,
+                VirtualFileManager.getInstance().modificationCount,
+                StreamlordSettings.getInstance(project).tracker.modificationCount,
+            )
+        if (counts == refreshedAt) return
         val scope = GlobalSearchScope.projectScope(project)
-        val files = LinkedHashSet<VirtualFile>()
-        files += FileTypeIndex.getFiles(KotlinFileType.INSTANCE, scope)
-        files += FileTypeIndex.getFiles(HtmlFileType.INSTANCE, scope)
+        // Markup first, and the cap on what is kept rather than on what is listed: the pages that define
+        // signals must not be crowded out by Kotlin sources or by files under build directories.
+        val markup = LinkedHashSet<VirtualFile>()
+        markup += FileTypeIndex.getFiles(HtmlFileType.INSTANCE, scope)
         // A template file is markup whatever type the IDE gives it, so it is found by its extension.
-        for (extension in HTML_EXTENSIONS) files += FilenameIndex.getAllFilesByExt(project, extension, scope)
+        for (extension in markupExtensions()) markup += FilenameIndex.getAllFilesByExt(project, extension, scope)
+        val files = markup.asSequence().filter(::indexable).take(FILE_CAP) +
+            FileTypeIndex.getFiles(KotlinFileType.INSTANCE, scope).asSequence().filter(::indexable).take(FILE_CAP)
         val seen = HashSet<String>()
-        for (vf in files.take(FILE_CAP)) {
-            if (!vf.isValid || vf.isDirectory || vf.length > SIZE_CAP) continue
-            if (vf.path.split('/').any { it in SKIPPED_DIRECTORIES }) continue
+        for (vf in files) {
             val language = languageOf(vf) ?: continue
             seen += vf.path
             val document = FileDocumentManager.getInstance().getCachedDocument(vf)
@@ -146,24 +160,36 @@ class SignalIndex(
             index(vf.path, stamp, text, language)
         }
         // A file deleted, renamed or moved out of the project defines nothing any more.
-        if (entries.keys.retainAll(seen)) definitionsUnion = null
-        refreshedAt = count
+        if (entries.keys.retainAll(seen)) dropUnion()
+        refreshedAt = counts
     }
+
+    private fun indexable(vf: VirtualFile): Boolean =
+        vf.isValid && !vf.isDirectory && vf.length <= SIZE_CAP && vf.path.split('/').none { it in SKIPPED_DIRECTORIES }
+
+    private fun dropUnion() {
+        synchronized(unionLock) {
+            unionGeneration++
+            definitionsUnion = null
+        }
+    }
+
+    /** HTML's own extensions and the template extensions in the settings, which the inspections read as markup too. */
+    private fun markupExtensions(): Set<String> = HTML_EXTENSIONS + StreamlordSettings.getInstance(project).templateExtensions
 
     /** Kotlin sources and markup, as the VS Code extension reads them; a Gradle script (`.kts`) declares no signals. */
     private fun languageOf(vf: VirtualFile): SourceLanguage? =
         when (vf.fileType) {
             KotlinFileType.INSTANCE -> if (vf.extension == "kt") SourceLanguage.KOTLIN else null
             HtmlFileType.INSTANCE -> SourceLanguage.HTML
-            else -> if (vf.extension?.lowercase() in HTML_EXTENSIONS) SourceLanguage.HTML else null
+            else -> if (vf.extension?.lowercase() in markupExtensions()) SourceLanguage.HTML else null
         }
 
     companion object {
         private const val FILE_CAP = 5000
         private const val SIZE_CAP = 1_000_000L
         private val SKIPPED_DIRECTORIES = setOf("build", "node_modules", ".gradle", "dist", "out", "target")
-        private val HTML_EXTENSIONS =
-            setOf("html", "htm", "xhtml", "jte", "kte", "ftl", "ftlh", "vm", "mustache", "peb", "pebble", "twig", "hbs")
+        private val HTML_EXTENSIONS = setOf("html", "htm", "xhtml")
 
         fun getInstance(project: Project): SignalIndex = project.service()
     }

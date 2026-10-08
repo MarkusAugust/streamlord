@@ -116,6 +116,15 @@ class InspectionTest : BasePlatformTestCase() {
         assertEquals(listOf("\\\$total"), unknown())
     }
 
+    fun `test a template extension from the settings defines signals in its own file`() {
+        myFixture.configureByText(
+            "page.njk",
+            "<div data-signals:count=\"0\"><span data-text=\"\$count + \$cuont\"></span></div>",
+        )
+        val highlights = myFixture.doHighlighting().filter { it.description?.contains("defines the signal") == true }
+        assertEquals(listOf("\$cuont"), highlights.map { it.text })
+    }
+
     fun `test every issue code belongs to an inspection`() {
         val analyzer = StreamlordAnalysis.getInstance(project).analyzer
         val src =
