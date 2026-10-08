@@ -13,6 +13,11 @@ private val KOTLIN_PATTERNS =
             """\b(?:signal|set|setExpr|increment|decrement|toggle|not|dataBind|dataIndicator|dataRef|dataComputed|dataMatchMedia)\(\s*"([A-Za-z_][A-Za-z0-9_.]*)"""",
         ),
         Regex("""\bdataSignals\(\s*"([A-Za-z_][A-Za-z0-9_.]*)"\s*,"""),
+    )
+
+/** A dollar escaped in a Kotlin string: a signal read, which completion offers and a definition is not. */
+private val KOTLIN_READS =
+    listOf(
         Regex("""\$\{'\$'\}([A-Za-z_][A-Za-z0-9_.]*)"""),
         Regex("""\\\$([A-Za-z_][A-Za-z0-9_.]*)"""),
     )
@@ -25,6 +30,9 @@ private val VALUE_ATTRIBUTE = Regex("""data-(?:star-)?(?:bind|indicator|ref)(?:_
 // by hand is `data-signals='{"query": ""}'`. Inside a Kotlin string the key's quotes are escaped.
 private val OBJECT_ATTRIBUTE = Regex("""data-(?:star-)?signals(?:__[^=\s]*)?=(?:"\{([^"]*)\}"|'\{([^']*)\}')""")
 private val OBJECT_KEY = Regex("""(?:^|[{,])\s*(?:\\?["'])?([A-Za-z_][A-Za-z0-9_]*)(?:\\?["'])?\s*:""")
+
+/** `$name = ...` in an expression: Datastar creates a signal it is assigned to, so the assignment defines it. */
+private val ASSIGNED_SIGNAL = Regex("""(?:\$|\$\{'\$'\})([A-Za-z_][A-Za-z0-9_.]*)\s*=(?![=>])""")
 
 /** A bare `$name` is a signal in markup; in Kotlin it is a template, so it stays out of the Kotlin list. */
 private val BARE_SIGNAL = Regex("""\$([A-Za-z_][A-Za-z0-9_.]*)""")
@@ -56,6 +64,31 @@ public fun collectSignals(
 public fun collectDeclaredSignals(
     src: String,
     language: SourceLanguage,
+): Set<String> = collect(src, language, reads = true)
+
+/**
+ * The signals this source defines, which a `$name` in an expression is checked against: what
+ * [collectDeclaredSignals] finds without the reads (a bare `$name` in markup, a `${'$'}name` in
+ * Kotlin), plus the properties of `@Serializable` classes, which a handler patches as well as
+ * reads, and every signal an expression assigns to.
+ */
+public fun collectSignalDefinitions(
+    src: String,
+    language: SourceLanguage,
+): Set<String> {
+    val out = LinkedHashSet(collect(src, language, reads = false))
+    if (language == SourceLanguage.KOTLIN) {
+        for (properties in serializableProperties(src).values) for (property in properties) out += property.name
+    }
+    for (m in ASSIGNED_SIGNAL.findAll(src)) out += m.groupValues[1]
+    out.removeAll { PLACEHOLDER in it }
+    return out
+}
+
+private fun collect(
+    src: String,
+    language: SourceLanguage,
+    reads: Boolean,
 ): Set<String> {
     val out = LinkedHashSet<String>()
     if (language == SourceLanguage.KOTLIN) {
@@ -72,7 +105,7 @@ public fun collectDeclaredSignals(
                 }
             }
         }
-        for (re in KOTLIN_PATTERNS) for (m in re.findAll(src)) out += m.groupValues[1]
+        for (re in if (reads) KOTLIN_PATTERNS + KOTLIN_READS else KOTLIN_PATTERNS) for (m in re.findAll(src)) out += m.groupValues[1]
     }
     // A keyed attribute may carry modifiers after the key: data-signals:foo-bar__ifmissing.
     for (m in KEYED_ATTRIBUTE.findAll(src)) out += toCamel(m.groupValues[1].substringBefore("__"))
@@ -81,7 +114,7 @@ public fun collectDeclaredSignals(
         val body = m.groups[1]?.value ?: m.groupValues[2]
         for (key in OBJECT_KEY.findAll(body)) out += key.groupValues[1]
     }
-    if (language == SourceLanguage.HTML) {
+    if (reads && language == SourceLanguage.HTML) {
         for (m in BARE_SIGNAL.findAll(src)) out += toCamel(m.groupValues[1])
     }
     // The placeholder the analysis writes for a Kotlin template is never a signal, whatever file it turns up in.

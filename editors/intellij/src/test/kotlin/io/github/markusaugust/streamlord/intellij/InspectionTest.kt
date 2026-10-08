@@ -8,6 +8,7 @@ import io.github.markusaugust.streamlord.intellij.inspections.DatastarKeyCaseIns
 import io.github.markusaugust.streamlord.intellij.inspections.InspectionCodes
 import io.github.markusaugust.streamlord.intellij.inspections.KotlinInterpolationInspection
 import io.github.markusaugust.streamlord.intellij.inspections.StreamlordMarkupInspection
+import io.github.markusaugust.streamlord.intellij.inspections.UnknownSignalInspection
 
 class InspectionTest : BasePlatformTestCase() {
     override fun setUp() {
@@ -18,6 +19,7 @@ class InspectionTest : BasePlatformTestCase() {
             DatastarAttributeInspection(),
             DatastarKeyCaseInspection(),
             StreamlordMarkupInspection(),
+            UnknownSignalInspection(),
         )
     }
 
@@ -81,6 +83,26 @@ class InspectionTest : BasePlatformTestCase() {
         )
         myFixture.configureByText("Theirs.kt", "fun f() = patchElements(\"<div>no id</div>\")")
         assertEquals(1, myFixture.doHighlighting().count { it.description?.contains("has no id") == true })
+    }
+
+    fun `test a signal no file defines is a warning`() {
+        val q = "\"\"\""
+        myFixture.configureByText(
+            "Demo.kt",
+            "fun f(): String = \$\$$q<div data-signals:teller=\"0\"><button data-on:click=\"\$telefon++\">x</button>" +
+                "<span data-text=\"\$teller\"></span></div>$q",
+        )
+        val highlights = myFixture.doHighlighting().filter { it.description?.contains("defines the signal") == true }
+        assertEquals(listOf("\$telefon"), highlights.map { it.text })
+    }
+
+    fun `test a signal another file defines is known, and a near one is the fix`() {
+        myFixture.addFileToProject("page.html", "<div data-signals:count=\"0\"></div>")
+        myFixture.configureByText("Routes.kt", "fun f() { dataText(\"\\\$count + \\\$coutn\") }")
+        val highlights = myFixture.doHighlighting().filter { it.description?.contains("defines the signal") == true }
+        assertEquals(listOf("\\\$coutn"), highlights.map { it.text })
+        myFixture.launchAction(myFixture.getAllQuickFixes().first { it.text == "Change to \$count" })
+        myFixture.checkResult("fun f() { dataText(\"\\\$count + \\\$count\") }")
     }
 
     fun `test every issue code belongs to an inspection`() {

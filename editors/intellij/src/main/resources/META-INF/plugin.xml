@@ -131,6 +131,13 @@
             level="WARNING"
             implementationClass="io.github.markusaugust.streamlord.intellij.inspections.DatastarAttributeInspection" />
         <localInspection
+            shortName="UnknownSignalInspection"
+            displayName="Signal no file defines"
+            groupName="Streamlord"
+            enabledByDefault="true"
+            level="WARNING"
+            implementationClass="io.github.markusaugust.streamlord.intellij.inspections.UnknownSignalInspection" />
+        <localInspection
             shortName="DatastarKeyCaseInspection"
             displayName="Datastar key casing"
             groupName="Streamlord"

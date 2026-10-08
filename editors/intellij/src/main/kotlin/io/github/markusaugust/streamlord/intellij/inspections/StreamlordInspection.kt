@@ -13,7 +13,9 @@ import com.intellij.psi.PsiFile
 import io.github.markusaugust.streamlord.analysis.Fix
 import io.github.markusaugust.streamlord.analysis.Issue
 import io.github.markusaugust.streamlord.analysis.Severity
+import io.github.markusaugust.streamlord.analysis.unknownSignalIssue
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
+import io.github.markusaugust.streamlord.intellij.index.SignalIndex
 import org.jetbrains.kotlin.psi.KtFile
 
 /**
@@ -24,18 +26,22 @@ import org.jetbrains.kotlin.psi.KtFile
 abstract class StreamlordInspection(
     private val codes: Set<String>,
 ) : LocalInspectionTool() {
+    /** The issues of the file, or null when the file is neither Kotlin nor markup. */
+    protected open fun issues(file: PsiFile): List<Issue>? {
+        val analysis = StreamlordAnalysis.getInstance(file.project)
+        return when {
+            file is KtFile -> analysis.kotlinIssues(file).flatMap { it.issues }
+            StreamlordAnalysis.isMarkupSide(file) -> analysis.htmlIssues(file)
+            else -> null
+        }
+    }
+
     override fun checkFile(
         file: PsiFile,
         manager: InspectionManager,
         isOnTheFly: Boolean,
     ): Array<ProblemDescriptor> {
-        val analysis = StreamlordAnalysis.getInstance(file.project)
-        val issues =
-            when {
-                file is KtFile -> analysis.kotlinIssues(file).flatMap { it.issues }
-                StreamlordAnalysis.isMarkupSide(file) -> analysis.htmlIssues(file)
-                else -> return ProblemDescriptor.EMPTY_ARRAY
-            }
+        val issues = issues(file) ?: return ProblemDescriptor.EMPTY_ARRAY
         val length = file.textLength
         return issues
             .filter { it.code in codes && it.start < length }
@@ -114,6 +120,27 @@ class DatastarAttributeInspection :
         ),
     )
 
+/**
+ * A `$name` no file in the project defines: a misspelt signal, or one renamed on one side only.
+ * The analysis finds what each expression reads; the project index says what is defined, from
+ * every Kotlin and markup file. Not run while the IDE indexes, when the index is not complete.
+ */
+class UnknownSignalInspection : StreamlordInspection(setOf("unknown-signal")) {
+    override fun issues(file: PsiFile): List<Issue>? {
+        val analysis = StreamlordAnalysis.getInstance(file.project)
+        val refs =
+            when {
+                file is KtFile -> analysis.kotlinSignalReferences(file)
+                StreamlordAnalysis.isMarkupSide(file) -> analysis.htmlSignalReferences(file)
+                else -> return null
+            }
+        if (refs.isEmpty()) return emptyList()
+        val index = SignalIndex.getInstance(file.project)
+        val defined = index.definitionsForFile(file) + index.allDefinitions()
+        return refs.mapNotNull { unknownSignalIssue(it, defined) }
+    }
+}
+
 /** Capitals in keys, which the browser lowercases, and what the DSL writes on the wire. */
 class DatastarKeyCaseInspection : StreamlordInspection(setOf("key-case", "key-case-wire"))
 
@@ -136,6 +163,7 @@ class StreamlordMarkupInspection :
 object InspectionCodes {
     val all: Set<String> =
         setOf("kotlin-interpolation") +
+            setOf("unknown-signal") +
             setOf("expression-syntax", "empty-expression", "unknown-action", "action-space", "pro-action", "signal-kebab") +
             setOf(
                 "unknown-attribute",

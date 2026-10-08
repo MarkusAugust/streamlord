@@ -12,6 +12,7 @@ import com.intellij.psi.search.GlobalSearchScope
 import io.github.markusaugust.streamlord.analysis.Selectors
 import io.github.markusaugust.streamlord.analysis.SourceLanguage
 import io.github.markusaugust.streamlord.analysis.collectSelectors
+import io.github.markusaugust.streamlord.analysis.collectSignalDefinitions
 import io.github.markusaugust.streamlord.analysis.collectSignals
 import org.jetbrains.kotlin.idea.KotlinFileType
 import java.util.concurrent.ConcurrentHashMap
@@ -29,6 +30,7 @@ class SignalIndex(
         val stamp: Long,
         val length: Int,
         val signals: Set<String>,
+        val definitions: Set<String>,
         val selectors: Selectors,
     )
 
@@ -37,6 +39,9 @@ class SignalIndex(
     /** The names declared in one file, from its current text. */
     fun forFile(file: PsiFile): Set<String> = entryFor(file)?.signals ?: emptySet()
 
+    /** The names one file defines, which a `$name` is checked against: no reads, as [forFile] has. */
+    fun definitionsForFile(file: PsiFile): Set<String> = entryFor(file)?.definitions ?: emptySet()
+
     fun selectorsForFile(file: PsiFile): Selectors = entryFor(file)?.selectors ?: Selectors.EMPTY
 
     /** Every signal name declared anywhere in the project. */
@@ -44,6 +49,14 @@ class SignalIndex(
         refresh()
         val out = LinkedHashSet<String>()
         for (e in entries.values) out += e.signals
+        return out
+    }
+
+    /** Every signal name defined anywhere in the project. */
+    fun allDefinitions(): Set<String> {
+        refresh()
+        val out = HashSet<String>()
+        for (e in entries.values) out += e.definitions
         return out
     }
 
@@ -80,7 +93,7 @@ class SignalIndex(
         text: String,
         language: SourceLanguage,
     ): Entry {
-        val entry = Entry(stamp, text.length, collectSignals(text, language), collectSelectors(text))
+        val entry = Entry(stamp, text.length, collectSignals(text, language), collectSignalDefinitions(text, language), collectSelectors(text))
         entries[key] = entry
         return entry
     }

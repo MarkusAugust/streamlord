@@ -8,6 +8,12 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Added
 
+- `streamlord-analysis`: `signalReferencesInKotlin` and `signalReferencesInHtml`, every `$name` a
+  Datastar expression reads, with source offsets; `collectSignalDefinitions`, the signals a file
+  defines without the ones it only reads, plus every `$name = ...` an expression assigns; and
+  `unknownSignalIssue`, the `unknown-signal` warning for a read no definition covers, with the
+  nearest defined name as the fix. `isKnownSignal` counts `$user.name` as known when `user` is
+  defined, and `$form` when `form.email` is.
 - `streamlord-analysis`: `ServerLog`, which reads where a server says it started from its log
   (Spring Boot's Tomcat, Jetty, Undertow and Netty lines in 3.5 and 4.0, Ktor's "Responding at"),
   context path included, and which lines are warnings or errors; `RunningServer`.

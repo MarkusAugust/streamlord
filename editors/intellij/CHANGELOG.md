@@ -2,6 +2,15 @@
 
 All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here.
 
+## Unreleased
+
+- A signal no file in the project defines is a warning: `data-on:click="$telefon++"` on a page
+  whose `data-signals:teller` declares `$teller` is underlined, where only the spell checker had
+  something to say before. A defined name that is close, such as `$count` for `$coutn`, is the
+  quick fix. Definitions are read from every Kotlin and markup file, as completion reads its
+  names; a signal the index cannot see, set from a script, is reported too, and the inspection
+  (Streamlord › Signal no file defines) can be turned off.
+
 ## 0.4.0
 
 - Stream Inspector: `{{baseUrl}}` follows the server you started from a run configuration. The

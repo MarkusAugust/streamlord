@@ -12,6 +12,7 @@ import io.github.markusaugust.streamlord.analysis.AnalyzeOptions
 import io.github.markusaugust.streamlord.analysis.Analyzer
 import io.github.markusaugust.streamlord.analysis.Catalog
 import io.github.markusaugust.streamlord.analysis.Issue
+import io.github.markusaugust.streamlord.analysis.SignalReference
 import io.github.markusaugust.streamlord.analysis.SiteIssues
 import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
 import org.jetbrains.kotlin.psi.KtFile
@@ -46,6 +47,20 @@ class StreamlordAnalysis(
     fun htmlIssues(file: PsiFile): List<Issue> =
         CachedValuesManager.getCachedValue(file) {
             CachedValueProvider.Result.create(analyzer.analyzeHtml(file.text, options()), file, settings.tracker)
+        }
+
+    /** The signals the expressions of a Kotlin file read, with calls that resolve to something other than Streamlord left out. */
+    fun kotlinSignalReferences(file: KtFile): List<SignalReference> =
+        CachedValuesManager.getCachedValue(file) {
+            val refs = analyzer.signalReferencesInKotlin(file.text, options())
+            val kept = refs.filter { r -> r.site?.let { StreamlordResolve.mayBeStreamlord(file, it) } ?: true }
+            CachedValueProvider.Result.create(kept, file, settings.tracker)
+        }
+
+    /** The signals the expressions of an HTML document or template read. */
+    fun htmlSignalReferences(file: PsiFile): List<SignalReference> =
+        CachedValuesManager.getCachedValue(file) {
+            CachedValueProvider.Result.create(analyzer.signalReferencesInHtml(file.text, options()), file, settings.tracker)
         }
 
     companion object {
