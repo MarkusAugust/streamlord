@@ -11,9 +11,8 @@ import { RequestStore } from "./requestStore.ts";
 import { RouteLensProvider } from "./routeLens.ts";
 import type { Route } from "./routes.ts";
 import { RunningServers } from "./serverLog.ts";
-import { signalReferencesInHtml, signalReferencesInKotlin, unknownSignalIssue } from "./signalReferences.ts";
+import { signalReferencesInHtml, signalReferencesInKotlin, unknownSignalIssue, type SignalReference } from "./signalReferences.ts";
 import { SignalIndex } from "./signalIndex.ts";
-import { collectSignalDefinitions } from "./signals.ts";
 
 /** Languages that get HTML-side support, from the setting; Kotlin always gets the Kotlin side. */
 function markupLanguages(): string[] {
@@ -28,7 +27,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const issues = new IssueStore();
 
   const diagnostics = vscode.languages.createDiagnosticCollection("streamlord");
-  const signals = new SignalIndex();
+  const signals = new SignalIndex(markup);
   const running = new RunningServers();
   // A debug session's output is the one an extension may read, so that is where a server is seen to start.
   context.subscriptions.push(
@@ -54,10 +53,10 @@ export function activate(context: vscode.ExtensionContext): void {
     const text = document.getText();
     if (document.languageId === "kotlin") {
       found = analyzeKotlin(text, { prefix: prefix(), checkHtmlAttributes: true });
-      found.push(...unknownSignals(signalReferencesInKotlin(text, prefix()), collectSignalDefinitions(text, "kotlin")));
+      found.push(...unknownSignals(document, signalReferencesInKotlin(text, prefix())));
     } else if (markup.has(document.languageId) && config().get<boolean>("diagnostics.html", true)) {
       found = analyzeHtml(text, { prefix: prefix(), checkHtmlAttributes: true });
-      found.push(...unknownSignals(signalReferencesInHtml(text, prefix()), collectSignalDefinitions(text, "html")));
+      found.push(...unknownSignals(document, signalReferencesInHtml(text, prefix())));
     } else {
       diagnostics.delete(document.uri);
       issues.delete(document.uri);
@@ -76,10 +75,11 @@ export function activate(context: vscode.ExtensionContext): void {
   };
 
   /** A `$name` no file defines. Quiet until the workspace has been read once, and when turned off. */
-  const unknownSignals = (refs: ReturnType<typeof signalReferencesInHtml>, here: Set<string>): Issue[] => {
+  const unknownSignals = (document: vscode.TextDocument, refs: SignalReference[]): Issue[] => {
     if (refs.length === 0 || !signals.ready || !config().get<boolean>("diagnostics.unknownSignals", true)) return [];
+    // The index reads this version of the document once; a lint right after an edit finds it read.
+    signals.update(document);
     const defined = signals.allDefinitions();
-    for (const n of here) defined.add(n);
     return refs.flatMap((r) => unknownSignalIssue(r, defined) ?? []);
   };
 
@@ -97,6 +97,8 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.languages.registerCodeLensProvider({ language: "kotlin" }, new RouteLensProvider()),
     vscode.commands.registerCommand("streamlord.inspector.openWith", (route: Route) => inspector.openWithRoute(route)),
     vscode.workspace.onDidOpenTextDocument(schedule),
+    // A signal defined or removed in one file changes what the others may read; the first read of the workspace is such a change.
+    signals.onDidChangeDefinitions(() => vscode.workspace.textDocuments.forEach(schedule)),
     vscode.workspace.onDidChangeTextDocument((e) => schedule(e.document)),
     vscode.workspace.onDidCloseTextDocument((d) => {
       diagnostics.delete(d.uri);
@@ -114,14 +116,12 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("streamlord.colors.remove", () => removeRecommendedColors()),
     vscode.commands.registerCommand("streamlord.reindexSignals", async () => {
       const n = await signals.rebuild();
-      vscode.workspace.textDocuments.forEach(schedule);
       void vscode.window.showInformationMessage(`Streamlord: indexed ${n} signal names.`);
     }),
   );
 
   vscode.workspace.textDocuments.forEach(schedule);
-  // The first lint ran without the index; once it is read, a signal another file defines is known.
-  void signals.rebuild().then(() => vscode.workspace.textDocuments.forEach(schedule));
+  void signals.rebuild();
 }
 
 export function deactivate(): void {

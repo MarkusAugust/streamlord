@@ -105,6 +105,17 @@ class InspectionTest : BasePlatformTestCase() {
         myFixture.checkResult("fun f() { dataText(\"\\\$count + \\\$count\") }")
     }
 
+    fun `test a template file defines signals, and a deleted file no longer does`() {
+        myFixture.addFileToProject("search.peb", "<input data-bind:query>")
+        val page = myFixture.addFileToProject("page.html", "<div data-signals:total=\"0\"></div>")
+        myFixture.configureByText("Routes.kt", "fun f() { dataText(\"\\\$query + \\\$total\") }")
+        val unknown = { myFixture.doHighlighting().filter { it.description?.contains("defines the signal") == true }.map { it.text } }
+        assertEquals(emptyList<String>(), unknown())
+        com.intellij.openapi.command.WriteCommandAction
+            .runWriteCommandAction(project) { page.virtualFile.delete(this) }
+        assertEquals(listOf("\\\$total"), unknown())
+    }
+
     fun `test every issue code belongs to an inspection`() {
         val analyzer = StreamlordAnalysis.getInstance(project).analyzer
         val src =

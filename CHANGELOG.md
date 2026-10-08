@@ -23,6 +23,12 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Changed
 
+- `streamlord-analysis`, for both editors: signal collection, for completion, `signalDrift` and
+  the new check alike, honours `__case` on a keyed attribute (`data-signals:my-value__case.snake`
+  is `my_value`, `__case.pascal` gives `MyValue`) and reads the keys of JSON text handed to
+  `patchSignals`, as in `patchSignals("""{"count": 1}""")`. `keyName(key, case)` names the
+  signal a key declares.
+
 - `streamlord-analysis`, for both editors: `Route` carries the `query` parameters and `headers`
   its handler reads, as `RouteParam`s that say whether they are required: Spring's
   `@RequestParam` and `@RequestHeader` from the parameter list, and Ktor's

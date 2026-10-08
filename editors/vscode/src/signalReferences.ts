@@ -1,5 +1,5 @@
 import { ALL_SITE_NAMES, lexCached, markupString } from "./analyze.ts";
-import { catalog, parseAttributeName } from "./catalog.ts";
+import { catalog, distance, parseAttributeName } from "./catalog.ts";
 import { DOCS, jsCodeMask, type Issue } from "./expression.ts";
 import { PLACEHOLDER, toSource, type KotlinString } from "./kotlinStrings.ts";
 import { asciiLowercase, decodeEntities, hasTemplateSyntax, tokenize } from "./markup.ts";
@@ -112,10 +112,10 @@ export function nearestSignal(name: string, defined: ReadonlySet<string>): strin
   let bestDistance = Infinity;
   for (const d of defined) {
     if (d === name) continue;
-    const distance = editDistance(name.toLowerCase(), d.toLowerCase());
-    if (distance <= limit && distance < bestDistance) {
+    const far = distance(name.toLowerCase(), d.toLowerCase());
+    if (far <= limit && far < bestDistance) {
       best = d;
-      bestDistance = distance;
+      bestDistance = far;
     }
   }
   return best;
@@ -139,14 +139,4 @@ export function unknownSignalIssue(ref: SignalReference, defined: ReadonlySet<st
     link: DOCS.signals,
     fixes: near ? [{ title: `Change to $${near}`, start: nameStart, end: nameStart + misspelt.length, text: near }] : undefined,
   };
-}
-
-function editDistance(a: string, b: string): number {
-  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
-  for (let i = 1; i <= a.length; i++) {
-    const cur = [i];
-    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j]! + 1, cur[j - 1]! + 1, prev[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1));
-    prev = cur;
-  }
-  return prev[b.length]!;
 }

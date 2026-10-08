@@ -29,6 +29,8 @@ internal fun expressionSignalReferences(text: String): List<SignalReference> {
         // `${'$'}count` reads as an escape token and then a signal token holding the name alone.
         val start = tokens.getOrNull(i - 1)?.takeIf { it.kind == TokenKind.KOTLIN_DOLLAR_ESCAPE && it.end == t.start }?.start ?: t.start
         val end = path?.end ?: t.end
+        // `foo$bar` and `$$x` are JavaScript identifiers that hold a dollar, not signals.
+        if (text.getOrNull(start - 1)?.let { it.isIdentPart() || it == '$' } == true) continue
         if (text.getOrNull(end) == '-' && text.getOrNull(end + 1)?.let { it.isLetterOrDigit() || it == '_' } == true) continue
         val name = head + (path?.let { text.substring(it.start, it.end) } ?: "")
         if (PLACEHOLDER in name) continue
@@ -87,7 +89,7 @@ public fun nearestSignal(
     return defined
         .asSequence()
         .filter { it != name }
-        .map { it to editDistance(name.lowercase(), it.lowercase()) }
+        .map { it to distance(name.lowercase(), it.lowercase()) }
         .filter { it.second <= limit }
         .minByOrNull { it.second }
         ?.first
@@ -116,20 +118,4 @@ public fun unknownSignalIssue(
         link = Docs.SIGNALS,
         fixes = near?.let { listOf(Fix("Change to \$$it", nameStart, nameStart + misspelt.length, it)) } ?: emptyList(),
     )
-}
-
-private fun editDistance(
-    a: String,
-    b: String,
-): Int {
-    var prev = IntArray(b.length + 1) { it }
-    for (i in 1..a.length) {
-        val cur = IntArray(b.length + 1)
-        cur[0] = i
-        for (j in 1..b.length) {
-            cur[j] = minOf(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + if (a[i - 1] == b[j - 1]) 0 else 1)
-        }
-        prev = cur
-    }
-    return prev[b.length]
 }

@@ -10,6 +10,9 @@ All notable changes to the Streamlord extension are recorded here.
   file, as completion reads its names, and the check waits until the workspace has been read
   once. A signal set only from a script is reported too; `streamlord.diagnostics.unknownSignals`
   turns the check off.
+- Signal completion honours `__case` (`data-signals:my-value__case.snake` offers `$my_value`), and
+  reads template files (`.jte`, `.peb`, `.hbs` and the rest) across the project, not only the ones
+  that are open.
 
 ## 0.6.0
 

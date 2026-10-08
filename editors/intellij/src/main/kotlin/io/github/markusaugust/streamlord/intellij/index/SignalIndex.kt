@@ -8,7 +8,9 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiFile
 import com.intellij.psi.search.FileTypeIndex
+import com.intellij.psi.search.FilenameIndex
 import com.intellij.psi.search.GlobalSearchScope
+import com.intellij.psi.util.PsiModificationTracker
 import io.github.markusaugust.streamlord.analysis.Selectors
 import io.github.markusaugust.streamlord.analysis.SourceLanguage
 import io.github.markusaugust.streamlord.analysis.collectSelectors
@@ -36,11 +38,16 @@ class SignalIndex(
 
     private val entries = ConcurrentHashMap<String, Entry>()
 
+    /** The union of every entry's definitions, dropped whenever an entry's definitions change or an entry goes. */
+    @Volatile
+    private var definitionsUnion: Set<String>? = null
+
+    /** The PSI modification count of the last full read, so a pass over many files reads the project once. */
+    @Volatile
+    private var refreshedAt = -1L
+
     /** The names declared in one file, from its current text. */
     fun forFile(file: PsiFile): Set<String> = entryFor(file)?.signals ?: emptySet()
-
-    /** The names one file defines, which a `$name` is checked against: no reads, as [forFile] has. */
-    fun definitionsForFile(file: PsiFile): Set<String> = entryFor(file)?.definitions ?: emptySet()
 
     fun selectorsForFile(file: PsiFile): Selectors = entryFor(file)?.selectors ?: Selectors.EMPTY
 
@@ -52,11 +59,18 @@ class SignalIndex(
         return out
     }
 
-    /** Every signal name defined anywhere in the project. */
-    fun allDefinitions(): Set<String> {
+    /**
+     * Every signal name defined anywhere in the project, [file] read from its current text: what a
+     * `$name` is checked against. No reads, as [all] has. Cached until a definition changes.
+     */
+    fun definitionsSeenFrom(file: PsiFile): Set<String> {
         refresh()
+        val own = entryFor(file)?.definitions ?: emptySet()
+        definitionsUnion?.let { if (it.containsAll(own)) return it }
         val out = HashSet<String>()
         for (e in entries.values) out += e.definitions
+        out += own
+        definitionsUnion = out
         return out
     }
 
@@ -74,6 +88,8 @@ class SignalIndex(
     /** Forget everything and read the project again; returns the number of signal names found. */
     fun rebuild(): Int {
         entries.clear()
+        definitionsUnion = null
+        refreshedAt = -1
         return all().size
     }
 
@@ -94,7 +110,8 @@ class SignalIndex(
         language: SourceLanguage,
     ): Entry {
         val entry = Entry(stamp, text.length, collectSignals(text, language), collectSignalDefinitions(text, language), collectSelectors(text))
-        entries[key] = entry
+        val previous = entries.put(key, entry)
+        if (previous?.definitions != entry.definitions) definitionsUnion = null
         return entry
     }
 
@@ -106,14 +123,21 @@ class SignalIndex(
         ) {
             return
         }
+        // Read the project again only when something in it changed since the last read.
+        val count = PsiModificationTracker.getInstance(project).modificationCount
+        if (count == refreshedAt) return
         val scope = GlobalSearchScope.projectScope(project)
-        val files = ArrayList<VirtualFile>()
+        val files = LinkedHashSet<VirtualFile>()
         files += FileTypeIndex.getFiles(KotlinFileType.INSTANCE, scope)
         files += FileTypeIndex.getFiles(HtmlFileType.INSTANCE, scope)
+        // A template file is markup whatever type the IDE gives it, so it is found by its extension.
+        for (extension in HTML_EXTENSIONS) files += FilenameIndex.getAllFilesByExt(project, extension, scope)
+        val seen = HashSet<String>()
         for (vf in files.take(FILE_CAP)) {
             if (!vf.isValid || vf.isDirectory || vf.length > SIZE_CAP) continue
             if (vf.path.split('/').any { it in SKIPPED_DIRECTORIES }) continue
             val language = languageOf(vf) ?: continue
+            seen += vf.path
             val document = FileDocumentManager.getInstance().getCachedDocument(vf)
             val stamp = document?.modificationStamp ?: vf.modificationStamp
             val cached = entries[vf.path]
@@ -121,6 +145,9 @@ class SignalIndex(
             val text = document?.text ?: runCatching { String(vf.contentsToByteArray(), vf.charset) }.getOrNull() ?: continue
             index(vf.path, stamp, text, language)
         }
+        // A file deleted, renamed or moved out of the project defines nothing any more.
+        if (entries.keys.retainAll(seen)) definitionsUnion = null
+        refreshedAt = count
     }
 
     /** Kotlin sources and markup, as the VS Code extension reads them; a Gradle script (`.kts`) declares no signals. */

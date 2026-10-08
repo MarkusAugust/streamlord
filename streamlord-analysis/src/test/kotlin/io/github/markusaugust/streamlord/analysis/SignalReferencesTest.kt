@@ -100,6 +100,28 @@ class SignalReferencesTest {
     }
 
     @Test
+    fun `a dollar inside a javascript identifier is not a signal`() {
+        val html = "<button data-on:click=\"foo\$bar() + \$\$x\"></button>"
+        assertEquals(emptyList(), analyzer.signalReferencesInHtml(html))
+    }
+
+    @Test
+    fun `a case modifier names the signal`() {
+        val html =
+            "<div data-signals:my-value__case.snake=\"1\" data-signals:big-box__case.pascal=\"1\" data-signals:plain-key=\"1\">" +
+                "<span data-text=\"\$my_value + \$BigBox + \$plainKey\"></span></div>"
+        assertEquals(emptyList(), unknown(html, SourceLanguage.HTML))
+        assertEquals(setOf("my_value", "BigBox", "plainKey"), collectSignalDefinitions(html, SourceLanguage.HTML))
+    }
+
+    @Test
+    fun `json text handed to patchSignals defines its keys`() {
+        val q = "\"\"\""
+        val src = "fun f() { sse.patchSignals($q{\"count\": 1, \"form\": {\"email\": \"\"}}$q) }"
+        assertEquals(setOf("count", "form", "email"), collectSignalDefinitions(src, SourceLanguage.KOTLIN))
+    }
+
+    @Test
     fun `no fix when nothing is close`() {
         assertNull(nearestSignal("telefon", setOf("teller")))
         assertEquals("teller", nearestSignal("telelr", setOf("teller", "total")))

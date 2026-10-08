@@ -135,8 +135,7 @@ class UnknownSignalInspection : StreamlordInspection(setOf("unknown-signal")) {
                 else -> return null
             }
         if (refs.isEmpty()) return emptyList()
-        val index = SignalIndex.getInstance(file.project)
-        val defined = index.definitionsForFile(file) + index.allDefinitions()
+        val defined = SignalIndex.getInstance(file.project).definitionsSeenFrom(file)
         return refs.mapNotNull { unknownSignalIssue(it, defined) }
     }
 }

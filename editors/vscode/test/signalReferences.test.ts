@@ -80,6 +80,23 @@ fun f() { patchSignals("total" to 1); dataText("\${'$'}query + \${'$'}total") }`
     assert.deepEqual(unknown(src), []);
   });
 
+  it("a dollar inside a javascript identifier is not a signal", () => {
+    assert.deepEqual(signalReferencesInHtml(`<button data-on:click="foo$bar() + $$x"></button>`, "data-"), []);
+  });
+
+  it("a case modifier names the signal", () => {
+    const html =
+      `<div data-signals:my-value__case.snake="1" data-signals:big-box__case.pascal="1" data-signals:plain-key="1">` +
+      `<span data-text="$my_value + $BigBox + $plainKey"></span></div>`;
+    assert.deepEqual(unknown(html, "html"), []);
+    assert.deepEqual([...collectSignalDefinitions(html, "html")].sort(), ["BigBox", "my_value", "plainKey"]);
+  });
+
+  it("json text handed to patchSignals defines its keys", () => {
+    const src = 'fun f() { sse.patchSignals("""{"count": 1, "form": {"email": ""}}""") }';
+    assert.deepEqual([...collectSignalDefinitions(src, "kotlin")].sort(), ["count", "email", "form"]);
+  });
+
   it("no fix when nothing is close", () => {
     assert.equal(nearestSignal("telefon", new Set(["teller"])), null);
     assert.equal(nearestSignal("telelr", new Set(["teller", "total"])), "teller");

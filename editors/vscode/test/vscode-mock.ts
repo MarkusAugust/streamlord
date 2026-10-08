@@ -137,9 +137,10 @@ export const workspace = {
   onDidSaveTextDocument: noop,
   onDidChangeTextDocument: noop,
   onDidDeleteFiles: noop,
+  onDidRenameFiles: noop,
   onDidChangeConfiguration: noop,
   createFileSystemWatcher: () => ({ onDidChange: noop, onDidCreate: noop, onDidDelete: noop, dispose: () => {} }),
-  findFiles: async () => [],
+  findFiles: async (): Promise<MockUri[]> => [],
   workspaceFolders: undefined as { uri: MockUri }[] | undefined,
   textDocuments: [] as OpenDocument[],
   applyEdit: async (edit: WorkspaceEdit) => {
