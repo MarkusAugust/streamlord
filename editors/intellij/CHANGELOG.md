@@ -2,7 +2,7 @@
 
 All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here.
 
-## Unreleased
+## 0.5.0
 
 - A signal no file in the project defines is a warning: `data-on:click="$telefon++"` on a page
   whose `data-signals:teller` declares `$teller` is underlined, where only the spell checker had

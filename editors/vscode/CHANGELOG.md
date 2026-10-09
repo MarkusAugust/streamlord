@@ -2,7 +2,7 @@
 
 All notable changes to the Streamlord extension are recorded here.
 
-## Unreleased
+## 0.7.0
 
 - A signal no file in the workspace defines is a warning: `data-on:click="$telefon++"` on a page
   whose `data-signals:teller` declares `$teller` is underlined. A defined name that is close, such
