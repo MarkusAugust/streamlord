@@ -138,6 +138,53 @@ get("/feed") {
 A signal patched to `null` is **removed**, because signal patches are RFC 7386 merge patches. That
 is not a quirk of Streamlord; it is what the protocol says, and it is how you delete.
 
+## Signals that stay in the browser
+
+Not every signal is for the server. Whether a drawer is showing, which row the cursor is on, a
+draft the reader has not sent yet: these are state the page needs and no handler reads.
+
+Start the name with an underscore and it stays behind. Every action sends the store through a
+filter whose default excludes `/(^|\.)_/`, so `_drawerOpen` never travels, and neither does
+`form._draft`:
+
+```kotlin sample=html
+div {
+    dataSignals("_drawerOpen" to false, "query" to "")
+    button {
+        dataOnClick(toggle("_drawerOpen"))
+        +"Menu"
+    }
+    input { dataBind("query") }
+    button {
+        dataOnClick(post("/search"))
+        +"Search"
+    }
+}
+```
+
+The `@post` carries `query` and nothing else. A handler cannot trust what was never sent, so an
+underscore is also the cheapest way to keep a request small and its input surface smaller.
+
+Two options narrow it further, per action. `filterSignals` picks from the store by name, and
+`payloadExpr` sends a value of your own instead of the store:
+
+```kotlin sample=html
+div {
+    button {
+        dataOnClick(post("/cart") { filterSignals = SignalFilter.include("^cart\\.") })
+        +"Save cart"
+    }
+    button {
+        dataOnClick(post("/rows/delete") { payloadExpr = "{ids: \$selected}" })
+        +"Delete"
+    }
+}
+```
+
+The client fills each half of the filter on its own: set only `include`, and the default
+`exclude` still keeps the underscored names home. `payloadExpr` sends exactly the expression's
+value, so `readSignals()` on `/rows/delete` sees `ids` and nothing else.
+
 ## The size limit
 
 Incoming signals are capped at 1 MiB by default, and the cap is applied *while reading*. A
