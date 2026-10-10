@@ -589,11 +589,13 @@ public abstract interface class io/github/markusaugust/streamlord/core/port/driv
 	public fun patchSignals-51bEbmg ([Lkotlin/Pair;ZLjava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun patchSignals-51bEbmg$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;ZLjava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public static synthetic fun patchSignals-51bEbmg$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;[Lkotlin/Pair;ZLjava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public fun pushUrl (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun redirect (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun removeElements-51bEbmg (Ljava/lang/String;ZLjava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun removeElements-51bEbmg$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;ZLjava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public fun removeSignals-5_5nbZA ([Ljava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun removeSignals-5_5nbZA$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;[Ljava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public fun replaceUrl (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun send (Lio/github/markusaugust/streamlord/core/domain/DatastarEvent;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun sendAll (Lkotlinx/coroutines/flow/Flow;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
@@ -608,17 +610,14 @@ public final class io/github/markusaugust/streamlord/core/port/driving/DatastarS
 	public static fun patchSignals-51bEbmg (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;[Lkotlin/Pair;ZLjava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun patchSignals-51bEbmg$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;ZLjava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public static synthetic fun patchSignals-51bEbmg$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;[Lkotlin/Pair;ZLjava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static fun pushUrl (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static fun redirect (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static fun removeElements-51bEbmg (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;ZLjava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun removeElements-51bEbmg$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;ZLjava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public static fun removeSignals-5_5nbZA (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;[Ljava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun removeSignals-5_5nbZA$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;[Ljava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static fun replaceUrl (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static fun sendAll (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Lkotlinx/coroutines/flow/Flow;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-}
-
-public final class io/github/markusaugust/streamlord/core/port/driving/DatastarStreamKt {
-	public static final fun pushUrl (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public static final fun replaceUrl (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class io/github/markusaugust/streamlord/core/protocol/DatastarAttributes {

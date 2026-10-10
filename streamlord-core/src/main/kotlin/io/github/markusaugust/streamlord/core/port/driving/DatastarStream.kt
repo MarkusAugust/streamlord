@@ -136,6 +136,36 @@ public interface DatastarStream {
     public suspend fun redirect(url: String) {
         executeScript("setTimeout(() => { window.location.href = ${JsonWriter.writeString(url)} })")
     }
+
+    /**
+     * Put [url] in the address bar without loading it, replacing the current history entry.
+     *
+     * For a page whose state the server owns: a filter, a search, a selected row. The server
+     * builds the canonical URL once, from the same state it rendered, and the reader can
+     * bookmark, share or reload it, provided the route answers a plain request with the page.
+     * The back button is not affected, which is what a filter that changes on every keystroke
+     * wants. The history entry's state is kept, for any script that stored one there.
+     *
+     * The URL is quoted as [redirect] quotes it. The browser refuses a URL of another origin with
+     * a `SecurityError`, so pass a path, or an absolute URL on the page's own origin.
+     */
+    public suspend fun replaceUrl(url: String) {
+        executeScript("window.history.replaceState(window.history.state, '', ${JsonWriter.writeString(url)})")
+    }
+
+    /**
+     * Put [url] in the address bar without loading it, as a new history entry.
+     *
+     * Back then returns to the previous URL without reloading, and the page hears it as a
+     * `popstate` on `window`. A page that pushes URLs listens for it and asks the server to render
+     * the URL it has returned to; that answer replaces or keeps the URL and never pushes it again,
+     * or Back would only ever lead forward. The new entry carries no state; Datastar keeps none.
+     *
+     * Quoted and refused as for [replaceUrl].
+     */
+    public suspend fun pushUrl(url: String) {
+        executeScript("window.history.pushState(null, '', ${JsonWriter.writeString(url)})")
+    }
 }
 
 /**
@@ -151,31 +181,3 @@ public suspend inline fun <reified T> DatastarStream.patchSignals(
     patchSignals(codec.encode(value, typeOf<T>()), onlyIfMissing, eventId, retry)
 }
 
-/**
- * Put [url] in the address bar without loading it, replacing the current history entry.
- *
- * For a page whose state the server owns: a filter, a search, a selected row. The server builds
- * the canonical URL once, from the same state it rendered, and the reader can bookmark, share or
- * reload it; the browser's own code never learns how a URL is put together. The back button is
- * not affected, which is what a filter that changes on every keystroke wants.
- *
- * The URL is quoted as a JavaScript string, as [DatastarStream.redirect] quotes it. The browser
- * refuses a URL of another origin with a `SecurityError`, so pass a path, or an absolute URL on
- * the page's own origin.
- */
-public suspend fun DatastarStream.replaceUrl(url: String) {
-    executeScript("window.history.replaceState(window.history.state, '', ${JsonWriter.writeString(url)})")
-}
-
-/**
- * Put [url] in the address bar without loading it, as a new history entry.
- *
- * Back then returns to the previous URL without reloading, and the page hears it as a `popstate`
- * on `window`. A page that pushes URLs therefore listens for it and asks the server to render
- * the URL it has returned to, with `data-on:popstate__window`.
- *
- * Quoted and refused as for [replaceUrl].
- */
-public suspend fun DatastarStream.pushUrl(url: String) {
-    executeScript("window.history.pushState(null, '', ${JsonWriter.writeString(url)})")
-}

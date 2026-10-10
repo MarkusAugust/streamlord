@@ -10,8 +10,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 - `replaceUrl(url)` and `pushUrl(url)` on a stream: the server puts the URL of the state it
   rendered in the address bar, replacing the current history entry or adding one, without a
-  reload. The URL is quoted as `redirect` quotes it. Documentation: a Live views page, which
-  starts with them.
+  reload. The URL is quoted as `redirect` quotes it; pass a path on the page's own origin.
+  Documentation: a Live views page, which starts with them.
 - Documentation: a Components and plain JavaScript page (attributes down and events up for
   custom elements, window events from plain scripts, `data-ignore-morph` on both sides of a
   morph, optimistic state rolled back on a failed fetch), and the signals page covers signals that
