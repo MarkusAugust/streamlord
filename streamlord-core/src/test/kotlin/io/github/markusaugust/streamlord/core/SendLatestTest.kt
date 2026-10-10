@@ -9,6 +9,7 @@ import io.github.markusaugust.streamlord.core.protocol.SseDecoder
 import io.github.markusaugust.streamlord.core.protocol.SseEncoder
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -176,5 +177,29 @@ class SendLatestTest {
             assertFailsWith<IllegalArgumentException> {
                 Streamlord().stream(BufferedSseSink()).sendLatest(flowOf(1), Duration.INFINITE) { count(it) }
             }
+        }
+
+    // A render that never suspends, as a blocking template engine's does, still counts.
+    @Test
+    fun `a render that never suspends counts towards the interval`() =
+        runBlocking {
+            val sentAt = ArrayList<Long>()
+            val start = System.nanoTime()
+            val sink =
+                object : SseSink {
+                    override suspend fun write(text: String) {
+                        sentAt += (System.nanoTime() - start) / 1_000_000
+                    }
+
+                    override suspend fun flush() = Unit
+                }
+
+            Streamlord().stream(sink).sendLatest(flowOf(1, 2), minInterval = 200.milliseconds) {
+                Thread.sleep(150)
+                count(it)
+            }
+
+            val gap = sentAt[1] - sentAt[0]
+            kotlin.test.assertTrue(gap in 190..330, "sent at $sentAt")
         }
 }

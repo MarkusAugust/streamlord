@@ -10,6 +10,7 @@ import io.github.markusaugust.streamlord.core.domain.withEventId
 import io.github.markusaugust.streamlord.core.json.JsonWriter
 import io.github.markusaugust.streamlord.core.port.driven.SignalsCodec
 import io.github.markusaugust.streamlord.core.protocol.SseEncoder
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -55,7 +56,8 @@ public interface DatastarStream {
      * - **Only the latest state is rendered.** States that arrive while a render is being sent
      *   are dropped for the newest one, so a burst of changes costs one render, not one each.
      * - **At most one send per [minInterval],** measured from the start of a render that is sent
-     *   to the start of the next render. Renders that are skipped are not held back. The first change goes out at once, and the newest of those that arrive
+     *   to the start of the next render. Renders that are skipped are not held back. The first
+     *   change goes out at once, and the newest of those that arrive
      *   within the interval after it goes out when it ends. With zero, the default, a render goes
      *   out as soon as the previous one is written. After the last render of a flow that
      *   completes, the interval is waited out before this returns.
@@ -72,7 +74,8 @@ public interface DatastarStream {
      * get("/board") {
      *     call.respondDatastar {
      *         sendLatest(board, resumeFrom = call.request.headers["last-event-id"]) { state ->
-     *             listOf(PatchElements(renderBoard(state), selector = "#board", mode = ElementPatchMode.INNER))
+     *             listOf(PatchElements(renderBoard(state), selector = "#board", mode =
+     *             ElementPatchMode.INNER))
      *         }
      *     }
      * }
@@ -99,19 +102,25 @@ public interface DatastarStream {
         resumeFrom: String? = null,
         render: suspend (S) -> List<DatastarEvent>,
     ) {
-        require(!minInterval.isNegative() && minInterval.isFinite()) { "minInterval must be zero or a finite positive duration" }
+        require(!minInterval.isNegative() && minInterval.isFinite()) {
+            "minInterval must be zero or a finite positive duration"
+        }
         var last = resumeFrom
         states.conflate().collect { state ->
             coroutineScope {
-                // Started with the render, on the same clock as everything else in the coroutine.
-                val interval = if (minInterval.isPositive()) launch { delay(minInterval) } else null
+                // Started before the render, undispatched, so a render that never suspends still
+                // counts towards it; and on the coroutine's own clock, as the render and the sink are.
+                val interval =
+                    if (minInterval.isPositive()) launch(start = CoroutineStart.UNDISPATCHED) { delay(minInterval) } else null
                 val events = render(state)
                 val fingerprint = if (events.isEmpty()) null else SseEncoder.fingerprint(events)
                 if (fingerprint == null || fingerprint == last) {
                     interval?.cancel()
                     return@coroutineScope
                 }
-                events.forEachIndexed { index, event -> send(if (index == events.lastIndex) event.withEventId(fingerprint) else event) }
+                events.forEachIndexed { index, event ->
+                    send(if (index == events.lastIndex) event.withEventId(fingerprint) else event)
+                }
                 last = fingerprint
                 interval?.join()
             }
