@@ -4,8 +4,8 @@ description: "datastarStream on a servlet response, and the one bean that config
 ---
 
 Spring is the Shield. Spring and the servlet API are `compileOnly`, so the adapter adds no
-version of either. It compiles against Framework 6.2 and is tested against 6.2 (Boot 3) and
-7.0 (Boot 4) on every build.
+version of either. It compiles and is tested against Framework 7.0 (Boot 4) on every build.
+Boot 3 is not supported.
 
 ## One bean, declared by you
 
@@ -18,10 +18,8 @@ fun streamlord(mapper: tools.jackson.databind.ObjectMapper): Streamlord =
     Streamlord(codec = JacksonSignalsCodec(mapper))
 ```
 
-Pick the codec that matches your Boot generation: `JacksonSignalsCodec` from
-`streamlord-json-jackson` for Boot 4, `Jackson2SignalsCodec` from `streamlord-json-jackson2` for
-Boot 3. The helpers take the bean explicitly, which is what keeps the adapter free of a
-component scan.
+`JacksonSignalsCodec` from `streamlord-json-jackson` matches Boot 4, which ships Jackson 3. The
+helpers take the bean explicitly, which is what keeps the adapter free of a component scan.
 
 The same constructor takes `heartbeat`, an interval after which a silent stream gets a
 keep-alive comment; [Operations](/operations/#heartbeats) has what it does and what it does not.

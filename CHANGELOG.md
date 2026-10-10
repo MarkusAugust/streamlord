@@ -78,6 +78,12 @@ All notable changes to Streamlord are recorded here. The format follows
 - `streamlord-analysis`: an env file that is not valid JSON is reported with where, such as
   `at line 3, column 1` for a comma after the last value.
 
+### Removed
+
+- Spring Boot 3 support. The Spring adapter is compiled and tested against Spring Framework 7.0
+  and Servlet 6.1 (Boot 4) only, and Streamlord requires kotlinx-coroutines 1.10.2, the version
+  Boot 4 pins, instead of 1.8.1. `streamlord-json-jackson2` stays, for applications on Jackson 2.
+
 ### Fixed
 
 - `streamlord-analysis`, for both editors: a route whose mapping had no leading slash, such as
