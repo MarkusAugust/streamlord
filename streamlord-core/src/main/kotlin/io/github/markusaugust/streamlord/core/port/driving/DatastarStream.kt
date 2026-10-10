@@ -180,4 +180,3 @@ public suspend inline fun <reified T> DatastarStream.patchSignals(
 ) {
     patchSignals(codec.encode(value, typeOf<T>()), onlyIfMissing, eventId, retry)
 }
-

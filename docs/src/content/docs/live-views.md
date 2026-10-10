@@ -34,8 +34,20 @@ get("/search") {
     }
     call.respondDatastar {
         patchElements(searchResults(query))
+        patchSignals("q" to query)
         replaceUrl(searchUrl(query))
     }
+}
+```
+
+The search box sends what the reader typed as `q`, the same parameter a bookmark carries, so the
+route reads it one way for both:
+
+```kotlin sample=html
+input {
+    id = "q"
+    dataBind("q")
+    dataOnInput($$"@get('/search?q=' + encodeURIComponent($q))") { debounce = 300.milliseconds }
 }
 ```
 
@@ -45,8 +57,8 @@ browser's code never learns how, and there is nothing to keep in step.
 
 `replaceUrl` swaps the current history entry, so a search that changes on every keystroke does
 not fill the back button. `pushUrl` adds an entry, for a step the reader should be able to go back
-from. Both quote the URL as a JavaScript string. The browser refuses one of another origin, so
-pass a path or a URL on the page's own origin.
+from, a row opened or a step taken. Both quote the URL as a JavaScript string. The browser refuses
+a URL of another origin, so pass a path or a URL on the page's own origin.
 
 After `pushUrl`, Back changes the URL without reloading, and the page hears a `popstate` on
 `window`. Ask the server for the URL the reader returned to:
@@ -57,7 +69,10 @@ div {
 }
 ```
 
-That `@get` is a Datastar request, so the route above answers it with the patch. Its answer must
-not push the URL again: `replaceUrl` it or leave it alone, or Back only ever leads forward.
+That `@get` is a Datastar request, so the route above answers it with the patch. Patch everything
+the URL names, the search box included, or the page and the address bar disagree. Its answer must
+not push the URL again, or Back only ever leads forward; leaving the URL alone is safest, since the
+browser has already put it there. The route above patches `q` with the results for that reason.
+
 Datastar Pro's `dataReplaceUrl` does the replacing from the client instead, from an expression on
 the page.
