@@ -33,6 +33,8 @@ be asked again whether it may still run, which is on [Operations](/operations/).
 
 `heartbeat` in the plugin writes a keep-alive comment on every stream that has been silent that
 long, for the proxies in between; it is on [Operations](/operations/#heartbeats).
+`compress` gzips every stream whose request takes it; it is on
+[Operations](/operations/#compression).
 
 ## One-shot streams
 

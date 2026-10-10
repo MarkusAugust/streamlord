@@ -19,4 +19,5 @@ dependencies {
     // streamed response to the client only once the stream has ended.
     testImplementation(libs.ktor.server.cio)
     testImplementation(project(":streamlord-test"))
+    testImplementation(libs.ktor.server.compression)
 }
