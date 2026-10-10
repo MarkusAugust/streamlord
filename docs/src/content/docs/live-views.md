@@ -26,9 +26,8 @@ fun tallyView(count: Int): List<DatastarEvent> =
 ```kotlin sample=ktor-routing
 get("/tally/view") {
     call.respondDatastar {
-        sendLatest(tally, minInterval = 50.milliseconds, resumeFrom = call.request.headers["last-event-id"]) {
-            tallyView(it)
-        }
+        val resumeFrom = call.request.headers["last-event-id"]
+        sendLatest(tally, minInterval = 50.milliseconds, resumeFrom = resumeFrom) { tallyView(it) }
     }
 }
 post("/tally/increment") {
@@ -49,7 +48,7 @@ button {
 ```
 
 `sendLatest` renders the state and sends it, the first time at once and then on every change. It
-renders only the newest state when several arrive together, at most one render per
+renders only the newest state when several arrive together, at most one send per
 `minInterval`, and nothing when a render would send the same bytes as the last. So the render
 can be the whole region, every time, and the client's morph works out what changed. A
 `StateFlow` starts with the current value, which is what a stream that has just opened needs.
@@ -57,8 +56,8 @@ can be the whole region, every time, and the client's morph works out what chang
 Four rules keep the stream alive:
 
 - **Patch inside the element that opens the stream, not the element itself.** `#view` carries the
-  `data-init`; the patch goes into it with `INNER`. A patch that replaced the element would run its
-  `data-init` again and restart the stream, and one that removed it would leave the stream
+  `data-init`; the patch goes into it with `INNER`. A `REPLACE`, or a morph that changes its
+  `data-init`, would run it again and restart the stream, and a removal would leave the stream
   running with nothing on the page to patch.
 - **Use `requestCancellation = CLEANUP`.** Under the default, `auto`, a request is aborted when
   another one goes to the same URL with the same method, from anywhere on the page. `cleanup`
@@ -78,7 +77,7 @@ occupies one for as long as it is open. Serve over HTTP/2, or keep to one stream
 `@get` closes the stream while the tab is hidden and opens it again when it comes back, which
 the fingerprint makes cheap; `openWhenHidden = true` keeps it open instead. The stream also wants
 a [heartbeat](/operations/#heartbeats) if a proxy sits in front of it. Testing the whole loop,
-command in and patch out on a stream already open, is on [Testing](/testing/).
+command in and patch out on a stream already open, is on [Testing](/testing/#a-stream-that-stays-open).
 
 ## The address bar belongs to the server
 

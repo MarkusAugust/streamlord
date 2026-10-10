@@ -131,8 +131,7 @@ own proxy's.
 Three things it does not do:
 
 - **It does not keep Datastar's client alive.** The client has no idle timeout of its own: its
-  `fetch` runs without a timer, and its retry counter resets when a 200 arrives, not per frame.
-  **Read from the source.** The
+  `fetch` runs without a timer, and its retry counter resets when a 200 arrives, not per frame. The
   heartbeat is for what sits between you and the browser, and for finding out on the server that
   the reader has gone: the comment is a write, and a write to a closed connection fails.
 - **It does not run beside a blocked thread.** On WebMVC the stream runs inside `runBlocking` on

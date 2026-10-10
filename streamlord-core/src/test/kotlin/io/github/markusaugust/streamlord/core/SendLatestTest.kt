@@ -4,8 +4,10 @@ import io.github.markusaugust.streamlord.core.application.Streamlord
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.core.port.driven.BufferedSseSink
+import io.github.markusaugust.streamlord.core.port.driven.SseSink
 import io.github.markusaugust.streamlord.core.protocol.SseDecoder
 import io.github.markusaugust.streamlord.core.protocol.SseEncoder
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -14,6 +16,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
 class SendLatestTest {
@@ -135,5 +138,43 @@ class SendLatestTest {
             }
 
             assertEquals(listOf(1, 3).map { """<b id="count">$it</b>""" }, SseDecoder.decode(sink.text()).map { (it as PatchElements).elements })
+        }
+
+    // The interval runs from the start of one sent render, on the coroutine's own clock, so a
+    // render that takes most of it leaves only the rest to wait.
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `a slow render counts towards the interval`() =
+        runTest {
+            val sentAt = ArrayList<Long>()
+            val sink =
+                object : SseSink {
+                    override suspend fun write(text: String) {
+                        sentAt += testScheduler.currentTime
+                    }
+
+                    override suspend fun flush() = Unit
+                }
+            val states =
+                flow {
+                    emit(1)
+                    delay(10)
+                    emit(2)
+                }
+
+            Streamlord().stream(sink).sendLatest(states, minInterval = 100.milliseconds) {
+                delay(80)
+                count(it)
+            }
+
+            assertEquals(listOf(80L, 180L), sentAt)
+        }
+
+    @Test
+    fun `an endless interval is refused`() =
+        runTest {
+            assertFailsWith<IllegalArgumentException> {
+                Streamlord().stream(BufferedSseSink()).sendLatest(flowOf(1), Duration.INFINITE) { count(it) }
+            }
         }
 }
