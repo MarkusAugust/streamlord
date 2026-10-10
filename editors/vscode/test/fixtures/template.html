@@ -1,6 +1,6 @@
 <!-- Hver attributt med kommentar skal gi markeringen kommentaren beskriver. -->
-<form data-on:submit__prevent="@post('/save')">                 <!-- ingen markering -->
-  <input data-bind:search data-indicator="busy">                <!-- ingen markering -->
+<form data-on:submit__prevent="@post('/save')" data-indicator="busy"> <!-- ingen markering -->
+  <input data-bind:search>                                      <!-- ingen markering -->
   <div data-on:click__debunce.500ms="x()"></div>                <!-- RØD: ukjent modifier -->
   <div data-on-intersect__threshold.150="x()"></div>            <!-- RØD: threshold 0-100 -->
   <div data-on="x()"></div>                                     <!-- RØD: data-on trenger nøkkel -->

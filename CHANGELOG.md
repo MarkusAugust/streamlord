@@ -8,6 +8,10 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Added
 
+- `streamlord-analysis`, for both editors: `indicator-without-action`, a warning on a
+  `data-indicator` whose element sends no request, since the indicator only tracks its own
+  element's; and quick fixes for two modifiers that parse as something else,
+  `__debounce_150ms` to `__debounce.150ms` and `__prevent.stop` to `__prevent__stop`.
 - `sendLatest(states, minInterval, resumeFrom) { render }` on a stream: renders the newest state
   and sends it, at most once per interval, and not at all when nothing changed. Each render's
   fingerprint is its event id, so a reconnect that passes `last-event-id` back as `resumeFrom` is

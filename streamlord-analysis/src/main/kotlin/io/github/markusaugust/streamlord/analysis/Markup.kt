@@ -142,6 +142,9 @@ private fun codePoint(cp: Int?): String? =
  * Does the value hold template syntax, so that it cannot be judged before rendering? A `${`
  * inside a JavaScript template literal is JavaScript's own and does not count.
  */
+/** A call to one of the actions that send a request. */
+private val BACKEND_ACTION = Regex("""@(?:get|post|put|patch|delete)\s*\(""")
+
 public fun hasTemplateSyntax(value: String): Boolean =
     TEMPLATE_SYNTAX.findAll(value).any { it.value != "\${" || quoteAt(value, it.range.first) != '`' }
 
@@ -643,6 +646,23 @@ public class MarkupValidator(
                 val mstart = if (mod.text.isEmpty()) mend - 2 else mend - mod.text.length
                 val mspec = spec.modifiers.firstOrNull { it.name == mod.name }
                 if (mspec == null) {
+                    // __debounce_150ms: an argument joined with an underscore, which Datastar reads
+                    // as one unknown name. Arguments follow a dot.
+                    val dotted = dottedArguments(mod.name, spec)
+                    if (dotted != null) {
+                        issues +=
+                            Issue(
+                                start = mstart,
+                                end = mend,
+                                message =
+                                    "Unknown modifier __${mod.name} on $prefix${spec.name}. A modifier's arguments follow a dot: __$dotted.",
+                                severity = Severity.ERROR,
+                                code = "unknown-modifier",
+                                link = link,
+                                fixes = listOf(Fix("Change to __$dotted", mstart, mstart + mod.name.length, dotted)),
+                            )
+                        continue
+                    }
                     val near = spec.modifiers.map { it.name }.firstOrNull { distance(it, mod.name) <= 2 }
                     issues +=
                         Issue(
@@ -668,7 +688,7 @@ public class MarkupValidator(
                         )
                     continue
                 }
-                issues += validateModifierArgs(mspec, mod.args, mstart, mend).map { it.copy(link = link) }
+                issues += validateModifierArgs(mspec, mod.args, mstart, mend, spec).map { it.copy(link = link) }
             }
             val value = attr.value
             if (value != null && spec.valueKind == ValueKind.EXPRESSION && value.isNotBlank() && !hasTemplateSyntax(value)) {
@@ -707,7 +727,42 @@ public class MarkupValidator(
                 issues += Issue(attr.valueStart, attr.valueEnd, "$prefix${spec.name} takes no value.", Severity.WARNING, "unexpected-value")
             }
         }
+        issues += indicatorWithoutAction(tag, prefix)
         return issues
+    }
+
+    /**
+     * `data-indicator` tracks the requests its own element sends: the client matches the fetch
+     * event's element against it. On an element whose attributes send none, it never turns on.
+     * Elements with template syntax in an attribute are left alone, since what they send is not
+     * known until they are rendered.
+     */
+    private fun indicatorWithoutAction(
+        tag: Tag,
+        prefix: String,
+    ): List<Issue> {
+        val indicator =
+            tag.attributes.firstOrNull {
+                val lower = it.name.asciiLowercase()
+                lower == "${prefix}indicator" || lower.startsWith("${prefix}indicator:") || lower.startsWith("${prefix}indicator__")
+            } ?: return emptyList()
+        if (tag.attributes.any { it.value != null && hasTemplateSyntax(it.value) }) return emptyList()
+        val sends =
+            tag.attributes.any {
+                it.name.asciiLowercase().startsWith(prefix) && it.value != null && BACKEND_ACTION.containsMatchIn(decodeEntities(it.value).text)
+            }
+        if (sends) return emptyList()
+        return listOf(
+            Issue(
+                indicator.nameStart,
+                indicator.nameEnd,
+                "${prefix}indicator tracks the requests this element sends, and nothing on it sends one. " +
+                    "Put it on the element whose attribute calls @get, @post, @put, @patch or @delete.",
+                Severity.WARNING,
+                "indicator-without-action",
+                Docs.attribute("indicator"),
+            ),
+        )
     }
 
     /**
@@ -758,11 +813,28 @@ public class MarkupValidator(
         )
     }
 
+    /**
+     * `debounce_150ms` read as `debounce.150ms`, when the part before the first underscore is a
+     * modifier of [spec] that takes arguments; null otherwise.
+     */
+    private fun dottedArguments(
+        name: String,
+        spec: AttributeSpec,
+    ): String? {
+        val underscore = name.indexOf('_')
+        if (underscore <= 0 || underscore == name.length - 1) return null
+        val head = name.substring(0, underscore)
+        val modifier = spec.modifiers.firstOrNull { it.name == head } ?: return null
+        if (modifier.type == ModifierType.FLAG) return null
+        return head + "." + name.substring(underscore + 1).replace('_', '.')
+    }
+
     private fun validateModifierArgs(
         spec: Modifier,
         args: List<String>,
         start: Int,
         end: Int,
+        attribute: AttributeSpec,
     ): List<Issue> {
         val issues = ArrayList<Issue>()
 
@@ -774,7 +846,18 @@ public class MarkupValidator(
         }
         when (spec.type) {
             ModifierType.FLAG -> {
-                if (args.isNotEmpty()) fail("__${spec.name} takes no arguments.")
+                // __prevent.stop: a second modifier joined with a dot, read as an argument.
+                val siblings = attribute.modifiers.map { it.name }
+                if (args.isNotEmpty() && args.all { it in siblings }) {
+                    val joined = args.joinToString("") { "__$it" }
+                    val at = start + spec.name.length
+                    fail(
+                        "__${spec.name} takes no arguments. Each modifier starts with two underscores: __${spec.name}$joined.",
+                        listOf(Fix("Change to __${spec.name}$joined", at, end, joined)),
+                    )
+                } else if (args.isNotEmpty()) {
+                    fail("__${spec.name} takes no arguments.")
+                }
             }
 
             ModifierType.DURATION -> {

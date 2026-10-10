@@ -468,7 +468,7 @@ class AnalyzerTest {
     @Test
     fun `validates a template`() {
         val src =
-            "<form data-on:submit__prevent=\"@post('/save')\"><input data-bind:search data-indicator=\"busy\" data-onn:x=\"1\">" + "</form>"
+            "<form data-on:submit__prevent=\"@post('/save')\" data-indicator=\"busy\"><input data-bind:search data-onn:x=\"1\">" + "</form>"
         assertEquals(listOf("unknown-attribute"), codes(analyzer.analyzeHtml(src, opts)))
     }
 
