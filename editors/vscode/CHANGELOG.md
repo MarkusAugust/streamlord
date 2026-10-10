@@ -6,7 +6,7 @@ All notable changes to the Streamlord extension are recorded here.
 
 - A `data-indicator` on an element that sends no request is a warning: the indicator only turns on
   for requests its own element sends, so one on a wrapper or a sibling never does.
-- `__debounce_150ms` offers `__debounce.150ms`, since a modifier's arguments follow a dot, and
+- Quick fixes: `__debounce_150ms` offers `__debounce.150ms`, since a modifier's arguments follow a dot, and
   `__prevent.stop` offers `__prevent__stop`, since each modifier starts with two underscores.
 
 ## 0.7.0

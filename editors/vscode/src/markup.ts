@@ -356,7 +356,6 @@ const DURATION = /^\d+(ms|s)?$/;
 const LONG_NAME = 6;
 const IDENT = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 
-/** Validate the Datastar attributes on one tag. */
 /** Validate the Datastar attributes on one tag; with its text, a template construct the tokenizer stepped over is seen too. */
 export function validateAttributes(tag: Tag, prefix: string, tagSource?: string): Issue[] {
   const issues: Issue[] = [];
@@ -565,8 +564,11 @@ function validateKeyCase(attr: Attribute, parsed: { key: string | null; base: st
   }];
 }
 
-/** A call to one of the actions the catalog lists as sending a request. */
-const BACKEND_ACTION = new RegExp("@(?:" + catalog.actions.filter((a) => a.kind === "backend").map((a) => a.name).join("|") + ")\\s*\\(");
+/** The actions the catalog lists as sending a request. */
+const BACKEND_ACTIONS = catalog.actions.filter((a) => a.kind === "backend").map((a) => a.name);
+
+/** A call to one of them, written as Datastar parses it: no space before the parenthesis. */
+const BACKEND_ACTION = new RegExp("@(?:" + BACKEND_ACTIONS.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")\\(");
 
 /** An attribute name as a browser parses it, without template syntax or a spread in it. */
 const PLAIN_ATTRIBUTE_NAME = /^[A-Za-z_:][A-Za-z0-9_:.@-]*$/;
@@ -592,7 +594,7 @@ function indicatorWithoutAction(tag: Tag, prefix: string, tagSource?: string): I
   return [{
     start: indicator.nameStart,
     end: indicator.nameStart + indicator.name.length,
-    message: `${prefix}indicator tracks the requests this element sends, and nothing on it sends one. Put it on the element whose attribute calls @get, @post, @put, @patch or @delete.`,
+    message: `${prefix}indicator tracks the requests this element sends, and nothing on it sends one. Put it on the element whose attribute calls ${BACKEND_ACTIONS.map((n) => "@" + n).join(", ")}.`,
     severity: "warning",
     code: "indicator-without-action",
     link: attributeDoc("indicator"),
@@ -618,7 +620,7 @@ function validateModifierArgs(spec: AttributeSpec["modifiers"][number], args: st
   switch (spec.type) {
     case "flag": {
       // __prevent.stop: a second modifier joined with a dot, read as an argument.
-      const siblings = attribute.modifiers.filter((m) => m.type === "flag").map((m) => m.name);
+      const siblings = attribute.modifiers.filter((m) => m.type === "flag" && m.name !== spec.name).map((m) => m.name);
       if (args.length > 0 && args.every((a) => siblings.includes(a))) {
         const joined = args.map((a) => "__" + a).join("");
         const at = start + spec.name.length;

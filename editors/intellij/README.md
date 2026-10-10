@@ -37,8 +37,8 @@ Kotlin 2.2+) are read as Kotlin reads them: a single `$` is text, so `$count` th
 A call the Kotlin plugin resolves to something other than Streamlord is left alone.
 
 **Quick fixes** on Alt+Enter: `$count` becomes `increment("count")`, `signal("count")`,
-`toggle("open")`, a `$$` literal or an escaped `${'$'}count`; `__debunce` becomes `__debounce`, `__debounce_150ms` becomes `__debounce.150ms` and
-`__prevent.stop` becomes `__prevent__stop`;
+`toggle("open")`, a `$$` literal or an escaped `${'$'}count`; `__debunce` becomes `__debounce`,
+`__debounce_150ms` becomes `__debounce.150ms` and `__prevent.stop` becomes `__prevent__stop`;
 `@Post` becomes `@post`; `data-signal` becomes `data-signals`; a missing duration, `id` or
 `selector` is added. Every message links to the matching page of the Datastar reference.
 

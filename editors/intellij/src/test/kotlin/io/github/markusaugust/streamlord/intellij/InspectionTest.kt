@@ -140,5 +140,6 @@ class InspectionTest : BasePlatformTestCase() {
         val unclaimed = codes - InspectionCodes.all
         assertEquals(emptySet<String>(), unclaimed)
         assertTrue(codes.toString(), codes.size > 15)
+        assertTrue(codes.toString(), "indicator-without-action" in codes)
     }
 }

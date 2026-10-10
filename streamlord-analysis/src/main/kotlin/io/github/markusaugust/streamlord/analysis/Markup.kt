@@ -446,9 +446,11 @@ public class MarkupValidator(
 ) {
     private val expressions = ExpressionValidator(catalog)
 
-    /** A call to one of the actions the catalog lists as sending a request. */
-    private val backendAction =
-        Regex("@(?:" + catalog.actions.filter { it.kind == "backend" }.joinToString("|") { Regex.escape(it.name) } + ")\\s*\\(")
+    /** The actions the catalog lists as sending a request. */
+    private val backendActions = catalog.actions.filter { it.kind == "backend" }.map { it.name }
+
+    /** A call to one of them, written as Datastar parses it: no space before the parenthesis. */
+    private val backendAction = Regex("@(?:" + backendActions.joinToString("|") { Regex.escape(it) } + ")\\(")
 
     public fun validateMarkup(
         html: String,
@@ -781,7 +783,7 @@ public class MarkupValidator(
                 indicator.nameStart,
                 indicator.nameEnd,
                 "${prefix}indicator tracks the requests this element sends, and nothing on it sends one. " +
-                    "Put it on the element whose attribute calls @get, @post, @put, @patch or @delete.",
+                    "Put it on the element whose attribute calls " + backendActions.joinToString(", ") { "@$it" } + ".",
                 Severity.WARNING,
                 "indicator-without-action",
                 Docs.attribute("indicator"),
@@ -871,7 +873,7 @@ public class MarkupValidator(
         when (spec.type) {
             ModifierType.FLAG -> {
                 // __prevent.stop: a second modifier joined with a dot, read as an argument.
-                val siblings = attribute.modifiers.filter { it.type == ModifierType.FLAG }.map { it.name }
+                val siblings = attribute.modifiers.filter { it.type == ModifierType.FLAG && it.name != spec.name }.map { it.name }
                 if (args.isNotEmpty() && args.all { it in siblings }) {
                     val joined = args.joinToString("") { "__$it" }
                     val at = start + spec.name.length
