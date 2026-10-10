@@ -44,12 +44,15 @@ public final class io/github/markusaugust/streamlord/core/application/Streamlord
 	public static final field Companion Lio/github/markusaugust/streamlord/core/application/Streamlord$Companion;
 	public static final field DEFAULT_MAX_SIGNALS_SIZE I
 	public fun <init> ()V
-	public fun <init> (Lio/github/markusaugust/streamlord/core/port/driven/SignalsCodec;IZLjava/util/List;)V
+	public synthetic fun <init> (Lio/github/markusaugust/streamlord/core/port/driven/SignalsCodec;IZLjava/util/List;)V
 	public synthetic fun <init> (Lio/github/markusaugust/streamlord/core/port/driven/SignalsCodec;IZLjava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Lio/github/markusaugust/streamlord/core/port/driven/SignalsCodec;IZLjava/util/List;Lkotlin/time/Duration;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Lio/github/markusaugust/streamlord/core/port/driven/SignalsCodec;IZLjava/util/List;Lkotlin/time/Duration;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun encode (Lkotlinx/coroutines/flow/Flow;)Lkotlinx/coroutines/flow/Flow;
 	public final fun getAttributePrefixes ()Ljava/util/List;
 	public final fun getCodec ()Lio/github/markusaugust/streamlord/core/port/driven/SignalsCodec;
 	public final fun getGuardElements ()Z
+	public final fun getHeartbeat-FghU774 ()Lkotlin/time/Duration;
 	public final fun getMaxSignalsSize ()I
 	public final fun guard (Lio/github/markusaugust/streamlord/core/domain/DatastarEvent;)Lio/github/markusaugust/streamlord/core/domain/DatastarEvent;
 	public final fun guard (Lio/github/markusaugust/streamlord/core/domain/DatastarResponse;)Lio/github/markusaugust/streamlord/core/domain/DatastarResponse;

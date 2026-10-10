@@ -23,6 +23,9 @@ Pick the codec that matches your Boot generation: `JacksonSignalsCodec` from
 Boot 3. The helpers take the bean explicitly, which is what keeps the adapter free of a
 component scan.
 
+The same constructor takes `heartbeat`, an interval after which a silent stream gets a
+keep-alive comment; [Operations](/operations/#heartbeats) has what it does and what it does not.
+
 ## Streaming from a controller
 
 The bean arrives through the controller's constructor, like any other bean:

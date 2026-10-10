@@ -19,10 +19,14 @@ import io.github.markusaugust.streamlord.core.port.driven.carriesSignalsInQuery
 import io.github.markusaugust.streamlord.core.port.driving.DatastarStream
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
 import io.github.markusaugust.streamlord.core.protocol.SseEncoder
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlin.reflect.KType
 import kotlin.reflect.typeOf
+import kotlin.time.Duration
 
 /**
  * The signals the browser sent, when no typed codec is in play: a [JsonObject].
@@ -51,18 +55,37 @@ public typealias Signals = JsonObject
  *   template engine.
  * @property attributePrefixes The `data-*` prefixes the guard recognises: `data-` and the
  *   aliased `data-star-` by default. A bundle built with another alias lists it here.
+ * @property heartbeat Write an SSE comment whenever a stream has been silent this long, so a
+ *   proxy or load balancer that closes idle connections sees traffic. Any frame resets the wait,
+ *   so a busy stream carries none. Applies to streams opened through the adapters'
+ *   `respondDatastar` and `datastarStream`. Off by default.
  */
 public class Streamlord(
     public val codec: SignalsCodec = BuiltInSignalsCodec,
     public val maxSignalsSize: Int = DEFAULT_MAX_SIGNALS_SIZE,
     public val guardElements: Boolean = false,
     public val attributePrefixes: List<String> = ElementsGuard.defaultPrefixes,
+    public val heartbeat: Duration? = null,
 ) {
     init {
         require(maxSignalsSize > 0) { "maxSignalsSize must be positive" }
+        require(heartbeat == null || heartbeat.isPositive()) { "heartbeat must be positive, or null for none" }
     }
 
-    /** Open a [DatastarStream] over a sink. Adapters call this; you rarely need to. */
+    /** The constructor as it was before [heartbeat], kept for code compiled against it. */
+    @Deprecated("Kept for binary compatibility.", level = DeprecationLevel.HIDDEN)
+    public constructor(
+        codec: SignalsCodec = BuiltInSignalsCodec,
+        maxSignalsSize: Int = DEFAULT_MAX_SIGNALS_SIZE,
+        guardElements: Boolean = false,
+        attributePrefixes: List<String> = ElementsGuard.defaultPrefixes,
+    ) : this(codec, maxSignalsSize, guardElements, attributePrefixes, null)
+
+    /**
+     * Open a [DatastarStream] over a sink. Adapters call this; you rarely need to.
+     *
+     * The stream has no lifetime of its own here, so [heartbeat] does not apply to it.
+     */
     public fun stream(sink: SseSink): DatastarStream = SseDatastarStream(sink, codec, ::guard)
 
     /**
@@ -77,6 +100,8 @@ public class Streamlord(
      * A [block] that catches the refusal and carries on sends nothing more: every later write is
      * refused again.
      *
+     * With a [heartbeat], a keep-alive comment runs alongside [block] and stops when it returns.
+     *
      * Adapters call this. Returns whether the stream ran to the end of [block] without a refusal.
      */
     public suspend fun stream(
@@ -87,7 +112,20 @@ public class Streamlord(
         val stream = SseDatastarStream(sink, codec, ::guard, authorisation)
         return try {
             stream.authorise()
-            stream.block()
+            val interval = heartbeat
+            if (interval == null) {
+                stream.block()
+            } else {
+                coroutineScope {
+                    val pulse = launch { stream.pulse(interval) }
+                    try {
+                        stream.block()
+                    } finally {
+                        // Joined, so the response never closes under a comment half written.
+                        pulse.cancelAndJoin()
+                    }
+                }
+            }
             !stream.isRefused
         } catch (_: StreamRefusedException) {
             false

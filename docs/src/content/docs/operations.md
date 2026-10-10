@@ -113,7 +113,39 @@ case-insensitively, so either spelling finds it.
 ## Heartbeats
 
 An idle proxy closes a connection that has been silent too long. An SSE comment is the cheapest
-thing you can put on the wire: the client ignores it, the proxy sees traffic.
+thing you can put on the wire: the client ignores it, the proxy sees traffic. Set an interval once
+and every stream gets one:
+
+```kotlin sample=ktor-application
+install(StreamlordPlugin) { heartbeat = 15.seconds }
+```
+
+On Spring it is the bean, `Streamlord(heartbeat = 15.seconds)`. A stream that has written nothing
+for that long gets a `: keep-alive` comment, and any frame starts the wait again, so a busy stream
+carries none. The heartbeat starts with your handler and stops when it returns.
+
+Fifteen seconds sits under every default idle timeout we have met. Raise it once you know your
+own proxy's.
+
+Three things it does not do:
+
+- **It does not keep Datastar's client alive.** The client has no idle timeout of its own; it
+  counts nothing between frames, and its retry counter resets when a response opens. The
+  heartbeat is for what sits between you and the browser, and for finding out on the server that
+  the reader has gone: the comment is a write, and a write to a closed connection fails.
+- **It does not run beside a blocked thread.** On WebMVC the stream runs inside `runBlocking` on
+  one thread. A handler that blocks that thread, a JDBC call or a `Thread.sleep`, holds the
+  heartbeat back until it returns. Suspend instead, or move the blocking call to
+  `Dispatchers.IO` with `withContext`.
+- **It does not reach WebFlux.** A `Flow` handed to WebFlux never passes through a Streamlord
+  stream. Merge a ticker of your own into it, or set the server's idle timeout above your
+  quietest stretch.
+
+With a [`StreamAuthorisation`](#asking-again-while-the-stream-runs) on the stream, the comment
+asks the question like any other write once `every` has passed, so an idle stream is checked on
+the heartbeat's schedule and a refusal ends it there.
+
+A single stream that needs its own rhythm can still write one by hand:
 
 ```kotlin sample=ktor-routing
 get("/slow") {
@@ -121,7 +153,7 @@ get("/slow") {
         coroutineScope {
             val heartbeat = launch {
                 while (true) {
-                    delay(15.seconds)
+                    delay(5.seconds)
                     comment()
                 }
             }
@@ -136,9 +168,6 @@ get("/slow") {
     }
 }
 ```
-
-Fifteen seconds sits under every default idle timeout we have met. Raise it once you know your
-own proxy's.
 
 ## Through the proxy
 

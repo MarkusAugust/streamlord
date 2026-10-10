@@ -6,9 +6,12 @@ import io.github.markusaugust.streamlord.core.port.driven.SignalsCodec
 import io.github.markusaugust.streamlord.core.port.driven.SseSink
 import io.github.markusaugust.streamlord.core.port.driving.DatastarStream
 import io.github.markusaugust.streamlord.core.protocol.SseEncoder
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.time.Duration
 import kotlin.time.TimeSource
 
 /**
@@ -32,6 +35,9 @@ internal class SseDatastarStream(
     private val gate = Mutex()
     private var asked: TimeSource.Monotonic.ValueTimeMark? = null
     private val refused = AtomicBoolean(false)
+
+    /** One element whenever a frame has reached the client since [pulse] last looked. */
+    private val written = Channel<Unit>(Channel.CONFLATED)
 
     /** Whether the authorisation has answered no. A handler may have swallowed the exception. */
     internal val isRefused: Boolean get() = refused.get()
@@ -57,6 +63,21 @@ internal class SseDatastarStream(
     private suspend fun emit(text: String) {
         sink.write(text)
         sink.flush()
+        written.trySend(Unit)
+    }
+
+    /**
+     * Write a keep-alive comment each time [interval] passes with nothing written, until cancelled.
+     *
+     * Any frame resets the wait, a comment included, so a busy stream never carries one and an
+     * idle stream carries one per [interval]. The comment is an ordinary write: it waits for the
+     * lock and passes [authorise], which means an idle stream with an authorisation is asked again
+     * on the heartbeat's schedule, and a refusal ends it here as it would anywhere else.
+     */
+    internal suspend fun pulse(interval: Duration): Nothing {
+        while (true) {
+            if (withTimeoutOrNull(interval) { written.receive() } == null) comment()
+        }
     }
 
     /**
