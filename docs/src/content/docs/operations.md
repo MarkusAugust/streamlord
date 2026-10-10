@@ -86,8 +86,11 @@ and Datastar's own reference never mentions.
 protocol default of 1000 ms, as the specification says to.
 
 **`id:`**, when you send one, is kept by the client and put on the **next** attempt as a
-`last-event-id` request header (`fetch.ts:662`). **Observed.** Send no id and the header is
-dropped again.
+`last-event-id` request header (`fetch.ts:662`). **Observed.** An event without an id leaves the
+header as it was: the client changes it only when an `id:` line arrives, and drops it only on an
+empty one (`fetch.ts:665`), which Streamlord does not send. So once a stream has sent an id, every
+retry and every reopen after a hidden tab carries the last one it sent, until the action is run
+again: a new `@get` starts without the header.
 
 That is the whole of a resumable stream: number your events, read the header, start after it.
 
