@@ -179,7 +179,8 @@ ended:
 private val http = HttpClient.newHttpClient()
 
 private fun post(url: String) {
-    http.send(HttpRequest.newBuilder(URI(url)).POST(HttpRequest.BodyPublishers.noBody()).build(), HttpResponse.BodyHandlers.discarding())
+    val request = HttpRequest.newBuilder(URI(url)).POST(HttpRequest.BodyPublishers.noBody()).build()
+    http.send(request, HttpResponse.BodyHandlers.discarding())
 }
 
 @Test
