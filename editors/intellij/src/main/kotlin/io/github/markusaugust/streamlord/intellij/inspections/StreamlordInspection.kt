@@ -100,7 +100,7 @@ class KotlinInterpolationInspection : StreamlordInspection(setOf("kotlin-interpo
 class DatastarExpressionInspection :
     StreamlordInspection(setOf("expression-syntax", "empty-expression", "unknown-action", "action-space", "pro-action", "signal-kebab"))
 
-/** `data-*` attribute names, keys, modifiers and their arguments, values. */
+/** `data-*` attribute names, keys, modifiers and their arguments, values, and an indicator with nothing to show. */
 class DatastarAttributeInspection :
     StreamlordInspection(
         setOf(
@@ -117,6 +117,7 @@ class DatastarAttributeInspection :
             "missing-key-or-value",
             "pro-attribute",
             "prefix-mismatch",
+            "indicator-without-action",
         ),
     )
 
@@ -178,6 +179,7 @@ object InspectionCodes {
                 "missing-key-or-value",
                 "pro-attribute",
                 "prefix-mismatch",
+                "indicator-without-action",
             ) +
             setOf("key-case", "key-case-wire") +
             setOf(

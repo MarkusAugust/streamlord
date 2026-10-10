@@ -24,7 +24,8 @@ function that returns HTML, a `val` holding a fragment), and in `.html` and temp
 - Markup in `patchElements(...)`: unclosed or stray tags, text outside elements, missing `id`
   on top-level elements when no selector is given, a mode that needs a selector.
 - `data-*` attributes: unknown names with "did you mean", unknown modifiers, wrong modifier
-  arguments (`__debounce` without a duration, `__threshold.150`), missing or unexpected keys.
+  arguments (`__debounce` without a duration, `__threshold.150`), missing or unexpected keys,
+  and a `data-indicator` on an element that sends no request.
 - Casing: a capital letter in a key (`data-signals:fooBar`), which the browser lowercases so
   the signal becomes `$foobar`, and a hyphen after a signal in an expression (`$foo-bar`,
   `$count-1`), which Datastar swallows into one signal name. Both come with the fix: the
@@ -41,7 +42,8 @@ template file; the id and completeness rules apply only where the string is hand
 `patchElements` and its kin, because only there is the patch mode known.
 
 **Quick fixes** on the lightbulb: `$count` becomes `increment("count")`, `signal("count")`,
-`toggle("open")` or an escaped `${'$'}count`; `__debunce` becomes `__debounce`; `@Post` becomes
+`toggle("open")` or an escaped `${'$'}count`; `__debunce` becomes `__debounce`, `__debounce_150ms` becomes `__debounce.150ms` and
+`__prevent.stop` becomes `__prevent__stop`; `@Post` becomes
 `@post`; `data-signal` becomes `data-signals`; a missing duration, `id` or `selector` is added.
 Every diagnostic links to the matching page of the Datastar reference.
 

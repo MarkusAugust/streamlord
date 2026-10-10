@@ -134,6 +134,7 @@ class InspectionTest : BasePlatformTestCase() {
                 " data-bind=\"\$x + 1\" data-star-on:x=\"1\" data-signals:fooBar=\"1\" data-on-intersect__threshold.150=\"y()\"></div><p>x\"\"\")",
                 "s.patchElements(\"<li>x</li>\", mode = ElementPatchMode.APPEND); s.removeElements(\" \"); s.removeElements(\"a\\nb\")",
                 "s.executeScript(\"'</script>'\"); dataSignals(\"fooBar\", \"1\"); s.patchElements(\"text </b>\")",
+                "s.patchElements(\"\"\"<span id=\"busy\" data-indicator:busy></span>\"\"\")",
             ).joinToString("\n")
         val codes = analyzer.analyzeKotlin(src).mapNotNull { it.code }.toSet()
         val unclaimed = codes - InspectionCodes.all

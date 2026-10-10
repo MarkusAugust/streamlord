@@ -5,6 +5,12 @@ package io.github.markusaugust.streamlord.analysis
  * them, and well-formed `data-*` attributes. A deliberately small tokenizer, not a browser.
  */
 
+/** An attribute name as a browser parses it, without template syntax or a spread in it. */
+private val PLAIN_ATTRIBUTE_NAME = Regex("""[A-Za-z_:][A-Za-z0-9_:.@-]*""")
+
+/** A modifier name with arguments run into it by underscores, and nothing else. */
+private val MODIFIER_WORD = Regex("""[a-z][a-z0-9]*(?:_[A-Za-z0-9]+)+""")
+
 private val VOID = setOf("area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr")
 
 /** Elements whose content is text, whatever it looks like: a `<div>` in a `<textarea>` or a `<title>` is not a tag. */
@@ -142,9 +148,6 @@ private fun codePoint(cp: Int?): String? =
  * Does the value hold template syntax, so that it cannot be judged before rendering? A `${`
  * inside a JavaScript template literal is JavaScript's own and does not count.
  */
-/** A call to one of the actions that send a request. */
-private val BACKEND_ACTION = Regex("""@(?:get|post|put|patch|delete)\s*\(""")
-
 public fun hasTemplateSyntax(value: String): Boolean =
     TEMPLATE_SYNTAX.findAll(value).any { it.value != "\${" || quoteAt(value, it.range.first) != '`' }
 
@@ -443,6 +446,10 @@ public class MarkupValidator(
 ) {
     private val expressions = ExpressionValidator(catalog)
 
+    /** A call to one of the actions the catalog lists as sending a request. */
+    private val backendAction =
+        Regex("@(?:" + catalog.actions.filter { it.kind == "backend" }.joinToString("|") { Regex.escape(it.name) } + ")\\s*\\(")
+
     public fun validateMarkup(
         html: String,
         opts: MarkupOptions,
@@ -468,7 +475,7 @@ public class MarkupValidator(
             closeImplied(stack, tag.name)
             if (stack.isEmpty()) topLevel += tag
             if (!tag.selfClosing) stack += tag
-            if (opts.checkAttributes) issues += validateAttributes(tag, opts.prefix)
+            if (opts.checkAttributes) issues += validateAttributes(tag, opts.prefix, html.substring(tag.start, tag.end))
         }
         for (unclosed in stack) {
             if (unclosed.name in OPTIONAL_END) continue
@@ -531,6 +538,16 @@ public class MarkupValidator(
     public fun validateAttributes(
         tag: Tag,
         prefix: String,
+    ): List<Issue> = validateAttributes(tag, prefix, null)
+
+    /**
+     * Validate the Datastar attributes on one tag, whose text is [tagSource]: with it, a template
+     * construct the tokenizer stepped over inside the tag is seen too.
+     */
+    public fun validateAttributes(
+        tag: Tag,
+        prefix: String,
+        tagSource: String?,
     ): List<Issue> {
         val issues = ArrayList<Issue>()
         for (attr in tag.attributes) {
@@ -727,7 +744,7 @@ public class MarkupValidator(
                 issues += Issue(attr.valueStart, attr.valueEnd, "$prefix${spec.name} takes no value.", Severity.WARNING, "unexpected-value")
             }
         }
-        issues += indicatorWithoutAction(tag, prefix)
+        issues += indicatorWithoutAction(tag, prefix, tagSource)
         return issues
     }
 
@@ -740,16 +757,23 @@ public class MarkupValidator(
     private fun indicatorWithoutAction(
         tag: Tag,
         prefix: String,
+        tagSource: String?,
     ): List<Issue> {
         val indicator =
             tag.attributes.firstOrNull {
                 val lower = it.name.asciiLowercase()
                 lower == "${prefix}indicator" || lower.startsWith("${prefix}indicator:") || lower.startsWith("${prefix}indicator__")
             } ?: return emptyList()
-        if (tag.attributes.any { it.value != null && hasTemplateSyntax(it.value) }) return emptyList()
+        // Template syntax in a value, or attributes spread into the tag by name, leave what it
+        // sends unknown until rendered.
+        if ((tagSource != null && hasTemplateSyntax(tagSource)) ||
+            tag.attributes.any { (it.value != null && hasTemplateSyntax(it.value)) || !PLAIN_ATTRIBUTE_NAME.matches(it.name) }
+        ) {
+            return emptyList()
+        }
         val sends =
             tag.attributes.any {
-                it.name.asciiLowercase().startsWith(prefix) && it.value != null && BACKEND_ACTION.containsMatchIn(decodeEntities(it.value).text)
+                it.name.asciiLowercase().startsWith(prefix) && it.value != null && backendAction.containsMatchIn(decodeEntities(it.value).text)
             }
         if (sends) return emptyList()
         return listOf(
@@ -815,14 +839,14 @@ public class MarkupValidator(
 
     /**
      * `debounce_150ms` read as `debounce.150ms`, when the part before the first underscore is a
-     * modifier of [spec] that takes arguments; null otherwise.
+     * modifier of [spec] that takes arguments and the rest is plain words; null otherwise.
      */
     private fun dottedArguments(
         name: String,
         spec: AttributeSpec,
     ): String? {
         val underscore = name.indexOf('_')
-        if (underscore <= 0 || underscore == name.length - 1) return null
+        if (underscore <= 0 || underscore == name.length - 1 || !MODIFIER_WORD.matches(name)) return null
         val head = name.substring(0, underscore)
         val modifier = spec.modifiers.firstOrNull { it.name == head } ?: return null
         if (modifier.type == ModifierType.FLAG) return null
@@ -847,7 +871,7 @@ public class MarkupValidator(
         when (spec.type) {
             ModifierType.FLAG -> {
                 // __prevent.stop: a second modifier joined with a dot, read as an argument.
-                val siblings = attribute.modifiers.map { it.name }
+                val siblings = attribute.modifiers.filter { it.type == ModifierType.FLAG }.map { it.name }
                 if (args.isNotEmpty() && args.all { it in siblings }) {
                     val joined = args.joinToString("") { "__$it" }
                     val at = start + spec.name.length

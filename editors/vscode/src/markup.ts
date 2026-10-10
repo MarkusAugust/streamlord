@@ -300,7 +300,7 @@ export function validateMarkup(html: string, opts: MarkupOptions): Issue[] {
     closeImplied(stack, tag.name);
     if (stack.length === 0) topLevel.push(tag);
     if (!tag.selfClosing) stack.push(tag);
-    if (opts.checkAttributes) issues.push(...validateAttributes(tag, opts.prefix));
+    if (opts.checkAttributes) issues.push(...validateAttributes(tag, opts.prefix, html.slice(tag.start, tag.end)));
   }
   for (const unclosed of stack) {
     if (unclosed.name in OPTIONAL_END) continue;
@@ -357,7 +357,8 @@ const LONG_NAME = 6;
 const IDENT = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 
 /** Validate the Datastar attributes on one tag. */
-export function validateAttributes(tag: Tag, prefix: string): Issue[] {
+/** Validate the Datastar attributes on one tag; with its text, a template construct the tokenizer stepped over is seen too. */
+export function validateAttributes(tag: Tag, prefix: string, tagSource?: string): Issue[] {
   const issues: Issue[] = [];
   for (const attr of tag.attributes) {
     const lower = asciiLowercase(attr.name);
@@ -475,7 +476,7 @@ export function validateAttributes(tag: Tag, prefix: string): Issue[] {
       issues.push({ start: attr.valueStart, end: attr.valueStart + attr.value.length, message: `${prefix}${spec.name} takes no value.`, severity: "warning", code: "unexpected-value" });
     }
   }
-  issues.push(...indicatorWithoutAction(tag, prefix));
+  issues.push(...indicatorWithoutAction(tag, prefix, tagSource));
   return issues;
 }
 
@@ -564,22 +565,29 @@ function validateKeyCase(attr: Attribute, parsed: { key: string | null; base: st
   }];
 }
 
-/** A call to one of the actions that send a request. */
-const BACKEND_ACTION = /@(?:get|post|put|patch|delete)\s*\(/;
+/** A call to one of the actions the catalog lists as sending a request. */
+const BACKEND_ACTION = new RegExp("@(?:" + catalog.actions.filter((a) => a.kind === "backend").map((a) => a.name).join("|") + ")\\s*\\(");
+
+/** An attribute name as a browser parses it, without template syntax or a spread in it. */
+const PLAIN_ATTRIBUTE_NAME = /^[A-Za-z_:][A-Za-z0-9_:.@-]*$/;
+
+/** A modifier name with arguments run into it by underscores, and nothing else. */
+const MODIFIER_WORD = /^[a-z][a-z0-9]*(?:_[A-Za-z0-9]+)+$/;
 
 /**
  * `data-indicator` tracks the requests its own element sends: the client matches the fetch event's
  * element against it. On an element whose attributes send none, it never turns on. Elements with
  * template syntax in an attribute are left alone, since what they send is not known until rendered.
  */
-function indicatorWithoutAction(tag: Tag, prefix: string): Issue[] {
+function indicatorWithoutAction(tag: Tag, prefix: string, tagSource?: string): Issue[] {
   const indicator = tag.attributes.find((a) => {
-    const lower = a.name.toLowerCase();
+    const lower = asciiLowercase(a.name);
     return lower === `${prefix}indicator` || lower.startsWith(`${prefix}indicator:`) || lower.startsWith(`${prefix}indicator__`);
   });
   if (!indicator) return [];
-  if (tag.attributes.some((a) => a.value !== null && hasTemplateSyntax(a.value))) return [];
-  const sends = tag.attributes.some((a) => a.name.toLowerCase().startsWith(prefix) && a.value !== null && BACKEND_ACTION.test(decodeEntities(a.value).text));
+  // Template syntax in a value, or attributes spread into the tag by name, leave what it sends unknown until rendered.
+  if ((tagSource !== undefined && hasTemplateSyntax(tagSource)) || tag.attributes.some((a) => (a.value !== null && hasTemplateSyntax(a.value)) || !PLAIN_ATTRIBUTE_NAME.test(a.name))) return [];
+  const sends = tag.attributes.some((a) => asciiLowercase(a.name).startsWith(prefix) && a.value !== null && BACKEND_ACTION.test(decodeEntities(a.value).text));
   if (sends) return [];
   return [{
     start: indicator.nameStart,
@@ -591,10 +599,13 @@ function indicatorWithoutAction(tag: Tag, prefix: string): Issue[] {
   }];
 }
 
-/** `debounce_150ms` read as `debounce.150ms`, when the part before the first underscore is a modifier that takes arguments. */
+/**
+ * `debounce_150ms` read as `debounce.150ms`, when the part before the first underscore is a modifier
+ * that takes arguments and the rest is plain words; null otherwise.
+ */
 function dottedArguments(name: string, spec: AttributeSpec): string | null {
   const underscore = name.indexOf("_");
-  if (underscore <= 0 || underscore === name.length - 1) return null;
+  if (underscore <= 0 || underscore === name.length - 1 || !MODIFIER_WORD.test(name)) return null;
   const head = name.slice(0, underscore);
   const modifier = spec.modifiers.find((m) => m.name === head);
   if (!modifier || modifier.type === "flag") return null;
@@ -603,22 +614,17 @@ function dottedArguments(name: string, spec: AttributeSpec): string | null {
 
 function validateModifierArgs(spec: AttributeSpec["modifiers"][number], args: string[], start: number, end: number, attrName: string, attribute: AttributeSpec): Issue[] {
   const issues: Issue[] = [];
-  const fail = (message: string) => issues.push({ start, end, message, severity: "error", code: "modifier-args" });
+  const fail = (message: string, fixes?: Issue["fixes"]) => issues.push({ start, end, message, severity: "error", code: "modifier-args", ...(fixes ? { fixes } : {}) });
   switch (spec.type) {
     case "flag": {
       // __prevent.stop: a second modifier joined with a dot, read as an argument.
-      const siblings = attribute.modifiers.map((m) => m.name);
+      const siblings = attribute.modifiers.filter((m) => m.type === "flag").map((m) => m.name);
       if (args.length > 0 && args.every((a) => siblings.includes(a))) {
         const joined = args.map((a) => "__" + a).join("");
         const at = start + spec.name.length;
-        issues.push({
-          start,
-          end,
-          message: `__${spec.name} takes no arguments. Each modifier starts with two underscores: __${spec.name}${joined}.`,
-          severity: "error",
-          code: "modifier-args",
-          fixes: [{ title: `Change to __${spec.name}${joined}`, start: at, end, text: joined }],
-        });
+        fail(`__${spec.name} takes no arguments. Each modifier starts with two underscores: __${spec.name}${joined}.`, [
+          { title: `Change to __${spec.name}${joined}`, start: at, end, text: joined },
+        ]);
       } else if (args.length > 0) {
         fail(`__${spec.name} takes no arguments.`);
       }

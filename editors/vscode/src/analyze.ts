@@ -372,7 +372,7 @@ export function analyzeHtml(src: string, opts: AnalyzeOptions): Issue[] {
   const issues: Issue[] = [];
   for (const tag of tokenize(src).tags) {
     if (tag.closing) continue;
-    issues.push(...validateAttributes(tag, opts.prefix));
+    issues.push(...validateAttributes(tag, opts.prefix, src.slice(tag.start, tag.end)));
   }
   return issues;
 }

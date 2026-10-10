@@ -458,6 +458,7 @@ public final class io/github/markusaugust/streamlord/analysis/MarkupValidator {
 	public fun <init> (Lio/github/markusaugust/streamlord/analysis/Catalog;)V
 	public synthetic fun <init> (Lio/github/markusaugust/streamlord/analysis/Catalog;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun validateAttributes (Lio/github/markusaugust/streamlord/analysis/Tag;Ljava/lang/String;)Ljava/util/List;
+	public final fun validateAttributes (Lio/github/markusaugust/streamlord/analysis/Tag;Ljava/lang/String;Ljava/lang/String;)Ljava/util/List;
 	public final fun validateMarkup (Ljava/lang/String;Lio/github/markusaugust/streamlord/analysis/MarkupOptions;)Ljava/util/List;
 }
 
