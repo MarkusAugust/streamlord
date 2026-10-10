@@ -23,13 +23,18 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.withContext
 import kotlinx.html.div
 import kotlinx.html.id
 import kotlinx.serialization.Serializable
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 
 class KtorAdapterTest {
     @Serializable
@@ -37,6 +42,22 @@ class KtorAdapterTest {
         val query: String = "",
         val page: Int = 1,
     )
+
+    @Test
+    fun `the plugin's heartbeat reaches a silent stream`() =
+        testApplication {
+            install(StreamlordPlugin) { heartbeat = 50.milliseconds }
+            routing {
+                get("/quiet") {
+                    // Real time, not the test's virtual clock: the heartbeat has to fall due.
+                    call.respondDatastar { withContext(Dispatchers.Default) { delay(300.milliseconds) } }
+                }
+            }
+
+            val body = client.get("/quiet").bodyAsText()
+
+            assertTrue(": keep-alive" in body, body)
+        }
 
     @Test
     fun `streams events with the right headers`() =

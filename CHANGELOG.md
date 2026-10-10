@@ -12,6 +12,10 @@ All notable changes to Streamlord are recorded here. The format follows
   custom elements, window events from plain scripts, `data-ignore-morph` on both sides of a
   morph, optimistic state rolled back on a failed fetch), and the signals page covers signals that
   stay in the browser, `filterSignals` and `payloadExpr`.
+- `Streamlord(heartbeat = ...)` and `heartbeat` on the Ktor plugin: a `: keep-alive` comment on
+  every Ktor and Spring WebMVC stream that has written nothing for that long, so an idle proxy
+  keeps the connection open. With a `StreamAuthorisation`, an idle stream is asked again on the
+  heartbeat's schedule. WebFlux's `asServerSentEvents` is not covered. Off by default.
 - `streamlord-analysis`, for both editors: `signalReferencesInKotlin` and `signalReferencesInHtml`, every `$name` a
   Datastar expression reads, with source offsets; `collectSignalDefinitions`, the signals a file
   defines without the ones it only reads, plus every `$name = ...` an expression assigns; and

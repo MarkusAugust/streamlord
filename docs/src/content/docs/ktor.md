@@ -31,6 +31,9 @@ owns the Content Security Policy nonce at both ends and gives `call.cspNonce` it
 [Security](/security/). `respondDatastar` also takes an `authorisation`, for a stream that should
 be asked again whether it may still run, which is on [Operations](/operations/).
 
+`heartbeat` in the plugin writes a keep-alive comment on every stream that has been silent that
+long, for the proxies in between; it is on [Operations](/operations/#heartbeats).
+
 ## One-shot streams
 
 The response opens, your block runs, and the response closes when the block returns.

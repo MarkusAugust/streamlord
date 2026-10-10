@@ -34,6 +34,11 @@ import kotlin.time.Duration.Companion.seconds
  * @property onRefused Run on the stream after a refusal and before it closes, so the reader can
  *   be told. Patch an element, patch a signal, `redirect("/login")`: the stream is still open
  *   here and this is the last thing that goes down it. The default says nothing and closes.
+ *   It runs to the end even while the handler is being cancelled, so that a frame already under
+ *   way is finished rather than cut, and is therefore given [LAST_WORDS_LIMIT] and no longer; a
+ *   frame still being written at the limit is cut there, and the client drops it. A write that
+ *   blocks its thread, as a servlet's does, cannot be cut, so the limit bounds a suspending
+ *   [onRefused] and not a blocking one.
  * @property allows The question. `false` ends the stream.
  */
 public class StreamAuthorisation(
@@ -48,5 +53,8 @@ public class StreamAuthorisation(
     public companion object {
         /** Long enough that a database check costs nothing per patch, short enough to matter. */
         public val DEFAULT_INTERVAL: Duration = 5.seconds
+
+        /** How long [onRefused] may take: ample for a patch or a redirect, and then the stream closes. */
+        public val LAST_WORDS_LIMIT: Duration = 5.seconds
     }
 }

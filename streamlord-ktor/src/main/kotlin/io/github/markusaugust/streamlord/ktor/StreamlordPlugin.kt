@@ -6,6 +6,7 @@ import io.github.markusaugust.streamlord.core.port.driven.SignalsCodec
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.createApplicationPlugin
 import io.ktor.util.AttributeKey
+import kotlin.time.Duration
 
 /**
  * Configuration for the [StreamlordPlugin]. Either hand over a fully built [streamlord], or set
@@ -32,12 +33,19 @@ public class StreamlordPluginConfig {
     /** The `data-*` prefixes the guard recognises; `data-` and `data-star-` unless you alias the bundle. */
     public var attributePrefixes: List<String> = ElementsGuard.defaultPrefixes
 
+    /**
+     * Write an SSE comment whenever a stream has been silent this long, so an idle proxy keeps the
+     * connection open. Any frame resets the wait. Off when null, which is the default.
+     */
+    public var heartbeat: Duration? = null
+
     internal fun build(): Streamlord =
         streamlord ?: Streamlord(
             codec = codec ?: Streamlord.Default.codec,
             maxSignalsSize = maxSignalsSize,
             guardElements = guardElements,
             attributePrefixes = attributePrefixes,
+            heartbeat = heartbeat,
         )
 }
 
