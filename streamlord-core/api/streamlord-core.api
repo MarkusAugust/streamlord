@@ -1,0 +1,716 @@
+public final class io/github/markusaugust/streamlord/core/DatastarEventValidationException : io/github/markusaugust/streamlord/core/StreamlordException {
+	public fun <init> (Ljava/lang/String;)V
+}
+
+public final class io/github/markusaugust/streamlord/core/JsonParseException : io/github/markusaugust/streamlord/core/StreamlordException {
+	public fun <init> (Ljava/lang/String;I)V
+	public final fun getPosition ()I
+}
+
+public final class io/github/markusaugust/streamlord/core/SignalsCodecException : io/github/markusaugust/streamlord/core/StreamlordException {
+	public fun <init> (Ljava/lang/String;Ljava/lang/Throwable;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+}
+
+public final class io/github/markusaugust/streamlord/core/SignalsTooLargeException : io/github/markusaugust/streamlord/core/StreamlordException {
+	public fun <init> (JI)V
+	public final fun getActualSize ()J
+	public final fun getMaxSize ()I
+}
+
+public final class io/github/markusaugust/streamlord/core/StreamRefusedException : io/github/markusaugust/streamlord/core/StreamlordException {
+	public fun <init> ()V
+}
+
+public class io/github/markusaugust/streamlord/core/StreamlordException : java/lang/RuntimeException {
+	public fun <init> (Ljava/lang/String;Ljava/lang/Throwable;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+}
+
+public final class io/github/markusaugust/streamlord/core/application/StreamAuthorisation {
+	public static final field Companion Lio/github/markusaugust/streamlord/core/application/StreamAuthorisation$Companion;
+	public synthetic fun <init> (JLkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (JLkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getAllows ()Lkotlin/jvm/functions/Function1;
+	public final fun getEvery-UwyO8pc ()J
+	public final fun getOnRefused ()Lkotlin/jvm/functions/Function2;
+}
+
+public final class io/github/markusaugust/streamlord/core/application/StreamAuthorisation$Companion {
+	public final fun getDEFAULT_INTERVAL-UwyO8pc ()J
+}
+
+public final class io/github/markusaugust/streamlord/core/application/Streamlord {
+	public static final field Companion Lio/github/markusaugust/streamlord/core/application/Streamlord$Companion;
+	public static final field DEFAULT_MAX_SIGNALS_SIZE I
+	public fun <init> ()V
+	public fun <init> (Lio/github/markusaugust/streamlord/core/port/driven/SignalsCodec;IZLjava/util/List;)V
+	public synthetic fun <init> (Lio/github/markusaugust/streamlord/core/port/driven/SignalsCodec;IZLjava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun encode (Lkotlinx/coroutines/flow/Flow;)Lkotlinx/coroutines/flow/Flow;
+	public final fun getAttributePrefixes ()Ljava/util/List;
+	public final fun getCodec ()Lio/github/markusaugust/streamlord/core/port/driven/SignalsCodec;
+	public final fun getGuardElements ()Z
+	public final fun getMaxSignalsSize ()I
+	public final fun guard (Lio/github/markusaugust/streamlord/core/domain/DatastarEvent;)Lio/github/markusaugust/streamlord/core/domain/DatastarEvent;
+	public final fun guard (Lio/github/markusaugust/streamlord/core/domain/DatastarResponse;)Lio/github/markusaugust/streamlord/core/domain/DatastarResponse;
+	public final fun readSignals (Lio/github/markusaugust/streamlord/core/port/driven/IncomingRequest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun readSignals (Lio/github/markusaugust/streamlord/core/port/driven/IncomingRequest;Lkotlin/reflect/KType;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun readSignalsJson (Lio/github/markusaugust/streamlord/core/port/driven/IncomingRequest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun stream (Lio/github/markusaugust/streamlord/core/port/driven/SseSink;)Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;
+	public final fun stream (Lio/github/markusaugust/streamlord/core/port/driven/SseSink;Lio/github/markusaugust/streamlord/core/application/StreamAuthorisation;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class io/github/markusaugust/streamlord/core/application/Streamlord$Companion {
+	public final fun getDefault ()Lio/github/markusaugust/streamlord/core/application/Streamlord;
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/CspNonce {
+	public static final field ATTRIBUTE Ljava/lang/String;
+	public static final field HEADER Ljava/lang/String;
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/domain/CspNonce;
+	public static final field REPORT_ONLY_HEADER Ljava/lang/String;
+	public final fun checked (Ljava/lang/String;)Ljava/lang/String;
+	public final fun generate ()Ljava/lang/String;
+	public final fun starterPolicy (Ljava/lang/String;)Ljava/lang/String;
+}
+
+public abstract interface class io/github/markusaugust/streamlord/core/domain/DatastarEvent {
+	public abstract fun getEventId ()Ljava/lang/String;
+	public abstract fun getRetry-FghU774 ()Lkotlin/time/Duration;
+}
+
+public abstract interface class io/github/markusaugust/streamlord/core/domain/DatastarResponse {
+	public abstract fun getBody ()Ljava/lang/String;
+	public abstract fun getContentType ()Ljava/lang/String;
+	public abstract fun getHeaders ()Ljava/util/Map;
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/ElementNamespace : java/lang/Enum {
+	public static final field Companion Lio/github/markusaugust/streamlord/core/domain/ElementNamespace$Companion;
+	public static final field HTML Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;
+	public static final field MATHML Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;
+	public static final field SVG Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getWire ()Ljava/lang/String;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;
+	public static fun values ()[Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/ElementNamespace$Companion {
+	public final fun fromWire (Ljava/lang/String;)Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;
+	public final fun getDEFAULT ()Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/ElementPatchMode : java/lang/Enum {
+	public static final field AFTER Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;
+	public static final field APPEND Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;
+	public static final field BEFORE Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;
+	public static final field Companion Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode$Companion;
+	public static final field INNER Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;
+	public static final field OUTER Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;
+	public static final field PREPEND Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;
+	public static final field REMOVE Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;
+	public static final field REPLACE Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getRequiresSelector ()Z
+	public final fun getWire ()Ljava/lang/String;
+	public final fun isMorph ()Z
+	public static fun valueOf (Ljava/lang/String;)Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;
+	public static fun values ()[Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/ElementPatchMode$Companion {
+	public final fun fromWire (Ljava/lang/String;)Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;
+	public final fun getDEFAULT ()Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/ElementsGuard {
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/domain/ElementsGuard;
+	public final fun check (Ljava/lang/String;Ljava/util/List;)Ljava/lang/String;
+	public static synthetic fun check$default (Lio/github/markusaugust/streamlord/core/domain/ElementsGuard;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Ljava/lang/String;
+	public final fun getAttributes ()Ljava/util/Set;
+	public final fun getDefaultPrefixes ()Ljava/util/List;
+	public final fun getExpressionAttributes ()Ljava/util/Set;
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/ElementsResponse : io/github/markusaugust/streamlord/core/domain/DatastarResponse {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;Z)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;
+	public final fun component4 ()Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;
+	public final fun component5 ()Z
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;Z)Lio/github/markusaugust/streamlord/core/domain/ElementsResponse;
+	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/core/domain/ElementsResponse;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/domain/ElementsResponse;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun getBody ()Ljava/lang/String;
+	public fun getContentType ()Ljava/lang/String;
+	public final fun getElements ()Ljava/lang/String;
+	public fun getHeaders ()Ljava/util/Map;
+	public final fun getMode ()Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;
+	public final fun getNamespace ()Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;
+	public final fun getSelector ()Ljava/lang/String;
+	public final fun getUseViewTransition ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/ExecuteScript : io/github/markusaugust/streamlord/core/domain/DatastarEvent {
+	public synthetic fun <init> (Ljava/lang/String;ZLjava/util/Map;Ljava/lang/String;Lkotlin/time/Duration;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ljava/lang/String;ZLjava/util/Map;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Z
+	public final fun component3 ()Ljava/util/Map;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5-FghU774 ()Lkotlin/time/Duration;
+	public final fun copy-jSaE0eg (Ljava/lang/String;ZLjava/util/Map;Ljava/lang/String;Lkotlin/time/Duration;)Lio/github/markusaugust/streamlord/core/domain/ExecuteScript;
+	public static synthetic fun copy-jSaE0eg$default (Lio/github/markusaugust/streamlord/core/domain/ExecuteScript;Ljava/lang/String;ZLjava/util/Map;Ljava/lang/String;Lkotlin/time/Duration;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/domain/ExecuteScript;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAttributes ()Ljava/util/Map;
+	public final fun getAutoRemove ()Z
+	public fun getEventId ()Ljava/lang/String;
+	public fun getRetry-FghU774 ()Lkotlin/time/Duration;
+	public final fun getScript ()Ljava/lang/String;
+	public final fun getScriptTag ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun toPatchElements ()Lio/github/markusaugust/streamlord/core/domain/PatchElements;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/ExpressionGuard {
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/domain/ExpressionGuard;
+	public final fun check (Ljava/lang/String;)Ljava/lang/String;
+	public final fun check (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/InterpolatedExpressionException : io/github/markusaugust/streamlord/core/StreamlordException {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getAttribute ()Ljava/lang/String;
+	public final fun getExpression ()Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/InterpolationKt {
+	public static final fun interpolate (Ljava/lang/String;Ljava/util/List;Ljava/util/List;)Ljava/lang/String;
+	public static final fun interpolate (Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+	public static synthetic fun interpolate$default (Ljava/lang/String;Ljava/util/List;Ljava/util/List;ILjava/lang/Object;)Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/MistypedAttributeException : io/github/markusaugust/streamlord/core/StreamlordException {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun getAttribute ()Ljava/lang/String;
+	public final fun getSuggestion ()Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/PatchElements : io/github/markusaugust/streamlord/core/domain/DatastarEvent {
+	public static final field Companion Lio/github/markusaugust/streamlord/core/domain/PatchElements$Companion;
+	public fun <init> ()V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;
+	public final fun component4 ()Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;
+	public final fun component5 ()Z
+	public final fun component6 ()Ljava/lang/String;
+	public final fun component7 ()Ljava/lang/String;
+	public final fun component8-FghU774 ()Lkotlin/time/Duration;
+	public final fun copy-bAucREo (Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;)Lio/github/markusaugust/streamlord/core/domain/PatchElements;
+	public static synthetic fun copy-bAucREo$default (Lio/github/markusaugust/streamlord/core/domain/PatchElements;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/domain/PatchElements;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getElements ()Ljava/lang/String;
+	public fun getEventId ()Ljava/lang/String;
+	public final fun getMode ()Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;
+	public final fun getNamespace ()Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;
+	public fun getRetry-FghU774 ()Lkotlin/time/Duration;
+	public final fun getSelector ()Ljava/lang/String;
+	public final fun getUseViewTransition ()Z
+	public final fun getViewTransitionSelector ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/PatchElements$Companion {
+	public final fun remove-Q2Q30fc (Ljava/lang/String;ZLjava/lang/String;Lkotlin/time/Duration;)Lio/github/markusaugust/streamlord/core/domain/PatchElements;
+	public static synthetic fun remove-Q2Q30fc$default (Lio/github/markusaugust/streamlord/core/domain/PatchElements$Companion;Ljava/lang/String;ZLjava/lang/String;Lkotlin/time/Duration;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/domain/PatchElements;
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/PatchSignals : io/github/markusaugust/streamlord/core/domain/DatastarEvent {
+	public synthetic fun <init> (Ljava/lang/String;ZLjava/lang/String;Lkotlin/time/Duration;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ljava/lang/String;ZLjava/lang/String;Lkotlin/time/Duration;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Z
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4-FghU774 ()Lkotlin/time/Duration;
+	public final fun copy-Q2Q30fc (Ljava/lang/String;ZLjava/lang/String;Lkotlin/time/Duration;)Lio/github/markusaugust/streamlord/core/domain/PatchSignals;
+	public static synthetic fun copy-Q2Q30fc$default (Lio/github/markusaugust/streamlord/core/domain/PatchSignals;Ljava/lang/String;ZLjava/lang/String;Lkotlin/time/Duration;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/domain/PatchSignals;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun getEventId ()Ljava/lang/String;
+	public final fun getOnlyIfMissing ()Z
+	public fun getRetry-FghU774 ()Lkotlin/time/Duration;
+	public final fun getSignals ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/Position : java/lang/Enum {
+	public static final field ATTRIBUTE Lio/github/markusaugust/streamlord/core/domain/Position;
+	public static final field CODE Lio/github/markusaugust/streamlord/core/domain/Position;
+	public static final field DATASTAR Lio/github/markusaugust/streamlord/core/domain/Position;
+	public static final field STRUCTURE Lio/github/markusaugust/streamlord/core/domain/Position;
+	public static final field STYLE Lio/github/markusaugust/streamlord/core/domain/Position;
+	public static final field TEXT Lio/github/markusaugust/streamlord/core/domain/Position;
+	public static final field URL Lio/github/markusaugust/streamlord/core/domain/Position;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/markusaugust/streamlord/core/domain/Position;
+	public static fun values ()[Lio/github/markusaugust/streamlord/core/domain/Position;
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/ScriptResponse : io/github/markusaugust/streamlord/core/domain/DatastarResponse {
+	public fun <init> (Ljava/lang/String;Ljava/util/Map;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/util/Map;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/util/Map;
+	public final fun copy (Ljava/lang/String;Ljava/util/Map;)Lio/github/markusaugust/streamlord/core/domain/ScriptResponse;
+	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/core/domain/ScriptResponse;Ljava/lang/String;Ljava/util/Map;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/domain/ScriptResponse;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAttributes ()Ljava/util/Map;
+	public fun getBody ()Ljava/lang/String;
+	public fun getContentType ()Ljava/lang/String;
+	public fun getHeaders ()Ljava/util/Map;
+	public final fun getScript ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/SignalsResponse : io/github/markusaugust/streamlord/core/domain/DatastarResponse {
+	public fun <init> (Ljava/lang/String;Z)V
+	public synthetic fun <init> (Ljava/lang/String;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Z
+	public final fun copy (Ljava/lang/String;Z)Lio/github/markusaugust/streamlord/core/domain/SignalsResponse;
+	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/core/domain/SignalsResponse;Ljava/lang/String;ZILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/domain/SignalsResponse;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun getBody ()Ljava/lang/String;
+	public fun getContentType ()Ljava/lang/String;
+	public fun getHeaders ()Ljava/util/Map;
+	public final fun getOnlyIfMissing ()Z
+	public final fun getSignals ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/Trusted {
+	public static final synthetic fun box-impl (Ljava/lang/String;)Lio/github/markusaugust/streamlord/core/domain/Trusted;
+	public static fun constructor-impl (Ljava/lang/String;)Ljava/lang/String;
+	public fun equals (Ljava/lang/Object;)Z
+	public static fun equals-impl (Ljava/lang/String;Ljava/lang/Object;)Z
+	public static final fun equals-impl0 (Ljava/lang/String;Ljava/lang/String;)Z
+	public final fun getHtml ()Ljava/lang/String;
+	public fun hashCode ()I
+	public static fun hashCode-impl (Ljava/lang/String;)I
+	public fun toString ()Ljava/lang/String;
+	public static fun toString-impl (Ljava/lang/String;)Ljava/lang/String;
+	public final synthetic fun unbox-impl ()Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/UnsafeInterpolationException : io/github/markusaugust/streamlord/core/StreamlordException {
+	public fun <init> (Lio/github/markusaugust/streamlord/core/domain/Position;ILjava/lang/String;)V
+	public synthetic fun <init> (Lio/github/markusaugust/streamlord/core/domain/Position;ILjava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getAttribute ()Ljava/lang/String;
+	public final fun getIndex ()I
+	public final fun getPosition ()Lio/github/markusaugust/streamlord/core/domain/Position;
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/Wire {
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/domain/Wire;
+	public final fun attributeName (Ljava/lang/String;)Ljava/lang/String;
+	public final fun escapeAttribute (Ljava/lang/String;)Ljava/lang/String;
+	public final fun escapeScriptBody (Ljava/lang/String;)Ljava/lang/String;
+	public final fun lines (Ljava/lang/String;)Ljava/util/List;
+	public final fun selector (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+	public static synthetic fun selector$default (Lio/github/markusaugust/streamlord/core/domain/Wire;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/String;
+	public final fun singleLine (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/json/JsonArray : io/github/markusaugust/streamlord/core/json/JsonValue, java/util/List, kotlin/jvm/internal/markers/KMappedMarker {
+	public fun <init> (Ljava/util/List;)V
+	public fun add (ILio/github/markusaugust/streamlord/core/json/JsonValue;)V
+	public synthetic fun add (ILjava/lang/Object;)V
+	public fun add (Lio/github/markusaugust/streamlord/core/json/JsonValue;)Z
+	public synthetic fun add (Ljava/lang/Object;)Z
+	public fun addAll (ILjava/util/Collection;)Z
+	public fun addAll (Ljava/util/Collection;)Z
+	public fun clear ()V
+	public fun contains (Lio/github/markusaugust/streamlord/core/json/JsonValue;)Z
+	public final fun contains (Ljava/lang/Object;)Z
+	public fun containsAll (Ljava/util/Collection;)Z
+	public fun equals (Ljava/lang/Object;)Z
+	public fun get (I)Lio/github/markusaugust/streamlord/core/json/JsonValue;
+	public synthetic fun get (I)Ljava/lang/Object;
+	public fun getSize ()I
+	public fun hashCode ()I
+	public fun indexOf (Lio/github/markusaugust/streamlord/core/json/JsonValue;)I
+	public final fun indexOf (Ljava/lang/Object;)I
+	public fun isEmpty ()Z
+	public fun iterator ()Ljava/util/Iterator;
+	public fun lastIndexOf (Lio/github/markusaugust/streamlord/core/json/JsonValue;)I
+	public final fun lastIndexOf (Ljava/lang/Object;)I
+	public fun listIterator ()Ljava/util/ListIterator;
+	public fun listIterator (I)Ljava/util/ListIterator;
+	public final fun objects ()Ljava/util/List;
+	public fun remove (I)Lio/github/markusaugust/streamlord/core/json/JsonValue;
+	public synthetic fun remove (I)Ljava/lang/Object;
+	public fun remove (Ljava/lang/Object;)Z
+	public fun removeAll (Ljava/util/Collection;)Z
+	public fun replaceAll (Ljava/util/function/UnaryOperator;)V
+	public fun retainAll (Ljava/util/Collection;)Z
+	public fun set (ILio/github/markusaugust/streamlord/core/json/JsonValue;)Lio/github/markusaugust/streamlord/core/json/JsonValue;
+	public synthetic fun set (ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun size ()I
+	public fun sort (Ljava/util/Comparator;)V
+	public final fun strings ()Ljava/util/List;
+	public fun subList (II)Ljava/util/List;
+	public fun toArray ()[Ljava/lang/Object;
+	public fun toArray ([Ljava/lang/Object;)[Ljava/lang/Object;
+	public fun toJson ()Ljava/lang/String;
+	public synthetic fun toKotlin ()Ljava/lang/Object;
+	public fun toKotlin ()Ljava/util/List;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/json/JsonBoolean : io/github/markusaugust/streamlord/core/json/JsonValue {
+	public static final field Companion Lio/github/markusaugust/streamlord/core/json/JsonBoolean$Companion;
+	public fun <init> (Z)V
+	public final fun component1 ()Z
+	public final fun copy (Z)Lio/github/markusaugust/streamlord/core/json/JsonBoolean;
+	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/core/json/JsonBoolean;ZILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/json/JsonBoolean;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getValue ()Z
+	public fun hashCode ()I
+	public fun toJson ()Ljava/lang/String;
+	public fun toKotlin ()Ljava/lang/Boolean;
+	public synthetic fun toKotlin ()Ljava/lang/Object;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/json/JsonBoolean$Companion {
+	public final fun getFALSE ()Lio/github/markusaugust/streamlord/core/json/JsonBoolean;
+	public final fun getTRUE ()Lio/github/markusaugust/streamlord/core/json/JsonBoolean;
+}
+
+public final class io/github/markusaugust/streamlord/core/json/JsonMergeKt {
+	public static final fun mergePatch (Lio/github/markusaugust/streamlord/core/json/JsonValue;Lio/github/markusaugust/streamlord/core/json/JsonValue;)Lio/github/markusaugust/streamlord/core/json/JsonValue;
+}
+
+public final class io/github/markusaugust/streamlord/core/json/JsonNull : io/github/markusaugust/streamlord/core/json/JsonValue {
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/json/JsonNull;
+	public fun toJson ()Ljava/lang/String;
+	public synthetic fun toKotlin ()Ljava/lang/Object;
+	public fun toKotlin ()Ljava/lang/Void;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/json/JsonNumber : io/github/markusaugust/streamlord/core/json/JsonValue {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/github/markusaugust/streamlord/core/json/JsonNumber;
+	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/core/json/JsonNumber;Ljava/lang/String;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/json/JsonNumber;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getText ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun toBigDecimal ()Ljava/math/BigDecimal;
+	public final fun toBigDecimalOrNull ()Ljava/math/BigDecimal;
+	public final fun toDouble ()D
+	public final fun toIntOrNull ()Ljava/lang/Integer;
+	public fun toJson ()Ljava/lang/String;
+	public fun toKotlin ()Ljava/lang/Number;
+	public synthetic fun toKotlin ()Ljava/lang/Object;
+	public final fun toLongOrNull ()Ljava/lang/Long;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/json/JsonObject : io/github/markusaugust/streamlord/core/json/JsonValue, java/util/Map, kotlin/jvm/internal/markers/KMappedMarker {
+	public static final field Companion Lio/github/markusaugust/streamlord/core/json/JsonObject$Companion;
+	public fun <init> (Ljava/util/Map;)V
+	public final fun array (Ljava/lang/String;)Lio/github/markusaugust/streamlord/core/json/JsonArray;
+	public final fun boolean (Ljava/lang/String;)Ljava/lang/Boolean;
+	public fun clear ()V
+	public synthetic fun compute (Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;
+	public fun compute (Ljava/lang/String;Ljava/util/function/BiFunction;)Lio/github/markusaugust/streamlord/core/json/JsonValue;
+	public synthetic fun computeIfAbsent (Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;
+	public fun computeIfAbsent (Ljava/lang/String;Ljava/util/function/Function;)Lio/github/markusaugust/streamlord/core/json/JsonValue;
+	public synthetic fun computeIfPresent (Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;
+	public fun computeIfPresent (Ljava/lang/String;Ljava/util/function/BiFunction;)Lio/github/markusaugust/streamlord/core/json/JsonValue;
+	public final fun containsKey (Ljava/lang/Object;)Z
+	public fun containsKey (Ljava/lang/String;)Z
+	public fun containsValue (Lio/github/markusaugust/streamlord/core/json/JsonValue;)Z
+	public final fun containsValue (Ljava/lang/Object;)Z
+	public final fun decimal (Ljava/lang/String;)Ljava/math/BigDecimal;
+	public final fun double (Ljava/lang/String;)Ljava/lang/Double;
+	public final fun entrySet ()Ljava/util/Set;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun get (Ljava/lang/Object;)Lio/github/markusaugust/streamlord/core/json/JsonValue;
+	public final synthetic fun get (Ljava/lang/Object;)Ljava/lang/Object;
+	public fun get (Ljava/lang/String;)Lio/github/markusaugust/streamlord/core/json/JsonValue;
+	public fun getEntries ()Ljava/util/Set;
+	public fun getKeys ()Ljava/util/Set;
+	public fun getSize ()I
+	public fun getValues ()Ljava/util/Collection;
+	public final fun has (Ljava/lang/String;)Z
+	public fun hashCode ()I
+	public final fun int (Ljava/lang/String;)Ljava/lang/Integer;
+	public fun isEmpty ()Z
+	public final fun keySet ()Ljava/util/Set;
+	public final fun long (Ljava/lang/String;)Ljava/lang/Long;
+	public synthetic fun merge (Ljava/lang/Object;Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;
+	public fun merge (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/json/JsonValue;Ljava/util/function/BiFunction;)Lio/github/markusaugust/streamlord/core/json/JsonValue;
+	public final fun obj (Ljava/lang/String;)Lio/github/markusaugust/streamlord/core/json/JsonObject;
+	public final fun path ([Ljava/lang/String;)Lio/github/markusaugust/streamlord/core/json/JsonValue;
+	public synthetic fun put (Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+	public fun put (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/json/JsonValue;)Lio/github/markusaugust/streamlord/core/json/JsonValue;
+	public fun putAll (Ljava/util/Map;)V
+	public synthetic fun putIfAbsent (Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+	public fun putIfAbsent (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/json/JsonValue;)Lio/github/markusaugust/streamlord/core/json/JsonValue;
+	public fun remove (Ljava/lang/Object;)Lio/github/markusaugust/streamlord/core/json/JsonValue;
+	public synthetic fun remove (Ljava/lang/Object;)Ljava/lang/Object;
+	public fun remove (Ljava/lang/Object;Ljava/lang/Object;)Z
+	public synthetic fun replace (Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+	public synthetic fun replace (Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z
+	public fun replace (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/json/JsonValue;)Lio/github/markusaugust/streamlord/core/json/JsonValue;
+	public fun replace (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/json/JsonValue;Lio/github/markusaugust/streamlord/core/json/JsonValue;)Z
+	public fun replaceAll (Ljava/util/function/BiFunction;)V
+	public final fun size ()I
+	public final fun string (Ljava/lang/String;)Ljava/lang/String;
+	public fun toJson ()Ljava/lang/String;
+	public synthetic fun toKotlin ()Ljava/lang/Object;
+	public fun toKotlin ()Ljava/util/Map;
+	public fun toString ()Ljava/lang/String;
+	public final fun values ()Ljava/util/Collection;
+}
+
+public final class io/github/markusaugust/streamlord/core/json/JsonObject$Companion {
+	public final fun getEMPTY ()Lio/github/markusaugust/streamlord/core/json/JsonObject;
+}
+
+public final class io/github/markusaugust/streamlord/core/json/JsonParser {
+	public static final field DEFAULT_MAX_DEPTH I
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/json/JsonParser;
+	public static final field MAX_NUMBER_LENGTH I
+	public final fun parse (Ljava/lang/String;I)Lio/github/markusaugust/streamlord/core/json/JsonValue;
+	public static synthetic fun parse$default (Lio/github/markusaugust/streamlord/core/json/JsonParser;Ljava/lang/String;IILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/json/JsonValue;
+	public final fun parseObject (Ljava/lang/String;I)Lio/github/markusaugust/streamlord/core/json/JsonObject;
+	public static synthetic fun parseObject$default (Lio/github/markusaugust/streamlord/core/json/JsonParser;Ljava/lang/String;IILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/json/JsonObject;
+}
+
+public final class io/github/markusaugust/streamlord/core/json/JsonString : io/github/markusaugust/streamlord/core/json/JsonValue {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lio/github/markusaugust/streamlord/core/json/JsonString;
+	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/core/json/JsonString;Ljava/lang/String;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/json/JsonString;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getValue ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toJson ()Ljava/lang/String;
+	public synthetic fun toKotlin ()Ljava/lang/Object;
+	public fun toKotlin ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class io/github/markusaugust/streamlord/core/json/JsonValue {
+	public fun toJson ()Ljava/lang/String;
+	public abstract fun toKotlin ()Ljava/lang/Object;
+}
+
+public final class io/github/markusaugust/streamlord/core/json/JsonValue$DefaultImpls {
+	public static fun toJson (Lio/github/markusaugust/streamlord/core/json/JsonValue;)Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/json/JsonWriter {
+	public static final field DEFAULT_MAX_DEPTH I
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/json/JsonWriter;
+	public final fun write (Ljava/lang/Object;I)Ljava/lang/String;
+	public static synthetic fun write$default (Lio/github/markusaugust/streamlord/core/json/JsonWriter;Ljava/lang/Object;IILjava/lang/Object;)Ljava/lang/String;
+	public final fun writeString (Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/port/driven/BufferedSseSink : io/github/markusaugust/streamlord/core/port/driven/SseSink {
+	public fun <init> ()V
+	public fun flush (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun getFlushCount ()I
+	public final fun text ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+	public fun write (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class io/github/markusaugust/streamlord/core/port/driven/BuiltInSignalsCodec : io/github/markusaugust/streamlord/core/port/driven/SignalsCodec {
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/port/driven/BuiltInSignalsCodec;
+	public fun decode (Ljava/lang/String;Lkotlin/reflect/KType;)Ljava/lang/Object;
+	public fun encode (Ljava/lang/Object;Lkotlin/reflect/KType;)Ljava/lang/String;
+}
+
+public abstract interface class io/github/markusaugust/streamlord/core/port/driven/IncomingRequest {
+	public abstract fun bodyText (ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun getMethod ()Ljava/lang/String;
+	public abstract fun header (Ljava/lang/String;)Ljava/lang/String;
+	public abstract fun queryParameter (Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/port/driven/IncomingRequestKt {
+	public static final fun getCarriesSignalsInQuery (Lio/github/markusaugust/streamlord/core/port/driven/IncomingRequest;)Z
+	public static final fun isDatastarRequest (Lio/github/markusaugust/streamlord/core/port/driven/IncomingRequest;)Z
+	public static final fun rejectDeclaredLengthAbove (ILjava/lang/Long;)V
+}
+
+public abstract interface class io/github/markusaugust/streamlord/core/port/driven/SignalsCodec {
+	public abstract fun decode (Ljava/lang/String;Lkotlin/reflect/KType;)Ljava/lang/Object;
+	public abstract fun encode (Ljava/lang/Object;Lkotlin/reflect/KType;)Ljava/lang/String;
+}
+
+public abstract interface class io/github/markusaugust/streamlord/core/port/driven/SseSink {
+	public abstract fun flush (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun write (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public abstract interface class io/github/markusaugust/streamlord/core/port/driving/DatastarStream {
+	public abstract fun comment (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun comment$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public fun executeScript-yV_PMig (Ljava/lang/String;ZLjava/util/Map;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun executeScript-yV_PMig$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;ZLjava/util/Map;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public abstract fun getCodec ()Lio/github/markusaugust/streamlord/core/port/driven/SignalsCodec;
+	public fun patchElements-D5qb1SI (Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun patchElements-D5qb1SI$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public fun patchSignals-51bEbmg (Ljava/lang/String;ZLjava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun patchSignals-51bEbmg ([Lkotlin/Pair;ZLjava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun patchSignals-51bEbmg$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;ZLjava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static synthetic fun patchSignals-51bEbmg$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;[Lkotlin/Pair;ZLjava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public fun redirect (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun removeElements-51bEbmg (Ljava/lang/String;ZLjava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun removeElements-51bEbmg$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;ZLjava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public fun removeSignals-5_5nbZA ([Ljava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun removeSignals-5_5nbZA$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;[Ljava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public abstract fun send (Lio/github/markusaugust/streamlord/core/domain/DatastarEvent;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun sendAll (Lkotlinx/coroutines/flow/Flow;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class io/github/markusaugust/streamlord/core/port/driving/DatastarStream$DefaultImpls {
+	public static synthetic fun comment$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static fun executeScript-yV_PMig (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;ZLjava/util/Map;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun executeScript-yV_PMig$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;ZLjava/util/Map;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static fun patchElements-D5qb1SI (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun patchElements-D5qb1SI$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static fun patchSignals-51bEbmg (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;ZLjava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun patchSignals-51bEbmg (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;[Lkotlin/Pair;ZLjava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun patchSignals-51bEbmg$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;ZLjava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static synthetic fun patchSignals-51bEbmg$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;[Lkotlin/Pair;ZLjava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static fun redirect (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun removeElements-51bEbmg (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;ZLjava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun removeElements-51bEbmg$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;ZLjava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static fun removeSignals-5_5nbZA (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;[Ljava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun removeSignals-5_5nbZA$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;[Ljava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static fun sendAll (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Lkotlinx/coroutines/flow/Flow;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class io/github/markusaugust/streamlord/core/protocol/DatastarAttributes {
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/protocol/DatastarAttributes;
+	public final fun getPrefix ()Ljava/lang/String;
+	public final fun name (Ljava/lang/String;)Ljava/lang/String;
+	public final fun setPrefix (Ljava/lang/String;)V
+}
+
+public final class io/github/markusaugust/streamlord/core/protocol/DatastarProtocol {
+	public static final field CONTENT_TYPE_EVENT_STREAM Ljava/lang/String;
+	public static final field CONTENT_TYPE_HTML Ljava/lang/String;
+	public static final field CONTENT_TYPE_JAVASCRIPT Ljava/lang/String;
+	public static final field CONTENT_TYPE_JSON Ljava/lang/String;
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/protocol/DatastarProtocol;
+	public static final field SIGNALS_PARAMETER Ljava/lang/String;
+	public static final field VERSION Ljava/lang/String;
+	public final fun getBODYLESS_METHODS ()Ljava/util/Set;
+	public final fun getDEFAULT_RETRY-UwyO8pc ()J
+	public final fun getSSE_RESPONSE_HEADERS ()Ljava/util/Map;
+}
+
+public final class io/github/markusaugust/streamlord/core/protocol/DatastarProtocol$DataLines {
+	public static final field ELEMENTS Ljava/lang/String;
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/protocol/DatastarProtocol$DataLines;
+	public static final field MODE Ljava/lang/String;
+	public static final field NAMESPACE Ljava/lang/String;
+	public static final field ONLY_IF_MISSING Ljava/lang/String;
+	public static final field SELECTOR Ljava/lang/String;
+	public static final field SIGNALS Ljava/lang/String;
+	public static final field USE_VIEW_TRANSITION Ljava/lang/String;
+	public static final field VIEW_TRANSITION_SELECTOR Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/protocol/DatastarProtocol$Events {
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/protocol/DatastarProtocol$Events;
+	public static final field PATCH_ELEMENTS Ljava/lang/String;
+	public static final field PATCH_SIGNALS Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/protocol/DatastarProtocol$Headers {
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/protocol/DatastarProtocol$Headers;
+	public static final field MODE Ljava/lang/String;
+	public static final field NAMESPACE Ljava/lang/String;
+	public static final field ONLY_IF_MISSING Ljava/lang/String;
+	public static final field REQUEST Ljava/lang/String;
+	public static final field SCRIPT_ATTRIBUTES Ljava/lang/String;
+	public static final field SELECTOR Ljava/lang/String;
+	public static final field USE_VIEW_TRANSITION Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/protocol/SseDecoder {
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/protocol/SseDecoder;
+	public final fun decode (Ljava/lang/String;)Ljava/util/List;
+	public final fun decodeOne (Ljava/lang/String;)Lio/github/markusaugust/streamlord/core/domain/DatastarEvent;
+	public final fun messages (Ljava/lang/String;)Ljava/util/List;
+}
+
+public final class io/github/markusaugust/streamlord/core/protocol/SseEncoder {
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/protocol/SseEncoder;
+	public final fun comment (Ljava/lang/String;)Ljava/lang/String;
+	public final fun encode (Lio/github/markusaugust/streamlord/core/domain/DatastarEvent;)Ljava/lang/String;
+	public final fun frame (Lio/github/markusaugust/streamlord/core/domain/DatastarEvent;)Lio/github/markusaugust/streamlord/core/protocol/SseFrame;
+}
+
+public final class io/github/markusaugust/streamlord/core/protocol/SseFrame {
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Ljava/util/List;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3-FghU774 ()Lkotlin/time/Duration;
+	public final fun component4 ()Ljava/util/List;
+	public final fun copy-5_5nbZA (Ljava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Ljava/util/List;)Lio/github/markusaugust/streamlord/core/protocol/SseFrame;
+	public static synthetic fun copy-5_5nbZA$default (Lio/github/markusaugust/streamlord/core/protocol/SseFrame;Ljava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Ljava/util/List;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/protocol/SseFrame;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getData ()Ljava/lang/String;
+	public final fun getDataLines ()Ljava/util/List;
+	public final fun getEvent ()Ljava/lang/String;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getRetry-FghU774 ()Lkotlin/time/Duration;
+	public fun hashCode ()I
+	public final fun render ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/protocol/SseMessage {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/util/List;
+	public final fun component5 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;)Lio/github/markusaugust/streamlord/core/protocol/SseMessage;
+	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/core/protocol/SseMessage;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/protocol/SseMessage;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getComments ()Ljava/util/List;
+	public final fun getData ()Ljava/util/List;
+	public final fun getEvent ()Ljava/lang/String;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getRetry ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
