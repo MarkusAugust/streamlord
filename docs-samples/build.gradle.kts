@@ -31,6 +31,7 @@ dependencies {
     // The adapters keep their frameworks compileOnly. The samples need them for real.
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.status.pages)
+    implementation(libs.ktor.server.cio)
     implementation(libs.spring.web)
     implementation(libs.spring.webmvc)
     implementation(libs.jakarta.servlet)
@@ -134,6 +135,8 @@ abstract class ExtractDocSamples : DefaultTask() {
                 "import kotlin.test.*\n" +
                     "import io.ktor.server.application.*\nimport io.ktor.server.routing.*\n" +
                     "import io.ktor.server.testing.*\n" +
+                    "import io.ktor.server.engine.*\nimport io.ktor.server.cio.*\nimport io.ktor.server.response.*\n" +
+                    "import io.ktor.http.HttpStatusCode\nimport java.net.URI\n" +
                     "import io.ktor.client.request.*\nimport io.ktor.client.statement.*\n" +
                     "import org.springframework.mock.web.*\n" +
                     "import io.github.markusaugust.streamlord.analysis.*\n$imports\n\n" +

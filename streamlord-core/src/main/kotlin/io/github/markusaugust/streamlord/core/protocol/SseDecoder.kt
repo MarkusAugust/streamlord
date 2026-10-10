@@ -106,6 +106,16 @@ public object SseDecoder {
         return out
     }
 
+    /**
+     * The Datastar event one message carries, or `null` when it is not one of Datastar's: a
+     * comment, an event name the protocol does not define. For messages that arrive one at a
+     * time, from an [SseReader].
+     *
+     * @throws DatastarEventValidationException as [decode] does, for a Datastar frame the client
+     *   would reject.
+     */
+    public fun event(message: SseMessage): DatastarEvent? = toEvent(message)
+
     private fun toEvent(message: SseMessage): DatastarEvent? {
         // Nothing of a message is judged until its event name says it is Datastar's.
         if (message.event != DatastarProtocol.Events.PATCH_ELEMENTS && message.event != DatastarProtocol.Events.PATCH_SIGNALS) return null

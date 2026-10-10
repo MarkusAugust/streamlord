@@ -8,6 +8,13 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Added
 
+- `streamlord-test`: `LiveDatastarStream`, a stream held open and read as it arrives, for a test
+  that sends a command and waits for the patch it causes on the stream that was already there.
+  `awaitPatchElements`, `awaitSignal` and `next` wait on real time, also inside `runTest`, and fail
+  with the stream they read. `open(uri)` uses the JDK's HTTP client.
+- `streamlord-core`: `SseReader`, which reads a stream that is still arriving and hands back each
+  message as its blank line arrives, and `SseDecoder.event` for one message at a time. The
+  inspector's `SseParser` in `streamlord-analysis` now reads through it.
 - Documentation: a Components and plain JavaScript page (attributes down and events up for
   custom elements, window events from plain scripts, `data-ignore-morph` on both sides of a
   morph, optimistic state rolled back on a failed fetch), and the signals page covers signals that
