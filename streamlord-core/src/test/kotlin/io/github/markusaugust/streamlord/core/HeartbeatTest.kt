@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.core
 
 import io.github.markusaugust.streamlord.core.application.StreamAuthorisation
+import io.github.markusaugust.streamlord.core.StreamRefusedException
 import io.github.markusaugust.streamlord.core.application.Streamlord
 import io.github.markusaugust.streamlord.core.port.driven.BufferedSseSink
 import io.github.markusaugust.streamlord.core.port.driven.SseSink
@@ -110,17 +111,22 @@ class HeartbeatTest {
     fun `a heartbeat must be positive`() {
         assertFailsWith<IllegalArgumentException> { Streamlord(heartbeat = 0.seconds) }
     }
-    /** A sink that takes its time over the last words, so the other coroutine wakes meanwhile. */
+    /**
+     * A sink that takes its time over the last words, so the other coroutine falls due meanwhile:
+     * longer than [quick]'s heartbeat, shorter than the limit on last words.
+     */
     private class SlowLastWords : SseSink {
         val text = StringBuilder()
 
         override suspend fun write(text: String) {
-            if ("gone" in text) delay(10.seconds)
+            if ("gone" in text) delay(4.seconds)
             this.text.append(text)
         }
 
         override suspend fun flush() = Unit
     }
+
+    private val quick = Streamlord(heartbeat = 2.seconds)
 
     private val lastWords = "event: datastar-patch-signals\ndata: signals {\"gone\":true}\n\n"
 
@@ -132,13 +138,13 @@ class HeartbeatTest {
             var allowed = true
 
             val finished =
-                beating.stream(
+                quick.stream(
                     sink,
                     StreamAuthorisation(every = 1.milliseconds, onRefused = { patchSignals("gone" to true) }) { allowed },
                 ) {
                     Thread.sleep(5)
                     allowed = false
-                    delay(20.seconds)
+                    delay(3.seconds)
                     patchSignals("late" to true)
                 }
 
@@ -154,12 +160,9 @@ class HeartbeatTest {
             var allowed = true
 
             val finished =
-                beating.stream(
+                quick.stream(
                     sink,
-                    StreamAuthorisation(every = 1.milliseconds, onRefused = {
-                        patchSignals("gone" to true)
-                        delay(30.seconds)
-                    }) { allowed },
+                    StreamAuthorisation(every = 1.milliseconds, onRefused = { patchSignals("gone" to true) }) { allowed },
                 ) {
                     Thread.sleep(5)
                     allowed = false
@@ -203,5 +206,47 @@ class HeartbeatTest {
                 }
             }
             assertFalse(reachedTheEnd)
+        }
+
+    @Test
+    fun `a block that swallows its refusal is ended by the next heartbeat`() =
+        runTest {
+            val sink = BufferedSseSink()
+            var allowed = true
+            var reachedTheEnd = false
+
+            val finished =
+                beating.stream(sink, StreamAuthorisation(every = 1.milliseconds) { allowed }) {
+                    Thread.sleep(5)
+                    allowed = false
+                    try {
+                        patchSignals("late" to true)
+                    } catch (_: StreamRefusedException) {
+                        // Carries on regardless.
+                    }
+                    delay(1.seconds * 3600)
+                    reachedTheEnd = true
+                }
+
+            assertFalse(finished)
+            assertFalse(reachedTheEnd, "the block waited out the hour after its refusal")
+        }
+
+    @Test
+    fun `last words that never finish are cut off at the limit`() =
+        runTest {
+            val sink = BufferedSseSink()
+
+            val finished =
+                beating.stream(
+                    sink,
+                    StreamAuthorisation(every = 1.milliseconds, onRefused = {
+                        patchSignals("gone" to true)
+                        delay(1.seconds * 3600)
+                    }) { false },
+                ) { patchSignals("never" to true) }
+
+            assertFalse(finished)
+            assertEquals(lastWords, sink.text())
         }
 }

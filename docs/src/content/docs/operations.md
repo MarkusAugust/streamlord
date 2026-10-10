@@ -123,7 +123,7 @@ install(StreamlordPlugin) { heartbeat = 15.seconds }
 On Spring it is a parameter of the bean you already declare,
 `Streamlord(codec = JacksonSignalsCodec(mapper), heartbeat = 15.seconds)`. A stream that has written nothing
 for that long gets a `: keep-alive` comment, and any frame starts the wait again, so a busy stream
-carries none. The heartbeat starts with your handler and stops when it returns.
+carries none. The heartbeat runs alongside your handler and stops when it returns.
 
 Fifteen seconds sits under every default idle timeout we have met. Raise it once you know your
 own proxy's.
@@ -132,7 +132,7 @@ Three things it does not do:
 
 - **It does not keep Datastar's client alive.** The client has no idle timeout of its own: its
   `fetch` runs without a timer, and its retry counter resets when a 200 arrives, not per frame.
-  **Read from the client source.** The
+  **Read from the source.** The
   heartbeat is for what sits between you and the browser, and for finding out on the server that
   the reader has gone: the comment is a write, and a write to a closed connection fails.
 - **It does not run beside a blocked thread.** On WebMVC the stream runs inside `runBlocking` on
@@ -141,8 +141,9 @@ Three things it does not do:
   `Dispatchers.IO` with `withContext`.
 - **It does not reach WebFlux.** A `Flow` handed to WebFlux never passes through a Streamlord
   stream, so a heartbeat on the bean does nothing there. Merge a ticker into the flow after
-  `asServerSentEvents()`, each tick a `ServerSentEvent.builder<String>().comment("keep-alive")
-  .build()`, or raise the proxy's idle timeout above your quietest stretch.
+  `asServerSentEvents()`, each tick a
+  `ServerSentEvent.builder<String>().comment("keep-alive").build()`, or raise the proxy's idle
+  timeout above your quietest stretch.
 
 With a [`StreamAuthorisation`](#asking-again-while-the-stream-runs) on the stream, the comment
 asks the question like any other write once `every` has passed, so an idle stream is checked on

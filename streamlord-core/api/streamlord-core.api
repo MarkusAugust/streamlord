@@ -38,6 +38,7 @@ public final class io/github/markusaugust/streamlord/core/application/StreamAuth
 
 public final class io/github/markusaugust/streamlord/core/application/StreamAuthorisation$Companion {
 	public final fun getDEFAULT_INTERVAL-UwyO8pc ()J
+	public final fun getLAST_WORDS_LIMIT-UwyO8pc ()J
 }
 
 public final class io/github/markusaugust/streamlord/core/application/Streamlord {

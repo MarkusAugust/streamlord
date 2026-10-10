@@ -7,7 +7,6 @@ import io.github.markusaugust.streamlord.core.port.driven.SseSink
 import io.github.markusaugust.streamlord.core.port.driving.DatastarStream
 import io.github.markusaugust.streamlord.core.protocol.SseEncoder
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -77,15 +76,13 @@ internal class SseDatastarStream(
      * lock and passes [authorise], which means an idle stream with an authorisation is asked again
      * on the heartbeat's schedule, and a refusal ends it here as it would anywhere else.
      *
-     * Once another writer has been refused, the pulse goes quiet rather than failing over a
-     * refusal it does not own. A comment of its own also lands in [written], so the wait after it
-     * starts at once.
+     * After a refusal, every comment is refused again, which ends a block that caught its own
+     * refusal and went on waiting. A comment of its own also lands in [written], so the wait after
+     * it starts at once.
      */
     internal suspend fun pulse(interval: Duration): Nothing {
         while (true) {
-            if (withTimeoutOrNull(interval) { written.receive() } != null) continue
-            if (refused.get()) awaitCancellation()
-            comment()
+            if (withTimeoutOrNull(interval) { written.receive() } == null) comment()
         }
     }
 
@@ -115,9 +112,11 @@ internal class SseDatastarStream(
 
         if (!refused.compareAndSet(false, true)) throw StreamRefusedException()
         // Not cancellable: with a heartbeat, the refusal can land in one coroutine while the
-        // other is torn down, and the last words go out whole or not at all. A reader who has
-        // gone still ends them, because the write throws.
-        withContext(NonCancellable) { authorisation.onRefused(LastWords()) }
+        // other is torn down, and the last words go out whole or not at all. Bounded instead, so
+        // a reader who stopped reading, or a slow onRefused, cannot hold the stream open forever.
+        withContext(NonCancellable) {
+            withTimeoutOrNull(StreamAuthorisation.LAST_WORDS_LIMIT) { authorisation.onRefused(LastWords()) }
+        }
         throw StreamRefusedException()
     }
 
