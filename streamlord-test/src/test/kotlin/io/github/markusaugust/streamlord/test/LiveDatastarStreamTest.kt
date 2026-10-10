@@ -285,4 +285,32 @@ class LiveDatastarStreamTest {
                 assertEquals(2, stream.received.size)
             }
         }
+
+    // One frame sets two signals and a patch follows: neither signal wait takes the patch.
+    @Test
+    fun `waiting for signals never moves past a patch`() =
+        runTest {
+            feed().use { stream ->
+                outbox.put(signals("""{"a":1,"b":2}""") + "event: datastar-patch-elements\ndata: elements <b id=\"c\">1</b>\n\n")
+                Thread.sleep(100)
+
+                stream.awaitSignal("a", 1)
+                stream.awaitSignal("b", 2)
+                stream.awaitPatchElements(containing = "<b id=\"c\">1</b>", timeout = 1.seconds)
+            }
+        }
+
+    @Test
+    fun `a patch wait that comes up empty shows every event and says how many it skipped`() =
+        runTest {
+            feed().use { stream ->
+                outbox.put("event: datastar-patch-elements\ndata: elements <div id=\"a\">1</div>\n\n")
+                stream.awaitPatchElements(containing = "1")
+
+                val failure = assertFailsWith<AssertionError> { stream.awaitPatchElements(containing = "2", timeout = 200.milliseconds) }
+
+                assertTrue("after the first 1, which an earlier wait had moved past" in failure.message!!, failure.message)
+                assertTrue("The stream carried 1 event" in failure.message!!, failure.message)
+            }
+        }
 }

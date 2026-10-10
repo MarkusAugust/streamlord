@@ -223,8 +223,9 @@ Three things it does:
 
 - **Each `await` reads until what it asks for arrives.** `awaitPatchElements` takes the arguments
   of `assertPatchElements` and moves past the patch it returns, so the next one waits for a new
-  patch. `awaitSignal` folds the store as the browser does, reads whatever has already arrived,
-  and returns once the signal holds the value. `next()` hands over one event at a time.
+  patch. `awaitSignal` folds the store as the browser does and returns at the first signal patch
+  after which it holds the value. `next()` hands over one event at a time. Each keeps its own
+  place, so waiting for a signal never skips a patch another wait is still to see.
 - **It waits on real time**, five seconds by default, also inside `runTest`. A wait that comes up
   empty, or a stream that ends first, fails with the assertion's own message and the stream it
   read, like every other assertion on this page.

@@ -4,6 +4,7 @@ import io.github.markusaugust.streamlord.core.StreamlordException
 import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.PatchElements
+import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.core.protocol.SseDecoder
 import io.github.markusaugust.streamlord.core.protocol.SseMessage
 import io.github.markusaugust.streamlord.core.protocol.SseReader
@@ -13,6 +14,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.IOException
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.io.Reader
@@ -48,8 +50,10 @@ import kotlin.time.toJavaDuration
  * Each `await` reads until what it asks for arrives, and fails with an `AssertionError` that
  * prints what the stream carried if it has not arrived within the timeout, or if the stream ends
  * first. Waiting happens on real time, also inside `runTest`, whose virtual clock would otherwise
- * call every wait finished before the server had answered. The `await` functions are meant to be
- * called one after another from one test: they share one place in the stream.
+ * call every wait finished before the server had answered. Each kind of wait keeps its own place
+ * in the stream: [awaitPatchElements] moves past patches it looked at, [awaitSignal] past signal
+ * patches, [next] past everything, and none of them past what another is still to see. They are
+ * meant to be called one after another, from one test.
  *
  * It is coroutine API, called from a Kotlin test inside `runTest` or `runBlocking`, and binds no
  * test framework: a failure is an `AssertionError`. [open] uses the JDK's own HTTP client; [of]
@@ -72,8 +76,15 @@ public class LiveDatastarStream private constructor(
 
     @Volatile private var messages: List<SseMessage> = emptyList()
 
-    /** How many [events] the `await` functions have looked at and moved past. */
-    private var cursor = 0
+    /** How many [events] a kind of wait has looked at and moved past. */
+    private class Place {
+        var at = 0
+    }
+
+    // One place per kind of wait, so waiting for a signal never moves past a patch, or back.
+    private val elementsPlace = Place()
+    private val signalsPlace = Place()
+    private val nextPlace = Place()
     private var ended = false
     private var endedBy: Throwable? = null
 
@@ -112,8 +123,8 @@ public class LiveDatastarStream private constructor(
     ): PatchElements {
         val assertion = { seen: DatastarEvents -> seen.assertPatchElements(selector, mode, elements, containing) }
         return lock.withLock {
-            val start = cursor
-            awaitMatch(timeout, describe = { failure(movedPast = start) { assertion(DatastarEvents(events.drop(start), emptyList())) } }) { event ->
+            val start = elementsPlace.at
+            awaitMatch(elementsPlace, timeout, describe = { failure(movedPast = start) { assertion(DatastarEvents(events.drop(start), emptyList())) } }) { event ->
                 (event as? PatchElements)?.takeIf { holds { assertion(DatastarEvents(listOf(it), emptyList())) } }
             }
         }
@@ -122,10 +133,11 @@ public class LiveDatastarStream private constructor(
     /**
      * Reads until the signal store, folded as the browser folds it, holds [expected] under [name].
      *
-     * The store is judged after each event no earlier `await` has moved past, so a value the
-     * stream has since changed is not taken for the answer, and the events after the one that
-     * set the value are left for the next `await`. With nothing new to read, a store that already
-     * holds [expected] returns without waiting. See [DatastarEvents.assertSignal] for how values
+     * The store is judged after each signal patch no earlier `awaitSignal` has moved past, and
+     * the first one after which it holds [expected] is the answer: a value an earlier wait saw
+     * and the stream has since changed does not count, and the patches after the answer are left
+     * for the next wait. With no new signal patch to read, a store that already holds [expected]
+     * returns without waiting. See [DatastarEvents.assertSignal] for how values
      * are compared and how a nested name is written.
      */
     public suspend fun awaitSignal(
@@ -140,10 +152,14 @@ public class LiveDatastarStream private constructor(
             while (readAvailable()) {
                 // Everything that has arrived, before the store is judged.
             }
-            if (cursor == events.size && holdsAt(cursor)) return@withLock
-            awaitMatch(timeout, describe = { failure { assertion(received) } }) { _ ->
-                // The cursor is already past this event, so the store is judged through it.
-                Unit.takeIf { holdsAt(cursor) }
+            val place = signalsPlace
+            if (events.subList(place.at, events.size).none { it is PatchSignals } && holdsAt(events.size)) {
+                place.at = events.size
+                return@withLock
+            }
+            awaitMatch(place, timeout, describe = { failure { assertion(received) } }) { event ->
+                // The place is already past this event, so the store is judged through it.
+                Unit.takeIf { event is PatchSignals && holdsAt(place.at) }
             }
         }
     }
@@ -156,10 +172,10 @@ public class LiveDatastarStream private constructor(
         lock.withLock {
             val outcome =
                 realTime(timeout) {
-                    while (cursor == events.size) {
+                    while (nextPlace.at == events.size) {
                         if (!readMore()) return@realTime Outcome.Ended
                     }
-                    Outcome.Found(events[cursor++])
+                    Outcome.Found(events[nextPlace.at++])
                 }
             when (outcome) {
                 null -> throw AssertionError(received.withStream("No Datastar event arrived within $timeout"))
@@ -183,6 +199,7 @@ public class LiveDatastarStream private constructor(
     }
 
     private suspend fun <T : Any> awaitMatch(
+        place: Place,
         timeout: Duration,
         describe: () -> String,
         match: (DatastarEvent) -> T?,
@@ -191,8 +208,8 @@ public class LiveDatastarStream private constructor(
         val arrived =
             realTime(timeout) {
                 while (found == null) {
-                    if (cursor == events.size && !readMore()) return@realTime false
-                    while (found == null && cursor < events.size) found = match(events[cursor++])
+                    if (place.at == events.size && !readMore()) return@realTime false
+                    while (found == null && place.at < events.size) found = match(events[place.at++])
                 }
                 true
             }
@@ -219,11 +236,14 @@ public class LiveDatastarStream private constructor(
         val message =
             try {
                 assertion()
-                received.withStream("It arrived as the wait ran out")
+                return received.withStream("It arrived as the wait ran out")
             } catch (e: AssertionError) {
-                e.message ?: received.withStream("Nothing matched")
+                e.message ?: return received.withStream("Nothing matched")
             }
-        return if (movedPast == 0) message else "$message\nEarlier awaits had moved past the $movedPast before these."
+        if (movedPast == 0) return message
+        // The assertion saw only the events after the place; the reader wants to see them all.
+        val headline = message.substringBefore(".\n\n")
+        return received.withStream("$headline after the first $movedPast, which an earlier wait had moved past")
     }
 
     private fun endedText(): String =
@@ -322,7 +342,7 @@ public class LiveDatastarStream private constructor(
                     client.send(request, HttpResponse.BodyHandlers.ofInputStream())
                 } catch (e: HttpTimeoutException) {
                     throw AssertionError("No answer from $uri within $timeout", e)
-                } catch (e: java.io.IOException) {
+                } catch (e: IOException) {
                     throw AssertionError("Could not open $uri: ${e.message ?: e::class.simpleName}", e)
                 }
             val body: InputStream = response.body()
