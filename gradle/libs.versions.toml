@@ -4,7 +4,7 @@ kotlin = "2.4.20"
 # downgrades anything newer, so code compiled against a later release fails there with
 # NoSuchMethodError: 1.11 compiles runBlocking to a symbol 1.10 does not have. Raise it only when
 # the oldest supported Boot does.
-coroutines = "1.10.2"
+coroutines = "1.11.0"
 coroutinesNewest = "1.11.0"
 serialization = "1.11.0"
 kotlinxHtml = "0.12.0"
