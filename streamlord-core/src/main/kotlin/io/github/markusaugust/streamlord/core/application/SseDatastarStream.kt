@@ -112,8 +112,9 @@ internal class SseDatastarStream(
 
         if (!refused.compareAndSet(false, true)) throw StreamRefusedException()
         // Not cancellable: with a heartbeat, the refusal can land in one coroutine while the
-        // other is torn down, and the last words go out whole or not at all. Bounded instead, so
-        // a reader who stopped reading, or a slow onRefused, cannot hold the stream open forever.
+        // other is torn down, and the last words go out whole. Bounded instead, so a slow
+        // onRefused, or a reader who stopped reading on a suspending sink, cannot hold the stream
+        // open forever. A write that blocks its thread is beyond any timeout.
         withContext(NonCancellable) {
             withTimeoutOrNull(StreamAuthorisation.LAST_WORDS_LIMIT) { authorisation.onRefused(LastWords()) }
         }

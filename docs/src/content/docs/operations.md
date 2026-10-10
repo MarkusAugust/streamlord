@@ -371,7 +371,8 @@ get("/feed") {
 }
 ```
 
-`redirect("/login")` works there too, and so does anything else the stream can send.
+`redirect("/login")` works there too, and so does anything else the stream can send. It has
+`StreamAuthorisation.LAST_WORDS_LIMIT`, five seconds, to say it.
 
 What the client does next is the rule from [further up this page](#when-datastar-reconnects-and-when-it-does-not):
 a 200 stream that ends cleanly does not reconnect under the default `retry: 'auto'`, which is what

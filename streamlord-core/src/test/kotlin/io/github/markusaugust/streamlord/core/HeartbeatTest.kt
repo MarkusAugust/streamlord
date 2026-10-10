@@ -1,11 +1,11 @@
 package io.github.markusaugust.streamlord.core
 
 import io.github.markusaugust.streamlord.core.application.StreamAuthorisation
-import io.github.markusaugust.streamlord.core.StreamRefusedException
 import io.github.markusaugust.streamlord.core.application.Streamlord
 import io.github.markusaugust.streamlord.core.port.driven.BufferedSseSink
 import io.github.markusaugust.streamlord.core.port.driven.SseSink
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -232,6 +232,7 @@ class HeartbeatTest {
             assertFalse(reachedTheEnd, "the block waited out the hour after its refusal")
         }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     @Test
     fun `last words that never finish are cut off at the limit`() =
         runTest {
@@ -248,5 +249,6 @@ class HeartbeatTest {
 
             assertFalse(finished)
             assertEquals(lastWords, sink.text())
+            assertTrue(testScheduler.currentTime <= StreamAuthorisation.LAST_WORDS_LIMIT.inWholeMilliseconds, "waited ${testScheduler.currentTime} ms")
         }
 }
