@@ -84,7 +84,7 @@ public class LiveDatastarStream private constructor(
             var cause: Throwable? = null
             try {
                 while (true) chunks.trySend(read() ?: break)
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 cause = e
             } finally {
                 chunks.close(cause)
@@ -113,7 +113,7 @@ public class LiveDatastarStream private constructor(
         val assertion = { seen: DatastarEvents -> seen.assertPatchElements(selector, mode, elements, containing) }
         return lock.withLock {
             val start = cursor
-            awaitMatch(timeout, describe = { failure { assertion(DatastarEvents(events.drop(start), messages)) } }) { event ->
+            awaitMatch(timeout, describe = { failure(movedPast = start) { assertion(DatastarEvents(events.drop(start), emptyList())) } }) { event ->
                 (event as? PatchElements)?.takeIf { holds { assertion(DatastarEvents(listOf(it), emptyList())) } }
             }
         }
@@ -122,9 +122,11 @@ public class LiveDatastarStream private constructor(
     /**
      * Reads until the signal store, folded as the browser folds it, holds [expected] under [name].
      *
-     * Whatever has already arrived is read first, so a value the stream has since changed is not
-     * taken for the answer. When the store holds [expected] after that, it returns without waiting.
-     * See [DatastarEvents.assertSignal] for how values are compared and how a nested name is written.
+     * The store is judged after each event no earlier `await` has moved past, so a value the
+     * stream has since changed is not taken for the answer, and the events after the one that
+     * set the value are left for the next `await`. With nothing new to read, a store that already
+     * holds [expected] returns without waiting. See [DatastarEvents.assertSignal] for how values
+     * are compared and how a nested name is written.
      */
     public suspend fun awaitSignal(
         name: String,
@@ -132,17 +134,17 @@ public class LiveDatastarStream private constructor(
         timeout: Duration = DEFAULT_TIMEOUT,
     ) {
         val assertion = { seen: DatastarEvents -> seen.assertSignal(name, expected) }
+        val holdsAt = { count: Int -> holds { assertion(DatastarEvents(events.subList(0, count), messages)) } }
         lock.withLock {
             @Suppress("ControlFlowWithEmptyBody")
             while (readAvailable()) {
                 // Everything that has arrived, before the store is judged.
             }
-            if (!holds { assertion(received) }) {
-                awaitMatch(timeout, describe = { failure { assertion(received) } }) { _ ->
-                    Unit.takeIf { holds { assertion(received) } }
-                }
+            if (cursor == events.size && holdsAt(cursor)) return@withLock
+            awaitMatch(timeout, describe = { failure { assertion(received) } }) { _ ->
+                // The cursor is already past this event, so the store is judged through it.
+                Unit.takeIf { holdsAt(cursor) }
             }
-            cursor = events.size
         }
     }
 
@@ -210,13 +212,19 @@ public class LiveDatastarStream private constructor(
         }
 
     /** The assertion's own message, which prints the events it looked at. */
-    private fun failure(assertion: () -> Unit): String =
-        try {
-            assertion()
-            received.withStream("It arrived as the wait ran out")
-        } catch (e: AssertionError) {
-            e.message ?: received.withStream("Nothing matched")
-        }
+    private fun failure(
+        movedPast: Int = 0,
+        assertion: () -> Unit,
+    ): String {
+        val message =
+            try {
+                assertion()
+                received.withStream("It arrived as the wait ran out")
+            } catch (e: AssertionError) {
+                e.message ?: received.withStream("Nothing matched")
+            }
+        return if (movedPast == 0) message else "$message\nEarlier awaits had moved past the $movedPast before these."
+    }
 
     private fun endedText(): String =
         when {
@@ -264,15 +272,16 @@ public class LiveDatastarStream private constructor(
     private fun take(chunk: String) {
         val arrived = reader.feed(chunk)
         messages = messages + arrived
-        val decoded =
-            arrived.mapNotNull { message ->
+        // One at a time, so the events before a rejected frame are kept.
+        for (message in arrived) {
+            val event =
                 try {
                     SseDecoder.event(message)
                 } catch (e: StreamlordException) {
                     throw AssertionError(received.withStream("The stream carried a frame the client would reject: ${e.message}"), e)
                 }
-            }
-        events = events + decoded
+            if (event != null) events = events + event
+        }
     }
 
     public companion object {
@@ -291,8 +300,8 @@ public class LiveDatastarStream private constructor(
          * does; send the current state on open, as a live view does anyway.
          *
          * @param headers Added to the request, for a session cookie or an authorisation header.
-         * @throws AssertionError when no answer starts within [timeout], or the answer is not a
-         *   200 `text/event-stream`.
+         * @throws AssertionError when the connection fails, no answer starts within [timeout], or
+         *   the answer is not a 200 `text/event-stream`.
          */
         public fun open(
             uri: URI,
@@ -313,6 +322,8 @@ public class LiveDatastarStream private constructor(
                     client.send(request, HttpResponse.BodyHandlers.ofInputStream())
                 } catch (e: HttpTimeoutException) {
                     throw AssertionError("No answer from $uri within $timeout", e)
+                } catch (e: java.io.IOException) {
+                    throw AssertionError("Could not open $uri: ${e.message ?: e::class.simpleName}", e)
                 }
             val body: InputStream = response.body()
             val contentType = response.headers().firstValue("Content-Type").orElse("")
@@ -326,9 +337,11 @@ public class LiveDatastarStream private constructor(
         }
 
         /**
-         * Read a stream from [text], for an HTTP client of your own. [onClose] is what [close]
-         * closes. Pass the underlying stream when the reader's own `close` waits for a read in
-         * progress, as an `InputStreamReader`'s does.
+         * Read a stream from [text], for an HTTP client of your own.
+         *
+         * @param onClose What [close] closes, the reader by default. Pass the underlying stream
+         *   when the reader's own `close` waits for a read in progress, as an `InputStreamReader`'s
+         *   does, or [close] waits with it.
          */
         public fun of(
             text: Reader,

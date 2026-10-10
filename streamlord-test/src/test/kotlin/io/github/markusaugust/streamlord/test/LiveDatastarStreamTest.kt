@@ -3,7 +3,11 @@ package io.github.markusaugust.streamlord.test
 import com.sun.net.httpserver.HttpServer
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.net.URI
@@ -18,6 +22,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 /** Against a real server on a real socket, which is what the class is for. */
 class LiveDatastarStreamTest {
@@ -170,9 +175,8 @@ class LiveDatastarStreamTest {
         runTest {
             feed().use { stream ->
                 outbox.put(signals("""{"count":1}"""))
-                stream.awaitSignal("count", 1)
                 outbox.put(signals("""{"count":2}"""))
-                Thread.sleep(200)
+                stream.awaitSignal("count", 2)
 
                 assertFailsWith<AssertionError> { stream.awaitSignal("count", 1, timeout = 300.milliseconds) }
             }
@@ -214,6 +218,7 @@ class LiveDatastarStreamTest {
         runTest {
             val stream = feed()
             stream.close()
+            stream.use { }
 
             val failure = assertFailsWith<AssertionError> { stream.awaitSignal("count", 1) }
 
@@ -229,4 +234,55 @@ class LiveDatastarStreamTest {
 
         assertTrue("No answer" in failure.message!!, failure.message)
     }
+
+    // One write, two frames: the patch after the signal is left for the next await.
+    @Test
+    fun `the events after a signal's value are left for the next await`() =
+        runTest {
+            feed().use { stream ->
+                outbox.put(signals("""{"count":1}""") + "event: datastar-patch-elements\ndata: elements <b id=\"c\">1</b>\n\n")
+                Thread.sleep(100)
+
+                stream.awaitSignal("count", 1)
+                stream.awaitPatchElements(containing = "<b id=\"c\">1</b>", timeout = 1.seconds)
+            }
+        }
+
+    @Test
+    fun `the events before a rejected frame are kept`() =
+        runTest {
+            feed().use { stream ->
+                outbox.put(signals("""{"count":1}""") + "event: datastar-patch-elements\ndata: mode sideways\ndata: elements <p/>\n\n")
+                Thread.sleep(100)
+
+                assertFailsWith<AssertionError> { stream.next() }
+                assertEquals(PatchSignals("""{"count":1}"""), stream.received.single())
+            }
+        }
+
+    @Test
+    fun `a timeout from the caller stays a cancellation`() =
+        runTest {
+            feed().use { stream ->
+                assertFailsWith<TimeoutCancellationException> {
+                    withContext(Dispatchers.Default) { withTimeout(200.milliseconds) { stream.awaitSignal("count", 1) } }
+                }
+            }
+        }
+
+    // The wait that gave up took nothing with it: the next wait reads what arrived after.
+    @Test
+    fun `a wait that runs out loses nothing`() =
+        runTest {
+            feed().use { stream ->
+                repeat(5) {
+                    assertFailsWith<AssertionError> { stream.awaitSignal("count", 9, timeout = 20.milliseconds) }
+                }
+                outbox.put(signals("""{"count":1}"""))
+                outbox.put(signals("""{"count":2}"""))
+
+                stream.awaitSignal("count", 2)
+                assertEquals(2, stream.received.size)
+            }
+        }
 }

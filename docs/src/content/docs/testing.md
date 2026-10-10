@@ -231,9 +231,10 @@ Three things it does:
 - **`close()` lets go of the connection**, and the server finds the reader gone on its next
   write. `received` keeps everything it read, comments included, for the assertions above.
 
-`open` sends `Datastar-Request: true` and takes `headers` for a cookie or a token. It speaks the
-JDK's own HTTP client, so it binds no HTTP library either; `LiveDatastarStream.of(reader)` reads
-from the `Reader` any other client hands you.
+`open` sends `Datastar-Request: true` and takes `headers` for a cookie or a token. It uses the
+JDK's own HTTP client, so it binds no HTTP library either. `LiveDatastarStream.of(reader, onClose)`
+reads from the `Reader` any other client hands you; pass the underlying stream as `onClose`, since
+an `InputStreamReader` waits for a read in progress before it closes.
 
 ## The `$` check, in CI, with no editor open
 

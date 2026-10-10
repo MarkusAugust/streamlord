@@ -75,4 +75,15 @@ class SseReaderTest {
     fun `fields with no blank line after them are not a message yet`() {
         assertEquals(emptyList(), SseReader().feed("event: datastar-patch-signals\ndata: signals {}\n"))
     }
+
+    @Test
+    fun `at the end, trailing comments are kept and an unfinished message is not`() {
+        val comments = SseReader()
+        comments.feed(": bye")
+        assertEquals(listOf("bye"), comments.finish()?.comments)
+
+        val unfinished = SseReader()
+        unfinished.feed("event: datastar-patch-signals\ndata: signals {}\n")
+        assertNull(unfinished.finish())
+    }
 }
