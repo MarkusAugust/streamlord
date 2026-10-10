@@ -214,11 +214,11 @@
     "generate": "node scripts/generate.mjs"
   },
   "dependencies": {
-    "acorn": "8.18.0"
+    "acorn": "8.19.0"
   },
   "devDependencies": {
     "@types/node": "22.19.0",
-    "@types/vscode": "1.105.0",
+    "@types/vscode": "1.140.0",
     "@vscode/vsce": "4.0.0",
     "esbuild": "0.28.2",
     "typescript": "5.9.3",
