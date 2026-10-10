@@ -92,8 +92,8 @@ empty one (`fetch.ts:665`). **Observed.** Streamlord cannot send an empty id; it
 the event is built.
 
 So once a stream has sent an id, every retry and every reopen after a hidden tab carries the last
-id the client received. The header goes only when the action runs again. A new `@get` starts without it,
-unless its own `headers` option passes one.
+id the client received. The header goes only when the action runs again. A new `@get` starts
+without it, unless its own `headers` option passes one.
 
 That is what lets the sample below resume across any number of retries, not only the first. The
 sample gives every event an id. Events without one that follow the last id are sent again, on a
