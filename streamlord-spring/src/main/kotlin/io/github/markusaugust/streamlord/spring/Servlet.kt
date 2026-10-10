@@ -54,18 +54,31 @@ public fun HttpServletResponse.datastarStream(
     block: suspend DatastarStream.() -> Unit,
 ): StreamingResponseBody {
     prepareForSse(request)
-    val gzip = streamlord.compress && request != null && DatastarProtocol.acceptsGzip(request.getHeader("Accept-Encoding"))
-    if (gzip) {
-        setHeader("Content-Encoding", "gzip")
-        setHeader("Vary", "Accept-Encoding")
-    }
+    // A committed response has sent its headers, and a body gzipped without them is noise.
+    val gzip =
+        streamlord.compress && !isCommitted && request != null &&
+            DatastarProtocol.acceptsGzip(request.getHeader("Accept-Encoding"))
+    // Added, not set: a CORS filter may already vary the response on Origin.
+    if (streamlord.compress && !isCommitted) addHeader("Vary", "Accept-Encoding")
+    if (gzip) setHeader("Content-Encoding", "gzip")
     return StreamingResponseBody { output ->
+        if (!gzip) {
+            val writer = OutputStreamWriter(output, StandardCharsets.UTF_8)
+            runBlocking { streamlord.stream(ServletSseSink(writer, this@datastarStream), authorisation, block) }
+            writer.flush()
+            return@StreamingResponseBody
+        }
         // Sync flush: each event leaves the compressor whole, the moment the sink flushes.
-        val body = if (gzip) GZIPOutputStream(output, true) else output
-        val writer = OutputStreamWriter(body, StandardCharsets.UTF_8)
-        runBlocking { streamlord.stream(ServletSseSink(writer, this@datastarStream), authorisation, block) }
-        writer.flush()
-        if (body is GZIPOutputStream) body.finish()
+        val body = SyncGzipOutputStream(output)
+        try {
+            val writer = OutputStreamWriter(body, StandardCharsets.UTF_8)
+            runBlocking { streamlord.stream(ServletSseSink(writer, this@datastarStream), authorisation, block) }
+            writer.flush()
+            // Only after a stream that ended well; one cut short is left for the client to see fail.
+            body.finish()
+        } finally {
+            body.release()
+        }
     }
 }
 
@@ -113,6 +126,13 @@ public class ServletSseSink(
         writer.flush()
         response.flushBuffer()
     }
+}
+
+/** Gzip with a sync flush per flush, and a way to free its native memory without closing the response. */
+internal class SyncGzipOutputStream(
+    out: OutputStream,
+) : GZIPOutputStream(out, true) {
+    fun release() = def.end()
 }
 
 /**

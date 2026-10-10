@@ -76,11 +76,21 @@ class SpringAdapterTest {
             .writeTo(response.outputStream)
 
         assertEquals("gzip", response.getHeader("Content-Encoding"))
-        assertEquals("Accept-Encoding", response.getHeader("Vary"))
+        assertEquals(listOf("Accept-Encoding"), response.getHeaders("Vary"))
         assertEquals(
             "event: datastar-patch-signals\ndata: signals {\"n\":1}\n\n",
             java.util.zip.GZIPInputStream(response.contentAsByteArray.inputStream()).readBytes().decodeToString(),
         )
+    }
+
+    @Test
+    fun `a Vary already on the response is kept`() {
+        val request = MockHttpServletRequest("GET", "/feed").apply { addHeader("Accept-Encoding", "gzip") }
+        val response = MockHttpServletResponse().apply { addHeader("Vary", "Origin") }
+
+        response.datastarStream(Streamlord(compress = true), request) { patchSignals("n" to 1) }.writeTo(response.outputStream)
+
+        assertEquals(listOf("Origin", "Accept-Encoding"), response.getHeaders("Vary"))
     }
 
     @Test

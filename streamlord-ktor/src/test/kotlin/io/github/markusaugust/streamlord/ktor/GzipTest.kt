@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.ktor
 
+import io.github.markusaugust.streamlord.core.application.StreamAuthorisation
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -83,7 +84,26 @@ class GzipTest {
             val response = client.get("/feed")
 
             assertNull(response.headers[HttpHeaders.ContentEncoding])
+            assertEquals(HttpHeaders.AcceptEncoding, response.headers[HttpHeaders.Vary])
             assertEquals("event: datastar-patch-signals\ndata: signals {\"n\":1}\n\n", response.bodyAsText())
+        }
+
+    // A refusal ends the stream cleanly, so the gzip member is whole too.
+    @Test
+    fun `a refused stream still ends as a whole gzip member`() =
+        testApplication {
+            install(StreamlordPlugin) { compress = true }
+            routing {
+                get("/feed") {
+                    call.respondDatastar(
+                        authorisation = StreamAuthorisation(onRefused = { patchSignals("gone" to true) }) { false },
+                    ) { patchSignals("n" to 1) }
+                }
+            }
+
+            val body = client.get("/feed") { header(HttpHeaders.AcceptEncoding, "gzip") }.bodyAsBytes()
+
+            assertEquals("event: datastar-patch-signals\ndata: signals {\"gone\":true}\n\n", gunzip(body))
         }
 
     // Every flush leaves a whole event decodable: nothing waits for the end of the stream.

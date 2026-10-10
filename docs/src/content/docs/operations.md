@@ -177,33 +177,52 @@ get("/slow") {
 
 ## Compression
 
-A view that re-renders a whole region sends most of the same markup again on every change, and
-gzip is good at exactly that. Turn it on once:
+A view that re-renders a whole region sends most of the same markup again on every change. Turn
+gzip on once:
 
 ```kotlin sample=ktor-application
 install(StreamlordPlugin) { compress = true }
 ```
 
 On Spring it is the bean, `Streamlord(compress = true)`, and `datastarStream` needs the request
-to see what the browser accepts. A stream is compressed only when the request's
-`Accept-Encoding` takes gzip, and it then carries `Content-Encoding: gzip` and
-`Vary: Accept-Encoding`.
+to see what the browser accepts. A stream is gzipped only when the request's `Accept-Encoding`
+takes it, and then carries `Content-Encoding: gzip`; with `compress` on, every stream carries
+`Vary: Accept-Encoding`. It works over plain HTTP too, unlike Brotli, which browsers ask for only
+over HTTPS.
 
-Each event is flushed through the compressor whole, so it reaches the browser as soon as it is
-written; the compressor keeps its window across events, which is where a repeated render becomes
-cheap. Three things to know:
+Each event is flushed through the compressor whole, a sync flush per event, and the compressor
+keeps its 32 KiB window from one event to the next. **Measured**, with the JDK's gzip at its
+default level on a 200-row table re-rendered whole:
 
-- **Ktor's own `Compression` plugin stays off a stream compressed here,** because the response
-  already names its encoding. Do not set it to compress `text/event-stream` as well.
-- **WebFlux is not covered.** A `Flow` handed to WebFlux never passes through a Streamlord
-  stream; use the server's own compression, and make sure it flushes per event.
+| | Bytes |
+|---|---|
+| One render, as text | 14,733 |
+| The first render, gzipped | 1,476 |
+| The next render, one row changed | 251 |
+| A heartbeat comment | 20 |
+
+The second render is cheap because the first is still in the window. A render larger than 32 KiB
+no longer finds the last one there, and costs about what the first did. That browsers decode a
+gzipped `fetch` body as it arrives, event by event, is how they behave in general and is **not
+measured here**.
+
+Four things to know:
+
+- **Ktor's own `Compression` plugin stays off a stream gzipped here,** because the content already
+  names its encoding; a test installs the plugin to show it. nginx's `gzip on` leaves an encoded
+  response alone in the same way.
+- **WebFlux is not covered.** A `Flow` handed to WebFlux never passes through a Streamlord stream.
+  Spring Boot's `server.compression` leaves `text/event-stream` out of its default types, and
+  whether it flushes per event when you add it is not measured here.
 - **Mind what shares a compressed stream.** Compression leaks how much two pieces of text have in
-  common through the size of the result. A stream that carries a secret next to text an attacker
-  can choose, a token beside a search term they typed, can give the secret away a byte at a time.
-  Keep secrets out of streams that echo input, or leave those streams uncompressed.
-
-A proxy in front must pass the stream through as it comes; `X-Accel-Buffering: no`, below, is
-what tells nginx.
+  common through the size of the result, and the window carries across events, so a secret in one
+  event and text an attacker chose in another, up to 32 KiB later, compress together. An attacker
+  who can trigger the stream and watch the sizes of encrypted traffic can recover the secret a
+  little at a time. Keep tokens and other secrets out of streams that carry text a reader can
+  choose, or leave those streams uncompressed.
+- **A proxy has to pass it through as it comes.** `X-Accel-Buffering: no`, below, tells nginx. A
+  CDN that decompresses and re-encodes may hold events back; the Railway measurement below was
+  taken without gzip.
 
 ## Through the proxy
 

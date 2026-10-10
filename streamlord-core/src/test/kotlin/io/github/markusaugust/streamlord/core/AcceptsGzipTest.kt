@@ -13,6 +13,8 @@ class AcceptsGzipTest {
         assertTrue(acceptsGzip("br;q=1.0, gzip;q=0.8"))
         assertTrue(acceptsGzip("*"))
         assertTrue(acceptsGzip("x-gzip"))
+        assertTrue(acceptsGzip("gzip; q=0.5"))
+        assertTrue(acceptsGzip("x-gzip;q=0, gzip"))
     }
 
     @Test
@@ -24,5 +26,9 @@ class AcceptsGzipTest {
         assertFalse(acceptsGzip("*, gzip;q=0"))
         assertFalse(acceptsGzip("*;q=0"))
         assertFalse(acceptsGzip("identity"))
+        assertFalse(acceptsGzip("gzip;q=0.0"))
+        assertFalse(acceptsGzip("gzip;q=0.000"))
+        assertFalse(acceptsGzip("gzip; q = 0"))
+        assertFalse(acceptsGzip("gzip;q=abc"))
     }
 }

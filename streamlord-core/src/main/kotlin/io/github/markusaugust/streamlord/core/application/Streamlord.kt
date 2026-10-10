@@ -63,10 +63,9 @@ public typealias Signals = JsonObject
  *   heartbeat. Off by default.
  * @property compress Gzip the streams Streamlord opens itself, when the request's
  *   `Accept-Encoding` takes gzip: `respondDatastar` on Ktor and `datastarStream` on Spring WebMVC
- *   with the request passed. Each event is flushed through the compressor whole, so it reaches
- *   the browser as soon as it is written. A view that re-renders whole regions compresses well,
- *   since one render repeats most of the last. Off by default; on WebFlux, the server's own
- *   compression is the place for it.
+ *   with the request passed. Each event is flushed through the compressor whole, so nothing waits
+ *   for the next, and the window carries across events, so a render that repeats most of the
+ *   last costs little. Off by default. Not WebFlux: its flows are only mapped.
  */
 public class Streamlord(
     public val codec: SignalsCodec = BuiltInSignalsCodec,

@@ -64,20 +64,33 @@ public suspend fun ApplicationCall.respondDatastar(
             // On the content rather than the response: this is where Ktor's Compression plugin
             // looks to see that a body is already encoded, and leaves it alone.
             override val headers: Headers =
-                if (gzip) {
-                    headersOf(
-                        HttpHeaders.ContentEncoding to listOf("gzip"),
-                        HttpHeaders.Vary to listOf(HttpHeaders.AcceptEncoding),
-                    )
-                } else {
-                    Headers.Empty
+                when {
+                    gzip -> {
+                        headersOf(
+                            HttpHeaders.ContentEncoding to listOf("gzip"),
+                            HttpHeaders.Vary to listOf(HttpHeaders.AcceptEncoding),
+                        )
+                    }
+
+                    // The answer depends on Accept-Encoding whether or not this one was gzipped.
+                    streamlord.compress -> {
+                        headersOf(HttpHeaders.Vary, HttpHeaders.AcceptEncoding)
+                    }
+
+                    else -> {
+                        Headers.Empty
+                    }
                 }
 
             override suspend fun writeTo(channel: ByteWriteChannel) {
                 if (gzip) {
                     val sink = GzipChannelSseSink(channel)
-                    streamlord.stream(sink, authorisation, block)
-                    sink.finish()
+                    try {
+                        streamlord.stream(sink, authorisation, block)
+                        sink.finish()
+                    } finally {
+                        sink.release()
+                    }
                 } else {
                     streamlord.stream(ChannelSseSink(channel), authorisation, block)
                 }
@@ -144,7 +157,13 @@ public suspend fun ApplicationCall.respondScript(
     respondDatastar(ScriptResponse(script, attributes), status)
 }
 
-/** An [SseSink] over Ktor's response channel. */
+/** Gzip with a sync flush per flush, and a way to free its native memory without closing anything. */
+internal class SyncGzipOutputStream(
+    out: java.io.OutputStream,
+) : GZIPOutputStream(out, true) {
+    fun release() = def.end()
+}
+
 /**
  * Gzip over the response channel. Each flush ends a deflate block with a sync flush and hands the
  * bytes to the channel, so an event is decodable the moment it arrives, while the compressor keeps
@@ -154,7 +173,7 @@ internal class GzipChannelSseSink(
     private val channel: ByteWriteChannel,
 ) : SseSink {
     private val buffer = ByteArrayOutputStream()
-    private val gzip = GZIPOutputStream(buffer, true)
+    private val gzip = SyncGzipOutputStream(buffer)
 
     override suspend fun write(text: String) {
         gzip.write(text.toByteArray(Charsets.UTF_8))
@@ -165,11 +184,17 @@ internal class GzipChannelSseSink(
         drain()
     }
 
-    /** End the gzip member, so the client's decoder sees a whole stream. */
+    /**
+     * End the gzip member, so the client's decoder sees a whole stream. Only after a stream that
+     * ended well: one cut short by an exception is left unterminated, so the client sees it fail.
+     */
     suspend fun finish() {
         gzip.finish()
         drain()
     }
+
+    /** Free the compressor's native memory, however the stream ended. */
+    fun release() = gzip.release()
 
     private suspend fun drain() {
         channel.writeFully(buffer.toByteArray())
@@ -178,6 +203,7 @@ internal class GzipChannelSseSink(
     }
 }
 
+/** An [SseSink] over Ktor's response channel. */
 internal class ChannelSseSink(
     private val channel: ByteWriteChannel,
 ) : SseSink {

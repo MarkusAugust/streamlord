@@ -42,7 +42,8 @@ public class StreamlordPluginConfig {
     /**
      * Gzip every stream whose request takes it, flushed event by event so nothing waits. Leave
      * Ktor's own Compression plugin to the other responses; a stream compressed here carries a
-     * `Content-Encoding` that keeps the plugin off it. Off by default.
+     * `Content-Encoding` that keeps the plugin off it. Off by default, and ignored when
+     * [streamlord] is set, as the other settings are.
      */
     public var compress: Boolean = false
 
