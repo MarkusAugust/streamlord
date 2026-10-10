@@ -217,7 +217,7 @@
     "acorn": "8.18.0"
   },
   "devDependencies": {
-    "@types/node": "22.19.0",
+    "@types/node": "26.6.4",
     "@types/vscode": "1.105.0",
     "@vscode/vsce": "4.0.0",
     "esbuild": "0.28.2",
