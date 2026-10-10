@@ -122,7 +122,8 @@ public object SseDecoder {
         val args = group(message.data)
         val retry = message.retry?.let(::parseRetry)
         // An empty id is valid SSE and means "no id"; the client drops its last-event-id on an
-        // empty `id:` line. A bare `id` with no colon it skips, as it skips every such line.
+        // empty `id:` line. The client skips a bare `id` with no colon, as it skips every line
+        // without one (fetch.ts:403 in Datastar 1.0.4).
         val id = message.id?.takeIf { it.isNotEmpty() }
         return when (message.event) {
             DatastarProtocol.Events.PATCH_ELEMENTS -> {
