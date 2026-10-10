@@ -26,6 +26,7 @@ export const NAVIGATION: Section[] = [
       { slug: "ktor", title: "Ktor" },
       { slug: "spring-webmvc", title: "Spring WebMVC" },
       { slug: "spring-webflux", title: "Spring WebFlux" },
+      { slug: "live-views", title: "Live views" },
       { slug: "signals", title: "Signals and codecs" },
     ],
   },

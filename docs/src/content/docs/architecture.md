@@ -25,7 +25,7 @@ description: "Ports and adapters, and why the core imports no framework."
     <div class="hex__arrow" aria-hidden="true"></div>
     <details class="hex__box hex__box--port">
       <summary><span class="hex__role">driving port</span><span class="hex__name"><code>DatastarStream</code></span></summary>
-      <p>The way in. <code>patchElements</code>, <code>patchSignals</code>, <code>executeScript</code> and <code>redirect</code> are all on this one interface, and <code>respondDatastar</code> hands you one. <code>Streamlord.readSignals</code> is the other direction of the same door.</p>
+      <p>The way in. <code>patchElements</code>, <code>patchSignals</code>, <code>executeScript</code>, <code>redirect</code>, <code>replaceUrl</code> and <code>pushUrl</code> are all on this one interface, and <code>respondDatastar</code> hands you one. <code>Streamlord.readSignals</code> is the other direction of the same door.</p>
     </details>
     <div class="hex__arrow" aria-hidden="true"></div>
     <details class="hex__box hex__box--core">
