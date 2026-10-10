@@ -179,10 +179,9 @@ our side is strict.
 
 ### And coroutines
 
-Boot pins kotlinx-coroutines the same way: 1.10.2 under Boot 4.0 and 4.1. Streamlord is
-compiled against 1.10.2, so a Boot build runs on the version it was compiled against. A Ktor
-application resolves a newer one through Ktor and that is fine too; the Spring adapter's tests run
-on both.
+Boot pins kotlinx-coroutines the same way: 1.10.2 under Boot 4.0 and 4.1, which is the version
+Streamlord is compiled against. A Ktor application resolves a newer one through Ktor and that is
+fine too; the Spring adapter's tests run on 1.10.2 and on the newest release.
 
 ### In practice you add few new jars
 

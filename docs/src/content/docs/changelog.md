@@ -9,6 +9,10 @@ with a sentence about what to do.
 
 ## Unreleased
 
+**Spring Boot 3 is no longer supported.** The Spring adapter is built for Boot 4 (Framework 7.0,
+Servlet 6.1), and Streamlord needs kotlinx-coroutines 1.10.2 or newer, which Boot 4 already pins.
+On Boot 3, stay on 0.11.1. Ktor applications change nothing.
+
 ## 0.11.1
 
 **Nothing to change in your code.** The modules are the same as in 0.11.0; this release carries

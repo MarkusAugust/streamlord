@@ -4,8 +4,8 @@ description: "datastarStream on a servlet response, and the one bean that config
 ---
 
 Spring is the Shield. Spring and the servlet API are `compileOnly`, so the adapter adds no
-version of either. It compiles and is tested against Framework 7.0 (Boot 4) on every
-build. Boot 3 is not supported.
+version of either. It compiles and is tested against Framework 7.0 (Boot 4) on every build.
+Boot 3 is not supported.
 
 ## One bean, declared by you
 

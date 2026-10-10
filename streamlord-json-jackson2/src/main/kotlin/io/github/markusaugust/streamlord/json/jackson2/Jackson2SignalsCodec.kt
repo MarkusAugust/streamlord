@@ -11,10 +11,9 @@ import kotlin.reflect.javaType
 /**
  * A [SignalsCodec] backed by Jackson 2 (`com.fasterxml.jackson`).
  *
- * Hand it the `ObjectMapper` your application already owns (in Spring Boot, the auto-configured
- * bean) so signals obey the same rules as every other JSON in the realm. [default] builds a
- * mapper with every module on the classpath registered, including `jackson-module-kotlin`
- * when present.
+ * Hand it the `ObjectMapper` your application already owns so signals obey the same rules as
+ * every other JSON in the realm. [default] builds a mapper with every module on the classpath
+ * registered, including `jackson-module-kotlin` when present.
  *
  * ```kotlin
  * @Bean fun streamlord(mapper: ObjectMapper) = Streamlord(codec = Jackson2SignalsCodec(mapper))
