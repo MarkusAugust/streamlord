@@ -90,7 +90,8 @@ protocol default of 1000 ms, as the specification says to.
 header as it was: the client changes it only when an `id:` line arrives, and drops it only on an
 empty one (`fetch.ts:665`), which Streamlord cannot send. **Observed.** So once a stream has sent
 an id, every retry and every reopen after a hidden tab carries the last one it sent, until the
-action is run again: a new `@get` starts without the header.
+action is run again: a new `@get` starts without the header, unless its own `headers` option
+passes one.
 
 That is what lets the sample below resume across any number of retries, not only the first. It
 also means that events sent after the last one with an id are sent again on a retry, since the
