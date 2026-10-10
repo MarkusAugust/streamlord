@@ -30,6 +30,31 @@ public class SseReader {
     private val data = ArrayList<String>()
     private val comments = ArrayList<String>()
 
+    /**
+     * The stream has ended: the comments read since the last message, as one message, the way
+     * [SseDecoder.messages] keeps them at the end of a text. Fields with no blank line after them
+     * are an unfinished message, which the client never dispatches, and are dropped.
+     */
+    public fun finish(): SseMessage? {
+        if (line.isNotEmpty()) {
+            val text = line.toString()
+            line.setLength(0)
+            if (text.startsWith(":")) comments += text.removePrefix(":").removePrefix(" ")
+        }
+        val trailing =
+            if (event == null && id == null && retry == null && data.isEmpty() && comments.isNotEmpty()) {
+                SseMessage(null, null, null, emptyList(), comments.toList())
+            } else {
+                null
+            }
+        event = null
+        id = null
+        retry = null
+        data.clear()
+        comments.clear()
+        return trailing
+    }
+
     /** Every message [chunk] completed, in order. Usually none or one. */
     public fun feed(chunk: String): List<SseMessage> {
         val out = ArrayList<SseMessage>()
@@ -37,7 +62,7 @@ public class SseReader {
             if (!started) {
                 started = true
                 // One leading byte order mark is not part of the stream.
-                if (char == '﻿') continue
+                if (char == '\uFEFF') continue
             }
             if (afterCr) {
                 afterCr = false

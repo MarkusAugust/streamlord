@@ -53,10 +53,8 @@ public final class io/github/markusaugust/streamlord/test/DatastarEventsKt {
 
 public final class io/github/markusaugust/streamlord/test/LiveDatastarStream : java/lang/AutoCloseable {
 	public static final field Companion Lio/github/markusaugust/streamlord/test/LiveDatastarStream$Companion;
-	public fun <init> (Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;)V
-	public synthetic fun <init> (Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun awaitPatchElements-zkXUZaI (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Ljava/lang/String;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public static synthetic fun awaitPatchElements-zkXUZaI$default (Lio/github/markusaugust/streamlord/test/LiveDatastarStream;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Ljava/lang/String;JLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun awaitPatchElements-myKFqkg (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Ljava/lang/String;Ljava/lang/String;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun awaitPatchElements-myKFqkg$default (Lio/github/markusaugust/streamlord/test/LiveDatastarStream;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Ljava/lang/String;Ljava/lang/String;JLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public final fun awaitSignal-exY8QGI (Ljava/lang/String;Ljava/lang/Object;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun awaitSignal-exY8QGI$default (Lio/github/markusaugust/streamlord/test/LiveDatastarStream;Ljava/lang/String;Ljava/lang/Object;JLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public fun close ()V
@@ -67,7 +65,9 @@ public final class io/github/markusaugust/streamlord/test/LiveDatastarStream : j
 
 public final class io/github/markusaugust/streamlord/test/LiveDatastarStream$Companion {
 	public final fun getDEFAULT_TIMEOUT-UwyO8pc ()J
-	public final fun open (Ljava/net/URI;Ljava/util/Map;Ljava/net/http/HttpClient;)Lio/github/markusaugust/streamlord/test/LiveDatastarStream;
-	public static synthetic fun open$default (Lio/github/markusaugust/streamlord/test/LiveDatastarStream$Companion;Ljava/net/URI;Ljava/util/Map;Ljava/net/http/HttpClient;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/test/LiveDatastarStream;
+	public final fun of (Ljava/io/Reader;Ljava/lang/AutoCloseable;)Lio/github/markusaugust/streamlord/test/LiveDatastarStream;
+	public static synthetic fun of$default (Lio/github/markusaugust/streamlord/test/LiveDatastarStream$Companion;Ljava/io/Reader;Ljava/lang/AutoCloseable;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/test/LiveDatastarStream;
+	public final fun open-SxA4cEA (Ljava/net/URI;Ljava/util/Map;J)Lio/github/markusaugust/streamlord/test/LiveDatastarStream;
+	public static synthetic fun open-SxA4cEA$default (Lio/github/markusaugust/streamlord/test/LiveDatastarStream$Companion;Ljava/net/URI;Ljava/util/Map;JILjava/lang/Object;)Lio/github/markusaugust/streamlord/test/LiveDatastarStream;
 }
 

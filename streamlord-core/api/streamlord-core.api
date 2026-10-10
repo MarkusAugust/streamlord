@@ -722,5 +722,6 @@ public final class io/github/markusaugust/streamlord/core/protocol/SseMessage {
 public final class io/github/markusaugust/streamlord/core/protocol/SseReader {
 	public fun <init> ()V
 	public final fun feed (Ljava/lang/String;)Ljava/util/List;
+	public final fun finish ()Lio/github/markusaugust/streamlord/core/protocol/SseMessage;
 }
 

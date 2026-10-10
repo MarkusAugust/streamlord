@@ -176,21 +176,18 @@ port, because Ktor's test host hands a streamed response to the client only once
 ended:
 
 ```kotlin sample=test
-private val http = java.net.http.HttpClient.newHttpClient()
+private val http = HttpClient.newHttpClient()
 
 private fun post(url: String) {
-    http.send(
-        java.net.http.HttpRequest.newBuilder(URI(url)).POST(java.net.http.HttpRequest.BodyPublishers.noBody()).build(),
-        java.net.http.HttpResponse.BodyHandlers.discarding(),
-    )
+    http.send(HttpRequest.newBuilder(URI(url)).POST(HttpRequest.BodyPublishers.noBody()).build(), HttpResponse.BodyHandlers.discarding())
 }
 
 @Test
 fun `a click reaches the page that is already open`() =
-    runBlocking {
+    runTest {
         val count = MutableStateFlow(0)
         val server =
-            embeddedServer(CIO, port = 0) {
+            embeddedServer(CIO, port = 0, host = "127.0.0.1") {
                 routing {
                     get("/count") { call.respondDatastar { count.collect { patchSignals("count" to it) } } }
                     post("/increment") {
@@ -199,12 +196,12 @@ fun `a click reaches the page that is already open`() =
                     }
                 }
             }.start()
-        val port = server.engine.resolvedConnectors().first().port
+        val origin = "http://127.0.0.1:${server.engine.resolvedConnectors().first().port}"
 
         try {
-            LiveDatastarStream.open(URI("http://localhost:$port/count")).use { page ->
+            LiveDatastarStream.open(URI("$origin/count")).use { page ->
                 page.awaitSignal("count", 0)
-                post("http://localhost:$port/increment")
+                post("$origin/increment")
                 page.awaitSignal("count", 1)
             }
         } finally {
@@ -214,15 +211,19 @@ fun `a click reaches the page that is already open`() =
 ```
 
 Needs `ktor-server-cio`, or the engine you deploy on, next to `streamlord-test`. On Spring Boot,
-`@SpringBootTest(webEnvironment = RANDOM_PORT)` gives the real server, and `@LocalServerPort`
-the port.
+`@SpringBootTest(webEnvironment = RANDOM_PORT)` gives the real server and `@LocalServerPort` the
+port, from a Kotlin test: the class is coroutine API, called inside `runTest` or `runBlocking`.
+
+The answer has to start within the timeout, five seconds by default, and a server sends its
+headers with its first flush. A handler that writes nothing until a command arrives holds `open`
+until it does, which is one more reason for a live view to send the current state first.
 
 Three things it does:
 
 - **Each `await` reads until what it asks for arrives.** `awaitPatchElements` takes the arguments
   of `assertPatchElements` and moves past the patch it returns, so the next one waits for a new
-  patch. `awaitSignal` folds the store as the browser does and returns once the signal holds the
-  value. `next()` hands over one event at a time.
+  patch. `awaitSignal` folds the store as the browser does, reads whatever has already arrived,
+  and returns once the signal holds the value. `next()` hands over one event at a time.
 - **It waits on real time**, five seconds by default, also inside `runTest`. A wait that comes up
   empty, or a stream that ends first, fails with the assertion's own message and the stream it
   read, like every other assertion on this page.
@@ -230,8 +231,8 @@ Three things it does:
   write. `received` keeps everything it read, comments included, for the assertions above.
 
 `open` sends `Datastar-Request: true` and takes `headers` for a cookie or a token. It speaks the
-JDK's own HTTP client, so it binds no HTTP library either; the constructor takes any function
-that returns the stream's next piece of text, for a client of your own.
+JDK's own HTTP client, so it binds no HTTP library either; `LiveDatastarStream.of(reader)` reads
+from the `Reader` any other client hands you.
 
 ## The `$` check, in CI, with no editor open
 

@@ -47,6 +47,10 @@ class LiveDatastarStreamTest {
                 exchange.close()
             }
         }
+        server.createContext("/silent") { exchange ->
+            Thread.sleep(2000)
+            exchange.close()
+        }
         server.createContext("/page") { exchange ->
             exchange.responseHeaders.add("Content-Type", "text/html")
             exchange.sendResponseHeaders(200, -1)
@@ -158,5 +162,71 @@ class LiveDatastarStreamTest {
             assertFailsWith<AssertionError> { LiveDatastarStream.open(URI("http://127.0.0.1:${server.address.port}/page")) }
 
         assertTrue("text/event-stream" in failure.message!!, failure.message)
+    }
+
+    // History said 1, the stream has since said 2: the answer is what the stream says now.
+    @Test
+    fun `a value the stream has since changed is not taken for the answer`() =
+        runTest {
+            feed().use { stream ->
+                outbox.put(signals("""{"count":1}"""))
+                stream.awaitSignal("count", 1)
+                outbox.put(signals("""{"count":2}"""))
+                Thread.sleep(200)
+
+                assertFailsWith<AssertionError> { stream.awaitSignal("count", 1, timeout = 300.milliseconds) }
+            }
+        }
+
+    @Test
+    fun `a frame the client would reject fails with the stream`() =
+        runTest {
+            feed().use { stream ->
+                outbox.put("event: datastar-patch-elements\ndata: mode sideways\ndata: elements <p/>\n\n")
+
+                val failure = assertFailsWith<AssertionError> { stream.next() }
+
+                assertTrue("would reject" in failure.message!!, failure.message)
+            }
+        }
+
+    @Test
+    fun `a connection that fails says how it ended`() =
+        runTest {
+            val broken =
+                object : java.io.Reader() {
+                    override fun read(
+                        cbuf: CharArray,
+                        off: Int,
+                        len: Int,
+                    ): Int = throw java.io.IOException("Connection reset")
+
+                    override fun close() = Unit
+                }
+
+            val failure = assertFailsWith<AssertionError> { LiveDatastarStream.of(broken).awaitSignal("count", 1) }
+
+            assertTrue("IOException: Connection reset" in failure.message!!, failure.message)
+        }
+
+    @Test
+    fun `an await after close says the stream was closed`() =
+        runTest {
+            val stream = feed()
+            stream.close()
+
+            val failure = assertFailsWith<AssertionError> { stream.awaitSignal("count", 1) }
+
+            assertTrue("closed first" in failure.message!!, failure.message)
+        }
+
+    @Test
+    fun `a server that never answers fails the open within its timeout`() {
+        val failure =
+            assertFailsWith<AssertionError> {
+                LiveDatastarStream.open(URI("http://127.0.0.1:${server.address.port}/silent"), timeout = 300.milliseconds)
+            }
+
+        assertTrue("No answer" in failure.message!!, failure.message)
     }
 }
