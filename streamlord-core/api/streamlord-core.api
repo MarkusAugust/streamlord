@@ -598,6 +598,8 @@ public abstract interface class io/github/markusaugust/streamlord/core/port/driv
 	public fun replaceUrl (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun send (Lio/github/markusaugust/streamlord/core/domain/DatastarEvent;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun sendAll (Lkotlinx/coroutines/flow/Flow;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun sendLatest-WPwdCS8 (Lkotlinx/coroutines/flow/Flow;JLjava/lang/String;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun sendLatest-WPwdCS8$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Lkotlinx/coroutines/flow/Flow;JLjava/lang/String;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 }
 
 public final class io/github/markusaugust/streamlord/core/port/driving/DatastarStream$DefaultImpls {
@@ -618,6 +620,8 @@ public final class io/github/markusaugust/streamlord/core/port/driving/DatastarS
 	public static synthetic fun removeSignals-5_5nbZA$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;[Ljava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public static fun replaceUrl (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static fun sendAll (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Lkotlinx/coroutines/flow/Flow;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun sendLatest-WPwdCS8 (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Lkotlinx/coroutines/flow/Flow;JLjava/lang/String;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun sendLatest-WPwdCS8$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Lkotlinx/coroutines/flow/Flow;JLjava/lang/String;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 }
 
 public final class io/github/markusaugust/streamlord/core/protocol/DatastarAttributes {
@@ -681,6 +685,7 @@ public final class io/github/markusaugust/streamlord/core/protocol/SseEncoder {
 	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/protocol/SseEncoder;
 	public final fun comment (Ljava/lang/String;)Ljava/lang/String;
 	public final fun encode (Lio/github/markusaugust/streamlord/core/domain/DatastarEvent;)Ljava/lang/String;
+	public final fun fingerprint (Ljava/util/List;)Ljava/lang/String;
 	public final fun frame (Lio/github/markusaugust/streamlord/core/domain/DatastarEvent;)Lio/github/markusaugust/streamlord/core/protocol/SseFrame;
 }
 

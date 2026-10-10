@@ -8,10 +8,16 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Added
 
+- `sendLatest(states, minInterval, resumeFrom) { render }` on a stream: renders the newest state
+  and sends it, at most once per interval, and not at all when nothing changed. Each render's
+  fingerprint is its event id, so a reconnect that passes `last-event-id` back as `resumeFrom` is
+  not sent what it already shows. `SseEncoder.fingerprint` computes it. Documentation: the Live
+  views page covers commands and the view, the element that opens the stream, and
+  `requestCancellation`.
 - `replaceUrl(url)` and `pushUrl(url)` on a stream: the server puts the URL of the state it
   rendered in the address bar, replacing the current history entry or adding one, without a
   reload. The URL is quoted as `redirect` quotes it; pass a path on the page's own origin.
-  Documentation: a Live views page, which starts with them.
+  Documentation: a Live views page, which covers them.
 - `streamlord-test`: `LiveDatastarStream`, a stream held open and read as it arrives, for a test
   that sends a command and waits for the patch it causes on the stream that was already there.
   `awaitPatchElements`, `awaitSignal` and `next` wait on real time, also inside `runTest`, and fail
@@ -19,6 +25,7 @@ All notable changes to Streamlord are recorded here. The format follows
   Coroutine API, for Kotlin tests.
 - `streamlord-core`: `SseReader`, which reads a stream that is still arriving and hands back each
   message as its blank line arrives, and `SseDecoder.event` for one message at a time.
+  Documentation: a Live views page, which covers them.
 - Documentation: a Components and plain JavaScript page (attributes down and events up for
   custom elements, window events from plain scripts, `data-ignore-morph` on both sides of a
   morph, optimistic state rolled back on a failed fetch), and the signals page covers signals that
