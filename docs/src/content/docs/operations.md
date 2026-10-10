@@ -88,11 +88,15 @@ protocol default of 1000 ms, as the specification says to.
 **`id:`**, when you send one, is kept by the client and put on the **next** attempt as a
 `last-event-id` request header (`fetch.ts:662`). **Observed.** An event without an id leaves the
 header as it was: the client changes it only when an `id:` line arrives, and drops it only on an
-empty one (`fetch.ts:665`), which Streamlord does not send. So once a stream has sent an id, every
-retry and every reopen after a hidden tab carries the last one it sent, until the action is run
-again: a new `@get` starts without the header.
+empty one (`fetch.ts:665`), which Streamlord cannot send. **Observed.** So once a stream has sent
+an id, every retry and every reopen after a hidden tab carries the last one it sent, until the
+action is run again: a new `@get` starts without the header.
 
-That is the whole of a resumable stream: number your events, read the header, start after it.
+That is what lets the sample below resume across any number of retries, not only the first. It
+also means that events sent after the last one with an id are sent again on a retry, since the
+header still names that one: give every event an id, or let a repeat do no harm.
+
+Number your events, read the header, start after it: that is the whole of a resumable stream.
 
 ```kotlin sample=ktor-routing
 get("/feed") {

@@ -80,8 +80,6 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
-- Documentation: Operations said the client drops `last-event-id` when an event carries no id.
-  It keeps it, and drops it only on an empty `id:`; the page now says so, with the source line.
 - `streamlord-analysis`, for both editors: a route whose mapping had no leading slash, such as
   `@RequestMapping("api/hent")` or Ktor's `route("api")`, was found as `api/hent/visning`, and
   the Stream Inspector opened it as `http://localhost:8080api/hent/visning`. Every route path now
@@ -92,6 +90,8 @@ All notable changes to Streamlord are recorded here. The format follows
   holds the rule to the JDK's own verdict.
 - `streamlord-analysis`: `Requests.emptyBodyHint`, the note the Stream Inspector shows under an
   error response that came without a body: the reason is then in the server's log.
+- Documentation: Operations said the client drops `last-event-id` when an event carries no id.
+  It keeps it, and drops it only on an empty `id:`; the page now says so, with the source line.
 
 ## [0.11.1] - 2026-10-05
 
