@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation
 
 import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.KotlinJvm
@@ -40,18 +41,19 @@ subprojects {
     version = rootProject.version
 
     extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension> {
-        if (!internal) explicitApi()
         /*
-         * The public surface, written down in api/<module>.api and checked by `check`.
+         * Published modules are held to explicit API mode, which makes every public declaration
+         * a decision, and to the dump in api/<module>.api, which makes every change to one visible.
          *
-         * Explicit API mode makes every public declaration a decision; this makes every change to
-         * one visible. A default parameter added to a public function compiles for every caller
-         * and still removes the JVM signature their jars were built against, which surfaces as
-         * NoSuchMethodError at runtime, never at compile time. The dump turns that into a diff in
-         * review. After an intended change, `./gradlew updateKotlinAbi` rewrites it.
+         * A default parameter added to a public function compiles for every caller and still
+         * removes the JVM signature that code compiled against the previous version calls, which
+         * surfaces as NoSuchMethodError at runtime and never at compile time. `check` compares
+         * the dump with the code and turns that into a red build; after an intended change,
+         * `./gradlew updateKotlinAbi` rewrites the dump, and the diff is reviewed with the rest.
          */
         if (!internal) {
-            @OptIn(org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation::class)
+            explicitApi()
+            @OptIn(ExperimentalAbiValidation::class)
             abiValidation()
         }
         jvmToolchain(21)
