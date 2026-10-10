@@ -8,6 +8,10 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Added
 
+- Documentation: a Components and plain JavaScript page (attributes down and events up for
+  custom elements, window events from plain scripts, `data-ignore-morph` on both sides of a
+  morph, optimistic state rolled back on a failed fetch), and the signals page covers signals that
+  stay in the browser, `filterSignals` and `payloadExpr`.
 - `streamlord-analysis`, for both editors: `signalReferencesInKotlin` and `signalReferencesInHtml`, every `$name` a
   Datastar expression reads, with source offsets; `collectSignalDefinitions`, the signals a file
   defines without the ones it only reads, plus every `$name = ...` an expression assigns; and
