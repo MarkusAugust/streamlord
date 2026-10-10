@@ -41,6 +41,19 @@ subprojects {
 
     extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension> {
         if (!internal) explicitApi()
+        /*
+         * The public surface, written down in api/<module>.api and checked by `check`.
+         *
+         * Explicit API mode makes every public declaration a decision; this makes every change to
+         * one visible. A default parameter added to a public function compiles for every caller
+         * and still removes the JVM signature their jars were built against, which surfaces as
+         * NoSuchMethodError at runtime, never at compile time. The dump turns that into a diff in
+         * review. After an intended change, `./gradlew updateKotlinAbi` rewrites it.
+         */
+        if (!internal) {
+            @OptIn(org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation::class)
+            abiValidation()
+        }
         jvmToolchain(21)
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)

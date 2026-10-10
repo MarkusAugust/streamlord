@@ -1,0 +1,56 @@
+public final class io/github/markusaugust/streamlord/ktor/CspNonceConfig {
+	public fun <init> ()V
+	public final fun getNonce ()Lkotlin/jvm/functions/Function0;
+	public final fun getPolicy ()Lkotlin/jvm/functions/Function1;
+	public final fun getReportOnly ()Z
+	public final fun setNonce (Lkotlin/jvm/functions/Function0;)V
+	public final fun setPolicy (Lkotlin/jvm/functions/Function1;)V
+	public final fun setReportOnly (Z)V
+}
+
+public final class io/github/markusaugust/streamlord/ktor/CspNonceKt {
+	public static final fun getCspNonce (Lio/ktor/server/application/ApplicationCall;)Ljava/lang/String;
+	public static final fun getCspNoncePlugin ()Lio/ktor/server/application/RouteScopedPlugin;
+}
+
+public final class io/github/markusaugust/streamlord/ktor/ResponsesKt {
+	public static final fun respondDatastar (Lio/ktor/server/application/ApplicationCall;Lio/github/markusaugust/streamlord/core/domain/DatastarResponse;Lio/ktor/http/HttpStatusCode;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static final fun respondDatastar (Lio/ktor/server/application/ApplicationCall;Lio/ktor/http/HttpStatusCode;Lio/github/markusaugust/streamlord/core/application/StreamAuthorisation;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static final fun respondDatastar (Lio/ktor/server/application/ApplicationCall;Lkotlinx/coroutines/flow/Flow;Lio/ktor/http/HttpStatusCode;Lio/github/markusaugust/streamlord/core/application/StreamAuthorisation;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun respondDatastar$default (Lio/ktor/server/application/ApplicationCall;Lio/github/markusaugust/streamlord/core/domain/DatastarResponse;Lio/ktor/http/HttpStatusCode;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static synthetic fun respondDatastar$default (Lio/ktor/server/application/ApplicationCall;Lio/ktor/http/HttpStatusCode;Lio/github/markusaugust/streamlord/core/application/StreamAuthorisation;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static synthetic fun respondDatastar$default (Lio/ktor/server/application/ApplicationCall;Lkotlinx/coroutines/flow/Flow;Lio/ktor/http/HttpStatusCode;Lio/github/markusaugust/streamlord/core/application/StreamAuthorisation;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static final fun respondElements (Lio/ktor/server/application/ApplicationCall;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLio/ktor/http/HttpStatusCode;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun respondElements$default (Lio/ktor/server/application/ApplicationCall;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLio/ktor/http/HttpStatusCode;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static final fun respondScript (Lio/ktor/server/application/ApplicationCall;Ljava/lang/String;Ljava/util/Map;Lio/ktor/http/HttpStatusCode;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun respondScript$default (Lio/ktor/server/application/ApplicationCall;Ljava/lang/String;Ljava/util/Map;Lio/ktor/http/HttpStatusCode;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static final fun respondSignals (Lio/ktor/server/application/ApplicationCall;Ljava/lang/String;ZLio/ktor/http/HttpStatusCode;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun respondSignals$default (Lio/ktor/server/application/ApplicationCall;Ljava/lang/String;ZLio/ktor/http/HttpStatusCode;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+}
+
+public final class io/github/markusaugust/streamlord/ktor/SignalsKt {
+	public static final fun asIncomingRequest (Lio/ktor/server/application/ApplicationCall;)Lio/github/markusaugust/streamlord/core/port/driven/IncomingRequest;
+	public static final fun isDatastarRequest (Lio/ktor/server/application/ApplicationCall;)Z
+	public static final fun readSignals (Lio/ktor/server/application/ApplicationCall;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static final fun readSignalsJson (Lio/ktor/server/application/ApplicationCall;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class io/github/markusaugust/streamlord/ktor/StreamlordPluginConfig {
+	public fun <init> ()V
+	public final fun getAttributePrefixes ()Ljava/util/List;
+	public final fun getCodec ()Lio/github/markusaugust/streamlord/core/port/driven/SignalsCodec;
+	public final fun getGuardElements ()Z
+	public final fun getMaxSignalsSize ()I
+	public final fun getStreamlord ()Lio/github/markusaugust/streamlord/core/application/Streamlord;
+	public final fun setAttributePrefixes (Ljava/util/List;)V
+	public final fun setCodec (Lio/github/markusaugust/streamlord/core/port/driven/SignalsCodec;)V
+	public final fun setGuardElements (Z)V
+	public final fun setMaxSignalsSize (I)V
+	public final fun setStreamlord (Lio/github/markusaugust/streamlord/core/application/Streamlord;)V
+}
+
+public final class io/github/markusaugust/streamlord/ktor/StreamlordPluginKt {
+	public static final fun getStreamlord (Lio/ktor/server/application/ApplicationCall;)Lio/github/markusaugust/streamlord/core/application/Streamlord;
+	public static final fun getStreamlordPlugin ()Lio/ktor/server/application/ApplicationPlugin;
+}
+
