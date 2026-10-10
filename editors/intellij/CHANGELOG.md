@@ -2,6 +2,13 @@
 
 All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here.
 
+## Unreleased
+
+- A `data-indicator` on an element that sends no request is a warning: the indicator only turns on
+  for requests its own element sends, so one on a wrapper or a sibling never does.
+- Quick fixes: `__debounce_150ms` offers `__debounce.150ms`, since a modifier's arguments follow a dot, and
+  `__prevent.stop` offers `__prevent__stop`, since each modifier starts with two underscores.
+
 ## 0.5.0
 
 - A signal no file in the project defines is a warning: `data-on:click="$telefon++"` on a page

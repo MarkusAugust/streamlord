@@ -5,6 +5,12 @@ package io.github.markusaugust.streamlord.analysis
  * them, and well-formed `data-*` attributes. A deliberately small tokenizer, not a browser.
  */
 
+/** An attribute name as a browser parses it, without template syntax or a spread in it. */
+private val PLAIN_ATTRIBUTE_NAME = Regex("""[A-Za-z_:][A-Za-z0-9_:.@-]*""")
+
+/** A modifier name with arguments run into it by underscores, and nothing else. */
+private val MODIFIER_WORD = Regex("""[a-z][a-z0-9]*(?:_[A-Za-z0-9]+)+""")
+
 private val VOID = setOf("area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr")
 
 /** Elements whose content is text, whatever it looks like: a `<div>` in a `<textarea>` or a `<title>` is not a tag. */
@@ -440,6 +446,12 @@ public class MarkupValidator(
 ) {
     private val expressions = ExpressionValidator(catalog)
 
+    /** The actions the catalog lists as sending a request. */
+    private val backendActions = catalog.actions.filter { it.kind == "backend" }.map { it.name }
+
+    /** A call to one of them, written as Datastar parses it: no space before the parenthesis. */
+    private val backendAction = Regex("@(?:" + backendActions.joinToString("|") { Regex.escape(it) } + ")\\(")
+
     public fun validateMarkup(
         html: String,
         opts: MarkupOptions,
@@ -465,7 +477,7 @@ public class MarkupValidator(
             closeImplied(stack, tag.name)
             if (stack.isEmpty()) topLevel += tag
             if (!tag.selfClosing) stack += tag
-            if (opts.checkAttributes) issues += validateAttributes(tag, opts.prefix)
+            if (opts.checkAttributes) issues += validateAttributes(tag, opts.prefix, html.substring(tag.start, tag.end))
         }
         for (unclosed in stack) {
             if (unclosed.name in OPTIONAL_END) continue
@@ -528,6 +540,16 @@ public class MarkupValidator(
     public fun validateAttributes(
         tag: Tag,
         prefix: String,
+    ): List<Issue> = validateAttributes(tag, prefix, null)
+
+    /**
+     * Validate the Datastar attributes on one tag, whose text is [tagSource]: with it, a template
+     * construct the tokenizer stepped over inside the tag is seen too.
+     */
+    public fun validateAttributes(
+        tag: Tag,
+        prefix: String,
+        tagSource: String?,
     ): List<Issue> {
         val issues = ArrayList<Issue>()
         for (attr in tag.attributes) {
@@ -643,6 +665,23 @@ public class MarkupValidator(
                 val mstart = if (mod.text.isEmpty()) mend - 2 else mend - mod.text.length
                 val mspec = spec.modifiers.firstOrNull { it.name == mod.name }
                 if (mspec == null) {
+                    // __debounce_150ms: an argument joined with an underscore, which Datastar reads
+                    // as one unknown name. Arguments follow a dot.
+                    val dotted = dottedArguments(mod.name, spec)
+                    if (dotted != null) {
+                        issues +=
+                            Issue(
+                                start = mstart,
+                                end = mend,
+                                message =
+                                    "Unknown modifier __${mod.name} on $prefix${spec.name}. A modifier's arguments follow a dot: __$dotted.",
+                                severity = Severity.ERROR,
+                                code = "unknown-modifier",
+                                link = link,
+                                fixes = listOf(Fix("Change to __$dotted", mstart, mstart + mod.name.length, dotted)),
+                            )
+                        continue
+                    }
                     val near = spec.modifiers.map { it.name }.firstOrNull { distance(it, mod.name) <= 2 }
                     issues +=
                         Issue(
@@ -668,7 +707,7 @@ public class MarkupValidator(
                         )
                     continue
                 }
-                issues += validateModifierArgs(mspec, mod.args, mstart, mend).map { it.copy(link = link) }
+                issues += validateModifierArgs(mspec, mod.args, mstart, mend, spec).map { it.copy(link = link) }
             }
             val value = attr.value
             if (value != null && spec.valueKind == ValueKind.EXPRESSION && value.isNotBlank() && !hasTemplateSyntax(value)) {
@@ -707,7 +746,49 @@ public class MarkupValidator(
                 issues += Issue(attr.valueStart, attr.valueEnd, "$prefix${spec.name} takes no value.", Severity.WARNING, "unexpected-value")
             }
         }
+        issues += indicatorWithoutAction(tag, prefix, tagSource)
         return issues
+    }
+
+    /**
+     * `data-indicator` tracks the requests its own element sends: the client matches the fetch
+     * event's element against it. On an element whose attributes send none, it never turns on.
+     * Elements with template syntax in an attribute are left alone, since what they send is not
+     * known until they are rendered.
+     */
+    private fun indicatorWithoutAction(
+        tag: Tag,
+        prefix: String,
+        tagSource: String?,
+    ): List<Issue> {
+        val indicator =
+            tag.attributes.firstOrNull {
+                val lower = it.name.asciiLowercase()
+                lower == "${prefix}indicator" || lower.startsWith("${prefix}indicator:") || lower.startsWith("${prefix}indicator__")
+            } ?: return emptyList()
+        // Template syntax in a value, or attributes spread into the tag by name, leave what it
+        // sends unknown until rendered.
+        if ((tagSource != null && hasTemplateSyntax(tagSource)) ||
+            tag.attributes.any { (it.value != null && hasTemplateSyntax(it.value)) || !PLAIN_ATTRIBUTE_NAME.matches(it.name) }
+        ) {
+            return emptyList()
+        }
+        val sends =
+            tag.attributes.any {
+                it.name.asciiLowercase().startsWith(prefix) && it.value != null && backendAction.containsMatchIn(decodeEntities(it.value).text)
+            }
+        if (sends) return emptyList()
+        return listOf(
+            Issue(
+                indicator.nameStart,
+                indicator.nameEnd,
+                "${prefix}indicator tracks the requests this element sends, and nothing on it sends one. " +
+                    "Put it on the element whose attribute calls " + backendActions.joinToString(", ") { "@$it" } + ".",
+                Severity.WARNING,
+                "indicator-without-action",
+                Docs.attribute("indicator"),
+            ),
+        )
     }
 
     /**
@@ -758,11 +839,28 @@ public class MarkupValidator(
         )
     }
 
+    /**
+     * `debounce_150ms` read as `debounce.150ms`, when the part before the first underscore is a
+     * modifier of [spec] that takes arguments and the rest is plain words; null otherwise.
+     */
+    private fun dottedArguments(
+        name: String,
+        spec: AttributeSpec,
+    ): String? {
+        val underscore = name.indexOf('_')
+        if (underscore <= 0 || underscore == name.length - 1 || !MODIFIER_WORD.matches(name)) return null
+        val head = name.substring(0, underscore)
+        val modifier = spec.modifiers.firstOrNull { it.name == head } ?: return null
+        if (modifier.type == ModifierType.FLAG) return null
+        return head + "." + name.substring(underscore + 1).replace('_', '.')
+    }
+
     private fun validateModifierArgs(
         spec: Modifier,
         args: List<String>,
         start: Int,
         end: Int,
+        attribute: AttributeSpec,
     ): List<Issue> {
         val issues = ArrayList<Issue>()
 
@@ -774,7 +872,18 @@ public class MarkupValidator(
         }
         when (spec.type) {
             ModifierType.FLAG -> {
-                if (args.isNotEmpty()) fail("__${spec.name} takes no arguments.")
+                // __prevent.stop: a second modifier joined with a dot, read as an argument.
+                val siblings = attribute.modifiers.filter { it.type == ModifierType.FLAG && it.name != spec.name }.map { it.name }
+                if (args.isNotEmpty() && args.all { it in siblings }) {
+                    val joined = args.joinToString("") { "__$it" }
+                    val at = start + spec.name.length
+                    fail(
+                        "__${spec.name} takes no arguments. Each modifier starts with two underscores: __${spec.name}$joined.",
+                        listOf(Fix("Change to __${spec.name}$joined", at, end, joined)),
+                    )
+                } else if (args.isNotEmpty()) {
+                    fail("__${spec.name} takes no arguments.")
+                }
             }
 
             ModifierType.DURATION -> {

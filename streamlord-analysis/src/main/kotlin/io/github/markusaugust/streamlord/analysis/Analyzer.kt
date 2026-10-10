@@ -138,7 +138,7 @@ public class Analyzer(
         val issues = ArrayList<Issue>()
         for (tag in tokenize(src).tags) {
             if (tag.closing) continue
-            issues += markup.validateAttributes(tag, opts.prefix)
+            issues += markup.validateAttributes(tag, opts.prefix, src.substring(tag.start, tag.end))
         }
         return issues
     }
