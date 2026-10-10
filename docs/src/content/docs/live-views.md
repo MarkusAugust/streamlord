@@ -32,7 +32,7 @@ get("/tally/view") {
     }
 }
 post("/tally/increment") {
-    tally.value++
+    tally.update { it + 1 }
     call.respond(HttpStatusCode.NoContent)
 }
 ```
@@ -57,18 +57,23 @@ can be the whole region, every time, and the client's morph works out what chang
 Four rules keep the stream alive:
 
 - **Patch inside the element that opens the stream, not the element itself.** `#view` carries the
-  `data-init`; the patch goes into it with `INNER`. A patch that replaced it would start a second
-  stream, and one that removed it would end the first.
-- **Use `requestCancellation = CLEANUP`.** The default, `auto`, aborts a request only when the
-  same element sends another one; `cleanup` also aborts it when the element leaves the page, so a
-  stream does not outlive the part of the page that opened it. **Read from the source.**
+  `data-init`; the patch goes into it with `INNER`. A patch that replaced the element would run its
+  `data-init` again and restart the stream, and one that removed it would leave the stream
+  running with nothing on the page to patch.
+- **Use `requestCancellation = CLEANUP`.** Under the default, `auto`, a request is aborted when
+  another one goes to the same URL with the same method, from anywhere on the page. `cleanup`
+  also aborts it when its element leaves the page, so a stream does not outlive the part of the
+  page that opened it.
+- **Let the stream alone patch its region.** A render that would send the same bytes as the last
+  is skipped, which is only right while nothing else has changed the region in between. Commands
+  answer `204` and leave the page to the stream.
 - **Send the state, not the change.** A reader whose stream dropped gets the whole region again on
   reconnect and cannot drift. Each render's fingerprint goes out as its event id; pass the
   `last-event-id` header back as `resumeFrom`, and a reconnect to an unchanged state sends
   nothing at all.
-- **Keep the connection count in mind.** Over HTTP/1.1 a browser holds six connections per origin,
-  and a stream occupies one for as long as it is open, in every tab. Serve over HTTP/2, or keep to
-  one stream per page.
+
+Over HTTP/1.1 a browser holds six connections per origin, across every tab, and a stream
+occupies one for as long as it is open. Serve over HTTP/2, or keep to one stream per page.
 
 `@get` closes the stream while the tab is hidden and opens it again when it comes back, which
 the fingerprint makes cheap; `openWhenHidden = true` keeps it open instead. The stream also wants

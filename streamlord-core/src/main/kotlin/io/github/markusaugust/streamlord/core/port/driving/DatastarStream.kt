@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.conflate
 import org.intellij.lang.annotations.Language
 import kotlin.reflect.typeOf
 import kotlin.time.Duration
+import kotlin.time.TimeSource
 
 /**
  * Driving port: the hand that holds the stream.
@@ -52,9 +53,11 @@ public interface DatastarStream {
      *
      * - **Only the latest state is rendered.** States that arrive while a render is being sent
      *   are dropped for the newest one, so a burst of changes costs one render, not one each.
-     * - **At most one render per [minInterval].** The first change goes out at once, and the
-     *   newest of those that arrive within the interval after it goes out when it ends. Zero, the
-     *   default, sends each render as soon as the last one has been written.
+     * - **At most one send per [minInterval],** measured from the start of one render to the
+     *   start of the next. The first change goes out at once, and the newest of those that arrive
+     *   within the interval after it goes out when it ends. With zero, the default, a render goes
+     *   out as soon as the previous one is written. After the last render of a flow that
+     *   completes, the interval is waited out before this returns.
      * - **A render that changes nothing is not sent.** Its events are compared with the last
      *   ones sent, by [SseEncoder.fingerprint], and dropped when they are the same.
      *
@@ -78,6 +81,14 @@ public interface DatastarStream {
      * current state, which is what a stream that has just opened needs first, and it never
      * completes, so the stream lives until the reader leaves.
      *
+     * It is for views: what the events describe must be the whole of what the region shows, and
+     * nothing else may patch it, or an unchanged render that is skipped would leave it wrong. A
+     * render that carries an [ExecuteScript] runs it again whenever the render changes, and not
+     * when it does not; one-off effects belong in [executeScript] directly. [resumeFrom] comes
+     * from the client and is only compared, never trusted. A frame cut by a dropped connection
+     * after its `id:` line and before its end leaves the client holding an id it never applied;
+     * the page is then corrected by the next change rather than on reconnect.
+     *
      * @param render The events for one state. An empty list sends nothing. The last event's id is
      *   replaced by the fingerprint; the others keep theirs.
      */
@@ -90,13 +101,15 @@ public interface DatastarStream {
         require(!minInterval.isNegative()) { "minInterval must not be negative" }
         var last = resumeFrom
         states.conflate().collect { state ->
+            val started = TimeSource.Monotonic.markNow()
             val events = render(state)
             if (events.isEmpty()) return@collect
             val fingerprint = SseEncoder.fingerprint(events)
             if (fingerprint == last) return@collect
             events.forEachIndexed { index, event -> send(if (index == events.lastIndex) event.withEventId(fingerprint) else event) }
             last = fingerprint
-            if (minInterval.isPositive()) delay(minInterval)
+            val rest = minInterval - started.elapsedNow()
+            if (rest.isPositive()) delay(rest)
         }
     }
 

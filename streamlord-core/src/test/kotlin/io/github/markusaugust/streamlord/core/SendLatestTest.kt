@@ -114,4 +114,26 @@ class SendLatestTest {
 
             assertFailsWith<IllegalArgumentException> { sent(interval = -1, states = flowOf(1)) }
         }
+
+    // States that arrive while a render is under way wait for it, and only the newest is next.
+    @Test
+    fun `states that arrive during a slow render are folded into the newest`() =
+        runTest {
+            val sink = BufferedSseSink()
+            val states =
+                flow {
+                    emit(1)
+                    delay(10)
+                    emit(2)
+                    delay(10)
+                    emit(3)
+                }
+
+            Streamlord().stream(sink).sendLatest(states) {
+                delay(100)
+                count(it)
+            }
+
+            assertEquals(listOf(1, 3).map { """<b id="count">$it</b>""" }, SseDecoder.decode(sink.text()).map { (it as PatchElements).elements })
+        }
 }
