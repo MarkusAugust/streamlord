@@ -65,34 +65,6 @@ dependencies {
 </dependency>
 ```
 
-## Spring Boot 3
-
-```kotlin tab="Gradle" group=install label="Build tool" sample=none
-dependencies {
-    implementation("io.github.markusaugust.streamlord:streamlord-spring:0.11.1")
-    implementation("io.github.markusaugust.streamlord:streamlord-html:0.11.1")
-    implementation("io.github.markusaugust.streamlord:streamlord-json-jackson2:0.11.1")
-}
-```
-
-```xml tab="Maven" group=install
-<dependency>
-  <groupId>io.github.markusaugust.streamlord</groupId>
-  <artifactId>streamlord-spring</artifactId>
-  <version>0.11.1</version>
-</dependency>
-<dependency>
-  <groupId>io.github.markusaugust.streamlord</groupId>
-  <artifactId>streamlord-html</artifactId>
-  <version>0.11.1</version>
-</dependency>
-<dependency>
-  <groupId>io.github.markusaugust.streamlord</groupId>
-  <artifactId>streamlord-json-jackson2</artifactId>
-  <version>0.11.1</version>
-</dependency>
-```
-
 That is the whole answer. `streamlord-core` arrives with the adapter, so you never name it.
 
 ---
@@ -134,7 +106,7 @@ the point of these modules is to reuse the JSON library you have rather than add
 |---|---|
 | `streamlord-json-kotlinx` | you already use kotlinx.serialization |
 | `streamlord-json-jackson` | Spring Boot 4, which ships Jackson 3 (`tools.jackson`) |
-| `streamlord-json-jackson2` | Spring Boot 3, which ships Jackson 2 (`com.fasterxml`) |
+| `streamlord-json-jackson2` | your application already uses Jackson 2 (`com.fasterxml`) |
 
 ### What each one puts on your classpath
 
@@ -196,8 +168,8 @@ Both were resolved rather than reasoned about, and neither is a surprise you can
 ```kotlin sample=none
 dependencies {
     // Take Boot's Jackson, whatever it is.
-    implementation("io.github.markusaugust.streamlord:streamlord-json-jackson2:0.11.1") {
-        exclude(group = "com.fasterxml.jackson.core")
+    implementation("io.github.markusaugust.streamlord:streamlord-json-jackson:0.11.1") {
+        exclude(group = "tools.jackson.core")
     }
 }
 ```
@@ -207,10 +179,10 @@ our side is strict.
 
 ### And coroutines
 
-Boot pins kotlinx-coroutines the same way: 1.8.1 under Boot 3.5, 1.10.2 under Boot 4.0 and 4.1.
-Streamlord is compiled against 1.8.1, the oldest of those, so whichever version your build
-settles on is one it runs on. A Ktor application resolves a newer one through Ktor and that is
-fine too; the Spring adapter's tests run on all three.
+Boot pins kotlinx-coroutines the same way: 1.10.2 under Boot 4.0 and 4.1. Streamlord is
+compiled against 1.10.2, so a Boot build runs on the version it was compiled against. A Ktor
+application resolves a newer one through Ktor and that is fine too; the Spring adapter's tests run
+on both.
 
 ### In practice you add few new jars
 
@@ -276,5 +248,5 @@ static files. **1.0.4** is what this release speaks.
 ## Versions
 
 JDK 21 builds Streamlord; the artifacts target JDK 17, the oldest realm both Ktor 3 and Spring
-Framework 7 still tolerate. Kotlin 2.4. The Spring adapter is compiled against Framework 6.2 and
-tested against 6.2 (Boot 3) and 7.0 (Boot 4) on every build.
+Framework 7 still tolerate. Kotlin 2.4. The Spring adapter is compiled and tested against
+Framework 7.0 (Boot 4) on every build. Boot 3 is not supported.

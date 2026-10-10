@@ -9,7 +9,7 @@ import kotlin.reflect.KType
 import kotlin.reflect.javaType
 
 /**
- * A [SignalsCodec] backed by Jackson 2 (`com.fasterxml.jackson`), the JSON of Spring Boot 3.
+ * A [SignalsCodec] backed by Jackson 2 (`com.fasterxml.jackson`).
  *
  * Hand it the `ObjectMapper` your application already owns (in Spring Boot, the auto-configured
  * bean) so signals obey the same rules as every other JSON in the realm. [default] builds a

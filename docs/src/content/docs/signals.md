@@ -103,7 +103,7 @@ production, because it makes every handler fail the moment any page gains a sign
 |---|---|---|
 | `streamlord-json-kotlinx` | `KotlinxSignalsCodec` | your application already uses kotlinx.serialization |
 | `streamlord-json-jackson` | `JacksonSignalsCodec` | Spring Boot 4, which ships Jackson 3 (`tools.jackson`) |
-| `streamlord-json-jackson2` | `Jackson2SignalsCodec` | Spring Boot 3, which ships Jackson 2 (`com.fasterxml`) |
+| `streamlord-json-jackson2` | `Jackson2SignalsCodec` | your application already uses Jackson 2 (`com.fasterxml`) |
 | none | the built-in reader | you are happy reading by name |
 
 The two Jackson modules exist because Jackson 3 moved package. Taking the wrong one compiles and
