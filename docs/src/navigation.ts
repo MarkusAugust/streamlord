@@ -36,8 +36,8 @@ export const NAVIGATION: Section[] = [
       { slug: "strings", title: "Strings" },
       { slug: "templates", title: "Templates" },
       { slug: "casing", title: "Casing" },
-      { slug: "components", title: "Components and plain JavaScript" },
       { slug: "choosing-a-style", title: "Choosing a style" },
+      { slug: "components", title: "Components and plain JavaScript" },
     ],
   },
   {

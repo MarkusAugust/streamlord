@@ -143,9 +143,9 @@ is not a quirk of Streamlord; it is what the protocol says, and it is how you de
 Not every signal is for the server. Whether a drawer is showing, which row the cursor is on, a
 draft the reader has not sent yet: these are state the page needs and no handler reads.
 
-Start the name with an underscore and it stays behind. Every action sends the store through a
-filter whose default excludes `/(^|\.)_/`, so `_drawerOpen` never travels, and neither does
-`form._draft`:
+Start the name with an underscore and it stays behind. Every backend action (`@get`, `@post` and
+the rest) sends the store through a filter whose default excludes `/(^|\.)_/`, so `_drawerOpen`
+never travels, and neither does `form._draft`:
 
 ```kotlin sample=html
 div {
@@ -170,12 +170,13 @@ Two options narrow it further, per action. `filterSignals` picks from the store 
 
 ```kotlin sample=html
 div {
+    dataSignals("selected" to listOf(3, 5))
     button {
         dataOnClick(post("/cart") { filterSignals = SignalFilter.include("^cart\\.") })
         +"Save cart"
     }
     button {
-        dataOnClick(post("/rows/delete") { payloadExpr = "{ids: \$selected}" })
+        dataOnClick(post("/rows/delete") { payloadExpr = $$"{ids: $selected}" })
         +"Delete"
     }
 }
