@@ -11,6 +11,7 @@ import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
 import io.github.markusaugust.streamlord.json.jackson.JacksonSignalsCodec
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
@@ -21,6 +22,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 class SpringAdapterTest {
@@ -51,6 +53,17 @@ class SpringAdapterTest {
                 "event: datastar-patch-elements\ndata: selector #b\ndata: mode remove\n\n",
             response.contentAsString,
         )
+    }
+
+    // runBlocking on the servlet thread: the heartbeat runs beside a handler that suspends.
+    @Test
+    fun `a heartbeat bean writes keep-alive comments into a silent stream`() {
+        val response = MockHttpServletResponse()
+        response
+            .datastarStream(Streamlord(heartbeat = 50.milliseconds)) { delay(300.milliseconds) }
+            .writeTo(response.outputStream)
+
+        assertTrue(": keep-alive" in response.contentAsString, response.contentAsString)
     }
 
     @Test

@@ -6,9 +6,12 @@ import io.github.markusaugust.streamlord.core.port.driven.SignalsCodec
 import io.github.markusaugust.streamlord.core.port.driven.SseSink
 import io.github.markusaugust.streamlord.core.port.driving.DatastarStream
 import io.github.markusaugust.streamlord.core.protocol.SseEncoder
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration
@@ -73,10 +76,16 @@ internal class SseDatastarStream(
      * idle stream carries one per [interval]. The comment is an ordinary write: it waits for the
      * lock and passes [authorise], which means an idle stream with an authorisation is asked again
      * on the heartbeat's schedule, and a refusal ends it here as it would anywhere else.
+     *
+     * Once another writer has been refused, the pulse goes quiet rather than failing over a
+     * refusal it does not own. A comment of its own also lands in [written], so the wait after it
+     * starts at once.
      */
     internal suspend fun pulse(interval: Duration): Nothing {
         while (true) {
-            if (withTimeoutOrNull(interval) { written.receive() } == null) comment()
+            if (withTimeoutOrNull(interval) { written.receive() } != null) continue
+            if (refused.get()) awaitCancellation()
+            comment()
         }
     }
 
@@ -105,7 +114,10 @@ internal class SseDatastarStream(
         if (!due || authorisation.allows()) return
 
         if (!refused.compareAndSet(false, true)) throw StreamRefusedException()
-        authorisation.onRefused(LastWords())
+        // Not cancellable: with a heartbeat, the refusal can land in one coroutine while the
+        // other is torn down, and the last words go out whole or not at all. A reader who has
+        // gone still ends them, because the write throws.
+        withContext(NonCancellable) { authorisation.onRefused(LastWords()) }
         throw StreamRefusedException()
     }
 

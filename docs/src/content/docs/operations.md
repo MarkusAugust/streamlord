@@ -120,7 +120,8 @@ and every stream gets one:
 install(StreamlordPlugin) { heartbeat = 15.seconds }
 ```
 
-On Spring it is the bean, `Streamlord(heartbeat = 15.seconds)`. A stream that has written nothing
+On Spring it is a parameter of the bean you already declare,
+`Streamlord(codec = JacksonSignalsCodec(mapper), heartbeat = 15.seconds)`. A stream that has written nothing
 for that long gets a `: keep-alive` comment, and any frame starts the wait again, so a busy stream
 carries none. The heartbeat starts with your handler and stops when it returns.
 
@@ -129,8 +130,9 @@ own proxy's.
 
 Three things it does not do:
 
-- **It does not keep Datastar's client alive.** The client has no idle timeout of its own; it
-  counts nothing between frames, and its retry counter resets when a response opens. The
+- **It does not keep Datastar's client alive.** The client has no idle timeout of its own: its
+  `fetch` runs without a timer, and its retry counter resets when a 200 arrives, not per frame.
+  **Read from the client source.** The
   heartbeat is for what sits between you and the browser, and for finding out on the server that
   the reader has gone: the comment is a write, and a write to a closed connection fails.
 - **It does not run beside a blocked thread.** On WebMVC the stream runs inside `runBlocking` on
@@ -138,14 +140,17 @@ Three things it does not do:
   heartbeat back until it returns. Suspend instead, or move the blocking call to
   `Dispatchers.IO` with `withContext`.
 - **It does not reach WebFlux.** A `Flow` handed to WebFlux never passes through a Streamlord
-  stream. Merge a ticker of your own into it, or set the server's idle timeout above your
-  quietest stretch.
+  stream, so a heartbeat on the bean does nothing there. Merge a ticker into the flow after
+  `asServerSentEvents()`, each tick a `ServerSentEvent.builder<String>().comment("keep-alive")
+  .build()`, or raise the proxy's idle timeout above your quietest stretch.
 
 With a [`StreamAuthorisation`](#asking-again-while-the-stream-runs) on the stream, the comment
 asks the question like any other write once `every` has passed, so an idle stream is checked on
 the heartbeat's schedule and a refusal ends it there.
 
-A single stream that needs its own rhythm can still write one by hand:
+The interval is one per `Streamlord`. A stream that needs a shorter one can write its own on top,
+by hand; a longer one, or none, takes a second `Streamlord`, which on Spring is a second bean
+handed to that controller:
 
 ```kotlin sample=ktor-routing
 get("/slow") {

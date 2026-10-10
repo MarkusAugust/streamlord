@@ -45,6 +45,7 @@ public fun DatastarEvent.toServerSentEvent(streamlord: Streamlord = Streamlord.D
  *
  * @param streamlord The configured instance; with `guardElements` on, every element patch
  *   passes [io.github.markusaugust.streamlord.core.domain.ElementsGuard] before it is encoded.
+ *   Its `heartbeat` does not apply: the flow is mapped, never opened as a Streamlord stream.
  */
 public fun Flow<DatastarEvent>.asServerSentEvents(streamlord: Streamlord = Streamlord.Default): Flow<ServerSentEvent<String>> =
     map { it.toServerSentEvent(streamlord) }
