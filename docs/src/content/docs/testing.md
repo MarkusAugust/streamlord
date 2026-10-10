@@ -164,6 +164,79 @@ fun `a remove carries a selector and no elements`() {
 This is the cheapest test in the set, and usually the one that fails first when you change how
 markup is built.
 
+## A stream that stays open
+
+Everything above reads a response that has ended. A live page does not end: it holds a stream
+open, a command arrives on another request, and the patch it causes goes down the stream that
+was already there. A test that opens a fresh stream after each command passes while that path is
+broken, because the fresh stream renders the new state on its own.
+
+`LiveDatastarStream` holds one open and reads it as it arrives. It needs a real server on a real
+port, because Ktor's test host hands a streamed response to the client only once the stream has
+ended:
+
+```kotlin sample=test
+private val http = HttpClient.newHttpClient()
+
+private fun post(url: String) {
+    val request = HttpRequest.newBuilder(URI(url)).POST(HttpRequest.BodyPublishers.noBody()).build()
+    http.send(request, HttpResponse.BodyHandlers.discarding())
+}
+
+@Test
+fun `a click reaches the page that is already open`() =
+    runTest {
+        val count = MutableStateFlow(0)
+        val server =
+            embeddedServer(CIO, port = 0, host = "127.0.0.1") {
+                routing {
+                    get("/count") { call.respondDatastar { count.collect { patchSignals("count" to it) } } }
+                    post("/increment") {
+                        count.value++
+                        call.respond(HttpStatusCode.NoContent)
+                    }
+                }
+            }.start()
+        val origin = "http://127.0.0.1:${server.engine.resolvedConnectors().first().port}"
+
+        try {
+            LiveDatastarStream.open(URI("$origin/count")).use { page ->
+                page.awaitSignal("count", 0)
+                post("$origin/increment")
+                page.awaitSignal("count", 1)
+            }
+        } finally {
+            server.stop()
+        }
+    }
+```
+
+Needs `ktor-server-cio`, or the engine you deploy on, next to `streamlord-test`. On Spring Boot,
+`@SpringBootTest(webEnvironment = RANDOM_PORT)` gives the real server and `@LocalServerPort` the
+port, from a Kotlin test: the class is coroutine API, called inside `runTest` or `runBlocking`.
+
+The answer has to start within the timeout, five seconds by default, and a server sends its
+headers with its first flush. A handler that writes nothing until a command arrives holds `open`
+until it does, which is one more reason for a live view to send the current state first.
+
+Three things it does:
+
+- **Each `await` reads until what it asks for arrives.** `awaitPatchElements` takes the arguments
+  of `assertPatchElements` and moves past the patch it returns, so the next one waits for a new
+  patch. `awaitSignal` folds the store as the browser does and returns at the first signal patch
+  after which it holds the value. `next()` hands over one event at a time. Each keeps its own
+  place, so waiting for a signal never skips a patch another wait is still to see.
+- **It waits on real time**, five seconds by default, also inside `runTest`. A wait that comes up
+  empty, or a stream that ends first, fails with the assertion's own message and the stream it
+  read, like every other assertion on this page.
+- **`close()` lets go of the connection**, and the server finds the reader gone on its next
+  write. `received` keeps everything it read, comments included, for the assertions above.
+
+`open` sends `Datastar-Request: true` and takes `headers` for a cookie or a token. It uses the
+JDK's own HTTP client, so it binds no HTTP library either. `LiveDatastarStream.of(reader, onClose)`
+reads from the `Reader` any other client hands you; pass the underlying stream as `onClose`, since
+an `InputStreamReader` waits for a read in progress before it closes.
+
 ## The `$` check, in CI, with no editor open
 
 The editors catch an interpolated signal as you type. CI does not have your editor. The same

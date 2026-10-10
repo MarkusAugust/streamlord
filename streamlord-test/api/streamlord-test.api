@@ -51,3 +51,23 @@ public final class io/github/markusaugust/streamlord/test/DatastarEventsKt {
 	public static final fun datastarEvents (Ljava/lang/String;)Lio/github/markusaugust/streamlord/test/DatastarEvents;
 }
 
+public final class io/github/markusaugust/streamlord/test/LiveDatastarStream : java/lang/AutoCloseable {
+	public static final field Companion Lio/github/markusaugust/streamlord/test/LiveDatastarStream$Companion;
+	public final fun awaitPatchElements-myKFqkg (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Ljava/lang/String;Ljava/lang/String;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun awaitPatchElements-myKFqkg$default (Lio/github/markusaugust/streamlord/test/LiveDatastarStream;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Ljava/lang/String;Ljava/lang/String;JLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun awaitSignal-exY8QGI (Ljava/lang/String;Ljava/lang/Object;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun awaitSignal-exY8QGI$default (Lio/github/markusaugust/streamlord/test/LiveDatastarStream;Ljava/lang/String;Ljava/lang/Object;JLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public fun close ()V
+	public final fun getReceived ()Lio/github/markusaugust/streamlord/test/DatastarEvents;
+	public final fun next-VtjQ1oo (JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun next-VtjQ1oo$default (Lio/github/markusaugust/streamlord/test/LiveDatastarStream;JLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+}
+
+public final class io/github/markusaugust/streamlord/test/LiveDatastarStream$Companion {
+	public final fun getDEFAULT_TIMEOUT-UwyO8pc ()J
+	public final fun of (Ljava/io/Reader;Ljava/lang/AutoCloseable;)Lio/github/markusaugust/streamlord/test/LiveDatastarStream;
+	public static synthetic fun of$default (Lio/github/markusaugust/streamlord/test/LiveDatastarStream$Companion;Ljava/io/Reader;Ljava/lang/AutoCloseable;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/test/LiveDatastarStream;
+	public final fun open-SxA4cEA (Ljava/net/URI;Ljava/util/Map;J)Lio/github/markusaugust/streamlord/test/LiveDatastarStream;
+	public static synthetic fun open-SxA4cEA$default (Lio/github/markusaugust/streamlord/test/LiveDatastarStream$Companion;Ljava/net/URI;Ljava/util/Map;JILjava/lang/Object;)Lio/github/markusaugust/streamlord/test/LiveDatastarStream;
+}
+

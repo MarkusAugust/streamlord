@@ -673,6 +673,7 @@ public final class io/github/markusaugust/streamlord/core/protocol/SseDecoder {
 	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/protocol/SseDecoder;
 	public final fun decode (Ljava/lang/String;)Ljava/util/List;
 	public final fun decodeOne (Ljava/lang/String;)Lio/github/markusaugust/streamlord/core/domain/DatastarEvent;
+	public final fun event (Lio/github/markusaugust/streamlord/core/protocol/SseMessage;)Lio/github/markusaugust/streamlord/core/domain/DatastarEvent;
 	public final fun messages (Ljava/lang/String;)Ljava/util/List;
 }
 
@@ -720,5 +721,11 @@ public final class io/github/markusaugust/streamlord/core/protocol/SseMessage {
 	public final fun getRetry ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/protocol/SseReader {
+	public fun <init> ()V
+	public final fun feed (Ljava/lang/String;)Ljava/util/List;
+	public final fun finish ()Lio/github/markusaugust/streamlord/core/protocol/SseMessage;
 }
 

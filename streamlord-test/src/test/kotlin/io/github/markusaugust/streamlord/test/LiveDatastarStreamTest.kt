@@ -1,0 +1,316 @@
+package io.github.markusaugust.streamlord.test
+
+import com.sun.net.httpserver.HttpServer
+import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
+import io.github.markusaugust.streamlord.core.domain.PatchSignals
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import java.io.OutputStream
+import java.net.InetSocketAddress
+import java.net.URI
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
+
+/** Against a real server on a real socket, which is what the class is for. */
+class LiveDatastarStreamTest {
+    private lateinit var server: HttpServer
+
+    /** What the open stream writes next; an empty string ends it. */
+    private val outbox = LinkedBlockingQueue<String>()
+    private val readerLeft = CountDownLatch(1)
+
+    @BeforeTest
+    fun start() {
+        server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/feed") { exchange ->
+            exchange.responseHeaders.add("Content-Type", "text/event-stream")
+            exchange.sendResponseHeaders(200, 0)
+            val body: OutputStream = exchange.responseBody
+            try {
+                while (true) {
+                    val frame = outbox.poll(5, TimeUnit.SECONDS) ?: break
+                    if (frame.isEmpty()) break
+                    body.write(frame.toByteArray())
+                    body.flush()
+                }
+            } catch (_: java.io.IOException) {
+                readerLeft.countDown()
+            } finally {
+                exchange.close()
+            }
+        }
+        server.createContext("/silent") { exchange ->
+            Thread.sleep(2000)
+            exchange.close()
+        }
+        server.createContext("/page") { exchange ->
+            exchange.responseHeaders.add("Content-Type", "text/html")
+            exchange.sendResponseHeaders(200, -1)
+            exchange.close()
+        }
+        server.start()
+    }
+
+    @AfterTest
+    fun stop() {
+        outbox.put("")
+        server.stop(0)
+    }
+
+    private fun feed() = LiveDatastarStream.open(URI("http://127.0.0.1:${server.address.port}/feed"))
+
+    private fun signals(json: String) = "event: datastar-patch-signals\ndata: signals $json\n\n"
+
+    @Test
+    fun `a signal changed after the stream opened is seen on the same stream`() =
+        runTest {
+            feed().use { stream ->
+                outbox.put(signals("""{"count":0}"""))
+                stream.awaitSignal("count", 0)
+
+                outbox.put(signals("""{"count":1}"""))
+                stream.awaitSignal("count", 1)
+            }
+        }
+
+    @Test
+    fun `an element patch is awaited past the ones that do not match`() =
+        runTest {
+            feed().use { stream ->
+                outbox.put("event: datastar-patch-elements\ndata: elements <div id=\"a\">1</div>\n\n")
+                outbox.put(": keep-alive\n\n")
+                outbox.put("event: datastar-patch-elements\ndata: selector #feed\ndata: mode append\ndata: elements <li>2</li>\n\n")
+
+                val patch = stream.awaitPatchElements(selector = "#feed", mode = ElementPatchMode.APPEND)
+
+                assertEquals("<li>2</li>", patch.elements)
+                assertEquals(listOf("keep-alive"), stream.received.messages.flatMap { it.comments })
+            }
+        }
+
+    @Test
+    fun `an await does not count an event an earlier await moved past`() =
+        runTest {
+            feed().use { stream ->
+                outbox.put("event: datastar-patch-elements\ndata: elements <div id=\"a\">1</div>\n\n")
+                stream.awaitPatchElements(containing = "1")
+
+                val failure =
+                    assertFailsWith<AssertionError> { stream.awaitPatchElements(containing = "1", timeout = 300.milliseconds) }
+
+                assertTrue("Waited 300ms" in failure.message!!, failure.message)
+            }
+        }
+
+    @Test
+    fun `a wait that comes up empty prints what the stream carried`() =
+        runTest {
+            feed().use { stream ->
+                outbox.put(signals("""{"count":0}"""))
+
+                val failure = assertFailsWith<AssertionError> { stream.awaitSignal("count", 1, timeout = 300.milliseconds) }
+
+                assertTrue("Signal 'count' is 0, expected 1" in failure.message!!, failure.message)
+                assertTrue("data: signals {\"count\":0}" in failure.message!!, failure.message)
+            }
+        }
+
+    @Test
+    fun `a stream that ends first fails at once, and next says so with null`() =
+        runTest {
+            feed().use { stream ->
+                outbox.put(signals("""{"count":0}"""))
+                outbox.put("")
+
+                assertEquals(PatchSignals("""{"count":0}"""), stream.next())
+                assertNull(stream.next())
+                val failure = assertFailsWith<AssertionError> { stream.awaitSignal("count", 1) }
+                assertTrue("The stream ended first" in failure.message!!, failure.message)
+            }
+        }
+
+    @Test
+    fun `closing lets the server see the reader leave`() =
+        runTest {
+            val stream = feed()
+            outbox.put(signals("""{"count":0}"""))
+            stream.awaitSignal("count", 0)
+
+            stream.close()
+            // A write fails only once the socket has noticed, so keep writing until it does.
+            var noticed = false
+            repeat(100) {
+                if (noticed) return@repeat
+                outbox.put(": keep-alive\n\n")
+                noticed = readerLeft.await(50, TimeUnit.MILLISECONDS)
+            }
+
+            assertTrue(noticed, "the server never saw the reader go")
+        }
+
+    @Test
+    fun `a response that is not a stream fails the open`() {
+        val failure =
+            assertFailsWith<AssertionError> { LiveDatastarStream.open(URI("http://127.0.0.1:${server.address.port}/page")) }
+
+        assertTrue("text/event-stream" in failure.message!!, failure.message)
+    }
+
+    // History said 1, the stream has since said 2: the answer is what the stream says now.
+    @Test
+    fun `a value the stream has since changed is not taken for the answer`() =
+        runTest {
+            feed().use { stream ->
+                outbox.put(signals("""{"count":1}"""))
+                outbox.put(signals("""{"count":2}"""))
+                stream.awaitSignal("count", 2)
+
+                assertFailsWith<AssertionError> { stream.awaitSignal("count", 1, timeout = 300.milliseconds) }
+            }
+        }
+
+    @Test
+    fun `a frame the client would reject fails with the stream`() =
+        runTest {
+            feed().use { stream ->
+                outbox.put("event: datastar-patch-elements\ndata: mode sideways\ndata: elements <p/>\n\n")
+
+                val failure = assertFailsWith<AssertionError> { stream.next() }
+
+                assertTrue("would reject" in failure.message!!, failure.message)
+            }
+        }
+
+    @Test
+    fun `a connection that fails says how it ended`() =
+        runTest {
+            val broken =
+                object : java.io.Reader() {
+                    override fun read(
+                        cbuf: CharArray,
+                        off: Int,
+                        len: Int,
+                    ): Int = throw java.io.IOException("Connection reset")
+
+                    override fun close() = Unit
+                }
+
+            val failure = assertFailsWith<AssertionError> { LiveDatastarStream.of(broken).awaitSignal("count", 1) }
+
+            assertTrue("IOException: Connection reset" in failure.message!!, failure.message)
+        }
+
+    @Test
+    fun `an await after close says the stream was closed`() =
+        runTest {
+            val stream = feed()
+            stream.close()
+            stream.use { }
+
+            val failure = assertFailsWith<AssertionError> { stream.awaitSignal("count", 1) }
+
+            assertTrue("closed first" in failure.message!!, failure.message)
+        }
+
+    @Test
+    fun `a server that never answers fails the open within its timeout`() {
+        val failure =
+            assertFailsWith<AssertionError> {
+                LiveDatastarStream.open(URI("http://127.0.0.1:${server.address.port}/silent"), timeout = 300.milliseconds)
+            }
+
+        assertTrue("No answer" in failure.message!!, failure.message)
+    }
+
+    // One write, two frames: the patch after the signal is left for the next await.
+    @Test
+    fun `the events after a signal's value are left for the next await`() =
+        runTest {
+            feed().use { stream ->
+                outbox.put(signals("""{"count":1}""") + "event: datastar-patch-elements\ndata: elements <b id=\"c\">1</b>\n\n")
+                Thread.sleep(100)
+
+                stream.awaitSignal("count", 1)
+                stream.awaitPatchElements(containing = "<b id=\"c\">1</b>", timeout = 1.seconds)
+            }
+        }
+
+    @Test
+    fun `the events before a rejected frame are kept`() =
+        runTest {
+            feed().use { stream ->
+                outbox.put(signals("""{"count":1}""") + "event: datastar-patch-elements\ndata: mode sideways\ndata: elements <p/>\n\n")
+                Thread.sleep(100)
+
+                assertFailsWith<AssertionError> { stream.next() }
+                assertEquals(PatchSignals("""{"count":1}"""), stream.received.single())
+            }
+        }
+
+    @Test
+    fun `a timeout from the caller stays a cancellation`() =
+        runTest {
+            feed().use { stream ->
+                assertFailsWith<TimeoutCancellationException> {
+                    withContext(Dispatchers.Default) { withTimeout(200.milliseconds) { stream.awaitSignal("count", 1) } }
+                }
+            }
+        }
+
+    // The wait that gave up took nothing with it: the next wait reads what arrived after.
+    @Test
+    fun `a wait that runs out loses nothing`() =
+        runTest {
+            feed().use { stream ->
+                repeat(5) {
+                    assertFailsWith<AssertionError> { stream.awaitSignal("count", 9, timeout = 20.milliseconds) }
+                }
+                outbox.put(signals("""{"count":1}"""))
+                outbox.put(signals("""{"count":2}"""))
+
+                stream.awaitSignal("count", 2)
+                assertEquals(2, stream.received.size)
+            }
+        }
+
+    // One frame sets two signals and a patch follows: neither signal wait takes the patch.
+    @Test
+    fun `waiting for signals never moves past a patch`() =
+        runTest {
+            feed().use { stream ->
+                outbox.put(signals("""{"a":1,"b":2}""") + "event: datastar-patch-elements\ndata: elements <b id=\"c\">1</b>\n\n")
+                Thread.sleep(100)
+
+                stream.awaitSignal("a", 1)
+                stream.awaitSignal("b", 2)
+                stream.awaitPatchElements(containing = "<b id=\"c\">1</b>", timeout = 1.seconds)
+            }
+        }
+
+    @Test
+    fun `a patch wait that comes up empty shows every event and says how many it skipped`() =
+        runTest {
+            feed().use { stream ->
+                outbox.put("event: datastar-patch-elements\ndata: elements <div id=\"a\">1</div>\n\n")
+                stream.awaitPatchElements(containing = "1")
+
+                val failure = assertFailsWith<AssertionError> { stream.awaitPatchElements(containing = "2", timeout = 200.milliseconds) }
+
+                assertTrue("past the first 1 events, which an earlier wait had seen" in failure.message!!, failure.message)
+                assertTrue("The stream carried 1 event" in failure.message!!, failure.message)
+            }
+        }
+}
