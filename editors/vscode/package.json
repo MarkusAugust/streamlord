@@ -221,7 +221,7 @@
     "@types/vscode": "1.105.0",
     "@vscode/vsce": "4.0.0",
     "esbuild": "0.28.2",
-    "typescript": "5.9.3",
+    "typescript": "7.0.2",
     "vscode-oniguruma": "^2.0.1",
     "vscode-textmate": "^9.3.2"
   },
