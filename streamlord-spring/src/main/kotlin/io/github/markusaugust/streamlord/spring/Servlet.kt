@@ -20,6 +20,7 @@ import java.io.OutputStream
 import java.io.OutputStreamWriter
 import java.io.Writer
 import java.nio.charset.StandardCharsets
+import java.util.zip.GZIPOutputStream
 import kotlin.reflect.typeOf
 
 /*
@@ -42,7 +43,9 @@ import kotlin.reflect.typeOf
  *
  * @param streamlord The configured instance, typically a Spring bean. Defaults to [Streamlord.Default].
  * @param request The request being answered, when you have it: `Connection: keep-alive` is an
- *   HTTP/1.1 header, and with the request at hand it is only set for HTTP/1.1.
+ *   HTTP/1.1 header, and with the request at hand it is only set for HTTP/1.1. With
+ *   [Streamlord.compress] on, the stream is gzipped when this request's `Accept-Encoding` takes
+ *   it; without the request, it is not.
  */
 public fun HttpServletResponse.datastarStream(
     streamlord: Streamlord = Streamlord.Default,
@@ -51,10 +54,18 @@ public fun HttpServletResponse.datastarStream(
     block: suspend DatastarStream.() -> Unit,
 ): StreamingResponseBody {
     prepareForSse(request)
+    val gzip = streamlord.compress && request != null && DatastarProtocol.acceptsGzip(request.getHeader("Accept-Encoding"))
+    if (gzip) {
+        setHeader("Content-Encoding", "gzip")
+        setHeader("Vary", "Accept-Encoding")
+    }
     return StreamingResponseBody { output ->
-        val writer = OutputStreamWriter(output, StandardCharsets.UTF_8)
+        // Sync flush: each event leaves the compressor whole, the moment the sink flushes.
+        val body = if (gzip) GZIPOutputStream(output, true) else output
+        val writer = OutputStreamWriter(body, StandardCharsets.UTF_8)
         runBlocking { streamlord.stream(ServletSseSink(writer, this@datastarStream), authorisation, block) }
         writer.flush()
+        if (body is GZIPOutputStream) body.finish()
     }
 }
 

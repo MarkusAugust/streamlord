@@ -67,6 +67,34 @@ class SpringAdapterTest {
     }
 
     @Test
+    fun `a compressing bean gzips the stream for a request that takes it`() {
+        val request = MockHttpServletRequest("GET", "/feed").apply { addHeader("Accept-Encoding", "gzip, br") }
+        val response = MockHttpServletResponse()
+
+        response
+            .datastarStream(Streamlord(compress = true), request) { patchSignals("n" to 1) }
+            .writeTo(response.outputStream)
+
+        assertEquals("gzip", response.getHeader("Content-Encoding"))
+        assertEquals("Accept-Encoding", response.getHeader("Vary"))
+        assertEquals(
+            "event: datastar-patch-signals\ndata: signals {\"n\":1}\n\n",
+            java.util.zip.GZIPInputStream(response.contentAsByteArray.inputStream()).readBytes().decodeToString(),
+        )
+    }
+
+    @Test
+    fun `without the request, or without gzip in it, the stream is plain`() {
+        for (request in listOf(null, MockHttpServletRequest("GET", "/feed"))) {
+            val response = MockHttpServletResponse()
+            response.datastarStream(Streamlord(compress = true), request) { patchSignals("n" to 1) }.writeTo(response.outputStream)
+
+            assertNull(response.getHeader("Content-Encoding"))
+            assertEquals("event: datastar-patch-signals\ndata: signals {\"n\":1}\n\n", response.contentAsString)
+        }
+    }
+
+    @Test
     fun `flow variant`() {
         val response = MockHttpServletResponse()
         response.datastarStream(flowOf(PatchSignals("{\"a\":1}"))).writeTo(response.outputStream)

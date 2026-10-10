@@ -25,6 +25,8 @@ component scan.
 
 The same constructor takes `heartbeat`, an interval after which a silent stream gets a
 keep-alive comment; [Operations](/operations/#heartbeats) has what it does and what it does not.
+`compress = true` gzips the stream when the request passed to `datastarStream` takes it; see
+[Operations](/operations/#compression).
 
 ## Streaming from a controller
 

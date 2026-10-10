@@ -61,6 +61,12 @@ public typealias Signals = JsonObject
  *   Ktor and `datastarStream` on Spring WebMVC. A `Flow` handed to WebFlux through
  *   `asServerSentEvents` or `asDatastarResponse` never passes through one, so it gets no
  *   heartbeat. Off by default.
+ * @property compress Gzip the streams Streamlord opens itself, when the request's
+ *   `Accept-Encoding` takes gzip: `respondDatastar` on Ktor and `datastarStream` on Spring WebMVC
+ *   with the request passed. Each event is flushed through the compressor whole, so it reaches
+ *   the browser as soon as it is written. A view that re-renders whole regions compresses well,
+ *   since one render repeats most of the last. Off by default; on WebFlux, the server's own
+ *   compression is the place for it.
  */
 public class Streamlord(
     public val codec: SignalsCodec = BuiltInSignalsCodec,
@@ -68,11 +74,22 @@ public class Streamlord(
     public val guardElements: Boolean = false,
     public val attributePrefixes: List<String> = ElementsGuard.defaultPrefixes,
     public val heartbeat: Duration? = null,
+    public val compress: Boolean = false,
 ) {
     init {
         require(maxSignalsSize > 0) { "maxSignalsSize must be positive" }
         require(heartbeat == null || heartbeat.isPositive()) { "heartbeat must be positive, or null for none" }
     }
+
+    /** The constructor as it was before [compress], kept for code compiled against it. */
+    @Deprecated("Kept for binary compatibility.", level = DeprecationLevel.HIDDEN)
+    public constructor(
+        codec: SignalsCodec = BuiltInSignalsCodec,
+        maxSignalsSize: Int = DEFAULT_MAX_SIGNALS_SIZE,
+        guardElements: Boolean = false,
+        attributePrefixes: List<String> = ElementsGuard.defaultPrefixes,
+        heartbeat: Duration? = null,
+    ) : this(codec, maxSignalsSize, guardElements, attributePrefixes, heartbeat, false)
 
     /** The constructor as it was before [heartbeat], kept for code compiled against it. */
     @Deprecated("Kept for binary compatibility.", level = DeprecationLevel.HIDDEN)
@@ -81,7 +98,7 @@ public class Streamlord(
         maxSignalsSize: Int = DEFAULT_MAX_SIGNALS_SIZE,
         guardElements: Boolean = false,
         attributePrefixes: List<String> = ElementsGuard.defaultPrefixes,
-    ) : this(codec, maxSignalsSize, guardElements, attributePrefixes, null)
+    ) : this(codec, maxSignalsSize, guardElements, attributePrefixes, null, false)
 
     /**
      * Open a [DatastarStream] over a sink. Adapters call this; you rarely need to.

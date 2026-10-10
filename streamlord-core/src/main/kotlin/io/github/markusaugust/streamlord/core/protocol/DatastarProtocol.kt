@@ -69,4 +69,25 @@ public object DatastarProtocol {
         "Cache-Control" to "no-cache",
         "X-Accel-Buffering" to "no",
     )
+
+    /**
+     * Whether an `Accept-Encoding` header takes gzip: listed by name or as `*`, with no `q=0`.
+     * Names are matched without regard to case, as HTTP says.
+     */
+    public fun acceptsGzip(acceptEncoding: String?): Boolean {
+        if (acceptEncoding.isNullOrBlank()) return false
+        var star: Boolean? = null
+        for (entry in acceptEncoding.split(',')) {
+            val parts = entry.split(';').map { it.trim() }
+            val name = parts.first().lowercase()
+            val quality =
+                parts.drop(1).firstOrNull { it.startsWith("q=", ignoreCase = true) }
+                    ?.substring(2)?.toDoubleOrNull() ?: 1.0
+            when (name) {
+                "gzip", "x-gzip" -> return quality > 0.0
+                "*" -> star = quality > 0.0
+            }
+        }
+        return star == true
+    }
 }

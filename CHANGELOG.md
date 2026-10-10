@@ -8,6 +8,9 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Added
 
+- `Streamlord(compress = true)` and `compress` on the Ktor plugin: gzip on Ktor and Spring WebMVC
+  streams whose request takes it, flushed event by event so nothing waits, with the window kept
+  across events so a repeated render costs little. WebFlux is not covered.
 - `replaceUrl(url)` and `pushUrl(url)` on a stream: the server puts the URL of the state it
   rendered in the address bar, replacing the current history entry or adding one, without a
   reload. The URL is quoted as `redirect` quotes it; pass a path on the page's own origin.

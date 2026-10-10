@@ -175,6 +175,36 @@ get("/slow") {
 }
 ```
 
+## Compression
+
+A view that re-renders a whole region sends most of the same markup again on every change, and
+gzip is good at exactly that. Turn it on once:
+
+```kotlin sample=ktor-application
+install(StreamlordPlugin) { compress = true }
+```
+
+On Spring it is the bean, `Streamlord(compress = true)`, and `datastarStream` needs the request
+to see what the browser accepts. A stream is compressed only when the request's
+`Accept-Encoding` takes gzip, and it then carries `Content-Encoding: gzip` and
+`Vary: Accept-Encoding`.
+
+Each event is flushed through the compressor whole, so it reaches the browser as soon as it is
+written; the compressor keeps its window across events, which is where a repeated render becomes
+cheap. Three things to know:
+
+- **Ktor's own `Compression` plugin stays off a stream compressed here,** because the response
+  already names its encoding. Do not set it to compress `text/event-stream` as well.
+- **WebFlux is not covered.** A `Flow` handed to WebFlux never passes through a Streamlord
+  stream; use the server's own compression, and make sure it flushes per event.
+- **Mind what shares a compressed stream.** Compression leaks how much two pieces of text have in
+  common through the size of the result. A stream that carries a secret next to text an attacker
+  can choose, a token beside a search term they typed, can give the secret away a byte at a time.
+  Keep secrets out of streams that echo input, or leave those streams uncompressed.
+
+A proxy in front must pass the stream through as it comes; `X-Accel-Buffering: no`, below, is
+what tells nginx.
+
 ## Through the proxy
 
 Streamlord sets two headers on every stream it opens, which is `respondDatastar` on Ktor,

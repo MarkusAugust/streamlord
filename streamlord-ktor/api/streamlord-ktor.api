@@ -39,12 +39,14 @@ public final class io/github/markusaugust/streamlord/ktor/StreamlordPluginConfig
 	public fun <init> ()V
 	public final fun getAttributePrefixes ()Ljava/util/List;
 	public final fun getCodec ()Lio/github/markusaugust/streamlord/core/port/driven/SignalsCodec;
+	public final fun getCompress ()Z
 	public final fun getGuardElements ()Z
 	public final fun getHeartbeat-FghU774 ()Lkotlin/time/Duration;
 	public final fun getMaxSignalsSize ()I
 	public final fun getStreamlord ()Lio/github/markusaugust/streamlord/core/application/Streamlord;
 	public final fun setAttributePrefixes (Ljava/util/List;)V
 	public final fun setCodec (Lio/github/markusaugust/streamlord/core/port/driven/SignalsCodec;)V
+	public final fun setCompress (Z)V
 	public final fun setGuardElements (Z)V
 	public final fun setHeartbeat-BwNAW2A (Lkotlin/time/Duration;)V
 	public final fun setMaxSignalsSize (I)V

@@ -12,14 +12,21 @@ import io.github.markusaugust.streamlord.core.port.driven.SseSink
 import io.github.markusaugust.streamlord.core.port.driving.DatastarStream
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
 import io.ktor.http.ContentType
+import io.ktor.http.Headers
+import io.ktor.http.HttpHeaders
+import io.ktor.http.content.OutgoingContent
+import io.ktor.http.headersOf
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.httpVersion
 import io.ktor.server.response.header
-import io.ktor.server.response.respondBytesWriter
+import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
 import io.ktor.utils.io.ByteWriteChannel
+import io.ktor.utils.io.writeFully
 import io.ktor.utils.io.writeStringUtf8
+import java.io.ByteArrayOutputStream
+import java.util.zip.GZIPOutputStream
 import kotlinx.coroutines.flow.Flow
 import org.intellij.lang.annotations.Language
 import kotlin.reflect.typeOf
@@ -48,9 +55,35 @@ public suspend fun ApplicationCall.respondDatastar(
     val streamlord = this.streamlord
     for ((name, value) in DatastarProtocol.SSE_RESPONSE_HEADERS) response.header(name, value)
     if (request.httpVersion == "HTTP/1.1") response.header("Connection", "keep-alive")
-    respondBytesWriter(contentType = ContentType.Text.EventStream, status = status) {
-        streamlord.stream(ChannelSseSink(this), authorisation, block)
-    }
+    val gzip = streamlord.compress && DatastarProtocol.acceptsGzip(request.headers[HttpHeaders.AcceptEncoding])
+    respond(
+        object : OutgoingContent.WriteChannelContent() {
+            override val contentType: ContentType = ContentType.Text.EventStream
+            override val status: HttpStatusCode = status
+
+            // On the content rather than the response: this is where Ktor's Compression plugin
+            // looks to see that a body is already encoded, and leaves it alone.
+            override val headers: Headers =
+                if (gzip) {
+                    headersOf(
+                        HttpHeaders.ContentEncoding to listOf("gzip"),
+                        HttpHeaders.Vary to listOf(HttpHeaders.AcceptEncoding),
+                    )
+                } else {
+                    Headers.Empty
+                }
+
+            override suspend fun writeTo(channel: ByteWriteChannel) {
+                if (gzip) {
+                    val sink = GzipChannelSseSink(channel)
+                    streamlord.stream(sink, authorisation, block)
+                    sink.finish()
+                } else {
+                    streamlord.stream(ChannelSseSink(channel), authorisation, block)
+                }
+            }
+        },
+    )
 }
 
 /** Respond with a Datastar SSE stream that drains [events] in order until the flow completes. */
@@ -112,6 +145,39 @@ public suspend fun ApplicationCall.respondScript(
 }
 
 /** An [SseSink] over Ktor's response channel. */
+/**
+ * Gzip over the response channel. Each flush ends a deflate block with a sync flush and hands the
+ * bytes to the channel, so an event is decodable the moment it arrives, while the compressor keeps
+ * its window across events and a render that repeats the last costs few bytes.
+ */
+internal class GzipChannelSseSink(
+    private val channel: ByteWriteChannel,
+) : SseSink {
+    private val buffer = ByteArrayOutputStream()
+    private val gzip = GZIPOutputStream(buffer, true)
+
+    override suspend fun write(text: String) {
+        gzip.write(text.toByteArray(Charsets.UTF_8))
+    }
+
+    override suspend fun flush() {
+        gzip.flush()
+        drain()
+    }
+
+    /** End the gzip member, so the client's decoder sees a whole stream. */
+    suspend fun finish() {
+        gzip.finish()
+        drain()
+    }
+
+    private suspend fun drain() {
+        channel.writeFully(buffer.toByteArray())
+        buffer.reset()
+        channel.flush()
+    }
+}
+
 internal class ChannelSseSink(
     private val channel: ByteWriteChannel,
 ) : SseSink {

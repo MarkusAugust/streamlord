@@ -15,4 +15,5 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(project(":streamlord-json-kotlinx"))
     testImplementation(project(":streamlord-html"))
+    testImplementation(libs.ktor.server.compression)
 }
