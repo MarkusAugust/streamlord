@@ -616,6 +616,11 @@ public final class io/github/markusaugust/streamlord/core/port/driving/DatastarS
 	public static fun sendAll (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Lkotlinx/coroutines/flow/Flow;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
+public final class io/github/markusaugust/streamlord/core/port/driving/DatastarStreamKt {
+	public static final fun pushUrl (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static final fun replaceUrl (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
 public final class io/github/markusaugust/streamlord/core/protocol/DatastarAttributes {
 	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/protocol/DatastarAttributes;
 	public final fun getPrefix ()Ljava/lang/String;

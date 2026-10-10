@@ -17,7 +17,7 @@ sanitises. A selector with a line break is a bug in your code, not something to 
 
 `ExecuteScript` neutralises `</script` inside the script body and HTML-escapes attribute values.
 `redirect()` quotes the URL as a JSON string literal and navigates from a `setTimeout`, the way
-the official SDKs do.
+the official SDKs do. `replaceUrl()` and `pushUrl()` quote it the same way.
 
 ## JavaScript-safe JSON
 
