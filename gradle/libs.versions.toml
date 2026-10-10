@@ -52,7 +52,7 @@ maven-publish = { id = "com.vanniktech.maven.publish", version = "0.37.0" }
 # 1.1.x requires a GraalVM whose reachability-metadata schema only exists from 25, and this
 # build's toolchain is 21 with artifacts targeting 17. Following the plugin would mean
 # dragging the whole build forward for one module.
-graalvm-native = { id = "org.graalvm.buildtools.native", version = "0.11.5" }
+graalvm-native = { id = "org.graalvm.buildtools.native", version = "1.1.14" }
 # The API reference, generated from the KDoc that is already in the source. Used for the
 # javadoc jar every published module carries, which was empty until now.
 dokka = { id = "org.jetbrains.dokka", version = "2.2.0" }
