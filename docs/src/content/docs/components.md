@@ -5,8 +5,8 @@ description: "Custom elements, third-party widgets and your own scripts next to 
 
 Datastar owns the attributes it reads and the elements it patches. Everything else on the page,
 a custom element, a chart library, a script you wrote, lives next to it. The rules on this page
-keep the two from stepping on each other. What they say about the client was read from the
-Datastar 1.0.4 source.
+keep the two from stepping on each other. What they say about the client was checked against
+the Datastar client's source.
 
 ## Attributes down, events up
 
@@ -49,8 +49,8 @@ window.dispatchEvent(new CustomEvent("player-progress", { detail: { seconds: 42 
 ```
 
 `window = true` writes `__window`, which listens where the script dispatched. Mount the listener
-on an element no patch replaces, a wrapper outside the morphed region, so no event lands while
-the element is being swapped.
+on an element no patch replaces, a wrapper outside the morphed region: a listener leaves with
+its element, and one on a patched element is gone the moment a patch removes it.
 
 ## Surviving a morph
 
@@ -88,30 +88,38 @@ every request on the page, and it carries the element that ran the action as `ev
 That is enough to show a change at once and take it back when the request fails:
 
 ```kotlin sample=html
+val task = 7
+val done = false
 ul {
     li {
-        id = "task-7"
-        dataSignals("_done7" to false)
-        dataClass("done", signal("_done7"))
+        id = "task-${task}"
+        dataSignals("_done${task}" to done)
+        dataClass("done", signal("_done${task}"))
         button {
-            dataOnClick(statements(toggle("_done7"), post("/tasks/7/toggle")))
+            dataOnClick(statements(toggle("_done${task}"), post("/tasks/${task}/toggle")))
             +"Done"
         }
         dataOnFetch(
-            "['error', 'retries-failed'].includes(evt.detail.type) " +
-                "&& evt.detail.el.closest('#task-7') && (${toggle("_done7")})",
+            "['${FetchEventType.ERROR}', '${FetchEventType.RETRIES_FAILED}']" +
+                ".includes(evt.detail.type) " +
+                "&& evt.detail.el.closest('#task-${task}') && (${set("_done${task}", done)})",
         )
     }
 }
 ```
 
 `error` means the server answered with a 4xx or 5xx; a lost connection retries and ends in
-`retries-failed`, so the rollback listens for both. The filter on `evt.detail.el` keeps other
-requests on the page from undoing this one.
+`retries-failed`, so the rollback listens for both. With the default `retry: 'auto'` that end
+comes after ten attempts with backoff, about three minutes, so an offline reader sees the change
+stand that long. The rollback sets the stored value rather than toggling back, which keeps it
+right when a retry mode fires several failures for one click. The filter on `evt.detail.el` keeps
+other requests on the page from undoing this one.
 
-Signals are global to the page, so each item needs its own name: `_done7` for task 7, `_done8`
-for task 8, each seeded from the stored value. The underscore keeps the signal out of the
-request. When the command succeeds, the server's patch renders the item with the stored value,
-and the client applies `data-signals` again because the attribute's value has changed.
+Signals are global to the page, so each item needs its own name, built from its id, and its own
+seed, the stored value. The underscore keeps the signal out of the request. When the command
+succeeds, the server's patch renders the item with the new stored value, and the client applies
+`data-signals` again because the attribute's value has changed. A command the server declines
+answers with a 4xx, so the rollback runs; a 2xx carrying the old value changes no attribute and
+leaves the optimistic state standing.
 
 Keep optimistic state small and local: the server's answer is the one that stays.

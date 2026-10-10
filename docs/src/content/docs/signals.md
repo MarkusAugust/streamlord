@@ -170,7 +170,7 @@ Two options narrow it further, per action. `filterSignals` picks from the store 
 
 ```kotlin sample=html
 div {
-    dataSignals("selected" to listOf(3, 5))
+    dataSignals("cart" to mapOf("items" to listOf(1, 2)), "selected" to listOf(3, 5))
     button {
         dataOnClick(post("/cart") { filterSignals = SignalFilter.include("^cart\\.") })
         +"Save cart"
