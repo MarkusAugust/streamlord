@@ -8,6 +8,12 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Added
 
+- `sendLatest(states, minInterval, resumeFrom) { render }` on a stream: renders the newest state
+  and sends it, at most once per interval, and not at all when nothing changed. Each render's
+  fingerprint is its event id, so a reconnect that passes `last-event-id` back as `resumeFrom` is
+  not sent what it already shows. `SseEncoder.fingerprint` computes it. Documentation: the Live
+  views page covers commands and the view, the element that opens the stream, and
+  `requestCancellation`.
 - `replaceUrl(url)` and `pushUrl(url)` on a stream: the server puts the URL of the state it
   rendered in the address bar, replacing the current history entry or adding one, without a
   reload. The URL is quoted as `redirect` quotes it; pass a path on the page's own origin.

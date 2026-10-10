@@ -7,7 +7,10 @@ import io.github.markusaugust.streamlord.core.domain.ExecuteScript
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.core.domain.Wire
+import io.github.markusaugust.streamlord.core.domain.withEventId
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol.DataLines
+import java.security.MessageDigest
+import java.util.Base64
 
 /**
  * Turns a [DatastarEvent] into the text the browser reads. Pure, stateless, thread-safe:
@@ -38,6 +41,20 @@ public object SseEncoder {
         )
 
         is ExecuteScript -> frame(event.toPatchElements())
+    }
+
+    /**
+     * A short name for what [events] say, the same for the same events wherever it is computed:
+     * 22 characters of base64url from a SHA-256 of their frames, with any event id left out. Two
+     * renders that would put the same bytes on the wire get the same fingerprint.
+     *
+     * [DatastarStream.sendLatest][io.github.markusaugust.streamlord.core.port.driving.DatastarStream.sendLatest]
+     * sends it as the event id, so the client hands it back as `last-event-id` when it reconnects.
+     */
+    public fun fingerprint(events: List<DatastarEvent>): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        for (event in events) digest.update(encode(event.withEventId(null)).toByteArray(Charsets.UTF_8))
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(digest.digest().copyOf(16))
     }
 
     /** An SSE comment. Invisible to the client; useful as a heartbeat or to force a flush. */

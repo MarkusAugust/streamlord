@@ -6,9 +6,13 @@ import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.ExecuteScript
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
+import io.github.markusaugust.streamlord.core.domain.withEventId
 import io.github.markusaugust.streamlord.core.json.JsonWriter
 import io.github.markusaugust.streamlord.core.port.driven.SignalsCodec
+import io.github.markusaugust.streamlord.core.protocol.SseEncoder
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.conflate
 import org.intellij.lang.annotations.Language
 import kotlin.reflect.typeOf
 import kotlin.time.Duration
@@ -37,6 +41,63 @@ public interface DatastarStream {
     /** Send every event of a [Flow], in order, until the flow completes. */
     public suspend fun sendAll(events: Flow<DatastarEvent>) {
         events.collect { send(it) }
+    }
+
+    /**
+     * Keep the page in step with [states]: render each state into events and send them, until
+     * the flow completes.
+     *
+     * Made for a view the server re-renders whole from its state, a region or the page, and lets
+     * the client's morph work out what changed. Three things keep that cheap:
+     *
+     * - **Only the latest state is rendered.** States that arrive while a render is being sent
+     *   are dropped for the newest one, so a burst of changes costs one render, not one each.
+     * - **At most one render per [minInterval].** The first change goes out at once, and the
+     *   newest of those that arrive within the interval after it goes out when it ends. Zero, the
+     *   default, sends each render as soon as the last one has been written.
+     * - **A render that changes nothing is not sent.** Its events are compared with the last
+     *   ones sent, by [SseEncoder.fingerprint], and dropped when they are the same.
+     *
+     * The fingerprint goes out as the id of the last event of each render, so the client sends it
+     * back as `last-event-id` when it reconnects. Pass that header as [resumeFrom] and a reconnect
+     * whose first render matches what the page already shows sends nothing. Without it, the first
+     * render always goes out, which is the safe default: a page that missed a render while it was
+     * away gets the whole of it.
+     *
+     * ```kotlin
+     * get("/board") {
+     *     call.respondDatastar {
+     *         sendLatest(board, resumeFrom = call.request.headers["last-event-id"]) { state ->
+     *             listOf(PatchElements(renderBoard(state), selector = "#board", mode = ElementPatchMode.INNER))
+     *         }
+     *     }
+     * }
+     * ```
+     *
+     * A [StateFlow][kotlinx.coroutines.flow.StateFlow] is the usual source: it starts with the
+     * current state, which is what a stream that has just opened needs first, and it never
+     * completes, so the stream lives until the reader leaves.
+     *
+     * @param render The events for one state. An empty list sends nothing. The last event's id is
+     *   replaced by the fingerprint; the others keep theirs.
+     */
+    public suspend fun <S> sendLatest(
+        states: Flow<S>,
+        minInterval: Duration = Duration.ZERO,
+        resumeFrom: String? = null,
+        render: suspend (S) -> List<DatastarEvent>,
+    ) {
+        require(!minInterval.isNegative()) { "minInterval must not be negative" }
+        var last = resumeFrom
+        states.conflate().collect { state ->
+            val events = render(state)
+            if (events.isEmpty()) return@collect
+            val fingerprint = SseEncoder.fingerprint(events)
+            if (fingerprint == last) return@collect
+            events.forEachIndexed { index, event -> send(if (index == events.lastIndex) event.withEventId(fingerprint) else event) }
+            last = fingerprint
+            if (minInterval.isPositive()) delay(minInterval)
+        }
     }
 
     /**
