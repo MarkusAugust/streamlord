@@ -309,7 +309,7 @@ class LiveDatastarStreamTest {
 
                 val failure = assertFailsWith<AssertionError> { stream.awaitPatchElements(containing = "2", timeout = 200.milliseconds) }
 
-                assertTrue("after the first 1, which an earlier wait had moved past" in failure.message!!, failure.message)
+                assertTrue("past the first 1 events, which an earlier wait had seen" in failure.message!!, failure.message)
                 assertTrue("The stream carried 1 event" in failure.message!!, failure.message)
             }
         }

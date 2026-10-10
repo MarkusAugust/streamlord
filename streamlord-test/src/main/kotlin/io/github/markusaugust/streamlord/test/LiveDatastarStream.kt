@@ -110,8 +110,8 @@ public class LiveDatastarStream private constructor(
     public val received: DatastarEvents get() = DatastarEvents(events, messages)
 
     /**
-     * The next element patch matching every argument given, among the events no earlier `await`
-     * has moved past. Reads until one arrives. The arguments are those of
+     * The next element patch matching every argument given, among the events no earlier
+     * `awaitPatchElements` has moved past. Reads until one arrives. The arguments are those of
      * [DatastarEvents.assertPatchElements].
      */
     public suspend fun awaitPatchElements(
@@ -165,8 +165,8 @@ public class LiveDatastarStream private constructor(
     }
 
     /**
-     * The next Datastar event after those the `await` functions have moved past, or `null` once
-     * the stream has ended. Comments and other messages are skipped, and kept in [received].
+     * The next Datastar event after those earlier calls to `next` returned, or `null` once the
+     * stream has ended. Comments and other messages are skipped, and kept in [received].
      */
     public suspend fun next(timeout: Duration = DEFAULT_TIMEOUT): DatastarEvent? =
         lock.withLock {
@@ -243,7 +243,7 @@ public class LiveDatastarStream private constructor(
         if (movedPast == 0) return message
         // The assertion saw only the events after the place; the reader wants to see them all.
         val headline = message.substringBefore(".\n\n")
-        return received.withStream("$headline after the first $movedPast, which an earlier wait had moved past")
+        return received.withStream("$headline, past the first $movedPast events, which an earlier wait had seen")
     }
 
     private fun endedText(): String =
