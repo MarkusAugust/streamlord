@@ -59,7 +59,9 @@ public fun HttpServletResponse.datastarStream(
         streamlord.compress && !isCommitted && request != null &&
             DatastarProtocol.acceptsGzip(request.getHeader("Accept-Encoding"))
     // Added, not set: a CORS filter may already vary the response on Origin.
-    if (streamlord.compress && !isCommitted) addHeader("Vary", "Accept-Encoding")
+    if (streamlord.compress && !isCommitted && getHeaders("Vary").none { it.contains("Accept-Encoding", ignoreCase = true) }) {
+        addHeader("Vary", "Accept-Encoding")
+    }
     if (gzip) setHeader("Content-Encoding", "gzip")
     return StreamingResponseBody { output ->
         if (!gzip) {

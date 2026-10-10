@@ -40,7 +40,7 @@ public class StreamlordPluginConfig {
     public var heartbeat: Duration? = null
 
     /**
-     * Gzip every stream whose request takes it, flushed event by event so nothing waits. Leave
+     * Gzip, and only gzip, every stream whose request takes it, flushed event by event so nothing waits. Leave
      * Ktor's own Compression plugin to the other responses; a stream compressed here carries a
      * `Content-Encoding` that keeps the plugin off it. Off by default, and ignored when
      * [streamlord] is set, as the other settings are.

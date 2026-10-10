@@ -106,6 +106,30 @@ class GzipTest {
             assertEquals("event: datastar-patch-signals\ndata: signals {\"gone\":true}\n\n", gunzip(body))
         }
 
+    // The sizes on the Operations page: a 200-row table, then the same table with one row changed.
+    @Test
+    fun `a render that repeats the last costs a fraction of the first`() =
+        runTest {
+            val rows = (0 until 200).joinToString("") { "<tr id=\"row-$it\"><td class=\"name\">Item $it</td><td class=\"qty\">${it * 7 % 13}</td></tr>" }
+            val first = "event: datastar-patch-elements\ndata: selector #view\ndata: mode inner\ndata: elements <table id=\"t\">$rows</table>\n\n"
+            val second = first.replace("Item 17<", "Item 17 (sold)<")
+            val channel = ByteChannel()
+            val sink = GzipChannelSseSink(channel)
+            val buffer = ByteArray(65_536)
+
+            suspend fun sent(text: String): Int {
+                sink.write(text)
+                sink.flush()
+                return channel.readAvailable(buffer)
+            }
+
+            val sizes = listOf(sent(first), sent(second), sent(": keep-alive\n\n"))
+            println("gzip sizes: raw ${first.length}, first ${sizes[0]}, second ${sizes[1]}, heartbeat ${sizes[2]}")
+
+            assertEquals(listOf(1476, 251, 20), sizes)
+            sink.release()
+        }
+
     // Every flush leaves a whole event decodable: nothing waits for the end of the stream.
     @Test
     fun `each event can be read before the stream ends`() =

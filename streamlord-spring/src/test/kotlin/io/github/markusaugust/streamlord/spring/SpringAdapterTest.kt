@@ -93,6 +93,34 @@ class SpringAdapterTest {
         assertEquals(listOf("Origin", "Accept-Encoding"), response.getHeaders("Vary"))
     }
 
+    // A stream cut short by an exception is left unterminated, so the client sees it fail.
+    @Test
+    fun `a stream that throws leaves the gzip member unfinished`() {
+        val request = MockHttpServletRequest("GET", "/feed").apply { addHeader("Accept-Encoding", "gzip") }
+        val response = MockHttpServletResponse()
+        val body =
+            response.datastarStream(Streamlord(compress = true), request) {
+                patchSignals("n" to 1)
+                error("the handler failed")
+            }
+
+        assertFailsWith<IllegalStateException> { body.writeTo(response.outputStream) }
+        assertFailsWith<java.io.EOFException> {
+            java.util.zip.GZIPInputStream(response.contentAsByteArray.inputStream()).readBytes()
+        }
+    }
+
+    @Test
+    fun `a committed response is never gzipped`() {
+        val request = MockHttpServletRequest("GET", "/feed").apply { addHeader("Accept-Encoding", "gzip") }
+        val response = MockHttpServletResponse().apply { setCommitted(true) }
+
+        response.datastarStream(Streamlord(compress = true), request) { patchSignals("n" to 1) }.writeTo(response.outputStream)
+
+        assertNull(response.getHeader("Content-Encoding"))
+        assertEquals("event: datastar-patch-signals\ndata: signals {\"n\":1}\n\n", response.contentAsString)
+    }
+
     @Test
     fun `without the request, or without gzip in it, the stream is plain`() {
         for (request in listOf(null, MockHttpServletRequest("GET", "/feed"))) {

@@ -8,8 +8,9 @@ description: "Reconnects, heartbeats, proxies and threads: what a long-lived str
 > Gorvek of Bonereach
 
 Datastar's documentation does not describe what its client does when a connection drops, and no
-SDK describes it either. Everything here was read out of the Datastar 1.0.4 client source or
-measured against a deployed service, and each claim says which. The ones marked **observed** are
+SDK describes it either. Everything here was read out of the Datastar 1.0.4 client source,
+measured against a deployed service or in this repository's own tests, and each claim says which;
+the few that are neither say so. The ones marked **observed** are
 behaviour of the client, not promises of the protocol. Check them against the version you ship.
 
 ## Your stream dies when the reader switches tabs
@@ -187,12 +188,14 @@ install(StreamlordPlugin) { compress = true }
 On Spring it is the bean, `Streamlord(compress = true)`, and `datastarStream` needs the request
 to see what the browser accepts. A stream is gzipped only when the request's `Accept-Encoding`
 takes it, and then carries `Content-Encoding: gzip`; with `compress` on, every stream carries
-`Vary: Accept-Encoding`. It works over plain HTTP too, unlike Brotli, which browsers ask for only
-over HTTPS.
+`Vary: Accept-Encoding`, on Ktor and on a WebMVC response not yet committed. It works over plain
+HTTP too; browsers ask for Brotli only over HTTPS, which is how they behave in general and is
+**not measured here**.
 
 Each event is flushed through the compressor whole, a sync flush per event, and the compressor
-keeps its 32 KiB window from one event to the next. **Measured**, with the JDK's gzip at its
-default level on a 200-row table re-rendered whole:
+keeps its 32 KiB window from one event to the next. **Measured** in `GzipTest`, through the Ktor
+sink with the JDK's gzip at its default level, on a table of 200 rows, each
+`<tr id="row-N"><td class="name">Item N</td><td class="qty">…</td></tr>`, re-rendered whole:
 
 | | Bytes |
 |---|---|
@@ -202,27 +205,31 @@ default level on a 200-row table re-rendered whole:
 | A heartbeat comment | 20 |
 
 The second render is cheap because the first is still in the window. A render larger than 32 KiB
-no longer finds the last one there, and costs about what the first did. That browsers decode a
+no longer finds the last one there, and costs about what the first did; that follows from the
+window's size and is **not measured here**. That browsers decode a
 gzipped `fetch` body as it arrives, event by event, is how they behave in general and is **not
 measured here**.
 
 Four things to know:
 
 - **Ktor's own `Compression` plugin stays off a stream gzipped here,** because the content already
-  names its encoding; a test installs the plugin to show it. nginx's `gzip on` leaves an encoded
-  response alone in the same way.
+  names its encoding; a test installs the plugin to show it. Ktor 3.6.0's plugin does compress a
+  bare event stream it is pointed at, so leave `text/event-stream` out of its types. nginx's
+  `gzip on` is documented to leave an encoded response alone, **not measured here**.
 - **WebFlux is not covered.** A `Flow` handed to WebFlux never passes through a Streamlord stream.
-  Spring Boot's `server.compression` leaves `text/event-stream` out of its default types, and
-  whether it flushes per event when you add it is not measured here.
+  Spring Boot's `server.compression` leaves `text/event-stream` out of its default types, by its
+  documentation; whether it flushes per event when you add it is **not measured here**.
 - **Mind what shares a compressed stream.** Compression leaks how much two pieces of text have in
   common through the size of the result, and the window carries across events, so a secret in one
-  event and text an attacker chose in another, up to 32 KiB later, compress together. An attacker
-  who can trigger the stream and watch the sizes of encrypted traffic can recover the secret a
-  little at a time. Keep tokens and other secrets out of streams that carry text a reader can
-  choose, or leave those streams uncompressed.
+  event and text an attacker chose in another, up to 32 KiB later, compress together. Each event
+  is flushed on its own, so its size shows through TLS one event at a time. An attacker who can
+  trigger the stream, from a cross-site request or by writing what another user's stream shows,
+  and who can watch the sizes of encrypted traffic, can recover the secret a little at a time.
+  Keep tokens and other secrets out of streams that carry text anyone else can influence, or leave
+  those streams uncompressed.
 - **A proxy has to pass it through as it comes.** `X-Accel-Buffering: no`, below, tells nginx. A
-  CDN that decompresses and re-encodes may hold events back; the Railway measurement below was
-  taken without gzip.
+  CDN that decompresses and re-encodes may hold events back, **not measured here**; the Railway
+  measurement below was taken without gzip.
 
 ## Through the proxy
 
