@@ -80,7 +80,7 @@ public class Streamlord(
         require(heartbeat == null || heartbeat.isPositive()) { "heartbeat must be positive, or null for none" }
     }
 
-    /** The constructor as 0.11 had it, before [heartbeat] and [compress], kept for code compiled against it. */
+    /** The constructor as 0.11 had it, before [heartbeat] and [compress], for code compiled against it. */
     @Deprecated("Kept for binary compatibility.", level = DeprecationLevel.HIDDEN)
     public constructor(
         codec: SignalsCodec = BuiltInSignalsCodec,

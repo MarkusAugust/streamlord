@@ -54,7 +54,10 @@ public class StreamAuthorisation(
         /** Long enough that a database check costs nothing per patch, short enough to matter. */
         public val DEFAULT_INTERVAL: Duration = 5.seconds
 
-        /** How long [onRefused] may take: ample for a patch or a redirect, and then the stream closes. */
+        /**
+         * How long [onRefused] may take: ample for a patch or a redirect, and then the stream
+         * closes. A gzipped Ktor stream gets as long again to write the end of its gzip member.
+         */
         public val LAST_WORDS_LIMIT: Duration = 5.seconds
     }
 }
