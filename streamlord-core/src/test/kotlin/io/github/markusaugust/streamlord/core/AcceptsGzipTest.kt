@@ -31,4 +31,14 @@ class AcceptsGzipTest {
         assertFalse(acceptsGzip("gzip; q = 0"))
         assertFalse(acceptsGzip("gzip;q=abc"))
     }
+
+    @Test
+    fun `a weight outside zero to one, or with more than three decimals, is no`() {
+        assertFalse(acceptsGzip("gzip;q=Infinity"))
+        assertFalse(acceptsGzip("gzip;q=2"))
+        assertFalse(acceptsGzip("gzip;q=-1"))
+        assertFalse(acceptsGzip("gzip;q=0.0001"))
+        assertTrue(acceptsGzip("gzip;q=1.000"))
+        assertTrue(acceptsGzip("gzip;q=0.001"))
+    }
 }

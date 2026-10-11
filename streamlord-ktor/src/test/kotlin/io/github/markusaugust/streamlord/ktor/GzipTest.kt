@@ -17,6 +17,7 @@ import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.ktor.utils.io.ByteChannel
 import io.ktor.utils.io.readAvailable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import java.io.ByteArrayInputStream
 import java.util.zip.GZIPInputStream
@@ -24,6 +25,8 @@ import java.util.zip.Inflater
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 
 class GzipTest {
     private val wire =
@@ -86,6 +89,29 @@ class GzipTest {
             assertNull(response.headers[HttpHeaders.ContentEncoding])
             assertEquals(HttpHeaders.AcceptEncoding, response.headers[HttpHeaders.Vary])
             assertEquals("event: datastar-patch-signals\ndata: signals {\"n\":1}\n\n", response.bodyAsText())
+        }
+
+    // The heartbeat's comments go through the same compressor, between the events, in one member.
+    @Test
+    fun `heartbeats on a gzipped stream arrive inside the gzip member`() =
+        testApplication {
+            install(StreamlordPlugin) {
+                compress = true
+                heartbeat = 50.milliseconds
+            }
+            routing {
+                get("/feed") {
+                    call.respondDatastar {
+                        delay(180.milliseconds)
+                        patchSignals("n" to 1)
+                    }
+                }
+            }
+
+            val text = gunzip(client.get("/feed") { header(HttpHeaders.AcceptEncoding, "gzip") }.bodyAsBytes())
+
+            assertTrue(text.startsWith(": "), text)
+            assertTrue(text.endsWith("event: datastar-patch-signals\ndata: signals {\"n\":1}\n\n"), text)
         }
 
     // A refusal ends the stream cleanly, so the gzip member is whole too.

@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.ktor
 
 import io.github.markusaugust.streamlord.core.application.StreamAuthorisation
+import io.github.markusaugust.streamlord.core.application.Streamlord
 import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.domain.DatastarResponse
 import io.github.markusaugust.streamlord.core.domain.ElementNamespace
@@ -28,6 +29,7 @@ import io.ktor.utils.io.writeStringUtf8
 import java.io.ByteArrayOutputStream
 import java.util.zip.GZIPOutputStream
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withTimeoutOrNull
 import org.intellij.lang.annotations.Language
 import kotlin.reflect.typeOf
 
@@ -84,13 +86,7 @@ public suspend fun ApplicationCall.respondDatastar(
 
             override suspend fun writeTo(channel: ByteWriteChannel) {
                 if (gzip) {
-                    val sink = GzipChannelSseSink(channel)
-                    try {
-                        streamlord.stream(sink, authorisation, block)
-                        sink.finish()
-                    } finally {
-                        sink.release()
-                    }
+                    streamlord.streamGzipped(channel, authorisation, block)
                 } else {
                     streamlord.stream(ChannelSseSink(channel), authorisation, block)
                 }
@@ -157,6 +153,26 @@ public suspend fun ApplicationCall.respondScript(
     respondDatastar(ScriptResponse(script, attributes), status)
 }
 
+/** The gzipped stream: [Streamlord.stream] over a [GzipChannelSseSink], ended as a whole member. */
+internal suspend fun Streamlord.streamGzipped(
+    channel: ByteWriteChannel,
+    authorisation: StreamAuthorisation?,
+    block: suspend DatastarStream.() -> Unit,
+) {
+    val sink = GzipChannelSseSink(channel)
+    try {
+        if (stream(sink, authorisation, block)) {
+            sink.finish()
+        } else {
+            // Refused: a reader that stalled the last words would stall the trailer too, so it
+            // gets the same limit, and no trailer past it.
+            withTimeoutOrNull(StreamAuthorisation.LAST_WORDS_LIMIT) { sink.finish() }
+        }
+    } finally {
+        sink.release()
+    }
+}
+
 /** Gzip with a sync flush per flush, and a way to free its native memory without closing anything. */
 internal class SyncGzipOutputStream(
     out: java.io.OutputStream,
@@ -197,8 +213,10 @@ internal class GzipChannelSseSink(
     fun release() = gzip.release()
 
     private suspend fun drain() {
-        channel.writeFully(buffer.toByteArray())
+        // Taken before the write, so bytes a cancelled write left behind are never sent twice.
+        val bytes = buffer.toByteArray()
         buffer.reset()
+        channel.writeFully(bytes)
         channel.flush()
     }
 }

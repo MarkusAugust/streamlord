@@ -110,7 +110,8 @@ public class SseReader {
         val value = if (colon < 0) "" else text.substring(colon + 1).removePrefix(" ")
         when (field) {
             "event" -> event = value
-            "id" -> id = value
+            // The SSE spec ignores an id with a NUL in it, as the browser's EventSource does.
+            "id" -> if ('\u0000' !in value) id = value
             "retry" -> retry = value
             "data" -> data += value
             else -> Unit // An unknown field is ignored, as the SSE grammar says to.
