@@ -1,5 +1,5 @@
 [versions]
-kotlin = "2.4.20"
+kotlin = "2.4.21"
 # A floor, not a preference. Spring Boot pins coroutines in its BOM (4.0 and 4.1 pin 1.10.2) and
 # downgrades anything newer, so code compiled against a later release fails there with
 # NoSuchMethodError: 1.11 compiles runBlocking to a symbol 1.10 does not have. Raise it only when
