@@ -31,7 +31,7 @@ public data class Issue(
 
     /**
      * The issue as one line in the form compilers write and IDEs and CI make clickable:
-     * `src/main/kotlin/Page.kt:12:5: warning: Kotlin interpolates $count ... [kotlin-interpolation]`.
+     * `src/main/kotlin/Page.kt:12:5: error: Kotlin interpolates $count ... [kotlin-interpolation]`.
      * [file] is written as given; [source] is the text the issue was found in.
      */
     public fun format(
@@ -46,7 +46,8 @@ public data class Issue(
 
 /**
  * A place in a text as editors count it: [line] and [column] both start at 1, and a column counts
- * UTF-16 characters, as the offsets of an [Issue] do. A `\r\n` line ending counts as one line break.
+ * UTF-16 characters, as the offsets of an [Issue] do. Only `\n` breaks a line: `\r\n` counts as one
+ * break, and a lone `\r` as none.
  */
 public data class SourcePosition(
     val line: Int,
