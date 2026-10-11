@@ -2,7 +2,7 @@
 
 All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here.
 
-## Unreleased
+## 0.6.0
 
 - A `data-indicator` on an element that sends no request is a warning: the indicator only turns on
   for requests its own element sends, so one on a wrapper or a sibling never does.
