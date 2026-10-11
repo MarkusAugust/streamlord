@@ -73,19 +73,27 @@ jobs:
               # This file decides what runs, so a change to it runs everything.
               .github/workflows/*)
                 kotlin=true; vscode=true; intellij=true; docs=true; image=true ;;
+              # The corpus both editors' checks are held to: CorpusTest in the SDK reads it too.
+              editors/vscode/test/fixtures/corpus/*) vscode=true; kotlin=true; intellij=true ;;
               editors/vscode/*)   vscode=true ;;
               editors/intellij/*) intellij=true ;;
+              # The catalog feeds the analysis, and VS Code's generated custom data.
+              catalog/*)          kotlin=true; vscode=true; intellij=true ;;
               # The pages are compiled by docs-samples and indexed into the image, so
               # they are Kotlin sources and image content as much as they are prose.
               docs/src/content/docs/*) docs=true; kotlin=true; image=true ;;
               docs/*)             docs=true ;;
               demo/*)             kotlin=true; image=true ;;
-              streamlord-core/*|streamlord-html/*|streamlord-ktor/*|streamlord-json-kotlinx/*)
+              # The IntelliJ plugin builds streamlord-analysis, and core beneath it, from source.
+              streamlord-core/*)  kotlin=true; image=true; intellij=true ;;
+              streamlord-analysis/*) kotlin=true; intellij=true ;;
+              streamlord-html/*|streamlord-ktor/*|streamlord-json-kotlinx/*)
                 kotlin=true; image=true ;;
               streamlord-*/*|docs-samples/*|playground/*)
                 kotlin=true ;;
+              # The version catalog and the settings scripts are the plugin's build too.
               gradle/*|gradlew*|*.gradle.kts|gradle.properties)
-                kotlin=true; image=true ;;
+                kotlin=true; image=true; intellij=true ;;
             esac
           done <<< "$files"
 
