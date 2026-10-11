@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.json.kotlinx
 
 import io.github.markusaugust.streamlord.core.SignalsCodecException
+import io.github.markusaugust.streamlord.core.SignalsDecodeException
 import io.github.markusaugust.streamlord.core.port.driven.decode
 import io.github.markusaugust.streamlord.core.port.driven.encode
 import kotlinx.serialization.KSerializer
@@ -75,6 +76,7 @@ class KotlinxSignalsCodecTest {
         val refused = assertFailsWith<SignalsCodecException> { codec.encode(Other("gorvek")) }
         assertTrue(refused.message!!.contains("Other"), "the message names the type that is missing")
         assertTrue(refused.message!!.contains("native image"), "and says why it matters")
+        assertFalse(refused is SignalsDecodeException, "a missing serializer is the server's, not the request's")
     }
 
     @Test
@@ -99,8 +101,8 @@ class KotlinxSignalsCodecTest {
 
     @Test
     fun `wraps failures`() {
-        assertFailsWith<SignalsCodecException> { codec.decode<Signals>("""{"count":"not a number"}""") }
-        assertFailsWith<SignalsCodecException> { codec.decode<Signals>("not json") }
+        assertFailsWith<SignalsDecodeException> { codec.decode<Signals>("""{"count":"not a number"}""") }
+        assertFailsWith<SignalsDecodeException> { codec.decode<Signals>("not json") }
     }
 
     @Serializable

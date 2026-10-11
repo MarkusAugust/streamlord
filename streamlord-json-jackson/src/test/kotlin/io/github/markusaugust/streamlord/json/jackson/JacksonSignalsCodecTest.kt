@@ -1,11 +1,13 @@
 package io.github.markusaugust.streamlord.json.jackson
 
 import io.github.markusaugust.streamlord.core.SignalsCodecException
+import io.github.markusaugust.streamlord.core.SignalsDecodeException
 import io.github.markusaugust.streamlord.core.port.driven.decode
 import io.github.markusaugust.streamlord.core.port.driven.encode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 
 class JacksonSignalsCodecTest {
 
@@ -24,9 +26,18 @@ class JacksonSignalsCodecTest {
         assertEquals(mapOf("a" to 1), codec.decode<Map<String, Int>>("""{"a":1}"""))
     }
 
+    interface Shape
+
+    // No request can make an interface buildable: the server's to fix, so not a decode failure.
+    @Test
+    fun `a type that cannot be built is the server's`() {
+        val failure = assertFailsWith<SignalsCodecException> { codec.decode<Shape>("""{"sides":3}""") }
+        assertFalse(failure is SignalsDecodeException, "$failure")
+    }
+
     @Test
     fun `wraps failures`() {
-        assertFailsWith<SignalsCodecException> { codec.decode<Signals>("""{"count":"no"}""") }
+        assertFailsWith<SignalsDecodeException> { codec.decode<Signals>("""{"count":"no"}""") }
     }
 
     // The browser sends its whole store; the type names only what one handler accepts.

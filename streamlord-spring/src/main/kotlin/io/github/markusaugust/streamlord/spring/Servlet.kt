@@ -53,13 +53,15 @@ public fun HttpServletResponse.datastarStream(
     authorisation: StreamAuthorisation? = null,
     block: suspend DatastarStream.() -> Unit,
 ): StreamingResponseBody {
+    // Read first: a committed response has sent its headers, so a body gzipped without them is
+    // noise, and a container refuses prepareForSse's setBufferSize on it anyway.
+    val committed = isCommitted
     prepareForSse(request)
-    // A committed response has sent its headers, and a body gzipped without them is noise.
-    val gzip =
-        streamlord.compress && !isCommitted && request != null &&
-            DatastarProtocol.acceptsGzip(request.getHeader("Accept-Encoding"))
+    // Without the request nothing is gzipped, so there is nothing for Accept-Encoding to vary.
+    val varies = streamlord.compress && !committed && request != null
+    val gzip = varies && DatastarProtocol.acceptsGzip(request.getHeader("Accept-Encoding"))
     // Added, not set: a CORS filter may already vary the response on Origin.
-    if (streamlord.compress && !isCommitted && getHeaders("Vary").none { it.contains("Accept-Encoding", ignoreCase = true) }) {
+    if (varies && getHeaders("Vary").none { it.contains("Accept-Encoding", ignoreCase = true) }) {
         addHeader("Vary", "Accept-Encoding")
     }
     if (gzip) setHeader("Content-Encoding", "gzip")

@@ -8,8 +8,10 @@ import io.github.markusaugust.streamlord.core.domain.SignalsResponse
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.port.driven.IncomingRequest
+import io.github.markusaugust.streamlord.core.port.driven.SignalsCodec
 import io.github.markusaugust.streamlord.core.port.driven.isDatastarRequest
 import kotlinx.coroutines.test.runTest
+import kotlin.reflect.KType
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -66,7 +68,22 @@ class ReadSignalsTest {
         val req = FakeRequest("POST", body = """{"count":2,"name":"x"}""")
         assertEquals(mapOf("count" to 2L, "name" to "x"), Streamlord.Default.readSignals<Map<String, Any?>>(req))
         assertEquals("""{"count":2,"name":"x"}""", Streamlord.Default.readSignals<String>(req))
-        assertFailsWith<SignalsCodecException> { Streamlord.Default.readSignals<ReadSignalsTest>(req) }
+        // A type the codec is not set up for is the server's to fix, whatever the request sent.
+        val unsupported = assertFailsWith<SignalsCodecException> { Streamlord.Default.readSignals<ReadSignalsTest>(req) }
+        assertFalse(unsupported is SignalsDecodeException, "$unsupported")
+    }
+
+    @Test
+    fun `a codec failure that is not ours is the request's`() = runTest {
+        val failing =
+            object : SignalsCodec {
+                override fun encode(value: Any?, type: KType): String = "{}"
+
+                override fun <T : Any> decode(json: String, type: KType): T = error("no such field")
+            }
+        val req = FakeRequest("POST", body = """{"count":2}""")
+
+        assertFailsWith<SignalsDecodeException> { Streamlord(codec = failing).readSignals<Map<String, Any?>>(req) }
     }
 
     @Test

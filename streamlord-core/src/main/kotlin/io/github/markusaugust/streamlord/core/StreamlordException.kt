@@ -23,11 +23,24 @@ public class DatastarEventValidationException(
 /**
  * Raised when signals cannot be turned into JSON, or JSON cannot be turned back into signals.
  * The [cause], when present, comes from the codec adapter that failed.
+ *
+ * Thrown as itself, it is the server's fault: a value JSON cannot hold, a type no codec is set
+ * up for. When the request's signals are what failed, it is a [SignalsDecodeException].
  */
-public class SignalsCodecException(
+public open class SignalsCodecException(
     message: String,
     cause: Throwable? = null,
 ) : StreamlordException(message, cause)
+
+/**
+ * Raised when the signals a request carried cannot be read into the type asked for: a field
+ * missing or of the wrong kind, or JSON that is no object at all. The client sent them, so it is
+ * a `400`, where a [SignalsCodecException] of any other kind is a `500`.
+ */
+public class SignalsDecodeException(
+    message: String,
+    cause: Throwable? = null,
+) : SignalsCodecException(message, cause)
 
 /**
  * Raised when an incoming signal payload exceeds the limit configured on

@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.core.application
 
 import io.github.markusaugust.streamlord.core.SignalsCodecException
+import io.github.markusaugust.streamlord.core.SignalsDecodeException
 import io.github.markusaugust.streamlord.core.SignalsTooLargeException
 import io.github.markusaugust.streamlord.core.StreamRefusedException
 import io.github.markusaugust.streamlord.core.StreamlordException
@@ -194,7 +195,7 @@ public class Streamlord(
         } catch (e: StreamlordException) {
             throw e
         } catch (e: Exception) {
-            throw SignalsCodecException("Could not decode signals into $type", e)
+            throw SignalsDecodeException("Could not decode signals into $type", e)
         }
     }
 

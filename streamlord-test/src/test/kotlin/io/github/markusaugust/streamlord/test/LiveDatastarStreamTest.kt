@@ -21,6 +21,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -54,6 +55,12 @@ class LiveDatastarStreamTest {
         }
         server.createContext("/silent") { exchange ->
             Thread.sleep(2000)
+            exchange.close()
+        }
+        server.createContext("/gzipped") { exchange ->
+            exchange.responseHeaders.add("Content-Type", "text/event-stream")
+            exchange.responseHeaders.add("Content-Encoding", "gzip")
+            exchange.sendResponseHeaders(200, -1)
             exchange.close()
         }
         server.createContext("/page") { exchange ->
@@ -159,6 +166,23 @@ class LiveDatastarStreamTest {
             }
 
             assertTrue(noticed, "the server never saw the reader go")
+        }
+
+    @Test
+    fun `a gzipped stream fails the open and says why`() {
+        val failure =
+            assertFailsWith<AssertionError> { LiveDatastarStream.open(URI("http://127.0.0.1:${server.address.port}/gzipped")) }
+
+        assertTrue("Content-Encoding 'gzip'" in failure.message!!, failure.message)
+    }
+
+    @Test
+    fun `an infinite timeout opens like any other`() =
+        runTest {
+            LiveDatastarStream.open(URI("http://127.0.0.1:${server.address.port}/feed"), timeout = Duration.INFINITE).use { stream ->
+                outbox.put(signals("""{"n":1}"""))
+                stream.awaitSignal("n", 1)
+            }
         }
 
     @Test

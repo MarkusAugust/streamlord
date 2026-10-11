@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.json.kotlinx
 
 import io.github.markusaugust.streamlord.core.SignalsCodecException
+import io.github.markusaugust.streamlord.core.SignalsDecodeException
 import io.github.markusaugust.streamlord.core.port.driven.SignalsCodec
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerializationException
@@ -68,9 +69,9 @@ public class KotlinxSignalsCodec(
                 @Suppress("UNCHECKED_CAST")
                 this.json.decodeFromString(serializer, json) as T
             } catch (e: SerializationException) {
-                throw SignalsCodecException("Could not decode signals into $type", e)
+                throw SignalsDecodeException("Could not decode signals into $type", e)
             } catch (e: IllegalArgumentException) {
-                throw SignalsCodecException("Could not decode signals into $type", e)
+                throw SignalsDecodeException("Could not decode signals into $type", e)
             }
         }
 
