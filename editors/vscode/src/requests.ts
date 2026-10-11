@@ -186,8 +186,9 @@ const PARAM_NAME = /^[A-Za-z_][A-Za-z0-9_.-]*$/;
 
 /** Where `position` falls in `text`, as an editor counts it: "at line 3, column 1". */
 export function lineAndColumn(text: string, position: number): string {
-  const before = text.slice(0, Math.max(0, Math.min(position, text.length)));
-  return `at line ${before.split("\n").length}, column ${position - before.lastIndexOf("\n")}`;
+  const at = Math.max(0, Math.min(position, text.length));
+  const before = text.slice(0, at);
+  return `at line ${before.split("\n").length}, column ${at - before.lastIndexOf("\n")}`;
 }
 
 function isObject(v: unknown): v is Record<string, unknown> {
