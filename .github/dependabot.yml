@@ -1,9 +1,10 @@
 # Dependabot, for every place in this repository that pins something someone else wrote.
 #
 # Security updates arrive as soon as an advisory names a version in use, whatever the
-# schedule below says. The schedule is for ordinary version bumps, and those come grouped and
-# weekly, because one pull request per patch release across six ecosystems is a queue nobody
-# reads.
+# schedule below says, except for what an ignore rule below excludes: those are pinned on
+# purpose and move by hand, so an advisory about one of them is for a person to act on. The
+# schedule is for ordinary version bumps, and those come grouped and weekly, because one pull
+# request per patch release across six ecosystems is a queue nobody reads.
 #
 # Gradle sees what the build files and gradle/libs.versions.toml declare. What those pull in
 # transitively is reported separately, by the dependency-submission job in security.yml.
@@ -23,6 +24,16 @@ updates:
       gradle:
         patterns: ["*"]
         update-types: [minor, patch]
+    ignore:
+      # A floor, set to what Spring Boot pins (see gradle/libs.versions.toml). Code compiled
+      # against a newer release fails under Boot with NoSuchMethodError, so it moves when Boot
+      # does, by hand. coroutinesNewest, which only tests run on, shares the artifact and is
+      # raised by hand with it.
+      - dependency-name: "org.jetbrains.kotlinx:kotlinx-coroutines*"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
+      # Held on the 0.11 line for the GraalVM 21 toolchain; see gradle/libs.versions.toml.
+      - dependency-name: "org.graalvm.buildtools.native"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /editors/vscode
@@ -32,6 +43,16 @@ updates:
       vscode:
         patterns: ["*"]
         update-types: [minor, patch]
+    ignore:
+      # The API types follow engines.vscode, the oldest editor the extension runs on. Newer types
+      # would let the code call what that editor lacks; they move with engines.vscode, by hand.
+      - dependency-name: "@types/vscode"
+      # The Node types follow the floor in engines.node, 22.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # A major TypeScript release (7 is the native compiler) is its own piece of work.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   # The documentation site, which is built with Bun and has bun.lock rather than a
   # package-lock.json.
@@ -43,6 +64,10 @@ updates:
       docs:
         patterns: ["*"]
         update-types: [minor, patch]
+    ignore:
+      # As for the extension: a major TypeScript release is its own piece of work.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   # The distroless base under streamlord-live. It is the only part of that image this
   # repository does not compile, and so the only part a new Debian advisory can be about.
