@@ -32,8 +32,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
  * or `Exception`, decides when it carries an `@Order` of its own; without one, the two tie and
  * Spring's registration order picks.
  *
- * A status needs a response that has not started: read the signals before the stream opens, since
- * a failure inside `datastarStream` or a streamed `Flow` cuts the stream off instead.
+ * A status needs a response that has not started: read the signals before the stream opens. Once
+ * a stream has sent its first event, a failure inside it cuts the stream off instead.
  */
 @RestControllerAdvice
 @Order(Ordered.LOWEST_PRECEDENCE)

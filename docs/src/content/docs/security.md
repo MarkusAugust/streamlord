@@ -59,7 +59,8 @@ install(StatusPages) {
 }
 ```
 
-On Spring, WebMVC and WebFlux annotated controllers alike, import the advice where you configure the application:
+On Spring, WebMVC and WebFlux annotated controllers alike, import the advice where you configure
+the application:
 
 ```kotlin sample=spring-controller
 @org.springframework.context.annotation.Configuration
@@ -70,7 +71,8 @@ class WebConfig
 It answers with the status and no body, so nothing of a codec's message reaches the client, and
 it has the lowest precedence: an advice of your own with an `@Order` that handles the same
 exceptions, or `Exception`, decides instead. A status needs a response that has not started, so
-read the signals before the stream opens: a failure inside the stream cuts it off instead.
+read the signals before the stream opens: once a stream has sent its first event, a failure inside
+it cuts the stream off instead.
 
 ## CSP
 
