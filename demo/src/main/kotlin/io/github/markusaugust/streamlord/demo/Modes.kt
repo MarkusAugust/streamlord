@@ -20,6 +20,14 @@ public data class Verdict(
 
 private val REBUILT = Verdict("info", "Rebuilt", "The wall is as it started, with an empty field in the stone.")
 
+private val NO_STONE =
+    Verdict(
+        "warning",
+        "No stone",
+        "Remove took the stone away, so there is nothing for this mode to aim at, and nothing was sent. " +
+            "Rebuild the wall to get it back.",
+    )
+
 /** The verdict for each mode, in the words the reader sees beside the wall. */
 internal fun verdict(mode: ElementPatchMode): Verdict =
     when (mode) {
@@ -77,6 +85,11 @@ public data class ModeSignals(
     val mode: String = "inner",
     /** Whether the page has a wire panel to show the frames in. */
     val wire: Boolean = false,
+    /**
+     * Whether a remove has taken the stone away since the wall was last rebuilt. The server keeps
+     * nothing between presses, so the page carries it.
+     */
+    val stoneGone: Boolean = false,
 )
 
 /**
@@ -105,17 +118,27 @@ public fun modeEvents(signals: ModeSignals): List<DatastarEvent> {
             patchElements(selector = "#modes-said", mode = ElementPatchMode.INNER) {
                 said(REBUILT, ElementPatchMode.INNER, "#wall", "the wall, as it started")
             },
-            PatchSignals("""{"lastMode": "reset"}"""),
+            PatchSignals("""{"lastMode": "reset", "stoneGone": false}"""),
         )
     }
 
     val mode = ElementPatchMode.entries.firstOrNull { it.wire == signals.mode } ?: ElementPatchMode.INNER
 
+    // Prepend and append aim at the wall; every other mode aims at a stone that is no longer there.
+    if (signals.stoneGone && mode != ElementPatchMode.PREPEND && mode != ElementPatchMode.APPEND) {
+        return listOf(
+            patchElements(selector = "#modes-said", mode = ElementPatchMode.INNER) {
+                said(NO_STONE, mode, "#stone", "Nothing sent: no element matches #stone.")
+            },
+            PatchSignals("""{"lastMode": "${mode.wire}", "stoneGone": true}"""),
+        )
+    }
+
     val patch =
         when (mode) {
             ElementPatchMode.INNER -> {
                 patchElements(selector = "#stone", mode = mode) {
-                    stoneInside("Inner: the paragraph is the same element, its contents are not.")
+                    stoneInside("Inner: the inside of the paragraph was morphed, and what you typed survived.")
                 }
             }
 
@@ -173,5 +196,6 @@ public fun modeEvents(signals: ModeSignals): List<DatastarEvent> {
             said(verdict(mode), mode, patch.selector, patch.elements.orEmpty())
         }
 
-    return listOf(patch, said, PatchSignals("""{"lastMode": "${mode.wire}"}"""))
+    val stoneGone = mode == ElementPatchMode.REMOVE || signals.stoneGone
+    return listOf(patch, said, PatchSignals("""{"lastMode": "${mode.wire}", "stoneGone": $stoneGone}"""))
 }

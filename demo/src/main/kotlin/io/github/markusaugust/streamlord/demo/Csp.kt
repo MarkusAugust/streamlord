@@ -24,6 +24,7 @@ import kotlinx.html.script
 import kotlinx.html.stream.createHTML
 import kotlinx.html.style
 import kotlinx.html.title
+import kotlinx.html.unsafe
 
 /** The Datastar client, from the same place the documentation's own pages take it. */
 private const val DATASTAR = "https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.4/bundles/datastar.js"
@@ -110,7 +111,8 @@ internal fun cspPage(nonce: String): String =
                 }
                 style {
                     attributes["nonce"] = nonce
-                    +CSS
+                    // Unescaped: a style element's text is CSS, and escaping would break a `>`.
+                    unsafe { +CSS }
                 }
             }
 

@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.demo
 
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.PatchElements
+import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -53,6 +54,26 @@ class ModesTest {
             assertTrue(said.elements.orEmpty().contains("""data-color="warning""""), "$mode should say gone")
         }
     }
+
+    // The server keeps nothing, so the page carries whether the stone was removed.
+    @Test
+    fun `after a remove, a mode aimed at the stone sends nothing and says why`() {
+        assertTrue(signalsAfter(ModeSignals("remove")).contains(""""stoneGone": true"""))
+
+        for (mode in listOf("inner", "outer", "replace", "before", "after", "remove")) {
+            val events = modeEvents(ModeSignals(mode, stoneGone = true))
+            val said = events.first() as PatchElements
+            assertEquals("#modes-said", said.selector, "$mode should send no patch at the missing stone")
+            assertTrue(said.elements.orEmpty().contains("No stone"), "$mode should say there is no stone")
+        }
+        for (mode in listOf("prepend", "append")) {
+            assertEquals("#wall", (modeEvents(ModeSignals(mode, stoneGone = true)).first() as PatchElements).selector)
+        }
+        assertTrue(signalsAfter(ModeSignals("reset", stoneGone = true)).contains(""""stoneGone": false"""))
+    }
+
+    private fun signalsAfter(signals: ModeSignals) =
+        (modeEvents(signals).last() as PatchSignals).signals
 
     @Test
     fun `an unknown mode falls back rather than failing`() {

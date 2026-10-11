@@ -6,7 +6,7 @@ description: "Custom elements, third-party widgets and your own scripts next to 
 Datastar owns the attributes it reads and the elements it patches. Everything else on the page,
 a custom element, a chart library, a script you wrote, lives next to it. The rules on this page
 keep the two from stepping on each other. What they say about the client was checked against
-the Datastar client's source.
+the Datastar 1.0.4 client's source.
 
 ## Attributes down, events up
 

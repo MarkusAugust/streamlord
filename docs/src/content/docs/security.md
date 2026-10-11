@@ -71,8 +71,9 @@ class WebConfig
 ```
 
 It answers with the status and no body, so nothing of a codec's message reaches the client, and
-it has the lowest precedence: an advice of your own with an `@Order` that handles the same
-exceptions, or `Exception`, decides instead. A status needs a response that has not started, so
+it has the lowest precedence: an advice of your own that handles the same exceptions, or
+`Exception`, decides instead when its `@Order` comes first; one with no `@Order` of its own ties
+with it, and Spring's registration order picks. A status needs a response that has not started, so
 read the signals before the stream opens: once a stream has sent its first event, a failure inside
 it cuts the stream off instead.
 
