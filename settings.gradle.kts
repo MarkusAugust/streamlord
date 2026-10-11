@@ -27,3 +27,5 @@ include(
     "streamlord-spring",
     "streamlord-test",
 )
+
+apply(from = "gradle/build-tool-floors.settings.gradle.kts")

@@ -23,3 +23,5 @@ rootProject.name = "streamlord-intellij"
 // The SDK build, for `streamlord-analysis` (and `streamlord-core` beneath it), so the plugin
 // judges Datastar strings with the same code as the SDK's own tests.
 includeBuild("../..")
+
+apply(from = "../../gradle/build-tool-floors.settings.gradle.kts")
