@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@astrojs/markdown-remark": "7.3.2",
-    "@fristil/designsystem": "0.30.0",
+    "@fristil/designsystem": "0.32.0",
     "astro": "7.3.8"
   },
   "devDependencies": {
