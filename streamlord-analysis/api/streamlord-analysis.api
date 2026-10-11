@@ -342,6 +342,7 @@ public final class io/github/markusaugust/streamlord/analysis/Issue {
 	public final fun copy (IILjava/lang/String;Lio/github/markusaugust/streamlord/analysis/Severity;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)Lio/github/markusaugust/streamlord/analysis/Issue;
 	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/analysis/Issue;IILjava/lang/String;Lio/github/markusaugust/streamlord/analysis/Severity;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/Issue;
 	public fun equals (Ljava/lang/Object;)Z
+	public final fun format (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
 	public final fun getCode ()Ljava/lang/String;
 	public final fun getEnd ()I
 	public final fun getFixes ()Ljava/util/List;
@@ -350,7 +351,12 @@ public final class io/github/markusaugust/streamlord/analysis/Issue {
 	public final fun getSeverity ()Lio/github/markusaugust/streamlord/analysis/Severity;
 	public final fun getStart ()I
 	public fun hashCode ()I
+	public final fun position (Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/SourcePosition;
 	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/analysis/IssueKt {
+	public static final fun sourcePosition (Ljava/lang/String;I)Lio/github/markusaugust/streamlord/analysis/SourcePosition;
 }
 
 public final class io/github/markusaugust/streamlord/analysis/JsParser {
@@ -972,6 +978,19 @@ public final class io/github/markusaugust/streamlord/analysis/SourceLanguage : j
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/SourceLanguage;
 	public static fun values ()[Lio/github/markusaugust/streamlord/analysis/SourceLanguage;
+}
+
+public final class io/github/markusaugust/streamlord/analysis/SourcePosition {
+	public fun <init> (II)V
+	public final fun component1 ()I
+	public final fun component2 ()I
+	public final fun copy (II)Lio/github/markusaugust/streamlord/analysis/SourcePosition;
+	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/analysis/SourcePosition;IIILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/SourcePosition;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getColumn ()I
+	public final fun getLine ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
 }
 
 public final class io/github/markusaugust/streamlord/analysis/SseKt {
