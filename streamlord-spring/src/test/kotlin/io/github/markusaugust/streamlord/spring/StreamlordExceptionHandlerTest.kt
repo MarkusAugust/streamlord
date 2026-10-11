@@ -7,8 +7,8 @@ import jakarta.servlet.http.HttpServletRequest
 import org.springframework.core.annotation.Order
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
-import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.PostMapping
@@ -35,21 +35,15 @@ class StreamlordExceptionHandlerTest {
     @Order(0)
     class Own {
         @ExceptionHandler(StreamlordException::class)
-        fun own(): ResponseEntity<String> = ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body("own")
+        fun own(): ResponseEntity<String> = ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT).body("own")
     }
 
     private fun mvc(vararg advice: Any): MockMvc = MockMvcBuilders.standaloneSetup(Signals()).setControllerAdvice(*advice).build()
 
-    // A RequestBuilder of our own: MockMvcRequestBuilders is not binary compatible between Spring 6.2 and 7.0.
     private fun MockMvc.post(
         path: String,
         body: String,
-    ) = perform { context ->
-        MockHttpServletRequest(context, "POST", path).apply {
-            contentType = "application/json"
-            setContent(body.toByteArray())
-        }
-    }.andReturn().response
+    ) = perform(MockMvcRequestBuilders.post(path).contentType("application/json").content(body)).andReturn().response
 
     @Test
     fun `signals over the limit are 413`() {

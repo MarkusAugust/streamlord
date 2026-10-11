@@ -96,6 +96,6 @@ the rest.
 `SignalsCodecException` to `400`. `@Import(StreamlordExceptionHandler::class)` does exactly that,
 or write the `@ControllerAdvice` yourself. Streamlord does not register it for you, because
 registering exception handlers behind your back is exactly the kind of help that turns into a
-fight; see [Security](/security/). For reactive endpoints, see [Spring WebFlux](/spring-webflux/). The
-one filter the adapter offers, `CspNonceFilter`, is a bean you declare like any other, and it is
-on [Security](/security/).
+fight; see [Security](/security/). For reactive endpoints, see [Spring WebFlux](/spring-webflux/).
+The one filter the adapter offers, `CspNonceFilter`, is a bean you declare like any other, and it
+is on [Security](/security/).

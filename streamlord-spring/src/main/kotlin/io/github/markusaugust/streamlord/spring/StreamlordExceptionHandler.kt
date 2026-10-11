@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
 
 /**
  * Answers signals that cannot be read with the status they deserve instead of a `500`:
- * [SignalsTooLargeException] with `413 Payload Too Large`, and [JsonParseException] and
+ * [SignalsTooLargeException] with `413 Content Too Large`, and [JsonParseException] and
  * [SignalsCodecException], a body that is not the signals you expected, with `400 Bad Request`.
  * The answer is the status and no body. A body would need a message converter for it, and a
  * missing one would turn the answer back into the `500`; nothing of the exception's message, which
@@ -36,7 +36,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
 @Order(Ordered.LOWEST_PRECEDENCE)
 public class StreamlordExceptionHandler {
     @ExceptionHandler(SignalsTooLargeException::class)
-    public fun signalsTooLarge(): ResponseEntity<Void> = ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).build()
+    public fun signalsTooLarge(): ResponseEntity<Void> = ResponseEntity.status(HttpStatus.CONTENT_TOO_LARGE).build()
 
     @ExceptionHandler(JsonParseException::class, SignalsCodecException::class)
     public fun signalsUnreadable(): ResponseEntity<Void> = ResponseEntity.badRequest().build()
