@@ -454,7 +454,8 @@ export function validateAttributes(tag: Tag, prefix: string, tagSource?: string)
         });
         continue;
       }
-      issues.push(...validateModifierArgs(mspec, mod.args, mstart, mend, prefix + spec.name, spec).map((i) => ({ ...i, link: attributeDoc(spec.name) })));
+      const present = parsed.modifiers.filter((m) => m !== mod).map((m) => m.name);
+      issues.push(...validateModifierArgs(mspec, mod.args, mstart, mend, prefix + spec.name, spec, present).map((i) => ({ ...i, link: attributeDoc(spec.name) })));
     }
     if (attr.value !== null && spec.valueKind === "expression" && attr.value.trim().length > 0 && !hasTemplateSyntax(attr.value)) {
       const decoded = decodeEntities(attr.value);
@@ -603,7 +604,8 @@ function indicatorWithoutAction(tag: Tag, prefix: string, tagSource?: string): I
 
 /**
  * `debounce_150ms` read as `debounce.150ms`, when the part before the first underscore is a modifier
- * that takes arguments and the rest is plain words; null otherwise.
+ * that takes arguments, the rest is plain words, and those words are arguments it takes; null
+ * otherwise, so the fix never offers something that fails in turn.
  */
 function dottedArguments(name: string, spec: AttributeSpec): string | null {
   const underscore = name.indexOf("_");
@@ -611,10 +613,12 @@ function dottedArguments(name: string, spec: AttributeSpec): string | null {
   const head = name.slice(0, underscore);
   const modifier = spec.modifiers.find((m) => m.name === head);
   if (!modifier || modifier.type === "flag") return null;
-  return head + "." + name.slice(underscore + 1).replaceAll("_", ".");
+  const args = name.slice(underscore + 1).split("_");
+  if (validateModifierArgs(modifier, args, 0, 0, "", spec).length > 0) return null;
+  return head + "." + args.join(".");
 }
 
-function validateModifierArgs(spec: AttributeSpec["modifiers"][number], args: string[], start: number, end: number, attrName: string, attribute: AttributeSpec): Issue[] {
+function validateModifierArgs(spec: AttributeSpec["modifiers"][number], args: string[], start: number, end: number, attrName: string, attribute: AttributeSpec, present: string[] = []): Issue[] {
   const issues: Issue[] = [];
   const fail = (message: string, fixes?: Issue["fixes"]) => issues.push({ start, end, message, severity: "error", code: "modifier-args", ...(fixes ? { fixes } : {}) });
   switch (spec.type) {
@@ -622,11 +626,16 @@ function validateModifierArgs(spec: AttributeSpec["modifiers"][number], args: st
       // __prevent.stop: a second modifier joined with a dot, read as an argument.
       const siblings = attribute.modifiers.filter((m) => m.type === "flag" && m.name !== spec.name).map((m) => m.name);
       if (args.length > 0 && args.every((a) => siblings.includes(a))) {
-        const joined = args.map((a) => "__" + a).join("");
+        // Each once, and not one the attribute already has.
+        const joined = [...new Set(args)].filter((a) => !present.includes(a)).map((a) => "__" + a).join("");
         const at = start + spec.name.length;
-        fail(`__${spec.name} takes no arguments. Each modifier starts with two underscores: __${spec.name}${joined}.`, [
-          { title: `Change to __${spec.name}${joined}`, start: at, end, text: joined },
-        ]);
+        if (joined.length === 0) {
+          fail(`__${spec.name} takes no arguments.`, [{ title: `Change to __${spec.name}`, start: at, end, text: "" }]);
+        } else {
+          fail(`__${spec.name} takes no arguments. Each modifier starts with two underscores: __${spec.name}${joined}.`, [
+            { title: `Change to __${spec.name}${joined}`, start: at, end, text: joined },
+          ]);
+        }
       } else if (args.length > 0) {
         fail(`__${spec.name} takes no arguments.`);
       }

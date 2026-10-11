@@ -12,3 +12,11 @@ dependencies {
 sourceSets.main {
     resources.srcDir(rootProject.file("catalog"))
 }
+
+// CorpusTest reads the cases the VS Code extension shares with it. Declared, so a change to a
+// case alone runs the tests again rather than finding them up to date.
+tasks.test {
+    inputs.dir(rootProject.layout.projectDirectory.dir("editors/vscode/test/fixtures/corpus"))
+        .withPropertyName("corpus")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+}
