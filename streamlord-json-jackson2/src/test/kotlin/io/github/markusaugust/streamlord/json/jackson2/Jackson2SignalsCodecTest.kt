@@ -7,6 +7,7 @@ import io.github.markusaugust.streamlord.core.port.driven.encode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 
 class Jackson2SignalsCodecTest {
 
@@ -23,6 +24,15 @@ class Jackson2SignalsCodecTest {
     fun `decodes data classes through the kotlin module`() {
         assertEquals(Signals("x", 2), codec.decode<Signals>("""{"search":"x","count":2}"""))
         assertEquals(mapOf("a" to 1), codec.decode<Map<String, Int>>("""{"a":1}"""))
+    }
+
+    interface Shape
+
+    // No request can make an interface buildable: the server's to fix, so not a decode failure.
+    @Test
+    fun `a type that cannot be built is the server's`() {
+        val failure = assertFailsWith<SignalsCodecException> { codec.decode<Shape>("""{"sides":3}""") }
+        assertFalse(failure is SignalsDecodeException, "$failure")
     }
 
     @Test
