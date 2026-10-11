@@ -6,7 +6,7 @@
       "name": "@streamlord/docs",
       "dependencies": {
         "@astrojs/markdown-remark": "7.3.2",
-        "@fristil/designsystem": "0.30.0",
+        "@fristil/designsystem": "0.32.0",
         "astro": "7.3.8",
       },
       "devDependencies": {
@@ -107,7 +107,7 @@
 
     "@emnapi/wasi-threads": ["@emnapi/wasi-threads@1.2.3", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-ELEBe8PsLvvJ6QMr0zLt8ffvOHW/dc1m3CEzNMg7aJUv3bMaoDtw2TXyDAwkYBuroxxuHEwhRTLJSe5sya547g=="],
 
-    "@fristil/designsystem": ["@fristil/designsystem@0.30.0", "", { "bin": { "fristil": "dist/cli.js" } }, "sha512-Aj6rlp0mTdD5VBiTtOd1kldN15qC3rlF1dXtBSfdRt/aE3GcGoi/fVy9HsLmlSJLg9hDR5yjDF9s/k8D0zXhYw=="],
+    "@fristil/designsystem": ["@fristil/designsystem@0.32.0", "", { "bin": { "fristil": "dist/cli.js" } }, "sha512-rZicEScTXPStV6unIkjrey7ufpcC6fOhb9ZbSDI5xeLiVBhmRfxIBiAOG4Ym8pX0VVeurDNFlp8mHkPh1ifcHQ=="],
 
     "@img/colour": ["@img/colour@1.1.0", "", {}, "sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ=="],
 
