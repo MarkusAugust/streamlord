@@ -6,9 +6,14 @@ import io.github.markusaugust.streamlord.core.port.driven.SignalsCodec
 import io.github.markusaugust.streamlord.core.port.driven.SseSink
 import io.github.markusaugust.streamlord.core.port.driving.DatastarStream
 import io.github.markusaugust.streamlord.core.protocol.SseEncoder
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.time.Duration
 import kotlin.time.TimeSource
 
 /**
@@ -32,6 +37,9 @@ internal class SseDatastarStream(
     private val gate = Mutex()
     private var asked: TimeSource.Monotonic.ValueTimeMark? = null
     private val refused = AtomicBoolean(false)
+
+    /** One element whenever a frame has reached the client since [pulse] last looked. */
+    private val written = Channel<Unit>(Channel.CONFLATED)
 
     /** Whether the authorisation has answered no. A handler may have swallowed the exception. */
     internal val isRefused: Boolean get() = refused.get()
@@ -57,6 +65,25 @@ internal class SseDatastarStream(
     private suspend fun emit(text: String) {
         sink.write(text)
         sink.flush()
+        written.trySend(Unit)
+    }
+
+    /**
+     * Write a keep-alive comment each time [interval] passes with nothing written, until cancelled.
+     *
+     * Any frame resets the wait, a comment included, so a busy stream never carries one and an
+     * idle stream carries one per [interval]. The comment is an ordinary write: it waits for the
+     * lock and passes [authorise], which means an idle stream with an authorisation is asked again
+     * on the heartbeat's schedule, and a refusal ends it here as it would anywhere else.
+     *
+     * After a refusal, every comment is refused again, which ends a block that caught its own
+     * refusal and went on waiting. A comment of its own also lands in [written], so the wait after
+     * it starts at once.
+     */
+    internal suspend fun pulse(interval: Duration): Nothing {
+        while (true) {
+            if (withTimeoutOrNull(interval) { written.receive() } == null) comment()
+        }
     }
 
     /**
@@ -84,7 +111,13 @@ internal class SseDatastarStream(
         if (!due || authorisation.allows()) return
 
         if (!refused.compareAndSet(false, true)) throw StreamRefusedException()
-        authorisation.onRefused(LastWords())
+        // Not cancellable: with a heartbeat, the refusal can land in one coroutine while the
+        // other is torn down, and the last words go out whole. Bounded instead, so a slow
+        // onRefused, or a reader who stopped reading on a suspending sink, cannot hold the stream
+        // open forever. A write that blocks its thread is beyond any timeout.
+        withContext(NonCancellable) {
+            withTimeoutOrNull(StreamAuthorisation.LAST_WORDS_LIMIT) { authorisation.onRefused(LastWords()) }
+        }
         throw StreamRefusedException()
     }
 

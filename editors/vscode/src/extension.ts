@@ -11,6 +11,7 @@ import { RequestStore } from "./requestStore.ts";
 import { RouteLensProvider } from "./routeLens.ts";
 import type { Route } from "./routes.ts";
 import { RunningServers } from "./serverLog.ts";
+import { signalReferencesInHtml, signalReferencesInKotlin, unknownSignalIssue, type SignalReference } from "./signalReferences.ts";
 import { SignalIndex } from "./signalIndex.ts";
 
 /** Languages that get HTML-side support, from the setting; Kotlin always gets the Kotlin side. */
@@ -26,7 +27,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const issues = new IssueStore();
 
   const diagnostics = vscode.languages.createDiagnosticCollection("streamlord");
-  const signals = new SignalIndex();
+  const signals = new SignalIndex(markup);
   const running = new RunningServers();
   // A debug session's output is the one an extension may read, so that is where a server is seen to start.
   context.subscriptions.push(
@@ -49,10 +50,13 @@ export function activate(context: vscode.ExtensionContext): void {
       return;
     }
     let found: Issue[];
+    const text = document.getText();
     if (document.languageId === "kotlin") {
-      found = analyzeKotlin(document.getText(), { prefix: prefix(), checkHtmlAttributes: true });
+      found = analyzeKotlin(text, { prefix: prefix(), checkHtmlAttributes: true });
+      if (checkSignals()) found.push(...unknownSignals(document, signalReferencesInKotlin(text, prefix())));
     } else if (markup.has(document.languageId) && config().get<boolean>("diagnostics.html", true)) {
-      found = analyzeHtml(document.getText(), { prefix: prefix(), checkHtmlAttributes: true });
+      found = analyzeHtml(text, { prefix: prefix(), checkHtmlAttributes: true });
+      if (checkSignals()) found.push(...unknownSignals(document, signalReferencesInHtml(text, prefix())));
     } else {
       diagnostics.delete(document.uri);
       issues.delete(document.uri);
@@ -70,6 +74,18 @@ export function activate(context: vscode.ExtensionContext): void {
     );
   };
 
+  /** Is the unknown-signal check on? Not until the workspace has been read once, and not when turned off. */
+  const checkSignals = () => signals.ready && config().get<boolean>("diagnostics.unknownSignals", true);
+
+  /** A `$name` no file defines. */
+  const unknownSignals = (document: vscode.TextDocument, refs: SignalReference[]): Issue[] => {
+    if (refs.length === 0) return [];
+    // The index reads this version of the document once; a lint right after an edit finds it read.
+    signals.update(document);
+    const defined = signals.allDefinitions();
+    return refs.flatMap((r) => unknownSignalIssue(r, defined) ?? []);
+  };
+
   const schedule = (document: vscode.TextDocument) => {
     if (document.languageId !== "kotlin" && !markup.has(document.languageId)) return;
     const key = document.uri.toString();
@@ -84,6 +100,8 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.languages.registerCodeLensProvider({ language: "kotlin" }, new RouteLensProvider()),
     vscode.commands.registerCommand("streamlord.inspector.openWith", (route: Route) => inspector.openWithRoute(route)),
     vscode.workspace.onDidOpenTextDocument(schedule),
+    // A signal defined or removed in one file changes what the others may read; the first read of the workspace is such a change.
+    signals.onDidChangeDefinitions(() => vscode.workspace.textDocuments.forEach(schedule)),
     vscode.workspace.onDidChangeTextDocument((e) => schedule(e.document)),
     vscode.workspace.onDidCloseTextDocument((d) => {
       diagnostics.delete(d.uri);

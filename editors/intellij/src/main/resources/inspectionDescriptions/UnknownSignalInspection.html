@@ -1,0 +1,15 @@
+<html>
+<body>
+A signal that an expression reads but no file in the project defines: <code>data-on:click="$telefon++"</code> on a page whose
+<code>data-signals:teller</code> declares <code>$teller</code>. Datastar reads it as <code>undefined</code> and says nothing.
+When a defined name is close, the quick fix writes it.
+<p>
+A signal is defined by a <code>data-signals</code>, <code>data-bind</code>, <code>data-ref</code>, <code>data-indicator</code>,
+<code>data-computed</code> or <code>data-match-media</code> attribute, by the DSL calls that write one (<code>dataSignals</code>,
+<code>patchSignals</code>, <code>signal</code> and the rest), by a property of a <code>@Serializable</code> class, or by an assignment
+<code>$name = ...</code> in an expression. A signal the page gets from somewhere the project index does not read, a script or
+another repository, is reported too; suppress it there, or turn the inspection off.
+</p>
+<!-- tooltip end -->
+</body>
+</html>

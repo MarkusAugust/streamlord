@@ -1,0 +1,334 @@
+public final class io/github/markusaugust/streamlord/html/ActionsKt {
+	public static final fun delete (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)Ljava/lang/String;
+	public static synthetic fun delete$default (Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Ljava/lang/String;
+	public static final fun get (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)Ljava/lang/String;
+	public static synthetic fun get$default (Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Ljava/lang/String;
+	public static final fun js (Ljava/lang/String;)Ljava/lang/String;
+	public static final fun patch (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)Ljava/lang/String;
+	public static synthetic fun patch$default (Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Ljava/lang/String;
+	public static final fun peek (Ljava/lang/String;)Ljava/lang/String;
+	public static final fun post (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)Ljava/lang/String;
+	public static synthetic fun post$default (Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Ljava/lang/String;
+	public static final fun put (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)Ljava/lang/String;
+	public static synthetic fun put$default (Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Ljava/lang/String;
+	public static final fun query (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)Ljava/lang/String;
+	public static synthetic fun query$default (Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Ljava/lang/String;
+	public static final fun setAll (Ljava/lang/Object;Lio/github/markusaugust/streamlord/html/SignalFilter;)Ljava/lang/String;
+	public static synthetic fun setAll$default (Ljava/lang/Object;Lio/github/markusaugust/streamlord/html/SignalFilter;ILjava/lang/Object;)Ljava/lang/String;
+	public static final fun toggleAll (Lio/github/markusaugust/streamlord/html/SignalFilter;)Ljava/lang/String;
+	public static synthetic fun toggleAll$default (Lio/github/markusaugust/streamlord/html/SignalFilter;ILjava/lang/Object;)Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/html/AttributesKt {
+	public static final fun dataAttr (Lkotlinx/html/HTMLTag;Ljava/lang/String;)V
+	public static final fun dataAttr (Lkotlinx/html/HTMLTag;Ljava/lang/String;Ljava/lang/String;)V
+	public static final fun dataBind (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
+	public static synthetic fun dataBind$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
+	public static final fun dataClass (Lkotlinx/html/HTMLTag;Ljava/lang/String;)V
+	public static final fun dataClass (Lkotlinx/html/HTMLTag;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;)V
+	public static synthetic fun dataClass$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;ILjava/lang/Object;)V
+	public static final fun dataComputed (Lkotlinx/html/HTMLTag;Ljava/lang/String;)V
+	public static final fun dataComputed (Lkotlinx/html/HTMLTag;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;)V
+	public static synthetic fun dataComputed$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;ILjava/lang/Object;)V
+	public static final fun dataEffect (Lkotlinx/html/HTMLTag;Ljava/lang/String;)V
+	public static final fun dataIgnore (Lkotlinx/html/HTMLTag;Z)V
+	public static synthetic fun dataIgnore$default (Lkotlinx/html/HTMLTag;ZILjava/lang/Object;)V
+	public static final fun dataIgnoreMorph (Lkotlinx/html/HTMLTag;)V
+	public static final fun dataIndicator (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;)V
+	public static synthetic fun dataIndicator$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;ILjava/lang/Object;)V
+	public static final fun dataInit (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
+	public static synthetic fun dataInit$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
+	public static final fun dataJsonSignals (Lkotlinx/html/HTMLTag;Lio/github/markusaugust/streamlord/html/SignalFilter;Z)V
+	public static synthetic fun dataJsonSignals$default (Lkotlinx/html/HTMLTag;Lio/github/markusaugust/streamlord/html/SignalFilter;ZILjava/lang/Object;)V
+	public static final fun dataNonce (Lkotlinx/html/HTMLTag;Ljava/lang/String;)V
+	public static final fun dataOn (Lkotlinx/html/HTMLTag;Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
+	public static synthetic fun dataOn$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
+	public static final fun dataOnChange (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
+	public static synthetic fun dataOnChange$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
+	public static final fun dataOnClick (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
+	public static synthetic fun dataOnClick$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
+	public static final fun dataOnFetch (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
+	public static synthetic fun dataOnFetch$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
+	public static final fun dataOnInput (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
+	public static synthetic fun dataOnInput$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
+	public static final fun dataOnIntersect (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
+	public static synthetic fun dataOnIntersect$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
+	public static final fun dataOnInterval (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
+	public static synthetic fun dataOnInterval$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
+	public static final fun dataOnKeydown (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
+	public static synthetic fun dataOnKeydown$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
+	public static final fun dataOnSignalPatch (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lio/github/markusaugust/streamlord/html/SignalFilter;Lkotlin/jvm/functions/Function1;)V
+	public static synthetic fun dataOnSignalPatch$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lio/github/markusaugust/streamlord/html/SignalFilter;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
+	public static final fun dataOnSubmit (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
+	public static synthetic fun dataOnSubmit$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
+	public static final fun dataPreserveAttr (Lkotlinx/html/HTMLTag;[Ljava/lang/String;)V
+	public static final fun dataRef (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;)V
+	public static synthetic fun dataRef$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;ILjava/lang/Object;)V
+	public static final fun dataShow (Lkotlinx/html/HTMLTag;Ljava/lang/String;)V
+	public static final fun dataSignals (Lkotlinx/html/HTMLTag;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;Z)V
+	public static final fun dataSignals (Lkotlinx/html/HTMLTag;Ljava/lang/String;Z)V
+	public static final fun dataSignals (Lkotlinx/html/HTMLTag;[Lkotlin/Pair;Z)V
+	public static synthetic fun dataSignals$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;ZILjava/lang/Object;)V
+	public static synthetic fun dataSignals$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;ZILjava/lang/Object;)V
+	public static synthetic fun dataSignals$default (Lkotlinx/html/HTMLTag;[Lkotlin/Pair;ZILjava/lang/Object;)V
+	public static final fun dataStyle (Lkotlinx/html/HTMLTag;Ljava/lang/String;)V
+	public static final fun dataStyle (Lkotlinx/html/HTMLTag;Ljava/lang/String;Ljava/lang/String;)V
+	public static final fun dataText (Lkotlinx/html/HTMLTag;Ljava/lang/String;)V
+}
+
+public final class io/github/markusaugust/streamlord/html/BindModifiers {
+	public fun <init> ()V
+	public final fun getCase ()Lio/github/markusaugust/streamlord/html/Case;
+	public final fun getEvents ()Ljava/util/List;
+	public final fun getProp ()Ljava/lang/String;
+	public final fun setCase (Lio/github/markusaugust/streamlord/html/Case;)V
+	public final fun setEvents (Ljava/util/List;)V
+	public final fun setProp (Ljava/lang/String;)V
+}
+
+public final class io/github/markusaugust/streamlord/html/Case : java/lang/Enum {
+	public static final field CAMEL Lio/github/markusaugust/streamlord/html/Case;
+	public static final field KEBAB Lio/github/markusaugust/streamlord/html/Case;
+	public static final field PASCAL Lio/github/markusaugust/streamlord/html/Case;
+	public static final field SNAKE Lio/github/markusaugust/streamlord/html/Case;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getWire ()Ljava/lang/String;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/markusaugust/streamlord/html/Case;
+	public static fun values ()[Lio/github/markusaugust/streamlord/html/Case;
+}
+
+public final class io/github/markusaugust/streamlord/html/Casing {
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/html/Casing;
+	public final fun camel (Ljava/lang/String;)Ljava/lang/String;
+	public final fun kebab (Ljava/lang/String;)Ljava/lang/String;
+	public final fun key (Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;Lio/github/markusaugust/streamlord/html/Case;)Lkotlin/Pair;
+	public final fun plainKey (Ljava/lang/String;)Ljava/lang/String;
+	public final fun reference (Ljava/lang/String;)Ljava/lang/String;
+	public final fun validate (Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/html/DatastarAttributes {
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/html/DatastarAttributes;
+	public final fun getPrefix ()Ljava/lang/String;
+	public final fun name (Ljava/lang/String;)Ljava/lang/String;
+	public final fun setPrefix (Ljava/lang/String;)V
+}
+
+public final class io/github/markusaugust/streamlord/html/ElementsKt {
+	public static final fun elements (Lkotlin/jvm/functions/Function1;)Ljava/lang/String;
+	public static final fun elementsResponse (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLkotlin/jvm/functions/Function1;)Lio/github/markusaugust/streamlord/core/domain/ElementsResponse;
+	public static synthetic fun elementsResponse$default (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/domain/ElementsResponse;
+	public static final fun patchElements-jxBP150 (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun patchElements-jxBP150$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static final fun patchElements-rl3MWlM (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/jvm/functions/Function1;)Lio/github/markusaugust/streamlord/core/domain/PatchElements;
+	public static synthetic fun patchElements-rl3MWlM$default (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/domain/PatchElements;
+}
+
+public final class io/github/markusaugust/streamlord/html/ExpressionsKt {
+	public static final fun decrement (Ljava/lang/String;)Ljava/lang/String;
+	public static final fun increment (Ljava/lang/String;)Ljava/lang/String;
+	public static final fun not (Ljava/lang/String;)Ljava/lang/String;
+	public static final fun set (Ljava/lang/String;Ljava/lang/Object;)Ljava/lang/String;
+	public static final fun setExpr (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+	public static final fun signal (Ljava/lang/String;)Ljava/lang/String;
+	public static final fun statements ([Ljava/lang/String;)Ljava/lang/String;
+	public static final fun toggle (Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/html/FetchEventType {
+	public static final field ERROR Ljava/lang/String;
+	public static final field FINISHED Ljava/lang/String;
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/html/FetchEventType;
+	public static final field RETRIES_FAILED Ljava/lang/String;
+	public static final field RETRYING Ljava/lang/String;
+	public static final field STARTED Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/html/FetchOptions {
+	public fun <init> ()V
+	public final fun getContentType ()Lio/github/markusaugust/streamlord/html/FetchOptions$ContentType;
+	public final fun getFilterSignals ()Lio/github/markusaugust/streamlord/html/SignalFilter;
+	public final fun getHeaders ()Ljava/util/Map;
+	public final fun getOpenWhenHidden ()Ljava/lang/Boolean;
+	public final fun getPayload ()Ljava/lang/Object;
+	public final fun getPayloadExpr ()Ljava/lang/String;
+	public final fun getRequestCancellation ()Lio/github/markusaugust/streamlord/html/FetchOptions$RequestCancellation;
+	public final fun getResponseOverrides ()Lio/github/markusaugust/streamlord/html/FetchOptions$ResponseOverrides;
+	public final fun getRetry ()Lio/github/markusaugust/streamlord/html/FetchOptions$Retry;
+	public final fun getRetryInterval-FghU774 ()Lkotlin/time/Duration;
+	public final fun getRetryMaxCount ()Ljava/lang/Integer;
+	public final fun getRetryMaxWait-FghU774 ()Lkotlin/time/Duration;
+	public final fun getRetryScaler ()Ljava/lang/Double;
+	public final fun getSelector ()Ljava/lang/String;
+	public final fun responseOverrides (Lkotlin/jvm/functions/Function1;)V
+	public final fun setContentType (Lio/github/markusaugust/streamlord/html/FetchOptions$ContentType;)V
+	public final fun setFilterSignals (Lio/github/markusaugust/streamlord/html/SignalFilter;)V
+	public final fun setHeaders (Ljava/util/Map;)V
+	public final fun setOpenWhenHidden (Ljava/lang/Boolean;)V
+	public final fun setPayload (Ljava/lang/Object;)V
+	public final fun setPayloadExpr (Ljava/lang/String;)V
+	public final fun setRequestCancellation (Lio/github/markusaugust/streamlord/html/FetchOptions$RequestCancellation;)V
+	public final fun setResponseOverrides (Lio/github/markusaugust/streamlord/html/FetchOptions$ResponseOverrides;)V
+	public final fun setRetry (Lio/github/markusaugust/streamlord/html/FetchOptions$Retry;)V
+	public final fun setRetryInterval-BwNAW2A (Lkotlin/time/Duration;)V
+	public final fun setRetryMaxCount (Ljava/lang/Integer;)V
+	public final fun setRetryMaxWait-BwNAW2A (Lkotlin/time/Duration;)V
+	public final fun setRetryScaler (Ljava/lang/Double;)V
+	public final fun setSelector (Ljava/lang/String;)V
+	public final fun toJs ()Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/html/FetchOptions$ContentType : java/lang/Enum {
+	public static final field FORM Lio/github/markusaugust/streamlord/html/FetchOptions$ContentType;
+	public static final field JSON Lio/github/markusaugust/streamlord/html/FetchOptions$ContentType;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getWire ()Ljava/lang/String;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/markusaugust/streamlord/html/FetchOptions$ContentType;
+	public static fun values ()[Lio/github/markusaugust/streamlord/html/FetchOptions$ContentType;
+}
+
+public final class io/github/markusaugust/streamlord/html/FetchOptions$RequestCancellation : java/lang/Enum {
+	public static final field AUTO Lio/github/markusaugust/streamlord/html/FetchOptions$RequestCancellation;
+	public static final field CLEANUP Lio/github/markusaugust/streamlord/html/FetchOptions$RequestCancellation;
+	public static final field DISABLED Lio/github/markusaugust/streamlord/html/FetchOptions$RequestCancellation;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getWire ()Ljava/lang/String;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/markusaugust/streamlord/html/FetchOptions$RequestCancellation;
+	public static fun values ()[Lio/github/markusaugust/streamlord/html/FetchOptions$RequestCancellation;
+}
+
+public final class io/github/markusaugust/streamlord/html/FetchOptions$ResponseOverrides {
+	public fun <init> ()V
+	public final fun getMode ()Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;
+	public final fun getNamespace ()Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;
+	public final fun getOnlyIfMissing ()Ljava/lang/Boolean;
+	public final fun getSelector ()Ljava/lang/String;
+	public final fun getUseViewTransition ()Ljava/lang/Boolean;
+	public final fun setMode (Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;)V
+	public final fun setNamespace (Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;)V
+	public final fun setOnlyIfMissing (Ljava/lang/Boolean;)V
+	public final fun setSelector (Ljava/lang/String;)V
+	public final fun setUseViewTransition (Ljava/lang/Boolean;)V
+}
+
+public final class io/github/markusaugust/streamlord/html/FetchOptions$Retry : java/lang/Enum {
+	public static final field ALWAYS Lio/github/markusaugust/streamlord/html/FetchOptions$Retry;
+	public static final field AUTO Lio/github/markusaugust/streamlord/html/FetchOptions$Retry;
+	public static final field ERROR Lio/github/markusaugust/streamlord/html/FetchOptions$Retry;
+	public static final field NEVER Lio/github/markusaugust/streamlord/html/FetchOptions$Retry;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getWire ()Ljava/lang/String;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/markusaugust/streamlord/html/FetchOptions$Retry;
+	public static fun values ()[Lio/github/markusaugust/streamlord/html/FetchOptions$Retry;
+}
+
+public final class io/github/markusaugust/streamlord/html/InitModifiers {
+	public fun <init> ()V
+	public final fun getDelay-FghU774 ()Lkotlin/time/Duration;
+	public final fun getViewTransition ()Z
+	public final fun setDelay-BwNAW2A (Lkotlin/time/Duration;)V
+	public final fun setViewTransition (Z)V
+}
+
+public final class io/github/markusaugust/streamlord/html/IntersectModifiers : io/github/markusaugust/streamlord/html/TimingModifiers {
+	public fun <init> ()V
+	public final fun getExit ()Z
+	public final fun getFull ()Z
+	public final fun getHalf ()Z
+	public final fun getOnce ()Z
+	public final fun getThreshold ()Ljava/lang/Integer;
+	public final fun getViewTransition ()Z
+	public final fun setExit (Z)V
+	public final fun setFull (Z)V
+	public final fun setHalf (Z)V
+	public final fun setOnce (Z)V
+	public final fun setThreshold (Ljava/lang/Integer;)V
+	public final fun setViewTransition (Z)V
+}
+
+public final class io/github/markusaugust/streamlord/html/IntervalModifiers {
+	public fun <init> ()V
+	public final fun getDuration-FghU774 ()Lkotlin/time/Duration;
+	public final fun getLeading ()Z
+	public final fun getViewTransition ()Z
+	public final fun setDuration-BwNAW2A (Lkotlin/time/Duration;)V
+	public final fun setLeading (Z)V
+	public final fun setViewTransition (Z)V
+}
+
+public final class io/github/markusaugust/streamlord/html/InvalidSignalNameException : io/github/markusaugust/streamlord/core/StreamlordException {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun getName ()Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/html/JsLiteral {
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/html/JsLiteral;
+	public final fun string (Ljava/lang/String;)Ljava/lang/String;
+	public final fun write (Ljava/lang/Object;)Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/html/OnModifiers : io/github/markusaugust/streamlord/html/TimingModifiers {
+	public fun <init> ()V
+	public final fun getCapture ()Z
+	public final fun getCase ()Lio/github/markusaugust/streamlord/html/Case;
+	public final fun getDocument ()Z
+	public final fun getOnce ()Z
+	public final fun getOutside ()Z
+	public final fun getPassive ()Z
+	public final fun getPrevent ()Z
+	public final fun getStop ()Z
+	public final fun getViewTransition ()Z
+	public final fun getWindow ()Z
+	public final fun setCapture (Z)V
+	public final fun setCase (Lio/github/markusaugust/streamlord/html/Case;)V
+	public final fun setDocument (Z)V
+	public final fun setOnce (Z)V
+	public final fun setOutside (Z)V
+	public final fun setPassive (Z)V
+	public final fun setPrevent (Z)V
+	public final fun setStop (Z)V
+	public final fun setViewTransition (Z)V
+	public final fun setWindow (Z)V
+}
+
+public final class io/github/markusaugust/streamlord/html/SignalFilter {
+	public static final field Companion Lio/github/markusaugust/streamlord/html/SignalFilter$Companion;
+	public fun <init> ()V
+	public fun <init> (Lkotlin/text/Regex;Lkotlin/text/Regex;)V
+	public synthetic fun <init> (Lkotlin/text/Regex;Lkotlin/text/Regex;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Lkotlin/text/Regex;
+	public final fun component2 ()Lkotlin/text/Regex;
+	public final fun copy (Lkotlin/text/Regex;Lkotlin/text/Regex;)Lio/github/markusaugust/streamlord/html/SignalFilter;
+	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/html/SignalFilter;Lkotlin/text/Regex;Lkotlin/text/Regex;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/html/SignalFilter;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getExclude ()Lkotlin/text/Regex;
+	public final fun getInclude ()Lkotlin/text/Regex;
+	public fun hashCode ()I
+	public final fun toJs ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/html/SignalFilter$Companion {
+	public final fun exclude (Ljava/lang/String;)Lio/github/markusaugust/streamlord/html/SignalFilter;
+	public final fun include (Ljava/lang/String;)Lio/github/markusaugust/streamlord/html/SignalFilter;
+	public final fun regexLiteral (Lkotlin/text/Regex;)Ljava/lang/String;
+}
+
+public class io/github/markusaugust/streamlord/html/TimingModifiers {
+	public fun <init> ()V
+	public final fun getDebounce-FghU774 ()Lkotlin/time/Duration;
+	public final fun getDebounceLeading ()Z
+	public final fun getDebounceNoTrailing ()Z
+	public final fun getDelay-FghU774 ()Lkotlin/time/Duration;
+	public final fun getThrottle-FghU774 ()Lkotlin/time/Duration;
+	public final fun getThrottleNoLeading ()Z
+	public final fun getThrottleTrailing ()Z
+	public final fun setDebounce-BwNAW2A (Lkotlin/time/Duration;)V
+	public final fun setDebounceLeading (Z)V
+	public final fun setDebounceNoTrailing (Z)V
+	public final fun setDelay-BwNAW2A (Lkotlin/time/Duration;)V
+	public final fun setThrottle-BwNAW2A (Lkotlin/time/Duration;)V
+	public final fun setThrottleNoLeading (Z)V
+	public final fun setThrottleTrailing (Z)V
+}
+

@@ -261,21 +261,22 @@ public class DatastarEvents(
     private fun onWire(elements: String): String = Wire.lines(elements).joinToString("\n")
 
     /** Every failure prints the stream, because the first question is always what it did send. */
-    private fun fail(what: String): Nothing =
-        throw AssertionError(
-            buildString {
-                append(what)
-                append(".\n\nThe stream carried ")
-                if (events.isEmpty()) {
-                    append("no Datastar events")
-                    if (messages.isNotEmpty()) append(" and ${messages.size} other message(s)")
-                    append(".")
-                } else {
-                    append("${events.size} ${if (events.size == 1) "event" else "events"}:\n")
-                    events.forEach { append("  ").append(describe(it)).append('\n') }
-                }
-            },
-        )
+    private fun fail(what: String): Nothing = throw AssertionError(withStream(what))
+
+    /** [what], then what the stream carried, as every failure here prints it. */
+    internal fun withStream(what: String): String =
+        buildString {
+            append(what)
+            append(".\n\nThe stream carried ")
+            if (events.isEmpty()) {
+                append("no Datastar events")
+                if (messages.isNotEmpty()) append(" and ${messages.size} other message(s)")
+                append(".")
+            } else {
+                append("${events.size} ${if (events.size == 1) "event" else "events"}:\n")
+                events.forEach { append("  ").append(describe(it)).append('\n') }
+            }
+        }
 
     private fun describe(event: DatastarEvent): String = SseEncoder.encode(event).trimEnd().replace("\n", " | ")
 

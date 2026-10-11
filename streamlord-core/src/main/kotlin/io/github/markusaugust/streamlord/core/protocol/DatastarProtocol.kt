@@ -69,4 +69,29 @@ public object DatastarProtocol {
         "Cache-Control" to "no-cache",
         "X-Accel-Buffering" to "no",
     )
+
+    /**
+     * Whether an `Accept-Encoding` header takes gzip: `gzip` or `x-gzip` listed with a weight
+     * above zero, or `*` above zero with gzip not refused by name. Names are matched without
+     * regard to case, and a weight that does not parse counts as a refusal. The adapters ask it
+     * when [compress][io.github.markusaugust.streamlord.core.application.Streamlord.compress] is on.
+     */
+    public fun acceptsGzip(acceptEncoding: String?): Boolean {
+        if (acceptEncoding.isNullOrBlank()) return false
+        var named: Boolean? = null
+        var star = false
+        for (entry in acceptEncoding.split(',')) {
+            val parts = entry.split(';')
+            val name = parts.first().trim().lowercase()
+            val weight =
+                parts.drop(1).map { it.split('=', limit = 2).map(String::trim) }
+                    .firstOrNull { it.size == 2 && it[0].equals("q", ignoreCase = true) }
+                    ?.let { it[1].toDoubleOrNull() ?: 0.0 } ?: 1.0
+            when (name) {
+                "gzip", "x-gzip" -> named = (named == true) || weight > 0.0
+                "*" -> star = weight > 0.0
+            }
+        }
+        return named ?: star
+    }
 }

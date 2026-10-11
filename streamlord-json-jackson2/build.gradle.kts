@@ -1,4 +1,4 @@
-description = "Streamlord JSON adapter for Jackson 2 (com.fasterxml), for Spring Boot 3."
+description = "Streamlord JSON adapter for Jackson 2 (com.fasterxml)."
 
 dependencies {
     api(project(":streamlord-core"))

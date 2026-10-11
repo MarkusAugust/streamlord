@@ -170,3 +170,11 @@ private fun validateCommon(
         }
     }
 }
+
+/** The same event with [id] as its SSE `id:`, or none when it is `null`. */
+internal fun DatastarEvent.withEventId(id: String?): DatastarEvent =
+    when (this) {
+        is PatchElements -> copy(eventId = id)
+        is PatchSignals -> copy(eventId = id)
+        is ExecuteScript -> copy(eventId = id)
+    }

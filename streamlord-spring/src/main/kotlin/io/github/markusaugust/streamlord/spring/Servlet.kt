@@ -20,6 +20,7 @@ import java.io.OutputStream
 import java.io.OutputStreamWriter
 import java.io.Writer
 import java.nio.charset.StandardCharsets
+import java.util.zip.GZIPOutputStream
 import kotlin.reflect.typeOf
 
 /*
@@ -42,7 +43,9 @@ import kotlin.reflect.typeOf
  *
  * @param streamlord The configured instance, typically a Spring bean. Defaults to [Streamlord.Default].
  * @param request The request being answered, when you have it: `Connection: keep-alive` is an
- *   HTTP/1.1 header, and with the request at hand it is only set for HTTP/1.1.
+ *   HTTP/1.1 header, and with the request at hand it is only set for HTTP/1.1. With
+ *   [Streamlord.compress] on, the stream is gzipped when this request's `Accept-Encoding` takes
+ *   it; without the request, it is not.
  */
 public fun HttpServletResponse.datastarStream(
     streamlord: Streamlord = Streamlord.Default,
@@ -51,10 +54,33 @@ public fun HttpServletResponse.datastarStream(
     block: suspend DatastarStream.() -> Unit,
 ): StreamingResponseBody {
     prepareForSse(request)
+    // A committed response has sent its headers, and a body gzipped without them is noise.
+    val gzip =
+        streamlord.compress && !isCommitted && request != null &&
+            DatastarProtocol.acceptsGzip(request.getHeader("Accept-Encoding"))
+    // Added, not set: a CORS filter may already vary the response on Origin.
+    if (streamlord.compress && !isCommitted && getHeaders("Vary").none { it.contains("Accept-Encoding", ignoreCase = true) }) {
+        addHeader("Vary", "Accept-Encoding")
+    }
+    if (gzip) setHeader("Content-Encoding", "gzip")
     return StreamingResponseBody { output ->
-        val writer = OutputStreamWriter(output, StandardCharsets.UTF_8)
-        runBlocking { streamlord.stream(ServletSseSink(writer, this@datastarStream), authorisation, block) }
-        writer.flush()
+        if (!gzip) {
+            val writer = OutputStreamWriter(output, StandardCharsets.UTF_8)
+            runBlocking { streamlord.stream(ServletSseSink(writer, this@datastarStream), authorisation, block) }
+            writer.flush()
+            return@StreamingResponseBody
+        }
+        // Sync flush: each event leaves the compressor whole, the moment the sink flushes.
+        val body = SyncGzipOutputStream(output)
+        try {
+            val writer = OutputStreamWriter(body, StandardCharsets.UTF_8)
+            runBlocking { streamlord.stream(ServletSseSink(writer, this@datastarStream), authorisation, block) }
+            writer.flush()
+            // Only after a stream that ended well; one cut short is left for the client to see fail.
+            body.finish()
+        } finally {
+            body.release()
+        }
     }
 }
 
@@ -102,6 +128,13 @@ public class ServletSseSink(
         writer.flush()
         response.flushBuffer()
     }
+}
+
+/** Gzip with a sync flush per flush, and a way to free its native memory without closing the response. */
+internal class SyncGzipOutputStream(
+    out: OutputStream,
+) : GZIPOutputStream(out, true) {
+    fun release() = def.end()
 }
 
 /**

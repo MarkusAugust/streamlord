@@ -89,3 +89,6 @@ Datastar Rocket, the separate `datastar-rocket.js` bundle with `data-if`, `data-
 web-component API, is in beta and not covered by the DSL. And the DSL is one of
 [three ways to write markup](/choosing-a-style/), not the way; if your team reads strings or
 templates better, those are served as equals.
+
+Custom elements, chart libraries and your own scripts next to the attributes are on
+[Components and plain JavaScript](/components/).

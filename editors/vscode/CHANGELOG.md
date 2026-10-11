@@ -2,6 +2,26 @@
 
 All notable changes to the Streamlord extension are recorded here.
 
+## Unreleased
+
+- A `data-indicator` on an element that sends no request is a warning: the indicator only turns on
+  for requests its own element sends, so one on a wrapper or a sibling never does.
+- Quick fixes: `__debounce_150ms` offers `__debounce.150ms`, since a modifier's arguments follow a dot, and
+  `__prevent.stop` offers `__prevent__stop`, since each modifier starts with two underscores.
+
+## 0.7.0
+
+- A signal no file in the workspace defines is a warning: `data-on:click="$telefon++"` on a page
+  whose `data-signals:teller` declares `$teller` is underlined. A defined name that is close, such
+  as `$count` for `$coutn`, is the quick fix. Definitions are read from every Kotlin and HTML
+  file, as completion reads its names, and the check waits until the workspace has been read
+  once. A signal set only from a script is reported too; `streamlord.diagnostics.unknownSignals`
+  turns the check off.
+- Signal completion honours `__case` (`data-signals:my-value__case.snake` offers `$my_value`), and
+  reads template files (`.jte`, `.peb`, `.hbs`, `.njk` and the rest) across the workspace, not
+  only the ones that are open. Files renamed, deleted or changed outside the editor are read
+  again; a git diff or an untitled buffer is not read at all.
+
 ## 0.6.0
 
 - Stream Inspector: `{{baseUrl}}` follows the server you started from a debug session. The

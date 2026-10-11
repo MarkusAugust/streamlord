@@ -13,6 +13,11 @@ private val KOTLIN_PATTERNS =
             """\b(?:signal|set|setExpr|increment|decrement|toggle|not|dataBind|dataIndicator|dataRef|dataComputed|dataMatchMedia)\(\s*"([A-Za-z_][A-Za-z0-9_.]*)"""",
         ),
         Regex("""\bdataSignals\(\s*"([A-Za-z_][A-Za-z0-9_.]*)"\s*,"""),
+    )
+
+/** A dollar escaped in a Kotlin string: a signal read, which completion offers and a definition is not. */
+private val KOTLIN_READS =
+    listOf(
         Regex("""\$\{'\$'\}([A-Za-z_][A-Za-z0-9_.]*)"""),
         Regex("""\\\$([A-Za-z_][A-Za-z0-9_.]*)"""),
     )
@@ -26,10 +31,17 @@ private val VALUE_ATTRIBUTE = Regex("""data-(?:star-)?(?:bind|indicator|ref)(?:_
 private val OBJECT_ATTRIBUTE = Regex("""data-(?:star-)?signals(?:__[^=\s]*)?=(?:"\{([^"]*)\}"|'\{([^']*)\}')""")
 private val OBJECT_KEY = Regex("""(?:^|[{,])\s*(?:\\?["'])?([A-Za-z_][A-Za-z0-9_]*)(?:\\?["'])?\s*:""")
 
+/** `$name = ...` in an expression: Datastar creates a signal it is assigned to, so the assignment defines it. */
+private val ASSIGNED_SIGNAL = Regex("""(?:\$|\$\{'\$'\})([A-Za-z_][A-Za-z0-9_.]*)\s*=(?![=>])""")
+
 /** A bare `$name` is a signal in markup; in Kotlin it is a template, so it stays out of the Kotlin list. */
 private val BARE_SIGNAL = Regex("""\$([A-Za-z_][A-Za-z0-9_.]*)""")
 
 private val PAIR_CALLS = setOf("dataSignals", "patchSignals", "removeSignals", "respondSignals", "datastarSignals")
+private val JSON_CALLS = setOf("patchSignals", "respondSignals", "datastarSignals")
+private val JSON_OBJECT = Regex("""^\s*\{""")
+private val CASE_MODIFIER = Regex("""__case\.([a-z]+)""")
+
 private val PAIR = Regex(""""([A-Za-z_][A-Za-z0-9_.]*)"\s+to\b""")
 private val NAME = Regex("""^"([A-Za-z_][A-Za-z0-9_.]*)"$""")
 
@@ -56,6 +68,31 @@ public fun collectSignals(
 public fun collectDeclaredSignals(
     src: String,
     language: SourceLanguage,
+): Set<String> = collect(src, language, reads = true)
+
+/**
+ * The signals this source defines, which a `$name` in an expression is checked against: what
+ * [collectDeclaredSignals] finds without the reads (a bare `$name` in markup, a `${'$'}name` in
+ * Kotlin), plus the properties of `@Serializable` classes, which a handler patches as well as
+ * reads, and every signal an expression assigns to.
+ */
+public fun collectSignalDefinitions(
+    src: String,
+    language: SourceLanguage,
+): Set<String> {
+    val out = LinkedHashSet(collect(src, language, reads = false))
+    if (language == SourceLanguage.KOTLIN) {
+        for (properties in serializableProperties(src).values) for (property in properties) out += property.name
+    }
+    for (m in ASSIGNED_SIGNAL.findAll(src)) out += m.groupValues[1]
+    out.removeAll { PLACEHOLDER in it }
+    return out
+}
+
+private fun collect(
+    src: String,
+    language: SourceLanguage,
+    reads: Boolean,
 ): Set<String> {
     val out = LinkedHashSet<String>()
     if (language == SourceLanguage.KOTLIN) {
@@ -63,6 +100,12 @@ public fun collectDeclaredSignals(
             val positional = site.positional
             positional.forEachIndexed { idx, a ->
                 for (pair in PAIR.findAll(a.text)) out += pair.groupValues[1]
+                // patchSignals("""{"count": 1}"""): the signals as JSON text.
+                if (site.name in JSON_CALLS) {
+                    a.string?.text?.takeIf { JSON_OBJECT.containsMatchIn(it) }?.let { json ->
+                        for (key in OBJECT_KEY.findAll(json)) out += key.groupValues[1]
+                    }
+                }
                 val name = NAME.find(a.text)?.groupValues?.get(1) ?: return@forEachIndexed
                 // removeSignals("a", "b") and dataSignals("name", "expression") take names positionally.
                 if (site.name == "removeSignals" ||
@@ -72,19 +115,38 @@ public fun collectDeclaredSignals(
                 }
             }
         }
-        for (re in KOTLIN_PATTERNS) for (m in re.findAll(src)) out += m.groupValues[1]
+        for (re in if (reads) KOTLIN_PATTERNS + KOTLIN_READS else KOTLIN_PATTERNS) for (m in re.findAll(src)) out += m.groupValues[1]
     }
-    // A keyed attribute may carry modifiers after the key: data-signals:foo-bar__ifmissing.
-    for (m in KEYED_ATTRIBUTE.findAll(src)) out += toCamel(m.groupValues[1].substringBefore("__"))
+    // A keyed attribute may carry modifiers after the key: data-signals:foo-bar__ifmissing, and
+    // `__case` names the signal: data-signals:my-value__case.snake is `$my_value`.
+    for (m in KEYED_ATTRIBUTE.findAll(src)) {
+        val written = m.groupValues[1]
+        out += keyName(written.substringBefore("__"), CASE_MODIFIER.find(written)?.groupValues?.get(1))
+    }
     for (m in VALUE_ATTRIBUTE.findAll(src)) out += toCamel(m.groupValues[1])
     for (m in OBJECT_ATTRIBUTE.findAll(src)) {
         val body = m.groups[1]?.value ?: m.groupValues[2]
         for (key in OBJECT_KEY.findAll(body)) out += key.groupValues[1]
     }
-    if (language == SourceLanguage.HTML) {
+    if (reads && language == SourceLanguage.HTML) {
         for (m in BARE_SIGNAL.findAll(src)) out += toCamel(m.groupValues[1])
     }
     // The placeholder the analysis writes for a Kotlin template is never a signal, whatever file it turns up in.
     out.removeAll { PLACEHOLDER in it }
     return out
 }
+
+/**
+ * The signal a kebab-case key names under a `__case` modifier: camel by default (`foo-bar` is
+ * `fooBar`), `snake` (`foo_bar`), `pascal` (`FooBar`) or `kebab` (`foo-bar`, as written).
+ */
+public fun keyName(
+    key: String,
+    case: String?,
+): String =
+    when (case) {
+        "kebab" -> key
+        "snake" -> key.replace('-', '_')
+        "pascal" -> toCamel(key).replaceFirstChar { it.uppercaseChar() }
+        else -> toCamel(key)
+    }

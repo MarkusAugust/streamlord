@@ -25,6 +25,14 @@
     {"name":"what datastar refuses to apply","source":"<input data-bind:foo=\"bar\"><input data-bind><div data-text></div><button data-on:click></button>","issues":[{"code":"key-and-value","start":7,"end":20},{"code":"missing-key-or-value","start":34,"end":43},{"code":"missing-value","start":49,"end":58},{"code":"missing-value","start":73,"end":86}]},
     {"name":"what datastar accepts without a value or a key","source":"<input data-bind:foo><input data-bind=\"foo\"><div data-signals:x></div><div data-ignore></div>","issues":[]},
     {"name":"empty modifiers","source":"<button data-on:click__=\"$a = 1\" data-on:click__once__=\"$a = 1\"></button>","issues":[{"code":"unknown-modifier","start":21,"end":23},{"code":"unknown-modifier","start":52,"end":54}]},
-    {"name":"an unknown modifier","source":"<button data-on:click__onse=\"$a = 1\"></button>","issues":[{"code":"unknown-modifier","start":23,"end":27,"fixes":["<button data-on:click__once=\"$a = 1\"></button>"]}]}
+    {"name":"an unknown modifier","source":"<button data-on:click__onse=\"$a = 1\"></button>","issues":[{"code":"unknown-modifier","start":23,"end":27,"fixes":["<button data-on:click__once=\"$a = 1\"></button>"]}]},
+    {"name":"an argument joined with an underscore","source":"<input data-on:input__debounce_150ms=\"@get('/search')\">","issues":[{"code":"unknown-modifier","start":22,"end":36,"fixes":["<input data-on:input__debounce.150ms=\"@get('/search')\">"]}]},
+    {"name":"a modifier joined with a dot","source":"<a data-on:click__prevent.stop=\"@post('/x')\"></a>","issues":[{"code":"modifier-args","start":18,"end":30,"fixes":["<a data-on:click__prevent__stop=\"@post('/x')\"></a>"]}]},
+    {"name":"an indicator on an element that sends nothing","source":"<span data-indicator:busy></span>","issues":[{"code":"indicator-without-action","start":6,"end":25}]},
+    {"name":"an indicator beside the action it tracks","source":"<button data-on:click=\"@post('/save')\" data-indicator:busy></button>","issues":[]},
+    {"name":"an indicator beside a stream opened on init","source":"<div data-init=\"@get('/feed')\" data-indicator=\"loading\"></div>","issues":[]},
+    {"name":"an indicator in a tag with attributes spread by a template","source":"<button {{ attrs }} data-indicator:busy></button>","issues":[]},
+    {"name":"an indicator written in capitals","source":"<SPAN DATA-INDICATOR:busy></SPAN>","issues":[{"code":"indicator-without-action","start":6,"end":25}]},
+    {"name":"an indicator beside an action written as entities","source":"<div data-effect=\"$q &amp;&amp; &#64;get('/search')\" data-indicator:busy></div>","issues":[]}
   ]
 }

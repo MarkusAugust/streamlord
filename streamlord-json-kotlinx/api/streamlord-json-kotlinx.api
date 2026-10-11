@@ -1,0 +1,13 @@
+public final class io/github/markusaugust/streamlord/json/kotlinx/KotlinxSignalsCodec : io/github/markusaugust/streamlord/core/port/driven/SignalsCodec {
+	public static final field Companion Lio/github/markusaugust/streamlord/json/kotlinx/KotlinxSignalsCodec$Companion;
+	public fun <init> ()V
+	public fun <init> (Lkotlinx/serialization/json/Json;Ljava/util/Map;Z)V
+	public synthetic fun <init> (Lkotlinx/serialization/json/Json;Ljava/util/Map;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun decode (Ljava/lang/String;Lkotlin/reflect/KType;)Ljava/lang/Object;
+	public fun encode (Ljava/lang/Object;Lkotlin/reflect/KType;)Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/json/kotlinx/KotlinxSignalsCodec$Companion {
+	public final fun getDefaultJson ()Lkotlinx/serialization/json/Json;
+}
+

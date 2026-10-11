@@ -1,25 +1,28 @@
 [versions]
-kotlin = "2.4.20"
-# A floor, not a preference. Spring Boot pins coroutines in its BOM (3.5 pins 1.8.1, 4.0 and 4.1 pin
-# 1.10.2) and downgrades anything newer, so code compiled against a later release fails there with
-# NoSuchMethodError: 1.11 compiles runBlocking to a symbol the older jars do not have. Compiling
-# against the oldest pin runs on all of them. Raise it only when the oldest supported Boot does.
-coroutines = "1.8.1"
-coroutinesBoot4 = "1.10.2"
+kotlin = "2.4.21"
+# A floor, not a preference. Spring Boot pins coroutines in its BOM (4.0 and 4.1 pin 1.10.2) and
+# downgrades anything newer, so code compiled against a later release fails there with
+# NoSuchMethodError: 1.11 compiles runBlocking to a symbol 1.10 does not have. Raise it only when
+# the oldest supported Boot does.
+coroutines = "1.10.2"
 coroutinesNewest = "1.11.0"
 serialization = "1.11.0"
 kotlinxHtml = "0.12.0"
 ktor = "3.6.0"
-spring = "6.2.19"
-spring7 = "7.0.9"
-servlet = "6.0.0"
-servlet61 = "6.1.0"
-reactor = "3.7.15"
+spring = "7.0.9"
+servlet = "6.1.0"
+reactor = "3.8.7"
 jackson = "3.2.3"
 jackson2 = "2.22.3"
+# Floors for libraries the build's own tools carry (Dokka, the IntelliJ Platform plugin), raised
+# past the advisories those tools' pins have; gradle/build-tool-floors.settings.gradle.kts
+# applies them. Nothing published depends on them.
+buildToolsJackson = "2.22.3"
+buildToolsJsoup = "1.23.2"
+buildToolsFreemarker = "2.3.35"
 
 [libraries]
-jetbrains-annotations = { module = "org.jetbrains:annotations", version = "23.0.0" }
+jetbrains-annotations = { module = "org.jetbrains:annotations", version = "26.1.0" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
@@ -31,6 +34,7 @@ ktor-server-test-host = { module = "io.ktor:ktor-server-test-host", version.ref 
 ktor-server-status-pages = { module = "io.ktor:ktor-server-status-pages", version.ref = "ktor" }
 # Used only by :demo, the service behind the documentation site.
 ktor-server-cio = { module = "io.ktor:ktor-server-cio", version.ref = "ktor" }
+ktor-server-compression = { module = "io.ktor:ktor-server-compression", version.ref = "ktor" }
 ktor-server-cors = { module = "io.ktor:ktor-server-cors", version.ref = "ktor" }
 ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
 spring-web = { module = "org.springframework:spring-web", version.ref = "spring" }
@@ -45,6 +49,10 @@ jackson-databind = { module = "tools.jackson.core:jackson-databind", version.ref
 jackson-kotlin = { module = "tools.jackson.module:jackson-module-kotlin", version.ref = "jackson" }
 jackson2-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson2" }
 jackson2-kotlin = { module = "com.fasterxml.jackson.module:jackson-module-kotlin", version.ref = "jackson2" }
+# Never declared as dependencies: listed so Dependabot keeps the floors above current.
+buildTools-jackson-bom = { module = "com.fasterxml.jackson:jackson-bom", version.ref = "buildToolsJackson" }
+buildTools-jsoup = { module = "org.jsoup:jsoup", version.ref = "buildToolsJsoup" }
+buildTools-freemarker = { module = "org.freemarker:freemarker", version.ref = "buildToolsFreemarker" }
 
 [plugins]
 maven-publish = { id = "com.vanniktech.maven.publish", version = "0.37.0" }
