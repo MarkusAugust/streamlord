@@ -40,8 +40,10 @@ million digits fit inside one mebibyte, and turning them into a number took over
 
 **You have two things to do here:** map `SignalsTooLargeException` to `413`, and map a body that
 is not the signals you expected to `400`. The second is `JsonParseException` from the built-in
-reader and `SignalsCodecException` from a codec, and unmapped they are a `500`: a stranger posting
-`query=gate` where JSON was expected gets a stack trace's worth of blame put on your server.
+reader and `SignalsDecodeException` from a codec, and unmapped they are a `500`: a stranger
+posting `query=gate` where JSON was expected gets a stack trace's worth of blame put on your
+server. Any other `SignalsCodecException`, a value JSON cannot hold on the way out, is your own
+bug, and a `500` is right for it.
 Streamlord will not register a handler behind your back. On Spring it ships one you import
 yourself, `StreamlordExceptionHandler`; on Ktor it is three handlers in `StatusPages`.
 
@@ -53,7 +55,7 @@ install(StatusPages) {
     exception<JsonParseException> { call, _ ->
         call.respond(io.ktor.http.HttpStatusCode.BadRequest)
     }
-    exception<SignalsCodecException> { call, _ ->
+    exception<SignalsDecodeException> { call, _ ->
         call.respond(io.ktor.http.HttpStatusCode.BadRequest)
     }
 }

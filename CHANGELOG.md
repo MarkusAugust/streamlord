@@ -58,7 +58,7 @@ All notable changes to Streamlord are recorded here. The format follows
   `VariableSource.RUNNING` with the name it was started under; `baseUrlSuggestion` and
   `withBaseUrl` offer and write its URL when the file's differs.
 - `streamlord-spring`: `StreamlordExceptionHandler`, a `@RestControllerAdvice` that answers
-  `SignalsTooLargeException` with `413` and `JsonParseException` and `SignalsCodecException` with
+  `SignalsTooLargeException` with `413` and `JsonParseException` and `SignalsDecodeException` with
   `400`, instead of the `500` they are unmapped. It is not registered for you:
   `@Import(StreamlordExceptionHandler::class)`. It answers with no body, has the lowest
   precedence, and works for WebMVC and WebFlux annotated controllers.
@@ -69,6 +69,12 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Changed
 
+- A codec that cannot read a request's signals throws `SignalsDecodeException`, a new subclass of
+  `SignalsCodecException`, so a `catch` of the old type still catches it. The kotlinx and Jackson
+  codecs do, and so does `readSignals` for a failure it wraps; the built-in reader still throws
+  `JsonParseException`. A `SignalsCodecException` of any other kind, a value JSON cannot hold on
+  the way out or a type no codec is set up for, is the server's fault: map
+  `SignalsDecodeException` to `400` and leave the rest a `500`.
 - `StreamAuthorisation.onRefused` runs to its end even while the handler is being cancelled, so
   a frame under way is finished rather than cut, and is given
   `StreamAuthorisation.LAST_WORDS_LIMIT`, five seconds, and no longer; so is the end of a gzipped

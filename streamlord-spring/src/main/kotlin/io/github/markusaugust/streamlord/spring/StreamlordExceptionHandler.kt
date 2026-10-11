@@ -1,7 +1,7 @@
 package io.github.markusaugust.streamlord.spring
 
 import io.github.markusaugust.streamlord.core.JsonParseException
-import io.github.markusaugust.streamlord.core.SignalsCodecException
+import io.github.markusaugust.streamlord.core.SignalsDecodeException
 import io.github.markusaugust.streamlord.core.SignalsTooLargeException
 import org.springframework.core.Ordered
 import org.springframework.core.annotation.Order
@@ -13,7 +13,9 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
 /**
  * Answers signals that cannot be read with the status they deserve instead of a `500`:
  * [SignalsTooLargeException] with `413 Content Too Large`, and [JsonParseException] and
- * [SignalsCodecException], a body that is not the signals you expected, with `400 Bad Request`.
+ * [SignalsDecodeException], a body that is not the signals you expected, with `400 Bad Request`.
+ * Any other [io.github.markusaugust.streamlord.core.SignalsCodecException], such as a value
+ * JSON cannot hold on the way out, is the server's fault and stays a `500`.
  * The answer is the status and no body. A body would need a message converter for it, and a
  * missing one would turn the answer back into the `500`; nothing of the exception's message, which
  * may come from a codec and name your classes, reaches the client either way.
@@ -41,6 +43,6 @@ public class StreamlordExceptionHandler {
     @ExceptionHandler(SignalsTooLargeException::class)
     public fun signalsTooLarge(): ResponseEntity<Void> = ResponseEntity.status(HttpStatus.CONTENT_TOO_LARGE).build()
 
-    @ExceptionHandler(JsonParseException::class, SignalsCodecException::class)
+    @ExceptionHandler(JsonParseException::class, SignalsDecodeException::class)
     public fun signalsUnreadable(): ResponseEntity<Void> = ResponseEntity.badRequest().build()
 }

@@ -110,6 +110,8 @@ class SpringAdapterTest {
         }
     }
 
+    // A container refuses prepareForSse's setBufferSize on a committed response before this is
+    // reached; the mock does not, which leaves the check itself to test.
     @Test
     fun `a committed response is never gzipped`() {
         val request = MockHttpServletRequest("GET", "/feed").apply { addHeader("Accept-Encoding", "gzip") }
@@ -129,6 +131,8 @@ class SpringAdapterTest {
 
             assertNull(response.getHeader("Content-Encoding"))
             assertEquals("event: datastar-patch-signals\ndata: signals {\"n\":1}\n\n", response.contentAsString)
+            // Without the request it is never gzipped, so it does not vary; with one, it might have been.
+            assertEquals(if (request == null) emptyList() else listOf("Accept-Encoding"), response.getHeaders("Vary"))
         }
     }
 

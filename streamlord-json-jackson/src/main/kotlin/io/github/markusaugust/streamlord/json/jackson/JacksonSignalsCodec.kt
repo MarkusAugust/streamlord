@@ -1,9 +1,11 @@
 package io.github.markusaugust.streamlord.json.jackson
 
 import io.github.markusaugust.streamlord.core.SignalsCodecException
+import io.github.markusaugust.streamlord.core.SignalsDecodeException
 import io.github.markusaugust.streamlord.core.port.driven.SignalsCodec
 import tools.jackson.core.JacksonException
 import tools.jackson.databind.ObjectMapper
+import tools.jackson.databind.exc.InvalidDefinitionException
 import tools.jackson.databind.json.JsonMapper
 import kotlin.reflect.KType
 import kotlin.reflect.javaType
@@ -30,9 +32,12 @@ public class JacksonSignalsCodec(private val mapper: ObjectMapper) : SignalsCode
     @OptIn(ExperimentalStdlibApi::class)
     override fun <T : Any> decode(json: String, type: KType): T = try {
         val javaType = mapper.constructType(type.javaType)
-        mapper.readValue<T>(json, javaType) ?: throw SignalsCodecException("Signals decoded to null for $type")
-    } catch (e: JacksonException) {
+        mapper.readValue<T>(json, javaType) ?: throw SignalsDecodeException("Signals decoded to null for $type")
+    } catch (e: InvalidDefinitionException) {
+        // The type itself cannot be built, whatever the request sends: the server's to fix.
         throw SignalsCodecException("Could not decode signals into $type", e)
+    } catch (e: JacksonException) {
+        throw SignalsDecodeException("Could not decode signals into $type", e)
     }
 
     public companion object {

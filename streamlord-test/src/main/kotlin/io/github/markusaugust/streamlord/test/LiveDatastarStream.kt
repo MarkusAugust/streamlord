@@ -113,6 +113,11 @@ public class LiveDatastarStream private constructor(
      * The next element patch matching every argument given, among the events no earlier
      * `awaitPatchElements` has moved past. Reads until one arrives. The arguments are those of
      * [DatastarEvents.assertPatchElements].
+     *
+     * A patch that does not match is moved past for good, which makes the order of the waits an
+     * assertion: when the server sends `#b` before `#a`, a wait for `#a` moves past `#b`, and a
+     * wait for `#b` after it waits for another. To check what has arrived in any order, assert on
+     * [received] instead.
      */
     public suspend fun awaitPatchElements(
         selector: String? = null,
@@ -331,7 +336,8 @@ public class LiveDatastarStream private constructor(
             val request =
                 HttpRequest
                     .newBuilder(uri)
-                    .timeout(timeout.toJavaDuration())
+                    // An infinite wait is no timeout at all; the JDK cannot hold one that long.
+                    .apply { if (timeout.isFinite()) timeout(timeout.toJavaDuration()) }
                     .header("Datastar-Request", "true")
                     .header("Accept", "text/event-stream")
                     .apply { headers.forEach { (name, value) -> header(name, value) } }
@@ -351,6 +357,12 @@ public class LiveDatastarStream private constructor(
             if (response.statusCode() != 200 || !isStream) {
                 body.close()
                 throw AssertionError("Expected a 200 text/event-stream from $uri, got ${response.statusCode()} '$contentType'")
+            }
+            // The JDK's client hands over the body as sent; a gzipped one would read as noise.
+            val encoding = response.headers().firstValue("Content-Encoding").orElse("identity")
+            if (!encoding.trim().equals("identity", ignoreCase = true)) {
+                body.close()
+                throw AssertionError("$uri answered with Content-Encoding '$encoding', which this reader does not decode; leave Accept-Encoding out of the headers")
             }
             // The stream itself is what close() closes: a read in progress holds the reader's lock.
             return of(InputStreamReader(body, Charsets.UTF_8), onClose = body)

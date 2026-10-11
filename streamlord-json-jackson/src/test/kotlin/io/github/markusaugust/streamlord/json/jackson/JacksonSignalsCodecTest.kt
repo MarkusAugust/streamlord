@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.json.jackson
 
 import io.github.markusaugust.streamlord.core.SignalsCodecException
+import io.github.markusaugust.streamlord.core.SignalsDecodeException
 import io.github.markusaugust.streamlord.core.port.driven.decode
 import io.github.markusaugust.streamlord.core.port.driven.encode
 import kotlin.test.Test
@@ -26,7 +27,7 @@ class JacksonSignalsCodecTest {
 
     @Test
     fun `wraps failures`() {
-        assertFailsWith<SignalsCodecException> { codec.decode<Signals>("""{"count":"no"}""") }
+        assertFailsWith<SignalsDecodeException> { codec.decode<Signals>("""{"count":"no"}""") }
     }
 
     // The browser sends its whole store; the type names only what one handler accepts.

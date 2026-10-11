@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.spring
 
 import io.github.markusaugust.streamlord.core.SignalsCodecException
+import io.github.markusaugust.streamlord.core.SignalsDecodeException
 import io.github.markusaugust.streamlord.core.SignalsTooLargeException
 import io.github.markusaugust.streamlord.core.StreamlordException
 import io.github.markusaugust.streamlord.core.application.Streamlord
@@ -30,7 +31,10 @@ class StreamlordExceptionHandlerTest {
         fun read(request: HttpServletRequest): String = request.readSignals(streamlord).toString()
 
         @PostMapping("/codec")
-        fun codec(): String = throw SignalsCodecException("Cannot construct instance of `com.example.internal.Secret`")
+        fun codec(): String = throw SignalsDecodeException("Cannot construct instance of `com.example.internal.Secret`")
+
+        @PostMapping("/encode")
+        fun encode(): String = throw SignalsCodecException("JSON cannot represent NaN")
     }
 
     @RestControllerAdvice
@@ -68,6 +72,14 @@ class StreamlordExceptionHandlerTest {
         assertFalse(response.contentAsString.contains("Secret"), response.contentAsString)
     }
 
+    // A value the server could not encode is its own bug, not a bad request.
+    @Test
+    fun `a failure to encode is left alone, to be the 500 it is`() {
+        val thrown = runCatching { mvc(StreamlordExceptionHandler()).post("/encode", "{}") }.exceptionOrNull()
+
+        assertTrue(generateSequence(thrown) { it.cause }.any { it is SignalsCodecException }, "$thrown")
+    }
+
     @Test
     fun `without it the exception is not handled`() {
         val thrown = runCatching { mvc().post("/read", "query=gate") }.exceptionOrNull()
@@ -89,7 +101,7 @@ class StreamlordExceptionHandlerTest {
         fun large(): String = throw SignalsTooLargeException(actualSize = 32, maxSize = 16)
 
         @PostMapping("/codec")
-        fun codec(): String = throw SignalsCodecException("Cannot construct instance of `com.example.internal.Secret`")
+        fun codec(): String = throw SignalsDecodeException("Cannot construct instance of `com.example.internal.Secret`")
     }
 
     private fun flux(): WebTestClient =

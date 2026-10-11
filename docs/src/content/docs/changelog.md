@@ -13,6 +13,11 @@ with a sentence about what to do.
 Servlet 6.1), and Streamlord needs kotlinx-coroutines 1.10.2 or newer, which Boot 4 already pins.
 On Boot 3, stay on 0.11.1. Ktor applications change nothing.
 
+**Map `SignalsDecodeException` to `400`, not `SignalsCodecException`.** The new subclass is what a
+codec throws when the request's signals cannot be read. A mapping of the old type still catches
+it, but also turns a value the server could not encode, its own bug, into a `400`. See
+[Security](/security/).
+
 ## 0.11.1
 
 **Nothing to change in your code.** The modules are the same as in 0.11.0; this release carries
