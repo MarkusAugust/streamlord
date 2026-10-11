@@ -707,7 +707,8 @@ public class MarkupValidator(
                         )
                     continue
                 }
-                issues += validateModifierArgs(mspec, mod.args, mstart, mend, spec).map { it.copy(link = link) }
+                val present = parsed.modifiers.filter { it !== mod }.map { it.name }
+                issues += validateModifierArgs(mspec, mod.args, mstart, mend, spec, present).map { it.copy(link = link) }
             }
             val value = attr.value
             if (value != null && spec.valueKind == ValueKind.EXPRESSION && value.isNotBlank() && !hasTemplateSyntax(value)) {
@@ -841,7 +842,8 @@ public class MarkupValidator(
 
     /**
      * `debounce_150ms` read as `debounce.150ms`, when the part before the first underscore is a
-     * modifier of [spec] that takes arguments and the rest is plain words; null otherwise.
+     * modifier of [spec] that takes arguments, the rest is plain words, and those words are
+     * arguments it takes; null otherwise, so the fix never offers something that fails in turn.
      */
     private fun dottedArguments(
         name: String,
@@ -852,7 +854,9 @@ public class MarkupValidator(
         val head = name.substring(0, underscore)
         val modifier = spec.modifiers.firstOrNull { it.name == head } ?: return null
         if (modifier.type == ModifierType.FLAG) return null
-        return head + "." + name.substring(underscore + 1).replace('_', '.')
+        val args = name.substring(underscore + 1).split('_')
+        if (validateModifierArgs(modifier, args, 0, 0, spec).isNotEmpty()) return null
+        return head + "." + args.joinToString(".")
     }
 
     private fun validateModifierArgs(
@@ -861,6 +865,7 @@ public class MarkupValidator(
         start: Int,
         end: Int,
         attribute: AttributeSpec,
+        present: Collection<String> = emptyList(),
     ): List<Issue> {
         val issues = ArrayList<Issue>()
 
@@ -875,12 +880,17 @@ public class MarkupValidator(
                 // __prevent.stop: a second modifier joined with a dot, read as an argument.
                 val siblings = attribute.modifiers.filter { it.type == ModifierType.FLAG && it.name != spec.name }.map { it.name }
                 if (args.isNotEmpty() && args.all { it in siblings }) {
-                    val joined = args.joinToString("") { "__$it" }
+                    // Each once, and not one the attribute already has.
+                    val joined = args.distinct().filter { it !in present }.joinToString("") { "__$it" }
                     val at = start + spec.name.length
-                    fail(
-                        "__${spec.name} takes no arguments. Each modifier starts with two underscores: __${spec.name}$joined.",
-                        listOf(Fix("Change to __${spec.name}$joined", at, end, joined)),
-                    )
+                    if (joined.isEmpty()) {
+                        fail("__${spec.name} takes no arguments.", listOf(Fix("Change to __${spec.name}", at, end, "")))
+                    } else {
+                        fail(
+                            "__${spec.name} takes no arguments. Each modifier starts with two underscores: __${spec.name}$joined.",
+                            listOf(Fix("Change to __${spec.name}$joined", at, end, joined)),
+                        )
+                    }
                 } else if (args.isNotEmpty()) {
                     fail("__${spec.name} takes no arguments.")
                 }

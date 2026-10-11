@@ -18,6 +18,10 @@ codec throws when the request's signals cannot be read. A mapping of the old typ
 it, but also turns a value the server could not encode, its own bug, into a `400`. See
 [Security](/security/).
 
+**`Requests.pathParams` and `fillPath` are gone** from `streamlord-analysis`, with the dialog they
+served. Only if you call them yourself: `Requests.routeUrl` writes a route's URL with a `{{name}}`
+for each path parameter, filled from the env file's `params`.
+
 ## 0.11.1
 
 **Nothing to change in your code.** The modules are the same as in 0.11.0; this release carries

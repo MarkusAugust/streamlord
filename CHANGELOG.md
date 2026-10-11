@@ -90,7 +90,7 @@ All notable changes to Streamlord are recorded here. The format follows
   `@RequestParam` and `@RequestHeader` from the parameter list, and Ktor's
   `queryParameters["x"]` from the handler's block. `Requests.routeUrl`, `routeHeaders` and
   `routeOptional` turn a route into what "Open in Stream Inspector" writes, a `{{name}}` for each
-  parameter. `pathParams` and `fillPath` are gone with the dialog they served.
+  parameter.
 - `streamlord-analysis`: `.streamlord/env.json` takes a fourth key, `params`, an object of texts.
   Each name in it is a variable for the URL, where its value is encoded, and the headers.
   `resolveRequest` reports a param that is missing or empty, and `withEnvVariables` adds it to
@@ -100,6 +100,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Removed
 
+- `streamlord-analysis`: `Requests.pathParams` and `fillPath`, with the dialog they served; the
+  inspector writes a `{{name}}` for each path parameter instead, through `Requests.routeUrl`.
 - Spring Boot 3 support. The Spring adapter is compiled and tested against Spring Framework 7.0
   and Servlet 6.1 (Boot 4) only, and Streamlord requires kotlinx-coroutines 1.10.2, the version
   Boot 4 pins, instead of 1.8.1. `streamlord-json-jackson2` stays, for applications on Jackson 2.
