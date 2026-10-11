@@ -6,6 +6,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-11
+
 ### Added
 
 - `streamlord-analysis`, for both editors: `indicator-without-action`, a warning on a
