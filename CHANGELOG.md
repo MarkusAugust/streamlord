@@ -22,8 +22,9 @@ All notable changes to Streamlord are recorded here. The format follows
   `requestCancellation`.
 - `Streamlord(compress = true)` and `compress` on the Ktor plugin: gzip on Ktor and Spring WebMVC
   streams whose request takes it, flushed event by event so nothing waits, with the window kept
-  across events so a repeated render costs little. WebFlux is not covered.
-  `DatastarProtocol.acceptsGzip` reads an `Accept-Encoding` header for the adapters.
+  across events so a repeated render costs little. WebFlux is not covered. With `compress` on,
+  every stream varies on `Accept-Encoding`, gzipped or not. `DatastarProtocol.acceptsGzip` reads
+  an `Accept-Encoding` header for the adapters, and takes a weight only as RFC 9110 writes it.
 - `replaceUrl(url)` and `pushUrl(url)` on a stream: the server puts the URL of the state it
   rendered in the address bar, replacing the current history entry or adding one, without a
   reload. The URL is quoted as `redirect` quotes it; pass a path on the page's own origin.
@@ -68,12 +69,16 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Changed
 
+- `StreamAuthorisation.onRefused` runs to its end even while the handler is being cancelled, so
+  a frame under way is finished rather than cut, and is given
+  `StreamAuthorisation.LAST_WORDS_LIMIT`, five seconds, and no longer; so is the end of a gzipped
+  Ktor stream after it. A write that blocks its thread, as a servlet's does, cannot be cut.
+- `SseDecoder` ignores an `id:` with a NUL in it, as the SSE spec and the browser do.
 - `streamlord-analysis`, for both editors: signal collection, for completion, `signalDrift` and
   the new check alike, honours `__case` on a keyed attribute (`data-signals:my-value__case.snake`
   is `my_value`, `__case.pascal` gives `MyValue`) and reads the keys of JSON text handed to
   `patchSignals`, as in `patchSignals("""{"count": 1}""")`. `keyName(key, case)` names the
   signal a key declares.
-
 - `streamlord-analysis`, for both editors: `Route` carries the `query` parameters and `headers`
   its handler reads, as `RouteParam`s that say whether they are required: Spring's
   `@RequestParam` and `@RequestHeader` from the parameter list, and Ktor's

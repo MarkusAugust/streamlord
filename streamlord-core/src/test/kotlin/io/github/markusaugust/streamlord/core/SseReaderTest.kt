@@ -23,6 +23,16 @@ class SseReaderTest {
     }
 
     @Test
+    fun `an id with a NUL in it is ignored, as the browser ignores it`() {
+        val wire = "id: a\u0000b\ndata: x\n\nid: c\ndata: y\n\n"
+
+        val read = SseReader().feed(wire)
+
+        assertEquals(listOf(null, "c"), read.map { it.id })
+        assertEquals(SseDecoder.messages(wire), read)
+    }
+
+    @Test
     fun `a line split anywhere reads as one line`() {
         val reader = SseReader()
         val wire = "event: datastar-patch-signals\ndata: signals {\"n\":1}\n\n"
