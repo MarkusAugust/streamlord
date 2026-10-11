@@ -40,6 +40,8 @@ ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negoti
 spring-web = { module = "org.springframework:spring-web", version.ref = "spring" }
 spring-webmvc = { module = "org.springframework:spring-webmvc", version.ref = "spring" }
 spring-test = { module = "org.springframework:spring-test", version.ref = "spring" }
+# Test-only, for :streamlord-spring: WebTestClient bound to a controller, for the WebFlux side.
+spring-webflux = { module = "org.springframework:spring-webflux", version.ref = "spring" }
 jakarta-servlet = { module = "jakarta.servlet:jakarta.servlet-api", version.ref = "servlet" }
 # Test-only, for :streamlord-spring. The WebFlux mocks in spring-test touch Publisher, so a
 # test of the nonce helper needs Reactor on the runtime classpath. The main source does not:

@@ -74,3 +74,9 @@ public final class io/github/markusaugust/streamlord/spring/ServletSseSink : io/
 	public fun write (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
+public final class io/github/markusaugust/streamlord/spring/StreamlordExceptionHandler {
+	public fun <init> ()V
+	public final fun signalsTooLarge ()Lorg/springframework/http/ResponseEntity;
+	public final fun signalsUnreadable ()Lorg/springframework/http/ResponseEntity;
+}
+
