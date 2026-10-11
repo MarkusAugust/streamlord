@@ -1,12 +1,14 @@
 package io.github.markusaugust.streamlord.spring
 
 import io.github.markusaugust.streamlord.core.SignalsCodecException
+import io.github.markusaugust.streamlord.core.SignalsTooLargeException
 import io.github.markusaugust.streamlord.core.StreamlordException
 import io.github.markusaugust.streamlord.core.application.Streamlord
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.core.annotation.Order
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.test.web.reactive.server.WebTestClient
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
@@ -79,5 +81,23 @@ class StreamlordExceptionHandlerTest {
 
         assertEquals(422, response.status)
         assertEquals("own", response.contentAsString)
+    }
+
+    @RestController
+    class Reactive {
+        @PostMapping("/large")
+        fun large(): String = throw SignalsTooLargeException(actualSize = 32, maxSize = 16)
+
+        @PostMapping("/codec")
+        fun codec(): String = throw SignalsCodecException("Cannot construct instance of `com.example.internal.Secret`")
+    }
+
+    private fun flux(): WebTestClient =
+        WebTestClient.bindToController(Reactive()).controllerAdvice(StreamlordExceptionHandler()).build()
+
+    @Test
+    fun `on WebFlux, signals over the limit are 413 and a codec failure is 400`() {
+        flux().post().uri("/large").exchange().expectStatus().isEqualTo(413).expectBody().isEmpty()
+        flux().post().uri("/codec").exchange().expectStatus().isBadRequest().expectBody().isEmpty()
     }
 }

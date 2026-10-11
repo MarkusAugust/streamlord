@@ -43,7 +43,7 @@ is not the signals you expected to `400`. The second is `JsonParseException` fro
 reader and `SignalsCodecException` from a codec, and unmapped they are a `500`: a stranger posting
 `query=gate` where JSON was expected gets a stack trace's worth of blame put on your server.
 Streamlord will not register a handler behind your back. On Spring it ships one you import
-yourself, `StreamlordExceptionHandler`; on Ktor it is three lines of `StatusPages`.
+yourself, `StreamlordExceptionHandler`; on Ktor it is three handlers in `StatusPages`.
 
 ```kotlin sample=ktor-application
 install(StatusPages) {
@@ -59,7 +59,7 @@ install(StatusPages) {
 }
 ```
 
-On Spring, WebMVC and WebFlux alike, import the advice where you configure the application:
+On Spring, WebMVC and WebFlux annotated controllers alike, import the advice where you configure the application:
 
 ```kotlin sample=spring-controller
 @org.springframework.context.annotation.Configuration
@@ -69,7 +69,8 @@ class WebConfig
 
 It answers with the status and no body, so nothing of a codec's message reaches the client, and
 it has the lowest precedence: an advice of your own with an `@Order` that handles the same
-exceptions decides instead.
+exceptions, or `Exception`, decides instead. A status needs a response that has not started, so
+read the signals before the stream opens: a failure inside the stream cuts it off instead.
 
 ## CSP
 

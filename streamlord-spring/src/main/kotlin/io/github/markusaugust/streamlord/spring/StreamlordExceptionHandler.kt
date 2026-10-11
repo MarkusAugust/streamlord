@@ -18,8 +18,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
  * missing one would turn the answer back into the `500`; nothing of the exception's message, which
  * may come from a codec and name your classes, reaches the client either way.
  *
- * Streamlord does not register it for you. Import it where you configure the application, in
- * WebMVC and WebFlux alike:
+ * Streamlord does not register it for you. Import it where you configure the application, for
+ * WebMVC and WebFlux annotated controllers alike:
  *
  * ```kotlin
  * @SpringBootApplication
@@ -28,9 +28,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
  * ```
  *
  * It has the lowest precedence. Spring asks one advice after another and the first that handles
- * the exception answers, so an advice of your own that handles any of these, or
- * `StreamlordException`, decides when it carries an `@Order` of its own; without one, the two
- * tie and Spring's registration order picks.
+ * the exception answers, so an advice of your own that handles any of these, `StreamlordException`
+ * or `Exception`, decides when it carries an `@Order` of its own; without one, the two tie and
+ * Spring's registration order picks.
+ *
+ * A status needs a response that has not started: read the signals before the stream opens, since
+ * a failure inside `datastarStream` or a streamed `Flow` cuts the stream off instead.
  */
 @RestControllerAdvice
 @Order(Ordered.LOWEST_PRECEDENCE)
