@@ -106,12 +106,24 @@ public object SseDecoder {
         return out
     }
 
+    /**
+     * The Datastar event one message carries, or `null` when it is not one of Datastar's: a
+     * comment, an event name the protocol does not define. For messages that arrive one at a
+     * time, from an [SseReader].
+     *
+     * @throws DatastarEventValidationException as [decode] does, for a Datastar frame the client
+     *   would reject.
+     */
+    public fun event(message: SseMessage): DatastarEvent? = toEvent(message)
+
     private fun toEvent(message: SseMessage): DatastarEvent? {
         // Nothing of a message is judged until its event name says it is Datastar's.
         if (message.event != DatastarProtocol.Events.PATCH_ELEMENTS && message.event != DatastarProtocol.Events.PATCH_SIGNALS) return null
         val args = group(message.data)
         val retry = message.retry?.let(::parseRetry)
-        // An empty id is valid SSE and means "no id"; the client drops its last-event-id on one.
+        // An empty id is valid SSE and means "no id"; the client drops its last-event-id on an
+        // empty `id:` line. The client skips a bare `id` with no colon, as it skips every line
+        // without one (fetch.ts:403 in Datastar 1.0.4).
         val id = message.id?.takeIf { it.isNotEmpty() }
         return when (message.event) {
             DatastarProtocol.Events.PATCH_ELEMENTS -> {

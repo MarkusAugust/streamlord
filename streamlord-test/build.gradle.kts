@@ -6,4 +6,5 @@ dependencies {
     api(project(":streamlord-core"))
 
     testImplementation(kotlin("test"))
+    testImplementation(libs.kotlinx.coroutines.test)
 }

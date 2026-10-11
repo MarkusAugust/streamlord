@@ -103,7 +103,7 @@ production, because it makes every handler fail the moment any page gains a sign
 |---|---|---|
 | `streamlord-json-kotlinx` | `KotlinxSignalsCodec` | your application already uses kotlinx.serialization |
 | `streamlord-json-jackson` | `JacksonSignalsCodec` | Spring Boot 4, which ships Jackson 3 (`tools.jackson`) |
-| `streamlord-json-jackson2` | `Jackson2SignalsCodec` | Spring Boot 3, which ships Jackson 2 (`com.fasterxml`) |
+| `streamlord-json-jackson2` | `Jackson2SignalsCodec` | your application already uses Jackson 2 (`com.fasterxml`) |
 | none | the built-in reader | you are happy reading by name |
 
 The two Jackson modules exist because Jackson 3 moved package. Taking the wrong one compiles and
@@ -137,6 +137,54 @@ get("/feed") {
 
 A signal patched to `null` is **removed**, because signal patches are RFC 7386 merge patches. That
 is not a quirk of Streamlord; it is what the protocol says, and it is how you delete.
+
+## Signals that stay in the browser
+
+Not every signal is for the server. Whether a drawer is showing, which row the cursor is on, a
+draft the reader has not sent yet: these are state the page needs and no handler reads.
+
+Start the name with an underscore and it stays behind. Every backend action (`@get`, `@post` and
+the rest) sends the store through a filter whose default excludes `/(^|\.)_/`, so `_drawerOpen`
+never travels, and neither does `form._draft`:
+
+```kotlin sample=html
+div {
+    dataSignals("_drawerOpen" to false, "query" to "")
+    button {
+        dataOnClick(toggle("_drawerOpen"))
+        +"Menu"
+    }
+    input { dataBind("query") }
+    button {
+        dataOnClick(post("/search"))
+        +"Search"
+    }
+}
+```
+
+The `@post` carries `query` and nothing else. A handler cannot trust what was never sent, so an
+underscore is also the cheapest way to keep a request small and its input surface smaller.
+
+Two options narrow it further, per action. `filterSignals` picks from the store by name, and
+`payloadExpr` sends a value of your own instead of the store:
+
+```kotlin sample=html
+div {
+    dataSignals("cart" to mapOf("items" to listOf(1, 2)), "selected" to listOf(3, 5))
+    button {
+        dataOnClick(post("/cart") { filterSignals = SignalFilter.include("^cart\\.") })
+        +"Save cart"
+    }
+    button {
+        dataOnClick(post("/rows/delete") { payloadExpr = $$"{ids: $selected}" })
+        +"Delete"
+    }
+}
+```
+
+The client fills each half of the filter on its own: set only `include`, and the default
+`exclude` still keeps the underscored names home. `payloadExpr` sends exactly the expression's
+value, so `readSignals()` on `/rows/delete` sees `ids` and nothing else.
 
 ## The size limit
 

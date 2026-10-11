@@ -8,6 +8,48 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Added
 
+- `streamlord-analysis`, for both editors: `indicator-without-action`, a warning on a
+  `data-indicator` whose element sends no request, since the indicator only tracks its own
+  element's; and quick fixes for two modifiers that parse as something else,
+  `__debounce_150ms` to `__debounce.150ms` and `__prevent.stop` to `__prevent__stop`.
+  `validateAttributes` takes the tag's text as well, so that a template construct inside the tag
+  is seen.
+- `sendLatest(states, minInterval, resumeFrom) { render }` on a stream: renders the newest state
+  and sends it, at most once per interval, and not at all when nothing changed. Each render's
+  fingerprint is its event id, so a reconnect that passes `last-event-id` back as `resumeFrom` is
+  not sent what it already shows. `SseEncoder.fingerprint` computes it. Documentation: the Live
+  views page covers commands and the view, the element that opens the stream, and
+  `requestCancellation`.
+- `Streamlord(compress = true)` and `compress` on the Ktor plugin: gzip on Ktor and Spring WebMVC
+  streams whose request takes it, flushed event by event so nothing waits, with the window kept
+  across events so a repeated render costs little. WebFlux is not covered.
+  `DatastarProtocol.acceptsGzip` reads an `Accept-Encoding` header for the adapters.
+- `replaceUrl(url)` and `pushUrl(url)` on a stream: the server puts the URL of the state it
+  rendered in the address bar, replacing the current history entry or adding one, without a
+  reload. The URL is quoted as `redirect` quotes it; pass a path on the page's own origin.
+  Documentation: a Live views page, which covers them.
+- `streamlord-test`: `LiveDatastarStream`, a stream held open and read as it arrives, for a test
+  that sends a command and waits for the patch it causes on the stream that was already there.
+  `awaitPatchElements`, `awaitSignal` and `next` wait on real time, also inside `runTest`, and fail
+  with the stream they read. `open(uri)` uses the JDK's HTTP client and `of(reader)` any other.
+  Coroutine API, for Kotlin tests.
+- `streamlord-core`: `SseReader`, which reads a stream that is still arriving and hands back each
+  message as its blank line arrives, and `SseDecoder.event` for one message at a time.
+  Documentation: a Live views page, which covers them.
+- Documentation: a Components and plain JavaScript page (attributes down and events up for
+  custom elements, window events from plain scripts, `data-ignore-morph` on both sides of a
+  morph, optimistic state rolled back on a failed fetch), and the signals page covers signals that
+  stay in the browser, `filterSignals` and `payloadExpr`.
+- `Streamlord(heartbeat = ...)` and `heartbeat` on the Ktor plugin: a `: keep-alive` comment on
+  every Ktor and Spring WebMVC stream that has written nothing for that long, so an idle proxy
+  keeps the connection open. With a `StreamAuthorisation`, an idle stream is asked again on the
+  heartbeat's schedule. WebFlux's `asServerSentEvents` is not covered. Off by default.
+- `streamlord-analysis`, for both editors: `signalReferencesInKotlin` and `signalReferencesInHtml`, every `$name` a
+  Datastar expression reads, with source offsets; `collectSignalDefinitions`, the signals a file
+  defines without the ones it only reads, plus every `$name = ...` an expression assigns; and
+  `unknownSignalIssue`, the `unknown-signal` warning for a read no definition covers, with the
+  nearest defined name as the fix. `isKnownSignal` counts `$user.name` as known when `user` is
+  defined, and `$form` when `form.email` is.
 - `streamlord-analysis`: `ServerLog`, which reads where a server says it started from its log
   (Spring Boot's Tomcat, Jetty, Undertow and Netty lines in 3.5 and 4.0, Ktor's "Responding at"),
   context path included, and which lines are warnings or errors; `RunningServer`.
@@ -20,6 +62,12 @@ All notable changes to Streamlord are recorded here. The format follows
   offset.
 
 ### Changed
+
+- `streamlord-analysis`, for both editors: signal collection, for completion, `signalDrift` and
+  the new check alike, honours `__case` on a keyed attribute (`data-signals:my-value__case.snake`
+  is `my_value`, `__case.pascal` gives `MyValue`) and reads the keys of JSON text handed to
+  `patchSignals`, as in `patchSignals("""{"count": 1}""")`. `keyName(key, case)` names the
+  signal a key declares.
 
 - `streamlord-analysis`, for both editors: `Route` carries the `query` parameters and `headers`
   its handler reads, as `RouteParam`s that say whether they are required: Spring's
@@ -34,6 +82,12 @@ All notable changes to Streamlord are recorded here. The format follows
 - `streamlord-analysis`: an env file that is not valid JSON is reported with where, such as
   `at line 3, column 1` for a comma after the last value.
 
+### Removed
+
+- Spring Boot 3 support. The Spring adapter is compiled and tested against Spring Framework 7.0
+  and Servlet 6.1 (Boot 4) only, and Streamlord requires kotlinx-coroutines 1.10.2, the version
+  Boot 4 pins, instead of 1.8.1. `streamlord-json-jackson2` stays, for applications on Jackson 2.
+
 ### Fixed
 
 - `streamlord-analysis`, for both editors: a route whose mapping had no leading slash, such as
@@ -46,6 +100,8 @@ All notable changes to Streamlord are recorded here. The format follows
   holds the rule to the JDK's own verdict.
 - `streamlord-analysis`: `Requests.emptyBodyHint`, the note the Stream Inspector shows under an
   error response that came without a body: the reason is then in the server's log.
+- Documentation: Operations said the client drops `last-event-id` when an event carries no id.
+  It keeps it, and drops it only on an empty `id:`; the page now says so, with the source line.
 
 ## [0.11.1] - 2026-10-05
 

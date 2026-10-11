@@ -1,0 +1,11 @@
+public final class io/github/markusaugust/streamlord/json/jackson/JacksonSignalsCodec : io/github/markusaugust/streamlord/core/port/driven/SignalsCodec {
+	public static final field Companion Lio/github/markusaugust/streamlord/json/jackson/JacksonSignalsCodec$Companion;
+	public fun <init> (Ltools/jackson/databind/ObjectMapper;)V
+	public fun decode (Ljava/lang/String;Lkotlin/reflect/KType;)Ljava/lang/Object;
+	public fun encode (Ljava/lang/Object;Lkotlin/reflect/KType;)Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/json/jackson/JacksonSignalsCodec$Companion {
+	public final fun default ()Lio/github/markusaugust/streamlord/json/jackson/JacksonSignalsCodec;
+}
+

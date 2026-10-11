@@ -336,7 +336,7 @@ dataText("$count")`;
 
 describe("analyzeHtml", () => {
   it("validates a template", () => {
-    const src = `<form data-on:submit__prevent="@post('/save')"><input data-bind:search data-indicator="busy" data-onn:x="1"></form>`;
+    const src = `<form data-on:submit__prevent="@post('/save')" data-indicator="busy"><input data-bind:search data-onn:x="1"></form>`;
     expect(codes(analyzeHtml(src, opts))).toEqual(["unknown-attribute"]);
   });
 
@@ -399,5 +399,39 @@ describe("sse", () => {
   });
   it("merge-patches signals", () => {
     expect(mergePatch({ a: 1, u: { n: "x", e: "y" } }, { a: null, u: { e: null, t: 1 }, l: [1] })).toEqual({ u: { n: "x", t: 1 }, l: [1] });
+  });
+});
+
+describe("near misses", () => {
+  const fixed = (src: string, fix: { start: number; end: number; text: string }) => src.slice(0, fix.start) + fix.text + src.slice(fix.end);
+
+  it("offers a dot for an argument joined with an underscore", () => {
+    const src = `<input data-on:input__debounce_150ms="@get('/search')">`;
+    const [issue] = analyzeHtml(src, opts);
+    expect(issue?.code).toBe("unknown-modifier");
+    expect(issue?.message).toContain("__debounce.150ms");
+    expect(fixed(src, issue!.fixes![0]!)).toBe(`<input data-on:input__debounce.150ms="@get('/search')">`);
+  });
+
+  it("offers two underscores for a modifier joined with a dot", () => {
+    const src = `<a data-on:click__prevent.stop="@post('/x')"></a>`;
+    const [issue] = analyzeHtml(src, opts);
+    expect(issue?.code).toBe("modifier-args");
+    expect(fixed(src, issue!.fixes![0]!)).toBe(`<a data-on:click__prevent__stop="@post('/x')"></a>`);
+  });
+
+  it("flags an indicator on an element that sends nothing", () => {
+    expect(analyzeHtml(`<span data-indicator:busy></span>`, opts).map((i) => i.code)).toEqual(["indicator-without-action"]);
+  });
+
+  it("leaves an indicator beside an attribute that sends a request", () => {
+    for (const src of [
+      `<button data-on:click="@post('/save')" data-indicator:busy></button>`,
+      `<div data-init="@get('/feed')" data-indicator="loading"></div>`,
+      `<div data-effect="$q &amp;&amp; @get('/search')" data-indicator:busy></div>`,
+      `<button data-on:click="{{ action }}" data-indicator:busy></button>`,
+    ]) {
+      expect(analyzeHtml(src, opts).map((i) => i.code)).toEqual([]);
+    }
   });
 });

@@ -8,8 +8,9 @@ description: "Reconnects, heartbeats, proxies and threads: what a long-lived str
 > Gorvek of Bonereach
 
 Datastar's documentation does not describe what its client does when a connection drops, and no
-SDK describes it either. Everything here was read out of the Datastar 1.0.4 client source or
-measured against a deployed service, and each claim says which. The ones marked **observed** are
+SDK describes it either. Everything here was read out of the Datastar 1.0.4 client source,
+measured against a deployed service or in this repository's own tests, and each claim says which;
+the few that are neither say so. The ones marked **observed** are
 behaviour of the client, not promises of the protocol. Check them against the version you ship.
 
 ## Your stream dies when the reader switches tabs
@@ -85,10 +86,26 @@ and Datastar's own reference never mentions.
 protocol default of 1000 ms, as the specification says to.
 
 **`id:`**, when you send one, is kept by the client and put on the **next** attempt as a
-`last-event-id` request header (`fetch.ts:662`). **Observed.** Send no id and the header is
-dropped again.
+`last-event-id` request header (`fetch.ts:662`). **Observed.** An event without an id leaves the
+header as it was: the client changes it only when an `id:` line arrives, and drops it only on an
+empty one (`fetch.ts:665`). **Observed.** Streamlord cannot send an empty id; it refuses one when
+the event is built.
 
-That is the whole of a resumable stream: number your events, read the header, start after it.
+So once a stream has sent an id, every retry and every reopen after a hidden tab carries the last
+id the client received. The header goes only when the action runs again. A new `@get` starts
+without it, unless its own `headers` option passes one.
+
+That is what lets the sample below resume across any number of retries, not only the first. The
+sample gives every event an id. Events without one that follow the last id are sent again, on a
+retry or a reopen, by a server that starts after the header.
+
+The client takes the id as soon as its line arrives (`fetch.ts:421`), and Streamlord writes `id:`
+before the `data:` lines. **Observed.** A connection that drops partway through a frame leaves
+the client holding the id of an event it never applied, and a server that starts after it skips
+that event. Where losing one matters, keep frames small, or resume from one id earlier and let
+the page take a repeat.
+
+Number your events, read the header, start after it: that is the whole of a resumable stream.
 
 ```kotlin sample=ktor-routing
 get("/feed") {
@@ -113,7 +130,44 @@ case-insensitively, so either spelling finds it.
 ## Heartbeats
 
 An idle proxy closes a connection that has been silent too long. An SSE comment is the cheapest
-thing you can put on the wire: the client ignores it, the proxy sees traffic.
+thing you can put on the wire: the client ignores it, the proxy sees traffic. Set an interval once
+and every stream gets one:
+
+```kotlin sample=ktor-application
+install(StreamlordPlugin) { heartbeat = 15.seconds }
+```
+
+On Spring it is a parameter of the bean you already declare,
+`Streamlord(codec = JacksonSignalsCodec(mapper), heartbeat = 15.seconds)`. A stream that has written nothing
+for that long gets a `: keep-alive` comment, and any frame starts the wait again, so a busy stream
+carries none. The heartbeat runs alongside your handler and stops when it returns.
+
+Fifteen seconds sits under every default idle timeout we have met. Raise it once you know your
+own proxy's.
+
+Three things it does not do:
+
+- **It does not keep Datastar's client alive.** The client has no idle timeout of its own: its
+  `fetch` runs without a timer, and its retry counter resets when a 200 arrives, not per frame. The
+  heartbeat is for what sits between you and the browser, and for finding out on the server that
+  the reader has gone: the comment is a write, and a write to a closed connection fails.
+- **It does not run beside a blocked thread.** On WebMVC the stream runs inside `runBlocking` on
+  one thread. A handler that blocks that thread, a JDBC call or a `Thread.sleep`, holds the
+  heartbeat back until it returns. Suspend instead, or move the blocking call to
+  `Dispatchers.IO` with `withContext`.
+- **It does not reach WebFlux.** A `Flow` handed to WebFlux never passes through a Streamlord
+  stream, so a heartbeat on the bean does nothing there. Merge a ticker into the flow after
+  `asServerSentEvents()`, each tick a
+  `ServerSentEvent.builder<String>().comment("keep-alive").build()`, or raise the proxy's idle
+  timeout above your quietest stretch.
+
+With a [`StreamAuthorisation`](#asking-again-while-the-stream-runs) on the stream, the comment
+asks the question like any other write once `every` has passed, so an idle stream is checked on
+the heartbeat's schedule and a refusal ends it there.
+
+The interval is one per `Streamlord`. A stream that needs a shorter one can write its own on top,
+by hand; a longer one, or none, takes a second `Streamlord`, which on Spring is a second bean
+handed to that controller:
 
 ```kotlin sample=ktor-routing
 get("/slow") {
@@ -121,7 +175,7 @@ get("/slow") {
         coroutineScope {
             val heartbeat = launch {
                 while (true) {
-                    delay(15.seconds)
+                    delay(5.seconds)
                     comment()
                 }
             }
@@ -137,8 +191,60 @@ get("/slow") {
 }
 ```
 
-Fifteen seconds sits under every default idle timeout we have met. Raise it once you know your
-own proxy's.
+## Compression
+
+A view that re-renders a whole region sends most of the same markup again on every change. Turn
+gzip on once:
+
+```kotlin sample=ktor-application
+install(StreamlordPlugin) { compress = true }
+```
+
+On Spring it is the bean, `Streamlord(compress = true)`, and `datastarStream` needs the request
+to see what the browser accepts. A stream is gzipped only when the request's `Accept-Encoding`
+takes it, and then carries `Content-Encoding: gzip`; with `compress` on, every stream carries
+`Vary: Accept-Encoding`, on Ktor and on a WebMVC response not yet committed. It works over plain
+HTTP too; browsers ask for Brotli only over HTTPS, which is how they behave in general and is
+**not measured here**.
+
+Each event is flushed through the compressor whole, a sync flush per event, and the compressor
+keeps its 32 KiB window from one event to the next. **Measured** in `GzipTest`, through the Ktor
+sink with the JDK's gzip at its default level, on a table of 200 rows, each
+`<tr id="row-N"><td class="name">Item N</td><td class="qty">…</td></tr>`, re-rendered whole:
+
+| | Bytes |
+|---|---|
+| One render, as text | 14,733 |
+| The first render, gzipped | 1,476 |
+| The next render, one row changed | 251 |
+| A heartbeat comment | 20 |
+
+The second render is cheap because the first is still in the window. A render larger than 32 KiB
+no longer finds the last one there, and costs about what the first did; that follows from the
+window's size and is **not measured here**. That browsers decode a
+gzipped `fetch` body as it arrives, event by event, is how they behave in general and is **not
+measured here**.
+
+Four things to know:
+
+- **Ktor's own `Compression` plugin stays off a stream gzipped here,** because the content already
+  names its encoding; a test installs the plugin to show it. Ktor 3.6.0's plugin does compress a
+  bare event stream it is pointed at, so leave `text/event-stream` out of its types. nginx's
+  `gzip on` is documented to leave an encoded response alone, **not measured here**.
+- **WebFlux is not covered.** A `Flow` handed to WebFlux never passes through a Streamlord stream.
+  Spring Boot's `server.compression` leaves `text/event-stream` out of its default types, by its
+  documentation; whether it flushes per event when you add it is **not measured here**.
+- **Mind what shares a compressed stream.** Compression leaks how much two pieces of text have in
+  common through the size of the result, and the window carries across events, so a secret in one
+  event and text an attacker chose in another, up to 32 KiB later, compress together. Each event
+  is flushed on its own, so its size shows through TLS one event at a time. An attacker who can
+  trigger the stream, from a cross-site request or by writing what another user's stream shows,
+  and who can watch the sizes of encrypted traffic, can recover the secret a little at a time.
+  Keep tokens and other secrets out of streams that carry text anyone else can influence, or leave
+  those streams uncompressed.
+- **A proxy has to pass it through as it comes.** `X-Accel-Buffering: no`, below, tells nginx. A
+  CDN that decompresses and re-encodes may hold events back, **not measured here**; the Railway
+  measurement below was taken without gzip.
 
 ## Through the proxy
 
@@ -336,7 +442,8 @@ get("/feed") {
 }
 ```
 
-`redirect("/login")` works there too, and so does anything else the stream can send.
+`redirect("/login")` works there too, and so does anything else the stream can send. It has
+`StreamAuthorisation.LAST_WORDS_LIMIT`, five seconds, to say it.
 
 What the client does next is the rule from [further up this page](#when-datastar-reconnects-and-when-it-does-not):
 a 200 stream that ends cleanly does not reconnect under the default `retry: 'auto'`, which is what
