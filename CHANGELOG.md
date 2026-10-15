@@ -30,21 +30,22 @@ All notable changes to Streamlord are recorded here. The format follows
 ### Changed
 
 - Some events that could be built before now throw `DatastarEventValidationException`, and so does
-  an `SseFrame` built by hand: a `retry` under 1 ms or over `Int.MAX_VALUE` ms, and an `eventId`
-  with a character above U+00FF or a space or tab at either end. Under 1 ms the line read
-  `retry: 0`, which has the client reconnect at once without end; above the limit the browser's
-  timer overflows. `fetch` cannot send such an id back as `last-event-id`, so every reconnect
-  failed, or it strips the spaces and the server got another id. A `retry` that writes as 1000,
-  such as 1000.5 ms, is now the default and left off, in `SseFrame.render` and `toServerSentEvent`.
+  an `SseFrame` built by hand: a `retry` that is not a whole number of milliseconds from 1 to
+  `Int.MAX_VALUE`, and an `eventId` that is not printable ASCII or has a space at either end. The
+  line carries whole milliseconds, so a fraction was cut off, and under one it read `retry: 0`, a
+  reconnect with no wait whose backoff never grows; above the limit the browser's timer overflows.
+  The id goes back as the `last-event-id` header, and only printable ASCII survives that: `fetch`
+  cannot send above U+00FF, Tomcat and Netty answer a control character with 400, Ktor's CIO turns
+  Latin-1 into U+FFFD, and edge spaces are stripped.
 - `SseDecoder`, `SseReader` and with them `streamlord-test` (`datastarEvents`, `DatastarEvents`,
   `LiveDatastarStream`) read a stream as Datastar's client does rather than as the browser's
   `EventSource`, and `SseDecoder` now reads through `SseReader`, so a text and a stream still
   arriving are read by one parser. A line without a colon is skipped, so a bare `event` or `id`
   keeps the value before it, and a byte order mark before a field or a value is dropped. An `id`
-  is kept in `messages()` as written; decoding fails on one the client could not send back as
-  `last-event-id`, with a NUL or a character above U+00FF in it, since every reconnect would then
-  fail. A `retry` that is not a whole number of milliseconds fails too, and so does `retry: 0`,
-  which has the client reconnect at once without end. Both
+  is kept in `messages()` as written; decoding fails on one that would not come back as written
+  as `last-event-id`, by the rule events are built with: printable ASCII, no space at either
+  end. A `retry` that is not a whole number of milliseconds from 1 to `Int.MAX_VALUE` fails too.
+  Both
   are checked on every message, Datastar's or not, and on an unfinished one at the end, since
   the client takes them per line; `SseReader.finish()` and `LiveDatastarStream` check that last
   one as well. A data line with no space after its key fails: the client would read the key as

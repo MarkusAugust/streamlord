@@ -83,7 +83,8 @@ and Datastar's own reference never mentions.
 
 **`retry:`** sets the client's base retry interval, overriding
 `retryInterval` (`fetch.ts:669`). **Observed.** It holds for the rest of the action, across
-reconnects, until a later frame sets another, and `retryMaxWait` does not cap it. Streamlord omits
+reconnects, until a later frame sets another. The first reconnect waits the full value;
+`retryMaxWait` only caps the backoff steps after it (`fetch.ts:539-542`). Streamlord omits
 the line when it writes as the protocol default of 1000 ms, as the specification says to, so a
 stream that has changed the interval goes back to it with 999 or 1001 ms:
 
@@ -92,18 +93,22 @@ patchSignals("phase" to "busy", retry = 5.seconds)
 patchSignals("phase" to "idle", retry = 1001.milliseconds)
 ```
 
-A retry runs from 1 ms to `Int.MAX_VALUE` ms. Under a millisecond the line would read `retry: 0`,
-and the client would reconnect at once and again without end: `retryMaxCount` only counts
-attempts that never reach a 200. Above the limit the browser's timer overflows. An event with
-either fails when it is built.
+A retry is a whole number of milliseconds from 1 to `Int.MAX_VALUE`, since the line carries whole
+milliseconds. Under one it would read `retry: 0`: a reconnect with no wait, whose backoff never
+grows, since zero times `retryScaler` is zero. Above the limit the browser's timer overflows. An
+event with either fails when it is built. A short retry has a cost of its own: a server that
+answers 200 and then drops the connection is reconnected to on that schedule without end, since
+`retryMaxCount` only counts attempts that never reach a 200.
 
 **`id:`**, when you send one, is kept by the client and put on the **next** attempt as a
 `last-event-id` request header (`fetch.ts:662`). **Observed.** An event without an id leaves the
 header as it was: the client changes it only when an `id:` line arrives, and drops it only on an
 empty one (`fetch.ts:665`). **Observed.** Streamlord cannot send an empty id; it refuses one when
-the event is built. It also refuses an id the client could not send back as it is: one with a
-character above U+00FF, which `fetch` cannot put in a header, so every reconnect would fail, and
-one with a space or tab at either end, which `fetch` strips, so the server would get another id.
+the event is built. It also refuses an id that would not come back as it was written: the id is
+printable ASCII, with no space at either end. `fetch` cannot send a character above U+00FF, Node's
+`fetch` refuses a control character, Tomcat and Netty answer one with 400, which ends the client's
+retries, and Ktor's CIO reads the header as UTF-8, so a Latin-1 character arrives as U+FFFD. A
+space at either end is stripped on the way.
 
 So once a stream has sent an id, every retry and every reopen after a hidden tab carries the last
 id the client received. The header goes only when the action runs again. A new `@get` starts

@@ -97,9 +97,9 @@ The decoder reads the body the way Datastar's client does, so a test cannot pass
 the client would not act on: a last frame with no blank line after it is not an event, a line
 without a colon is skipped, and a frame the client would reject fails the test instead of being
 read charitably. That includes, on any message, Datastar's or not, an `id` the client could not
-send back as `last-event-id` (one with a NUL or a character above U+00FF in it) and a `retry`
-that is not a whole number of milliseconds, or is zero, since the client takes both from every
-message it reads. `LiveDatastarStream` judges the end of a stream the same way.
+send back as `last-event-id` unchanged (anything but printable ASCII, or a space at either end)
+and a `retry` that is not a whole number of milliseconds from 1 to `Int.MAX_VALUE`, since the
+client takes both from every message it reads. `LiveDatastarStream` judges the end of a stream the same way.
 
 `datastarEvents` returns a `List<DatastarEvent>`, so your own assertions work on it unchanged and
 these are a convenience rather than a cage. `events.messages` has the raw SSE messages too, for a
