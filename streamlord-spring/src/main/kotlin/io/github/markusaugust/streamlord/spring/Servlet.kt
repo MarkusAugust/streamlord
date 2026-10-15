@@ -22,6 +22,7 @@ import java.io.Writer
 import java.nio.charset.StandardCharsets
 import java.util.zip.GZIPOutputStream
 import kotlin.reflect.typeOf
+import kotlin.time.Duration
 
 /*
  * Spring WebMVC (servlet) integration.
@@ -46,13 +47,21 @@ import kotlin.reflect.typeOf
  *   HTTP/1.1 header, and with the request at hand it is only set for HTTP/1.1. With
  *   [Streamlord.compress] on, the stream is gzipped when this request's `Accept-Encoding` takes
  *   it; without the request, it is not.
+ * @param heartbeat A keep-alive comment after this long without a frame, for this stream alone,
+ *   or `null` for none. Defaults to the bean's [Streamlord.heartbeat]. One that is not positive
+ *   throws here, while the controller can still answer with a status.
  */
+// A stable JVM name: without it, the Duration parameter mangles the name with a hash of the
+// signature, which no Java caller can call and every new parameter would change.
+@JvmName("datastarStream")
 public fun HttpServletResponse.datastarStream(
     streamlord: Streamlord = Streamlord.Default,
     request: HttpServletRequest? = null,
     authorisation: StreamAuthorisation? = null,
+    heartbeat: Duration? = streamlord.heartbeat,
     block: suspend DatastarStream.() -> Unit,
 ): StreamingResponseBody {
+    require(heartbeat == null || heartbeat.isPositive()) { "heartbeat must be positive, or null for none" }
     // Read first: a committed response has sent its headers, so a body gzipped without them is
     // noise, and a container refuses prepareForSse's setBufferSize on it anyway.
     val committed = isCommitted
@@ -68,7 +77,7 @@ public fun HttpServletResponse.datastarStream(
     return StreamingResponseBody { output ->
         if (!gzip) {
             val writer = OutputStreamWriter(output, StandardCharsets.UTF_8)
-            runBlocking { streamlord.stream(ServletSseSink(writer, this@datastarStream), authorisation, block) }
+            runBlocking { streamlord.stream(ServletSseSink(writer, this@datastarStream), authorisation, heartbeat, block) }
             writer.flush()
             return@StreamingResponseBody
         }
@@ -76,7 +85,7 @@ public fun HttpServletResponse.datastarStream(
         val body = SyncGzipOutputStream(output)
         try {
             val writer = OutputStreamWriter(body, StandardCharsets.UTF_8)
-            runBlocking { streamlord.stream(ServletSseSink(writer, this@datastarStream), authorisation, block) }
+            runBlocking { streamlord.stream(ServletSseSink(writer, this@datastarStream), authorisation, heartbeat, block) }
             writer.flush()
             // Only after a stream that ended well; one cut short is left for the client to see fail.
             body.finish()
@@ -87,12 +96,32 @@ public fun HttpServletResponse.datastarStream(
 }
 
 /** Open a Datastar SSE stream that drains [events] until the flow completes. */
+@JvmName("datastarStream")
 public fun HttpServletResponse.datastarStream(
     events: Flow<DatastarEvent>,
     streamlord: Streamlord = Streamlord.Default,
     request: HttpServletRequest? = null,
     authorisation: StreamAuthorisation? = null,
-): StreamingResponseBody = datastarStream(streamlord, request, authorisation) { sendAll(events) }
+    heartbeat: Duration? = streamlord.heartbeat,
+): StreamingResponseBody = datastarStream(streamlord, request, authorisation, heartbeat) { sendAll(events) }
+
+/** [datastarStream] as 0.12 had it, before `heartbeat`, for code compiled against it. */
+@Deprecated("Kept for binary compatibility.", level = DeprecationLevel.HIDDEN)
+public fun HttpServletResponse.datastarStream(
+    streamlord: Streamlord = Streamlord.Default,
+    request: HttpServletRequest? = null,
+    authorisation: StreamAuthorisation? = null,
+    block: suspend DatastarStream.() -> Unit,
+): StreamingResponseBody = datastarStream(streamlord, request, authorisation, streamlord.heartbeat, block)
+
+/** The [Flow] variant of [datastarStream] as 0.12 had it, for code compiled against it. */
+@Deprecated("Kept for binary compatibility.", level = DeprecationLevel.HIDDEN)
+public fun HttpServletResponse.datastarStream(
+    events: Flow<DatastarEvent>,
+    streamlord: Streamlord = Streamlord.Default,
+    request: HttpServletRequest? = null,
+    authorisation: StreamAuthorisation? = null,
+): StreamingResponseBody = datastarStream(events, streamlord, request, authorisation, streamlord.heartbeat)
 
 /**
  * Set the headers an SSE response needs and disable buffering. Called by [datastarStream].
