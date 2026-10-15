@@ -32,8 +32,8 @@ owns the Content Security Policy nonce at both ends and gives `call.cspNonce` it
 be asked again whether it may still run, which is on [Operations](/operations/).
 
 `heartbeat` in the plugin writes a keep-alive comment on every stream that has been silent that
-long, for the proxies in between, unless the stream passes a `heartbeat` of its own to
-`respondDatastar`; it is on [Operations](/operations/#heartbeats).
+long, 30 seconds unless you set it, for the proxies in between, unless the stream passes a
+`heartbeat` of its own to `respondDatastar`; it is on [Operations](/operations/#heartbeats).
 `compress` gzips every stream whose request takes it; it is on
 [Operations](/operations/#compression).
 
@@ -81,8 +81,9 @@ their frames.
 
 Ktor does not cancel a handler because its client has gone. A stream that keeps writing ends
 when a write fails with an `IOException`, which usually takes a few writes after the client left:
-the first ones still land in the operating system's buffer. A stream that waits without writing,
-for an event that has not happened yet, waits on with nobody listening.
+the first ones still land in the operating system's buffer. The heartbeat, on by default, makes a
+stream that waits write too, so it ends a few heartbeats after the client left. With the heartbeat
+off, a stream that waits for an event that has not happened yet waits on with nobody listening.
 
 Install Ktor's `HttpRequestLifecycle` on the route, and the handler is cancelled the moment the
 connection closes:

@@ -101,6 +101,11 @@ client would reject fails the test instead of being read charitably.
 these are a convenience rather than a cage. `events.messages` has the raw SSE messages too, for a
 test about a heartbeat comment or a resume id.
 
+A stream that is silent for five seconds carries `: keep-alive` comments by default. They are
+messages, not events, so the event assertions never see them. Under `runTest`, virtual time skips
+ahead whenever every coroutine waits, so a stream whose block waits on a real thread writes comment
+after comment without pause: give such a test `Streamlord(heartbeat = null)`.
+
 Nothing in `streamlord-test` depends on a test framework. A failure is an `AssertionError`, which
 every runner understands, so kotlin.test, JUnit 4 and 5, Kotest and TestNG all work and none of
 them is imposed on you. The module's only dependency is `streamlord-core`.

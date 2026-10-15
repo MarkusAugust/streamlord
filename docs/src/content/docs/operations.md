@@ -130,27 +130,36 @@ case-insensitively, so either spelling finds it.
 ## Heartbeats
 
 An idle proxy closes a connection that has been silent too long. An SSE comment is the cheapest
-thing you can put on the wire: the client ignores it, the proxy sees traffic. Set an interval once
-and every stream gets one:
+thing you can put on the wire: the client ignores it, the proxy sees traffic. Every stream
+Streamlord opens has one: a stream that has written nothing for 30 seconds gets a `: keep-alive`
+comment, and any frame starts the wait again, so a busy stream carries none. The heartbeat runs
+alongside your handler and stops when it returns.
+
+The first comes sooner, after five seconds of silence from the start. Some servers send no
+headers until the first byte of the body and give up on a response that has written nothing for a
+while: Netty does after ten seconds. A stream that writes within those five seconds carries no
+early comment.
+
+Thirty seconds sits under the idle timeout of most proxies, but a proxy that closes after exactly
+thirty silent seconds races it. Set the interval below your proxy's, once, or turn it off with
+`null`:
 
 ```kotlin sample=ktor-application
 install(StreamlordPlugin) { heartbeat = 15.seconds }
 ```
 
 On Spring it is a parameter of the bean you already declare,
-`Streamlord(codec = JacksonSignalsCodec(mapper), heartbeat = 15.seconds)`. A stream that has written nothing
-for that long gets a `: keep-alive` comment, and any frame starts the wait again, so a busy stream
-carries none. The heartbeat runs alongside your handler and stops when it returns.
-
-Fifteen seconds sits under every default idle timeout we have met. Raise it once you know your
-own proxy's.
+`Streamlord(codec = JacksonSignalsCodec(mapper), heartbeat = 15.seconds)`.
 
 Three things it does not do:
 
 - **It does not keep Datastar's client alive.** The client has no idle timeout of its own: its
   `fetch` runs without a timer, and its retry counter resets when a 200 arrives, not per frame. The
   heartbeat is for what sits between you and the browser, and for finding out on the server that
-  the reader has gone: the comment is a write, and a write to a closed connection fails.
+  the reader has gone: the comment is a write, and a write to a closed connection fails. It
+  takes a few: the first still land in the operating system's buffer, and on Ktor's CIO over a
+  local socket the stream ended about five intervals after the client left, two and a half
+  minutes at the default.
 - **It does not run beside a blocked thread.** On WebMVC the stream runs inside `runBlocking` on
   one thread. A handler that blocks that thread, a JDBC call or a `Thread.sleep`, holds the
   heartbeat back until it returns. Suspend instead, or move the blocking call to

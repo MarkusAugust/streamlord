@@ -75,8 +75,9 @@ Over HTTP/1.1 a browser holds six connections per origin, across every tab, and 
 occupies one for as long as it is open. Serve over HTTP/2, or keep to one stream per page.
 
 `@get` closes the stream while the tab is hidden and opens it again when it comes back, which
-the fingerprint makes cheap; `openWhenHidden = true` keeps it open instead. The stream also wants
-a [heartbeat](/operations/#heartbeats) if a proxy sits in front of it. Testing the whole loop,
+the fingerprint makes cheap; `openWhenHidden = true` keeps it open instead. Its
+[heartbeat](/operations/#heartbeats), on by default, keeps a proxy in front of it from closing it
+while nothing changes. Testing the whole loop,
 command in and patch out on a stream already open, is on [Testing](/testing/#a-stream-that-stays-open).
 
 ## The address bar belongs to the server
