@@ -83,7 +83,9 @@ public interface DatastarStream {
      *
      * A [StateFlow][kotlinx.coroutines.flow.StateFlow] is the usual source: it starts with the
      * current state, which is what a stream that has just opened needs first, and it never
-     * completes, so the stream lives until the reader leaves.
+     * completes, so the stream lives until it is cancelled. When the reader leaves, Ktor cancels
+     * it only with its `HttpRequestLifecycle` plugin installed; otherwise the stream ends at a
+     * write that fails, and without a heartbeat a view that does not change writes nothing.
      *
      * It is for views: what the events describe must be the whole of what the region shows, and
      * nothing else may patch it, or an unchanged render that is skipped would leave it wrong. A

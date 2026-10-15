@@ -104,7 +104,7 @@ abstract class ExtractDocSamples : DefaultTask() {
     private fun wrap(context: String, body: String, name: String): String? =
         when (context) {
             "ktor-routing" ->
-                "import io.ktor.http.*\nimport io.ktor.server.application.*\nimport io.ktor.server.routing.*\n" +
+                "import io.ktor.http.*\nimport io.ktor.server.application.*\nimport io.ktor.server.http.*\nimport io.ktor.server.routing.*\n" +
                     "import io.ktor.server.response.*\nimport io.ktor.utils.io.*\n$imports\n\n" +
                     "fun io.ktor.server.routing.Route.$name() {\n$body\n}\n"
             "ktor-application" ->
