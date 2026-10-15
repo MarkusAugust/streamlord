@@ -174,8 +174,9 @@ asks the question like any other write once `every` has passed, so an idle strea
 the heartbeat's schedule and a refusal ends it there.
 
 The interval is set once per `Streamlord`, and one stream can take its own: `heartbeat` on
-`respondDatastar` or `datastarStream`, or `null` for none. A report that works for two minutes
-before it has anything to say keeps the connection warm on its own schedule:
+`respondDatastar` or `datastarStream`, or `null` for none. A report that goes quiet for two
+minutes after its first patch, behind a proxy stricter than the rest, can keep its own connection
+warm without changing anyone else's:
 
 ```kotlin sample=ktor-routing
 get("/report") {
@@ -187,8 +188,22 @@ get("/report") {
 }
 ```
 
-On Spring it is the same parameter, `response.datastarStream(streamlord, request, heartbeat =
-5.seconds) { … }`. One that is not positive throws where you call it, before the response starts.
+On Spring it is the same parameter:
+
+```kotlin sample=spring
+@GetMapping("/report")
+fun report(
+    request: HttpServletRequest,
+    response: HttpServletResponse,
+): org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody =
+    response.datastarStream(request = request, heartbeat = 5.seconds) {
+        patchElements("""<div id="report">Working</div>""")
+        delay(120.seconds)
+        patchElements("""<div id="report">Done</div>""")
+    }
+```
+
+One that is not positive throws where you call it, before the response starts.
 
 ## Compression
 
