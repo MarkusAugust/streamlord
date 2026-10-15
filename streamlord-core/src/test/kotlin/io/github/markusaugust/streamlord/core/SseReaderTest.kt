@@ -23,13 +23,21 @@ class SseReaderTest {
     }
 
     @Test
-    fun `an id with a NUL in it is ignored, as the browser ignores it`() {
+    fun `an id with a NUL in it is kept, as Datastar's client keeps it`() {
         val wire = "id: a\u0000b\ndata: x\n\nid: c\ndata: y\n\n"
 
         val read = SseReader().feed(wire)
 
-        assertEquals(listOf(null, "c"), read.map { it.id })
+        assertEquals(listOf("a\u0000b", "c"), read.map { it.id })
         assertEquals(SseDecoder.messages(wire), read)
+    }
+
+    @Test
+    fun `a line without a colon is ignored`() {
+        val read = SseReader().feed("event: e\nevent\nid: 7\nid\ndata: x\n\n").single()
+
+        assertEquals("e", read.event)
+        assertEquals("7", read.id)
     }
 
     @Test
