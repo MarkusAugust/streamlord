@@ -27,6 +27,8 @@ buildToolsFreemarker = "2.3.35"
 jetbrains-annotations = { module = "org.jetbrains:annotations", version = "26.1.0" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
+# Test-only, for :streamlord-spring: Spring MVC needs it to run a suspend controller.
+kotlinx-coroutines-reactor = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-reactor", version.ref = "coroutines" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 kotlinx-html = { module = "org.jetbrains.kotlinx:kotlinx-html-jvm", version.ref = "kotlinxHtml" }
 ktor-server-core = { module = "io.ktor:ktor-server-core", version.ref = "ktor" }

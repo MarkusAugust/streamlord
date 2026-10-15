@@ -16,6 +16,7 @@ dependencies {
     testImplementation(libs.reactor.core)
     testImplementation(libs.tomcat.embed.core)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.kotlinx.coroutines.reactor)
     testImplementation(project(":streamlord-json-jackson"))
     testImplementation(libs.jackson.kotlin)
 }
