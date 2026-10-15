@@ -8,6 +8,7 @@ import io.github.markusaugust.streamlord.core.port.driving.patchSignals
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
+import java.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -15,7 +16,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
-import java.io.IOException
 
 class HeartbeatTest {
     private val beating = Streamlord(heartbeat = 15.seconds)
@@ -112,6 +112,15 @@ class HeartbeatTest {
             assertEquals(2, sink.comments(), "at 5 and 35 seconds")
         }
 
+    // The constructor code compiled against 0.11 calls: it takes the default like the other.
+    @Test
+    fun `the 0_11 constructor takes the default heartbeat`() {
+        val old = Streamlord::class.java.constructors.single { it.parameterCount == 4 }
+        val streamlord = old.newInstance(Streamlord.Default.codec, 1000, false, listOf("data-")) as Streamlord
+
+        assertEquals(Streamlord.DEFAULT_HEARTBEAT, streamlord.heartbeat)
+    }
+
     @Test
     fun `null turns the heartbeat off`() =
         runTest {
@@ -179,6 +188,7 @@ class HeartbeatTest {
     fun `a heartbeat must be positive`() {
         assertFailsWith<IllegalArgumentException> { Streamlord(heartbeat = 0.seconds) }
     }
+
     /**
      * A sink that takes its time over the last words, so the other coroutine falls due meanwhile:
      * longer than [quick]'s heartbeat, shorter than the limit on last words.
@@ -317,6 +327,9 @@ class HeartbeatTest {
 
             assertFalse(finished)
             assertEquals(lastWords, sink.text())
-            assertTrue(testScheduler.currentTime <= StreamAuthorisation.LAST_WORDS_LIMIT.inWholeMilliseconds, "waited ${testScheduler.currentTime} ms")
+            assertTrue(
+                testScheduler.currentTime <= StreamAuthorisation.LAST_WORDS_LIMIT.inWholeMilliseconds,
+                "waited ${testScheduler.currentTime} ms",
+            )
         }
 }
