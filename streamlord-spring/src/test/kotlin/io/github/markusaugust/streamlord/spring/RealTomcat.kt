@@ -40,6 +40,19 @@ class RealTomcat(
             .newHttpClient()
             .send(HttpRequest.newBuilder(URI("http://localhost:$port$path")).build(), HttpResponse.BodyHandlers.ofLines())
 
+    /**
+     * The lines of the body of [path] until it ends. A stream that Spring's timeout cuts can end
+     * with the connection closed under the reader, which counts as an end here.
+     */
+    fun lines(path: String): List<String> {
+        val lines = mutableListOf<String>()
+        try {
+            get(path).body().use { body -> body.forEach { lines += it } }
+        } catch (_: java.io.UncheckedIOException) {
+        }
+        return lines
+    }
+
     override fun close() {
         tomcat.stop()
         tomcat.destroy()

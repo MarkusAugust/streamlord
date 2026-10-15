@@ -63,15 +63,23 @@ class StreamExecutorTest {
         @GetMapping("/own-flow")
         fun ownFlow(response: HttpServletResponse): StreamingResponseBody =
             response.datastarStream(
-                flow { emit(io.github.markusaugust.streamlord.core.domain.PatchSignals("{\"flow\":true}")) },
+                flow {
+                    emit(
+                        io.github.markusaugust.streamlord.core.domain
+                            .PatchSignals("{\"flow\":true}"),
+                    )
+                },
                 executor = own,
             )
 
         // Spring sets its own executor again for the cycle that runs the stream of a suspend handler.
         @GetMapping("/own-suspended")
-        suspend fun ownSuspended(response: HttpServletResponse): StreamingResponseBody {
+        suspend fun ownSuspended(
+            request: HttpServletRequest,
+            response: HttpServletResponse,
+        ): StreamingResponseBody {
             delay(10.milliseconds)
-            return response.datastarStream(executor = own) { patchSignals("thread" to Thread.currentThread().name) }
+            return response.datastarStream(request = request, executor = own) { patchSignals("thread" to Thread.currentThread().name) }
         }
     }
 

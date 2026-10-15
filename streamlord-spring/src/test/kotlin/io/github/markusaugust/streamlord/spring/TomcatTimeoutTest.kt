@@ -162,8 +162,8 @@ class TomcatTimeoutTest {
 
     private fun events(path: String): Pair<Int, Long> {
         val started = System.nanoTime()
-        val lines = tomcat.get(path).body().use { lines -> lines.filter { it.startsWith("event: ") }.count() }
-        return lines.toInt() to (System.nanoTime() - started) / 1_000_000
+        val lines = tomcat.lines(path).count { it.startsWith("event: ") }
+        return lines to (System.nanoTime() - started) / 1_000_000
     }
 
     @Test
