@@ -26,9 +26,9 @@ import kotlin.reflect.typeOf
 /*
  * Spring WebMVC (servlet) integration.
  *
- * A controller returns a StreamingResponseBody; Spring hands the servlet output stream to
- * Streamlord on a container thread, and the stream lives until the block returns. Coroutines run
- * inside runBlocking on that thread, which is exactly what a streaming servlet response is for.
+ * A controller returns a StreamingResponseBody. Spring frees the container thread and runs the
+ * body on a thread from its MVC async executor, which the stream holds until the block returns.
+ * Coroutines run inside runBlocking on that thread.
  */
 
 /**

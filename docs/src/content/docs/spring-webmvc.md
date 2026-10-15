@@ -53,14 +53,53 @@ class SearchController(private val streamlord: Streamlord) {
 }
 ```
 
-`datastarStream` returns a `StreamingResponseBody`, which is how WebMVC keeps a servlet thread
-from being held for the life of the response. Everything inside the block writes one frame.
+`datastarStream` returns a `StreamingResponseBody`. Spring frees the servlet container's thread
+and runs the block on a thread from its own async executor, and that thread stays with the
+stream until the block returns. Everything inside the block writes one frame.
 
 **Do not take it as a parameter of the handler method.** `fun search(streamlord: Streamlord)`
 compiles and starts, and Spring then treats the parameter as a model attribute: it constructs a
 new `Streamlord` with every default, for each request, and never looks at your bean. The codec
 you configured is gone, so a typed read fails with `BuiltInSignalsCodec cannot decode into
 SearchSignals`, and `guardElements` is quietly off. The constructor is the only way in.
+
+## Streams that stay open
+
+Two Spring settings decide how long a stream may live and how many can run at once. Both apply
+to every async request in the application, not to Streamlord's alone.
+
+**How long.** Spring gives an async request the container's timeout, 30 seconds on Tomcat, and
+then cuts it: the block is interrupted and the client sees the stream end. A stream meant to stay
+open needs a longer one:
+
+```properties
+# application.properties
+spring.mvc.async.request-timeout=30m
+```
+
+`-1` removes the limit. Do that only with a [heartbeat](/operations/#heartbeats) on the bean:
+without one, a client that vanished without closing its connection is never written to again,
+and its stream holds a thread for good. Tomcat checks for timeouts once a second, so one can land
+up to a second late.
+
+**How many.** Each open stream holds one thread from that async executor. Under Spring Boot it is
+the `applicationTaskExecutor`, which has 8 threads and an unbounded queue. The ninth stream waits
+in the queue until a thread comes free, and its timeout is already counting. Give it more
+threads:
+
+```properties
+spring.task.execution.pool.core-size=64
+```
+
+or, on Java 21, a virtual thread for each:
+
+```properties
+spring.threads.virtual.enabled=true
+```
+
+Declaring an `Executor` bean of your own makes Boot skip `applicationTaskExecutor`, and these
+settings with it: Spring MVC then starts a new thread for every request, without limit, and logs
+a warning about it. `spring.task.execution.mode=force` keeps Boot's executor alongside yours.
 
 ## No stream at all
 
