@@ -65,8 +65,9 @@ SearchSignals`, and `guardElements` is quietly off. The constructor is the only 
 
 ## Streams that stay open
 
-Two Spring settings decide how long a stream may live and how many can run at once. Both apply
-to every async request in the application, not to Streamlord's alone.
+Two things decide how long a stream may live and how many can run at once: its timeout, which
+one stream can set for itself, and Spring's async executor, which every async request in the
+application shares.
 
 **How long.** Spring gives an async request the container's timeout, 30 seconds on Tomcat, and
 then cuts it: the block is interrupted and the client sees the stream end. A stream meant to stay
@@ -90,8 +91,9 @@ fun feed(
 
 `Duration.INFINITE` lifts the limit, and only with a heartbeat is that safe: without one, a client
 that vanished without closing its connection is never written to again, and its stream holds a
-thread for good. A finite `timeout` works the same way. Every other request keeps the
-application's setting, which raises the limit for all of them at once:
+thread for good. A finite `timeout`, such as `timeout = 10.minutes`, sets this stream's limit
+the same way. Every other request stays on the application's setting. To raise the limit for all
+of them at once:
 
 ```properties
 # application.properties
@@ -101,7 +103,7 @@ spring.mvc.async.request-timeout=30m
 `-1` there removes the limit for every async request, with the same condition: a heartbeat on the
 bean, and on every stream that does not pass `heartbeat = null`. Tomcat checks for timeouts once a
 second, so one can land up to a second late. `timeout` needs a request that Spring MVC is
-handling, and throws outside one rather than doing nothing.
+handling, and throws outside one rather than doing nothing; one that is not positive throws too.
 
 **How many.** Each open stream holds one thread from that async executor. Under Spring Boot it is
 the `applicationTaskExecutor`, which has 8 threads and an unbounded queue. The ninth stream waits
