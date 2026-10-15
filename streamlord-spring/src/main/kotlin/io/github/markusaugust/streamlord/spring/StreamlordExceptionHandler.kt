@@ -35,7 +35,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
  * Spring's registration order picks.
  *
  * A status needs a response that has not started: read the signals before the stream opens. Once
- * a stream has sent its first event, a failure inside it cuts the stream off instead.
+ * a stream has sent its first event, or its first heartbeat comment, at most five seconds after
+ * it opened, a failure inside it cuts the stream off instead.
  */
 @RestControllerAdvice
 @Order(Ordered.LOWEST_PRECEDENCE)

@@ -8,6 +8,7 @@ import io.github.markusaugust.streamlord.core.port.driving.patchSignals
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
+import java.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -15,21 +16,46 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
-import java.io.IOException
 
 class HeartbeatTest {
     private val beating = Streamlord(heartbeat = 15.seconds)
 
     private fun BufferedSseSink.comments(): Int = text().lines().count { it == ": keep-alive" }
 
+    // The first after five seconds, so a server that sends no headers before the first byte, as
+    // Netty does, has one before it gives up on the response; then one per interval.
     @Test
-    fun `a silent stream carries one comment per interval`() =
+    fun `a silent stream carries one comment early and then one per interval`() =
         runTest {
             val sink = BufferedSseSink()
 
-            beating.stream(sink, null) { delay(50.seconds) }
+            beating.stream(sink, null) { delay(45.seconds) }
 
-            assertEquals(3, sink.comments())
+            assertEquals(3, sink.comments(), "at 5, 20 and 35 seconds")
+        }
+
+    @Test
+    fun `the first comment waits no longer than the interval`() =
+        runTest {
+            val sink = BufferedSseSink()
+
+            Streamlord(heartbeat = 2.seconds).stream(sink, null) { delay(3.seconds) }
+
+            assertEquals(1, sink.comments(), "at 2 seconds, not 5")
+        }
+
+    @Test
+    fun `a stream that writes early gets no early comment`() =
+        runTest {
+            val sink = BufferedSseSink()
+
+            beating.stream(sink, null) {
+                delay(4.seconds)
+                patchSignals("tick" to 1)
+                delay(14.seconds)
+            }
+
+            assertEquals(0, sink.comments(), "the frame at 4 seconds came first, and 15 silent seconds never passed")
         }
 
     @Test
@@ -53,6 +79,7 @@ class HeartbeatTest {
             val sink = BufferedSseSink()
 
             beating.stream(sink, null) {
+                patchSignals("tick" to 0)
                 delay(10.seconds)
                 patchSignals("tick" to 1)
                 delay(10.seconds)
@@ -73,11 +100,33 @@ class HeartbeatTest {
         }
 
     @Test
-    fun `no heartbeat by default`() =
+    fun `a heartbeat of thirty seconds by default`() =
         runTest {
             val sink = BufferedSseSink()
 
-            Streamlord().stream(sink, null) { delay(1.seconds * 60) }
+            assertEquals(30.seconds, Streamlord.DEFAULT_HEARTBEAT)
+            assertEquals(Streamlord.DEFAULT_HEARTBEAT, Streamlord().heartbeat)
+            assertEquals(Streamlord.DEFAULT_HEARTBEAT, Streamlord.Default.heartbeat)
+            Streamlord().stream(sink, null) { delay(60.seconds) }
+
+            assertEquals(2, sink.comments(), "at 5 and 35 seconds")
+        }
+
+    // The constructor code compiled against 0.11 calls: it takes the default like the other.
+    @Test
+    fun `the 0_11 constructor takes the default heartbeat`() {
+        val old = Streamlord::class.java.constructors.single { it.parameterCount == 4 }
+        val streamlord = old.newInstance(Streamlord.Default.codec, 1000, false, listOf("data-")) as Streamlord
+
+        assertEquals(Streamlord.DEFAULT_HEARTBEAT, streamlord.heartbeat)
+    }
+
+    @Test
+    fun `null turns the heartbeat off`() =
+        runTest {
+            val sink = BufferedSseSink()
+
+            Streamlord(heartbeat = null).stream(sink, null) { delay(60.seconds) }
 
             assertEquals("", sink.text())
         }
@@ -87,7 +136,7 @@ class HeartbeatTest {
         runTest {
             val sink = BufferedSseSink()
 
-            Streamlord().stream(sink, null, heartbeat = 15.seconds) { delay(50.seconds) }
+            Streamlord(heartbeat = null).stream(sink, null, heartbeat = 15.seconds) { delay(45.seconds) }
 
             assertEquals(3, sink.comments())
         }
@@ -139,6 +188,7 @@ class HeartbeatTest {
     fun `a heartbeat must be positive`() {
         assertFailsWith<IllegalArgumentException> { Streamlord(heartbeat = 0.seconds) }
     }
+
     /**
      * A sink that takes its time over the last words, so the other coroutine falls due meanwhile:
      * longer than [quick]'s heartbeat, shorter than the limit on last words.
@@ -277,6 +327,9 @@ class HeartbeatTest {
 
             assertFalse(finished)
             assertEquals(lastWords, sink.text())
-            assertTrue(testScheduler.currentTime <= StreamAuthorisation.LAST_WORDS_LIMIT.inWholeMilliseconds, "waited ${testScheduler.currentTime} ms")
+            assertTrue(
+                testScheduler.currentTime <= StreamAuthorisation.LAST_WORDS_LIMIT.inWholeMilliseconds,
+                "waited ${testScheduler.currentTime} ms",
+            )
         }
 }

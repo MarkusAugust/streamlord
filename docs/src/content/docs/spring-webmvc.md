@@ -22,7 +22,8 @@ fun streamlord(mapper: tools.jackson.databind.ObjectMapper): Streamlord =
 helpers take the bean explicitly, which is what keeps the adapter free of a component scan.
 
 The same constructor takes `heartbeat`, an interval after which a silent stream gets a
-keep-alive comment; [Operations](/operations/#heartbeats) has what it does and what it does not.
+keep-alive comment, 30 seconds unless you set it, `null` for none;
+[Operations](/operations/#heartbeats) has what it does and what it does not.
 `compress = true` gzips the stream when the request passed to `datastarStream` takes it; see
 [Operations](/operations/#compression).
 
@@ -89,19 +90,19 @@ fun feed(
     }
 ```
 
-`Duration.INFINITE` lifts the limit, and only with a heartbeat is that safe: without one, a client
-that vanished without closing its connection is never written to again, and its stream holds a
-thread for good. A finite `timeout`, such as `timeout = 10.minutes`, sets this stream's limit
-the same way. Every other request stays on the application's setting. To raise the limit for all
-of them at once:
+`Duration.INFINITE` lifts the limit, and only with a heartbeat, which is on by default, is that
+safe: without one, a client that vanished without closing its connection is never written to
+again, and its stream holds a thread for good. A finite `timeout`, such as
+`timeout = 10.minutes`, sets this stream's limit the same way. Every other request stays on the
+application's setting. To raise the limit for all of them at once:
 
 ```properties
 # application.properties
 spring.mvc.async.request-timeout=30m
 ```
 
-`-1` there removes the limit for every async request, with the same condition: a heartbeat on the
-bean, and on every stream that does not pass `heartbeat = null`. Tomcat checks for timeouts once a
+`-1` there removes the limit for every async request, with the same condition: leave the
+heartbeat on, on the bean and on every stream. Tomcat checks for timeouts once a
 second, so one can land up to a second late. `timeout` needs a request that Spring MVC is
 handling, and throws outside one rather than doing nothing; one that is not positive throws too.
 

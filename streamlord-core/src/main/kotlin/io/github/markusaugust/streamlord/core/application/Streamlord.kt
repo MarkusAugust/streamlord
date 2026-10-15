@@ -28,6 +28,7 @@ import kotlinx.coroutines.launch
 import kotlin.reflect.KType
 import kotlin.reflect.typeOf
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * The signals the browser sent, when no typed codec is in play: a [JsonObject].
@@ -57,12 +58,16 @@ public typealias Signals = JsonObject
  * @property attributePrefixes The `data-*` prefixes the guard recognises: `data-` and the
  *   aliased `data-star-` by default. A bundle built with another alias lists it here.
  * @property heartbeat An SSE comment whenever a stream has been silent this long, so a proxy or
- *   load balancer that closes idle connections sees traffic. Any frame resets the wait, so a busy
- *   stream carries none. Applies to the streams Streamlord opens itself: `respondDatastar` on
- *   Ktor and `datastarStream` on Spring WebMVC. A `Flow` handed to WebFlux through
- *   `asServerSentEvents` or `asDatastarResponse` never passes through one, so it gets no
- *   heartbeat. Off by default. One stream can take its own, or none, through the `heartbeat`
- *   parameter of `respondDatastar` and `datastarStream`.
+ *   load balancer that closes idle connections sees traffic, and a reader who has gone is found
+ *   by the write that fails. Any frame resets the wait, so a busy stream carries none. A stream
+ *   silent from the start gets its first comment after five seconds, or this interval if it is
+ *   shorter, so a server that sends no headers before the first byte, as Netty does, has one
+ *   before it gives up on the response. [DEFAULT_HEARTBEAT] unless given; `null` turns it off.
+ *   Applies to the streams Streamlord opens itself: `respondDatastar` on Ktor and
+ *   `datastarStream` on Spring WebMVC. A `Flow` handed to WebFlux through `asServerSentEvents`
+ *   or `asDatastarResponse` never passes through one, so it gets no heartbeat. One stream can
+ *   take its own, or none, through the `heartbeat` parameter of `respondDatastar` and
+ *   `datastarStream`.
  * @property compress Gzip the streams Streamlord opens itself, when the request's
  *   `Accept-Encoding` takes gzip: `respondDatastar` on Ktor and `datastarStream` on Spring WebMVC
  *   with the request passed. Each event is flushed through the compressor whole, so nothing waits
@@ -74,7 +79,7 @@ public class Streamlord(
     public val maxSignalsSize: Int = DEFAULT_MAX_SIGNALS_SIZE,
     public val guardElements: Boolean = false,
     public val attributePrefixes: List<String> = ElementsGuard.defaultPrefixes,
-    public val heartbeat: Duration? = null,
+    public val heartbeat: Duration? = DEFAULT_HEARTBEAT,
     public val compress: Boolean = false,
 ) {
     init {
@@ -82,14 +87,17 @@ public class Streamlord(
         requireHeartbeat(heartbeat)
     }
 
-    /** The constructor as 0.11 had it, before [heartbeat] and [compress], for code compiled against it. */
+    /**
+     * The constructor as 0.11 had it, before [heartbeat] and [compress], for code compiled against
+     * it. It takes [DEFAULT_HEARTBEAT] like the other, so the default holds for every caller.
+     */
     @Deprecated("Kept for binary compatibility.", level = DeprecationLevel.HIDDEN)
     public constructor(
         codec: SignalsCodec = BuiltInSignalsCodec,
         maxSignalsSize: Int = DEFAULT_MAX_SIGNALS_SIZE,
         guardElements: Boolean = false,
         attributePrefixes: List<String> = ElementsGuard.defaultPrefixes,
-    ) : this(codec, maxSignalsSize, guardElements, attributePrefixes, null, false)
+    ) : this(codec, maxSignalsSize, guardElements, attributePrefixes, DEFAULT_HEARTBEAT, false)
 
     /**
      * Open a [DatastarStream] over a sink. Adapters call this; you rarely need to.
@@ -128,9 +136,10 @@ public class Streamlord(
     /**
      * [stream] with a [heartbeat] for this stream alone, in place of the instance's: an interval,
      * or `null` for none. Adapters pass what their caller asked for.
+     *
+     * The JVM name stays plain through `@JvmName`: a `Duration` parameter would otherwise add a
+     * hash of the signature to it, which changes with every parameter added.
      */
-    // A stable JVM name: without it, a Duration parameter mangles the name with a hash of the
-    // signature, which no Java caller can call and every new parameter would change.
     @JvmName("stream")
     public suspend fun stream(
         sink: SseSink,
@@ -218,6 +227,13 @@ public class Streamlord(
     public companion object {
         /** One mebibyte. Generous for signals, fatal for nobody. */
         public const val DEFAULT_MAX_SIGNALS_SIZE: Int = 1_048_576
+
+        /**
+         * Thirty seconds: under the idle timeouts of most proxies and load balancers, at one
+         * comment per silent half minute per stream. A proxy that closes sooner wants a shorter
+         * one.
+         */
+        public val DEFAULT_HEARTBEAT: Duration = 30.seconds
 
         /** A Streamlord with the built-in codec and default limits. */
         public val Default: Streamlord = Streamlord()

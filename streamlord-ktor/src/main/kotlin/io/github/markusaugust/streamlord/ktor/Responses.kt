@@ -15,9 +15,9 @@ import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
 import io.ktor.http.ContentType
 import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.OutgoingContent
 import io.ktor.http.headersOf
-import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.httpVersion
 import io.ktor.server.response.header
@@ -26,11 +26,11 @@ import io.ktor.server.response.respondText
 import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.writeFully
 import io.ktor.utils.io.writeStringUtf8
-import java.io.ByteArrayOutputStream
-import java.util.zip.GZIPOutputStream
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withTimeoutOrNull
 import org.intellij.lang.annotations.Language
+import java.io.ByteArrayOutputStream
+import java.util.zip.GZIPOutputStream
 import kotlin.reflect.typeOf
 import kotlin.time.Duration
 
@@ -55,12 +55,13 @@ import kotlin.time.Duration
  * }
  * ```
  *
+ * The JVM name stays plain through `@JvmName`: a `Duration` parameter would otherwise add a
+ * hash of the signature to it, which changes with every parameter added.
+ *
  * @param heartbeat A keep-alive comment after this long without a frame, for this stream alone,
  *   or `null` for none. Defaults to the configured [Streamlord.heartbeat]. One that is not
  *   positive throws here, before the response starts.
  */
-// A stable JVM name: without it, the Duration parameter mangles the name with a hash of the
-// signature, which no Java caller can call and every new parameter would change.
 @JvmName("respondDatastar")
 public suspend fun ApplicationCall.respondDatastar(
     status: HttpStatusCode = HttpStatusCode.OK,

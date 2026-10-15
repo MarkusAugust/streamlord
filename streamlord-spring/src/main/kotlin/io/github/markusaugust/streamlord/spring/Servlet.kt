@@ -50,6 +50,9 @@ import kotlin.time.Duration
  * }
  * ```
  *
+ * The JVM name stays plain through `@JvmName`: a `Duration` parameter would otherwise add a
+ * hash of the signature to it, which changes with every parameter added.
+ *
  * @param streamlord The configured instance, typically a Spring bean. Defaults to [Streamlord.Default].
  * @param request The request being answered, when you have it: `Connection: keep-alive` is an
  *   HTTP/1.1 header, and with the request at hand it is only set for HTTP/1.1. With
@@ -57,10 +60,10 @@ import kotlin.time.Duration
  *   it; without the request, it is not.
  * @param timeout How long Spring lets this stream run before it cuts it, in place of the
  *   application's `spring.mvc.async.request-timeout`, whose own default is the container's 30
- *   seconds. [Duration.INFINITE] lifts the limit, which is safe only with a heartbeat: without
- *   one, a client that vanished without closing its connection holds the stream's thread for
- *   good. `null`, the default, leaves Spring's setting alone. The container checks for timeouts
- *   about once a second, so one lands up to a second late. One that is not positive throws
+ *   seconds. [Duration.INFINITE] lifts the limit, which is safe only with a heartbeat, on by
+ *   default: without one, a client that vanished without closing its connection holds the stream's
+ *   thread for good. `null`, the default, leaves Spring's setting alone. The container checks for
+ *   timeouts about once a second, so one lands up to a second late. One that is not positive throws
  *   [IllegalArgumentException]. It needs a request that Spring MVC is handling, found through
  *   [request] or Spring's `RequestContextHolder`, and throws [IllegalStateException] without one
  *   rather than being ignored. Works from a `suspend` controller too. When one request asks for
@@ -69,8 +72,6 @@ import kotlin.time.Duration
  *   or `null` for none. Defaults to the bean's [Streamlord.heartbeat]. One that is not positive
  *   throws here, while the controller can still answer with a status.
  */
-// A stable JVM name: without it, the Duration parameter mangles the name with a hash of the
-// signature, which no Java caller can call and every new parameter would change.
 @JvmName("datastarStream")
 public fun HttpServletResponse.datastarStream(
     streamlord: Streamlord = Streamlord.Default,

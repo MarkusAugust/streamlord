@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.spring
 
+import io.github.markusaugust.streamlord.core.SignalsTooLargeException
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -38,7 +39,10 @@ class TomcatTimeoutTest {
     @RestController
     class Streams {
         // Forty events, one every 100 ms: four seconds, long past the 300 ms default.
-        private fun HttpServletResponse.count(request: HttpServletRequest, timeout: Duration?): StreamingResponseBody =
+        private fun HttpServletResponse.count(
+            request: HttpServletRequest,
+            timeout: Duration?,
+        ): StreamingResponseBody =
             datastarStream(request = request, timeout = timeout) {
                 repeat(40) {
                     patchSignals("n" to it)
@@ -47,13 +51,22 @@ class TomcatTimeoutTest {
             }
 
         @GetMapping("/default")
-        fun default(request: HttpServletRequest, response: HttpServletResponse) = response.count(request, null)
+        fun default(
+            request: HttpServletRequest,
+            response: HttpServletResponse,
+        ) = response.count(request, null)
 
         @GetMapping("/infinite")
-        fun infinite(request: HttpServletRequest, response: HttpServletResponse) = response.count(request, Duration.INFINITE)
+        fun infinite(
+            request: HttpServletRequest,
+            response: HttpServletResponse,
+        ) = response.count(request, Duration.INFINITE)
 
         @GetMapping("/two-seconds")
-        fun twoSeconds(request: HttpServletRequest, response: HttpServletResponse) = response.count(request, 2.seconds)
+        fun twoSeconds(
+            request: HttpServletRequest,
+            response: HttpServletResponse,
+        ) = response.count(request, 2.seconds)
 
         // Without the request: the adapter finds it through Spring's RequestContextHolder.
         @GetMapping("/held")
@@ -65,13 +78,30 @@ class TomcatTimeoutTest {
                 }
             }
 
+        // Thrown a second in, before the first event and before the default heartbeat's first
+        // comment is due. The timeout keeps the 300 ms default of this test from cutting it first.
+        @GetMapping("/too-large")
+        fun tooLarge(
+            request: HttpServletRequest,
+            response: HttpServletResponse,
+        ): StreamingResponseBody =
+            response.datastarStream(request = request, timeout = 10.seconds) {
+                delay(1000.milliseconds)
+                throw SignalsTooLargeException(10, 5)
+            }
+
         // Spring runs a suspend handler in an async cycle of its own, and the stream in a second.
         @GetMapping("/suspended")
-        suspend fun suspended(request: HttpServletRequest, response: HttpServletResponse) =
-            response.count(request, Duration.INFINITE)
+        suspend fun suspended(
+            request: HttpServletRequest,
+            response: HttpServletResponse,
+        ) = response.count(request, Duration.INFINITE)
 
         @GetMapping("/suspended-first")
-        suspend fun suspendedFirst(request: HttpServletRequest, response: HttpServletResponse): StreamingResponseBody {
+        suspend fun suspendedFirst(
+            request: HttpServletRequest,
+            response: HttpServletResponse,
+        ): StreamingResponseBody {
             delay(50.milliseconds)
             return response.count(request, Duration.INFINITE)
         }
@@ -86,6 +116,9 @@ class TomcatTimeoutTest {
 
         @Bean
         fun streams() = Streams()
+
+        @Bean
+        fun errors() = StreamlordExceptionHandler()
     }
 
     private lateinit var tomcat: Tomcat
@@ -123,11 +156,22 @@ class TomcatTimeoutTest {
     private fun events(path: String): Pair<Int, Long> {
         val started = System.nanoTime()
         val lines =
-            HttpClient.newHttpClient()
+            HttpClient
+                .newHttpClient()
                 .send(HttpRequest.newBuilder(URI("http://localhost:$port$path")).build(), HttpResponse.BodyHandlers.ofLines())
                 .body()
                 .use { lines -> lines.filter { it.startsWith("event: ") }.count() }
         return lines.toInt() to (System.nanoTime() - started) / 1_000_000
+    }
+
+    @Test
+    fun `a failure before the first event still answers with its status`() {
+        val response =
+            HttpClient
+                .newHttpClient()
+                .send(HttpRequest.newBuilder(URI("http://localhost:$port/too-large")).build(), HttpResponse.BodyHandlers.ofString())
+
+        assertEquals(413, response.statusCode(), response.body())
     }
 
     @Test

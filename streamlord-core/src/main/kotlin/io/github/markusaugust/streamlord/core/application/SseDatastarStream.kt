@@ -14,6 +14,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
 /**
@@ -76,13 +77,19 @@ internal class SseDatastarStream(
      * lock and passes [authorise], which means an idle stream with an authorisation is asked again
      * on the heartbeat's schedule, and a refusal ends it here as it would anywhere else.
      *
+     * The first wait is [FIRST_PULSE], or [interval] if it is shorter: some servers, Netty among
+     * them, send no headers before the first byte of the body and give up on a response that has
+     * written nothing for a while. A stream that writes within it carries no early comment.
+     *
      * After a refusal, every comment is refused again, which ends a block that caught its own
      * refusal and went on waiting. A comment of its own also lands in [written], so the wait after
      * it starts at once.
      */
     internal suspend fun pulse(interval: Duration): Nothing {
+        var wait = minOf(interval, FIRST_PULSE)
         while (true) {
-            if (withTimeoutOrNull(interval) { written.receive() } == null) comment()
+            if (withTimeoutOrNull(wait) { written.receive() } == null) comment()
+            wait = interval
         }
     }
 
@@ -141,3 +148,6 @@ internal class SseDatastarStream(
         }
     }
 }
+
+/** Well under the ten seconds Netty allows a response that has written nothing. */
+internal val FIRST_PULSE: Duration = 5.seconds
