@@ -12,6 +12,9 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.context.request.RequestContextHolder
+import org.springframework.web.context.request.ServletRequestAttributes
+import org.springframework.web.context.request.async.WebAsyncUtils
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -89,6 +92,26 @@ class StreamTimeoutTest {
     fun `a timeout outside Spring MVC fails rather than being ignored`() {
         assertFailsWith<IllegalStateException> {
             MockHttpServletResponse().datastarStream(request = MockHttpServletRequest(), timeout = 5.seconds) {}
+        }
+    }
+
+    @Test
+    fun `a timeout with no request at all fails`() {
+        RequestContextHolder.resetRequestAttributes()
+        assertFailsWith<IllegalStateException> { MockHttpServletResponse().datastarStream(timeout = 5.seconds) {} }
+    }
+
+    // A request Spring knows about, but not one Spring MVC is answering asynchronously.
+    @Test
+    fun `a timeout for a held request outside Spring MVC fails`() {
+        val request = MockHttpServletRequest()
+        RequestContextHolder.setRequestAttributes(ServletRequestAttributes(request))
+        try {
+            assertFailsWith<IllegalStateException> { MockHttpServletResponse().datastarStream(timeout = 5.seconds) {} }
+            WebAsyncUtils.getAsyncManager(request)
+            assertFailsWith<IllegalStateException> { MockHttpServletResponse().datastarStream(timeout = 5.seconds) {} }
+        } finally {
+            RequestContextHolder.resetRequestAttributes()
         }
     }
 
