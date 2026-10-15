@@ -96,12 +96,13 @@ class IdleStreamTest {
             }
         try {
             Socket("localhost", server.port).use { socket ->
-                socket.soTimeout = 3000
+                socket.soTimeout = 10_000
                 socket.getOutputStream().write("GET /idle HTTP/1.1\r\nHost: x\r\n\r\n".toByteArray())
                 socket.getInputStream().read(ByteArray(4096))
             }
 
-            assertTrue(ended.get(3, TimeUnit.SECONDS) is CancellationException)
+            // About 200 ms on a desktop; the bound is for a busy CI runner, not a measure of speed.
+            assertTrue(ended.get(10, TimeUnit.SECONDS) is CancellationException)
         } finally {
             server.stop(100, 500)
         }
