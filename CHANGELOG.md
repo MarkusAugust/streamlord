@@ -29,6 +29,13 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Changed
 
+- Some events that could be built before now throw `DatastarEventValidationException`, and so does
+  an `SseFrame` built by hand: a `retry` under 1 ms or over `Int.MAX_VALUE` ms, and an `eventId`
+  with a character above U+00FF or a space or tab at either end. Under 1 ms the line read
+  `retry: 0`, which has the client reconnect at once without end; above the limit the browser's
+  timer overflows. `fetch` cannot send such an id back as `last-event-id`, so every reconnect
+  failed, or it strips the spaces and the server got another id. A `retry` that writes as 1000,
+  such as 1000.5 ms, is now the default and left off, in `SseFrame.render` and `toServerSentEvent`.
 - `SseDecoder`, `SseReader` and with them `streamlord-test` (`datastarEvents`, `DatastarEvents`,
   `LiveDatastarStream`) read a stream as Datastar's client does rather than as the browser's
   `EventSource`, and `SseDecoder` now reads through `SseReader`, so a text and a stream still
@@ -70,6 +77,12 @@ All notable changes to Streamlord are recorded here. The format follows
   0.12 no longer compiles: javac does not see the hidden signatures, and the new ones take a
   `kotlin.time.Duration`, which Java can only pass as `null`. Binaries compiled against 0.12 are
   not affected.
+
+### Fixed
+
+- `SseFrame`, a public data class, validates what it is given: a line break in its `event`, `id`
+  or a data line, or a NUL in its `id`, could write a line of its own into the stream, an event or
+  data the server never meant to send. A NUL in data is still written, since markup can carry one.
 
 ## [0.12.0] - 2026-10-11
 

@@ -82,14 +82,28 @@ Two SSE fields the
 and Datastar's own reference never mentions.
 
 **`retry:`** sets the client's base retry interval, overriding
-`retryInterval` (`fetch.ts:669`). **Observed.** Streamlord omits the line when it is the
-protocol default of 1000 ms, as the specification says to.
+`retryInterval` (`fetch.ts:669`). **Observed.** It holds for the rest of the action, across
+reconnects, until a later frame sets another, and `retryMaxWait` does not cap it. Streamlord omits
+the line when it writes as the protocol default of 1000 ms, as the specification says to, so a
+stream that has changed the interval goes back to it with 999 or 1001 ms:
+
+```kotlin sample=stream
+patchSignals("phase" to "busy", retry = 5.seconds)
+patchSignals("phase" to "idle", retry = 1001.milliseconds)
+```
+
+A retry runs from 1 ms to `Int.MAX_VALUE` ms. Under a millisecond the line would read `retry: 0`,
+and the client would reconnect at once and again without end: `retryMaxCount` only counts
+attempts that never reach a 200. Above the limit the browser's timer overflows. An event with
+either fails when it is built.
 
 **`id:`**, when you send one, is kept by the client and put on the **next** attempt as a
 `last-event-id` request header (`fetch.ts:662`). **Observed.** An event without an id leaves the
 header as it was: the client changes it only when an `id:` line arrives, and drops it only on an
 empty one (`fetch.ts:665`). **Observed.** Streamlord cannot send an empty id; it refuses one when
-the event is built.
+the event is built. It also refuses an id the client could not send back as it is: one with a
+character above U+00FF, which `fetch` cannot put in a header, so every reconnect would fail, and
+one with a space or tab at either end, which `fetch` strips, so the server would get another id.
 
 So once a stream has sent an id, every retry and every reopen after a hidden tab carries the last
 id the client received. The header goes only when the action runs again. A new `@get` starts
