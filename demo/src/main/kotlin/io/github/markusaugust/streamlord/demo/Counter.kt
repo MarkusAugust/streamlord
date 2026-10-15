@@ -37,9 +37,10 @@ public data class CounterSignals(
  *
  * The cancel button is Datastar's own doing, not ours. A request keeps an AbortController per
  * method and URL, so when anything on the page asks for the same endpoint again, the browser
- * aborts the stream that is still running before it sends anything. Ktor sees the disconnect and
- * cancels the coroutine, which is why there is no bookkeeping here and nothing to leak: the
- * `flow` builder simply stops being collected.
+ * aborts the stream that is still running before it sends anything. The counter writes a number
+ * every few hundred milliseconds, and once the connection is gone a write soon fails and ends
+ * the collection, which is why there is no bookkeeping here and nothing to leak: the `flow`
+ * builder simply stops being collected.
  *
  * The second request still arrives, though, and it is the one that puts the page back in order.
  * It reports what the counter reached and turns the button back into Start. The server decides

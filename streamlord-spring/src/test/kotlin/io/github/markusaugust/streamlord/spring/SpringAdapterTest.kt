@@ -55,7 +55,7 @@ class SpringAdapterTest {
         )
     }
 
-    // runBlocking on the servlet thread: the heartbeat runs beside a handler that suspends.
+    // runBlocking on the thread writing the body: the heartbeat runs beside a handler that suspends.
     @Test
     fun `a heartbeat bean writes keep-alive comments into a silent stream`() {
         val response = MockHttpServletResponse()
