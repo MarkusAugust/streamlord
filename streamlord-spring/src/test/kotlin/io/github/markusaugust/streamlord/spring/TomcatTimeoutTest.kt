@@ -147,46 +147,22 @@ class TomcatTimeoutTest {
         fun errors() = StreamlordExceptionHandler()
     }
 
-    private lateinit var tomcat: Tomcat
-    private lateinit var baseDir: Path
-    private var port = 0
+    private lateinit var tomcat: RealTomcat
+    private val port get() = tomcat.port
 
     @BeforeTest
     fun start() {
-        tomcat = Tomcat()
-        baseDir = Files.createTempDirectory("tomcat")
-        tomcat.setBaseDir(baseDir.toString())
-        tomcat.setPort(0)
-        val context = tomcat.addContext("", null)
-        val spring = AnnotationConfigWebApplicationContext().apply { register(Mvc::class.java) }
-        Tomcat.addServlet(context, "dispatcher", DispatcherServlet(spring)).apply {
-            isAsyncSupported = true
-            setLoadOnStartup(1)
-        }
-        context.addServletMappingDecoded("/", "dispatcher")
-        tomcat.start()
-        port = tomcat.connector.localPort
+        tomcat = RealTomcat(Mvc::class.java)
     }
 
     @AfterTest
     fun stop() {
-        tomcat.stop()
-        tomcat.destroy()
-        // Tomcat records its base directory as a JVM-wide property, which the next instance would
-        // otherwise make again after this one is gone.
-        System.clearProperty("catalina.base")
-        System.clearProperty("catalina.home")
-        baseDir.toFile().deleteRecursively()
+        tomcat.close()
     }
 
     private fun events(path: String): Pair<Int, Long> {
         val started = System.nanoTime()
-        val lines =
-            HttpClient
-                .newHttpClient()
-                .send(HttpRequest.newBuilder(URI("http://localhost:$port$path")).build(), HttpResponse.BodyHandlers.ofLines())
-                .body()
-                .use { lines -> lines.filter { it.startsWith("event: ") }.count() }
+        val lines = tomcat.get(path).body().use { lines -> lines.filter { it.startsWith("event: ") }.count() }
         return lines.toInt() to (System.nanoTime() - started) / 1_000_000
     }
 
