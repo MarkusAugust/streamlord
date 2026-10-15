@@ -17,11 +17,15 @@ All notable changes to Streamlord are recorded here. The format follows
   of `spring.mvc.async.request-timeout` and the container's 30 seconds behind it.
   `Duration.INFINITE` lifts the limit; `null`, the default, leaves Spring's setting alone, and one
   that is not positive throws. It applies to the async cycle that runs the stream, also from a
-  `suspend` controller, and finds the request through the parameter or Spring's
-  `RequestContextHolder`; outside a request that Spring MVC is handling it throws rather than
-  doing nothing.
+  `suspend` controller that passes the request, and finds the request through the parameter or
+  Spring's `RequestContextHolder`; outside a request that Spring MVC is handling it throws rather
+  than doing nothing.
 - `heartbeatContext` on `Streamlord.stream`: the context the heartbeat runs in, added to the
   caller's, for an adapter whose block may block its thread. One that carries a `Job` throws.
+- `executor` on `datastarStream`, in both variants: the executor that runs this stream, in place
+  of Spring MVC's, whose Boot default has eight threads and an unbounded queue. Set on the async
+  cycle that runs the stream, also from a `suspend` controller that passes the request; outside
+  a request that Spring MVC is handling it throws.
 
 ### Changed
 

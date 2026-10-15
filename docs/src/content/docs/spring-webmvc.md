@@ -125,6 +125,37 @@ Declaring an `Executor` bean of your own makes Boot skip `applicationTaskExecuto
 settings with it: Spring MVC then starts a new thread for every request, without limit, and logs
 a warning about it. `spring.task.execution.mode=force` keeps Boot's executor alongside yours.
 
+Or keep the long streams off that executor altogether, so the short requests behind them never
+wait. `executor` gives one stream an executor of its own:
+
+```kotlin sample=spring
+private val feeds = org.springframework.core.task.VirtualThreadTaskExecutor("feed-")
+
+@GetMapping("/feed")
+fun feed(
+    request: HttpServletRequest,
+    response: HttpServletResponse,
+): org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody =
+    response.datastarStream(request = request, executor = feeds) {
+        patchElements("""<div id="feed">Open</div>""")
+        awaitCancellation()
+    }
+```
+
+`VirtualThreadTaskExecutor` needs Java 21. On older Java, build a `ThreadPoolTaskExecutor` with
+`corePoolSize` set to the number of streams it should run at once, call `initialize()` before the
+first stream and `shutdown()` when the application stops. Its queue has no limit unless you give
+it one, so `maxPoolSize` alone changes nothing. Declared as a `@Bean` instead, it makes Boot drop
+`applicationTaskExecutor`, as above, unless `spring.task.execution.mode=force` is set.
+
+An executor that rejects the stream, because its queue is full or it has been shut down, throws
+`TaskRejectedException` before anything is written. It reaches your `@ExceptionHandler` like any
+other exception, as a 500 unless you map it; a 503 tells the client to try again.
+
+Like `timeout`, `executor` needs a request that Spring MVC is handling, and a `suspend`
+controller has to pass it: Spring's `RequestContextHolder` does not follow a controller across a
+suspension.
+
 The heartbeat does not use that executor. It runs on `Dispatchers.IO`, beside the block, so a
 block that blocks its thread does not hold the comment back. An authorisation asked by the
 heartbeat runs there too, without the request's thread-locals; see

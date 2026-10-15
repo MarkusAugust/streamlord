@@ -6,14 +6,11 @@ import io.github.markusaugust.streamlord.core.port.driving.patchSignals
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import kotlinx.coroutines.delay
-import org.apache.catalina.startup.Tomcat
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.context.request.RequestContextHolder
-import org.springframework.web.context.support.AnnotationConfigWebApplicationContext
-import org.springframework.web.servlet.DispatcherServlet
 import org.springframework.web.servlet.config.annotation.AsyncSupportConfigurer
 import org.springframework.web.servlet.config.annotation.EnableWebMvc
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
@@ -22,8 +19,6 @@ import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
-import java.nio.file.Files
-import java.nio.file.Path
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -147,47 +142,23 @@ class TomcatTimeoutTest {
         fun errors() = StreamlordExceptionHandler()
     }
 
-    private lateinit var tomcat: Tomcat
-    private lateinit var baseDir: Path
-    private var port = 0
+    private lateinit var tomcat: RealTomcat
+    private val port get() = tomcat.port
 
     @BeforeTest
     fun start() {
-        tomcat = Tomcat()
-        baseDir = Files.createTempDirectory("tomcat")
-        tomcat.setBaseDir(baseDir.toString())
-        tomcat.setPort(0)
-        val context = tomcat.addContext("", null)
-        val spring = AnnotationConfigWebApplicationContext().apply { register(Mvc::class.java) }
-        Tomcat.addServlet(context, "dispatcher", DispatcherServlet(spring)).apply {
-            isAsyncSupported = true
-            setLoadOnStartup(1)
-        }
-        context.addServletMappingDecoded("/", "dispatcher")
-        tomcat.start()
-        port = tomcat.connector.localPort
+        tomcat = RealTomcat(Mvc::class.java)
     }
 
     @AfterTest
     fun stop() {
-        tomcat.stop()
-        tomcat.destroy()
-        // Tomcat records its base directory as a JVM-wide property, which the next instance would
-        // otherwise make again after this one is gone.
-        System.clearProperty("catalina.base")
-        System.clearProperty("catalina.home")
-        baseDir.toFile().deleteRecursively()
+        tomcat.close()
     }
 
     private fun events(path: String): Pair<Int, Long> {
         val started = System.nanoTime()
-        val lines =
-            HttpClient
-                .newHttpClient()
-                .send(HttpRequest.newBuilder(URI("http://localhost:$port$path")).build(), HttpResponse.BodyHandlers.ofLines())
-                .body()
-                .use { lines -> lines.filter { it.startsWith("event: ") }.count() }
-        return lines.toInt() to (System.nanoTime() - started) / 1_000_000
+        val lines = tomcat.lines(path).count { it.startsWith("event: ") }
+        return lines to (System.nanoTime() - started) / 1_000_000
     }
 
     @Test
