@@ -155,6 +155,14 @@ Three things it does not do:
   one thread. A handler that blocks that thread, a JDBC call or a `Thread.sleep`, holds the
   heartbeat back until it returns. Suspend instead, or move the blocking call to
   `Dispatchers.IO` with `withContext`.
+- **It does not stop a blocking call.** When the stream ends early, because the client left,
+  `allows()` refused or Spring's timeout fired, its coroutine is cancelled, and cancellation
+  waits for the next suspension point. A call that blocks inside `withContext(Dispatchers.IO)`
+  runs to its end first. `runInterruptible(Dispatchers.IO) { … }` interrupts it instead, which
+  stops a `Thread.sleep` or a blocking queue at once. Two exceptions: an NIO channel that is
+  interrupted closes, so keep pooled connections out of it; and a read from a plain
+  `java.net.Socket`, which most JDBC drivers use, ignores the interrupt. Give a query its own
+  timeout (`Statement.setQueryTimeout`, or your pool's), since nothing else will stop it.
 - **It does not reach WebFlux.** A `Flow` handed to WebFlux never passes through a Streamlord
   stream, so a heartbeat on the bean does nothing there. Merge a ticker into the flow after
   `asServerSentEvents()`, each tick a
