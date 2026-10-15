@@ -547,10 +547,14 @@ tasks.named("checkDocSamples") { dependsOn(applyWireTranscripts) }
  * Both spellings are covered, the Gradle coordinate and the Maven element, because the install
  * page carries a tab for each.
  *
- * It does not close the window between bumping the version and the tag finishing its publish,
+ * A snapshot is left out. Between releases the release branch carries `-SNAPSHOT`, and the pages
+ * should go on naming the release a reader can download; writing the snapshot in would also make
+ * every merge of master into the branch conflict on these lines.
+ *
+ * It does not close the window between the release commit and the tag finishing its publish,
  * during which the pages name a release Maven Central has not seen yet. Closing that would mean
- * tracking the last successful publish separately; bumping and tagging in one push, as the
- * README prescribes, keeps the window short instead.
+ * tracking the last successful publish separately; tagging the release commit straight away, as
+ * RELEASING.md prescribes, keeps the window short instead.
  */
 abstract class ApplyProjectVersion : DefaultTask() {
     @get:Input
@@ -570,6 +574,10 @@ abstract class ApplyProjectVersion : DefaultTask() {
     @TaskAction
     fun apply() {
         val version = version.get()
+        if (version.endsWith("-SNAPSHOT")) {
+            logger.lifecycle("$version is a snapshot: the documented coordinates keep the last release.")
+            return
+        }
         val group = coordinateGroup.get()
 
         val gradleCoordinate = Regex("""(${Regex.escape(group)}:[\w-]+:)[\w.\-]+""")
