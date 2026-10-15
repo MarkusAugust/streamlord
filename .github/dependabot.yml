@@ -1,10 +1,9 @@
 # Dependabot, for every place in this repository that pins something someone else wrote.
 #
 # Security updates arrive as soon as an advisory names a version in use, whatever the
-# schedule below says, except for what an ignore rule below excludes: those are pinned on
-# purpose and move by hand, so an advisory about one of them is for a person to act on. The
-# schedule is for ordinary version bumps, and those come grouped and weekly, because one pull
-# request per patch release across six ecosystems is a queue nobody reads.
+# schedule below says. The schedule is for ordinary version bumps, and those come grouped and
+# weekly, because one pull request per patch release across six ecosystems is a queue nobody
+# reads.
 #
 # Gradle sees what the build files and gradle/libs.versions.toml declare. What those pull in
 # transitively is reported separately, by the dependency-submission job in security.yml.
@@ -15,9 +14,12 @@
 # below names the branch in target-branch, and the release commit moves it on to the next one,
 # so the config that lands on master with a release already points at the branch cut after it.
 #
-# Security updates ignore target-branch and always open against master. Retarget such a pull
-# request to the release branch, or, when the advisory is about something a published artifact
-# carries, ship it as a patch release from master.
+# Security updates ignore target-branch and always open against master. Because every
+# ecosystem sets target-branch, none of the options below apply to them either, the ignore
+# rules included: an advisory about a dependency pinned on purpose, such as the coroutines
+# floor, still opens a pull request that would move it. Close that one and move the pin by
+# hand, or not at all. Retarget any other to the release branch, or, when the advisory is about
+# something a published artifact carries, ship it as a patch release from master.
 
 version: 2
 
