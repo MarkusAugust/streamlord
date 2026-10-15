@@ -7,8 +7,9 @@ package io.github.markusaugust.streamlord.core.protocol
  * [SseDecoder.messages] reads a stream that has ended. This reads one that has not, which is what
  * a test needs when it holds a stream open, sends a command and waits for the patch it causes,
  * and what an inspector needs when it shows a stream as it runs. The grammar is the same: a line
- * ends at CRLF, CR or LF, a blank line ends a message, a `:` line is a comment, and an unknown
- * field is ignored.
+ * ends at CRLF, CR or LF, a blank line ends a message, a `:` line is a comment, a line without a
+ * colon is skipped, an unknown field is ignored, and an `id` is kept as written, as Datastar's
+ * client keeps it. [SseDecoder.event] judges what the client would reject.
  *
  * A line ending can be split between two pieces, a CR at the end of one and its LF at the start
  * of the next. The CR ends its line at once, so nothing waits on a stream that stops there, and
@@ -104,14 +105,14 @@ public class SseReader {
             comments += text.removePrefix(":").removePrefix(" ")
             return
         }
-        // "field: value", and a field with no colon is a field with an empty value.
+        // "field: value". A line without a colon is skipped, as Datastar's client skips it.
         val colon = text.indexOf(':')
-        val field = if (colon < 0) text else text.substring(0, colon)
-        val value = if (colon < 0) "" else text.substring(colon + 1).removePrefix(" ")
+        if (colon < 0) return
+        val field = text.substring(0, colon)
+        val value = text.substring(colon + 1).removePrefix(" ")
         when (field) {
             "event" -> event = value
-            // The SSE spec ignores an id with a NUL in it, as the browser's EventSource does.
-            "id" -> if ('\u0000' !in value) id = value
+            "id" -> id = value
             "retry" -> retry = value
             "data" -> data += value
             else -> Unit // An unknown field is ignored, as the SSE grammar says to.

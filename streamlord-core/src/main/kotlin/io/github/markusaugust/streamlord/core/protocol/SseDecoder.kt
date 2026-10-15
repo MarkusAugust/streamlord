@@ -31,16 +31,23 @@ public object SseDecoder {
     /**
      * Every Datastar event in [text], in the order the stream carried them.
      *
-     * It reads a stream the way the browser does, so that a test cannot pass on a response the
-     * client would not act on. A last message with no blank line after it is not an event, mode
-     * and namespace tokens are matched exactly as written, and a signal patch needs its signals.
+     * It reads a stream the way Datastar's client does, so that a test cannot pass on a response
+     * the client would not act on. A last message with no blank line after it is not an event,
+     * mode and namespace tokens are matched exactly as written, and a signal patch needs its
+     * signals.
      *
      * @throws DatastarEventValidationException if a Datastar frame names a mode or namespace that
-     *   does not exist, has no `signals` where it needs them, or carries a `retry` that is not a
-     *   number. A malformed frame is a bug in whatever wrote it, and reporting it is more use
-     *   than dropping it.
+     *   does not exist, has no `signals` where it needs them, or has a data line with no space
+     *   after its key; or if any message, Datastar's or not, finished or not, carries a `retry`
+     *   that is not a whole number or an `id` with a NUL in it, which the client takes from every
+     *   message and cannot send back. A malformed frame is a bug in whatever wrote it, and
+     *   reporting it is more use than dropping it.
      */
-    public fun decode(text: String): List<DatastarEvent> = messages(text).mapNotNull(::toEvent)
+    public fun decode(text: String): List<DatastarEvent> {
+        val parsed = parse(text)
+        parsed.pending.forEach { (field, value) -> check(field, value) }
+        return parsed.messages.mapNotNull(::event)
+    }
 
     /** One frame, for the caller who knows there is exactly one. */
     public fun decodeOne(text: String): DatastarEvent =
@@ -56,8 +63,20 @@ public object SseDecoder {
      * `id:` for resuming, an event from something else entirely. A caller checking any of those
      * needs the message, not the Datastar meaning of it.
      */
-    public fun messages(text: String): List<SseMessage> {
+    public fun messages(text: String): List<SseMessage> = parse(text).messages
+
+    /**
+     * The messages, and the `id` and `retry` lines of an unfinished one at the end: the client
+     * never dispatches that message, but takes those two from each line as it ends.
+     */
+    private class Parsed(
+        val messages: List<SseMessage>,
+        val pending: List<Pair<String, String>>,
+    )
+
+    private fun parse(text: String): Parsed {
         val out = ArrayList<SseMessage>()
+        val pending = ArrayList<Pair<String, String>>()
         var event: String? = null
         var id: String? = null
         var retry: String? = null
@@ -73,13 +92,16 @@ public object SseDecoder {
             retry = null
             data.clear()
             comments.clear()
+            pending.clear()
         }
 
         // One leading byte order mark is not part of the stream, and a line ends at CRLF, CR or LF.
-        val lines = Wire.lines(text.removePrefix("\uFEFF"))
+        val pieces = Wire.lines(text.removePrefix("\uFEFF"))
         // Text that ends in a line break splits into one empty piece too many: it is the end of
-        // the last line, not a blank line after it.
-        for (line in if (lines.last().isEmpty()) lines.dropLast(1) else lines) {
+        // the last line, not a blank line after it. Without one, the last line is still arriving.
+        val ended = pieces.last().isEmpty()
+        val lines = if (ended) pieces.dropLast(1) else pieces
+        for ((index, line) in lines.withIndex()) {
             if (line.isEmpty()) {
                 flush()
                 continue
@@ -88,23 +110,30 @@ public object SseDecoder {
                 comments += line.removePrefix(":").removePrefix(" ")
                 continue
             }
-            // "field: value", and a field with no colon is a field with an empty value.
+            // "field: value". A line without a colon is skipped, as Datastar's client skips it
+            // (fetch.ts:403 in 1.0.4), where the SSE grammar reads it as a field with no value.
             val colon = line.indexOf(':')
-            val field = if (colon < 0) line else line.substring(0, colon)
-            val value = if (colon < 0) "" else line.substring(colon + 1).removePrefix(" ")
+            if (colon < 0) continue
+            val field = line.substring(0, colon)
+            val value = line.substring(colon + 1).removePrefix(" ")
             when (field) {
                 "event" -> event = value
-                // The SSE spec ignores an id with a NUL in it, as the browser's EventSource does.
-                "id" -> if ('\u0000' !in value) id = value
+
+                // Kept as written, NUL included: the client keeps it too, and decoding rejects it.
+                "id" -> id = value
+
                 "retry" -> retry = value
+
                 "data" -> data += value
+
                 else -> Unit // An unknown field is ignored, as the SSE grammar says to.
             }
+            if ((field == "id" || field == "retry") && (ended || index < lines.lastIndex)) pending += field to value
         }
         // Comments are kept whatever follows them; fields with no blank line after them are an
         // unfinished message, which the SSE grammar discards and the client never dispatches.
         if (event == null && id == null && retry == null && data.isEmpty()) flush()
-        return out
+        return Parsed(out, pending)
     }
 
     /**
@@ -113,9 +142,24 @@ public object SseDecoder {
      * time, from an [SseReader].
      *
      * @throws DatastarEventValidationException as [decode] does, for a Datastar frame the client
-     *   would reject.
+     *   would reject, and for any message whose `id` or `retry` it would take and fail on.
      */
-    public fun event(message: SseMessage): DatastarEvent? = toEvent(message)
+    public fun event(message: SseMessage): DatastarEvent? {
+        message.id?.let { check("id", it) }
+        message.retry?.let { check("retry", it) }
+        return toEvent(message)
+    }
+
+    /** An `id` or `retry` that the client would take from any message and fail on. */
+    private fun check(
+        field: String,
+        value: String,
+    ) {
+        when (field) {
+            "id" -> if ('\u0000' in value) throw DatastarEventValidationException("An id with a NUL in it cannot go back as last-event-id")
+            "retry" -> parseRetry(value)
+        }
+    }
 
     private fun toEvent(message: SseMessage): DatastarEvent? {
         // Nothing of a message is judged until its event name says it is Datastar's.
@@ -123,8 +167,7 @@ public object SseDecoder {
         val args = group(message.data)
         val retry = message.retry?.let(::parseRetry)
         // An empty id is valid SSE and means "no id"; the client drops its last-event-id on an
-        // empty `id:` line. The client skips a bare `id` with no colon, as it skips every line
-        // without one (fetch.ts:403 in Datastar 1.0.4).
+        // empty `id:` line.
         val id = message.id?.takeIf { it.isNotEmpty() }
         return when (message.event) {
             DatastarProtocol.Events.PATCH_ELEMENTS -> {
@@ -165,6 +208,10 @@ public object SseDecoder {
         val groups = LinkedHashMap<String, MutableList<String>>()
         for (line in data) {
             val space = line.indexOf(' ')
+            // The client would read the key as the line minus its last character (fetch.ts:115-117).
+            if (space < 0 && line.isNotEmpty()) {
+                throw DatastarEventValidationException("A data line needs a space after its key: '$line'")
+            }
             val key = if (space < 0) line else line.substring(0, space)
             val value = if (space < 0) "" else line.substring(space + 1)
             groups.getOrPut(key) { ArrayList() } += value
