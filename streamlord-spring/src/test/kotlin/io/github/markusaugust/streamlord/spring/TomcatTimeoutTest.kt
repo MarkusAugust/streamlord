@@ -51,7 +51,7 @@ class TomcatTimeoutTest {
         fun infinite(request: HttpServletRequest, response: HttpServletResponse) = response.count(request, Duration.INFINITE)
     }
 
-    @Configuration
+    @Configuration(proxyBeanMethods = false)
     @EnableWebMvc
     class Mvc : WebMvcConfigurer {
         override fun configureAsyncSupport(configurer: AsyncSupportConfigurer) {
