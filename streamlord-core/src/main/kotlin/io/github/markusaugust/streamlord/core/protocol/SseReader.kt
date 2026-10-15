@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.core.protocol
 
+import io.github.markusaugust.streamlord.core.DatastarEventValidationException
+
 /**
  * Reads a stream that is still arriving: feed it text in whatever pieces the connection hands
  * over, and it gives back each message the moment its blank line has arrived.
@@ -35,8 +37,16 @@ public class SseReader {
      * The stream has ended: the comments read since the last message, as one message, the way
      * [SseDecoder.messages] keeps them at the end of a text. Fields with no blank line after them
      * are an unfinished message, which the client never dispatches, and are dropped.
+     *
+     * @throws DatastarEventValidationException when that unfinished message carries an `id` or a
+     *   `retry` that [SseDecoder.decode] rejects: the client takes both from each line as it ends,
+     *   dispatched or not.
      */
-    public fun finish(): SseMessage? {
+    public fun finish(): SseMessage? = finish(check = true)
+
+    internal fun finish(check: Boolean): SseMessage? {
+        // Only lines that have ended are read; one still arriving was never seen by the client.
+        if (check && (event != null || id != null || retry != null || data.isNotEmpty())) SseDecoder.checkTaken(id, retry)
         if (line.isNotEmpty()) {
             val text = line.toString()
             line.setLength(0)
@@ -105,11 +115,13 @@ public class SseReader {
             comments += text.removePrefix(":").removePrefix(" ")
             return
         }
-        // "field: value". A line without a colon is skipped, as Datastar's client skips it.
+        // "field: value". A line without a colon is skipped, as Datastar's client skips it, and a
+        // byte order mark is dropped from the start of the field and of the value, as the client's
+        // TextDecoder drops it from each (fetch.ts:403-408 in 1.0.4).
         val colon = text.indexOf(':')
         if (colon < 0) return
-        val field = text.substring(0, colon)
-        val value = text.substring(colon + 1).removePrefix(" ")
+        val field = text.substring(0, colon).removePrefix("\uFEFF")
+        val value = text.substring(colon + 1).removePrefix(" ").removePrefix("\uFEFF")
         when (field) {
             "event" -> event = value
             "id" -> id = value

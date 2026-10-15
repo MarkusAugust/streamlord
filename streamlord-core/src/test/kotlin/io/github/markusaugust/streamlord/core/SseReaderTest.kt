@@ -6,6 +6,7 @@ import io.github.markusaugust.streamlord.core.protocol.SseMessage
 import io.github.markusaugust.streamlord.core.protocol.SseReader
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 
 class SseReaderTest {
@@ -30,6 +31,15 @@ class SseReaderTest {
 
         assertEquals(listOf("a\u0000b", "c"), read.map { it.id })
         assertEquals(SseDecoder.messages(wire), read)
+    }
+
+    // The live reader judges the end of a stream as decode judges the end of a text.
+    @Test
+    fun `at the end, an unfinished message's id and retry are checked`() {
+        val reader = SseReader()
+        reader.feed("event: datastar-patch-signals\ndata: signals {}\n\nretry: soon\n")
+
+        assertFailsWith<DatastarEventValidationException> { reader.finish() }
     }
 
     @Test
@@ -82,11 +92,13 @@ class SseReaderTest {
         assertNull(SseDecoder.event(message))
     }
 
+    // The client decodes each field and value on its own, and each decode drops a leading mark.
     @Test
-    fun `one leading byte order mark is dropped, a later one is text`() {
+    fun `a byte order mark before a field or a value is dropped, one inside a value is text`() {
         val reader = SseReader()
-        assertEquals(listOf(listOf("x")), data(reader.feed("﻿data: x\n\n")))
-        assertEquals(listOf(listOf("﻿y")), data(reader.feed("data: ﻿y\n\n")))
+        assertEquals(listOf(listOf("x")), data(reader.feed("\uFEFFdata: x\n\n")))
+        assertEquals(listOf(listOf("y")), data(reader.feed("data: \uFEFFy\n\n")))
+        assertEquals(listOf(listOf("y\uFEFFz")), data(reader.feed("data: y\uFEFFz\n\n")))
     }
 
     @Test

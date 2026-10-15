@@ -8,11 +8,11 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 
 /**
- * The decoder is what a test trusts to say what the browser received, so it has to read a stream
- * the way the browser does. Each case here is one where it used to be more forgiving, or less,
- * than the SSE grammar and the Datastar client.
+ * The decoder is what a test trusts to say what the client received, so it has to read a stream
+ * the way Datastar's client does (fetch.ts in 1.0.4). Each case here is one where it used to be
+ * more forgiving, or less.
  */
-class SseDecoderAsTheBrowserReadsTest {
+class SseDecoderAsTheClientReadsTest {
     private val signals = "event: datastar-patch-signals\ndata: signals {\"a\":1}\n"
 
     @Test
@@ -64,7 +64,41 @@ class SseDecoderAsTheBrowserReadsTest {
     @Test
     fun `id and retry in an unfinished message are checked too`() {
         assertFailsWith<DatastarEventValidationException> { SseDecoder.decode(signals + "\nid: 9\nretry: soon\n") }
+        assertFailsWith<DatastarEventValidationException> { SseDecoder.decode(signals + "\nid: a\u0000b\r\n") }
+        assertFailsWith<DatastarEventValidationException> { SseDecoder.decode(signals + "\nretry: soon\r") }
         assertEquals(1, SseDecoder.decode(signals + "\nretry: soon").size, "a line still arriving is not read yet")
+    }
+
+    // The client keeps the last of each, finished message or not.
+    @Test
+    fun `the last retry of a message is the one judged`() {
+        assertEquals(1, SseDecoder.decode("retry: soon\nretry: 5\n" + signals + "\n").size)
+        assertEquals(1, SseDecoder.decode(signals + "\nretry: soon\nretry: 5\n").size)
+    }
+
+    // fetch turns header values into ByteStrings and refuses one above U+00FF or with a control
+    // character, so the client cannot reconnect with it.
+    @Test
+    fun `an id the client could not send back is malformed`() {
+        for (id in listOf("€1", "a\u0001b", "a\u007Fb")) {
+            assertFailsWith<DatastarEventValidationException>(id) { SseDecoder.decode("id: $id\n" + signals + "\n") }
+        }
+        assertEquals("ø1", SseDecoder.decodeOne("id: ø1\n" + signals + "\n").eventId)
+    }
+
+    @Test
+    fun `an id is judged on a message that is not Datastar's too`() {
+        val message = SseDecoder.messages("event: other\nid: a\u0000b\ndata: x\n\n").single()
+
+        assertFailsWith<DatastarEventValidationException> { SseDecoder.event(message) }
+    }
+
+    // The client decodes each field and each value on its own, and each decode drops a leading
+    // byte order mark (fetch.ts:406-408).
+    @Test
+    fun `a byte order mark before a field or a value is dropped`() {
+        assertEquals(PatchSignals("{}"), SseDecoder.decodeOne("\uFEFFevent: datastar-patch-signals\ndata: signals {}\n\n"))
+        assertEquals(PatchSignals("{}"), SseDecoder.decodeOne("event: \uFEFFdatastar-patch-signals\ndata: \uFEFFsignals {}\n\n"))
     }
 
     // The client stores it and sends it back as last-event-id, which a header cannot carry, so
