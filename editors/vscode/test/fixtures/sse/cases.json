@@ -1,0 +1,264 @@
+{
+  "description": "Server-Sent Events read as Datastar's client reads them, for the Stream Inspector of both editors. Each case feeds its chunks in order and lists the messages they complete; finish is what the parser hands back when the stream ends. Read by sseCorpus.test.ts and by SseCorpusTest.kt in streamlord-analysis.",
+  "cases": [
+    {
+      "name": "a message with only a retry is handed back, since the client acts on it",
+      "chunks": [
+        "retry: 500\n\n"
+      ],
+      "messages": [
+        {
+          "event": "message",
+          "id": null,
+          "retry": 500,
+          "data": [],
+          "comments": []
+        }
+      ],
+      "finish": null
+    },
+    {
+      "name": "a byte order mark before a field or a value is dropped",
+      "chunks": [
+        "﻿event: datastar-patch-signals\ndata: ﻿signals {}\n\n"
+      ],
+      "messages": [
+        {
+          "event": "datastar-patch-signals",
+          "id": null,
+          "retry": null,
+          "data": [
+            "signals {}"
+          ],
+          "comments": []
+        }
+      ],
+      "finish": null
+    },
+    {
+      "name": "two marks before the first field leave one in its name, as the client's do",
+      "chunks": [
+        "﻿﻿event: e\ndata: x\n\n"
+      ],
+      "messages": [
+        {
+          "event": "message",
+          "id": null,
+          "retry": null,
+          "data": [
+            "x"
+          ],
+          "comments": []
+        }
+      ],
+      "finish": null
+    },
+    {
+      "name": "an id with a NUL in it is kept, as the client keeps it",
+      "chunks": [
+        "id: a\u0000b\ndata: x\n\n"
+      ],
+      "messages": [
+        {
+          "event": "message",
+          "id": "a\u0000b",
+          "retry": null,
+          "data": [
+            "x"
+          ],
+          "comments": []
+        }
+      ],
+      "finish": null
+    },
+    {
+      "name": "a retry that is not a whole number is shown as none",
+      "chunks": [
+        "retry: 1e3\ndata: x\n\n"
+      ],
+      "messages": [
+        {
+          "event": "message",
+          "id": null,
+          "retry": null,
+          "data": [
+            "x"
+          ],
+          "comments": []
+        }
+      ],
+      "finish": null
+    },
+    {
+      "name": "a retry that does not fit an int is shown as none, the last line deciding",
+      "chunks": [
+        "retry: 5\nretry: 2147483648\ndata: x\n\n"
+      ],
+      "messages": [
+        {
+          "event": "message",
+          "id": null,
+          "retry": null,
+          "data": [
+            "x"
+          ],
+          "comments": []
+        }
+      ],
+      "finish": null
+    },
+    {
+      "name": "an explicit event: message with nothing else is still a message",
+      "chunks": [
+        "event: message\n\n"
+      ],
+      "messages": [
+        {
+          "event": "message",
+          "id": null,
+          "retry": null,
+          "data": [],
+          "comments": []
+        }
+      ],
+      "finish": null
+    },
+    {
+      "name": "comments after the last message come back at the end",
+      "chunks": [
+        "data: x\n\n: bye\n"
+      ],
+      "messages": [
+        {
+          "event": "message",
+          "id": null,
+          "retry": null,
+          "data": [
+            "x"
+          ],
+          "comments": []
+        }
+      ],
+      "finish": {
+        "event": "message",
+        "id": null,
+        "retry": null,
+        "data": [],
+        "comments": [
+          "bye"
+        ]
+      }
+    },
+    {
+      "name": "an unfinished message is dropped at the end",
+      "chunks": [
+        "data: x\n\ndata: y\n"
+      ],
+      "messages": [
+        {
+          "event": "message",
+          "id": null,
+          "retry": null,
+          "data": [
+            "x"
+          ],
+          "comments": []
+        }
+      ],
+      "finish": null
+    },
+    {
+      "name": "a line without a colon is skipped",
+      "chunks": [
+        "event: e\nevent\nid: 7\nid\ndata: x\n\n"
+      ],
+      "messages": [
+        {
+          "event": "e",
+          "id": "7",
+          "retry": null,
+          "data": [
+            "x"
+          ],
+          "comments": []
+        }
+      ],
+      "finish": null
+    },
+    {
+      "name": "a CRLF split across two chunks is one line ending",
+      "chunks": [
+        "data: a\r",
+        "\ndata: b\n\n"
+      ],
+      "messages": [
+        {
+          "event": "message",
+          "id": null,
+          "retry": null,
+          "data": [
+            "a",
+            "b"
+          ],
+          "comments": []
+        }
+      ],
+      "finish": null
+    },
+    {
+      "name": "a lone CR ends a line",
+      "chunks": [
+        "data: a\r\r"
+      ],
+      "messages": [
+        {
+          "event": "message",
+          "id": null,
+          "retry": null,
+          "data": [
+            "a"
+          ],
+          "comments": []
+        }
+      ],
+      "finish": null
+    },
+    {
+      "name": "a keep-alive is a message of comments",
+      "chunks": [
+        ": keep-alive\n\n"
+      ],
+      "messages": [
+        {
+          "event": "message",
+          "id": null,
+          "retry": null,
+          "data": [],
+          "comments": [
+            "keep-alive"
+          ]
+        }
+      ],
+      "finish": null
+    },
+    {
+      "name": "one space after the colon is dropped, a second is kept",
+      "chunks": [
+        "data:x\ndata:  y\n\n"
+      ],
+      "messages": [
+        {
+          "event": "message",
+          "id": null,
+          "retry": null,
+          "data": [
+            "x",
+            " y"
+          ],
+          "comments": []
+        }
+      ],
+      "finish": null
+    }
+  ]
+}

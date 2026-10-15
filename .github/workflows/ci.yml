@@ -76,7 +76,8 @@ jobs:
               .github/workflows/*)
                 kotlin=true; vscode=true; intellij=true; docs=true; image=true ;;
               # The corpus both editors' checks are held to: CorpusTest in the SDK reads it too.
-              editors/vscode/test/fixtures/corpus/*) vscode=true; kotlin=true; intellij=true ;;
+              # And the SSE corpus both inspectors read, SseCorpusTest in streamlord-analysis too.
+              editors/vscode/test/fixtures/corpus/*|editors/vscode/test/fixtures/sse/*) vscode=true; kotlin=true; intellij=true ;;
               editors/vscode/*)   vscode=true ;;
               editors/intellij/*) intellij=true ;;
               # The catalog feeds the analysis, and VS Code's generated custom data.

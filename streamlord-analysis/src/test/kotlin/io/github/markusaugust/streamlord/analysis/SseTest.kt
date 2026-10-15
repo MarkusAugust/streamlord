@@ -47,4 +47,27 @@ class SseTest {
         val p = SseParser()
         assertEquals(listOf(2147483647, null), p.feed("retry: 2147483647\ndata: a\n\nretry: 2147483648\ndata: b\n\n").map { it.retry })
     }
+
+    // As the client splits it: without a space the key is the line minus its last character, and
+    // the value is the whole line (fetch.ts:115-117).
+    @Test
+    fun `a data line without a space is split as the client splits it`() {
+        val message = SseParser().feed("event: datastar-patch-signals\ndata: signals\n\n").single()
+
+        assertEquals(mapOf("signal" to "signals"), decodeDatastar(message).args)
+    }
+
+    // One long line in small pieces used to be scanned again from its start on every piece.
+    @Test
+    fun `a long line in small pieces is read in linear time`() {
+        val parser = SseParser()
+        val started = System.nanoTime()
+        parser.feed("data: ")
+        repeat(80_000) { parser.feed("0123456789") }
+        val messages = parser.feed("\n\n")
+        val millis = (System.nanoTime() - started) / 1_000_000
+
+        assertEquals(800_000, messages.single().data.single().length)
+        kotlin.test.assertTrue(millis < 2_000, "took $millis ms")
+    }
 }
