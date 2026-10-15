@@ -22,7 +22,15 @@ public sealed interface DatastarEvent {
     /** Optional SSE `id:` line, used by browsers for replay after reconnection. */
     public val eventId: String?
 
-    /** Optional SSE `retry:` line. `null` leaves the browser default (1000 ms) in place. */
+    /**
+     * Optional SSE `retry:` line, from 1 ms to [Int.MAX_VALUE] ms: how long the client waits
+     * before it reconnects. It holds for the rest of the action, across reconnects too, until a
+     * later frame sets another. `null` leaves the client's current interval in place, which is
+     * the action's `retryInterval` (1000 ms unless set) until a frame has changed it. 1000 ms is
+     * never written, as the SDK specification has it, so a stream that has changed the interval
+     * goes back with 999 or 1001 ms. `retryMaxCount` only counts reconnects that never reach a
+     * 200, and `retryMaxWait` does not cap this value.
+     */
     public val retry: Duration?
 }
 
@@ -160,15 +168,8 @@ private fun validateCommon(
     eventId: String?,
     retry: Duration?,
 ) {
-    eventId?.let {
-        if (it.isEmpty()) throw DatastarEventValidationException("eventId must not be empty")
-        Wire.singleLine(it, "eventId")
-    }
-    retry?.let {
-        if (!it.isPositive() || it.isInfinite()) {
-            throw DatastarEventValidationException("retry must be a positive, finite duration")
-        }
-    }
+    eventId?.let(Wire::eventId)
+    retry?.let(Wire::retry)
 }
 
 /** The same event with [id] as its SSE `id:`, or none when it is `null`. */

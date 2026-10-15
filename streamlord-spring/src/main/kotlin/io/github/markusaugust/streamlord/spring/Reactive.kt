@@ -29,8 +29,10 @@ public fun DatastarEvent.toServerSentEvent(streamlord: Streamlord = Streamlord.D
     val frame = SseEncoder.frame(streamlord.guard(this))
     val builder = ServerSentEvent.builder(frame.data).event(frame.event)
     frame.id?.let { builder.id(it) }
-    // The protocol default is left off the wire, as SseFrame.render leaves it off.
-    frame.retry?.takeIf { it != DatastarProtocol.DEFAULT_RETRY }?.let { builder.retry(JavaDuration.ofMillis(it.inWholeMilliseconds)) }
+    // The protocol default is left off the wire, as SseFrame.render leaves it off, compared as written.
+    frame.retry
+        ?.takeIf { it.inWholeMilliseconds != DatastarProtocol.DEFAULT_RETRY.inWholeMilliseconds }
+        ?.let { builder.retry(JavaDuration.ofMillis(it.inWholeMilliseconds)) }
     return builder.build()
 }
 
