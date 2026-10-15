@@ -1,11 +1,13 @@
 package io.github.markusaugust.streamlord.core
 
+import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.core.protocol.SseDecoder
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * The decoder is what a test trusts to say what the client received, so it has to read a stream
@@ -76,14 +78,41 @@ class SseDecoderAsTheClientReadsTest {
         assertEquals(1, SseDecoder.decode(signals + "\nretry: soon\nretry: 5\n").size)
     }
 
-    // fetch turns header values into ByteStrings and refuses one above U+00FF or with a control
-    // character, so the client cannot reconnect with it.
+    // fetch turns header values into ByteStrings and refuses one above U+00FF, so the client
+    // cannot reconnect with it. Latin-1 and other control characters are header bytes it sends.
     @Test
     fun `an id the client could not send back is malformed`() {
-        for (id in listOf("€1", "a\u0001b", "a\u007Fb")) {
-            assertFailsWith<DatastarEventValidationException>(id) { SseDecoder.decode("id: $id\n" + signals + "\n") }
+        assertFailsWith<DatastarEventValidationException> { SseDecoder.decode("id: €1\n" + signals + "\n") }
+        for (id in listOf("ø1", "a\u0001b", "a\u007Fb")) {
+            assertEquals(id, SseDecoder.decodeOne("id: $id\n" + signals + "\n").eventId)
         }
-        assertEquals("ø1", SseDecoder.decodeOne("id: ø1\n" + signals + "\n").eventId)
+    }
+
+    // The client reads both flags with trim() === 'true' (utils/text.ts:24).
+    @Test
+    fun `a flag with spaces around true is true`() {
+        val signals = SseDecoder.decodeOne("event: datastar-patch-signals\ndata: signals {}\ndata: onlyIfMissing true \n\n")
+        val elements =
+            SseDecoder.decodeOne("event: datastar-patch-elements\ndata: elements <p id=\"a\"></p>\ndata: useViewTransition  true\n\n")
+
+        assertTrue((signals as PatchSignals).onlyIfMissing)
+        assertTrue((elements as PatchElements).useViewTransition)
+    }
+
+    // Digits only, and not zero: zero has the client reconnect at once without end. Checked on
+    // every message alike.
+    @Test
+    fun `a retry of zero or with a sign is malformed on every message`() {
+        for (retry in listOf("0", "-5", "+5")) {
+            assertFailsWith<DatastarEventValidationException>(retry) { SseDecoder.decode("retry: $retry\n" + signals + "\n") }
+            assertFailsWith<DatastarEventValidationException>(retry) { SseDecoder.decode("event: other\nretry: $retry\ndata: x\n\n") }
+        }
+    }
+
+    // Each field is decoded on its own and loses one leading mark; a second one is part of the name.
+    @Test
+    fun `two byte order marks before the first field leave one in its name`() {
+        assertEquals(emptyList(), SseDecoder.decode("\uFEFF\uFEFF" + signals + "\n"))
     }
 
     @Test

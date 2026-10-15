@@ -24,7 +24,6 @@ import io.github.markusaugust.streamlord.core.DatastarEventValidationException
  */
 public class SseReader {
     private val line = StringBuilder()
-    private var started = false
     private var afterCr = false
 
     private var event: String? = null
@@ -70,11 +69,6 @@ public class SseReader {
     public fun feed(chunk: String): List<SseMessage> {
         val out = ArrayList<SseMessage>()
         for (char in chunk) {
-            if (!started) {
-                started = true
-                // One leading byte order mark is not part of the stream.
-                if (char == '\uFEFF') continue
-            }
             if (afterCr) {
                 afterCr = false
                 if (char == '\n') continue

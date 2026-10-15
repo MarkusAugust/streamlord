@@ -84,18 +84,18 @@ public object SseDecoder {
     }
 
     /**
-     * The `id` and `retry` the client takes from any message, Datastar's or not, judged as
-     * [decode] judges them. An `id` goes back as the `last-event-id` header on a reconnect, and
-     * `fetch` cannot send one with a control character or one above U+00FF in it, so every
-     * reconnect would fail. A `retry` must be a whole number of milliseconds, as the SSE grammar
-     * says: the client ignores text it cannot read as a number and reads some it should not, an
-     * empty one as zero among them, which is a bug in whatever wrote it either way.
+     * The `id` and `retry` the client takes from any message, Datastar's or not. An `id` goes back
+     * as the `last-event-id` header on a reconnect, and `fetch` cannot send one with a NUL or a
+     * character above U+00FF in it, so every reconnect would fail. A `retry` must be a whole
+     * number of milliseconds, as the SSE grammar says, and not zero: the client ignores text it
+     * cannot read as a number and reads some it should not, an empty one as zero among them, and
+     * zero has it reconnect at once without end.
      */
     internal fun checkTaken(
         id: String?,
         retry: String?,
     ) {
-        id?.firstOrNull { (it < ' ' && it != '\t') || it == '\u007F' || it > '\u00FF' }?.let {
+        id?.firstOrNull { it == '\u0000' || it > '\u00FF' }?.let {
             throw DatastarEventValidationException(
                 "An id with U+%04X in it cannot go back as last-event-id, so every reconnect would fail".format(it.code),
             )
@@ -118,7 +118,7 @@ public object SseDecoder {
                     selector = args[DataLines.SELECTOR],
                     mode = args[DataLines.MODE]?.let(::mode) ?: ElementPatchMode.DEFAULT,
                     namespace = args[DataLines.NAMESPACE]?.let(::namespace) ?: ElementNamespace.DEFAULT,
-                    useViewTransition = args[DataLines.USE_VIEW_TRANSITION] == "true",
+                    useViewTransition = args[DataLines.USE_VIEW_TRANSITION]?.trim() == "true",
                     viewTransitionSelector = args[DataLines.VIEW_TRANSITION_SELECTOR],
                     eventId = id,
                     retry = retry,
@@ -130,7 +130,7 @@ public object SseDecoder {
                     signals =
                         args[DataLines.SIGNALS]
                             ?: throw DatastarEventValidationException("A signal patch carried no signals line; the client rejects it"),
-                    onlyIfMissing = args[DataLines.ONLY_IF_MISSING] == "true",
+                    onlyIfMissing = args[DataLines.ONLY_IF_MISSING]?.trim() == "true",
                     eventId = id,
                     retry = retry,
                 )
@@ -161,9 +161,15 @@ public object SseDecoder {
         return groups.mapValues { it.value.joinToString("\n") }
     }
 
-    private fun parseRetry(value: String): Duration =
-        value.toLongOrNull()?.milliseconds
-            ?: throw DatastarEventValidationException("retry must be a whole number of milliseconds, not '$value'")
+    // Digits only, as the SSE grammar has it, where toLongOrNull also takes a sign. Zero is digits
+    // too, but it has the client reconnect at once and again without end.
+    private fun parseRetry(value: String): Duration {
+        val millis =
+            value.takeIf { it.isNotEmpty() && it.all { c -> c in '0'..'9' } }?.toLongOrNull()
+                ?: throw DatastarEventValidationException("retry must be a whole number of milliseconds, not '$value'")
+        if (millis == 0L) throw DatastarEventValidationException("retry: 0 has the client reconnect at once, without end")
+        return millis.milliseconds
+    }
 
     // Exact, where ElementPatchMode.fromWire is forgiving: the client compares these tokens as written.
     private fun mode(wire: String): ElementPatchMode =
