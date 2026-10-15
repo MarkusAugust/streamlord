@@ -4,8 +4,10 @@ name: Security
 # vulnerability. Everything here reports to the repository's Security tab rather than failing
 # a build, because an advisory published on a Tuesday is not something a pull request did.
 #
-# The one check that does fail a build is in ci.yml, on the streamlord-live image, just before
-# it is pushed: that is the moment a known vulnerability can still be kept from shipping.
+# The one check that does fail a build is in ci.yml, on the streamlord-live image: on master
+# just before it is pushed, which is the moment a known vulnerability can still be kept from
+# shipping, and on a release branch, as the warning before anything is tagged. On a release
+# tag it only reports.
 
 on:
   push:
