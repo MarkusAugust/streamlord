@@ -68,6 +68,17 @@ class SpringAdapterTest {
         assertTrue(": keep-alive" in response.contentAsString, response.contentAsString)
     }
 
+    // The heartbeat runs on Dispatchers.IO, so a block that blocks its own thread does not hold it.
+    @Test
+    fun `a block that blocks its thread still gets its heartbeat`() {
+        val response = MockHttpServletResponse()
+        response
+            .datastarStream(Streamlord(heartbeat = 50.milliseconds)) { Thread.sleep(300) }
+            .writeTo(response.outputStream)
+
+        assertTrue(": keep-alive" in response.contentAsString, response.contentAsString)
+    }
+
     @Test
     fun `a heartbeat for one stream applies when the bean has none`() {
         val response = MockHttpServletResponse()
@@ -116,7 +127,11 @@ class SpringAdapterTest {
             .datastarStream(Streamlord(compress = true), request, heartbeat = 50.milliseconds) { delay(300.milliseconds) }
             .writeTo(response.outputStream)
 
-        val text = java.util.zip.GZIPInputStream(response.contentAsByteArray.inputStream()).readBytes().decodeToString()
+        val text =
+            java.util.zip
+                .GZIPInputStream(response.contentAsByteArray.inputStream())
+                .readBytes()
+                .decodeToString()
         assertTrue(text.startsWith(": keep-alive"), text)
     }
 
@@ -157,7 +172,10 @@ class SpringAdapterTest {
         assertEquals(listOf("Accept-Encoding"), response.getHeaders("Vary"))
         assertEquals(
             "event: datastar-patch-signals\ndata: signals {\"n\":1}\n\n",
-            java.util.zip.GZIPInputStream(response.contentAsByteArray.inputStream()).readBytes().decodeToString(),
+            java.util.zip
+                .GZIPInputStream(response.contentAsByteArray.inputStream())
+                .readBytes()
+                .decodeToString(),
         )
     }
 
@@ -184,7 +202,9 @@ class SpringAdapterTest {
 
         assertFailsWith<IllegalStateException> { body.writeTo(response.outputStream) }
         assertFailsWith<java.io.EOFException> {
-            java.util.zip.GZIPInputStream(response.contentAsByteArray.inputStream()).readBytes()
+            java.util.zip
+                .GZIPInputStream(response.contentAsByteArray.inputStream())
+                .readBytes()
         }
     }
 

@@ -20,11 +20,14 @@ import io.github.markusaugust.streamlord.core.port.driven.carriesSignalsInQuery
 import io.github.markusaugust.streamlord.core.port.driving.DatastarStream
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
 import io.github.markusaugust.streamlord.core.protocol.SseEncoder
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.reflect.KType
 import kotlin.reflect.typeOf
 import kotlin.time.Duration
@@ -131,11 +134,18 @@ public class Streamlord(
         sink: SseSink,
         authorisation: StreamAuthorisation?,
         block: suspend DatastarStream.() -> Unit,
-    ): Boolean = stream(sink, authorisation, heartbeat, block)
+    ): Boolean = stream(sink, authorisation, heartbeat, block = block)
 
     /**
      * [stream] with a [heartbeat] for this stream alone, in place of the instance's: an interval,
      * or `null` for none. Adapters pass what their caller asked for.
+     *
+     * The heartbeat runs in [heartbeatContext] added to the caller's. An adapter whose [block] may
+     * block its thread, as a servlet's can, passes a dispatcher of its own, so the comment is not
+     * held back while the thread is. [StreamAuthorisation.allows] and
+     * [StreamAuthorisation.onRefused] can then run there, without the caller's thread-locals. The
+     * context must not carry a [Job]: the heartbeat stays a child of the stream, which waits for it
+     * before it returns.
      *
      * The JVM name stays plain through `@JvmName`: a `Duration` parameter would otherwise add a
      * hash of the signature to it, which changes with every parameter added.
@@ -145,9 +155,11 @@ public class Streamlord(
         sink: SseSink,
         authorisation: StreamAuthorisation?,
         heartbeat: Duration?,
+        heartbeatContext: CoroutineContext = EmptyCoroutineContext,
         block: suspend DatastarStream.() -> Unit,
     ): Boolean {
         requireHeartbeat(heartbeat)
+        require(heartbeatContext[Job] == null) { "heartbeatContext must not carry a Job; the heartbeat belongs to the stream" }
         val stream = SseDatastarStream(sink, codec, ::guard, authorisation)
         return try {
             stream.authorise()
@@ -156,7 +168,7 @@ public class Streamlord(
                 stream.block()
             } else {
                 coroutineScope {
-                    val pulse = launch { stream.pulse(interval) }
+                    val pulse = launch(heartbeatContext) { stream.pulse(interval) }
                     try {
                         stream.block()
                     } finally {

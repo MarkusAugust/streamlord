@@ -13,6 +13,7 @@ import io.github.markusaugust.streamlord.core.port.driving.DatastarStream
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.runBlocking
 import org.springframework.web.context.request.NativeWebRequest
@@ -37,7 +38,7 @@ import kotlin.time.Duration
  *
  * A controller returns a StreamingResponseBody. Spring frees the container thread and runs the
  * body on a thread from its MVC async executor, which the stream holds until the block returns.
- * Coroutines run inside runBlocking on that thread.
+ * The block runs inside runBlocking on that thread; the heartbeat on Dispatchers.IO.
  */
 
 /**
@@ -98,7 +99,7 @@ public fun HttpServletResponse.datastarStream(
     return StreamingResponseBody { output ->
         if (!gzip) {
             val writer = OutputStreamWriter(output, StandardCharsets.UTF_8)
-            runBlocking { streamlord.stream(ServletSseSink(writer, this@datastarStream), authorisation, heartbeat, block) }
+            streamlord.streamBlocking(ServletSseSink(writer, this@datastarStream), authorisation, heartbeat, block)
             writer.flush()
             return@StreamingResponseBody
         }
@@ -106,7 +107,7 @@ public fun HttpServletResponse.datastarStream(
         val body = SyncGzipOutputStream(output)
         try {
             val writer = OutputStreamWriter(body, StandardCharsets.UTF_8)
-            runBlocking { streamlord.stream(ServletSseSink(writer, this@datastarStream), authorisation, heartbeat, block) }
+            streamlord.streamBlocking(ServletSseSink(writer, this@datastarStream), authorisation, heartbeat, block)
             writer.flush()
             // Only after a stream that ended well; one cut short is left for the client to see fail.
             body.finish()
@@ -217,6 +218,21 @@ public class ServletSseSink(
         writer.flush()
         response.flushBuffer()
     }
+}
+
+/*
+ * The block runs on this thread, where Spring's request context is, and the heartbeat on
+ * Dispatchers.IO, so a block that blocks the thread does not hold the comment back. Not a small
+ * pool of its own: a write blocks its thread, and one slow reader would stall every heartbeat.
+ * runBlocking waits for the heartbeat before it returns, also when Spring's timeout interrupts it.
+ */
+private fun Streamlord.streamBlocking(
+    sink: SseSink,
+    authorisation: StreamAuthorisation?,
+    heartbeat: Duration?,
+    block: suspend DatastarStream.() -> Unit,
+) {
+    runBlocking { stream(sink, authorisation, heartbeat, Dispatchers.IO, block) }
 }
 
 /** Gzip with a sync flush per flush, and a way to free its native memory without closing the response. */

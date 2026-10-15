@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.spring
 
 import io.github.markusaugust.streamlord.core.SignalsTooLargeException
+import io.github.markusaugust.streamlord.core.application.StreamAuthorisation
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -10,6 +11,7 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.context.request.RequestContextHolder
 import org.springframework.web.context.support.AnnotationConfigWebApplicationContext
 import org.springframework.web.servlet.DispatcherServlet
 import org.springframework.web.servlet.config.annotation.AsyncSupportConfigurer
@@ -36,6 +38,10 @@ import kotlin.time.Duration.Companion.seconds
  * Tomcat checks for timeouts once a second, so the bounds here are seconds, not milliseconds.
  */
 class TomcatTimeoutTest {
+    companion object {
+        val seen: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
+    }
+
     @RestController
     class Streams {
         // Forty events, one every 100 ms: four seconds, long past the 300 ms default.
@@ -88,6 +94,26 @@ class TomcatTimeoutTest {
             response.datastarStream(request = request, timeout = 10.seconds) {
                 delay(1000.milliseconds)
                 throw SignalsTooLargeException(10, 5)
+            }
+
+        // Where the request context is: in the block, and in the authorisation's first answer, but
+        // not when the heartbeat asks from Dispatchers.IO.
+        @GetMapping("/contexts")
+        fun contexts(
+            request: HttpServletRequest,
+            response: HttpServletResponse,
+        ): StreamingResponseBody =
+            response.datastarStream(
+                request = request,
+                authorisation =
+                    StreamAuthorisation(every = 1.milliseconds) {
+                        seen += "allows ${RequestContextHolder.getRequestAttributes() != null}"
+                        true
+                    },
+                heartbeat = 50.milliseconds,
+            ) {
+                seen += "block ${RequestContextHolder.getRequestAttributes() != null}"
+                Thread.sleep(400)
             }
 
         // Spring runs a suspend handler in an async cycle of its own, and the stream in a second.
@@ -162,6 +188,15 @@ class TomcatTimeoutTest {
                 .body()
                 .use { lines -> lines.filter { it.startsWith("event: ") }.count() }
         return lines.toInt() to (System.nanoTime() - started) / 1_000_000
+    }
+
+    @Test
+    fun `the block has the request context and the heartbeat's authorisation does not`() {
+        seen.clear()
+        events("/contexts")
+
+        assertEquals(listOf("allows true", "block true"), seen.take(2))
+        assertTrue("allows false" in seen.drop(2), seen.toString())
     }
 
     @Test

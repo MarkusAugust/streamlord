@@ -20,9 +20,14 @@ All notable changes to Streamlord are recorded here. The format follows
   `suspend` controller, and finds the request through the parameter or Spring's
   `RequestContextHolder`; outside a request that Spring MVC is handling it throws rather than
   doing nothing.
+- `heartbeatContext` on `Streamlord.stream`: the context the heartbeat runs in, added to the
+  caller's, for an adapter whose block may block its thread. One that carries a `Job` throws.
 
 ### Changed
 
+- On Spring WebMVC the heartbeat runs on `Dispatchers.IO`, beside the block, so a block that
+  blocks its thread no longer holds it back. An authorisation's `allows()` and `onRefused`, when
+  the heartbeat asks, run there without the request's thread-locals.
 - The heartbeat is on by default: `Streamlord.DEFAULT_HEARTBEAT`, 30 seconds, for `Streamlord()`,
   `Streamlord.Default` and the Ktor plugin, and for code compiled against 0.11 or 0.12 that
   relies on the default. Every stream Streamlord opens on Ktor or Spring WebMVC that is silent for
