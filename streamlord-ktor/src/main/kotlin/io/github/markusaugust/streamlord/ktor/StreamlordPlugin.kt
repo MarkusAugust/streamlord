@@ -35,10 +35,11 @@ public class StreamlordPluginConfig {
 
     /**
      * Write an SSE comment whenever a stream has been silent this long, so an idle proxy keeps the
-     * connection open. Any frame resets the wait. Off when null, which is the default. One stream
-     * can take its own, or none, through the `heartbeat` parameter of `respondDatastar`.
+     * connection open. Any frame resets the wait. [Streamlord.DEFAULT_HEARTBEAT] unless set; null
+     * turns it off. One stream can take its own, or none, through the `heartbeat` parameter of
+     * `respondDatastar`.
      */
-    public var heartbeat: Duration? = null
+    public var heartbeat: Duration? = Streamlord.DEFAULT_HEARTBEAT
 
     /**
      * Gzip, and only gzip, every stream whose request takes it, flushed event by event so nothing waits. Leave

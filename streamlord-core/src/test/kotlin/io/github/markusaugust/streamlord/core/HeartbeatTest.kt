@@ -52,10 +52,10 @@ class HeartbeatTest {
             beating.stream(sink, null) {
                 delay(4.seconds)
                 patchSignals("tick" to 1)
-                delay(18.seconds)
+                delay(14.seconds)
             }
 
-            assertEquals(0, sink.comments(), "the frame at 4 seconds came before the early comment was due")
+            assertEquals(0, sink.comments(), "the frame at 4 seconds came first, and 15 silent seconds never passed")
         }
 
     @Test
