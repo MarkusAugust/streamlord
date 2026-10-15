@@ -129,11 +129,11 @@ fails when the code no longer matches it. That catches a change that compiles an
 code built against the previous release. After a change you meant, run
 `./gradlew updateKotlinAbi` and commit the dump with it.
 
-Releases go to Maven Central from CI only: bump `version` in `gradle.properties`, commit, push
-a tag `v<version>`. The `publish-maven-central` job checks that the tag matches, then signs and
-publishes every module under `io.github.markusaugust.streamlord` through the Central Portal
-with automatic release. The VS Code extension has its own tag, `vscode-v<version>`, and the
-IntelliJ plugin `intellij-v<version>`.
+Releases go to Maven Central from CI only, from a tag `v<version>` on the release branch. The
+`publish-maven-central` job checks that the tag matches, then signs and publishes every module
+under `io.github.markusaugust.streamlord` through the Central Portal with automatic release.
+The VS Code extension has its own tag, `vscode-v<version>`, and the IntelliJ plugin
+`intellij-v<version>`. [RELEASING.md](RELEASING.md) has the branch model and every step.
 
 ## Running the documentation site locally
 
