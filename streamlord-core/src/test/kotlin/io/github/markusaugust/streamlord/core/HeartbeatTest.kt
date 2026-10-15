@@ -6,9 +6,13 @@ import io.github.markusaugust.streamlord.core.port.driven.BufferedSseSink
 import io.github.markusaugust.streamlord.core.port.driven.SseSink
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import java.io.IOException
+import java.util.concurrent.Executors
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -149,6 +153,41 @@ class HeartbeatTest {
             beating.stream(sink, null, heartbeat = null) { delay(50.seconds) }
 
             assertEquals("", sink.text())
+        }
+
+    // An adapter whose block may block its thread runs the heartbeat somewhere else.
+    @Test
+    fun `the heartbeat runs in the context it is given`() {
+        val pulse = Executors.newSingleThreadExecutor { Thread(it, "pulse") }.asCoroutineDispatcher()
+        val threads = mutableListOf<String>()
+        val sink =
+            object : SseSink {
+                override suspend fun write(text: String) {
+                    if (text.startsWith(":")) synchronized(threads) { threads += Thread.currentThread().name }
+                }
+
+                override suspend fun flush() {}
+            }
+
+        pulse.use {
+            runBlocking {
+                Streamlord().stream(sink, null, heartbeat = 50.milliseconds, heartbeatContext = pulse) {
+                    Thread.sleep(300)
+                }
+            }
+        }
+
+        assertTrue(threads.isNotEmpty() && threads.all { it == "pulse" }, threads.toString())
+    }
+
+    // A Job in the context would take the heartbeat out of the stream's scope, and the stream
+    // could then close under a comment half written.
+    @Test
+    fun `a heartbeat context must not carry a Job`() =
+        runTest {
+            assertFailsWith<IllegalArgumentException> {
+                Streamlord().stream(BufferedSseSink(), null, heartbeat = 15.seconds, heartbeatContext = Job()) {}
+            }
         }
 
     @Test

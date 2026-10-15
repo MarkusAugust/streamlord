@@ -68,6 +68,35 @@ class SpringAdapterTest {
         assertTrue(": keep-alive" in response.contentAsString, response.contentAsString)
     }
 
+    // The heartbeat runs on Dispatchers.IO, so a block that blocks its own thread does not hold it.
+    @Test
+    fun `a block that blocks its thread still gets its heartbeat`() {
+        val response = MockHttpServletResponse()
+        response
+            .datastarStream(Streamlord(heartbeat = 50.milliseconds)) { Thread.sleep(300) }
+            .writeTo(response.outputStream)
+
+        assertTrue(": keep-alive" in response.contentAsString, response.contentAsString)
+    }
+
+    // Shut before the body is finished or its compressor freed, so a heartbeat still running then
+    // writes nothing.
+    @Test
+    fun `a shut sink writes nothing more`() =
+        runTest {
+            val written = java.io.StringWriter()
+            val response = MockHttpServletResponse()
+            val sink = ShutableServletSink(written, response)
+
+            sink.write(": one\n\n")
+            sink.flush()
+            sink.shut()
+            sink.write(": two\n\n")
+            sink.flush()
+
+            assertEquals(": one\n\n", written.toString())
+        }
+
     @Test
     fun `a heartbeat for one stream applies when the bean has none`() {
         val response = MockHttpServletResponse()
