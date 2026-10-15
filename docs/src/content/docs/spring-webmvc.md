@@ -125,6 +125,11 @@ Declaring an `Executor` bean of your own makes Boot skip `applicationTaskExecuto
 settings with it: Spring MVC then starts a new thread for every request, without limit, and logs
 a warning about it. `spring.task.execution.mode=force` keeps Boot's executor alongside yours.
 
+The heartbeat does not use that executor. It runs on `Dispatchers.IO`, beside the block, so a
+block that blocks its thread does not hold the comment back. An authorisation asked by the
+heartbeat runs there too, without the request's thread-locals; see
+[Operations](/operations/#heartbeats).
+
 ## No stream at all
 
 ```kotlin sample=spring

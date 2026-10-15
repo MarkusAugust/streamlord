@@ -160,10 +160,14 @@ Three things it does not do:
   takes a few: the first still land in the operating system's buffer, and on Ktor's CIO over a
   local socket the stream ended about five intervals after the client left, two and a half
   minutes at the default.
-- **It does not run beside a blocked thread.** On WebMVC the stream runs inside `runBlocking` on
-  one thread. A handler that blocks that thread, a JDBC call or a `Thread.sleep`, holds the
-  heartbeat back until it returns. Suspend instead, or move the blocking call to
-  `Dispatchers.IO` with `withContext`.
+- **It does not run on the request's thread on WebMVC.** The block runs inside `runBlocking` on
+  that thread, and the heartbeat on `Dispatchers.IO`, so a JDBC call or a `Thread.sleep` in the
+  block does not hold the comment back. Two things follow. An authorisation's `allows()` and
+  `onRefused`, when the heartbeat asks, run on an IO thread without the request's thread-locals,
+  Spring Security's context among them: read what they need before the stream opens. And a
+  comment stuck in a write to a slow reader holds one of the threads `Dispatchers.IO` shares with
+  the rest of the application, 64 by default. On Ktor, suspend rather than block, as anywhere in
+  a handler.
 - **It does not stop a blocking call.** When the stream ends early, because the client left,
   `allows()` refused or Spring's timeout fired, its coroutine is cancelled, and cancellation
   waits for the next suspension point. A call that blocks inside `withContext(Dispatchers.IO)`
