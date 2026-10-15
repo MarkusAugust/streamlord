@@ -2,6 +2,13 @@
 
 All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here.
 
+## 0.6.1
+
+- Stream Inspector: a stream no longer stops with "Input length = 1" when a character such as
+  `æ`, `ø`, `å` or an emoji arrives split across two reads, which a large patch makes likely. A
+  byte that is not UTF-8 becomes `�`, as it does in the browser, instead of ending the stream, and
+  a byte order mark at the start no longer hides the first event's name.
+
 ## 0.6.0
 
 - A `data-indicator` on an element that sends no request is a warning: the indicator only turns on
