@@ -177,7 +177,7 @@ class HeartbeatTest {
             }
         }
 
-        assertTrue(threads.isNotEmpty() && threads.all { it == "pulse" }, threads.toString())
+        assertTrue(threads.isNotEmpty() && threads.all { it.startsWith("pulse") }, threads.toString())
     }
 
     // A Job in the context would take the heartbeat out of the stream's scope, and the stream

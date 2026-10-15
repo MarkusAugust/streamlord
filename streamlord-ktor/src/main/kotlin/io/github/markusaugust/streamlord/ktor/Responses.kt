@@ -104,7 +104,7 @@ public suspend fun ApplicationCall.respondDatastar(
                 if (gzip) {
                     streamlord.streamGzipped(channel, authorisation, heartbeat, block)
                 } else {
-                    streamlord.stream(ChannelSseSink(channel), authorisation, heartbeat, block)
+                    streamlord.stream(ChannelSseSink(channel), authorisation, heartbeat, block = block)
                 }
             }
         },
@@ -200,7 +200,7 @@ internal suspend fun Streamlord.streamGzipped(
 ) {
     val sink = GzipChannelSseSink(channel)
     try {
-        if (stream(sink, authorisation, heartbeat, block)) {
+        if (stream(sink, authorisation, heartbeat, block = block)) {
             sink.finish()
         } else {
             // Refused: a reader that stalled the last words would stall the trailer too, so it

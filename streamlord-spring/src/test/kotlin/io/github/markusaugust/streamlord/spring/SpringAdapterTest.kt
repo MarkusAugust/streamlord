@@ -145,7 +145,11 @@ class SpringAdapterTest {
             .datastarStream(Streamlord(compress = true), request, heartbeat = 50.milliseconds) { delay(300.milliseconds) }
             .writeTo(response.outputStream)
 
-        val text = java.util.zip.GZIPInputStream(response.contentAsByteArray.inputStream()).readBytes().decodeToString()
+        val text =
+            java.util.zip
+                .GZIPInputStream(response.contentAsByteArray.inputStream())
+                .readBytes()
+                .decodeToString()
         assertTrue(text.startsWith(": keep-alive"), text)
     }
 
@@ -186,7 +190,10 @@ class SpringAdapterTest {
         assertEquals(listOf("Accept-Encoding"), response.getHeaders("Vary"))
         assertEquals(
             "event: datastar-patch-signals\ndata: signals {\"n\":1}\n\n",
-            java.util.zip.GZIPInputStream(response.contentAsByteArray.inputStream()).readBytes().decodeToString(),
+            java.util.zip
+                .GZIPInputStream(response.contentAsByteArray.inputStream())
+                .readBytes()
+                .decodeToString(),
         )
     }
 
@@ -213,7 +220,9 @@ class SpringAdapterTest {
 
         assertFailsWith<IllegalStateException> { body.writeTo(response.outputStream) }
         assertFailsWith<java.io.EOFException> {
-            java.util.zip.GZIPInputStream(response.contentAsByteArray.inputStream()).readBytes()
+            java.util.zip
+                .GZIPInputStream(response.contentAsByteArray.inputStream())
+                .readBytes()
         }
     }
 

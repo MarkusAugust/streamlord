@@ -39,7 +39,9 @@ import kotlin.time.Duration.Companion.seconds
  *   limit stops it between frames, never inside one: Ktor copies a whole frame into the response
  *   before the write can suspend, and a servlet write blocks its thread and cannot be cut. So the
  *   limit bounds a suspending [onRefused], and not a blocking one.
- * @property allows The question. `false` ends the stream.
+ * @property allows The question. `false` ends the stream. On Spring WebMVC the heartbeat asks it
+ *   from a thread of `Dispatchers.IO`, so it cannot rely on the request's thread-locals; read
+ *   what it needs before the stream opens. The same holds for [onRefused].
  */
 public class StreamAuthorisation(
     public val every: Duration = DEFAULT_INTERVAL,
