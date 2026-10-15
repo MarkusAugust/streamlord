@@ -22,14 +22,40 @@ class HeartbeatTest {
 
     private fun BufferedSseSink.comments(): Int = text().lines().count { it == ": keep-alive" }
 
+    // The first after five seconds, so a server that sends no headers before the first byte, as
+    // Netty does, has one before it gives up on the response; then one per interval.
     @Test
-    fun `a silent stream carries one comment per interval`() =
+    fun `a silent stream carries one comment early and then one per interval`() =
         runTest {
             val sink = BufferedSseSink()
 
-            beating.stream(sink, null) { delay(50.seconds) }
+            beating.stream(sink, null) { delay(45.seconds) }
 
-            assertEquals(3, sink.comments())
+            assertEquals(3, sink.comments(), "at 5, 20 and 35 seconds")
+        }
+
+    @Test
+    fun `the first comment waits no longer than the interval`() =
+        runTest {
+            val sink = BufferedSseSink()
+
+            Streamlord(heartbeat = 2.seconds).stream(sink, null) { delay(3.seconds) }
+
+            assertEquals(1, sink.comments(), "at 2 seconds, not 5")
+        }
+
+    @Test
+    fun `a stream that writes early gets no early comment`() =
+        runTest {
+            val sink = BufferedSseSink()
+
+            beating.stream(sink, null) {
+                delay(4.seconds)
+                patchSignals("tick" to 1)
+                delay(18.seconds)
+            }
+
+            assertEquals(0, sink.comments(), "the frame at 4 seconds came before the early comment was due")
         }
 
     @Test
@@ -53,6 +79,7 @@ class HeartbeatTest {
             val sink = BufferedSseSink()
 
             beating.stream(sink, null) {
+                patchSignals("tick" to 0)
                 delay(10.seconds)
                 patchSignals("tick" to 1)
                 delay(10.seconds)
@@ -73,11 +100,24 @@ class HeartbeatTest {
         }
 
     @Test
-    fun `no heartbeat by default`() =
+    fun `a heartbeat of thirty seconds by default`() =
         runTest {
             val sink = BufferedSseSink()
 
-            Streamlord().stream(sink, null) { delay(1.seconds * 60) }
+            assertEquals(30.seconds, Streamlord.DEFAULT_HEARTBEAT)
+            assertEquals(Streamlord.DEFAULT_HEARTBEAT, Streamlord().heartbeat)
+            assertEquals(Streamlord.DEFAULT_HEARTBEAT, Streamlord.Default.heartbeat)
+            Streamlord().stream(sink, null) { delay(60.seconds) }
+
+            assertEquals(2, sink.comments(), "at 5 and 35 seconds")
+        }
+
+    @Test
+    fun `null turns the heartbeat off`() =
+        runTest {
+            val sink = BufferedSseSink()
+
+            Streamlord(heartbeat = null).stream(sink, null) { delay(60.seconds) }
 
             assertEquals("", sink.text())
         }
@@ -87,7 +127,7 @@ class HeartbeatTest {
         runTest {
             val sink = BufferedSseSink()
 
-            Streamlord().stream(sink, null, heartbeat = 15.seconds) { delay(50.seconds) }
+            Streamlord(heartbeat = null).stream(sink, null, heartbeat = 15.seconds) { delay(45.seconds) }
 
             assertEquals(3, sink.comments())
         }

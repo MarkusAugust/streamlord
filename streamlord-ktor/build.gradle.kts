@@ -18,6 +18,7 @@ dependencies {
     // A real server on a real socket, for the tests the test host cannot serve: it hands a
     // streamed response to the client only once the stream has ended.
     testImplementation(libs.ktor.server.cio)
+    testImplementation(libs.ktor.server.netty)
     testImplementation(project(":streamlord-test"))
     testImplementation(libs.ktor.server.compression)
 }

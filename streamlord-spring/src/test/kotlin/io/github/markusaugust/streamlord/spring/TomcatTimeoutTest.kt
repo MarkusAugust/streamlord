@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.spring
 
+import io.github.markusaugust.streamlord.core.SignalsTooLargeException
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -65,6 +66,11 @@ class TomcatTimeoutTest {
                 }
             }
 
+        // Thrown before the first event, while the default heartbeat's first comment is not yet due.
+        @GetMapping("/too-large")
+        fun tooLarge(request: HttpServletRequest, response: HttpServletResponse): StreamingResponseBody =
+            response.datastarStream(request = request) { throw SignalsTooLargeException(10, 5) }
+
         // Spring runs a suspend handler in an async cycle of its own, and the stream in a second.
         @GetMapping("/suspended")
         suspend fun suspended(request: HttpServletRequest, response: HttpServletResponse) =
@@ -86,6 +92,9 @@ class TomcatTimeoutTest {
 
         @Bean
         fun streams() = Streams()
+
+        @Bean
+        fun errors() = StreamlordExceptionHandler()
     }
 
     private lateinit var tomcat: Tomcat
@@ -128,6 +137,15 @@ class TomcatTimeoutTest {
                 .body()
                 .use { lines -> lines.filter { it.startsWith("event: ") }.count() }
         return lines.toInt() to (System.nanoTime() - started) / 1_000_000
+    }
+
+    @Test
+    fun `a failure before the first event still answers with its status`() {
+        val response =
+            HttpClient.newHttpClient()
+                .send(HttpRequest.newBuilder(URI("http://localhost:$port/too-large")).build(), HttpResponse.BodyHandlers.ofString())
+
+        assertEquals(413, response.statusCode(), response.body())
     }
 
     @Test
