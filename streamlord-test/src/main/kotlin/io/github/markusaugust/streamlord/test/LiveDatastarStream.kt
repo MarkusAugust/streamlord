@@ -129,7 +129,9 @@ public class LiveDatastarStream private constructor(
         val assertion = { seen: DatastarEvents -> seen.assertPatchElements(selector, mode, elements, containing) }
         return lock.withLock {
             val start = elementsPlace.at
-            awaitMatch(elementsPlace, timeout, describe = { failure(movedPast = start) { assertion(DatastarEvents(events.drop(start), emptyList())) } }) { event ->
+            awaitMatch(elementsPlace, timeout, describe = {
+                failure(movedPast = start) { assertion(DatastarEvents(events.drop(start), emptyList())) }
+            }) { event ->
                 (event as? PatchElements)?.takeIf { holds { assertion(DatastarEvents(listOf(it), emptyList())) } }
             }
         }
@@ -287,7 +289,13 @@ public class LiveDatastarStream private constructor(
         if (chunk == null) {
             ended = true
             endedBy = result.exceptionOrNull()
-            reader.finish()?.let { messages = messages + it }
+            val trailing =
+                try {
+                    reader.finish()
+                } catch (e: StreamlordException) {
+                    throw AssertionError(received.withStream("The stream ended on a line the client would reject: ${e.message}"), e)
+                }
+            trailing?.let { messages = messages + it }
             return false
         }
         take(chunk)
@@ -362,7 +370,9 @@ public class LiveDatastarStream private constructor(
             val encoding = response.headers().firstValue("Content-Encoding").orElse("identity")
             if (!encoding.trim().equals("identity", ignoreCase = true)) {
                 body.close()
-                throw AssertionError("$uri answered with Content-Encoding '$encoding', which this reader does not decode; leave Accept-Encoding out of the headers")
+                throw AssertionError(
+                    "$uri answered with Content-Encoding '$encoding', which this reader does not decode; leave Accept-Encoding out of the headers",
+                )
             }
             // The stream itself is what close() closes: a read in progress holds the reader's lock.
             return of(InputStreamReader(body, Charsets.UTF_8), onClose = body)

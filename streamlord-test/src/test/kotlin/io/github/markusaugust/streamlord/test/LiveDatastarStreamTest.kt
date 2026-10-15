@@ -218,6 +218,20 @@ class LiveDatastarStreamTest {
             }
         }
 
+    // As datastarEvents judges the end of a text: the client takes the line as it ends.
+    @Test
+    fun `a stream that ends on a line the client would reject fails`() =
+        runTest {
+            val wire = "event: datastar-patch-signals\ndata: signals {\"a\":1}\n\nretry: soon\n"
+            LiveDatastarStream.of(java.io.StringReader(wire)).use { stream ->
+                assertEquals(PatchSignals("{\"a\":1}"), stream.next())
+
+                val failure = assertFailsWith<AssertionError> { stream.next() }
+
+                assertTrue("would reject" in failure.message!!, failure.message)
+            }
+        }
+
     @Test
     fun `a connection that fails says how it ended`() =
         runTest {
