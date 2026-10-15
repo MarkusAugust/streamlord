@@ -7,6 +7,7 @@ import io.github.markusaugust.streamlord.core.domain.InterpolatedExpressionExcep
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.core.json.JsonWriter
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
+import io.github.markusaugust.streamlord.core.port.driving.DatastarStream
 import io.github.markusaugust.streamlord.html.patchElements
 import io.github.markusaugust.streamlord.json.kotlinx.KotlinxSignalsCodec
 import io.ktor.client.request.get
@@ -32,6 +33,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.html.div
 import kotlinx.html.id
 import kotlinx.serialization.Serializable
+import kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -101,6 +103,39 @@ class KtorAdapterTest {
                         flow<DatastarEvent> { withContext(Dispatchers.Default) { delay(300.milliseconds) } },
                         heartbeat = 50.milliseconds,
                     )
+                }
+            }
+
+            val body = client.get("/quiet").bodyAsText()
+
+            assertTrue(": keep-alive" in body, body)
+        }
+
+    // The JVM entry point code compiled against 0.12 calls: it must keep the plugin's heartbeat.
+    @Test
+    fun `the 0_12 signature still applies the plugin's heartbeat`() =
+        testApplication {
+            install(StreamlordPlugin) { heartbeat = 50.milliseconds }
+            routing {
+                get("/quiet") {
+                    val block: suspend DatastarStream.() -> Unit = {
+                        withContext(Dispatchers.Default) { delay(300.milliseconds) }
+                    }
+                    val old =
+                        Class.forName("io.github.markusaugust.streamlord.ktor.ResponsesKt").getMethod(
+                            "respondDatastar\$default",
+                            io.ktor.server.application.ApplicationCall::class.java,
+                            HttpStatusCode::class.java,
+                            io.github.markusaugust.streamlord.core.application.StreamAuthorisation::class.java,
+                            Function2::class.java,
+                            kotlin.coroutines.Continuation::class.java,
+                            Int::class.javaPrimitiveType,
+                            Any::class.java,
+                        )
+                    // Mask 0b11: status and authorisation left to their defaults.
+                    suspendCoroutineUninterceptedOrReturn<Any?> { continuation ->
+                        old.invoke(null, call, null, null, block, continuation, 0b11, null)
+                    }
                 }
             }
 
