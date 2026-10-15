@@ -6,6 +6,7 @@ import io.github.markusaugust.streamlord.analysis.SseParser
 import io.github.markusaugust.streamlord.analysis.decodeDatastar
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import java.io.InputStream
+import java.io.InputStreamReader
 import java.net.ConnectException
 import java.net.URI
 import java.net.UnknownHostException
@@ -153,11 +154,17 @@ class StreamClient(
                     val v6 = ipv6Loopback(target) ?: throw e
                     client.send(build(v6, method, signalsJson, headers), HttpResponse.BodyHandlers.ofInputStream())
                 }
-            val contentType = response.headers().firstValue("content-type").orElse("")
-            val http = "${response.statusCode()} ${reason(response.statusCode())}".trim()
-            handlers.onStatus(Status.OPEN, http, contentType)
             response.body().use { body ->
+                // Held before anything is read, so a close from here on ends the read; one that came while the
+                // request was in flight is honoured here, and the response is never reported open.
                 holder.stream = body
+                if (aborted.get()) {
+                    handlers.onStatus(Status.CLOSED)
+                    return
+                }
+                val contentType = response.headers().firstValue("content-type").orElse("")
+                val http = "${response.statusCode()} ${reason(response.statusCode())}".trim()
+                handlers.onStatus(Status.OPEN, http, contentType)
                 if (!contentType.contains("text/event-stream")) {
                     val text = body.readBytes().toString(Charsets.UTF_8)
                     val datastarHeaders = LinkedHashMap<String, String>()
@@ -171,21 +178,7 @@ class StreamClient(
                     handlers.onStatus(Status.CLOSED)
                     return
                 }
-                val parser = SseParser()
-                val buffer = ByteArray(8192)
-                val decoder = Charsets.UTF_8.newDecoder()
-                while (!aborted.get()) {
-                    val n = body.read(buffer)
-                    if (n < 0) break
-                    val chunk = decoder.decode(java.nio.ByteBuffer.wrap(buffer, 0, n)).toString()
-                    for (msg in parser.feed(chunk)) {
-                        if (msg.isComment) {
-                            handlers.onComment(msg.comments.joinToString("\n"))
-                        } else {
-                            handlers.onFrame(decodeDatastar(msg))
-                        }
-                    }
-                }
+                pump(body, handlers, aborted)
             }
             handlers.onStatus(Status.CLOSED)
         } catch (e: Exception) {
@@ -221,6 +214,38 @@ class StreamClient(
     }
 
     companion object {
+        /**
+         * Read an event stream from [body] and hand each message to [handlers], until it ends or [aborted] is set.
+         *
+         * The reader keeps a character split between two reads for the next one and turns a byte that is not
+         * UTF-8 into U+FFFD, as the browser's decoder does. It is not closed here: closing it waits for a read
+         * under way, and [Connection.close] ends one by closing [body] itself.
+         */
+        internal fun pump(
+            body: InputStream,
+            handlers: Handlers,
+            aborted: AtomicBoolean,
+        ) {
+            val reader = InputStreamReader(body, Charsets.UTF_8)
+            val parser = SseParser()
+            val buffer = CharArray(8192)
+            var first = true
+            while (!aborted.get()) {
+                val n = reader.read(buffer)
+                if (n < 0) break
+                // One byte order mark opens the stream; it is not part of the first field's name.
+                val from = if (first && buffer[0] == '﻿') 1 else 0
+                first = false
+                for (msg in parser.feed(String(buffer, from, n - from))) {
+                    if (msg.isComment) {
+                        handlers.onComment(msg.comments.joinToString("\n"))
+                    } else {
+                        handlers.onFrame(decodeDatastar(msg))
+                    }
+                }
+            }
+        }
+
         private val LOCALHOST = Regex("""^(https?://(?:[^@/?#]*@)?)localhost(?=[:/?#]|$)""", RegexOption.IGNORE_CASE)
 
         /** [url] with its host `localhost` written as `[::1]`, or null when the host is something else. */
