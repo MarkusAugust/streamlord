@@ -31,12 +31,16 @@ All notable changes to Streamlord are recorded here. The format follows
 
 - `SseDecoder`, `SseReader` and with them `streamlord-test` (`datastarEvents`, `DatastarEvents`,
   `LiveDatastarStream`) read a stream as Datastar's client does rather than as the browser's
-  `EventSource`. A line without a colon is skipped, so a bare `event` or `id` keeps the value
-  before it. An `id` with a NUL in it is kept in `messages()` and fails decoding, since the client
-  would send it back as `last-event-id`, which a header cannot carry. `id` and `retry` are
-  checked on every message, Datastar's or not, and in an unfinished one, since the client takes
-  them per line. A data line with no space after its key fails: the client would read the key
-  as the line minus its last character.
+  `EventSource`, and `SseDecoder` now reads through `SseReader`, so a text and a stream still
+  arriving are read by one parser. A line without a colon is skipped, so a bare `event` or `id`
+  keeps the value before it, and a byte order mark before a field or a value is dropped. An `id`
+  is kept in `messages()` as written; decoding fails on one the client could not send back as
+  `last-event-id`, with a control character or a character above U+00FF in it, since every
+  reconnect would then fail. A `retry` that is not a whole number of milliseconds fails too. Both
+  are checked on every message, Datastar's or not, and on an unfinished one at the end, since
+  the client takes them per line; `SseReader.finish()` and `LiveDatastarStream` check that last
+  one as well. A data line with no space after its key fails: the client would read the key as
+  the line minus its last character.
 - On Spring WebMVC the heartbeat runs on `Dispatchers.IO`, beside the block, so a block that
   blocks its thread no longer holds it back. An authorisation's `allows()` and `onRefused`, when
   the heartbeat asks, run there without the request's thread-locals.
