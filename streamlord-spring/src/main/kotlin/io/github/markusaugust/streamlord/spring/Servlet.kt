@@ -50,6 +50,9 @@ import kotlin.time.Duration
  * }
  * ```
  *
+ * The JVM name stays plain through `@JvmName`: a `Duration` parameter would otherwise add a
+ * hash of the signature to it, which changes with every parameter added.
+ *
  * @param streamlord The configured instance, typically a Spring bean. Defaults to [Streamlord.Default].
  * @param request The request being answered, when you have it: `Connection: keep-alive` is an
  *   HTTP/1.1 header, and with the request at hand it is only set for HTTP/1.1. With
@@ -69,8 +72,6 @@ import kotlin.time.Duration
  *   or `null` for none. Defaults to the bean's [Streamlord.heartbeat]. One that is not positive
  *   throws here, while the controller can still answer with a status.
  */
-// A stable JVM name: without it, the Duration parameter mangles the name with a hash of the
-// signature, which no Java caller can call and every new parameter would change.
 @JvmName("datastarStream")
 public fun HttpServletResponse.datastarStream(
     streamlord: Streamlord = Streamlord.Default,

@@ -33,9 +33,13 @@ All notable changes to Streamlord are recorded here. The format follows
 - A stream silent from the start gets its first comment after five seconds, or the interval if
   it is shorter. Netty sends no headers before the first byte of the body and closed such a
   stream after ten seconds. The comment commits the response, so a failure in the block after it
-  cuts the stream off rather than answering with a status; before it, the status still goes out.
-- Under `runTest`, a stream whose block waits on a real thread now writes comment after comment
-  while virtual time skips ahead. Give such a test `Streamlord(heartbeat = null)`.
+  cuts the stream off rather than answering with a status. On Spring WebMVC, with
+  `StreamlordExceptionHandler`, a failure before it still answers with its status; on Ktor the
+  status is fixed when the stream starts, as before.
+- A test that calls `Streamlord.stream` directly under `runTest`, with a block that waits on a
+  real thread, now gets comment after comment while virtual time skips ahead. Give such a test
+  `Streamlord(heartbeat = null)`. Ktor's `testApplication` and Spring's `datastarStream` run in
+  real time and are not affected.
 - A lambda passed inside the parentheses as the last positional argument of `datastarStream` or
   `respondDatastar`, `datastarStream(streamlord, request, authorisation, { … })` or with a
   function reference, now lands on `timeout` or `heartbeat` and no longer compiles. Pass the block

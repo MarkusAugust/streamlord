@@ -72,7 +72,7 @@ public final class io/github/markusaugust/streamlord/core/application/Streamlord
 }
 
 public final class io/github/markusaugust/streamlord/core/application/Streamlord$Companion {
-	public final fun getDEFAULT_HEARTBEAT ()J
+	public final fun getDEFAULT_HEARTBEAT-UwyO8pc ()J
 	public final fun getDefault ()Lio/github/markusaugust/streamlord/core/application/Streamlord;
 }
 

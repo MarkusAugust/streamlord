@@ -136,9 +136,10 @@ public class Streamlord(
     /**
      * [stream] with a [heartbeat] for this stream alone, in place of the instance's: an interval,
      * or `null` for none. Adapters pass what their caller asked for.
+     *
+     * The JVM name stays plain through `@JvmName`: a `Duration` parameter would otherwise add a
+     * hash of the signature to it, which changes with every parameter added.
      */
-    // A stable JVM name: without it, a Duration parameter mangles the name with a hash of the
-    // signature, which no Java caller can call and every new parameter would change.
     @JvmName("stream")
     public suspend fun stream(
         sink: SseSink,
@@ -232,8 +233,6 @@ public class Streamlord(
          * comment per silent half minute per stream. A proxy that closes sooner wants a shorter
          * one.
          */
-        // A plain getter name, since a Duration would otherwise mangle it.
-        @get:JvmName("getDEFAULT_HEARTBEAT")
         public val DEFAULT_HEARTBEAT: Duration = 30.seconds
 
         /** A Streamlord with the built-in codec and default limits. */
