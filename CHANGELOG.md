@@ -35,12 +35,14 @@ All notable changes to Streamlord are recorded here. The format follows
   arriving are read by one parser. A line without a colon is skipped, so a bare `event` or `id`
   keeps the value before it, and a byte order mark before a field or a value is dropped. An `id`
   is kept in `messages()` as written; decoding fails on one the client could not send back as
-  `last-event-id`, with a control character or a character above U+00FF in it, since every
-  reconnect would then fail. A `retry` that is not a whole number of milliseconds fails too. Both
+  `last-event-id`, with a NUL or a character above U+00FF in it, since every reconnect would then
+  fail. A `retry` that is not a whole number of milliseconds fails too, and so does `retry: 0`,
+  which has the client reconnect at once without end. Both
   are checked on every message, Datastar's or not, and on an unfinished one at the end, since
   the client takes them per line; `SseReader.finish()` and `LiveDatastarStream` check that last
   one as well. A data line with no space after its key fails: the client would read the key as
-  the line minus its last character.
+  the line minus its last character. `onlyIfMissing` and `useViewTransition` are true with spaces
+  around `true`, as the client trims them.
 - On Spring WebMVC the heartbeat runs on `Dispatchers.IO`, beside the block, so a block that
   blocks its thread no longer holds it back. An authorisation's `allows()` and `onRefused`, when
   the heartbeat asks, run there without the request's thread-locals.
