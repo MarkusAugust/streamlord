@@ -13,6 +13,12 @@ All notable changes to Streamlord are recorded here. The format follows
   configured one. It defaults to `Streamlord.heartbeat`, so nothing changes until it is passed.
   One that is not positive throws where it is passed, before the response starts. The functions
   keep their JVM names, and the 0.12 signatures remain, hidden, for code compiled against them.
+- `timeout` on `datastarStream`, in both variants: how long Spring lets this stream run, in place
+  of `spring.mvc.async.request-timeout` and the container's 30 seconds behind it.
+  `Duration.INFINITE` lifts the limit; `null`, the default, leaves Spring's setting alone. It is
+  set on the async request when the controller asks for the stream, found through the request or
+  Spring's `RequestContextHolder`, and throws outside a request that Spring MVC is handling rather
+  than doing nothing.
 
 ### Changed
 
