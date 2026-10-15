@@ -27,8 +27,7 @@ All notable changes to Streamlord are recorded here. The format follows
 
 - On Spring WebMVC the heartbeat runs on `Dispatchers.IO`, beside the block, so a block that
   blocks its thread no longer holds it back. An authorisation's `allows()` and `onRefused`, when
-  the heartbeat asks, run there without the request's thread-locals. The sink is shut before the
-  body is finished, so a heartbeat still running after an interrupted stream writes nothing.
+  the heartbeat asks, run there without the request's thread-locals.
 - The heartbeat is on by default: `Streamlord.DEFAULT_HEARTBEAT`, 30 seconds, for `Streamlord()`,
   `Streamlord.Default` and the Ktor plugin, and for code compiled against 0.11 or 0.12 that
   relies on the default. Every stream Streamlord opens on Ktor or Spring WebMVC that is silent for

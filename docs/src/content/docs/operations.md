@@ -151,7 +151,7 @@ install(StreamlordPlugin) { heartbeat = 15.seconds }
 On Spring it is a parameter of the bean you already declare,
 `Streamlord(codec = JacksonSignalsCodec(mapper), heartbeat = 15.seconds)`.
 
-Three things it does not do:
+Four things it does not do:
 
 - **It does not keep Datastar's client alive.** The client has no idle timeout of its own: its
   `fetch` runs without a timer, and its retry counter resets when a 200 arrives, not per frame. The
@@ -166,7 +166,7 @@ Three things it does not do:
   `onRefused`, when the heartbeat asks, run on an IO thread without the request's thread-locals,
   Spring Security's context among them: read what they need before the stream opens. And a
   comment stuck in a write to a slow reader holds one of the threads `Dispatchers.IO` shares with
-  the rest of the application, 64 by default. On Ktor, suspend rather than block, as anywhere in
+  the rest of the application, at least 64 by default. On Ktor, suspend rather than block, as anywhere in
   a handler.
 - **It does not stop a blocking call.** When the stream ends early, because the client left,
   `allows()` refused or Spring's timeout fired, its coroutine is cancelled, and cancellation
@@ -479,6 +479,10 @@ you want. A reader who should be let back in reloads or follows your redirect; o
 is not hammering your endpoint in the meantime.
 
 On Spring the parameter is the same, on `datastarStream(streamlord, request, authorisation) { }`.
+
+On WebMVC the heartbeat asks from a thread of `Dispatchers.IO`, without the request's
+thread-locals, Spring Security's context among them, while the first answer and the block have
+them. Read what `allows` needs before the stream opens; see [Heartbeats](#heartbeats).
 
 ## Not covered here yet
 
