@@ -11,6 +11,8 @@ kotlinxHtml = "0.12.0"
 ktor = "3.6.0"
 spring = "7.0.9"
 servlet = "6.1.0"
+# What Spring Boot 4 pins, so the container a test starts is the one Boot users run.
+tomcat = "11.0.24"
 reactor = "3.8.7"
 jackson = "3.2.3"
 jackson2 = "2.22.3"
@@ -25,6 +27,8 @@ buildToolsFreemarker = "2.3.35"
 jetbrains-annotations = { module = "org.jetbrains:annotations", version = "26.1.0" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
+# Test-only, for :streamlord-spring: Spring MVC needs it to run a suspend controller.
+kotlinx-coroutines-reactor = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-reactor", version.ref = "coroutines" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 kotlinx-html = { module = "org.jetbrains.kotlinx:kotlinx-html-jvm", version.ref = "kotlinxHtml" }
 ktor-server-core = { module = "io.ktor:ktor-server-core", version.ref = "ktor" }
@@ -47,6 +51,9 @@ jakarta-servlet = { module = "jakarta.servlet:jakarta.servlet-api", version.ref 
 # test of the nonce helper needs Reactor on the runtime classpath. The main source does not:
 # the helper takes a ServerWebExchange and returns a String, which is why no WebFilter ships.
 reactor-core = { module = "io.projectreactor:reactor-core", version.ref = "reactor" }
+# Test-only, for :streamlord-spring: a real container, for the timeouts and threads that
+# MockMvc never runs.
+tomcat-embed-core = { module = "org.apache.tomcat.embed:tomcat-embed-core", version.ref = "tomcat" }
 jackson-databind = { module = "tools.jackson.core:jackson-databind", version.ref = "jackson" }
 jackson-kotlin = { module = "tools.jackson.module:jackson-module-kotlin", version.ref = "jackson" }
 jackson2-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson2" }

@@ -15,11 +15,19 @@ import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.runBlocking
+import org.springframework.web.context.request.NativeWebRequest
+import org.springframework.web.context.request.RequestContextHolder
+import org.springframework.web.context.request.ServletRequestAttributes
+import org.springframework.web.context.request.async.AsyncWebRequest
+import org.springframework.web.context.request.async.CallableProcessingInterceptor
+import org.springframework.web.context.request.async.WebAsyncManager
+import org.springframework.web.context.request.async.WebAsyncUtils
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody
 import java.io.OutputStream
 import java.io.OutputStreamWriter
 import java.io.Writer
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.Callable
 import java.util.zip.GZIPOutputStream
 import kotlin.reflect.typeOf
 import kotlin.time.Duration
@@ -47,6 +55,16 @@ import kotlin.time.Duration
  *   HTTP/1.1 header, and with the request at hand it is only set for HTTP/1.1. With
  *   [Streamlord.compress] on, the stream is gzipped when this request's `Accept-Encoding` takes
  *   it; without the request, it is not.
+ * @param timeout How long Spring lets this stream run before it cuts it, in place of the
+ *   application's `spring.mvc.async.request-timeout`, whose own default is the container's 30
+ *   seconds. [Duration.INFINITE] lifts the limit, which is safe only with a heartbeat: without
+ *   one, a client that vanished without closing its connection holds the stream's thread for
+ *   good. `null`, the default, leaves Spring's setting alone. The container checks for timeouts
+ *   about once a second, so one lands up to a second late. One that is not positive throws
+ *   [IllegalArgumentException]. It needs a request that Spring MVC is handling, found through
+ *   [request] or Spring's `RequestContextHolder`, and throws [IllegalStateException] without one
+ *   rather than being ignored. Works from a `suspend` controller too. When one request asks for
+ *   several streams, the last timeout given applies.
  * @param heartbeat A keep-alive comment after this long without a frame, for this stream alone,
  *   or `null` for none. Defaults to the bean's [Streamlord.heartbeat]. One that is not positive
  *   throws here, while the controller can still answer with a status.
@@ -58,10 +76,12 @@ public fun HttpServletResponse.datastarStream(
     streamlord: Streamlord = Streamlord.Default,
     request: HttpServletRequest? = null,
     authorisation: StreamAuthorisation? = null,
+    timeout: Duration? = null,
     heartbeat: Duration? = streamlord.heartbeat,
     block: suspend DatastarStream.() -> Unit,
 ): StreamingResponseBody {
     require(heartbeat == null || heartbeat.isPositive()) { "heartbeat must be positive, or null for none" }
+    if (timeout != null) setAsyncTimeout(timeout, request)
     // Read first: a committed response has sent its headers, so a body gzipped without them is
     // noise, and a container refuses prepareForSse's setBufferSize on it anyway.
     val committed = isCommitted
@@ -102,8 +122,9 @@ public fun HttpServletResponse.datastarStream(
     streamlord: Streamlord = Streamlord.Default,
     request: HttpServletRequest? = null,
     authorisation: StreamAuthorisation? = null,
+    timeout: Duration? = null,
     heartbeat: Duration? = streamlord.heartbeat,
-): StreamingResponseBody = datastarStream(streamlord, request, authorisation, heartbeat) { sendAll(events) }
+): StreamingResponseBody = datastarStream(streamlord, request, authorisation, timeout, heartbeat) { sendAll(events) }
 
 /** [datastarStream] as 0.12 had it, before `heartbeat`, for code compiled against it. */
 @Deprecated("Kept for binary compatibility.", level = DeprecationLevel.HIDDEN)
@@ -112,7 +133,7 @@ public fun HttpServletResponse.datastarStream(
     request: HttpServletRequest? = null,
     authorisation: StreamAuthorisation? = null,
     block: suspend DatastarStream.() -> Unit,
-): StreamingResponseBody = datastarStream(streamlord, request, authorisation, streamlord.heartbeat, block)
+): StreamingResponseBody = datastarStream(streamlord, request, authorisation, null, streamlord.heartbeat, block)
 
 /** The [Flow] variant of [datastarStream] as 0.12 had it, for code compiled against it. */
 @Deprecated("Kept for binary compatibility.", level = DeprecationLevel.HIDDEN)
@@ -121,7 +142,43 @@ public fun HttpServletResponse.datastarStream(
     streamlord: Streamlord = Streamlord.Default,
     request: HttpServletRequest? = null,
     authorisation: StreamAuthorisation? = null,
-): StreamingResponseBody = datastarStream(events, streamlord, request, authorisation, streamlord.heartbeat)
+): StreamingResponseBody = datastarStream(events, streamlord, request, authorisation, null, streamlord.heartbeat)
+
+/*
+ * Set on the async cycle that runs the stream, just before Spring starts it. Not on the request's
+ * current async request: a suspend controller runs in a cycle of its own, and the stream in a
+ * second one that Spring makes with its default timeout. The interceptor stays on the request's
+ * manager across both, and the fixed key means the last timeout given for a request is the one
+ * that applies. The manager is read from the attribute rather than through
+ * WebAsyncUtils.getAsyncManager, which would make a new one outside MVC and leave the setting
+ * with nothing to act on.
+ */
+private fun setAsyncTimeout(
+    timeout: Duration,
+    request: HttpServletRequest?,
+) {
+    require(timeout.isPositive()) { "timeout must be positive, Duration.INFINITE for none, or null for Spring's own" }
+    val servletRequest = request ?: (RequestContextHolder.getRequestAttributes() as? ServletRequestAttributes)?.request
+    val manager = servletRequest?.getAttribute(WebAsyncUtils.WEB_ASYNC_MANAGER_ATTRIBUTE) as? WebAsyncManager
+    checkNotNull(manager?.asyncWebRequest) {
+        "A timeout needs a request that Spring MVC is handling; this one is not, so it would have no effect"
+    }
+    // -1 is no limit to Spring and the container alike, and 0 is too, so a positive timeout is at least 1 ms.
+    val millis = if (timeout.isInfinite()) -1L else timeout.inWholeMilliseconds.coerceAtLeast(1)
+    manager.registerCallableInterceptor(
+        TIMEOUT_INTERCEPTOR,
+        object : CallableProcessingInterceptor {
+            override fun <T : Any> beforeConcurrentHandling(
+                request: NativeWebRequest,
+                task: Callable<T>,
+            ) {
+                (request as AsyncWebRequest).setTimeout(millis)
+            }
+        },
+    )
+}
+
+private const val TIMEOUT_INTERCEPTOR = "io.github.markusaugust.streamlord.spring.timeout"
 
 /**
  * Set the headers an SSE response needs and disable buffering. Called by [datastarStream].

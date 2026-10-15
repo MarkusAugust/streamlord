@@ -13,12 +13,19 @@ All notable changes to Streamlord are recorded here. The format follows
   configured one. It defaults to `Streamlord.heartbeat`, so nothing changes until it is passed.
   One that is not positive throws where it is passed, before the response starts. The functions
   keep their JVM names, and the 0.12 signatures remain, hidden, for code compiled against them.
+- `timeout` on `datastarStream`, in both variants: how long Spring lets this stream run, in place
+  of `spring.mvc.async.request-timeout` and the container's 30 seconds behind it.
+  `Duration.INFINITE` lifts the limit; `null`, the default, leaves Spring's setting alone, and one
+  that is not positive throws. It applies to the async cycle that runs the stream, also from a
+  `suspend` controller, and finds the request through the parameter or Spring's
+  `RequestContextHolder`; outside a request that Spring MVC is handling it throws rather than
+  doing nothing.
 
 ### Changed
 
 - A lambda passed inside the parentheses as the last positional argument of `datastarStream` or
   `respondDatastar`, `datastarStream(streamlord, request, authorisation, { … })` or with a
-  function reference, now lands on `heartbeat` and no longer compiles. Pass the block after the
+  function reference, now lands on `timeout` or `heartbeat` and no longer compiles. Pass the block after the
   parentheses, as almost all code does, or as `block = …`. Java source written against 0.12 no
   longer compiles: javac does not see the hidden signatures, and the new ones take a
   `kotlin.time.Duration`, which Java can only pass as `null`. Binaries compiled against 0.12 are
