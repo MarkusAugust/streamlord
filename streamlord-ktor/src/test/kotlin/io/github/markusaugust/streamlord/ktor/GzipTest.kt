@@ -114,6 +114,24 @@ class GzipTest {
             assertTrue(text.endsWith("event: datastar-patch-signals\ndata: signals {\"n\":1}\n\n"), text)
         }
 
+    @Test
+    fun `a heartbeat for one stream reaches a gzipped stream`() =
+        testApplication {
+            install(StreamlordPlugin) { compress = true }
+            routing {
+                get("/feed") {
+                    call.respondDatastar(heartbeat = 50.milliseconds) {
+                        delay(180.milliseconds)
+                        patchSignals("n" to 1)
+                    }
+                }
+            }
+
+            val text = gunzip(client.get("/feed") { header(HttpHeaders.AcceptEncoding, "gzip") }.bodyAsBytes())
+
+            assertTrue(text.startsWith(": keep-alive"), text)
+        }
+
     // A refusal ends the stream cleanly, so the gzip member is whole too.
     @Test
     fun `a refused stream still ends as a whole gzip member`() =

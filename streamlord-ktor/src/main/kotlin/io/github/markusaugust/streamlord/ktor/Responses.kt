@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withTimeoutOrNull
 import org.intellij.lang.annotations.Language
 import kotlin.reflect.typeOf
+import kotlin.time.Duration
 
 /**
  * Respond with a Datastar SSE stream and run [block] against it.
@@ -53,12 +54,21 @@ import kotlin.reflect.typeOf
  *     }
  * }
  * ```
+ *
+ * @param heartbeat A keep-alive comment after this long without a frame, for this stream alone,
+ *   or `null` for none. Defaults to the configured [Streamlord.heartbeat]. One that is not
+ *   positive throws here, before the response starts.
  */
+// A stable JVM name: without it, the Duration parameter mangles the name with a hash of the
+// signature, which no Java caller can call and every new parameter would change.
+@JvmName("respondDatastar")
 public suspend fun ApplicationCall.respondDatastar(
     status: HttpStatusCode = HttpStatusCode.OK,
     authorisation: StreamAuthorisation? = null,
+    heartbeat: Duration? = streamlord.heartbeat,
     block: suspend DatastarStream.() -> Unit,
 ) {
+    require(heartbeat == null || heartbeat.isPositive()) { "heartbeat must be positive, or null for none" }
     val streamlord = this.streamlord
     for ((name, value) in DatastarProtocol.SSE_RESPONSE_HEADERS) response.header(name, value)
     if (request.httpVersion == "HTTP/1.1") response.header("Connection", "keep-alive")
@@ -91,9 +101,9 @@ public suspend fun ApplicationCall.respondDatastar(
 
             override suspend fun writeTo(channel: ByteWriteChannel) {
                 if (gzip) {
-                    streamlord.streamGzipped(channel, authorisation, block)
+                    streamlord.streamGzipped(channel, authorisation, heartbeat, block)
                 } else {
-                    streamlord.stream(ChannelSseSink(channel), authorisation, block)
+                    streamlord.stream(ChannelSseSink(channel), authorisation, heartbeat, block)
                 }
             }
         },
@@ -101,12 +111,34 @@ public suspend fun ApplicationCall.respondDatastar(
 }
 
 /** Respond with a Datastar SSE stream that drains [events] in order until the flow completes. */
+@JvmName("respondDatastar")
+public suspend fun ApplicationCall.respondDatastar(
+    events: Flow<DatastarEvent>,
+    status: HttpStatusCode = HttpStatusCode.OK,
+    authorisation: StreamAuthorisation? = null,
+    heartbeat: Duration? = streamlord.heartbeat,
+) {
+    respondDatastar(status, authorisation, heartbeat) { sendAll(events) }
+}
+
+/** [respondDatastar] as 0.12 had it, before `heartbeat`, for code compiled against it. */
+@Deprecated("Kept for binary compatibility.", level = DeprecationLevel.HIDDEN)
+public suspend fun ApplicationCall.respondDatastar(
+    status: HttpStatusCode = HttpStatusCode.OK,
+    authorisation: StreamAuthorisation? = null,
+    block: suspend DatastarStream.() -> Unit,
+) {
+    respondDatastar(status, authorisation, streamlord.heartbeat, block)
+}
+
+/** The [Flow] variant of [respondDatastar] as 0.12 had it, for code compiled against it. */
+@Deprecated("Kept for binary compatibility.", level = DeprecationLevel.HIDDEN)
 public suspend fun ApplicationCall.respondDatastar(
     events: Flow<DatastarEvent>,
     status: HttpStatusCode = HttpStatusCode.OK,
     authorisation: StreamAuthorisation? = null,
 ) {
-    respondDatastar(status, authorisation) { sendAll(events) }
+    respondDatastar(events, status, authorisation, streamlord.heartbeat)
 }
 
 /** Respond with a single non-SSE Datastar response: `text/html`, `application/json` or `text/javascript`. */
@@ -162,11 +194,12 @@ public suspend fun ApplicationCall.respondScript(
 internal suspend fun Streamlord.streamGzipped(
     channel: ByteWriteChannel,
     authorisation: StreamAuthorisation?,
+    heartbeat: Duration?,
     block: suspend DatastarStream.() -> Unit,
 ) {
     val sink = GzipChannelSseSink(channel)
     try {
-        if (stream(sink, authorisation, block)) {
+        if (stream(sink, authorisation, heartbeat, block)) {
             sink.finish()
         } else {
             // Refused: a reader that stalled the last words would stall the trailer too, so it

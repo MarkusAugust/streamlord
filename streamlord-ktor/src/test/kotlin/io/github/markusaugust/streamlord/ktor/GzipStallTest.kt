@@ -22,7 +22,7 @@ class GzipStallTest {
             val channel = ByteChannel()
             val refuse = StreamAuthorisation(onRefused = { patchSignals("noise" to noise) }) { false }
 
-            Streamlord(compress = true).streamGzipped(channel, refuse) { patchSignals("n" to 1) }
+            Streamlord(compress = true).streamGzipped(channel, refuse, null) { patchSignals("n" to 1) }
 
             // The last words and the trailer each get the limit, and no more.
             val limit = StreamAuthorisation.LAST_WORDS_LIMIT

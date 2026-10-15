@@ -1,11 +1,13 @@
 package io.github.markusaugust.streamlord.ktor
 
 import io.github.markusaugust.streamlord.core.SignalsTooLargeException
+import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.InterpolatedExpressionException
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.core.json.JsonWriter
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
+import io.github.markusaugust.streamlord.core.port.driving.DatastarStream
 import io.github.markusaugust.streamlord.html.patchElements
 import io.github.markusaugust.streamlord.json.kotlinx.KotlinxSignalsCodec
 import io.ktor.client.request.get
@@ -25,11 +27,13 @@ import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.withContext
 import kotlinx.html.div
 import kotlinx.html.id
 import kotlinx.serialization.Serializable
+import kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -57,6 +61,109 @@ class KtorAdapterTest {
             val body = client.get("/quiet").bodyAsText()
 
             assertTrue(": keep-alive" in body, body)
+        }
+
+    @Test
+    fun `a heartbeat for one stream applies when the plugin sets none`() =
+        testApplication {
+            routing {
+                get("/quiet") {
+                    call.respondDatastar(heartbeat = 50.milliseconds) {
+                        withContext(Dispatchers.Default) { delay(300.milliseconds) }
+                    }
+                }
+            }
+
+            val body = client.get("/quiet").bodyAsText()
+
+            assertTrue(": keep-alive" in body, body)
+        }
+
+    @Test
+    fun `null for one stream silences the plugin's heartbeat`() =
+        testApplication {
+            install(StreamlordPlugin) { heartbeat = 50.milliseconds }
+            routing {
+                get("/quiet") {
+                    call.respondDatastar(heartbeat = null) {
+                        withContext(Dispatchers.Default) { delay(300.milliseconds) }
+                    }
+                }
+            }
+
+            assertEquals("", client.get("/quiet").bodyAsText())
+        }
+
+    @Test
+    fun `the flow variant takes a heartbeat for its stream`() =
+        testApplication {
+            routing {
+                get("/quiet") {
+                    call.respondDatastar(
+                        flow<DatastarEvent> { withContext(Dispatchers.Default) { delay(300.milliseconds) } },
+                        heartbeat = 50.milliseconds,
+                    )
+                }
+            }
+
+            val body = client.get("/quiet").bodyAsText()
+
+            assertTrue(": keep-alive" in body, body)
+        }
+
+    // The JVM entry point code compiled against 0.12 calls: it must keep the plugin's heartbeat.
+    @Test
+    fun `the 0_12 signature still applies the plugin's heartbeat`() =
+        testApplication {
+            install(StreamlordPlugin) { heartbeat = 50.milliseconds }
+            routing {
+                get("/quiet") {
+                    val block: suspend DatastarStream.() -> Unit = {
+                        withContext(Dispatchers.Default) { delay(300.milliseconds) }
+                    }
+                    val old =
+                        Class.forName("io.github.markusaugust.streamlord.ktor.ResponsesKt").getMethod(
+                            "respondDatastar\$default",
+                            io.ktor.server.application.ApplicationCall::class.java,
+                            HttpStatusCode::class.java,
+                            io.github.markusaugust.streamlord.core.application.StreamAuthorisation::class.java,
+                            Function2::class.java,
+                            kotlin.coroutines.Continuation::class.java,
+                            Int::class.javaPrimitiveType,
+                            Any::class.java,
+                        )
+                    // Mask 0b11: status and authorisation left to their defaults.
+                    suspendCoroutineUninterceptedOrReturn<Any?> { continuation ->
+                        old.invoke(null, call, null, null, block, continuation, 0b11, null)
+                    }
+                }
+            }
+
+            val body = client.get("/quiet").bodyAsText()
+
+            assertTrue(": keep-alive" in body, body)
+        }
+
+    // Before the response starts, so the failure can still become a status.
+    @Test
+    fun `a heartbeat that is not positive fails before the response starts`() =
+        testApplication {
+            var failure: Throwable? = null
+            routing {
+                get("/quiet") {
+                    try {
+                        call.respondDatastar(heartbeat = 0.milliseconds) {}
+                    } catch (e: IllegalArgumentException) {
+                        failure = e
+                        call.respondText("refused", status = HttpStatusCode.BadRequest)
+                    }
+                }
+            }
+
+            val response = client.get("/quiet")
+
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+            assertTrue(failure is IllegalArgumentException)
         }
 
     @Test

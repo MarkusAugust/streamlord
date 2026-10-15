@@ -173,31 +173,37 @@ With a [`StreamAuthorisation`](#asking-again-while-the-stream-runs) on the strea
 asks the question like any other write once `every` has passed, so an idle stream is checked on
 the heartbeat's schedule and a refusal ends it there.
 
-The interval is one per `Streamlord`. A stream that needs a shorter one can write its own on top,
-by hand; a longer one, or none, takes a second `Streamlord`, which on Spring is a second bean
-handed to that controller:
+The interval is set once per `Streamlord`, and one stream can take its own: `heartbeat` on
+`respondDatastar` or `datastarStream`, or `null` for none. A report that goes quiet for two
+minutes after its first patch, behind a proxy stricter than the rest, can keep its own connection
+warm without changing anyone else's:
 
 ```kotlin sample=ktor-routing
-get("/slow") {
-    call.respondDatastar {
-        coroutineScope {
-            val heartbeat = launch {
-                while (true) {
-                    delay(5.seconds)
-                    comment()
-                }
-            }
-            try {
-                patchElements("""<div id="report">Working</div>""")
-                delay(120.seconds)
-                patchElements("""<div id="report">Done</div>""")
-            } finally {
-                heartbeat.cancel()
-            }
-        }
+get("/report") {
+    call.respondDatastar(heartbeat = 5.seconds) {
+        patchElements("""<div id="report">Working</div>""")
+        delay(120.seconds)
+        patchElements("""<div id="report">Done</div>""")
     }
 }
 ```
+
+On Spring it is the same parameter:
+
+```kotlin sample=spring
+@GetMapping("/report")
+fun report(
+    request: HttpServletRequest,
+    response: HttpServletResponse,
+): org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody =
+    response.datastarStream(request = request, heartbeat = 5.seconds) {
+        patchElements("""<div id="report">Working</div>""")
+        delay(120.seconds)
+        patchElements("""<div id="report">Done</div>""")
+    }
+```
+
+One that is not positive throws where you call it, before the response starts.
 
 ## Compression
 

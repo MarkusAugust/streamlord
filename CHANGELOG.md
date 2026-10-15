@@ -6,6 +6,24 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `heartbeat` on `respondDatastar` and `datastarStream`, in both variants, and on
+  `Streamlord.stream`: a keep-alive interval for one stream, or `null` for none, in place of the
+  configured one. It defaults to `Streamlord.heartbeat`, so nothing changes until it is passed.
+  One that is not positive throws where it is passed, before the response starts. The functions
+  keep their JVM names, and the 0.12 signatures remain, hidden, for code compiled against them.
+
+### Changed
+
+- A lambda passed inside the parentheses as the last positional argument of `datastarStream` or
+  `respondDatastar`, `datastarStream(streamlord, request, authorisation, { … })` or with a
+  function reference, now lands on `heartbeat` and no longer compiles. Pass the block after the
+  parentheses, as almost all code does, or as `block = …`. Java source written against 0.12 no
+  longer compiles: javac does not see the hidden signatures, and the new ones take a
+  `kotlin.time.Duration`, which Java can only pass as `null`. Binaries compiled against 0.12 are
+  not affected.
+
 ## [0.12.0] - 2026-10-11
 
 ### Added

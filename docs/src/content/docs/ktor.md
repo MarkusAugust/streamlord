@@ -32,7 +32,8 @@ owns the Content Security Policy nonce at both ends and gives `call.cspNonce` it
 be asked again whether it may still run, which is on [Operations](/operations/).
 
 `heartbeat` in the plugin writes a keep-alive comment on every stream that has been silent that
-long, for the proxies in between; it is on [Operations](/operations/#heartbeats).
+long, for the proxies in between, unless the stream passes a `heartbeat` of its own to
+`respondDatastar`; it is on [Operations](/operations/#heartbeats).
 `compress` gzips every stream whose request takes it; it is on
 [Operations](/operations/#compression).
 

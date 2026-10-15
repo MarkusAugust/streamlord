@@ -82,6 +82,34 @@ class HeartbeatTest {
             assertEquals("", sink.text())
         }
 
+    @Test
+    fun `a heartbeat given to one stream applies when the instance has none`() =
+        runTest {
+            val sink = BufferedSseSink()
+
+            Streamlord().stream(sink, null, heartbeat = 15.seconds) { delay(50.seconds) }
+
+            assertEquals(3, sink.comments())
+        }
+
+    @Test
+    fun `null for one stream turns the instance's heartbeat off`() =
+        runTest {
+            val sink = BufferedSseSink()
+
+            beating.stream(sink, null, heartbeat = null) { delay(50.seconds) }
+
+            assertEquals("", sink.text())
+        }
+
+    @Test
+    fun `a heartbeat for one stream must be positive`() =
+        runTest {
+            assertFailsWith<IllegalArgumentException> {
+                Streamlord().stream(BufferedSseSink(), null, heartbeat = 0.seconds) {}
+            }
+        }
+
     // An idle stream is asked again on the heartbeat's schedule, and a no ends it there.
     @Test
     fun `a refusal on a heartbeat ends an idle stream`() =

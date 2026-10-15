@@ -68,6 +68,7 @@ public final class io/github/markusaugust/streamlord/core/application/Streamlord
 	public final fun readSignalsJson (Lio/github/markusaugust/streamlord/core/port/driven/IncomingRequest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun stream (Lio/github/markusaugust/streamlord/core/port/driven/SseSink;)Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;
 	public final fun stream (Lio/github/markusaugust/streamlord/core/port/driven/SseSink;Lio/github/markusaugust/streamlord/core/application/StreamAuthorisation;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun stream (Lio/github/markusaugust/streamlord/core/port/driven/SseSink;Lio/github/markusaugust/streamlord/core/application/StreamAuthorisation;Lkotlin/time/Duration;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class io/github/markusaugust/streamlord/core/application/Streamlord$Companion {

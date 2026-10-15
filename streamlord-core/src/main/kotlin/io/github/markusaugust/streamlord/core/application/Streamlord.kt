@@ -61,7 +61,8 @@ public typealias Signals = JsonObject
  *   stream carries none. Applies to the streams Streamlord opens itself: `respondDatastar` on
  *   Ktor and `datastarStream` on Spring WebMVC. A `Flow` handed to WebFlux through
  *   `asServerSentEvents` or `asDatastarResponse` never passes through one, so it gets no
- *   heartbeat. Off by default.
+ *   heartbeat. Off by default. One stream can take its own, or none, through the `heartbeat`
+ *   parameter of `respondDatastar` and `datastarStream`.
  * @property compress Gzip the streams Streamlord opens itself, when the request's
  *   `Accept-Encoding` takes gzip: `respondDatastar` on Ktor and `datastarStream` on Spring WebMVC
  *   with the request passed. Each event is flushed through the compressor whole, so nothing waits
@@ -78,7 +79,7 @@ public class Streamlord(
 ) {
     init {
         require(maxSignalsSize > 0) { "maxSignalsSize must be positive" }
-        require(heartbeat == null || heartbeat.isPositive()) { "heartbeat must be positive, or null for none" }
+        requireHeartbeat(heartbeat)
     }
 
     /** The constructor as 0.11 had it, before [heartbeat] and [compress], for code compiled against it. */
@@ -122,7 +123,22 @@ public class Streamlord(
         sink: SseSink,
         authorisation: StreamAuthorisation?,
         block: suspend DatastarStream.() -> Unit,
+    ): Boolean = stream(sink, authorisation, heartbeat, block)
+
+    /**
+     * [stream] with a [heartbeat] for this stream alone, in place of the instance's: an interval,
+     * or `null` for none. Adapters pass what their caller asked for.
+     */
+    // A stable JVM name: without it, a Duration parameter mangles the name with a hash of the
+    // signature, which no Java caller can call and every new parameter would change.
+    @JvmName("stream")
+    public suspend fun stream(
+        sink: SseSink,
+        authorisation: StreamAuthorisation?,
+        heartbeat: Duration?,
+        block: suspend DatastarStream.() -> Unit,
     ): Boolean {
+        requireHeartbeat(heartbeat)
         val stream = SseDatastarStream(sink, codec, ::guard, authorisation)
         return try {
             stream.authorise()
@@ -206,6 +222,10 @@ public class Streamlord(
         /** A Streamlord with the built-in codec and default limits. */
         public val Default: Streamlord = Streamlord()
     }
+}
+
+private fun requireHeartbeat(heartbeat: Duration?) {
+    require(heartbeat == null || heartbeat.isPositive()) { "heartbeat must be positive, or null for none" }
 }
 
 /** The signals decoded into [T], or `null` when the request carried none. */

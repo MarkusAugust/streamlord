@@ -9,9 +9,11 @@ import io.github.markusaugust.streamlord.core.domain.ExecuteScript
 import io.github.markusaugust.streamlord.core.domain.InterpolatedExpressionException
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
+import io.github.markusaugust.streamlord.core.port.driving.DatastarStream
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
 import io.github.markusaugust.streamlord.json.jackson.JacksonSignalsCodec
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
@@ -62,6 +64,82 @@ class SpringAdapterTest {
         response
             .datastarStream(Streamlord(heartbeat = 50.milliseconds)) { delay(300.milliseconds) }
             .writeTo(response.outputStream)
+
+        assertTrue(": keep-alive" in response.contentAsString, response.contentAsString)
+    }
+
+    @Test
+    fun `a heartbeat for one stream applies when the bean has none`() {
+        val response = MockHttpServletResponse()
+        response
+            .datastarStream(Streamlord(), heartbeat = 50.milliseconds) { delay(300.milliseconds) }
+            .writeTo(response.outputStream)
+
+        assertTrue(": keep-alive" in response.contentAsString, response.contentAsString)
+    }
+
+    @Test
+    fun `null for one stream silences the bean's heartbeat`() {
+        val response = MockHttpServletResponse()
+        response
+            .datastarStream(Streamlord(heartbeat = 50.milliseconds), heartbeat = null) { delay(300.milliseconds) }
+            .writeTo(response.outputStream)
+
+        assertEquals("", response.contentAsString)
+    }
+
+    @Test
+    fun `the flow variant takes a heartbeat for its stream`() {
+        val response = MockHttpServletResponse()
+        val events = flow<DatastarEvent> { delay(300.milliseconds) }
+        response
+            .datastarStream(events, Streamlord(), heartbeat = 50.milliseconds)
+            .writeTo(response.outputStream)
+
+        assertTrue(": keep-alive" in response.contentAsString, response.contentAsString)
+    }
+
+    // At the controller, while a status can still be sent, rather than once the body is running.
+    @Test
+    fun `a heartbeat that is not positive fails when the stream is asked for`() {
+        assertFailsWith<IllegalArgumentException> {
+            MockHttpServletResponse().datastarStream(heartbeat = 0.milliseconds) {}
+        }
+    }
+
+    @Test
+    fun `a heartbeat for one stream reaches a gzipped stream`() {
+        val request = MockHttpServletRequest("GET", "/feed").apply { addHeader("Accept-Encoding", "gzip") }
+        val response = MockHttpServletResponse()
+
+        response
+            .datastarStream(Streamlord(compress = true), request, heartbeat = 50.milliseconds) { delay(300.milliseconds) }
+            .writeTo(response.outputStream)
+
+        val text = java.util.zip.GZIPInputStream(response.contentAsByteArray.inputStream()).readBytes().decodeToString()
+        assertTrue(text.startsWith(": keep-alive"), text)
+    }
+
+    // The JVM entry point code compiled against 0.12 calls: it must keep the bean's heartbeat.
+    @Test
+    fun `the 0_12 signature still applies the bean's heartbeat`() {
+        val response = MockHttpServletResponse()
+        val block: suspend DatastarStream.() -> Unit = { delay(300.milliseconds) }
+        val old =
+            Class.forName("io.github.markusaugust.streamlord.spring.ServletKt").getMethod(
+                "datastarStream\$default",
+                jakarta.servlet.http.HttpServletResponse::class.java,
+                Streamlord::class.java,
+                jakarta.servlet.http.HttpServletRequest::class.java,
+                io.github.markusaugust.streamlord.core.application.StreamAuthorisation::class.java,
+                Function2::class.java,
+                Int::class.javaPrimitiveType,
+                Any::class.java,
+            )
+
+        // Mask 0b110: request and authorisation left to their defaults.
+        val body = old.invoke(null, response, Streamlord(heartbeat = 50.milliseconds), null, null, block, 0b110, null)
+        (body as org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody).writeTo(response.outputStream)
 
         assertTrue(": keep-alive" in response.contentAsString, response.contentAsString)
     }

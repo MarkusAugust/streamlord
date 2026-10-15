@@ -77,9 +77,9 @@ open needs a longer one:
 spring.mvc.async.request-timeout=30m
 ```
 
-`-1` removes the limit. Do that only with a [heartbeat](/operations/#heartbeats) on the bean:
-without one, a client that vanished without closing its connection is never written to again,
-and its stream holds a thread for good. Tomcat checks for timeouts once a second, so one can land
+`-1` removes the limit. Do that only with a [heartbeat](/operations/#heartbeats) on the bean,
+and on every stream that does not pass `heartbeat = null`: without one, a client that vanished
+without closing its connection is never written to again, and its stream holds a thread for good. Tomcat checks for timeouts once a second, so one can land
 up to a second late.
 
 **How many.** Each open stream holds one thread from that async executor. Under Spring Boot it is
