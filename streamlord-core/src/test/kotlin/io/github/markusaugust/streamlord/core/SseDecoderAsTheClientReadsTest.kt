@@ -78,14 +78,20 @@ class SseDecoderAsTheClientReadsTest {
         assertEquals(1, SseDecoder.decode(signals + "\nretry: soon\nretry: 5\n").size)
     }
 
-    // fetch turns header values into ByteStrings and refuses one above U+00FF, so the client
-    // cannot reconnect with it. Latin-1 and other control characters are header bytes it sends.
+    // The id goes back as the last-event-id header, which only printable ASCII survives; the rule
+    // is the one an event is built with, on every message.
     @Test
-    fun `an id the client could not send back is malformed`() {
-        assertFailsWith<DatastarEventValidationException> { SseDecoder.decode("id: €1\n" + signals + "\n") }
-        for (id in listOf("ø1", "a\u0001b", "a\u007Fb")) {
-            assertEquals(id, SseDecoder.decodeOne("id: $id\n" + signals + "\n").eventId)
+    fun `an id that would not come back as written is malformed`() {
+        for (id in listOf("€1", "ø1", "a\u0001b", "a\u007Fb", "7 ")) {
+            assertFailsWith<DatastarEventValidationException>(id) { SseDecoder.decode("id: $id\n" + signals + "\n") }
+            assertFailsWith<DatastarEventValidationException>(id) { SseDecoder.decode("event: other\nid: $id\ndata: x\n\n") }
         }
+        assertEquals("a b", SseDecoder.decodeOne("id: a b\n" + signals + "\n").eventId)
+    }
+
+    @Test
+    fun `a retry over Int MAX_VALUE milliseconds is malformed on every message`() {
+        assertFailsWith<DatastarEventValidationException> { SseDecoder.decode("event: other\nretry: 2147483648\ndata: x\n\n") }
     }
 
     // The client reads both flags with trim() === 'true' (utils/text.ts:24).
