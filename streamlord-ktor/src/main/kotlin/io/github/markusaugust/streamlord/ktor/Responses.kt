@@ -37,8 +37,13 @@ import kotlin.reflect.typeOf
  * Respond with a Datastar SSE stream and run [block] against it.
  *
  * The response stays open for exactly as long as [block] runs. Return, and the stream closes
- * cleanly; collect a never-ending `Flow`, and it lives until the client disconnects, at which
- * point Ktor cancels the coroutine. Every event is flushed the moment it is sent.
+ * cleanly. Every event is flushed the moment it is sent.
+ *
+ * Ktor does not cancel the handler when the client disconnects. A block that keeps writing ends
+ * when a write fails with an `IOException`, usually a few writes after the client left; a block
+ * that waits without writing waits on. Install
+ * Ktor's `HttpRequestLifecycle` with `cancelCallOnClose = true` on the route, and the handler is
+ * cancelled as the connection closes, on the CIO and Netty engines.
  *
  * ```kotlin
  * get("/feed") {

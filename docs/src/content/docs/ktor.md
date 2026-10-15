@@ -62,7 +62,8 @@ This is the shape most endpoints take. It is a stream in the protocol sense, a
 ## Long-lived streams
 
 Hand `respondDatastar` a `Flow` instead of a block, and the response stays open for as long as
-the flow produces. It ends when the flow ends, or when the client leaves.
+the flow produces. It ends when the flow ends. When the client leaves first, see
+[below](#when-the-client-leaves): Ktor does not stop it on its own.
 
 ```kotlin sample=ktor-routing
 get("/counter") {
@@ -72,9 +73,37 @@ get("/counter") {
 }
 ```
 
-Cancellation arrives as coroutine cancellation, so a `flow { }` with a `finally` block cleans up
-the way you would expect. One mutex per stream means concurrent coroutines writing to the same
-stream never interleave their frames.
+One mutex per stream means concurrent coroutines writing to the same stream never interleave
+their frames.
+
+## When the client leaves
+
+Ktor does not cancel a handler because its client has gone. A stream that keeps writing ends
+when a write fails with an `IOException`, which usually takes a few writes after the client left:
+the first ones still land in the operating system's buffer. A stream that waits without writing,
+for an event that has not happened yet, waits on with nobody listening.
+
+Install Ktor's `HttpRequestLifecycle` on the route, and the handler is cancelled the moment the
+connection closes:
+
+```kotlin sample=ktor-routing
+route("/counter") {
+    install(HttpRequestLifecycle) { cancelCallOnClose = true }
+    get {
+        call.respondDatastar(
+            ticks.map { n -> patchElements { span { id = "counter"; +"$n" } } },
+        )
+    }
+}
+```
+
+Either way the end arrives as an exception in your coroutine, so a `flow { }` or a block with a
+`finally` cleans up the way you would expect.
+
+The plugin works on the CIO and Netty engines. It does nothing under `testApplication`, and on
+CIO it does nothing for an HTTP/1.0 request or one that sends `Connection: close`, because CIO
+stops watching such a connection once the request is read. Install it on the routes that stream
+rather than on the whole application: a short request is better left to finish what it started.
 
 ## No stream at all
 
