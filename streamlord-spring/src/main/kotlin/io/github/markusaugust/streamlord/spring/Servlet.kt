@@ -38,7 +38,8 @@ import kotlin.time.Duration
  * Spring WebMVC (servlet) integration.
  *
  * A controller returns a StreamingResponseBody. Spring frees the container thread and runs the
- * body on a thread from its MVC async executor, which the stream holds until the block returns.
+ * body on a thread from its MVC async executor, or the stream's own executor when it passes one,
+ * and the stream holds that thread until the block returns.
  * The block runs inside runBlocking on that thread; the heartbeat on Dispatchers.IO.
  */
 
@@ -185,8 +186,12 @@ private fun asyncManager(
     val servletRequest = request ?: (RequestContextHolder.getRequestAttributes() as? ServletRequestAttributes)?.request
     val manager = servletRequest?.getAttribute(WebAsyncUtils.WEB_ASYNC_MANAGER_ATTRIBUTE) as? WebAsyncManager
     checkNotNull(manager?.asyncWebRequest) {
-        "$what needs a request that Spring MVC is handling, and none was found: pass the request. " +
-            "Spring's RequestContextHolder does not follow a suspend controller across a suspension."
+        if (request == null) {
+            "$what needs a request that Spring MVC is handling, and none was found: pass the request. " +
+                "Spring's RequestContextHolder does not follow a suspend controller across a suspension."
+        } else {
+            "$what needs a request that Spring MVC is handling; this one is not, so it would have no effect"
+        }
     }
     return manager
 }
