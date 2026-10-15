@@ -8,6 +8,16 @@
 #
 # Gradle sees what the build files and gradle/libs.versions.toml declare. What those pull in
 # transitively is reported separately, by the dependency-submission job in security.yml.
+#
+# Version updates go to the release branch, not to master. master holds what is released and
+# nothing else: the work for the next release, dependency bumps included, gathers on
+# release/<next version> and reaches master when that version is published. Every ecosystem
+# below names the branch in target-branch, and the release commit moves it on to the next one,
+# so the config that lands on master with a release already points at the branch cut after it.
+#
+# Security updates ignore target-branch and always open against master. Retarget such a pull
+# request to the release branch, or, when the advisory is about something a published artifact
+# carries, ship it as a patch release from master.
 
 version: 2
 
@@ -18,6 +28,7 @@ updates:
     directories:
       - /
       - /editors/intellij
+    target-branch: release/0.13.0
     schedule:
       interval: weekly
     groups:
@@ -37,6 +48,7 @@ updates:
 
   - package-ecosystem: npm
     directory: /editors/vscode
+    target-branch: release/0.13.0
     schedule:
       interval: weekly
     groups:
@@ -58,6 +70,7 @@ updates:
   # package-lock.json.
   - package-ecosystem: bun
     directory: /docs
+    target-branch: release/0.13.0
     schedule:
       interval: weekly
     groups:
@@ -73,12 +86,14 @@ updates:
   # repository does not compile, and so the only part a new Debian advisory can be about.
   - package-ecosystem: docker
     directory: /demo
+    target-branch: release/0.13.0
     schedule:
       interval: weekly
 
   # The actions the workflows run, with the secrets those workflows hold.
   - package-ecosystem: github-actions
     directory: /
+    target-branch: release/0.13.0
     schedule:
       interval: weekly
     groups:
