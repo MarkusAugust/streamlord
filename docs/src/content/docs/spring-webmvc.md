@@ -125,6 +125,28 @@ Declaring an `Executor` bean of your own makes Boot skip `applicationTaskExecuto
 settings with it: Spring MVC then starts a new thread for every request, without limit, and logs
 a warning about it. `spring.task.execution.mode=force` keeps Boot's executor alongside yours.
 
+Or keep the long streams off that executor altogether, so the short requests behind them never
+wait. `executor` gives one stream an executor of its own:
+
+```kotlin sample=spring
+private val feeds = org.springframework.core.task.VirtualThreadTaskExecutor("feed-")
+
+@GetMapping("/feed")
+fun feed(
+    request: HttpServletRequest,
+    response: HttpServletResponse,
+): org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody =
+    response.datastarStream(request = request, executor = feeds) {
+        patchElements("""<div id="feed">Open</div>""")
+        awaitCancellation()
+    }
+```
+
+`VirtualThreadTaskExecutor` needs Java 21. On older Java a bounded `ThreadPoolTaskExecutor` does the
+same, sized for the streams you expect. Like `timeout`, it needs a request that Spring MVC is
+handling, and a `suspend` controller has to pass it: Spring's `RequestContextHolder` does not
+follow a controller across a suspension.
+
 The heartbeat does not use that executor. It runs on `Dispatchers.IO`, beside the block, so a
 block that blocks its thread does not hold the comment back. An authorisation asked by the
 heartbeat runs there too, without the request's thread-locals; see

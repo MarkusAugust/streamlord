@@ -22,6 +22,10 @@ All notable changes to Streamlord are recorded here. The format follows
   doing nothing.
 - `heartbeatContext` on `Streamlord.stream`: the context the heartbeat runs in, added to the
   caller's, for an adapter whose block may block its thread. One that carries a `Job` throws.
+- `executor` on `datastarStream`, in both variants: the executor that runs this stream, in place
+  of Spring MVC's, whose Boot default has eight threads and an unbounded queue. Set on the async
+  cycle that runs the stream, also from a `suspend` controller that passes the request; outside
+  a request that Spring MVC is handling it throws.
 
 ### Changed
 
