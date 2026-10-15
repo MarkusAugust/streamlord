@@ -171,21 +171,7 @@ class StreamClient(
                     handlers.onStatus(Status.CLOSED)
                     return
                 }
-                val parser = SseParser()
-                val buffer = ByteArray(8192)
-                val decoder = Charsets.UTF_8.newDecoder()
-                while (!aborted.get()) {
-                    val n = body.read(buffer)
-                    if (n < 0) break
-                    val chunk = decoder.decode(java.nio.ByteBuffer.wrap(buffer, 0, n)).toString()
-                    for (msg in parser.feed(chunk)) {
-                        if (msg.isComment) {
-                            handlers.onComment(msg.comments.joinToString("\n"))
-                        } else {
-                            handlers.onFrame(decodeDatastar(msg))
-                        }
-                    }
-                }
+                pump(body, handlers, aborted)
             }
             handlers.onStatus(Status.CLOSED)
         } catch (e: Exception) {
@@ -221,6 +207,29 @@ class StreamClient(
     }
 
     companion object {
+        /** Read an event stream from [body] and hand each message to [handlers], until it ends or [aborted] is set. */
+        internal fun pump(
+            body: InputStream,
+            handlers: Handlers,
+            aborted: AtomicBoolean,
+        ) {
+            val parser = SseParser()
+            val buffer = ByteArray(8192)
+            val decoder = Charsets.UTF_8.newDecoder()
+            while (!aborted.get()) {
+                val n = body.read(buffer)
+                if (n < 0) break
+                val chunk = decoder.decode(java.nio.ByteBuffer.wrap(buffer, 0, n)).toString()
+                for (msg in parser.feed(chunk)) {
+                    if (msg.isComment) {
+                        handlers.onComment(msg.comments.joinToString("\n"))
+                    } else {
+                        handlers.onFrame(decodeDatastar(msg))
+                    }
+                }
+            }
+        }
+
         private val LOCALHOST = Regex("""^(https?://(?:[^@/?#]*@)?)localhost(?=[:/?#]|$)""", RegexOption.IGNORE_CASE)
 
         /** [url] with its host `localhost` written as `[::1]`, or null when the host is something else. */

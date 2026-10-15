@@ -424,4 +424,61 @@ class InspectorTest : BasePlatformTestCase() {
             server.stop(0)
         }
     }
+
+    /**
+     * A connection hands over bytes in whatever pieces it likes, so a character can arrive in two
+     * reads, and the server may send a byte that is not UTF-8 at all. The browser's decoder keeps
+     * the one and replaces the other; the stream carries on either way.
+     */
+    fun `test a character split between reads, and a byte that is not UTF-8, reach the frame`() {
+        val bytes =
+            "event: datastar-patch-elements\ndata: elements <p>blåbær \uD83E\uDED0</p>\n\n".toByteArray() +
+                "event: datastar-patch-signals\ndata: signals {\"s\":\"".toByteArray() +
+                byteArrayOf(0xFF.toByte()) +
+                "\"}\n\n".toByteArray()
+        val frames = pumped(bytes)
+        assertEquals(listOf("datastar-patch-elements", "datastar-patch-signals"), frames.map { it.event })
+        assertEquals("<p>blåbær \uD83E\uDED0</p>", frames[0].args["elements"])
+        assertEquals("{\"s\":\"\uFFFD\"}", frames[1].args["signals"])
+    }
+
+    /** A byte order mark opens the body, not the first field's name. */
+    fun `test a byte order mark at the start of the stream is not part of the event name`() {
+        val bom = byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte())
+        val bytes = bom + "event: datastar-patch-signals\ndata: signals {}\n\n".toByteArray()
+        assertEquals(listOf("datastar-patch-signals"), pumped(bytes).map { it.event })
+    }
+
+    /** Every frame [StreamClient.pump] reads from [bytes], handed over one byte per read. */
+    private fun pumped(bytes: ByteArray): List<DatastarFrame> {
+        val trickle =
+            object : java.io.InputStream() {
+                private var next = 0
+
+                override fun read(): Int = if (next < bytes.size) bytes[next++].toInt() and 0xFF else -1
+
+                override fun read(
+                    b: ByteArray,
+                    off: Int,
+                    len: Int,
+                ): Int {
+                    if (len == 0) return 0
+                    val c = read()
+                    if (c < 0) return -1
+                    b[off] = c.toByte()
+                    return 1
+                }
+            }
+        val frames = CopyOnWriteArrayList<DatastarFrame>()
+        StreamClient.pump(
+            trickle,
+            object : StreamClient.Handlers {
+                override fun onFrame(frame: DatastarFrame) {
+                    frames += frame
+                }
+            },
+            java.util.concurrent.atomic.AtomicBoolean(false),
+        )
+        return frames
+    }
 }
