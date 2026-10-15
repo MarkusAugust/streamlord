@@ -6,6 +6,7 @@ import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
+import io.github.markusaugust.streamlord.core.domain.Wire
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol.DataLines
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -84,23 +85,20 @@ public object SseDecoder {
     }
 
     /**
-     * The `id` and `retry` the client takes from any message, Datastar's or not. An `id` goes back
-     * as the `last-event-id` header on a reconnect, and `fetch` cannot send one with a NUL or a
-     * character above U+00FF in it, so every reconnect would fail. A `retry` must be a whole
-     * number of milliseconds, as the SSE grammar says, and not zero: the client ignores text it
-     * cannot read as a number and reads some it should not, an empty one as zero among them, and
-     * zero has it reconnect at once without end.
+     * The `id` and `retry` the client takes from any message, Datastar's or not, held to the rules
+     * an event is built with ([Wire.eventId] and [Wire.retry]). An `id` goes back as the
+     * `last-event-id` header on a reconnect, which only printable ASCII survives. A `retry` must be
+     * a whole number of milliseconds, as the SSE grammar says, from 1 to [Int.MAX_VALUE]: the
+     * client ignores text it cannot read as a number and reads some it should not, an empty one as
+     * zero among them.
      */
     internal fun checkTaken(
         id: String?,
         retry: String?,
     ) {
-        id?.firstOrNull { it == '\u0000' || it > '\u00FF' }?.let {
-            throw DatastarEventValidationException(
-                "An id with U+%04X in it cannot go back as last-event-id, so every reconnect would fail".format(it.code),
-            )
-        }
-        retry?.let(::parseRetry)
+        // An empty id is no id, and the one value that rule lets through.
+        id?.takeIf { it.isNotEmpty() }?.let(Wire::eventId)
+        retry?.let { Wire.retry(parseRetry(it)) }
     }
 
     private fun toEvent(message: SseMessage): DatastarEvent? {
@@ -167,7 +165,11 @@ public object SseDecoder {
         val millis =
             value.takeIf { it.isNotEmpty() && it.all { c -> c in '0'..'9' } }?.toLongOrNull()
                 ?: throw DatastarEventValidationException("retry must be a whole number of milliseconds, not '$value'")
-        if (millis == 0L) throw DatastarEventValidationException("retry: 0 has the client reconnect at once, without end")
+        if (millis ==
+            0L
+        ) {
+            throw DatastarEventValidationException("retry: 0 has the client reconnect with no wait, and its backoff never grows")
+        }
         return millis.milliseconds
     }
 

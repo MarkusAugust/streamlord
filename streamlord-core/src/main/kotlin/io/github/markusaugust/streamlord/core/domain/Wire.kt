@@ -33,33 +33,39 @@ public object Wire {
     }
 
     /**
-     * Reject an event id the client could not send back as it is. It returns as the
-     * `last-event-id` header on a reconnect: `fetch` cannot send a character above U+00FF, so
-     * every reconnect would fail, and it strips spaces and tabs at either end, so the server
-     * would be handed another id than the one it wrote.
+     * Reject an event id that would not come back as it was written. It returns as the
+     * `last-event-id` header on a reconnect, and only printable ASCII survives that trip:
+     * `fetch` cannot send a character above U+00FF, Node's `fetch` refuses a control character,
+     * Tomcat and Netty answer one with 400, which ends the client's retries, and Ktor's CIO reads
+     * the header as UTF-8, so a Latin-1 character arrives as U+FFFD. A space at either end is
+     * stripped on the way, so the server would get another id.
      */
     internal fun eventId(value: String): String {
         if (value.isEmpty()) throw DatastarEventValidationException("eventId must not be empty")
-        singleLine(value, "eventId")
-        value.firstOrNull { it > '\u00FF' }?.let {
-            throw DatastarEventValidationException("eventId must not contain '$it': the client cannot send it back as last-event-id")
+        value.firstOrNull { it !in ' '..'~' }?.let {
+            throw DatastarEventValidationException(
+                "eventId must be printable ASCII, not U+%04X: it goes back as the last-event-id header".format(it.code),
+            )
         }
-        if (value.first().isEdgeSpace() || value.last().isEdgeSpace()) {
-            throw DatastarEventValidationException("eventId must not start or end with a space or tab: the client strips them")
+        if (value.first() == ' ' || value.last() == ' ') {
+            throw DatastarEventValidationException("eventId must not start or end with a space: the client strips it")
         }
         return value
     }
 
-    private fun Char.isEdgeSpace() = this == ' ' || this == '\t'
-
     /**
-     * Reject a retry the client cannot use: under one millisecond it is written as `retry: 0`,
-     * which has the client reconnect at once and again without end, and over [Int.MAX_VALUE]
-     * milliseconds the browser's timer overflows.
+     * Reject a retry the client cannot use as written: a whole number of milliseconds from 1 to
+     * [Int.MAX_VALUE]. The line carries whole milliseconds, so a fraction would be cut off, and
+     * one under a millisecond would read `retry: 0`, a reconnect with no wait whose backoff never
+     * grows from zero. Over [Int.MAX_VALUE] the browser's timer overflows.
      */
     internal fun retry(value: Duration): Duration {
-        if (value.isInfinite() || value < 1.milliseconds || value > Int.MAX_VALUE.milliseconds) {
-            throw DatastarEventValidationException("retry must be between 1 ms and ${Int.MAX_VALUE} ms, not $value")
+        if (value.isInfinite() ||
+            value < 1.milliseconds ||
+            value > Int.MAX_VALUE.milliseconds ||
+            value.inWholeNanoseconds % 1_000_000 != 0L
+        ) {
+            throw DatastarEventValidationException("retry must be a whole number of milliseconds from 1 to ${Int.MAX_VALUE}, not $value")
         }
         return value
     }

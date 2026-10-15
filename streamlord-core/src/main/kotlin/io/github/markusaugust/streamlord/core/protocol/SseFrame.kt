@@ -38,8 +38,7 @@ public data class SseFrame(
         buildString(64 + dataLines.sumOf { it.length + 8 }) {
             append("event: ").append(event).append('\n')
             id?.let { append("id: ").append(it).append('\n') }
-            // Compared as written: 1000.5 ms is the 1000 the client would read, and is left off too.
-            retry?.takeIf { it.inWholeMilliseconds != DatastarProtocol.DEFAULT_RETRY.inWholeMilliseconds }?.let {
+            retry?.takeIf { it != DatastarProtocol.DEFAULT_RETRY }?.let {
                 append("retry: ").append(it.inWholeMilliseconds).append('\n')
             }
             for (line in dataLines) append("data: ").append(line).append('\n')

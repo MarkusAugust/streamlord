@@ -23,13 +23,13 @@ public sealed interface DatastarEvent {
     public val eventId: String?
 
     /**
-     * Optional SSE `retry:` line, from 1 ms to [Int.MAX_VALUE] ms: how long the client waits
-     * before it reconnects. It holds for the rest of the action, across reconnects too, until a
+     * Optional SSE `retry:` line, a whole number of milliseconds from 1 to [Int.MAX_VALUE]: how
+     * long the client waits before it reconnects. It holds for the rest of the action, across reconnects too, until a
      * later frame sets another. `null` leaves the client's current interval in place, which is
      * the action's `retryInterval` (1000 ms unless set) until a frame has changed it. 1000 ms is
      * never written, as the SDK specification has it, so a stream that has changed the interval
      * goes back with 999 or 1001 ms. `retryMaxCount` only counts reconnects that never reach a
-     * 200, and `retryMaxWait` does not cap this value.
+     * 200, and `retryMaxWait` caps the backoff after the first wait, not this value.
      */
     public val retry: Duration?
 }

@@ -8,35 +8,30 @@ import io.github.markusaugust.streamlord.core.protocol.SseFrame
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.microseconds
 import kotlin.time.Duration.Companion.milliseconds
 
 /** What an event may put on the wire, so the client can act on it and reconnect with it. */
 class WireLimitsTest {
-    // Under a millisecond it is written as retry: 0, and the client reconnects at once without
-    // end; over Int.MAX_VALUE the browser's timer overflows.
+    // The line carries whole milliseconds: a fraction would be cut off, and under one it would
+    // read retry: 0, a reconnect with no wait. Over Int.MAX_VALUE the browser's timer overflows.
     @Test
-    fun `a retry runs from one millisecond to Int MAX_VALUE milliseconds`() {
-        for (retry in listOf(500.microseconds, (Int.MAX_VALUE.toLong() + 1).milliseconds)) {
+    fun `a retry is a whole number of milliseconds from 1 to Int MAX_VALUE`() {
+        for (retry in listOf(500.microseconds, 1.5.milliseconds, 1000.5.milliseconds, (Int.MAX_VALUE.toLong() + 1).milliseconds)) {
             assertFailsWith<DatastarEventValidationException>("$retry") { PatchSignals("{}", retry = retry) }
             assertFailsWith<DatastarEventValidationException>("$retry") { SseFrame("e", retry = retry) }
         }
-        PatchSignals("{}", retry = 1.milliseconds)
-        PatchSignals("{}", retry = Int.MAX_VALUE.milliseconds)
+        assertTrue("retry: 1\n" in SseFrame("e", retry = 1.milliseconds).render())
+        assertTrue("retry: 2147483647\n" in SseFrame("e", retry = Int.MAX_VALUE.milliseconds).render())
     }
 
-    // The client compares the number it reads, so 1000.5 ms is the default it would write.
+    // It goes back as the last-event-id header, and only printable ASCII survives that: fetch
+    // cannot send above U+00FF, servers refuse control characters, Ktor's CIO turns Latin-1 into
+    // U+FFFD, and a space at either end is stripped.
     @Test
-    fun `a retry that writes as 1000 is the default and is left off`() {
-        assertFalse("retry:" in SseFrame("e", retry = 1000.5.milliseconds).render())
-    }
-
-    // fetch cannot send a character above U+00FF in the last-event-id header, so every reconnect
-    // would fail; and it strips spaces and tabs at the edges, so the server would get another id.
-    @Test
-    fun `an event id the client could not send back as it is fails`() {
-        for (id in listOf("€1", " 7", "7 ", "\t7")) {
+    fun `an event id is printable ASCII with no space at either end`() {
+        for (id in listOf("€1", "ø1", "a\u0001b", "a\tb", "a\u007Fb", " 7", "7 ")) {
             assertFailsWith<DatastarEventValidationException>(id) { PatchSignals("{}", eventId = id) }
             assertFailsWith<DatastarEventValidationException>(id) { SseFrame("e", id = id) }
         }
@@ -45,20 +40,26 @@ class WireLimitsTest {
     // Whatever the encoder accepts, the decoder reads back.
     @Test
     fun `an event id the client can send round-trips`() {
-        for (id in listOf("ø1", "a\u0001b", "a b")) {
+        for (id in listOf("7", "a b", "event-1_x~")) {
             val event = PatchSignals("{}", eventId = id)
             assertEquals(event, SseDecoder.decodeOne(SseEncoder.encode(event)))
         }
     }
 
-    // A frame built by hand must not be able to write a line of its own.
+    // A frame built by hand is held to what an event is held to, and cannot write a line of its own.
     @Test
-    fun `a frame refuses a line break in any field`() {
+    fun `a frame refuses what an event refuses`() {
         assertFailsWith<DatastarEventValidationException> { SseFrame("e\nid: x") }
         assertFailsWith<DatastarEventValidationException> { SseFrame("e", id = "a\nb") }
         assertFailsWith<DatastarEventValidationException> { SseFrame("e", dataLines = listOf("a\rb")) }
         assertFailsWith<DatastarEventValidationException> { SseFrame("e", id = "a\u0000b") }
         assertFailsWith<DatastarEventValidationException> { SseFrame("e", retry = (-5).milliseconds) }
+    }
+
+    // Selectors take any character the page's own ids do; only the event id is held to ASCII.
+    @Test
+    fun `a selector may carry characters above U+00FF`() {
+        PatchElements("<p id=\"日本\"></p>", selector = "[data-name=\"€\"]", viewTransitionSelector = "#日本")
     }
 
     // NUL in markup is harmless to the client, and an event that exists can always be written.
