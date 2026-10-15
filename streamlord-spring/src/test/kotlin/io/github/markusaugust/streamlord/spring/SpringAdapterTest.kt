@@ -12,6 +12,7 @@ import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
 import io.github.markusaugust.streamlord.json.jackson.JacksonSignalsCodec
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
@@ -64,6 +65,45 @@ class SpringAdapterTest {
             .writeTo(response.outputStream)
 
         assertTrue(": keep-alive" in response.contentAsString, response.contentAsString)
+    }
+
+    @Test
+    fun `a heartbeat for one stream applies when the bean has none`() {
+        val response = MockHttpServletResponse()
+        response
+            .datastarStream(Streamlord(), heartbeat = 50.milliseconds) { delay(300.milliseconds) }
+            .writeTo(response.outputStream)
+
+        assertTrue(": keep-alive" in response.contentAsString, response.contentAsString)
+    }
+
+    @Test
+    fun `null for one stream silences the bean's heartbeat`() {
+        val response = MockHttpServletResponse()
+        response
+            .datastarStream(Streamlord(heartbeat = 50.milliseconds), heartbeat = null) { delay(300.milliseconds) }
+            .writeTo(response.outputStream)
+
+        assertEquals("", response.contentAsString)
+    }
+
+    @Test
+    fun `the flow variant takes a heartbeat for its stream`() {
+        val response = MockHttpServletResponse()
+        val events = flow<DatastarEvent> { delay(300.milliseconds) }
+        response
+            .datastarStream(events, Streamlord(), heartbeat = 50.milliseconds)
+            .writeTo(response.outputStream)
+
+        assertTrue(": keep-alive" in response.contentAsString, response.contentAsString)
+    }
+
+    // At the controller, while a status can still be sent, rather than once the body is running.
+    @Test
+    fun `a heartbeat that is not positive fails when the stream is asked for`() {
+        assertFailsWith<IllegalArgumentException> {
+            MockHttpServletResponse().datastarStream(heartbeat = 0.milliseconds) {}
+        }
     }
 
     @Test
