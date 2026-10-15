@@ -14,6 +14,7 @@ dependencies {
     testImplementation(libs.spring.webflux)
     testImplementation(libs.jakarta.servlet)
     testImplementation(libs.reactor.core)
+    testImplementation(libs.tomcat.embed.core)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(project(":streamlord-json-jackson"))
     testImplementation(libs.jackson.kotlin)
