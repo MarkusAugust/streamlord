@@ -104,20 +104,6 @@ internal class SseDatastarStream(
      * exception and carries on therefore sends nothing more, which is the whole point: the
      * refusal has to hold even when the handler does not stop.
      */
-    /*
-     * The answer, with a CancellationException of the check's own, such as a withTimeout around a
-     * database call, turned into a failure. Thrown as it is, it would end only the coroutine that
-     * asked: on the heartbeat that is the heartbeat itself, which stops without a word, and the
-     * stream would never be asked again nor find a reader who left.
-     */
-    private suspend fun allowed(authorisation: StreamAuthorisation): Boolean =
-        try {
-            authorisation.allows()
-        } catch (e: CancellationException) {
-            currentCoroutineContext().ensureActive()
-            throw IllegalStateException("The stream's authorisation check threw ${e::class.simpleName}: ${e.message}", e)
-        }
-
     internal suspend fun authorise() {
         val authorisation = authorisation ?: return
         if (refused.get()) throw StreamRefusedException()
@@ -144,6 +130,20 @@ internal class SseDatastarStream(
         }
         throw StreamRefusedException()
     }
+
+    /*
+     * The answer, with a CancellationException of the check's own, such as a withTimeout around a
+     * database call, turned into a failure. Thrown as it is, it would end only the coroutine that
+     * asked: on the heartbeat that is the heartbeat itself, which stops without a word, and the
+     * stream would never be asked again nor find a reader who left.
+     */
+    private suspend fun allowed(authorisation: StreamAuthorisation): Boolean =
+        try {
+            authorisation.allows()
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw IllegalStateException("The stream's authorisation check threw ${e::class.simpleName}: ${e.message}", e)
+        }
 
     /**
      * What [StreamAuthorisation.onRefused] writes through. It is a separate stream because the

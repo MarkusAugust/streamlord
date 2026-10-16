@@ -26,14 +26,18 @@ import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.writeFully
 import io.ktor.utils.io.writeStringUtf8
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.yield
 import org.intellij.lang.annotations.Language
 import java.io.ByteArrayOutputStream
 import java.util.zip.GZIPOutputStream
 import kotlin.reflect.typeOf
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Respond with a Datastar SSE stream and run [block] against it.
@@ -65,8 +69,9 @@ import kotlin.time.Duration
  *   writes at once: Netty sends no headers before the first byte of the body, and closes a
  *   response that has written nothing for ten seconds, while the handler waits on.
  *
- * A block that throws ends the stream after the frames it sent. On CIO the connection is cut;
- * on Netty Ktor often ends it as if it had finished, which Datastar's client does not retry.
+ * A block that throws ends the stream after a moment for the frames it sent to go out, which is
+ * as much as Ktor allows a writer, and the connection is then cut, which Datastar's client
+ * retries.
  */
 @JvmName("respondDatastar")
 public suspend fun ApplicationCall.respondDatastar(
@@ -130,10 +135,16 @@ private suspend fun ApplicationCall.respondStream(
                         streamlord.stream(ChannelSseSink(channel), authorisation, heartbeat, block = block)
                     }
                 } catch (e: Throwable) {
-                    // Ktor closes the channel with the failure, and an engine that reads it then
-                    // drops what was written and not yet sent. Sent first, the frames reach the
-                    // client before the stream is cut.
-                    withContext(NonCancellable) { runCatching { channel.flush() } }
+                    // Ktor closes the channel with the failure, and the engine then drops what it
+                    // has not yet taken from it. ktor-io gives a writer no way to wait for that,
+                    // so the engine is given a moment, bounded for a reader who stopped reading.
+                    withContext(NonCancellable) {
+                        withTimeoutOrNull(LAST_FRAMES_LIMIT) {
+                            runCatching { channel.flush() }
+                            yield()
+                            delay(LAST_FRAMES_GRACE)
+                        }
+                    }
                     throw e
                 }
             }
@@ -272,6 +283,10 @@ public suspend fun ApplicationCall.respondScript(
     respondResponse(ScriptResponse(script, attributes), status)
 }
 
+/** How long a failed stream waits for the engine to take its last frames, and at most for a stalled reader. */
+private val LAST_FRAMES_GRACE = 50.milliseconds
+private val LAST_FRAMES_LIMIT = 1.seconds
+
 /** The gzipped stream: [Streamlord.stream] over a [GzipChannelSseSink], ended as a whole member. */
 internal suspend fun Streamlord.streamGzipped(
     channel: ByteWriteChannel,
@@ -322,8 +337,7 @@ internal class GzipChannelSseSink(
 
     /**
      * End the gzip member, so the client's decoder sees a whole stream. Only after a stream that
-     * ended well: one cut short by an exception is left unterminated, so a decoder that reads it
-     * whole sees it fail. Netty may still end the response cleanly; see [respondDatastar].
+     * ended well: one cut short by an exception is left unterminated, so the client sees it fail.
      */
     suspend fun finish() {
         gzip.finish()

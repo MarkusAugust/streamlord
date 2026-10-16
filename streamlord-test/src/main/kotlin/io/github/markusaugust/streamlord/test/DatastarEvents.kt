@@ -90,8 +90,10 @@ public class DatastarEvents(
      * The client keeps an array an array when an object is patched onto it, and sets each key as
      * it would on any object (signals.ts, mergeInner): an index past the end extends the array, and
      * `null` deletes the element and leaves a hole. A hole reads as `null`, as `JSON.stringify`
-     * writes it. A key that is not an index, such as `01` or `name`, becomes a property of the
-     * array that JSON never shows, and is left out here.
+     * writes it, and a `null` the array held is taken for one, so `onlyIfMissing` fills it where
+     * the client would keep it. A key that is not an index, such as `01` or `name`, becomes a
+     * property of the array that JSON never shows, and is left out here. An index far past the end
+     * fails the assertion rather than fill memory with the holes the client leaves unallocated.
      */
     private fun foldIntoArray(
         target: JsonArray,
@@ -101,6 +103,9 @@ public class DatastarEvents(
         val items = target.toMutableList()
         for ((key, value) in patch) {
             val index = key.toIntOrNull()?.takeIf { it >= 0 && it.toString() == key } ?: continue
+            if (index > items.size + holeLimit) {
+                throw AssertionError("Signal patch index $index is $holeLimit or more past the end of an array of ${items.size}")
+            }
             val present = index < items.size && items[index] !is JsonNull
             when {
                 value is JsonNull -> if (!ifMissing && index < items.size) items[index] = JsonNull
@@ -122,6 +127,8 @@ public class DatastarEvents(
             is JsonObject -> fold(existing, patch, ifMissing)
             else -> fold(JsonObject.EMPTY, patch, ifMissing)
         }
+
+    private val holeLimit = 10_000
 
     private fun MutableList<JsonValue>.put(
         index: Int,

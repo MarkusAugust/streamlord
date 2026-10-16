@@ -97,9 +97,12 @@ All notable changes to Streamlord are recorded here. The format follows
   a database call, ended only the coroutine that asked. When the heartbeat asked, that was the
   heartbeat, which stopped without a word, and an idle stream was never asked again nor found a
   reader who left. It now ends the stream as an `IllegalStateException`, on both paths.
-- On Ktor, a frame the block sent just before it threw reaches the client before the stream is
-  cut. CIO dropped what was written and not yet sent; the heartbeat hid it, and `heartbeat = null`
-  brought it back.
+- On Ktor, a block that throws has its frames delivered and its stream cut. With
+  `heartbeat = null`, CIO lost the last frame in about two failures of five and sent no bytes at
+  all in most failures before a first write, some of which then hung open; Netty ended half of
+  them as if they had finished, which the client does not retry. Ktor gives a writer no way to wait
+  for the engine, so a failure now waits a moment, at most a second for a stalled reader, before it
+  is thrown on; over 200 failures of each kind on each engine, none lost a frame or ended cleanly.
 - `respondDatastar` on a call already answered throws `IllegalStateException`. It did nothing on
   CIO and threw Netty's own exception from the header loop.
 - Ktor no longer sends `Connection: keep-alive` to a request that asked to close.
@@ -108,8 +111,7 @@ All notable changes to Streamlord are recorded here. The format follows
 - `LiveDatastarStream` sends the client's `Accept`, now `DatastarProtocol.ACCEPT`, and words a
   frame it fails on as one Streamlord's rules refuse: the client takes `retry: 0` and `1e3`.
 - The pages give the measured disconnect figures (four to five heartbeats on CIO, two on Netty),
-  say which engine sends its headers when, and say what Netty does with a failed block and with
-  `heartbeat = null`; and the core, `streamlord-test` and the Ktor tests also run on the newest
+  say which engine sends its headers when, and what Netty does with `heartbeat = null`; and the core, `streamlord-test` and the Ktor tests also run on the newest
   coroutines release, and `HttpRequestLifecycle` is tested on Netty.
 - On Spring WebMVC, a failure inside a stream that has started is cut off, as the documentation
   said, also when `StreamlordExceptionHandler` handles it: the handler throws the exception on

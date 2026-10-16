@@ -90,4 +90,11 @@ class AsTheBrowserHoldsItTest {
 
         events.assertSignal("list", listOf("a", null, "c", null, null, "x"))
     }
+
+    @Test
+    fun `an index far past the end fails rather than fill memory`() {
+        val events = stream(PatchSignals("""{"list":["a"]}"""), PatchSignals("""{"list":{"100000000":"x"}}"""))
+
+        assertFailsWith<AssertionError> { events.assertSignal("list", listOf("a")) }
+    }
 }

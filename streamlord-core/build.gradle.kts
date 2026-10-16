@@ -18,24 +18,30 @@ dependencies {
  */
 val coroutinesNewestVersion = libs.versions.coroutinesNewest.get()
 
-val newestCoroutinesTestRuntimeClasspath: Configuration = configurations.create("newestCoroutinesTestRuntimeClasspath") {
-    extendsFrom(configurations.testRuntimeClasspath.get())
-    attributes {
-        attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage.JAVA_RUNTIME))
-        attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category.LIBRARY))
-        attribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE, objects.named(LibraryElements.JAR))
+val newestCoroutinesTestRuntimeClasspath: Configuration =
+    configurations.create("newestCoroutinesTestRuntimeClasspath") {
+        extendsFrom(configurations.testRuntimeClasspath.get())
+        attributes {
+            attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage.JAVA_RUNTIME))
+            attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category.LIBRARY))
+            attribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE, objects.named(LibraryElements.JAR))
+        }
+        resolutionStrategy.eachDependency {
+            val coroutines = requested.group == "org.jetbrains.kotlinx" && requested.name.startsWith("kotlinx-coroutines")
+            if (coroutines) useVersion(coroutinesNewestVersion)
+        }
     }
-    resolutionStrategy.eachDependency {
-        if (requested.group == "org.jetbrains.kotlinx" && requested.name.startsWith("kotlinx-coroutines")) useVersion(coroutinesNewestVersion)
-    }
-}
 
-val testNewestCoroutines = tasks.register<Test>("testNewestCoroutines") {
-    description = "Runs the tests against kotlinx-coroutines $coroutinesNewestVersion."
-    group = "verification"
-    testClassesDirs = sourceSets.test.get().output.classesDirs
-    classpath = sourceSets.test.get().output + sourceSets.main.get().output + newestCoroutinesTestRuntimeClasspath
-    useJUnitPlatform()
-}
+val testNewestCoroutines =
+    tasks.register<Test>("testNewestCoroutines") {
+        description = "Runs the tests against kotlinx-coroutines $coroutinesNewestVersion."
+        group = "verification"
+        testClassesDirs =
+            sourceSets.test
+                .get()
+                .output.classesDirs
+        classpath = sourceSets.test.get().output + sourceSets.main.get().output + newestCoroutinesTestRuntimeClasspath
+        useJUnitPlatform()
+    }
 
 tasks.check { dependsOn(testNewestCoroutines) }

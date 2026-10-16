@@ -4,7 +4,10 @@ import io.github.markusaugust.streamlord.core.port.driving.patchSignals
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.cio.CIO
+import io.ktor.server.engine.ApplicationEngine
+import io.ktor.server.engine.ApplicationEngineFactory
 import io.ktor.server.engine.embeddedServer
+import io.ktor.server.netty.Netty
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
@@ -17,13 +20,19 @@ import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/** How a stream on a real CIO server answers a closing request, a failure, and a call already answered. */
+/** How a stream on a real server answers a closing request, a failure, and a call already answered. */
 class StreamEdgesTest {
     private fun <T> serving(
         module: Application.() -> Unit,
         test: (port: Int) -> T,
+    ): T = serving(CIO, module, test)
+
+    private fun <T, E : ApplicationEngine, C : ApplicationEngine.Configuration> serving(
+        engine: ApplicationEngineFactory<E, C>,
+        module: Application.() -> Unit,
+        test: (port: Int) -> T,
     ): T {
-        val server = embeddedServer(CIO, port = 0, module = module).start(wait = false)
+        val server = embeddedServer(engine, port = 0, module = module).start(wait = false)
         try {
             return test(
                 runBlocking {
@@ -60,24 +69,37 @@ class StreamEdgesTest {
             out.toString(Charsets.ISO_8859_1)
         }
 
-    // Ktor closes the channel with the failure, and CIO then dropped what was written and not yet
-    // sent. Without a heartbeat nothing gave it the time to go out.
+    // Ktor closes the channel with the failure, and the engine then dropped what it had not yet
+    // sent: CIO the last frame, or the whole response, and Netty often ended it as if it had
+    // finished. Without a heartbeat nothing gave the engine the time.
     @Test
-    fun `a frame sent before a failure reaches the client, and the stream is then cut`() =
-        serving({
+    fun `a failure after a frame delivers it and cuts the stream, on CIO`() = failsCleanly(CIO)
+
+    @Test
+    fun `a failure after a frame delivers it and cuts the stream, on Netty`() = failsCleanly(Netty)
+
+    private fun <E : ApplicationEngine, C : ApplicationEngine.Configuration> failsCleanly(engine: ApplicationEngineFactory<E, C>) =
+        serving(engine, {
             routing {
-                get("/fail") {
+                get("/after") {
                     call.respondDatastar(heartbeat = null) {
                         patchSignals("n" to 1)
                         error("after the first frame")
                     }
                 }
+                get("/before") { call.respondDatastar(heartbeat = null) { error("before anything was written") } }
             }
         }) { port ->
-            repeat(10) {
-                val response = raw(port, "/fail")
-                assertTrue("datastar-patch-signals" in response, "run $it lost the frame:\n$response")
-                assertFalse(response.endsWith("0\r\n\r\n"), "run $it ended as if it had finished:\n$response")
+            repeat(50) {
+                val after = raw(port, "/after")
+                assertTrue("datastar-patch-signals" in after, "run $it lost the frame:\n$after")
+                assertFalse(after.endsWith("0\r\n\r\n"), "run $it ended as if it had finished:\n$after")
+                // Cut or closed, never ended as if finished nor left open: Netty on Ktor 3.0 sends
+                // nothing before the first byte of the body, and closes the connection instead.
+                val started = System.nanoTime()
+                val before = raw(port, "/before")
+                assertTrue((System.nanoTime() - started) / 1_000_000 < 2000, "run $it left the connection open:\n$before")
+                assertFalse(before.endsWith("0\r\n\r\n"), "run $it ended as if it had finished:\n$before")
             }
         }
 
