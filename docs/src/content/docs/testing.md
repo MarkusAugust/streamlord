@@ -95,11 +95,13 @@ events.assertNoSignal("draft")
 
 The decoder reads the body the way Datastar's client does, so a test cannot pass on a response
 the client would not act on: a last frame with no blank line after it is not an event, a line
-without a colon is skipped, and a frame the client would reject fails the test instead of being
+without a colon is skipped, and a frame Streamlord's rules refuse fails the test instead of being
 read charitably. That includes, on any message, Datastar's or not, an `id` the client could not
 send back as `last-event-id` unchanged (anything but printable ASCII, or a space at either end)
-and a `retry` that is not a whole number of milliseconds from 1 to `Int.MAX_VALUE`, since the
-client takes both from every message it reads. `LiveDatastarStream` judges the end of a stream the same way.
+and a `retry` that is not a whole number of milliseconds from 1 to `Int.MAX_VALUE`. The client
+takes both from every message it reads. It takes `retry: 0` too, as a reconnect with no wait whose
+backoff never grows, and reads `1e3` as a second; Streamlord writes neither, so a test fails on a
+stream that does. `LiveDatastarStream` judges the end of a stream the same way.
 
 `datastarEvents` returns a `List<DatastarEvent>`, so your own assertions work on it unchanged and
 these are a convenience rather than a cage. `events.messages` has the raw SSE messages too, for a
@@ -229,11 +231,11 @@ Needs `ktor-server-cio`, or the engine you deploy on, next to `streamlord-test`.
 `@SpringBootTest(webEnvironment = RANDOM_PORT)` gives the real server and `@LocalServerPort` the
 port, from a Kotlin test: the class is coroutine API, called inside `runTest` or `runBlocking`.
 
-The answer has to start within the timeout, five seconds by default, and a server sends its
-headers with its first flush. A handler that writes nothing until a command arrives holds `open`
-until it does, which is one more reason for a live view to send the current state first. The
-heartbeat's first comment comes at five seconds too, so it cannot be counted on to open the stream
-within the timeout.
+The answer has to start within the timeout, five seconds by default. Ktor's CIO sends the headers
+as soon as the response opens; Netty holds them until the first byte of the body, so on Netty a
+handler that writes nothing until a command arrives holds `open` until it does, which is one more
+reason for a live view to send the current state first. The heartbeat's first comment comes at
+five seconds too, so it cannot be counted on to open the stream within the timeout.
 
 Three things it does:
 

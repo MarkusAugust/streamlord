@@ -7,6 +7,7 @@ import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonString
 import io.github.markusaugust.streamlord.core.json.JsonValue
+import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
 import java.net.URLEncoder
 
 /*
@@ -35,7 +36,7 @@ public data class RequestsFile(
 
 public object Requests {
     /** What Datastar's client sends as `Accept`, and so what the inspector sends (fetch.ts:82 in 1.0.4). */
-    public const val ACCEPT: String = "text/event-stream, text/html, application/json"
+    public const val ACCEPT: String = DatastarProtocol.ACCEPT
 
     /** How much of a response without a stream the inspector reads and shows. */
     public const val NON_STREAM_LIMIT: Int = 1024 * 1024

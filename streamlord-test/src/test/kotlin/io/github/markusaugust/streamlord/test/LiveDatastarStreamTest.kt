@@ -33,6 +33,8 @@ class LiveDatastarStreamTest {
     private val outbox = LinkedBlockingQueue<String>()
     private val readerLeft = CountDownLatch(1)
 
+    @Volatile private var accepted: String? = null
+
     @BeforeTest
     fun start() {
         server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
@@ -52,6 +54,12 @@ class LiveDatastarStreamTest {
             } finally {
                 exchange.close()
             }
+        }
+        server.createContext("/accept") { exchange ->
+            accepted = exchange.requestHeaders.getFirst("Accept")
+            exchange.responseHeaders.add("Content-Type", "text/event-stream")
+            exchange.sendResponseHeaders(200, 0)
+            exchange.close()
         }
         server.createContext("/silent") { exchange ->
             Thread.sleep(2000)
@@ -207,20 +215,20 @@ class LiveDatastarStreamTest {
         }
 
     @Test
-    fun `a frame the client would reject fails with the stream`() =
+    fun `a frame Streamlord's rules refuse fails with the stream`() =
         runTest {
             feed().use { stream ->
                 outbox.put("event: datastar-patch-elements\ndata: mode sideways\ndata: elements <p/>\n\n")
 
                 val failure = assertFailsWith<AssertionError> { stream.next() }
 
-                assertTrue("would reject" in failure.message!!, failure.message)
+                assertTrue("rules refuse" in failure.message!!, failure.message)
             }
         }
 
     // As datastarEvents judges the end of a text: the client takes the line as it ends.
     @Test
-    fun `a stream that ends on a line the client would reject fails`() =
+    fun `a stream that ends on a line Streamlord's rules refuse fails`() =
         runTest {
             val wire = "event: datastar-patch-signals\ndata: signals {\"a\":1}\n\nretry: soon\n"
             LiveDatastarStream.of(java.io.StringReader(wire)).use { stream ->
@@ -228,7 +236,7 @@ class LiveDatastarStreamTest {
 
                 val failure = assertFailsWith<AssertionError> { stream.next() }
 
-                assertTrue("would reject" in failure.message!!, failure.message)
+                assertTrue("rules refuse" in failure.message!!, failure.message)
             }
         }
 
@@ -350,5 +358,13 @@ class LiveDatastarStreamTest {
                 assertTrue("past the first 1 events, which an earlier wait had seen" in failure.message!!, failure.message)
                 assertTrue("The stream carried 1 event" in failure.message!!, failure.message)
             }
+        }
+
+    @Test
+    fun `it asks with the Accept Datastar's client sends`() =
+        runTest {
+            LiveDatastarStream.open(URI("http://127.0.0.1:${server.address.port}/accept")).use { }
+
+            assertEquals("text/event-stream, text/html, application/json", accepted)
         }
 }

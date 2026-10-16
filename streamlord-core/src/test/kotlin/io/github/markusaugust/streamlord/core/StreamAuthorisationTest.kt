@@ -5,14 +5,18 @@ import io.github.markusaugust.streamlord.core.application.Streamlord
 import io.github.markusaugust.streamlord.core.port.driven.BufferedSseSink
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.nanoseconds
 
 class StreamAuthorisationTest {
@@ -182,5 +186,28 @@ class StreamAuthorisationTest {
                     "event: datastar-patch-signals\ndata: signals {\"refused\":true}\n\n",
                 sink.text(),
             )
+        }
+
+    // A withTimeout around the check is a CancellationException of its own. Thrown as it is from
+    // the heartbeat, it ended the heartbeat alone, and an idle stream was never asked again.
+    @Test
+    fun `a check that times out when the heartbeat asks ends the stream`() =
+        runBlocking {
+            var asked = 0
+            val authorisation =
+                StreamAuthorisation(every = 1.milliseconds) {
+                    if (++asked > 1) withTimeout(10.milliseconds) { delay(1000.milliseconds) }
+                    true
+                }
+            val started = System.nanoTime()
+            val e =
+                assertFailsWith<IllegalStateException> {
+                    Streamlord(heartbeat = 50.milliseconds).stream(BufferedSseSink(), authorisation) {
+                        patchSignals("n" to 1)
+                        delay(3000.milliseconds)
+                    }
+                }
+            assertTrue((System.nanoTime() - started) / 1_000_000 < 2000, "the stream ran on to the end of the block")
+            assertTrue("TimeoutCancellationException" in e.message.orEmpty(), "$e")
         }
 }
