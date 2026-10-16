@@ -1,4 +1,4 @@
-import { compactSignals, requestUrl, sendableUrl } from "./requests.ts";
+import { ACCEPT, compactSignals, NON_STREAM_CUT, NON_STREAM_LIMIT, readsAsStream, requestUrl, sendableUrl, unreadBody } from "./requests.ts";
 import { decodeDatastar, SseParser, type DatastarFrame, type SseMessage } from "./sse.ts";
 
 /**
@@ -37,7 +37,7 @@ export function buildRequest(req: StreamRequest): { url: string; init: RequestIn
   }
   const sendable = sendableUrl(requestUrl(req.url, req.method, signalsJson));
   if ("error" in sendable) return sendable;
-  const headers: Record<string, string> = { Accept: "text/event-stream", "Datastar-Request": "true", ...(req.headers ?? {}) };
+  const headers: Record<string, string> = { Accept: ACCEPT, "Datastar-Request": "true", ...(req.headers ?? {}) };
   const bodyless = req.method === "GET" || req.method === "DELETE";
   if (!bodyless) headers["Content-Type"] = "application/json";
   return { url: sendable.url, init: { method: req.method, headers, body: bodyless ? undefined : signalsJson } };
@@ -55,8 +55,10 @@ export async function openStream(req: StreamRequest, handlers: StreamHandlers, s
     const response = await fetch(built.url, { ...built.init, signal });
     const ct = response.headers.get("content-type") ?? "";
     handlers.onStatus?.("open", { http: `${response.status} ${response.statusText}`, contentType: ct });
-    if (!ct.includes("text/event-stream")) {
-      const text = await response.text();
+    if (!readsAsStream(response.status, ct)) {
+      const unread = unreadBody(response.status, ct);
+      if (unread) await response.body?.cancel();
+      const text = unread ?? (await readLimited(response));
       const datastarHeaders: Record<string, string> = {};
       response.headers.forEach((v, k) => {
         if (k.startsWith("datastar-")) datastarHeaders[k] = v;
@@ -111,4 +113,28 @@ export function describeError(e: unknown): string {
   if (cause?.code) return `${cause.code}: ${cause.message || err.message}`;
   if (cause?.message) return `${err.message}: ${cause.message}`;
   return err.message;
+}
+
+/** The body as text, read up to the limit, so a large response does not land in memory whole. */
+async function readLimited(response: Response): Promise<string> {
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  while (size <= NON_STREAM_LIMIT) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    size += value.length;
+  }
+  const cut = size > NON_STREAM_LIMIT;
+  if (cut) await reader.cancel();
+  const bytes = new Uint8Array(size);
+  let at = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, at);
+    at += chunk.length;
+  }
+  const text = new TextDecoder().decode(cut ? bytes.subarray(0, NON_STREAM_LIMIT) : bytes);
+  return cut ? text + NON_STREAM_CUT : text;
 }

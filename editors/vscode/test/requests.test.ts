@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { baseUrlSuggestion, describeVariables, emptyBodyHint, lineAndColumn, withBaseUrl, mergeVariables, newRequestLabel, parseEnv, parseRequestsFile, pushRecent, remove, resolveRequest, routeHeaders, routeOptional, routeUrl, sendableUrl, serializeRequestsFile, substitute, toCurl, unreachableHint, upsert, variableCompletions, withEnvVariables, type SavedRequest } from "../src/requests.ts";
+import { ACCEPT, baseUrlSuggestion, describeVariables, emptyBodyHint, lineAndColumn, withBaseUrl, mergeVariables, newRequestLabel, parseEnv, parseRequestsFile, pushRecent, readsAsStream, remove, resolveRequest, routeHeaders, routeOptional, routeUrl, sendableUrl, serializeRequestsFile, substitute, toCurl, unreachableHint, upsert, variableCompletions, withEnvVariables, type SavedRequest } from "../src/requests.ts";
 import { findRoutes } from "../src/routes.ts";
 
 const req = (over: Partial<SavedRequest> = {}): SavedRequest => ({ name: "counter", url: "{{baseUrl}}/api/counter-stream", method: "GET", signals: "", headers: "", ...over });
@@ -42,11 +42,11 @@ describe("saved requests", () => {
   it("exports curl for query-string and body methods", () => {
     assert.equal(
       toCurl(req({ url: "http://localhost:8080/api/x", signals: '{"q": "a b"}', headers: "X-A: 1" })),
-      `curl -N -X GET 'http://localhost:8080/api/x?datastar=%7B%22q%22%3A%22a+b%22%7D' -H 'Accept: text/event-stream' -H 'Datastar-Request: true' -H 'X-A: 1'`,
+      `curl -N -X GET 'http://localhost:8080/api/x?datastar=%7B%22q%22%3A%22a+b%22%7D' -H 'Accept: text/event-stream, text/html, application/json' -H 'Datastar-Request: true' -H 'X-A: 1'`,
     );
     assert.equal(
       toCurl(req({ url: "http://h/x", method: "POST", signals: `{"s":"it's"}` })),
-      `curl -N -X POST 'http://h/x' -H 'Accept: text/event-stream' -H 'Datastar-Request: true' -H 'Content-Type: application/json' --data '{"s":"it'\\''s"}'`,
+      `curl -N -X POST 'http://h/x' -H 'Accept: text/event-stream, text/html, application/json' -H 'Datastar-Request: true' -H 'Content-Type: application/json' --data '{"s":"it'\\''s"}'`,
     );
   });
 
@@ -54,7 +54,7 @@ describe("saved requests", () => {
   // module's `RequestsTest.kt`: both editors write one shared file and export one curl line.
 
   it("curl export takes the url as written and never throws", () => {
-    const tail = " -H 'Accept: text/event-stream' -H 'Datastar-Request: true'";
+    const tail = " -H 'Accept: text/event-stream, text/html, application/json' -H 'Datastar-Request: true'";
     const get = (url: string): string => toCurl(req({ url }));
     assert.equal(get("http://localhost:8080"), `curl -N -X GET 'http://localhost:8080?datastar=%7B%7D'${tail}`);
     assert.equal(get("/x"), `curl -N -X GET '/x?datastar=%7B%7D'${tail}`);
@@ -66,7 +66,7 @@ describe("saved requests", () => {
   });
 
   it("curl export compacts signals without respelling them", () => {
-    const tail = " -H 'Accept: text/event-stream' -H 'Datastar-Request: true'";
+    const tail = " -H 'Accept: text/event-stream, text/html, application/json' -H 'Datastar-Request: true'";
     assert.equal(
       toCurl(req({ url: "http://h/x", method: "POST", signals: ' { "n" : 1.0,\n\t"s": "a  \\" b\\u00e9</p>", "l": [ 1, 2 ] }\r\n' })),
       `curl -N -X POST 'http://h/x'${tail} -H 'Content-Type: application/json' --data '{"n":1.0,"s":"a  \\" b\\u00e9</p>","l":[1,2]}'`,
@@ -218,8 +218,17 @@ describe("sendable url", () => {
     for (const [url, error] of cases) assert.deepEqual(sendableUrl(url), { error }, url);
   });
 
+  // The client's own Accept (fetch.ts:82), and the responses it reads as a stream (:587-653): a
+  // 200 that is not HTML, JSON or JavaScript, a missing Content-Type included.
+  it("reads a response as a stream as the client reads it", () => {
+    assert.equal(ACCEPT, "text/event-stream, text/html, application/json");
+    for (const type of ["text/event-stream", "text/event-stream; charset=utf-8", "text/plain", "", null, "Text/HTML"]) assert.equal(readsAsStream(200, type), true, `${type}`);
+    for (const type of ["text/html", "text/html; charset=utf-8", "application/json", "text/javascript"]) assert.equal(readsAsStream(200, type), false, type);
+    for (const status of [204, 302, 404, 500]) assert.equal(readsAsStream(status, "text/event-stream"), false, `${status}`);
+  });
+
   it("points to the server log when an error came without a body", () => {
-    assert.equal(emptyBodyHint(400, " \n"), "The server sent no body with this 400, so the reason is in its log. Spring Boot, for one, writes no error body for a request that accepts only text/event-stream.");
+    assert.equal(emptyBodyHint(400, " \n"), "The server sent no body with this 400, so the reason is in its log.");
     assert.equal(emptyBodyHint(400, "Required request parameter 'partsnummer' is not present"), null);
     assert.equal(emptyBodyHint(204, ""), null);
   });

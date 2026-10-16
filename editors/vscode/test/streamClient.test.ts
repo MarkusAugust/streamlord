@@ -2,7 +2,7 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { parseHeaderLines, toCurl, type SavedRequest } from "../src/requests.ts";
+import { NON_STREAM_CUT, parseHeaderLines, toCurl, type SavedRequest } from "../src/requests.ts";
 import { openStream } from "../src/streamClient.ts";
 
 /** What a server receives: the request target as it stood on the wire, and the body. */
@@ -24,6 +24,26 @@ before(async () => {
     req.on("data", (chunk: string) => (body += chunk));
     req.on("end", () => {
       received.push({ method: req.method ?? "", target: req.url ?? "", body, headers: req.headers });
+      // Responses the client reads by status and Content-Type, not by what the body looks like.
+      if (req.url?.startsWith("/no-type")) {
+        res.writeHead(200);
+        return void res.end("data: x\n\n");
+      }
+      if (req.url?.startsWith("/html")) {
+        res.writeHead(200, { "Content-Type": "text/html" });
+        const size = req.url.startsWith("/html-big") ? 2 * 1024 * 1024 : req.url.startsWith("/html-exact") ? 1024 * 1024 : 0;
+        return void res.end(size ? "x".repeat(size) : "<p id=\"a\">x</p>");
+      }
+      // A stream with an error status that stays open: the client reads none of it.
+      if (req.url?.startsWith("/missing-open")) {
+        res.writeHead(404, { "Content-Type": "text/event-stream" });
+        res.write("data: x\n\n");
+        return void setTimeout(() => res.end(), 3000);
+      }
+      if (req.url?.startsWith("/missing")) {
+        res.writeHead(404, { "Content-Type": "text/event-stream" });
+        return void res.end("data: x\n\n");
+      }
       res.writeHead(200, { "Content-Type": "text/event-stream" });
       // Comments after the last message, which only the parser's finish hands back.
       if (req.url?.startsWith("/trailing")) res.end("data: x\n\n: bye\n");
@@ -59,6 +79,49 @@ function curlParts(line: string): { target: string; body: string } {
 const request = (over: Partial<SavedRequest>): SavedRequest => ({ name: "", url: `${base}/api/feed`, method: "GET", signals: "", headers: "", ...over });
 
 describe("stream client", () => {
+  it("sends the client's Accept", async () => {
+    const { got } = await send(request({}));
+    assert.equal(got?.headers.accept, "text/event-stream, text/html, application/json");
+  });
+
+  it("reads a 200 without a Content-Type as a stream, as the client does", async () => {
+    const frames: string[] = [];
+    await openStream({ url: `${base}/no-type`, method: "GET", signals: "", headers: {} }, { onFrame: (f) => frames.push(f.event) }, new AbortController().signal);
+    assert.deepEqual(frames, ["message"]);
+  });
+
+  it("shows HTML, and any status but 200, as a response without a stream", async () => {
+    const shown: string[] = [];
+    const frames: string[] = [];
+    for (const path of ["/html", "/missing"]) {
+      await openStream(
+        { url: `${base}${path}`, method: "GET", signals: "", headers: {} },
+        { onNonSse: (r) => shown.push(`${r.http}: ${r.body}`), onFrame: (f) => frames.push(f.event) },
+        new AbortController().signal,
+      );
+    }
+    assert.deepEqual(
+      [shown, frames],
+      [['200 OK: <p id="a">x</p>', "404 Not Found: Not read: the client reads no body with a 404, and a stream may never end."], []],
+    );
+  });
+
+  it("shows a stream with an error status at once, without waiting on its body", async () => {
+    const started = performance.now();
+    let shown = "";
+    await openStream({ url: `${base}/missing-open`, method: "GET", signals: "", headers: {} }, { onNonSse: (r) => (shown = r.http) }, new AbortController().signal);
+    assert.equal(shown, "404 Not Found");
+    assert.ok(performance.now() - started < 2000, "waited on the body");
+  });
+
+  it("reads a response without a stream only up to its limit", async () => {
+    let body = "";
+    await openStream({ url: `${base}/html-big`, method: "GET", signals: "", headers: {} }, { onNonSse: (r) => (body = r.body) }, new AbortController().signal);
+    assert.equal(body, "x".repeat(1024 * 1024) + NON_STREAM_CUT);
+    await openStream({ url: `${base}/html-exact`, method: "GET", signals: "", headers: {} }, { onNonSse: (r) => (body = r.body) }, new AbortController().signal);
+    assert.equal(body, "x".repeat(1024 * 1024), "a body of exactly the limit is not cut");
+  });
+
   it("hands over a last comment cut inside a character", async () => {
     const comments: string[] = [];
     await openStream({ url: `${base}/cut`, method: "GET", signals: "", headers: {} }, { onComment: (c) => comments.push(c) }, new AbortController().signal);

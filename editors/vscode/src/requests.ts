@@ -530,13 +530,42 @@ export function parseHeaderLines(text: string): Record<string, string> {
   return Object.fromEntries(out);
 }
 
+/** What Datastar's client sends as Accept, and so what the inspector sends (fetch.ts:82 in 1.0.4). */
+export const ACCEPT = "text/event-stream, text/html, application/json";
+
+/** How much of a response without a stream the inspector reads and shows. */
+export const NON_STREAM_LIMIT = 1024 * 1024;
+
+/** What ends a body cut at NON_STREAM_LIMIT. */
+export const NON_STREAM_CUT = "\n\n(cut at 1 MiB)";
+
+/**
+ * What to show in place of a body the inspector does not read, or null when it reads it: a stream
+ * with any status but 200. The client reads no body then, and a stream may never end, which would
+ * leave the panel open with nothing in it.
+ */
+export function unreadBody(status: number, contentType: string | null): string | null {
+  return status !== 200 && (contentType ?? "").includes("text/event-stream") ? `Not read: the client reads no body with a ${status}, and a stream may never end.` : null;
+}
+
+/**
+ * Whether the client reads this response as a stream: a 200 that is not HTML, JSON or JavaScript,
+ * a missing Content-Type included (fetch.ts:587-655). It matches the types as written, as the
+ * client does. Any other response is shown without a stream; the client acts on no body at all
+ * unless the status is 200.
+ */
+export function readsAsStream(status: number, contentType: string | null): boolean {
+  const type = contentType ?? "";
+  return status === 200 && !type.includes("text/html") && !type.includes("application/json") && !type.includes("text/javascript");
+}
+
 /** A curl command equivalent to what the inspector sends. Variables must already be resolved. */
 export function toCurl(r: SavedRequest): string {
   const bodyless = r.method === "GET" || r.method === "DELETE";
   const signalsJson = compactSignals(r.signals);
   const parts = ["curl", "-N", "-X", r.method];
   parts.push(shellQuote(requestUrl(r.url, r.method, signalsJson)));
-  parts.push("-H", shellQuote("Accept: text/event-stream"), "-H", shellQuote("Datastar-Request: true"));
+  parts.push("-H", shellQuote(`Accept: ${ACCEPT}`), "-H", shellQuote("Datastar-Request: true"));
   for (const [k, v] of Object.entries(parseHeaderLines(r.headers))) parts.push("-H", shellQuote(`${k}: ${v}`));
   if (!bodyless) parts.push("-H", shellQuote("Content-Type: application/json"), "--data", shellQuote(signalsJson));
   return parts.join(" ");
@@ -589,13 +618,11 @@ export function sendableUrl(url: string): { url: string } | { error: string } {
 
 /**
  * What to say under an error response that came without a body, or null when there is a body or
- * no error. The reason is then only in the server's log: a Spring Boot app missing a request
- * parameter answered the inspector with a bare 400, because its error page has no
- * text/event-stream form to write.
+ * no error. The reason is then only in the server's log.
  */
 export function emptyBodyHint(status: number, body: string): string | null {
   if (status < 400 || body.trim() !== "") return null;
-  return `The server sent no body with this ${status}, so the reason is in its log. Spring Boot, for one, writes no error body for a request that accepts only text/event-stream.`;
+  return `The server sent no body with this ${status}, so the reason is in its log.`;
 }
 
 const PORT = /^:[0-9]*$/;
