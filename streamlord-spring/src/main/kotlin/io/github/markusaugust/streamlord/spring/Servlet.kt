@@ -234,7 +234,12 @@ public fun HttpServletResponse.prepareForSse(request: HttpServletRequest? = null
     characterEncoding = StandardCharsets.UTF_8.name()
     for ((name, value) in DatastarProtocol.SSE_RESPONSE_HEADERS) setHeader(name, value)
     if (request == null || request.protocol.equals("HTTP/1.1", ignoreCase = true)) setHeader("Connection", "keep-alive")
-    bufferSize = 0
+    // A request, not a need: every event is flushed anyway. Tomcat refuses it once anything is
+    // written, committed or not, and only ever grows its buffer, so a refusal changes nothing.
+    try {
+        bufferSize = 0
+    } catch (_: IllegalStateException) {
+    }
 }
 
 /**

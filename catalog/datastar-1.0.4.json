@@ -412,7 +412,7 @@
     { "name": "openWhenHidden", "type": "boolean", "default": "false for @get, true otherwise" },
     { "name": "payload", "type": "any", "default": "the filtered signal store" },
     { "name": "requestCancellation", "type": "'auto' | 'cleanup' | 'disabled' | AbortController", "default": "'auto'" },
-    { "name": "responseOverrides", "type": "{selector?, mode?, namespace?, useViewTransition?} | {onlyIfMissing?}", "default": "none" },
+    { "name": "responseOverrides", "type": "{selector?, mode?, namespace?, useViewTransition?} | {onlyIfMissing?}", "default": "none; documented, but Datastar 1.0.4's client never reads it, so set the datastar-* headers on the response instead" },
     { "name": "retry", "type": "'auto' | 'error' | 'always' | 'never'", "default": "'auto'" },
     { "name": "retryInterval", "type": "number (ms)", "default": "1000" },
     { "name": "retryScaler", "type": "number", "default": "2" },

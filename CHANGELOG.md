@@ -86,6 +86,11 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- `datastarStream` on a response something has already written to no longer fails with a 500.
+  `prepareForSse` asks for no buffer, which Tomcat refuses once anything is written, committed or
+  not; the request is dropped then, since every event is flushed anyway.
+- The catalog, and with it both editors, says that the `responseOverrides` fetch option has no
+  effect in Datastar 1.0.4, whose client never reads it, as the DSL's KDoc already did.
 - The Stream Inspector, in IntelliJ and VS Code, asks and reads as Datastar's client does. It
   sends the client's `Accept` (`text/event-stream, text/html, application/json`), in the request
   and in the curl line, so a server that answers by `Accept` answers the inspector as it answers
