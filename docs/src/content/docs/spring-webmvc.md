@@ -59,8 +59,9 @@ and runs the block on a thread from its own async executor, and that thread stay
 stream until the block returns. Everything inside the block writes one frame.
 
 Call `datastarStream` before anything writes to the response. One that something has already
-written to still streams, without gzip; one already committed throws `IllegalStateException`,
-since its headers, and the content type with them, have gone out.
+written to through its output stream still streams, without gzip; one written through
+`getWriter()`, or already committed, fails with `IllegalStateException`, since the stream needs the
+output stream and a committed response has sent its headers, the content type with them.
 
 **Do not take it as a parameter of the handler method.** `fun search(streamlord: Streamlord)`
 compiles and starts, and Spring then treats the parameter as a model attribute: it constructs a
@@ -194,7 +195,7 @@ events, its guard included, and does nothing more:
 - **No heartbeat, no gzip, no authorisation.** The bean's `heartbeat` and `compress` do not reach
   it, and there is no `authorisation` to pass. A quiet flow that never ends is never written to,
   so a client that vanished can go unnoticed until the next element.
-- **No thread between elements.** The flow runs on the request's thread up to its first
+- **No thread held between elements.** The flow runs on the request's thread up to its first
   suspension, and after that on whichever thread resumes it. After a `delay`, that is
   `kotlinx.coroutines.DefaultExecutor`, the single thread the coroutines library keeps for
   timers. Keep blocking calls off it with `flowOn(Dispatchers.IO)`.

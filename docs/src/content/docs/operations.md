@@ -251,8 +251,8 @@ On Spring it is the bean, `Streamlord(codec = JacksonSignalsCodec(mapper), compr
 the request's `Accept-Encoding` takes it, and then carries `Content-Encoding: gzip`; with
 `compress` on, every stream carries `Vary: Accept-Encoding`, on Ktor and on WebMVC when the request
 is given and nothing was written to the response before the stream opened. A response something
-has already written to is streamed without gzip, since those bytes would sit in front of the gzip
-member. It works over plain
+has already written to through its output stream is streamed without gzip, since those bytes
+would sit in front of the gzip member. It works over plain
 HTTP too; browsers ask for Brotli only over HTTPS, which is how they behave in general and is
 **not measured here**.
 
