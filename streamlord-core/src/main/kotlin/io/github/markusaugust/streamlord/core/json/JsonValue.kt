@@ -136,8 +136,7 @@ public data class JsonNumber(
 
     public fun toBigDecimal(): BigDecimal = toBigDecimalOrNull() ?: throw ArithmeticException("Number '$text' is outside BigDecimal range")
 
-    /** A `Long` when the number is integral and fits, otherwise a `Double`. */
-    // A negative zero keeps its sign, as JavaScript keeps it; a Long cannot carry one.
+    /** A `Long` when the number is integral and fits, otherwise a `Double`; a negative zero, which a `Long` cannot carry, as `-0.0`. */
     override fun toKotlin(): Number = if (text.startsWith('-') && toDouble() == 0.0) -0.0 else toLongOrNull() ?: toDouble()
 }
 

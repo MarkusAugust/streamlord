@@ -81,6 +81,8 @@ class ProtocolAsTheClientTakesItTest {
             """<b data-text="&plus;&plus;"></b>""",
             """<b data-text="&#43&#43"></b>""",
             """<b data-text="&equals;"></b>""",
+            """<b data-text="&amp&amp 1"></b>""",
+            """<b data-text="&lt 1"></b>""",
         )) {
             assertFailsWith<InterpolatedExpressionException>(html) { ElementsGuard.check(html) }
         }

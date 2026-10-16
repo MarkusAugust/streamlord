@@ -69,7 +69,13 @@ public data class PatchElements(
         // An inner patch of nothing empties its target, the one way to clear a container.
         val empty = if (mode == ElementPatchMode.INNER) elements == null else elements.isNullOrBlank()
         if (mode != ElementPatchMode.REMOVE && empty) {
-            throw DatastarEventValidationException("Patch mode '${mode.wire}' requires elements")
+            throw DatastarEventValidationException(
+                if (mode == ElementPatchMode.INNER) {
+                    "Patch mode 'inner' requires elements; pass \"\" to empty the target"
+                } else {
+                    "Patch mode '${mode.wire}' requires elements"
+                },
+            )
         }
     }
 
@@ -124,9 +130,11 @@ public data class PatchSignals(
  * @property attributes Extra attributes for the script tag, such as `type`. Under CSP mode
  *   Datastar re-creates every script it patches in and sets the nonce itself, from the one the
  *   page was loaded with, so a nonce passed here is overwritten. With CSP mode off the client
- *   copies it onto the script it re-creates, where a page's own policy honours it. Not the
- *   effect attribute while [autoRemove] is on: the browser keeps the first of two, and the
- *   removal would be lost.
+ *   copies the script's attributes as the page then holds them, and under a policy sent as a
+ *   header the browser has already emptied a nonce attribute by then (HTML's nonce hiding), so
+ *   the copy carries none; only a policy from a `<meta>` tag leaves it. Use CSP mode. Not the
+ *   effect attribute while [autoRemove] is on: the browser keeps the first of two, yours, and
+ *   the removal would be lost.
  */
 public data class ExecuteScript(
     @Language("JavaScript") val script: String,
@@ -141,7 +149,7 @@ public data class ExecuteScript(
         attributes.keys.forEach(Wire::attributeName)
         if (autoRemove && attributes.keys.any { it.equals(DatastarAttributes.name("effect"), ignoreCase = true) }) {
             throw DatastarEventValidationException(
-                "An effect attribute beside autoRemove would be dropped, as would the removal; pass autoRemove = false",
+                "autoRemove's el.remove() would be dropped in favour of your effect attribute; pass autoRemove = false",
             )
         }
     }

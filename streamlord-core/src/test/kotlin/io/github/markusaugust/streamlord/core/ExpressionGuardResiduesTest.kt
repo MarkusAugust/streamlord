@@ -42,6 +42,9 @@ class ExpressionGuardResiduesTest {
             "+\$n",
             "\$items.renew",
             "`total: \${\$n}`",
+            "\$msg = 'Use \${} for templates'",
+            "\$a = 1; .5 + \$b",
+            "return /;?\$/.test(\$v)",
         )) {
             assertEquals(ok, ExpressionGuard.check(ok))
         }

@@ -23,7 +23,8 @@ Every expression helper runs the text through `ExpressionGuard`, which throws
 leaves behind when the variable was empty: nothing at all, only operators, or an operator with a
 missing side. That is the common case in a handler, where the value Kotlin substituted is an empty
 query or a blank field. An array with a hole, `[, 1]`, is refused too, since that is what `[$first, 1]`
-leaves; write `[undefined, 1]` when you mean the hole.
+leaves; write `[undefined, 1]` when you mean the hole. So is a `+` or `-` with a space after it at
+the start, `- 1`, which is what `$a - 1` leaves: write `-$x` and `-1` without the space.
 
 It cannot catch the other case. When the variable held `3`, the text is `3++`, and nothing in
 that string says a signal was meant. Only something that reads your source can see it, which is

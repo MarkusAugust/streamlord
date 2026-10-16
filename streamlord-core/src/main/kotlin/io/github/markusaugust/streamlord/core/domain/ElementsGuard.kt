@@ -78,8 +78,11 @@ public object ElementsGuard {
      */
     public val defaultPrefixes: List<String> = listOf("data-star-", "data-")
 
-    // A numeric reference decodes with or without its semicolon; a named one, in an attribute, only with it.
-    private val ENTITY = Regex("&(?:([A-Za-z]+);|#(\\d+);?|#[xX]([0-9a-fA-F]+);?)")
+    // A numeric reference decodes with or without its semicolon. A named one needs it, except the
+    // legacy few the standard lets go without, which in an attribute decode unless a letter, a
+    // digit or = follows: &lt 1 is < 1 and &amp&amp is &&.
+    private val ENTITY =
+        Regex("&(?:([A-Za-z]+);|(amp|AMP|lt|LT|gt|GT|quot|QUOT)(?![A-Za-z0-9=;])|#(\\d+);?|#[xX]([0-9a-fA-F]+);?)")
 
     /** The named references for the ASCII a Datastar expression is made of (the HTML standard's table). */
     private val NAMED_ENTITIES =
@@ -141,9 +144,10 @@ public object ElementsGuard {
             value
         } else {
             ENTITY.replace(value) { m ->
-                val (named, decimal, hex) = m.destructured
+                val (named, legacy, decimal, hex) = m.destructured
                 when {
                     named.isNotEmpty() -> NAMED_ENTITIES[named] ?: m.value
+                    legacy.isNotEmpty() -> NAMED_ENTITIES.getValue(legacy)
                     decimal.isNotEmpty() -> codePoint(decimal.toIntOrNull()) ?: m.value
                     else -> codePoint(hex.toIntOrNull(16)) ?: m.value
                 }

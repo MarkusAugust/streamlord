@@ -201,7 +201,27 @@ public object ExpressionGuard {
 
     private fun regexCanStart(before: StringBuilder): Boolean {
         val last = before.lastOrNull { !it.isWhitespace() } ?: return true
-        return last in "(,=:[!&|?{};>+-*%<~^"
+        if (last in "(,=:[!&|?{};>+-*%<~^") return true
+        // After a keyword a slash opens a regex too: return /x/.test($v), case /a/:.
+        return KEYWORD_BEFORE_REGEX.containsMatchIn(before)
+    }
+
+    private val KEYWORD_BEFORE_REGEX = Regex("(?<![.\\w$])(?:return|typeof|case|void|delete|in|instanceof|new|await|throw|yield)\\s*$")
+
+    /** Whether a template literal holds a `${}` with nothing in it; in another string it is only text. */
+    private fun emptySubstitution(t: String): Boolean {
+        var i = 0
+        while (i < t.length) {
+            val c = t[i]
+            if (c == '\'' || c == '"' || c == '`') {
+                val end = endOfString(t, i)
+                if (c == '`' && EMPTY_SUBSTITUTION.containsMatchIn(t.substring(i, end))) return true
+                i = end
+            } else {
+                i++
+            }
+        }
+        return false
     }
 
     /** One past a regex literal's flags, or -1 when the slash at [start] opens none. */
@@ -255,7 +275,7 @@ public object ExpressionGuard {
         expression: String,
         attribute: String?,
     ): String {
-        if (EMPTY_SUBSTITUTION.containsMatchIn(expression)) {
+        if (emptySubstitution(expression)) {
             throw InterpolatedExpressionException(expression, "has a \${} with nothing in it", attribute)
         }
         val t = blankLiterals(expression.trim())
@@ -274,7 +294,8 @@ public object ExpressionGuard {
             .map { it.trim() }
             .filter { it.isNotEmpty() }
             .drop(1)) {
-            NEEDS_LEFT.firstOrNull { statement.startsWith(it) && it !in CLOSERS && !(it == "." && statement.startsWith("...")) }?.let {
+            val dotIsFine = statement.startsWith("...") || (statement.startsWith(".") && statement.getOrNull(1)?.isDigit() == true)
+            NEEDS_LEFT.firstOrNull { statement.startsWith(it) && it !in CLOSERS && !(it == "." && dotIsFine) }?.let {
                 throw InterpolatedExpressionException(
                     expression,
                     "has a statement that starts with '$it', which needs something on its left",
