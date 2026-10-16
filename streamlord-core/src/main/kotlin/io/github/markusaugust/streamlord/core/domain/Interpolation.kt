@@ -28,8 +28,8 @@ public enum class Position {
     ATTRIBUTE,
 
     /**
-     * The start of an attribute that holds a URL, such as `href` or `src`. Escaping keeps the
-     * value inside the attribute and does nothing about `javascript:`, so the scheme is checked.
+     * An attribute that holds a URL, such as `href` or `src`. Escaping keeps the value inside the
+     * attribute and does nothing about `javascript:`, so the scheme of the whole value is checked.
      */
     URL,
 
@@ -86,7 +86,7 @@ public class UnsafeInterpolationException(
                     }
 
                     Position.URL -> {
-                        "at the start of $attribute with a scheme the browser may run, such as javascript:"
+                        "in $attribute, making a URL with a scheme the browser may run, such as javascript:"
                     }
 
                     Position.STYLE -> {
@@ -144,9 +144,15 @@ public class UnsafeInterpolationException(
  *
  * Three kinds of attribute are held to more than escaping, because the browser acts on what
  * they contain. An event handler (`on*`) and `srcdoc` are refused like a script body. `style`
- * takes a number only. A URL attribute (`href`, `src`, `action` and the like) whose value
- * begins with the hole takes a relative URL or an `http`, `https`, `mailto` or `tel` one, and
- * a hole further in, as in `href="/heads/%s"`, is an ordinary attribute.
+ * takes a number only. A URL attribute (`href`, `src`, `action` and the like, and `values`,
+ * `to` and `from` on SVG's animation elements) must come out, values and all, as a relative URL
+ * or an `http`, `https`, `mailto` or `tel` one: `href="/heads/%s"` takes anything, and
+ * `href="%s%s"` cannot be made into `javascript:` across its two holes.
+ *
+ * The markup is read the way the browser's tokenizer reads it, and both as HTML and as the
+ * inside of an `<svg>` or `<math>`, where a `title` or a `textarea` holds elements rather than
+ * text. A value has to be safe both ways, so markup whose namespace cannot be told, a patch with
+ * an SVG namespace among it, is judged as either.
  *
  * `%%` writes one `%`. A `%` followed by anything else is literal, so CSS and escaped URLs need
  * no ceremony; a hole is only ever `%s`, and a miscounted one fails here rather than quietly.
@@ -183,8 +189,9 @@ public fun interpolate(
     if (holes.isEmpty()) return format.replace("%%", "%")
 
     val shadow = shadow(format, holes)
-    val landscape = Landscape(prefixes, shadow)
-    scanMarkup(shadow, landscape)
+    // Longest first, so `data-star-` is tried before `data-` whatever order the caller used.
+    val ordered = prefixes.sortedByDescending { it.length }
+    val landscapes = listOf(false, true).map { foreign -> Landscape(ordered, shadow).also { scanMarkup(shadow, it, foreign) } }
 
     val out = StringBuilder(format.length + values.size * 16)
     var cut = 0
@@ -198,15 +205,18 @@ public fun interpolate(
             }
 
             else -> {
-                val position = landscape.positionOf(hole)
-                if (!position.admits(value)) {
-                    throw UnsafeInterpolationException(position, index, landscape.attributeAt(hole))
+                for (landscape in landscapes) {
+                    val position = landscape.positionOf(hole)
+                    if (!position.admits(value)) {
+                        throw UnsafeInterpolationException(position, index, landscape.attributeAt(hole))
+                    }
                 }
                 out.escaped(value)
             }
         }
     }
     out.literal(format, cut, format.length)
+    for (landscape in landscapes) landscape.checkUrls(format, holes, values)
     return out.toString()
 }
 
@@ -243,10 +253,13 @@ private fun StringBuilder.literal(
  */
 private fun Position.admits(value: Any?): Boolean =
     when (this) {
-        Position.TEXT, Position.ATTRIBUTE -> true
+        // A URL is judged whole, once every value is in place; see Landscape.checkUrls.
+        Position.TEXT, Position.ATTRIBUTE, Position.URL -> true
+
         Position.DATASTAR -> value is Number || value is Boolean
+
         Position.STYLE -> value is Number
-        Position.URL -> value == null || safeUrl(value.toString())
+
         Position.STRUCTURE, Position.CODE -> false
     }
 
@@ -329,11 +342,34 @@ private fun holes(format: String): List<Int> {
 private val URL_ATTRIBUTES =
     setOf("href", "src", "action", "formaction", "xlink:href", "poster", "data", "cite", "background", "ping", "manifest")
 
+/** SVG's animation elements, whose `values`, `to` and `from` can set an `href`. */
+private val ANIMATION_TAGS = setOf("animate", "set", "animatetransform", "animatemotion")
+private val ANIMATION_URL_ATTRIBUTES = setOf("values", "to", "from")
+
+/**
+ * [text] with the character references a browser decodes in an attribute value decoded: the
+ * numeric ones and the few named ones that can spell a scheme. Anything else is left as written.
+ */
+private fun decodeReferences(text: String): String =
+    REFERENCE.replace(text) { m ->
+        val (hex, dec, name) = m.destructured
+        when {
+            hex.isNotEmpty() -> hex.toIntOrNull(16)?.takeIf(Character::isValidCodePoint)?.let { Character.toString(it) }
+            dec.isNotEmpty() -> dec.toIntOrNull()?.takeIf(Character::isValidCodePoint)?.let { Character.toString(it) }
+            else -> NAMED_REFERENCES[name]
+        } ?: m.value
+    }
+
+private val REFERENCE = Regex("""&(?:#[xX]([0-9a-fA-F]+);?|#([0-9]+);?|([A-Za-z]+);)""")
+private val NAMED_REFERENCES =
+    mapOf("amp" to "&", "colon" to ":", "Tab" to "\t", "NewLine" to "\n", "sol" to "/", "quest" to "?", "num" to "#", "period" to ".")
+
 private class Landscape(
     private val prefixes: List<String>,
     private val markup: String,
 ) : MarkupVisitor {
     private val attributeNames = ArrayList<String>()
+    private val attributeTags = ArrayList<String>()
     private val attributeStarts = ArrayList<Int>()
     private val attributeEnds = ArrayList<Int>()
     private val tagStarts = ArrayList<Int>()
@@ -342,6 +378,7 @@ private class Landscape(
     private val codeEnds = ArrayList<Int>()
 
     override fun attribute(
+        tag: String,
         name: String,
         valueStart: Int,
         valueEnd: Int,
@@ -351,6 +388,7 @@ private class Landscape(
         // attributes beside it. It is left to the tag spans, which refuse.
         if (!quoted || valueStart < 0) return
         attributeNames += name
+        attributeTags += tag.lowercase()
         attributeStarts += valueStart
         attributeEnds += valueEnd
     }
@@ -377,20 +415,50 @@ private class Landscape(
             val name = attributeNames[attribute].lowercase()
             return when {
                 datastar(name) -> Position.DATASTAR
-
                 name.startsWith("on") || name == "srcdoc" -> Position.CODE
-
                 name == "style" -> Position.STYLE
-
-                // Only a value that begins with the hole can choose the scheme.
-                name in URL_ATTRIBUTES && markup.substring(attributeStarts[attribute], hole).isBlank() -> Position.URL
-
+                isUrl(attribute) -> Position.URL
                 else -> Position.ATTRIBUTE
             }
         }
         if (indexOfSpan(hole, tagStarts, tagEnds) >= 0) return Position.STRUCTURE
         if (indexOfSpan(hole, codeStarts, codeEnds) >= 0) return Position.CODE
         return Position.TEXT
+    }
+
+    private fun isUrl(attribute: Int): Boolean {
+        val name = attributeNames[attribute].lowercase()
+        return name in URL_ATTRIBUTES || (name in ANIMATION_URL_ATTRIBUTES && attributeTags[attribute] in ANIMATION_TAGS)
+    }
+
+    /**
+     * Throws for the first URL attribute with a hole whose value, every value in place, would
+     * carry a scheme that does more than navigate. A list of them, as `values` holds, is judged
+     * entry by entry.
+     */
+    fun checkUrls(
+        format: String,
+        holes: List<Int>,
+        values: List<Any?>,
+    ) {
+        for (attribute in attributeStarts.indices) {
+            if (!isUrl(attribute)) continue
+            val start = attributeStarts[attribute]
+            val end = attributeEnds[attribute]
+            val inside = holes.indices.filter { holes[it] in start until end }
+            // Trusted waives every check, this one included.
+            if (inside.isEmpty() || inside.any { values[it] is Trusted }) continue
+            val value = StringBuilder()
+            var cut = start
+            for (index in inside) {
+                value.append(decodeReferences(format.substring(cut, holes[index]).replace("%%", "%")))
+                value.append(values[index].let { if (it is Trusted) it.html else it?.toString().orEmpty() })
+                cut = holes[index] + 2
+            }
+            value.append(decodeReferences(format.substring(cut, end).replace("%%", "%")))
+            val entries = if (attributeNames[attribute].lowercase() == "values") value.split(';') else listOf(value.toString())
+            if (entries.any { !safeUrl(it) }) throw UnsafeInterpolationException(Position.URL, inside.first(), attributeNames[attribute])
+        }
     }
 
     fun attributeAt(hole: Int): String? = indexOfSpan(hole, attributeStarts, attributeEnds).takeIf { it >= 0 }?.let { attributeNames[it] }

@@ -60,7 +60,7 @@ public data class SignalsResponse(
     val onlyIfMissing: Boolean = false,
 ) : DatastarResponse {
     init {
-        if (signals.isBlank()) throw DatastarEventValidationException("signals must not be blank")
+        Wire.signals(signals)
     }
 
     override val contentType: String get() = DatastarProtocol.CONTENT_TYPE_JSON

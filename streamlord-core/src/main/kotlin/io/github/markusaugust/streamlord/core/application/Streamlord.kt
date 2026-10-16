@@ -7,6 +7,7 @@ import io.github.markusaugust.streamlord.core.StreamRefusedException
 import io.github.markusaugust.streamlord.core.StreamlordException
 import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.domain.DatastarResponse
+import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 import io.github.markusaugust.streamlord.core.domain.ElementsResponse
 import io.github.markusaugust.streamlord.core.domain.PatchElements
@@ -196,13 +197,17 @@ public class Streamlord(
      * has passed [ElementsGuard] first. Adapters call this before anything reaches the wire.
      */
     public fun guard(event: DatastarEvent): DatastarEvent {
-        if (guardElements && event is PatchElements) event.elements?.let { ElementsGuard.check(it, attributePrefixes) }
+        if (guardElements && event is PatchElements) {
+            event.elements?.let { ElementsGuard.check(it, attributePrefixes, foreign = event.namespace != ElementNamespace.DEFAULT) }
+        }
         return event
     }
 
     /** The response, unchanged; with [guardElements] on, an [ElementsResponse] has passed [ElementsGuard] first. */
     public fun guard(response: DatastarResponse): DatastarResponse {
-        if (guardElements && response is ElementsResponse) ElementsGuard.check(response.elements, attributePrefixes)
+        if (guardElements && response is ElementsResponse) {
+            ElementsGuard.check(response.elements, attributePrefixes, foreign = response.namespace != ElementNamespace.DEFAULT)
+        }
         return response
     }
 

@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.core.domain
 
 import io.github.markusaugust.streamlord.core.DatastarEventValidationException
+import io.github.markusaugust.streamlord.core.json.JsonShape
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -14,7 +15,14 @@ import kotlin.time.Duration.Companion.milliseconds
 public object Wire {
     private val LINE_BREAKS = Regex("\r\n|\r|\n")
     private val ATTRIBUTE_NAME = Regex("[A-Za-z_:][A-Za-z0-9_:.-]*")
-    private val END_SCRIPT = Regex("</script", RegexOption.IGNORE_CASE)
+
+    // The end tags that close the element early, and the three Datastar's client takes for a whole
+    // document, which drops the script or appends a second html element.
+    private val END_TAGS = Regex("</(script|body|head|html)", RegexOption.IGNORE_CASE)
+
+    // After <!--, a <script that a name boundary follows sends the tokenizer into a state where
+    // </script> no longer ends the element.
+    private val OPEN_SCRIPT = Regex("<(script)(?=[\\t\\n\\u000C\\r />])", RegexOption.IGNORE_CASE)
 
     /** Split text into lines on `\r\n`, `\r` or `\n`, exactly as the SSE grammar does. */
     public fun lines(text: String): List<String> = text.split(LINE_BREAKS)
@@ -28,6 +36,20 @@ public object Wire {
             if (ch == '\n' || ch == '\r' || ch == '\u0000') {
                 throw DatastarEventValidationException("$field must not contain line breaks or NUL characters")
             }
+        }
+        return value
+    }
+
+    /**
+     * Reject signals that are not one JSON object. Datastar's client reads signals with
+     * `JSON.parse` and, when that fails, runs the text as JavaScript, so text that is not JSON is
+     * code in the browser; an array or a string would arrive as an object keyed `0`, `1` and on.
+     */
+    internal fun signals(value: String): String {
+        if (!JsonShape.isObject(value)) {
+            throw DatastarEventValidationException(
+                "signals must be one JSON object: Datastar's client runs signals that are not JSON as JavaScript",
+            )
         }
         return value
     }
@@ -102,9 +124,18 @@ public object Wire {
         }
 
     /**
-     * Make a script body safe to embed in a `<script>` element. The only sequence that can end
-     * the element early is `</script`; inside a JavaScript string or regex `<\/script` means the
-     * same thing, and outside of one it was never valid JavaScript anyway.
+     * Make a script body safe to embed in a `<script>` element and to patch as one.
+     *
+     * `</script` ends the element early, and `</body>`, `</head>` and `</html>` make Datastar's
+     * client read the patch as a whole document; each becomes `<\/…`. After a `<!--`, a
+     * `<script` keeps the element open past its `</script>`, so it becomes `<\x73cript`. Inside a
+     * JavaScript string, regex or template literal both mean what they meant, and outside of one
+     * neither was valid JavaScript anyway.
      */
-    public fun escapeScriptBody(script: String): String = script.replace(END_SCRIPT) { "<\\/script" }
+    public fun escapeScriptBody(script: String): String {
+        val ended = script.replace(END_TAGS) { "<\\/${it.groupValues[1].lowercase()}" }
+        val comment = ended.indexOf("<!--")
+        if (comment < 0) return ended
+        return ended.substring(0, comment) + ended.substring(comment).replace(OPEN_SCRIPT) { "<\\x73${it.groupValues[1].drop(1)}" }
+    }
 }

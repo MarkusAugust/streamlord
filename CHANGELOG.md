@@ -86,6 +86,35 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- `interpolate` and `ElementsGuard` read markup as the browser's tokenizer does. A value got past
+  `interpolate`, and a `$`-trap residue past the guard, where the scanner read the markup
+  otherwise: a comment closed by `<!-->` or `--!>`, a bogus comment such as `<!x …>`, a
+  non-ASCII letter after `<`, `</titlex>` taken to end a `title`, the raw text elements it did not
+  know (`xmp`, `iframe`, `noembed`, `noframes`, `noscript`, `plaintext`), and a `title` or a
+  `textarea` inside `<svg>`, which holds elements there. `interpolate` reads the markup both as
+  HTML and as the inside of an `<svg>` or `<math>` and holds a value to both; the guard reads it as
+  svg where the markup opens one or the patch carries an SVG or MathML namespace.
+- `interpolate` judges a URL attribute whole, every value in place, so `href="%s%s"` with `"java"`
+  and `"script:alert(1)"` throws, as does a hole in `href="javascript:…(%s)"`, which used to be
+  escaped and admitted. `values`, `to` and `from` on SVG's animation elements are URL attributes,
+  and custom prefixes are tried longest first, as the guard already did.
+- `PatchSignals` and `SignalsResponse` refuse signals that are not one JSON object, and `JsonNumber`
+  text that is not a JSON number, with `DatastarEventValidationException` and
+  `IllegalArgumentException`. Datastar's client runs signals that `JSON.parse` refuses as
+  JavaScript, and `JsonWriter` wrote a `JsonNumber` as it was given. An array or a string, which
+  arrived as an object keyed `0`, `1` and on, is refused too. `SseDecoder`, and with it `datastarEvents` and
+  `LiveDatastarStream`, fails on such signals where it reads them, since the client would run
+  them.
+- A script body escapes `</body>`, `</head>` and `</html>`, which made Datastar's client read the
+  patch as a whole document and drop the script or append a second `html` element, and a
+  `<script` after `<!--`, which kept the element open past its end tag. `JsonWriter` and
+  `JsLiteral` escape `<!` in strings for the same reason, so `redirect("/q?<!--<script>")` runs.
+- `JsLiteral` writes a `__proto__` key as a computed key, the only form that is a key in an object
+  literal rather than the prototype, and `dataSignals` refuses `__proto__`, which Datastar's
+  client never creates.
+- The Security page no longer says `data-ignore` contains raw user HTML: the user's `</div>`
+  closes the wrapper, and a patched `<script>` runs inside it. User HTML has to be sanitized
+  first.
 - `streamlord-ktor` runs on every Ktor 3. Ktor's reified helpers inlined a `TypeInfo`
   constructor that only Ktor 3.6.0 has, so on Ktor 3.0 to 3.5 every `respondDatastar`, the plugin
   and `cspNonce` failed with `NoSuchMethodError`. Its tests now also run, compiled against Ktor
