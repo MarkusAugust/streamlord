@@ -35,8 +35,18 @@ public data class ElementsResponse(
     val useViewTransition: Boolean = false,
 ) : DatastarResponse {
     init {
-        if (elements.isBlank()) throw DatastarEventValidationException("elements must not be blank")
+        // An inner patch of nothing empties its target, and a remove needs no elements at all.
+        if (elements.isBlank() && mode != ElementPatchMode.INNER && mode != ElementPatchMode.REMOVE) {
+            throw DatastarEventValidationException("elements must not be blank")
+        }
         selector?.let { Wire.selector(it) }
+        // A header travels as Latin-1 to the client, which reads it so, and some servers send UTF-8
+        // and others drop what Latin-1 lacks: only printable ASCII arrives as written.
+        selector?.firstOrNull { it !in ' '..'~' }?.let {
+            throw DatastarEventValidationException(
+                "A selector in a response header must be printable ASCII, not U+%04X; send it in a stream instead".format(it.code),
+            )
+        }
         if (mode.requiresSelector && selector == null) {
             throw DatastarEventValidationException("Patch mode '${mode.wire}' requires a selector")
         }
@@ -87,6 +97,13 @@ public data class ScriptResponse(
             if (attributes.isEmpty()) {
                 emptyMap()
             } else {
-                mapOf(DatastarProtocol.Headers.SCRIPT_ATTRIBUTES to JsonWriter.write(attributes))
+                // As \u escapes: the header reaches the client as Latin-1, and JSON.parse restores them.
+                mapOf(DatastarProtocol.Headers.SCRIPT_ATTRIBUTES to asciiOnly(JsonWriter.write(attributes)))
             }
 }
+
+/** JSON text with every character past printable ASCII written as a `\u` escape, which only a string can hold. */
+private fun asciiOnly(json: String): String =
+    buildString(json.length) {
+        for (c in json) if (c in ' '..'~') append(c) else append("\\u%04x".format(c.code))
+    }

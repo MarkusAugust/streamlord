@@ -271,7 +271,7 @@ private val SAFE_SCHEMES = setOf("http", "https", "mailto", "tel")
  * reads it: tabs and line breaks are dropped wherever they are and leading control characters
  * and spaces are skipped, which is how `java\tscript:` gets past a naive check.
  */
-private fun safeUrl(url: String): Boolean {
+internal fun safeUrl(url: String): Boolean {
     val read = url.filterNot { it == '\t' || it == '\n' || it == '\r' }.trimStart { it <= ' ' }
     val scheme = SCHEME.find(read)?.groupValues?.get(1) ?: return true
     return scheme.lowercase() in SAFE_SCHEMES

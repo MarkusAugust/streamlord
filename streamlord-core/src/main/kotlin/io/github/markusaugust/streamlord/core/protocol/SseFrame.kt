@@ -21,7 +21,8 @@ public data class SseFrame(
 ) {
     init {
         noLineBreak(event, "event")
-        id?.let(Wire::eventId)
+        // An empty id is valid SSE: the client drops its last-event-id on one.
+        id?.takeIf { it.isNotEmpty() }?.let(Wire::eventId)
         retry?.let(Wire::retry)
         // NUL is harmless in data, where markup can carry one, and only refused in the id.
         for (line in dataLines) noLineBreak(line, "data")

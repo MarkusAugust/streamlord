@@ -56,7 +56,7 @@ public object Wire {
 
     /**
      * Reject an event id that would not come back as it was written. It returns as the
-     * `last-event-id` header on a reconnect, and only printable ASCII survives that trip:
+     * `last-event-id` header on a reconnect, and printable ASCII is what reliably survives the trip:
      * `fetch` cannot send a character above U+00FF, Node's `fetch` refuses a control character,
      * Tomcat and Netty answer one with 400, which ends the client's retries, and Ktor's CIO reads
      * the header as UTF-8, so a Latin-1 character arrives as U+FFFD. A space at either end is

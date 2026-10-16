@@ -66,7 +66,9 @@ public data class PatchElements(
         if (mode.requiresSelector && selector == null) {
             throw DatastarEventValidationException("Patch mode '${mode.wire}' requires a selector")
         }
-        if (mode != ElementPatchMode.REMOVE && elements.isNullOrBlank()) {
+        // An inner patch of nothing empties its target, the one way to clear a container.
+        val empty = if (mode == ElementPatchMode.INNER) elements == null else elements.isNullOrBlank()
+        if (mode != ElementPatchMode.REMOVE && empty) {
             throw DatastarEventValidationException("Patch mode '${mode.wire}' requires elements")
         }
     }
@@ -119,10 +121,12 @@ public data class PatchSignals(
  * @property autoRemove Add `data-effect="el.remove()"` so the script tag vanishes after it runs. The
  *   attribute follows [io.github.markusaugust.streamlord.core.protocol.DatastarAttributes.prefix], so the
  *   aliased bundle gets `data-star-effect`.
- * @property attributes Extra attributes for the script tag, such as `type`. Not a CSP nonce:
- *   under CSP mode Datastar re-creates every script it patches in and sets the nonce itself,
- *   from the one the page was loaded with, so a nonce passed here is overwritten. With CSP mode
- *   off it is simply ignored. The nonce that matters is the one on the document's `<html>`.
+ * @property attributes Extra attributes for the script tag, such as `type`. Under CSP mode
+ *   Datastar re-creates every script it patches in and sets the nonce itself, from the one the
+ *   page was loaded with, so a nonce passed here is overwritten. With CSP mode off the client
+ *   copies it onto the script it re-creates, where a page's own policy honours it. Not the
+ *   effect attribute while [autoRemove] is on: the browser keeps the first of two, and the
+ *   removal would be lost.
  */
 public data class ExecuteScript(
     @Language("JavaScript") val script: String,
@@ -135,6 +139,11 @@ public data class ExecuteScript(
         validateCommon(eventId, retry)
         if (script.isBlank()) throw DatastarEventValidationException("script must not be blank")
         attributes.keys.forEach(Wire::attributeName)
+        if (autoRemove && attributes.keys.any { it.equals(DatastarAttributes.name("effect"), ignoreCase = true) }) {
+            throw DatastarEventValidationException(
+                "An effect attribute beside autoRemove would be dropped, as would the removal; pass autoRemove = false",
+            )
+        }
     }
 
     /** The script element exactly as it is sent to the browser. */

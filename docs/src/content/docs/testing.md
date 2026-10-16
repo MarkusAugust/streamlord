@@ -93,15 +93,15 @@ events.assertNoSignal("draft")
 
 ### It is a list, and it binds no test framework
 
-The decoder reads the body the way Datastar's client does, so a test cannot pass on a response
-the client would not act on: a last frame with no blank line after it is not an event, a line
-without a colon is skipped, and a frame Streamlord's rules refuse fails the test instead of being
-read charitably. That includes, on any message, Datastar's or not, an `id` the client could not
-send back as `last-event-id` unchanged (anything but printable ASCII, or a space at either end)
-and a `retry` that is not a whole number of milliseconds from 1 to `Int.MAX_VALUE`. The client
-takes both from every message it reads. It takes `retry: 0` too, as a reconnect with no wait whose
-backoff never grows, and reads `1e3` as a second; Streamlord writes neither, so a test fails on a
-stream that does. `LiveDatastarStream` judges the end of a stream the same way.
+The decoder reads the body the way Datastar's client does, so a test cannot pass on a response the
+client would not act on: a last frame with no blank line after it is not an event, a line without a
+colon is skipped, and a frame Streamlord's rules refuse fails the test instead of being read
+charitably. That includes, on any message, Datastar's or not, an `id` the client could not send
+back as `last-event-id` unchanged, by Streamlord's rule (anything but printable ASCII, or a space
+at either end) and a `retry` that is not a whole number of milliseconds from 1 to `Int.MAX_VALUE`.
+The client takes both from every message it reads. It takes `retry: 0` too, as a reconnect with no
+wait whose backoff never grows, and reads `1e3` as a second; Streamlord writes neither, so a test
+fails on a stream that does. `LiveDatastarStream` judges the end of a stream the same way.
 
 `datastarEvents` returns a `List<DatastarEvent>`, so your own assertions work on it unchanged and
 these are a convenience rather than a cage. `events.messages` has the raw SSE messages too, for a

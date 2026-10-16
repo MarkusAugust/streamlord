@@ -110,7 +110,7 @@ public class SseReader {
         }
         // "field: value". A line without a colon is skipped, as Datastar's client skips it, and a
         // byte order mark is dropped from the start of the field and of the value, as the client's
-        // TextDecoder drops it from each (fetch.ts:403-408 in 1.0.4).
+        // TextDecoder drops it from each (fetch.ts:407 and 409 in 1.0.4).
         val colon = text.indexOf(':')
         if (colon < 0) return
         val field = text.substring(0, colon).removePrefix("\uFEFF")

@@ -22,7 +22,8 @@ Every expression helper runs the text through `ExpressionGuard`, which throws
 `InterpolatedExpressionException` at render time when the text has the shape an eaten signal
 leaves behind when the variable was empty: nothing at all, only operators, or an operator with a
 missing side. That is the common case in a handler, where the value Kotlin substituted is an empty
-query or a blank field.
+query or a blank field. An array with a hole, `[, 1]`, is refused too, since that is what `[$first, 1]`
+leaves; write `[undefined, 1]` when you mean the hole.
 
 It cannot catch the other case. When the variable held `3`, the text is `3++`, and nothing in
 that string says a signal was meant. Only something that reads your source can see it, which is

@@ -6,6 +6,8 @@ import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.ExecuteScript
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
+import io.github.markusaugust.streamlord.core.domain.interpolate
+import io.github.markusaugust.streamlord.core.domain.safeUrl
 import io.github.markusaugust.streamlord.core.domain.withEventId
 import io.github.markusaugust.streamlord.core.json.JsonWriter
 import io.github.markusaugust.streamlord.core.port.driven.SignalsCodec
@@ -13,9 +15,9 @@ import io.github.markusaugust.streamlord.core.protocol.SseEncoder
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.launch
 import org.intellij.lang.annotations.Language
 import kotlin.reflect.typeOf
 import kotlin.time.Duration
@@ -222,8 +224,13 @@ public interface DatastarStream {
      * Send the browser to another page. The URL is safely quoted. The navigation runs from a
      * `setTimeout`, as the official SDKs do, so the script element is applied and removed before
      * the page unloads.
+     *
+     * @throws IllegalArgumentException for a URL with a scheme that does more than navigate, such
+     *   as `javascript:`, which the browser would run on the page: only a relative URL or an
+     *   `http`, `https`, `mailto` or `tel` one is followed, as [interpolate] has it.
      */
     public suspend fun redirect(url: String) {
+        require(safeUrl(url)) { "redirect follows a relative URL or an http, https, mailto or tel one, not '$url'" }
         executeScript("setTimeout(() => { window.location.href = ${JsonWriter.writeString(url)} })")
     }
 

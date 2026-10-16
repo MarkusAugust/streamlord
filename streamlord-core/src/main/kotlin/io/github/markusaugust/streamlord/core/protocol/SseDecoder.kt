@@ -113,7 +113,8 @@ public object SseDecoder {
             DatastarProtocol.Events.PATCH_ELEMENTS -> {
                 PatchElements(
                     elements = args[DataLines.ELEMENTS],
-                    selector = args[DataLines.SELECTOR],
+                    // An empty selector is none to the client, which then patches by id (patchElements.ts:43).
+                    selector = args[DataLines.SELECTOR]?.takeIf { it.isNotEmpty() },
                     mode = args[DataLines.MODE]?.let(::mode) ?: ElementPatchMode.DEFAULT,
                     namespace = args[DataLines.NAMESPACE]?.let(::namespace) ?: ElementNamespace.DEFAULT,
                     useViewTransition = args[DataLines.USE_VIEW_TRANSITION]?.trim() == "true",
@@ -153,11 +154,34 @@ public object SseDecoder {
                 throw DatastarEventValidationException("A data line needs a space after its key: '$line'")
             }
             val key = if (space < 0) line else line.substring(0, space)
+            // The client gathers the lines in a plain object, where a key Object.prototype already
+            // has finds no list to push to and throws (fetch.ts:118); the client then reconnects.
+            if (key in PROTOTYPE_KEYS) {
+                throw DatastarEventValidationException(
+                    "A data line's key '$key' is one Datastar's client fails on: it names a property every object has",
+                )
+            }
             val value = if (space < 0) "" else line.substring(space + 1)
             groups.getOrPut(key) { ArrayList() } += value
         }
         return groups.mapValues { it.value.joinToString("\n") }
     }
+
+    private val PROTOTYPE_KEYS =
+        setOf(
+            "__proto__",
+            "constructor",
+            "hasOwnProperty",
+            "isPrototypeOf",
+            "propertyIsEnumerable",
+            "toLocaleString",
+            "toString",
+            "valueOf",
+            "__defineGetter__",
+            "__defineSetter__",
+            "__lookupGetter__",
+            "__lookupSetter__",
+        )
 
     // Digits only, as the SSE grammar has it, where toLongOrNull also takes a sign. Zero is digits
     // too, but it has the client reconnect at once and again without end.
