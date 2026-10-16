@@ -75,6 +75,7 @@ class IdleStreamTest {
     // Ktor's own plugin, on the route: what the Ktor page tells a reader to install.
     @Test
     fun `HttpRequestLifecycle on the route cancels a stream whose client left`() {
+        val waiting = CompletableFuture<Unit>()
         val ended = CompletableFuture<Throwable>()
         val server =
             serve(CIO) {
@@ -84,6 +85,7 @@ class IdleStreamTest {
                         get {
                             call.respondDatastar(heartbeat = null) {
                                 try {
+                                    waiting.complete(Unit)
                                     awaitCancellation()
                                 } catch (e: Throwable) {
                                     ended.complete(e)
@@ -99,6 +101,8 @@ class IdleStreamTest {
                 socket.soTimeout = 10_000
                 socket.getOutputStream().write("GET /idle HTTP/1.1\r\nHost: x\r\n\r\n".toByteArray())
                 socket.getInputStream().read(ByteArray(4096))
+                // Left only once the block waits: a cancel that came before it would never be seen here.
+                waiting.get(10, TimeUnit.SECONDS)
             }
 
             // About 200 ms on a desktop; the bound is for a busy CI runner, not a measure of speed.
