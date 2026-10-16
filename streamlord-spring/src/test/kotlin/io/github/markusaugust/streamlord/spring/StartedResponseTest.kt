@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.spring
 
 import io.github.markusaugust.streamlord.core.application.Streamlord
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
+import io.github.markusaugust.streamlord.core.protocol.SseDecoder
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.context.annotation.Bean
@@ -30,6 +31,13 @@ class StartedResponseTest {
         ): StreamingResponseBody {
             response.outputStream.write(": started\n\n".toByteArray())
             return response.datastarStream(Streamlord(compress = true), request) { patchSignals("n" to 1) }
+        }
+
+        // Bytes that end in the middle of a line, which would swallow the first event's first field.
+        @GetMapping("/unfinished")
+        fun unfinished(response: HttpServletResponse): StreamingResponseBody {
+            response.outputStream.write("pre:".toByteArray())
+            return response.datastarStream { patchSignals("n" to 1) }
         }
 
         @GetMapping("/written")
@@ -76,7 +84,8 @@ class StartedResponseTest {
 
         assertEquals(200, response.statusCode(), response.body())
         assertEquals(null, response.headers().firstValue("content-encoding").orElse(null))
-        assertEquals(": started\n\nevent: datastar-patch-signals\ndata: signals {\"n\":1}\n\n", response.body())
+        // A blank line after what was there, which closes anything left open.
+        assertEquals(": started\n\n\n\nevent: datastar-patch-signals\ndata: signals {\"n\":1}\n\n", response.body())
     }
 
     // The stream writes to the output stream, which the servlet API refuses once the writer is taken.
@@ -87,5 +96,12 @@ class StartedResponseTest {
 
         assertEquals(500, response.statusCode(), body)
         assertFalse("datastar-patch-signals" in body, body)
+    }
+
+    @Test
+    fun `a stream after an unfinished line keeps its first event`() {
+        val body = tomcat.get("/unfinished").body().use { it.toList().joinToString("\n") }
+
+        assertEquals(1, SseDecoder.decode(body + "\n").size, body)
     }
 }

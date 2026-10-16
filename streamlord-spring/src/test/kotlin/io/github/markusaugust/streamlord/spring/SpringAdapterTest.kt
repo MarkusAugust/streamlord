@@ -254,7 +254,8 @@ class SpringAdapterTest {
                 contentType = "application/json"
             }
         assertEquals(Search("fire"), post.readSignals<Search>(streamlord))
-        assertEquals(Search("fire"), post.readSignalsOr(Search(), streamlord).let { Search("fire") })
+        // A body read once is gone; a second read is not a request without signals.
+        assertFailsWith<IllegalStateException> { post.readSignalsOr(Search(), streamlord) }
 
         val empty = MockHttpServletRequest("GET", "/x")
         assertNull(empty.readSignals<Search>(streamlord))
