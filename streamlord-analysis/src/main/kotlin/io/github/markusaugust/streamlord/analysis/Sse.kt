@@ -1,7 +1,10 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.DatastarEventValidationException
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonValue
+import io.github.markusaugust.streamlord.core.protocol.SseReader
+import io.github.markusaugust.streamlord.core.protocol.SseMessage as CoreSseMessage
 
 /*
  * A Server-Sent Events parser and a Datastar event decoder, for the Stream Inspector.
@@ -15,10 +18,10 @@ public data class SseMessage(
     val comments: List<String> = emptyList(),
 ) {
     /** A message that carries nothing at all is not dispatched. */
-    val isEmpty: Boolean get() = data.isEmpty() && event == "message" && id == null && comments.isEmpty()
+    val isEmpty: Boolean get() = data.isEmpty() && event == "message" && id == null && retry == null && comments.isEmpty()
 
     /** A keep-alive: comments only. */
-    val isComment: Boolean get() = comments.isNotEmpty() && data.isEmpty() && event == "message"
+    val isComment: Boolean get() = comments.isNotEmpty() && data.isEmpty() && event == "message" && id == null && retry == null
 }
 
 public data class DatastarFrame(
@@ -31,58 +34,40 @@ public data class DatastarFrame(
     val receivedAt: Long,
 )
 
-/** Feeds chunks of an SSE stream, hands back every complete message. */
+/**
+ * Feeds chunks of an SSE stream, hands back every complete message.
+ *
+ * It reads as Datastar's client does, through the core's [SseReader]: a line without a colon is
+ * skipped, a byte order mark before a field or a value is dropped, and an `id` is kept as
+ * written. A message carrying only a `retry` is handed back, since the client acts on it. The
+ * inspector shows what arrived and judges nothing, so a `retry` that is not a whole number of
+ * milliseconds that fits an [Int] is shown as none.
+ */
 public class SseParser {
-    private val buffer = StringBuilder()
-    private var event = "message"
-    private var id: String? = null
-    private var retry: Int? = null
-    private val data = ArrayList<String>()
-    private val comments = ArrayList<String>()
+    private val reader = SseReader()
 
-    // A chunk may end between the CR and the LF of one line ending. The CR ends its line at once,
-    // so nothing waits on a stream that closes there, and the LF that opens the next chunk is dropped.
-    private var afterCr = false
+    public fun feed(chunk: String): List<SseMessage> = reader.feed(chunk).map(::shown)
 
-    public fun feed(chunk: String): List<SseMessage> {
-        if (chunk.isEmpty()) return emptyList()
-        buffer.append(chunk, if (afterCr && chunk[0] == '\n') 1 else 0, chunk.length)
-        afterCr = false
-        val out = ArrayList<SseMessage>()
-        while (true) {
-            val idx = buffer.indexOfFirst { it == '\n' || it == '\r' }
-            if (idx < 0) break
-            val line = buffer.substring(0, idx)
-            val crLast = buffer[idx] == '\r' && idx + 1 == buffer.length
-            val sepLen = if (buffer[idx] == '\r' && !crLast && buffer[idx + 1] == '\n') 2 else 1
-            if (crLast) afterCr = true
-            buffer.delete(0, idx + sepLen)
-            if (line.isEmpty()) {
-                val msg = SseMessage(event, id, retry, data.toList(), comments.toList())
-                if (!msg.isEmpty) out += msg
-                event = "message"
-                id = null
-                retry = null
-                data.clear()
-                comments.clear()
-                continue
-            }
-            if (line.startsWith(":")) {
-                comments += line.substring(1).removePrefix(" ")
-                continue
-            }
-            val colon = line.indexOf(':')
-            val field = if (colon < 0) line else line.substring(0, colon)
-            val value = if (colon < 0) "" else line.substring(colon + 1).removePrefix(" ")
-            when (field) {
-                "event" -> event = value
-                "data" -> data += value
-                "id" -> id = value
-                "retry" -> if (value.isNotEmpty() && value.all { it in '0'..'9' }) retry = value.toIntOrNull()
-            }
+    /**
+     * The stream has ended: the comments read since the last message, if any, as one message.
+     * An unfinished message is dropped, as the client never dispatches one.
+     */
+    public fun finish(): SseMessage? =
+        try {
+            reader.finish()?.let(::shown)
+        } catch (_: DatastarEventValidationException) {
+            // The reader judges an unfinished message's id and retry; the inspector does not.
+            null
         }
-        return out
-    }
+
+    private fun shown(message: CoreSseMessage): SseMessage =
+        SseMessage(
+            event = message.event ?: "message",
+            id = message.id,
+            retry = message.retry?.takeIf { it.isNotEmpty() && it.all { c -> c in '0'..'9' } }?.toIntOrNull(),
+            data = message.data,
+            comments = message.comments,
+        )
 }
 
 public fun decodeDatastar(
@@ -91,9 +76,11 @@ public fun decodeDatastar(
 ): DatastarFrame {
     val groups = LinkedHashMap<String, MutableList<String>>()
     for (line in msg.data) {
+        // As the client splits it, slice(0, i) and slice(i + 1): without a space, the key is the
+        // line minus its last character and the value is the whole line (fetch.ts:115-117).
         val sp = line.indexOf(' ')
-        val key = if (sp < 0) line else line.substring(0, sp)
-        val value = if (sp < 0) "" else line.substring(sp + 1)
+        val key = if (sp < 0) line.dropLast(1) else line.substring(0, sp)
+        val value = if (sp < 0) line else line.substring(sp + 1)
         groups.getOrPut(key) { ArrayList() } += value
     }
     val args = groups.mapValues { it.value.joinToString("\n") }

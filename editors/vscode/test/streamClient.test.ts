@@ -25,7 +25,9 @@ before(async () => {
     req.on("end", () => {
       received.push({ method: req.method ?? "", target: req.url ?? "", body, headers: req.headers });
       res.writeHead(200, { "Content-Type": "text/event-stream" });
-      res.end('event: datastar-patch-signals\ndata: signals {"ok":true}\n\n');
+      // Comments after the last message, which only the parser's finish hands back.
+      if (req.url?.startsWith("/trailing")) res.end("data: x\n\n: bye\n");
+      else res.end('event: datastar-patch-signals\ndata: signals {"ok":true}\n\n');
     });
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -52,6 +54,12 @@ function curlParts(line: string): { target: string; body: string } {
 const request = (over: Partial<SavedRequest>): SavedRequest => ({ name: "", url: `${base}/api/feed`, method: "GET", signals: "", headers: "", ...over });
 
 describe("stream client", () => {
+  it("shows the comments that end a stream after its last message", async () => {
+    const comments: string[] = [];
+    await openStream({ url: `${base}/trailing`, method: "GET", signals: "", headers: {} }, { onComment: (c) => comments.push(c) }, new AbortController().signal);
+    assert.deepEqual(comments, ["bye"]);
+  });
+
   it("sends what the curl line shows", async () => {
     const signals = ' { "n" : 1.0, "s": "\\u00e9 x" } ';
     for (const r of [

@@ -44,24 +44,23 @@ public class SseReader {
     public fun finish(): SseMessage? = finish(check = true)
 
     internal fun finish(check: Boolean): SseMessage? {
-        // Only lines that have ended are read; one still arriving was never seen by the client.
-        if (check && (event != null || id != null || retry != null || data.isNotEmpty())) SseDecoder.checkTaken(id, retry)
         if (line.isNotEmpty()) {
             val text = line.toString()
             line.setLength(0)
             if (text.startsWith(":")) comments += text.removePrefix(":").removePrefix(" ")
         }
-        val trailing =
-            if (event == null && id == null && retry == null && data.isEmpty() && comments.isNotEmpty()) {
-                SseMessage(null, null, null, emptyList(), comments.toList())
-            } else {
-                null
-            }
+        val unfinished = event != null || id != null || retry != null || data.isNotEmpty()
+        val trailing = if (!unfinished && comments.isNotEmpty()) SseMessage(null, null, null, emptyList(), comments.toList()) else null
+        val takenId = id
+        val takenRetry = retry
         event = null
         id = null
         retry = null
         data.clear()
         comments.clear()
+        // Only lines that have ended were read; one still arriving was never seen by the client.
+        // Judged after the reset, so a reader that throws here is still clean.
+        if (check && unfinished) SseDecoder.checkTaken(takenId, takenRetry)
         return trailing
     }
 

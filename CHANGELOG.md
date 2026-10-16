@@ -26,6 +26,8 @@ All notable changes to Streamlord are recorded here. The format follows
   of Spring MVC's, whose Boot default has eight threads and an unbounded queue. Set on the async
   cycle that runs the stream, also from a `suspend` controller that passes the request; outside
   a request that Spring MVC is handling it throws.
+- `SseParser.finish()` in `streamlord-analysis`: the comments that end a stream after its last
+  message, handed back when it ends. Both Stream Inspectors call it, so a closing comment shows.
 
 ### Changed
 
@@ -81,6 +83,13 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- The Stream Inspector, in IntelliJ and VS Code, reads a stream as Datastar's client does. The
+  analysis `SseParser` now reads through the core's `SseReader`, and the VS Code parser is ported
+  to the same rules, held to one shared corpus of cases. A message carrying only a `retry` is
+  shown; a line without a colon is skipped; a byte order mark before a field or a value is
+  dropped; a data line without a space is split as the client splits it; a `retry` past a 32-bit
+  int is shown as none in both, where VS Code kept the previous one; an explicit `event: message`
+  is shown; and a long line in small pieces is read in linear time, where it was quadratic.
 - `SseFrame`, a public data class, validates what it is given: a line break in its `event`, `id`
   or a data line, or a NUL in its `id`, could write a line of its own into the stream, an event or
   data the server never meant to send. A NUL in data is still written, since markup can carry one.

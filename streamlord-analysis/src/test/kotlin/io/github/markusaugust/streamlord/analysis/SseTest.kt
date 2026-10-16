@@ -67,7 +67,14 @@ class SseTest {
         val messages = parser.feed("\n\n")
         val millis = (System.nanoTime() - started) / 1_000_000
 
-        assertEquals(800_000, messages.single().data.single().length)
+        assertEquals(
+            800_000,
+            messages
+                .single()
+                .data
+                .single()
+                .length,
+        )
         kotlin.test.assertTrue(millis < 2_000, "took $millis ms")
     }
 }
