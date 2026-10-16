@@ -9,8 +9,8 @@ import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.contentLength
 import io.ktor.server.request.header
 import io.ktor.server.request.httpMethod
-import io.ktor.server.request.receiveChannel
-import io.ktor.utils.io.readBuffer
+import io.ktor.utils.io.ByteReadChannel
+import io.ktor.utils.io.readRemaining
 import kotlinx.io.readByteArray
 import kotlin.reflect.typeOf
 
@@ -21,14 +21,24 @@ import kotlin.reflect.typeOf
  * `Content-Length` above the limit is rejected before a byte is read, and a chunked body is cut
  * off one byte past the limit. Nothing larger than the limit ever sits in memory.
  */
-internal class KtorIncomingRequest(private val call: ApplicationCall) : IncomingRequest {
+internal class KtorIncomingRequest(
+    private val call: ApplicationCall,
+) : IncomingRequest {
     override val method: String get() = call.request.httpMethod.value
+
     override fun queryParameter(name: String): String? = call.request.queryParameters[name]
+
     override fun header(name: String): String? = call.request.header(name)
 
     override suspend fun bodyText(maxBytes: Int): String {
         rejectDeclaredLengthAbove(maxBytes, call.request.contentLength())
-        val bytes = call.receiveChannel().readBuffer(maxBytes.toLong() + 1).readByteArray()
+        // receiveNullable and readRemaining, which every Ktor 3 has. 3.6.0 deprecates both for a
+        // receive(TypeInfo) member and a readBuffer(Long) it added, which an older Ktor lacks.
+        @Suppress("DEPRECATION")
+        val channel = checkNotNull(call.receiveNullable<ByteReadChannel>(portableTypeInfo<ByteReadChannel>()))
+
+        @Suppress("DEPRECATION")
+        val bytes = channel.readRemaining(maxBytes.toLong() + 1).readByteArray()
         if (bytes.size > maxBytes) throw SignalsTooLargeException(bytes.size.toLong(), maxBytes)
         return bytes.decodeToString()
     }
@@ -60,8 +70,7 @@ public suspend fun ApplicationCall.readSignals(): Signals = streamlord.readSigna
  * ```
  */
 @JvmName("readSignalsTyped")
-public suspend inline fun <reified T : Any> ApplicationCall.readSignals(): T? =
-    streamlord.readSignals(asIncomingRequest(), typeOf<T>())
+public suspend inline fun <reified T : Any> ApplicationCall.readSignals(): T? = streamlord.readSignals(asIncomingRequest(), typeOf<T>())
 
 /** The signals decoded into [T], or [default] when the request carried none. */
 public suspend inline fun <reified T : Any> ApplicationCall.readSignalsOr(default: T): T = readSignals<T>() ?: default

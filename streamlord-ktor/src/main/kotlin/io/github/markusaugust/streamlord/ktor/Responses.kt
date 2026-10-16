@@ -21,7 +21,6 @@ import io.ktor.http.headersOf
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.httpVersion
 import io.ktor.server.response.header
-import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
 import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.writeFully
@@ -108,6 +107,7 @@ public suspend fun ApplicationCall.respondDatastar(
                 }
             }
         },
+        portableTypeInfo<OutgoingContent>(),
     )
 }
 
