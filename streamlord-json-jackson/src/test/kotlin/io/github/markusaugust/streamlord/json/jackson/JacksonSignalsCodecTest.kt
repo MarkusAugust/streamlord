@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.json.jackson
 
+import com.fasterxml.jackson.annotation.JsonSubTypes
+import com.fasterxml.jackson.annotation.JsonTypeInfo
 import io.github.markusaugust.streamlord.core.SignalsCodecException
 import io.github.markusaugust.streamlord.core.SignalsDecodeException
 import io.github.markusaugust.streamlord.core.port.driven.decode
@@ -101,5 +103,32 @@ class JacksonSignalsCodecTest {
         }
         assertFailsWith<SignalsCodecException> { bare.decode<List<Delete>>("""[{"id":1}]""") }
         assertEquals(mapOf("a" to 1), bare.decode<Map<String, Int>>("""{"a":1}"""))
+    }
+
+    @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "t")
+    @JsonSubTypes(JsonSubTypes.Type(value = Box::class, name = "box"))
+    sealed interface Shaped
+
+    data class Box(
+        val label: String = "",
+        val page: Int = 1,
+    ) : Shaped
+
+    // The interface names no class Jackson builds, but its subtypes are Kotlin and lose their values the same way.
+    @Test
+    fun `a Kotlin interface needs the Kotlin module too`() {
+        assertFailsWith<SignalsCodecException> {
+            JacksonSignalsCodec(JsonMapper.builder().build()).decode<Shaped>("""{"t":"box","label":"x","page":3}""")
+        }
+        assertEquals(Box("x", 3), codec.decode<Shaped>("""{"t":"box","label":"x","page":3}"""))
+    }
+
+    // A Java creator keeps the mapper's rule, under which a missing component that takes null is null.
+    @Test
+    fun `a Java record may leave out a component that takes null`() {
+        for (c in listOf(codec, JacksonSignalsCodec(JsonMapper.builder().build()))) {
+            assertEquals(JavaSignals("a", null, 1), c.decode<JavaSignals>("""{"name":"a","n":1}"""))
+            assertFailsWith<SignalsDecodeException> { c.decode<JavaSignals>("""{"name":"a","n":null}""") }
+        }
     }
 }

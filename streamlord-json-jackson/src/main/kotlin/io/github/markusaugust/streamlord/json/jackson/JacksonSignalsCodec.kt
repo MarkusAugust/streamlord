@@ -19,15 +19,19 @@ import kotlin.reflect.javaType
  * bean) so signals obey the same rules as every other JSON in the realm. [default] builds a
  * mapper that discovers registered modules, including `jackson-module-kotlin` when present.
  *
- * Three rules hold whatever the mapper says, because the type is what a request may send. They
- * are the kotlinx codec's rules, with one exception. A constructor parameter must be sent unless
- * it has a default or, unlike kotlinx, takes `null`, even when the mapper turns off
- * `FAIL_ON_NULL_FOR_PRIMITIVES`, which otherwise lets a missing `val id: Long` arrive as `0`. A
- * `null` for a primitive is refused. And nothing may follow the JSON value.
+ * Three rules hold whatever the mapper says, because the type is what a request may send. A
+ * `null` for a primitive is refused, also when the parameter has a default and when the mapper
+ * has the Kotlin module's `NullIsSameAsDefault` on, so declare it `Int?` if the page may send
+ * `null`. A Kotlin parameter must be sent unless it has a default or, unlike with kotlinx, takes
+ * `null`, even when the mapper turns off `FAIL_ON_NULL_FOR_PRIMITIVES`, which otherwise lets a
+ * missing `val id: Long` arrive as `0`; a Java creator keeps the mapper's rule. And nothing may
+ * follow the JSON value.
  *
- * A Kotlin class needs `jackson-module-kotlin` on the mapper. Without it Jackson builds the class
- * from its defaults and drops what the browser sent, or refuses a class without defaults, so
- * decoding one throws [SignalsCodecException] instead.
+ * A Kotlin class or interface in the type needs `jackson-module-kotlin` on the mapper, even one
+ * Jackson could build without it, such as a class with `var` properties. Without the module
+ * Jackson reads a Kotlin class past its constructor, builds it from its defaults and drops what the browser sent, or
+ * refuses a class without defaults, so decoding throws
+ * [SignalsCodecException] instead.
  *
  * ```kotlin
  * val streamlord = Streamlord(codec = JacksonSignalsCodec(objectMapper))
@@ -52,17 +56,16 @@ public class JacksonSignalsCodec(
         type: KType,
     ): T =
         try {
-            if (mapper.registeredModules().none { it.registrationId == KOTLIN_MODULE }) {
-                kotlinClassIn(type)?.let { throw noKotlinModule(type, it) }
-            }
+            val kotlin = kotlinClassIn(type)
+            if (kotlin != null && !hasKotlinModule()) throw noKotlinModule(type, kotlin)
             val javaType = mapper.constructType(type.javaType)
             mapper
                 .readerFor(javaType)
-                .with(
-                    DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES,
-                    DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES,
-                    DeserializationFeature.FAIL_ON_TRAILING_TOKENS,
-                ).readValue<T>(json) ?: throw SignalsDecodeException("Signals decoded to null for $type")
+                .with(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES, DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+                // A Kotlin parameter with no default must be sent, as kotlinx has it; the Kotlin module
+                // still lets one that takes null go missing. A Java creator keeps the mapper's rule.
+                .let { if (kotlin != null) it.with(DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES) else it }
+                .readValue<T>(json) ?: throw SignalsDecodeException("Signals decoded to null for $type")
         } catch (e: InvalidDefinitionException) {
             // The type itself cannot be built, whatever the request sends: the server's to fix.
             throw SignalsCodecException("Could not decode signals into $type", e)
@@ -70,14 +73,16 @@ public class JacksonSignalsCodec(
             throw SignalsDecodeException("Could not decode signals into $type", e)
         }
 
+    private fun hasKotlinModule(): Boolean = mapper.registeredModules().any { it.registrationId == KOTLIN_MODULE }
+
     public companion object {
         private const val KOTLIN_MODULE = "tools.jackson.module.kotlin.KotlinModule"
 
-        /** The first Kotlin class in [type] or its arguments that Jackson builds from its properties. */
+        /** The first Kotlin class or interface in [type] or its arguments; an enum Jackson reads by name either way. */
         private fun kotlinClassIn(type: KType): KClass<*>? {
             val klass = type.classifier as? KClass<*>
             val java = klass?.java
-            if (java != null && java.isAnnotationPresent(Metadata::class.java) && !java.isEnum && !java.isInterface) return klass
+            if (java != null && java.isAnnotationPresent(Metadata::class.java) && !java.isEnum) return klass
             return type.arguments.firstNotNullOfOrNull { argument -> argument.type?.let { kotlinClassIn(it) } }
         }
 

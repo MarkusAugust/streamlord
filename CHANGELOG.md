@@ -113,13 +113,22 @@ All notable changes to Streamlord are recorded here. The format follows
   together on `dataOnIntersect`, of which the client reads one, and a negative `retryMaxCount` or
   `retryScaler`.
 - `SignalFilter.regexLiteral` writes the quoting of `Regex.escape`, `\Q...\E`, as escaped text,
-  where JavaScript matched the letters `Q` and `E`, and refuses the syntax only Java reads:
-  possessive quantifiers, atomic groups, `\A`, `\z`, `\Z`, `\G`, `\p{...}`, `\x{...}`, the other
-  Java-only escapes, and nested or intersected classes.
+  where JavaScript matched the letters `Q` and `E`, writes an octal escape as `\xHH`, and groups a
+  character outside the Basic Multilingual Plane so a quantifier takes all of it. It refuses what
+  JavaScript reads differently or refuses: possessive and stacked quantifiers, atomic groups,
+  `\A`, `\z`, `\Z`, `\G`, `\p{...}`, `\x{...}`, `\b{...}`, `\c` before anything but a capital,
+  a back reference to no group or followed by a digit, an escaped surrogate, a character outside
+  the Basic Multilingual Plane in a class, the other Java-only escapes, and nested or intersected
+  classes. `\Q(?i)\E`, the escape of a text with an inline flag in it, is no longer refused.
+  Each was checked against Node.
 - `JacksonSignalsCodec` and `Jackson2SignalsCodec` hold three rules whatever the mapper says: a
-  missing parameter that has no default and cannot be `null` is refused, so is a `null` for a
-  primitive, and so is anything after the JSON value. A Kotlin class needs `jackson-module-kotlin`
-  on the mapper, and decoding one without it throws `SignalsCodecException`.
+  `null` for a primitive is refused, also for one with a default and under the Kotlin module's
+  `NullIsSameAsDefault`, where Spring Boot's mapper read `{"count":null}` as `0`; a missing Kotlin
+  parameter that has no default and cannot be `null` is refused, while a Java creator keeps the
+  mapper's rule; and nothing may follow the JSON value. A Kotlin class or interface needs
+  `jackson-module-kotlin` on the mapper, and decoding one without it throws
+  `SignalsCodecException`, also a class Jackson could build without the module, such as one with
+  `var` properties.
 
 ### Fixed
 
@@ -133,13 +142,15 @@ All notable changes to Streamlord are recorded here. The format follows
 - The Pro attributes wrote a duration under a millisecond as `0ms`, where the free ones refuse
   it; they follow the free attributes' rules now.
 - `dataStyle("--brandColor", ...)` wrote `--brand-color`, another custom property. A custom
-  property with capitals is refused, since the browser lowercases the key; use the object form.
+  property with capitals is refused, since Datastar cannot set one in either form: the browser
+  lowercases the key, and the object form turns each capital into a hyphen.
 - `collectSignals` and `collectDeclaredSignals` in `streamlord-analysis`, and the VS Code
-  extension, read `dataSignals("foo-bar" to 1)` as declaring `$fooBar`, as the DSL now writes it.
-  A key with a hyphen in the pairs form was not collected at all.
+  extension, read the top-level key of `dataSignals("foo-bar" to 1)` as declaring `$fooBar`, as
+  the DSL now writes it. A key with a hyphen in the pairs form was not collected at all. Keys of a
+  nested map are still offered as names of their own, as before.
 - The optimistic-UI example on the components page threw when it rendered: it set an attribute
-  on the `li` after its button. The documentation's markup examples now run as part of the build
-  as well as compile.
+  on the `li` after its button. The documentation's `sample=html` examples now run as part of the
+  build as well as compile.
 - `SseFrame(id = "")` builds again: an empty id is valid SSE and drops the client's
   `last-event-id`, and 0.12 took it. An event still refuses one.
 - `SseDecoder`, and with it `datastarEvents`, fails on a data line whose key `Object.prototype`

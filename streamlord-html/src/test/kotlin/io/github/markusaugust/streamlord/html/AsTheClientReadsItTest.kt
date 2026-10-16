@@ -103,23 +103,39 @@ class AsTheClientReadsItTest {
         assertEquals("/a\\u2028b\\u2029c/", SignalFilter.regexLiteral(Regex("a b c")))
         assertEquals("""/x}+/""", SignalFilter.regexLiteral(Regex("x}+")))
         assertEquals("/(?:)/", SignalFilter.regexLiteral(Regex("\\Q\\E")))
-        for (java in listOf(
-            "a++",
-            "a{2}+",
-            "(?>a)",
-            "\\Aa",
-            "a\\z",
-            "a\\Z",
-            "\\Gx",
-            "\\p{L}",
-            "\\x{41}",
-            "\\h",
-            "\\R",
-            "\\e",
-            "[a[b]]",
-            "[a&&b]",
-            "[]a]",
-        )) {
+        assertEquals("""/\(\?i\)/""", SignalFilter.regexLiteral(Regex(Regex.escape("(?i)"))))
+        assertEquals("""/\x41\xff/""", SignalFilter.regexLiteral(Regex("\\0101\\0377")))
+        assertEquals("""/(a)\1/""", SignalFilter.regexLiteral(Regex("(a)\\1")))
+        assertEquals("/^(?:😀)+$/", SignalFilter.regexLiteral(Regex("^😀+$")))
+        val javaOnly =
+            listOf(
+                "a++",
+                "a{2}+",
+                "(?>a)",
+                "(?i)a",
+                "\\Aa",
+                "a\\z",
+                "a\\Z",
+                "\\Gx",
+                "\\p{L}",
+                "\\x{41}",
+                "\\h",
+                "\\R",
+                "\\e",
+                "\\ca",
+                "\\c[",
+                "(a)\\11",
+                "a\\1",
+                "x{1}{2}",
+                "a*{2}",
+                "a\\b{g}",
+                "[😀]",
+                "\\uD83D\\uDE00",
+                "[a[b]]",
+                "[a&&b]",
+                "[]a]",
+            )
+        for (java in javaOnly) {
             assertFailsWith<IllegalArgumentException>(java) { SignalFilter.regexLiteral(Regex(java)) }
         }
     }

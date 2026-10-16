@@ -69,9 +69,11 @@ div {
 }
 ```
 
-A custom property keeps its case in CSS, and the browser lowercases the key, so
-`dataStyle("--brandColor", ...)` is refused. Use the object form,
-`dataStyle("{'--brandColor': '#10161f'}")`.
+A custom property keeps its case in CSS, and Datastar cannot set one with capitals: the browser
+lowercases the key, and the object form turns each capital into a hyphen, so
+`{'--brandColor': ...}` sets `--brand-color`. `dataStyle("--brandColor", ...)` is therefore
+refused. Name the property in lowercase. The object form also puts a hyphen before a digit, so
+`{'--brand2': ...}` sets `--brand-2`; the keyed form, `dataStyle("--brand2", ...)`, keeps it.
 
 References may index: `signal("items[0].name")` and `signal("items['sub-total']")`. A reference
 is JavaScript, so `signal`, `set` and the other expression helpers refuse only a blank name, one

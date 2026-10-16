@@ -342,16 +342,19 @@ public fun HTMLTag.dataStyle(expression: String) {
 
 /**
  * `data-style:property="expression"`. A camelCase [property] such as `backgroundColor` is written
- * as `background-color`. A custom property keeps its case in CSS and the browser lowercases the
- * key, so one with capitals, such as `--brandColor`, is refused; use the object form,
- * `dataStyle("{'--brandColor': ...}")`.
+ * as `background-color`. A custom property keeps its case in CSS, and Datastar cannot set one
+ * with capitals, such as `--brandColor`: the browser lowercases the key, and the object form
+ * turns each capital into a hyphen. So it is refused; name the property in lowercase.
  */
 public fun HTMLTag.dataStyle(
     property: String,
     expression: String,
 ) {
     if (property.startsWith("--") && property.any { it.isUpperCase() }) {
-        throw InvalidSignalNameException(property, "is a custom property with capitals, which a key cannot carry; use the object form")
+        throw InvalidSignalNameException(
+            property,
+            "is a custom property with capitals, which Datastar cannot set in either form; name it in lowercase",
+        )
     }
     attributes[ds("style:${Casing.plainKey(property)}")] = ExpressionGuard.check(expression)
 }

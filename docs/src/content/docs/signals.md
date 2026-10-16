@@ -112,12 +112,17 @@ then fails at runtime on an `ObjectMapper` that is not the one Spring configured
 ## Where the codecs differ
 
 All three ignore keys the type does not name and refuse a body with anything after the JSON
-value. All three also refuse a `null` for a primitive, and a missing parameter that has no
-default and cannot be `null`. For Jackson, Streamlord enforces these whatever your mapper is set to, because
-Jackson 2 and Spring Boot's mapper would otherwise turn a missing `val id: Long` into `0`. A
-Kotlin class read through Jackson needs `jackson-module-kotlin` on the mapper. Without it Jackson
-drops what the browser sent or leaves `null` in a property that cannot hold one, so the codec
-throws `SignalsCodecException`, a 500, instead.
+value. All three also refuse a `null` for a primitive, and a missing Kotlin parameter that has no
+default and cannot be `null`. For Jackson, Streamlord enforces these whatever your mapper is set
+to, because Jackson 2 and Spring Boot's mapper would otherwise turn a missing `val id: Long` into
+`0`. The `null` is refused even for a primitive with a default, and even when the mapper has the
+Kotlin module's `NullIsSameAsDefault` on: declare the property `Int?` if a page may send `null`.
+A Java class read through Jackson, such as a record, keeps the mapper's rule for a missing value.
+
+A Kotlin class or interface read through Jackson needs `jackson-module-kotlin` on the mapper.
+Without it Jackson drops what the browser sent or leaves `null` in a property that cannot hold
+one, so the codec throws `SignalsCodecException`, a 500, instead; it does so even for a class
+Jackson could build without the module, since that class loses its null-safety all the same.
 
 They differ on the rest:
 

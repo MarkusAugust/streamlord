@@ -1,7 +1,11 @@
 package io.github.markusaugust.streamlord.json.jackson2
 
+import com.fasterxml.jackson.annotation.JsonSubTypes
+import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.databind.DeserializationFeature
+import com.fasterxml.jackson.databind.MapperFeature
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.json.JsonMapper
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import io.github.markusaugust.streamlord.core.SignalsCodecException
 import io.github.markusaugust.streamlord.core.SignalsDecodeException
@@ -100,5 +104,46 @@ class Jackson2SignalsCodecTest {
         }
         assertFailsWith<SignalsCodecException> { bare.decode<List<Delete>>("""[{"id":1}]""") }
         assertEquals(mapOf("a" to 1), bare.decode<Map<String, Int>>("""{"a":1}"""))
+    }
+
+    @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "t")
+    @JsonSubTypes(JsonSubTypes.Type(value = Box::class, name = "box"))
+    sealed interface Shaped
+
+    data class Box(
+        val label: String = "",
+        val page: Int = 1,
+    ) : Shaped
+
+    // The interface names no class Jackson builds, but its subtypes are Kotlin and lose their values the same way.
+    @Test
+    fun `a Kotlin interface needs the Kotlin module too`() {
+        assertFailsWith<SignalsCodecException> {
+            Jackson2SignalsCodec(
+                ObjectMapper(),
+            ).decode<Shaped>("""{"t":"box","label":"x","page":3}""")
+        }
+        assertEquals(Box("x", 3), codec.decode<Shaped>("""{"t":"box","label":"x","page":3}"""))
+    }
+
+    // A Java creator keeps the mapper's rule, under which a missing component that takes null is null.
+    @Test
+    fun `a Java record may leave out a component that takes null`() {
+        for (c in listOf(codec, Jackson2SignalsCodec(ObjectMapper()))) {
+            assertEquals(JavaSignals("a", null, 1), c.decode<JavaSignals>("""{"name":"a","n":1}"""))
+            assertFailsWith<SignalsDecodeException> { c.decode<JavaSignals>("""{"name":"a","n":null}""") }
+        }
+    }
+
+    // Spring Boot keeps it on, but the introspector the module adds is there either way.
+    @Test
+    fun `the Kotlin module is found when module ids are not recorded`() {
+        val mapper =
+            JsonMapper
+                .builder()
+                .disable(MapperFeature.IGNORE_DUPLICATE_MODULE_REGISTRATIONS)
+                .addModule(KotlinModule.Builder().build())
+                .build()
+        assertEquals(Page(3), Jackson2SignalsCodec(mapper).decode<Page>("""{"page":3}"""))
     }
 }

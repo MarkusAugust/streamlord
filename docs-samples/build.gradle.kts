@@ -279,7 +279,11 @@ abstract class ExtractDocSamples : DefaultTask() {
          * it renders, such as an attribute set after a child was written, and so does the DSL,
          * which checks names and expressions as it writes them.
          */
-        val samples = htmlSamples.joinToString(",\n") { (where, fn) -> "        \"$where\" to { div { $fn() } }" }
+        val samples =
+            htmlSamples.joinToString(",\n") { (where, fn) ->
+                val literal = where.replace("\\", "\\\\").replace("\"", "\\\"").replace("$", "\\$")
+                "        \"$literal\" to { div { $fn() } }"
+            }
         out.resolve("HtmlSamples.kt").writeText(
             """
             import kotlinx.html.div
