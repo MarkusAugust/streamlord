@@ -449,6 +449,22 @@ class InspectorTest : BasePlatformTestCase() {
         assertEquals(listOf("datastar-patch-signals"), pumped(bytes).map { it.event })
     }
 
+    /** Comments after the last message come back when the stream ends, through the parser's finish. */
+    fun `test the comments that end a stream after its last message are shown`() {
+        val comments = CopyOnWriteArrayList<String>()
+        StreamClient.pump(
+            "data: x\n\n: bye\n".byteInputStream(),
+            object : StreamClient.Handlers {
+                override fun onComment(text: String) {
+                    comments += text
+                }
+            },
+            java.util.concurrent.atomic
+                .AtomicBoolean(false),
+        )
+        assertEquals(listOf("bye"), comments)
+    }
+
     /** Every frame [StreamClient.pump] reads from [bytes], handed over one byte per read. */
     private fun pumped(bytes: ByteArray): List<DatastarFrame> {
         val trickle =
@@ -477,7 +493,8 @@ class InspectorTest : BasePlatformTestCase() {
                     frames += frame
                 }
             },
-            java.util.concurrent.atomic.AtomicBoolean(false),
+            java.util.concurrent.atomic
+                .AtomicBoolean(false),
         )
         return frames
     }

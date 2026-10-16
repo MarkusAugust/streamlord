@@ -1,5 +1,5 @@
 import { compactSignals, requestUrl, sendableUrl } from "./requests.ts";
-import { decodeDatastar, SseParser, type DatastarFrame } from "./sse.ts";
+import { decodeDatastar, SseParser, type DatastarFrame, type SseMessage } from "./sse.ts";
 
 /**
  * The network half of the Stream Inspector, free of any editor API so it can be tested against a
@@ -71,18 +71,23 @@ export async function openStream(req: StreamRequest, handlers: StreamHandlers, s
     }
     const parser = new SseParser();
     const reader = response.body.getReader();
-    const decoder = new TextDecoder();
+    // The byte order mark is the parser's to drop, before each field as the client drops it.
+    const decoder = new TextDecoder("utf-8", { ignoreBOM: true });
+    const show = (msg: SseMessage) => {
+      if (msg.comments.length && msg.data.length === 0 && msg.event === "message" && msg.id === null && msg.retry === null) {
+        handlers.onComment?.(msg.comments.join("\n"));
+      } else {
+        handlers.onFrame?.(decodeDatastar(msg));
+      }
+    };
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
-      for (const msg of parser.feed(decoder.decode(value, { stream: true }))) {
-        if (msg.comments.length && msg.data.length === 0 && msg.event === "message") {
-          handlers.onComment?.(msg.comments.join("\n"));
-          continue;
-        }
-        handlers.onFrame?.(decodeDatastar(msg));
-      }
+      for (const msg of parser.feed(decoder.decode(value, { stream: true }))) show(msg);
     }
+    for (const msg of parser.feed(decoder.decode())) show(msg);
+    const trailing = parser.finish();
+    if (trailing) show(trailing);
     handlers.onStatus?.("closed");
   } catch (e) {
     if ((e as Error).name === "AbortError") {

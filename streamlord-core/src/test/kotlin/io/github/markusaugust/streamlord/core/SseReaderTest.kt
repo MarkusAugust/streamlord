@@ -40,6 +40,7 @@ class SseReaderTest {
         reader.feed("event: datastar-patch-signals\ndata: signals {}\n\nretry: soon\n")
 
         assertFailsWith<DatastarEventValidationException> { reader.finish() }
+        assertEquals(listOf(listOf("y")), reader.feed("data: y\n\n").map { it.data }, "reset before judging, so still clean")
     }
 
     @Test
