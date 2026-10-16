@@ -10,8 +10,11 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 
 class Jackson2SignalsCodecTest {
-
-    data class Signals(val search: String = "", val count: Int = 0, val gone: String? = null)
+    data class Signals(
+        val search: String = "",
+        val count: Int = 0,
+        val gone: String? = null,
+    )
 
     private val codec = Jackson2SignalsCodec.default()
 

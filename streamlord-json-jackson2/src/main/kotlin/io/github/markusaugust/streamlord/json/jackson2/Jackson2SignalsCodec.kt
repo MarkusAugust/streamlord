@@ -21,24 +21,33 @@ import kotlin.reflect.javaType
  * @Bean fun streamlord(mapper: ObjectMapper) = Streamlord(codec = Jackson2SignalsCodec(mapper))
  * ```
  */
-public class Jackson2SignalsCodec(private val mapper: ObjectMapper) : SignalsCodec {
-
-    override fun encode(value: Any?, type: KType): String = try {
-        mapper.writeValueAsString(value)
-    } catch (e: JsonProcessingException) {
-        throw SignalsCodecException("Could not encode $type as signals", e)
-    }
+public class Jackson2SignalsCodec(
+    private val mapper: ObjectMapper,
+) : SignalsCodec {
+    override fun encode(
+        value: Any?,
+        type: KType,
+    ): String =
+        try {
+            mapper.writeValueAsString(value)
+        } catch (e: JsonProcessingException) {
+            throw SignalsCodecException("Could not encode $type as signals", e)
+        }
 
     @OptIn(ExperimentalStdlibApi::class)
-    override fun <T : Any> decode(json: String, type: KType): T = try {
-        val javaType = mapper.typeFactory.constructType(type.javaType)
-        mapper.readValue<T>(json, javaType) ?: throw SignalsDecodeException("Signals decoded to null for $type")
-    } catch (e: InvalidDefinitionException) {
-        // The type itself cannot be built, whatever the request sends: the server's to fix.
-        throw SignalsCodecException("Could not decode signals into $type", e)
-    } catch (e: JsonProcessingException) {
-        throw SignalsDecodeException("Could not decode signals into $type", e)
-    }
+    override fun <T : Any> decode(
+        json: String,
+        type: KType,
+    ): T =
+        try {
+            val javaType = mapper.typeFactory.constructType(type.javaType)
+            mapper.readValue<T>(json, javaType) ?: throw SignalsDecodeException("Signals decoded to null for $type")
+        } catch (e: InvalidDefinitionException) {
+            // The type itself cannot be built, whatever the request sends: the server's to fix.
+            throw SignalsCodecException("Could not decode signals into $type", e)
+        } catch (e: JsonProcessingException) {
+            throw SignalsDecodeException("Could not decode signals into $type", e)
+        }
 
     public companion object {
         /**
@@ -48,8 +57,9 @@ public class Jackson2SignalsCodec(private val mapper: ObjectMapper) : SignalsCod
          * ignore them. The browser sends its whole store, and a type names only the signals one
          * handler accepts; Jackson 2's own default would refuse every such request.
          */
-        public fun default(): Jackson2SignalsCodec = Jackson2SignalsCodec(
-            ObjectMapper().findAndRegisterModules().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false),
-        )
+        public fun default(): Jackson2SignalsCodec =
+            Jackson2SignalsCodec(
+                ObjectMapper().findAndRegisterModules().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false),
+            )
     }
 }

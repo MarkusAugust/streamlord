@@ -21,28 +21,36 @@ import kotlin.reflect.javaType
  * val streamlord = Streamlord(codec = JacksonSignalsCodec(objectMapper))
  * ```
  */
-public class JacksonSignalsCodec(private val mapper: ObjectMapper) : SignalsCodec {
-
-    override fun encode(value: Any?, type: KType): String = try {
-        mapper.writeValueAsString(value)
-    } catch (e: JacksonException) {
-        throw SignalsCodecException("Could not encode $type as signals", e)
-    }
+public class JacksonSignalsCodec(
+    private val mapper: ObjectMapper,
+) : SignalsCodec {
+    override fun encode(
+        value: Any?,
+        type: KType,
+    ): String =
+        try {
+            mapper.writeValueAsString(value)
+        } catch (e: JacksonException) {
+            throw SignalsCodecException("Could not encode $type as signals", e)
+        }
 
     @OptIn(ExperimentalStdlibApi::class)
-    override fun <T : Any> decode(json: String, type: KType): T = try {
-        val javaType = mapper.constructType(type.javaType)
-        mapper.readValue<T>(json, javaType) ?: throw SignalsDecodeException("Signals decoded to null for $type")
-    } catch (e: InvalidDefinitionException) {
-        // The type itself cannot be built, whatever the request sends: the server's to fix.
-        throw SignalsCodecException("Could not decode signals into $type", e)
-    } catch (e: JacksonException) {
-        throw SignalsDecodeException("Could not decode signals into $type", e)
-    }
+    override fun <T : Any> decode(
+        json: String,
+        type: KType,
+    ): T =
+        try {
+            val javaType = mapper.constructType(type.javaType)
+            mapper.readValue<T>(json, javaType) ?: throw SignalsDecodeException("Signals decoded to null for $type")
+        } catch (e: InvalidDefinitionException) {
+            // The type itself cannot be built, whatever the request sends: the server's to fix.
+            throw SignalsCodecException("Could not decode signals into $type", e)
+        } catch (e: JacksonException) {
+            throw SignalsDecodeException("Could not decode signals into $type", e)
+        }
 
     public companion object {
         /** A codec over a fresh mapper with every module on the classpath registered. */
-        public fun default(): JacksonSignalsCodec =
-            JacksonSignalsCodec(JsonMapper.builder().findAndAddModules().build())
+        public fun default(): JacksonSignalsCodec = JacksonSignalsCodec(JsonMapper.builder().findAndAddModules().build())
     }
 }
