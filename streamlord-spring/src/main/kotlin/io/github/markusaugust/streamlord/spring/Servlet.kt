@@ -61,7 +61,8 @@ import kotlin.time.Duration
  * @param streamlord The configured instance, typically a Spring bean. Defaults to [Streamlord.Default].
  * @param request The request being answered, when you have it: `Connection: keep-alive` is an
  *   HTTP/1.1 header that HTTP/2 forbids, and it is set only for a request known to be HTTP/1.1.
- *   Without this one, the request Spring MVC is handling for this response stands in. With
+ *   Without this one, the request Spring MVC is handling for this response stands in, which a
+ *   `suspend` controller no longer finds once it has suspended. With
  *   [Streamlord.compress] on, the stream is gzipped when this request's `Accept-Encoding` takes
  *   it; without the request, it is not.
  * @param timeout How long Spring lets this stream run before it cuts it, in place of the

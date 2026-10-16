@@ -650,8 +650,8 @@ val checkKotlinFloor =
     tasks.register<JavaExec>("checkKotlinFloor") {
         description = "Compiles the documentation's examples with Kotlin $kotlinFloor, as the oldest consumer would."
         group = "verification"
-        dependsOn(generateDocSamples)
-        val sources = listOf(layout.projectDirectory.dir("src/main/kotlin"), layout.buildDirectory.dir("generated/samples").get())
+        // The generated samples by way of their task, which wires the dependency.
+        val sources = files(layout.projectDirectory.dir("src/main/kotlin"), generateDocSamples.map { it.target })
         val output = layout.buildDirectory.dir("kotlin-floor")
         inputs.files(sources).withPathSensitivity(PathSensitivity.RELATIVE)
         inputs.files(kotlinFloorClasspath, kotlinFloorPlugins)
@@ -662,7 +662,7 @@ val checkKotlinFloor =
         // Locals, so the provider holds files and not the build script.
         val compileClasspath: FileCollection = kotlinFloorClasspath
         val plugins: FileCollection = kotlinFloorPlugins
-        val sourcePaths = sources.map { it.asFile.absolutePath }
+        val sourcePaths: FileCollection = sources
         val outputPath = output.map { it.asFile.absolutePath }
         argumentProviders.add(
             CommandLineArgumentProvider {
@@ -677,7 +677,7 @@ val checkKotlinFloor =
                     compileClasspath.asPath,
                     "-d",
                     outputPath.get(),
-                ) + sourcePaths
+                ) + sourcePaths.files.map { it.absolutePath }
             },
         )
     }

@@ -106,12 +106,13 @@ class CspNoncePluginTest {
             install(CspNoncePlugin) { nonce = { "" } }
             routing { get("/") { call.respondText(call.cspNonce) } }
 
-            // The test host of an older Ktor hands the server's exception to the test rather than
-            // answering 500, as a real server and a newer test host do.
+            // Ktor 3.0's test host hands the server's exception to the test rather than answering
+            // 500, as a real server and a newer test host do.
             val response =
                 try {
                     client.get("/")
                 } catch (e: IllegalArgumentException) {
+                    if (System.getProperty("streamlord.ktorOldest") == null) throw e
                     assertTrue("CSP nonce" in e.message.orEmpty(), e.message)
                     return@testApplication
                 }

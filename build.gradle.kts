@@ -13,6 +13,9 @@ plugins {
     alias(libs.plugins.dokka) apply false
 }
 
+// The oldest Kotlin a consumer may compile with; see compilerOptions below.
+val kotlinFloor: String = libs.versions.kotlinFloor.get()
+
 /*
  * The forge that shapes every module of Streamlord.
  *
@@ -20,8 +23,6 @@ plugins {
  * both Ktor 3 and Spring Framework 7 still tolerate), compiled in explicit API
  * mode so that nothing leaves the walls of a module by accident.
  */
-val kotlinFloor: String = libs.versions.kotlinFloor.get()
-
 subprojects {
     /*
      * Modules that exist for the build itself and never leave it. They are not

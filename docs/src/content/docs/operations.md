@@ -321,7 +321,9 @@ fun feed(
     }
 ```
 
-With neither, outside a request Spring MVC is handling, the header is left out. Tomcat drops
+With neither, the header is left out: outside a request Spring MVC is handling, and in a
+`suspend` controller after it has suspended, since Spring's request holder does not follow it to
+the thread it resumes on. Pass the request there. Tomcat drops
 connection headers from requests over HTTP/2 but not from responses, and curl and Node refuse a
 response that carries one.
 

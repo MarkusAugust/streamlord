@@ -96,8 +96,9 @@ All notable changes to Streamlord are recorded here. The format follows
   are compiled with Kotlin 2.2.21 on every build.
 - `datastarStream` without a request no longer sends `Connection: keep-alive` over HTTP/2, which
   curl and Node refuse; Tomcat passes the header through. It finds the request Spring MVC is
-  handling for the response when none is passed, and sets the header only for HTTP/1.1. Outside
-  Spring MVC, with no request, it leaves the header out.
+  handling for the response when none is passed, and sets the header only for HTTP/1.1. With no
+  request found, outside Spring MVC or in a `suspend` controller after it suspended, it leaves the
+  header out; HTTP/1.1 keeps the connection open without it.
 - `datastarStream` on a response something has already written to, but not committed, no longer
   fails with a 500: `prepareForSse` asked for no buffer, which Tomcat, Jetty and Undertow refuse
   once anything is written, and Streamlord now does without it, since every event is flushed
