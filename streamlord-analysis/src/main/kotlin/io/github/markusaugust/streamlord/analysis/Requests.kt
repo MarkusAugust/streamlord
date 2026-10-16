@@ -34,6 +34,26 @@ public data class RequestsFile(
 }
 
 public object Requests {
+    /** What Datastar's client sends as `Accept`, and so what the inspector sends (fetch.ts:82 in 1.0.4). */
+    public const val ACCEPT: String = "text/event-stream, text/html, application/json"
+
+    /** How much of a response without a stream the inspector reads and shows. */
+    public const val NON_STREAM_LIMIT: Int = 1024 * 1024
+
+    /**
+     * Whether the client reads this response as a stream: a 200 that is not HTML, JSON or
+     * JavaScript, a missing Content-Type included (fetch.ts:587-653). It matches the types as
+     * written, as the client does. Any other response is shown without a stream; the client acts
+     * on no body at all unless the status is 200.
+     */
+    public fun readsAsStream(
+        status: Int,
+        contentType: String?,
+    ): Boolean {
+        val type = contentType ?: ""
+        return status == 200 && "text/html" !in type && "application/json" !in type && "text/javascript" !in type
+    }
+
     public const val REQUESTS_FILE: String = ".streamlord/inspector.json"
     public const val ENV_FILE: String = ".streamlord/env.json"
     public const val RECENT_LIMIT: Int = 10
@@ -802,9 +822,7 @@ public object Requests {
 
     /**
      * What to say under an error response that came without a body, or null when there is a body
-     * or no error. The reason is then only in the server's log: a Spring Boot app missing a request
-     * parameter answered the inspector with a bare 400, because its error page has no
-     * text/event-stream form to write.
+     * or no error. The reason is then only in the server's log.
      */
     public fun emptyBodyHint(
         status: Int,
@@ -813,8 +831,7 @@ public object Requests {
         if (status < 400 || body.isNotBlank()) {
             null
         } else {
-            "The server sent no body with this $status, so the reason is in its log. " +
-                "Spring Boot, for one, writes no error body for a request that accepts only text/event-stream."
+            "The server sent no body with this $status, so the reason is in its log."
         }
 
     private val PORT = Regex("""^:[0-9]*$""")
@@ -855,7 +872,7 @@ public object Requests {
         val signalsJson = compactSignals(r.signals)
         val parts = mutableListOf("curl", "-N", "-X", r.method)
         parts += shellQuote(requestUrl(r.url, r.method, signalsJson))
-        parts += listOf("-H", shellQuote("Accept: text/event-stream"), "-H", shellQuote("Datastar-Request: true"))
+        parts += listOf("-H", shellQuote("Accept: $ACCEPT"), "-H", shellQuote("Datastar-Request: true"))
         for ((k, v) in parseHeaderLines(r.headers)) parts += listOf("-H", shellQuote("$k: $v"))
         if (!bodyless) parts += listOf("-H", shellQuote("Content-Type: application/json"), "--data", shellQuote(signalsJson))
         return parts.joinToString(" ")

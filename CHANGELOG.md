@@ -28,6 +28,9 @@ All notable changes to Streamlord are recorded here. The format follows
   a request that Spring MVC is handling it throws.
 - `SseParser.finish()` in `streamlord-analysis`: the comments that end a stream after its last
   message, handed back when it ends. Both Stream Inspectors call it, so a closing comment shows.
+- `Requests.ACCEPT`, `Requests.readsAsStream` and `Requests.NON_STREAM_LIMIT` in
+  `streamlord-analysis`: the `Accept` Datastar's client sends, and how it decides that a response
+  is a stream, for both Stream Inspectors.
 
 ### Changed
 
@@ -83,6 +86,13 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- The Stream Inspector, in IntelliJ and VS Code, asks and reads as Datastar's client does. It
+  sends the client's `Accept` (`text/event-stream, text/html, application/json`), in the request
+  and in the curl line, so a server that answers by `Accept` answers the inspector as it answers
+  the page. It reads a 200 that is not HTML, JSON or JavaScript as a stream, a missing
+  `Content-Type` included, and shows any other response without a stream, any status but 200
+  among them, read up to 1 MiB. The hint under an error without a body no longer blames an
+  `Accept` the inspector no longer sends.
 - The Stream Inspector, in IntelliJ and VS Code, reads a stream as Datastar's client does. The
   analysis `SseParser` now reads through the core's `SseReader`, and the VS Code parser is ported
   to the same rules, held to one shared corpus of cases. A message carrying only a `retry` is

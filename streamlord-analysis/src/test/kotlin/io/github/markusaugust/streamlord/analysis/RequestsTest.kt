@@ -63,13 +63,13 @@ class RequestsTest {
     @Test
     fun `exports curl for query-string and body methods`() {
         assertEquals(
-            "curl -N -X GET 'http://localhost:8080/api/x?datastar=%7B%22q%22%3A%22a+b%22%7D' -H 'Accept: text/event-stream, text/html, application/json' " +
-                "-H 'Datastar-Request: true' -H 'X-A: 1'",
+            "curl -N -X GET 'http://localhost:8080/api/x?datastar=%7B%22q%22%3A%22a+b%22%7D' " +
+                "-H 'Accept: text/event-stream, text/html, application/json' -H 'Datastar-Request: true' -H 'X-A: 1'",
             Requests.toCurl(req(url = "http://localhost:8080/api/x", signals = "{\"q\": \"a b\"}", headers = "X-A: 1")),
         )
         assertEquals(
-            "curl -N -X POST 'http://h/x' -H 'Accept: text/event-stream, text/html, application/json' -H 'Datastar-Request: true' -H 'Content-Type: application/json' " +
-                "--data '{\"s\":\"it'\\''s\"}'",
+            "curl -N -X POST 'http://h/x' -H 'Accept: text/event-stream, text/html, application/json' " +
+                "-H 'Datastar-Request: true' -H 'Content-Type: application/json' --data '{\"s\":\"it'\\''s\"}'",
             Requests.toCurl(req(url = "http://h/x", method = "POST", signals = "{\"s\":\"it's\"}")),
         )
     }

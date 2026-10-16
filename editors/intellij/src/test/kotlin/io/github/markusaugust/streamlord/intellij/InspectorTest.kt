@@ -471,9 +471,12 @@ class InspectorTest : BasePlatformTestCase() {
         server.start()
         try {
             val base = "http://127.0.0.1:${server.address.port}"
+
             fun open(path: String): Pair<List<DatastarFrame>, StreamClient.NonSseResponse?> {
                 val frames = CopyOnWriteArrayList<DatastarFrame>()
-                val nonSse = java.util.concurrent.atomic.AtomicReference<StreamClient.NonSseResponse>()
+                val nonSse =
+                    java.util.concurrent.atomic
+                        .AtomicReference<StreamClient.NonSseResponse>()
                 val done = CountDownLatch(1)
                 StreamClient().open(
                     "$base$path",
@@ -501,10 +504,10 @@ class InspectorTest : BasePlatformTestCase() {
             }
             assertEquals(listOf("message"), open("/no-type").first.map { it.event })
             val (missingFrames, missing) = open("/missing")
-            assertEquals(emptyList(), missingFrames)
+            assertEquals(emptyList<DatastarFrame>(), missingFrames)
             assertTrue(missing!!.http.startsWith("404"))
             val big = open("/big").second!!.body
-            assertTrue(big.length < 1024 * 1024 + 100, "${big.length}")
+            assertTrue("${big.length}", big.length < 1024 * 1024 + 100)
             assertTrue(big.endsWith("(cut at 1 MiB)"))
         } finally {
             server.stop(0)
