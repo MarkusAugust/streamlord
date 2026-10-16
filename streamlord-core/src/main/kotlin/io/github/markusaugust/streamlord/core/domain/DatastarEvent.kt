@@ -94,7 +94,9 @@ public data class PatchElements(
  * a key with a value is set, a key set to `null` is removed, nested objects merge recursively.
  *
  * @property signals A JSON object as text. Use a codec or the built-in
- *   [io.github.markusaugust.streamlord.core.json.JsonWriter] to produce it.
+ *   [io.github.markusaugust.streamlord.core.json.JsonWriter] to produce it. Anything else
+ *   throws [io.github.markusaugust.streamlord.core.DatastarEventValidationException]: Datastar's
+ *   client runs signals that are not JSON as JavaScript.
  * @property onlyIfMissing Only set signals that do not already exist on the client.
  */
 public data class PatchSignals(
@@ -105,7 +107,7 @@ public data class PatchSignals(
 ) : DatastarEvent {
     init {
         validateCommon(eventId, retry)
-        if (signals.isBlank()) throw DatastarEventValidationException("signals must not be blank")
+        Wire.signals(signals)
     }
 }
 

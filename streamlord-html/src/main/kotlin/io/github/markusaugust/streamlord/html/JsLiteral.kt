@@ -20,12 +20,15 @@ import io.github.markusaugust.streamlord.core.json.JsonWriter
 public object JsLiteral {
     private val IDENTIFIER = Regex("[A-Za-z_$][A-Za-z0-9_$]*")
 
-    /** A single-quoted JavaScript string literal. `</` is broken up so the text is also safe inside a `<script>` element. */
+    /**
+     * A single-quoted JavaScript string literal. `</` and `<!` are broken up so the text is also
+     * safe inside a `<script>` element, where `<!--` followed by `<script` would keep it open.
+     */
     public fun string(value: String): String =
         buildString(value.length + 2) {
             append('\'')
             var previous = ' '
-            for (c in value) {
+            for ((i, c) in value.withIndex()) {
                 when (c) {
                     '\'' -> append("\\'")
                     '\\' -> append("\\\\")
@@ -37,6 +40,7 @@ public object JsLiteral {
                     '\u2028' -> append("\\u2028")
                     '\u2029' -> append("\\u2029")
                     '/' -> if (previous == '<') append("\\/") else append('/')
+                    '<' -> if (value.getOrNull(i + 1) == '!') append("\\x3C") else append('<')
                     else -> if (c < ' ') append("\\u%04x".format(c.code)) else append(c)
                 }
                 previous = c
@@ -94,8 +98,15 @@ public object JsLiteral {
             if (!first) sb.append(", ")
             first = false
             val name = key.toString()
-            // An unquoted __proto__ sets the prototype of the object literal instead of a key.
-            sb.append(if (IDENTIFIER.matches(name) && name != "__proto__") name else string(name)).append(": ")
+            // __proto__ sets the object literal's prototype, quoted or not; only a computed key is a key.
+            sb
+                .append(
+                    when {
+                        name == "__proto__" -> "['__proto__']"
+                        IDENTIFIER.matches(name) -> name
+                        else -> string(name)
+                    },
+                ).append(": ")
             appendValue(sb, v)
         }
         sb.append('}')

@@ -113,12 +113,19 @@ public data class JsonString(
 
 /**
  * A JSON number kept as its original text, so nothing is lost between the browser and you.
- * Ask for the width you need. The grammar is validated by the parser; the accessors never throw
- * on a value that merely does not fit, they return `null` (or `Infinity` for [toDouble]).
+ * Ask for the width you need. The accessors never throw on a value that merely does not fit,
+ * they return `null` (or `Infinity` for [toDouble]).
+ *
+ * @throws IllegalArgumentException when [text] is not a JSON number. The writer puts the text
+ *   into the output as it is, and Datastar's client runs signals that are not JSON.
  */
 public data class JsonNumber(
     val text: String,
 ) : JsonValue {
+    init {
+        require(JsonShape.isNumber(text)) { "Not a JSON number: '$text'" }
+    }
+
     public fun toIntOrNull(): Int? = toLongOrNull()?.takeIf { it in Int.MIN_VALUE..Int.MAX_VALUE }?.toInt()
 
     public fun toLongOrNull(): Long? = text.toLongOrNull() ?: runCatching { BigDecimal(text).longValueExact() }.getOrNull()

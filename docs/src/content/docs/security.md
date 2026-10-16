@@ -265,12 +265,17 @@ means the surface you can depend on is the surface that was meant.
 
 ## Raw user HTML
 
-If you patch in HTML that a user wrote, wrap it in `data-ignore`. Datastar then skips that element
-and everything under it, so a `data-*` attribute smuggled in through a comment field is markup and
-never an expression.
+HTML a user wrote has to go through an allowlist sanitizer before it is patched in, such as the
+OWASP Java HTML Sanitizer, keeping the tags and attributes you mean to allow and nothing else.
+`data-ignore` does not contain it on its own: the user's `</div>` closes your wrapper, and what
+follows it is live markup again, and Datastar's client runs every `<script>` it patches in,
+`data-ignore` or not.
+
+Wrap the sanitized HTML in `data-ignore` as well. Datastar then skips that element and everything
+under it, so a `data-*` attribute that got past the sanitizer is markup and never an expression.
 
 ```kotlin sample=html
-val fromTheUser = "<p>whatever they typed</p>"
+val fromTheUser = "<p>whatever they typed, sanitized</p>"
 
 div {
     dataIgnore()

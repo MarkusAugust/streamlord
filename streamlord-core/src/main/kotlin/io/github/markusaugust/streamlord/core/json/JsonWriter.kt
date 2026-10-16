@@ -13,8 +13,9 @@ import java.math.BigInteger
  * are for. Attempting it raises [SignalsCodecException] with a clear message rather than a
  * silent `toString()`.
  *
- * The output is safe to embed in a JavaScript context: U+2028, U+2029 and `</` are escaped,
- * which matters because Datastar evaluates `data-signals` as an expression.
+ * The output is safe to embed in a JavaScript context: U+2028, U+2029, `</` and `<!` are
+ * escaped, which matters because Datastar evaluates `data-signals` as an expression, and a
+ * string inside a `<script>` that holds `<!--` and then `<script` keeps the element open.
  */
 public object JsonWriter {
     public const val DEFAULT_MAX_DEPTH: Int = 64
@@ -167,7 +168,7 @@ public object JsonWriter {
     ) {
         sb.append('"')
         var previous = ' '
-        for (c in s) {
+        for ((i, c) in s.withIndex()) {
             when (c) {
                 '"' -> sb.append("\\\"")
                 '\\' -> sb.append("\\\\")
@@ -179,6 +180,7 @@ public object JsonWriter {
                 '\u2028' -> sb.append("\\u2028")
                 '\u2029' -> sb.append("\\u2029")
                 '/' -> if (previous == '<') sb.append("\\/") else sb.append('/')
+                '<' -> if (s.getOrNull(i + 1) == '!') sb.append("\\u003c") else sb.append('<')
                 else -> if (c < ' ') sb.append("\\u%04x".format(c.code)) else sb.append(c)
             }
             previous = c

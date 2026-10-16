@@ -84,6 +84,8 @@ public fun HTMLTag.dataSignals(
     vararg signals: Pair<String, Any?>,
     ifMissing: Boolean = false,
 ) {
+    // Datastar's client merges signals key by key and skips __proto__, so the signal would never exist.
+    require(signals.none { it.first == "__proto__" }) { "__proto__ cannot be a signal: Datastar's client never creates it" }
     attributes[ds("signals${signalMods(null, ifMissing)}")] = JsonWriter.write(signals.toMap())
 }
 
