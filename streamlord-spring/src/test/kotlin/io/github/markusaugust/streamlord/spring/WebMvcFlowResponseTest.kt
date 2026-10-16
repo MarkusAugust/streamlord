@@ -3,6 +3,7 @@ package io.github.markusaugust.streamlord.spring
 import io.github.markusaugust.streamlord.core.application.Streamlord
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -31,13 +32,17 @@ import kotlin.time.Duration.Companion.milliseconds
  * timeout, and the Streamlord stream is never opened: no heartbeat or gzip reaches it.
  */
 class WebMvcFlowResponseTest {
+    companion object {
+        val threads = java.util.concurrent.CopyOnWriteArrayList<String>()
+    }
+
     @RestController
     class Streams {
-        private val streamlord = Streamlord(heartbeat = 50.milliseconds, compress = true)
+        private val streamlord = Streamlord(heartbeat = 500.milliseconds, compress = true)
 
-        // Fifteen events, one every 100 ms, with a quiet second in the middle.
+        // Fifteen events, one every 100 ms, with a quiet second in the middle that a heartbeat would fill.
         @GetMapping("/flow")
-        fun flow(): ResponseEntity<kotlinx.coroutines.flow.Flow<ServerSentEvent<String>>> =
+        fun flow(): ResponseEntity<Flow<ServerSentEvent<String>>> =
             flow {
                 repeat(15) {
                     if (it == 7) delay(1000.milliseconds)
@@ -61,12 +66,9 @@ class WebMvcFlowResponseTest {
 
     private lateinit var tomcat: RealTomcat
 
-    companion object {
-        val threads = java.util.concurrent.CopyOnWriteArrayList<String>()
-    }
-
     @BeforeTest
     fun start() {
+        threads.clear()
         tomcat = RealTomcat(Mvc::class.java)
     }
 
@@ -93,7 +95,8 @@ class WebMvcFlowResponseTest {
         assertFalse(": keep-alive" in body, "a heartbeat reached it:\n$body")
         assertEquals(null, response.headers().firstValue("content-encoding").orElse(null))
         assertTrue(took > 1500, "the stream took $took ms")
-        // The flow suspends between elements; after the first, no request thread runs it.
-        assertTrue(threads.drop(1).none { it.startsWith("http-") }, "$threads")
+        // The request's thread up to the first suspension, then the one that resumes after a delay.
+        assertTrue(threads.first().startsWith("http-"), "$threads")
+        assertTrue(threads.drop(1).all { it == "kotlinx.coroutines.DefaultExecutor" }, "$threads")
     }
 }

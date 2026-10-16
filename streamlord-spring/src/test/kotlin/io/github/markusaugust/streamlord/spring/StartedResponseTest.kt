@@ -14,6 +14,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 
 /**
  * A response something has already written to. Tomcat refuses a new buffer size once anything is
@@ -29,6 +30,12 @@ class StartedResponseTest {
         ): StreamingResponseBody {
             response.outputStream.write(": started\n\n".toByteArray())
             return response.datastarStream(Streamlord(compress = true), request) { patchSignals("n" to 1) }
+        }
+
+        @GetMapping("/written")
+        fun written(response: HttpServletResponse): StreamingResponseBody {
+            response.writer.write(": started\n\n")
+            return response.datastarStream { patchSignals("n" to 1) }
         }
     }
 
@@ -70,5 +77,15 @@ class StartedResponseTest {
         assertEquals(200, response.statusCode(), response.body())
         assertEquals(null, response.headers().firstValue("content-encoding").orElse(null))
         assertEquals(": started\n\nevent: datastar-patch-signals\ndata: signals {\"n\":1}\n\n", response.body())
+    }
+
+    // The stream writes to the output stream, which the servlet API refuses once the writer is taken.
+    @Test
+    fun `a response written to through its writer fails`() {
+        val response = tomcat.get("/written")
+        val body = response.body().use { it.toList().joinToString("\n") }
+
+        assertEquals(500, response.statusCode(), body)
+        assertFalse("datastar-patch-signals" in body, body)
     }
 }
