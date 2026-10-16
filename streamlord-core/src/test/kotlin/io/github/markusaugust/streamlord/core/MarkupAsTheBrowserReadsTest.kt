@@ -5,6 +5,7 @@ import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 import io.github.markusaugust.streamlord.core.domain.InterpolatedExpressionException
 import io.github.markusaugust.streamlord.core.domain.PatchElements
+import io.github.markusaugust.streamlord.core.domain.Trusted
 import io.github.markusaugust.streamlord.core.domain.UnsafeInterpolationException
 import io.github.markusaugust.streamlord.core.domain.interpolate
 import kotlin.test.Test
@@ -105,6 +106,27 @@ class MarkupAsTheBrowserReadsTest {
         // In HTML, markup a textarea shows is text, and stays allowed.
         val shown = """<textarea><div data-text=""></div></textarea>"""
         assertEquals(shown, ElementsGuard.check(shown))
+    }
+
+    @Test
+    fun `the guard reads as svg only inside an svg`() {
+        val textarea = """<textarea readonly><div data-text=""></div></textarea>"""
+        for (html in listOf(
+            """<svg viewBox="0 0 1 1"><title>Icon</title></svg>$textarea""",
+            """<script>const s = "<svg></svg>"</script>$textarea""",
+            """<textarea>Draw with <svg> and <div data-text=""></textarea>""",
+            """<svg><title>Icon</title></svg><title>Use <b data-show=""> tags</title>""",
+        )) {
+            assertEquals(html, ElementsGuard.check(html))
+        }
+        assertFailsWith<InterpolatedExpressionException> {
+            ElementsGuard.check("""<p></p><svg><g><title><b data-text="++"></b></title></g></svg>$textarea""")
+        }
+    }
+
+    @Test
+    fun `Trusted waives the URL check too`() {
+        assertEquals("""<a href="javascript:void(0)">x</a>""", interpolate("""<a href="%s">x</a>""", Trusted("javascript:void(0)")))
     }
 
     @Test

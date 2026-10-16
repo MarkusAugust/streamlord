@@ -15,7 +15,9 @@ sanitises. A selector with a line break is a bug in your code, not something to 
 
 ## No script breakout
 
-`ExecuteScript` neutralises `</script` inside the script body and HTML-escapes attribute values.
+`ExecuteScript` neutralises `</script` inside the script body, and `</body>`, `</head>` and
+`</html>`, which would make Datastar's client read the patch as a whole document, and a `<script`
+after `<!--`, which would keep the element open past its end tag. It HTML-escapes attribute values.
 `redirect()` quotes the URL as a JSON string literal and navigates from a `setTimeout`, the way
 the official SDKs do. `replaceUrl()` and `pushUrl()` quote it the same way.
 

@@ -116,7 +116,9 @@ holes.
 The markup is read the way the browser's tokenizer reads it, comments, end tags and all, and
 twice: as HTML and as the inside of an `<svg>` or `<math>`, where a `title` or a `textarea` holds
 elements rather than text. A value has to be safe both ways, since a patch with an SVG namespace
-carries no `<svg>` of its own.
+carries no `<svg>` of its own. So a `title` or a `textarea` that shows markup as a code sample cannot
+take a hole inside a `data-*` attribute of that sample; put the whole sample in one hole instead,
+where it is text either way.
 
 The refusals are the point. Escaping cannot save these: a value in a `data-*` attribute
 becomes part of a Datastar expression, and your own server signed the page it arrived on; a value

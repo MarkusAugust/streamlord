@@ -125,7 +125,9 @@ public object ElementsGuard {
     ): String {
         // Longest first, so `data-x-` is tried before `data-` whatever order the caller used.
         val ordered = if (prefixes === defaultPrefixes) prefixes else prefixes.sortedByDescending { it.length }
-        val visitor =
+        val roots = ArrayList<Int>()
+        scanMarkup(
+            elements,
             object : MarkupVisitor {
                 override fun attribute(
                     tag: String,
@@ -134,11 +136,33 @@ public object ElementsGuard {
                     valueEnd: Int,
                     quoted: Boolean,
                 ) = checkAttribute(name, if (valueStart < 0) null else elements.substring(valueStart, valueEnd), ordered)
-            }
-        scanMarkup(elements, visitor)
+
+                override fun tag(
+                    start: Int,
+                    end: Int,
+                ) {
+                    if (foreignRoot(elements, start) != null) roots += start
+                }
+            },
+        )
         // Inside an svg or a math, a title or a textarea holds elements rather than text. Read that
-        // way only where it can be, since in HTML the markup they show is text, and often meant so.
-        if (foreign || FOREIGN_ROOT.containsMatchIn(elements)) scanMarkup(elements, visitor, foreign = true)
+        // way only there, since in HTML the markup they show is text, and often meant so.
+        val spans = if (foreign) listOf(elements) else foreignSpans(elements, roots)
+        for (span in spans) {
+            scanMarkup(
+                span,
+                object : MarkupVisitor {
+                    override fun attribute(
+                        tag: String,
+                        name: String,
+                        valueStart: Int,
+                        valueEnd: Int,
+                        quoted: Boolean,
+                    ) = checkAttribute(name, if (valueStart < 0) null else span.substring(valueStart, valueEnd), ordered)
+                },
+                foreign = true,
+            )
+        }
         return elements
     }
 
@@ -212,4 +236,41 @@ public class MistypedAttributeException(
             "Did you mean that? The browser ignores an unknown data-* attribute without a word.",
     )
 
-private val FOREIGN_ROOT = Regex("<(svg|math)[\\s/>]", RegexOption.IGNORE_CASE)
+/** `svg` or `math` when the tag at [start] opens one of them, otherwise `null`. */
+private fun foreignRoot(
+    html: String,
+    start: Int,
+): String? =
+    listOf("svg", "math").firstOrNull {
+        html.regionMatches(start + 1, it, 0, it.length, ignoreCase = true) &&
+            html.getOrNull(start + 1 + it.length).let { c -> c == null || c in " \t\n\u000C\r/>" }
+    }
+
+/**
+ * Each svg or math the HTML reading found, from its start tag to its own end tag, nested ones
+ * counted, or to the end of the markup when it is never closed.
+ */
+private fun foreignSpans(
+    html: String,
+    roots: List<Int>,
+): List<String> {
+    val spans = ArrayList<String>()
+    var covered = 0
+    for (start in roots) {
+        if (start < covered) continue
+        val name = foreignRoot(html, start) ?: continue
+        val token = Regex("<(/?)$name(?=[\\s/>]|$)", RegexOption.IGNORE_CASE)
+        var depth = 0
+        var end = html.length
+        for (m in token.findAll(html, start)) {
+            depth += if (m.groupValues[1].isEmpty()) 1 else -1
+            if (depth == 0) {
+                end = html.indexOf('>', m.range.last).let { if (it < 0) html.length else it + 1 }
+                break
+            }
+        }
+        spans += html.substring(start, end)
+        covered = end
+    }
+    return spans
+}

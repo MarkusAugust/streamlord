@@ -28,8 +28,8 @@ public enum class Position {
     ATTRIBUTE,
 
     /**
-     * The start of an attribute that holds a URL, such as `href` or `src`. Escaping keeps the
-     * value inside the attribute and does nothing about `javascript:`, so the scheme is checked.
+     * An attribute that holds a URL, such as `href` or `src`. Escaping keeps the value inside the
+     * attribute and does nothing about `javascript:`, so the scheme of the whole value is checked.
      */
     URL,
 
@@ -86,7 +86,7 @@ public class UnsafeInterpolationException(
                     }
 
                     Position.URL -> {
-                        "at the start of $attribute with a scheme the browser may run, such as javascript:"
+                        "in $attribute, making a URL with a scheme the browser may run, such as javascript:"
                     }
 
                     Position.STYLE -> {
@@ -255,8 +255,11 @@ private fun Position.admits(value: Any?): Boolean =
     when (this) {
         // A URL is judged whole, once every value is in place; see Landscape.checkUrls.
         Position.TEXT, Position.ATTRIBUTE, Position.URL -> true
+
         Position.DATASTAR -> value is Number || value is Boolean
+
         Position.STYLE -> value is Number
+
         Position.STRUCTURE, Position.CODE -> false
     }
 
@@ -412,13 +415,9 @@ private class Landscape(
             val name = attributeNames[attribute].lowercase()
             return when {
                 datastar(name) -> Position.DATASTAR
-
                 name.startsWith("on") || name == "srcdoc" -> Position.CODE
-
                 name == "style" -> Position.STYLE
-
                 isUrl(attribute) -> Position.URL
-
                 else -> Position.ATTRIBUTE
             }
         }
@@ -447,7 +446,8 @@ private class Landscape(
             val start = attributeStarts[attribute]
             val end = attributeEnds[attribute]
             val inside = holes.indices.filter { holes[it] in start until end }
-            if (inside.isEmpty()) continue
+            // Trusted waives every check, this one included.
+            if (inside.isEmpty() || inside.any { values[it] is Trusted }) continue
             val value = StringBuilder()
             var cut = start
             for (index in inside) {
