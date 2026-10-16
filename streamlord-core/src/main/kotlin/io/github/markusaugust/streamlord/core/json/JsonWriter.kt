@@ -20,30 +20,56 @@ public object JsonWriter {
     public const val DEFAULT_MAX_DEPTH: Int = 64
 
     /** Encode [value] as JSON text. */
-    public fun write(value: Any?, maxDepth: Int = DEFAULT_MAX_DEPTH): String =
-        StringBuilder().also { appendValue(it, value, 0, maxDepth) }.toString()
+    public fun write(
+        value: Any?,
+        maxDepth: Int = DEFAULT_MAX_DEPTH,
+    ): String = StringBuilder().also { appendValue(it, value, 0, maxDepth) }.toString()
 
     /** Encode a JSON string literal, quotes included. Also a valid JavaScript string literal. */
     public fun writeString(value: String): String = StringBuilder(value.length + 2).also { appendString(it, value) }.toString()
 
-    private fun appendValue(sb: StringBuilder, value: Any?, depth: Int, maxDepth: Int) {
-        if (depth >= maxDepth && isContainer(value)) throw SignalsCodecException("JSON nesting deeper than $maxDepth levels (cyclic structure?)")
+    private fun appendValue(
+        sb: StringBuilder,
+        value: Any?,
+        depth: Int,
+        maxDepth: Int,
+    ) {
+        if (depth >= maxDepth &&
+            isContainer(value)
+        ) {
+            throw SignalsCodecException("JSON nesting deeper than $maxDepth levels (cyclic structure?)")
+        }
         when (value) {
             null, JsonNull -> sb.append("null")
+
             is JsonValue -> appendJsonValue(sb, value, depth, maxDepth)
+
             is Boolean -> sb.append(value)
+
             is String -> appendString(sb, value)
+
             is Char -> appendString(sb, value.toString())
+
             is Number -> appendNumber(sb, value)
+
             is Enum<*> -> appendString(sb, value.name)
+
             is Map<*, *> -> appendMap(sb, value, depth, maxDepth)
+
             is Iterable<*> -> appendIterable(sb, value, depth, maxDepth)
+
             is Sequence<*> -> appendIterable(sb, value.asIterable(), depth, maxDepth)
+
             is Array<*> -> appendIterable(sb, value.asIterable(), depth, maxDepth)
+
             is IntArray -> appendIterable(sb, value.asIterable(), depth, maxDepth)
+
             is LongArray -> appendIterable(sb, value.asIterable(), depth, maxDepth)
+
             is DoubleArray -> appendIterable(sb, value.asIterable(), depth, maxDepth)
+
             is BooleanArray -> appendIterable(sb, value.asIterable(), depth, maxDepth)
+
             else -> throw SignalsCodecException(
                 "JsonWriter cannot encode ${value::class.qualifiedName}. " +
                     "Use a Map, or configure a SignalsCodec adapter (streamlord-json-kotlinx or streamlord-json-jackson).",
@@ -51,7 +77,12 @@ public object JsonWriter {
         }
     }
 
-    private fun appendJsonValue(sb: StringBuilder, value: JsonValue, depth: Int, maxDepth: Int) {
+    private fun appendJsonValue(
+        sb: StringBuilder,
+        value: JsonValue,
+        depth: Int,
+        maxDepth: Int,
+    ) {
         when (value) {
             is JsonObject -> appendMap(sb, value, depth, maxDepth)
             is JsonArray -> appendIterable(sb, value, depth, maxDepth)
@@ -62,7 +93,12 @@ public object JsonWriter {
         }
     }
 
-    private fun appendMap(sb: StringBuilder, map: Map<*, *>, depth: Int, maxDepth: Int) {
+    private fun appendMap(
+        sb: StringBuilder,
+        map: Map<*, *>,
+        depth: Int,
+        maxDepth: Int,
+    ) {
         sb.append('{')
         var first = true
         // Only a map with keys that are not strings can repeat one once they are written as text.
@@ -79,7 +115,12 @@ public object JsonWriter {
         sb.append('}')
     }
 
-    private fun appendIterable(sb: StringBuilder, items: Iterable<*>, depth: Int, maxDepth: Int) {
+    private fun appendIterable(
+        sb: StringBuilder,
+        items: Iterable<*>,
+        depth: Int,
+        maxDepth: Int,
+    ) {
         sb.append('[')
         var first = true
         for (item in items) {
@@ -96,14 +137,21 @@ public object JsonWriter {
         value is Map<*, *> || value is Iterable<*> || value is Sequence<*> || value is Array<*> ||
             value is IntArray || value is LongArray || value is DoubleArray || value is BooleanArray
 
-    private fun appendNumber(sb: StringBuilder, n: Number) {
+    private fun appendNumber(
+        sb: StringBuilder,
+        n: Number,
+    ) {
         when (n) {
             is Int, is Long, is Short, is Byte, is BigInteger -> sb.append(n.toString())
+
             is Double -> sb.append(finite(n))
+
             // Its own shortest form: widened to a Double, 0.1f is written as 0.10000000149011612.
             is Float -> finite(n.toDouble()).let { sb.append(n.toString()) }
+
             // Plain notation reads better, and for a scale like 2000000000 it is two billion zeros.
             is BigDecimal -> sb.append(if (n.scale() in -PLAIN_SCALE..PLAIN_SCALE) n.toPlainString() else n.toString())
+
             else -> sb.append(finite(n.toDouble()))
         }
     }
@@ -113,7 +161,10 @@ public object JsonWriter {
         return d.toString()
     }
 
-    private fun appendString(sb: StringBuilder, s: String) {
+    private fun appendString(
+        sb: StringBuilder,
+        s: String,
+    ) {
         sb.append('"')
         var previous = ' '
         for (c in s) {
