@@ -63,12 +63,12 @@ class RequestsTest {
     @Test
     fun `exports curl for query-string and body methods`() {
         assertEquals(
-            "curl -N -X GET 'http://localhost:8080/api/x?datastar=%7B%22q%22%3A%22a+b%22%7D' -H 'Accept: text/event-stream' " +
+            "curl -N -X GET 'http://localhost:8080/api/x?datastar=%7B%22q%22%3A%22a+b%22%7D' -H 'Accept: text/event-stream, text/html, application/json' " +
                 "-H 'Datastar-Request: true' -H 'X-A: 1'",
             Requests.toCurl(req(url = "http://localhost:8080/api/x", signals = "{\"q\": \"a b\"}", headers = "X-A: 1")),
         )
         assertEquals(
-            "curl -N -X POST 'http://h/x' -H 'Accept: text/event-stream' -H 'Datastar-Request: true' -H 'Content-Type: application/json' " +
+            "curl -N -X POST 'http://h/x' -H 'Accept: text/event-stream, text/html, application/json' -H 'Datastar-Request: true' -H 'Content-Type: application/json' " +
                 "--data '{\"s\":\"it'\\''s\"}'",
             Requests.toCurl(req(url = "http://h/x", method = "POST", signals = "{\"s\":\"it's\"}")),
         )
@@ -79,7 +79,7 @@ class RequestsTest {
 
     @Test
     fun `curl export takes the url as written and never throws`() {
-        val tail = " -H 'Accept: text/event-stream' -H 'Datastar-Request: true'"
+        val tail = " -H 'Accept: text/event-stream, text/html, application/json' -H 'Datastar-Request: true'"
         val get = { url: String -> Requests.toCurl(req(url = url)) }
         assertEquals("curl -N -X GET 'http://localhost:8080?datastar=%7B%7D'$tail", get("http://localhost:8080"))
         assertEquals("curl -N -X GET '/x?datastar=%7B%7D'$tail", get("/x"))
@@ -95,7 +95,7 @@ class RequestsTest {
 
     @Test
     fun `curl export compacts signals without respelling them`() {
-        val tail = " -H 'Accept: text/event-stream' -H 'Datastar-Request: true'"
+        val tail = " -H 'Accept: text/event-stream, text/html, application/json' -H 'Datastar-Request: true'"
         val spaced = " { \"n\" : 1.0,\n\t\"s\": \"a  \\\" b\\u00e9</p>\", \"l\": [ 1, 2 ] }\r\n"
         assertEquals(
             "curl -N -X POST 'http://h/x'$tail -H 'Content-Type: application/json' " +
@@ -162,11 +162,24 @@ class RequestsTest {
         }
     }
 
+    // The client's own Accept (fetch.ts:82), and the responses it reads as a stream (:587-653):
+    // a 200 that is not HTML, JSON or JavaScript, a missing Content-Type included.
+    @Test
+    fun `a response is read as a stream as the client reads it`() {
+        assertEquals("text/event-stream, text/html, application/json", Requests.ACCEPT)
+        for (type in listOf("text/event-stream", "text/event-stream; charset=utf-8", "text/plain", "", null, "Text/HTML")) {
+            assertEquals(true, Requests.readsAsStream(200, type), "$type")
+        }
+        for (type in listOf("text/html", "text/html; charset=utf-8", "application/json", "text/javascript")) {
+            assertEquals(false, Requests.readsAsStream(200, type), type)
+        }
+        for (status in listOf(204, 302, 404, 500)) assertEquals(false, Requests.readsAsStream(status, "text/event-stream"), "$status")
+    }
+
     @Test
     fun `points to the server log when an error came without a body`() {
         assertEquals(
-            "The server sent no body with this 400, so the reason is in its log. " +
-                "Spring Boot, for one, writes no error body for a request that accepts only text/event-stream.",
+            "The server sent no body with this 400, so the reason is in its log.",
             Requests.emptyBodyHint(400, " \n"),
         )
         assertEquals(null, Requests.emptyBodyHint(400, "Required request parameter 'partsnummer' is not present"))

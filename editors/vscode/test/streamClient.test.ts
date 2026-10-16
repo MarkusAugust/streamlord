@@ -24,6 +24,19 @@ before(async () => {
     req.on("data", (chunk: string) => (body += chunk));
     req.on("end", () => {
       received.push({ method: req.method ?? "", target: req.url ?? "", body, headers: req.headers });
+      // Responses the client reads by status and Content-Type, not by what the body looks like.
+      if (req.url?.startsWith("/no-type")) {
+        res.writeHead(200);
+        return void res.end("data: x\n\n");
+      }
+      if (req.url?.startsWith("/html")) {
+        res.writeHead(200, { "Content-Type": "text/html" });
+        return void res.end(req.url.startsWith("/html-big") ? "x".repeat(2 * 1024 * 1024) : "<p id=\"a\">x</p>");
+      }
+      if (req.url?.startsWith("/missing")) {
+        res.writeHead(404, { "Content-Type": "text/event-stream" });
+        return void res.end("data: x\n\n");
+      }
       res.writeHead(200, { "Content-Type": "text/event-stream" });
       // Comments after the last message, which only the parser's finish hands back.
       if (req.url?.startsWith("/trailing")) res.end("data: x\n\n: bye\n");
@@ -59,6 +72,37 @@ function curlParts(line: string): { target: string; body: string } {
 const request = (over: Partial<SavedRequest>): SavedRequest => ({ name: "", url: `${base}/api/feed`, method: "GET", signals: "", headers: "", ...over });
 
 describe("stream client", () => {
+  it("sends the client's Accept", async () => {
+    const { got } = await send(request({}));
+    assert.equal(got?.headers.accept, "text/event-stream, text/html, application/json");
+  });
+
+  it("reads a 200 without a Content-Type as a stream, as the client does", async () => {
+    const frames: string[] = [];
+    await openStream({ url: `${base}/no-type`, method: "GET", signals: "", headers: {} }, { onFrame: (f) => frames.push(f.event) }, new AbortController().signal);
+    assert.deepEqual(frames, ["message"]);
+  });
+
+  it("shows HTML, and any status but 200, as a response without a stream", async () => {
+    const shown: string[] = [];
+    const frames: string[] = [];
+    for (const path of ["/html", "/missing"]) {
+      await openStream(
+        { url: `${base}${path}`, method: "GET", signals: "", headers: {} },
+        { onNonSse: (r) => shown.push(r.http), onFrame: (f) => frames.push(f.event) },
+        new AbortController().signal,
+      );
+    }
+    assert.deepEqual([shown, frames], [["200 OK", "404 Not Found"], []]);
+  });
+
+  it("reads a response without a stream only up to its limit", async () => {
+    let body = "";
+    await openStream({ url: `${base}/html-big`, method: "GET", signals: "", headers: {} }, { onNonSse: (r) => (body = r.body) }, new AbortController().signal);
+    assert.ok(body.length < 1024 * 1024 + 100, `${body.length}`);
+    assert.ok(body.endsWith("(cut at 1 MiB)"), body.slice(-40));
+  });
+
   it("hands over a last comment cut inside a character", async () => {
     const comments: string[] = [];
     await openStream({ url: `${base}/cut`, method: "GET", signals: "", headers: {} }, { onComment: (c) => comments.push(c) }, new AbortController().signal);

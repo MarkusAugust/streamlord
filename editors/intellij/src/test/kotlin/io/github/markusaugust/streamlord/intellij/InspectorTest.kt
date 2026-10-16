@@ -39,7 +39,8 @@ class InspectorTest : BasePlatformTestCase() {
             }
         }
         server.createContext("/plain") { exchange ->
-            exchange.responseHeaders.add("Content-Type", "text/plain")
+            seen += "accept " + exchange.requestHeaders.getFirst("Accept")
+            exchange.responseHeaders.add("Content-Type", "text/html")
             exchange.responseHeaders.add("datastar-selector", "#x")
             val body = "hello".toByteArray()
             exchange.sendResponseHeaders(200, body.size.toLong())
@@ -108,6 +109,7 @@ class InspectorTest : BasePlatformTestCase() {
             assertEquals("hello", plain.get().body)
             assertEquals("200 OK", plain.get().http)
             assertEquals(mapOf("datastar-selector" to "#x"), plain.get().headers)
+            assertEquals("accept text/event-stream, text/html, application/json", seen.last())
 
             val failed = CountDownLatch(1)
             var error: String? = null
@@ -447,6 +449,66 @@ class InspectorTest : BasePlatformTestCase() {
         val bom = byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte())
         val bytes = bom + "event: datastar-patch-signals\ndata: signals {}\n\n".toByteArray()
         assertEquals(listOf("datastar-patch-signals"), pumped(bytes).map { it.event })
+    }
+
+    /** By status and Content-Type, as the client reads a response, not by what the body looks like. */
+    fun `test a response is read as a stream as the client reads it`() {
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/no-type") { exchange ->
+            exchange.sendResponseHeaders(200, 0)
+            exchange.responseBody.use { it.write("data: x\n\n".toByteArray()) }
+        }
+        server.createContext("/missing") { exchange ->
+            exchange.responseHeaders.add("Content-Type", "text/event-stream")
+            exchange.sendResponseHeaders(404, 0)
+            exchange.responseBody.use { it.write("data: x\n\n".toByteArray()) }
+        }
+        server.createContext("/big") { exchange ->
+            exchange.responseHeaders.add("Content-Type", "text/html")
+            exchange.sendResponseHeaders(200, 0)
+            exchange.responseBody.use { out -> repeat(2048) { out.write(ByteArray(1024) { 'x'.code.toByte() }) } }
+        }
+        server.start()
+        try {
+            val base = "http://127.0.0.1:${server.address.port}"
+            fun open(path: String): Pair<List<DatastarFrame>, StreamClient.NonSseResponse?> {
+                val frames = CopyOnWriteArrayList<DatastarFrame>()
+                val nonSse = java.util.concurrent.atomic.AtomicReference<StreamClient.NonSseResponse>()
+                val done = CountDownLatch(1)
+                StreamClient().open(
+                    "$base$path",
+                    "GET",
+                    "{}",
+                    emptyMap(),
+                    object : StreamClient.Handlers {
+                        override fun onStatus(
+                            status: StreamClient.Status,
+                            http: String?,
+                            contentType: String?,
+                        ) {
+                            if (status == StreamClient.Status.CLOSED) done.countDown()
+                        }
+
+                        override fun onFrame(frame: DatastarFrame) {
+                            frames += frame
+                        }
+
+                        override fun onNonSse(response: StreamClient.NonSseResponse) = nonSse.set(response)
+                    },
+                )
+                assertTrue(done.await(10, TimeUnit.SECONDS))
+                return frames to nonSse.get()
+            }
+            assertEquals(listOf("message"), open("/no-type").first.map { it.event })
+            val (missingFrames, missing) = open("/missing")
+            assertEquals(emptyList(), missingFrames)
+            assertTrue(missing!!.http.startsWith("404"))
+            val big = open("/big").second!!.body
+            assertTrue(big.length < 1024 * 1024 + 100, "${big.length}")
+            assertTrue(big.endsWith("(cut at 1 MiB)"))
+        } finally {
+            server.stop(0)
+        }
     }
 
     /** Comments after the last message come back when the stream ends, through the parser's finish. */
