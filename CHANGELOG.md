@@ -34,6 +34,9 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Changed
 
+- `datastarElements`, `datastarSignals`, `datastarScript` and `toResponseEntity` no longer take a
+  `status`. Datastar's client reads the body of no status but 200, so any other made the response
+  do nothing. Source that passed one no longer compiles; code compiled against 0.12 still links.
 - Some events that could be built before now throw `DatastarEventValidationException`, and so does
   an `SseFrame` built by hand: a `retry` that is not a whole number of milliseconds from 1 to
   `Int.MAX_VALUE`, and an `eventId` that is not printable ASCII or has a space at either end. The
@@ -86,6 +89,30 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- On Spring WebMVC, a failure inside a stream that has started is cut off, as the documentation
+  said, also when `StreamlordExceptionHandler` handles it: the handler throws the exception on
+  when the response is committed. It used to answer, which ended the chunked body as if the stream
+  had finished, so Datastar's client neither retried nor reported it, and a body an advice
+  returned was appended to the event stream.
+- `datastarStream` sets `Content-Encoding: gzip` and `Connection: keep-alive`, and starts the gzip
+  member, with the stream's first write, so a failure before it, a `500`, a mapped `413` or a
+  rejected executor's `503`, is no longer answered as gzip over a plain body.
+- A `ShallowEtagHeaderFilter`, or any `ContentCachingResponseWrapper`, no longer holds a stream back
+  until it ends: the stream flushes the response underneath it.
+- On Jetty, a stream is no longer sent one byte per chunk. Its buffer was set to none, which Jetty
+  reads as one byte; it keeps the size it has.
+- A stream on a response that something wrote to without ending its line, which lost its first
+  event to that line, writes a blank line first. This also comes after a change in this release:
+  0.12 failed on such a response, with a 500.
+- `datastarStream` on a response whose writer is taken throws `IllegalStateException` where it is
+  called, not later on Spring's async thread.
+- A `suspend` controller that resumed on the thread of another request, and passed `timeout` or
+  `executor` without the request, set them on that other request. It now throws, as it does with
+  no request at all.
+- `readSignals` and its siblings on a request whose declared body was already read, by a
+  `@RequestBody`, a form or multipart filter, or a second read, throw `IllegalStateException`
+  rather than read no signals and return the default. `maxSignalsSize = Int.MAX_VALUE` no longer
+  fails with an overflow.
 - `interpolate` and `ElementsGuard` read markup as the browser's tokenizer does. A value got past
   `interpolate`, and a `$`-trap residue past the guard, where the scanner read the markup
   otherwise: a comment closed by `<!-->` or `--!>`, a bogus comment such as `<!x …>`, a

@@ -59,9 +59,18 @@ and runs the block on a thread from its own async executor, and that thread stay
 stream until the block returns. Everything inside the block writes one frame.
 
 Call `datastarStream` before anything writes to the response. One that something has already
-written to through its output stream still streams, without gzip; one written through
-`getWriter()`, or already committed, fails with `IllegalStateException`, since the stream needs the
-output stream and a committed response has sent its headers, the content type with them.
+written to through its output stream still streams, without gzip, after a blank line that closes
+whatever was left open; one written through `getWriter()`, or already committed, makes
+`datastarStream` throw `IllegalStateException`, since the stream needs the output stream and a
+committed response has sent its headers, the content type with them.
+
+The stream sets `Content-Encoding` and `Connection` with its first write. A block that fails
+before it writes anything leaves the response to an error answer as it was, so a `500` or a
+mapped `413` does not claim to be gzipped.
+
+A filter that caches the response, as Spring's `ShallowEtagHeaderFilter` does to compute an ETag,
+would hold the events back until the stream ends; the stream writes past its
+`ContentCachingResponseWrapper`, and the events leave as they are sent.
 
 **Do not take it as a parameter of the handler method.** `fun search(streamlord: Streamlord)`
 compiles and starts, and Spring then treats the parameter as a model attribute: it constructs a
@@ -76,8 +85,9 @@ one stream can set for itself, and Spring's async executor, which every async re
 application shares.
 
 **How long.** Spring gives an async request the container's timeout, 30 seconds on Tomcat, and
-then cuts it: the block is interrupted and the client sees the stream end. A stream meant to stay
-open gives itself a longer one:
+then ends it: the block is interrupted, and the response ends as if the stream had finished,
+so Datastar's client does not reconnect and the page stops updating. A stream meant to stay open
+gives itself a longer one:
 
 ```kotlin sample=spring
 @GetMapping("/feed")
@@ -96,8 +106,8 @@ fun feed(
 ```
 
 `Duration.INFINITE` lifts the limit, and only with a heartbeat, which is on by default, is that
-safe: without one, a client that vanished without closing its connection is never written to
-again, and its stream holds a thread for good. A finite `timeout`, such as
+safe: without one, a stream that writes nothing is never told that its client left, closed
+connection or not, and holds a thread for good. A finite `timeout`, such as
 `timeout = 10.minutes`, sets this stream's limit the same way. Every other request stays on the
 application's setting. To raise the limit for all of them at once:
 
@@ -127,8 +137,8 @@ spring.threads.virtual.enabled=true
 ```
 
 Declaring an `Executor` bean of your own makes Boot skip `applicationTaskExecutor`, and these
-settings with it: Spring MVC then starts a new thread for every request, without limit, and logs
-a warning about it. `spring.task.execution.mode=force` keeps Boot's executor alongside yours.
+settings with it: Spring MVC then starts a new thread for every request, without limit, and says
+nothing about it. `spring.task.execution.mode=force` keeps Boot's executor alongside yours.
 
 Or keep the long streams off that executor altogether, so the short requests behind them never
 wait. `executor` gives one stream an executor of its own:
@@ -237,7 +247,10 @@ the rest.
 
 `SignalsTooLargeException` should be mapped to `413`, and `JsonParseException` and
 `SignalsDecodeException` to `400`. `@Import(StreamlordExceptionHandler::class)` does exactly that,
-or write the `@ControllerAdvice` yourself. Streamlord does not register it for you, because
+or write the `@ControllerAdvice` yourself. An advice that answers an exception thrown inside a
+stream that has started ends it as if it had finished, and Datastar's client does not reconnect;
+throw the exception on when `response.isCommitted`, as `StreamlordExceptionHandler` does, and the
+container cuts the connection, which the client retries. Streamlord does not register it for you, because
 registering exception handlers behind your back is exactly the kind of help that turns into a
 fight. For reactive endpoints, see [Spring WebFlux](/spring-webflux/). The one filter the adapter
 offers, `CspNonceFilter`, is a bean you declare like any other, and it is on [Security](/security/).

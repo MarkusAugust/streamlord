@@ -34,13 +34,21 @@ public final class io/github/markusaugust/streamlord/spring/ReactiveKt {
 }
 
 public final class io/github/markusaugust/streamlord/spring/ResponsesKt {
-	public static final fun datastarElements (Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLorg/springframework/http/HttpStatus;Lio/github/markusaugust/streamlord/core/application/Streamlord;)Lorg/springframework/http/ResponseEntity;
+	public static final fun datastarElements (Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLio/github/markusaugust/streamlord/core/application/Streamlord;)Lorg/springframework/http/ResponseEntity;
+	public static final synthetic fun datastarElements (Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLorg/springframework/http/HttpStatus;Lio/github/markusaugust/streamlord/core/application/Streamlord;)Lorg/springframework/http/ResponseEntity;
+	public static synthetic fun datastarElements$default (Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLio/github/markusaugust/streamlord/core/application/Streamlord;ILjava/lang/Object;)Lorg/springframework/http/ResponseEntity;
 	public static synthetic fun datastarElements$default (Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLorg/springframework/http/HttpStatus;Lio/github/markusaugust/streamlord/core/application/Streamlord;ILjava/lang/Object;)Lorg/springframework/http/ResponseEntity;
-	public static final fun datastarScript (Ljava/lang/String;Ljava/util/Map;Lorg/springframework/http/HttpStatus;)Lorg/springframework/http/ResponseEntity;
+	public static final fun datastarScript (Ljava/lang/String;Ljava/util/Map;)Lorg/springframework/http/ResponseEntity;
+	public static final synthetic fun datastarScript (Ljava/lang/String;Ljava/util/Map;Lorg/springframework/http/HttpStatus;)Lorg/springframework/http/ResponseEntity;
+	public static synthetic fun datastarScript$default (Ljava/lang/String;Ljava/util/Map;ILjava/lang/Object;)Lorg/springframework/http/ResponseEntity;
 	public static synthetic fun datastarScript$default (Ljava/lang/String;Ljava/util/Map;Lorg/springframework/http/HttpStatus;ILjava/lang/Object;)Lorg/springframework/http/ResponseEntity;
-	public static final fun datastarSignals (Ljava/lang/String;ZLorg/springframework/http/HttpStatus;)Lorg/springframework/http/ResponseEntity;
+	public static final fun datastarSignals (Ljava/lang/String;Z)Lorg/springframework/http/ResponseEntity;
+	public static final synthetic fun datastarSignals (Ljava/lang/String;ZLorg/springframework/http/HttpStatus;)Lorg/springframework/http/ResponseEntity;
+	public static synthetic fun datastarSignals$default (Ljava/lang/String;ZILjava/lang/Object;)Lorg/springframework/http/ResponseEntity;
 	public static synthetic fun datastarSignals$default (Ljava/lang/String;ZLorg/springframework/http/HttpStatus;ILjava/lang/Object;)Lorg/springframework/http/ResponseEntity;
-	public static final fun toResponseEntity (Lio/github/markusaugust/streamlord/core/domain/DatastarResponse;Lorg/springframework/http/HttpStatus;Lio/github/markusaugust/streamlord/core/application/Streamlord;)Lorg/springframework/http/ResponseEntity;
+	public static final fun toResponseEntity (Lio/github/markusaugust/streamlord/core/domain/DatastarResponse;Lio/github/markusaugust/streamlord/core/application/Streamlord;)Lorg/springframework/http/ResponseEntity;
+	public static final synthetic fun toResponseEntity (Lio/github/markusaugust/streamlord/core/domain/DatastarResponse;Lorg/springframework/http/HttpStatus;Lio/github/markusaugust/streamlord/core/application/Streamlord;)Lorg/springframework/http/ResponseEntity;
+	public static synthetic fun toResponseEntity$default (Lio/github/markusaugust/streamlord/core/domain/DatastarResponse;Lio/github/markusaugust/streamlord/core/application/Streamlord;ILjava/lang/Object;)Lorg/springframework/http/ResponseEntity;
 	public static synthetic fun toResponseEntity$default (Lio/github/markusaugust/streamlord/core/domain/DatastarResponse;Lorg/springframework/http/HttpStatus;Lio/github/markusaugust/streamlord/core/application/Streamlord;ILjava/lang/Object;)Lorg/springframework/http/ResponseEntity;
 }
 
@@ -80,7 +88,9 @@ public final class io/github/markusaugust/streamlord/spring/ServletSseSink : io/
 
 public final class io/github/markusaugust/streamlord/spring/StreamlordExceptionHandler {
 	public fun <init> ()V
-	public final fun signalsTooLarge ()Lorg/springframework/http/ResponseEntity;
-	public final fun signalsUnreadable ()Lorg/springframework/http/ResponseEntity;
+	public final synthetic fun signalsTooLarge ()Lorg/springframework/http/ResponseEntity;
+	public final fun signalsTooLarge (Lio/github/markusaugust/streamlord/core/SignalsTooLargeException;)Lorg/springframework/http/ResponseEntity;
+	public final synthetic fun signalsUnreadable ()Lorg/springframework/http/ResponseEntity;
+	public final fun signalsUnreadable (Ljava/lang/Exception;)Lorg/springframework/http/ResponseEntity;
 }
 

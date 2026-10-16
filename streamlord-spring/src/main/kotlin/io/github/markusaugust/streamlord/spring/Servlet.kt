@@ -27,6 +27,8 @@ import org.springframework.web.context.request.async.CallableProcessingIntercept
 import org.springframework.web.context.request.async.WebAsyncManager
 import org.springframework.web.context.request.async.WebAsyncUtils
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody
+import org.springframework.web.util.ContentCachingResponseWrapper
+import org.springframework.web.util.WebUtils
 import java.io.OutputStream
 import java.io.OutputStreamWriter
 import java.io.Writer
@@ -99,10 +101,19 @@ public fun HttpServletResponse.datastarStream(
     require(heartbeat == null || heartbeat.isPositive()) { "heartbeat must be positive, or null for none" }
     // Its headers have gone out, and with them a content type the stream cannot change.
     check(!isCommitted) { "The response is already committed, so it cannot become an event stream" }
-    if (timeout != null) setAsyncTimeout(timeout, request)
-    if (executor != null) setAsyncExecutor(executor, request)
+    // The stream writes to the output stream, which a response refuses once its writer is taken.
+    // Asked of the container's own response: a wrapper, such as the one ShallowEtagHeaderFilter
+    // adds, makes its stream once, and Spring has yet to tell it not to cache this one.
+    try {
+        generateSequence<ServletResponse>(this) { (it as? ServletResponseWrapper)?.response }.last().outputStream
+    } catch (e: IllegalStateException) {
+        throw IllegalStateException("The response's writer is already in use, so it cannot carry an event stream", e)
+    }
+    val answered = requestOf(request)
+    if (timeout != null) setAsyncTimeout(timeout, answered, request != null)
+    if (executor != null) setAsyncExecutor(executor, answered, request != null)
     // What something wrote before the stream would sit in front of a gzip member and break it.
-    val untouched = prepareStream(request)
+    val untouched = prepareHeaders(this)
     // Without the request nothing is gzipped, so there is nothing for Accept-Encoding to vary.
     val varies = streamlord.compress && untouched && request != null
     val gzip = varies && DatastarProtocol.acceptsGzip(request.getHeader("Accept-Encoding"))
@@ -110,27 +121,72 @@ public fun HttpServletResponse.datastarStream(
     if (varies && getHeaders("Vary").none { it.contains("Accept-Encoding", ignoreCase = true) }) {
         addHeader("Vary", "Accept-Encoding")
     }
-    if (gzip) setHeader("Content-Encoding", "gzip")
+    val keepAlive = answered?.protocol.equals("HTTP/1.1", ignoreCase = true)
     return StreamingResponseBody { output ->
-        if (!gzip) {
-            val writer = OutputStreamWriter(output, StandardCharsets.UTF_8)
-            streamlord.streamBlocking(ServletSseSink(writer, this@datastarStream), authorisation, heartbeat, block)
-            writer.flush()
-            return@StreamingResponseBody
-        }
-        // Sync flush: each event leaves the compressor whole, the moment the sink flushes.
-        val body = SyncGzipOutputStream(output)
+        val sink = StreamSink(output, this@datastarStream, gzip, keepAlive, untouched)
         try {
-            val writer = OutputStreamWriter(body, StandardCharsets.UTF_8)
-            streamlord.streamBlocking(ServletSseSink(writer, this@datastarStream), authorisation, heartbeat, block)
-            writer.flush()
-            // Only after a stream that ended well; one cut short is left for the client to see fail.
-            body.finish()
+            streamlord.streamBlocking(sink, authorisation, heartbeat, block)
+            sink.finish()
         } finally {
-            body.release()
+            sink.release()
         }
     }
 }
+
+/**
+ * The stream's sink, which starts the response with its first write: the headers that belong to
+ * the stream alone, `Content-Encoding` and `Connection`, and the gzip member. A failure before it
+ * leaves the response as an error answer can use it, since a header once set cannot be taken off.
+ */
+private class StreamSink(
+    private val output: OutputStream,
+    response: HttpServletResponse,
+    private val gzip: Boolean,
+    private val keepAlive: Boolean,
+    private val untouched: Boolean,
+) : SseSink {
+    private val response = flushable(response)
+    private var writer: Writer? = null
+    private var body: SyncGzipOutputStream? = null
+
+    private fun start(): Writer {
+        writer?.let { return it }
+        if (gzip) response.setHeader("Content-Encoding", "gzip")
+        if (keepAlive) response.setHeader("Connection", "keep-alive")
+        // Bytes something wrote before the stream may end in the middle of a line, which would
+        // swallow the first event's first field; a blank line closes whatever was open.
+        if (!untouched) output.write("\n\n".toByteArray())
+        // Sync flush: each event leaves the compressor whole, the moment the sink flushes.
+        val target = if (gzip) SyncGzipOutputStream(output).also { body = it } else output
+        return OutputStreamWriter(target, StandardCharsets.UTF_8).also { writer = it }
+    }
+
+    override suspend fun write(text: String) {
+        start().write(text)
+    }
+
+    override suspend fun flush() {
+        start().flush()
+        response.flushBuffer()
+    }
+
+    /** Only after a stream that ended well; one cut short is left for the client to see fail. */
+    fun finish() {
+        writer?.flush()
+        body?.finish()
+    }
+
+    fun release() {
+        body?.release()
+    }
+}
+
+/*
+ * The response to flush. A ContentCachingResponseWrapper, as ShallowEtagHeaderFilter puts in front
+ * of every response, keeps a flush from the container, so the stream goes past it.
+ */
+private fun flushable(response: HttpServletResponse): HttpServletResponse =
+    (WebUtils.getNativeResponse(response, ContentCachingResponseWrapper::class.java)?.response as? HttpServletResponse) ?: response
 
 /** Open a Datastar SSE stream that drains [events] until the flow completes. */
 @JvmName("datastarStream")
@@ -165,18 +221,20 @@ public fun HttpServletResponse.datastarStream(
 private fun setAsyncTimeout(
     timeout: Duration,
     request: HttpServletRequest?,
+    given: Boolean,
 ) {
     require(timeout.isPositive()) { "timeout must be positive, Duration.INFINITE for none, or null for Spring's own" }
     // -1 is no limit to Spring and the container alike, and 0 is too, so a positive timeout is at least 1 ms.
     val millis = if (timeout.isInfinite()) -1L else timeout.inWholeMilliseconds.coerceAtLeast(1)
-    onStreamCycle(asyncManager(request, "A timeout"), "timeout") { asyncRequest, _ -> asyncRequest.setTimeout(millis) }
+    onStreamCycle(asyncManager(request, given, "A timeout"), "timeout") { asyncRequest, _ -> asyncRequest.setTimeout(millis) }
 }
 
 private fun setAsyncExecutor(
     executor: AsyncTaskExecutor,
     request: HttpServletRequest?,
+    given: Boolean,
 ) {
-    onStreamCycle(asyncManager(request, "An executor"), "executor") { _, manager -> manager.setTaskExecutor(executor) }
+    onStreamCycle(asyncManager(request, given, "An executor"), "executor") { _, manager -> manager.setTaskExecutor(executor) }
 }
 
 /*
@@ -207,12 +265,12 @@ private fun sameResponse(
  */
 private fun asyncManager(
     request: HttpServletRequest?,
+    given: Boolean,
     what: String,
 ): WebAsyncManager {
-    val servletRequest = request ?: (RequestContextHolder.getRequestAttributes() as? ServletRequestAttributes)?.request
-    val manager = servletRequest?.getAttribute(WebAsyncUtils.WEB_ASYNC_MANAGER_ATTRIBUTE) as? WebAsyncManager
+    val manager = request?.getAttribute(WebAsyncUtils.WEB_ASYNC_MANAGER_ATTRIBUTE) as? WebAsyncManager
     checkNotNull(manager?.asyncWebRequest) {
-        if (request == null) {
+        if (!given) {
             "$what needs a request that Spring MVC is handling, and none was found: pass the request. " +
                 "Spring's RequestContextHolder does not follow a suspend controller across a suspension."
         } else {
@@ -265,12 +323,25 @@ public fun HttpServletResponse.prepareForSse(request: HttpServletRequest? = null
  * refuse it once anything is written, committed or not, and the refusal is that answer.
  */
 internal fun HttpServletResponse.prepareStream(request: HttpServletRequest?): Boolean {
-    contentType = DatastarProtocol.CONTENT_TYPE_EVENT_STREAM
-    characterEncoding = StandardCharsets.UTF_8.name()
-    for ((name, value) in DatastarProtocol.SSE_RESPONSE_HEADERS) setHeader(name, value)
+    val untouched = prepareHeaders(this)
     if (requestOf(request)?.protocol.equals("HTTP/1.1", ignoreCase = true)) setHeader("Connection", "keep-alive")
+    return untouched
+}
+
+/**
+ * The content type and the headers every stream carries, and whether nothing had been written to
+ * the response before. The buffer is set to the size it has: Tomcat, Jetty and Undertow refuse
+ * that once anything is written, committed or not, which is the answer, and it shrinks nothing.
+ * A buffer of none would be no better, since every event is flushed, and Jetty reads it as one
+ * byte, which sends every byte in a chunk of its own.
+ */
+private fun prepareHeaders(response: HttpServletResponse): Boolean {
+    response.contentType = DatastarProtocol.CONTENT_TYPE_EVENT_STREAM
+    response.characterEncoding = StandardCharsets.UTF_8.name()
+    for ((name, value) in DatastarProtocol.SSE_RESPONSE_HEADERS) response.setHeader(name, value)
+    val buffered = flushable(response)
     return try {
-        bufferSize = 0
+        buffered.bufferSize = buffered.bufferSize
         true
     } catch (_: IllegalStateException) {
         false
@@ -295,7 +366,7 @@ public class ServletSseSink(
 
     override suspend fun flush() {
         writer.flush()
-        response.flushBuffer()
+        flushable(response).flushBuffer()
     }
 }
 
@@ -338,9 +409,15 @@ public class ServletIncomingRequest(
     override fun header(name: String): String? = request.getHeader(name)
 
     override suspend fun bodyText(maxBytes: Int): String {
-        rejectDeclaredLengthAbove(maxBytes, request.contentLengthLong.takeIf { it >= 0 })
-        val bytes = request.inputStream.readNBytes(maxBytes + 1)
+        val declared = request.contentLengthLong.takeIf { it >= 0 }
+        rejectDeclaredLengthAbove(maxBytes, declared)
+        val bytes = request.inputStream.readNBytes(if (maxBytes < Int.MAX_VALUE) maxBytes + 1 else maxBytes)
         if (bytes.size > maxBytes) throw SignalsTooLargeException(bytes.size.toLong(), maxBytes)
+        // A body that was declared and is gone was read before: by a @RequestBody, a filter that
+        // parsed a form or a multipart, or a second read. It is not a request without signals.
+        check(bytes.isNotEmpty() || declared == null || declared == 0L) {
+            "The request body was already read, by a @RequestBody, a filter or an earlier read, so the signals in it are gone"
+        }
         val charset = request.characterEncoding?.let { runCatching { charset(it) }.getOrNull() } ?: StandardCharsets.UTF_8
         return String(bytes, charset)
     }
