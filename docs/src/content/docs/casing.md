@@ -32,7 +32,22 @@ div {
 }
 ```
 
-`signal("foo-bar")` gives you `$fooBar`, because that is what Datastar calls it.
+`signal("foo-bar")` gives you `$fooBar`, the signal `data-signals:foo-bar` declares. The pairs
+form reads its keys the same way, nested maps included, so all three name one signal:
+
+```kotlin sample=html
+div {
+    dataSignals("foo-bar" to 7, "user" to mapOf("first-name" to ""))
+    // data-signals="{"fooBar":7,"user":{"firstName":""}}"
+    span { dataText(signal("foo-bar")) }          // $fooBar
+    span { dataText(signal("user.first-name")) }  // $user.firstName
+}
+```
+
+A key the DSL does not write keeps its hyphen: the object form, `dataSignals("{'foo-bar': 1}")`,
+and a signal patched from the server. In an expression Datastar reads `$foo-bar` as the signal
+`foo-bar`, which `signal("foo-bar")` cannot write, so reach such a key by indexing the store:
+`signal("['foo-bar']")` gives `$['foo-bar']`.
 
 An explicit `case =` is kept, but the key is still written in kebab-case, because the browser
 lowercases it either way. `dataBind`, `dataRef` and `dataIndicator` write the name in the
@@ -54,12 +69,21 @@ div {
 }
 ```
 
+A custom property keeps its case in CSS, and Datastar cannot set one with capitals: the browser
+lowercases the key, and the object form turns each capital into a hyphen, so
+`{'--brandColor': ...}` sets `--brand-color`. `dataStyle("--brandColor", ...)` is therefore
+refused. Name the property in lowercase. The object form also puts a hyphen before a digit, so
+`{'--brand2': ...}` sets `--brand-2`; the keyed form, `dataStyle("--brand2", ...)`, keeps it.
+
 References may index: `signal("items[0].name")` and `signal("items['sub-total']")`. A reference
-is JavaScript, so `signal`, `set` and the other expression helpers refuse only a blank name or
-one with whitespace. A name that becomes a key or an attribute value, as in `dataBind`,
-`dataSignals` and `dataClass`, also refuses quotes and the characters that end an attribute. Both
-throw `InvalidSignalNameException` at render time. Neither makes a name from a request safe to
-pass in: a reference is written into an expression as it stands.
+is JavaScript, so `signal`, `set` and the other expression helpers refuse only a blank name, one
+with whitespace, and one that starts with a character Datastar does not read after `$`. A name
+that becomes a key or an attribute value, as in `dataClass`, also refuses quotes, `/` and the
+characters that end an attribute. A name that declares a signal, as in `dataSignals`, `dataBind`
+and `dataComputed`, must be ASCII letters, digits and `_`, in parts joined by `.` or `-`, because
+that is all Datastar reads after a `$`: a signal named `über` exists, and `$über` never reaches
+it. All of these throw `InvalidSignalNameException` at render time. None of it makes a name from
+a request safe to pass in: a reference is written into an expression as it stands.
 
 ## The hyphen after a signal
 

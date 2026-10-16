@@ -42,7 +42,7 @@ private val JSON_CALLS = setOf("patchSignals", "respondSignals", "datastarSignal
 private val JSON_OBJECT = Regex("""^\s*\{""")
 private val CASE_MODIFIER = Regex("""__case\.([a-z]+)""")
 
-private val PAIR = Regex(""""([A-Za-z_][A-Za-z0-9_.]*)"\s+to\b""")
+private val PAIR = Regex(""""([A-Za-z_][A-Za-z0-9_.-]*)"\s+to\b""")
 private val NAME = Regex("""^"([A-Za-z_][A-Za-z0-9_.]*)"$""")
 
 public fun collectSignals(
@@ -99,7 +99,8 @@ private fun collect(
         for (site in findCallSites(src, PAIR_CALLS)) {
             val positional = site.positional
             positional.forEachIndexed { idx, a ->
-                for (pair in PAIR.findAll(a.text)) out += pair.groupValues[1]
+                // dataSignals("foo-bar" to 1) declares $fooBar, as the keyed form does; a patch keeps the key.
+                for (pair in PAIR.findAll(a.text)) out += pair.groupValues[1].let { if (site.name == "dataSignals") toCamel(it) else it }
                 // patchSignals("""{"count": 1}"""): the signals as JSON text.
                 if (site.name in JSON_CALLS) {
                     a.string?.text?.takeIf { JSON_OBJECT.containsMatchIn(it) }?.let { json ->

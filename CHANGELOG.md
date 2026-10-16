@@ -32,6 +32,9 @@ All notable changes to Streamlord are recorded here. The format follows
   `streamlord-analysis`, for both Stream Inspectors: the `Accept` Datastar's client sends, how it
   decides that a response is a stream, and how much of any other response the inspectors read.
 
+- `Casing.signalName`, the check a name that declares a signal passes: what `Casing.validate`
+  admits, and only ASCII letters, digits and `_` in parts joined by `.` or `-`.
+
 ### Changed
 
 - `respondDatastar`, its `Flow` variant and `respondElements`, `respondSignals` and `respondScript`
@@ -90,9 +93,64 @@ All notable changes to Streamlord are recorded here. The format follows
   0.12 no longer compiles: javac does not see the hidden signatures, and the new ones take a
   `kotlin.time.Duration`, which Java can only pass as `null`. Binaries compiled against 0.12 are
   not affected.
+- `dataSignals` in its pairs form reads its keys the way the keyed form reads its name, nested
+  maps included: `dataSignals("foo-bar" to 7, "user" to mapOf("first-name" to ""))` declares
+  `$fooBar` and `$user.firstName`, the signals `signal("foo-bar")` and `signal("user.first-name")`
+  refer to. It declared `foo-bar`, which the helpers could not reach. Two keys that become one
+  name throw `InvalidSignalNameException`. The object form and a patch from the server keep their
+  keys, and `signal("['foo-bar']")` reaches one.
+- A name that declares a signal, in `dataSignals`, `dataComputed`, `dataBind`, `dataRef`,
+  `dataIndicator` and `dataMatchMedia`, must be ASCII letters, digits and `_` in parts joined by
+  `.` or `-`, since that is all Datastar's client reads after a `$`; `über` or `a:b` declared a
+  signal no expression reaches. `signal` and the other expression helpers refuse a name that
+  starts with a character the client does not read after `$`. A `/` in any key throws
+  `InvalidSignalNameException`, where it reached kotlinx.html and threw its own exception.
+- A duration in a modifier or a retry option that the browser's timers cannot honour throws:
+  a negative one, which fires at once, and one over `Int.MAX_VALUE` milliseconds, about 24.8
+  days, which wraps into a negative one. A flag whose duration is not set throws instead of being
+  dropped: `debounceLeading`, `debounceNoTrailing`, `throttleNoLeading`, `throttleTrailing` and
+  `leading` on `dataOnInterval`. So do an interval of zero, `half`, `full` and `threshold`
+  together on `dataOnIntersect`, of which the client reads one, and a negative `retryMaxCount` or
+  `retryScaler`.
+- `SignalFilter.regexLiteral` writes the quoting of `Regex.escape`, `\Q...\E`, as escaped text,
+  where JavaScript matched the letters `Q` and `E`, writes an octal escape as `\xHH`, and groups a
+  character outside the Basic Multilingual Plane so a quantifier takes all of it. It refuses what
+  JavaScript reads differently or refuses: possessive and stacked quantifiers, atomic groups,
+  `\A`, `\z`, `\Z`, `\G`, `\p{...}`, `\x{...}`, `\b{...}`, `\c` before anything but a capital,
+  a back reference to no group or followed by a digit, an escaped surrogate, a character outside
+  the Basic Multilingual Plane in a class, the other Java-only escapes, and nested or intersected
+  classes. `\Q(?i)\E`, the escape of a text with an inline flag in it, is no longer refused.
+  Each was checked against Node.
+- `JacksonSignalsCodec` and `Jackson2SignalsCodec` hold three rules whatever the mapper says: a
+  `null` for a primitive is refused, also for one with a default and under the Kotlin module's
+  `NullIsSameAsDefault`, where Spring Boot's mapper read `{"count":null}` as `0`; a missing Kotlin
+  parameter that has no default and cannot be `null` is refused, while a Java creator keeps the
+  mapper's rule; and nothing may follow the JSON value. A Kotlin class or interface needs
+  `jackson-module-kotlin` on the mapper, and decoding one without it throws
+  `SignalsCodecException`, also a class Jackson could build without the module, such as one with
+  `var` properties.
 
 ### Fixed
 
+- `Jackson2SignalsCodec.default()`, and any Jackson 2 mapper such as Spring Boot's, read a missing
+  or `null` primitive as `0`: `{}` into `data class Delete(val id: Long)` reached the handler as
+  `Delete(id=0)`. It is refused.
+- `JacksonSignalsCodec` over a mapper without `jackson-module-kotlin` built a Kotlin class from
+  its defaults and dropped what the browser sent: `{"page":3}` into `page: Int = 1` gave `1`.
+- `SignalFilter.regexLiteral` escapes U+2028 and U+2029, which ended the literal and made the
+  client throw a SyntaxError.
+- The Pro attributes wrote a duration under a millisecond as `0ms`, where the free ones refuse
+  it; they follow the free attributes' rules now.
+- `dataStyle("--brandColor", ...)` wrote `--brand-color`, another custom property. A custom
+  property with capitals is refused, since Datastar cannot set one in either form: the browser
+  lowercases the key, and the object form turns each capital into a hyphen.
+- `collectSignals` and `collectDeclaredSignals` in `streamlord-analysis`, and the VS Code
+  extension, read the top-level key of `dataSignals("foo-bar" to 1)` as declaring `$fooBar`, as
+  the DSL now writes it. A key with a hyphen in the pairs form was not collected at all. Keys of a
+  nested map are still offered as names of their own, as before.
+- The optimistic-UI example on the components page threw when it rendered: it set an attribute
+  on the `li` after its button. The documentation's `sample=html` examples now run as part of the
+  build as well as compile.
 - `SseFrame(id = "")` builds again: an empty id is valid SSE and drops the client's
   `last-event-id`, and 0.12 took it. An event still refuses one.
 - `SseDecoder`, and with it `datastarEvents`, fails on a data line whose key `Object.prototype`

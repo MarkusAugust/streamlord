@@ -10,6 +10,7 @@ import io.github.markusaugust.streamlord.html.SignalFilter
 import io.github.markusaugust.streamlord.html.js
 import kotlinx.html.HTMLTag
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 
 /*
  * The forbidden wing of the library: kotlinx.html helpers for the attributes of Datastar Pro.
@@ -24,7 +25,23 @@ import kotlin.time.Duration
  * The module is a separate artifact for exactly that reason: adding it is your explicit opt-in.
  */
 
-private fun Duration.ms(): String = "${inWholeMilliseconds}ms"
+// The free attributes' rule: whole milliseconds the browser's timers take, from 0 to Int.MAX_VALUE.
+private fun Duration.ms(): String {
+    require(!isNegative() && this <= Int.MAX_VALUE.milliseconds) {
+        "$this is outside what the browser's timers take: 0 to ${Int.MAX_VALUE}ms"
+    }
+    require(!isPositive() || inWholeMilliseconds > 0) { "$this is shorter than a millisecond, the smallest duration Datastar reads" }
+    return "${inWholeMilliseconds}ms"
+}
+
+private fun requireDuration(
+    duration: Duration?,
+    vararg flags: Pair<String, Boolean>,
+    name: String,
+) {
+    if (duration != null) return
+    flags.firstOrNull { it.second }?.let { throw IllegalArgumentException("${it.first} needs $name, which is not set") }
+}
 
 private fun ds(suffix: String): String = DatastarAttributes.name(suffix)
 
@@ -39,6 +56,8 @@ public class ResizeModifiers {
 
     internal fun build(): String =
         buildString {
+            requireDuration(debounce, "debounceLeading" to debounceLeading, "debounceNoTrailing" to debounceNoTrailing, name = "debounce")
+            requireDuration(throttle, "throttleNoLeading" to throttleNoLeading, "throttleTrailing" to throttleTrailing, name = "throttle")
             debounce?.let {
                 append("__debounce.").append(it.ms())
                 if (debounceLeading) append(".leading")
@@ -60,6 +79,7 @@ public class RafModifiers {
 
     internal fun build(): String =
         buildString {
+            requireDuration(throttle, "throttleNoLeading" to throttleNoLeading, "throttleTrailing" to throttleTrailing, name = "throttle")
             throttle?.let {
                 append("__throttle.").append(it.ms())
                 if (throttleNoLeading) append(".noleading")
@@ -116,7 +136,7 @@ public fun HTMLTag.dataMatchMedia(
     mediaQuery: String,
     case: Case? = null,
 ) {
-    val (key, mod) = Casing.key(signal, case, Case.CAMEL)
+    val (key, mod) = Casing.key(Casing.signalName(signal), case, Case.CAMEL)
     val mods = mod?.let { "__case.${it.wire}" } ?: ""
     attributes[ds("match-media:$key$mods")] = js(mediaQuery)
 }

@@ -21,6 +21,11 @@ class SignalsTest {
     }
 
     @Test
+    fun `the pairs form camel-cases its keys as the keyed form does, and a patch keeps them`() {
+        assertEquals(listOf("foo-bar", "fooBar"), kotlin("dataSignals(\"foo-bar\" to 7); patchSignals(\"foo-bar\" to 1)"))
+    }
+
+    @Test
     fun `a property goes by its serial name, and a parenthesis does not end the class`() {
         val src =
             """

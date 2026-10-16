@@ -41,7 +41,7 @@ const PROPERTY = /(?:@SerialName\(\s*(?:value\s*=\s*)?"([^"]*)"\s*\)\s*(?:@\w+(?
 const PAIR_CALLS: ReadonlySet<string> = new Set(["dataSignals", "patchSignals", "removeSignals", "respondSignals", "datastarSignals"]);
 const JSON_CALLS: ReadonlySet<string> = new Set(["patchSignals", "respondSignals", "datastarSignals"]);
 const CASE_MODIFIER = /__case\.([a-z]+)/;
-const PAIR = /"([A-Za-z_][A-Za-z0-9_.]*)"\s+to\b/g;
+const PAIR = /"([A-Za-z_][A-Za-z0-9_.-]*)"\s+to\b/g;
 const NAME = /^"([A-Za-z_][A-Za-z0-9_.]*)"$/;
 
 export function collectSignals(src: string, language: "kotlin" | "html"): Set<string> {
@@ -65,7 +65,8 @@ function collect(src: string, language: "kotlin" | "html", reads: boolean): Set<
     for (const site of findCallSites(src, PAIR_CALLS)) {
       const positional = site.args.filter((a) => a.named === null);
       positional.forEach((a, idx) => {
-        for (const pair of a.text.matchAll(PAIR)) if (pair[1]) out.add(pair[1]);
+        // dataSignals("foo-bar" to 1) declares $fooBar, as the keyed form does; a patch keeps the key.
+        for (const pair of a.text.matchAll(PAIR)) if (pair[1]) out.add(site.name === "dataSignals" ? toCamel(pair[1]) : pair[1]);
         // patchSignals("""{"count": 1}"""): the signals as JSON text.
         if (JSON_CALLS.has(site.name) && a.string && /^\s*\{/.test(a.string.text)) {
           for (const key of a.string.text.matchAll(OBJECT_KEY)) if (key[1]) out.add(key[1]);

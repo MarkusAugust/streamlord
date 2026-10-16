@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.html.pro
 
 import io.github.markusaugust.streamlord.html.Case
 import io.github.markusaugust.streamlord.html.DatastarAttributes
+import io.github.markusaugust.streamlord.html.InvalidSignalNameException
 import io.github.markusaugust.streamlord.html.SignalFilter
 import io.github.markusaugust.streamlord.html.elements
 import io.github.markusaugust.streamlord.html.signal
@@ -9,6 +10,9 @@ import kotlinx.html.div
 import kotlinx.html.input
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.microseconds
 import kotlin.time.Duration.Companion.milliseconds
 
 class ProDslTest {
@@ -107,5 +111,21 @@ class ProDslTest {
                 "en",
             ),
         )
+    }
+
+    // The free attributes' rules: Pro wrote 500 microseconds as 0ms, and a flag without its duration vanished.
+    @Test
+    fun `pro durations follow the rules of the free ones`() {
+        for (wait in listOf(500.microseconds, (-1).milliseconds, 30.days)) {
+            assertFailsWith<IllegalArgumentException>("$wait") { elements { div { dataOnResize("x()") { debounce = wait } } } }
+            assertFailsWith<IllegalArgumentException>("$wait") { elements { div { dataOnRaf("x()") { throttle = wait } } } }
+        }
+        assertFailsWith<IllegalArgumentException> { elements { div { dataOnResize("x()") { debounceLeading = true } } } }
+        assertFailsWith<IllegalArgumentException> { elements { div { dataOnRaf("x()") { throttleTrailing = true } } } }
+    }
+
+    @Test
+    fun `a media query signal must be a name a reference reaches`() {
+        assertFailsWith<InvalidSignalNameException> { elements { div { dataMatchMedia("über", "(max-width: 600px)") } } }
     }
 }

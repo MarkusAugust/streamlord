@@ -14,6 +14,10 @@ describe("signal collection", () => {
     assert.deepEqual(kotlin(src), ["count", "inner", "name", "wrapped"]);
   });
 
+  it("the pairs form camel-cases its keys as the keyed form does, and a patch keeps them", () => {
+    assert.deepEqual(kotlin(`dataSignals("foo-bar" to 7); patchSignals("foo-bar" to 1)`), ["foo-bar", "fooBar"]);
+  });
+
   it("a property goes by its serial name, and a parenthesis does not end the class", () => {
     const src = `@Serializable
 data class PageSignals(
