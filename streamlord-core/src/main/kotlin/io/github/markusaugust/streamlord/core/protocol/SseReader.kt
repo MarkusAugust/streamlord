@@ -39,7 +39,7 @@ public class SseReader {
      *
      * @throws DatastarEventValidationException when that unfinished message carries an `id` or a
      *   `retry` that [SseDecoder.decode] rejects: the client takes both from each line as it ends,
-     *   dispatched or not.
+     *   dispatched or not. The reader is reset first, so it reads on cleanly after the throw.
      */
     public fun finish(): SseMessage? = finish(check = true)
 

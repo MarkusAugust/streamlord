@@ -3,8 +3,9 @@ package io.github.markusaugust.streamlord.analysis
 import io.github.markusaugust.streamlord.core.json.JsonNull
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
+import org.junit.jupiter.api.DynamicTest
+import org.junit.jupiter.api.TestFactory
 import java.io.File
-import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
@@ -30,19 +31,20 @@ class SseCorpusTest {
         return messages to parser.finish()
     }
 
-    @Test
-    fun `reads every case of the shared corpus as written`() {
+    @TestFactory
+    fun `reads every case of the shared corpus as written`(): List<DynamicTest> {
         check(files.isNotEmpty())
-        for (file in files) {
-            val corpus = JsonParser.parseObject(file.readText())
-            for (case in corpus.array("cases")!!.map { it as JsonObject }) {
+        return files.flatMap { file ->
+            JsonParser.parseObject(file.readText()).array("cases")!!.map { it as JsonObject }.map { case ->
                 val name = case.string("name")!!
-                val chunks = case.array("chunks")!!.strings()
-                val expected =
-                    case.array("messages")!!.map { message(it as JsonObject) } to
-                        (case["finish"]?.takeIf { it != JsonNull }?.let { message(it as JsonObject) })
-                assertEquals(expected, read(chunks), name)
-                assertEquals(expected, read(chunks.joinToString("").map { it.toString() }), "$name, one character at a time")
+                DynamicTest.dynamicTest("${file.name}: $name") {
+                    val chunks = case.array("chunks")!!.strings()
+                    val expected =
+                        case.array("messages")!!.map { message(it as JsonObject) } to
+                            (case["finish"]?.takeIf { it != JsonNull }?.let { message(it as JsonObject) })
+                    assertEquals(expected, read(chunks), name)
+                    assertEquals(expected, read(chunks.joinToString("").map { it.toString() }), "$name, one character at a time")
+                }
             }
         }
     }

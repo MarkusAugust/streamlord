@@ -6,6 +6,15 @@ import { decodeDatastar, SseParser, type SseMessage } from "../src/sse.ts";
 const data = (messages: SseMessage[]): string[][] => messages.map((m) => m.data);
 
 describe("sse parser", () => {
+  // Joined as the client joins data lines, so empty ones before the first with text are gone, and
+  // a message without data has the one empty line the client splits it into.
+  it("data is joined as the client joins it before it is split", () => {
+    const [leading] = new SseParser().feed("event: datastar-patch-elements\ndata:\ndata: elements <p>x</p>\n\n");
+    const [none] = new SseParser().feed("event: datastar-x\n\n");
+    assert.deepEqual(decodeDatastar(leading!).args, { elements: "<p>x</p>" });
+    assert.deepEqual(decodeDatastar(none!).args, { "": "" });
+  });
+
   // As the client splits it: without a space the key is the line minus its last character, and
   // the value is the whole line (fetch.ts:115-117).
   it("a data line without a space is split as the client splits it", () => {

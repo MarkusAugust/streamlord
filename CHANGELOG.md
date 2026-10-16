@@ -89,7 +89,14 @@ All notable changes to Streamlord are recorded here. The format follows
   shown; a line without a colon is skipped; a byte order mark before a field or a value is
   dropped; a data line without a space is split as the client splits it; a `retry` past a 32-bit
   int is shown as none in both, where VS Code kept the previous one; an explicit `event: message`
-  is shown; and a long line in small pieces is read in linear time, where it was quadratic.
+  is shown; a message with comments and an `id` or a `retry` is shown as a frame rather than a
+  keep-alive; data lines are joined as the client joins them before they are split, so empty
+  ones before the first with text are gone; and a long line in small pieces is read in linear
+  time, where it was quadratic. The inspector judges nothing, so a `retry` its last line cannot
+  give as a whole number that fits an int shows none, where the client may keep an earlier one or
+  read `1e3` as 1000.
+- `SseReader.finish()` resets the reader before it rejects an unfinished message, so a reader
+  that threw reads on cleanly.
 - `SseFrame`, a public data class, validates what it is given: a line break in its `event`, `id`
   or a data line, or a NUL in its `id`, could write a line of its own into the stream, an event or
   data the server never meant to send. A NUL in data is still written, since markup can carry one.

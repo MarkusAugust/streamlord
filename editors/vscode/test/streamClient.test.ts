@@ -27,6 +27,11 @@ before(async () => {
       res.writeHead(200, { "Content-Type": "text/event-stream" });
       // Comments after the last message, which only the parser's finish hands back.
       if (req.url?.startsWith("/trailing")) res.end("data: x\n\n: bye\n");
+      // A last comment cut inside a character, which only the decoder's final flush hands over.
+      else if (req.url?.startsWith("/cut")) res.end(Buffer.concat([Buffer.from("data: x\n\n: bye"), Buffer.from([0xe2])]));
+      // Two byte order marks: the parser drops one before the field, the client's decoder too.
+      else if (req.url?.startsWith("/two-marks")) res.end(Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf, 0xef, 0xbb, 0xbf]), Buffer.from("event: datastar-patch-signals\ndata: signals {}\n\n")]));
+      else if (req.url?.startsWith("/comment-id")) res.end(": c\nid: 7\n\n");
       else res.end('event: datastar-patch-signals\ndata: signals {"ok":true}\n\n');
     });
   });
@@ -54,6 +59,29 @@ function curlParts(line: string): { target: string; body: string } {
 const request = (over: Partial<SavedRequest>): SavedRequest => ({ name: "", url: `${base}/api/feed`, method: "GET", signals: "", headers: "", ...over });
 
 describe("stream client", () => {
+  it("hands over a last comment cut inside a character", async () => {
+    const comments: string[] = [];
+    await openStream({ url: `${base}/cut`, method: "GET", signals: "", headers: {} }, { onComment: (c) => comments.push(c) }, new AbortController().signal);
+    assert.deepEqual(comments, ["bye\uFFFD"]);
+  });
+
+  it("leaves a second byte order mark in the field's name, as the client does", async () => {
+    const events: string[] = [];
+    await openStream({ url: `${base}/two-marks`, method: "GET", signals: "", headers: {} }, { onFrame: (f) => events.push(f.event) }, new AbortController().signal);
+    assert.deepEqual(events, ["message"]);
+  });
+
+  it("shows comments with an id as a frame, not a keep-alive", async () => {
+    const frames: string[] = [];
+    const comments: string[] = [];
+    await openStream(
+      { url: `${base}/comment-id`, method: "GET", signals: "", headers: {} },
+      { onFrame: (f) => frames.push(f.id ?? ""), onComment: (c) => comments.push(c) },
+      new AbortController().signal,
+    );
+    assert.deepEqual([frames, comments], [["7"], []]);
+  });
+
   it("shows the comments that end a stream after its last message", async () => {
     const comments: string[] = [];
     await openStream({ url: `${base}/trailing`, method: "GET", signals: "", headers: {} }, { onComment: (c) => comments.push(c) }, new AbortController().signal);

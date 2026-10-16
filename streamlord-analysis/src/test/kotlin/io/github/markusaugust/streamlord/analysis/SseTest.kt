@@ -77,4 +77,22 @@ class SseTest {
         )
         kotlin.test.assertTrue(millis < 2_000, "took $millis ms")
     }
+
+    // Joined as the client joins data lines, so empty ones before the first with text are gone,
+    // and a message without data has the one empty line the client splits it into.
+    @Test
+    fun `data is joined as the client joins it before it is split`() {
+        val leading = SseParser().feed("event: datastar-patch-elements\ndata:\ndata: elements <p>x</p>\n\n").single()
+        val none = SseParser().feed("event: datastar-x\n\n").single()
+
+        assertEquals(mapOf("elements" to "<p>x</p>"), decodeDatastar(leading).args)
+        assertEquals(mapOf("" to ""), decodeDatastar(none).args)
+    }
+
+    // The inspector shows comments alone as a keep-alive; with an id or a retry they are a frame.
+    @Test
+    fun `comments with an id are not a keep-alive`() {
+        assertEquals(false, SseParser().feed(": c\nid: 7\n\n").single().isComment)
+        assertEquals(true, SseParser().feed(": c\n\n").single().isComment)
+    }
 }

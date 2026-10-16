@@ -72,7 +72,7 @@
       "finish": null
     },
     {
-      "name": "a retry that is not a whole number is shown as none",
+      "name": "a retry the inspector cannot read as a whole number shows none, where the client reads 1e3 as 1000",
       "chunks": [
         "retry: 1e3\ndata: x\n\n"
       ],
@@ -254,6 +254,96 @@
           "data": [
             "x",
             " y"
+          ],
+          "comments": []
+        }
+      ],
+      "finish": null
+    },
+    {
+      "name": "the last retry line decides, and one that is not a number shows none, where the client keeps the one before",
+      "chunks": [
+        "retry: 5\nretry: abc\ndata: x\n\n"
+      ],
+      "messages": [
+        {
+          "event": "message",
+          "id": null,
+          "retry": null,
+          "data": [
+            "x"
+          ],
+          "comments": []
+        }
+      ],
+      "finish": null
+    },
+    {
+      "name": "a retry with a sign shows none",
+      "chunks": [
+        "retry: +5\ndata: x\n\n"
+      ],
+      "messages": [
+        {
+          "event": "message",
+          "id": null,
+          "retry": null,
+          "data": [
+            "x"
+          ],
+          "comments": []
+        }
+      ],
+      "finish": null
+    },
+    {
+      "name": "comments with an id are a message with both",
+      "chunks": [
+        ": c\nid: 7\n\n"
+      ],
+      "messages": [
+        {
+          "event": "message",
+          "id": "7",
+          "retry": null,
+          "data": [],
+          "comments": [
+            "c"
+          ]
+        }
+      ],
+      "finish": null
+    },
+    {
+      "name": "an unfinished message with a NUL id at the end is dropped, not judged",
+      "chunks": [
+        "data: x\n\nid: a\u0000b\n"
+      ],
+      "messages": [
+        {
+          "event": "message",
+          "id": null,
+          "retry": null,
+          "data": [
+            "x"
+          ],
+          "comments": []
+        }
+      ],
+      "finish": null
+    },
+    {
+      "name": "an unfinished message with an unreadable retry at the end is dropped, not judged",
+      "chunks": [
+        "data: x\n\nretry: soon\n"
+      ],
+      "messages": [
+        {
+          "event": "message",
+          "id": null,
+          "retry": null,
+          "data": [
+            "x"
           ],
           "comments": []
         }

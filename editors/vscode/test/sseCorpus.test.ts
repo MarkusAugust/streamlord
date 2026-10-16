@@ -26,12 +26,12 @@ function read(chunks: string[]): { messages: SseMessage[]; finish: SseMessage | 
 describe("shared SSE corpus", () => {
   for (const file of readdirSync(dir).sort()) {
     const corpus = JSON.parse(readFileSync(new URL(file, dir), "utf8")) as { cases: Case[] };
-    it(`reads every case in ${file} as written`, () => {
-      for (const c of corpus.cases) {
+    for (const c of corpus.cases) {
+      it(`${file}: ${c.name}`, () => {
         const expected = { messages: c.messages, finish: c.finish };
         assert.deepEqual(read(c.chunks), expected, c.name);
         assert.deepEqual(read([...c.chunks.join("")]), expected, `${c.name}, one character at a time`);
-      }
-    });
+      });
+    }
   }
 });

@@ -136,7 +136,10 @@ export function decodeDatastar(msg: SseMessage): DatastarFrame {
   // A Map, and Object.fromEntries after it: a data line may open with `constructor` or `__proto__`,
   // which a plain object answers from its prototype.
   const groups = new Map<string, string[]>();
-  for (const line of msg.data) {
+  // Joined as the client joins them, which drops empty lines before the first that has text, and
+  // split again (fetch.ts:409-411, :114), so a message with no data still has one line.
+  const joined = msg.data.reduce((acc, line) => (acc ? `${acc}\n${line}` : line), "");
+  for (const line of joined.split("\n")) {
     // As the client splits it: without a space the key is the line minus its last character and
     // the value is the whole line (fetch.ts:115-117).
     const sp = line.indexOf(" ");
