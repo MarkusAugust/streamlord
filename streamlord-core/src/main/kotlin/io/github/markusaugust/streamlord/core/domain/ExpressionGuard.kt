@@ -108,9 +108,22 @@ public object ExpressionGuard {
             "-",
         )
 
-    private val ONLY_OPERATORS = Regex("^[\\s=!<>&|?:.+\\-*/%,()\\[\\]{}]*$")
+    private val ONLY_OPERATORS = Regex("^[\\s=!<>&|?:.+\\-*/%,;()\\[\\]{}]*$")
+
+    /** Keyword operators: what is left of `$a in $b`, `typeof $x` or `void $x` once the signals are eaten. */
+    private val ONLY_KEYWORDS = Regex("^(?:\\s*\\b(?:in|instanceof|typeof|void|delete|new|await)\\b)+\\s*$")
+    private val KEYWORD_NEEDS_LEFT = Regex("^(in|instanceof)\\b")
+    private val KEYWORD_NEEDS_RIGHT = Regex("(?<![.\\w$])(in|instanceof|typeof|void|delete|new|await)$")
+
+    /** A binary `+` or `-` at the start, set apart from what follows: `$a + 1` without its `$a`. */
+    private val LEADING_BINARY = Regex("^[+\\-]\\s")
+
+    /** A template literal's `${}` with nothing in it, which is not JavaScript at all: `` `${$n}` `` without its `$n`. */
+    private val EMPTY_SUBSTITUTION = Regex("\\$\\{\\s*}")
 
     /** `[]`, `{}`, `[{}]`: empty literals are operands, the usual way to start a list or object signal. */
+    private val CLOSERS = setOf(")", "]", "}")
+
     private val ONLY_BRACKETS = Regex("^[\\s\\[\\]{}]+$")
 
     /**
@@ -129,29 +142,127 @@ public object ExpressionGuard {
                 "|(?<![+\\-])([:=*%<>&|?!@]|[+\\-](?![+\\-]))(?:\\s*)(?=[)\\]},])",
         )
 
-    /** A string literal in the expression: its contents are text, not operators (`':)'`, `'a, '`). */
-    private val STRING_LITERAL = Regex("'(?:[^'\\\\]|\\\\.)*'|\"(?:[^\"\\\\]|\\\\.)*\"|`(?:[^`\\\\]|\\\\.)*`")
-
     /**
-     * A regex literal, which can only follow the start, an opening bracket or an operator, never
-     * an operand: `split(/[,;]/)`, `= /(?:a|b)/g`. Its contents are a pattern, not operators.
+     * The expression with every string, regex literal and comment blanked to a harmless operand,
+     * read left to right as JavaScript reads it, so a quote inside a regex (`/'/`) opens no string
+     * and `//` inside a string opens no comment. A regex can only follow the start, an opening
+     * bracket or an operator, never an operand: `split(/[,;]/)`, `= /(?:a|b)/g`, but `a / b`.
      */
-    private val REGEX_LITERAL = Regex("(^|[(,=:\\[!&|?{};>]\\s*)/(?:[^/\\\\\\n\\[]|\\\\.|\\[(?:[^\\]\\\\]|\\\\.)*\\])+/[gimsuy]*")
+    private fun blankLiterals(t: String): String {
+        val out = StringBuilder(t.length)
+        var i = 0
+        while (i < t.length) {
+            val c = t[i]
+            when {
+                c == '\'' || c == '"' || c == '`' -> {
+                    i = endOfString(t, i)
+                    out.append("'s'")
+                }
 
-    /** The expression with every string and regex literal blanked to a harmless operand. */
-    private fun blankLiterals(t: String): String =
-        t
-            .replace(STRING_LITERAL, "'s'")
-            .replace(COMMENT, " ")
-            .replace(REGEX_LITERAL) { "${it.groupValues[1]}'r'" }
-            .trim()
+                c == '/' && t.getOrNull(i + 1) == '/' -> {
+                    i = t.indexOf('\n', i).let { if (it < 0) t.length else it }
+                    out.append(' ')
+                }
 
-    /**
-     * A comment, which is neither an operand nor an operator. Read after the strings, so `'//'`
-     * is text, and before the regex literals, which would otherwise take a leading block comment
-     * for a pattern. The slash it opens with is never an escaped one, so `/a\//` stays a regex.
-     */
-    private val COMMENT = Regex("(?<!\\\\)/\\*[\\s\\S]*?\\*/|(?<!\\\\)//[^\\n]*")
+                c == '/' && t.getOrNull(i + 1) == '*' -> {
+                    i = t.indexOf("*/", i + 2).let { if (it < 0) t.length else it + 2 }
+                    out.append(' ')
+                }
+
+                c == '/' && regexCanStart(out) && endOfRegex(t, i) > 0 -> {
+                    i = endOfRegex(t, i)
+                    out.append("'r'")
+                }
+
+                else -> {
+                    out.append(c)
+                    i++
+                }
+            }
+        }
+        return out.toString().trim()
+    }
+
+    private fun endOfString(
+        t: String,
+        start: Int,
+    ): Int {
+        val quote = t[start]
+        var i = start + 1
+        while (i < t.length) {
+            when (t[i]) {
+                '\\' -> i += 2
+                quote -> return i + 1
+                else -> i++
+            }
+        }
+        return t.length
+    }
+
+    private fun regexCanStart(before: StringBuilder): Boolean {
+        val last = before.lastOrNull { !it.isWhitespace() } ?: return true
+        if (last in "(,=:[!&|?{};>+-*%<~^") return true
+        // After a keyword a slash opens a regex too: return /x/.test($v), case /a/:.
+        return KEYWORD_BEFORE_REGEX.containsMatchIn(before)
+    }
+
+    private val KEYWORD_BEFORE_REGEX = Regex("(?<![.\\w$])(?:return|typeof|case|void|delete|in|instanceof|new|await|throw|yield)\\s*$")
+
+    /** Whether a template literal holds a `${}` with nothing in it; in another string it is only text. */
+    private fun emptySubstitution(t: String): Boolean {
+        var i = 0
+        while (i < t.length) {
+            val c = t[i]
+            if (c == '\'' || c == '"' || c == '`') {
+                val end = endOfString(t, i)
+                if (c == '`' && EMPTY_SUBSTITUTION.containsMatchIn(t.substring(i, end))) return true
+                i = end
+            } else {
+                i++
+            }
+        }
+        return false
+    }
+
+    /** One past a regex literal's flags, or -1 when the slash at [start] opens none. */
+    private fun endOfRegex(
+        t: String,
+        start: Int,
+    ): Int {
+        var i = start + 1
+        var inClass = false
+        while (i < t.length) {
+            when (t[i]) {
+                '\\' -> {
+                    i += 2
+                    continue
+                }
+
+                '\n' -> {
+                    return -1
+                }
+
+                '[' -> {
+                    inClass = true
+                }
+
+                ']' -> {
+                    inClass = false
+                }
+
+                '/' -> {
+                    if (!inClass) {
+                        if (i == start + 1) return -1
+                        var end = i + 1
+                        while (end < t.length && t[end] in "dgimsuvy") end++
+                        return end
+                    }
+                }
+            }
+            i++
+        }
+        return -1
+    }
 
     /** Returns [expression] untouched, or throws [InterpolatedExpressionException]. */
     public fun check(expression: String): String = check(expression, null)
@@ -164,10 +275,37 @@ public object ExpressionGuard {
         expression: String,
         attribute: String?,
     ): String {
+        if (emptySubstitution(expression)) {
+            throw InterpolatedExpressionException(expression, "has a \${} with nothing in it", attribute)
+        }
         val t = blankLiterals(expression.trim())
         if (t.isEmpty()) throw InterpolatedExpressionException(expression, "is empty", attribute)
         if (ONLY_BRACKETS.matches(t)) return expression
-        if (ONLY_OPERATORS.matches(t)) throw InterpolatedExpressionException(expression, "contains no operands, only operators", attribute)
+        if (ONLY_OPERATORS.matches(t) || ONLY_KEYWORDS.matches(t)) {
+            throw InterpolatedExpressionException(expression, "contains no operands, only operators", attribute)
+        }
+        if (LEADING_BINARY.containsMatchIn(t)) {
+            throw InterpolatedExpressionException(expression, "starts with '${t[0]}', which needs something on its left", attribute)
+        }
+        // Each statement on its own, so `@post('/x'); $done = true` without its signal is caught too.
+        // A closing bracket may open a statement and an opening one end it: `if (a) { b; }`, `for (;;)`.
+        for (statement in t
+            .split(';')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .drop(1)) {
+            val dotIsFine = statement.startsWith("...") || (statement.startsWith(".") && statement.getOrNull(1)?.isDigit() == true)
+            NEEDS_LEFT.firstOrNull { statement.startsWith(it) && it !in CLOSERS && !(it == "." && dotIsFine) }?.let {
+                throw InterpolatedExpressionException(
+                    expression,
+                    "has a statement that starts with '$it', which needs something on its left",
+                    attribute,
+                )
+            }
+        }
+        KEYWORD_NEEDS_LEFT.find(t)?.let {
+            throw InterpolatedExpressionException(expression, "starts with '${it.value}', which needs something on its left", attribute)
+        }
         val leadingDotIsFine = t.startsWith("...") || (t.startsWith(".") && t.getOrNull(1)?.isDigit() == true)
         NEEDS_LEFT.firstOrNull { t.startsWith(it) && !(it == "." && leadingDotIsFine) }?.let {
             throw InterpolatedExpressionException(expression, "starts with '$it', which needs something on its left", attribute)
@@ -178,6 +316,9 @@ public object ExpressionGuard {
             val number = tail.endsWith(".") && tail.dropLast(1).lastOrNull()?.isDigit() == true
             NEEDS_RIGHT.firstOrNull { tail.endsWith(it) && !(it == "." && number) }?.let {
                 throw InterpolatedExpressionException(expression, "ends with '$it', which needs something on its right", attribute)
+            }
+            KEYWORD_NEEDS_RIGHT.find(tail)?.let {
+                throw InterpolatedExpressionException(expression, "ends with '${it.value}', which needs something on its right", attribute)
             }
         }
         ORPHANS.find(t)?.let {

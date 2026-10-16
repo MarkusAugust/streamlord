@@ -94,7 +94,7 @@ export class SseParser {
       return;
     }
     // A line without a colon is skipped, and a byte order mark is dropped from the start of the
-    // field and of the value, as the client's TextDecoder drops it from each (fetch.ts:403-408).
+    // field and of the value, as the client's TextDecoder drops it from each (fetch.ts:407 and 409).
     const colon = text.indexOf(":");
     if (colon < 0) return;
     const field = text.slice(0, colon).replace(/^\uFEFF/, "");

@@ -26,7 +26,10 @@ public object CspNonce {
     /** The header a policy is only reported from, which blocks nothing. */
     public const val REPORT_ONLY_HEADER: String = "Content-Security-Policy-Report-Only"
 
-    /** The name of the attribute the nonce goes in, on the `<html>` element. */
+    /**
+     * The name of the attribute the nonce goes in, on the `<html>` element, for the standard
+     * bundle. The aliased bundle reads `data-star-nonce` (csp.ts:7).
+     */
     public const val ATTRIBUTE: String = "data-nonce"
 
     private const val BYTES = 16

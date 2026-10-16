@@ -93,6 +93,28 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- `SseFrame(id = "")` builds again: an empty id is valid SSE and drops the client's
+  `last-event-id`, and 0.12 took it. An event still refuses one.
+- `SseDecoder`, and with it `datastarEvents`, fails on a data line whose key `Object.prototype`
+  has, `constructor` or `__proto__` among them, which makes Datastar's client throw and reconnect
+  instead of patching; and it reads an empty `selector` as none, as the client does.
+- An inner patch of nothing is allowed, the one way to empty a container, and an
+  `ElementsResponse` for an inner or remove patch needs no body.
+- A non-SSE response refuses a selector that is not printable ASCII, which reached the client
+  garbled or lost as a header, and writes its script attributes with `\u` escapes, which
+  `JSON.parse` restores.
+- `JsonWriter` escapes a surrogate without its other half, which arrived as a replacement
+  character, and `JsonNumber("-0")` keeps its sign.
+- `ExpressionGuard` catches what the Dollar trap page said it does: a residue of only `;`, a
+  statement that starts with an operator after a `;`, keyword operators with a side missing
+  (`in`, `typeof`, `void` and the like), a leading binary `+` or `-`, and an empty `${}`. It reads
+  strings, regex literals and comments left to right, so `/'/.test($s)` no longer fails.
+- `ElementsGuard` decodes the references the browser decodes: the named ones for the ASCII an
+  expression is made of, `&plus;` among them, and numeric ones without their semicolon.
+- `redirect` refuses a URL with a scheme that does more than navigate, such as `javascript:`,
+  which the browser would run on the page; `ExecuteScript` refuses an effect attribute beside
+  `autoRemove`, which the browser dropped along with the removal; and its KDoc and the CSP nonce's
+  say what the client does with a nonce and which attribute the aliased bundle reads.
 - A `CancellationException` thrown by an authorisation's `allows()`, such as a `withTimeout` around
   a database call, ended only the coroutine that asked. When the heartbeat asked, that was the
   heartbeat, which stopped without a word, and an idle stream was never asked again nor found a

@@ -170,18 +170,75 @@ public object JsonWriter {
         var previous = ' '
         for ((i, c) in s.withIndex()) {
             when (c) {
-                '"' -> sb.append("\\\"")
-                '\\' -> sb.append("\\\\")
-                '\n' -> sb.append("\\n")
-                '\r' -> sb.append("\\r")
-                '\t' -> sb.append("\\t")
-                '\b' -> sb.append("\\b")
-                '\u000C' -> sb.append("\\f")
-                '\u2028' -> sb.append("\\u2028")
-                '\u2029' -> sb.append("\\u2029")
-                '/' -> if (previous == '<') sb.append("\\/") else sb.append('/')
-                '<' -> if (s.getOrNull(i + 1) == '!') sb.append("\\u003c") else sb.append('<')
-                else -> if (c < ' ') sb.append("\\u%04x".format(c.code)) else sb.append(c)
+                '"' -> {
+                    sb.append("\\\"")
+                }
+
+                '\\' -> {
+                    sb.append("\\\\")
+                }
+
+                '\n' -> {
+                    sb.append("\\n")
+                }
+
+                '\r' -> {
+                    sb.append("\\r")
+                }
+
+                '\t' -> {
+                    sb.append("\\t")
+                }
+
+                '\b' -> {
+                    sb.append("\\b")
+                }
+
+                '\u000C' -> {
+                    sb.append("\\f")
+                }
+
+                '\u2028' -> {
+                    sb.append("\\u2028")
+                }
+
+                '\u2029' -> {
+                    sb.append("\\u2029")
+                }
+
+                '/' -> {
+                    if (previous == '<') sb.append("\\/") else sb.append('/')
+                }
+
+                '<' -> {
+                    if (s.getOrNull(i + 1) == '!') sb.append("\\u003c") else sb.append('<')
+                }
+
+                // A surrogate without its other half is no character UTF-8 can carry: escaped, as
+                // JSON.stringify does, it arrives as itself rather than as a replacement character.
+                in '\uD800'..'\uDBFF' -> {
+                    if (s.getOrNull(i + 1)?.isLowSurrogate() ==
+                        true
+                    ) {
+                        sb.append(c)
+                    } else {
+                        sb.append("\\u%04x".format(c.code))
+                    }
+                }
+
+                in '\uDC00'..'\uDFFF' -> {
+                    if (s.getOrNull(i - 1)?.isHighSurrogate() ==
+                        true
+                    ) {
+                        sb.append(c)
+                    } else {
+                        sb.append("\\u%04x".format(c.code))
+                    }
+                }
+
+                else -> {
+                    if (c < ' ') sb.append("\\u%04x".format(c.code)) else sb.append(c)
+                }
             }
             previous = c
         }

@@ -103,12 +103,13 @@ answers 200 and then drops the connection is reconnected to on that schedule wit
 **`id:`**, when you send one, is kept by the client and put on the **next** attempt as a
 `last-event-id` request header (`fetch.ts:662`). **Observed.** An event without an id leaves the
 header as it was: the client changes it only when an `id:` line arrives, and drops it only on an
-empty one (`fetch.ts:665`). **Observed.** Streamlord cannot send an empty id; it refuses one when
-the event is built. It also refuses an id that would not come back as it was written: the id is
-printable ASCII, with no space at either end. `fetch` cannot send a character above U+00FF, Node's
-`fetch` refuses a control character, Tomcat and Netty answer one with 400, which ends the client's
-retries, and Ktor's CIO reads the header as UTF-8, so a Latin-1 character arrives as U+FFFD. A
-space at either end is stripped on the way.
+empty one (`fetch.ts:665`). **Observed.** An event cannot carry an empty id; it is refused when
+the event is built. An `SseFrame` built by hand can, to drop the header on purpose. Streamlord
+also keeps an id to printable ASCII with no space at either end, which comes back as it was
+written: `fetch` cannot send a character above U+00FF, Node's `fetch` refuses a control
+character, Tomcat and Netty answer one with 400, which ends the client's retries, and Ktor's CIO
+reads the header as UTF-8, so a Latin-1 character arrives as U+FFFD. A space at either end is
+stripped on the way. A tab inside an id would come back, and is refused all the same.
 
 So once a stream has sent an id, every retry and every reopen after a hidden tab carries the last
 id the client received. The header goes only when the action runs again. A new `@get` starts
