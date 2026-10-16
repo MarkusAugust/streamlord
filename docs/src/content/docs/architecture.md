@@ -56,8 +56,8 @@ description: "Ports and adapters, and why the core imports no framework."
 **Domain** (`core.domain`): `DatastarEvent` as a sealed hierarchy with `PatchElements`,
 `PatchSignals` and `ExecuteScript`; `ElementPatchMode` and `ElementNamespace`; the non-SSE
 `DatastarResponse` types; and the guards, which are the part that makes this an SDK rather than
-an encoder. `Wire` keeps line breaks out of single-line fields, `ExpressionGuard` and
-`ElementsGuard` hunt the `$` trap, `interpolate` asks where a value landed, and `CspNonce` holds
+an encoder. `Wire` keeps line breaks out of single-line fields and holds an event id and a retry
+to what the client can send back and use, `ExpressionGuard` and `ElementsGuard` hunt the `$` trap, `interpolate` asks where a value landed, and `CspNonce` holds
 the nonce half of Datastar's CSP mode.
 
 **Protocol** (`core.protocol`): `SseEncoder`, which is pure, `SseFrame`, `DatastarAttributes` and

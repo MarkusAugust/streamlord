@@ -8,7 +8,7 @@ description: "Every byte from the browser is untrusted, and the protocol has mor
 
 ## No SSE injection
 
-Selectors, event ids, header values and script attribute names are validated **at construction**.
+Selectors, event ids, retry intervals, header values and script attribute names are validated **at construction**.
 A selector carrying a newline cannot forge a second `data:` line and smuggle in an event you did
 not send. The guard is called `Wire`, it lives in `core.domain`, and it refuses rather than
 sanitises. A selector with a line break is a bug in your code, not something to quietly fix.

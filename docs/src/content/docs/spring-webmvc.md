@@ -58,6 +58,10 @@ class SearchController(private val streamlord: Streamlord) {
 and runs the block on a thread from its own async executor, and that thread stays with the
 stream until the block returns. Everything inside the block writes one frame.
 
+Call `datastarStream` before anything writes to the response. One that something has already
+written to still streams, without gzip; one already committed throws `IllegalStateException`,
+since its headers, and the content type with them, have gone out.
+
 **Do not take it as a parameter of the handler method.** `fun search(streamlord: Streamlord)`
 compiles and starts, and Spring then treats the parameter as a model attribute: it constructs a
 new `Streamlord` with every default, for each request, and never looks at your bean. The codec

@@ -250,7 +250,9 @@ On Spring it is the bean, `Streamlord(codec = JacksonSignalsCodec(mapper), compr
 `datastarStream` needs the request to see what the browser accepts. A stream is gzipped only when
 the request's `Accept-Encoding` takes it, and then carries `Content-Encoding: gzip`; with
 `compress` on, every stream carries `Vary: Accept-Encoding`, on Ktor and on WebMVC when the request
-is given and the response is not yet committed. It works over plain
+is given and nothing was written to the response before the stream opened. A response something
+has already written to is streamed without gzip, since those bytes would sit in front of the gzip
+member. It works over plain
 HTTP too; browsers ask for Brotli only over HTTPS, which is how they behave in general and is
 **not measured here**.
 

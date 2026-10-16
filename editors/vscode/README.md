@@ -78,8 +78,11 @@ into your user settings; `Streamlord: Remove recommended colors` takes it out ag
 
 **Stream Inspector** (`Streamlord: Open Stream Inspector`): connect to a running endpoint with
 a method, signals and headers; every SSE event arrives decoded, and the signal store is kept
-exactly as the client would keep it. Non-SSE Datastar responses are shown with their
-`datastar-*` headers.
+exactly as the client would keep it.
+It asks as Datastar's client does, with the same `Accept`, and reads what the client reads: a
+200 that is not HTML, JSON or JavaScript is decoded as a stream, whatever its `Content-Type`. Any
+other response is shown with its `datastar-*` headers and up to 1 MiB of its body; a stream with
+any status but 200 is not read, as the client reads none.
 
 - **Saved requests** live in `.streamlord/inspector.json` in the workspace (commit it to share
   with the team, or ignore it). Save one with **Save**, and pick it again from the Request
