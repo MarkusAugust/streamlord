@@ -77,4 +77,17 @@ class AsTheBrowserHoldsItTest {
     fun `markup is compared as the wire carries it`() {
         stream(PatchElements("<p id=\"a\">one\r\ntwo</p>")).assertPatchElements(elements = "<p id=\"a\">one\r\ntwo</p>")
     }
+
+    // signals.ts mergeInner: an index past the end extends the array, and null leaves a hole.
+    @Test
+    fun `a patch onto an array extends it and leaves holes as the client does`() {
+        val events =
+            stream(
+                PatchSignals("""{"list":["a","b","c"]}"""),
+                PatchSignals("""{"list":{"5":"x"}}"""),
+                PatchSignals("""{"list":{"1":null,"01":"never","name":"never"}}"""),
+            )
+
+        events.assertSignal("list", listOf("a", null, "c", null, null, "x"))
+    }
 }
