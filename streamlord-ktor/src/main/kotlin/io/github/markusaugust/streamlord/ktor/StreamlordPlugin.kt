@@ -10,7 +10,7 @@ import kotlin.time.Duration
 
 /**
  * Configuration for the [StreamlordPlugin]. Either hand over a fully built [streamlord], or set
- * [codec] and [maxSignalsLength] and let the plugin build one.
+ * [codec] and [maxSignalsSize] and let the plugin build one.
  */
 public class StreamlordPluginConfig {
     /** A pre-built instance. Takes precedence over the other properties when set. */

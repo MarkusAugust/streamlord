@@ -60,6 +60,23 @@ post("/search") {
 This is the shape most endpoints take. It is a stream in the protocol sense, a
 `text/event-stream` response that can carry many frames, but it lives for milliseconds.
 
+Read the signals and set a session or a cookie before `respondDatastar`, as the example does. The
+`200` and its headers go out as the stream opens, so a `SignalsTooLargeException` thrown inside
+the block can no longer become a `413`, and a session set there throws `TooLateSessionSetException`.
+
+## When the block fails
+
+A block that throws ends the stream, and the frames it sent before go out first. On CIO the
+connection is then cut, which Datastar's client retries. On Netty it is often ended as if the
+stream had finished, and the client does not come back: Ktor's Netty engine closes a response
+that failed the way it closes one that succeeded, and Streamlord cannot tell it otherwise. Catch
+what you can inside the block and send the page what it should show.
+
+On Netty, keep the heartbeat on, or write within ten seconds of the open: Netty sends no headers
+before the first byte of the body, and closes a response that has written nothing for ten seconds,
+with no headers at all, while the handler waits on. `heartbeat = null` there is for a stream that
+writes at once.
+
 ## Long-lived streams
 
 Hand `respondDatastar` a `Flow` instead of a block, and the response stays open for as long as

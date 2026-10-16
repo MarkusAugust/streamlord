@@ -25,7 +25,9 @@ import io.ktor.server.response.respondText
 import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.writeFully
 import io.ktor.utils.io.writeStringUtf8
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.intellij.lang.annotations.Language
 import java.io.ByteArrayOutputStream
@@ -59,19 +61,40 @@ import kotlin.time.Duration
  *
  * @param heartbeat A keep-alive comment after this long without a frame, for this stream alone,
  *   or `null` for none. Defaults to the configured [Streamlord.heartbeat]. One that is not
- *   positive throws here, before the response starts.
+ *   positive throws here, before the response starts. On Netty, `null` is for a stream that
+ *   writes at once: Netty sends no headers before the first byte of the body, and closes a
+ *   response that has written nothing for ten seconds, while the handler waits on.
+ *
+ * A block that throws ends the stream after the frames it sent. On CIO the connection is cut;
+ * on Netty Ktor often ends it as if it had finished, which Datastar's client does not retry.
  */
 @JvmName("respondDatastar")
 public suspend fun ApplicationCall.respondDatastar(
-    status: HttpStatusCode = HttpStatusCode.OK,
     authorisation: StreamAuthorisation? = null,
     heartbeat: Duration? = streamlord.heartbeat,
     block: suspend DatastarStream.() -> Unit,
 ) {
+    respondStream(HttpStatusCode.OK, authorisation, heartbeat, block)
+}
+
+private suspend fun ApplicationCall.respondStream(
+    status: HttpStatusCode,
+    authorisation: StreamAuthorisation?,
+    heartbeat: Duration?,
+    block: suspend DatastarStream.() -> Unit,
+) {
     require(heartbeat == null || heartbeat.isPositive()) { "heartbeat must be positive, or null for none" }
+    check(!response.isCommitted && !response.isSent) { "The response has already been sent, so it cannot become an event stream" }
     val streamlord = this.streamlord
     for ((name, value) in DatastarProtocol.SSE_RESPONSE_HEADERS) response.header(name, value)
-    if (request.httpVersion == "HTTP/1.1") response.header("Connection", "keep-alive")
+    // HTTP/2 forbids it, and a request that asked to close is not to be told otherwise.
+    val closing =
+        request.headers
+            .getAll(HttpHeaders.Connection)
+            .orEmpty()
+            .flatMap { it.split(',') }
+            .any { it.trim().equals("close", true) }
+    if (request.httpVersion == "HTTP/1.1" && !closing) response.header("Connection", "keep-alive")
     val gzip = streamlord.compress && DatastarProtocol.acceptsGzip(request.headers[HttpHeaders.AcceptEncoding])
     respond(
         object : OutgoingContent.WriteChannelContent() {
@@ -100,10 +123,18 @@ public suspend fun ApplicationCall.respondDatastar(
                 }
 
             override suspend fun writeTo(channel: ByteWriteChannel) {
-                if (gzip) {
-                    streamlord.streamGzipped(channel, authorisation, heartbeat, block)
-                } else {
-                    streamlord.stream(ChannelSseSink(channel), authorisation, heartbeat, block = block)
+                try {
+                    if (gzip) {
+                        streamlord.streamGzipped(channel, authorisation, heartbeat, block)
+                    } else {
+                        streamlord.stream(ChannelSseSink(channel), authorisation, heartbeat, block = block)
+                    }
+                } catch (e: Throwable) {
+                    // Ktor closes the channel with the failure, and an engine that reads it then
+                    // drops what was written and not yet sent. Sent first, the frames reach the
+                    // client before the stream is cut.
+                    withContext(NonCancellable) { runCatching { channel.flush() } }
+                    throw e
                 }
             }
         },
@@ -115,21 +146,20 @@ public suspend fun ApplicationCall.respondDatastar(
 @JvmName("respondDatastar")
 public suspend fun ApplicationCall.respondDatastar(
     events: Flow<DatastarEvent>,
-    status: HttpStatusCode = HttpStatusCode.OK,
     authorisation: StreamAuthorisation? = null,
     heartbeat: Duration? = streamlord.heartbeat,
 ) {
-    respondDatastar(status, authorisation, heartbeat) { sendAll(events) }
+    respondStream(HttpStatusCode.OK, authorisation, heartbeat) { sendAll(events) }
 }
 
-/** [respondDatastar] as 0.12 had it, before `heartbeat`, for code compiled against it. */
+/** [respondDatastar] as 0.12 had it, with a status and before `heartbeat`, for code compiled against it. */
 @Deprecated("Kept for binary compatibility.", level = DeprecationLevel.HIDDEN)
 public suspend fun ApplicationCall.respondDatastar(
     status: HttpStatusCode = HttpStatusCode.OK,
     authorisation: StreamAuthorisation? = null,
     block: suspend DatastarStream.() -> Unit,
 ) {
-    respondDatastar(status, authorisation, streamlord.heartbeat, block)
+    respondStream(status, authorisation, streamlord.heartbeat, block)
 }
 
 /** The [Flow] variant of [respondDatastar] as 0.12 had it, for code compiled against it. */
@@ -139,56 +169,107 @@ public suspend fun ApplicationCall.respondDatastar(
     status: HttpStatusCode = HttpStatusCode.OK,
     authorisation: StreamAuthorisation? = null,
 ) {
-    respondDatastar(events, status, authorisation, streamlord.heartbeat)
+    respondStream(status, authorisation, streamlord.heartbeat) { sendAll(events) }
 }
 
-/** Respond with a single non-SSE Datastar response: `text/html`, `application/json` or `text/javascript`. */
-public suspend fun ApplicationCall.respondDatastar(
+/**
+ * Respond with a single non-SSE Datastar response: `text/html`, `application/json` or
+ * `text/javascript`. Always `200 OK`: Datastar's client reads the body of no other status.
+ */
+public suspend fun ApplicationCall.respondDatastar(response: DatastarResponse) {
+    respondResponse(response, HttpStatusCode.OK)
+}
+
+private suspend fun ApplicationCall.respondResponse(
     response: DatastarResponse,
-    status: HttpStatusCode = HttpStatusCode.OK,
+    status: HttpStatusCode,
 ) {
     streamlord.guard(response)
     for ((name, value) in response.headers) this.response.header(name, value)
     respondText(response.body, ContentType.parse(response.contentType), status)
 }
 
-/** Respond with HTML to be patched as elements, without opening a stream. */
+/** Respond with HTML to be patched as elements, without opening a stream. Always `200 OK`, as [respondDatastar]. */
 public suspend fun ApplicationCall.respondElements(
     @Language("HTML") elements: String,
     selector: String? = null,
     mode: ElementPatchMode = ElementPatchMode.DEFAULT,
     namespace: ElementNamespace = ElementNamespace.DEFAULT,
     useViewTransition: Boolean = false,
-    status: HttpStatusCode = HttpStatusCode.OK,
 ) {
-    respondDatastar(ElementsResponse(elements, selector, mode, namespace, useViewTransition), status)
+    respondDatastar(ElementsResponse(elements, selector, mode, namespace, useViewTransition))
 }
 
-/** Respond with a JSON object to be patched as signals, without opening a stream. */
+/** Respond with a JSON object to be patched as signals, without opening a stream. Always `200 OK`. */
 public suspend fun ApplicationCall.respondSignals(
     @Language("JSON") signals: String,
     onlyIfMissing: Boolean = false,
-    status: HttpStatusCode = HttpStatusCode.OK,
 ) {
-    respondDatastar(SignalsResponse(signals, onlyIfMissing), status)
+    respondDatastar(SignalsResponse(signals, onlyIfMissing))
 }
 
-/** Respond with any value the codec can encode, to be patched as signals. */
+/** Respond with any value the codec can encode, to be patched as signals. Always `200 OK`. */
 public suspend inline fun <reified T> ApplicationCall.respondSignals(
     value: T,
     onlyIfMissing: Boolean = false,
-    status: HttpStatusCode = HttpStatusCode.OK,
 ) {
-    respondSignals(streamlord.codec.encode(value, typeOf<T>()), onlyIfMissing, status)
+    respondSignals(streamlord.codec.encode(value, typeOf<T>()), onlyIfMissing)
 }
 
-/** Respond with JavaScript to execute, without opening a stream. */
+/** Respond with JavaScript to execute, without opening a stream. Always `200 OK`. */
 public suspend fun ApplicationCall.respondScript(
     @Language("JavaScript") script: String,
     attributes: Map<String, String> = emptyMap(),
+) {
+    respondDatastar(ScriptResponse(script, attributes))
+}
+
+/*
+ * The 0.12 signatures with a status, which Datastar's client ignored the body of for anything but
+ * 200. Kept for code compiled against them; the inline respondSignals, inlined into such code,
+ * calls the String one.
+ */
+
+/** [respondDatastar] for a [DatastarResponse] as 0.12 had it, for code compiled against it. */
+@Deprecated("Kept for binary compatibility.", level = DeprecationLevel.HIDDEN)
+public suspend fun ApplicationCall.respondDatastar(
+    response: DatastarResponse,
     status: HttpStatusCode = HttpStatusCode.OK,
 ) {
-    respondDatastar(ScriptResponse(script, attributes), status)
+    respondResponse(response, status)
+}
+
+/** [respondElements] as 0.12 had it, for code compiled against it. */
+@Deprecated("Kept for binary compatibility.", level = DeprecationLevel.HIDDEN)
+public suspend fun ApplicationCall.respondElements(
+    elements: String,
+    selector: String? = null,
+    mode: ElementPatchMode = ElementPatchMode.DEFAULT,
+    namespace: ElementNamespace = ElementNamespace.DEFAULT,
+    useViewTransition: Boolean = false,
+    status: HttpStatusCode = HttpStatusCode.OK,
+) {
+    respondResponse(ElementsResponse(elements, selector, mode, namespace, useViewTransition), status)
+}
+
+/** [respondSignals] as 0.12 had it, for code compiled against it. */
+@Deprecated("Kept for binary compatibility.", level = DeprecationLevel.HIDDEN)
+public suspend fun ApplicationCall.respondSignals(
+    signals: String,
+    onlyIfMissing: Boolean = false,
+    status: HttpStatusCode = HttpStatusCode.OK,
+) {
+    respondResponse(SignalsResponse(signals, onlyIfMissing), status)
+}
+
+/** [respondScript] as 0.12 had it, for code compiled against it. */
+@Deprecated("Kept for binary compatibility.", level = DeprecationLevel.HIDDEN)
+public suspend fun ApplicationCall.respondScript(
+    script: String,
+    attributes: Map<String, String> = emptyMap(),
+    status: HttpStatusCode = HttpStatusCode.OK,
+) {
+    respondResponse(ScriptResponse(script, attributes), status)
 }
 
 /** The gzipped stream: [Streamlord.stream] over a [GzipChannelSseSink], ended as a whole member. */
@@ -241,7 +322,8 @@ internal class GzipChannelSseSink(
 
     /**
      * End the gzip member, so the client's decoder sees a whole stream. Only after a stream that
-     * ended well: one cut short by an exception is left unterminated, so the client sees it fail.
+     * ended well: one cut short by an exception is left unterminated, so a decoder that reads it
+     * whole sees it fail. Netty may still end the response cleanly; see [respondDatastar].
      */
     suspend fun finish() {
         gzip.finish()

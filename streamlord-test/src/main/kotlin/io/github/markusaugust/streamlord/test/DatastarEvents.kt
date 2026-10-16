@@ -86,7 +86,13 @@ public class DatastarEvents(
         return JsonObject(out)
     }
 
-    /** The client keeps an array an array when an object is patched onto it, and reads the keys as indices. */
+    /**
+     * The client keeps an array an array when an object is patched onto it, and sets each key as
+     * it would on any object (signals.ts, mergeInner): an index past the end extends the array, and
+     * `null` deletes the element and leaves a hole. A hole reads as `null`, as `JSON.stringify`
+     * writes it. A key that is not an index, such as `01` or `name`, becomes a property of the
+     * array that JSON never shows, and is left out here.
+     */
     private fun foldIntoArray(
         target: JsonArray,
         patch: JsonObject,
@@ -94,15 +100,35 @@ public class DatastarEvents(
     ): JsonValue {
         val items = target.toMutableList()
         for ((key, value) in patch) {
-            val index = key.toIntOrNull()?.takeIf { it in 0..items.size } ?: continue
+            val index = key.toIntOrNull()?.takeIf { it >= 0 && it.toString() == key } ?: continue
+            val present = index < items.size && items[index] !is JsonNull
             when {
-                value is JsonNull -> Unit
-                index == items.size -> items += value
-                value is JsonObject && items[index] is JsonObject -> items[index] = fold(items[index] as JsonObject, value, ifMissing)
-                !ifMissing -> items[index] = value
+                value is JsonNull -> if (!ifMissing && index < items.size) items[index] = JsonNull
+                value is JsonObject -> items.put(index, foldInto(items.getOrNull(index), value, ifMissing))
+                !(ifMissing && present) -> items.put(index, value)
             }
         }
         return JsonArray(items)
+    }
+
+    /** An object patched onto whatever stood there: merged into an object or an array, or onto nothing. */
+    private fun foldInto(
+        existing: JsonValue?,
+        patch: JsonObject,
+        ifMissing: Boolean,
+    ): JsonValue =
+        when (existing) {
+            is JsonArray -> foldIntoArray(existing, patch, ifMissing)
+            is JsonObject -> fold(existing, patch, ifMissing)
+            else -> fold(JsonObject.EMPTY, patch, ifMissing)
+        }
+
+    private fun MutableList<JsonValue>.put(
+        index: Int,
+        value: JsonValue,
+    ) {
+        while (size <= index) add(JsonNull)
+        this[index] = value
     }
 
     /**

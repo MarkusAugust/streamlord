@@ -11,6 +11,9 @@ public object DatastarProtocol {
     /** The Datastar version this SDK speaks. */
     public const val VERSION: String = "1.0.4"
 
+    /** The `Accept` the client sends with every request (fetch.ts:82). */
+    public const val ACCEPT: String = "text/event-stream, text/html, application/json"
+
     /** Query parameter (GET, DELETE) and JSON namespace under which the client sends signals. */
     public const val SIGNALS_PARAMETER: String = "datastar"
 
@@ -65,10 +68,11 @@ public object DatastarProtocol {
      * Headers every SSE response should carry. `Cache-Control` comes from the SDK specification;
      * `X-Accel-Buffering: no` tells nginx-style proxies to stop hoarding the stream.
      */
-    public val SSE_RESPONSE_HEADERS: Map<String, String> = mapOf(
-        "Cache-Control" to "no-cache",
-        "X-Accel-Buffering" to "no",
-    )
+    public val SSE_RESPONSE_HEADERS: Map<String, String> =
+        mapOf(
+            "Cache-Control" to "no-cache",
+            "X-Accel-Buffering" to "no",
+        )
 
     /**
      * Whether an `Accept-Encoding` header takes gzip: `gzip` or `x-gzip` listed with a weight
@@ -84,7 +88,9 @@ public object DatastarProtocol {
             val parts = entry.split(';')
             val name = parts.first().trim().lowercase()
             val weight =
-                parts.drop(1).map { it.split('=', limit = 2).map(String::trim) }
+                parts
+                    .drop(1)
+                    .map { it.split('=', limit = 2).map(String::trim) }
                     .firstOrNull { it.size == 2 && it[0].equals("q", ignoreCase = true) }
                     ?.let { if (QVALUE.matches(it[1])) it[1].toDouble() else 0.0 } ?: 1.0
             when (name) {

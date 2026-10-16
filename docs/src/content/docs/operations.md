@@ -176,9 +176,9 @@ Four things it does not do:
   `fetch` runs without a timer, and its retry counter resets when a 200 arrives, not per frame. The
   heartbeat is for what sits between you and the browser, and for finding out on the server that
   the reader has gone: the comment is a write, and a write to a closed connection fails. It
-  takes a few: the first still land in the operating system's buffer, and on Ktor's CIO over a
-  local socket the stream ended about five intervals after the client left, two and a half
-  minutes at the default.
+  takes a few: the first still land in the operating system's buffer. Over a local socket, the
+  stream ended four to five intervals after the client left on Ktor's CIO, about two minutes at
+  the default, and two intervals on Netty, about one minute.
 - **It does not run on the request's thread on WebMVC.** The block runs inside `runBlocking` on
   that thread, and the heartbeat on `Dispatchers.IO`, so a JDBC call or a `Thread.sleep` in the
   block does not hold the comment back. Two things follow. An authorisation's `allows()` and
@@ -472,11 +472,12 @@ store; Streamlord fixes the contract and not the logic.
 Four things it does, each for a reason:
 
 - **It asks at the open, before your handler runs.** The cheapest place to refuse a connection is
-  before it starts, and a refusal there writes nothing at all.
+  before it starts, and a refusal there writes nothing of your handler's; only what `onRefused`
+  writes goes out. On Ktor the `200` and its headers are already on their way.
 - **It asks again on an interval, not before every patch.** A chatty stream would otherwise cost
   one database round trip per patch. The verdict stands for `every`, five seconds by default.
-  Writes are not held back while a stale verdict is asked for again; they go out on the old one
-  until the new one arrives.
+  The write that finds the verdict stale waits for the new one; other writes go out on the old one
+  until it arrives.
 - **A refusal ends the stream** rather than letting it fall silent, so the client sees a finished
   response instead of an idle server. Your handler stops where it stood; nothing after the refused
   write runs. A handler that catches the exception and carries on gains nothing by it: every

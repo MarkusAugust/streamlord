@@ -34,6 +34,10 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Changed
 
+- `respondDatastar`, its `Flow` variant and `respondElements`, `respondSignals` and `respondScript`
+  on Ktor no longer take a `status`, as on Spring: Datastar's client reads neither a stream nor a
+  body with any status but 200. Source that passed one, also positionally as the first argument
+  of `respondDatastar`, no longer compiles; code compiled against 0.12 still links.
 - `datastarElements`, `datastarSignals`, `datastarScript` and `toResponseEntity` no longer take a
   `status`. Datastar's client reads the body of no status but 200, so any other made the response
   do nothing. Source that passed one no longer compiles; code compiled against 0.12 still links.
@@ -89,6 +93,24 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- A `CancellationException` thrown by an authorisation's `allows()`, such as a `withTimeout` around
+  a database call, ended only the coroutine that asked. When the heartbeat asked, that was the
+  heartbeat, which stopped without a word, and an idle stream was never asked again nor found a
+  reader who left. It now ends the stream as an `IllegalStateException`, on both paths.
+- On Ktor, a frame the block sent just before it threw reaches the client before the stream is
+  cut. CIO dropped what was written and not yet sent; the heartbeat hid it, and `heartbeat = null`
+  brought it back.
+- `respondDatastar` on a call already answered throws `IllegalStateException`. It did nothing on
+  CIO and threw Netty's own exception from the header loop.
+- Ktor no longer sends `Connection: keep-alive` to a request that asked to close.
+- `streamlord-test` folds a signal patch onto an array as Datastar's client does: an index past
+  the end extends it, and `null` leaves a hole, read as `null`. It dropped both.
+- `LiveDatastarStream` sends the client's `Accept`, now `DatastarProtocol.ACCEPT`, and words a
+  frame it fails on as one Streamlord's rules refuse: the client takes `retry: 0` and `1e3`.
+- The pages give the measured disconnect figures (four to five heartbeats on CIO, two on Netty),
+  say which engine sends its headers when, and say what Netty does with a failed block and with
+  `heartbeat = null`; and the core, `streamlord-test` and the Ktor tests also run on the newest
+  coroutines release, and `HttpRequestLifecycle` is tested on Netty.
 - On Spring WebMVC, a failure inside a stream that has started is cut off, as the documentation
   said, also when `StreamlordExceptionHandler` handles it: the handler throws the exception on
   when the response is committed. It used to answer, which ended the chunked body as if the stream
