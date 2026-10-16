@@ -7,9 +7,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flow
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.core.task.TaskRejectedException
+import org.springframework.http.ResponseEntity
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
+import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.servlet.config.annotation.AsyncSupportConfigurer
@@ -20,7 +23,9 @@ import java.util.concurrent.CompletableFuture
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -40,6 +45,8 @@ class StreamExecutorTest {
             }
 
         val own: ThreadPoolTaskExecutor = executor("own")
+
+        val shutDown: ThreadPoolTaskExecutor = executor("gone").apply { shutdown() }
     }
 
     @RestController
@@ -83,6 +90,23 @@ class StreamExecutorTest {
         }
     }
 
+    @RestController
+    class Rejected {
+        @GetMapping("/rejected")
+        fun rejected(response: HttpServletResponse): StreamingResponseBody =
+            response.datastarStream(executor = shutDown) { patchSignals("ran" to true) }
+    }
+
+    @RestController
+    class Mapped {
+        @GetMapping("/mapped")
+        fun mapped(response: HttpServletResponse): StreamingResponseBody =
+            response.datastarStream(executor = shutDown) { patchSignals("ran" to true) }
+
+        @ExceptionHandler(TaskRejectedException::class)
+        fun busy(): ResponseEntity<String> = ResponseEntity.status(503).body("busy")
+    }
+
     @Configuration(proxyBeanMethods = false)
     @EnableWebMvc
     class Mvc : WebMvcConfigurer {
@@ -93,6 +117,12 @@ class StreamExecutorTest {
 
         @Bean
         fun streams() = Streams()
+
+        @Bean
+        fun rejected() = Rejected()
+
+        @Bean
+        fun mapped() = Mapped()
     }
 
     private lateinit var tomcat: RealTomcat
@@ -147,6 +177,24 @@ class StreamExecutorTest {
         val body = tomcat.get("/own-suspended").body().use { it.toList().joinToString("\n") }
 
         assertTrue("own-" in body, body)
+    }
+
+    @Test
+    fun `an executor that rejects the stream fails before anything is written`() {
+        val response = tomcat.get("/rejected")
+        val body = response.body().use { it.toList().joinToString("\n") }
+
+        assertEquals(500, response.statusCode(), body)
+        assertFalse("ran" in body, body)
+    }
+
+    @Test
+    fun `a rejection reaches an exception handler`() {
+        val response = tomcat.get("/mapped")
+        val body = response.body().use { it.toList().joinToString("\n") }
+
+        assertEquals(503, response.statusCode(), body)
+        assertEquals("busy", body)
     }
 
     @Test

@@ -58,6 +58,11 @@ class SearchController(private val streamlord: Streamlord) {
 and runs the block on a thread from its own async executor, and that thread stays with the
 stream until the block returns. Everything inside the block writes one frame.
 
+Call `datastarStream` before anything writes to the response. One that something has already
+written to through its output stream still streams, without gzip; one written through
+`getWriter()`, or already committed, fails with `IllegalStateException`, since the stream needs the
+output stream and a committed response has sent its headers, the content type with them.
+
 **Do not take it as a parameter of the handler method.** `fun search(streamlord: Streamlord)`
 compiles and starts, and Spring then treats the parameter as a model attribute: it constructs a
 new `Streamlord` with every default, for each request, and never looks at your bean. The codec
@@ -160,6 +165,44 @@ The heartbeat does not use that executor. It runs on `Dispatchers.IO`, beside th
 block that blocks its thread does not hold the comment back. An authorisation asked by the
 heartbeat runs there too, without the request's thread-locals; see
 [Operations](/operations/#heartbeats).
+
+## A flow as the response
+
+`asDatastarResponse()` from [Spring WebFlux](/spring-webflux/) works from a WebMVC controller
+too:
+
+```kotlin sample=spring-controller
+@RestController
+class TickerController(private val streamlord: Streamlord) {
+    @GetMapping("/ticker")
+    fun ticker(): org.springframework.http.ResponseEntity<kotlinx.coroutines.flow.Flow<org.springframework.http.codec.ServerSentEvent<String>>> =
+        ticks
+            .map { n -> PatchElements("""<span id="counter">$n</span>""") }
+            .asDatastarResponse(streamlord)
+}
+```
+
+It needs `kotlinx-coroutines-reactor`, which brings Reactor with it. Spring MVC writes a returned
+`Flow` through Reactor, and without the two it cannot write one at all: the request fails with a
+500 and `HttpMessageNotWritableException: No converter for [...] with preset Content-Type
+'text/event-stream'`.
+
+Spring then writes the flow itself, and no Streamlord stream is opened. The bean renders the
+events, its guard included, and does nothing more:
+
+- **No timeout.** The application's async timeout does not apply, so the response lasts as long
+  as the flow does.
+- **No heartbeat, no gzip, no authorisation.** The bean's `heartbeat` and `compress` do not reach
+  it, and there is no `authorisation` to pass. A quiet flow that never ends is never written to,
+  so a client that vanished can go unnoticed until the next element.
+- **No thread held between elements.** The flow runs on the request's thread up to its first
+  suspension, and after that on whichever thread resumes it. After a `delay`, that is
+  `kotlinx.coroutines.DefaultExecutor`, the single thread the coroutines library keeps for
+  timers. Keep blocking calls off it with `flowOn(Dispatchers.IO)`.
+
+Take `datastarStream` when the stream needs a heartbeat, a timeout, gzip or an authorisation.
+Take the flow when what you send is a flow you already have, and the stream should hold no thread
+while it waits. The frames are spelled Spring's way, as on [Spring WebFlux](/spring-webflux/).
 
 ## No stream at all
 

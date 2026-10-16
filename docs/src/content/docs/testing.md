@@ -105,7 +105,8 @@ client takes both from every message it reads. `LiveDatastarStream` judges the e
 these are a convenience rather than a cage. `events.messages` has the raw SSE messages too, for a
 test about a heartbeat comment or a resume id.
 
-A stream that is silent for five seconds carries `: keep-alive` comments by default. They are
+A stream silent from its start gets a `: keep-alive` comment after five seconds by default, and
+after that one whenever it has been silent for 30 seconds. They are
 messages, not events, so the event assertions never see them. Under `runTest`, virtual time skips
 ahead whenever every coroutine waits, so a stream whose block waits on a real thread writes comment
 after comment without pause: give such a test `Streamlord(heartbeat = null)`.
@@ -230,7 +231,9 @@ port, from a Kotlin test: the class is coroutine API, called inside `runTest` or
 
 The answer has to start within the timeout, five seconds by default, and a server sends its
 headers with its first flush. A handler that writes nothing until a command arrives holds `open`
-until it does, which is one more reason for a live view to send the current state first.
+until it does, which is one more reason for a live view to send the current state first. The
+heartbeat's first comment comes at five seconds too, so it cannot be counted on to open the stream
+within the timeout.
 
 Three things it does:
 
