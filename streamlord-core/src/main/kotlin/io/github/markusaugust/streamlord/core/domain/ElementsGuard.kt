@@ -112,20 +112,33 @@ public object ElementsGuard {
     public fun check(
         elements: String,
         prefixes: List<String> = defaultPrefixes,
+    ): String = check(elements, prefixes, foreign = false)
+
+    /**
+     * [check], reading the markup as the inside of an `<svg>` or `<math>` too when [foreign] says
+     * the patch lands in one, or when the markup opens one itself.
+     */
+    internal fun check(
+        elements: String,
+        prefixes: List<String>,
+        foreign: Boolean,
     ): String {
         // Longest first, so `data-x-` is tried before `data-` whatever order the caller used.
         val ordered = if (prefixes === defaultPrefixes) prefixes else prefixes.sortedByDescending { it.length }
-        scanMarkup(
-            elements,
+        val visitor =
             object : MarkupVisitor {
                 override fun attribute(
+                    tag: String,
                     name: String,
                     valueStart: Int,
                     valueEnd: Int,
                     quoted: Boolean,
                 ) = checkAttribute(name, if (valueStart < 0) null else elements.substring(valueStart, valueEnd), ordered)
-            },
-        )
+            }
+        scanMarkup(elements, visitor)
+        // Inside an svg or a math, a title or a textarea holds elements rather than text. Read that
+        // way only where it can be, since in HTML the markup they show is text, and often meant so.
+        if (foreign || FOREIGN_ROOT.containsMatchIn(elements)) scanMarkup(elements, visitor, foreign = true)
         return elements
     }
 
@@ -198,3 +211,5 @@ public class MistypedAttributeException(
         "Attribute $attribute is not a Datastar attribute, but is one letter away from $suggestion. " +
             "Did you mean that? The browser ignores an unknown data-* attribute without a word.",
     )
+
+private val FOREIGN_ROOT = Regex("<(svg|math)[\\s/>]", RegexOption.IGNORE_CASE)
