@@ -2,7 +2,7 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { parseHeaderLines, toCurl, type SavedRequest } from "../src/requests.ts";
+import { NON_STREAM_CUT, parseHeaderLines, toCurl, type SavedRequest } from "../src/requests.ts";
 import { openStream } from "../src/streamClient.ts";
 
 /** What a server receives: the request target as it stood on the wire, and the body. */
@@ -31,7 +31,14 @@ before(async () => {
       }
       if (req.url?.startsWith("/html")) {
         res.writeHead(200, { "Content-Type": "text/html" });
-        return void res.end(req.url.startsWith("/html-big") ? "x".repeat(2 * 1024 * 1024) : "<p id=\"a\">x</p>");
+        const size = req.url.startsWith("/html-big") ? 2 * 1024 * 1024 : req.url.startsWith("/html-exact") ? 1024 * 1024 : 0;
+        return void res.end(size ? "x".repeat(size) : "<p id=\"a\">x</p>");
+      }
+      // A stream with an error status that stays open: the client reads none of it.
+      if (req.url?.startsWith("/missing-open")) {
+        res.writeHead(404, { "Content-Type": "text/event-stream" });
+        res.write("data: x\n\n");
+        return void setTimeout(() => res.end(), 3000);
       }
       if (req.url?.startsWith("/missing")) {
         res.writeHead(404, { "Content-Type": "text/event-stream" });
@@ -89,18 +96,30 @@ describe("stream client", () => {
     for (const path of ["/html", "/missing"]) {
       await openStream(
         { url: `${base}${path}`, method: "GET", signals: "", headers: {} },
-        { onNonSse: (r) => shown.push(r.http), onFrame: (f) => frames.push(f.event) },
+        { onNonSse: (r) => shown.push(`${r.http}: ${r.body}`), onFrame: (f) => frames.push(f.event) },
         new AbortController().signal,
       );
     }
-    assert.deepEqual([shown, frames], [["200 OK", "404 Not Found"], []]);
+    assert.deepEqual(
+      [shown, frames],
+      [['200 OK: <p id="a">x</p>', "404 Not Found: Not read: the client reads no body with a 404, and a stream may never end."], []],
+    );
+  });
+
+  it("shows a stream with an error status at once, without waiting on its body", async () => {
+    const started = performance.now();
+    let shown = "";
+    await openStream({ url: `${base}/missing-open`, method: "GET", signals: "", headers: {} }, { onNonSse: (r) => (shown = r.http) }, new AbortController().signal);
+    assert.equal(shown, "404 Not Found");
+    assert.ok(performance.now() - started < 2000, "waited on the body");
   });
 
   it("reads a response without a stream only up to its limit", async () => {
     let body = "";
     await openStream({ url: `${base}/html-big`, method: "GET", signals: "", headers: {} }, { onNonSse: (r) => (body = r.body) }, new AbortController().signal);
-    assert.ok(body.length < 1024 * 1024 + 100, `${body.length}`);
-    assert.ok(body.endsWith("(cut at 1 MiB)"), body.slice(-40));
+    assert.equal(body, "x".repeat(1024 * 1024) + NON_STREAM_CUT);
+    await openStream({ url: `${base}/html-exact`, method: "GET", signals: "", headers: {} }, { onNonSse: (r) => (body = r.body) }, new AbortController().signal);
+    assert.equal(body, "x".repeat(1024 * 1024), "a body of exactly the limit is not cut");
   });
 
   it("hands over a last comment cut inside a character", async () => {

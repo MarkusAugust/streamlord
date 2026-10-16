@@ -1,4 +1,4 @@
-import { ACCEPT, compactSignals, NON_STREAM_LIMIT, readsAsStream, requestUrl, sendableUrl } from "./requests.ts";
+import { ACCEPT, compactSignals, NON_STREAM_CUT, NON_STREAM_LIMIT, readsAsStream, requestUrl, sendableUrl, unreadBody } from "./requests.ts";
 import { decodeDatastar, SseParser, type DatastarFrame, type SseMessage } from "./sse.ts";
 
 /**
@@ -55,8 +55,10 @@ export async function openStream(req: StreamRequest, handlers: StreamHandlers, s
     const response = await fetch(built.url, { ...built.init, signal });
     const ct = response.headers.get("content-type") ?? "";
     handlers.onStatus?.("open", { http: `${response.status} ${response.statusText}`, contentType: ct });
-    if (!readsAsStream(response.status, response.headers.get("content-type"))) {
-      const text = await readLimited(response);
+    if (!readsAsStream(response.status, ct)) {
+      const unread = unreadBody(response.status, ct);
+      if (unread) await response.body?.cancel();
+      const text = unread ?? (await readLimited(response));
       const datastarHeaders: Record<string, string> = {};
       response.headers.forEach((v, k) => {
         if (k.startsWith("datastar-")) datastarHeaders[k] = v;
@@ -134,5 +136,5 @@ async function readLimited(response: Response): Promise<string> {
     at += chunk.length;
   }
   const text = new TextDecoder().decode(cut ? bytes.subarray(0, NON_STREAM_LIMIT) : bytes);
-  return cut ? `${text}\n\n(cut at 1 MiB)` : text;
+  return cut ? text + NON_STREAM_CUT : text;
 }

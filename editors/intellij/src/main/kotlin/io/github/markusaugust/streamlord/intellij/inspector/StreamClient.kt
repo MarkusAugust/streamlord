@@ -163,15 +163,18 @@ class StreamClient(
                     handlers.onStatus(Status.CLOSED)
                     return
                 }
-                val contentType = response.headers().firstValue("content-type").orElse("")
+                // Every value, joined as fetch's Headers.get joins them, so a second type is seen.
+                val contentType = response.headers().allValues("content-type").joinToString(", ")
                 val http = "${response.statusCode()} ${reason(response.statusCode())}".trim()
                 handlers.onStatus(Status.OPEN, http, contentType)
-                if (!Requests.readsAsStream(response.statusCode(), response.headers().firstValue("content-type").orElse(null))) {
-                    // Up to the limit, so a large response does not land in memory whole.
-                    val bytes = body.readNBytes(Requests.NON_STREAM_LIMIT + 1)
-                    val cut = bytes.size > Requests.NON_STREAM_LIMIT
-                    val read = String(bytes, 0, minOf(bytes.size, Requests.NON_STREAM_LIMIT), Charsets.UTF_8)
-                    val text = if (cut) "$read\n\n(cut at 1 MiB)" else read
+                if (!Requests.readsAsStream(response.statusCode(), contentType)) {
+                    val text =
+                        Requests.unreadBody(response.statusCode(), contentType) ?: run {
+                            // Up to the limit, so a large response does not land in memory whole.
+                            val bytes = body.readNBytes(Requests.NON_STREAM_LIMIT + 1)
+                            val read = String(bytes, 0, minOf(bytes.size, Requests.NON_STREAM_LIMIT), Charsets.UTF_8)
+                            if (bytes.size > Requests.NON_STREAM_LIMIT) read + Requests.NON_STREAM_CUT else read
+                        }
                     val datastarHeaders = LinkedHashMap<String, String>()
                     for ((k, v) in response.headers().map()) {
                         if (k.lowercase().startsWith("datastar-")) {

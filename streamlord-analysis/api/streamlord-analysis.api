@@ -569,6 +569,7 @@ public final class io/github/markusaugust/streamlord/analysis/Requests {
 	public static final field ACCEPT Ljava/lang/String;
 	public static final field ENV_FILE Ljava/lang/String;
 	public static final field INSTANCE Lio/github/markusaugust/streamlord/analysis/Requests;
+	public static final field NON_STREAM_CUT Ljava/lang/String;
 	public static final field NON_STREAM_LIMIT I
 	public static final field PARAMS Ljava/lang/String;
 	public static final field RECENT_LIMIT I
@@ -601,6 +602,7 @@ public final class io/github/markusaugust/streamlord/analysis/Requests {
 	public final fun toCurl (Lio/github/markusaugust/streamlord/analysis/SavedRequest;)Ljava/lang/String;
 	public final fun unreachableHint (Ljava/lang/String;Ljava/util/List;Lio/github/markusaugust/streamlord/analysis/RunningServer;)Ljava/lang/String;
 	public static synthetic fun unreachableHint$default (Lio/github/markusaugust/streamlord/analysis/Requests;Ljava/lang/String;Ljava/util/List;Lio/github/markusaugust/streamlord/analysis/RunningServer;ILjava/lang/Object;)Ljava/lang/String;
+	public final fun unreadBody (ILjava/lang/String;)Ljava/lang/String;
 	public final fun upsert (Lio/github/markusaugust/streamlord/analysis/RequestsFile;Lio/github/markusaugust/streamlord/analysis/SavedRequest;)Lio/github/markusaugust/streamlord/analysis/RequestsFile;
 	public final fun variableCompletions (Ljava/lang/String;ILio/github/markusaugust/streamlord/analysis/Requests$Field;Ljava/util/List;)Lio/github/markusaugust/streamlord/analysis/Requests$Completion;
 	public final fun variableValues (Ljava/util/List;)Ljava/util/Map;

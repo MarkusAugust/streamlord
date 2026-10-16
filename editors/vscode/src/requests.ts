@@ -536,9 +536,21 @@ export const ACCEPT = "text/event-stream, text/html, application/json";
 /** How much of a response without a stream the inspector reads and shows. */
 export const NON_STREAM_LIMIT = 1024 * 1024;
 
+/** What ends a body cut at NON_STREAM_LIMIT. */
+export const NON_STREAM_CUT = "\n\n(cut at 1 MiB)";
+
+/**
+ * What to show in place of a body the inspector does not read, or null when it reads it: a stream
+ * with any status but 200. The client reads no body then, and a stream may never end, which would
+ * leave the panel open with nothing in it.
+ */
+export function unreadBody(status: number, contentType: string | null): string | null {
+  return status !== 200 && (contentType ?? "").includes("text/event-stream") ? `Not read: the client reads no body with a ${status}, and a stream may never end.` : null;
+}
+
 /**
  * Whether the client reads this response as a stream: a 200 that is not HTML, JSON or JavaScript,
- * a missing Content-Type included (fetch.ts:587-653). It matches the types as written, as the
+ * a missing Content-Type included (fetch.ts:587-655). It matches the types as written, as the
  * client does. Any other response is shown without a stream; the client acts on no body at all
  * unless the status is 200.
  */

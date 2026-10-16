@@ -468,6 +468,18 @@ class InspectorTest : BasePlatformTestCase() {
             exchange.sendResponseHeaders(200, 0)
             exchange.responseBody.use { out -> repeat(2048) { out.write(ByteArray(1024) { 'x'.code.toByte() }) } }
         }
+        server.createContext("/exact") { exchange ->
+            exchange.responseHeaders.add("Content-Type", "text/html")
+            exchange.sendResponseHeaders(200, 0)
+            exchange.responseBody.use { out -> repeat(1024) { out.write(ByteArray(1024) { 'x'.code.toByte() }) } }
+        }
+        // Two values: fetch joins them, so the second makes this HTML and not a stream.
+        server.createContext("/two-types") { exchange ->
+            exchange.responseHeaders.add("Content-Type", "text/event-stream")
+            exchange.responseHeaders.add("Content-Type", "text/html")
+            exchange.sendResponseHeaders(200, 0)
+            exchange.responseBody.use { it.write("data: x\n\n".toByteArray()) }
+        }
         server.start()
         try {
             val base = "http://127.0.0.1:${server.address.port}"
@@ -506,9 +518,12 @@ class InspectorTest : BasePlatformTestCase() {
             val (missingFrames, missing) = open("/missing")
             assertEquals(emptyList<DatastarFrame>(), missingFrames)
             assertTrue(missing!!.http.startsWith("404"))
-            val big = open("/big").second!!.body
-            assertTrue("${big.length}", big.length < 1024 * 1024 + 100)
-            assertTrue(big.endsWith("(cut at 1 MiB)"))
+            assertEquals("Not read: the client reads no body with a 404, and a stream may never end.", missing.body)
+            assertEquals("x".repeat(Requests.NON_STREAM_LIMIT) + Requests.NON_STREAM_CUT, open("/big").second!!.body)
+            assertEquals("x".repeat(Requests.NON_STREAM_LIMIT), open("/exact").second!!.body)
+            val (twoFrames, two) = open("/two-types")
+            assertEquals(emptyList<DatastarFrame>(), twoFrames)
+            assertEquals("text/event-stream, text/html", two!!.contentType)
         } finally {
             server.stop(0)
         }
