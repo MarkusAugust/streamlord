@@ -128,9 +128,9 @@ public class Streamlord(
      * earlier refusal and carried on without writing is ended at the next heartbeat. A [block]
      * that catches every exception swallows that ending as well, and runs on until it returns.
      *
-     * A refusal the heartbeat asks for as [block] ends is cancelled with the heartbeat, when
+     * A check the heartbeat starts as [block] ends is cancelled with it, when
      * [StreamAuthorisation.allows] suspends as it should. One that blocks its thread or runs
-     * `NonCancellable` can land after [block] has returned, and the stream that ran to its end is
+     * `NonCancellable` can refuse after [block] has returned, and the stream that ran to its end is
      * then reported refused, with its last words sent.
      *
      * Adapters call this. Returns whether the stream ran to the end of [block] without a refusal.

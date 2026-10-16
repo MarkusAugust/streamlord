@@ -33,7 +33,8 @@ import kotlin.time.Duration.Companion.seconds
  *   cheapest place to refuse a connection is before it starts. Its age is measured on the
  *   monotonic clock, not the coroutine's, so virtual time under `runTest` does not age it. While
  *   an expired verdict is being asked for again, other writes are not held back: any number of
- *   frames can go out on the old one until the new one arrives.
+ *   frames can go out on the old one until the new one arrives, and an [allows] slower than
+ *   [every] can be asked again before it has answered.
  * @property onRefused Run on the stream after a refusal and before it closes, so the reader can
  *   be told. Patch an element, patch a signal, `redirect("/login")`: the stream is still open
  *   here and this is the last thing that goes down it. The default says nothing and closes.

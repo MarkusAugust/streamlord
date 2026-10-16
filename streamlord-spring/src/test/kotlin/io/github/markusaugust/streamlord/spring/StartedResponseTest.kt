@@ -1,6 +1,8 @@
 package io.github.markusaugust.streamlord.spring
 
+import io.github.markusaugust.streamlord.core.application.Streamlord
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
+import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -12,7 +14,6 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 /**
  * A response something has already written to. Tomcat refuses a new buffer size once anything is
@@ -22,9 +23,12 @@ class StartedResponseTest {
     @RestController
     class Streams {
         @GetMapping("/started")
-        fun started(response: HttpServletResponse): StreamingResponseBody {
+        fun started(
+            request: HttpServletRequest,
+            response: HttpServletResponse,
+        ): StreamingResponseBody {
             response.outputStream.write(": started\n\n".toByteArray())
-            return response.datastarStream { patchSignals("n" to 1) }
+            return response.datastarStream(Streamlord(compress = true), request) { patchSignals("n" to 1) }
         }
     }
 
@@ -47,12 +51,24 @@ class StartedResponseTest {
         tomcat.close()
     }
 
+    // Not gzipped, even when the request takes it: the bytes already written would sit in front of
+    // the gzip member and break it.
     @Test
-    fun `a stream opens on a response that something has written to`() {
-        val response = tomcat.get("/started")
-        val body = response.body().use { lines -> lines.toList().joinToString("\n") }
+    fun `a stream opens on a response that something has written to, without gzip`() {
+        val response =
+            java.net.http.HttpClient
+                .newHttpClient()
+                .send(
+                    java.net.http.HttpRequest
+                        .newBuilder(java.net.URI("http://localhost:${tomcat.port}/started"))
+                        .header("Accept-Encoding", "gzip")
+                        .build(),
+                    java.net.http.HttpResponse.BodyHandlers
+                        .ofString(),
+                )
 
-        assertEquals(200, response.statusCode(), body)
-        assertTrue("event: datastar-patch-signals" in body, body)
+        assertEquals(200, response.statusCode(), response.body())
+        assertEquals(null, response.headers().firstValue("content-encoding").orElse(null))
+        assertEquals(": started\n\nevent: datastar-patch-signals\ndata: signals {\"n\":1}\n\n", response.body())
     }
 }

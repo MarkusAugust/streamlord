@@ -470,6 +470,8 @@ Four things it does, each for a reason:
   before it starts, and a refusal there writes nothing at all.
 - **It asks again on an interval, not before every patch.** A chatty stream would otherwise cost
   one database round trip per patch. The verdict stands for `every`, five seconds by default.
+  Writes are not held back while a stale verdict is asked for again; they go out on the old one
+  until the new one arrives.
 - **A refusal ends the stream** rather than letting it fall silent, so the client sees a finished
   response instead of an idle server. Your handler stops where it stood; nothing after the refused
   write runs. A handler that catches the exception and carries on gains nothing by it: every

@@ -110,6 +110,10 @@ messages, not events, so the event assertions never see them. Under `runTest`, v
 ahead whenever every coroutine waits, so a stream whose block waits on a real thread writes comment
 after comment without pause: give such a test `Streamlord(heartbeat = null)`.
 
+A `StreamAuthorisation` verdict ages on the real clock, not the virtual one, so a `delay(every)`
+under `runTest` never makes the stream ask again. A test that wants it to ask again waits in real
+time, with a short `every`.
+
 Nothing in `streamlord-test` depends on a test framework. A failure is an `AssertionError`, which
 every runner understands, so kotlin.test, JUnit 4 and 5, Kotest and TestNG all work and none of
 them is imposed on you. The module's only dependency is `streamlord-core`.
