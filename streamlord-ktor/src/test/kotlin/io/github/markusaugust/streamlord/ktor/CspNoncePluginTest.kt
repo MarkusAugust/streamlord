@@ -106,7 +106,15 @@ class CspNoncePluginTest {
             install(CspNoncePlugin) { nonce = { "" } }
             routing { get("/") { call.respondText(call.cspNonce) } }
 
-            val response = client.get("/")
+            // The test host of an older Ktor hands the server's exception to the test rather than
+            // answering 500, as a real server and a newer test host do.
+            val response =
+                try {
+                    client.get("/")
+                } catch (e: IllegalArgumentException) {
+                    assertTrue("CSP nonce" in e.message.orEmpty(), e.message)
+                    return@testApplication
+                }
 
             assertEquals(HttpStatusCode.InternalServerError, response.status)
             assertNull(response.headers[CspNonce.HEADER], "no policy is written from a nonce that was refused")
