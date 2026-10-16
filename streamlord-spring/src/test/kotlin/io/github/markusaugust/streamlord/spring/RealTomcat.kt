@@ -1,7 +1,10 @@
 package io.github.markusaugust.streamlord.spring
 
+import jakarta.servlet.Filter
 import org.apache.catalina.startup.Tomcat
 import org.apache.coyote.http2.Http2Protocol
+import org.apache.tomcat.util.descriptor.web.FilterDef
+import org.apache.tomcat.util.descriptor.web.FilterMap
 import org.springframework.web.context.support.AnnotationConfigWebApplicationContext
 import org.springframework.web.servlet.DispatcherServlet
 import java.net.URI
@@ -17,6 +20,7 @@ import java.nio.file.Files
 class RealTomcat(
     config: Class<*>,
     http2: Boolean = false,
+    filters: List<Filter> = emptyList(),
 ) : AutoCloseable {
     private val baseDir = Files.createTempDirectory("tomcat")
     private val tomcat = Tomcat()
@@ -34,6 +38,24 @@ class RealTomcat(
             setLoadOnStartup(1)
         }
         context.addServletMappingDecoded("/", "dispatcher")
+        for ((index, filter) in filters.withIndex()) {
+            val name = "filter$index"
+            context.addFilterDef(
+                FilterDef().apply {
+                    filterName = name
+                    this.filter = filter
+                    setAsyncSupported("true")
+                },
+            )
+            context.addFilterMap(
+                FilterMap().apply {
+                    filterName = name
+                    addURLPattern("/*")
+                    setDispatcher("REQUEST")
+                    setDispatcher("ASYNC")
+                },
+            )
+        }
         tomcat.start()
         port = tomcat.connector.localPort
     }

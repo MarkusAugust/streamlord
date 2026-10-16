@@ -77,8 +77,10 @@ it has the lowest precedence: an advice of your own that handles the same except
 `Exception`, decides instead when its `@Order` comes first; one with no `@Order` of its own ties
 with it, and Spring's registration order picks. A status needs a response that has not started, so
 read the signals before the stream opens: once a stream has sent its first event, or its first
-heartbeat comment, at most five seconds after it opened, a failure inside it cuts the stream off
-instead.
+heartbeat comment, at most five seconds after it opened while a heartbeat is on, the handler throws
+the exception on and the container cuts the stream off, which Datastar's client retries. An advice
+of your own should do the same when `response.isCommitted`: an answer there ends the stream as if
+it had finished, and the client does not come back.
 
 ## CSP
 
