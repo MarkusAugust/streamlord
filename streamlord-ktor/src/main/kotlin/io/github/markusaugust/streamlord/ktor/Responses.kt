@@ -42,8 +42,8 @@ import kotlin.time.Duration
  * Ktor does not cancel the handler when the client disconnects. A block that keeps writing ends
  * when a write fails with an `IOException`, usually a few writes after the client left; a block
  * that waits without writing waits on. Install
- * Ktor's `HttpRequestLifecycle` with `cancelCallOnClose = true` on the route, and the handler is
- * cancelled as the connection closes, on the CIO and Netty engines.
+ * Ktor's `HttpRequestLifecycle` (Ktor 3.4 and newer) with `cancelCallOnClose = true` on the
+ * route, and the handler is cancelled as the connection closes, on the CIO and Netty engines.
  *
  * ```kotlin
  * get("/feed") {

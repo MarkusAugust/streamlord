@@ -247,5 +247,8 @@ static files. **1.0.4** is what this release speaks.
 ## Versions
 
 JDK 21 builds Streamlord; the artifacts target JDK 17, the oldest realm both Ktor 3 and Spring
-Framework 7 still tolerate. Kotlin 2.4. The Spring adapter is compiled and tested against
-Framework 7.0 (Boot 4) on every build. Boot 3 is not supported.
+Framework 7 still tolerate. Kotlin 2.4 builds it, to the level of Kotlin 2.2, so a project on
+Kotlin 2.2 or newer compiles against it; Boot 4.0 manages 2.2, and the documentation's examples are
+compiled with 2.2 on every build. The Ktor adapter runs on Ktor 3.0 and newer, and its tests run on
+3.0 and on the newest. The Spring adapter is compiled and tested against Framework 7.0 (Boot 4)
+on every build. Boot 3 is not supported.

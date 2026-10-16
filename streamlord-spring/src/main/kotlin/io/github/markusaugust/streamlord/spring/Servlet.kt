@@ -11,6 +11,8 @@ import io.github.markusaugust.streamlord.core.port.driven.isDatastarRequest
 import io.github.markusaugust.streamlord.core.port.driven.rejectDeclaredLengthAbove
 import io.github.markusaugust.streamlord.core.port.driving.DatastarStream
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
+import jakarta.servlet.ServletResponse
+import jakarta.servlet.ServletResponseWrapper
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import kotlinx.coroutines.Dispatchers
@@ -58,7 +60,8 @@ import kotlin.time.Duration
  *
  * @param streamlord The configured instance, typically a Spring bean. Defaults to [Streamlord.Default].
  * @param request The request being answered, when you have it: `Connection: keep-alive` is an
- *   HTTP/1.1 header, and with the request at hand it is only set for HTTP/1.1. With
+ *   HTTP/1.1 header that HTTP/2 forbids, and it is set only for a request known to be HTTP/1.1.
+ *   Without this one, the request Spring MVC is handling for this response stands in. With
  *   [Streamlord.compress] on, the stream is gzipped when this request's `Accept-Encoding` takes
  *   it; without the request, it is not.
  * @param timeout How long Spring lets this stream run before it cuts it, in place of the
@@ -176,6 +179,28 @@ private fun setAsyncExecutor(
 }
 
 /*
+ * The request this response answers: [given], or the one Spring MVC holds for the current thread
+ * when that one's response is this. A suspend controller can resume on a thread that holds some
+ * other request, so the holder's request counts only for its own response.
+ */
+internal fun HttpServletResponse.requestOf(given: HttpServletRequest?): HttpServletRequest? {
+    if (given != null) return given
+    val attributes = RequestContextHolder.getRequestAttributes() as? ServletRequestAttributes ?: return null
+    val held = attributes.response ?: return null
+    return attributes.request.takeIf { sameResponse(held, this) }
+}
+
+// Spring hands a controller the response wrapped for its async lifecycle, and filters wrap it
+// too, so two responses are the same when one is found unwrapping the other.
+private fun sameResponse(
+    a: ServletResponse,
+    b: ServletResponse,
+): Boolean {
+    fun chain(response: ServletResponse) = generateSequence(response) { (it as? ServletResponseWrapper)?.response }
+    return chain(a).any { it === b } || chain(b).any { it === a }
+}
+
+/*
  * The request's manager, read from the attribute rather than through WebAsyncUtils.getAsyncManager,
  * which would make a new one outside MVC and leave the setting with nothing to act on.
  */
@@ -225,9 +250,9 @@ private fun onStreamCycle(
  * Set the headers an SSE response needs and disable buffering. Called by [datastarStream].
  *
  * `Connection: keep-alive` belongs to HTTP/1.1 only; HTTP/2 forbids connection-specific
- * headers. With [request] given it is set only when the request came over HTTP/1.1; without
- * it, the header is set, as almost every servlet deployment still speaks HTTP/1.1 and the
- * HTTP/2 containers drop it themselves.
+ * headers, and curl and Node refuse a response that carries one, which Tomcat passes through. It
+ * is set only for a request known to be HTTP/1.1: [request], or else the one Spring MVC is
+ * handling for this response. With neither, it is left out.
  */
 public fun HttpServletResponse.prepareForSse(request: HttpServletRequest? = null) {
     prepareStream(request)
@@ -242,7 +267,7 @@ internal fun HttpServletResponse.prepareStream(request: HttpServletRequest?): Bo
     contentType = DatastarProtocol.CONTENT_TYPE_EVENT_STREAM
     characterEncoding = StandardCharsets.UTF_8.name()
     for ((name, value) in DatastarProtocol.SSE_RESPONSE_HEADERS) setHeader(name, value)
-    if (request == null || request.protocol.equals("HTTP/1.1", ignoreCase = true)) setHeader("Connection", "keep-alive")
+    if (requestOf(request)?.protocol.equals("HTTP/1.1", ignoreCase = true)) setHeader("Connection", "keep-alive")
     return try {
         bufferSize = 0
         true
