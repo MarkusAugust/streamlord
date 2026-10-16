@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.spring
 
 import org.apache.catalina.startup.Tomcat
+import org.apache.coyote.http2.Http2Protocol
 import org.springframework.web.context.support.AnnotationConfigWebApplicationContext
 import org.springframework.web.servlet.DispatcherServlet
 import java.net.URI
@@ -15,6 +16,7 @@ import java.nio.file.Files
  */
 class RealTomcat(
     config: Class<*>,
+    http2: Boolean = false,
 ) : AutoCloseable {
     private val baseDir = Files.createTempDirectory("tomcat")
     private val tomcat = Tomcat()
@@ -23,6 +25,8 @@ class RealTomcat(
     init {
         tomcat.setBaseDir(baseDir.toString())
         tomcat.setPort(0)
+        // HTTP/2 over plain HTTP, reached by an upgrade from HTTP/1.1, as Java's client asks for it.
+        if (http2) tomcat.connector.addUpgradeProtocol(Http2Protocol())
         val context = tomcat.addContext("", null)
         val spring = AnnotationConfigWebApplicationContext().apply { register(config) }
         Tomcat.addServlet(context, "dispatcher", DispatcherServlet(spring)).apply {

@@ -621,3 +621,65 @@ val applyProjectVersion =
     }
 
 tasks.named("checkDocSamples") { dependsOn(applyProjectVersion) }
+
+/*
+ * The examples compiled again by the oldest Kotlin a consumer may use, against the modules as
+ * they are built, with that Kotlin's own standard library. The modules are compiled by a newer
+ * Kotlin, whose metadata an older compiler refuses to read past one version ahead, and the
+ * build alone never shows it.
+ */
+val kotlinFloor = libs.versions.kotlinFloor.get()
+
+val kotlinFloorCompiler: Configuration = configurations.create("kotlinFloorCompiler")
+val kotlinFloorPlugins: Configuration = configurations.create("kotlinFloorPlugins") { isTransitive = false }
+val kotlinFloorClasspath: Configuration = configurations.create("kotlinFloorClasspath") {
+    extendsFrom(configurations.compileClasspath.get())
+    attributes {
+        attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage.JAVA_API))
+        attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category.LIBRARY))
+    }
+    resolutionStrategy.eachDependency { if (requested.group == "org.jetbrains.kotlin") useVersion(kotlinFloor) }
+}
+
+dependencies {
+    kotlinFloorCompiler("org.jetbrains.kotlin:kotlin-compiler-embeddable:$kotlinFloor")
+    kotlinFloorPlugins("org.jetbrains.kotlin:kotlin-serialization-compiler-plugin-embeddable:$kotlinFloor")
+}
+
+val checkKotlinFloor =
+    tasks.register<JavaExec>("checkKotlinFloor") {
+        description = "Compiles the documentation's examples with Kotlin $kotlinFloor, as the oldest consumer would."
+        group = "verification"
+        // The generated samples by way of their task, which wires the dependency.
+        val sources = files(layout.projectDirectory.dir("src/main/kotlin"), generateDocSamples.map { it.target })
+        val output = layout.buildDirectory.dir("kotlin-floor")
+        inputs.files(sources).withPathSensitivity(PathSensitivity.RELATIVE)
+        inputs.files(kotlinFloorClasspath, kotlinFloorPlugins)
+        outputs.dir(output)
+        classpath = kotlinFloorCompiler
+        mainClass.set("org.jetbrains.kotlin.cli.jvm.K2JVMCompiler")
+        javaLauncher.set(javaToolchains.launcherFor { languageVersion.set(JavaLanguageVersion.of(21)) })
+        // Locals, so the provider holds files and not the build script.
+        val compileClasspath: FileCollection = kotlinFloorClasspath
+        val plugins: FileCollection = kotlinFloorPlugins
+        val sourcePaths: FileCollection = sources
+        val outputPath = output.map { it.asFile.absolutePath }
+        argumentProviders.add(
+            CommandLineArgumentProvider {
+                listOf(
+                    "-no-stdlib",
+                    "-no-reflect",
+                    "-jvm-target",
+                    "17",
+                    "-Xjsr305=strict",
+                    "-Xplugin=" + plugins.singleFile.absolutePath,
+                    "-classpath",
+                    compileClasspath.asPath,
+                    "-d",
+                    outputPath.get(),
+                ) + sourcePaths.files.map { it.absolutePath }
+            },
+        )
+    }
+
+tasks.named("check") { dependsOn(checkKotlinFloor) }

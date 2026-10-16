@@ -60,7 +60,7 @@ public class StreamlordPluginConfig {
         )
 }
 
-internal val StreamlordKey: AttributeKey<Streamlord> = AttributeKey("Streamlord")
+internal val StreamlordKey: AttributeKey<Streamlord> = AttributeKey("Streamlord", portableTypeInfo<Streamlord>())
 
 /**
  * Installs a configured [Streamlord] into the application, so every `call.respondDatastar { }`

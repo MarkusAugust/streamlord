@@ -86,6 +86,19 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- `streamlord-ktor` runs on every Ktor 3. Ktor's reified helpers inlined a `TypeInfo`
+  constructor that only Ktor 3.6.0 has, so on Ktor 3.0 to 3.5 every `respondDatastar`, the plugin
+  and `cspNonce` failed with `NoSuchMethodError`. Its tests now also run, compiled against Ktor
+  3.0.0, on the adapter as it is published.
+- Every module compiles in a project on Kotlin 2.2, which Spring Boot 4.0 manages. They carried
+  Kotlin 2.4 metadata, which a Kotlin 2.2 compiler refuses to read. They are built at language and
+  API level 2.2 and name the 2.2 standard library in their POMs, and the documentation's examples
+  are compiled with Kotlin 2.2.21 on every build.
+- `datastarStream` without a request no longer sends `Connection: keep-alive` over HTTP/2, which
+  curl and Node refuse; Tomcat passes the header through. It finds the request Spring MVC is
+  handling for the response when none is passed, and sets the header only for HTTP/1.1. With no
+  request found, outside Spring MVC or in a `suspend` controller after it suspended, it leaves the
+  header out; HTTP/1.1 keeps the connection open without it.
 - `datastarStream` on a response something has already written to, but not committed, no longer
   fails with a 500: `prepareForSse` asked for no buffer, which Tomcat, Jetty and Undertow refuse
   once anything is written, and Streamlord now does without it, since every event is flushed

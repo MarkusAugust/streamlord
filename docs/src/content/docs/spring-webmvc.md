@@ -159,7 +159,8 @@ other exception, as a 500 unless you map it; a 503 tells the client to try again
 
 Like `timeout`, `executor` needs a request that Spring MVC is handling, and a `suspend`
 controller has to pass it: Spring's `RequestContextHolder` does not follow a controller across a
-suspension.
+suspension. Without it there, `Connection: keep-alive` is left out on HTTP/1.1 too, which HTTP/1.1
+does without.
 
 The heartbeat does not use that executor. It runs on `Dispatchers.IO`, beside the block, so a
 block that blocks its thread does not hold the comment back. An authorisation asked by the

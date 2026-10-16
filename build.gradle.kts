@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 import org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation
 
 import com.vanniktech.maven.publish.JavadocJar
@@ -11,6 +12,9 @@ plugins {
     alias(libs.plugins.maven.publish) apply false
     alias(libs.plugins.dokka) apply false
 }
+
+// The oldest Kotlin a consumer may compile with; see compilerOptions below.
+val kotlinFloor: String = libs.versions.kotlinFloor.get()
 
 /*
  * The forge that shapes every module of Streamlord.
@@ -61,7 +65,22 @@ subprojects {
             jvmTarget.set(JvmTarget.JVM_17)
             allWarningsAsErrors.set(!internal)
             freeCompilerArgs.addAll("-Xjdk-release=17", "-Xjsr305=strict")
+            /*
+             * A Kotlin compiler reads metadata at most one version ahead of its own, so modules
+             * built by this Kotlin at its own level would refuse to compile in a project on the
+             * Kotlin Spring Boot 4.0 manages. Built to that level instead, and with that standard
+             * library in the POM; docs-samples' checkKotlinFloor compiles against them with it.
+             */
+            if (!internal) {
+                val floor = KotlinVersion.fromVersion(kotlinFloor.substringBeforeLast('.'))
+                languageVersion.set(floor)
+                apiVersion.set(floor)
+                // Where an annotation on a constructor property lands by default from Kotlin 2.4,
+                // the parameter and the field, as the modules built at 2.4 had it.
+                freeCompilerArgs.add("-Xannotation-default-target=param-property")
+            }
         }
+        if (!internal) coreLibrariesVersion = kotlinFloor
     }
 
     extensions.configure<JavaPluginExtension> {

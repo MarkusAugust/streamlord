@@ -48,7 +48,8 @@ class SpringAdapterTest {
 
         assertTrue(response.contentType!!.startsWith("text/event-stream"))
         assertEquals("no-cache", response.getHeader("Cache-Control"))
-        assertEquals("keep-alive", response.getHeader("Connection"))
+        // No request given and none that Spring MVC is handling, so nothing says it is HTTP/1.1.
+        assertNull(response.getHeader("Connection"))
         assertEquals(
             "event: datastar-patch-elements\ndata: elements <div id=\"a\">1</div>\n\n" +
                 "event: datastar-patch-signals\ndata: signals {\"query\":\"ash\",\"page\":2}\n\n" +

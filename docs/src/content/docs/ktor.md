@@ -12,7 +12,7 @@ Ktor is the Sword. The adapter is two plugins and a set of extension functions o
 `respondScript`), four that read (`readSignals`, `readSignalsOr`, `readSignalsJson`,
 `asIncomingRequest`), several of them with overloads, and three properties, `streamlord`,
 `isDatastarRequest` and `cspNonce`. It brings no Ktor version of its own. Ktor is `compileOnly`, so
-you stay on whatever you had.
+you stay on whatever you had, from Ktor 3.0 on.
 
 ## The plugin
 
@@ -85,8 +85,8 @@ the first ones still land in the operating system's buffer. The heartbeat, on by
 stream that waits write too, so it ends a few heartbeats after the client left. With the heartbeat
 off, a stream that waits for an event that has not happened yet waits on with nobody listening.
 
-Install Ktor's `HttpRequestLifecycle` on the route, and the handler is cancelled the moment the
-connection closes:
+Install Ktor's `HttpRequestLifecycle`, which came in Ktor 3.4, on the route, and the handler is
+cancelled the moment the connection closes:
 
 ```kotlin sample=ktor-routing
 route("/counter") {

@@ -8,18 +8,13 @@ import io.ktor.server.engine.ApplicationEngine
 import io.ktor.server.engine.ApplicationEngineFactory
 import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
-import io.ktor.server.http.HttpRequestLifecycle
 import io.ktor.server.netty.Netty
 import io.ktor.server.routing.get
-import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.runBlocking
 import java.net.Socket
 import java.net.SocketTimeoutException
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -67,46 +62,6 @@ class IdleStreamTest {
 
             assertEquals(false, closed, "Netty closed the stream:\n$text")
             assertTrue(": keep-alive" in text, "no keep-alive comment:\n$text")
-        } finally {
-            server.stop(100, 500)
-        }
-    }
-
-    // Ktor's own plugin, on the route: what the Ktor page tells a reader to install.
-    @Test
-    fun `HttpRequestLifecycle on the route cancels a stream whose client left`() {
-        val waiting = CompletableFuture<Unit>()
-        val ended = CompletableFuture<Throwable>()
-        val server =
-            serve(CIO) {
-                routing {
-                    route("/idle") {
-                        install(HttpRequestLifecycle) { cancelCallOnClose = true }
-                        get {
-                            call.respondDatastar(heartbeat = null) {
-                                try {
-                                    waiting.complete(Unit)
-                                    awaitCancellation()
-                                } catch (e: Throwable) {
-                                    ended.complete(e)
-                                    throw e
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        try {
-            Socket("localhost", server.port).use { socket ->
-                socket.soTimeout = 10_000
-                socket.getOutputStream().write("GET /idle HTTP/1.1\r\nHost: x\r\n\r\n".toByteArray())
-                socket.getInputStream().read(ByteArray(4096))
-                // Left only once the block waits: a cancel that came before it would never be seen here.
-                waiting.get(10, TimeUnit.SECONDS)
-            }
-
-            // About 200 ms on a desktop; the bound is for a busy CI runner, not a measure of speed.
-            assertTrue(ended.get(10, TimeUnit.SECONDS) is CancellationException)
         } finally {
             server.stop(100, 500)
         }

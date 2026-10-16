@@ -22,3 +22,42 @@ dependencies {
     testImplementation(project(":streamlord-test"))
     testImplementation(libs.ktor.server.compression)
 }
+
+/*
+ * Ktor is compileOnly, so a consumer runs the adapter on whatever Ktor 3 they have. Compiled
+ * against the newest, it can still reach for something only the newest has, an inline helper's
+ * constructor among them, and that fails at runtime only. So the tests are compiled again the
+ * way a consumer's code would be, against the oldest Ktor 3 the adapter promises, and run on it
+ * against the adapter's classes as compiled against the newest.
+ */
+val ktorOldestVersion = libs.versions.ktorOldest.get()
+
+val oldestKtorTest: SourceSet = sourceSets.create("oldestKtorTest") {
+    kotlin.srcDir("src/test/kotlin")
+    // HttpRequestLifecycle came in Ktor 3.4.0.
+    kotlin.exclude("**/RequestLifecycleTest.kt")
+    runtimeClasspath += sourceSets.main.get().output
+}
+
+configurations.named("oldestKtorTestImplementation") { extendsFrom(configurations.testImplementation.get()) }
+configurations.named("oldestKtorTestRuntimeOnly") { extendsFrom(configurations.testRuntimeOnly.get()) }
+listOf("oldestKtorTestCompileClasspath", "oldestKtorTestRuntimeClasspath").forEach { name ->
+    configurations.named(name) {
+        resolutionStrategy.eachDependency { if (requested.group == "io.ktor") useVersion(ktorOldestVersion) }
+    }
+}
+
+kotlin.target.compilations.named("oldestKtorTest") {
+    associateWith(kotlin.target.compilations.getByName("main"))
+}
+
+val testOldestKtor = tasks.register<Test>("testOldestKtor") {
+    description = "Runs the Ktor adapter tests, compiled against Ktor $ktorOldestVersion, on it."
+    group = "verification"
+    testClassesDirs = oldestKtorTest.output.classesDirs
+    classpath = oldestKtorTest.runtimeClasspath
+    useJUnitPlatform()
+    systemProperty("streamlord.ktorOldest", ktorOldestVersion)
+}
+
+tasks.check { dependsOn(testOldestKtor) }

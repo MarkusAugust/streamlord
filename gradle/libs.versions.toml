@@ -1,5 +1,8 @@
 [versions]
 kotlin = "2.4.21"
+# The oldest Kotlin a consumer may compile with: what Spring Boot 4.0 manages. The published
+# modules are built to its language and API level, and docs-samples compiles with it.
+kotlinFloor = "2.2.21"
 # A floor, not a preference. Spring Boot pins coroutines in its BOM (4.0 and 4.1 pin 1.10.2) and
 # downgrades anything newer, so code compiled against a later release fails there with
 # NoSuchMethodError: 1.11 compiles runBlocking to a symbol 1.10 does not have. Raise it only when
@@ -9,6 +12,8 @@ coroutinesNewest = "1.11.0"
 serialization = "1.11.0"
 kotlinxHtml = "0.12.0"
 ktor = "3.6.0"
+# The oldest Ktor the adapter promises to run on; testOldestKtor runs its tests against it.
+ktorOldest = "3.0.0"
 spring = "7.0.9"
 servlet = "6.1.0"
 # What Spring Boot 4 pins, so the container a test starts is the one Boot users run.

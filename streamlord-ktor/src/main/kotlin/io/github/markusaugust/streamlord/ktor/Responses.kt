@@ -21,7 +21,6 @@ import io.ktor.http.headersOf
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.httpVersion
 import io.ktor.server.response.header
-import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
 import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.writeFully
@@ -43,8 +42,8 @@ import kotlin.time.Duration
  * Ktor does not cancel the handler when the client disconnects. A block that keeps writing ends
  * when a write fails with an `IOException`, usually a few writes after the client left; a block
  * that waits without writing waits on. Install
- * Ktor's `HttpRequestLifecycle` with `cancelCallOnClose = true` on the route, and the handler is
- * cancelled as the connection closes, on the CIO and Netty engines.
+ * Ktor's `HttpRequestLifecycle` (Ktor 3.4 and newer) with `cancelCallOnClose = true` on the
+ * route, and the handler is cancelled as the connection closes, on the CIO and Netty engines.
  *
  * ```kotlin
  * get("/feed") {
@@ -108,6 +107,7 @@ public suspend fun ApplicationCall.respondDatastar(
                 }
             }
         },
+        portableTypeInfo<OutgoingContent>(),
     )
 }
 
