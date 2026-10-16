@@ -109,6 +109,37 @@ production, because it makes every handler fail the moment any page gains a sign
 The two Jackson modules exist because Jackson 3 moved package. Taking the wrong one compiles and
 then fails at runtime on an `ObjectMapper` that is not the one Spring configured.
 
+## Where the codecs differ
+
+All three ignore keys the type does not name and refuse a body with anything after the JSON
+value. All three also refuse a `null` for a primitive, and a missing parameter that has no
+default and cannot be `null`. For Jackson, Streamlord enforces these whatever your mapper is set to, because
+Jackson 2 and Spring Boot's mapper would otherwise turn a missing `val id: Long` into `0`. A
+Kotlin class read through Jackson needs `jackson-module-kotlin` on the mapper. Without it Jackson
+drops what the browser sent or leaves `null` in a property that cannot hold one, so the codec
+throws `SignalsCodecException`, a 500, instead.
+
+They differ on the rest:
+
+| Body or value | kotlinx | Jackson 3 and 2 |
+|---|---|---|
+| `{"page":3.7}` into `page: Int` | refused | `3` |
+| `{"name":5}` into `name: String` | refused | `"5"` |
+| `{"page":"3"}` into `page: Int` | `3` | `3` |
+| `{}` into `q: String?` with no default | refused | `null` |
+| writing `Double.NaN` or an infinity | `SignalsCodecException` | the string `"NaN"`, so the signal changes type in the browser |
+| writing a `Map<String, Any?>` | `SignalsCodecException` | written |
+
+A body that is refused throws `SignalsDecodeException`, which `StreamlordExceptionHandler`
+answers with a 400.
+
+## Numbers past 2^53
+
+The browser holds every number as a double, which is exact up to 2^53, 9007199254740992. A
+`Long` beyond that, such as a snowflake id, comes back as another number: a page given
+`{"id":9007199254740993}` sends `9007199254740992`. The codecs and the DSL write the digits as
+they are and cannot warn you, so keep such ids in a `String`.
+
 ## In a native image
 
 A codec finds the serializer for a `KType` by reading the class, which GraalVM's native-image

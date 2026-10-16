@@ -169,6 +169,7 @@ abstract class ExtractDocSamples : DefaultTask() {
 
         val problems = mutableListOf<Problem>()
         val transcripts = mutableListOf<Pair<String, String>>()
+        val htmlSamples = mutableListOf<Pair<String, String>>()
         var written = 0
 
         val markdown =
@@ -225,11 +226,13 @@ abstract class ExtractDocSamples : DefaultTask() {
                     continue
                 }
 
-                val source = wrap(context, body, "sample_${page.nameWithoutExtension.replace('-', '_')}_$fenceLine")
+                val name = "sample_${page.nameWithoutExtension.replace('-', '_')}_$fenceLine"
+                val source = wrap(context, body, name)
                 if (source == null) {
                     problems += Problem(page.name, fenceLine, "unknown context '$context'. Known: $known, and none.")
                     continue
                 }
+                if (context == "html") htmlSamples += "${page.name}:$fenceLine" to name
 
                 out.resolve("sample_${page.nameWithoutExtension.replace('-', '_')}_$fenceLine.kt").writeText(source)
                 written++
@@ -271,7 +274,36 @@ abstract class ExtractDocSamples : DefaultTask() {
             """.trimIndent(),
         )
 
-        logger.lifecycle("Extracted $written documentation samples and ${transcripts.size} transcripts.")
+        /*
+         * The markup samples run as well as compile: kotlinx.html refuses some things only while
+         * it renders, such as an attribute set after a child was written, and so does the DSL,
+         * which checks names and expressions as it writes them.
+         */
+        val samples = htmlSamples.joinToString(",\n") { (where, fn) -> "        \"$where\" to { div { $fn() } }" }
+        out.resolve("HtmlSamples.kt").writeText(
+            """
+            import kotlinx.html.div
+            import kotlinx.html.stream.createHTML
+            import kotlin.system.exitProcess
+
+            /** Generated. Renders every sample=html block and names each one that throws. */
+            fun main() {
+                val all: List<Pair<String, kotlinx.html.TagConsumer<String>.() -> Unit>> = listOf(
+            $samples
+                )
+                val failed = all.mapNotNull { (where, sample) ->
+                    runCatching { createHTML(prettyPrint = false).sample() }.exceptionOrNull()?.let { "  ${'$'}where  ${'$'}it" }
+                }
+                if (failed.isNotEmpty()) {
+                    System.err.println("These sample=html blocks throw when they render:\n" + failed.joinToString("\n"))
+                    exitProcess(1)
+                }
+                println("Rendered ${'$'}{all.size} html samples.")
+            }
+            """.trimIndent(),
+        )
+
+        logger.lifecycle("Extracted $written documentation samples, ${htmlSamples.size} of them markup, and ${transcripts.size} transcripts.")
     }
 }
 
@@ -433,6 +465,17 @@ val checkDocDependencies =
 
 tasks.named("checkDocSamples") { dependsOn(checkDocDependencies) }
 
+
+val runHtmlSamples =
+    tasks.register<JavaExec>("runHtmlSamples") {
+        description = "Renders every sample=html block of the documentation and fails on one that throws."
+        group = "verification"
+        dependsOn(tasks.named("compileKotlin"))
+        classpath = sourceSets.main.get().runtimeClasspath
+        mainClass.set("HtmlSamplesKt")
+    }
+
+tasks.named("checkDocSamples") { dependsOn(runHtmlSamples) }
 
 /*
  * Runs the generated dispatcher, so the bytes on the page are the bytes Streamlord's own

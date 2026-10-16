@@ -104,6 +104,7 @@ public final class io/github/markusaugust/streamlord/html/Casing {
 	public final fun key (Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;Lio/github/markusaugust/streamlord/html/Case;)Lkotlin/Pair;
 	public final fun plainKey (Ljava/lang/String;)Ljava/lang/String;
 	public final fun reference (Ljava/lang/String;)Ljava/lang/String;
+	public final fun signalName (Ljava/lang/String;)Ljava/lang/String;
 	public final fun validate (Ljava/lang/String;)Ljava/lang/String;
 }
 

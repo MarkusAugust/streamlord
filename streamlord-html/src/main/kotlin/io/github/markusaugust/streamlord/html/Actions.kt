@@ -119,11 +119,15 @@ public class FetchOptions {
                 retry?.let { add("retry: ${js(it.wire)}") }
                 retryInterval?.let { add("retryInterval: ${it.wholeMilliseconds()}") }
                 retryScaler?.let {
-                    require(it.isFinite()) { "retryScaler must be a finite number, not $it" }
+                    // Below zero the backoff turns into no wait at all.
+                    require(it.isFinite() && it >= 0) { "retryScaler must be a finite number of 0 or more, not $it" }
                     add("retryScaler: $it")
                 }
                 retryMaxWait?.let { add("retryMaxWait: ${it.wholeMilliseconds()}") }
-                retryMaxCount?.let { add("retryMaxCount: $it") }
+                retryMaxCount?.let {
+                    require(it >= 0) { "retryMaxCount must be 0 or more, not $it" }
+                    add("retryMaxCount: $it")
+                }
                 requestCancellation?.let { add("requestCancellation: ${js(it.wire)}") }
                 (payloadExpr ?: payload?.let { JsLiteral.write(it) })?.let { add("payload: $it") }
                 responseOverrides?.toJs()?.let { add("responseOverrides: $it") }

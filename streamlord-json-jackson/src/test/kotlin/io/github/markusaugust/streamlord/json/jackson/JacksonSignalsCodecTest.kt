@@ -4,6 +4,9 @@ import io.github.markusaugust.streamlord.core.SignalsCodecException
 import io.github.markusaugust.streamlord.core.SignalsDecodeException
 import io.github.markusaugust.streamlord.core.port.driven.decode
 import io.github.markusaugust.streamlord.core.port.driven.encode
+import tools.jackson.databind.DeserializationFeature
+import tools.jackson.databind.json.JsonMapper
+import tools.jackson.module.kotlin.KotlinModule
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -47,5 +50,56 @@ class JacksonSignalsCodecTest {
     @Test
     fun `ignores the signals the type does not name`() {
         assertEquals(Signals("x", 2), codec.decode<Signals>("""{"search":"x","count":2,"elsewhere":true}"""))
+    }
+
+    data class Delete(
+        val id: Long,
+    )
+
+    data class Page(
+        val page: Int = 1,
+    )
+
+    data class Find(
+        val q: String?,
+    )
+
+    // A required signal the browser did not send must not reach the handler as 0.
+    @Test
+    fun `a missing or null primitive is refused, whatever the mapper says`() {
+        val lenient =
+            JacksonSignalsCodec(
+                JsonMapper
+                    .builder()
+                    .addModule(
+                        KotlinModule.Builder().build(),
+                    ).disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+                    .build(),
+            )
+        for (c in listOf(codec, lenient)) {
+            assertFailsWith<SignalsDecodeException> { c.decode<Delete>("{}") }
+            assertFailsWith<SignalsDecodeException> { c.decode<Delete>("""{"id":null}""") }
+            assertFailsWith<SignalsDecodeException> { c.decode<Page>("""{"page":null}""") }
+            assertEquals(Page(), c.decode<Page>("{}"))
+            // Unlike kotlinx, the Kotlin module reads a nullable parameter as optional.
+            assertEquals(Find(null), c.decode<Find>("{}"))
+        }
+    }
+
+    @Test
+    fun `anything after the value is refused`() {
+        assertFailsWith<SignalsDecodeException> { codec.decode<Page>("""{"page":2} {"page":3}""") }
+    }
+
+    // Without the module Jackson reads past the constructor: values dropped, null in a String, or a 400 that is the server's.
+    @Test
+    fun `a Kotlin class needs the Kotlin module on the mapper`() {
+        val bare = JacksonSignalsCodec(JsonMapper.builder().build())
+        for (body in listOf("""{"page":3}""", "{}")) {
+            val failure = assertFailsWith<SignalsCodecException> { bare.decode<Page>(body) }
+            assertFalse(failure is SignalsDecodeException, "$failure")
+        }
+        assertFailsWith<SignalsCodecException> { bare.decode<List<Delete>>("""[{"id":1}]""") }
+        assertEquals(mapOf("a" to 1), bare.decode<Map<String, Int>>("""{"a":1}"""))
     }
 }
