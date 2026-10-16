@@ -208,17 +208,12 @@ class SpringAdapterTest {
         }
     }
 
-    // A container refuses prepareForSse's setBufferSize on a committed response before this is
-    // reached; the mock does not, which leaves the check itself to test.
+    // Its headers have gone out, with whatever content type they carried.
     @Test
-    fun `a committed response is never gzipped`() {
-        val request = MockHttpServletRequest("GET", "/feed").apply { addHeader("Accept-Encoding", "gzip") }
+    fun `a committed response cannot become a stream`() {
         val response = MockHttpServletResponse().apply { setCommitted(true) }
 
-        response.datastarStream(Streamlord(compress = true), request) { patchSignals("n" to 1) }.writeTo(response.outputStream)
-
-        assertNull(response.getHeader("Content-Encoding"))
-        assertEquals("event: datastar-patch-signals\ndata: signals {\"n\":1}\n\n", response.contentAsString)
+        assertFailsWith<IllegalStateException> { response.datastarStream { patchSignals("n" to 1) } }
     }
 
     @Test

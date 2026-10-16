@@ -93,14 +93,14 @@ public fun HttpServletResponse.datastarStream(
     block: suspend DatastarStream.() -> Unit,
 ): StreamingResponseBody {
     require(heartbeat == null || heartbeat.isPositive()) { "heartbeat must be positive, or null for none" }
+    // Its headers have gone out, and with them a content type the stream cannot change.
+    check(!isCommitted) { "The response is already committed, so it cannot become an event stream" }
     if (timeout != null) setAsyncTimeout(timeout, request)
     if (executor != null) setAsyncExecutor(executor, request)
-    // Read first: a committed response has sent its headers, so a body gzipped without them is
-    // noise, and a container refuses prepareForSse's setBufferSize on it anyway.
-    val committed = isCommitted
-    prepareForSse(request)
+    // What something wrote before the stream would sit in front of a gzip member and break it.
+    val untouched = prepareStream(request)
     // Without the request nothing is gzipped, so there is nothing for Accept-Encoding to vary.
-    val varies = streamlord.compress && !committed && request != null
+    val varies = streamlord.compress && untouched && request != null
     val gzip = varies && DatastarProtocol.acceptsGzip(request.getHeader("Accept-Encoding"))
     // Added, not set: a CORS filter may already vary the response on Origin.
     if (varies && getHeaders("Vary").none { it.contains("Accept-Encoding", ignoreCase = true) }) {
@@ -230,11 +230,25 @@ private fun onStreamCycle(
  * HTTP/2 containers drop it themselves.
  */
 public fun HttpServletResponse.prepareForSse(request: HttpServletRequest? = null) {
+    prepareStream(request)
+}
+
+/**
+ * [prepareForSse], and whether nothing had been written to the response before it. A buffer of
+ * none is a request, not a need, since every event is flushed anyway. Tomcat, Jetty and Undertow
+ * refuse it once anything is written, committed or not, and the refusal is that answer.
+ */
+internal fun HttpServletResponse.prepareStream(request: HttpServletRequest?): Boolean {
     contentType = DatastarProtocol.CONTENT_TYPE_EVENT_STREAM
     characterEncoding = StandardCharsets.UTF_8.name()
     for ((name, value) in DatastarProtocol.SSE_RESPONSE_HEADERS) setHeader(name, value)
     if (request == null || request.protocol.equals("HTTP/1.1", ignoreCase = true)) setHeader("Connection", "keep-alive")
-    bufferSize = 0
+    return try {
+        bufferSize = 0
+        true
+    } catch (_: IllegalStateException) {
+        false
+    }
 }
 
 /**

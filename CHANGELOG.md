@@ -86,6 +86,14 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- `datastarStream` on a response something has already written to, but not committed, no longer
+  fails with a 500: `prepareForSse` asked for no buffer, which Tomcat, Jetty and Undertow refuse
+  once anything is written, and Streamlord now does without it, since every event is flushed
+  anyway. Such a stream is not gzipped, since the bytes before it would break the gzip member. A
+  committed response, whose headers have gone out, fails with a clear `IllegalStateException`
+  rather than the container's.
+- The catalog notes that the `responseOverrides` fetch option has no effect in Datastar 1.0.4,
+  whose client never reads it, as the DSL's KDoc already did.
 - The Stream Inspector, in IntelliJ and VS Code, asks and reads as Datastar's client does. It
   sends the client's `Accept` (`text/event-stream, text/html, application/json`), in the request
   and in the curl line, so a server that answers by `Accept` answers the inspector as it answers
