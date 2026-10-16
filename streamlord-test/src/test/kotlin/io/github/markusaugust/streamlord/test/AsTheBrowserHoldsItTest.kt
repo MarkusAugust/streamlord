@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.test
 
+import io.github.markusaugust.streamlord.core.DatastarEventValidationException
 import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.domain.ExecuteScript
 import io.github.markusaugust.streamlord.core.domain.PatchElements
@@ -7,6 +8,7 @@ import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.core.protocol.SseEncoder
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
 /** The assertions against what the Datastar 1.0.4 client ends up holding for the same stream. */
@@ -54,8 +56,13 @@ class AsTheBrowserHoldsItTest {
     }
 
     @Test
-    fun `signals that are not json fail the assertion, not the test run`() {
-        assertFailsWith<AssertionError> { stream(PatchSignals("{count: 1}")).assertSignal("count", 1) }
+    fun `signals that are not json fail where they are read`() {
+        // Streamlord can no longer send them; another server can, and the client would run them.
+        val failure =
+            assertFailsWith<DatastarEventValidationException> {
+                datastarEvents("event: datastar-patch-signals\ndata: signals {count: 1}\n\n")
+            }
+        assertTrue("runs signals that are not JSON as JavaScript" in failure.message.orEmpty(), failure.message)
     }
 
     @Test

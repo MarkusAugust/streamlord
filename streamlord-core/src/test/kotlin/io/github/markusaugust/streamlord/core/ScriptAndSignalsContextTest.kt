@@ -1,0 +1,68 @@
+package io.github.markusaugust.streamlord.core
+
+import io.github.markusaugust.streamlord.core.domain.ExecuteScript
+import io.github.markusaugust.streamlord.core.domain.PatchSignals
+import io.github.markusaugust.streamlord.core.domain.SignalsResponse
+import io.github.markusaugust.streamlord.core.domain.Wire
+import io.github.markusaugust.streamlord.core.json.JsonNumber
+import io.github.markusaugust.streamlord.core.json.JsonWriter
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+
+/**
+ * What Streamlord writes where the browser runs it. Datastar's client reads signals with
+ * JSON.parse and runs anything JSON.parse refuses as JavaScript, and a script element holding
+ * `<!--` and then `<script` runs past its own end tag.
+ */
+class ScriptAndSignalsContextTest {
+    @Test
+    fun `signals that are not one JSON object are refused`() {
+        for (text in listOf("{a: (window.pwned = 1)}", "[1, 2]", "\"x\"", "{\"a\": 1} {}", "{\"a\": 1", "{\"a\": 01}", "")) {
+            assertFailsWith<DatastarEventValidationException>(text) { PatchSignals(text) }
+            assertFailsWith<DatastarEventValidationException>(text) { SignalsResponse(text) }
+        }
+        val deep = "{\"a\":" + "[".repeat(5000) + "]".repeat(5000) + "}"
+        assertEquals(deep, PatchSignals(deep).signals)
+        assertEquals(
+            " {\"a\": [1, -2.5e3, true, null, \"\\u00e9\\n\"], \"b\": {}} ",
+            PatchSignals(" {\"a\": [1, -2.5e3, true, null, \"\\u00e9\\n\"], \"b\": {}} ").signals,
+        )
+    }
+
+    @Test
+    fun `a JsonNumber holds a JSON number`() {
+        for (text in listOf("(window.pwned = 1)", "1e", "01", "+1", ".5", "NaN", "Infinity", "1_000", "")) {
+            assertFailsWith<IllegalArgumentException>(text) { JsonNumber(text) }
+        }
+        for (text in listOf("0", "-0", "12", "-1.5", "1e400", "2E-3")) assertEquals(text, JsonNumber(text).text)
+    }
+
+    @Test
+    fun `a JSON string never opens a script comment`() {
+        val written = JsonWriter.writeString("/search?q=<!--<script>")
+        assertFalse("<!" in written, written)
+        assertEquals("\"/search?q=\\u003c!--<script>\"", written)
+    }
+
+    @Test
+    fun `a script body neither ends early nor runs past its end`() {
+        assertEquals("a = '<\\/script>'", Wire.escapeScriptBody("a = '</script>'"))
+        for (tag in listOf("body", "head", "html", "BODY")) {
+            assertFalse("</$tag" in Wire.escapeScriptBody("a = '</$tag>'"), tag)
+        }
+        val commented = Wire.escapeScriptBody("a = '<!--<script>'; b = '</script>'")
+        assertFalse(Regex("<script[\\s/>]", RegexOption.IGNORE_CASE).containsMatchIn(commented.substringAfter("<!--")), commented)
+        // Without <!--, a <script inside a string is harmless and stays as written.
+        assertEquals("a = '<script>'", Wire.escapeScriptBody("a = '<script>'"))
+        assertTrue(
+            "<\\/body>" in
+                ExecuteScript("x = '</body>'").let {
+                    io.github.markusaugust.streamlord.core.protocol.SseEncoder
+                        .encode(it)
+                },
+        )
+    }
+}
