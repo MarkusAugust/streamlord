@@ -95,8 +95,8 @@ All notable changes to Streamlord are recorded here. The format follows
   had finished, so Datastar's client neither retried nor reported it, and a body an advice
   returned was appended to the event stream.
 - `datastarStream` sets `Content-Encoding: gzip` and `Connection: keep-alive`, and starts the gzip
-  member, with the stream's first write, so a failure before it, a `500`, a mapped `413` or a
-  rejected executor's `503`, is no longer answered as gzip over a plain body.
+  member, with the stream's first write, so a failure before it, a `500` or a mapped `413` or
+  `503`, is no longer answered as gzip over a plain body.
 - A `ShallowEtagHeaderFilter`, or any `ContentCachingResponseWrapper`, no longer holds a stream back
   until it ends: the stream flushes the response underneath it.
 - On Jetty, a stream is no longer sent one byte per chunk. Its buffer was set to none, which Jetty

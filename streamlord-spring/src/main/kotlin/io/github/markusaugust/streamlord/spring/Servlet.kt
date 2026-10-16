@@ -101,6 +101,9 @@ public fun HttpServletResponse.datastarStream(
     require(heartbeat == null || heartbeat.isPositive()) { "heartbeat must be positive, or null for none" }
     // Its headers have gone out, and with them a content type the stream cannot change.
     check(!isCommitted) { "The response is already committed, so it cannot become an event stream" }
+    val answered = requestOf(request)
+    if (timeout != null) setAsyncTimeout(timeout, answered, request != null)
+    if (executor != null) setAsyncExecutor(executor, answered, request != null)
     // The stream writes to the output stream, which a response refuses once its writer is taken.
     // Asked of the container's own response: a wrapper, such as the one ShallowEtagHeaderFilter
     // adds, makes its stream once, and Spring has yet to tell it not to cache this one.
@@ -109,9 +112,6 @@ public fun HttpServletResponse.datastarStream(
     } catch (e: IllegalStateException) {
         throw IllegalStateException("The response's writer is already in use, so it cannot carry an event stream", e)
     }
-    val answered = requestOf(request)
-    if (timeout != null) setAsyncTimeout(timeout, answered, request != null)
-    if (executor != null) setAsyncExecutor(executor, answered, request != null)
     // What something wrote before the stream would sit in front of a gzip member and break it.
     val untouched = prepareHeaders(this)
     // Without the request nothing is gzipped, so there is nothing for Accept-Encoding to vary.
@@ -306,7 +306,7 @@ private fun onStreamCycle(
 }
 
 /**
- * Set the headers an SSE response needs and disable buffering. Called by [datastarStream].
+ * Set the content type and the headers an SSE response needs; the buffer keeps the size it has.
  *
  * `Connection: keep-alive` belongs to HTTP/1.1 only; HTTP/2 forbids connection-specific
  * headers, and curl and Node refuse a response that carries one, which Tomcat passes through. It
@@ -317,11 +317,7 @@ public fun HttpServletResponse.prepareForSse(request: HttpServletRequest? = null
     prepareStream(request)
 }
 
-/**
- * [prepareForSse], and whether nothing had been written to the response before it. A buffer of
- * none is a request, not a need, since every event is flushed anyway. Tomcat, Jetty and Undertow
- * refuse it once anything is written, committed or not, and the refusal is that answer.
- */
+/** [prepareForSse], and whether nothing had been written to the response before it; see [prepareHeaders]. */
 internal fun HttpServletResponse.prepareStream(request: HttpServletRequest?): Boolean {
     val untouched = prepareHeaders(this)
     if (requestOf(request)?.protocol.equals("HTTP/1.1", ignoreCase = true)) setHeader("Connection", "keep-alive")

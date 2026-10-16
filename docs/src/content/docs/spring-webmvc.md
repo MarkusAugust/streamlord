@@ -250,7 +250,10 @@ the rest.
 or write the `@ControllerAdvice` yourself. An advice that answers an exception thrown inside a
 stream that has started ends it as if it had finished, and Datastar's client does not reconnect;
 throw the exception on when `response.isCommitted`, as `StreamlordExceptionHandler` does, and the
-container cuts the connection, which the client retries. Streamlord does not register it for you, because
-registering exception handlers behind your back is exactly the kind of help that turns into a
-fight. For reactive endpoints, see [Spring WebFlux](/spring-webflux/). The one filter the adapter
-offers, `CspNonceFilter`, is a bean you declare like any other, and it is on [Security](/security/).
+container cuts the connection, which the client retries. Over HTTP/2 straight to Tomcat under
+Spring Boot it does not: Boot's error page runs into the started response, and Tomcat ends the
+stream as if it had finished. Over HTTP/1.1, which a proxy in front usually speaks to the
+application, Tomcat and Jetty cut it. Streamlord does not register it for you, because registering
+exception handlers behind your back is exactly the kind of help that turns into a fight. For
+reactive endpoints, see [Spring WebFlux](/spring-webflux/). The one filter the adapter offers,
+`CspNonceFilter`, is a bean you declare like any other, and it is on [Security](/security/).

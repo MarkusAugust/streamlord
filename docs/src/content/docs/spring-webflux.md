@@ -25,9 +25,9 @@ event. Return the bare flow from a controller and Spring sets the content type a
 header, so prefer the response. Everything before these is your flow, and everything after is
 Spring's.
 
-The frames are written by Spring's own encoder, so they are spelled Spring's way: `event:`,
-`data:` and `retry:` with no space after the colon, and `id:` ahead of `event:`. The fields and the data are the ones Ktor
-and WebMVC send, and the Datastar client reads both spellings alike.
+The frames are written by Spring's own encoder, so they are spelled Spring's way: `event:`, `data:`
+and `retry:` with no space after the colon, and `id:` ahead of `event:`. The fields and the data
+are the ones Ktor and WebMVC send, and the Datastar client reads both spellings alike.
 
 ## The guard
 

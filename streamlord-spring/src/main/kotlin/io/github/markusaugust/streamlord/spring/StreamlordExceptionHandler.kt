@@ -42,6 +42,10 @@ import org.springframework.web.context.request.ServletRequestAttributes
  * the container cuts the connection, which Datastar's client retries. An answer then would end
  * the stream as if it had finished, and the client would not come back. An advice of your own
  * that handles exceptions from inside a stream should do the same.
+ *
+ * Over HTTP/2 straight to Tomcat under Spring Boot, the cut does not hold: Boot's error page runs
+ * into the started response, and Tomcat then ends the stream as if it had finished. Over HTTP/1.1,
+ * as a proxy in front usually speaks to the application, Tomcat and Jetty cut it.
  */
 @RestControllerAdvice
 @Order(Ordered.LOWEST_PRECEDENCE)
