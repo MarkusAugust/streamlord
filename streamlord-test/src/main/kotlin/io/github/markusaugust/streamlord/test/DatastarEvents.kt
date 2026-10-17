@@ -50,7 +50,9 @@ public class DatastarEvents(
      * So a signal patched twice reads as its last value, and one patched to `null` is gone,
      * which is what a test usually means when it asks what a signal ended up as. `onlyIfMissing`
      * is honoured leaf by leaf, as the client honours it: a nested object is still walked, and
-     * only the values that are already there are left alone.
+     * only the values that are already there are left alone. A `null` inside a stored array, and
+     * the hole a deleted index leaves, read as `""`, which is what the client hands an expression
+     * and sends to the server. See `mergePatchAsClient`.
      *
      * @throws AssertionError if a patch carried signals that are not a JSON object.
      */

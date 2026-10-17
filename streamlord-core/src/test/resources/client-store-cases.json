@@ -316,5 +316,61 @@
    }
   ],
   "client": "{\"a\":false,\"b\":2}"
+ },
+ {
+  "name": "a length key truncates the array",
+  "steps": [
+   {
+    "signals": "{\"a\":[1,2,3]}",
+    "onlyIfMissing": false
+   },
+   {
+    "signals": "{\"a\":{\"length\":1}}",
+    "onlyIfMissing": false
+   }
+  ],
+  "client": "{\"a\":[1]}"
+ },
+ {
+  "name": "a length key extends the array",
+  "steps": [
+   {
+    "signals": "{\"a\":[1]}",
+    "onlyIfMissing": false
+   },
+   {
+    "signals": "{\"a\":{\"length\":3}}",
+    "onlyIfMissing": false
+   }
+  ],
+  "client": "{\"a\":[1,\"\",\"\"]}"
+ },
+ {
+  "name": "a length key under onlyIfMissing is kept",
+  "steps": [
+   {
+    "signals": "{\"a\":[1,2,3]}",
+    "onlyIfMissing": false
+   },
+   {
+    "signals": "{\"a\":{\"length\":1}}",
+    "onlyIfMissing": true
+   }
+  ],
+  "client": "{\"a\":[1,2,3]}"
+ },
+ {
+  "name": "a length key beside indices",
+  "steps": [
+   {
+    "signals": "{\"a\":[1,2,3]}",
+    "onlyIfMissing": false
+   },
+   {
+    "signals": "{\"a\":{\"0\":9,\"length\":2}}",
+    "onlyIfMissing": false
+   }
+  ],
+  "client": "{\"a\":[9,2]}"
  }
 ]

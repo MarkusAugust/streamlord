@@ -17,7 +17,7 @@ class MergePatchAsClientTest {
     @Test
     fun `holds what the client holds`() {
         val cases = JsonParser.parse(javaClass.getResource("/client-store-cases.json")!!.readText()) as JsonArray
-        assertEquals(23, cases.size)
+        assertEquals(27, cases.size)
         for (case in cases.filterIsInstance<JsonObject>()) {
             var store = JsonObject.EMPTY
             for (step in case.array("steps")!!.objects()) {
@@ -32,6 +32,12 @@ class MergePatchAsClientTest {
         val store = JsonParser.parseObject("""{"a":[1]}""")
         assertFailsWith<IllegalArgumentException> { mergePatchAsClient(store, JsonParser.parse("""{"a":{"20000":1}}""")) }
         assertFailsWith<IllegalArgumentException> { mergePatchAsClient(store, JsonParser.parse("""{"__proto__":{"polluted":1}}""")) }
+        // The browser's RangeError: a length that is not a whole number of zero or more.
+        for (length in listOf("-1", "\"x\"", "1.5")) {
+            assertFailsWith<IllegalArgumentException>(
+                length,
+            ) { mergePatchAsClient(store, JsonParser.parse("""{"a":{"length":$length}}""")) }
+        }
         assertEquals("""{"a":[1]}""", store.toJson())
     }
 }

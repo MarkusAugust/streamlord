@@ -13,8 +13,6 @@ package io.github.markusaugust.streamlord.analysis
 private val HYPHENATED_SIGNAL = Regex("""\$[A-Za-z_][A-Za-z0-9_.]*(?:-[A-Za-z0-9_][A-Za-z0-9_.]*)+""")
 private val HYPHEN_WORD = Regex("""-([A-Za-z0-9_])""")
 private val ACTION = Regex("""@([A-Za-z_$][A-Za-z0-9_$]*)(\s*)\(""")
-private val SIGNAL_PATH = Regex("""\$\w+(?:\.\w+)+""")
-private val NUMERIC_SEGMENT = Regex("""\.\d""")
 private val SIGNAL_PREFIX = Regex("""\$([A-Za-z_][A-Za-z0-9_.]*)?$""")
 private val ACTION_PREFIX = Regex("""@([A-Za-z_][A-Za-z0-9_]*)?$""")
 private val KEBAB_PART = Regex("""-([a-z])""")
@@ -138,14 +136,77 @@ internal fun jsCodeMask(text: String): BooleanArray {
 /** `foo-bar` -> `fooBar`, as Datastar reads a kebab-case key. */
 public fun toCamel(name: String): String = if ('-' in name) KEBAB_PART.replace(name) { it.groupValues[1].uppercase() } else name
 
-/**
- * One statement of a value-returning expression, as Datastar's `genRx` matches them (engine.ts:412
- * in 1.0.4): everything up to a `;` that is not inside quotes, a regex literal or a no-argument IIFE.
- */
-private val STATEMENT =
+/** The characters `String.prototype.trim` removes: WhiteSpace and LineTerminator, which `Char.isWhitespace` is not. */
+private const val JS_WHITESPACE = "\t\n\u000B\u000C\r \u00A0\u1680\u2028\u2029\u202F\u205F\u3000\uFEFF"
+
+private fun Char.isJsWhitespace(): Boolean = this in JS_WHITESPACE || this in '\u2000'..'\u200A'
+
+private const val JS_SPACE = """[\t\n\u000B\u000C\r \u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]"""
+
+/** The one IIFE shape `genRx` steps over whole: `(function() {...})()` or `(() => ...)()`, no arguments, no nesting. */
+private val IIFE =
     Regex(
-        """(?U)(?:/(?:\\/|[^/])*/|"(?:\\"|[^"])*"|'(?:\\'|[^'])*'|`(?:\\`|[^`])*`|\(\s*(?:(?:function)\s*\(\s*\)|(?:\(\s*\))\s*=>)\s*(?:\{[\s\S]*?\}|[^;){]*)\s*\)\s*\(\s*\)|[^;])+""",
+        """\($JS_SPACE*(?:(?:function)$JS_SPACE*\($JS_SPACE*\)|(?:\($JS_SPACE*\))$JS_SPACE*=>)$JS_SPACE*(?:\{[\s\S]*?\}|[^;){]*)$JS_SPACE*\)$JS_SPACE*\($JS_SPACE*\)""",
     )
+
+/**
+ * The end of the quoted run `X(?:\\X|[^X])*X` that opens at [from], or null when none closes. The
+ * client's regex consumes an escaped delimiter as a pair, and when it runs out of text it gives the
+ * last pair back and ends the run on that delimiter; that is reproduced here, so a run that is not
+ * closed still ends where the browser's regex ends it.
+ */
+private fun delimitedEnd(
+    text: String,
+    from: Int,
+    delimiter: Char,
+): Int? {
+    var j = from + 1
+    var lastPair = -1
+    while (j < text.length) {
+        val c = text[j]
+        if (c == '\\' && j + 1 < text.length && text[j + 1] == delimiter) {
+            j += 2
+            lastPair = j
+        } else if (c != delimiter) {
+            j++
+        } else {
+            return j + 1
+        }
+    }
+    return if (lastPair >= 0) lastPair else null
+}
+
+/**
+ * The statements of a value-returning expression, as Datastar's `genRx` matches them (engine.ts:412
+ * in 1.0.4): runs of anything but `;`, where a quoted string, a regex literal and a no-argument
+ * IIFE are stepped over whole, `;` and all. Written as a scan rather than the client's one regular
+ * expression, which Java's engine recurses on and overflows for a few kilobytes of text; the two
+ * agree token for token, since each alternative is tried in the client's order at every offset.
+ */
+internal fun clientStatements(text: String): List<IntRange> {
+    val out = ArrayList<IntRange>()
+    var start = -1
+    var i = 0
+    while (i < text.length) {
+        val c = text[i]
+        if (c == ';') {
+            if (start >= 0) out += start until i
+            start = -1
+            i++
+            continue
+        }
+        if (start < 0) start = i
+        val tokenEnd =
+            when (c) {
+                '/', '"', '\'', '`' -> delimitedEnd(text, i, c)
+                '(' -> IIFE.matchAt(text, i)?.range?.let { it.last + 1 }
+                else -> null
+            }
+        i = tokenEnd ?: (i + 1)
+    }
+    if (start >= 0) out += start until text.length
+    return out
+}
 
 /** JavaScript as Datastar compiles an expression, with a map from each of its offsets back to the expression. */
 internal class ClientScript(
@@ -156,10 +217,86 @@ internal class ClientScript(
 }
 
 /**
+ * The client's rewrite of an expression (engine.ts:448 in 1.0.4), as one pattern: a quoted string
+ * or a template literal without `${` is stepped over, a `${...}` has its signals rewritten, and a
+ * `$name.path` outside them is written as `$['name']['path']`. Written as a plain string, since in
+ * a raw one `${` would open a Kotlin template.
+ */
+private val CLIENT_REWRITE =
+    Regex(
+        "(?:\"[^\"\\\\]*(?:\\\\.[^\"\\\\]*)*\"|'[^'\\\\]*(?:\\\\.[^'\\\\]*)*'|`[^`\\\\$]*(?:(?:\\\\.|\\$(?!\\{))[^`\\\\$]*)*`)|\\$\\{([^{}]*)\\}|\\$(\\w+(?:[.-]\\w+)*)",
+    )
+
+/** A signal reference as the client reads one: `\w` and `.`/`-` joined parts. */
+private val CLIENT_SIGNAL = Regex("""\$(\w+(?:[.-]\w+)*)""")
+
+private fun signalPath(name: String): String = "$" + name.split('.').joinToString("") { "['$it']" }
+
+/**
+ * The text with every `$name.path` written as the client writes it before compiling, so a signal
+ * can be no parameter, declared name or property key, as it cannot be in the browser; what sits in
+ * quotes stays as written, as it does there. Every character of a rewritten reference maps back to
+ * where the reference began.
+ */
+internal fun clientSignals(text: String): ClientScript {
+    val js = StringBuilder()
+    val origin = ArrayList<Int>(text.length + 16)
+
+    fun copy(
+        from: Int,
+        to: Int,
+    ) {
+        for (k in from until to) {
+            origin += k
+            js.append(text[k])
+        }
+    }
+
+    fun signals(
+        from: Int,
+        to: Int,
+    ) {
+        var i = from
+        for (m in CLIENT_SIGNAL.findAll(text.substring(from, to))) {
+            copy(i, from + m.range.first)
+            val written = signalPath(m.groupValues[1])
+            repeat(written.length) { origin += from + m.range.first }
+            js.append(written)
+            i = from + m.range.last + 1
+        }
+        copy(i, to)
+    }
+    var i = 0
+    for (m in CLIENT_REWRITE.findAll(text)) {
+        copy(i, m.range.first)
+        val interpolation = m.groups[1]
+        when {
+            interpolation != null -> {
+                copy(m.range.first, interpolation.range.first)
+                signals(interpolation.range.first, interpolation.range.last + 1)
+                copy(interpolation.range.last + 1, m.range.last + 1)
+            }
+
+            m.groups[2] != null -> {
+                signals(m.range.first, m.range.last + 1)
+            }
+
+            else -> {
+                copy(m.range.first, m.range.last + 1)
+            }
+        }
+        i = m.range.last + 1
+    }
+    copy(i, text.length)
+    origin += text.length
+    return ClientScript(js.toString(), origin.toIntArray())
+}
+
+/**
  * The function body Datastar compiles from [text] (engine.ts:385-430 in 1.0.4). The text is
- * trimmed. With [returnsValue] it is split into statements, the last of them wrapped in
- * `return (...);` unless it starts with `return`, and the statements joined with `;\n`; the
- * separators and the wrapping map to where the statement started or ended.
+ * trimmed as JavaScript trims. With [returnsValue] it is split into statements, the last of them
+ * wrapped in `return (...);` unless it starts with `return`, and the statements joined with `;\n`;
+ * the separators and the wrapping map to where the statement started or ended.
  */
 internal fun clientScript(
     text: String,
@@ -183,24 +320,27 @@ internal fun clientScript(
         repeat(piece.length) { origin += at }
         js.append(piece)
     }
-    val start = text.indexOfFirst { !it.isWhitespace() }
+
+    fun jsTrim(s: String): String = s.trim { it.isJsWhitespace() }
+    val start = text.indexOfFirst { !it.isJsWhitespace() }
     if (start < 0) return ClientScript("", intArrayOf(text.length))
-    val end = text.indexOfLast { !it.isWhitespace() } + 1
+    val end = text.indexOfLast { !it.isJsWhitespace() } + 1
     val trimmed = text.substring(start, end)
     if (!returnsValue) {
         append(trimmed, start)
     } else {
-        val statements = STATEMENT.findAll(trimmed).toList()
-        statements.forEachIndexed { i, m ->
-            if (i > 0) synthetic(";\n", start + m.range.first - 1)
-            val last = m.value.trim()
+        val statements = clientStatements(trimmed)
+        statements.forEachIndexed { i, r ->
+            val statement = trimmed.substring(r)
+            if (i > 0) synthetic(";\n", start + r.first - 1)
+            val last = jsTrim(statement)
             if (i == statements.lastIndex && !last.startsWith("return")) {
-                val lastStart = start + m.range.first + m.value.indexOf(last)
+                val lastStart = start + r.first + statement.indexOf(last)
                 synthetic("return (", lastStart)
                 append(last, lastStart)
                 synthetic(");", lastStart + last.length)
             } else {
-                append(m.value, start + m.range.first)
+                append(statement, start + r.first)
             }
         }
     }
@@ -227,14 +367,15 @@ public class ExpressionValidator(
         if (text.isBlank()) {
             return listOf(Issue(0, maxOf(text.length, 1), "Empty Datastar expression.", Severity.WARNING, "empty-expression"))
         }
-        // `$foo.0.name` is the path foo, 0, name: Datastar rewrites it to bracket form before the browser
-        // parses it. To a JavaScript parser `.0` is an error, so the digit is read as a letter, at the same width.
-        val js = SIGNAL_PATH.replace(text.replace('@', '_')) { path -> NUMERIC_SEGMENT.replace(path.value, "._") }
-        val script = returnsValue?.let { clientScript(js, it) }
-        val err = if (script != null) JsParser.error(script.js) else JsParser.error(js)?.takeUnless { objectLiteralParses(js) }
+        // An action is legal JavaScript once its @ is a letter; a signal is written as the client writes it.
+        val signals = clientSignals(text.replace('@', '_'))
+        val script = returnsValue?.let { clientScript(signals.js, it) }
+        val js = script?.js ?: signals.js
+        val err = if (script != null) JsParser.error(js) else JsParser.error(js)?.takeUnless { objectLiteralParses(js) }
         if (err != null) {
-            val pos = minOf(script?.toExpression(err.pos) ?: err.pos, text.length)
-            val end = maxOf(pos + 1, minOf(script?.toExpression(err.raisedAt) ?: err.raisedAt, text.length))
+            fun toText(offset: Int): Int = signals.toExpression(script?.toExpression(offset) ?: offset)
+            val pos = minOf(toText(err.pos), text.length)
+            val end = maxOf(pos + 1, minOf(toText(err.raisedAt), text.length))
             issues += Issue(pos, end, "Datastar expression: ${err.message}", Severity.ERROR, "expression-syntax", Docs.EXPRESSIONS)
         }
         val code = jsCodeMask(text)

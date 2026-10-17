@@ -161,6 +161,62 @@ interface ClientScript {
 }
 
 /**
+ * The client's rewrite of an expression (engine.ts:448 in 1.0.4), as one pattern: a quoted string
+ * or a template literal without `${` is stepped over, a `${...}` has its signals rewritten, and a
+ * `$name.path` outside them is written as `$['name']['path']`.
+ */
+const CLIENT_REWRITE = /(?:"[^"\\]*(?:\\.[^"\\]*)*"|'[^'\\]*(?:\\.[^'\\]*)*'|`[^`\\$]*(?:(?:\\.|\$(?!\{))[^`\\$]*)*`)|\$\{([^{}]*)\}|\$(\w+(?:[.-]\w+)*)/g;
+
+/** A signal reference as the client reads one: `\w` and `.`/`-` joined parts. */
+const CLIENT_SIGNAL = /\$(\w+(?:[.-]\w+)*)/g;
+
+const signalPath = (name: string) => "$" + name.split(".").map((part) => `['${part}']`).join("");
+
+/**
+ * The text with every `$name.path` written as the client writes it before compiling, so a signal
+ * can be no parameter, declared name or property key, as it cannot be in the browser; what sits in
+ * quotes stays as written, as it does there. Every character of a rewritten reference maps back to
+ * where the reference began.
+ */
+export function clientSignals(text: string): ClientScript {
+  let js = "";
+  const origin: number[] = [];
+  const copy = (from: number, to: number) => {
+    for (let k = from; k < to; k++) {
+      origin.push(k);
+      js += text[k];
+    }
+  };
+  const signals = (from: number, to: number) => {
+    let i = from;
+    for (const m of text.slice(from, to).matchAll(CLIENT_SIGNAL)) {
+      const at = from + (m.index ?? 0);
+      copy(i, at);
+      const written = signalPath(m[1] ?? "");
+      for (let k = 0; k < written.length; k++) origin.push(at);
+      js += written;
+      i = at + m[0].length;
+    }
+    copy(i, to);
+  };
+  let i = 0;
+  for (const m of text.matchAll(CLIENT_REWRITE)) {
+    const at = m.index ?? 0;
+    copy(i, at);
+    if (m[1] !== undefined) {
+      copy(at, at + 2);
+      signals(at + 2, at + 2 + m[1].length);
+      copy(at + 2 + m[1].length, at + m[0].length);
+    } else if (m[2] !== undefined) signals(at, at + m[0].length);
+    else copy(at, at + m[0].length);
+    i = at + m[0].length;
+  }
+  copy(i, text.length);
+  origin.push(text.length);
+  return { js, origin };
+}
+
+/**
  * The function body Datastar compiles from `text` (engine.ts:385-430 in 1.0.4). The text is
  * trimmed. With `returnsValue` it is split into statements, the last of them wrapped in
  * `return (...);` unless it starts with `return`, and the statements joined with `;\n`; the
@@ -212,13 +268,14 @@ export function validateExpression(text: string, returnsValue?: boolean, hyphena
   if (text.trim().length === 0) {
     return [{ start: 0, end: Math.max(text.length, 1), message: "Empty Datastar expression.", severity: "warning", code: "empty-expression" }];
   }
-  // `$foo.0.name` is the path foo, 0, name: Datastar rewrites it to bracket form before the browser
-  // parses it. To a JavaScript parser `.0` is an error, so the digit is read as a letter, at the same width.
-  const js = text.replace(/@/g, "_").replace(/\$\w+(?:\.\w+)+/g, (path) => path.replace(/\.\d/g, "._"));
-  const script = returnsValue === undefined ? null : clientScript(js, returnsValue);
-  const toExpression = (offset: number) => (script ? (script.origin[Math.min(Math.max(offset, 0), script.origin.length - 1)] ?? 0) : offset);
+  // An action is legal JavaScript once its @ is a letter; a signal is written as the client writes it.
+  const signals = clientSignals(text.replace(/@/g, "_"));
+  const script = returnsValue === undefined ? null : clientScript(signals.js, returnsValue);
+  const js = script ? script.js : signals.js;
+  const at = (c: ClientScript, offset: number) => c.origin[Math.min(Math.max(offset, 0), c.origin.length - 1)] ?? 0;
+  const toExpression = (offset: number) => at(signals, script ? at(script, offset) : offset);
   try {
-    parseScript(script ? script.js : js);
+    parseScript(js);
   } catch (e) {
     if (script || !objectLiteralParses(js)) {
       const err = e as { pos?: number; raisedAt?: number; message?: string };

@@ -95,7 +95,7 @@ public object Requests {
         text: String,
         path: String = REQUESTS_FILE,
     ): RequestsFile {
-        val json = text.removePrefix("")
+        val json = text.removePrefix("\uFEFF")
         val raw =
             try {
                 JsonParser.parse(json)
@@ -233,7 +233,7 @@ public object Requests {
      */
     public fun parseEnv(rawText: String): Env {
         val errors = ArrayList<String>()
-        val text = rawText.removePrefix("﻿")
+        val text = rawText.removePrefix("\uFEFF")
         val raw =
             try {
                 JsonParser.parse(text)
@@ -903,7 +903,8 @@ public object Requests {
 
     /**
      * The headers the inspector sends: the client's own (fetch.ts:81-88 in 1.0.4), then the user's,
-     * which replace one of the same name as `Object.assign` does there.
+     * which replace one of the same name. The client's `Object.assign` replaces only the same
+     * spelling and `fetch` then joins the two values; the inspector sends the user's alone.
      */
     public fun requestHeaders(
         method: String,

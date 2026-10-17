@@ -26,6 +26,7 @@
     {"name":"the kotlinx attributes form with an interpolated signal","source":"attributes[\"data-on:click\"] = \"$count++\"","issues":[{"code":"kotlin-interpolation","start":31,"end":37,"fixes":["attributes[\"data-on:click\"] = increment(\"count\")","attributes[\"data-on:click\"] = $$\"$count++\"","attributes[\"data-on:click\"] = \"${'$'}count++\"","attributes[\"data-on:click\"] = \"\\$count++\""]}]},
     {"name":"the kotlinx attributes form with a near-miss name","source":"attributes[\"data-onn:click\"] = \"x()\"","issues":[{"code":"unknown-attribute","start":12,"end":26,"fixes":["attributes[\"data-on:click\"] = \"x()\""]}]},
     {"name":"the kotlinx attributes form with a template and a broken expression","source":"attributes[\"data-text\"] = \"$a +\"","issues":[{"code":"kotlin-interpolation","start":27,"end":29,"fixes":["attributes[\"data-text\"] = $$\"$a +\"","attributes[\"data-text\"] = \"${'$'}a +\"","attributes[\"data-text\"] = \"\\$a +\""]}]},
-    {"name":"the kotlinx attributes form with a broken expression","source":"attributes[\"data-text\"] = \"$\" + \"a +\"","issues":[]}
+    {"name":"the kotlinx attributes form with a broken expression","source":"attributes[\"data-text\"] = \"$\" + \"a +\"","issues":[]},
+    {"name":"the kotlinx attributes form keeps the dollar escape in a fix","source":"attributes[\"data-text\"] = \"\\$my-value\"","issues":[{"code":"signal-kebab","start":27,"end":37,"fixes":["attributes[\"data-text\"] = \"\\$myValue\"","attributes[\"data-text\"] = \"\\$my - value\""]}]}
   ]
 }

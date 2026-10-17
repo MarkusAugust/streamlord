@@ -165,9 +165,15 @@ export function decodeDatastar(msg: SseMessage): DatastarFrame {
  * `null`: a `null` inside a stored array, and the hole a deleted index leaves, read as `""` and are
  * not missing to the next `onlyIfMissing`. The same rules as `mergePatchAsClient` in streamlord-core.
  *
+ * A key `length` on an array resizes it, as the client's store does: shorter drops the tail, longer
+ * adds `""`; one that is not a whole number of zero or more throws, as the browser's `RangeError`
+ * does. This is the store as it reads once a binding has touched it: the client fills a hole with
+ * `""` on the first read, so a hole is missing to `onlyIfMissing` only until then.
+ *
  * Objects are made without a prototype, so `constructor` is a signal name and nothing else. More
  * than `holeLimit` indices past the end of an array throws, rather than fill memory with the holes
- * the client never allocates, and so does a key named `__proto__`, on which the client itself fails.
+ * the client never allocates, and so does a key named `__proto__`, which the client takes for the
+ * prototype and fails on or does nothing with.
  */
 export function mergePatchAsClient(store: Record<string, unknown>, patch: unknown, ifMissing = false, holeLimit = 10_000): Record<string, unknown> {
   if (isPojo(patch)) return foldObject(store, patch, ifMissing, holeLimit);
@@ -210,8 +216,17 @@ function foldIntoArray(target: unknown[], patch: Record<string, unknown>, ifMiss
     items[index] = value;
   };
   for (const [key, value] of Object.entries(patch)) {
+    if (key === "length") {
+      if (ifMissing) continue;
+      const length = typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : -1;
+      if (length < 0 || length > items.length + holeLimit) throw new Error(`Invalid array length ${JSON.stringify(value)} in a signal patch`);
+      const before = items.length;
+      items.length = length;
+      if (length > before) items.fill("", before);
+      continue;
+    }
     const index = Number(key);
-    if (!(Number.isInteger(index) && index >= 0 && String(index) === key)) continue;
+    if (!(Number.isInteger(index) && index >= 0 && index < 4294967295 && String(index) === key)) continue;
     if (index > items.length + holeLimit) throw new Error(`Signal patch index ${index} is more than ${holeLimit} past the end of an array of ${items.length}`);
     if (value === null) {
       if (!ifMissing && index < items.length) items[index] = "";

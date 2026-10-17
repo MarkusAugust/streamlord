@@ -85,9 +85,9 @@ class InspectorPanel(
     private val method = ComboBox(Requests.METHODS.toTypedArray())
     private val signalsField = JBTextArea(3, 40).mono()
     private val headersField = JBTextArea(2, 40).mono()
-    private val resolved = JBLabel().plain().apply { foreground = JBColor.GRAY }
+    private val resolved = plainLabel().apply { foreground = JBColor.GRAY }
     private val dirty = JBLabel("● modified").apply { foreground = JBColor.namedColor("Label.warningForeground", JBColor.ORANGE) }
-    private val status = JBLabel("idle").plain()
+    private val status = plainLabel("idle")
     private val frames = JPanel().apply { layout = BoxLayout(this, BoxLayout.Y_AXIS) }
     private val storeView = JBTextArea("{}").mono().apply { isEditable = false }
     private val variablesView = JBTextArea("").mono().apply { isEditable = false }
@@ -115,6 +115,11 @@ class InspectorPanel(
         add(split, BorderLayout.CENTER)
         choices.renderer =
             object : DefaultListCellRenderer() {
+                // A saved name comes from a file the project shares: text, never Swing HTML. Set before any text is.
+                init {
+                    putClientProperty("html.disable", true)
+                }
+
                 override fun getListCellRendererComponent(
                     list: JList<*>?,
                     value: Any?,
@@ -123,8 +128,6 @@ class InspectorPanel(
                     cellHasFocus: Boolean,
                 ): Component {
                     val c = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus)
-                    // A saved name comes from a file the project shares: text, never Swing HTML.
-                    (c as? JComponent)?.putClientProperty("html.disable", true)
                     val choice = value as? Choice
                     icon =
                         if (choice?.request == null) {
@@ -523,7 +526,7 @@ class InspectorPanel(
         frames.removeAll()
         count = 0
         frames.add(
-            JBLabel(message).plain().apply {
+            plainLabel(message).apply {
                 foreground = JBColor.GRAY
                 border = JBUI.Borders.empty(8)
             },
@@ -560,7 +563,7 @@ class InspectorPanel(
 
     private fun addComment(text: String) {
         prepend(
-            JBLabel("${time(System.currentTimeMillis())}  : $text").plain().apply {
+            plainLabel("${time(System.currentTimeMillis())}  : $text").apply {
                 foreground = JBColor.GRAY
                 font = font.deriveFont(Font.ITALIC)
                 border = JBUI.Borders.empty(2, 4)
@@ -594,7 +597,7 @@ class InspectorPanel(
         useBaseUrl: String? = null,
     ) {
         val label =
-            JBLabel(message).plain().apply {
+            plainLabel(message).apply {
                 foreground = JBColor.RED
                 border = JBUI.Borders.empty(2, 4)
             }
@@ -644,7 +647,7 @@ class InspectorPanel(
             }
         header.forEachIndexed { i, h ->
             left.add(
-                JBLabel(h).plain().apply {
+                plainLabel(h).apply {
                     if (i == 1) {
                         foreground = color
                         font = font.deriveFont(Font.BOLD)
@@ -655,7 +658,7 @@ class InspectorPanel(
         }
         head.add(left, BorderLayout.WEST)
         head.add(
-            JBLabel(right).plain().apply {
+            plainLabel(right).apply {
                 foreground = JBColor.GRAY
                 horizontalAlignment = SwingConstants.RIGHT
             },
@@ -684,9 +687,14 @@ class InspectorPanel(
 
     /**
      * Swing renders a label whose text starts with `<html>` as HTML, images and all. Event names,
-     * content types and saved names come from a server or a shared file, so every label here is text.
+     * content types and saved names come from a server or a shared file, so every label here is
+     * text. The flag has to be there before the text is set: Swing reads it when the text changes.
      */
-    private fun JBLabel.plain(): JBLabel = apply { putClientProperty("html.disable", true) }
+    private fun plainLabel(text: String = ""): JBLabel =
+        JBLabel().apply {
+            putClientProperty("html.disable", true)
+            this.text = text
+        }
 
     private fun notify(message: String) {
         NotificationGroupManager

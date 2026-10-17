@@ -35,9 +35,14 @@ public fun mergePatch(
  * nothing. And the store never hands back `null`: a `null` inside a stored array, and the hole a
  * deleted index leaves, read as `""` and are not missing to the next `onlyIfMissing`.
  *
+ * A key `length` on an array resizes it, as the client's store does: shorter drops the tail,
+ * longer adds `""`; one that is not a whole number of zero or more throws, as the browser's
+ * `RangeError` does. This is the store as it reads once a binding has touched it: the client
+ * fills a hole with `""` on the first read, so a hole is missing to `onlyIfMissing` only until then.
+ *
  * More than [holeLimit] indices past the end of an array throws [IllegalArgumentException]
  * rather than fill memory with the holes the client never allocates, and so does a key named
- * `__proto__`, on which the client itself fails.
+ * `__proto__`, which the client takes for the prototype and fails on or does nothing with.
  */
 public fun mergePatchAsClient(
     store: JsonObject,
@@ -112,7 +117,15 @@ private fun foldIntoArray(
 ): JsonValue {
     val items = target.toMutableList()
     for ((key, value) in patch) {
-        val index = key.toIntOrNull()?.takeIf { it >= 0 && it.toString() == key } ?: continue
+        if (key == "length") {
+            if (ifMissing) continue
+            val length = (value as? JsonNumber)?.toDouble()?.takeIf { it >= 0 && it == Math.floor(it) }?.toLong()
+            require(length != null && length <= items.size + holeLimit) { "Invalid array length ${value.toJson()} in a signal patch" }
+            while (items.size > length) items.removeAt(items.size - 1)
+            while (items.size < length) items.add(EMPTY)
+            continue
+        }
+        val index = key.toLongOrNull()?.takeIf { it >= 0 && it < 4294967295L && it.toString() == key }?.toInt() ?: continue
         require(
             index <= items.size + holeLimit,
         ) { "Signal patch index $index is more than $holeLimit past the end of an array of ${items.size}" }

@@ -666,7 +666,8 @@ export function readsAsStream(status: number, contentType: string | null): boole
 
 /**
  * The headers the inspector sends: the client's own (fetch.ts:81-88 in 1.0.4), then the user's,
- * which replace one of the same name as `Object.assign` does there.
+ * which replace one of the same name. The client's `Object.assign` replaces only the same spelling
+ * and `fetch` then joins the two values; the inspector sends the user's alone.
  */
 export function requestHeaders(method: string, userHeaders: Record<string, string>): Record<string, string> {
   const out = new Map<string, string>();

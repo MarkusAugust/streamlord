@@ -118,14 +118,21 @@ function checkAttributesIndex(m: RegExpMatchArray, value: KotlinString | null, o
   if (value && (kind === "expression" || kind === "signal")) issues.push(...inStringLiterals(value, interpolationIssues(value, src)));
   // With a template in the value the interpolation issue speaks for it, as at a DSL call.
   const judgeValue = value !== null && !(value.text.includes(PLACEHOLDER) && value.interpolations.some((i) => i.kind === "simple"));
-  const at = (offset: number) => (offset <= name.length ? nameStart + offset : toSource(value!, offset - valueStart, offset - valueStart + 1).start);
+  // A range in the value maps through the literal as a whole, so an error at its end keeps a width.
+  const range = (start: number, end: number) => (end <= name.length ? { start: nameStart + start, end: nameStart + end } : toSource(value!, start - valueStart, end - valueStart));
   for (const i of validateAttributes(tag, opts.prefix, undefined, hyphenated)) {
     const inName = i.end <= name.length;
     if (!inName && !judgeValue) continue;
     const fixes = i.fixes
       ?.filter((f) => (f.end <= name.length) === inName)
-      .map((f) => (f.start === f.end ? { ...f, start: at(f.start), end: at(f.start) } : { ...f, start: at(f.start), end: at(f.end), text: inName ? f.text : keepDollarEscape(value!, src, f) }));
-    issues.push({ ...i, start: at(i.start), end: at(i.end), ...(fixes ? { fixes } : {}) });
+      .map((f) => {
+        if (inName) return { ...f, start: nameStart + f.start, end: nameStart + f.end };
+        // In the literal's own coordinates, so a `\$` the source wrote is written back.
+        const inValue = { ...f, start: f.start - valueStart, end: f.end - valueStart };
+        const at = toSource(value!, inValue.start, Math.max(inValue.end, inValue.start + 1));
+        return { ...f, start: at.start, end: f.start === f.end ? at.start : at.end, text: keepDollarEscape(value!, src, inValue) };
+      });
+    issues.push({ ...i, ...range(i.start, i.end), ...(fixes ? { fixes } : {}) });
   }
   return issues;
 }

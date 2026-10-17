@@ -161,26 +161,35 @@ public class Analyzer(
         // With a template in the value the interpolation issue speaks for it, as at a DSL call.
         val judgeValue = value != null && !(PLACEHOLDER in value.text && value.interpolations.any { it.kind == InterpolationKind.SIMPLE })
 
-        fun at(offset: Int): Int =
-            if (offset <=
+        // A range in the value maps through the literal as a whole, so an error at its end keeps a width.
+        fun range(
+            start: Int,
+            end: Int,
+        ): IntRange =
+            if (end <=
                 name.length
             ) {
-                nameStart + offset
+                nameStart + start until nameStart + end
             } else {
-                value!!.toSource(offset - valueStart, offset - valueStart + 1).first
+                value!!.toSource(start - valueStart, end - valueStart)
             }
         for (i in markup.validateAttributes(tag, opts.prefix, null, hyphenated)) {
             val inName = i.end <= name.length
             if (!inName && !judgeValue) continue
+            val r = range(i.start, i.end)
             val fixes =
                 i.fixes.filter { (it.end <= name.length) == inName }.map { f ->
-                    if (f.start == f.end) {
-                        f.copy(start = at(f.start), end = at(f.start))
+                    if (inName) {
+                        f.copy(start = nameStart + f.start, end = nameStart + f.end)
                     } else {
-                        f.copy(start = at(f.start), end = at(f.end), text = if (inName) f.text else keepDollarEscape(value!!, src, f))
+                        // In the literal's own coordinates, so a `\$` the source wrote is written back.
+                        val inValue = f.copy(start = f.start - valueStart, end = f.end - valueStart)
+                        val at = value!!.toSource(inValue.start, maxOf(inValue.end, inValue.start + 1))
+                        val fixEnd = if (f.start == f.end) at.first else at.last + 1
+                        f.copy(start = at.first, end = fixEnd, text = keepDollarEscape(value, src, inValue))
                     }
                 }
-            issues += i.copy(start = at(i.start), end = at(i.end), fixes = fixes)
+            issues += i.copy(start = r.first, end = r.last + 1, fixes = fixes)
         }
         return issues
     }

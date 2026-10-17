@@ -63,9 +63,10 @@ export function indexOfAsciiIgnoreCase(s: string, needle: string, from: number):
 
 /*
  * A named reference with its semicolon, one of the few legacy names the browser also reads
- * without it (unless `=` or a letter or digit follows, as in a URL's `&copy=1`), or a numeric one.
+ * without it (unless `=` or a letter or digit follows, as in a URL's `&copy=1`), or a numeric
+ * one, which the browser reads with or without its semicolon.
  */
-const ENTITY = /&(?:([A-Za-z][A-Za-z0-9]*);|(amp|AMP|lt|LT|gt|GT|quot|QUOT|nbsp)(?![=A-Za-z0-9])|#(\d{1,7});|#[xX]([0-9A-Fa-f]{1,6});)/y;
+const ENTITY = /&(?:([A-Za-z][A-Za-z0-9]*);|(amp|AMP|lt|LT|gt|GT|quot|QUOT|nbsp)(?![=A-Za-z0-9])|#(\d{1,7});?|#[xX]([0-9A-Fa-f]{1,6});?)/y;
 
 /** The named references that spell a character an expression may hold: the ASCII punctuation, and the whitespace. */
 const NAMED_ENTITIES: Record<string, string> = {

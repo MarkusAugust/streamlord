@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { ACCEPT, baseUrlSuggestion, describeVariables, emptyBodyHint, lineAndColumn, withBaseUrl, mergeVariables, newRequestLabel, parseEnv, parseRequestsFile, pushRecent, readsAsStream, remove, resolveRequest, routeHeaders, routeOptional, routeUrl, sendableUrl, serializeRequestsFile, substitute, toCurl, unreachableHint, upsert, variableCompletions, withEnvVariables, type SavedRequest } from "../src/requests.ts";
+import { ACCEPT, baseUrlSuggestion, requestHeaders, requestsPathProblem, describeVariables, emptyBodyHint, lineAndColumn, withBaseUrl, mergeVariables, newRequestLabel, parseEnv, parseRequestsFile, pushRecent, readsAsStream, remove, resolveRequest, routeHeaders, routeOptional, routeUrl, sendableUrl, serializeRequestsFile, substitute, toCurl, unreachableHint, upsert, variableCompletions, withEnvVariables, type SavedRequest } from "../src/requests.ts";
 import { findRoutes } from "../src/routes.ts";
 
 const req = (over: Partial<SavedRequest> = {}): SavedRequest => ({ name: "counter", url: "{{baseUrl}}/api/counter-stream", method: "GET", signals: "", headers: "", ...over });
@@ -432,5 +432,37 @@ describe("line and column", () => {
     assert.equal(lineAndColumn("ab\ncd", 3), "at line 2, column 1");
     assert.equal(lineAndColumn("ab\ncd", 99), "at line 2, column 3");
     assert.equal(lineAndColumn("ab\ncd", -4), "at line 1, column 1");
+  });
+});
+
+describe("requests file hygiene", () => {
+  it("says when the file is not json, and a byte order mark is not part of it", () => {
+    const bom = parseRequestsFile('\uFEFF{"requests":[{"name":"a","url":"/a"}]}');
+    assert.deepEqual(bom.requests.map((r) => r.name), ["a"]);
+    assert.equal(bom.error, undefined);
+    const broken = parseRequestsFile('{"requests":[{"name":"a","url":"/a"},]}', "req.json");
+    assert.deepEqual(broken.requests, []);
+    assert.ok(broken.error?.startsWith("req.json is not valid JSON"), broken.error);
+    assert.equal(parseRequestsFile("[]").error, undefined);
+    assert.deepEqual(parseEnv('\uFEFF{"params":{"bom":"1"}}').params, [["bom", "1"]]);
+  });
+
+  it("sends object signals as written in the file", () => {
+    const text = '{"requests":[{"name":"n","url":"/x","signals": { "id": 12345678901234567890, "f": 1.0, "s": "</b>" }}]}';
+    assert.equal(parseRequestsFile(text).requests[0]!.signals, '{ "id": 12345678901234567890, "f": 1.0, "s": "</b>" }');
+  });
+
+  it("keeps the requests file inside the workspace", () => {
+    assert.equal(requestsPathProblem(".streamlord/inspector.json"), null);
+    assert.equal(requestsPathProblem("tools/requests.json"), null);
+    assert.equal(requestsPathProblem(""), null);
+    for (const bad of ["../inspector.json", "a/../../inspector.json", "/etc/inspector.json", "C:\\inspector.json"]) assert.ok(requestsPathProblem(bad), bad);
+  });
+
+  // fetch.ts:81-88 in 1.0.4: the client's headers first, then the user's over them.
+  it("lets the user's headers replace the client's own", () => {
+    assert.deepEqual(Object.keys(requestHeaders("POST", { "content-type": "text/plain", "X-A": "1" })), ["Accept", "Datastar-Request", "content-type", "X-A"]);
+    assert.equal(requestHeaders("POST", { "content-type": "text/plain" })["content-type"], "text/plain");
+    assert.deepEqual(Object.keys(requestHeaders("GET", {})), ["Accept", "Datastar-Request"]);
   });
 });
