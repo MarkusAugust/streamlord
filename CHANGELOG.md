@@ -224,7 +224,8 @@ All notable changes to Streamlord are recorded here. The format follows
 - A `'` in a regex filter opened what Datastar's client took for a string, so a signal after the
   filter in the same expression was left as a global variable: `@setAll(true, {include: /it's/});
   $msg = 'done'` set `window.$msg`. A `"` broke the attribute in a string, and the client rewrote
-  a `$` or `@` in one as a signal or an action, so `/^[_$a-z]+$/` matched nothing. Quotes,
+  `$name` and `@name(` in one as a signal and an action, so `/^[_$a-z]+$/` matched no signal
+  name. Quotes,
   backticks, `&`, `\`, `$` and `@` in a regex filter are now written as `\xHH`, and an anchoring
   `$` before a word character as `$(?:)`.
 - `JsLiteral` wrote a map key such as `$id` bare, which the client rewrote as a signal, and the

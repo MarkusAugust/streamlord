@@ -1,6 +1,5 @@
 package io.github.markusaugust.streamlord.html
 
-import io.github.markusaugust.streamlord.core.json.JsonWriter
 import kotlinx.html.button
 import kotlinx.html.div
 import kotlin.test.Test
@@ -184,17 +183,19 @@ class AsTheClientReadsItTest {
         assertEquals("""<div data-style:--brand="'red'"></div>""", elements { div { dataStyle("--brand", "'red'") } })
     }
 
-    // engine.ts:415-416: how the client cuts an attribute's expression into statements before it
-    // compiles them. It reads a quote after a `\` as escaped, so a string that ends in `\` would
-    // run on, and a `;` after it would cut the expression in the middle of a string.
+    // engine.ts:415-416: how the client cuts the expression of an attribute whose value it reads,
+    // such as data-text or data-signals, into statements. It reads a quote or `/` after a `\` as
+    // escaped, so a string or regex that ends in `\` would run on, and a `;` after it would cut
+    // the expression in the middle of a string.
     private val statements =
         Regex(
             """(?:\/(?:\\\/|[^/])*\/|"(?:\\"|[^"])*"|'(?:\\'|[^'])*'|`(?:\\`|[^`])*`|""" +
                 """\(\s*(?:(?:function)\s*\(\s*\)|(?:\(\s*\))\s*=>)\s*(?:\{[\s\S]*?\}|[^;){]*)\s*\)\s*\(\s*\)|[^;])+""",
         )
 
-    // engine.ts:448: how it then rewrites `$name` as a signal and `@name(` as an action. It skips
-    // strings but knows no regex literals, so a quote in one hides the signals after it.
+    // engine.ts:448: how it rewrites `$name` as a signal and `@name(` as an action, in every
+    // attribute. It skips strings but knows no regex literals, so a quote in one hides the signals
+    // after it.
     private val rewrites =
         Regex(
             """(?:"[^"\\]*(?:\\.[^"\\]*)*"|'[^'\\]*(?:\\.[^'\\]*)*'|`[^`\\$]*(?:(?:\\.|\$(?!\{))[^`\\$]*)*`)|""" +
@@ -232,15 +233,31 @@ class AsTheClientReadsItTest {
 
     @Test
     fun `a regex filter hides no signal or action after it`() {
-        val patterns = listOf("x\\\\", "it's", "a\"b", "back`tick", "^[_\$a-z]+\$", "^a\$b", "\\\$x", "a@b(c)?")
+        val patterns =
+            listOf(
+                "x\\\\",
+                "\\'",
+                "it's",
+                "a\"b",
+                "back`tick",
+                "^[_\$a-z]+\$",
+                "^a\$b",
+                "\\\$x",
+                "a@b(c)?",
+                "\$\\Qab\\E?",
+                "a\$\\Q_\\E",
+            )
         for (pattern in patterns) {
+            val literal = SignalFilter.regexLiteral(Regex(pattern))
             val expression = setAll(true, SignalFilter(include = Regex(pattern))) + "; " + set("msg", "done")
-            assertEquals(2, statementsIn(expression).size, pattern)
             assertEquals(listOf("msg"), signalsIn(expression), pattern)
             assertEquals(listOf("setAll"), actionsIn(expression), pattern)
+            // In data-text, a `/` later on would close a literal whose last `\` escaped its own end.
+            assertEquals(1, statementsIn("$literal.source + '/;'").size, pattern)
         }
         assertEquals("/^[_\\x24a-z]+\$/", SignalFilter.regexLiteral(Regex("^[_\$a-z]+\$")))
         assertEquals("/^a\$(?:)b/", SignalFilter.regexLiteral(Regex("^a\$b")))
+        assertEquals("/\$(?:)ab?/", SignalFilter.regexLiteral(Regex("\$\\Qab\\E?")))
         assertEquals("/\\x24x a\\x40b/", SignalFilter.regexLiteral(Regex("\\\$x a@b")))
     }
 

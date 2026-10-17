@@ -14,9 +14,9 @@ import java.math.BigInteger
  * silent `toString()`.
  *
  * The output is safe to embed in a JavaScript context: U+2028, U+2029, `</` and `<!` are
- * escaped, which matters because Datastar evaluates `data-signals` as an expression, and a
- * string inside a `<script>` that holds `<!--` and then `<script` keeps the element open. For
- * JSON that Datastar's client reads as an expression, use [writeExpression].
+ * escaped, which matters because a script runs it as JavaScript, and a string inside a
+ * `<script>` that holds `<!--` and then `<script` keeps the element open. For JSON that
+ * Datastar's client reads as an expression, such as `data-signals`, use [writeExpression].
  */
 public object JsonWriter {
     public const val DEFAULT_MAX_DEPTH: Int = 64
@@ -31,7 +31,7 @@ public object JsonWriter {
      * [write], for JSON that Datastar's client reads as an expression, such as the value of
      * `data-signals`: `\` is written as `\u005c`. The client cuts an expression into statements
      * at each `;` outside a string and reads a quote after a `\` as escaped, so `{"a": "C:\\", "b":
-     * ";"}` would be cut inside the second string and lose every signal in it.
+     * ";"}` would be cut inside the second value and lose every signal in it.
      */
     public fun writeExpression(
         value: Any?,

@@ -6,7 +6,7 @@ import io.github.markusaugust.streamlord.core.json.JsonWriter
 
 /**
  * Writes Kotlin values as JavaScript literals for Datastar expressions: strings in single
- * quotes, object keys bare where JavaScript allows it.
+ * quotes, object keys bare where JavaScript allows it and Datastar's client leaves them alone.
  *
  * JSON is valid JavaScript, but its double quotes are also the quotes of an HTML attribute.
  * `@get("/x")` survives the kotlinx.html DSL, which escapes them, and breaks the moment it is
