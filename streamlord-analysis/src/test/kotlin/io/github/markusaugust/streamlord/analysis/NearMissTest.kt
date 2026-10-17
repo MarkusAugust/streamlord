@@ -62,6 +62,11 @@ class NearMissTest {
 
     @Test
     fun `an element with template syntax is left alone`() {
-        assertEquals(emptyList(), analyzer.analyzeHtml("""<button data-on:click="{{ action }}" data-indicator:busy></button>""", opts).map { it.code })
+        assertEquals(
+            emptyList(),
+            analyzer.analyzeHtml("""<button data-on:click="{{ action }}" data-indicator:busy></button>""", opts).map {
+                it.code
+            },
+        )
     }
 }

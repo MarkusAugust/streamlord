@@ -9,9 +9,9 @@ import io.github.markusaugust.streamlord.core.protocol.SseDecoder
 import io.github.markusaugust.streamlord.core.protocol.SseEncoder
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -138,7 +138,10 @@ class SendLatestTest {
                 count(it)
             }
 
-            assertEquals(listOf(1, 3).map { """<b id="count">$it</b>""" }, SseDecoder.decode(sink.text()).map { (it as PatchElements).elements })
+            assertEquals(
+                listOf(1, 3).map { """<b id="count">$it</b>""" },
+                SseDecoder.decode(sink.text()).map { (it as PatchElements).elements },
+            )
         }
 
     // The interval runs from the start of one sent render, on the coroutine's own clock, so a

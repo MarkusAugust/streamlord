@@ -30,16 +30,17 @@ public inline fun patchElements(
     eventId: String? = null,
     retry: Duration? = null,
     block: TagConsumer<*>.() -> Unit,
-): PatchElements = PatchElements(
-    elements = elements(block),
-    selector = selector,
-    mode = mode,
-    namespace = namespace,
-    useViewTransition = useViewTransition,
-    viewTransitionSelector = viewTransitionSelector,
-    eventId = eventId,
-    retry = retry,
-)
+): PatchElements =
+    PatchElements(
+        elements = elements(block),
+        selector = selector,
+        mode = mode,
+        namespace = namespace,
+        useViewTransition = useViewTransition,
+        viewTransitionSelector = viewTransitionSelector,
+        eventId = eventId,
+        retry = retry,
+    )
 
 /**
  * Patch elements written in the kotlinx.html DSL straight into the stream.

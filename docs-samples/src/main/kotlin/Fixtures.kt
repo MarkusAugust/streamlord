@@ -19,6 +19,7 @@ data class Hit(
     val url: String,
 )
 
+@Suppress("ktlint:standard:class-naming") // read as a value in the samples
 object repository {
     fun search(query: String): List<Hit> = listOf(Hit("A head on the wall", "/heads/1")).filter { query.isNotEmpty() }
 }
@@ -34,6 +35,7 @@ fun renderResults(hits: List<Hit>): String = hits.joinToString("") { "<li>${it.t
  * Streamlord a string, not about any one engine, so the fixture is the smallest thing that has
  * the shape every engine has: a name, some values, a string out.
  */
+@Suppress("ktlint:standard:class-naming") // read as a value in the samples
 object pebble {
     fun render(
         template: String,
