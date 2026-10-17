@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  The light palette for the Datastar tokens only, in the spirit of IntelliJ Light: signals in the
-  scheme's constant blue, actions purple, scope variables keyword-blue italic, keys teal. Nothing
-  here touches a token that belongs to Kotlin, HTML or JavaScript, so the user's theme stays theirs.
+  The light palette for the Datastar tokens only, with the Light+ values the VS Code extension
+  recommends, so the two editors colour Datastar alike: signals constant blue, actions purple,
+  scope variables keyword-blue italic, keys teal. Nothing here touches a token that belongs to
+  Kotlin, HTML or JavaScript, so the user's theme stays theirs.
 -->
 <list>
   <option name="STREAMLORD_SIGNAL">

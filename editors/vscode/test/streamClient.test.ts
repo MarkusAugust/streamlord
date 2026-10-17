@@ -72,7 +72,7 @@ async function send(r: SavedRequest): Promise<{ got: Received | undefined; error
 /** The request target and the body of a curl line, as curl would put them on the wire. */
 function curlParts(line: string): { target: string; body: string } {
   const url = /^curl -N -X \S+ '([^']*)'/.exec(line)?.[1] ?? "";
-  const data = /--data '((?:[^']|'\\'')*)'$/.exec(line)?.[1]?.replace(/'\\''/g, "'") ?? "";
+  const data = /--data-raw '((?:[^']|'\\'')*)'$/.exec(line)?.[1]?.replace(/'\\''/g, "'") ?? "";
   return { target: url.slice(base.length), body: data };
 }
 

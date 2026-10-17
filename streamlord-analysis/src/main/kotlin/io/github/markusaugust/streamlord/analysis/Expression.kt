@@ -138,11 +138,91 @@ internal fun jsCodeMask(text: String): BooleanArray {
 /** `foo-bar` -> `fooBar`, as Datastar reads a kebab-case key. */
 public fun toCamel(name: String): String = if ('-' in name) KEBAB_PART.replace(name) { it.groupValues[1].uppercase() } else name
 
+/**
+ * One statement of a value-returning expression, as Datastar's `genRx` matches them (engine.ts:412
+ * in 1.0.4): everything up to a `;` that is not inside quotes, a regex literal or a no-argument IIFE.
+ */
+private val STATEMENT =
+    Regex(
+        """(?U)(?:/(?:\\/|[^/])*/|"(?:\\"|[^"])*"|'(?:\\'|[^'])*'|`(?:\\`|[^`])*`|\(\s*(?:(?:function)\s*\(\s*\)|(?:\(\s*\))\s*=>)\s*(?:\{[\s\S]*?\}|[^;){]*)\s*\)\s*\(\s*\)|[^;])+""",
+    )
+
+/** JavaScript as Datastar compiles an expression, with a map from each of its offsets back to the expression. */
+internal class ClientScript(
+    val js: String,
+    private val origin: IntArray,
+) {
+    fun toExpression(offset: Int): Int = origin[offset.coerceIn(0, origin.size - 1)]
+}
+
+/**
+ * The function body Datastar compiles from [text] (engine.ts:385-430 in 1.0.4). The text is
+ * trimmed. With [returnsValue] it is split into statements, the last of them wrapped in
+ * `return (...);` unless it starts with `return`, and the statements joined with `;\n`; the
+ * separators and the wrapping map to where the statement started or ended.
+ */
+internal fun clientScript(
+    text: String,
+    returnsValue: Boolean,
+): ClientScript {
+    val js = StringBuilder()
+    val origin = ArrayList<Int>(text.length + 16)
+
+    fun append(
+        piece: String,
+        from: Int,
+    ) {
+        for (k in piece.indices) origin += from + k
+        js.append(piece)
+    }
+
+    fun synthetic(
+        piece: String,
+        at: Int,
+    ) {
+        repeat(piece.length) { origin += at }
+        js.append(piece)
+    }
+    val start = text.indexOfFirst { !it.isWhitespace() }
+    if (start < 0) return ClientScript("", intArrayOf(text.length))
+    val end = text.indexOfLast { !it.isWhitespace() } + 1
+    val trimmed = text.substring(start, end)
+    if (!returnsValue) {
+        append(trimmed, start)
+    } else {
+        val statements = STATEMENT.findAll(trimmed).toList()
+        statements.forEachIndexed { i, m ->
+            if (i > 0) synthetic(";\n", start + m.range.first - 1)
+            val last = m.value.trim()
+            if (i == statements.lastIndex && !last.startsWith("return")) {
+                val lastStart = start + m.range.first + m.value.indexOf(last)
+                synthetic("return (", lastStart)
+                append(last, lastStart)
+                synthetic(");", lastStart + last.length)
+            } else {
+                append(m.value, start + m.range.first)
+            }
+        }
+    }
+    origin += end
+    return ClientScript(js.toString(), origin.toIntArray())
+}
+
 /** The checks of one Datastar expression: syntax, kebab-case signals, unknown and Pro actions. */
 public class ExpressionValidator(
     private val catalog: Catalog = Catalog.default,
 ) {
-    public fun validate(text: String): List<Issue> {
+    /**
+     * The issues of [text]. With [returnsValue] known, the syntax is judged on the script Datastar
+     * compiles, see [clientScript]; without it, on the text as a script, with an object literal
+     * allowed to open it. A `$my-value` named in [hyphenatedSignals] is a declared signal, not a
+     * kebab-case slip.
+     */
+    public fun validate(
+        text: String,
+        returnsValue: Boolean? = null,
+        hyphenatedSignals: Set<String> = emptySet(),
+    ): List<Issue> {
         val issues = ArrayList<Issue>()
         if (text.isBlank()) {
             return listOf(Issue(0, maxOf(text.length, 1), "Empty Datastar expression.", Severity.WARNING, "empty-expression"))
@@ -150,16 +230,20 @@ public class ExpressionValidator(
         // `$foo.0.name` is the path foo, 0, name: Datastar rewrites it to bracket form before the browser
         // parses it. To a JavaScript parser `.0` is an error, so the digit is read as a letter, at the same width.
         val js = SIGNAL_PATH.replace(text.replace('@', '_')) { path -> NUMERIC_SEGMENT.replace(path.value, "._") }
-        val err = JsParser.error(js)?.takeUnless { objectLiteralParses(js) }
+        val script = returnsValue?.let { clientScript(js, it) }
+        val err = if (script != null) JsParser.error(script.js) else JsParser.error(js)?.takeUnless { objectLiteralParses(js) }
         if (err != null) {
-            val pos = minOf(err.pos, text.length)
-            val end = maxOf(pos + 1, minOf(err.raisedAt, text.length))
+            val pos = minOf(script?.toExpression(err.pos) ?: err.pos, text.length)
+            val end = maxOf(pos + 1, minOf(script?.toExpression(err.raisedAt) ?: err.raisedAt, text.length))
             issues += Issue(pos, end, "Datastar expression: ${err.message}", Severity.ERROR, "expression-syntax", Docs.EXPRESSIONS)
         }
         val code = jsCodeMask(text)
         for (k in HYPHENATED_SIGNAL.findAll(text)) {
             val written = k.value
             if (!code[k.range.first]) continue
+            // data-signals:my-value__case.kebab declares $my-value as written, and the expression reaches it.
+            val named = written.substring(1)
+            if (hyphenatedSignals.any { named == it || named.startsWith("$it.") }) continue
             val head = written.substringBefore('-')
             val rest = written.substringAfter('-')
             // `-1`, `-2px`: nobody names a signal that; the author subtracts. `-bar`: a kebab-case key, or a subtraction of a variable.
@@ -239,8 +323,8 @@ public class ExpressionValidator(
 }
 
 /**
- * An expression that opens with `{` is an object literal to Datastar, which wraps the last statement
- * in `return (...)` for the attributes that take a value; to a script parser it is a block. When the
+ * With no attribute to say whether the value is read, an expression that opens with `{` may be an
+ * object literal Datastar wraps in `return (...)`; to a script parser it is a block. When the
  * script parse fails, the text is tried once more inside parentheses.
  */
 private fun objectLiteralParses(js: String): Boolean = js.trimStart().startsWith("{") && JsParser.error("($js)") == null

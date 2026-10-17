@@ -19,6 +19,8 @@ export interface SavedRequest {
 export interface RequestsFile {
   version: 1;
   requests: SavedRequest[];
+  /** Why the file could not be read, when it exists and is not JSON; saving over it would lose what it holds. */
+  error?: string;
 }
 
 export const REQUESTS_FILE = ".streamlord/inspector.json";
@@ -30,28 +32,130 @@ export function emptyRequestsFile(): RequestsFile {
   return { version: 1, requests: [] };
 }
 
-/** Parse the requests file leniently: bad entries are dropped, never fatal. */
-export function parseRequestsFile(text: string): RequestsFile {
+/**
+ * Parse the requests file leniently: bad entries are dropped. Text that is not JSON at all is
+ * reported in `error`, so a save does not write an empty list over it.
+ */
+export function parseRequestsFile(text: string, path = REQUESTS_FILE): RequestsFile {
+  const json = text.startsWith("\uFEFF") ? text.slice(1) : text;
   let raw: unknown;
   try {
-    raw = JSON.parse(text);
-  } catch {
-    return emptyRequestsFile();
+    raw = JSON.parse(json);
+  } catch (e) {
+    const position = /position (\d+)/.exec((e as Error).message)?.[1];
+    return { version: 1, requests: [], error: position !== undefined ? `${path} is not valid JSON ${lineAndColumn(json, Number(position))}.` : `${path} is not valid JSON.` };
   }
   const list = (raw as { requests?: unknown })?.requests;
   if (!Array.isArray(list)) return emptyRequestsFile();
   const requests: SavedRequest[] = [];
-  for (const item of list as Record<string, unknown>[]) {
-    if (!item || typeof item.name !== "string" || typeof item.url !== "string") continue;
+  (list as Record<string, unknown>[]).forEach((item, index) => {
+    if (!item || typeof item !== "object" || typeof item.name !== "string" || typeof item.url !== "string") return;
     requests.push({
       name: item.name,
       url: item.url,
       method: METHODS.includes(String(item.method ?? "GET").toUpperCase()) ? String(item.method ?? "GET").toUpperCase() : "GET",
-      signals: typeof item.signals === "string" ? item.signals : item.signals && typeof item.signals === "object" ? JSON.stringify(item.signals, null, 2) : "",
+      // As written in the file: JSON.parse has already rounded a number past 2^53, and a second writer spells escapes its own way.
+      signals: typeof item.signals === "string" ? item.signals : item.signals && typeof item.signals === "object" ? (rawMember(json, index) ?? JSON.stringify(item.signals, null, 2)) : "",
       headers: typeof item.headers === "string" ? item.headers : item.headers && typeof item.headers === "object" && !Array.isArray(item.headers) ? Object.entries(item.headers as Record<string, unknown>).map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`).join("\n") : "",
     });
-  }
+  });
   return { version: 1, requests };
+}
+
+/**
+ * The source text of `requests[index].signals`, or null when the file is not shaped that way.
+ * The last `requests` and the last `signals` count, as JSON.parse keeps the last duplicate.
+ */
+function rawMember(text: string, index: number): string | null {
+  const scan = new JsonScan(text);
+  let found: string | null = null;
+  scan.members(scan.skipSpace(0), (key, start) => {
+    if (key !== "requests" || text[start] !== "[") return;
+    let i = index;
+    scan.elements(start, (elementStart, elementEnd) => {
+      if (i-- === 0 && text[elementStart] === "{") {
+        scan.members(elementStart, (k, s, e) => {
+          if (k === "signals") found = text.slice(s, e);
+        });
+      }
+      return elementEnd;
+    });
+  });
+  return found;
+}
+
+/** Just enough of a JSON scanner to find the span of a member of valid JSON; the text must have parsed already. */
+class JsonScan {
+  constructor(private readonly text: string) {}
+
+  skipSpace(from: number): number {
+    let i = from;
+    while (i < this.text.length && " \t\n\r".includes(this.text[i] ?? "")) i++;
+    return i;
+  }
+
+  /** The offset just past the value starting at `from`. */
+  skipValue(from: number): number {
+    const c = this.text[from];
+    if (c === '"') return this.skipString(from);
+    if (c === "{") {
+      let end = from;
+      this.members(from, (_k, _s, e) => (end = e));
+      const close = this.skipSpace(end);
+      if (this.text[close] === "}") return close + 1;
+      const brace = this.text.indexOf("}", from);
+      return brace < 0 ? this.text.length : brace + 1;
+    }
+    if (c === "[") return this.elements(from, (_s, e) => e);
+    let i = from;
+    while (i < this.text.length && !",]} \t\n\r".includes(this.text[i] ?? "")) i++;
+    return i;
+  }
+
+  private skipString(from: number): number {
+    let i = from + 1;
+    while (i < this.text.length && this.text[i] !== '"') i += this.text[i] === "\\" ? 2 : 1;
+    return Math.min(i + 1, this.text.length);
+  }
+
+  /** Each member of the object at `from`: its key and the span of its value. */
+  members(from: number, each: (key: string, start: number, end: number) => void): void {
+    let i = this.skipSpace(from + 1);
+    while (i < this.text.length && this.text[i] !== "}") {
+      if (this.text[i] !== '"') return;
+      const keyEnd = this.skipString(i);
+      const key = JSON.parse(this.text.slice(i, keyEnd)) as string;
+      i = this.skipSpace(keyEnd);
+      if (this.text[i] !== ":") return;
+      const start = this.skipSpace(i + 1);
+      const end = this.skipValue(start);
+      each(key, start, end);
+      i = this.skipSpace(end);
+      if (this.text[i] === ",") i = this.skipSpace(i + 1);
+    }
+  }
+
+  /** Each element of the array at `from`; `each` returns where to continue. Returns the offset just past the array. */
+  elements(from: number, each: (start: number, end: number) => number): number {
+    let i = this.skipSpace(from + 1);
+    while (i < this.text.length && this.text[i] !== "]") {
+      const end = this.skipValue(i);
+      i = this.skipSpace(each(i, end));
+      if (this.text[i] === ",") i = this.skipSpace(i + 1);
+    }
+    return Math.min(i + 1, this.text.length);
+  }
+}
+
+/**
+ * What is wrong with a configured requests-file path, or null: it has to stay inside the
+ * workspace, since the setting may come from a checked-in file.
+ */
+export function requestsPathProblem(path: string): string | null {
+  if (path.trim().length === 0) return null;
+  if (path.startsWith("/") || path.startsWith("\\") || /^[A-Za-z]:/.test(path)) return `The requests file ${path} is not inside the workspace: use a workspace-relative path.`;
+  if (path.split(/[/\\]/).includes("..")) return `The requests file ${path} leaves the workspace: use a path without .. in it.`;
+  return null;
 }
 
 /**
@@ -132,8 +236,9 @@ const INVALID = `${ENV_FILE} is not valid`;
  * `params` (objects of texts) are allowed, and anything else is reported rather than ignored, so
  * a typo does not quietly leave a value unset.
  */
-export function parseEnv(text: string): Env {
+export function parseEnv(rawText: string): Env {
   const env: Env = { baseUrl: null, signals: null, headers: null, params: null, errors: [] };
+  const text = rawText.startsWith("\uFEFF") ? rawText.slice(1) : rawText;
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -559,15 +664,33 @@ export function readsAsStream(status: number, contentType: string | null): boole
   return status === 200 && !type.includes("text/html") && !type.includes("application/json") && !type.includes("text/javascript");
 }
 
-/** A curl command equivalent to what the inspector sends. Variables must already be resolved. */
+/**
+ * The headers the inspector sends: the client's own (fetch.ts:81-88 in 1.0.4), then the user's,
+ * which replace one of the same name as `Object.assign` does there.
+ */
+export function requestHeaders(method: string, userHeaders: Record<string, string>): Record<string, string> {
+  const out = new Map<string, string>();
+  out.set("Accept", ACCEPT);
+  out.set("Datastar-Request", "true");
+  if (!(method === "GET" || method === "DELETE")) out.set("Content-Type", "application/json");
+  for (const [k, v] of Object.entries(userHeaders)) {
+    for (const existing of out.keys()) if (existing.toLowerCase() === k.toLowerCase()) out.delete(existing);
+    out.set(k, v);
+  }
+  return Object.fromEntries(out);
+}
+
+/**
+ * A curl command equivalent to what the inspector sends. Variables must already be resolved.
+ * The body goes as `--data-raw`: with `--data`, curl reads signals that start with `@` from the file they name.
+ */
 export function toCurl(r: SavedRequest): string {
   const bodyless = r.method === "GET" || r.method === "DELETE";
   const signalsJson = compactSignals(r.signals);
   const parts = ["curl", "-N", "-X", r.method];
   parts.push(shellQuote(requestUrl(r.url, r.method, signalsJson)));
-  parts.push("-H", shellQuote(`Accept: ${ACCEPT}`), "-H", shellQuote("Datastar-Request: true"));
-  for (const [k, v] of Object.entries(parseHeaderLines(r.headers))) parts.push("-H", shellQuote(`${k}: ${v}`));
-  if (!bodyless) parts.push("-H", shellQuote("Content-Type: application/json"), "--data", shellQuote(signalsJson));
+  for (const [k, v] of Object.entries(requestHeaders(r.method, parseHeaderLines(r.headers)))) parts.push("-H", shellQuote(`${k}: ${v}`));
+  if (!bodyless) parts.push("--data-raw", shellQuote(signalsJson));
   return parts.join(" ");
 }
 

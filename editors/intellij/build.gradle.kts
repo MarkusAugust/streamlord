@@ -258,8 +258,9 @@ val generateHtmlLiveTemplates by tasks.registering {
         )
         sb.append("    <variable name=\"PATH\" expression=\"\" defaultValue=\"&quot;/path&quot;\" alwaysStopAt=\"true\" />\n")
         sb.append("    <context><option name=\"HTML\" value=\"true\" /></context>\n  </template>\n")
+        // Named apart from the generated `data-init`: two templates of one name in a group leave only one.
         sb.append(
-            "  <template name=\"data-init\" value=\"${esc(
+            "  <template name=\"data-init-get\" value=\"${esc(
                 "data-init=\"@get('\$PATH\$')\"\$END\$",
             )}\" description=\"Open a stream when the element appears.\" toReformat=\"false\" toShortenFQNames=\"false\">\n",
         )

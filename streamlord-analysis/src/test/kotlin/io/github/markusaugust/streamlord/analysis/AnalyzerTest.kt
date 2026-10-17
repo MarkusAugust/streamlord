@@ -163,17 +163,14 @@ class AnalyzerTest {
         val issues = analyzer.analyzeHtml(src, opts)
         assertEquals(List(7) { "key-case" }, codes(issues))
         assertEquals(
-            listOf(
-                "foo-bar",
-                "full-name",
-                "my-signal__case.pascal",
-                "widget-loaded__case.camel",
-                "is-open__case.camel",
-                "aria-label",
-                "background-color",
-            ),
-            issues.map { it.fixes[0].text },
+            listOf("foo-bar", "full-name", "my-signal__case.pascal", "widget-loaded__case.camel", "is-open__case.camel"),
+            issues.take(5).map { it.fixes[0].text },
         )
+        // A kebab-case attribute would set aria-label; the object form keeps the name. No form keeps a style property's capitals.
+        assertEquals("data-attr=\"{ariaLabel: 'x'}\"", issues[5].fixes.single().text)
+        assertContains(issues[5].message, "sets arialabel, not ariaLabel")
+        assertEquals(emptyList(), issues[6].fixes)
+        assertContains(issues[6].message, "would set background-color. Name the property in lowercase")
         assertContains(issues[0].message, "\$foobar")
         assertEquals("fooBar", src.substring(issues[0].start, issues[0].end))
         val fine =
@@ -189,7 +186,8 @@ class AnalyzerTest {
         assertEquals(listOf("foo-bar", "widget-loaded"), explicit.map { it.fixes[0].text })
         assertContains(explicit[0].message, "foo-bar__case.kebab")
         val custom = analyzer.analyzeHtml("<div data-style:--myColor=\"\$c\"></div>", opts)
-        assertEquals(listOf("--my-color"), custom.map { it.fixes[0].text })
+        assertContains(custom.single().message, "sets --mycolor, not --myColor. The object form would set --my-color")
+        assertEquals(emptyList(), custom.single().fixes)
         assertEquals(
             listOf("key-case"),
             codes(analyzer.analyzeHtml("<div data-star-signals:fooBar=\"1\"></div>", AnalyzeOptions("data-star-", true))),

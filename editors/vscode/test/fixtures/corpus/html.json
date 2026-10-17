@@ -38,6 +38,23 @@
     {"name":"an indicator beside a stream opened on init","source":"<div data-init=\"@get('/feed')\" data-indicator=\"loading\"></div>","issues":[]},
     {"name":"an indicator in a tag with attributes spread by a template","source":"<button {{ attrs }} data-indicator:busy></button>","issues":[]},
     {"name":"an indicator written in capitals","source":"<SPAN DATA-INDICATOR:busy></SPAN>","issues":[{"code":"indicator-without-action","start":6,"end":25}]},
-    {"name":"an indicator beside an action written as entities","source":"<div data-effect=\"$q &amp;&amp; &#64;get('/search')\" data-indicator:busy></div>","issues":[]}
+    {"name":"an indicator beside an action written as entities","source":"<div data-effect=\"$q &amp;&amp; &#64;get('/search')\" data-indicator:busy></div>","issues":[]},
+    {"name":"the pre-1.0 syntax, with the key after a dash","source":"<div data-on-click=\"x()\"></div>","issues":[{"code":"unknown-attribute","start":5,"end":18,"fixes":["<div data-on:click=\"x()\"></div>"]}]},
+    {"name":"the pre-1.0 data-on-load, which is data-init now","source":"<div data-on-load=\"x()\"></div>","issues":[{"code":"unknown-attribute","start":5,"end":17,"fixes":["<div data-init=\"x()\"></div>"]}]},
+    {"name":"the pre-1.0 data-bind-value","source":"<div data-bind-value></div>","issues":[{"code":"unknown-attribute","start":5,"end":20,"fixes":["<div data-bind:value></div>"]}]},
+    {"name":"a modifier written after a dot in the event","source":"<div data-on:click.prevent=\"x()\"></div>","issues":[{"code":"unknown-modifier","start":13,"end":26,"fixes":["<div data-on:click__prevent=\"x()\"></div>"]}]},
+    {"name":"a semicolon inside a block of a value-returning attribute","source":"<div data-text=\"$items.map(i => { return i.name; }).join(', ')\"></div>","issues":[{"code":"expression-syntax"}]},
+    {"name":"a line comment at the end of a value-returning attribute","source":"<div data-text=\"$items.length // count\"></div>","issues":[{"code":"expression-syntax"}]},
+    {"name":"an await at the top level of an event handler","source":"<div data-on:click=\"await @post('/x')\"></div>","issues":[{"code":"expression-syntax"}]},
+    {"name":"two statements in a value-returning attribute","source":"<div data-text=\"$a; $b\"></div>","issues":[]},
+    {"name":"a return in an event handler","source":"<div data-on:click=\"if ($x) return; $y = 1\"></div>","issues":[]},
+    {"name":"a semicolon inside an object literal of a value-returning attribute","source":"<div data-class=\"{hidden: $x; }\"></div>","issues":[{"code":"expression-syntax"}]},
+    {"name":"a dollar written as a named reference","source":"<div data-text=\"&dollar;foo + 2\"></div>","issues":[]},
+    {"name":"a legacy reference without its semicolon","source":"<div data-show=\"$a &amp&amp $b\"></div>","issues":[]},
+    {"name":"a named reference that is no character of an expression","source":"<div data-text=\"&copy;\"></div>","issues":[{"code":"expression-syntax"}]},
+    {"name":"a capital in an attribute name, kept by the object form","source":"<svg data-attr:viewBox=\"'0 0 10 10'\"></svg>","issues":[{"code":"key-case","start":15,"end":22,"fixes":["<svg data-attr=\"{viewBox: '0 0 10 10'}\"></svg>"]}]},
+    {"name":"a capital in a style property, which no form keeps","source":"<div data-style:--brandColor=\"'red'\"></div>","issues":[{"code":"key-case","start":16,"end":28}]},
+    {"name":"a kebab-case signal the page declares as written","source":"<div data-signals:my-value__case.kebab=\"1\" data-text=\"$my-value\"></div>","issues":[]},
+    {"name":"the object form of data-computed","source":"<div data-computed=\"{total: () => $a + $b}\"></div>","issues":[]}
   ]
 }

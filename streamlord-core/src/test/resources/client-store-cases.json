@@ -1,0 +1,320 @@
+[
+ {
+  "name": "plain merge and delete",
+  "steps": [
+   {
+    "signals": "{\"a\":{\"b\":1,\"c\":2}}",
+    "onlyIfMissing": false
+   },
+   {
+    "signals": "{\"a\":{\"b\":null}}",
+    "onlyIfMissing": false
+   }
+  ],
+  "client": "{\"a\":{\"c\":2}}"
+ },
+ {
+  "name": "top-level array",
+  "steps": [
+   {
+    "signals": "{\"x\":1}",
+    "onlyIfMissing": false
+   },
+   {
+    "signals": "[5,6]",
+    "onlyIfMissing": false
+   }
+  ],
+  "client": "{\"0\":5,\"1\":6,\"x\":1}"
+ },
+ {
+  "name": "top-level string",
+  "steps": [
+   {
+    "signals": "{\"x\":1}",
+    "onlyIfMissing": false
+   },
+   {
+    "signals": "\"ab\"",
+    "onlyIfMissing": false
+   }
+  ],
+  "client": "{\"0\":\"a\",\"1\":\"b\",\"x\":1}"
+ },
+ {
+  "name": "top-level number",
+  "steps": [
+   {
+    "signals": "{\"x\":1}",
+    "onlyIfMissing": false
+   },
+   {
+    "signals": "7",
+    "onlyIfMissing": false
+   }
+  ],
+  "client": "{\"x\":1}"
+ },
+ {
+  "name": "top-level null",
+  "steps": [
+   {
+    "signals": "{\"x\":1}",
+    "onlyIfMissing": false
+   },
+   {
+    "signals": "null",
+    "onlyIfMissing": false
+   }
+  ],
+  "client": "{\"x\":1}"
+ },
+ {
+  "name": "index past end",
+  "steps": [
+   {
+    "signals": "{\"a\":[1]}",
+    "onlyIfMissing": false
+   },
+   {
+    "signals": "{\"a\":{\"3\":9}}",
+    "onlyIfMissing": false
+   }
+  ],
+  "client": "{\"a\":[1,\"\",\"\",9]}"
+ },
+ {
+  "name": "null into array",
+  "steps": [
+   {
+    "signals": "{\"a\":[1,2]}",
+    "onlyIfMissing": false
+   },
+   {
+    "signals": "{\"a\":{\"0\":null}}",
+    "onlyIfMissing": false
+   }
+  ],
+  "client": "{\"a\":[\"\",2]}"
+ },
+ {
+  "name": "null into array ifMissing",
+  "steps": [
+   {
+    "signals": "{\"a\":[1,2]}",
+    "onlyIfMissing": false
+   },
+   {
+    "signals": "{\"a\":{\"0\":null}}",
+    "onlyIfMissing": true
+   }
+  ],
+  "client": "{\"a\":[1,2]}"
+ },
+ {
+  "name": "a stored null reads as empty and is not missing",
+  "steps": [
+   {
+    "signals": "{\"a\":[null,2]}",
+    "onlyIfMissing": false
+   },
+   {
+    "signals": "{\"a\":{\"0\":5,\"1\":6}}",
+    "onlyIfMissing": true
+   }
+  ],
+  "client": "{\"a\":[\"\",2]}"
+ },
+ {
+  "name": "a null nested in a stored array reads as empty",
+  "steps": [
+   {
+    "signals": "{\"a\":[{\"b\":null}]}",
+    "onlyIfMissing": false
+   }
+  ],
+  "client": "{\"a\":[{\"b\":\"\"}]}"
+ },
+ {
+  "name": "non-index key on array",
+  "steps": [
+   {
+    "signals": "{\"a\":[1]}",
+    "onlyIfMissing": false
+   },
+   {
+    "signals": "{\"a\":{\"name\":1,\"01\":2}}",
+    "onlyIfMissing": false
+   }
+  ],
+  "client": "{\"a\":[1]}"
+ },
+ {
+  "name": "object onto array nested",
+  "steps": [
+   {
+    "signals": "{\"a\":[{\"b\":1}]}",
+    "onlyIfMissing": false
+   },
+   {
+    "signals": "{\"a\":{\"0\":{\"c\":2}}}",
+    "onlyIfMissing": false
+   }
+  ],
+  "client": "{\"a\":[{\"b\":1,\"c\":2}]}"
+ },
+ {
+  "name": "object onto primitive",
+  "steps": [
+   {
+    "signals": "{\"a\":1}",
+    "onlyIfMissing": false
+   },
+   {
+    "signals": "{\"a\":{\"b\":2}}",
+    "onlyIfMissing": false
+   }
+  ],
+  "client": "{\"a\":{\"b\":2}}"
+ },
+ {
+  "name": "ifMissing object onto primitive",
+  "steps": [
+   {
+    "signals": "{\"a\":1}",
+    "onlyIfMissing": false
+   },
+   {
+    "signals": "{\"a\":{\"b\":2}}",
+    "onlyIfMissing": true
+   }
+  ],
+  "client": "{\"a\":{\"b\":2}}"
+ },
+ {
+  "name": "array replaces object",
+  "steps": [
+   {
+    "signals": "{\"a\":{\"b\":1}}",
+    "onlyIfMissing": false
+   },
+   {
+    "signals": "{\"a\":[1]}",
+    "onlyIfMissing": false
+   }
+  ],
+  "client": "{\"a\":[1]}"
+ },
+ {
+  "name": "ifMissing array onto existing",
+  "steps": [
+   {
+    "signals": "{\"a\":{\"b\":1}}",
+    "onlyIfMissing": false
+   },
+   {
+    "signals": "{\"a\":[1]}",
+    "onlyIfMissing": true
+   }
+  ],
+  "client": "{\"a\":{\"b\":1}}"
+ },
+ {
+  "name": "ifMissing leaf by leaf",
+  "steps": [
+   {
+    "signals": "{\"user\":{\"name\":\"a\"}}",
+    "onlyIfMissing": false
+   },
+   {
+    "signals": "{\"user\":{\"name\":\"b\",\"age\":1}}",
+    "onlyIfMissing": true
+   }
+  ],
+  "client": "{\"user\":{\"name\":\"a\",\"age\":1}}"
+ },
+ {
+  "name": "ifMissing null keeps",
+  "steps": [
+   {
+    "signals": "{\"a\":1,\"b\":2}",
+    "onlyIfMissing": false
+   },
+   {
+    "signals": "{\"a\":null}",
+    "onlyIfMissing": true
+   }
+  ],
+  "client": "{\"a\":1,\"b\":2}"
+ },
+ {
+  "name": "ifMissing new nested",
+  "steps": [
+   {
+    "signals": "{}",
+    "onlyIfMissing": false
+   },
+   {
+    "signals": "{\"a\":{\"b\":{\"c\":1}}}",
+    "onlyIfMissing": true
+   }
+  ],
+  "client": "{\"a\":{\"b\":{\"c\":1}}}"
+ },
+ {
+  "name": "object onto array ifMissing",
+  "steps": [
+   {
+    "signals": "{\"a\":[1,2]}",
+    "onlyIfMissing": false
+   },
+   {
+    "signals": "{\"a\":{\"0\":9,\"2\":3}}",
+    "onlyIfMissing": true
+   }
+  ],
+  "client": "{\"a\":[1,2,3]}"
+ },
+ {
+  "name": "empty object patch keeps",
+  "steps": [
+   {
+    "signals": "{\"a\":{\"b\":1}}",
+    "onlyIfMissing": false
+   },
+   {
+    "signals": "{\"a\":{}}",
+    "onlyIfMissing": false
+   }
+  ],
+  "client": "{\"a\":{\"b\":1}}"
+ },
+ {
+  "name": "empty array replaces",
+  "steps": [
+   {
+    "signals": "{\"a\":{\"b\":1}}",
+    "onlyIfMissing": false
+   },
+   {
+    "signals": "{\"a\":[]}",
+    "onlyIfMissing": false
+   }
+  ],
+  "client": "{\"a\":[]}"
+ },
+ {
+  "name": "bool and number",
+  "steps": [
+   {
+    "signals": "{\"a\":true,\"b\":1.5,\"c\":\"x\"}",
+    "onlyIfMissing": false
+   },
+   {
+    "signals": "{\"a\":false,\"b\":2,\"c\":null}",
+    "onlyIfMissing": false
+   }
+  ],
+  "client": "{\"a\":false,\"b\":2}"
+ }
+]

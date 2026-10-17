@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.intellij.inspections
 
+import com.intellij.codeInsight.daemon.HighlightDisplayKey
 import com.intellij.codeInsight.intention.HighPriorityAction
 import com.intellij.codeInspection.InspectionManager
 import com.intellij.codeInspection.LocalInspectionTool
@@ -8,6 +9,7 @@ import com.intellij.codeInspection.ProblemDescriptor
 import com.intellij.codeInspection.ProblemHighlightType
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
+import com.intellij.profile.codeInspection.InspectionProjectProfileManager
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiFile
 import io.github.markusaugust.streamlord.analysis.Fix
@@ -43,6 +45,7 @@ abstract class StreamlordInspection(
     ): Array<ProblemDescriptor> {
         val issues = issues(file) ?: return ProblemDescriptor.EMPTY_ARRAY
         val length = file.textLength
+        val profiled = severitySetInProfile(file)
         return issues
             .filter { it.code in codes && it.start < length }
             .map { issue ->
@@ -51,11 +54,24 @@ abstract class StreamlordInspection(
                     file,
                     range,
                     issue.message + (issue.link?.let { " See $it" } ?: ""),
-                    highlightType(issue.severity),
+                    if (profiled) ProblemHighlightType.GENERIC_ERROR_OR_WARNING else highlightType(issue.severity),
                     isOnTheFly,
                     *issue.fixes.mapIndexed { i, fix -> if (i == 0) PreferredReplaceTextFix(fix) else ReplaceTextFix(fix) }.toTypedArray(),
                 )
             }.toTypedArray()
+    }
+
+    /**
+     * Has the user given this inspection a severity in the profile? One family mixes severities
+     * (a syntax error beside a Pro hint), so by default each issue keeps the one the analysis
+     * gave it; a level set in the profile applies to the whole family, as the profile promises.
+     */
+    private fun severitySetInProfile(file: PsiFile): Boolean {
+        val key = HighlightDisplayKey.find(shortName) ?: return false
+        val profile = InspectionProjectProfileManager.getInstance(file.project).currentProfile
+        // The wrapper knows the level plugin.xml declares; the tool itself only knows the platform's default.
+        val declared = profile.getInspectionTool(shortName, file)?.defaultLevel ?: return false
+        return profile.getErrorLevel(key, file) != declared
     }
 
     private fun highlightType(severity: Severity): ProblemHighlightType =

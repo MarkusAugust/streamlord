@@ -6,9 +6,10 @@ import { findCallSites } from "./scanner.ts";
  * generous: better to offer a name twice than to miss it.
  */
 
+// A kebab-case name is written as a kebab-case key, which Datastar reads as camelCase: signal("foo-bar") is $fooBar.
 const KOTLIN_PATTERNS: RegExp[] = [
-  /\b(?:signal|set|setExpr|increment|decrement|toggle|not|dataBind|dataIndicator|dataRef|dataComputed|dataMatchMedia)\(\s*"([A-Za-z_][A-Za-z0-9_.]*)"/g,
-  /\bdataSignals\(\s*"([A-Za-z_][A-Za-z0-9_.]*)"\s*,/g,
+  /\b(?:signal|set|setExpr|increment|decrement|toggle|not|dataBind|dataIndicator|dataRef|dataComputed|dataMatchMedia)\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"/g,
+  /\bdataSignals\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"\s*,/g,
 ];
 
 /** A dollar escaped in a Kotlin string: a signal read, which completion offers and a definition is not. */
@@ -22,7 +23,8 @@ const HTML_ATTRIBUTE_PATTERNS: RegExp[] = [
   /data-(?:star-)?(?:signals|bind|indicator|ref|computed|match-media):([A-Za-z_][A-Za-z0-9_.-]*)/g,
   /data-(?:star-)?(?:bind|indicator|ref)(?:__[^=\s]*)?="([A-Za-z_][A-Za-z0-9_.]*)"/g,
   // The object form may sit in either kind of quote: JSON written by hand is `data-signals='{"query": ""}'`.
-  /data-(?:star-)?signals(?:__[^=\s]*)?=(?:"\{([^"]*)\}"|'\{([^']*)\}')/g,
+  // data-computed="{total: () => ...}" declares its keys the same way.
+  /data-(?:star-)?(?:signals|computed)(?:__[^=\s]*)?=(?:"\{([^"]*)\}"|'\{([^']*)\}')/g,
 ];
 
 /** A key of the object form: bare or quoted, and inside a Kotlin string quoted with escaped quotes. */
@@ -42,7 +44,7 @@ const PAIR_CALLS: ReadonlySet<string> = new Set(["dataSignals", "patchSignals", 
 const JSON_CALLS: ReadonlySet<string> = new Set(["patchSignals", "respondSignals", "datastarSignals"]);
 const CASE_MODIFIER = /__case\.([a-z]+)/;
 const PAIR = /"([A-Za-z_][A-Za-z0-9_.-]*)"\s+to\b/g;
-const NAME = /^"([A-Za-z_][A-Za-z0-9_.]*)"$/;
+const NAME = /^"([A-Za-z_][A-Za-z0-9_.-]*)"$/;
 
 export function collectSignals(src: string, language: "kotlin" | "html"): Set<string> {
   return collect(src, language, true);
@@ -73,8 +75,9 @@ function collect(src: string, language: "kotlin" | "html", reads: boolean): Set<
         }
         const name = NAME.exec(a.text);
         if (!name?.[1]) return;
-        // removeSignals("a", "b") and dataSignals("name", "expression") take names positionally.
-        if (site.name === "removeSignals" || (site.name === "dataSignals" && idx === 0 && positional[1]?.string)) out.add(name[1]);
+        // removeSignals("a", "b") names keys as they are; dataSignals("name", "expression") writes a key Datastar camel-cases.
+        if (site.name === "removeSignals") out.add(name[1]);
+        if (site.name === "dataSignals" && idx === 0 && positional[1]?.string) out.add(toCamel(name[1]));
       });
     }
   }
@@ -88,7 +91,7 @@ function collect(src: string, language: "kotlin" | "html", reads: boolean): Set<
       // object form's body is captured whole, `__` and all.
       const keyed = re === HTML_ATTRIBUTE_PATTERNS[0];
       const captured = keyed ? (m[1] ?? "").split("__")[0] ?? "" : (m[1] ?? m[2] ?? "");
-      if (re.source.includes("signals(?:__")) {
+      if (re === HTML_ATTRIBUTE_PATTERNS[2]) {
         for (const key of captured.matchAll(OBJECT_KEY)) {
           if (key[1]) out.add(key[1]);
         }

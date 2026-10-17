@@ -34,7 +34,7 @@ import io.github.markusaugust.streamlord.core.json.JsonNull
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonValue
-import io.github.markusaugust.streamlord.core.json.mergePatch
+import io.github.markusaugust.streamlord.core.json.mergePatchAsClient
 import io.github.markusaugust.streamlord.intellij.Streamlord
 import java.awt.BorderLayout
 import java.awt.Component
@@ -68,7 +68,7 @@ class InspectorPanel(
     private val running = RunningServers.getInstance(project)
     private val client = StreamClient()
     private var connection: StreamClient.Connection? = null
-    private var signals: JsonValue = JsonObject.EMPTY
+    private var signals: JsonObject = JsonObject.EMPTY
     private var count = 0
 
     /** An entry of the request list: a saved request, a recent one, or the blank one at the top. */
@@ -85,9 +85,9 @@ class InspectorPanel(
     private val method = ComboBox(Requests.METHODS.toTypedArray())
     private val signalsField = JBTextArea(3, 40).mono()
     private val headersField = JBTextArea(2, 40).mono()
-    private val resolved = JBLabel().apply { foreground = JBColor.GRAY }
+    private val resolved = JBLabel().plain().apply { foreground = JBColor.GRAY }
     private val dirty = JBLabel("● modified").apply { foreground = JBColor.namedColor("Label.warningForeground", JBColor.ORANGE) }
-    private val status = JBLabel("idle")
+    private val status = JBLabel("idle").plain()
     private val frames = JPanel().apply { layout = BoxLayout(this, BoxLayout.Y_AXIS) }
     private val storeView = JBTextArea("{}").mono().apply { isEditable = false }
     private val variablesView = JBTextArea("").mono().apply { isEditable = false }
@@ -123,6 +123,8 @@ class InspectorPanel(
                     cellHasFocus: Boolean,
                 ): Component {
                     val c = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus)
+                    // A saved name comes from a file the project shares: text, never Swing HTML.
+                    (c as? JComponent)?.putClientProperty("html.disable", true)
                     val choice = value as? Choice
                     icon =
                         if (choice?.request == null) {
@@ -483,19 +485,22 @@ class InspectorPanel(
         ApplicationManager.getApplication().invokeLater(block, project.disposed)
     }
 
+    /** The store as the client would hold it after this frame, see [mergePatchAsClient]; `onlyIfMissing` is read as the client reads it (patchSignals.ts:16, text.ts:24 in 1.0.4). */
     private fun applyFrame(frame: DatastarFrame) {
         if (frame.event != "datastar-patch-signals") return
         val text = frame.args["signals"] ?: return
-        try {
-            var patch = JsonParser.parse(text)
-            if (frame.args["onlyIfMissing"] == "true" && patch is JsonObject) {
-                val existing = signals as? JsonObject ?: JsonObject.EMPTY
-                patch = JsonObject(patch.filterKeys { !existing.containsKey(it) })
+        val patch =
+            try {
+                JsonParser.parse(text)
+            } catch (_: Exception) {
+                // invalid JSON in the stream is shown raw in the frame itself
+                return
             }
-            signals = mergePatch(signals, patch)
+        try {
+            signals = mergePatchAsClient(signals, patch, frame.args["onlyIfMissing"]?.trim() == "true")
             storeView.text = pretty(signals)
-        } catch (_: Exception) {
-            // invalid JSON in the stream is shown raw in the frame itself
+        } catch (e: IllegalArgumentException) {
+            error("The signal store cannot take this patch: ${e.message}")
         }
     }
 
@@ -518,7 +523,7 @@ class InspectorPanel(
         frames.removeAll()
         count = 0
         frames.add(
-            JBLabel(message).apply {
+            JBLabel(message).plain().apply {
                 foreground = JBColor.GRAY
                 border = JBUI.Borders.empty(8)
             },
@@ -555,7 +560,7 @@ class InspectorPanel(
 
     private fun addComment(text: String) {
         prepend(
-            JBLabel("${time(System.currentTimeMillis())}  : $text").apply {
+            JBLabel("${time(System.currentTimeMillis())}  : $text").plain().apply {
                 foreground = JBColor.GRAY
                 font = font.deriveFont(Font.ITALIC)
                 border = JBUI.Borders.empty(2, 4)
@@ -589,7 +594,7 @@ class InspectorPanel(
         useBaseUrl: String? = null,
     ) {
         val label =
-            JBLabel(message).apply {
+            JBLabel(message).plain().apply {
                 foreground = JBColor.RED
                 border = JBUI.Borders.empty(2, 4)
             }
@@ -639,7 +644,7 @@ class InspectorPanel(
             }
         header.forEachIndexed { i, h ->
             left.add(
-                JBLabel(h).apply {
+                JBLabel(h).plain().apply {
                     if (i == 1) {
                         foreground = color
                         font = font.deriveFont(Font.BOLD)
@@ -650,7 +655,7 @@ class InspectorPanel(
         }
         head.add(left, BorderLayout.WEST)
         head.add(
-            JBLabel(right).apply {
+            JBLabel(right).plain().apply {
                 foreground = JBColor.GRAY
                 horizontalAlignment = SwingConstants.RIGHT
             },
@@ -676,6 +681,12 @@ class InspectorPanel(
         card.add(body, BorderLayout.CENTER)
         return card
     }
+
+    /**
+     * Swing renders a label whose text starts with `<html>` as HTML, images and all. Event names,
+     * content types and saved names come from a server or a shared file, so every label here is text.
+     */
+    private fun JBLabel.plain(): JBLabel = apply { putClientProperty("html.disable", true) }
 
     private fun notify(message: String) {
         NotificationGroupManager

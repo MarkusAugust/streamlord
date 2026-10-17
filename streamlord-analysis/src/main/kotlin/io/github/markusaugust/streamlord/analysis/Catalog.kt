@@ -44,6 +44,12 @@ public data class AttributeSpec(
     val onlyOn: List<String>?,
     val doc: String,
     val requires: Requires? = null,
+    /**
+     * Whether Datastar reads the expression's value: it then splits the text into statements on
+     * `;` and wraps the last one in `return (...)` before compiling. The others are compiled as
+     * written, as the body of an event handler.
+     */
+    val returnsValue: Boolean = false,
 )
 
 public data class ActionSpec(
@@ -130,6 +136,7 @@ public class Catalog private constructor(
                     onlyOn = a.array("onlyOn")?.strings(),
                     doc = a.string("doc") ?: "",
                     requires = a.string("requires")?.let { Requires.valueOf(it.uppercase()) },
+                    returnsValue = a.boolean("returnsValue") ?: false,
                 )
             }
         actions =

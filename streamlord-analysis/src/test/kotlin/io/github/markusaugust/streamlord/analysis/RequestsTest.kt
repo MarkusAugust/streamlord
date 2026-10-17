@@ -69,7 +69,7 @@ class RequestsTest {
         )
         assertEquals(
             "curl -N -X POST 'http://h/x' -H 'Accept: text/event-stream, text/html, application/json' " +
-                "-H 'Datastar-Request: true' -H 'Content-Type: application/json' --data '{\"s\":\"it'\\''s\"}'",
+                "-H 'Datastar-Request: true' -H 'Content-Type: application/json' --data-raw '{\"s\":\"it'\\''s\"}'",
             Requests.toCurl(req(url = "http://h/x", method = "POST", signals = "{\"s\":\"it's\"}")),
         )
     }
@@ -88,7 +88,7 @@ class RequestsTest {
         assertEquals("curl -N -X GET '{{base}}/x?datastar=%7B%7D'$tail", get("{{base}}/x"))
         assertEquals("curl -N -X GET 'http://h/x?y=1&z=a b&datastar=%7B%7D#frag'$tail", get("http://h/x?y=1&datastar=old&z=a b#frag"))
         assertEquals(
-            "curl -N -X POST 'http://localhost:8080'$tail -H 'Content-Type: application/json' --data '{}'",
+            "curl -N -X POST 'http://localhost:8080'$tail -H 'Content-Type: application/json' --data-raw '{}'",
             Requests.toCurl(req(url = "http://localhost:8080", method = "POST")),
         )
     }
@@ -99,7 +99,7 @@ class RequestsTest {
         val spaced = " { \"n\" : 1.0,\n\t\"s\": \"a  \\\" b\\u00e9</p>\", \"l\": [ 1, 2 ] }\r\n"
         assertEquals(
             "curl -N -X POST 'http://h/x'$tail -H 'Content-Type: application/json' " +
-                "--data '{\"n\":1.0,\"s\":\"a  \\\" b\\u00e9</p>\",\"l\":[1,2]}'",
+                "--data-raw '{\"n\":1.0,\"s\":\"a  \\\" b\\u00e9</p>\",\"l\":[1,2]}'",
             Requests.toCurl(req(url = "http://h/x", method = "POST", signals = spaced)),
         )
         assertEquals(
@@ -107,7 +107,7 @@ class RequestsTest {
             Requests.toCurl(req(url = "http://h/x", signals = "{\"k\":\"~*'()!é \uD83D\"}")),
         )
         assertEquals(
-            "curl -N -X PUT 'http://h/x'$tail -H 'X-A: 2' -H 'B: 3' -H 'Content-Type: application/json' --data 'not json'",
+            "curl -N -X PUT 'http://h/x'$tail -H 'Content-Type: application/json' -H 'X-A: 2' -H 'B: 3' --data-raw 'not json'",
             Requests.toCurl(req(url = "http://h/x", method = "PUT", signals = "  not json ", headers = "X-A: 1\nBad\n B : 3 \r\nX-A: 2")),
         )
     }

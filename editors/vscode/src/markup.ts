@@ -1,5 +1,5 @@
 import { catalog, distance, parseAttributeName, type AttributeSpec } from "./catalog.ts";
-import { attributeDoc, DOCS, quoteAt, validateExpression, type Issue } from "./expression.ts";
+import { attributeDoc, DOCS, quoteAt, validateExpression, type Fix, type Issue } from "./expression.ts";
 
 /**
  * Markup checks for the HTML Datastar patches: complete elements, ids where the protocol needs
@@ -61,8 +61,21 @@ export function indexOfAsciiIgnoreCase(s: string, needle: string, from: number):
   return asciiLowercase(s).indexOf(needle, from);
 }
 
-const ENTITY = /&(?:(amp|lt|gt|quot|apos)|#(\d{1,7})|#[xX]([0-9A-Fa-f]{1,6}));/y;
-const NAMED_ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
+/*
+ * A named reference with its semicolon, one of the few legacy names the browser also reads
+ * without it (unless `=` or a letter or digit follows, as in a URL's `&copy=1`), or a numeric one.
+ */
+const ENTITY = /&(?:([A-Za-z][A-Za-z0-9]*);|(amp|AMP|lt|LT|gt|GT|quot|QUOT|nbsp)(?![=A-Za-z0-9])|#(\d{1,7});|#[xX]([0-9A-Fa-f]{1,6});)/y;
+
+/** The named references that spell a character an expression may hold: the ASCII punctuation, and the whitespace. */
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: "&", AMP: "&", lt: "<", LT: "<", gt: ">", GT: ">", quot: '"', QUOT: '"', apos: "'",
+  nbsp: "\u00A0", Tab: "\t", NewLine: "\n", excl: "!", num: "#", dollar: "$", percnt: "%",
+  lpar: "(", rpar: ")", ast: "*", midast: "*", plus: "+", comma: ",", period: ".", sol: "/",
+  colon: ":", semi: ";", equals: "=", quest: "?", commat: "@", lsqb: "[", lbrack: "[", bsol: "\\",
+  rsqb: "]", rbrack: "]", Hat: "^", lowbar: "_", UnderBar: "_", grave: "`", DiacriticalGrave: "`",
+  lcub: "{", lbrace: "{", verbar: "|", vert: "|", VerticalLine: "|", rcub: "}", rbrace: "}",
+};
 
 function codePoint(cp: number): string | null {
   return cp === 0 || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff) ? null : String.fromCodePoint(cp);
@@ -70,8 +83,10 @@ function codePoint(cp: number): string | null {
 
 /**
  * The attribute value as the browser hands it to Datastar: `&amp;&amp;` is `&&` by then. The
- * named references a value needs (amp, lt, gt, quot, apos) and the numeric ones are decoded.
- * `map` has, for every decoded index, the offset it came from: `text.length + 1` entries.
+ * named references that spell ASCII punctuation or whitespace, the legacy ones the browser reads
+ * without a semicolon, and the numeric ones are decoded; `&copy;` and the rest stay as written,
+ * which to the expression they are. `map` has, for every decoded index, the offset it came from:
+ * `text.length + 1` entries.
  */
 export function decodeEntities(value: string): { text: string; map: number[] } {
   let text = "";
@@ -80,7 +95,7 @@ export function decodeEntities(value: string): { text: string; map: number[] } {
   while (i < value.length) {
     ENTITY.lastIndex = i;
     const m = value[i] === "&" ? ENTITY.exec(value) : null;
-    const decoded = !m ? null : m[1] ? (NAMED_ENTITIES[m[1]] ?? null) : codePoint(m[2] ? parseInt(m[2], 10) : parseInt(m[3] ?? "", 16));
+    const decoded = !m ? null : m[1] ? (NAMED_ENTITIES[m[1]] ?? null) : m[2] ? (NAMED_ENTITIES[m[2]] ?? null) : codePoint(m[3] ? parseInt(m[3], 10) : parseInt(m[4] ?? "", 16));
     if (!m || decoded === null) {
       text += value[i];
       map.push(i);
@@ -155,7 +170,11 @@ export interface MarkupOptions {
   prefix: string;
   /** Validate data-* attributes and their expressions. */
   checkAttributes: boolean;
+  /** Kebab-case signal names the source declares with `__case.kebab`, which `$my-value` then reaches as written. */
+  hyphenatedSignals?: ReadonlySet<string>;
 }
+
+const NO_SIGNALS: ReadonlySet<string> = new Set();
 
 export function tokenize(html: string): { tags: Tag[]; topLevelText: { start: number; end: number }[] } {
   const tags: Tag[] = [];
@@ -300,7 +319,7 @@ export function validateMarkup(html: string, opts: MarkupOptions): Issue[] {
     closeImplied(stack, tag.name);
     if (stack.length === 0) topLevel.push(tag);
     if (!tag.selfClosing) stack.push(tag);
-    if (opts.checkAttributes) issues.push(...validateAttributes(tag, opts.prefix, html.slice(tag.start, tag.end)));
+    if (opts.checkAttributes) issues.push(...validateAttributes(tag, opts.prefix, html.slice(tag.start, tag.end), opts.hyphenatedSignals));
   }
   for (const unclosed of stack) {
     if (unclosed.name in OPTIONAL_END) continue;
@@ -357,7 +376,7 @@ const LONG_NAME = 6;
 const IDENT = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 
 /** Validate the Datastar attributes on one tag; with its text, a template construct the tokenizer stepped over is seen too. */
-export function validateAttributes(tag: Tag, prefix: string, tagSource?: string): Issue[] {
+export function validateAttributes(tag: Tag, prefix: string, tagSource?: string, hyphenatedSignals: ReadonlySet<string> = NO_SIGNALS): Issue[] {
   const issues: Issue[] = [];
   for (const attr of tag.attributes) {
     const lower = asciiLowercase(attr.name);
@@ -376,8 +395,8 @@ export function validateAttributes(tag: Tag, prefix: string, tagSource?: string)
       const qualified = parsed.key !== null || parsed.modifiers.length > 0;
       const found = catalog.attributes.find((a) => distance(parsed.base, a.name) === 1 && (qualified || (a.name.length >= LONG_NAME && a.name.length === parsed.base.length)));
       const near = found ? { a: found } : undefined;
+      const baseEnd = attr.nameStart + prefix.length + parsed.base.length;
       if (near) {
-        const baseEnd = attr.nameStart + prefix.length + parsed.base.length;
         issues.push({
           start: attr.nameStart,
           end: nameEnd,
@@ -386,6 +405,24 @@ export function validateAttributes(tag: Tag, prefix: string, tagSource?: string)
           code: "unknown-attribute",
           link: attributeDoc(near.a.name),
           fixes: [{ title: `Change to ${prefix}${near.a.name}`, start: attr.nameStart, end: baseEnd, text: `${prefix}${near.a.name}` }],
+        });
+        continue;
+      }
+      // data-on-click, data-bind-value: the pre-1.0 syntax, which 1.0 reads as an attribute it does not have.
+      const dash = parsed.base.indexOf("-");
+      const keyedSpec = dash > 0 && parsed.key === null ? catalog.attributesByName.get(parsed.base.slice(0, dash)) : undefined;
+      if (keyedSpec?.keyed) {
+        const rest = parsed.base.slice(dash + 1);
+        const init = keyedSpec.name === "on" && rest === "load";
+        const fixed = init ? `${prefix}init` : `${prefix}${keyedSpec.name}:${rest}`;
+        issues.push({
+          start: attr.nameStart,
+          end: nameEnd,
+          message: `${prefix}${parsed.base} is Datastar's pre-1.0 syntax, which 1.0 ignores. ${init ? `An expression run when the element appears is ${fixed}.` : `The key follows a colon: ${fixed}.`}`,
+          severity: "warning",
+          code: "unknown-attribute",
+          link: attributeDoc(init ? "init" : keyedSpec.name),
+          fixes: [{ title: `Change to ${fixed}`, start: attr.nameStart, end: baseEnd, text: fixed }],
         });
       }
       continue;
@@ -401,6 +438,7 @@ export function validateAttributes(tag: Tag, prefix: string, tagSource?: string)
       issues.push({ start: attr.nameStart, end: nameEnd, message: `${prefix}${spec.name} does not take a key.`, severity: "error", code: "unexpected-key", link: attributeDoc(spec.name) });
     }
     if (parsed.key !== null) issues.push(...validateKeyCase(attr, parsed, spec, prefix));
+    issues.push(...validateDottedKey(attr, parsed, spec, prefix));
     const hasKey = !!parsed.key;
     const hasValue = !!attr.value;
     if (spec.requires === "value" && !hasValue) {
@@ -464,7 +502,7 @@ export function validateAttributes(tag: Tag, prefix: string, tagSource?: string)
         const from = at(start);
         return { start: attr.valueStart + from, end: attr.valueStart + (end > start ? Math.max(at(end), from + 1) : from) };
       };
-      for (const issue of validateExpression(decoded.text)) {
+      for (const issue of validateExpression(decoded.text, spec.returnsValue, hyphenatedSignals)) {
         const fixes = issue.fixes?.map((f) => ({ ...f, ...source(f.start, f.end) }));
         issues.push({ ...issue, ...source(issue.start, issue.end), ...(fixes ? { fixes } : {}) });
       }
@@ -534,11 +572,38 @@ export function keyReading(spec: AttributeSpec, name: string, wire: string): str
   }
 }
 
-/** For a raw key the only way to keep a capital is the object form; said once, where it applies. */
+/**
+ * What a raw key with a capital can do, said once, where it applies: an attribute keeps its name in
+ * the object form (attr.ts sets the key as written); a style property has no form that keeps one,
+ * since the object form writes the key kebab-case (style.ts:50 in 1.0.4).
+ */
 export function rawKeyNote(spec: AttributeSpec, prefix: string, key: string): string {
-  return keyKind(spec) === "raw" && spec.valueKind === "expression"
-    ? ` For a name that really has capitals, such as SVG's viewBox, use the object form: ${prefix}${spec.name}="{${key}: ...}".`
-    : "";
+  if (keyKind(spec) !== "raw" || spec.valueKind !== "expression") return "";
+  if (spec.name === "style") return ` The object form would set ${kebab(key)}. Name the property in lowercase.`;
+  return ` For a name that really has capitals, such as SVG's viewBox, use the object form: ${prefix}${spec.name}="{${key}: ...}".`;
+}
+
+/**
+ * `data-on:click.prevent`: a modifier written after a dot, which Datastar reads as part of the
+ * event name. Only for events; a dot in a signal key is a path.
+ */
+function validateDottedKey(attr: Attribute, parsed: { key: string | null }, spec: AttributeSpec, prefix: string): Issue[] {
+  const key = parsed.key;
+  if (!key || !key.includes(".") || keyKind(spec) !== "event") return [];
+  const pieces = key.split(".");
+  const mods = pieces.slice(1);
+  if (!pieces[0] || mods.some((m) => !spec.modifiers.some((x) => x.name === m))) return [];
+  const keyStart = attr.nameStart + attr.name.indexOf(":") + 1;
+  const fixed = pieces[0] + mods.map((m) => `__${m}`).join("");
+  return [{
+    start: keyStart,
+    end: keyStart + key.length,
+    message: `Datastar reads ${key} as ${keyReading(spec, key, key)}, dots and all. A modifier follows two underscores: ${prefix}${spec.name}:${fixed}.`,
+    severity: "warning",
+    code: "unknown-modifier",
+    link: attributeDoc(spec.name),
+    fixes: [{ title: `Change to ${fixed}`, start: keyStart, end: keyStart + key.length, text: fixed }],
+  }];
 }
 
 function validateKeyCase(attr: Attribute, parsed: { key: string | null; base: string; modifiers: { name: string; args: string[] }[] }, spec: AttributeSpec, prefix: string): Issue[] {
@@ -554,10 +619,30 @@ function validateKeyCase(attr: Attribute, parsed: { key: string | null; base: st
   // With an explicit __case already there, only the key itself changes.
   const fixed = existing ? kebab(key) : wireKey(key, spec.keyCase, null);
   const reaches = keyReading(spec, key.toLowerCase(), key.toLowerCase());
+  if (keyKind(spec) === "raw") {
+    // A kebab-case key would set view-box, not viewBox: for an attribute the object form keeps the
+    // name, for a style property no form does, since the object form writes it kebab-case.
+    const value = attr.value;
+    const quote = value === null || !value.includes('"') ? '"' : !value.includes("'") ? "'" : null;
+    const fixes: Fix[] = [];
+    if (spec.name === "attr" && value !== null && quote !== null) {
+      const end = attr.valueStart + value.length + (attr.quoted ? 1 : 0);
+      fixes.push({ title: "Use the object form", start: attr.nameStart, end, text: `${name}=${quote}{${key}: ${value}}${quote}` });
+    }
+    return [{
+      start: keyStart,
+      end: keyStart + key.length,
+      message: `The browser lowercases attribute names, so this sets ${key.toLowerCase()}, not ${key}.${rawKeyNote(spec, prefix, key)}`,
+      severity: "warning",
+      code: "key-case",
+      link: attributeDoc(spec.name),
+      fixes,
+    }];
+  }
   return [{
     start: keyStart,
     end: keyStart + key.length,
-    message: `The browser lowercases attribute names, so this reaches Datastar as ${reaches}, not ${key}. Write ${name}:${fixed}${existing ? "__" + existing.name + (existing.args.length ? "." + existing.args.join(".") : "") : ""}: keys are kebab-case${keyKind(spec) === "signal" ? ", and Datastar reads a kebab-case signal key as camelCase" : ""}.${rawKeyNote(spec, prefix, key)}`,
+    message: `The browser lowercases attribute names, so this reaches Datastar as ${reaches}, not ${key}. Write ${name}:${fixed}${existing ? "__" + existing.name + (existing.args.length ? "." + existing.args.join(".") : "") : ""}: keys are kebab-case${keyKind(spec) === "signal" ? ", and Datastar reads a kebab-case signal key as camelCase" : ""}.`,
     severity: "warning",
     code: "key-case",
     link: attributeDoc(spec.name),

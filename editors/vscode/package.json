@@ -60,6 +60,14 @@
         "category": "Streamlord"
       }
     ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "streamlord.inspector.openWith",
+          "when": "false"
+        }
+      ]
+    },
     "configuration": {
       "title": "Streamlord",
       "properties": {

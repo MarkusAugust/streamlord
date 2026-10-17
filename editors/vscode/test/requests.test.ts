@@ -46,7 +46,7 @@ describe("saved requests", () => {
     );
     assert.equal(
       toCurl(req({ url: "http://h/x", method: "POST", signals: `{"s":"it's"}` })),
-      `curl -N -X POST 'http://h/x' -H 'Accept: text/event-stream, text/html, application/json' -H 'Datastar-Request: true' -H 'Content-Type: application/json' --data '{"s":"it'\\''s"}'`,
+      `curl -N -X POST 'http://h/x' -H 'Accept: text/event-stream, text/html, application/json' -H 'Datastar-Request: true' -H 'Content-Type: application/json' --data-raw '{"s":"it'\\''s"}'`,
     );
   });
 
@@ -62,14 +62,14 @@ describe("saved requests", () => {
     assert.equal(get("http://h/a b"), `curl -N -X GET 'http://h/a b?datastar=%7B%7D'${tail}`);
     assert.equal(get("{{base}}/x"), `curl -N -X GET '{{base}}/x?datastar=%7B%7D'${tail}`);
     assert.equal(get("http://h/x?y=1&datastar=old&z=a b#frag"), `curl -N -X GET 'http://h/x?y=1&z=a b&datastar=%7B%7D#frag'${tail}`);
-    assert.equal(toCurl(req({ url: "http://localhost:8080", method: "POST" })), `curl -N -X POST 'http://localhost:8080'${tail} -H 'Content-Type: application/json' --data '{}'`);
+    assert.equal(toCurl(req({ url: "http://localhost:8080", method: "POST" })), `curl -N -X POST 'http://localhost:8080'${tail} -H 'Content-Type: application/json' --data-raw '{}'`);
   });
 
   it("curl export compacts signals without respelling them", () => {
     const tail = " -H 'Accept: text/event-stream, text/html, application/json' -H 'Datastar-Request: true'";
     assert.equal(
       toCurl(req({ url: "http://h/x", method: "POST", signals: ' { "n" : 1.0,\n\t"s": "a  \\" b\\u00e9</p>", "l": [ 1, 2 ] }\r\n' })),
-      `curl -N -X POST 'http://h/x'${tail} -H 'Content-Type: application/json' --data '{"n":1.0,"s":"a  \\" b\\u00e9</p>","l":[1,2]}'`,
+      `curl -N -X POST 'http://h/x'${tail} -H 'Content-Type: application/json' --data-raw '{"n":1.0,"s":"a  \\" b\\u00e9</p>","l":[1,2]}'`,
     );
     assert.equal(
       toCurl(req({ url: "http://h/x", signals: `{"k":"~*'()!é \uD83D"}` })),
@@ -77,7 +77,7 @@ describe("saved requests", () => {
     );
     assert.equal(
       toCurl(req({ url: "http://h/x", method: "PUT", signals: "  not json ", headers: "X-A: 1\nBad\n B : 3 \r\nX-A: 2" })),
-      `curl -N -X PUT 'http://h/x'${tail} -H 'X-A: 2' -H 'B: 3' -H 'Content-Type: application/json' --data 'not json'`,
+      `curl -N -X PUT 'http://h/x'${tail} -H 'Content-Type: application/json' -H 'X-A: 2' -H 'B: 3' --data-raw 'not json'`,
     );
   });
 
