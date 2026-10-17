@@ -95,7 +95,7 @@ public fun HTMLTag.dataSignals(
     keyed.groupBy { it.first }.values.firstOrNull { it.size > 1 }?.let {
         throw InvalidSignalNameException(it.first().first, "is given twice once the keys are read in camelCase")
     }
-    attributes[ds("signals${signalMods(null, ifMissing)}")] = JsonWriter.write(keyed.toMap())
+    attributes[ds("signals${signalMods(null, ifMissing)}")] = JsonWriter.writeExpression(keyed.toMap())
 }
 
 /** [value] with the keys of every map in it camel-cased, as Datastar reads a key in `data-signals:`. */

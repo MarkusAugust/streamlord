@@ -138,7 +138,7 @@ class HtmlDslTest {
     @Test
     fun `actions render options only when set and quote uris safely`() {
         assertEquals("""@get('/a')""", get("/a"))
-        assertEquals("""@delete('/x?y=\'1\'')""", delete("/x?y='1'"))
+        assertEquals("""@delete('/x?y=\x271\x27')""", delete("/x?y='1'"))
         assertEquals("""@query('/search')""", query("/search"))
         assertEquals(
             """@post('/form', {contentType: 'form', filterSignals: {include: /^form\//}, selector: '#f', headers: {'X-Csrf-Token': 't'}, openWhenHidden: true, retry: 'never', retryInterval: 500, requestCancellation: 'cleanup'})""",
@@ -231,7 +231,7 @@ class HtmlDslTest {
                 """<input data-on:input="@put('/draft')" data-on:change="@patch('/field')" data-on:keydown="evt.key"></form></html>""",
             html,
         )
-        assertEquals("""'a\'b'""", js("a'b"))
+        assertEquals("""'a\x27b'""", js("a'b"))
         val response = elementsResponse(selector = "#out", mode = ElementPatchMode.INNER) { span { +"x" } }
         assertEquals("<span>x</span>", response.body)
         assertEquals(mapOf("datastar-selector" to "#out", "datastar-mode" to "inner"), response.headers)
@@ -376,7 +376,7 @@ class HtmlDslTest {
             SignalFilter.regexLiteral(Regex("^a$", setOf(RegexOption.IGNORE_CASE, RegexOption.MULTILINE, RegexOption.DOT_MATCHES_ALL))),
         )
         assertEquals("""/a\/b/""", SignalFilter.regexLiteral(Regex("a/b")))
-        assertEquals("""/a\/b\\\/c/""", SignalFilter.regexLiteral(Regex("""a\/b\\/c""")))
+        assertEquals("""/a\/b\x5c\/c/""", SignalFilter.regexLiteral(Regex("""a\/b\\/c""")))
         assertEquals("{include: /form/i}", SignalFilter(include = Regex("form", RegexOption.IGNORE_CASE)).toJs())
         assertFailsWith<IllegalArgumentException> { SignalFilter.regexLiteral(Regex("a b", RegexOption.COMMENTS)) }
     }
@@ -384,7 +384,7 @@ class HtmlDslTest {
     /** Everything the helpers quote is single-quoted, so it survives a double-quoted attribute written by hand. */
     @Test
     fun `javascript literals use single quotes and bare keys`() {
-        assertEquals("'it\\'s <\\/script>\\n'", JsLiteral.string("it's </script>\n"))
+        assertEquals("'it\\x27s <\\/script>\\n'", JsLiteral.string("it's </script>\n"))
         assertEquals(
             "{id: 7, tags: ['a', 'b'], 'x-y': null, ok: true, n: 1.5}",
             JsLiteral.write(
@@ -413,7 +413,7 @@ class HtmlDslTest {
             },
         )
         assertEquals(
-            """<div data-on:click="${'$'}user.name = 'O\'Neil'"></div>""",
+            """<div data-on:click="${'$'}user.name = 'O\x27Neil'"></div>""",
             elements { div { dataOnClick(set("user.name", "O'Neil")) } },
         )
     }

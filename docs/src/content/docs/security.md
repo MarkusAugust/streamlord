@@ -29,6 +29,15 @@ The built-in writer escapes U+2028, U+2029 and `</`. This is not decoration: `da
 evaluated as an expression on the client, and U+2028 is a line terminator in JavaScript source
 but not in JSON. A string containing one, written naively, ends the expression.
 
+In `data-signals`, Streamlord also writes `\` as `\u005c`. Before compiling the value of
+an attribute it reads, such as `data-signals` or `data-text`, Datastar's client cuts it into
+statements at each `;` outside a string, and it reads a quote after a `\` as escaped. Written
+as `\\`, `{"path": "C:\\", "sep": ";"}` would be cut inside the second value, and every
+signal in the attribute would be lost. The literals the HTML helpers write (`js()`, `set()`,
+`setAll()`, the fetch options, the Pro actions and regex filters) write `\`, quotes and `&` as
+`\xHH`. In a value attribute they stay whole, and between the double quotes of an attribute
+written in a string or a template, a quote in a value cannot end it.
+
 ## Bounded input
 
 Incoming signals are capped (1 MiB by default, configurable) and the cap applies *while

@@ -22,6 +22,9 @@ public enum class Case(
  * the other options have no JavaScript equivalent and are refused. The quoting of
  * [Regex.escape], `\Q...\E`, is written out as escaped text, an octal escape as `\xHH`, and a
  * character outside the Basic Multilingual Plane is grouped so a quantifier takes all of it.
+ * Quotes, backticks, `&`, `\`, `$` and `@` are written as `\xHH`, and a `$` anchor before a word
+ * character as `$(?:)`: Datastar's client rewrites `$name` and `@name(` inside a regex literal
+ * too, and a quote in one would hide the signals after it.
  * Syntax that JavaScript, without the `u` flag, reads differently or refuses is refused: inline
  * flags, possessive and stacked quantifiers, atomic groups, `\A`, `\z`, `\Z`, `\G`, `\p{...}`,
  * `\x{...}`, `\b{...}`, `\c` before anything but a capital, a back reference to no group or
@@ -30,8 +33,9 @@ public enum class Case(
  *
  * Some syntax both dialects share still means slightly different things at the edges, and is
  * written as it is: `\s` and `\b` count Unicode spaces and word characters differently, `$`
- * without [RegexOption.MULTILINE] also matches before a final line break in Java only, and `.`
- * takes a character outside the Basic Multilingual Plane as one in Java and as two in JavaScript.
+ * without [RegexOption.MULTILINE] also matches before a final line break in Java only, `^` with
+ * it matches at the end of the input in JavaScript only, and `.` takes a character outside the
+ * Basic Multilingual Plane as one in Java and as two in JavaScript.
  */
 public data class SignalFilter(
     val include: Regex? = null,
@@ -65,7 +69,7 @@ public data class SignalFilter(
                         else -> throw IllegalArgumentException("Regex option $option has no JavaScript equivalent")
                     }
                 }
-            val body = javaScriptBody(regex.pattern)
+            val body = javaScriptBody(regex.pattern).replace(ANCHOR_BEFORE_WORD) { "$(?:)" }
             // An empty literal is `//`, which JavaScript reads as the start of a comment.
             if (body.isEmpty()) return "/(?:)/$flags"
             return "/$body/$flags"
@@ -76,9 +80,11 @@ public data class SignalFilter(
 
         /**
          * The pattern as the body of a JavaScript literal, read the way Java reads it: `\Q...\E` as
-         * escaped text, `/` and the line terminators escaped so the literal stays one token, an
-         * octal escape as `\xHH`, a character outside the Basic Multilingual Plane grouped so that
-         * a quantifier takes all of it, and what JavaScript would read otherwise or refuse, refused.
+         * escaped text, `/` and the line terminators escaped so the literal stays one token, quotes,
+         * backticks, `&`, `\`, `$` and `@` as `\xHH` so the client reads the expression around it
+         * intact, an octal escape as `\xHH`, a character outside the Basic Multilingual Plane
+         * grouped so that a quantifier takes all of it, and what JavaScript would read otherwise or
+         * refuse, refused. [regexLiteral] then writes a `$` anchor before a word character as `$(?:)`.
          */
         private fun javaScriptBody(pattern: String): String {
             val groups = capturingGroups(pattern)
@@ -155,6 +161,12 @@ public data class SignalFilter(
                         ch.isHighSurrogate() && pattern.getOrNull(i + 1)?.isLowSurrogate() == true -> {
                             appendSupplementary(ch, pattern[i + 1])
                             i += 2
+                        }
+
+                        // An anchor; a literal `$`, escaped or in a class, is written as `\x24`.
+                        ch == '$' -> {
+                            append(ch)
+                            i++
                         }
 
                         else -> {
@@ -240,7 +252,7 @@ public data class SignalFilter(
                     append('\\').append(next)
                 }
 
-                next in LINE_TERMINATORS -> {
+                next in LINE_TERMINATORS || next in AS_HEX -> {
                     appendLiteral(next)
                 }
 
@@ -298,12 +310,23 @@ public data class SignalFilter(
         private fun StringBuilder.appendChar(ch: Char) {
             when (ch) {
                 '/' -> append("\\/")
-                in LINE_TERMINATORS -> appendLiteral(ch)
+                in LINE_TERMINATORS, in AS_HEX -> appendLiteral(ch)
                 else -> append(ch)
             }
         }
 
         private const val LINE_TERMINATORS = "\n\r\u2028\u2029"
+
+        // Datastar's client rewrites `$name` and `@name(` everywhere outside a string, in a regex
+        // literal too, where a quote opens what it takes for a string and hides the signals after
+        // it. In an attribute whose value it reads, such as `data-text`, it also cuts the expression
+        // into statements, and `\` before the closing `/` reads as an escape. A quote or `&` would
+        // also end or change an attribute pasted into a string.
+        private const val AS_HEX = "'\"`&\\$@"
+
+        // A literal `$` is written as `\x24`, so every `$` left in the body is an anchor; before
+        // the client's `\w`, it would rewrite one as a signal, wherever the character came from.
+        private val ANCHOR_BEFORE_WORD = Regex("""\$(?=[A-Za-z0-9_])""")
 
         /** [ch] as text that matches itself in a JavaScript literal, in a class or out of one. */
         private fun StringBuilder.appendLiteral(ch: Char) {
@@ -312,6 +335,7 @@ public data class SignalFilter(
                 ch == '\r' -> append("\\r")
                 ch == '\u2028' -> append("\\u2028")
                 ch == '\u2029' -> append("\\u2029")
+                ch in AS_HEX -> append("\\x").append(ch.code.toString(16).padStart(2, '0'))
                 ch.isLetterOrDigit() || ch == '_' || ch.code > 0x7F -> append(ch)
                 else -> append('\\').append(ch)
             }

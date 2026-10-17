@@ -547,6 +547,8 @@ public final class io/github/markusaugust/streamlord/core/json/JsonWriter {
 	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/json/JsonWriter;
 	public final fun write (Ljava/lang/Object;I)Ljava/lang/String;
 	public static synthetic fun write$default (Lio/github/markusaugust/streamlord/core/json/JsonWriter;Ljava/lang/Object;IILjava/lang/Object;)Ljava/lang/String;
+	public final fun writeExpression (Ljava/lang/Object;I)Ljava/lang/String;
+	public static synthetic fun writeExpression$default (Lio/github/markusaugust/streamlord/core/json/JsonWriter;Ljava/lang/Object;IILjava/lang/Object;)Ljava/lang/String;
 	public final fun writeString (Ljava/lang/String;)Ljava/lang/String;
 }
 

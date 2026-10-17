@@ -90,6 +90,15 @@ class JsonTest {
         assertEquals("\"http://x/y\"", JsonWriter.writeString("http://x/y"))
     }
 
+    // Only the escaped backslashes change; the escaped quote after them stays one.
+    @Test
+    fun `an expression writes every backslash as u005c`() {
+        val value = mapOf("a" to "C:\\", "b" to "\\\"x\\\\", "c" to "\n")
+        val expression = JsonWriter.writeExpression(value)
+        assertEquals("{\"a\":\"C:\\u005c\",\"b\":\"\\u005c\\\"x\\u005c\\u005c\",\"c\":\"\\n\"}", expression)
+        assertEquals(JsonParser.parse(JsonWriter.write(value)), JsonParser.parse(expression))
+    }
+
     @Test
     fun `round trips through the value tree`() {
         val text = """{"a":[1,2.5,"s",null,true,{"b":{}}],"c":-0.0,"d":1e10}"""

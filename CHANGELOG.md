@@ -44,6 +44,8 @@ All notable changes to Streamlord are recorded here. The format follows
   sends with the user's replacing its own; `Requests.requestsPathProblem`, what is wrong with a
   configured requests-file path; `RequestsFile.error`, why a requests file could not be read; and
   `AttributeSpec.returnsValue`, from the catalog, for the attributes whose value Datastar reads.
+- `JsonWriter.writeExpression`: JSON for a place where Datastar's client reads it as an
+  expression, such as `data-signals`, with every `\` written as `\u005c`.
 
 ### Changed
 
@@ -207,6 +209,27 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- A value ending in `\` emptied the attribute it was written into. Datastar's client cuts an
+  expression into statements at each `;` outside a string and reads a quote after a `\` as
+  escaped, so `dataSignals("path" to "C:\\", "sep" to ";")` declared no signal at all, and
+  `js("C:\\")` followed by a `;` in `data-text` showed nothing. `dataSignals` now writes `\` as
+  `\u005c`, through the new `JsonWriter.writeExpression`, and the HTML helpers' literals write it
+  as `\x5c`.
+- The literals the HTML helpers write (`js()`, `set()`, `setAll()`, the fetch options and the Pro
+  actions) left `"` and `&` as they were. Pasted between the double quotes of an attribute in a
+  string or a template, as the HTML DSL page says they can be, a `"` in a value ended the
+  attribute, which let a value such as `"><img src=x onerror=…>` run script, and `&lt;` reached
+  the client as `<`. Quotes, `&` and `\` are now written as `\xHH`, so `'it\'s'` is now
+  `'it\x27s'`.
+- A `'` in a regex filter opened what Datastar's client took for a string, so a signal after the
+  filter in the same expression was left as a global variable: `@setAll(true, {include: /it's/});
+  $msg = 'done'` set `window.$msg`. A `"` broke the attribute in a string, and the client rewrote
+  `$name` and `@name(` in one as a signal and an action, so `/^[_$a-z]+$/` matched no signal
+  name. Quotes,
+  backticks, `&`, `\`, `$` and `@` in a regex filter are now written as `\xHH`, and an anchoring
+  `$` before a word character as `$(?:)`.
+- `JsLiteral` wrote a map key such as `$id` bare, which the client rewrote as a signal, and the
+  whole expression failed to compile. Such a key is now quoted.
 - Documentation corrected where the audit found it wrong: the README's MIT condition names the
   licence text as well as the notice and links one documentation domain; the security page's
   ordered-delivery prose names the raid the transcript shows and says the JSON parser is run

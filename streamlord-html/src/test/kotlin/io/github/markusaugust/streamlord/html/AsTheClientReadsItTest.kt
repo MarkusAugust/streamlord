@@ -98,7 +98,7 @@ class AsTheClientReadsItTest {
     @Test
     fun `a regex reaches JavaScript meaning what it meant in Kotlin`() {
         assertEquals("""/^cart\.items/""", SignalFilter.regexLiteral(Regex("^" + Regex.escape("cart.items"))))
-        assertEquals("""/x\\Ey/""", SignalFilter.regexLiteral(Regex(Regex.escape("x\\Ey"))))
+        assertEquals("""/x\x5cEy/""", SignalFilter.regexLiteral(Regex(Regex.escape("x\\Ey"))))
         assertEquals("""/[\]\-\^]/""", SignalFilter.regexLiteral(Regex("[\\Q]-^\\E]")))
         assertEquals("/a\\u2028b\\u2029c/", SignalFilter.regexLiteral(Regex("a b c")))
         assertEquals("""/x}+/""", SignalFilter.regexLiteral(Regex("x}+")))
@@ -181,5 +181,99 @@ class AsTheClientReadsItTest {
     fun `a custom property with capitals cannot travel in a key`() {
         assertFailsWith<InvalidSignalNameException> { elements { div { dataStyle("--brandColor", "'red'") } } }
         assertEquals("""<div data-style:--brand="'red'"></div>""", elements { div { dataStyle("--brand", "'red'") } })
+    }
+
+    // engine.ts:415-416: how the client cuts the expression of an attribute whose value it reads,
+    // such as data-text or data-signals, into statements. It reads a quote or `/` after a `\` as
+    // escaped, so a string or regex that ends in `\` would run on, and a `;` after it would cut
+    // the expression in the middle of a string.
+    private val statements =
+        Regex(
+            """(?:\/(?:\\\/|[^/])*\/|"(?:\\"|[^"])*"|'(?:\\'|[^'])*'|`(?:\\`|[^`])*`|""" +
+                """\(\s*(?:(?:function)\s*\(\s*\)|(?:\(\s*\))\s*=>)\s*(?:\{[\s\S]*?\}|[^;){]*)\s*\)\s*\(\s*\)|[^;])+""",
+        )
+
+    // engine.ts:448: how it rewrites `$name` as a signal and `@name(` as an action, in every
+    // attribute. It skips strings but knows no regex literals, so a quote in one hides the signals
+    // after it.
+    private val rewrites =
+        Regex(
+            """(?:"[^"\\]*(?:\\.[^"\\]*)*"|'[^'\\]*(?:\\.[^'\\]*)*'|`[^`\\$]*(?:(?:\\.|\$(?!\{))[^`\\$]*)*`)|""" +
+                """\$\{([^{}]*)\}|\$(\w+(?:[.-]\w+)*)|@([A-Za-z_$][\w$]*)\(""",
+        )
+
+    private fun statementsIn(expression: String) = statements.findAll(expression).map { it.value.trim() }.toList()
+
+    private fun rewritten(
+        expression: String,
+        group: Int,
+    ) = rewrites.findAll(expression).mapNotNull { it.groups[group]?.value }.toList()
+
+    private fun signalsIn(expression: String) = rewritten(expression, 2)
+
+    private fun actionsIn(expression: String) = rewritten(expression, 3)
+
+    private fun signalsAttribute(html: String) =
+        Regex("""data-signals="([^"]*)"""")
+            .find(html)!!
+            .groupValues[1]
+            .replace("&quot;", "\"")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&amp;", "&")
+
+    @Test
+    fun `a value ending in a backslash stays inside its string`() {
+        for (value in listOf("C:\\", "a\\'", "\\\"", "x\\\\")) {
+            assertEquals(1, statementsIn(js(value) + " + " + js(";")).size, value)
+            val pairs = signalsAttribute(elements { div { dataSignals("p1" to value, "p2" to ";") } })
+            assertEquals(1, statementsIn(pairs).size, value)
+        }
+    }
+
+    @Test
+    fun `a regex filter hides no signal or action after it`() {
+        val patterns =
+            listOf(
+                "x\\\\",
+                "\\'",
+                "it's",
+                "a\"b",
+                "back`tick",
+                "^[_\$a-z]+\$",
+                "^a\$b",
+                "\\\$x",
+                "a@b(c)?",
+                "\$\\Qab\\E?",
+                "a\$\\Q_\\E",
+            )
+        for (pattern in patterns) {
+            val literal = SignalFilter.regexLiteral(Regex(pattern))
+            val expression = setAll(true, SignalFilter(include = Regex(pattern))) + "; " + set("msg", "done")
+            assertEquals(listOf("msg"), signalsIn(expression), pattern)
+            assertEquals(listOf("setAll"), actionsIn(expression), pattern)
+            // In data-text, a `/` later on would close a literal whose last `\` escaped its own end.
+            assertEquals(1, statementsIn("$literal.source + '/;'").size, pattern)
+        }
+        assertEquals("/^[_\\x24a-z]+\$/", SignalFilter.regexLiteral(Regex("^[_\$a-z]+\$")))
+        assertEquals("/^a\$(?:)b/", SignalFilter.regexLiteral(Regex("^a\$b")))
+        assertEquals("/\$(?:)ab?/", SignalFilter.regexLiteral(Regex("\$\\Qab\\E?")))
+        assertEquals("/\\x24x a\\x40b/", SignalFilter.regexLiteral(Regex("\\\$x a@b")))
+    }
+
+    @Test
+    fun `an object key holding a dollar is quoted`() {
+        assertEquals("{'\$a': 1, b_1: 2}", JsLiteral.write(mapOf("\$a" to 1, "b_1" to 2)))
+        assertEquals(listOf("o"), signalsIn(set("o", mapOf("\$a" to 1, "_\$x" to 2))))
+    }
+
+    // The single quotes around a literal are the only ones it holds, so it can stand between the
+    // double quotes of an attribute written in a string or a template, and no entity is decoded.
+    @Test
+    fun `a helper's literal holds no quote or ampersand of its own`() {
+        val literal = set("v", "\"><img src=x onerror=alert(1)> & 'it' `x`")
+        assertEquals("\$v = '\\x22><img src=x onerror=alert(1)> \\x26 \\x27it\\x27 `x`'", literal)
+        val regex = SignalFilter.regexLiteral(Regex("it's \"a\" `b` & c\\\\"))
+        assertEquals("/it\\x27s \\x22a\\x22 \\x60b\\x60 \\x26 c\\x5c/", regex)
     }
 }

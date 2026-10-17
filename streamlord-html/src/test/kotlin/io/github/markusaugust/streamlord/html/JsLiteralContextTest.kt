@@ -19,7 +19,7 @@ class JsLiteralContextTest {
     fun `a string never opens a script comment`() {
         val written = JsLiteral.string("<!--<script>")
         assertFalse("<!" in written, written)
-        assertEquals("'\\x3C!--<script>'", written)
+        assertEquals("'\\x3c!--<script>'", written)
     }
 
     @Test
