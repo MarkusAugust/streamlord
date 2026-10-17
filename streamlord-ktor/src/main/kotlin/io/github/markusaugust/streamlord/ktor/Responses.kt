@@ -71,8 +71,9 @@ import kotlin.time.Duration.Companion.seconds
  *
  * A block that throws ends the stream after a moment for the frames it sent to go out, which is
  * as much as Ktor allows a writer, and the connection is then cut, which Datastar's client
- * retries. CIO and Netty cut it themselves; on Tomcat and Jetty Streamlord cuts it, and on an
- * engine it does not know, the stream ends as the engine ends it.
+ * retries. CIO and Netty cut it themselves; on Tomcat, with the async servlet Ktor's engine sets
+ * up and a connector that discards its facades, and on Jetty, Streamlord cuts it. Anywhere else
+ * the stream ends as the engine ends it.
  */
 @JvmName("respondDatastar")
 public suspend fun ApplicationCall.respondDatastar(
