@@ -45,6 +45,9 @@ ktor-server-status-pages = { module = "io.ktor:ktor-server-status-pages", versio
 ktor-server-cio = { module = "io.ktor:ktor-server-cio", version.ref = "ktor" }
 # Test-only, for :streamlord-ktor: Netty sends no headers before the first byte of the body.
 ktor-server-netty = { module = "io.ktor:ktor-server-netty", version.ref = "ktor" }
+# Test-only, for :streamlord-ktor: Tomcat and Jetty end a failed body as if it had finished.
+ktor-server-tomcat-jakarta = { module = "io.ktor:ktor-server-tomcat-jakarta", version.ref = "ktor" }
+ktor-server-jetty-jakarta = { module = "io.ktor:ktor-server-jetty-jakarta", version.ref = "ktor" }
 ktor-server-compression = { module = "io.ktor:ktor-server-compression", version.ref = "ktor" }
 ktor-server-cors = { module = "io.ktor:ktor-server-cors", version.ref = "ktor" }
 ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }

@@ -3,14 +3,17 @@ package io.github.markusaugust.streamlord.ktor
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
+import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.ApplicationEngine
 import io.ktor.server.engine.ApplicationEngineFactory
 import io.ktor.server.engine.embeddedServer
+import io.ktor.server.jetty.jakarta.Jetty
 import io.ktor.server.netty.Netty
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
+import io.ktor.server.tomcat.jakarta.Tomcat
 import kotlinx.coroutines.runBlocking
 import java.io.ByteArrayOutputStream
 import java.net.Socket
@@ -47,7 +50,7 @@ class StreamEdgesTest {
         }
     }
 
-    /** The raw bytes of a GET until the server closes the connection or goes quiet. */
+    /** The raw bytes of a GET until the last chunk, or until the server closes the connection or goes quiet. */
     private fun raw(
         port: Int,
         path: String,
@@ -63,6 +66,7 @@ class StreamEdgesTest {
                     val n = socket.getInputStream().read(buffer)
                     if (n < 0) break
                     out.write(buffer, 0, n)
+                    if (out.toString(Charsets.ISO_8859_1).endsWith("\r\n0\r\n\r\n")) break
                 }
             } catch (_: java.io.IOException) {
             }
@@ -78,8 +82,18 @@ class StreamEdgesTest {
     @Test
     fun `a failure after a frame delivers it and cuts the stream, on Netty`() = failsCleanly(Netty)
 
+    // Both end a failed body with its last chunk, as if it had finished, unless the connection is
+    // cut under them; see EngineCut.kt. On the oldest Ktor, Jetty is Jetty 11 behind a servlet.
+    @Test
+    fun `a failure after a frame delivers it and cuts the stream, on Tomcat`() = failsCleanly(Tomcat)
+
+    @Test
+    fun `a failure after a frame delivers it and cuts the stream, on Jetty`() = failsCleanly(Jetty)
+
     private fun <E : ApplicationEngine, C : ApplicationEngine.Configuration> failsCleanly(engine: ApplicationEngineFactory<E, C>) =
         serving(engine, {
+            // Gzipped only for a request that accepts it.
+            install(StreamlordPlugin) { compress = true }
             routing {
                 get("/after") {
                     call.respondDatastar(heartbeat = null) {
@@ -88,8 +102,15 @@ class StreamEdgesTest {
                     }
                 }
                 get("/before") { call.respondDatastar(heartbeat = null) { error("before anything was written") } }
+                get("/ok") { call.respondDatastar(heartbeat = null) { patchSignals("n" to 1) } }
             }
         }) { port ->
+            val ok = raw(port, "/ok")
+            assertTrue(ok.endsWith("0\r\n\r\n"), "a stream that ended well did not end as finished:\n$ok")
+            // A browser takes a gzip member left unterminated for a whole one when the body ends.
+            val gzipped = raw(port, "/after", "Accept-Encoding: gzip\r\n")
+            assertTrue("content-encoding: gzip" in gzipped.lowercase(), gzipped)
+            assertFalse(gzipped.endsWith("0\r\n\r\n"), "the gzipped stream ended as if it had finished")
             repeat(50) {
                 val after = raw(port, "/after")
                 assertTrue("datastar-patch-signals" in after, "run $it lost the frame:\n$after")

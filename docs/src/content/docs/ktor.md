@@ -70,9 +70,19 @@ A block that throws ends the stream: the frames it sent go out, and the connecti
 which Datastar's client retries. Ktor offers a writer no way to wait for the engine to send what it
 was given, and without one CIO dropped the last frames, or the whole response, and Netty often
 ended a failed response as if it had finished. So a failure waits a moment for the engine, at most
-a second for a reader who stopped reading, before it is thrown on. Over 200 failures on each
-engine, on a local socket, every frame arrived and every stream was cut; under heavy load that is
-not a promise. Catch what you can inside the block and send the page what it should show.
+a second for a reader who stopped reading, before it is thrown on. Over 200 failures on CIO and
+on Netty, on a local socket, every frame arrived and every stream was cut; under heavy load that
+is not a promise. Catch what you can inside the block and send the page what it should show.
+
+CIO and Netty cut the connection themselves. Tomcat and Jetty end a failed response with its last
+chunk, as if it had finished, and Datastar's client does not retry a stream that finished, so
+Streamlord cuts the connection under them: Tomcat 10.1 and 11, Jetty 12 from Ktor 3.3 and Jetty
+11 before it, over HTTP/1.1 and HTTP/2, where only the stream is reset. It reaches into the
+engine by reflection to do it, since no API Ktor has does, and on Tomcat it waits until Ktor has
+completed the request. A Tomcat connector set to keep its facades (`discardFacades = false`) hands
+the one Ktor holds to the next request, and there Streamlord cuts nothing. On another engine, or
+if an engine's insides move, nothing is cut either, and the stream ends as the engine ends it;
+catching the failure inside the block is then the only way to tell the page.
 
 On Netty, keep the heartbeat on, or write within ten seconds of the open: Netty sends no headers
 before the first byte of the body, and closes a response that has written nothing for ten seconds,
