@@ -351,14 +351,15 @@ tasks.named("check") { dependsOn(tasks.named("checkDocSamples")) }
  * the moment someone bumps a version in libs.versions.toml. This resolves each module the way a
  * consumer would and fails when the page disagrees.
  *
- * A block opts in by naming its module:
+ * A tree is a nested list that opts in with a comment naming its module, and ends at the first
+ * blank line:
  *
- *     ```deps=streamlord-json-jackson2 sample=none
- *     com.fasterxml.jackson.core:jackson-databind 2.22.3
- *     ```
+ *     <!-- deps=streamlord-json-jackson2 -->
+ *     - <code>com.fasterxml.jackson.core:<wbr>jackson-databind 2.22.3</code>
+ *       - <code>com.fasterxml.jackson.core:<wbr>jackson-core 2.22.3</code>
  *
- * Only coordinates are compared, not the drawing around them, so the tree glyphs
- * stay a presentation choice.
+ * Only coordinates are compared, with the tags taken out, so the `<wbr>` that lets a coordinate
+ * break at its colon on a phone stays a presentation choice.
  */
 val documentedModules =
     listOf("streamlord-json-kotlinx", "streamlord-json-jackson", "streamlord-json-jackson2")
@@ -390,26 +391,16 @@ abstract class CheckDocDependencies : DefaultTask() {
         val claims = mutableMapOf<String, MutableSet<String>>()
         val coordinate = Regex("""([\w.\-]+):([\w.\-]+)[ :]+([\w.\-]+)""")
 
+        val marker = Regex("""^<!-- deps=([\w-]+) -->$""")
+        val tag = Regex("<[^>]+>")
+
         for (page in pages.get().asFile.walkTopDown().filter { it.extension == "md" }) {
             val lines = page.readLines()
-            var index = 0
-            while (index < lines.size) {
-                val info = lines[index].takeIf { it.startsWith("```") }?.removePrefix("```")?.trim()
-                if (info == null) {
-                    index++
-                    continue
-                }
-                val end = lines.drop(index + 1).indexOfFirst { it.startsWith("```") }
-                if (end < 0) break
-                val body = lines.subList(index + 1, index + 1 + end)
-                index += end + 2
-
-                val module = info.split(" ").firstOrNull { it.startsWith("deps=") }?.removePrefix("deps=")
-                    ?: continue
-
+            for ((index, line) in lines.withIndex()) {
+                val module = marker.find(line.trim())?.groupValues?.get(1) ?: continue
                 val found = claims.getOrPut(module) { mutableSetOf() }
-                for (line in body) {
-                    coordinate.find(line)?.let { found += normalise("${it.groupValues[1]}:${it.groupValues[2]}:${it.groupValues[3]}") }
+                for (item in lines.drop(index + 1).takeWhile { it.isNotBlank() }) {
+                    coordinate.find(item.replace(tag, ""))?.let { found += normalise("${it.groupValues[1]}:${it.groupValues[2]}:${it.groupValues[3]}") }
                 }
             }
         }
@@ -419,7 +410,7 @@ abstract class CheckDocDependencies : DefaultTask() {
         for ((module, actual) in resolved.get()) {
             val claimed = claims[module]
             if (claimed == null) {
-                problems += "  $module: no block on any page declares deps=$module"
+                problems += "  $module: no tree on any page declares deps=$module"
                 continue
             }
 
