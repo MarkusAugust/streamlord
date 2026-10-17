@@ -52,12 +52,33 @@ All notable changes to Streamlord are recorded here. The format follows
   `data-signals:a.b` does and hands a clash to a function of yours.
 - `Casing.heldKey` in `streamlord-html`: refuses an attribute key whose signal, as Datastar's
   client reads it after lowercasing, cutting at `__` and applying `__case`, it cannot hold.
+- `SignalPatchException` in `streamlord-core`, an `IllegalArgumentException` that
+  `mergePatchAsClient` throws for a patch the client fails on partway through; its `store` is the
+  store as the client keeps it then, with the keys before the failing one applied.
 
 - `SignalsMediaTypeException`, `Streamlord.requireJsonContentType` with the same setting on the
   Ktor plugin, and `Streamlord.MAX_SIGNALS_DEPTH`; see Changed, Fixed and Security.
 
 ### Changed
 
+- `dataOn` and `dataClass` refuse a name that mixes capitals with a hyphen before a lower-case
+  letter, such as `fooBar-baz`. No key gives it back: the `__case.camel` the capitals need turns
+  the hyphen into a capital too, so the client listened for, or toggled, `fooBarBaz`.
+- `BindModifiers.events` are checked as `dataOn` checks an event, and one with a capital or a `.`
+  is refused: the client listened for it in lowercase, or as two events split at the `.`.
+- `BindModifiers.prop` is written so that Datastar's own camel-casing gives it back, a leading
+  capital included (`URL` as `-u-r-l`), and one it cannot give back is refused: `x2y` came back
+  as `x2Y`, `_value` as `Value`, `my_prop` as `myProp`.
+- A key or name with a no-break space or another space JavaScript's `\s` has and Java's lacks,
+  or with a NUL, is refused like any other white space: the client split a class on it, and the
+  HTML parser turned a NUL into U+FFFD.
+- A duration that is not a whole number of milliseconds, such as `1.5.milliseconds`, is refused
+  in the modifiers and the fetch options, as one under a millisecond already was. It was rounded
+  down without a word.
+- A Kotlin `Regex` with a quantifier that has nothing to repeat, such as `$?`, `^{2}`, `\b*`, a
+  `{1}` at the start, after `|` or `(`, on a lookbehind or after an empty `\Q\E`, and the empty
+  `(?)`, is refused by `SignalFilter`. Java takes them; JavaScript refuses the literal with
+  "Nothing to repeat", which stopped Datastar for the rest of the page.
 - A dotted name in the pairs of `patchSignals`, `removeSignals` and `dataSignals` now nests, as
   `data-signals:form.email` does: `patchSignals("form.email" to "x")` patches `$form.email`. It
   used to send the key `"form.email"`, which the client stores as one key that `$form.email`
@@ -269,6 +290,39 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- `ExpressionGuard` let two expressions the client compiles through: `- $x`, a sign before a
+  signal, and `[ , 1]`, a hole at the start of an array written with a space. `[, 1]`, what
+  `[$a, 1]` leaves behind, is still refused.
+- `mergePatchAsClient` now folds a patch exactly as the 1.0.4 client does, held to the client's
+  `mergePatch` built from source over 326 scenarios: a `length` is turned into a number the
+  JavaScript way (`[]` and `false` are 0, `"2"` is 2), deleting a `length` throws, a patch that
+  throws keeps the keys before it, and keys are walked and kept in JavaScript's order, also in
+  objects inside arrays.
+- `SseDecoder` read some frames the client takes as malformed. An empty
+  `viewTransitionSelector` is none; an element patch with no elements, or only white space, in a
+  mode that needs them decodes to what the client does with it: an `outer` or `replace` with a
+  selector removes the target, an `inner` empties it, and the rest are no event. Flags are read
+  with JavaScript's `trim()`, so `true` followed by a byte order mark is true and `true` followed
+  by U+001C is not.
+- A string with half of a surrogate pair reached the client as `?` from a codec and in elements.
+  Signals now carry it as `\ud800`, as the built-in writer does, and elements as U+FFFD.
+- On Spring with Tomcat, a stream answered a request that sent `Connection: keep-alive` with
+  `Connection: keep-alive, keep-alive`: Tomcat adds its own to such a request. The stream now
+  leaves the header to Tomcat then, and still sets none over HTTP/2 or when the request asks to
+  close.
+- On Ktor, reading the signals of a body that was already read threw Ktor's own
+  `RequestAlreadyConsumedException`; it now says, as on Spring, that the body was read before.
+- The documentation of `maxSignalsSize` and the security page said the 1 MiB cap holds for the
+  `datastar` query parameter. The server refuses the request line at 4 to 8 KiB, with a status
+  Datastar's client does not retry; the page now gives the numbers per server and points large
+  signals to `@post`.
+- The security page now says that Ktor 3.6 without `StatusPages` sends an exception's message in
+  the 500, and shows a catch-all that does not.
+- KDoc: `timeout` on `datastarStream` said Spring cuts the stream, where Tomcat and Jetty end it
+  cleanly and the client does not reconnect; `dataIndicator` counts only fetches from its own
+  element; `FetchOptions` writes an option set to its default value; `SignalFilter` names the
+  differences at NEL and with `IGNORE_CASE`, where Kotlin folds the Kelvin sign into `k` and the
+  long s into `s` and JavaScript does not.
 - A signal patch could carry a key Datastar's client cannot hold, from pairs, a codec or a JSON
   string, at any depth. `__proto__` with an object under it made its merge throw halfway through
   a batch it never closed, so no later signal reached the page. An object under a property of
