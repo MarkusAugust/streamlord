@@ -19,6 +19,8 @@ dependencies {
     // streamed response to the client only once the stream has ended.
     testImplementation(libs.ktor.server.cio)
     testImplementation(libs.ktor.server.netty)
+    testImplementation(libs.ktor.server.tomcat.jakarta)
+    testImplementation(libs.ktor.server.jetty.jakarta)
     testImplementation(project(":streamlord-test"))
     testImplementation(libs.ktor.server.compression)
 }
