@@ -154,9 +154,9 @@ abstract class ExtractDocSamples : DefaultTask() {
 
     /**
      * A handler method that takes the Streamlord bean as a parameter. It compiles, and Spring
-     * then treats the parameter as a model attribute and constructs a fresh default instance,
-     * so the codec and the guard on the real bean are silently ignored. The bean has to come
-     * through the constructor.
+     * then treats the parameter as a model attribute and tries to construct one, which fails on
+     * the value-class `heartbeat`: every request answers 500 with `BeanInstantiationException`,
+     * on WebMVC and WebFlux alike. The bean has to come through the constructor.
      */
     private val handlerTakingTheBean =
         Regex("""@(?:Get|Post|Put|Patch|Delete|Request)Mapping\b(?:(?!\bfun\b)[\s\S])*?\bfun\s+\w+\s*\([^)]*:\s*Streamlord\b""")

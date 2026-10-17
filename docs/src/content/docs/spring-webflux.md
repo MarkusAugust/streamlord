@@ -46,9 +46,10 @@ class CounterController(private val streamlord: Streamlord) {
 }
 ```
 
-Not as a parameter of the handler method. Spring builds a new default `Streamlord` for a
-parameter of that type instead of injecting your bean, so the guard you switched on would be off
-again and nothing would say so.
+Not as a parameter of the handler method. Spring tries to build a new `Streamlord` for a
+parameter of that type instead of injecting your bean, fails on the constructor, and answers
+every request to that handler with `500` and a `BeanInstantiationException`, as
+[on WebMVC](/spring-webmvc/).
 
 ## Reading signals
 
