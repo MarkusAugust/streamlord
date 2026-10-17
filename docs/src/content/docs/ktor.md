@@ -78,9 +78,11 @@ CIO and Netty cut the connection themselves. Tomcat and Jetty end a failed respo
 chunk, as if it had finished, and Datastar's client does not retry a stream that finished, so
 Streamlord cuts the connection under them: Tomcat 10.1 and 11, Jetty 12 from Ktor 3.3 and Jetty
 11 before it, over HTTP/1.1 and HTTP/2, where only the stream is reset. It reaches into the
-engine by reflection to do it, since no API Ktor has does. On another engine, or if an engine's
-insides move, nothing is cut and the stream ends as the engine ends it; catching the failure
-inside the block is then the only way to tell the page.
+engine by reflection to do it, since no API Ktor has does, and on Tomcat it waits until Ktor has
+completed the request. A Tomcat connector set to keep its facades (`discardFacades = false`) hands
+the one Ktor holds to the next request, and there Streamlord cuts nothing. On another engine, or
+if an engine's insides move, nothing is cut either, and the stream ends as the engine ends it;
+catching the failure inside the block is then the only way to tell the page.
 
 On Netty, keep the heartbeat on, or write within ten seconds of the open: Netty sends no headers
 before the first byte of the body, and closes a response that has written nothing for ten seconds,

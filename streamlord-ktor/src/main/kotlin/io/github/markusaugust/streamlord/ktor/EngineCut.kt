@@ -67,6 +67,11 @@ internal fun markEngine(call: ApplicationCall) {
         val response = call.attributes.getOrNull(BaseApplicationResponse.EngineResponseAttributeKey) ?: return
         val facade = servletRequest(response) ?: return
         if (facade.javaClass.name != "org.apache.catalina.connector.RequestFacade") return
+        // A connector that keeps its facades hands the one Ktor holds to the next request; with
+        // the cut, a failing stream's frame was once seen on another connection. No cut there.
+        val catalina = field(facade.javaClass, "request").get(facade) ?: return
+        val connector = catalina.javaClass.getMethod("getConnector").invoke(catalina) ?: return
+        if (connector.javaClass.getMethod("getDiscardFacades").invoke(connector) != true) return
         val async = facade.javaClass.getMethod("getAsyncContext").invoke(facade) ?: return
         call.attributes.put(TomcatRequestKey, async)
     } catch (e: Throwable) {

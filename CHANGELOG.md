@@ -333,9 +333,9 @@ All notable changes to Streamlord are recorded here. The format follows
   gzipped or not, so the client did not reconnect and the page stopped updating without a word.
   Streamlord now cuts the connection there too, on Tomcat 10.1 and 11 and Jetty 11 and 12, over
   HTTP/1.1 and HTTP/2, where only the stream is reset. It does so by reflection, with no new
-  dependency, and on Tomcat only once Ktor has completed the request, so that a reused facade
-  never reaches another one; on an engine Streamlord does not know, the stream ends as the
-  engine ends it.
+  dependency, and on Tomcat only once Ktor has completed the request, and not on a connector set
+  to keep its facades, where a cut reached other requests. On an engine Streamlord does not know,
+  the stream ends as the engine ends it.
 - `respondDatastar` on a call already answered throws `IllegalStateException`. It did nothing on
   CIO and threw Netty's own exception from the header loop.
 - Neither Ktor nor Spring WebMVC sends `Connection: keep-alive` to a request that asked to close.

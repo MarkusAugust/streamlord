@@ -342,7 +342,8 @@ internal class GzipChannelSseSink(
 
     /**
      * End the gzip member, so the client's decoder sees a whole stream. Only after a stream that
-     * ended well: one cut short by an exception is left unterminated, so the client sees it fail.
+     * ended well. A browser takes an unended member for a whole one when the body ends, so what
+     * tells the client that a stream failed is the cut connection, not the missing trailer.
      */
     suspend fun finish() {
         gzip.finish()
