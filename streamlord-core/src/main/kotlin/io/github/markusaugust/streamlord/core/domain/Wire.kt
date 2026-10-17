@@ -44,13 +44,20 @@ public object Wire {
      * Reject signals that are not one JSON object. Datastar's client reads signals with
      * `JSON.parse` and, when that fails, runs the text as JavaScript, so text that is not JSON is
      * code in the browser; an array or a string would arrive as an object keyed `0`, `1` and on.
+     * A key the client cannot hold, at any depth, is rejected too; see [SignalNames].
      */
     internal fun signals(value: String): String {
-        if (!JsonShape.isObject(value)) {
+        var refused: String? = null
+        val shaped =
+            JsonShape.isObject(value) { key, objectUnder ->
+                if (refused == null) refused = SignalNames.keyProblem(key, objectUnder)?.let { "signals hold the key '$key': $it" }
+            }
+        if (!shaped) {
             throw DatastarEventValidationException(
                 "signals must be one JSON object: Datastar's client runs signals that are not JSON as JavaScript",
             )
         }
+        refused?.let { throw DatastarEventValidationException(it) }
         return value
     }
 

@@ -138,7 +138,7 @@ public fun HTMLTag.dataMatchMedia(
 ) {
     val (key, mod) = Casing.key(Casing.signalName(signal), case, Case.CAMEL)
     val mods = mod?.let { "__case.${it.wire}" } ?: ""
-    attributes[ds("match-media:$key$mods")] = js(mediaQuery)
+    attributes[ds("match-media:" + Casing.heldKey(signal, "$key$mods"))] = js(mediaQuery)
 }
 
 /** `data-on-raf="expression"` (Pro): run on every animation frame. */

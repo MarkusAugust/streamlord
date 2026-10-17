@@ -6,6 +6,7 @@ import io.github.markusaugust.streamlord.core.domain.SignalsResponse
 import io.github.markusaugust.streamlord.core.domain.Wire
 import io.github.markusaugust.streamlord.core.json.JsonNumber
 import io.github.markusaugust.streamlord.core.json.JsonWriter
+import org.junit.jupiter.api.Timeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -30,6 +31,48 @@ class ScriptAndSignalsContextTest {
             " {\"a\": [1, -2.5e3, true, null, \"\\u00e9\\n\"], \"b\": {}} ",
             PatchSignals(" {\"a\": [1, -2.5e3, true, null, \"\\u00e9\\n\"], \"b\": {}} ").signals,
         )
+    }
+
+    // Measured against the 1.0.4 store: __proto__ throws midway through a batch it never closes,
+    // constructor with an object under it reaches Object.prototype, and a dotted key is one key
+    // that $a.b does not reach and a request drops.
+    @Test
+    fun `signals holding a key the client cannot hold are refused`() {
+        val escapedProto = "{\"__pro" + "\\" + "u0074o__\": {}}"
+        val escapedDot = "{\"a" + "\\" + "u002eb\": 1}"
+        val refused =
+            listOf(
+                "{\"__proto__\": {\"x\": 1}}",
+                "{\"__proto__\": 1}",
+                "{\"constructor\": {\"prototype\": {\"x\": 1}}}",
+                "{\"toString\": {\"name\": 1}}",
+                "{\"a\": [{\"b\": {\"valueOf\": {}}}]}",
+                "{\"a.b\": 1}",
+                "{\"a\": {\"b.c\": 1}}",
+                escapedProto,
+                escapedDot,
+            )
+        for (text in refused) {
+            assertFailsWith<DatastarEventValidationException>(text) { PatchSignals(text) }
+            assertFailsWith<DatastarEventValidationException>(text) { SignalsResponse(text) }
+        }
+        // A plain value or an array under a name every object has is held as the client holds it.
+        val fine =
+            "{\"constructor\": 1, \"team\": {\"constructor\": \"Ferrari\"}, " +
+                "\"toString\": [{}], \"valueOf\": 2, \"prototype\": {\"x\": 1}}"
+        assertEquals(fine, PatchSignals(fine).signals)
+        // Text that is not JSON is told so, before any of its keys.
+        val broken = assertFailsWith<DatastarEventValidationException> { PatchSignals("{\"a.b\": {\"constructor\": {}}") }
+        assertTrue("one JSON object" in broken.message.orEmpty(), broken.message)
+    }
+
+    // Each key is read once. Read in proportion to the rest of the text, these 200 000 keys took
+    // nine seconds; read once, ten milliseconds. The limit sits far from both.
+    @Test
+    @Timeout(5)
+    fun `checking the keys takes time in proportion to the text`() {
+        val rows = (1..100_000).joinToString(",", "{\"rows\":[", "]}") { "{\"id\":$it,\"name\":\"n$it\"}" }
+        assertEquals(rows, PatchSignals(rows).signals)
     }
 
     @Test

@@ -104,7 +104,9 @@ public data class PatchElements(
  * @property signals A JSON object as text. Use a codec or the built-in
  *   [io.github.markusaugust.streamlord.core.json.JsonWriter] to produce it. Anything else
  *   throws [io.github.markusaugust.streamlord.core.DatastarEventValidationException]: Datastar's
- *   client runs signals that are not JSON as JavaScript.
+ *   client runs signals that are not JSON as JavaScript. A key the client cannot hold, at any
+ *   depth, throws the same: `__proto__`, a property of `Object.prototype` with an object under
+ *   it, or one holding `.` ([SignalNames]).
  * @property onlyIfMissing Only set signals that do not already exist on the client.
  */
 public data class PatchSignals(

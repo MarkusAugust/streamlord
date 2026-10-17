@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.html
 
+import kotlinx.html.DIV
 import kotlinx.html.button
 import kotlinx.html.div
 import kotlin.test.Test
@@ -173,7 +174,71 @@ class AsTheClientReadsItTest {
         assertEquals("\$user.firstName", signal("user.first-name"))
         assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("foo-bar" to 1, "fooBar" to 2) } } }
         assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("a" to mapOf("x-y" to 1, "xY" to 2)) } } }
-        assertFailsWith<IllegalArgumentException> { elements { div { dataSignals("a" to mapOf("__proto__" to 1)) } } }
+        assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("a" to mapOf("__proto__" to 1)) } } }
+    }
+
+    // data-signals:a.b nests, and the pairs form now does too; a dotted key inside a map the client
+    // would store as one key, which $a.b does not reach and a request drops.
+    @Test
+    fun `a dotted pair nests as the keyed form does`() {
+        assertEquals(
+            """<div data-signals="{&quot;form&quot;:{&quot;email&quot;:&quot;&quot;,&quot;firstName&quot;:&quot;&quot;},""" +
+                """&quot;n&quot;:1}"></div>""",
+            elements { div { dataSignals("form.email" to "", "form.first-name" to "", "n" to 1) } },
+        )
+        assertEquals(
+            """<div data-signals="{&quot;a&quot;:{&quot;b&quot;:1,&quot;c&quot;:2}}"></div>""",
+            elements { div { dataSignals("a" to mapOf("b" to 1), "a.c" to 2) } },
+        )
+        assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("a" to 1, "a.b" to 2) } } }
+        assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("a" to mapOf("b.c" to 1)) } } }
+    }
+
+    // Measured against the 1.0.4 store: __proto__ throws midway through a batch, and constructor
+    // with an object under it reaches Object.prototype.
+    @Test
+    fun `a name the client cannot hold is refused`() {
+        val names = listOf("constructor", "constructor.prototype.x", "a.constructor", "__proto__.x", "toString.name", "to-string.name")
+        for (name in names) {
+            assertFailsWith<InvalidSignalNameException>(name) { elements { div { dataSignals(name, "1") } } }
+            assertFailsWith<InvalidSignalNameException>(name) { elements { div { dataSignals(name to 1) } } }
+            assertFailsWith<InvalidSignalNameException>(name) { elements { div { dataBind(name) } } }
+            assertFailsWith<InvalidSignalNameException>(name) { elements { div { dataRef(name) } } }
+            assertFailsWith<InvalidSignalNameException>(name) { elements { div { dataIndicator(name) } } }
+            assertFailsWith<InvalidSignalNameException>(name) { elements { div { dataComputed(name, "1") } } }
+        }
+        val prototypeUnder = "a" to mapOf("constructor" to mapOf("prototype" to 1))
+        assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals(prototypeUnder) } } }
+        val camelUnder = "a" to mapOf("to-string" to mapOf("name" to 1))
+        assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals(camelUnder) } } }
+        // With a plain value under it, the client holds such a key.
+        assertEquals(
+            """<div data-signals="{&quot;team&quot;:{&quot;constructor&quot;:&quot;Ferrari&quot;}}"></div>""",
+            elements { div { dataSignals("team" to mapOf("constructor" to "Ferrari")) } },
+        )
+        assertEquals("""<div data-signals:constructors="1"></div>""", elements { div { dataSignals("constructors", "1") } })
+        val clash = assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("n" to 1, "a" to 1, "a.b" to 2) } } }
+        assertEquals("a", clash.name)
+    }
+
+    // The browser lowercases the key, and the client cuts it at the first `__` and applies the
+    // `__case` it is given, so the name it holds is not always the name written.
+    @Test
+    fun `a name is checked as the client reads it from the key`() {
+        val refused =
+            listOf(
+                { d: DIV -> d.dataSignals("Constructor", "{prototype: {y: 1}}", Case.KEBAB) },
+                { d: DIV -> d.dataSignals("ToString", "{name: 1}", Case.CAMEL) },
+                { d: DIV -> d.dataSignals("_-proto-_.polluted", "'yes'", Case.SNAKE) },
+                { d: DIV -> d.dataSignals("constructor_", "{prototype: {w: 1}}", ifMissing = true) },
+                { d: DIV -> d.dataComputed("ValueOf", "({x: 1})", Case.CAMEL) },
+                { d: DIV -> d.dataBind("Constructor.prototype.bound") { case = Case.SNAKE } },
+            )
+        for ((i, write) in refused.withIndex()) {
+            assertFailsWith<InvalidSignalNameException>("case $i") { elements { div { write(this) } } }
+        }
+        // Without a modifier the client keeps the trailing `_`.
+        assertEquals("""<div data-signals:constructor_="1"></div>""", elements { div { dataSignals("constructor_", "1") } })
     }
 
     // CSS custom properties are case-sensitive and the browser lowercases the key.

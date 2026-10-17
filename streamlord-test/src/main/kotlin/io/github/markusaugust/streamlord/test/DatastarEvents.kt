@@ -194,23 +194,11 @@ public class DatastarEvents(
     }
 
     /**
-     * The value at a dotted path in the folded store, or `null` when nothing is there. A key may
-     * itself hold a dot, so at each level the longest key that exists is taken first.
+     * The value at a dotted path in the folded store, or `null` when nothing is there. No key holds
+     * a dot: [PatchSignals] refuses one, since the client could not reach it.
      */
-    private fun path(name: String): JsonValue? = path(signals, name.split('.'))
-
-    private fun path(
-        here: JsonValue,
-        segments: List<String>,
-    ): JsonValue? {
-        if (segments.isEmpty()) return here
-        val fields = here as? JsonObject ?: return null
-        for (taken in segments.size downTo 1) {
-            val next = fields[segments.subList(0, taken).joinToString(".")] ?: continue
-            path(next, segments.subList(taken, segments.size))?.let { return it }
-        }
-        return null
-    }
+    private fun path(name: String): JsonValue? =
+        name.split('.').fold<String, JsonValue?>(signals) { here, key -> (here as? JsonObject)?.get(key) }
 
     /** JSON equality with numbers compared by value, so `13` is `13.0`. */
     private fun same(

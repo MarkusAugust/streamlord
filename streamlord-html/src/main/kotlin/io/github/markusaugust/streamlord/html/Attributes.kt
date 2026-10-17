@@ -4,6 +4,7 @@ package io.github.markusaugust.streamlord.html
 
 import io.github.markusaugust.streamlord.core.domain.CspNonce
 import io.github.markusaugust.streamlord.core.domain.ExpressionGuard
+import io.github.markusaugust.streamlord.core.domain.SignalNames
 import io.github.markusaugust.streamlord.core.json.JsonWriter
 import kotlinx.html.HTMLTag
 import io.github.markusaugust.streamlord.core.protocol.DatastarAttributes as CoreDatastarAttributes
@@ -70,7 +71,7 @@ public fun HTMLTag.dataSignals(
     ifMissing: Boolean = false,
 ) {
     val (key, mod) = Casing.key(Casing.signalName(name), case, Case.CAMEL)
-    attributes[ds("signals:$key${signalMods(mod, ifMissing)}")] = ExpressionGuard.check(expression)
+    attributes[ds("signals:" + Casing.heldKey(name, "$key${signalMods(mod, ifMissing)}"))] = ExpressionGuard.check(expression)
 }
 
 /**
@@ -81,21 +82,24 @@ public fun HTMLTag.dataSignals(
  * ```
  *
  * The keys of the pairs and of every map inside them are read the way the keyed form reads its
- * name: `first-name` declares `$user.firstName`, the signal `signal("user.first-name")` refers to.
- * A [io.github.markusaugust.streamlord.core.json.JsonValue] is written as it is.
+ * name: `first-name` declares `$user.firstName`, the signal `signal("user.first-name")` refers to,
+ * and a dotted name nests, so `"user.first-name" to ""` declares the same signal. A key inside a
+ * map holding `.` is refused, since the client would store it as one key that `$a.b` does not
+ * reach, and so is one it cannot hold with what is under it ([SignalNames]). A
+ * [io.github.markusaugust.streamlord.core.json.JsonObject] is a map, and its keys are read the
+ * same way.
  */
 public fun HTMLTag.dataSignals(
     vararg signals: Pair<String, Any?>,
     ifMissing: Boolean = false,
 ) {
-    // Datastar's client merges signals key by key and skips __proto__, so the signal would never exist.
-    require(signals.none { it.first == "__proto__" }) { "__proto__ cannot be a signal: Datastar's client never creates it" }
     signals.forEach { Casing.signalName(it.first) }
     val keyed = signals.map { (name, value) -> Casing.camel(name) to camelKeys(value, name) }
     keyed.groupBy { it.first }.values.firstOrNull { it.size > 1 }?.let {
         throw InvalidSignalNameException(it.first().first, "is given twice once the keys are read in camelCase")
     }
-    attributes[ds("signals${signalMods(null, ifMissing)}")] = JsonWriter.writeExpression(keyed.toMap())
+    val nested = SignalNames.nest(keyed) { name, reason -> throw InvalidSignalNameException(name, reason) }
+    attributes[ds("signals${signalMods(null, ifMissing)}")] = JsonWriter.writeExpression(nested)
 }
 
 /** [value] with the keys of every map in it camel-cased, as Datastar reads a key in `data-signals:`. */
@@ -107,8 +111,9 @@ private fun camelKeys(
         is Map<*, *> -> {
             val out = LinkedHashMap<Any?, Any?>(value.size)
             for ((k, v) in value) {
-                require(k != "__proto__") { "__proto__ cannot be a signal: Datastar's client never creates it, at $path" }
                 val key = if (k is String) Casing.camel(k) else k
+                val problem = SignalNames.keyProblem(key.toString(), v is Map<*, *>)
+                if (problem != null) throw InvalidSignalNameException("$path.$k", "is a key the client cannot hold: $problem")
                 if (key in out) throw InvalidSignalNameException("$path.$k", "is given twice once the keys are read in camelCase")
                 out[key] = camelKeys(v, "$path.$k")
             }
@@ -140,7 +145,7 @@ public fun HTMLTag.dataComputed(
     case: Case? = null,
 ) {
     val (key, mod) = Casing.key(Casing.signalName(name), case, Case.CAMEL)
-    attributes[ds("computed:$key${caseMod(mod)}")] = ExpressionGuard.check(expression)
+    attributes[ds("computed:" + Casing.heldKey(name, "$key${caseMod(mod)}"))] = ExpressionGuard.check(expression)
 }
 
 /** `data-json-signals`: renders the signal store as JSON into the element. Handy while debugging. */
@@ -306,7 +311,7 @@ private fun HTMLTag.signalNameAttribute(
         attributes[ds("$attribute${modifiers(null)}")] = Casing.camel(Casing.signalName(name))
     } else {
         val (key, mod) = Casing.key(Casing.signalName(name), case, Case.CAMEL)
-        attributes[ds("$attribute:$key${modifiers(mod)}")] = ""
+        attributes[ds("$attribute:" + Casing.heldKey(name, "$key${modifiers(mod)}"))] = ""
     }
 }
 

@@ -13,8 +13,16 @@ internal object JsonShape {
     private const val VALUE = 4
     private const val AFTER = 5
 
-    /** Whether [text] is one JSON object and nothing else, as RFC 8259 writes it. */
-    fun isObject(text: String): Boolean {
+    /**
+     * Whether [text] is one JSON object and nothing else, as RFC 8259 writes it. [onKey] is handed
+     * every key at every depth, decoded as `JSON.parse` decodes it, with whether an object, not an
+     * array or a plain value, stands under it.
+     */
+    fun isObject(
+        text: String,
+        onKey: ((key: String, objectUnder: Boolean) -> Unit)? = null,
+    ): Boolean {
+        var key: String? = null
         val n = text.length
         var i = space(text, 0)
         if (i >= n || text[i] != '{') return false
@@ -34,8 +42,10 @@ internal object JsonShape {
                         i++
                         state = AFTER
                     } else {
+                        val start = i
                         i = string(text, i)
                         if (i < 0) return false
+                        if (onKey != null) key = decoded(text, start + 1, i - 1)
                         state = COLON
                     }
                 }
@@ -47,6 +57,8 @@ internal object JsonShape {
                 }
 
                 VALUE_OR_CLOSE, VALUE -> {
+                    key?.let { onKey?.invoke(it, c == '{') }
+                    key = null
                     when {
                         c == ']' && state == VALUE_OR_CLOSE -> {
                             open.removeLast()
@@ -160,6 +172,36 @@ internal object JsonShape {
             }
         }
         return -1
+    }
+
+    /** The text of a string [string] has checked, between [from] and [to], with its escapes read. */
+    private fun decoded(
+        text: String,
+        from: Int,
+        to: Int,
+    ): String {
+        if ((from until to).none { text[it] == '\\' }) return text.substring(from, to)
+        val out = StringBuilder(to - from)
+        var i = from
+        while (i < to) {
+            val c = text[i]
+            if (c != '\\') {
+                out.append(c)
+                i++
+                continue
+            }
+            when (val escape = text[i + 1]) {
+                'b' -> out.append('\b')
+                'f' -> out.append('\u000C')
+                'n' -> out.append('\n')
+                'r' -> out.append('\r')
+                't' -> out.append('\t')
+                'u' -> out.append(text.substring(i + 2, i + 6).toInt(16).toChar())
+                else -> out.append(escape)
+            }
+            i += if (text[i + 1] == 'u') 6 else 2
+        }
+        return out.toString()
     }
 
     private fun Char.isHex(): Boolean = this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'

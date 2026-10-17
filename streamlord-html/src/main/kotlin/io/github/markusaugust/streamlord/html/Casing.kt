@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.html
 
 import io.github.markusaugust.streamlord.core.StreamlordException
+import io.github.markusaugust.streamlord.core.domain.SignalNames
 
 /**
  * Raised for a name no signal or attribute key can carry: blank, or with whitespace, quotes or
@@ -66,10 +67,12 @@ public object Casing {
     /**
      * A name that declares a signal: what [validate] admits, and only ASCII letters, digits and
      * `_`, in parts joined by `.` or `-`. Datastar's client reads nothing else after a `$`, so
-     * `$über` or `$a:b` would reach no signal.
+     * `$über` or `$a:b` would reach no signal. No part, as written or as Datastar camel-cases it,
+     * may be a property every object has, such as `constructor` or `toString` ([SignalNames]).
      */
     public fun signalName(name: String): String {
         validate(name)
+        (SignalNames.pathProblem(name) ?: SignalNames.pathProblem(camel(name)))?.let { throw InvalidSignalNameException(name, it) }
         if (!SIGNAL_NAME.matches(name)) {
             throw InvalidSignalNameException(
                 name,
@@ -94,6 +97,33 @@ public object Casing {
         if (case != null) return key to case
         val wanted = if (name.first().isUpperCase()) Case.PASCAL else Case.CAMEL
         return key to (if (wanted == default) null else wanted)
+    }
+
+    /**
+     * [written], the key and modifiers of an attribute that declares the signal [name], once the
+     * name Datastar's client reads from it is one it can hold. The browser lowercases the key, the
+     * client cuts it at the first `__` and applies each `__case` it is given, so `constructor_`
+     * with `__ifmissing` is read as `constructor`, and `_-proto-_` with `__case.snake` as
+     * `__proto__` (`parseAttributeKey` in engine.ts, `modifyCasing` in text.ts).
+     */
+    public fun heldKey(
+        name: String,
+        written: String,
+    ): String {
+        val parts = written.lowercase().split("__")
+        val modifiers = parts.drop(1).map { it.split('.') }
+        val cases = modifiers.lastOrNull { it.first() == "case" }?.drop(1) ?: listOf("camel")
+        val held =
+            cases.fold(parts.first()) { key, case ->
+                when (case) {
+                    "camel" -> camel(key)
+                    "snake" -> key.replace('-', '_')
+                    "pascal" -> key.take(1).uppercase() + camel(key.drop(1))
+                    else -> key
+                }
+            }
+        SignalNames.pathProblem(held)?.let { throw InvalidSignalNameException(name, "is read by Datastar's client as $held, which $it") }
+        return written
     }
 
     /** The key for an attribute whose key is used as written (`attr`, `style`, `animate`): `ariaLabel` -> `aria-label`. */

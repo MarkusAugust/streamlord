@@ -24,6 +24,6 @@ class JsLiteralContextTest {
 
     @Test
     fun `__proto__ is refused as a signal`() {
-        assertFailsWith<IllegalArgumentException> { createHTML().div { dataSignals("__proto__" to 1) } }
+        assertFailsWith<InvalidSignalNameException> { createHTML().div { dataSignals("__proto__" to 1) } }
     }
 }

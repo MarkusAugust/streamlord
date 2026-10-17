@@ -100,6 +100,7 @@ public final class io/github/markusaugust/streamlord/html/Case : java/lang/Enum 
 public final class io/github/markusaugust/streamlord/html/Casing {
 	public static final field INSTANCE Lio/github/markusaugust/streamlord/html/Casing;
 	public final fun camel (Ljava/lang/String;)Ljava/lang/String;
+	public final fun heldKey (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
 	public final fun kebab (Ljava/lang/String;)Ljava/lang/String;
 	public final fun key (Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;Lio/github/markusaugust/streamlord/html/Case;)Lkotlin/Pair;
 	public final fun plainKey (Ljava/lang/String;)Ljava/lang/String;

@@ -47,8 +47,33 @@ All notable changes to Streamlord are recorded here. The format follows
 - `JsonWriter.writeExpression`: JSON for a place where Datastar's client reads it as an
   expression, such as `data-signals`, with every `\` written as `\u005c`.
 
+- `SignalNames` in `streamlord-core`: the keys and names Datastar's client cannot hold, with the
+  reason (`keyProblem`, `pathProblem`), and `nest`, which nests dotted names the way
+  `data-signals:a.b` does and hands a clash to a function of yours.
+- `Casing.heldKey` in `streamlord-html`: refuses an attribute key whose signal, as Datastar's
+  client reads it after lowercasing, cutting at `__` and applying `__case`, it cannot hold.
+
 ### Changed
 
+- A dotted name in the pairs of `patchSignals`, `removeSignals` and `dataSignals` now nests, as
+  `data-signals:form.email` does: `patchSignals("form.email" to "x")` patches `$form.email`. It
+  used to send the key `"form.email"`, which the client stores as one key that `$form.email`
+  does not reach. `removeSignals("form.email")` sends `{"form": {"email": null}}`, and where
+  `form` is missing or holds a plain value, the client makes it an empty object; a name under
+  another one being removed is left out.
+- `patchSignals` throws `DatastarEventValidationException` on a name given twice, or given a
+  value and signals under it, where the last value used to win, as `dataSignals` already did. Two
+  maps under one name merge.
+- A name in the pairs of `patchSignals` and `removeSignals`, and every name the HTML DSL writes,
+  may not have an empty part or a part that is a property of `Object.prototype`, as written or
+  camel-cased: `patchSignals("constructor" to 1)` and `dataSignals("to-string.name", "1")` throw.
+- `dataSignals` refuses `__proto__` with `InvalidSignalNameException`, as it refuses any other
+  name, rather than `IllegalArgumentException`.
+- `datastarEvents` and `LiveDatastarStream` in `streamlord-test` throw
+  `DatastarEventValidationException` on a stream whose signals hold a key the client cannot hold,
+  as they do on signals that are not JSON, and `assertSignal` no longer looks for a key holding
+  a dot, since none can be read. A dotted key is refused inside an array too, where the client
+  would keep it, so that one rule holds everywhere.
 - `respondDatastar`, its `Flow` variant and `respondElements`, `respondSignals` and `respondScript`
   on Ktor no longer take a `status`, as on Spring: Datastar's client reads neither a stream nor a
   body with any status but 200. Source that passed one, also positionally as the first argument
@@ -209,6 +234,22 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- A signal patch could carry a key Datastar's client cannot hold, from pairs, a codec or a JSON
+  string, at any depth. `__proto__` with an object under it made its merge throw halfway through
+  a batch it never closed, so no later signal reached the page. An object under a property of
+  `Object.prototype` was written into the built-in one before every request:
+  `{"constructor": {"prototype": {"x": 1}}}` set `x` on `Object.prototype` for every object on
+  the page, and `{"toString": {"name": 1}}` made every later request fail. A dotted key was
+  stored as one key that `$a.b` does not reach, and dropped from the client's requests.
+  `PatchSignals` and `SignalsResponse` now throw `DatastarEventValidationException` on such a
+  key; a plain value under `constructor` or `toString` goes through.
+- `data-signals:constructor.prototype.x`, `data-signals:to-string.name` and the same names in
+  `dataBind`, `dataRef`, `dataIndicator`, `dataComputed` and Pro `dataMatchMedia` set a property
+  on `Object.prototype` or broke every later request in the client. Such a name is now refused,
+  also where the client reads it differently from how it is written: `"Constructor"` with
+  `Case.KEBAB` is read as `constructor`, `"_-proto-_"` with `Case.SNAKE` as `__proto__`, and
+  `"constructor_"` with `ifMissing` as `constructor`, since the client cuts the key at the first
+  `__`.
 - A value ending in `\` emptied the attribute it was written into. Datastar's client cuts an
   expression into statements at each `;` outside a string and reads a quote after a `\` as
   escaped, so `dataSignals("path" to "C:\\", "sep" to ";")` declared no signal at all, and
