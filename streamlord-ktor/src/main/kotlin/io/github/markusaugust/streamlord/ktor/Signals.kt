@@ -6,6 +6,7 @@ import io.github.markusaugust.streamlord.core.port.driven.IncomingRequest
 import io.github.markusaugust.streamlord.core.port.driven.isDatastarRequest
 import io.github.markusaugust.streamlord.core.port.driven.rejectDeclaredLengthAbove
 import io.ktor.server.application.ApplicationCall
+import io.ktor.server.request.RequestAlreadyConsumedException
 import io.ktor.server.request.contentLength
 import io.ktor.server.request.header
 import io.ktor.server.request.httpMethod
@@ -35,7 +36,17 @@ internal class KtorIncomingRequest(
         // receiveNullable and readRemaining, which every Ktor 3 has. 3.6.0 deprecates both for a
         // receive(TypeInfo) member and a readBuffer(Long) it added, which an older Ktor lacks.
         @Suppress("DEPRECATION")
-        val channel = checkNotNull(call.receiveNullable<ByteReadChannel>(portableTypeInfo<ByteReadChannel>()))
+        val channel =
+            try {
+                checkNotNull(call.receiveNullable<ByteReadChannel>(portableTypeInfo<ByteReadChannel>()))
+            } catch (e: RequestAlreadyConsumedException) {
+                // As on Spring: a body read before is not a request without signals, and Ktor's own
+                // exception says nothing of where they went.
+                throw IllegalStateException(
+                    "The request body was already read, by call.receive, a plugin or an earlier read, so the signals in it are gone",
+                    e,
+                )
+            }
 
         @Suppress("DEPRECATION")
         val bytes = channel.readRemaining(maxBytes.toLong() + 1).readByteArray()
