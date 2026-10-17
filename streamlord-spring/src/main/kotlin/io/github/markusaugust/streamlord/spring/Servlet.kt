@@ -328,16 +328,18 @@ internal fun HttpServletResponse.prepareStream(request: HttpServletRequest?): Bo
 /**
  * Whether the stream may say `Connection: keep-alive`: an HTTP/1.1 request that did not ask to
  * close. HTTP/2 has no such header, and a client that sent `Connection: close` is not contradicted.
+ * One that asked for keep-alive itself gets Tomcat's answer, which comes on top of a header set
+ * here: `Connection: keep-alive, keep-alive`.
  */
 private fun wantsKeepAlive(request: HttpServletRequest?): Boolean {
     if (request == null || !request.protocol.equals("HTTP/1.1", ignoreCase = true)) return false
-    val closing =
+    val tokens =
         request
             .getHeaders("Connection")
             .toList()
             .flatMap { it.split(',') }
-            .any { it.trim().equals("close", ignoreCase = true) }
-    return !closing
+            .map { it.trim() }
+    return tokens.none { it.equals("close", ignoreCase = true) || it.equals("keep-alive", ignoreCase = true) }
 }
 
 /**
