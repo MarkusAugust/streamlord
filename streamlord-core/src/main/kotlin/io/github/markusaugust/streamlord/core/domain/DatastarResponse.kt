@@ -53,7 +53,7 @@ public data class ElementsResponse(
     }
 
     override val contentType: String get() = DatastarProtocol.CONTENT_TYPE_HTML
-    override val body: String get() = elements
+    override val body: String get() = Wire.loneSurrogatesReplaced(elements)
     override val headers: Map<String, String>
         get() =
             buildMap {
@@ -74,7 +74,7 @@ public data class SignalsResponse(
     }
 
     override val contentType: String get() = DatastarProtocol.CONTENT_TYPE_JSON
-    override val body: String get() = signals
+    override val body: String get() = Wire.loneSurrogatesEscaped(signals)
     override val headers: Map<String, String>
         get() = if (onlyIfMissing) mapOf(DatastarProtocol.Headers.ONLY_IF_MISSING to "true") else emptyMap()
 }

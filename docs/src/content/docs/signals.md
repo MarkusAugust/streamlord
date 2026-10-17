@@ -192,6 +192,12 @@ check the value with `isFinite()` where it matters, or read it through kotlinx.
 A body that is refused throws `SignalsDecodeException`, which `StreamlordExceptionHandler`
 answers with a 400.
 
+A string holding half of a surrogate pair, which `JSON.stringify` sends as `\ud800`, comes back
+from every codec with the half as it is, in the codec's own text. UTF-8 has no bytes for it, so
+Streamlord writes it as `\ud800` when the patch goes out, and the browser gets back what it sent,
+as from the built-in writer. In elements there is no way to carry one, and it is sent as
+U+FFFD, the replacement character the browser would put there itself.
+
 ## Numbers past 2^53
 
 The browser holds every number as a double, which is exact up to 2^53, 9007199254740992. A
@@ -304,6 +310,8 @@ value, so `readSignals()` on `/rows/delete` sees `ids` and nothing else.
 
 Incoming signals are capped at 1 MiB by default, and the cap is applied *while reading*. A
 declared `Content-Length` above the limit is rejected before a byte is read; a chunked body is
-cut off one byte past it. Nothing larger than the cap ever sits in memory. Map
+cut off one byte past it. Nothing larger than the cap ever sits in memory. Signals sent by `@get`
+or `@delete` travel in the URL, which the server refuses at 4 to 8 KiB, long before the cap,
+so send large ones with `@post` ([Security](/security/#bounded-input) has the numbers). Map
 `SignalsTooLargeException` to `413` in your framework's error handling, and a body that will not
 parse or decode to `400`. See [Security](/security/).

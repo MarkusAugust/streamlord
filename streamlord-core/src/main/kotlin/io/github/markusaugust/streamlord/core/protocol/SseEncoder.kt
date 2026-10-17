@@ -76,12 +76,13 @@ public object SseEncoder {
                 event.viewTransitionSelector?.let { add("${DataLines.VIEW_TRANSITION_SELECTOR} $it") }
             }
             if (event.namespace != ElementNamespace.DEFAULT) add("${DataLines.NAMESPACE} ${event.namespace.wire}")
-            event.elements?.let { html -> Wire.lines(html).forEach { add("${DataLines.ELEMENTS} $it") } }
+            event.elements?.let { html -> Wire.lines(Wire.loneSurrogatesReplaced(html)).forEach { add("${DataLines.ELEMENTS} $it") } }
         }
 
+    // A codec writes a lone surrogate as it is; escaped, it arrives as itself, as from the built-in writer.
     private fun patchSignalsLines(event: PatchSignals): List<String> =
         buildList {
             if (event.onlyIfMissing) add("${DataLines.ONLY_IF_MISSING} true")
-            Wire.lines(event.signals).forEach { add("${DataLines.SIGNALS} $it") }
+            Wire.lines(Wire.loneSurrogatesEscaped(event.signals)).forEach { add("${DataLines.SIGNALS} $it") }
         }
 }

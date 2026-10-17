@@ -2,9 +2,11 @@ package io.github.markusaugust.streamlord.core
 
 import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
+import io.github.markusaugust.streamlord.core.domain.ElementsResponse
 import io.github.markusaugust.streamlord.core.domain.ExecuteScript
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
+import io.github.markusaugust.streamlord.core.domain.SignalsResponse
 import io.github.markusaugust.streamlord.core.protocol.DatastarAttributes
 import io.github.markusaugust.streamlord.core.protocol.SseEncoder
 import kotlin.test.Test
@@ -165,5 +167,21 @@ class SseEncoderTest {
         } finally {
             DatastarAttributes.prefix = "data-"
         }
+    }
+
+    // UTF-8 has no bytes for a surrogate without its other half; the writers put `?` there. A
+    // codec's JSON keeps the surrogate, so the escape the built-in writer and JSON.stringify use
+    // brings it to the client as itself, and in HTML the browser's own U+FFFD is the most it can be.
+    @Test
+    fun `a lone surrogate reaches the client as the built-in writer sends it`() {
+        val codecJson = "{\"v\":\"x\uD800y\uDC00z😀\"}"
+        val signals = SseEncoder.encode(PatchSignals(codecJson))
+        assertEquals("event: datastar-patch-signals\ndata: signals {\"v\":\"x\\ud800y\\udc00z😀\"}\n\n", signals)
+        assertEquals(signals, String(signals.toByteArray(Charsets.UTF_8), Charsets.UTF_8))
+        assertEquals("{\"v\":\"x\\ud800y\\udc00z😀\"}", SignalsResponse(codecJson).body)
+
+        val elements = SseEncoder.encode(PatchElements("<p id=\"a\">x\uD800y😀</p>"))
+        assertEquals("event: datastar-patch-elements\ndata: elements <p id=\"a\">x\uFFFDy😀</p>\n\n", elements)
+        assertEquals("<p id=\"a\">x\uFFFDy</p>", ElementsResponse("<p id=\"a\">x\uDC00y</p>").body)
     }
 }
