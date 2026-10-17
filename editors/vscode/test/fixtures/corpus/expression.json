@@ -32,6 +32,10 @@
     {"name":"a decimal bigint","source":"1.5n","issues":[{"code":"expression-syntax"}]},
     {"name":"a doubled numeric separator","source":"1__0","issues":[{"code":"expression-syntax"}]},
     {"name":"a second default clause","source":"switch ($a) { default: 1; default: 2 }","issues":[{"code":"expression-syntax"}]},
-    {"name":"a repeated arrow parameter","source":"((a, a) => 1)()","issues":[{"code":"expression-syntax"}]}
+    {"name":"a repeated arrow parameter","source":"((a, a) => 1)()","issues":[{"code":"expression-syntax"}]},
+    {"name":"an await at the top level","source":"await @post('/save')","issues":[{"code":"expression-syntax"}]},
+    {"name":"a signal declared with let","source":"let $x = 1","issues":[{"code":"expression-syntax"}]},
+    {"name":"a signal as an object key","source":"x = {$a: 1}","issues":[{"code":"expression-syntax"}]},
+    {"name":"a signal path assigned to","source":"$user.name = 'x'; $items[0] = 2","issues":[]}
   ]
 }

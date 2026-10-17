@@ -79,8 +79,9 @@ class AsTheBrowserHoldsItTest {
     }
 
     // signals.ts mergeInner: an index past the end extends the array, and null leaves a hole.
+    // The client reads a hole, and a null it holds, as an empty string: that is what `$list[1]` gives and what `@post` sends.
     @Test
-    fun `a patch onto an array extends it and leaves holes as the client does`() {
+    fun `a patch onto an array extends it, and a hole reads as an empty string as it does in the client`() {
         val events =
             stream(
                 PatchSignals("""{"list":["a","b","c"]}"""),
@@ -88,7 +89,7 @@ class AsTheBrowserHoldsItTest {
                 PatchSignals("""{"list":{"1":null,"01":"never","name":"never"}}"""),
             )
 
-        events.assertSignal("list", listOf("a", null, "c", null, null, "x"))
+        events.assertSignal("list", listOf("a", "", "c", "", "", "x"))
     }
 
     @Test

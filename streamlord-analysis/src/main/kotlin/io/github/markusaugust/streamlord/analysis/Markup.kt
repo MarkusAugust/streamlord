@@ -69,8 +69,65 @@ private val SIGNAL_NAME = Regex("""^[A-Za-z_$][A-Za-z0-9_.$-]*$""")
 private val HAS_CAPITAL = Regex("""[A-Z]""")
 private val LEADING_CAPITAL = Regex("""^[A-Z]""")
 private val HAS_LOWERCASE = Regex("""[a-z]""")
-private val ENTITY = Regex("""&(?:(amp|lt|gt|quot|apos)|#(\d{1,7})|#[xX]([0-9A-Fa-f]{1,6}));""")
-private val NAMED_ENTITIES = mapOf("amp" to "&", "lt" to "<", "gt" to ">", "quot" to "\"", "apos" to "'")
+
+/*
+ * A named reference with its semicolon, one of the few legacy names the browser also reads
+ * without it (unless `=` or a letter or digit follows, as in a URL's `&copy=1`), or a numeric
+ * one, which the browser reads with or without its semicolon.
+ */
+private val ENTITY =
+    Regex("""&(?:([A-Za-z][A-Za-z0-9]*);|(amp|AMP|lt|LT|gt|GT|quot|QUOT|nbsp)(?![=A-Za-z0-9])|#(\d{1,7});?|#[xX]([0-9A-Fa-f]{1,6});?)""")
+
+/** The named references that spell a character an expression may hold: the ASCII punctuation, and the whitespace. */
+private val NAMED_ENTITIES =
+    mapOf(
+        "amp" to "&",
+        "AMP" to "&",
+        "lt" to "<",
+        "LT" to "<",
+        "gt" to ">",
+        "GT" to ">",
+        "quot" to "\"",
+        "QUOT" to "\"",
+        "apos" to "'",
+        "nbsp" to "\u00A0",
+        "Tab" to "\t",
+        "NewLine" to "\n",
+        "excl" to "!",
+        "num" to "#",
+        "dollar" to "$",
+        "percnt" to "%",
+        "lpar" to "(",
+        "rpar" to ")",
+        "ast" to "*",
+        "midast" to "*",
+        "plus" to "+",
+        "comma" to ",",
+        "period" to ".",
+        "sol" to "/",
+        "colon" to ":",
+        "semi" to ";",
+        "equals" to "=",
+        "quest" to "?",
+        "commat" to "@",
+        "lsqb" to "[",
+        "lbrack" to "[",
+        "bsol" to "\\",
+        "rsqb" to "]",
+        "rbrack" to "]",
+        "Hat" to "^",
+        "lowbar" to "_",
+        "UnderBar" to "_",
+        "grave" to "`",
+        "DiacriticalGrave" to "`",
+        "lcub" to "{",
+        "lbrace" to "{",
+        "verbar" to "|",
+        "vert" to "|",
+        "VerticalLine" to "|",
+        "rcub" to "}",
+        "rbrace" to "}",
+    )
 private val TEMPLATE_CALL = Regex("""^[@#][A-Za-z]+\s*\(""")
 
 /** Below this length a Datastar name has too many honest neighbours (test, kind, once) to judge a bare `data-*` at all. */
@@ -110,7 +167,9 @@ internal class DecodedValue(
 
 /**
  * The attribute value as the browser hands it to Datastar: `&amp;&amp;` is `&&` by then. The
- * named references a value needs (amp, lt, gt, quot, apos) and the numeric ones are decoded.
+ * named references that spell ASCII punctuation or whitespace, the legacy ones the browser reads
+ * without a semicolon, and the numeric ones are decoded; `&copy;` and the rest stay as written,
+ * which to the expression they are.
  */
 internal fun decodeEntities(value: String): DecodedValue {
     if ('&' !in value) return DecodedValue(value, IntArray(value.length + 1) { it })
@@ -123,7 +182,8 @@ internal fun decodeEntities(value: String): DecodedValue {
             when {
                 m == null -> null
                 m.groupValues[1].isNotEmpty() -> NAMED_ENTITIES[m.groupValues[1]]
-                else -> codePoint(m.groupValues[2].toIntOrNull() ?: m.groupValues[3].toIntOrNull(16))
+                m.groupValues[2].isNotEmpty() -> NAMED_ENTITIES[m.groupValues[2]]
+                else -> codePoint(m.groupValues[3].toIntOrNull() ?: m.groupValues[4].toIntOrNull(16))
             }
         if (m == null || decoded == null) {
             out.append(value[i])
@@ -237,6 +297,8 @@ public data class MarkupOptions(
     val prefix: String,
     /** Validate data-* attributes and their expressions. */
     val checkAttributes: Boolean,
+    /** Kebab-case signal names the source declares with `__case.kebab`, which `$my-value` then reaches as written. */
+    val hyphenatedSignals: Set<String> = emptySet(),
 )
 
 public fun tokenize(html: String): Tokens {
@@ -428,16 +490,20 @@ public fun keyReading(
         KeyKind.RAW -> "the ${if (spec.name == "style") "property" else "attribute"} ${wire.substringBefore("__")}"
     }
 
-/** For a raw key the only way to keep a capital is the object form; said once, where it applies. */
+/**
+ * What a raw key with a capital can do, said once, where it applies: an attribute keeps its name in
+ * the object form (attr.ts sets the key as written); a style property has no form that keeps one,
+ * since the object form writes the key kebab-case (style.ts:50 in 1.0.4).
+ */
 public fun rawKeyNote(
     spec: AttributeSpec,
     prefix: String,
     key: String,
 ): String =
-    if (keyKind(spec) == KeyKind.RAW && spec.valueKind == ValueKind.EXPRESSION) {
-        " For a name that really has capitals, such as SVG's viewBox, use the object form: $prefix${spec.name}=\"{$key: ...}\"."
-    } else {
-        ""
+    when {
+        keyKind(spec) != KeyKind.RAW || spec.valueKind != ValueKind.EXPRESSION -> ""
+        spec.name == "style" -> " The object form would set ${kebab(key)}. Name the property in lowercase."
+        else -> " For a name that really has capitals, such as SVG's viewBox, use the object form: $prefix${spec.name}=\"{$key: ...}\"."
     }
 
 /** The markup and attribute rules, bound to one catalog. */
@@ -477,7 +543,10 @@ public class MarkupValidator(
             closeImplied(stack, tag.name)
             if (stack.isEmpty()) topLevel += tag
             if (!tag.selfClosing) stack += tag
-            if (opts.checkAttributes) issues += validateAttributes(tag, opts.prefix, html.substring(tag.start, tag.end))
+            if (opts.checkAttributes) {
+                issues +=
+                    validateAttributes(tag, opts.prefix, html.substring(tag.start, tag.end), opts.hyphenatedSignals)
+            }
         }
         for (unclosed in stack) {
             if (unclosed.name in OPTIONAL_END) continue
@@ -550,6 +619,7 @@ public class MarkupValidator(
         tag: Tag,
         prefix: String,
         tagSource: String?,
+        hyphenatedSignals: Set<String> = emptySet(),
     ): List<Issue> {
         val issues = ArrayList<Issue>()
         for (attr in tag.attributes) {
@@ -579,8 +649,8 @@ public class MarkupValidator(
                         distance(parsed.base, it.name) == 1 &&
                             (qualified || (it.name.length >= LONG_NAME && it.name.length == parsed.base.length))
                     }
+                val baseEnd = attr.nameStart + prefix.length + parsed.base.length
                 if (near != null) {
-                    val baseEnd = attr.nameStart + prefix.length + parsed.base.length
                     issues +=
                         Issue(
                             start = attr.nameStart,
@@ -590,6 +660,38 @@ public class MarkupValidator(
                             code = "unknown-attribute",
                             link = Docs.attribute(near.name),
                             fixes = listOf(Fix("Change to $prefix${near.name}", attr.nameStart, baseEnd, "$prefix${near.name}")),
+                        )
+                    continue
+                }
+                // data-on-click, data-bind-value: the pre-1.0 syntax, which 1.0 reads as an attribute it does not have.
+                val dash = parsed.base.indexOf('-')
+                val keyedSpec =
+                    if (dash > 0 &&
+                        parsed.key == null
+                    ) {
+                        catalog.attributesByName[parsed.base.substring(0, dash)]?.takeIf { it.keyed }
+                    } else {
+                        null
+                    }
+                if (keyedSpec != null) {
+                    val rest = parsed.base.substring(dash + 1)
+                    val init = keyedSpec.name == "on" && rest == "load"
+                    val fixed = if (init) "${prefix}init" else "$prefix${keyedSpec.name}:$rest"
+                    issues +=
+                        Issue(
+                            start = attr.nameStart,
+                            end = nameEnd,
+                            message =
+                                "$prefix${parsed.base} is Datastar's pre-1.0 syntax, which 1.0 ignores. " +
+                                    if (init) {
+                                        "An expression run when the element appears is $fixed."
+                                    } else {
+                                        "The key follows a colon: $fixed."
+                                    },
+                            severity = Severity.WARNING,
+                            code = "unknown-attribute",
+                            link = Docs.attribute(if (init) "init" else keyedSpec.name),
+                            fixes = listOf(Fix("Change to $fixed", attr.nameStart, baseEnd, fixed)),
                         )
                 }
                 continue
@@ -621,6 +723,7 @@ public class MarkupValidator(
                 issues += Issue(attr.nameStart, nameEnd, "$prefix${spec.name} does not take a key.", Severity.ERROR, "unexpected-key", link)
             }
             if (parsed.key != null) issues += validateKeyCase(attr, parsed, spec, prefix)
+            issues += validateDottedKey(attr, parsed, spec, prefix)
             val hasKey = !parsed.key.isNullOrEmpty()
             val hasValue = !attr.value.isNullOrEmpty()
             if (spec.requires == Requires.VALUE && !hasValue) {
@@ -721,7 +824,7 @@ public class MarkupValidator(
                     val from = decoded.toSource(start)
                     return attr.valueStart + from to attr.valueStart + if (end > start) maxOf(decoded.toSource(end), from + 1) else from
                 }
-                for (issue in expressions.validate(decoded.text)) {
+                for (issue in expressions.validate(decoded.text, spec.returnsValue, hyphenatedSignals)) {
                     val (start, end) = source(issue.start, issue.end)
                     issues +=
                         issue.copy(
@@ -776,7 +879,8 @@ public class MarkupValidator(
         }
         val sends =
             tag.attributes.any {
-                it.name.asciiLowercase().startsWith(prefix) && it.value != null && backendAction.containsMatchIn(decodeEntities(it.value).text)
+                it.name.asciiLowercase().startsWith(prefix) && it.value != null &&
+                    backendAction.containsMatchIn(decodeEntities(it.value).text)
             }
         if (sends) return emptyList()
         return listOf(
@@ -788,6 +892,40 @@ public class MarkupValidator(
                 Severity.WARNING,
                 "indicator-without-action",
                 Docs.attribute("indicator"),
+            ),
+        )
+    }
+
+    /**
+     * `data-on:click.prevent`: a modifier written after a dot, which Datastar reads as part of the
+     * event name. Only for events; a dot in a signal key is a path.
+     */
+    private fun validateDottedKey(
+        attr: Attribute,
+        parsed: ParsedAttribute,
+        spec: AttributeSpec,
+        prefix: String,
+    ): List<Issue> {
+        val key = parsed.key ?: return emptyList()
+        if ('.' !in key || keyKind(spec) != KeyKind.EVENT) return emptyList()
+        val pieces = key.split('.')
+        val mods = pieces.drop(1)
+        if (pieces[0].isEmpty() || mods.any { m -> spec.modifiers.none { it.name == m } }) return emptyList()
+        val keyStart = attr.nameStart + attr.name.indexOf(':') + 1
+        val fixed = pieces[0] + mods.joinToString("") { "__$it" }
+        return listOf(
+            Issue(
+                start = keyStart,
+                end = keyStart + key.length,
+                message = "Datastar reads $key as ${keyReading(
+                    spec,
+                    key,
+                    key,
+                )}, dots and all. A modifier follows two underscores: $prefix${spec.name}:$fixed.",
+                severity = Severity.WARNING,
+                code = "unknown-modifier",
+                link = Docs.attribute(spec.name),
+                fixes = listOf(Fix("Change to $fixed", keyStart, keyStart + key.length, fixed)),
             ),
         )
     }
@@ -825,13 +963,48 @@ public class MarkupValidator(
                 ""
             }
         val camelNote = if (keyKind(spec) == KeyKind.SIGNAL) ", and Datastar reads a kebab-case signal key as camelCase" else ""
+        if (keyKind(spec) == KeyKind.RAW) {
+            // A kebab-case key would set view-box, not viewBox: for an attribute the object form keeps the
+            // name, for a style property no form does, since the object form writes it kebab-case.
+            val value = attr.value
+            val quote =
+                if (value == null || '"' !in value) {
+                    '"'
+                } else if ('\'' !in value) {
+                    '\''
+                } else {
+                    null
+                }
+            val fixes =
+                if (spec.name == "attr" && value != null && quote != null) {
+                    val end = attr.valueEnd + if (attr.quoted) 1 else 0
+                    listOf(Fix("Use the object form", attr.nameStart, end, "$name=$quote{$key: $value}$quote"))
+                } else {
+                    emptyList()
+                }
+            return listOf(
+                Issue(
+                    start = keyStart,
+                    end = keyStart + key.length,
+                    message = "The browser lowercases attribute names, so this sets ${key.lowercase()}, not $key.${rawKeyNote(
+                        spec,
+                        prefix,
+                        key,
+                    )}",
+                    severity = Severity.WARNING,
+                    code = "key-case",
+                    link = Docs.attribute(spec.name),
+                    fixes = fixes,
+                ),
+            )
+        }
         return listOf(
             Issue(
                 start = keyStart,
                 end = keyStart + key.length,
                 message =
                     "The browser lowercases attribute names, so this reaches Datastar as $reaches, not $key. " +
-                        "Write $name:$fixed$keep: keys are kebab-case$camelNote.${rawKeyNote(spec, prefix, key)}",
+                        "Write $name:$fixed$keep: keys are kebab-case$camelNote.",
                 severity = Severity.WARNING,
                 code = "key-case",
                 link = Docs.attribute(spec.name),

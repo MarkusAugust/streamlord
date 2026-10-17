@@ -122,16 +122,22 @@ export function attributeDoc(name: string): string {
 
 const ACTION = /@([A-Za-z_$][A-Za-z0-9_$]*)(\s*)\(/g;
 
+/** As the function body Datastar compiles with `Function()`: `return` is allowed at the top level, `await` is not. */
 function parseScript(js: string): void {
   Parser.parse(js, {
     ecmaVersion: "latest",
     sourceType: "script",
     allowReturnOutsideFunction: true,
-    allowAwaitOutsideFunction: true,
+    allowAwaitOutsideFunction: false,
     allowHashBang: false,
   });
 }
 
+/**
+ * With no attribute to say whether the value is read, an expression that opens with `{` may be an
+ * object literal Datastar wraps in `return (...)`; to a script parser it is a block. When the
+ * script parse fails, the text is tried once more inside parentheses.
+ */
 function objectLiteralParses(js: string): boolean {
   if (!js.trimStart().startsWith("{")) return false;
   try {
@@ -142,24 +148,139 @@ function objectLiteralParses(js: string): boolean {
   }
 }
 
-export function validateExpression(text: string): Issue[] {
+/**
+ * One statement of a value-returning expression, as Datastar's `genRx` matches them (engine.ts:412
+ * in 1.0.4): everything up to a `;` that is not inside quotes, a regex literal or a no-argument IIFE.
+ */
+const STATEMENT = /(?:\/(?:\\\/|[^/])*\/|"(?:\\"|[^"])*"|'(?:\\'|[^'])*'|`(?:\\`|[^`])*`|\(\s*(?:(?:function)\s*\(\s*\)|(?:\(\s*\))\s*=>)\s*(?:\{[\s\S]*?\}|[^;){]*)\s*\)\s*\(\s*\)|[^;])+/gm;
+
+/** JavaScript as Datastar compiles an expression, with a map from each of its offsets back to the expression. */
+interface ClientScript {
+  js: string;
+  origin: number[];
+}
+
+/**
+ * The client's rewrite of an expression (engine.ts:448 in 1.0.4), as one pattern: a quoted string
+ * or a template literal without `${` is stepped over, a `${...}` has its signals rewritten, and a
+ * `$name.path` outside them is written as `$['name']['path']`.
+ */
+const CLIENT_REWRITE = /(?:"[^"\\]*(?:\\.[^"\\]*)*"|'[^'\\]*(?:\\.[^'\\]*)*'|`[^`\\$]*(?:(?:\\.|\$(?!\{))[^`\\$]*)*`)|\$\{([^{}]*)\}|\$(\w+(?:[.-]\w+)*)/g;
+
+/** A signal reference as the client reads one: `\w` and `.`/`-` joined parts. */
+const CLIENT_SIGNAL = /\$(\w+(?:[.-]\w+)*)/g;
+
+const signalPath = (name: string) => "$" + name.split(".").map((part) => `['${part}']`).join("");
+
+/**
+ * The text with every `$name.path` written as the client writes it before compiling, so a signal
+ * can be no parameter, declared name or property key, as it cannot be in the browser; what sits in
+ * quotes stays as written, as it does there. Every character of a rewritten reference maps back to
+ * where the reference began.
+ */
+export function clientSignals(text: string): ClientScript {
+  let js = "";
+  const origin: number[] = [];
+  const copy = (from: number, to: number) => {
+    for (let k = from; k < to; k++) {
+      origin.push(k);
+      js += text[k];
+    }
+  };
+  const signals = (from: number, to: number) => {
+    let i = from;
+    for (const m of text.slice(from, to).matchAll(CLIENT_SIGNAL)) {
+      const at = from + (m.index ?? 0);
+      copy(i, at);
+      const written = signalPath(m[1] ?? "");
+      for (let k = 0; k < written.length; k++) origin.push(at);
+      js += written;
+      i = at + m[0].length;
+    }
+    copy(i, to);
+  };
+  let i = 0;
+  for (const m of text.matchAll(CLIENT_REWRITE)) {
+    const at = m.index ?? 0;
+    copy(i, at);
+    if (m[1] !== undefined) {
+      copy(at, at + 2);
+      signals(at + 2, at + 2 + m[1].length);
+      copy(at + 2 + m[1].length, at + m[0].length);
+    } else if (m[2] !== undefined) signals(at, at + m[0].length);
+    else copy(at, at + m[0].length);
+    i = at + m[0].length;
+  }
+  copy(i, text.length);
+  origin.push(text.length);
+  return { js, origin };
+}
+
+/**
+ * The function body Datastar compiles from `text` (engine.ts:385-430 in 1.0.4). The text is
+ * trimmed. With `returnsValue` it is split into statements, the last of them wrapped in
+ * `return (...);` unless it starts with `return`, and the statements joined with `;\n`; the
+ * separators and the wrapping map to where the statement started or ended.
+ */
+export function clientScript(text: string, returnsValue: boolean): ClientScript {
+  let js = "";
+  const origin: number[] = [];
+  const append = (piece: string, from: number) => {
+    for (let k = 0; k < piece.length; k++) origin.push(from + k);
+    js += piece;
+  };
+  const synthetic = (piece: string, at: number) => {
+    for (let k = 0; k < piece.length; k++) origin.push(at);
+    js += piece;
+  };
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return { js: "", origin: [text.length] };
+  const start = text.indexOf(trimmed);
+  const end = start + trimmed.length;
+  if (!returnsValue) append(trimmed, start);
+  else {
+    const statements = [...trimmed.matchAll(STATEMENT)];
+    statements.forEach((m, i) => {
+      if (i > 0) synthetic(";\n", start + m.index - 1);
+      const last = m[0].trim();
+      if (i === statements.length - 1 && !last.startsWith("return")) {
+        const lastStart = start + m.index + m[0].indexOf(last);
+        synthetic("return (", lastStart);
+        append(last, lastStart);
+        synthetic(");", lastStart + last.length);
+      } else append(m[0], start + m.index);
+    });
+  }
+  origin.push(end);
+  return { js, origin };
+}
+
+/**
+ * The issues of `text`. With `returnsValue` known, the syntax is judged on the script Datastar
+ * compiles, see `clientScript`; without it, on the text as a script, with an object literal
+ * allowed to open it. A `$my-value` named in `hyphenatedSignals` is a declared signal, not a
+ * kebab-case slip.
+ */
+const NO_SIGNALS: ReadonlySet<string> = new Set();
+
+export function validateExpression(text: string, returnsValue?: boolean, hyphenatedSignals: ReadonlySet<string> = NO_SIGNALS): Issue[] {
   const issues: Issue[] = [];
   if (text.trim().length === 0) {
     return [{ start: 0, end: Math.max(text.length, 1), message: "Empty Datastar expression.", severity: "warning", code: "empty-expression" }];
   }
-  // `$foo.0.name` is the path foo, 0, name: Datastar rewrites it to bracket form before the browser
-  // parses it. To a JavaScript parser `.0` is an error, so the digit is read as a letter, at the same width.
-  const js = text.replace(/@/g, "_").replace(/\$\w+(?:\.\w+)+/g, (path) => path.replace(/\.\d/g, "._"));
+  // An action is legal JavaScript once its @ is a letter; a signal is written as the client writes it.
+  const signals = clientSignals(text.replace(/@/g, "_"));
+  const script = returnsValue === undefined ? null : clientScript(signals.js, returnsValue);
+  const js = script ? script.js : signals.js;
+  const at = (c: ClientScript, offset: number) => c.origin[Math.min(Math.max(offset, 0), c.origin.length - 1)] ?? 0;
+  const toExpression = (offset: number) => at(signals, script ? at(script, offset) : offset);
   try {
     parseScript(js);
   } catch (e) {
-    // An expression that opens with `{` is an object literal to Datastar, which wraps the last
-    // statement in `return (...)` for the attributes that take a value; to a script parser it is a
-    // block. When the script parse fails, the text is tried once more inside parentheses.
-    if (!objectLiteralParses(js)) {
+    if (script || !objectLiteralParses(js)) {
       const err = e as { pos?: number; raisedAt?: number; message?: string };
-      const pos = Math.min(err.pos ?? 0, text.length);
-      const end = Math.max(pos + 1, Math.min(err.raisedAt ?? pos + 1, text.length));
+      const pos = Math.min(toExpression(err.pos ?? 0), text.length);
+      const end = Math.max(pos + 1, Math.min(toExpression(err.raisedAt ?? pos + 1), text.length));
       const msg = (err.message ?? "Syntax error").replace(/\s*\(\d+:\d+\)$/, "");
       issues.push({ start: pos, end, message: `Datastar expression: ${msg}`, severity: "error", code: "expression-syntax", link: DOCS.expressions });
     }
@@ -170,6 +291,9 @@ export function validateExpression(text: string): Issue[] {
   while ((k = HYPHENATED_SIGNAL.exec(text)) !== null) {
     const written = k[0];
     if (code[k.index] === 0) continue;
+    // data-signals:my-value__case.kebab declares $my-value as written, and the expression reaches it.
+    const named = written.slice(1);
+    if ([...hyphenatedSignals].some((h) => named === h || named.startsWith(`${h}.`))) continue;
     const head = written.slice(0, written.indexOf("-"));
     const rest = written.slice(written.indexOf("-") + 1);
     // `-1`, `-2px`: nobody names a signal that; the author subtracts. `-bar`: a kebab-case key, or a subtraction of a variable.

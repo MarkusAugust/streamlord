@@ -16,8 +16,9 @@ strings alongside the Streamlord SDK.
 function that returns HTML, a `val` holding a fragment), and in `.html` and template files:
 
 - Kotlin interpolation of signals: `"$count++"` becomes `"++"` at runtime. Flagged as an error
-  with the fix spelled out. In HTML strings, `$name` inside a `data-*` expression is the same
-  error; `$name` in text is a hint, since there it is usually meant.
+  with the fix spelled out. In HTML strings, `$name` inside a `data-*` expression is a warning,
+  since a server value is often meant there; `$name` in text, or inside a JavaScript string such
+  as `@post('/x/$id')`, is a hint, since there it is what you want.
 - Datastar expression syntax, checked with a real JavaScript parser, with the error at the
   right column.
 - Unknown actions (`@Post`), Pro actions and Pro attributes (hint: they need the Pro bundle).

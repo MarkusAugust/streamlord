@@ -33,6 +33,12 @@ export interface AttributeSpec {
    * value; `exclusive` wants the signal as a key or as a value, exactly one of the two.
    */
   requires?: "value" | "exclusive";
+  /**
+   * Whether Datastar reads the expression's value: it then splits the text into statements on `;`
+   * and wraps the last one in `return (...)` before compiling. The others are compiled as written,
+   * as the body of an event handler.
+   */
+  returnsValue: boolean;
 }
 
 export interface ActionSpec {
@@ -110,6 +116,7 @@ function build(): Catalog {
     onlyOn: a.onlyOn as string[] | undefined,
     doc: a.doc as string,
     requires: a.requires as AttributeSpec["requires"],
+    returnsValue: (a.returnsValue as boolean | undefined) ?? false,
   }));
   const actions: ActionSpec[] = (raw.actions as unknown as Record<string, unknown>[]).map((a) => ({
     name: a.name as string,

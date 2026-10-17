@@ -1,4 +1,4 @@
-import { ALL_SITE_NAMES, lexCached, markupString } from "./analyze.ts";
+import { ALL_SITE_NAMES, ATTRIBUTES_INDEX, attributesIndexValue, lexCached, markupString } from "./analyze.ts";
 import { catalog, distance, parseAttributeName } from "./catalog.ts";
 import { DOCS, jsCodeMask, type Issue } from "./expression.ts";
 import { PLACEHOLDER, toSource, type KotlinString } from "./kotlinStrings.ts";
@@ -80,6 +80,13 @@ export function signalReferencesInKotlin(src: string, prefix: string): SignalRef
       const s = markupString(site, html);
       if (s && !s.unterminated) add(s, signalReferencesInHtml(s.text, prefix));
     }
+  }
+  for (const m of src.matchAll(ATTRIBUTES_INDEX)) {
+    if (lex.mask[m.index ?? 0] === 0) continue;
+    const s = attributesIndexValue(src, m, lex.strings);
+    if (!s) continue;
+    claimed.add(s.start);
+    if (parseAttributeName(asciiLowercase(m[1] ?? ""), prefix)?.spec?.valueKind === "expression") add(s, expressionSignalReferences(s.text));
   }
   for (const s of lex.strings) {
     if (claimed.has(s.start) || s.unterminated || !isHtmlString(src, s)) continue;

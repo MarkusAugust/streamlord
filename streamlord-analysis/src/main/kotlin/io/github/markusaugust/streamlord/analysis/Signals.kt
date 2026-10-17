@@ -7,12 +7,13 @@ package io.github.markusaugust.streamlord.analysis
 
 public enum class SourceLanguage { KOTLIN, HTML }
 
+// A kebab-case name is written as a kebab-case key, which Datastar reads as camelCase: signal("foo-bar") is $fooBar.
 private val KOTLIN_PATTERNS =
     listOf(
         Regex(
-            """\b(?:signal|set|setExpr|increment|decrement|toggle|not|dataBind|dataIndicator|dataRef|dataComputed|dataMatchMedia)\(\s*"([A-Za-z_][A-Za-z0-9_.]*)"""",
+            """\b(?:signal|set|setExpr|increment|decrement|toggle|not|dataBind|dataIndicator|dataRef|dataComputed|dataMatchMedia)\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"""",
         ),
-        Regex("""\bdataSignals\(\s*"([A-Za-z_][A-Za-z0-9_.]*)"\s*,"""),
+        Regex("""\bdataSignals\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"\s*,"""),
     )
 
 /** A dollar escaped in a Kotlin string: a signal read, which completion offers and a definition is not. */
@@ -28,7 +29,8 @@ private val VALUE_ATTRIBUTE = Regex("""data-(?:star-)?(?:bind|indicator|ref)(?:_
 
 // The object form may sit in either kind of quote, and its keys may be bare or quoted: JSON written
 // by hand is `data-signals='{"query": ""}'`. Inside a Kotlin string the key's quotes are escaped.
-private val OBJECT_ATTRIBUTE = Regex("""data-(?:star-)?signals(?:__[^=\s]*)?=(?:"\{([^"]*)\}"|'\{([^']*)\}')""")
+// data-computed="{total: () => ...}" declares its keys the same way.
+private val OBJECT_ATTRIBUTE = Regex("""data-(?:star-)?(?:signals|computed)(?:__[^=\s]*)?=(?:"\{([^"]*)\}"|'\{([^']*)\}')""")
 private val OBJECT_KEY = Regex("""(?:^|[{,])\s*(?:\\?["'])?([A-Za-z_][A-Za-z0-9_]*)(?:\\?["'])?\s*:""")
 
 /** `$name = ...` in an expression: Datastar creates a signal it is assigned to, so the assignment defines it. */
@@ -43,7 +45,7 @@ private val JSON_OBJECT = Regex("""^\s*\{""")
 private val CASE_MODIFIER = Regex("""__case\.([a-z]+)""")
 
 private val PAIR = Regex(""""([A-Za-z_][A-Za-z0-9_.-]*)"\s+to\b""")
-private val NAME = Regex("""^"([A-Za-z_][A-Za-z0-9_.]*)"$""")
+private val NAME = Regex("""^"([A-Za-z_][A-Za-z0-9_.-]*)"$""")
 
 public fun collectSignals(
     src: String,
@@ -108,15 +110,13 @@ private fun collect(
                     }
                 }
                 val name = NAME.find(a.text)?.groupValues?.get(1) ?: return@forEachIndexed
-                // removeSignals("a", "b") and dataSignals("name", "expression") take names positionally.
-                if (site.name == "removeSignals" ||
-                    (site.name == "dataSignals" && idx == 0 && positional.getOrNull(1)?.string != null)
-                ) {
-                    out += name
-                }
+                // removeSignals("a", "b") names keys as they are; dataSignals("name", "expression") writes a key Datastar camel-cases.
+                if (site.name == "removeSignals") out += name
+                if (site.name == "dataSignals" && idx == 0 && positional.getOrNull(1)?.string != null) out += toCamel(name)
             }
         }
-        for (re in if (reads) KOTLIN_PATTERNS + KOTLIN_READS else KOTLIN_PATTERNS) for (m in re.findAll(src)) out += m.groupValues[1]
+        for (re in KOTLIN_PATTERNS) for (m in re.findAll(src)) out += toCamel(m.groupValues[1])
+        if (reads) for (re in KOTLIN_READS) for (m in re.findAll(src)) out += m.groupValues[1]
     }
     // A keyed attribute may carry modifiers after the key: data-signals:foo-bar__ifmissing, and
     // `__case` names the signal: data-signals:my-value__case.snake is `$my_value`.

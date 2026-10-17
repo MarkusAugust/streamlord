@@ -154,13 +154,101 @@ export function decodeDatastar(msg: SseMessage): DatastarFrame {
   return { event: msg.event, id: msg.id, retry: msg.retry, args, raw, receivedAt: Date.now() };
 }
 
-/** RFC 7386 JSON merge patch, as the Datastar client applies signal patches. */
-export function mergePatch(target: unknown, patch: unknown): unknown {
-  if (patch === null || typeof patch !== "object" || Array.isArray(patch)) return patch;
-  const result: Record<string, unknown> = target !== null && typeof target === "object" && !Array.isArray(target) ? { ...(target as Record<string, unknown>) } : {};
-  for (const [k, v] of Object.entries(patch as Record<string, unknown>)) {
-    if (v === null) delete result[k];
-    else result[k] = mergePatch(result[k], v);
-  }
-  return result;
+/**
+ * The store as the Datastar 1.0.4 client reads it after a signal patch: `mergePatch` and
+ * `mergeInner` in the client's `signals.ts`, which differ from RFC 7386 in four ways. `onlyIfMissing`
+ * is honoured leaf by leaf, so a nested object is still walked and only the values already there
+ * are kept. An object patched onto an array keeps the array and sets its indices: an index past the
+ * end extends it, a key that is not an index is dropped. The client walks whatever the patch is
+ * with `for ... in`, so an array at the top level sets the keys `0`, `1`, ..., a string sets one key
+ * per character, and a number, a boolean or `null` patches nothing. And the store never hands back
+ * `null`: a `null` inside a stored array, and the hole a deleted index leaves, read as `""` and are
+ * not missing to the next `onlyIfMissing`. The same rules as `mergePatchAsClient` in streamlord-core.
+ *
+ * A key `length` on an array resizes it, as the client's store does: shorter drops the tail, longer
+ * adds `""`; one that is not a whole number of zero or more throws, as the browser's `RangeError`
+ * does. This is the store as it reads once a binding has touched it: the client fills a hole with
+ * `""` on the first read, so a hole is missing to `onlyIfMissing` only until then.
+ *
+ * Objects are made without a prototype, so `constructor` is a signal name and nothing else. More
+ * than `holeLimit` indices past the end of an array throws, rather than fill memory with the holes
+ * the client never allocates, and so does a key named `__proto__`, which the client takes for the
+ * prototype and fails on or does nothing with.
+ */
+export function mergePatchAsClient(store: Record<string, unknown>, patch: unknown, ifMissing = false, holeLimit = 10_000): Record<string, unknown> {
+  if (isPojo(patch)) return foldObject(store, patch, ifMissing, holeLimit);
+  if (Array.isArray(patch)) return foldObject(store, Object.fromEntries(patch.map((v, i) => [String(i), v])), ifMissing, holeLimit);
+  if (typeof patch === "string") return foldObject(store, Object.fromEntries([...patch].map((c, i) => [String(i), c])), ifMissing, holeLimit);
+  return store;
 }
+
+function isPojo(v: unknown): v is Record<string, unknown> {
+  return v !== null && typeof v === "object" && !Array.isArray(v);
+}
+
+function emptyObject(): Record<string, unknown> {
+  return Object.create(null) as Record<string, unknown>;
+}
+
+function foldObject(target: Record<string, unknown>, patch: Record<string, unknown>, ifMissing: boolean, holeLimit: number): Record<string, unknown> {
+  const out = emptyObject();
+  for (const [k, v] of Object.entries(target)) out[k] = v;
+  for (const [key, value] of Object.entries(patch)) {
+    if (key === "__proto__") throw new Error("The client cannot hold a signal named __proto__");
+    const existing = out[key];
+    if (value === null) {
+      if (!ifMissing) delete out[key];
+    } else if (isPojo(value) && Array.isArray(existing)) {
+      out[key] = foldIntoArray(existing, value, ifMissing, holeLimit);
+    } else if (isPojo(value)) {
+      out[key] = foldObject(isPojo(existing) ? existing : emptyObject(), value, ifMissing, holeLimit);
+    } else if (!(ifMissing && key in out)) {
+      out[key] = asRead(value);
+    }
+  }
+  return out;
+}
+
+function foldIntoArray(target: unknown[], patch: Record<string, unknown>, ifMissing: boolean, holeLimit: number): unknown[] {
+  const items = [...target];
+  const put = (index: number, value: unknown) => {
+    while (items.length <= index) items.push("");
+    items[index] = value;
+  };
+  for (const [key, value] of Object.entries(patch)) {
+    if (key === "length") {
+      if (ifMissing) continue;
+      const length = typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : -1;
+      if (length < 0 || length > items.length + holeLimit) throw new Error(`Invalid array length ${JSON.stringify(value)} in a signal patch`);
+      const before = items.length;
+      items.length = length;
+      if (length > before) items.fill("", before);
+      continue;
+    }
+    const index = Number(key);
+    if (!(Number.isInteger(index) && index >= 0 && index < 4294967295 && String(index) === key)) continue;
+    if (index > items.length + holeLimit) throw new Error(`Signal patch index ${index} is more than ${holeLimit} past the end of an array of ${items.length}`);
+    if (value === null) {
+      if (!ifMissing && index < items.length) items[index] = "";
+    } else if (isPojo(value)) {
+      const existing = items[index];
+      put(index, Array.isArray(existing) ? foldIntoArray(existing, value, ifMissing, holeLimit) : foldObject(isPojo(existing) ? existing : emptyObject(), value, ifMissing, holeLimit));
+    } else if (!(ifMissing && index < items.length)) {
+      put(index, asRead(value));
+    }
+  }
+  return items;
+}
+
+/** A value as the client's store reads it back: every `null` inside it is `""`. */
+function asRead(value: unknown): unknown {
+  if (value === null) return "";
+  if (Array.isArray(value)) return value.map(asRead);
+  if (typeof value === "object") {
+    const out = emptyObject();
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) out[k] = asRead(v);
+    return out;
+  }
+  return value;
+}
+

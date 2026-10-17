@@ -20,6 +20,12 @@ private val ASSIGN_BEFORE = Regex("""\s*=\s*$""")
 private val BRACED_TEMPLATE = Regex("""\$\{""")
 private val TRIM_AFTER = Regex("""\s*\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)""")
 
+/** kotlinx.html's own way to write any attribute: `attributes["data-on:click"] = "..."`. */
+private val ATTRIBUTES_INDEX = Regex("""\battributes\s*\[\s*"(data-[^"\\]*)"\s*]\s*=\s*""")
+
+/** What may follow the value of an assignment: the end of the statement, nothing more of an expression. */
+private val STATEMENT_END = Regex("""[ \t]*(?:[;}\n\r]|$)""")
+
 /** The DSL helper that says the same as a whole-string expression, when there is one. */
 private val HELPERS: List<Pair<Regex, (String) -> String>> =
     listOf(
@@ -84,22 +90,108 @@ public class Analyzer(
         val out = ArrayList<SiteIssues>()
         val claimed = HashSet<Int>()
         val lex = lex(src)
+        val hyphenated = hyphenatedSignals(src, SourceLanguage.KOTLIN)
         for (site in findCallSites(src, allSiteNames, lex)) {
             val issues = ArrayList<Issue>()
-            catalog.expressionCallSites[site.name]?.let { issues += checkExpressionSite(site, it, src) }
-            catalog.htmlCallSites[site.name]?.let { issues += checkHtmlSite(site, it, opts, src) }
+            catalog.expressionCallSites[site.name]?.let { issues += checkExpressionSite(site, it, src, hyphenated) }
+            catalog.htmlCallSites[site.name]?.let { issues += checkHtmlSite(site, it, opts, src, hyphenated) }
             catalog.scriptCallSites[site.name]?.let { issues += checkScriptSite(site, it) }
             catalog.selectorCallSites[site.name]?.let { issues += checkSelectorSite(site, it) }
             issues += checkKeyCaseSite(site, src)
             for (a in site.args) a.string?.let { claimed += it.start }
             if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
         }
+        for (m in ATTRIBUTES_INDEX.findAll(src)) {
+            if (!lex.mask[m.range.first]) continue
+            val value = attributesIndexValue(src, m, lex)
+            value?.let { claimed += it.start }
+            val issues = checkAttributesIndex(m, value, opts, src, hyphenated)
+            if (issues.isNotEmpty()) out += SiteIssues(null, value, issues)
+        }
         for (s in lex.strings) {
             if (s.start in claimed || s.unterminated || !isHtmlString(src, s)) continue
-            val issues = checkFreeHtmlString(s, opts, src)
+            val issues = checkFreeHtmlString(s, opts, src, hyphenated)
             if (issues.isNotEmpty()) out += SiteIssues(null, s, issues)
         }
         return out
+    }
+
+    /** The string literal assigned in an `attributes["..."] =` match, when it is the whole value: not the first half of a concatenation. */
+    private fun attributesIndexValue(
+        src: String,
+        m: MatchResult,
+        lex: KotlinLex,
+    ): KotlinString? {
+        val s = lex.stringAt(m.range.last + 2)?.takeIf { it.start == m.range.last + 1 && !it.unterminated } ?: return null
+        return s.takeIf { STATEMENT_END.matchesAt(src, it.end) }
+    }
+
+    /** The kebab-case signals [src] declares as written, with `__case.kebab`, so `$my-value` is not a slip there. */
+    private fun hyphenatedSignals(
+        src: String,
+        language: SourceLanguage,
+    ): Set<String> = if ("__case.kebab" in src) collectSignalDefinitions(src, language).filterTo(HashSet()) { '-' in it } else emptySet()
+
+    /**
+     * `attributes["data-on:click"] = "$count++"` judged as the attribute it writes: the name as in
+     * markup, the value as the expression a DSL call takes, with Kotlin's interpolation trap. A
+     * value that is not a literal is taken for a template, so only the name is judged.
+     */
+    private fun checkAttributesIndex(
+        m: MatchResult,
+        value: KotlinString?,
+        opts: AnalyzeOptions,
+        src: String,
+        hyphenated: Set<String>,
+    ): List<Issue> {
+        if (!opts.checkHtmlAttributes) return emptyList()
+        val name = m.groupValues[1]
+        val nameStart = m.range.first + m.value.indexOf('"') + 1
+        // The attribute in a space of its own, `name="value"`: the name at 0, the value after the `="`.
+        val valueStart = name.length + 2
+        val text = value?.text ?: PLACEHOLDER
+        val tag = Tag("div", 0, valueStart + text.length + 1, false, false, listOf(Attribute(name, 0, text, valueStart, true)))
+        val issues = ArrayList<Issue>()
+        val kind = catalog.parseAttributeName(name.asciiLowercase(), opts.prefix)?.spec?.valueKind
+        if (value != null &&
+            (kind == ValueKind.EXPRESSION || kind == ValueKind.SIGNAL)
+        ) {
+            issues += inStringLiterals(value, interpolationIssues(value, src))
+        }
+        // With a template in the value the interpolation issue speaks for it, as at a DSL call.
+        val judgeValue = value != null && !(PLACEHOLDER in value.text && value.interpolations.any { it.kind == InterpolationKind.SIMPLE })
+
+        // A range in the value maps through the literal as a whole, so an error at its end keeps a width.
+        fun range(
+            start: Int,
+            end: Int,
+        ): IntRange =
+            if (end <=
+                name.length
+            ) {
+                nameStart + start until nameStart + end
+            } else {
+                value!!.toSource(start - valueStart, end - valueStart)
+            }
+        for (i in markup.validateAttributes(tag, opts.prefix, null, hyphenated)) {
+            val inName = i.end <= name.length
+            if (!inName && !judgeValue) continue
+            val r = range(i.start, i.end)
+            val fixes =
+                i.fixes.filter { (it.end <= name.length) == inName }.map { f ->
+                    if (inName) {
+                        f.copy(start = nameStart + f.start, end = nameStart + f.end)
+                    } else {
+                        // In the literal's own coordinates, so a `\$` the source wrote is written back.
+                        val inValue = f.copy(start = f.start - valueStart, end = f.end - valueStart)
+                        val at = value!!.toSource(inValue.start, maxOf(inValue.end, inValue.start + 1))
+                        val fixEnd = if (f.start == f.end) at.first else at.last + 1
+                        f.copy(start = at.first, end = fixEnd, text = keepDollarEscape(value, src, inValue))
+                    }
+                }
+            issues += i.copy(start = r.first, end = r.last + 1, fixes = fixes)
+        }
+        return issues
     }
 
     /**
@@ -134,11 +226,17 @@ public class Analyzer(
     public fun analyzeHtml(
         src: String,
         opts: AnalyzeOptions = AnalyzeOptions(),
+    ): List<Issue> = analyzeHtml(src, opts, hyphenatedSignals(src, SourceLanguage.HTML))
+
+    private fun analyzeHtml(
+        src: String,
+        opts: AnalyzeOptions,
+        hyphenated: Set<String>,
     ): List<Issue> {
         val issues = ArrayList<Issue>()
         for (tag in tokenize(src).tags) {
             if (tag.closing) continue
-            issues += markup.validateAttributes(tag, opts.prefix, src.substring(tag.start, tag.end))
+            issues += markup.validateAttributes(tag, opts.prefix, src.substring(tag.start, tag.end), hyphenated)
         }
         return issues
     }
@@ -179,6 +277,14 @@ public class Analyzer(
                 add(s, markupSignalReferences(s.text, catalog, opts.prefix), site)
             }
         }
+        for (m in ATTRIBUTES_INDEX.findAll(src)) {
+            if (!lex.mask[m.range.first]) continue
+            val s = attributesIndexValue(src, m, lex) ?: continue
+            claimed += s.start
+            if (catalog.parseAttributeName(m.groupValues[1].asciiLowercase(), opts.prefix)?.spec?.valueKind == ValueKind.EXPRESSION) {
+                add(s, expressionSignalReferences(s.text), null)
+            }
+        }
         for (s in lex.strings) {
             if (s.start in claimed || s.unterminated || !isHtmlString(src, s)) continue
             add(s, markupSignalReferences(s.text, catalog, opts.prefix), null)
@@ -209,9 +315,10 @@ public class Analyzer(
         s: KotlinString,
         opts: AnalyzeOptions,
         src: String,
+        hyphenated: Set<String>,
     ): List<Issue> {
         val issues = ArrayList(interpolationHints(s, src, opts.prefix))
-        if (opts.checkHtmlAttributes) issues += mapIssues(s, src, analyzeHtml(s.text, opts))
+        if (opts.checkHtmlAttributes) issues += mapIssues(s, src, analyzeHtml(s.text, opts, hyphenated))
         return issues
     }
 
@@ -295,7 +402,7 @@ public class Analyzer(
         return issues
     }
 
-    private enum class Where { WHOLE, PART }
+    private enum class Where { WHOLE, PART, STRING }
 
     /**
      * In HTML a Kotlin template is usually meant (`<li>$name</li>`), so interpolation is a hint,
@@ -317,6 +424,8 @@ public class Analyzer(
                     if (decoded < a.valueStart || decoded >= a.valueStart + v.length) continue
                     val parsed = catalog.parseAttributeName(a.name.asciiLowercase(), prefix)
                     if (parsed?.spec?.valueKind != ValueKind.EXPRESSION) return null
+                    // @post('/x/$id'): inside quotes a $ is never a signal, so the Kotlin value is what is meant.
+                    if (quoteAt(v, decoded - a.valueStart) != null) return Where.STRING
                     // data-signals:count="$initial" seeds a signal from the server, like the object form does.
                     if (parsed.spec.name == "signals") return Where.PART
                     return if (v.trim() == PLACEHOLDER) Where.WHOLE else Where.PART
@@ -349,6 +458,14 @@ public class Analyzer(
                         message =
                             "Kotlin interpolates \$$name inside a Datastar expression. Meant as a server value, that is fine; " +
                                 "meant as the signal \$$name, make the literal \$\$\"\"\"...\"\"\" (Kotlin 2.2+) or escape as \${'$'}$name.",
+                    )
+                }
+
+                Where.STRING -> {
+                    i.copy(
+                        severity = Severity.HINT,
+                        fixes = emptyList(),
+                        message = stringLiteralMessage(name),
                     )
                 }
 
@@ -401,22 +518,47 @@ public class Analyzer(
         site: CallSite,
         spec: CallSiteSpec,
         src: String,
+        hyphenated: Set<String>,
     ): List<Issue> {
         if (spec.onlyIfStringArgs && site.args.any { it.named == null && it.string == null }) return emptyList()
         val s = site.selectString(spec) ?: return emptyList()
         if (s.unterminated) return emptyList()
-        val issues = ArrayList(interpolationIssues(s, src))
+        val issues = ArrayList(inStringLiterals(s, interpolationIssues(s, src)))
         val text = s.text
         if (PLACEHOLDER in text && s.interpolations.any { it.kind == InterpolationKind.SIMPLE }) return issues
-        issues += mapIssues(s, src, expressions.validate(text))
+        issues += mapIssues(s, src, expressions.validate(text, catalog.attributesByKotlin[site.name]?.returnsValue, hyphenated))
         return issues
     }
+
+    /**
+     * A template inside a JavaScript string literal of the expression, `@post('/x/$id')`, is no
+     * trap: Datastar leaves a `$` inside quotes alone (engine.ts:448 in 1.0.4), so a signal was
+     * never possible there, and the Kotlin value is what the author wants. Said as a hint, since
+     * the literal could also have meant the text `$id`.
+     */
+    private fun stringLiteralMessage(name: String): String =
+        "Kotlin interpolates \$$name into this JavaScript string; the browser gets its value as text. A \$ inside quotes is never a signal."
+
+    private fun inStringLiterals(
+        s: KotlinString,
+        issues: List<Issue>,
+    ): List<Issue> =
+        issues.map { i ->
+            val ip = s.interpolations.firstOrNull { it.start == i.start } ?: return@map i
+            if (quoteAt(s.text, ip.decodedStart) == null) return@map i
+            i.copy(
+                severity = Severity.HINT,
+                fixes = emptyList(),
+                message = stringLiteralMessage(ip.text),
+            )
+        }
 
     private fun checkHtmlSite(
         site: CallSite,
         spec: CallSiteSpec,
         opts: AnalyzeOptions,
         src: String,
+        hyphenated: Set<String>,
     ): List<Issue> {
         val s = markupString(site, spec)
         if (s == null && !site.trailingLambda) return emptyList()
@@ -457,7 +599,12 @@ public class Analyzer(
         // A mode that cannot be read here (a variable) may be one that needs no ids.
         val requireIds = selector == null && (modeArg == null || mode == "outer")
         if (s != null) {
-            issues += mapIssues(s, src, markup.validateMarkup(s.text, MarkupOptions(requireIds, opts.prefix, opts.checkHtmlAttributes)))
+            issues +=
+                mapIssues(
+                    s,
+                    src,
+                    markup.validateMarkup(s.text, MarkupOptions(requireIds, opts.prefix, opts.checkHtmlAttributes, hyphenated)),
+                )
         }
         return issues
     }

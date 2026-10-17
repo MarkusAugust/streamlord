@@ -34,6 +34,16 @@ All notable changes to Streamlord are recorded here. The format follows
 
 - `Casing.signalName`, the check a name that declares a signal passes: what `Casing.validate`
   admits, and only ASCII letters, digits and `_` in parts joined by `.` or `-`.
+- `mergePatchAsClient` in `streamlord-core`: the signal store as Datastar's client reads it after
+  a patch, which RFC 7386 is not: `onlyIfMissing` leaf by leaf, an object onto an array by index,
+  an array or a string at the top level as keys, a `length` key resizing an array, and a `null`
+  inside a stored array read as `""`.
+  `DatastarEvents.signals` and both Stream Inspectors fold with it. Each rule was measured against
+  the client.
+- In `streamlord-analysis`, for both editors: `Requests.requestHeaders`, the headers the client
+  sends with the user's replacing its own; `Requests.requestsPathProblem`, what is wrong with a
+  configured requests-file path; `RequestsFile.error`, why a requests file could not be read; and
+  `AttributeSpec.returnsValue`, from the catalog, for the attributes whose value Datastar reads.
 
 ### Changed
 
@@ -129,6 +139,48 @@ All notable changes to Streamlord are recorded here. The format follows
   `jackson-module-kotlin` on the mapper, and decoding one without it throws
   `SignalsCodecException`, also a class Jackson could build without the module, such as one with
   `var` properties.
+
+- The editors judge an expression as Datastar compiles it. Every `$name.path` outside quotes is
+  written as `$['name']['path']` first, so a signal as a parameter, `$items.map($i => $i.name)`, a
+  declared name or a property key is the syntax error it is in the browser. The value of
+  `data-text`, `data-show`, `data-class`, `data-style`, `data-attr`, `data-signals`,
+  `data-computed` and `data-on-signal-patch` is then split into statements on `;` outside quotes
+  and regex literals, and the last is wrapped in `return (...)`, so a `;` inside a block or a `//`
+  comment at the end is an error too; the others are the body of a function that is not async, so
+  `await` at the top level is an error. `&dollar;`, the other named references for ASCII
+  punctuation, `&amp` without its semicolon and `&#36` without its semicolon are read as the
+  browser reads them.
+- The editors flag the pre-1.0 syntax, `data-on-click`, `data-on-load`, `data-bind-value`, which
+  1.0 ignores, with the 1.0 form as the fix, and `data-on:click.prevent`, which listens to an
+  event named `click.prevent`. A capital in `data-attr:viewBox` is fixed to the object form, which
+  keeps the name, where the fix wrote `view-box`; for `data-style:--brandColor` no form keeps it,
+  and the message says so.
+- The editors read `$id` inside a JavaScript string of an expression, `@post('/x/$id')`, as the
+  server value it is, a hint rather than an error with fixes that broke the URL; a `$my-value`
+  the page declares with `__case.kebab` is no longer a kebab-case warning; the object form of
+  `data-computed` declares its keys; and `dataSignals("foo-bar", "1")`, `dataBind("foo-bar")` and
+  the other name-taking helpers declare `$fooBar`, as they write it. `attributes["data-on:click"]
+  = "..."`, kotlinx.html's own form, is judged as the attribute it writes, interpolation trap
+  included.
+- Both Stream Inspectors keep the signal store as the client keeps it, see `mergePatchAsClient`,
+  and read `onlyIfMissing` with its spaces trimmed, as the client does. The user's headers replace
+  the client's own, `Content-Type` included, where IntelliJ added a second one and VS Code
+  overrode the user's. Copy as curl writes the body with `--data-raw`, since with `--data` curl
+  read signals that start with `@` from the file they name. Signals written as an object in
+  `inspector.json` are sent as written, where VS Code rounded a number past 2^53 and the two
+  editors spelled them differently.
+- Both Stream Inspectors refuse to save over a requests file that is not JSON and say why, where
+  a save wrote an empty list over it; a byte order mark in `inspector.json` or `env.json` no
+  longer hides what they hold, in either editor; and a requests-file path that leaves the
+  workspace, which a checked-in setting may carry, falls back to the default and a save says so.
+- The IntelliJ inspections take the severity set for them in the profile; by default each issue
+  keeps the one the analysis gives it, since a family mixes a syntax error with a hint. The
+  inspector shows event names, content types and saved names as text, where Swing rendered one
+  that started with `<html>`, images and all. The `data-init="@get(...)"` live template is named
+  `data-init-get`, so it no longer hides behind the generated `data-init`.
+- In VS Code, "Open Stream Inspector with route" is gone from the command palette, where it threw
+  without a route; "Apply recommended colors" reads the user settings alone, so a workspace's
+  token rules are no longer copied into them.
 
 ### Fixed
 

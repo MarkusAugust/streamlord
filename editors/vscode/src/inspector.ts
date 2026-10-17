@@ -3,7 +3,7 @@ import { baseUrlSuggestion, compactSignals, describeVariables, emptyBodyHint, EN
 import type { RequestStore } from "./requestStore.ts";
 import type { RunningServers } from "./serverLog.ts";
 import type { Route } from "./routes.ts";
-import { mergePatch, type DatastarFrame } from "./sse.ts";
+import { mergePatchAsClient, type DatastarFrame } from "./sse.ts";
 import { openStream } from "./streamClient.ts";
 
 /**
@@ -18,7 +18,7 @@ const LOG_GRACE_MS = 400;
 export class Inspector {
   private panel: vscode.WebviewPanel | null = null;
   private abort: AbortController | null = null;
-  private signals: unknown = {};
+  private signals: Record<string, unknown> = {};
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -50,7 +50,9 @@ export class Inspector {
    * value comes from `params` in the env file; one that is not there yet is reported with a link
    * that adds it, so nothing is asked for in a dialog and nothing is forgotten between runs.
    */
-  openWithRoute(route: Route): void {
+  openWithRoute(route?: Route): void {
+    // The command palette can run the command without a route; it then opens the inspector as it was.
+    if (!route) return this.open();
     this.open({ name: "", method: route.method, url: routeUrl(route), signals: "", headers: routeHeaders(route) });
   }
 
@@ -123,7 +125,12 @@ export class Inspector {
       }
       case "delete": {
         const ok = await vscode.window.showWarningMessage(`Delete saved request “${msg.name}”?`, { modal: true }, "Delete");
-        if (ok === "Delete") await this.store.delete(msg.name);
+        if (ok !== "Delete") return;
+        try {
+          await this.store.delete(msg.name);
+        } catch (e) {
+          this.post({ type: "error", message: (e as Error).message });
+        }
         return;
       }
       case "curl": {
@@ -214,20 +221,21 @@ export class Inspector {
     );
   }
 
+  /** The store as the client would hold it after this frame, see `mergePatchAsClient`; `onlyIfMissing` is read as the client reads it (patchSignals.ts:16, text.ts:24 in 1.0.4). */
   private applyFrame(frame: DatastarFrame): void {
     if (frame.event !== "datastar-patch-signals" || !frame.args.signals) return;
+    let patch: unknown;
     try {
-      const patch = JSON.parse(frame.args.signals);
-      if (frame.args.onlyIfMissing === "true") {
-        const existing = this.signals as Record<string, unknown>;
-        const filtered = Object.fromEntries(Object.entries(patch as Record<string, unknown>).filter(([k]) => !(k in existing)));
-        this.signals = mergePatch(this.signals, filtered);
-      } else {
-        this.signals = mergePatch(this.signals, patch);
-      }
-      this.post({ type: "signals", signals: this.signals });
+      patch = JSON.parse(frame.args.signals);
     } catch {
       // invalid JSON in the stream is shown raw; the frame itself is still posted
+      return;
+    }
+    try {
+      this.signals = mergePatchAsClient(this.signals, patch, (frame.args.onlyIfMissing ?? "").trim() === "true");
+      this.post({ type: "signals", signals: this.signals });
+    } catch (e) {
+      this.post({ type: "error", message: `The signal store cannot take this patch: ${(e as Error).message}` });
     }
   }
 }
@@ -426,7 +434,7 @@ function html(cspSource: string): string {
       const f = m.frame; const kind = f.event.endsWith('elements') ? 'elements' : f.event.endsWith('signals') ? 'signals' : '';
       const d = document.createElement('div'); d.className = 'frame';
       const rows = Object.entries(f.args).map(([k, v]) => '<dt>' + esc(k) + '</dt><dd><pre>' + esc(v) + '</pre></dd>').join('');
-      d.innerHTML = '<header><span>#' + count + '</span><span class="ev ' + kind + '">' + esc(f.event) + '</span>' + (f.id !== null ? '<span>id ' + esc(f.id) + '</span>' : '') + (f.retry !== null ? '<span>retry ' + f.retry + 'ms</span>' : '') + '<span class="t">' + time(f.receivedAt) + '</span></header><dl>' + rows + '</dl>';
+      d.innerHTML = '<header><span>#' + count + '</span><span class="ev ' + kind + '">' + esc(f.event) + '</span>' + (f.id !== null ? '<span>id ' + esc(f.id) + '</span>' : '') + (f.retry !== null ? '<span>retry ' + esc(f.retry) + 'ms</span>' : '') + '<span class="t">' + time(f.receivedAt) + '</span></header><dl>' + rows + '</dl>';
       frames.prepend(d);
     }
   });

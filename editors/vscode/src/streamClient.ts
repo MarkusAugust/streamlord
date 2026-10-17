@@ -1,4 +1,4 @@
-import { ACCEPT, compactSignals, NON_STREAM_CUT, NON_STREAM_LIMIT, readsAsStream, requestUrl, sendableUrl, unreadBody } from "./requests.ts";
+import { compactSignals, NON_STREAM_CUT, NON_STREAM_LIMIT, readsAsStream, requestHeaders, requestUrl, sendableUrl, unreadBody } from "./requests.ts";
 import { decodeDatastar, SseParser, type DatastarFrame, type SseMessage } from "./sse.ts";
 
 /**
@@ -37,9 +37,9 @@ export function buildRequest(req: StreamRequest): { url: string; init: RequestIn
   }
   const sendable = sendableUrl(requestUrl(req.url, req.method, signalsJson));
   if ("error" in sendable) return sendable;
-  const headers: Record<string, string> = { Accept: ACCEPT, "Datastar-Request": "true", ...(req.headers ?? {}) };
+  // The user's headers come last and replace the client's own, Content-Type included, as they do in the client.
+  const headers = requestHeaders(req.method, req.headers ?? {});
   const bodyless = req.method === "GET" || req.method === "DELETE";
-  if (!bodyless) headers["Content-Type"] = "application/json";
   return { url: sendable.url, init: { method: req.method, headers, body: bodyless ? undefined : signalsJson } };
 }
 

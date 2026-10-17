@@ -206,16 +206,12 @@ class StreamClient(
         headers: Map<String, String>,
     ): HttpRequest {
         val bodyless = method == "GET" || method == "DELETE"
-        val builder =
-            HttpRequest
-                .newBuilder(URI(url))
-                .header("Accept", Requests.ACCEPT)
-                .header("Datastar-Request", "true")
-        for ((k, v) in headers) builder.header(k, v)
+        val builder = HttpRequest.newBuilder(URI(url))
+        // The user's headers replace the client's own, Content-Type included, as they do in the client.
+        for ((k, v) in Requests.requestHeaders(method, headers)) builder.setHeader(k, v)
         if (bodyless) {
             builder.method(method, HttpRequest.BodyPublishers.noBody())
         } else {
-            builder.header("Content-Type", "application/json")
             builder.method(method, HttpRequest.BodyPublishers.ofString(signalsJson))
         }
         return builder.build()

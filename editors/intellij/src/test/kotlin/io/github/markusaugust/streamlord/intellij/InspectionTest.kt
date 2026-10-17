@@ -1,5 +1,9 @@
 package io.github.markusaugust.streamlord.intellij
 
+import com.intellij.codeHighlighting.HighlightDisplayLevel
+import com.intellij.codeInsight.daemon.HighlightDisplayKey
+import com.intellij.lang.annotation.HighlightSeverity
+import com.intellij.profile.codeInspection.InspectionProjectProfileManager
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.inspections.DatastarAttributeInspection
@@ -141,5 +145,24 @@ class InspectionTest : BasePlatformTestCase() {
         assertEquals(emptySet<String>(), unclaimed)
         assertTrue(codes.toString(), codes.size > 15)
         assertTrue(codes.toString(), "indicator-without-action" in codes)
+    }
+
+    fun `test each issue keeps its own severity until the profile sets one for the family`() {
+        myFixture.configureByText("Mixed.kt", "fun f() { dataText(\"\${'\$'}a-b +\") }")
+        val own = myFixture.doHighlighting()
+        assertEquals(HighlightSeverity.ERROR, own.single { it.description?.startsWith("Datastar expression:") == true }.severity)
+        assertEquals(HighlightSeverity.WARNING, own.single { it.description?.contains("no key declares") == true }.severity)
+        val key = HighlightDisplayKey.find("DatastarExpressionInspection")!!
+        val profile = InspectionProjectProfileManager.getInstance(project).currentProfile
+        profile.setErrorLevel(key, HighlightDisplayLevel.WEAK_WARNING, project)
+        try {
+            // A fresh file: the daemon keeps the highlights of an unchanged document.
+            myFixture.configureByText("Mixed2.kt", "fun f() { dataText(\"\${'\$'}a-b +\") }")
+            val set = myFixture.doHighlighting()
+            assertEquals(HighlightSeverity.WEAK_WARNING, set.single { it.description?.startsWith("Datastar expression:") == true }.severity)
+            assertEquals(HighlightSeverity.WEAK_WARNING, set.single { it.description?.contains("no key declares") == true }.severity)
+        } finally {
+            profile.setErrorLevel(key, HighlightDisplayLevel.ERROR, project)
+        }
     }
 }

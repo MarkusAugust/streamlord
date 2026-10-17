@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { ENV_FILE, emptyRequestsFile, mergeVariables, parseEnv, parseRequestsFile, pushRecent, remove, REQUESTS_FILE, serializeRequestsFile, upsert, withBaseUrl, withEnvVariables, type RequestsFile, type SavedRequest, type Variable } from "./requests.ts";
+import { ENV_FILE, emptyRequestsFile, mergeVariables, parseEnv, parseRequestsFile, pushRecent, remove, REQUESTS_FILE, requestsPathProblem, serializeRequestsFile, upsert, withBaseUrl, withEnvVariables, type RequestsFile, type SavedRequest, type Variable } from "./requests.ts";
 import type { RunningServers } from "./serverLog.ts";
 
 /**
@@ -34,19 +34,36 @@ export class RequestStore implements vscode.Disposable {
     return f ? vscode.Uri.joinPath(f.uri, rel) : undefined;
   }
 
-  /** Relative path of the requests file, configurable. */
-  private requestsRel(): string {
+  private configuredRequestsPath(): string {
     return vscode.workspace.getConfiguration("streamlord").get<string>("inspector.requestsFile", REQUESTS_FILE);
   }
 
+  /** Relative path of the requests file, configurable; a path that leaves the workspace falls back to the default, and a save says so. */
+  private requestsRel(): string {
+    const configured = this.configuredRequestsPath();
+    return requestsPathProblem(configured) === null && configured.trim().length > 0 ? configured : REQUESTS_FILE;
+  }
+
+  /** The requests file; a file that is missing is empty, one that is not JSON says so in `error`. */
   async readFile(): Promise<RequestsFile> {
     const uri = this.fileUri(this.requestsRel());
     if (!uri) return emptyRequestsFile();
+    let text: string;
     try {
-      return parseRequestsFile(Buffer.from(await vscode.workspace.fs.readFile(uri)).toString("utf8"));
+      text = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString("utf8");
     } catch {
       return emptyRequestsFile();
     }
+    return parseRequestsFile(text, this.requestsRel());
+  }
+
+  /** The file to write over, or the reason it cannot be: writing an empty list over a file that did not parse would lose what it holds. */
+  private async writable(): Promise<RequestsFile> {
+    const problem = requestsPathProblem(this.configuredRequestsPath());
+    if (problem) throw new Error(`${problem} Nothing was saved.`);
+    const file = await this.readFile();
+    if (file.error) throw new Error(`${file.error} Fix the file before saving, so the requests in it are not lost.`);
+    return file;
   }
 
   private async writeFile(file: RequestsFile): Promise<void> {
@@ -62,11 +79,11 @@ export class RequestStore implements vscode.Disposable {
   }
 
   async save(request: SavedRequest): Promise<void> {
-    await this.writeFile(upsert(await this.readFile(), request));
+    await this.writeFile(upsert(await this.writable(), request));
   }
 
   async delete(name: string): Promise<void> {
-    await this.writeFile(remove(await this.readFile(), name));
+    await this.writeFile(remove(await this.writable(), name));
   }
 
   recent(): SavedRequest[] {

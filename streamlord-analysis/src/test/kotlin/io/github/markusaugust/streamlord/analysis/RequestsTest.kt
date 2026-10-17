@@ -6,6 +6,9 @@ import java.net.URI
 import java.net.http.HttpRequest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /** The cases of the VS Code extension's `requests.test.ts` and the SSE tests. */
 class RequestsTest {
@@ -69,7 +72,7 @@ class RequestsTest {
         )
         assertEquals(
             "curl -N -X POST 'http://h/x' -H 'Accept: text/event-stream, text/html, application/json' " +
-                "-H 'Datastar-Request: true' -H 'Content-Type: application/json' --data '{\"s\":\"it'\\''s\"}'",
+                "-H 'Datastar-Request: true' -H 'Content-Type: application/json' --data-raw '{\"s\":\"it'\\''s\"}'",
             Requests.toCurl(req(url = "http://h/x", method = "POST", signals = "{\"s\":\"it's\"}")),
         )
     }
@@ -88,7 +91,7 @@ class RequestsTest {
         assertEquals("curl -N -X GET '{{base}}/x?datastar=%7B%7D'$tail", get("{{base}}/x"))
         assertEquals("curl -N -X GET 'http://h/x?y=1&z=a b&datastar=%7B%7D#frag'$tail", get("http://h/x?y=1&datastar=old&z=a b#frag"))
         assertEquals(
-            "curl -N -X POST 'http://localhost:8080'$tail -H 'Content-Type: application/json' --data '{}'",
+            "curl -N -X POST 'http://localhost:8080'$tail -H 'Content-Type: application/json' --data-raw '{}'",
             Requests.toCurl(req(url = "http://localhost:8080", method = "POST")),
         )
     }
@@ -99,7 +102,7 @@ class RequestsTest {
         val spaced = " { \"n\" : 1.0,\n\t\"s\": \"a  \\\" b\\u00e9</p>\", \"l\": [ 1, 2 ] }\r\n"
         assertEquals(
             "curl -N -X POST 'http://h/x'$tail -H 'Content-Type: application/json' " +
-                "--data '{\"n\":1.0,\"s\":\"a  \\\" b\\u00e9</p>\",\"l\":[1,2]}'",
+                "--data-raw '{\"n\":1.0,\"s\":\"a  \\\" b\\u00e9</p>\",\"l\":[1,2]}'",
             Requests.toCurl(req(url = "http://h/x", method = "POST", signals = spaced)),
         )
         assertEquals(
@@ -107,7 +110,7 @@ class RequestsTest {
             Requests.toCurl(req(url = "http://h/x", signals = "{\"k\":\"~*'()!é \uD83D\"}")),
         )
         assertEquals(
-            "curl -N -X PUT 'http://h/x'$tail -H 'X-A: 2' -H 'B: 3' -H 'Content-Type: application/json' --data 'not json'",
+            "curl -N -X PUT 'http://h/x'$tail -H 'Content-Type: application/json' -H 'X-A: 2' -H 'B: 3' --data-raw 'not json'",
             Requests.toCurl(req(url = "http://h/x", method = "PUT", signals = "  not json ", headers = "X-A: 1\nBad\n B : 3 \r\nX-A: 2")),
         )
     }
@@ -664,5 +667,53 @@ class RequestsTest {
         val target = JsonParser.parse("""{"a":1,"u":{"n":"x","e":"y"}}""")
         val patch = JsonParser.parse("""{"a":null,"u":{"e":null,"t":1},"l":[1]}""")
         assertEquals(JsonParser.parse("""{"u":{"n":"x","t":1},"l":[1]}"""), mergePatch(target, patch))
+    }
+
+    @Test
+    fun `a requests file that is not json says so, and a byte order mark is not part of it`() {
+        val bom = Requests.parseRequestsFile("\uFEFF{\"requests\":[{\"name\":\"a\",\"url\":\"/a\"}]}")
+        assertEquals(listOf("a"), bom.requests.map { it.name })
+        assertNull(bom.error)
+        val broken = Requests.parseRequestsFile("{\"requests\":[{\"name\":\"a\",\"url\":\"/a\"},]}", "req.json")
+        assertEquals(emptyList(), broken.requests)
+        assertTrue(broken.error!!.startsWith("req.json is not valid JSON"), broken.error)
+        assertNull(Requests.parseRequestsFile("[]").error)
+        assertEquals(listOf("bom"), Requests.parseEnv("\uFEFF{\"params\":{\"bom\":\"1\"}}").params!!.map { it.first })
+    }
+
+    @Test
+    fun `object signals are sent as written in the file`() {
+        val signals = "{ \"id\": 12345678901234567890, \"f\": 1.0, \"s\": \"</b>\" }"
+        val text = "{\"requests\":[{\"name\":\"n\",\"url\":\"/x\",\"signals\": $signals}]}"
+        assertEquals(
+            signals,
+            Requests
+                .parseRequestsFile(text)
+                .requests
+                .single()
+                .signals,
+        )
+    }
+
+    @Test
+    fun `a requests file path has to stay inside the project`() {
+        assertNull(Requests.requestsPathProblem(".streamlord/inspector.json"))
+        assertNull(Requests.requestsPathProblem("tools/requests.json"))
+        assertNull(Requests.requestsPathProblem(""))
+        assertNotNull(Requests.requestsPathProblem("../inspector.json"))
+        assertNotNull(Requests.requestsPathProblem("a/../../inspector.json"))
+        assertNotNull(Requests.requestsPathProblem("/etc/inspector.json"))
+        assertNotNull(Requests.requestsPathProblem("C:\\inspector.json"))
+    }
+
+    // fetch.ts:81-88 in 1.0.4: the client's headers first, then the user's over them.
+    @Test
+    fun `the user's headers replace the client's own`() {
+        assertEquals(
+            listOf("Accept", "Datastar-Request", "content-type", "X-A"),
+            Requests.requestHeaders("POST", linkedMapOf("content-type" to "text/plain", "X-A" to "1")).keys.toList(),
+        )
+        assertEquals("text/plain", Requests.requestHeaders("POST", mapOf("content-type" to "text/plain"))["content-type"])
+        assertEquals(listOf("Accept", "Datastar-Request"), Requests.requestHeaders("GET", emptyMap()).keys.toList())
     }
 }

@@ -28,6 +28,8 @@ public data class SavedRequest(
 
 public data class RequestsFile(
     val requests: List<SavedRequest>,
+    /** Why the file could not be read, when it exists and is not JSON; saving over it would lose what it holds. */
+    val error: String? = null,
 ) {
     public companion object {
         public val EMPTY: RequestsFile = RequestsFile(emptyList())
@@ -85,19 +87,29 @@ public object Requests {
     private val PATH_PARAM_TEXT = Regex("""\{[^{}]*\}""")
     private const val NOT_SENDABLE = "\"<>\\^`|"
 
-    /** Parse the requests file leniently: bad entries are dropped, never fatal. */
-    public fun parseRequestsFile(text: String): RequestsFile {
+    /**
+     * Parse the requests file leniently: bad entries are dropped. Text that is not JSON at all is
+     * reported in [RequestsFile.error], so a save does not write an empty list over it.
+     */
+    public fun parseRequestsFile(
+        text: String,
+        path: String = REQUESTS_FILE,
+    ): RequestsFile {
+        val json = text.removePrefix("\uFEFF")
         val raw =
             try {
-                JsonParser.parse(text)
+                JsonParser.parse(json)
+            } catch (e: JsonParseException) {
+                return RequestsFile(emptyList(), "$path is not valid JSON ${lineAndColumn(json, e.position)}.")
             } catch (_: Exception) {
-                return RequestsFile.EMPTY
+                return RequestsFile(emptyList(), "$path is not valid JSON.")
             }
         val list = (raw as? JsonObject)?.array("requests") ?: return RequestsFile.EMPTY
         val requests = ArrayList<SavedRequest>()
-        for (item in list.objects()) {
-            val name = item.string("name") ?: continue
-            val url = item.string("url") ?: continue
+        list.forEachIndexed { index, item ->
+            if (item !is JsonObject) return@forEachIndexed
+            val name = item.string("name") ?: return@forEachIndexed
+            val url = item.string("url") ?: return@forEachIndexed
             val method = (item.string("method") ?: "GET").uppercase()
             val signals = item["signals"]
             val headers = item["headers"]
@@ -109,7 +121,10 @@ public object Requests {
                     signals =
                         when (signals) {
                             is JsonString -> signals.value
-                            is JsonObject, is JsonArray -> prettyJson(signals)
+
+                            // As written in the file: a second writer would spell numbers past 2^53 and escapes its own way.
+                            is JsonObject, is JsonArray -> rawMember(json, index) ?: prettyJson(signals)
+
                             else -> ""
                         },
                     headers =
@@ -216,8 +231,9 @@ public object Requests {
      * `params` (objects of texts) are allowed, and anything else is reported rather than ignored, so
      * a typo does not quietly leave a value unset.
      */
-    public fun parseEnv(text: String): Env {
+    public fun parseEnv(rawText: String): Env {
         val errors = ArrayList<String>()
+        val text = rawText.removePrefix("\uFEFF")
         val raw =
             try {
                 JsonParser.parse(text)
@@ -885,16 +901,163 @@ public object Requests {
     /** UTF-8 escapes in capitals. */
     private fun escape(s: String): String = s.toByteArray(Charsets.UTF_8).joinToString("") { "%%%02X".format(it.toInt() and 0xff) }
 
-    /** A curl command equivalent to what the inspector sends. Variables must already be resolved. */
+    /**
+     * The headers the inspector sends: the client's own (fetch.ts:81-88 in 1.0.4), then the user's,
+     * which replace one of the same name. The client's `Object.assign` replaces only the same
+     * spelling and `fetch` then joins the two values; the inspector sends the user's alone.
+     */
+    public fun requestHeaders(
+        method: String,
+        userHeaders: Map<String, String>,
+    ): Map<String, String> {
+        val out = LinkedHashMap<String, String>()
+        out["Accept"] = ACCEPT
+        out["Datastar-Request"] = "true"
+        if (!(method == "GET" || method == "DELETE")) out["Content-Type"] = "application/json"
+        for ((k, v) in userHeaders) {
+            out.keys.firstOrNull { it.equals(k, ignoreCase = true) }?.let { out.remove(it) }
+            out[k] = v
+        }
+        return out
+    }
+
+    /**
+     * A curl command equivalent to what the inspector sends. Variables must already be resolved.
+     * The body goes as `--data-raw`: with `--data`, curl reads signals that start with `@` from the file they name.
+     */
     public fun toCurl(r: SavedRequest): String {
         val bodyless = r.method == "GET" || r.method == "DELETE"
         val signalsJson = compactSignals(r.signals)
         val parts = mutableListOf("curl", "-N", "-X", r.method)
         parts += shellQuote(requestUrl(r.url, r.method, signalsJson))
-        parts += listOf("-H", shellQuote("Accept: $ACCEPT"), "-H", shellQuote("Datastar-Request: true"))
-        for ((k, v) in parseHeaderLines(r.headers)) parts += listOf("-H", shellQuote("$k: $v"))
-        if (!bodyless) parts += listOf("-H", shellQuote("Content-Type: application/json"), "--data", shellQuote(signalsJson))
+        for ((k, v) in requestHeaders(r.method, parseHeaderLines(r.headers))) parts += listOf("-H", shellQuote("$k: $v"))
+        if (!bodyless) parts += listOf("--data-raw", shellQuote(signalsJson))
         return parts.joinToString(" ")
+    }
+
+    /**
+     * What is wrong with a configured requests-file path, or null: it has to stay inside the
+     * project, since the setting may come from a checked-in file.
+     */
+    public fun requestsPathProblem(path: String): String? =
+        when {
+            path.isBlank() -> null
+
+            path.startsWith(
+                "/",
+            ) ||
+                path.startsWith(
+                    "\\",
+                ) || DRIVE.containsMatchIn(path) -> "The requests file $path is not inside the project: use a project-relative path."
+
+            path.split('/', '\\').any { it == ".." } -> "The requests file $path leaves the project: use a path without .. in it."
+
+            else -> null
+        }
+
+    private val DRIVE = Regex("""^[A-Za-z]:""")
+
+    /**
+     * The source text of `requests[index].signals`, or null when the file is not shaped that way.
+     * The last `requests` and the last `signals` count, as a JSON parser keeps the last duplicate.
+     */
+    private fun rawMember(
+        text: String,
+        index: Int,
+    ): String? {
+        val scan = JsonScan(text)
+        var found: String? = null
+        scan.members(scan.skipSpace(0)) { key, start, end ->
+            if (key != "requests" || text[start] != '[') return@members
+            var i = index
+            scan.elements(start) { elementStart, elementEnd ->
+                if (i-- == 0 && text[elementStart] == '{') {
+                    scan.members(elementStart) { k, s, e -> if (k == "signals") found = text.substring(s, e) }
+                }
+                elementEnd
+            }
+        }
+        return found
+    }
+
+    /** Just enough of a JSON scanner to find the span of a member of valid JSON; [text] must have parsed already. */
+    private class JsonScan(
+        private val text: String,
+    ) {
+        fun skipSpace(from: Int): Int {
+            var i = from
+            while (i < text.length && text[i] in " \t\n\r") i++
+            return i
+        }
+
+        /** The offset just past the value starting at [from]. */
+        fun skipValue(from: Int): Int =
+            when (text[from]) {
+                '"' -> {
+                    skipString(from)
+                }
+
+                '{' -> {
+                    var end = from
+                    members(from) { _, _, e -> end = e }
+                    skipSpace(end).let { if (it < text.length && text[it] == '}') it + 1 else close(from, '}') }
+                }
+
+                '[' -> {
+                    elements(from) { _, e -> e }
+                }
+
+                else -> {
+                    var i = from
+                    while (i < text.length && text[i] !in ",]} \t\n\r") i++
+                    i
+                }
+            }
+
+        private fun close(
+            from: Int,
+            brace: Char,
+        ): Int = text.indexOf(brace, from).let { if (it < 0) text.length else it + 1 }
+
+        private fun skipString(from: Int): Int {
+            var i = from + 1
+            while (i < text.length && text[i] != '"') i += if (text[i] == '\\') 2 else 1
+            return minOf(i + 1, text.length)
+        }
+
+        /** Each member of the object at [from]: its key and the span of its value. */
+        fun members(
+            from: Int,
+            each: (key: String, start: Int, end: Int) -> Unit,
+        ) {
+            var i = skipSpace(from + 1)
+            while (i < text.length && text[i] != '}') {
+                if (text[i] != '"') return
+                val keyEnd = skipString(i)
+                val key = JsonParser.parse(text.substring(i, keyEnd)).let { (it as JsonString).value }
+                i = skipSpace(keyEnd)
+                if (i >= text.length || text[i] != ':') return
+                val start = skipSpace(i + 1)
+                val end = skipValue(start)
+                each(key, start, end)
+                i = skipSpace(end)
+                if (i < text.length && text[i] == ',') i = skipSpace(i + 1)
+            }
+        }
+
+        /** Each element of the array at [from]; [each] returns where to continue. Returns the offset just past the array. */
+        fun elements(
+            from: Int,
+            each: (start: Int, end: Int) -> Int,
+        ): Int {
+            var i = skipSpace(from + 1)
+            while (i < text.length && text[i] != ']') {
+                val end = skipValue(i)
+                i = skipSpace(each(i, end))
+                if (i < text.length && text[i] == ',') i = skipSpace(i + 1)
+            }
+            return minOf(i + 1, text.length)
+        }
     }
 
     /**

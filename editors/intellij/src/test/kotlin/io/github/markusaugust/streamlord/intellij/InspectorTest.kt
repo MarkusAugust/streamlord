@@ -6,19 +6,29 @@ import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
+import com.intellij.ui.components.JBTextArea
+import com.intellij.util.ui.UIUtil
 import com.sun.net.httpserver.HttpServer
 import io.github.markusaugust.streamlord.analysis.DatastarFrame
 import io.github.markusaugust.streamlord.analysis.Requests
 import io.github.markusaugust.streamlord.analysis.RunningServer
 import io.github.markusaugust.streamlord.analysis.SavedRequest
+import io.github.markusaugust.streamlord.core.json.JsonParser
+import io.github.markusaugust.streamlord.intellij.inspector.InspectorPanel
 import io.github.markusaugust.streamlord.intellij.inspector.InspectorState
 import io.github.markusaugust.streamlord.intellij.inspector.RequestStore
 import io.github.markusaugust.streamlord.intellij.inspector.RunningServers
 import io.github.markusaugust.streamlord.intellij.inspector.StreamClient
+import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
 import java.net.InetSocketAddress
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import javax.swing.JComboBox
+import javax.swing.JLabel
+import javax.swing.JList
+import javax.swing.ListCellRenderer
+import kotlin.test.assertFailsWith
 
 class InspectorTest : BasePlatformTestCase() {
     fun `test the client reads a datastar stream as the browser would`() {
@@ -178,7 +188,7 @@ class InspectorTest : BasePlatformTestCase() {
 
             fun curlParts(line: String): Pair<String, String> {
                 val url = Regex("""^curl -N -X \S+ '([^']*)'""").find(line)!!.groupValues[1]
-                val data = Regex("""--data '((?:[^']|'\\'')*)'$""").find(line)?.groupValues?.get(1) ?: ""
+                val data = Regex("""--data-raw '((?:[^']|'\\'')*)'$""").find(line)?.groupValues?.get(1) ?: ""
                 return url.removePrefix(base) to data.replace("'\\''", "'")
             }
 
@@ -577,5 +587,93 @@ class InspectorTest : BasePlatformTestCase() {
                 .AtomicBoolean(false),
         )
         return frames
+    }
+
+    fun `test a save over a requests file that is not JSON is refused, so nothing in it is lost`() {
+        val store = RequestStore.getInstance(project)
+        store.save(SavedRequest("a", "/a", "GET", "", ""))
+        val file = store.requestsFile()!!
+        // A byte order mark and a trailing comma: the file is not JSON, and would read as empty.
+        val broken = "\uFEFF" + String(file.contentsToByteArray()).replace("}\n  ]", "},\n  ]")
+        WriteCommandAction.runWriteCommandAction(project) { VfsUtil.saveText(file, broken) }
+        try {
+            val read = store.read()
+            assertEquals(emptyList<SavedRequest>(), read.requests)
+            assertTrue(read.error!!, read.error!!.startsWith(".streamlord/inspector.json is not valid JSON"))
+            val e = assertFailsWith<IllegalStateException> { store.save(SavedRequest("b", "/b", "GET", "", "")) }
+            assertTrue(e.message!!, "not lost" in e.message!!)
+            assertEquals(broken, String(file.contentsToByteArray()))
+        } finally {
+            // The project is shared with the other tests, which read this file.
+            WriteCommandAction.runWriteCommandAction(project) { VfsUtil.saveText(file, "{\"version\": 1, \"requests\": []}\n") }
+        }
+    }
+
+    fun `test a requests file path that leaves the project falls back to the default, and a save says so`() {
+        val store = RequestStore.getInstance(project)
+        val settings = StreamlordSettings.getInstance(project)
+        settings.state.requestsFile = "../elsewhere/inspector.json"
+        try {
+            assertEquals(Requests.REQUESTS_FILE, store.requestsPath())
+            val e = assertFailsWith<IllegalStateException> { store.save(SavedRequest("a", "/a", "GET", "", "")) }
+            assertTrue(e.message!!, "leaves the project" in e.message!!)
+        } finally {
+            settings.state.requestsFile = Requests.REQUESTS_FILE
+        }
+    }
+
+    // Swing renders a label whose text starts with <html> as HTML and fetches its images; an event name or a saved name must not.
+    fun `test the panel shows server text and shared names as text, never as Swing HTML`() {
+        val store = RequestStore.getInstance(project)
+        store.save(SavedRequest("<html><b>x</b><img src='http://127.0.0.1:1/beacon'>", "/a", "GET", "", ""))
+        val panel = InspectorPanel(project, testRootDisposable)
+        panel.pushRequests(null)
+        val frame = DatastarFrame("<html><b>forged</b><img src='http://127.0.0.1:1/b'>", "1", null, mapOf("elements" to "<p>x</p>"), "", 0L)
+        panel.javaClass
+            .getDeclaredMethod("addFrame", DatastarFrame::class.java)
+            .apply { isAccessible = true }
+            .invoke(panel, frame)
+        panel.javaClass
+            .getDeclaredMethod(
+                "addComment",
+                String::class.java,
+            ).apply { isAccessible = true }
+            .invoke(panel, "<html><img src='x'>")
+        // The request list, not the method list beside it.
+        val list =
+            UIUtil.findComponentsOfType(panel, JComboBox::class.java).first { combo ->
+                (0 until combo.itemCount).any { combo.getItemAt(it).toString().startsWith("<html>") }
+            }
+
+        @Suppress("UNCHECKED_CAST")
+        val renderer = list.renderer as ListCellRenderer<Any>
+        // One component renders every entry in turn, so what it shows is read as each is rendered.
+        val rendered =
+            (0 until list.itemCount).map {
+                val c = renderer.getListCellRendererComponent(JList<Any>(), list.getItemAt(it), it, false, false) as JLabel
+                c.text to c.getClientProperty("html")
+            }
+        assertTrue(rendered.any { it.first.startsWith("<html>") })
+        for ((text, html) in rendered) assertNull(text, html)
+        val labels = UIUtil.findComponentsOfType(panel, JLabel::class.java)
+        assertTrue(labels.any { it.text.startsWith("<html>") })
+        for (c in labels) assertNull(c.text, c.getClientProperty("html"))
+    }
+
+    fun `test the signal store follows the client, leaf by leaf and reading the flag as the client reads it`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        val apply = panel.javaClass.getDeclaredMethod("applyFrame", DatastarFrame::class.java).apply { isAccessible = true }
+
+        fun patch(
+            signals: String,
+            onlyIfMissing: String? = null,
+        ) {
+            val args = listOfNotNull("signals" to signals, onlyIfMissing?.let { "onlyIfMissing" to it }).toMap()
+            apply.invoke(panel, DatastarFrame("datastar-patch-signals", null, null, args, "", 0L))
+        }
+        patch("""{"user":{"name":"a"},"list":[1,2]}""")
+        patch("""{"user":{"name":"b","age":1},"list":{"0":9,"2":3}}""", "true ")
+        val store = UIUtil.findComponentsOfType(panel, JBTextArea::class.java).single { it.text.startsWith("{\n") }
+        assertEquals("""{"user":{"name":"a","age":1},"list":[1,2,3]}""", JsonParser.parse(store.text).toJson())
     }
 }

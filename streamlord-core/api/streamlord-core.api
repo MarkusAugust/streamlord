@@ -415,6 +415,8 @@ public final class io/github/markusaugust/streamlord/core/json/JsonBoolean$Compa
 
 public final class io/github/markusaugust/streamlord/core/json/JsonMergeKt {
 	public static final fun mergePatch (Lio/github/markusaugust/streamlord/core/json/JsonValue;Lio/github/markusaugust/streamlord/core/json/JsonValue;)Lio/github/markusaugust/streamlord/core/json/JsonValue;
+	public static final fun mergePatchAsClient (Lio/github/markusaugust/streamlord/core/json/JsonObject;Lio/github/markusaugust/streamlord/core/json/JsonValue;ZI)Lio/github/markusaugust/streamlord/core/json/JsonObject;
+	public static synthetic fun mergePatchAsClient$default (Lio/github/markusaugust/streamlord/core/json/JsonObject;Lio/github/markusaugust/streamlord/core/json/JsonValue;ZIILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/json/JsonObject;
 }
 
 public final class io/github/markusaugust/streamlord/core/json/JsonNull : io/github/markusaugust/streamlord/core/json/JsonValue {
