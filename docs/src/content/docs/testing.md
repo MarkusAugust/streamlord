@@ -39,6 +39,31 @@ fun `the feed appends one item and sets the count`() =
 
 Needs `ktor-server-test-host` and `streamlord-test` in `testImplementation`.
 
+### Declare a posted body as JSON
+
+`setBody` with a string declares the body `text/plain`, and `readSignals` refuses that with
+`SignalsMediaTypeException`. Declare it `application/json`, as Datastar's client does:
+
+```kotlin sample=test
+@Test
+fun `a search reads the query it was sent`() =
+    testApplication {
+        routing {
+            post("/search") {
+                call.respondText("found " + call.readSignals().string("query"))
+            }
+        }
+
+        val response =
+            client.post("/search") {
+                contentType(ContentType.Application.Json)
+                setBody("""{"query":"gate"}""")
+            }
+
+        assertEquals("found gate", response.bodyAsText())
+    }
+```
+
 ### Keep a streamed test response under 1 MiB on Ktor 3.6.0
 
 The test host in Ktor 3.6.0 hangs on a streamed response of 1 MiB or more, and the test fails

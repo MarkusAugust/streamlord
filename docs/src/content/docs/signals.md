@@ -116,20 +116,41 @@ then fails at runtime on an `ObjectMapper` that is not the one Spring configured
 ## Where the codecs differ
 
 All three ignore keys the type does not name and refuse a body with anything after the JSON
-value. All three also refuse a `null` for a primitive, a `null` inside a `List<Int>`,
-`Set<Item>` or `Map<String, Int>`, and a missing Kotlin parameter that has no default and cannot
-be `null`. The `null` inside a collection is refused however deep the lists and maps nest, as in
-`Map<String, List<Int>>`, both in a property of your class and in the type you read whole. For
-Jackson, Streamlord enforces these whatever your mapper is set to, because Jackson 2 and Spring
-Boot's mapper would otherwise turn a missing `val id: Long` into `0`, refuse every request that
-carries a signal the type does not name, and hand your handler a `List<Int>` with a `null` in
-it. The `null` is refused even for a primitive with a default, and even when the mapper has the
-Kotlin module's `NullIsSameAsDefault` on: declare the property `Int?`, or the element
-`List<Int?>`, if a page may send `null`. A Java class read through Jackson, such as a record,
-keeps the mapper's rule for a missing value and takes a `null` inside its collections, since a
-Java `List<Integer>` may hold one. With Jackson 3 the `null` inside a property's collection is
-refused by the Kotlin module's `StrictNullChecks`, which is on unless your mapper turns it off;
-the type you read whole is checked by the codec either way.
+value. All three also refuse a `null` for a primitive property such as `val id: Long`, and a
+missing Kotlin parameter that has no default and cannot be `null`. For Jackson, Streamlord
+enforces these whatever your mapper is set to, because Jackson 2 and Spring Boot's mapper would
+otherwise turn a missing `val id: Long` into `0` and refuse every request that carries a signal
+the type does not name. The `null` is refused even for a primitive with a default, and even when
+the mapper has the Kotlin module's `NullIsSameAsDefault` on: declare the property `Int?` if a
+page may send `null`. A Java class read through Jackson, such as a record, may leave out a
+component that takes `null`, which then arrives as `null`; the table below has what the two
+Jackson codecs make of a missing primitive.
+
+A `null` inside a `List<Int>`, `Set<Item>`, `Array<String>` or `Map<String, Int>` is refused too,
+however deep the lists and maps nest, as in `Map<String, List<Int>>`; declare the element `Int?`,
+as in `List<Int?>`, if a page may send one. kotlinx refuses it wherever the type sits. Jackson
+refuses it in two places:
+
+- a parameter of a Kotlin class's constructor, or of its `@JsonCreator` factory, that names the
+  element type, as `data class Signals(val ids: List<Int>)` does;
+- the type you read whole, when it is itself a list, set, array or map, as in
+  `readSignals<Map<String, List<Int>>>()`.
+
+Everywhere else Jackson hands your handler the `null`:
+
+- a `var` declared in the class body rather than in the constructor;
+- a value class holding a list, such as `@JvmInline value class Ids(val v: List<Int>)`;
+- a property typed by a type parameter, as `v: T` or `items: List<T>`, including the parts of a
+  class such as `Pair<List<Int>, Int>` read whole; the table below has how the two Jackson codecs
+  differ on `List<T>`;
+- a Java class, such as a record, since a Java `List<Integer>` may hold `null`.
+
+With Jackson 3 the check on a constructor parameter is the Kotlin module's `StrictNullChecks`,
+which is on unless your mapper turns it off; turned off, only the type read whole is checked. With
+Jackson 2 Streamlord adds the same check whatever the mapper says. Neither follows a mapper whose
+default is to skip a `null` in a collection, as
+`setDefaultSetterInfo(JsonSetter.Value.forContentNulls(Nulls.SKIP))` sets it: the parameter still
+refuses one. To have it dropped, put `@JsonSetter(contentNulls = Nulls.SKIP)` on the parameter.
 
 Objects and arrays nested more than 64 deep are refused before any codec reads them, so all
 three, and the built-in reader, answer a body of twenty thousand `[` with a 400 rather than a
@@ -157,6 +178,10 @@ They differ on the rest:
 | `{"c":0}` or `{"c":"0"}` into `c: Colour`, an enum | refused | the first constant, `RED` |
 | a raw tab or other control character inside a string, which JSON does not allow | read as it is | refused |
 | `{}` into `q: String?` with no default | refused | `null` |
+| `{"v":null}` into `v: T` of `data class One<T>(val v: T)`, read as `One<Int>` | refused | `null` |
+| `{"items":[1,null]}` into `items: List<T>`, read as `Page<Int>` | refused | Jackson 3 refuses it; Jackson 2 reads `[1, null]` |
+| `{"items":[1,null]}` into `items: List<T>`, read as `Page<Int?>` | `[1, null]` | Jackson 3 refuses it, unless `StrictNullChecks` is off; Jackson 2 reads `[1, null]` |
+| `{"name":"a"}` into a Java record with an `int n` | `SignalsCodecException`, a 500: no serializer | Jackson 3 reads `n` as `0`; Jackson 2 refuses it |
 | reading into `Map<String, Any?>` | `SignalsCodecException`, a 500 | read |
 | writing `Double.NaN` or an infinity | `SignalsCodecException` | the string `"NaN"`, so the signal changes type in the browser |
 | writing a `Map<String, Any?>` | `SignalsCodecException` | written |

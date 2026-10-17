@@ -28,15 +28,16 @@ import kotlin.reflect.javaType
  * does not name is ignored, as the other codecs ignore it, even when the mapper turns on
  * `FAIL_ON_UNKNOWN_PROPERTIES`. And nothing may follow the JSON value.
  *
- * A `null` inside a Kotlin parameter's `List<Int>` or `Map<String, Int>` is refused by the
- * Kotlin module's `StrictNullChecks`, on by default in Jackson 3; a mapper that turns it off lets
- * one through. One inside a `List<Int>` or `Map<String, List<Int>>` read whole is refused by the
- * codec, at any depth, whatever the mapper says.
+ * A `null` inside a Kotlin constructor parameter's `List<Int>` or `Map<String, Int>` is refused
+ * by the Kotlin module's `StrictNullChecks`, on by default in Jackson 3; a mapper that turns it
+ * off lets one through. It does not reach a `var` in the class body or a value class holding a
+ * list. One inside a `List<Int>` or `Map<String, List<Int>>` read whole is refused by the codec,
+ * at any depth, whatever the mapper says.
  *
  * A Kotlin class or interface in the type needs `jackson-module-kotlin` on the mapper, even one
  * Jackson could build without it, such as a class with `var` properties. Without the module
- * Jackson reads a Kotlin class past its constructor, builds it from its defaults and drops what the browser sent, or
- * refuses a class without defaults, so decoding throws
+ * Jackson reads a Kotlin class past its constructor, builds it from its defaults and drops what
+ * the browser sent, or refuses a class without defaults, so decoding throws
  * [SignalsCodecException] instead.
  *
  * ```kotlin

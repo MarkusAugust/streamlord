@@ -278,7 +278,7 @@ class KtorAdapterTest {
 
     // A <form enctype="text/plain"> on another site posts this without a preflight.
     @Test
-    fun `a body not declared application json is refused, unless the plugin is told otherwise`() =
+    fun `a body not declared application json is refused without the plugin`() =
         testApplication {
             routing {
                 post("/s") {
@@ -357,6 +357,25 @@ class KtorAdapterTest {
             install(StreamlordPlugin) { requireJsonContentType = false }
             routing { post("/s") { call.respond("ok " + call.readSignals().int("a")) } }
             assertEquals("ok 1", client.post("/s") { setBody("{\"a\":1}") }.bodyAsText())
+        }
+
+    // The plugin builds its own Streamlord, so its default is not Streamlord.Default's.
+    @Test
+    fun `the plugin refuses a body not declared application json unless told otherwise`() =
+        testApplication {
+            install(StreamlordPlugin)
+            routing {
+                post("/s") {
+                    try {
+                        call.respond("ok " + call.readSignals().int("a"))
+                    } catch (e: SignalsMediaTypeException) {
+                        call.respond(HttpStatusCode.UnsupportedMediaType, "refused " + e.contentType)
+                    }
+                }
+            }
+            val form = client.post("/s") { setBody("{\"a\":1}") }
+            assertEquals(HttpStatusCode.UnsupportedMediaType, form.status)
+            assertEquals("refused text/plain; charset=UTF-8", form.bodyAsText())
         }
 
     @Test

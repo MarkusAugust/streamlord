@@ -247,6 +247,11 @@ All notable changes to Streamlord are recorded here. The format follows
 - `Jackson2SignalsCodec` reads through a copy of the mapper handed to it, made once, so that
   mapper's rules and cache are not changed; a mapper of a subclass that does not override
   `copy()` cannot be used.
+- `Jackson2SignalsCodec` over a mapper whose default is to skip a `null` in a collection,
+  `setDefaultSetterInfo(JsonSetter.Value.forContentNulls(Nulls.SKIP))`, now refuses one in a
+  Kotlin parameter's `List<Int>` with a `400` where the mapper dropped it, as the Kotlin module's
+  own `StrictNullChecks` does on Jackson 2 and 3. `@JsonSetter(contentNulls = Nulls.SKIP)` on the
+  parameter still drops it.
 
 ### Fixed
 
@@ -464,13 +469,21 @@ All notable changes to Streamlord are recorded here. The format follows
   every handler: real Ktor CIO answered `500`. The codec also turns that error into
   `SignalsDecodeException` for a caller that decodes a body itself, as on WebFlux. Through
   `readSignals`, the Jackson codecs, which allowed 1000 and 500 levels, stop at 64 as well.
-- `Jackson2SignalsCodec` refuses a `null` inside a Kotlin parameter's `List<Int>`, `Set`,
-  `Array` or `Map<String, Int>`, at any depth, as `StrictNullChecks` in the Kotlin module would,
-  with `default()` and with a mapper of your own, also in a class with a value class parameter;
-  it reached the handler as a `NullPointerException`. A Java class's collections still take
-  `null`. Both Jackson codecs refuse a `null` inside a `List<Int>` or `Map<String, List<Int>>`
-  read whole, at any depth, which the Kotlin module does not check. An element type declared
-  nullable, `List<Int?>`, still takes one.
+- `Jackson2SignalsCodec` refuses a `null` inside the `List<Int>`, `Set`, `Array` or
+  `Map<String, Int>` of a Kotlin constructor or `@JsonCreator` parameter, at any depth, as
+  `StrictNullChecks` in the Kotlin module would, with `default()` and with a mapper of your own,
+  also in a class with a value class parameter; it reached the handler as a
+  `NullPointerException`. A parameter's `List<T>` is left alone, since what `T` stands for is
+  known only to the type read, so `Page<Int?>` takes a `null` and `Page<Int>` does too. A `var`
+  in the class body, a value class holding a list and a Java class's collections still take
+  `null`. Both Jackson codecs refuse a `null` inside a `List<Int>`, `Array<String>` or
+  `Map<String, List<Int>>` read whole, at any depth, which the Kotlin module does not check. An
+  element type declared nullable, `List<Int?>`, still takes one. The Signals page lists where
+  each codec refuses a `null` and where it does not.
+- `KotlinxSignalsCodec` threw `ClassCastException` past every handler on any body read into an
+  `Array<Int>`, or another array of a primitive type looked up by type, since kotlinx.serialization
+  builds an `int[]` for it. It now throws `SignalsCodecException`, a `500`, that says to declare
+  it `IntArray` or `List<Int>`. A property of that type in a class is read as before.
 - Both Jackson codecs ignore keys the type does not name whatever the mapper says, as the docs
   promised. `Jackson2SignalsCodec(jacksonObjectMapper())`, and any mapper with
   `FAIL_ON_UNKNOWN_PROPERTIES` on, refused every request that carried a signal the type did not

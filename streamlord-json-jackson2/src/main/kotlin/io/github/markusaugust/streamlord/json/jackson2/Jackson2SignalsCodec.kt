@@ -18,6 +18,7 @@ import java.lang.reflect.Method
 import kotlin.reflect.KClass
 import kotlin.reflect.KFunction
 import kotlin.reflect.KType
+import kotlin.reflect.KTypeParameter
 import kotlin.reflect.full.valueParameters
 import kotlin.reflect.javaType
 import kotlin.reflect.jvm.javaConstructor
@@ -34,23 +35,26 @@ import kotlin.reflect.jvm.kotlinFunction
  * `null` for a primitive, such as `val id: Long`, is refused rather than read as `0`, which is
  * what Jackson 2 and Spring Boot's mapper do by default; this holds when the parameter has a
  * default and when the mapper has the Kotlin module's `NullIsSameAsDefault` on, so declare it
- * `Int?` if the page may send `null`. A `null` inside a Kotlin parameter's `List<Int>`,
- * `Set<Item>`, `Array<String>` or `Map<String, Int>` is refused too, as the Kotlin module's
- * `StrictNullChecks` refuses it, and so is one inside a `List<Int>` or `Map<String, List<Int>>`
- * read whole, at any depth; declare the element `Int?` if it may be `null`. A Java class's
- * collections keep taking `null`. A Kotlin
- * parameter must be sent unless it has a default or, unlike with kotlinx, takes `null`; a Java
- * creator keeps the mapper's rule. A key the type does not name is ignored, as the other codecs
- * ignore it, where Jackson 2's own default refuses it. And nothing may follow the JSON value.
+ * `Int?` if the page may send `null`. A `null` inside a Kotlin constructor parameter's
+ * `List<Int>`, `Set<Item>`, `Array<String>` or `Map<String, Int>` is refused too, as the Kotlin
+ * module's `StrictNullChecks` refuses it, and so is one inside a `List<Int>` or
+ * `Map<String, List<Int>>` read whole, at any depth; declare the element `Int?` if it may be
+ * `null`. Like `StrictNullChecks`, this ignores a mapper whose default setter info skips `null`
+ * in collections; put `@JsonSetter(contentNulls = Nulls.SKIP)` on the parameter instead. A
+ * parameter's `List<T>` keeps taking `null`, since what `T` stands for is not known there, and so
+ * do a `var` in the class body, a value class holding a list, and a Java class's collections. A
+ * Kotlin parameter must be sent unless it has a default or, unlike with kotlinx, takes `null`; a
+ * Java creator keeps the mapper's rule. A key the type does not name is ignored, as the other
+ * codecs ignore it, where Jackson 2's own default refuses it. And nothing may follow the JSON
+ * value.
  *
  * The codec reads through a copy of the mapper, made once, so the mapper you hand it is never
  * changed. A mapper of a subclass that does not override `copy()` cannot be used.
  *
  * A Kotlin class or interface in the type needs `jackson-module-kotlin` on the mapper, even one
  * Jackson could build without it, such as a class with `var` properties. Without the module
- * Jackson reads a Kotlin class past its constructor, puts `null` into a property that cannot hold one and refuses a class
- * without defaults, so decoding throws
- * [SignalsCodecException] instead.
+ * Jackson reads a Kotlin class past its constructor, puts `null` into a property that cannot hold
+ * one and refuses a class without defaults, so decoding throws [SignalsCodecException] instead.
  *
  * ```kotlin
  * @Bean fun streamlord(mapper: ObjectMapper) = Streamlord(codec = Jackson2SignalsCodec(mapper))
@@ -196,7 +200,7 @@ private object ContentNulls : NopAnnotationIntrospector() {
                 is Method -> owner.kotlinFunction
                 else -> null
             }
-        val nonNull =
+        val item =
             function
                 ?.valueParameters
                 ?.getOrNull(parameter.index)
@@ -204,7 +208,8 @@ private object ContentNulls : NopAnnotationIntrospector() {
                 ?.arguments
                 ?.getOrNull(content)
                 ?.type
-                ?.isMarkedNullable == false
+        // A type parameter, as in List<T>, is never marked nullable, yet Box<Int?> fills it with one that is.
+        val nonNull = item != null && item.classifier !is KTypeParameter && !item.isMarkedNullable
         return if (nonNull) JsonSetter.Value.forContentNulls(Nulls.FAIL) else JsonSetter.Value.empty()
     }
 }

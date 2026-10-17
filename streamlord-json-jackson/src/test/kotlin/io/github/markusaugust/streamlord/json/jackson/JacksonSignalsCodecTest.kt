@@ -129,6 +129,8 @@ class JacksonSignalsCodecTest {
         for (c in listOf(codec, JacksonSignalsCodec(JsonMapper.builder().build()))) {
             assertEquals(JavaSignals("a", null, 1), c.decode<JavaSignals>("""{"name":"a","n":1}"""))
             assertFailsWith<SignalsDecodeException> { c.decode<JavaSignals>("""{"name":"a","n":null}""") }
+            // Unlike Jackson 2, which refuses it; the table on the Signals page has both.
+            assertEquals(JavaSignals("a", null, 0), c.decode<JavaSignals>("""{"name":"a"}"""))
         }
     }
 
@@ -173,6 +175,8 @@ class JacksonSignalsCodecTest {
     @Test
     fun `a null inside a collection read whole is refused at any depth`() {
         for (c in listOf(codec, JacksonSignalsCodec(JsonMapper.builder().build()))) {
+            assertFailsWith<SignalsDecodeException> { c.decode<Array<String>>("""["a",null]""") }
+            assertEquals(listOf("a", null), c.decode<Array<String?>>("""["a",null]""").toList())
             assertFailsWith<SignalsDecodeException> { c.decode<List<Int>>("""[1,null]""") }
             assertFailsWith<SignalsDecodeException> { c.decode<Set<String>>("""["a",null]""") }
             assertFailsWith<SignalsDecodeException> { c.decode<Map<String, List<Int>>>("""{"a":[1,null]}""") }

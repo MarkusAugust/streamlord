@@ -136,6 +136,7 @@ abstract class ExtractDocSamples : DefaultTask() {
                     "import io.ktor.server.application.*\nimport io.ktor.server.routing.*\n" +
                     "import io.ktor.server.testing.*\n" +
                     "import io.ktor.server.engine.*\nimport io.ktor.server.cio.*\nimport io.ktor.server.response.*\n" +
+                    "import io.ktor.http.ContentType\nimport io.ktor.http.contentType\n" +
                     "import io.ktor.http.HttpStatusCode\nimport kotlinx.coroutines.test.runTest\nimport java.net.URI\n" +
                     "import java.net.http.HttpClient\nimport java.net.http.HttpRequest\nimport java.net.http.HttpResponse\n" +
                     "import io.ktor.client.request.*\nimport io.ktor.client.statement.*\n" +

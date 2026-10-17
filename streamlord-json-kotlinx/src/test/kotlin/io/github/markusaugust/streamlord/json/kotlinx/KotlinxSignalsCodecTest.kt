@@ -200,4 +200,25 @@ class KotlinxSignalsCodecTest {
             assertFailsWith<SignalsDecodeException>(body) { codec.decode<Painted>(body) }
         }
     }
+
+    @Serializable
+    data class Numbered(
+        val xs: Array<Int>,
+    )
+
+    // kotlinx.serialization builds an int[] for it and fails to cast it, on every body.
+    @Test
+    fun `an Array of a primitive looked up by type is the server's, with the fix in the message`() {
+        for (body in listOf("[1,2]", "[1,null]", "nope")) {
+            val failure = assertFailsWith<SignalsCodecException>(body) { codec.decode<Array<Int>>(body) }
+            assertFalse(failure is SignalsDecodeException, "$failure")
+            assertTrue("IntArray" in failure.message.orEmpty(), failure.message)
+        }
+        assertFailsWith<SignalsCodecException> { codec.decode<List<Array<Long>>>("[[1]]") }
+        assertEquals(listOf(1, 2), codec.decode<IntArray>("[1,2]").toList())
+        assertEquals(listOf(1, null), codec.decode<Array<Int?>>("[1,null]").toList())
+        assertEquals(listOf("a"), codec.decode<Array<String>>("""["a"]""").toList())
+        // The compiler plugin's serializer for a property is right.
+        assertEquals(listOf(1, 2), codec.decode<Numbered>("""{"xs":[1,2]}""").xs.toList())
+    }
 }

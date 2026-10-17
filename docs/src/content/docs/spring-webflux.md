@@ -62,8 +62,10 @@ WebMVC.
 The body never passes through `readSignals` here, so its check of the `Content-Type` is yours.
 Declare the mapping `consumes = ["application/json"]`, so a form on another site cannot post
 signals to it, as [Security](/security/#forms-from-other-sites) explains; Spring answers anything
-else with `415`. A body nested too deep to read is still refused by the codec, with
-`SignalsDecodeException`, though at the codec's own depth rather than at 64.
+else with `415`. Nor does the limit of 64 levels of nesting apply. Jackson refuses a body nested
+past its own limit, by default 500 levels in Jackson 3 and 1000 in Jackson 2, with `SignalsDecodeException`.
+kotlinx has no limit: it reads what the stack holds, and turns the `StackOverflowError` of a body
+nested deeper than that into `SignalsDecodeException`.
 
 ## Cancellation
 

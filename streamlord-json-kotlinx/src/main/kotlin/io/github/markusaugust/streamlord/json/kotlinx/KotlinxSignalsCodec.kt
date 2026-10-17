@@ -67,6 +67,7 @@ public class KotlinxSignalsCodec(
         type: KType,
     ): T =
         serializerFor(type).let { serializer ->
+            if (type !in serializers) refusePrimitiveArrays(type, type)
             try {
                 @Suppress("UNCHECKED_CAST")
                 this.json.decodeFromString(serializer, json) as T
@@ -155,6 +156,29 @@ public class KotlinxSignalsCodec(
         } catch (e: IllegalArgumentException) {
             throw SignalsCodecException(lookupFailed(type), e)
         }
+    }
+
+    /*
+     * The serializer kotlinx.serialization builds for an Array<Int> from its KType makes an int[]
+     * and casts it to Array<Any?>, so every decode would end in a ClassCastException. One the
+     * compiler plugin generates for a property is right, so this checks only the type looked up.
+     */
+    private fun refusePrimitiveArrays(
+        type: KType,
+        whole: KType,
+    ) {
+        val element = type.arguments.singleOrNull()?.type
+        val elementClass = element?.classifier as? KClass<*>
+        // Array::class is Array<Any>'s; an Array<Int> has a class of its own.
+        val isArray = (type.classifier as? KClass<*>)?.java?.isArray == true
+        if (isArray && elementClass != null && !element.isMarkedNullable && elementClass.javaPrimitiveType != null) {
+            throw SignalsCodecException(
+                "Could not decode signals into $whole: kotlinx.serialization cannot read an " +
+                    "Array<${elementClass.simpleName}> looked up by type. Declare it " +
+                    "${elementClass.simpleName}Array or List<${elementClass.simpleName}> instead.",
+            )
+        }
+        type.arguments.forEach { argument -> argument.type?.let { refusePrimitiveArrays(it, whole) } }
     }
 
     private fun lookupFailed(type: KType): String =
