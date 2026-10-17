@@ -32,6 +32,29 @@ class ScriptAndSignalsContextTest {
         )
     }
 
+    // Measured against the 1.0.4 store: __proto__ throws midway through a batch it never closes,
+    // constructor with an object under it reaches Object.prototype, and a dotted key is one key
+    // that $a.b does not reach and a request drops.
+    @Test
+    fun `signals holding a key the client cannot hold are refused`() {
+        val escapedProto = "{\"__pro" + "\\" + "u0074o__\": {}}"
+        for (
+        text in listOf(
+            "{\"__proto__\": {\"x\": 1}}",
+            "{\"constructor\": {\"prototype\": {\"x\": 1}}}",
+            "{\"a\": [{\"b\": {\"constructor\": 1}}]}",
+            "{\"a.b\": 1}",
+            "{\"a\": {\"b.c\": 1}}",
+            escapedProto,
+        )
+        ) {
+            assertFailsWith<DatastarEventValidationException>(text) { PatchSignals(text) }
+            assertFailsWith<DatastarEventValidationException>(text) { SignalsResponse(text) }
+        }
+        val fine = "{\"constructors\": 1, \"prototype\": {\"x\": 1}, \"a\": [\"b.c\", \"__proto__\"]}"
+        assertEquals(fine, PatchSignals(fine).signals)
+    }
+
     @Test
     fun `a JsonNumber holds a JSON number`() {
         for (text in listOf("(window.pwned = 1)", "1e", "01", "+1", ".5", "NaN", "Infinity", "1_000", "")) {

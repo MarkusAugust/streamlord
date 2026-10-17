@@ -47,8 +47,18 @@ All notable changes to Streamlord are recorded here. The format follows
 - `JsonWriter.writeExpression`: JSON for a place where Datastar's client reads it as an
   expression, such as `data-signals`, with every `\` written as `\u005c`.
 
+- `SignalNames` in `streamlord-core`: the keys and names Datastar's client cannot hold, with the
+  reason (`keyProblem`, `pathProblem`), and `nest`, which nests dotted names the way
+  `data-signals:a.b` does.
+
 ### Changed
 
+- A dotted name in the pairs of `patchSignals`, `removeSignals` and `dataSignals` now nests, as
+  `data-signals:form.email` does: `patchSignals("form.email" to "x")` patches `$form.email`. It
+  used to send the key `"form.email"`, which the client stores as one key that `$form.email`
+  does not reach. A name given both a value and signals under it throws.
+- `dataSignals` refuses `__proto__` with `InvalidSignalNameException`, as it refuses any other
+  name, rather than `IllegalArgumentException`.
 - `respondDatastar`, its `Flow` variant and `respondElements`, `respondSignals` and `respondScript`
   on Ktor no longer take a `status`, as on Spring: Datastar's client reads neither a stream nor a
   body with any status but 200. Source that passed one, also positionally as the first argument
@@ -209,6 +219,15 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- A signal patch could carry a key Datastar's client cannot hold, from pairs, a codec or a JSON
+  string, at any depth. `__proto__` made its merge throw halfway through a batch it never closed,
+  so no later signal reached the page; `{"constructor": {"prototype": {"x": 1}}}` set `x` on
+  `Object.prototype` for every object on the page; and a dotted key was stored as one key that
+  `$a.b` does not reach, and dropped from the client's requests. `PatchSignals` and
+  `SignalsResponse` now throw `DatastarEventValidationException` on such a key.
+- `data-signals:constructor.prototype.x` and the same name in `dataBind`, `dataRef`,
+  `dataIndicator`, `dataComputed` and Pro `dataMatchMedia` set a property on `Object.prototype`
+  in the client. A name with a `__proto__` or `constructor` part is now refused.
 - A value ending in `\` emptied the attribute it was written into. Datastar's client cuts an
   expression into statements at each `;` outside a string and reads a quote after a `\` as
   escaped, so `dataSignals("path" to "C:\\", "sep" to ";")` declared no signal at all, and

@@ -43,11 +43,16 @@ class AsTheBrowserHoldsItTest {
     }
 
     @Test
-    fun `a key that holds a dot is found`() {
-        val events = stream(PatchSignals("""{"a.b":1,"c":{"d.e":2}}"""))
-
-        events.assertSignal("a.b", 1)
-        events.assertSignal("c.d.e", 2)
+    fun `a key the client cannot hold fails where it is read`() {
+        // Streamlord can no longer send one; another server can, and the client would lose it.
+        for (key in listOf("a.b", "__proto__", "constructor")) {
+            val failure =
+                assertFailsWith<DatastarEventValidationException>(key) {
+                    datastarEvents("event: datastar-patch-signals\ndata: signals {\"c\":{\"$key\":{}}}\n\n")
+                }
+            assertTrue("'$key'" in failure.message.orEmpty(), failure.message)
+        }
+        stream(PatchSignals("""{"c":{"d":{"e":2}}}""")).assertSignal("c.d.e", 2)
     }
 
     @Test

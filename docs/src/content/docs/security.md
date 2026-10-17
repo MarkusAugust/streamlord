@@ -38,6 +38,15 @@ signal in the attribute would be lost. The literals the HTML helpers write (`js(
 `\xHH`. In a value attribute they stay whole, and between the double quotes of an attribute
 written in a string or a template, a quote in a value cannot end it.
 
+## Signal names the client cannot hold
+
+A signal patch, or a `data-signals` the DSL writes, never carries `__proto__` or `constructor`
+as a key or a part of a name, at any depth. In Datastar 1.0.4's store, `__proto__` makes the merge
+throw and leaves the page deaf to every later signal, and `{"constructor": {"prototype": {"x":
+1}}}` sets `x` on `Object.prototype`. A map of names typed by users, broadcast to every viewer,
+could otherwise do either to every page that shows it. Streamlord throws instead, before
+anything is sent. [Patching signals back](/signals/#patching-signals-back) lists the keys.
+
 ## Bounded input
 
 Incoming signals are capped (1 MiB by default, configurable) and the cap applies *while

@@ -173,7 +173,39 @@ class AsTheClientReadsItTest {
         assertEquals("\$user.firstName", signal("user.first-name"))
         assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("foo-bar" to 1, "fooBar" to 2) } } }
         assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("a" to mapOf("x-y" to 1, "xY" to 2)) } } }
-        assertFailsWith<IllegalArgumentException> { elements { div { dataSignals("a" to mapOf("__proto__" to 1)) } } }
+        assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("a" to mapOf("__proto__" to 1)) } } }
+    }
+
+    // data-signals:a.b nests, and the pairs form now does too; a dotted key inside a map the client
+    // would store as one key, which $a.b does not reach and a request drops.
+    @Test
+    fun `a dotted pair nests as the keyed form does`() {
+        assertEquals(
+            """<div data-signals="{&quot;form&quot;:{&quot;email&quot;:&quot;&quot;,&quot;firstName&quot;:&quot;&quot;},""" +
+                """&quot;n&quot;:1}"></div>""",
+            elements { div { dataSignals("form.email" to "", "form.first-name" to "", "n" to 1) } },
+        )
+        assertEquals(
+            """<div data-signals="{&quot;a&quot;:{&quot;b&quot;:1,&quot;c&quot;:2}}"></div>""",
+            elements { div { dataSignals("a" to mapOf("b" to 1), "a.c" to 2) } },
+        )
+        assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("a" to 1, "a.b" to 2) } } }
+        assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("a" to mapOf("b.c" to 1)) } } }
+    }
+
+    // Measured against the 1.0.4 store: __proto__ throws midway through a batch, and constructor
+    // with an object under it reaches Object.prototype.
+    @Test
+    fun `a name the client cannot hold is refused`() {
+        for (name in listOf("constructor", "constructor.prototype.x", "a.constructor", "__proto__.x")) {
+            assertFailsWith<InvalidSignalNameException>(name) { elements { div { dataSignals(name, "1") } } }
+            assertFailsWith<InvalidSignalNameException>(name) { elements { div { dataSignals(name to 1) } } }
+            assertFailsWith<InvalidSignalNameException>(name) { elements { div { dataBind(name) } } }
+            assertFailsWith<InvalidSignalNameException>(name) { elements { div { dataComputed(name, "1") } } }
+        }
+        val prototypeUnder = "a" to mapOf("constructor" to mapOf("prototype" to 1))
+        assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals(prototypeUnder) } } }
+        assertEquals("""<div data-signals:constructors="1"></div>""", elements { div { dataSignals("constructors", "1") } })
     }
 
     // CSS custom properties are case-sensitive and the browser lowercases the key.

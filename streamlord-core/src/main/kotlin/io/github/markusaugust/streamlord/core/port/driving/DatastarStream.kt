@@ -1,11 +1,13 @@
 package io.github.markusaugust.streamlord.core.port.driving
 
+import io.github.markusaugust.streamlord.core.DatastarEventValidationException
 import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.ExecuteScript
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
+import io.github.markusaugust.streamlord.core.domain.SignalNames
 import io.github.markusaugust.streamlord.core.domain.interpolate
 import io.github.markusaugust.streamlord.core.domain.safeUrl
 import io.github.markusaugust.streamlord.core.domain.withEventId
@@ -185,10 +187,10 @@ public interface DatastarStream {
 
     /**
      * Patch signals from key/value pairs. Values may be primitives, maps, lists or `null`
-     * (which removes the signal).
+     * (which removes the signal). A dotted name reaches a nested signal, as `$user.name` does.
      *
      * ```kotlin
-     * patchSignals("count" to 42, "user" to mapOf("name" to "Gorvek"), "draft" to null)
+     * patchSignals("count" to 42, "user.name" to "Gorvek", "draft" to null)
      * ```
      */
     public suspend fun patchSignals(
@@ -197,16 +199,27 @@ public interface DatastarStream {
         eventId: String? = null,
         retry: Duration? = null,
     ) {
-        send(PatchSignals(JsonWriter.write(signals.toMap()), onlyIfMissing, eventId, retry))
+        send(PatchSignals(JsonWriter.write(nested(signals.asList())), onlyIfMissing, eventId, retry))
     }
 
-    /** Remove signals by name. Sugar for patching them to `null`. */
+    /** Remove signals by name, dotted for a nested one. Sugar for patching them to `null`. */
     public suspend fun removeSignals(
         vararg names: String,
         eventId: String? = null,
         retry: Duration? = null,
     ) {
-        send(PatchSignals(JsonWriter.write(names.associateWith { null }), eventId = eventId, retry = retry))
+        send(PatchSignals(JsonWriter.write(nested(names.map { it to null })), eventId = eventId, retry = retry))
+    }
+
+    private fun nested(pairs: List<Pair<String, Any?>>): Map<String, Any?> {
+        for ((name, _) in pairs) {
+            SignalNames.pathProblem(name)?.let { throw DatastarEventValidationException("signal $name: $it") }
+        }
+        return try {
+            SignalNames.nest(pairs)
+        } catch (e: IllegalArgumentException) {
+            throw DatastarEventValidationException(e.message ?: "signals clash")
+        }
     }
 
     /** Execute JavaScript in the browser. See [ExecuteScript]. */

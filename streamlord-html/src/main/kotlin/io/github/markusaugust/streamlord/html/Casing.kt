@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.html
 
 import io.github.markusaugust.streamlord.core.StreamlordException
+import io.github.markusaugust.streamlord.core.domain.SignalNames
 
 /**
  * Raised for a name no signal or attribute key can carry: blank, or with whitespace, quotes or
@@ -66,10 +67,12 @@ public object Casing {
     /**
      * A name that declares a signal: what [validate] admits, and only ASCII letters, digits and
      * `_`, in parts joined by `.` or `-`. Datastar's client reads nothing else after a `$`, so
-     * `$über` or `$a:b` would reach no signal.
+     * `$über` or `$a:b` would reach no signal. No part may be `__proto__` or `constructor`, which
+     * the client cannot hold ([SignalNames]).
      */
     public fun signalName(name: String): String {
         validate(name)
+        SignalNames.pathProblem(name)?.let { throw InvalidSignalNameException(name, "names no signal the client can hold: $it") }
         if (!SIGNAL_NAME.matches(name)) {
             throw InvalidSignalNameException(
                 name,

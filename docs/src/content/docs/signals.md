@@ -174,6 +174,20 @@ get("/feed") {
 A signal patched to `null` is **removed**, because signal patches are RFC 7386 merge patches. That
 is not a quirk of Streamlord; it is what the protocol says, and it is how you delete.
 
+A dotted name reaches a nested signal: `patchSignals("form.email" to "")` patches `$form.email`,
+the signal `data-signals:form.email` declares, and `removeSignals("form.email")` removes it.
+
+Some keys Datastar's client cannot hold, and a patch carrying one throws
+`DatastarEventValidationException` before anything is sent, whether it came from pairs, a codec
+or a JSON string, at any depth:
+
+- `__proto__` makes the client's merge throw halfway through, and no later signal reaches the
+  page until it is reloaded;
+- `constructor` with an object under it reaches `Object.prototype` and changes every object on
+  the page;
+- a key holding `.` inside an object is stored as one key, which `$a.b` does not reach, and the
+  client drops its value when it sends the signals with a request.
+
 ## Signals that stay in the browser
 
 Not every signal is for the server. Whether a drawer is showing, which row the cursor is on, a

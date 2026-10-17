@@ -297,6 +297,13 @@ public final class io/github/markusaugust/streamlord/core/domain/ScriptResponse 
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class io/github/markusaugust/streamlord/core/domain/SignalNames {
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/domain/SignalNames;
+	public final fun keyProblem (Ljava/lang/String;)Ljava/lang/String;
+	public final fun nest (Ljava/lang/Iterable;)Ljava/util/Map;
+	public final fun pathProblem (Ljava/lang/String;)Ljava/lang/String;
+}
+
 public final class io/github/markusaugust/streamlord/core/domain/SignalsResponse : io/github/markusaugust/streamlord/core/domain/DatastarResponse {
 	public fun <init> (Ljava/lang/String;Z)V
 	public synthetic fun <init> (Ljava/lang/String;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
