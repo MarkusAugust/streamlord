@@ -15,7 +15,8 @@ import java.math.BigInteger
  *
  * The output is safe to embed in a JavaScript context: U+2028, U+2029, `</` and `<!` are
  * escaped, which matters because Datastar evaluates `data-signals` as an expression, and a
- * string inside a `<script>` that holds `<!--` and then `<script` keeps the element open.
+ * string inside a `<script>` that holds `<!--` and then `<script` keeps the element open. For
+ * JSON that Datastar's client reads as an expression, use [writeExpression].
  */
 public object JsonWriter {
     public const val DEFAULT_MAX_DEPTH: Int = 64
@@ -25,6 +26,20 @@ public object JsonWriter {
         value: Any?,
         maxDepth: Int = DEFAULT_MAX_DEPTH,
     ): String = StringBuilder().also { appendValue(it, value, 0, maxDepth) }.toString()
+
+    /**
+     * [write], for JSON that Datastar's client reads as an expression, such as the value of
+     * `data-signals`: `\` is written as `\u005c`. The client cuts an expression into statements
+     * at each `;` outside a string and takes `\\"` for an escaped quote, so `{"a": "C:\\", "b":
+     * ";"}` would be cut inside the second string and lose every signal in it.
+     */
+    public fun writeExpression(
+        value: Any?,
+        maxDepth: Int = DEFAULT_MAX_DEPTH,
+    ): String =
+        // Every `\` in the output begins an escape, and the pairs are read from the left, so this
+        // replaces exactly the escaped backslashes.
+        write(value, maxDepth).replace("\\\\", "\\u005c")
 
     /** Encode a JSON string literal, quotes included. Also a valid JavaScript string literal. */
     public fun writeString(value: String): String = StringBuilder(value.length + 2).also { appendString(it, value) }.toString()

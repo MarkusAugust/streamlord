@@ -54,7 +54,7 @@ class ProDslTest {
     @Test
     fun `match media quotes the query as a JavaScript string`() {
         assertEquals(
-            """<div data-match-media:narrow="'(max-width: 600px) and (orientation: \'portrait\')'"></div>""",
+            """<div data-match-media:narrow="'(max-width: 600px) and (orientation: \x27portrait\x27)'"></div>""",
             elements { div { dataMatchMedia("narrow", "(max-width: 600px) and (orientation: 'portrait')") } },
         )
     }

@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.html
 
+import io.github.markusaugust.streamlord.core.json.JsonWriter
 import kotlinx.html.button
 import kotlinx.html.div
 import kotlin.test.Test
@@ -98,7 +99,7 @@ class AsTheClientReadsItTest {
     @Test
     fun `a regex reaches JavaScript meaning what it meant in Kotlin`() {
         assertEquals("""/^cart\.items/""", SignalFilter.regexLiteral(Regex("^" + Regex.escape("cart.items"))))
-        assertEquals("""/x\\Ey/""", SignalFilter.regexLiteral(Regex(Regex.escape("x\\Ey"))))
+        assertEquals("""/x\x5cEy/""", SignalFilter.regexLiteral(Regex(Regex.escape("x\\Ey"))))
         assertEquals("""/[\]\-\^]/""", SignalFilter.regexLiteral(Regex("[\\Q]-^\\E]")))
         assertEquals("/a\\u2028b\\u2029c/", SignalFilter.regexLiteral(Regex("a b c")))
         assertEquals("""/x}+/""", SignalFilter.regexLiteral(Regex("x}+")))
@@ -181,5 +182,38 @@ class AsTheClientReadsItTest {
     fun `a custom property with capitals cannot travel in a key`() {
         assertFailsWith<InvalidSignalNameException> { elements { div { dataStyle("--brandColor", "'red'") } } }
         assertEquals("""<div data-style:--brand="'red'"></div>""", elements { div { dataStyle("--brand", "'red'") } })
+    }
+
+    // engine.ts:415-416: how the client cuts an attribute's expression into statements before it
+    // compiles them. It takes `\\'` and `\\"` for an escaped quote, so a string that ends in `\`
+    // would run on, and a `;` after it would cut the expression in the middle of a string.
+    private val statements =
+        Regex(
+            """(?:\/(?:\\\/|[^/])*\/|"(?:\\"|[^"])*"|'(?:\\'|[^'])*'|`(?:\\`|[^`])*`|""" +
+                """\(\s*(?:(?:function)\s*\(\s*\)|(?:\(\s*\))\s*=>)\s*(?:\{[\s\S]*?\}|[^;){]*)\s*\)\s*\(\s*\)|[^;])+""",
+        )
+
+    private fun statementsIn(expression: String) = statements.findAll(expression).map { it.value.trim() }.toList()
+
+    @Test
+    fun `a value ending in a backslash stays inside its string`() {
+        for (value in listOf("C:\\", "a\\'", "\\\"", "x\\\\")) {
+            assertEquals(1, statementsIn(js(value) + " + " + js(";")).size, value)
+            assertEquals(1, statementsIn(set("v", value)).size, value)
+            assertEquals(1, statementsIn(JsonWriter.writeExpression(mapOf("p1" to value, "p2" to ";"))).size, value)
+        }
+        for (pattern in listOf("x\\\\", "it's", "a\"b", "back`tick")) {
+            assertEquals(2, statementsIn(setAll(true, SignalFilter(include = Regex(pattern))) + "; " + set("msg", "done")).size, pattern)
+        }
+    }
+
+    // The single quotes around a literal are the only ones it holds, so it can stand between the
+    // double quotes of an attribute written in a string or a template, and no entity is decoded.
+    @Test
+    fun `a helper's literal holds no quote or ampersand of its own`() {
+        val literal = set("v", "\"><img src=x onerror=alert(1)> & 'it' `x`")
+        assertEquals("\$v = '\\x22><img src=x onerror=alert(1)> \\x26 \\x27it\\x27 `x`'", literal)
+        val regex = SignalFilter.regexLiteral(Regex("it's \"a\" `b` & c\\\\"))
+        assertEquals("/it\\x27s \\x22a\\x22 \\x60b\\x60 \\x26 c\\x5c/", regex)
     }
 }

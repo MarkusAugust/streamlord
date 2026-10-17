@@ -23,6 +23,11 @@ public object JsLiteral {
     /**
      * A single-quoted JavaScript string literal. `</` and `<!` are broken up so the text is also
      * safe inside a `<script>` element, where `<!--` followed by `<script` would keep it open.
+     *
+     * Quotes, `&` and `\` are written as `\xHH`. No quote can then end an attribute pasted into
+     * a string or a template, no entity is decoded on the way, and no `\` stands before a quote,
+     * where Datastar's client, splitting an expression into statements, takes `\\'` for an
+     * escaped quote and reads on past the end of the string.
      */
     public fun string(value: String): String =
         buildString(value.length + 2) {
@@ -30,8 +35,10 @@ public object JsLiteral {
             var previous = ' '
             for ((i, c) in value.withIndex()) {
                 when (c) {
-                    '\'' -> append("\\'")
-                    '\\' -> append("\\\\")
+                    '\'' -> append("\\x27")
+                    '"' -> append("\\x22")
+                    '&' -> append("\\x26")
+                    '\\' -> append("\\x5c")
                     '\n' -> append("\\n")
                     '\r' -> append("\\r")
                     '\t' -> append("\\t")

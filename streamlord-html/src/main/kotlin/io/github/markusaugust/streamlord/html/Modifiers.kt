@@ -76,7 +76,8 @@ public data class SignalFilter(
 
         /**
          * The pattern as the body of a JavaScript literal, read the way Java reads it: `\Q...\E` as
-         * escaped text, `/` and the line terminators escaped so the literal stays one token, an
+         * escaped text, `/` and the line terminators escaped so the literal stays one token, quotes,
+         * backticks, `&` and `\` as `\xHH` so the client reads the expression around it intact, an
          * octal escape as `\xHH`, a character outside the Basic Multilingual Plane grouped so that
          * a quantifier takes all of it, and what JavaScript would read otherwise or refuse, refused.
          */
@@ -240,7 +241,7 @@ public data class SignalFilter(
                     append('\\').append(next)
                 }
 
-                next in LINE_TERMINATORS -> {
+                next in LINE_TERMINATORS || next in AS_HEX -> {
                     appendLiteral(next)
                 }
 
@@ -298,12 +299,17 @@ public data class SignalFilter(
         private fun StringBuilder.appendChar(ch: Char) {
             when (ch) {
                 '/' -> append("\\/")
-                in LINE_TERMINATORS -> appendLiteral(ch)
+                in LINE_TERMINATORS, in AS_HEX -> appendLiteral(ch)
                 else -> append(ch)
             }
         }
 
         private const val LINE_TERMINATORS = "\n\r\u2028\u2029"
+
+        // Datastar's client knows no regex literals: a quote in one opens a string that hides the
+        // signals after it, and `\` before the closing `/` reads as an escape. A quote or `&` would
+        // also end or change an attribute pasted into a string.
+        private const val AS_HEX = "'\"`&\\"
 
         /** [ch] as text that matches itself in a JavaScript literal, in a class or out of one. */
         private fun StringBuilder.appendLiteral(ch: Char) {
@@ -312,6 +318,7 @@ public data class SignalFilter(
                 ch == '\r' -> append("\\r")
                 ch == '\u2028' -> append("\\u2028")
                 ch == '\u2029' -> append("\\u2029")
+                ch in AS_HEX -> append("\\x").append(ch.code.toString(16))
                 ch.isLetterOrDigit() || ch == '_' || ch.code > 0x7F -> append(ch)
                 else -> append('\\').append(ch)
             }

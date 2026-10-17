@@ -53,7 +53,9 @@ so the attribute stays as short as what you actually asked for.
 
 Everything the helpers quote (`js()`, `set()`, `setAll()`, the fetch options, the Pro actions)
 is written as a JavaScript literal in single quotes, the way the Datastar documentation writes
-it. The same text therefore works unchanged in the DSL, in a string and in a template.
+it. Quotes, `&` and `\` inside a value are written as `\x22`, `\x26` and the like, so the same
+text works unchanged in the DSL and between the double quotes of an attribute in a string or a
+template.
 
 ## Feeding streams directly
 
