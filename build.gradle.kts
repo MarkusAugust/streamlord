@@ -43,12 +43,6 @@ subprojects {
     tasks.withType<Jar>().configureEach {
         from(rootProject.layout.projectDirectory.file("LICENSE")) { into("META-INF") }
     }
-    // A stable module name for a consumer on the module path, so the jar does not take its file name.
-    tasks.withType<Jar>().matching { it.name == "jar" }.configureEach {
-        manifest.attributes(
-            "Automatic-Module-Name" to "io.github.markusaugust.streamlord." + project.name.removePrefix("streamlord-").replace('-', '.'),
-        )
-    }
     version = rootProject.version
 
     extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension> {
@@ -107,6 +101,13 @@ subprojects {
     }
 
     if (internal) return@subprojects
+
+    // A stable module name for a consumer on the module path, so the jar does not take its file name.
+    tasks.withType<Jar>().matching { it.name == "jar" }.configureEach {
+        manifest.attributes(
+            "Automatic-Module-Name" to "io.github.markusaugust.streamlord." + project.name.removePrefix("streamlord-").replace('-', '.'),
+        )
+    }
 
     // The javadoc jar is the publish plugin's own task, which the Jar rule above does not reach.
     tasks.withType<com.vanniktech.maven.publish.tasks.JavadocJar>().configureEach {

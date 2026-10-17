@@ -16,7 +16,7 @@ ktor = "3.6.0"
 ktorOldest = "3.0.0"
 spring = "7.0.9"
 servlet = "6.1.0"
-# Spring Boot 4.0.8 pins 11.0.24; the tests run the first line past its three advisories (fixed in 11.0.25).
+# Spring Boot 4.0.8 pins 11.0.24, which has three advisories fixed in 11.0.25; the tests run the current 11.0 line.
 tomcat = "11.0.27"
 reactor = "3.8.7"
 jackson = "3.2.3"

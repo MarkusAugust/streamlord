@@ -189,7 +189,7 @@ All notable changes to Streamlord are recorded here. The format follows
   jobs run in a `release` environment that takes release tags alone. The IntelliJ publish job
   stops when the signing certificate secrets are missing, where it published an unsigned plugin
   under a workflow that looked as if it signed it. The javadoc jars carry `META-INF/LICENSE`, as
-  the licence page promises and the other jars do, and every published jar names an
+  the licence page promises and the other jars do, and every published main jar names an
   `Automatic-Module-Name`.
 - `checkDocSamples` fails in CI on a page whose coordinates or wire transcripts it would have
   rewritten, so a release commit that forgets them goes red on the tag; locally it still rewrites

@@ -15,7 +15,9 @@ commit, and only a repository admin can create, move or delete a release tag (`v
 bypass them, require no green check before a merge and no review, so a red pull request can
 still be merged into `master`, which deploys. Merging is a decision taken on a green run, by
 hand. The three publish jobs run in the `release` environment, which takes the release tags
-alone and holds no other secret.
+alone. The publishing secrets are repository secrets today, readable from any run; moving them
+into the environment is what would make them readable from release tags alone, and then
+`verify-signing`, which runs by hand on a branch, needs the environment and a branch policy too.
 
 ## Day to day
 
@@ -72,9 +74,10 @@ it.
    `https://repo1.maven.org/maven2/io/github/markusaugust/streamlord/streamlord-core/maven-metadata.xml`
    to list the version.
 8. Then the editor tags, `intellij-v<version>` and `vscode-v<version>`, on the same commit. The
-   IntelliJ job refuses to publish unless the three `JETBRAINS_CERTIFICATE_*` and
-   `JETBRAINS_PRIVATE_KEY*` secrets are set, since without them the plugin would go out
-   unsigned while the workflow looks as if it signed it. Not
+   IntelliJ job refuses to publish unless `JETBRAINS_CERTIFICATE_CHAIN`, `JETBRAINS_PRIVATE_KEY`
+   and `JETBRAINS_PRIVATE_KEY_PASSWORD` are set, since without them the plugin went out unsigned
+   while the workflow looked as if it signed it. None of the three exists yet: create them from a
+   JetBrains plugin signing certificate before the next IntelliJ release, or the run stops there. Not
    before: each tag runs on its own, and pushed together with `v<version>` the plugins could
    publish while Maven Central is still building or failing. Push at most three tags at a time;
    GitHub starts no workflow for a push of more.
