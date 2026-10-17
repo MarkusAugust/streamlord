@@ -172,7 +172,7 @@ machine. Bump `version` in `package.json`, commit, then push a tag `vscode-v<ver
 `publish-vscode` job checks that the tag matches, builds, tests, and runs `vsce publish` with
 the `VSCE_PAT` repository secret (an Azure DevOps personal access token with the Marketplace
 *Manage* scope for the `MarkusAugust` publisher). Which branch the bump goes on, and when the
-tag may be pushed, is in [RELEASING.md](https://github.com/MarkusAugust/streamlord/blob/master/RELEASING.md).
+tag may be pushed, is in [the repository README](https://github.com/MarkusAugust/streamlord#building-and-releasing).
 
 No `.vsix` is ever committed; `npm run package` only builds one locally for installing by hand. The
 attribute and action catalog lives in `../../catalog/` and is verified against the Kotlin DSL
