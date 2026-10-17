@@ -220,8 +220,9 @@ abstract class ExtractDocSamples : DefaultTask() {
                         Problem(
                             page.name,
                             fenceLine,
-                            "a handler method takes Streamlord as a parameter. Spring builds a new default instance " +
-                                "for it instead of injecting the bean; take the bean in the controller's constructor.",
+                            "a handler method takes Streamlord as a parameter. Spring treats it as a model attribute " +
+                                "and fails to construct one, so every request answers 500 with " +
+                                "BeanInstantiationException; take the bean in the controller's constructor.",
                         )
                     continue
                 }
@@ -355,11 +356,11 @@ tasks.named("check") { dependsOn(tasks.named("checkDocSamples")) }
  * blank line:
  *
  *     <!-- deps=streamlord-json-jackson2 -->
- *     - <code>com.fasterxml.jackson.core:<wbr>jackson-databind 2.22.3</code>
- *       - <code>com.fasterxml.jackson.core:<wbr>jackson-core 2.22.3</code>
+ *     - <code>com.fasterxml.jackson.core:<wbr><span class="unbroken">jackson-databind</span> 2.22.3</code>
+ *       - <code>com.fasterxml.jackson.core:<wbr><span class="unbroken">jackson-core</span> 2.22.3</code>
  *
- * Only coordinates are compared, with the tags taken out, so the `<wbr>` that lets a coordinate
- * break at its colon on a phone stays a presentation choice.
+ * Only coordinates are compared, with the tags taken out, so the `<wbr>` and the span that let a
+ * coordinate break at its colon on a phone, and not at a hyphen, stay a presentation choice.
  */
 val documentedModules =
     listOf("streamlord-json-kotlinx", "streamlord-json-jackson", "streamlord-json-jackson2")
@@ -400,7 +401,9 @@ abstract class CheckDocDependencies : DefaultTask() {
                 val module = marker.find(line.trim())?.groupValues?.get(1) ?: continue
                 val found = claims.getOrPut(module) { mutableSetOf() }
                 for (item in lines.drop(index + 1).takeWhile { it.isNotBlank() }) {
-                    coordinate.find(item.replace(tag, ""))?.let { found += normalise("${it.groupValues[1]}:${it.groupValues[2]}:${it.groupValues[3]}") }
+                    coordinate.find(item.replace(tag, ""))?.let {
+                        found += normalise("${it.groupValues[1]}:${it.groupValues[2]}:${it.groupValues[3]}")
+                    }
                 }
             }
         }

@@ -451,8 +451,14 @@ All notable changes to Streamlord are recorded here. The format follows
 - The Spring pages give the real symptom of a handler that takes `Streamlord` as a parameter:
   every request answers `500` with `BeanInstantiationException`, on WebMVC and WebFlux, rather
   than running on a default instance. The security page says why the writer escapes U+2028 when
-  current browsers accept it raw, and the introduction and the README that a request with
-  `Connection: close` gets different headers from the version written by hand.
+  current browsers accept it raw, and that it escapes `<!` as well as `</`, and the introduction
+  and the README that a request with `Connection: close` gets different headers from the version
+  written by hand. The roadmap no longer says what a named release lacks and describes the store
+  panel with the merge it uses, `mergePatchAsClient`. The install page draws the codec dependency
+  trees as lists that break only at a coordinate's colon on a phone, not as text art. The editor
+  READMEs list the IntelliJ inspection for a signal no file defines, the Stream Inspector's two
+  settings and the required signing secrets, and VS Code's `test:live` runs against the
+  repository's own demo rather than a service outside it.
 
 ## [0.12.0] - 2026-10-11
 

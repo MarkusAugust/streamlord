@@ -25,20 +25,25 @@ the official SDKs do, and refuses a URL with a scheme that does more than naviga
 
 ## JavaScript-safe JSON
 
-The built-in writer escapes U+2028, U+2029 and `</`, because the JSON it writes ends up in
+The built-in writer escapes U+2028, U+2029, `</` and `<!`, because the JSON it writes ends up in
 JavaScript source as well as in JSON parsers. `data-signals` is compiled as an expression on the
 client, and JSON you hand to `executeScript` lands in a `<script>` element.
 
-`</` is the one that matters in every browser: inside a `<script>`, `</script>` ends the element
-wherever it stands, in a string or not, and the rest of the JSON becomes markup.
+`</` and `<!` are the two that matter in every browser. Inside a `<script>`, `</script>` ends the
+element wherever it stands, in a string or not, and the rest of the JSON becomes markup. A
+`<!--<script>` does the opposite: the parser then reads the next `</script>` as part of the
+script, so the element stays open and swallows the rest of the page. In Chrome,
+`<script>window.a = {"s":"<!--<script>"}</script>` followed by a paragraph and a second script
+leaves one script element, which never runs, and no paragraph; written as `\u003c!--<script>`,
+both scripts run and the paragraph is there.
 
 U+2028 and U+2029 are line terminators in JavaScript and ordinary characters in JSON. Since
 ES2019 a string literal may hold them, so in a current browser a raw one does no harm: in
 Chrome 155 with Datastar 1.0.4, `data-signals:r='{"s":"a<U+2028>b<U+2029>c"}'` with the raw
-characters gives the same five-character string as the escaped form. An engine older than that
-(Chrome 66, Firefox 62, Safari 12) ends the string at the character and throws `SyntaxError`, and
-so does a tool that reads JavaScript by the older rules. Written as `\u2028`, the JSON means the
-same thing to every reader, at a cost of three bytes per character.
+characters gives the same five-character string as the escaped form. An engine older than
+Chrome 66, Firefox 62 or Safari 12, and Edge before 79, ends the string at the character and
+throws `SyntaxError`, and so does a tool that reads JavaScript by the older rules. Written as
+`\u2028`, the JSON means the same thing to every reader, at a cost of three bytes per character.
 
 In `data-signals`, Streamlord also writes `\` as `\u005c`. Before compiling the value of
 an attribute it reads, such as `data-signals` or `data-text`, Datastar's client cuts it into

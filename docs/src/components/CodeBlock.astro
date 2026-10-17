@@ -24,6 +24,12 @@
     border-radius: 3px;
     background: var(--fs-color-neutral-surface);
     font-size: 0.9em;
+    /* A long identifier breaks where it would overflow a phone rather than widen the page. */
+    overflow-wrap: break-word;
+  }
+  /* Part of an inline code span that only breaks at a <wbr> beside it, never at a hyphen inside. */
+  .prose code .unbroken {
+    white-space: nowrap;
   }
   .prose code {
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

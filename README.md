@@ -62,8 +62,9 @@ get("/feed") {
 
 Both send the same bytes, and the same headers unless the request sends `Connection: close`: then
 the first still answers `Connection: keep-alive`, and `respondDatastar` answers `close`. The first
-leaves the flushing, the line splitting, the selector rules, the JSON and the headers to you; [the introduction](https://streamlord-docs.netlify.app/introduction/)
-lists what each of those costs.
+leaves the flushing, the line splitting, the selector rules, the JSON and the headers to you;
+[the introduction](https://streamlord-docs.netlify.app/introduction/) lists what each of those
+costs.
 
 ## Three ways to write markup
 

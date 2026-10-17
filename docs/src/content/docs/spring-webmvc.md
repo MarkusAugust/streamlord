@@ -77,11 +77,12 @@ compiles and starts, and Spring then treats the parameter as a model attribute: 
 build a new `Streamlord` for each request instead of passing your bean, and cannot: `heartbeat`
 is a `Duration`, a Kotlin value class, and the arguments Spring prepares do not fit the
 constructor the JVM sees. Every request to that handler answers `500` before the handler runs,
-and the log says:
+and Tomcat logs:
 
 ```text
-BeanInstantiationException: Failed to instantiate [io.github.markusaugust.streamlord.core.application.Streamlord]: Illegal arguments for constructor
-Caused by: IllegalArgumentException: Number of provided arguments must be less than or equal to the number of constructor parameters
+Servlet.service() for servlet [dispatcherServlet] in context with path [] threw exception [Request processing failed: org.springframework.beans.BeanInstantiationException: Failed to instantiate [io.github.markusaugust.streamlord.core.application.Streamlord]: Illegal arguments for constructor] with root cause
+
+java.lang.IllegalArgumentException: Number of provided arguments must be less than or equal to the number of constructor parameters
 ```
 
 The constructor is the only way in.
