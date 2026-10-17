@@ -50,7 +50,7 @@ class StreamEdgesTest {
         }
     }
 
-    /** The raw bytes of a GET until the server closes the connection or goes quiet. */
+    /** The raw bytes of a GET until the last chunk, or until the server closes the connection or goes quiet. */
     private fun raw(
         port: Int,
         path: String,
@@ -66,6 +66,7 @@ class StreamEdgesTest {
                     val n = socket.getInputStream().read(buffer)
                     if (n < 0) break
                     out.write(buffer, 0, n)
+                    if (out.toString(Charsets.ISO_8859_1).endsWith("\r\n0\r\n\r\n")) break
                 }
             } catch (_: java.io.IOException) {
             }

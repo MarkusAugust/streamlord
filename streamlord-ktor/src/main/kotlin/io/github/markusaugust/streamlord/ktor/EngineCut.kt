@@ -17,19 +17,17 @@ import java.util.function.Function
  * themselves.
  */
 
-/** Cut the connection under [call]'s response, which has started. Whether an engine was recognised. */
+/** Cut the connection under [call]'s response, which has started. Whether a cut was set going. */
 internal fun cutConnection(
     call: ApplicationCall,
     cause: Throwable,
 ): Boolean {
     val response = call.attributes.getOrNull(BaseApplicationResponse.EngineResponseAttributeKey) ?: return false
+    // Whatever goes wrong here, a native image's missing reflection metadata included, the failure
+    // the caller rethrows is the block's, not this one.
     return try {
         tomcat(response, cause) || jettyCore(response, cause) || jettyServlet(response, cause)
-    } catch (e: ReflectiveOperationException) {
-        false
-    } catch (e: RuntimeException) {
-        false
-    } catch (e: LinkageError) {
+    } catch (e: Throwable) {
         false
     }
 }
@@ -58,8 +56,10 @@ private fun tomcat(
 }
 
 // Ktor 3.3 and newer run Jetty 12 without servlets. The exchange's HttpStream is wrapped so that the
-// completion Ktor reports as a success, and the last write that goes with it, fail instead: Jetty
-// then aborts the exchange, closing an HTTP/1.1 connection and resetting an HTTP/2 stream.
+// last write, which Ktor makes as it ends the response, fails instead: Jetty then aborts the
+// exchange, closing an HTTP/1.1 connection and resetting an HTTP/2 stream. That write also carries
+// the headers of a response that wrote nothing, so such a response gets none, which the client
+// retries as it retries a cut.
 private fun jettyCore(
     response: BaseApplicationResponse,
     cause: Throwable,
@@ -71,30 +71,20 @@ private fun jettyCore(
     val loader = jettyResponse.javaClass.classLoader
     val streamClass = Class.forName("org.eclipse.jetty.server.HttpStream", false, loader)
     val failCallback = Class.forName("org.eclipse.jetty.util.Callback", false, loader).getMethod("failed", Throwable::class.java)
-    val failStream = streamClass.getMethod("failed", Throwable::class.java)
     val request = Class.forName("org.eclipse.jetty.server.Response", false, loader).getMethod("getRequest").invoke(jettyResponse)
     val wrap =
         Function<Any, Any> { stream ->
             Proxy.newProxyInstance(loader, arrayOf(streamClass)) { _, method, args ->
-                when {
+                try {
                     // send(MetaData.Request, MetaData.Response, boolean last, ByteBuffer, Callback)
-                    method.name == "send" && args?.size == 5 && args[2] == true -> {
+                    if (method.name == "send" && args?.size == 5 && args[2] == true) {
                         failCallback.invoke(args[4], cause)
                         null
+                    } else {
+                        method.invoke(stream, *(args ?: emptyArray()))
                     }
-
-                    method.name == "succeeded" && args.isNullOrEmpty() -> {
-                        failStream.invoke(stream, cause)
-                        null
-                    }
-
-                    else -> {
-                        try {
-                            method.invoke(stream, *(args ?: emptyArray()))
-                        } catch (e: InvocationTargetException) {
-                            throw e.targetException
-                        }
-                    }
+                } catch (e: InvocationTargetException) {
+                    throw e.targetException
                 }
             }
         }

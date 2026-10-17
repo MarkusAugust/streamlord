@@ -70,9 +70,9 @@ A block that throws ends the stream: the frames it sent go out, and the connecti
 which Datastar's client retries. Ktor offers a writer no way to wait for the engine to send what it
 was given, and without one CIO dropped the last frames, or the whole response, and Netty often
 ended a failed response as if it had finished. So a failure waits a moment for the engine, at most
-a second for a reader who stopped reading, before it is thrown on. Over 200 failures on each
-engine, on a local socket, every frame arrived and every stream was cut; under heavy load that is
-not a promise. Catch what you can inside the block and send the page what it should show.
+a second for a reader who stopped reading, before it is thrown on. Over 200 failures on CIO and
+on Netty, on a local socket, every frame arrived and every stream was cut; under heavy load that
+is not a promise. Catch what you can inside the block and send the page what it should show.
 
 CIO and Netty cut the connection themselves. Tomcat and Jetty end a failed response with its last
 chunk, as if it had finished, and Datastar's client does not retry a stream that finished, so
