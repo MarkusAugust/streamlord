@@ -5,6 +5,7 @@ import org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation
 import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.KotlinJvm
 import com.vanniktech.maven.publish.MavenPublishBaseExtension
+import com.vanniktech.maven.publish.SourcesJar
 
 plugins {
     alias(libs.plugins.kotlin.jvm) apply false
@@ -41,6 +42,12 @@ subprojects {
     // MIT asks that the notice and the licence text travel with every copy, and a jar is a copy.
     tasks.withType<Jar>().configureEach {
         from(rootProject.layout.projectDirectory.file("LICENSE")) { into("META-INF") }
+    }
+    // A stable module name for a consumer on the module path, so the jar does not take its file name.
+    tasks.withType<Jar>().matching { it.name == "jar" }.configureEach {
+        manifest.attributes(
+            "Automatic-Module-Name" to "io.github.markusaugust.streamlord." + project.name.removePrefix("streamlord-").replace('-', '.'),
+        )
     }
     version = rootProject.version
 
@@ -101,6 +108,11 @@ subprojects {
 
     if (internal) return@subprojects
 
+    // The javadoc jar is the publish plugin's own task, which the Jar rule above does not reach.
+    tasks.withType<com.vanniktech.maven.publish.tasks.JavadocJar>().configureEach {
+        from(rootProject.layout.projectDirectory.file("LICENSE")) { into("META-INF") }
+    }
+
     /*
      * Maven Central, through Sonatype's Central Portal. Credentials and the signing key come
      * from CI secrets as Gradle properties (ORG_GRADLE_PROJECT_mavenCentralUsername etc.);
@@ -124,7 +136,7 @@ subprojects {
         configure(
             KotlinJvm(
                 javadocJar = JavadocJar.Dokka("dokkaGeneratePublicationHtml"),
-                sourcesJar = true,
+                sourcesJar = SourcesJar.Sources(),
             ),
         )
         coordinates(rootProject.group.toString(), project.name, rootProject.version.toString())

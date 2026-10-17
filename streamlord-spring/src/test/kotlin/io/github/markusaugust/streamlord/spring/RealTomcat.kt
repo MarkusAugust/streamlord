@@ -37,7 +37,8 @@ class RealTomcat(
             isAsyncSupported = true
             setLoadOnStartup(1)
         }
-        context.addServletMappingDecoded("/", "dispatcher")
+        // addServletMappingDecoded is deprecated from Tomcat 11.0.25; this one takes the pattern as written.
+        context.addServletMapping("/", "dispatcher")
         for ((index, filter) in filters.withIndex()) {
             val name = "filter$index"
             context.addFilterDef(

@@ -16,8 +16,8 @@ ktor = "3.6.0"
 ktorOldest = "3.0.0"
 spring = "7.0.9"
 servlet = "6.1.0"
-# What Spring Boot 4 pins, so the container a test starts is the one Boot users run.
-tomcat = "11.0.24"
+# Spring Boot 4.0.8 pins 11.0.24; the tests run the first line past its three advisories (fixed in 11.0.25).
+tomcat = "11.0.27"
 reactor = "3.8.7"
 jackson = "3.2.3"
 jackson2 = "2.22.3"

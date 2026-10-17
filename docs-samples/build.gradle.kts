@@ -509,6 +509,10 @@ abstract class ApplyWireTranscripts : DefaultTask() {
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val transcripts: DirectoryProperty
 
+    /** In CI a stale page fails the build rather than being rewritten into a workspace nobody commits. */
+    @get:Input
+    abstract val failOnChange: Property<Boolean>
+
     /*
      * Neither an input nor an output. The task edits its own source directory, a shape
      * Gradle's model has no room for: declaring it both ways is a dependency cycle, and
@@ -526,6 +530,7 @@ abstract class ApplyWireTranscripts : DefaultTask() {
                 .associate { it.nameWithoutExtension to it.readText().trimEnd('\n') + "\n" }
 
         var changed = 0
+        val stale = ArrayList<String>()
 
         for (page in pages.get().asFile.walkTopDown().filter { it.extension == "md" }) {
             val lines = page.readLines().toMutableList()
@@ -562,11 +567,17 @@ abstract class ApplyWireTranscripts : DefaultTask() {
             }
 
             if (touched) {
-                page.writeText(lines.joinToString("\n") + "\n")
+                if (failOnChange.get()) stale += page.name else page.writeText(lines.joinToString("\n") + "\n")
                 changed++
             }
         }
 
+        if (stale.isNotEmpty()) {
+            throw GradleException(
+                "The wire transcripts are stale on ${stale.joinToString(", ")}. " +
+                    "Run ./gradlew :docs-samples:checkDocSamples locally and commit what it rewrites.",
+            )
+        }
         logger.lifecycle(
             if (changed == 0) "Wire transcripts on the pages are current."
             else "Rewrote the wire transcripts on $changed page(s). Commit the change.",
@@ -581,6 +592,7 @@ val applyWireTranscripts =
         dependsOn(generateWireTranscripts)
         transcripts.set(layout.buildDirectory.dir("wire"))
         pages.set(rootProject.layout.projectDirectory.dir("docs/src/content/docs"))
+        failOnChange.set(providers.environmentVariable("CI").map { it.isNotBlank() }.orElse(false))
         outputs.upToDateWhen { false }
     }
 
@@ -611,6 +623,10 @@ abstract class ApplyProjectVersion : DefaultTask() {
     @get:Input
     abstract val coordinateGroup: Property<String>
 
+    /** In CI a stale page fails the build rather than being rewritten into a workspace nobody commits. */
+    @get:Input
+    abstract val failOnChange: Property<Boolean>
+
     /** Rewritten in place, so neither an input nor an output. See ApplyWireTranscripts. */
     @get:Internal
     abstract val pages: DirectoryProperty
@@ -635,6 +651,7 @@ abstract class ApplyProjectVersion : DefaultTask() {
         val files =
             pages.get().asFile.walkTopDown().filter { it.extension == "md" } + extraPages.files
         var changed = 0
+        val stale = ArrayList<String>()
 
         for (page in files) {
             val before = page.readText()
@@ -644,11 +661,17 @@ abstract class ApplyProjectVersion : DefaultTask() {
                     .replace(mavenDependency) { "${it.groupValues[1]}$version${it.groupValues[2]}" }
 
             if (after != before) {
-                page.writeText(after)
+                if (failOnChange.get()) stale += page.name else page.writeText(after)
                 changed++
             }
         }
 
+        if (stale.isNotEmpty()) {
+            throw GradleException(
+                "The documented coordinates do not name $version on ${stale.joinToString(", ")}. " +
+                    "Run ./gradlew :docs-samples:checkDocSamples locally and commit what it rewrites.",
+            )
+        }
         logger.lifecycle(
             if (changed == 0) "Documented coordinates already name $version."
             else "Rewrote the coordinates to $version on $changed file(s). Commit the change.",
@@ -664,6 +687,7 @@ val applyProjectVersion =
         coordinateGroup.set(rootProject.group.toString())
         pages.set(rootProject.layout.projectDirectory.dir("docs/src/content/docs"))
         extraPages.from(rootProject.layout.projectDirectory.file("README.md"))
+        failOnChange.set(providers.environmentVariable("CI").map { it.isNotBlank() }.orElse(false))
         outputs.upToDateWhen { false }
     }
 
