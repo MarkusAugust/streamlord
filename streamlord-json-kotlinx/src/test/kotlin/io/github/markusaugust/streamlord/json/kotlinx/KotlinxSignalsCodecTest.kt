@@ -183,4 +183,21 @@ class KotlinxSignalsCodecTest {
         val e = assertFailsWith<SignalsCodecException> { KotlinxSignalsCodec().decode<Map<String, Int>>("""{"a":"no"}""") }
         assertFalse("serializer" in e.message.orEmpty().lowercase(), e.message)
     }
+
+    @Serializable
+    enum class Colour { RED, GREEN }
+
+    @Serializable
+    data class Painted(
+        val c: Colour,
+    )
+
+    // Jackson reads a number as the constant at that position; the table on the Signals page has both.
+    @Test
+    fun `an enum is read by name only`() {
+        assertEquals(Painted(Colour.GREEN), codec.decode<Painted>("""{"c":"GREEN"}"""))
+        for (body in listOf("""{"c":0}""", """{"c":"0"}""")) {
+            assertFailsWith<SignalsDecodeException>(body) { codec.decode<Painted>(body) }
+        }
+    }
 }

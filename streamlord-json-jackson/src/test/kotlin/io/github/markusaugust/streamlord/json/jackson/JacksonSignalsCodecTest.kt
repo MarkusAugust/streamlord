@@ -146,15 +146,54 @@ class JacksonSignalsCodecTest {
     data class Held(
         val xs: List<Int> = emptyList(),
         val m: Map<String, Int> = emptyMap(),
+        val deep: Map<String, List<List<Int>>> = emptyMap(),
     )
 
     @Test
     fun `a null inside a collection that holds none is refused`() {
-        for (body in listOf("""{"xs":[1,null]}""", """{"m":{"a":null}}""")) {
+        for (body in listOf("""{"xs":[1,null]}""", """{"m":{"a":null}}""", """{"deep":{"a":[[1],[2,null]]}}""")) {
             assertFailsWith<SignalsDecodeException>(body) { codec.decode<Held>(body) }
         }
         // The Kotlin module checks a constructor's parameters; a map read whole is checked by the codec.
         assertFailsWith<SignalsDecodeException> { codec.decode<Map<String, Int>>("""{"a":null}""") }
         assertEquals(mapOf("a" to null), codec.decode<Map<String, Int?>>("""{"a":null}"""))
+    }
+
+    // A Java collection takes null; its platform type only looks as if it did not.
+    @Test
+    fun `a Java record keeps null inside its collections`() {
+        for (c in listOf(codec, JacksonSignalsCodec(JsonMapper.builder().build()))) {
+            assertEquals(
+                JavaHeld(listOf(1, null), mapOf("a" to null)),
+                c.decode<JavaHeld>("""{"xs":[1,null],"m":{"a":null}}"""),
+            )
+        }
+    }
+
+    @Test
+    fun `a null inside a collection read whole is refused at any depth`() {
+        for (c in listOf(codec, JacksonSignalsCodec(JsonMapper.builder().build()))) {
+            assertFailsWith<SignalsDecodeException> { c.decode<List<Int>>("""[1,null]""") }
+            assertFailsWith<SignalsDecodeException> { c.decode<Set<String>>("""["a",null]""") }
+            assertFailsWith<SignalsDecodeException> { c.decode<Map<String, List<Int>>>("""{"a":[1,null]}""") }
+            assertFailsWith<SignalsDecodeException> { c.decode<List<List<Int>>>("""[[1],[2,null]]""") }
+            assertFailsWith<SignalsDecodeException> { c.decode<Map<String, Map<String, Int>>>("""{"a":{"b":null}}""") }
+            assertEquals(listOf(listOf(1, null)), c.decode<List<List<Int?>>>("""[[1,null]]"""))
+            assertEquals(mapOf("a" to null), c.decode<Map<String, List<Int>?>>("""{"a":null}"""))
+        }
+    }
+
+    enum class Colour { RED, GREEN }
+
+    data class Painted(
+        val c: Colour,
+    )
+
+    // Unlike kotlinx, which refuses both; the table on the Signals page has it.
+    @Test
+    fun `an enum is read by position as well as by name`() {
+        for (body in listOf("""{"c":0}""", """{"c":"0"}""")) {
+            assertEquals(Painted(Colour.RED), codec.decode<Painted>(body), body)
+        }
     }
 }

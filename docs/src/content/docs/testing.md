@@ -160,7 +160,9 @@ fun `the panel patches inner html`() {
 ```
 
 `MockHttpServletRequest` does the other direction when you want to check signal reading, and it
-takes a body or a `datastar` query parameter like the real thing.
+takes a body or a `datastar` query parameter like the real thing. Give a body
+`contentType = "application/json"` as well, as Datastar's client does; without it, reading the
+signals throws `SignalsMediaTypeException`.
 
 ## Without a framework at all
 

@@ -15,6 +15,13 @@ change nothing. A client of your own that posts signals without that `Content-Ty
 map the exception to `415` in `StatusPages`; [Security](/security/#forms-from-other-sites) has
 the block and the reason.
 
+**The Jackson codecs ignore keys your type does not name, even when your mapper refuses them.**
+A mapper with `FAIL_ON_UNKNOWN_PROPERTIES` on, as `jacksonObjectMapper()` has it, no longer fails
+every request that carries a signal the type does not name; nothing to change unless a test of
+yours counted on that failure. `Jackson2SignalsCodec` reads through a copy of the mapper you hand
+it, made once, so that mapper keeps its own rules; a mapper of a subclass that does not override
+`copy()` cannot be used.
+
 ## 0.12.0
 
 **Spring Boot 3 is no longer supported.** The Spring adapter is built for Boot 4 (Framework 7.0,

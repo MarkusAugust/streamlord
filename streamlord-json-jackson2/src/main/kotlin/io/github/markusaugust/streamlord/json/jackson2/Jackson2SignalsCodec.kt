@@ -16,9 +16,11 @@ import io.github.markusaugust.streamlord.core.port.driven.SignalsCodec
 import java.lang.reflect.Constructor
 import java.lang.reflect.Method
 import kotlin.reflect.KClass
+import kotlin.reflect.KFunction
 import kotlin.reflect.KType
 import kotlin.reflect.full.valueParameters
 import kotlin.reflect.javaType
+import kotlin.reflect.jvm.javaConstructor
 import kotlin.reflect.jvm.kotlinFunction
 
 /**
@@ -34,7 +36,9 @@ import kotlin.reflect.jvm.kotlinFunction
  * default and when the mapper has the Kotlin module's `NullIsSameAsDefault` on, so declare it
  * `Int?` if the page may send `null`. A `null` inside a Kotlin parameter's `List<Int>`,
  * `Set<Item>`, `Array<String>` or `Map<String, Int>` is refused too, as the Kotlin module's
- * `StrictNullChecks` refuses it, so declare the element `Int?` if it may be `null`. A Kotlin
+ * `StrictNullChecks` refuses it, and so is one inside a `List<Int>` or `Map<String, List<Int>>`
+ * read whole, at any depth; declare the element `Int?` if it may be `null`. A Java class's
+ * collections keep taking `null`. A Kotlin
  * parameter must be sent unless it has a default or, unlike with kotlinx, takes `null`; a Java
  * creator keeps the mapper's rule. A key the type does not name is ignored, as the other codecs
  * ignore it, where Jackson 2's own default refuses it. And nothing may follow the JSON value.
@@ -120,15 +124,27 @@ public class Jackson2SignalsCodec(
 
         /*
          * The Kotlin module checks what a constructor holds, not the type asked for, so a
-         * Map<String, Int> read whole is checked here.
+         * List<Int> or Map<String, List<Int>> read whole is checked here, through every list,
+         * set, array and map it nests.
          */
         private fun refuseNullValues(
-            value: Any,
+            value: Any?,
             type: KType,
+            whole: KType = type,
         ) {
-            val values = type.arguments.getOrNull(1)?.type
-            if (value is Map<*, *> && values?.isMarkedNullable == false && null in value.values) {
-                throw SignalsDecodeException("Signals held null where $type takes none")
+            val (items, item) =
+                when (value) {
+                    is Map<*, *> -> value.values to type.arguments.getOrNull(1)?.type
+                    is Collection<*> -> value to type.arguments.getOrNull(0)?.type
+                    is Array<*> -> value.asList() to type.arguments.getOrNull(0)?.type
+                    else -> return
+                }
+            if (item == null) return
+            for (each in items) {
+                if (each == null && !item.isMarkedNullable) {
+                    throw SignalsDecodeException("Signals held null where $whole takes none")
+                }
+                refuseNullValues(each, item, whole)
             }
         }
 
@@ -171,9 +187,12 @@ private object ContentNulls : NopAnnotationIntrospector() {
                 parameter.type.isMapLikeType -> 1
                 else -> return JsonSetter.Value.empty()
             }
+        val owner = parameter.owner.member
+        // A Java parameter's platform type is not marked nullable, yet takes null.
+        if (!owner.declaringClass.isAnnotationPresent(Metadata::class.java)) return JsonSetter.Value.empty()
         val function =
-            when (val owner = parameter.owner.member) {
-                is Constructor<*> -> owner.kotlinFunction
+            when (owner) {
+                is Constructor<*> -> owner.kotlinFunction ?: owner.behindSynthetic()
                 is Method -> owner.kotlinFunction
                 else -> null
             }
@@ -189,3 +208,14 @@ private object ContentNulls : NopAnnotationIntrospector() {
         return if (nonNull) JsonSetter.Value.forContentNulls(Nulls.FAIL) else JsonSetter.Value.empty()
     }
 }
+
+/*
+ * A constructor that takes a value class is private, and Jackson reads it, while kotlin-reflect
+ * knows it only as the synthetic one beside it, which takes a DefaultConstructorMarker last.
+ */
+private fun Constructor<*>.behindSynthetic(): KFunction<*>? =
+    declaringClass.kotlin.constructors.firstOrNull { constructor ->
+        val types = constructor.javaConstructor?.parameterTypes ?: return@firstOrNull false
+        types.lastOrNull()?.name == "kotlin.jvm.internal.DefaultConstructorMarker" &&
+            types.copyOfRange(0, types.size - 1).contentEquals(parameterTypes)
+    }

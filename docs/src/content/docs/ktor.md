@@ -35,7 +35,9 @@ be asked again whether it may still run, which is on [Operations](/operations/).
 long, 30 seconds unless you set it, for the proxies in between, unless the stream passes a
 `heartbeat` of its own to `respondDatastar`; it is on [Operations](/operations/#heartbeats).
 `compress` gzips every stream whose request takes it; it is on
-[Operations](/operations/#compression).
+[Operations](/operations/#compression). `requireJsonContentType`, on unless you set it to `false`,
+refuses signals in a body not declared `application/json`; it is on
+[Security](/security/#forms-from-other-sites).
 
 ## One-shot streams
 

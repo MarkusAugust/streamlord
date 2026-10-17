@@ -21,6 +21,7 @@ dependencies {
     testImplementation(libs.ktor.server.netty)
     testImplementation(project(":streamlord-test"))
     testImplementation(libs.ktor.server.compression)
+    testImplementation(libs.ktor.server.status.pages)
 }
 
 /*

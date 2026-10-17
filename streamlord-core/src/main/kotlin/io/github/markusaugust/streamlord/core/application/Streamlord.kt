@@ -236,8 +236,9 @@ public class Streamlord(
      * Applies the protocol rule: query parameter `datastar` for GET and DELETE, body otherwise.
      *
      * While [requireJsonContentType] is on, a request whose body is declared anything but
-     * `application/json` throws [SignalsMediaTypeException] before the body is read, and so does
-     * a body that is not empty and declared nothing at all.
+     * `application/json` throws [SignalsMediaTypeException] before the body is read. A request
+     * with no `Content-Type` has its body read first, within [maxSignalsSize], and throws it
+     * after the read when the body is not blank; a blank one is no signals, and `null`.
      */
     public suspend fun readSignalsJson(request: IncomingRequest): String? {
         val inQuery = request.carriesSignalsInQuery
@@ -312,8 +313,8 @@ public class Streamlord(
 private const val CONTENT_TYPE = "Content-Type"
 
 /** `application/json` in any case, with or without parameters such as a charset. */
-private fun isJson(contentType: String?): Boolean =
-    contentType?.substringBefore(';')?.trim()?.equals(DatastarProtocol.CONTENT_TYPE_JSON, ignoreCase = true) == true
+private fun isJson(contentType: String): Boolean =
+    contentType.substringBefore(';').trim().equals(DatastarProtocol.CONTENT_TYPE_JSON, ignoreCase = true)
 
 private fun requireHeartbeat(heartbeat: Duration?) {
     require(heartbeat == null || heartbeat.isPositive()) { "heartbeat must be positive, or null for none" }

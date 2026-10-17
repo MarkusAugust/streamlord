@@ -122,6 +122,15 @@ class ReadSignalsGuardTest {
             assertEquals(2, decoded)
         }
 
+    // Depth falls again at each close: siblings, however many, are one level.
+    @Test
+    fun `many shallow siblings pass`() =
+        runTest {
+            val siblings = "{\"xs\":[" + List(150) { "[],{},[{}]" }.joinToString(",") + "]}"
+            val read = Streamlord.Default.readSignals<Map<String, Any?>>(json(siblings))
+            assertEquals(450, (read?.get("xs") as List<*>).size)
+        }
+
     @Test
     fun `the built-in reader refuses the same depth`() =
         runTest {

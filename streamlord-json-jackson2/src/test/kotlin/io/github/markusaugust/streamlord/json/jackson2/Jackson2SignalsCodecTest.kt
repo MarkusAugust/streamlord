@@ -11,6 +11,9 @@ import io.github.markusaugust.streamlord.core.SignalsCodecException
 import io.github.markusaugust.streamlord.core.SignalsDecodeException
 import io.github.markusaugust.streamlord.core.port.driven.decode
 import io.github.markusaugust.streamlord.core.port.driven.encode
+import java.io.File
+import java.net.URLClassLoader
+import kotlin.reflect.KType
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -159,6 +162,7 @@ class Jackson2SignalsCodecTest {
         val names: Array<String> = emptyArray(),
         val maybe: List<Int?> = emptyList(),
         val maybeMap: Map<String, Int?> = emptyMap(),
+        val deep: Map<String, List<List<Int>>> = emptyMap(),
     )
 
     // A null where the type holds none would reach the handler as a NullPointerException.
@@ -177,6 +181,7 @@ class Jackson2SignalsCodecTest {
                 """{"items":[null]}""",
                 """{"tags":[null]}""",
                 """{"names":["a",null]}""",
+                """{"deep":{"a":[[1],[2,null]]}}""",
             )) {
                 assertFailsWith<SignalsDecodeException>(body) { c.decode<Held>(body) }
             }
@@ -185,6 +190,103 @@ class Jackson2SignalsCodecTest {
             assertEquals(mapOf("a" to null), held.maybeMap)
             assertFailsWith<SignalsDecodeException> { c.decode<Map<String, Int>>("""{"a":null}""") }
             assertEquals(mapOf("a" to null), c.decode<Map<String, Int?>>("""{"a":null}"""))
+        }
+    }
+
+    @JvmInline
+    value class Id(
+        val v: Int,
+    )
+
+    data class WithId(
+        val id: Id,
+        val xs: List<Int> = emptyList(),
+        val m: Map<String, Int> = emptyMap(),
+        val ids: List<Id> = emptyList(),
+    )
+
+    data class WithIdRequired(
+        val id: Id,
+        val xs: List<Int>,
+        val m: Map<String, Int>,
+    )
+
+    // A value class parameter hides the constructor kotlin-reflect knows behind a synthetic one.
+    @Test
+    fun `a null inside a collection is refused beside a value class`() {
+        for (c in listOf(
+            codec,
+            Jackson2SignalsCodec(
+                com.fasterxml.jackson.module.kotlin
+                    .jacksonObjectMapper(),
+            ),
+        )) {
+            for (body in listOf("""{"id":1,"xs":[1,null]}""", """{"id":1,"m":{"a":null}}""", """{"id":1,"ids":[null]}""")) {
+                assertFailsWith<SignalsDecodeException>(body) { c.decode<WithId>(body) }
+            }
+            for (body in listOf("""{"id":1,"xs":[1,null],"m":{}}""", """{"id":1,"xs":[],"m":{"a":null}}""")) {
+                assertFailsWith<SignalsDecodeException>(body) { c.decode<WithIdRequired>(body) }
+            }
+            assertEquals(WithId(Id(1), listOf(2), ids = listOf(Id(3))), c.decode<WithId>("""{"id":1,"xs":[2],"ids":[3]}"""))
+        }
+    }
+
+    // A Java collection takes null; its platform type only looks as if it did not.
+    @Test
+    fun `a Java record keeps null inside its collections`() {
+        for (c in listOf(codec, Jackson2SignalsCodec(ObjectMapper()))) {
+            assertEquals(
+                JavaHeld(listOf(1, null), mapOf("a" to null)),
+                c.decode<JavaHeld>("""{"xs":[1,null],"m":{"a":null}}"""),
+            )
+        }
+    }
+
+    // The Kotlin module checks a constructor's parameters; a type read whole is checked by the codec, all the way down.
+    @Test
+    fun `a null inside a collection read whole is refused at any depth`() {
+        for (c in listOf(codec, Jackson2SignalsCodec(ObjectMapper()))) {
+            assertFailsWith<SignalsDecodeException> { c.decode<List<Int>>("""[1,null]""") }
+            assertFailsWith<SignalsDecodeException> { c.decode<Set<String>>("""["a",null]""") }
+            assertFailsWith<SignalsDecodeException> { c.decode<Map<String, List<Int>>>("""{"a":[1,null]}""") }
+            assertFailsWith<SignalsDecodeException> { c.decode<List<List<Int>>>("""[[1],[2,null]]""") }
+            assertFailsWith<SignalsDecodeException> { c.decode<Map<String, Map<String, Int>>>("""{"a":{"b":null}}""") }
+            assertEquals(listOf(listOf(1, null)), c.decode<List<List<Int?>>>("""[[1,null]]"""))
+            assertEquals(mapOf("a" to null), c.decode<Map<String, List<Int>?>>("""{"a":null}"""))
+        }
+    }
+
+    data class Created
+        @com.fasterxml.jackson.annotation.JsonCreator
+        constructor(
+            @param:com.fasterxml.jackson.annotation.JsonProperty("xs") val xs: List<Int>,
+        )
+
+    // jackson-databind brings no kotlin-reflect; the Kotlin module does, and the rule above is installed only beside it.
+    @Test
+    fun `a mapper without the Kotlin module never needs kotlin-reflect`() {
+        val urls =
+            System
+                .getProperty("java.class.path")
+                .split(File.pathSeparator)
+                .filterNot { File(it).name.startsWith("kotlin-reflect") }
+                .map { File(it).toURI().toURL() }
+                .toTypedArray()
+        URLClassLoader(urls, ClassLoader.getPlatformClassLoader()).use { loader ->
+            assertFailsWith<ClassNotFoundException> { loader.loadClass("kotlin.reflect.jvm.ReflectJvmMapping") }
+            val mapperClass = loader.loadClass(ObjectMapper::class.java.name)
+            val codec =
+                loader
+                    .loadClass(Jackson2SignalsCodec::class.java.name)
+                    .getConstructor(mapperClass)
+                    .newInstance(mapperClass.getConstructor().newInstance())
+            val type =
+                loader
+                    .loadClass("kotlin.jvm.internal.Reflection")
+                    .getMethod("typeOf", Class::class.java)
+                    .invoke(null, loader.loadClass(JavaWrap::class.java.name))
+            val decode = codec.javaClass.getMethod("decode", String::class.java, loader.loadClass(KType::class.java.name))
+            assertEquals("JavaWrap[inner=Created(xs=[1])]", decode.invoke(codec, """{"inner":{"xs":[1]}}""", type).toString())
         }
     }
 
@@ -200,5 +302,19 @@ class Jackson2SignalsCodecTest {
             mapper.readValue("""{"page":2,"other":1}""", Page::class.java)
         }
         assertEquals(listOf(1, null), mapper.readValue("""{"xs":[1,null]}""", Held::class.java).xs)
+    }
+
+    enum class Colour { RED, GREEN }
+
+    data class Painted(
+        val c: Colour,
+    )
+
+    // Unlike kotlinx, which refuses both; the table on the Signals page has it.
+    @Test
+    fun `an enum is read by position as well as by name`() {
+        for (body in listOf("""{"c":0}""", """{"c":"0"}""")) {
+            assertEquals(Painted(Colour.RED), codec.decode<Painted>(body), body)
+        }
     }
 }

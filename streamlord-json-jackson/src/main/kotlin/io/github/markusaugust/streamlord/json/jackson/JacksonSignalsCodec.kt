@@ -28,8 +28,10 @@ import kotlin.reflect.javaType
  * does not name is ignored, as the other codecs ignore it, even when the mapper turns on
  * `FAIL_ON_UNKNOWN_PROPERTIES`. And nothing may follow the JSON value.
  *
- * A `null` inside a `List<Int>` or `Map<String, Int>` is refused by the Kotlin module's
- * `StrictNullChecks`, on by default in Jackson 3; a mapper that turns it off lets one through.
+ * A `null` inside a Kotlin parameter's `List<Int>` or `Map<String, Int>` is refused by the
+ * Kotlin module's `StrictNullChecks`, on by default in Jackson 3; a mapper that turns it off lets
+ * one through. One inside a `List<Int>` or `Map<String, List<Int>>` read whole is refused by the
+ * codec, at any depth, whatever the mapper says.
  *
  * A Kotlin class or interface in the type needs `jackson-module-kotlin` on the mapper, even one
  * Jackson could build without it, such as a class with `var` properties. Without the module
@@ -87,15 +89,27 @@ public class JacksonSignalsCodec(
 
         /*
          * The Kotlin module checks what a constructor holds, not the type asked for, so a
-         * Map<String, Int> read whole is checked here.
+         * List<Int> or Map<String, List<Int>> read whole is checked here, through every list,
+         * set, array and map it nests.
          */
         private fun refuseNullValues(
-            value: Any,
+            value: Any?,
             type: KType,
+            whole: KType = type,
         ) {
-            val values = type.arguments.getOrNull(1)?.type
-            if (value is Map<*, *> && values?.isMarkedNullable == false && null in value.values) {
-                throw SignalsDecodeException("Signals held null where $type takes none")
+            val (items, item) =
+                when (value) {
+                    is Map<*, *> -> value.values to type.arguments.getOrNull(1)?.type
+                    is Collection<*> -> value to type.arguments.getOrNull(0)?.type
+                    is Array<*> -> value.asList() to type.arguments.getOrNull(0)?.type
+                    else -> return
+                }
+            if (item == null) return
+            for (each in items) {
+                if (each == null && !item.isMarkedNullable) {
+                    throw SignalsDecodeException("Signals held null where $whole takes none")
+                }
+                refuseNullValues(each, item, whole)
             }
         }
 
