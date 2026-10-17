@@ -216,27 +216,63 @@ internal class ClientScript(
     fun toExpression(offset: Int): Int = origin[offset.coerceIn(0, origin.size - 1)]
 }
 
-/**
- * The client's rewrite of an expression (engine.ts:448 in 1.0.4), as one pattern: a quoted string
- * or a template literal without `${` is stepped over, a `${...}` has its signals rewritten, and a
- * `$name.path` outside them is written as `$['name']['path']`. Written as a plain string, since in
- * a raw one `${` would open a Kotlin template.
- */
-private val CLIENT_REWRITE =
-    Regex(
-        "(?:\"[^\"\\\\]*(?:\\\\.[^\"\\\\]*)*\"|'[^'\\\\]*(?:\\\\.[^'\\\\]*)*'|`[^`\\\\$]*(?:(?:\\\\.|\\$(?!\\{))[^`\\\\$]*)*`)|\\$\\{([^{}]*)\\}|\\$(\\w+(?:[.-]\\w+)*)",
-    )
-
-/** A signal reference as the client reads one: `\w` and `.`/`-` joined parts. */
+/** A signal reference as the client reads one (engine.ts:448 in 1.0.4): `\w` and `.`/`-` joined parts. */
 private val CLIENT_SIGNAL = Regex("""\$(\w+(?:[.-]\w+)*)""")
 
 private fun signalPath(name: String): String = "$" + name.split('.').joinToString("") { "['$it']" }
 
+/** What `.` in the client's pattern does not match. */
+private fun Char.isLineTerminator(): Boolean = this == '\n' || this == '\r' || this == '\u2028' || this == '\u2029'
+
 /**
- * The text with every `$name.path` written as the client writes it before compiling, so a signal
- * can be no parameter, declared name or property key, as it cannot be in the browser; what sits in
- * quotes stays as written, as it does there. Every character of a rewritten reference maps back to
- * where the reference began.
+ * The end of a quoted string as the client's pattern matches one, `"[^"\\]*(?:\\.[^"\\]*)*"`:
+ * an escape takes the next character unless that is a line terminator, and a string that never
+ * closes is no string. Null when the pattern would not match here.
+ */
+private fun quotedEnd(
+    text: String,
+    from: Int,
+    quote: Char,
+): Int? {
+    var j = from + 1
+    while (j < text.length) {
+        val c = text[j]
+        when {
+            c == quote -> return j + 1
+            c == '\\' -> if (j + 1 < text.length && !text[j + 1].isLineTerminator()) j += 2 else return null
+            else -> j++
+        }
+    }
+    return null
+}
+
+/** The end of a template literal with no `${` in it, as the client's pattern matches one; null otherwise. */
+private fun templateEnd(
+    text: String,
+    from: Int,
+): Int? {
+    var j = from + 1
+    while (j < text.length) {
+        val c = text[j]
+        when {
+            c == '`' -> return j + 1
+            c == '\\' -> if (j + 1 < text.length && !text[j + 1].isLineTerminator()) j += 2 else return null
+            c == '$' && text.getOrNull(j + 1) == '{' -> return null
+            else -> j++
+        }
+    }
+    return null
+}
+
+/**
+ * The text with every `$name.path` written as the client writes it before compiling (engine.ts:448
+ * in 1.0.4), so a signal can be no parameter, declared name or property key, as it cannot be in the
+ * browser. The client does it with one pattern: a quoted string or a template literal without `${`
+ * is stepped over, a `${...}` with no brace inside has its signals rewritten, and a `$name.path`
+ * outside them becomes `$['name']['path']`. Here it is a scan, since Java's engine recurses on
+ * that pattern's loops and overflows on a long string of escapes; the alternatives are tried in the
+ * client's order at every offset. Every character of a rewritten reference maps back to where the
+ * reference began.
  */
 internal fun clientSignals(text: String): ClientScript {
     val js = StringBuilder()
@@ -252,42 +288,58 @@ internal fun clientSignals(text: String): ClientScript {
         }
     }
 
-    fun signals(
-        from: Int,
-        to: Int,
-    ) {
-        var i = from
-        for (m in CLIENT_SIGNAL.findAll(text.substring(from, to))) {
-            copy(i, from + m.range.first)
-            val written = signalPath(m.groupValues[1])
-            repeat(written.length) { origin += from + m.range.first }
-            js.append(written)
-            i = from + m.range.last + 1
-        }
-        copy(i, to)
+    /** A signal reference starting at [from], rewritten; the offset just past it, or null when none starts here. */
+    fun signal(from: Int): Int? {
+        val m = CLIENT_SIGNAL.matchAt(text, from) ?: return null
+        val written = signalPath(m.groupValues[1])
+        repeat(written.length) { origin += from }
+        js.append(written)
+        return m.range.last + 1
     }
     var i = 0
-    for (m in CLIENT_REWRITE.findAll(text)) {
-        copy(i, m.range.first)
-        val interpolation = m.groups[1]
-        when {
-            interpolation != null -> {
-                copy(m.range.first, interpolation.range.first)
-                signals(interpolation.range.first, interpolation.range.last + 1)
-                copy(interpolation.range.last + 1, m.range.last + 1)
-            }
+    while (i < text.length) {
+        val c = text[i]
+        val end =
+            when {
+                c == '"' || c == '\'' -> {
+                    quotedEnd(text, i, c)?.also { copy(i, it) }
+                }
 
-            m.groups[2] != null -> {
-                signals(m.range.first, m.range.last + 1)
-            }
+                c == '`' -> {
+                    templateEnd(text, i)?.also { copy(i, it) }
+                }
 
-            else -> {
-                copy(m.range.first, m.range.last + 1)
+                c == '$' && text.getOrNull(i + 1) == '{' -> {
+                    val close = text.indexOfAny(charArrayOf('{', '}'), i + 2)
+                    if (close < 0 || text[close] != '}') {
+                        null
+                    } else {
+                        copy(i, i + 2)
+                        var k = i + 2
+                        while (k < close) {
+                            k = signal(k) ?: run {
+                                copy(k, k + 1)
+                                k + 1
+                            }
+                        }
+                        copy(close, close + 1)
+                        close + 1
+                    }
+                }
+
+                c == '$' -> {
+                    signal(i)
+                }
+
+                else -> {
+                    null
+                }
             }
+        i = end ?: run {
+            copy(i, i + 1)
+            i + 1
         }
-        i = m.range.last + 1
     }
-    copy(i, text.length)
     origin += text.length
     return ClientScript(js.toString(), origin.toIntArray())
 }
