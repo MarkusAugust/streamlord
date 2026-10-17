@@ -3,6 +3,7 @@ package io.github.markusaugust.streamlord.core
 import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
+import io.github.markusaugust.streamlord.core.json.SignalPatchException
 import io.github.markusaugust.streamlord.core.json.mergePatchAsClient
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -24,6 +25,33 @@ class MergePatchAsClientTest {
                 store = mergePatchAsClient(store, JsonParser.parse(step.string("signals")!!), step.boolean("onlyIfMissing")!!)
             }
             assertEquals(case.string("client"), store.toJson(), case.string("name"))
+        }
+    }
+
+    /**
+     * Each scenario in `client-merge-differential.json` was run through `mergePatch` imported from
+     * the 1.0.4 source (engine/signals.ts) under Bun and happy-dom, a fresh store per scenario, and
+     * `client` is `JSON.stringify` of the root after each step, or `THROWS` and the root once the
+     * step threw. The audit's 317 scenarios (17 by hand, 300 at random with seed 7) plus the cases
+     * around `length`, a throw partway through a patch and key order.
+     */
+    @Test
+    fun `folds each step as the client's own mergePatch does`() {
+        val scenarios = JsonParser.parse(javaClass.getResource("/client-merge-differential.json")!!.readText()) as JsonArray
+        assertEquals(326, scenarios.size)
+        for (scenario in scenarios.objects()) {
+            var store = JsonObject.EMPTY
+            for ((i, step) in scenario.array("steps")!!.objects().withIndex()) {
+                val patch = JsonParser.parse(step.string("signals")!!)
+                val got =
+                    try {
+                        mergePatchAsClient(store, patch, step.boolean("onlyIfMissing")!!).also { store = it }.toJson()
+                    } catch (e: SignalPatchException) {
+                        store = e.store
+                        "THROWS " + e.store.toJson()
+                    }
+                assertEquals(step.string("client"), got, "${scenario.string("name")} step $i")
+            }
         }
     }
 

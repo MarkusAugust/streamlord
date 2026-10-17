@@ -24,6 +24,16 @@ public fun mergePatch(
 }
 
 /**
+ * Raised by [mergePatchAsClient] for a patch the client fails on, or that it refuses, partway
+ * through. The client has by then applied the keys before the one that failed and keeps them, so
+ * [store] is the store as it reads afterwards, and the next patch folds into that.
+ */
+public class SignalPatchException(
+    message: String,
+    public val store: JsonObject,
+) : IllegalArgumentException(message)
+
+/**
  * The store as the Datastar 1.0.4 client reads it after a signal patch: `mergePatch` and
  * `mergeInner` in the client's `signals.ts`, which differ from [mergePatch] in four ways.
  *
@@ -35,119 +45,210 @@ public fun mergePatch(
  * nothing. And the store never hands back `null`: a `null` inside a stored array, and the hole a
  * deleted index leaves, read as `""` and are not missing to the next `onlyIfMissing`.
  *
- * A key `length` on an array resizes it, as the client's store does: shorter drops the tail,
- * longer adds `""`; one that is not a whole number of zero or more throws, as the browser's
+ * Keys are walked and kept in JavaScript's order, array indices ascending first, so `toJson()`
+ * of the result is the client's `JSON.stringify`. A key `length` on an array resizes it, as the
+ * client's store does: the value is turned into a number the way JavaScript does it (`[]`,
+ * `false` and `""` are 0, `"2"` and `[2]` are 2), shorter drops the tail and longer adds `""`;
+ * one that does not come out a whole number of zero or more throws, as the browser's
  * `RangeError` does. This is the store as it reads once a binding has touched it: the client
  * fills a hole with `""` on the first read, so a hole is missing to `onlyIfMissing` only until then.
  *
- * More than [holeLimit] indices past the end of an array throws [IllegalArgumentException]
- * rather than fill memory with the holes the client never allocates, and so does a key named
- * `__proto__`, which the client takes for the prototype and fails on or does nothing with.
+ * More than [holeLimit] indices past the end of an array throws rather than fill memory with the
+ * holes the client never allocates, and so does a key named `__proto__`, which the client takes
+ * for the prototype and fails on or does nothing with. A patch that throws, here or in the
+ * client, has its earlier keys applied: the exception is a [SignalPatchException] that carries
+ * the store as the client keeps it.
  */
 public fun mergePatchAsClient(
     store: JsonObject,
     patch: JsonValue,
     ifMissing: Boolean = false,
     holeLimit: Int = 10_000,
-): JsonObject =
-    when (patch) {
-        is JsonObject -> {
-            foldObject(store, patch, ifMissing, holeLimit)
-        }
-
-        is JsonArray -> {
-            foldObject(store, JsonObject(patch.withIndex().associate { (i, v) -> i.toString() to v }), ifMissing, holeLimit)
-        }
-
-        is JsonString -> {
-            foldObject(
-                store,
-                JsonObject(
-                    patch.value.withIndex().associate { (i, c) ->
-                        i.toString() to JsonString(c.toString())
-                    },
-                ),
-                ifMissing,
-                holeLimit,
-            )
-        }
-
-        else -> {
-            store
-        }
-    }
-
-private fun foldObject(
-    target: JsonObject,
-    patch: JsonObject,
-    ifMissing: Boolean,
-    holeLimit: Int,
 ): JsonObject {
-    val out = LinkedHashMap<String, JsonValue>(target)
-    for ((key, value) in patch) {
-        require(key != "__proto__") { "The client cannot hold a signal named __proto__" }
-        val existing = out[key]
-        when {
-            value is JsonNull -> if (!ifMissing) out.remove(key)
-            value is JsonObject && existing is JsonArray -> out[key] = foldIntoArray(existing, value, ifMissing, holeLimit)
-            value is JsonObject -> out[key] = foldObject(existing as? JsonObject ?: JsonObject.EMPTY, value, ifMissing, holeLimit)
-            !(ifMissing && key in out) -> out[key] = asRead(value)
+    val keys: Map<String, JsonValue> =
+        when (patch) {
+            is JsonObject -> patch
+            is JsonArray -> patch.withIndex().associate { (i, v) -> i.toString() to v }
+            is JsonString -> patch.value.withIndex().associate { (i, c) -> i.toString() to JsonString(c.toString()) }
+            else -> return store
+        }
+    val root = thaw(store) as JsObject
+    try {
+        ClientMerge(ifMissing, holeLimit).fold(keys, root)
+    } catch (e: IllegalArgumentException) {
+        throw SignalPatchException(e.message ?: "The client cannot take this signal patch", freeze(root) as JsonObject)
+    }
+    return freeze(root) as JsonObject
+}
+
+// The store while a patch folds into it: mutable objects and arrays, with JsonValue leaves.
+private class JsObject(
+    val fields: LinkedHashMap<String, Any> = LinkedHashMap(),
+)
+
+private class JsArray(
+    val items: ArrayList<Any> = ArrayList(),
+)
+
+private fun thaw(value: JsonValue): Any =
+    when (value) {
+        is JsonObject -> JsObject(value.mapValuesTo(LinkedHashMap()) { thaw(it.value) })
+        is JsonArray -> JsArray(value.mapTo(ArrayList()) { thaw(it) })
+        else -> value
+    }
+
+private fun freeze(value: Any): JsonValue =
+    when (value) {
+        is JsArray -> JsonArray(value.items.map { freeze(it) })
+        is JsObject -> JsonObject(inJsOrder(value.fields.mapValues { freeze(it.value) }))
+        else -> value as JsonValue
+    }
+
+/** `mergePatch` and `mergeInner` in signals.ts, on the store as [thaw] lays it out. */
+private class ClientMerge(
+    private val ifMissing: Boolean,
+    private val holeLimit: Int,
+) {
+    fun fold(
+        patch: Map<String, JsonValue>,
+        node: Any,
+    ) {
+        for ((key, value) in inJsOrder(patch)) {
+            require(key != "__proto__") { "The client cannot hold a signal named __proto__" }
+            if (value is JsonNull) {
+                if (!ifMissing) delete(node, key)
+            } else {
+                mergeInner(value, key, node)
+            }
         }
     }
-    return JsonObject(inJsOrder(out))
-}
 
-/** The order JavaScript keeps and `JSON.stringify` writes: array indices ascending, then the rest as they were set. */
-private fun inJsOrder(map: Map<String, JsonValue>): Map<String, JsonValue> {
-    val indices = map.keys.filter { isArrayIndex(it) }
-    if (indices.isEmpty()) return map
-    val out = LinkedHashMap<String, JsonValue>(map.size)
-    for (key in indices.sortedBy { it.toLong() }) out[key] = map.getValue(key)
-    for ((key, value) in map) if (!isArrayIndex(key)) out[key] = value
-    return out
-}
+    private fun mergeInner(
+        patch: JsonValue,
+        target: String,
+        parent: Any,
+    ) {
+        if (patch is JsonObject) {
+            var node = get(parent, target)
+            if (node !is JsObject && node !is JsArray) {
+                node = JsObject()
+                set(parent, target, node)
+            }
+            fold(patch, node)
+        } else if (!(ifMissing && has(parent, target))) {
+            set(parent, target, thaw(asRead(patch)))
+        }
+    }
 
-private fun isArrayIndex(key: String): Boolean = key.toLongOrNull()?.let { it >= 0 && it < 4294967295L && it.toString() == key } ?: false
+    private fun has(
+        parent: Any,
+        key: String,
+    ): Boolean =
+        when (parent) {
+            is JsArray -> key == "length" || (arrayIndex(key)?.let { it < parent.items.size } ?: false)
+            else -> key in (parent as JsObject).fields
+        }
 
-private fun foldIntoArray(
-    target: JsonArray,
-    patch: JsonObject,
-    ifMissing: Boolean,
-    holeLimit: Int,
-): JsonValue {
-    val items = target.toMutableList()
-    for ((key, value) in patch) {
+    private fun get(
+        parent: Any,
+        key: String,
+    ): Any? =
+        when (parent) {
+            is JsArray -> arrayIndex(key)?.let { parent.items.getOrNull(it.toInt()) }
+            else -> (parent as JsObject).fields[key]
+        }
+
+    private fun set(
+        parent: Any,
+        key: String,
+        value: Any,
+    ) {
+        if (parent !is JsArray) {
+            (parent as JsObject).fields[key] = value
+            return
+        }
+        val items = parent.items
         if (key == "length") {
-            if (ifMissing) continue
-            val length = (value as? JsonNumber)?.toDouble()?.takeIf { it >= 0 && it == Math.floor(it) }?.toLong()
-            require(length != null && length <= items.size + holeLimit) { "Invalid array length ${value.toJson()} in a signal patch" }
+            val length = arrayLength(value)
+            require(length != null) { "Invalid array length ${freeze(value).toJson()} in a signal patch" }
+            require(length <= items.size + holeLimit) {
+                "Signal patch length $length is more than $holeLimit past the end of an array of ${items.size}"
+            }
             while (items.size > length) items.removeAt(items.size - 1)
             while (items.size < length) items.add(EMPTY)
-            continue
+            return
         }
-        val index = key.toLongOrNull()?.takeIf { it >= 0 && it < 4294967295L && it.toString() == key }?.toInt() ?: continue
+        // A key that is not an index is a property JSON.stringify leaves out.
+        val index = arrayIndex(key) ?: return
         require(
             index <= items.size + holeLimit,
         ) { "Signal patch index $index is more than $holeLimit past the end of an array of ${items.size}" }
-        when {
-            value is JsonNull -> if (!ifMissing && index < items.size) items[index] = EMPTY
-            value is JsonObject -> items.put(index, foldInto(items.getOrNull(index), value, ifMissing, holeLimit))
-            !(ifMissing && index < items.size) -> items.put(index, asRead(value))
+        while (items.size <= index) items.add(EMPTY)
+        items[index.toInt()] = value
+    }
+
+    // `delete` leaves a hole, read as ""; deleting an array's length is a TypeError in the client's strict-mode code.
+    private fun delete(
+        parent: Any,
+        key: String,
+    ) {
+        require(!(parent is JsArray && key == "length")) { "The client cannot delete the length of an array" }
+        when (parent) {
+            is JsArray -> arrayIndex(key)?.takeIf { it < parent.items.size }?.let { parent.items[it.toInt()] = EMPTY }
+            else -> (parent as JsObject).fields.remove(key)
         }
     }
-    return JsonArray(items)
 }
 
-private fun foldInto(
-    existing: JsonValue?,
-    patch: JsonObject,
-    ifMissing: Boolean,
-    holeLimit: Int,
-): JsonValue =
-    when (existing) {
-        is JsonArray -> foldIntoArray(existing, patch, ifMissing, holeLimit)
-        is JsonObject -> foldObject(existing, patch, ifMissing, holeLimit)
-        else -> foldObject(JsonObject.EMPTY, patch, ifMissing, holeLimit)
+/** The order JavaScript keeps and `JSON.stringify` writes: array indices ascending, then the rest as they were set. */
+private fun <V> inJsOrder(map: Map<String, V>): Map<String, V> {
+    val indices = map.keys.filter { arrayIndex(it) != null }
+    if (indices.isEmpty()) return map
+    val out = LinkedHashMap<String, V>(map.size)
+    for (key in indices.sortedBy { it.toLong() }) out[key] = map.getValue(key)
+    for ((key, value) in map) if (arrayIndex(key) == null) out[key] = value
+    return out
+}
+
+private fun arrayIndex(key: String): Long? = key.toLongOrNull()?.takeIf { it >= 0 && it < 4294967295L && it.toString() == key }
+
+/** What `array.length = value` takes [value] for, or `null` where the browser throws a `RangeError`. */
+private fun arrayLength(value: Any): Long? {
+    val number = jsNumber(value)
+    return if (number >= 0 && number <= 4294967295.0 && number == Math.floor(number)) number.toLong() else null
+}
+
+/** JavaScript's `Number(value)`, for a value of the store. */
+private fun jsNumber(value: Any): Double =
+    when (value) {
+        is JsonNumber -> {
+            value.toDouble()
+        }
+
+        is JsonBoolean -> {
+            if (value.value) 1.0 else 0.0
+        }
+
+        is JsonString -> {
+            JsText.toNumber(value.value)
+        }
+
+        is JsonNull -> {
+            0.0
+        }
+
+        // An array is read through its text, the items joined by commas: one item is that item's text.
+        is JsArray -> {
+            when (value.items.size) {
+                0 -> 0.0
+                1 -> value.items[0].let { if (it is JsonBoolean || it is JsObject) Double.NaN else jsNumber(it) }
+                else -> Double.NaN
+            }
+        }
+
+        else -> {
+            Double.NaN
+        }
     }
 
 private val EMPTY = JsonString("")
@@ -160,11 +261,3 @@ private fun asRead(value: JsonValue): JsonValue =
         is JsonObject -> JsonObject(value.mapValues { asRead(it.value) })
         else -> value
     }
-
-private fun MutableList<JsonValue>.put(
-    index: Int,
-    value: JsonValue,
-) {
-    while (size <= index) add(EMPTY)
-    this[index] = value
-}
