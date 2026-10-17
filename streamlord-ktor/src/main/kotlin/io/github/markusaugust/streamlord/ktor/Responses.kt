@@ -71,7 +71,9 @@ import kotlin.time.Duration.Companion.seconds
  *
  * A block that throws ends the stream after a moment for the frames it sent to go out, which is
  * as much as Ktor allows a writer, and the connection is then cut, which Datastar's client
- * retries.
+ * retries. CIO and Netty cut it themselves; on Tomcat, with the async servlet Ktor's engine sets
+ * up and a connector that discards its facades, and on Jetty, Streamlord cuts it. Anywhere else
+ * the stream ends as the engine ends it.
  */
 @JvmName("respondDatastar")
 public suspend fun ApplicationCall.respondDatastar(
@@ -101,6 +103,8 @@ private suspend fun ApplicationCall.respondStream(
             .any { it.trim().equals("close", true) }
     if (request.httpVersion == "HTTP/1.1" && !closing) response.header("Connection", "keep-alive")
     val gzip = streamlord.compress && DatastarProtocol.acceptsGzip(request.headers[HttpHeaders.AcceptEncoding])
+    // Before anything is written: on Tomcat, which request a failure may cut.
+    markEngine(this)
     respond(
         object : OutgoingContent.WriteChannelContent() {
             override val contentType: ContentType = ContentType.Text.EventStream
@@ -144,6 +148,8 @@ private suspend fun ApplicationCall.respondStream(
                             yield()
                             delay(LAST_FRAMES_GRACE)
                         }
+                        // Tomcat and Jetty would end the response as if it had finished, which Datastar does not retry.
+                        cutConnection(this@respondStream, e)
                     }
                     throw e
                 }
@@ -337,7 +343,8 @@ internal class GzipChannelSseSink(
 
     /**
      * End the gzip member, so the client's decoder sees a whole stream. Only after a stream that
-     * ended well: one cut short by an exception is left unterminated, so the client sees it fail.
+     * ended well. A browser takes an unended member for a whole one when the body ends, so what
+     * tells the client that a stream failed is the cut connection, not the missing trailer.
      */
     suspend fun finish() {
         gzip.finish()
