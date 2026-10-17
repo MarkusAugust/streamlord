@@ -189,9 +189,10 @@ or a JSON string, at any depth:
   and the rest of `Object.prototype`) with an object under it, which the client writes into the
   built-in property before every request: `constructor.prototype` reaches every object on the
   page, and `toString.name` makes every later request fail. A plain value or an array under
-  such a key is fine, so `{"team": {"constructor": "Ferrari"}}` goes through;
-- a key holding `.`, which the client stores as one key that `$a.b` does not reach, and drops
-  when it sends the signals with a request.
+  such a key arrives as sent, so `{"team": {"constructor": "Ferrari"}}` goes through; what the
+  page then writes under it is its own doing;
+- a key holding `.`, which the client stores as one key that `$a.b` does not reach, and, outside
+  a list, drops when it sends the signals with a request. It is refused inside a list too.
 
 A name in the pairs is held to more, since an object may come under any of its parts: no part
 may be empty or one of those properties, so `patchSignals("constructor" to 1)` throws too. The

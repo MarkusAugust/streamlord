@@ -50,6 +50,8 @@ All notable changes to Streamlord are recorded here. The format follows
 - `SignalNames` in `streamlord-core`: the keys and names Datastar's client cannot hold, with the
   reason (`keyProblem`, `pathProblem`), and `nest`, which nests dotted names the way
   `data-signals:a.b` does and hands a clash to a function of yours.
+- `Casing.heldKey` in `streamlord-html`: refuses an attribute key whose signal, as Datastar's
+  client reads it after lowercasing, cutting at `__` and applying `__case`, it cannot hold.
 
 ### Changed
 
@@ -243,7 +245,11 @@ All notable changes to Streamlord are recorded here. The format follows
   key; a plain value under `constructor` or `toString` goes through.
 - `data-signals:constructor.prototype.x`, `data-signals:to-string.name` and the same names in
   `dataBind`, `dataRef`, `dataIndicator`, `dataComputed` and Pro `dataMatchMedia` set a property
-  on `Object.prototype` or broke every later request in the client. Such a name is now refused.
+  on `Object.prototype` or broke every later request in the client. Such a name is now refused,
+  also where the client reads it differently from how it is written: `"Constructor"` with
+  `Case.KEBAB` is read as `constructor`, `"_-proto-_"` with `Case.SNAKE` as `__proto__`, and
+  `"constructor_"` with `ifMissing` as `constructor`, since the client cuts the key at the first
+  `__`.
 - A value ending in `\` emptied the attribute it was written into. Datastar's client cuts an
   expression into statements at each `;` outside a string and reads a quote after a `\` as
   escaped, so `dataSignals("path" to "C:\\", "sep" to ";")` declared no signal at all, and

@@ -99,6 +99,33 @@ public object Casing {
         return key to (if (wanted == default) null else wanted)
     }
 
+    /**
+     * [written], the key and modifiers of an attribute that declares the signal [name], once the
+     * name Datastar's client reads from it is one it can hold. The browser lowercases the key, the
+     * client cuts it at the first `__` and applies each `__case` it is given, so `constructor_`
+     * with `__ifmissing` is read as `constructor`, and `_-proto-_` with `__case.snake` as
+     * `__proto__` (`parseAttributeKey` in engine.ts, `modifyCasing` in text.ts).
+     */
+    public fun heldKey(
+        name: String,
+        written: String,
+    ): String {
+        val parts = written.lowercase().split("__")
+        val modifiers = parts.drop(1).map { it.split('.') }
+        val cases = modifiers.lastOrNull { it.first() == "case" }?.drop(1) ?: listOf("camel")
+        val held =
+            cases.fold(parts.first()) { key, case ->
+                when (case) {
+                    "camel" -> camel(key)
+                    "snake" -> key.replace('-', '_')
+                    "pascal" -> key.take(1).uppercase() + camel(key.drop(1))
+                    else -> key
+                }
+            }
+        SignalNames.pathProblem(held)?.let { throw InvalidSignalNameException(name, "is read by Datastar's client as $held, which $it") }
+        return written
+    }
+
     /** The key for an attribute whose key is used as written (`attr`, `style`, `animate`): `ariaLabel` -> `aria-label`. */
     public fun plainKey(name: String): String = kebab(validate(name))
 

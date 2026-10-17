@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.html
 
+import kotlinx.html.DIV
 import kotlinx.html.button
 import kotlinx.html.div
 import kotlin.test.Test
@@ -218,6 +219,26 @@ class AsTheClientReadsItTest {
         assertEquals("""<div data-signals:constructors="1"></div>""", elements { div { dataSignals("constructors", "1") } })
         val clash = assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("n" to 1, "a" to 1, "a.b" to 2) } } }
         assertEquals("a", clash.name)
+    }
+
+    // The browser lowercases the key, and the client cuts it at the first `__` and applies the
+    // `__case` it is given, so the name it holds is not always the name written.
+    @Test
+    fun `a name is checked as the client reads it from the key`() {
+        val refused =
+            listOf(
+                { d: DIV -> d.dataSignals("Constructor", "{prototype: {y: 1}}", Case.KEBAB) },
+                { d: DIV -> d.dataSignals("ToString", "{name: 1}", Case.CAMEL) },
+                { d: DIV -> d.dataSignals("_-proto-_.polluted", "'yes'", Case.SNAKE) },
+                { d: DIV -> d.dataSignals("constructor_", "{prototype: {w: 1}}", ifMissing = true) },
+                { d: DIV -> d.dataComputed("ValueOf", "({x: 1})", Case.CAMEL) },
+                { d: DIV -> d.dataBind("Constructor.prototype.bound") { case = Case.SNAKE } },
+            )
+        for ((i, write) in refused.withIndex()) {
+            assertFailsWith<InvalidSignalNameException>("case $i") { elements { div { write(this) } } }
+        }
+        // Without a modifier the client keeps the trailing `_`.
+        assertEquals("""<div data-signals:constructor_="1"></div>""", elements { div { dataSignals("constructor_", "1") } })
     }
 
     // CSS custom properties are case-sensitive and the browser lowercases the key.

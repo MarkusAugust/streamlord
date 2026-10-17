@@ -41,16 +41,18 @@ written in a string or a template, a quote in a value cannot end it.
 ## Signal names the client cannot hold
 
 Every object in a browser already has `constructor`, `toString` and ten other properties from
-`Object.prototype`. In Datastar 1.0.4's store, `__proto__` makes the merge throw and leaves the
-page deaf to every later signal. An object under one of the others is written into the built-in
-property before every request that sends signals: `{"constructor": {"prototype": {"x": 1}}}`
-sets `x` on `Object.prototype`, and `{"toString": {"name": 1}}` makes every later request on the
-page fail. A map of names typed by users, broadcast to every viewer, could otherwise do either
-to every page that shows it.
+`Object.prototype`. In Datastar 1.0.4's store, an object under `__proto__` makes the merge throw
+and leaves the page deaf to every later signal. An object under one of the others is written
+into the built-in property before every request that sends signals: `{"constructor":
+{"prototype": {"x": 1}}}` sets `x` on `Object.prototype`, and `{"toString": {"name": 1}}` makes
+every later request on the page fail. A map of names typed by users, broadcast to every viewer,
+could otherwise do either to every page that shows it.
 
 So a signal patch never carries such a key, at any depth, whether it came from pairs, a codec or
-a JSON string, and the names the DSL writes never have such a part. Streamlord throws instead,
-before anything is sent; [Patching signals back](/signals/#patching-signals-back) has the rule.
+a JSON string. A name the DSL writes is checked as the client will read it, after the browser
+lowercases the key and the client cuts it at `__` and applies any `__case`, and never has such
+a part. Streamlord throws instead, before anything is sent;
+[Patching signals back](/signals/#patching-signals-back) has the rule.
 What you write yourself as an expression, such as `dataSignals("{constructor: {...}}")`, is
 JavaScript, and is not checked.
 

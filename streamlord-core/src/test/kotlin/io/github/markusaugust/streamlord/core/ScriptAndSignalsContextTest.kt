@@ -57,10 +57,12 @@ class ScriptAndSignalsContextTest {
             assertFailsWith<DatastarEventValidationException>(text) { SignalsResponse(text) }
         }
         // A plain value or an array under a name every object has is held as the client holds it.
-        val fine = "{\"constructor\": 1, \"team\": {\"constructor\": \"Ferrari\"}, \"toString\": [1], \"prototype\": {\"x\": 1}}"
+        val fine =
+            "{\"constructor\": 1, \"team\": {\"constructor\": \"Ferrari\"}, " +
+                "\"toString\": [{}], \"valueOf\": 2, \"prototype\": {\"x\": 1}}"
         assertEquals(fine, PatchSignals(fine).signals)
         // Text that is not JSON is told so, before any of its keys.
-        val broken = assertFailsWith<DatastarEventValidationException> { PatchSignals("{\"a.b\" 1}") }
+        val broken = assertFailsWith<DatastarEventValidationException> { PatchSignals("{\"a.b\": {\"constructor\": {}}") }
         assertTrue("one JSON object" in broken.message.orEmpty(), broken.message)
     }
 

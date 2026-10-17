@@ -71,7 +71,7 @@ public fun HTMLTag.dataSignals(
     ifMissing: Boolean = false,
 ) {
     val (key, mod) = Casing.key(Casing.signalName(name), case, Case.CAMEL)
-    attributes[ds("signals:$key${signalMods(mod, ifMissing)}")] = ExpressionGuard.check(expression)
+    attributes[ds("signals:" + Casing.heldKey(name, "$key${signalMods(mod, ifMissing)}"))] = ExpressionGuard.check(expression)
 }
 
 /**
@@ -112,7 +112,7 @@ private fun camelKeys(
             val out = LinkedHashMap<Any?, Any?>(value.size)
             for ((k, v) in value) {
                 val key = if (k is String) Casing.camel(k) else k
-                val problem = SignalNames.keyProblem(k.toString(), v is Map<*, *>) ?: SignalNames.keyProblem(key.toString(), v is Map<*, *>)
+                val problem = SignalNames.keyProblem(key.toString(), v is Map<*, *>)
                 if (problem != null) throw InvalidSignalNameException("$path.$k", "is a key the client cannot hold: $problem")
                 if (key in out) throw InvalidSignalNameException("$path.$k", "is given twice once the keys are read in camelCase")
                 out[key] = camelKeys(v, "$path.$k")
@@ -145,7 +145,7 @@ public fun HTMLTag.dataComputed(
     case: Case? = null,
 ) {
     val (key, mod) = Casing.key(Casing.signalName(name), case, Case.CAMEL)
-    attributes[ds("computed:$key${caseMod(mod)}")] = ExpressionGuard.check(expression)
+    attributes[ds("computed:" + Casing.heldKey(name, "$key${caseMod(mod)}"))] = ExpressionGuard.check(expression)
 }
 
 /** `data-json-signals`: renders the signal store as JSON into the element. Handy while debugging. */
@@ -311,7 +311,7 @@ private fun HTMLTag.signalNameAttribute(
         attributes[ds("$attribute${modifiers(null)}")] = Casing.camel(Casing.signalName(name))
     } else {
         val (key, mod) = Casing.key(Casing.signalName(name), case, Case.CAMEL)
-        attributes[ds("$attribute:$key${modifiers(mod)}")] = ""
+        attributes[ds("$attribute:" + Casing.heldKey(name, "$key${modifiers(mod)}"))] = ""
     }
 }
 

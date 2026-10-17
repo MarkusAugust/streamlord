@@ -12,11 +12,13 @@ import io.github.markusaugust.streamlord.core.DatastarEventValidationException
  *   request that sends signals, writes into the built-in one: `{"constructor": {"prototype":
  *   {"x": 1}}}` sets `x` on `Object.prototype`, `{"toString": {"name": 1}}` makes every later
  *   request on the page fail, and the signal is dropped from requests.
- * - A key holding `.` is stored as one key, which `$a.b` does not reach, and the client loses its
- *   value when it sends the signals with a request, because it splits the key at the dot.
+ * - A key holding `.` is stored as one key, which `$a.b` does not reach, and outside a list the
+ *   client loses its value when it sends the signals with a request, because it splits the key
+ *   at the dot. It is refused inside a list too, so that one rule holds everywhere.
  *
- * A name written in code, a path such as `data-signals:a.b` takes, may carry an object under it
- * at any part, so none of its parts may be one of these.
+ * A plain value or a list under `constructor` arrives as sent; what the page then writes under it
+ * is the page's own doing. A name written in code, a path such as `data-signals:a.b` takes, may
+ * carry an object under it at any part, so none of its parts may be one of these.
  */
 public object SignalNames {
     /** The properties of `Object.prototype` in a browser: every object already has them. */
@@ -54,7 +56,7 @@ public object SignalNames {
             }
 
             '.' in key -> {
-                "the client stores a key holding '.' as one key, which \$a.b does not reach and requests drop"
+                "the client stores a key holding '.' as one key, which \$a.b does not reach"
             }
 
             else -> {
@@ -76,7 +78,8 @@ public object SignalNames {
      * it: `"form.email" to "x"` and `"form.name" to "y"` give `{form: {email: "x", name: "y"}}`.
      * Maps under one name merge, key by key. A name given two values, or a value and signals
      * under it, is handed to [clash] with the reason, which by default throws
-     * [DatastarEventValidationException].
+     * [DatastarEventValidationException]. The names themselves are not checked; hold each to
+     * [pathProblem] first.
      */
     public fun nest(
         pairs: Iterable<Pair<String, Any?>>,
@@ -114,7 +117,8 @@ public object SignalNames {
         at: String,
         clash: (String, String) -> Nothing,
     ): Any? {
-        if (existing !is Map<*, *> || value !is Map<*, *>) clash(at, "is given twice")
+        if (existing !is Map<*, *> && value !is Map<*, *>) clash(at, "is given twice")
+        if (existing !is Map<*, *> || value !is Map<*, *>) clash(at, "is given a value and also names signals under it")
         val out = copy(existing)
         for ((k, v) in value) {
             val key = k.toString()
