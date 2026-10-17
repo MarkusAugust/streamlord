@@ -39,7 +39,8 @@ reading*:
 - nothing larger than the cap ever sits in memory.
 
 The parser caps nesting depth at 64 and the length of a number at 1000 characters, rejects
-everything RFC 8259 rejects, and is fuzzed on every build. The second cap is there because a
+everything RFC 8259 rejects, and is run on every build against twenty thousand random inputs and
+twenty thousand mutated documents, from fixed seeds, so the same ones each time. The second cap is there because a
 million digits fit inside one mebibyte, and turning them into a number took over twenty seconds.
 
 **You have two things to do here:** map `SignalsTooLargeException` to `413`, and map a body that
@@ -161,8 +162,10 @@ install(CspNoncePlugin) {
 `reportOnly = true` writes `Content-Security-Policy-Report-Only` instead, so the browser logs
 what the policy would have blocked and blocks nothing. On an application that has never had a
 policy, spend a deploy or two there first. Setting `policy = null` generates the nonce and writes
-no header at all, which is what you want when Spring Security or a proxy already writes the
-policy and you only need the two halves to agree.
+no header at all, for when a proxy or a header writer of your own already writes the policy. That
+writer has to take the nonce from the request, `call.cspNonce` on Ktor and the
+`CspNonceFilter.ATTRIBUTE` request attribute on Spring, so the two halves agree; Spring Security's
+own CSP writer takes one fixed string and cannot.
 
 ### Three things the client does that will catch you out
 
@@ -247,7 +250,7 @@ get("/watch") {
 
 Each coroutine keeps its own pace, and when both are due at the same moment, which goes first is
 up to the scheduler. Either way, what reaches the browser is one whole event after another. Two
-and a half seconds in, the first raid lands between the second and third tick:
+and a half seconds in, the second raid, `raid-1`, lands between ticks 2 and 3:
 
 ```text
 event: datastar-patch-elements

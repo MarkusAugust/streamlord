@@ -101,7 +101,8 @@ All notable changes to Streamlord are recorded here. The format follows
   function reference, now lands on `timeout` or `heartbeat` and no longer compiles. Pass the block
   after the parentheses, as almost all code does, or as `block = …`. Java source written against
   0.12 no longer compiles: javac does not see the hidden signatures, and the new ones take a
-  `kotlin.time.Duration`, which Java can only pass as `null`. Binaries compiled against 0.12 are
+  `kotlin.time.Duration`, which Java can only pass as `null`: no timeout change, and for
+  `heartbeat` no heartbeat at all, the first comment included. Binaries compiled against 0.12 are
   not affected.
 - `dataSignals` in its pairs form reads its keys the way the keyed form reads its name, nested
   maps included: `dataSignals("foo-bar" to 7, "user" to mapOf("first-name" to ""))` declares
@@ -197,8 +198,22 @@ All notable changes to Streamlord are recorded here. The format follows
   passes `-H:+UnlockExperimentalVMOptions` ahead of the experimental options GraalVM will refuse
   without it, and two constructs Gradle 10 removes are gone from the build scripts.
 
+- `streamlord-analysis`, which only the two editors consume, changed the signatures of
+  `ExpressionValidator.validate`, `MarkupValidator.validateAttributes`, `Requests.parseRequestsFile`,
+  `MarkupOptions`, `RequestsFile` and `AttributeSpec` with new parameters that have defaults, so
+  Kotlin source still compiles against them and code compiled against 0.12 does not link. The
+  `signalsTooLarge` and `signalsUnreadable` handlers of `StreamlordExceptionHandler` take the
+  exception; the 0.12 signatures remain, hidden.
+
 ### Fixed
 
+- Documentation corrected where the audit found it wrong: the README's MIT condition names the
+  licence text as well as the notice and links one documentation domain; the security page's
+  ordered-delivery prose names the raid the transcript shows and says the JSON parser is run
+  against a fixed seed, not fuzzed afresh; the CSP note no longer says Spring Security's writer
+  can agree with the nonce; the WebFlux page says Spring writes no space after any colon; the
+  roadmap's release counts are gone; and the editor READMEs link a page that exists on `master`.
+  The site's link check now covers same-page anchors.
 - `Jackson2SignalsCodec.default()`, and any Jackson 2 mapper such as Spring Boot's, read a missing
   or `null` primitive as `0`: `{}` into `data class Delete(val id: Long)` reached the handler as
   `Delete(id=0)`. It is refused.
@@ -252,7 +267,7 @@ All notable changes to Streamlord are recorded here. The format follows
   is thrown on; over 200 failures of each kind on each engine, none lost a frame or ended cleanly.
 - `respondDatastar` on a call already answered throws `IllegalStateException`. It did nothing on
   CIO and threw Netty's own exception from the header loop.
-- Ktor no longer sends `Connection: keep-alive` to a request that asked to close.
+- Neither Ktor nor Spring WebMVC sends `Connection: keep-alive` to a request that asked to close.
 - `streamlord-test` folds a signal patch onto an array as Datastar's client does: an index past
   the end extends it, and `null` leaves a hole, read as `null`. It dropped both.
 - `LiveDatastarStream` sends the client's `Accept`, now `DatastarProtocol.ACCEPT`, and words a
@@ -360,6 +375,8 @@ All notable changes to Streamlord are recorded here. The format follows
 - `SseFrame`, a public data class, validates what it is given: a line break in its `event`, `id`
   or a data line, or a NUL in its `id`, could write a line of its own into the stream, an event or
   data the server never meant to send. A NUL in data is still written, since markup can carry one.
+  This reverses 0.12.0, where `SseDecoder` dropped an `id` with a NUL in it and read on: the id is
+  now kept as written, and decoding fails on it.
 
 ## [0.12.0] - 2026-10-11
 

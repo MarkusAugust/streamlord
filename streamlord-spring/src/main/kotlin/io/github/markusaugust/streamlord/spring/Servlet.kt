@@ -121,7 +121,7 @@ public fun HttpServletResponse.datastarStream(
     if (varies && getHeaders("Vary").none { it.contains("Accept-Encoding", ignoreCase = true) }) {
         addHeader("Vary", "Accept-Encoding")
     }
-    val keepAlive = answered?.protocol.equals("HTTP/1.1", ignoreCase = true)
+    val keepAlive = wantsKeepAlive(answered)
     return StreamingResponseBody { output ->
         val sink = StreamSink(output, this@datastarStream, gzip, keepAlive, untouched)
         try {
@@ -320,8 +320,23 @@ public fun HttpServletResponse.prepareForSse(request: HttpServletRequest? = null
 /** [prepareForSse], and whether nothing had been written to the response before it; see [prepareHeaders]. */
 internal fun HttpServletResponse.prepareStream(request: HttpServletRequest?): Boolean {
     val untouched = prepareHeaders(this)
-    if (requestOf(request)?.protocol.equals("HTTP/1.1", ignoreCase = true)) setHeader("Connection", "keep-alive")
+    if (wantsKeepAlive(requestOf(request))) setHeader("Connection", "keep-alive")
     return untouched
+}
+
+/**
+ * Whether the stream may say `Connection: keep-alive`: an HTTP/1.1 request that did not ask to
+ * close. HTTP/2 has no such header, and a client that sent `Connection: close` is not contradicted.
+ */
+private fun wantsKeepAlive(request: HttpServletRequest?): Boolean {
+    if (request == null || !request.protocol.equals("HTTP/1.1", ignoreCase = true)) return false
+    val closing =
+        request
+            .getHeaders("Connection")
+            .toList()
+            .flatMap { it.split(',') }
+            .any { it.trim().equals("close", ignoreCase = true) }
+    return !closing
 }
 
 /**

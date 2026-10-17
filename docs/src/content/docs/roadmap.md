@@ -139,7 +139,7 @@ and a template that has fallen a version behind teaches the wrong API with full 
 repository covering both adapters, or the `demo` module documented as the thing to copy, carries
 the same weight for a fraction of the upkeep.
 
-It waits for 1.0 because the API is still moving. Three releases this week changed the surface,
+It waits for 1.0 because the API is still moving. Every release so far has changed the surface,
 and each of them would have aged a template silently.
 
 ### Until then
@@ -162,8 +162,8 @@ Weighed and set aside for now, with the reason, so the same ground is not covere
   Datastar client copes; the browser's own throttling does that properly. Cutting a stream off to
   see whether the *server* notices is the useful half, and the Stop button already does it.
 - **An `ElementsRenderer` port.** The 0.1.0 roadmap planned one for 0.3: template engines behind
-  an interface, configured once, rather than called at each site. Eight releases went past it and
-  the argument got weaker each time. It would buy no new ability, only move `pebble.render(...)`
+  an interface, configured once, rather than called at each site. Every release since went past it
+  and the argument got weaker each time. It would buy no new ability, only move `pebble.render(...)`
   from the call site into a configuration, and it would cost a module per engine to version and
   keep in step. Worse, it would make the engines we wrote adapters for first-class and everything
   else a thing you glue together yourself, when today any engine works, including one you wrote

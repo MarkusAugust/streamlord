@@ -167,15 +167,15 @@ pages show.
 
 MIT. Take it, wield it, and may your streams never buffer. It costs nothing, and every released
 version stays MIT: that permission cannot be withdrawn, not even by me. Use it commercially,
-change it, ship it inside something closed. The one condition is that the copyright notice
-travels with it.
+change it, ship it inside something closed. The one condition is that the copyright notice and
+the licence text travel with it, and every jar carries both as `META-INF/LICENSE`.
 
 The name Streamlord and the mark are not part of that grant. Fork the code freely; do not call
 the result Streamlord.
 
 Contributions: issues are always welcome. Pull requests are taken after a conversation, and
 whoever contributes signs [CLA.md](CLA.md). The whole picture is on
-[the documentation site](https://streamlord.sobernetics.no/licence/).
+[the documentation site](https://streamlord-docs.netlify.app/licence/).
 
 *Gorvek, Sarn, Gallowmark and every other name in this grimoire are our own
 invention. Any resemblance to legends told at other tables is the mead's doing.*
