@@ -45,6 +45,12 @@ class StreamEdgesTest {
             response: HttpServletResponse,
         ): StreamingResponseBody = response.datastarStream(streamlord, request) { error("before anything was written") }
 
+        @GetMapping("/plain")
+        fun plain(
+            request: HttpServletRequest,
+            response: HttpServletResponse,
+        ): StreamingResponseBody = response.datastarStream(streamlord, request) { patchSignals("n" to 1) }
+
         @GetMapping("/too-large-before")
         fun tooLargeBefore(response: HttpServletResponse): StreamingResponseBody =
             response.datastarStream(streamlord) { throw SignalsTooLargeException(2, 1) }
@@ -128,6 +134,15 @@ class StreamEdgesTest {
         assertTrue(response.startsWith("HTTP/1.1 500"), response)
         assertFalse("content-encoding" in response.lowercase(), response)
         assertFalse("connection: keep-alive" in response.lowercase(), response)
+    }
+
+    @Test
+    fun `a request that asks to close is not told keep-alive`() {
+        val response = raw("/plain", "Connection: close\r\n")
+
+        assertTrue("datastar-patch-signals" in response, response)
+        assertFalse("connection: keep-alive" in response.lowercase(), response)
+        assertTrue("connection: keep-alive" in raw("/plain").lowercase())
     }
 
     @Test

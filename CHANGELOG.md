@@ -198,6 +198,13 @@ All notable changes to Streamlord are recorded here. The format follows
   passes `-H:+UnlockExperimentalVMOptions` ahead of the experimental options GraalVM will refuse
   without it, and two constructs Gradle 10 removes are gone from the build scripts.
 
+- `streamlord-analysis`, which only the two editors consume, changed the signatures of
+  `ExpressionValidator.validate`, `MarkupValidator.validateAttributes`, `Requests.parseRequestsFile`,
+  `MarkupOptions`, `RequestsFile` and `AttributeSpec` with new parameters that have defaults, so
+  Kotlin source still compiles against them and code compiled against 0.12 does not link. The
+  `signalsTooLarge` and `signalsUnreadable` handlers of `StreamlordExceptionHandler` take the
+  exception; the 0.12 signatures remain, hidden.
+
 ### Fixed
 
 - Documentation corrected where the audit found it wrong: the README's MIT condition names the
@@ -260,7 +267,7 @@ All notable changes to Streamlord are recorded here. The format follows
   is thrown on; over 200 failures of each kind on each engine, none lost a frame or ended cleanly.
 - `respondDatastar` on a call already answered throws `IllegalStateException`. It did nothing on
   CIO and threw Netty's own exception from the header loop.
-- Ktor no longer sends `Connection: keep-alive` to a request that asked to close.
+- Neither Ktor nor Spring WebMVC sends `Connection: keep-alive` to a request that asked to close.
 - `streamlord-test` folds a signal patch onto an array as Datastar's client does: an index past
   the end extends it, and `null` leaves a hole, read as `null`. It dropped both.
 - `LiveDatastarStream` sends the client's `Accept`, now `DatastarProtocol.ACCEPT`, and words a

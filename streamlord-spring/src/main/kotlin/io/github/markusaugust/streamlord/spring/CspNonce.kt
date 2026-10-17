@@ -36,8 +36,9 @@ import org.springframework.web.server.ServerWebExchange
  * @param nonce Where a nonce comes from. Defaults to 16 random bytes from `SecureRandom`,
  *   base64 encoded.
  * @param policy The policy this nonce goes into, built from it. Defaults to
- *   [CspNonce.starterPolicy]; `null` generates the nonce and writes no header, which is what you
- *   want when Spring Security or something else in the chain already writes the policy.
+ *   [CspNonce.starterPolicy]; `null` generates the nonce and writes no header, for when a proxy or
+ *   a header writer of your own already writes the policy from the nonce in [ATTRIBUTE]. Spring
+ *   Security's own CSP writer takes one fixed string and cannot carry a nonce per request.
  * @param reportOnly Report violations instead of enforcing the policy, by writing
  *   `Content-Security-Policy-Report-Only`. Worth a deploy or two on an existing application: the
  *   browser logs what the policy would have blocked and blocks nothing.

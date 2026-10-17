@@ -76,7 +76,7 @@ public fun decodeDatastar(
 ): DatastarFrame {
     val groups = LinkedHashMap<String, MutableList<String>>()
     // Joined as the client joins them, which drops empty lines before the first that has text,
-    // and split again (fetch.ts:409-411, :114), so a message with no data still has one line.
+    // and split again (fetch.ts:412-416, :114), so a message with no data still has one line.
     val joined = msg.data.fold("") { acc, line -> if (acc.isEmpty()) line else "$acc\n$line" }
     for (line in joined.split("\n")) {
         // As the client splits it, slice(0, i) and slice(i + 1): without a space, the key is the

@@ -39,8 +39,8 @@ reading*:
 - nothing larger than the cap ever sits in memory.
 
 The parser caps nesting depth at 64 and the length of a number at 1000 characters, rejects
-everything RFC 8259 rejects, and is run on every build against twenty thousand random inputs
-from a fixed seed, so the same ones each time. The second cap is there because a
+everything RFC 8259 rejects, and is run on every build against twenty thousand random inputs and
+twenty thousand mutated documents, from fixed seeds, so the same ones each time. The second cap is there because a
 million digits fit inside one mebibyte, and turning them into a number took over twenty seconds.
 
 **You have two things to do here:** map `SignalsTooLargeException` to `413`, and map a body that
