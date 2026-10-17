@@ -22,11 +22,16 @@ public object JsonParser {
     public const val MAX_NUMBER_LENGTH: Int = 1000
 
     /** Parse any JSON value. */
-    public fun parse(text: String, maxDepth: Int = DEFAULT_MAX_DEPTH): JsonValue = Cursor(text, maxDepth).parseDocument()
+    public fun parse(
+        text: String,
+        maxDepth: Int = DEFAULT_MAX_DEPTH,
+    ): JsonValue = Cursor(text, maxDepth).parseDocument()
 
     /** Parse text that must be a JSON object, as signals always are. */
-    public fun parseObject(text: String, maxDepth: Int = DEFAULT_MAX_DEPTH): JsonObject =
-        parse(text, maxDepth) as? JsonObject ?: throw JsonParseException("Expected a JSON object", 0)
+    public fun parseObject(
+        text: String,
+        maxDepth: Int = DEFAULT_MAX_DEPTH,
+    ): JsonObject = parse(text, maxDepth) as? JsonObject ?: throw JsonParseException("Expected a JSON object", 0)
 
     /**
      * Whether [text] opens objects and arrays more than [maxDepth] deep, counted as [parse] counts
@@ -60,7 +65,10 @@ public object JsonParser {
         return false
     }
 
-    private class Cursor(private val s: String, private val maxDepth: Int) {
+    private class Cursor(
+        private val s: String,
+        private val maxDepth: Int,
+    ) {
         private var i = 0
 
         fun parseDocument(): JsonValue {
@@ -104,13 +112,18 @@ public object JsonParser {
                 fields[key] = parseValue(depth)
                 skipWhitespace()
                 when (peek()) {
-                    ',' -> i++
+                    ',' -> {
+                        i++
+                    }
+
                     '}' -> {
                         i++
                         return JsonObject(fields)
                     }
 
-                    else -> fail("Expected ',' or '}'")
+                    else -> {
+                        fail("Expected ',' or '}'")
+                    }
                 }
             }
         }
@@ -129,13 +142,18 @@ public object JsonParser {
                 items += parseValue(depth)
                 skipWhitespace()
                 when (peek()) {
-                    ',' -> i++
+                    ',' -> {
+                        i++
+                    }
+
                     ']' -> {
                         i++
                         return JsonArray(items)
                     }
 
-                    else -> fail("Expected ',' or ']'")
+                    else -> {
+                        fail("Expected ',' or ']'")
+                    }
                 }
             }
         }
@@ -210,7 +228,10 @@ public object JsonParser {
             return JsonNumber(s.substring(start, i))
         }
 
-        private fun literal(word: String, value: JsonValue): JsonValue {
+        private fun literal(
+            word: String,
+            value: JsonValue,
+        ): JsonValue {
             if (!s.startsWith(word, i)) fail("Invalid literal")
             i += word.length
             return value

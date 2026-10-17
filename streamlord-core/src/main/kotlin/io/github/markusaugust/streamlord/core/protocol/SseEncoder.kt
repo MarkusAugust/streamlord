@@ -25,23 +25,30 @@ public object SseEncoder {
     public fun encode(event: DatastarEvent): String = frame(event).render()
 
     /** Decompose an event into its SSE fields. */
-    public fun frame(event: DatastarEvent): SseFrame = when (event) {
-        is PatchElements -> SseFrame(
-            event = DatastarProtocol.Events.PATCH_ELEMENTS,
-            id = event.eventId,
-            retry = event.retry,
-            dataLines = patchElementsLines(event),
-        )
+    public fun frame(event: DatastarEvent): SseFrame =
+        when (event) {
+            is PatchElements -> {
+                SseFrame(
+                    event = DatastarProtocol.Events.PATCH_ELEMENTS,
+                    id = event.eventId,
+                    retry = event.retry,
+                    dataLines = patchElementsLines(event),
+                )
+            }
 
-        is PatchSignals -> SseFrame(
-            event = DatastarProtocol.Events.PATCH_SIGNALS,
-            id = event.eventId,
-            retry = event.retry,
-            dataLines = patchSignalsLines(event),
-        )
+            is PatchSignals -> {
+                SseFrame(
+                    event = DatastarProtocol.Events.PATCH_SIGNALS,
+                    id = event.eventId,
+                    retry = event.retry,
+                    dataLines = patchSignalsLines(event),
+                )
+            }
 
-        is ExecuteScript -> frame(event.toPatchElements())
-    }
+            is ExecuteScript -> {
+                frame(event.toPatchElements())
+            }
+        }
 
     /**
      * A short name for what [events] say, the same for the same events wherever it is computed:
@@ -58,22 +65,23 @@ public object SseEncoder {
     }
 
     /** An SSE comment. Invisible to the client; useful as a heartbeat or to force a flush. */
-    public fun comment(text: String): String =
-        Wire.lines(text).joinToString(separator = "") { ": $it\n" } + "\n"
+    public fun comment(text: String): String = Wire.lines(text).joinToString(separator = "") { ": $it\n" } + "\n"
 
-    private fun patchElementsLines(event: PatchElements): List<String> = buildList {
-        event.selector?.let { add("${DataLines.SELECTOR} $it") }
-        if (event.mode != ElementPatchMode.DEFAULT) add("${DataLines.MODE} ${event.mode.wire}")
-        if (event.useViewTransition) {
-            add("${DataLines.USE_VIEW_TRANSITION} true")
-            event.viewTransitionSelector?.let { add("${DataLines.VIEW_TRANSITION_SELECTOR} $it") }
+    private fun patchElementsLines(event: PatchElements): List<String> =
+        buildList {
+            event.selector?.let { add("${DataLines.SELECTOR} $it") }
+            if (event.mode != ElementPatchMode.DEFAULT) add("${DataLines.MODE} ${event.mode.wire}")
+            if (event.useViewTransition) {
+                add("${DataLines.USE_VIEW_TRANSITION} true")
+                event.viewTransitionSelector?.let { add("${DataLines.VIEW_TRANSITION_SELECTOR} $it") }
+            }
+            if (event.namespace != ElementNamespace.DEFAULT) add("${DataLines.NAMESPACE} ${event.namespace.wire}")
+            event.elements?.let { html -> Wire.lines(html).forEach { add("${DataLines.ELEMENTS} $it") } }
         }
-        if (event.namespace != ElementNamespace.DEFAULT) add("${DataLines.NAMESPACE} ${event.namespace.wire}")
-        event.elements?.let { html -> Wire.lines(html).forEach { add("${DataLines.ELEMENTS} $it") } }
-    }
 
-    private fun patchSignalsLines(event: PatchSignals): List<String> = buildList {
-        if (event.onlyIfMissing) add("${DataLines.ONLY_IF_MISSING} true")
-        Wire.lines(event.signals).forEach { add("${DataLines.SIGNALS} $it") }
-    }
+    private fun patchSignalsLines(event: PatchSignals): List<String> =
+        buildList {
+            if (event.onlyIfMissing) add("${DataLines.ONLY_IF_MISSING} true")
+            Wire.lines(event.signals).forEach { add("${DataLines.SIGNALS} $it") }
+        }
 }

@@ -215,18 +215,32 @@ All notable changes to Streamlord are recorded here. The format follows
 
 - The build and the workflows are pinned: every GitHub Action by commit, with its version in a
   comment Dependabot keeps in step; the Gradle wrapper by `distributionSha256Sum`; the demo's base
-  image by digest; Bun and the Railway CLI by version. Checkouts no longer persist the token in
-  `.git/config`, the Railway token reaches only the two steps that deploy, and the three publish
-  jobs run in a `release` environment that takes release tags alone. The IntelliJ publish job
-  stops when the signing certificate secrets are missing, where it published an unsigned plugin
-  under a workflow that looked as if it signed it. The javadoc jars carry `META-INF/LICENSE`, as
-  the licence page promises and the other jars do, and every published main jar names an
-  `Automatic-Module-Name`.
+  image by digest; the Railway CLI by version; Bun by version both in CI and in the Netlify build
+  that deploys the documentation, which now installs from the frozen lockfile and runs Astro under
+  the Bun it checked, through `bun x`, as CI does. When Netlify hands that build another Bun, or
+  none, it fetches the pinned one from the npm registry, whose integrity hash for that exact version
+  npm checks the download against, and stops if it still has the wrong one. Checkouts no longer
+  persist the token in `.git/config`, the Railway token reaches only the two steps that deploy, and
+  the three publish jobs run in a `release` environment that takes release tags alone. The image is
+  pushed by a job of its own, which alone holds `packages: write`, runs on master alone, deploys one
+  run at a time and skips a commit that master has already moved past, so an older run never deploys
+  over a newer one. The IntelliJ publish job stops when the signing certificate secrets are missing,
+  where it published an unsigned plugin under a workflow that looked as if it signed it. The javadoc
+  jars carry `META-INF/LICENSE`, as the licence page promises and the other jars do, and every
+  published main jar names an `Automatic-Module-Name`.
 - `checkDocSamples` fails in CI on a page whose coordinates or wire transcripts it would have
   rewritten, so a release commit that forgets them goes red on the tag; locally it still rewrites
   them. The test-only Tomcat is 11.0.27, past three advisories on 11.0.24. The native image
   passes `-H:+UnlockExperimentalVMOptions` ahead of the experimental options GraalVM will refuse
-  without it, and two constructs Gradle 10 removes are gone from the build scripts.
+  without it, and three constructs Gradle 10 removes are gone from the build scripts; the
+  warnings left come from the Dokka and GraalVM plugins.
+- The Kotlin sources follow ktlint, and CI checks them with ktlint 1.8.0 on every change to a
+  Kotlin file or to an `.editorconfig`, so the formatting IntelliJ's ktlint plugin applies on
+  save no longer rewrites lines nobody meant to touch. A change to `netlify.toml` alone runs the
+  documentation build.
+- `SendLatestTest`, which checks that `sendLatest` counts a render that never suspends, ran on the
+  wall clock and failed under load. It runs on a clock the test drives, and no longer fails on a
+  busy machine.
 
 - `streamlord-analysis`, which only the two editors consume, changed the signatures of
   `ExpressionValidator.validate`, `MarkupValidator.validateAttributes`, `Requests.parseRequestsFile`,
@@ -350,6 +364,13 @@ All notable changes to Streamlord are recorded here. The format follows
   them as if they had finished, which the client does not retry. Ktor gives a writer no way to wait
   for the engine, so a failure now waits a moment, at most a second for a stalled reader, before it
   is thrown on; over 200 failures of each kind on each engine, none lost a frame or ended cleanly.
+  Ktor's Tomcat and Jetty engines ended a failed body with its last chunk, as if it had finished,
+  gzipped or not, so the client did not reconnect and the page stopped updating without a word.
+  Streamlord now cuts the connection there too, on Tomcat 10.1 and 11 and Jetty 11 and 12, over
+  HTTP/1.1 and HTTP/2, where only the stream is reset. It does so by reflection, with no new
+  dependency, and on Tomcat only once Ktor has completed the request, and not on a connector set
+  to keep its facades, where a cut reached other requests. On an engine Streamlord does not know,
+  the stream ends as the engine ends it.
 - `respondDatastar` on a call already answered throws `IllegalStateException`. It did nothing on
   CIO and threw Netty's own exception from the header loop.
 - Neither Ktor nor Spring WebMVC sends `Connection: keep-alive` to a request that asked to close.

@@ -19,10 +19,16 @@ import kotlin.reflect.typeOf
  */
 public interface SignalsCodec {
     /** Encode [value] (whose static type is [type]) as a JSON object text. */
-    public fun encode(value: Any?, type: KType): String
+    public fun encode(
+        value: Any?,
+        type: KType,
+    ): String
 
     /** Decode a JSON object text into [type]. Must throw [SignalsCodecException] on failure. */
-    public fun <T : Any> decode(json: String, type: KType): T
+    public fun <T : Any> decode(
+        json: String,
+        type: KType,
+    ): T
 }
 
 /** Encode with the static type inferred at the call site. */
@@ -39,19 +45,30 @@ public inline fun <reified T : Any> SignalsCodec.decode(json: String): T = decod
  * you, in plain words, which adapter to add.
  */
 public object BuiltInSignalsCodec : SignalsCodec {
-    override fun encode(value: Any?, type: KType): String = JsonWriter.write(value)
+    override fun encode(
+        value: Any?,
+        type: KType,
+    ): String = JsonWriter.write(value)
 
-    override fun <T : Any> decode(json: String, type: KType): T {
-        val result: Any = when (type.classifier) {
-            String::class -> json
-            JsonValue::class -> JsonParser.parse(json)
-            JsonObject::class -> JsonParser.parseObject(json)
-            Map::class -> JsonParser.parseObject(json).toKotlin()
-            else -> throw SignalsCodecException(
-                "BuiltInSignalsCodec cannot decode into $type. " +
-                    "Add streamlord-json-kotlinx or streamlord-json-jackson and configure Streamlord(codec = ...).",
-            )
-        }
+    override fun <T : Any> decode(
+        json: String,
+        type: KType,
+    ): T {
+        val result: Any =
+            when (type.classifier) {
+                String::class -> json
+
+                JsonValue::class -> JsonParser.parse(json)
+
+                JsonObject::class -> JsonParser.parseObject(json)
+
+                Map::class -> JsonParser.parseObject(json).toKotlin()
+
+                else -> throw SignalsCodecException(
+                    "BuiltInSignalsCodec cannot decode into $type. " +
+                        "Add streamlord-json-kotlinx or streamlord-json-jackson and configure Streamlord(codec = ...).",
+                )
+            }
         @Suppress("UNCHECKED_CAST")
         return result as T
     }

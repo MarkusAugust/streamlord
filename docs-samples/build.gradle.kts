@@ -453,7 +453,7 @@ val checkDocDependencies =
         for (module in documentedModules) {
             val configuration =
                 configurations.detachedConfiguration(
-                    project.dependencies.create(project.project(":$module")),
+                    project.dependencies.project(":$module"),
                 )
             resolved.put(
                 module,
