@@ -73,9 +73,10 @@ jobs:
           kotlin=false; vscode=false; intellij=false; docs=false; image=false; ktlint=false
           while IFS= read -r file; do
             [ -z "$file" ] && continue
-            # Any Kotlin file, wherever it lives, and the rules it is held to.
+            # Any Kotlin file, wherever it lives, and the rules it is held to, at the root or
+            # in an .editorconfig nearer the sources.
             case "$file" in
-              *.kt|.editorconfig) ktlint=true ;;
+              *.kt|.editorconfig|*/.editorconfig) ktlint=true ;;
             esac
             case "$file" in
               # This file decides what runs, so a change to it runs everything.
@@ -528,6 +529,11 @@ jobs:
     # Everything in this job reaches the outside world, and only master does that.
     if: github.ref == 'refs/heads/master'
     needs: [demo-image]
+    # Two pushes to master close together deploy one after the other, never side by side, and
+    # the second waits for the first rather than cancelling it halfway through a deploy.
+    concurrency:
+      group: demo-deploy
+      cancel-in-progress: false
     permissions:
       packages: write
     # Whether to deploy, on the job: the secrets context is not available in a step's `if`,
