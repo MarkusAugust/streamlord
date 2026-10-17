@@ -17,7 +17,6 @@ import kotlin.time.measureTime
  * [JsonParseException]; anything else (stack overflow, other exceptions, runaway time) is a wound.
  */
 class JsonRobustnessTest {
-
     @Test
     fun `random garbage never escapes as anything but JsonParseException`() {
         val random = Random(1337)
@@ -60,16 +59,21 @@ class JsonRobustnessTest {
 
     @Test
     fun `one mebibyte parses in linear time`() {
-        val big = buildString {
-            append('{')
-            var i = 0
-            while (length < 1_048_576) {
-                if (i > 0) append(',')
-                append("\"k").append(i).append("\":\"").append("v".repeat(50)).append('"')
-                i++
+        val big =
+            buildString {
+                append('{')
+                var i = 0
+                while (length < 1_048_576) {
+                    if (i > 0) append(',')
+                    append("\"k")
+                        .append(i)
+                        .append("\":\"")
+                        .append("v".repeat(50))
+                        .append('"')
+                    i++
+                }
+                append('}')
             }
-            append('}')
-        }
         val elapsed = measureTime { assertTrue((JsonParser.parse(big) as JsonObject).size > 10_000) }
         assertTrue(elapsed.inWholeMilliseconds < 2_000, "took $elapsed")
     }

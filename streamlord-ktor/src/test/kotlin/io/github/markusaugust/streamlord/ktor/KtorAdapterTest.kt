@@ -6,8 +6,8 @@ import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.InterpolatedExpressionException
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.core.json.JsonWriter
-import io.github.markusaugust.streamlord.core.port.driving.patchSignals
 import io.github.markusaugust.streamlord.core.port.driving.DatastarStream
+import io.github.markusaugust.streamlord.core.port.driving.patchSignals
 import io.github.markusaugust.streamlord.html.patchElements
 import io.github.markusaugust.streamlord.json.kotlinx.KotlinxSignalsCodec
 import io.ktor.client.request.get

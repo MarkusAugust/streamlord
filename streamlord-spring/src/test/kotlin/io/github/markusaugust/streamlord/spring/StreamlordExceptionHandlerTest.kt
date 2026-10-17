@@ -104,12 +104,25 @@ class StreamlordExceptionHandlerTest {
         fun codec(): String = throw SignalsDecodeException("Cannot construct instance of `com.example.internal.Secret`")
     }
 
-    private fun flux(): WebTestClient =
-        WebTestClient.bindToController(Reactive()).controllerAdvice(StreamlordExceptionHandler()).build()
+    private fun flux(): WebTestClient = WebTestClient.bindToController(Reactive()).controllerAdvice(StreamlordExceptionHandler()).build()
 
     @Test
     fun `on WebFlux, signals over the limit are 413 and a codec failure is 400`() {
-        flux().post().uri("/large").exchange().expectStatus().isEqualTo(413).expectBody().isEmpty()
-        flux().post().uri("/codec").exchange().expectStatus().isBadRequest().expectBody().isEmpty()
+        flux()
+            .post()
+            .uri("/large")
+            .exchange()
+            .expectStatus()
+            .isEqualTo(413)
+            .expectBody()
+            .isEmpty()
+        flux()
+            .post()
+            .uri("/codec")
+            .exchange()
+            .expectStatus()
+            .isBadRequest()
+            .expectBody()
+            .isEmpty()
     }
 }
