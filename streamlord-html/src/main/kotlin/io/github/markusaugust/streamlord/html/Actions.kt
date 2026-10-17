@@ -6,8 +6,9 @@ import kotlin.time.Duration
 
 /**
  * Options for the backend actions `@get`, `@post`, `@put`, `@patch`, `@delete` and `@query`,
- * rendered as a JavaScript object literal. Only values that differ from Datastar's own defaults
- * are written, so the common case renders nothing at all.
+ * rendered as a JavaScript object literal. Only the options you set are written, so the common
+ * case renders nothing at all; one set to the value Datastar takes by default is written all
+ * the same, and means what leaving it out means.
  */
 public class FetchOptions {
     /** `'json'` (default) or `'form'`. */

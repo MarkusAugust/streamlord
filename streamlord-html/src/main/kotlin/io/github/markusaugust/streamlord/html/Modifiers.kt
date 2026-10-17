@@ -26,16 +26,23 @@ public enum class Case(
  * character as `$(?:)`: Datastar's client rewrites `$name` and `@name(` inside a regex literal
  * too, and a quote in one would hide the signals after it.
  * Syntax that JavaScript, without the `u` flag, reads differently or refuses is refused: inline
- * flags, possessive and stacked quantifiers, atomic groups, `\A`, `\z`, `\Z`, `\G`, `\p{...}`,
- * `\x{...}`, `\b{...}`, `\c` before anything but a capital, a back reference to no group or
- * followed by a digit, escaped surrogates, a character outside the Basic Multilingual Plane in a
- * class, the other Java-only escapes, and nested or intersected classes.
+ * flags, the empty `(?)`, possessive and stacked quantifiers, a quantifier with nothing to
+ * repeat (at the start, after `|` or `(`, or on `^`, `$`, `\b`, `\B` or a lookbehind), atomic
+ * groups, `\A`, `\z`, `\Z`, `\G`, `\p{...}`, `\x{...}`, `\b{...}`, `\c` before anything but
+ * a capital, a back reference to no group or followed by a digit, escaped surrogates, a
+ * character outside the Basic Multilingual Plane in a class, the other Java-only escapes, and
+ * nested or intersected classes.
  *
  * Some syntax both dialects share still means slightly different things at the edges, and is
  * written as it is: `\s` and `\b` count Unicode spaces and word characters differently, `$`
  * without [RegexOption.MULTILINE] also matches before a final line break in Java only, `^` with
  * it matches at the end of the input in JavaScript only, and `.` takes a character outside the
- * Basic Multilingual Plane as one in Java and as two in JavaScript.
+ * Basic Multilingual Plane as one in Java and as two in JavaScript. Java counts NEL (U+0085) as
+ * a line break, so `.` does not match it and `^` and `$` with [RegexOption.MULTILINE] match next
+ * to it; JavaScript reads it as an ordinary character. With [RegexOption.IGNORE_CASE] Kotlin
+ * folds case the Unicode way, and JavaScript without the `u` flag never folds a character
+ * outside ASCII into one inside it: `k` matches the Kelvin sign (U+212A) and `s` the long s
+ * (U+017F) in Kotlin only.
  */
 public data class SignalFilter(
     val include: Regex? = null,
@@ -93,24 +100,45 @@ public data class SignalFilter(
                 var inClass = false
                 // 1 after a quantifier, 2 once a ? has made it lazy; one more would stack, which JavaScript refuses.
                 var quantifier = 0
+                // Whether what was written last takes a quantifier. Without the u flag JavaScript refuses
+                // one with nothing to repeat: at the start, after `|` or `(`, and after an anchor, `\b`,
+                // `\B` or a lookbehind, all of which Java quantifies or reads as a literal.
+                var atom = false
+                // For each open group, whether it is a lookbehind.
+                val open = ArrayDeque<Boolean>()
                 while (i < pattern.length) {
                     val ch = pattern[i]
                     if (ch == '\\' && i + 1 < pattern.length) {
+                        val next = pattern[i + 1]
+                        val from = length
                         i = escape(pattern, i, inClass, groups)
-                        quantifier = 0
+                        // An empty \Q\E writes nothing, so what came before it is still what a quantifier takes.
+                        if (!inClass && (next != 'Q' || length > from)) {
+                            atom = next != 'b' && next != 'B'
+                            quantifier = 0
+                        }
                         continue
                     }
                     if (inClass) {
                         when {
-                            ch == ']' -> inClass = false
+                            ch == ']' -> {
+                                inClass = false
+                                atom = true
+                            }
 
-                            ch == '[' -> javaOnly("a [ inside a class", "Java reads it as a nested class; escape it")
+                            ch == '[' -> {
+                                javaOnly("a [ inside a class", "Java reads it as a nested class; escape it")
+                            }
 
                             ch == '&' && pattern.getOrNull(
                                 i + 1,
-                            ) == '&' -> javaOnly("&& inside a class", "Java reads it as an intersection")
+                            ) == '&' -> {
+                                javaOnly("&& inside a class", "Java reads it as an intersection")
+                            }
 
-                            ch.isSurrogate() -> javaOnly(OUTSIDE_BMP_IN_CLASS, "JavaScript reads it as two characters without the u flag")
+                            ch.isSurrogate() -> {
+                                javaOnly(OUTSIDE_BMP_IN_CLASS, "JavaScript reads it as two characters without the u flag")
+                            }
                         }
                         appendChar(ch)
                         i++
@@ -132,8 +160,39 @@ public data class SignalFilter(
                             if (kind != null && (kind.isLetter() || kind == '-')) {
                                 javaOnly("an inline flag such as (?i)", "pass RegexOption.IGNORE_CASE to Regex(...) instead")
                             }
-                            append("(?")
-                            i += 2
+                            if (kind == ')') javaOnly("an empty flag group (?)", "JavaScript refuses it")
+                            val lookbehind = kind == '<' && pattern.getOrNull(i + 3).let { it == '=' || it == '!' }
+                            open.addLast(lookbehind)
+                            // The whole opening, `(?:`, `(?<=` or `(?<name>`, so what comes next is the group's first term.
+                            val end =
+                                when {
+                                    lookbehind -> i + 4
+                                    kind == '<' -> pattern.indexOf('>', i).let { if (it < 0) pattern.length else it + 1 }
+                                    else -> minOf(i + 3, pattern.length)
+                                }
+                            append(pattern, i, end)
+                            i = end
+                            atom = false
+                            quantifier = 0
+                            continue
+                        }
+
+                        ch == '(' -> {
+                            open.addLast(false)
+                            append(ch)
+                            i++
+                            atom = false
+                            quantifier = 0
+                            continue
+                        }
+
+                        // A lookbehind takes no quantifier in JavaScript; a lookahead does, without the u flag.
+                        ch == ')' -> {
+                            atom = open.removeLastOrNull() != true
+                            append(ch)
+                            i++
+                            quantifier = 0
+                            continue
                         }
 
                         ch == '*' || ch == '+' || ch == '?' -> {
@@ -142,6 +201,7 @@ public data class SignalFilter(
                                     quantifier == 1 && ch == '?' -> 2
                                     quantifier == 1 && ch == '+' -> javaOnly("a possessive quantifier")
                                     quantifier != 0 -> javaOnly("a quantifier on a quantifier", "JavaScript refuses it")
+                                    !atom -> nothingToRepeat(ch.toString())
                                     else -> 1
                                 }
                             append(ch)
@@ -151,6 +211,7 @@ public data class SignalFilter(
 
                         ch == '{' && pattern.getOrNull(i + 1)?.isDigit() == true -> {
                             if (quantifier != 0) javaOnly("a quantifier on a quantifier", "JavaScript refuses it")
+                            if (!atom) nothingToRepeat("{")
                             val close = pattern.indexOf('}', i).let { if (it < 0) pattern.length - 1 else it }
                             append(pattern, i, close + 1)
                             i = close + 1
@@ -164,9 +225,12 @@ public data class SignalFilter(
                         }
 
                         // An anchor; a literal `$`, escaped or in a class, is written as `\x24`.
-                        ch == '$' -> {
+                        ch == '$' || ch == '^' || ch == '|' -> {
                             append(ch)
                             i++
+                            atom = false
+                            quantifier = 0
+                            continue
                         }
 
                         else -> {
@@ -174,6 +238,7 @@ public data class SignalFilter(
                             i++
                         }
                     }
+                    atom = true
                     quantifier = 0
                 }
             }
@@ -341,6 +406,12 @@ public data class SignalFilter(
             }
         }
 
+        private fun nothingToRepeat(quantifier: String): Nothing =
+            javaOnly(
+                "a $quantifier with nothing to repeat, at the start, after |, (, an anchor, \\b, \\B or a lookbehind",
+                "JavaScript refuses it",
+            )
+
         private fun javaOnly(
             what: String,
             hint: String? = null,
@@ -355,17 +426,18 @@ public data class SignalFilter(
 internal fun Duration.toModifier(): String = "${wholeMilliseconds()}ms"
 
 /**
- * Datastar counts in whole milliseconds and hands them to the browser's timers. A shorter
- * positive duration would be written as zero, which says something other than what was asked
- * for, so it is refused instead. The timers take a negative wait as none and wrap one over
- * [Int.MAX_VALUE] milliseconds, about 24.8 days, into a negative one, so both fire at once and
- * are refused too.
+ * Datastar is given whole milliseconds, which it hands to the browser's timers. A shorter
+ * positive duration would be written as zero, and a fraction such as 1.5 ms rounded down, which
+ * says something other than what was asked for, so both are refused instead. The timers take a
+ * negative wait as none and wrap one over [Int.MAX_VALUE] milliseconds, about 24.8 days, into a
+ * negative one, so both fire at once and are refused too.
  */
 internal fun Duration.wholeMilliseconds(): Long {
     require(!isNegative() && this <= Int.MAX_VALUE.milliseconds) {
         "$this is outside what the browser's timers take: 0 to ${Int.MAX_VALUE}ms"
     }
     require(!isPositive() || inWholeMilliseconds > 0) { "$this is shorter than a millisecond, the smallest duration Datastar reads" }
+    require(inWholeMilliseconds.milliseconds == this) { "$this is not a whole number of milliseconds, which is what Datastar is given" }
     return inWholeMilliseconds
 }
 
@@ -496,20 +568,26 @@ public class BindModifiers {
      */
     public var case: Case? = null
 
-    /** Bind to a specific element property instead of the default. */
+    /**
+     * Bind to a specific element property instead of the default. The browser lowercases the
+     * modifier and Datastar's client camel-cases it back with its own rules, so a name it cannot
+     * give back, such as `x2y` (read as `x2Y`) or `_value` (read as `Value`), is refused.
+     */
     public var prop: String? = null
 
-    /** Events that sync the element back into the signal. */
+    /**
+     * Events that sync the element back into the signal. Datastar listens to each as the browser
+     * hands it the modifier, so an event with a capital (lowercased) or a `.` (split in two) is refused.
+     */
     public var events: List<String> = emptyList()
 
     internal fun build(): String =
         buildString {
             case?.let { append("__case.").append(it.wire) }
-            // The browser lowercases attribute names and the client camel-cases the modifier back.
-            prop?.let { append("__prop.").append(Casing.kebab(it)) }
+            prop?.let { append("__prop.").append(Casing.bindProp(it)) }
             if (events.isNotEmpty()) {
                 append("__event")
-                events.forEach { append('.').append(it) }
+                events.forEach { append('.').append(Casing.bindEvent(it)) }
             }
         }
 }

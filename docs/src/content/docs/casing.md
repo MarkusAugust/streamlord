@@ -54,7 +54,15 @@ and a signal patched from the server. In an expression Datastar reads `$foo-bar`
 `signal("['foo-bar']")` gives `$['foo-bar']`.
 
 An explicit `case =` is kept, but the key is still written in kebab-case, because the browser
-lowercases it either way. `dataBind`, `dataRef` and `dataIndicator` write the name in the
+lowercases it either way.
+
+An event or class name that mixes capitals with a hyphen before a lower-case letter, such as
+`fooBar-baz`, cannot travel in a key: the capitals need `__case.camel`, and that turns the hyphen
+into a capital too, so the client would listen for or toggle `fooBarBaz`. `dataOn` and
+`dataClass` refuse it; write the name in one case, `fooBarBaz` or `foo-bar-baz`. In `dataBind`,
+the `events` are used as the browser hands them over, so one with a capital (which arrives in
+lowercase) or a `.` (which splits it in two) is refused, and a `prop` is refused when Datastar's
+own camel-casing would not give it back: `x2y` comes back as `x2Y`, `_value` as `Value`. `dataBind`, `dataRef` and `dataIndicator` write the name in the
 *value*, which keeps its case, unless you ask for a `case`, since Datastar applies `__case` to a
 key only.
 
@@ -82,8 +90,9 @@ refused. Name the property in lowercase. The object form also puts a hyphen befo
 References may index: `signal("items[0].name")` and `signal("items['sub-total']")`. A reference
 is JavaScript, so `signal`, `set` and the other expression helpers refuse only a blank name, one
 with whitespace, and one that starts with a character Datastar does not read after `$`. A name
-that becomes a key or an attribute value, as in `dataClass`, also refuses quotes, `/` and the
-characters that end an attribute. A name that declares a signal, as in `dataSignals`, `dataBind`
+that becomes a key or an attribute value, as in `dataClass`, also refuses quotes, `/`, NUL,
+the characters that end an attribute, and white space as either Java or JavaScript counts it, so
+a no-break space too: the client splits a class list on it. A name that declares a signal, as in `dataSignals`, `dataBind`
 and `dataComputed`, must be ASCII letters, digits and `_`, in parts joined by `.` or `-`, because
 that is all Datastar reads after a `$`: a signal named `über` exists, and `$über` never reaches
 it. All of these throw `InvalidSignalNameException` at render time. None of it makes a name from

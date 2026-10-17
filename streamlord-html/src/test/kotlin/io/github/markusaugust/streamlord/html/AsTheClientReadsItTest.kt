@@ -3,11 +3,13 @@ package io.github.markusaugust.streamlord.html
 import kotlinx.html.DIV
 import kotlinx.html.button
 import kotlinx.html.div
+import kotlinx.html.input
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.microseconds
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -340,5 +342,123 @@ class AsTheClientReadsItTest {
         assertEquals("\$v = '\\x22><img src=x onerror=alert(1)> \\x26 \\x27it\\x27 `x`'", literal)
         val regex = SignalFilter.regexLiteral(Regex("it's \"a\" `b` & c\\\\"))
         assertEquals("/it\\x27s \\x22a\\x22 \\x60b\\x60 \\x26 c\\x5c/", regex)
+    }
+
+    // Run through modifyCasing from the 1.0.4 source: no key over {a, b, -} up to nine
+    // characters, with any chain of up to three __case values, gives a name of the shape aB-b.
+    @Test
+    fun `an event or class name mixing capitals with a hyphen before a lower-case letter is refused`() {
+        for (name in listOf("fooBar-baz", "foo-barBaz", "Foo-bar", "--brandColor")) {
+            assertFailsWith<InvalidSignalNameException>(name) { elements { div { dataClass(name, "true") } } }
+            assertFailsWith<InvalidSignalNameException>(name) { elements { div { dataOn(name, "x()") } } }
+        }
+        assertEquals(
+            """<div data-class:foo--bar__case.camel="true" data-on:item-1__case.pascal="x()" data-class:foo-bar="true"></div>""",
+            elements {
+                div {
+                    dataClass("foo-Bar", "true")
+                    dataOn("Item-1", "x()")
+                    dataClass("foo-bar", "true")
+                }
+            },
+        )
+        // A signal name with a hyphen is camel-cased on purpose, as signal() reads it.
+        assertEquals("""<div data-signals:foo-bar-baz="1"></div>""", elements { div { dataSignals("fooBar-baz", "1") } })
+    }
+
+    // bind.ts listens to each __event value as the browser hands it over, lowercased, after
+    // parseAttributeKey has split the modifier at each `.`.
+    @Test
+    fun `a bind event the client would not listen to is refused`() {
+        for (event in listOf("myChange", "my.change", "a__b", "", "a b")) {
+            assertFailsWith<InvalidSignalNameException>(event) { elements { input { dataBind("v") { events = listOf(event) } } } }
+        }
+        assertEquals(
+            """<input data-bind__event.my-change.input="v">""",
+            elements { input { dataBind("v") { events = listOf("my-change", "input") } } },
+        )
+    }
+
+    // bind.ts reads __prop with its own camel(), whose kebab splits letters from digits and turns `_` into a hyphen.
+    @Test
+    fun `a bind property comes back from the client as written or is refused`() {
+        for (prop in listOf("x2y", "_private", "my_prop", "a.b")) {
+            assertFailsWith<InvalidSignalNameException>(prop) { elements { input { dataBind("v") { this.prop = prop } } } }
+        }
+        assertEquals(
+            """<input data-bind__prop.-u-r-l="v" data-bind__prop.inner-h-t-m-l="w" data-bind__prop.x2-y="z">""",
+            elements {
+                input {
+                    dataBind("v") { prop = "URL" }
+                    dataBind("w") { prop = "innerHTML" }
+                    dataBind("z") { prop = "x2Y" }
+                }
+            },
+        )
+    }
+
+    // class.ts splits a class list on JavaScript's \s, which has the no-break space; the HTML
+    // parser turns NUL into U+FFFD.
+    @Test
+    fun `a key with a no-break space or a NUL is refused`() {
+        for (name in listOf("a\u00a0b", "a\u0000b", "a\u2028b", "a\ufeffb", "a\u3000b")) {
+            assertFailsWith<InvalidSignalNameException>(name) { elements { div { dataClass(name, "true") } } }
+        }
+    }
+
+    // tagToMs reads 1.5ms as 1.5; the DSL writes whole milliseconds, so it may not round.
+    @Test
+    fun `a duration that is not a whole number of milliseconds is refused`() {
+        assertFailsWith<IllegalArgumentException> { click { debounce = 1.5.milliseconds } }
+        assertFailsWith<IllegalArgumentException> { post("/x") { retryInterval = 1500.microseconds } }
+        assertEquals("""<button data-on:click__debounce.2ms="x()"></button>""", click { debounce = 2.milliseconds })
+    }
+
+    // Both compile as Datastar's client builds an expression; a template that ate a signal leaves neither.
+    @Test
+    fun `a sign before a signal and a hole at the start of an array pass the guard`() {
+        assertEquals("""<div data-text="- ${'$'}x"></div>""", elements { div { dataText("- \$x") } })
+        assertEquals("""<div data-on:click="${'$'}x = [ , 1]"></div>""", elements { div { dataOnClick("\$x = [ , 1]") } })
+        assertFailsWith<io.github.markusaugust.streamlord.core.domain.InterpolatedExpressionException> {
+            elements { div { dataOnClick("\$x = [, 1]") } }
+        }
+    }
+
+    // Each refused here is refused by Chrome with "Nothing to repeat" or "Invalid group"; the
+    // ones written are what it compiles. The fuzz in the audit's harness checks the rest.
+    @Test
+    fun `a quantifier with nothing to repeat is refused`() {
+        val refused =
+            listOf(
+                "$?",
+                "$*",
+                "$+",
+                "\${1,2}",
+                "^{2}",
+                "^*",
+                "\\b*",
+                "\\B{1}",
+                "{1}",
+                "{1,2}",
+                "a|{1}",
+                "a|*",
+                "(?<!{1}a)",
+                "(?<=*a)",
+                "(?={1}a)",
+                "(?!*a)",
+                "({1})",
+                "(?:*a)",
+                "\\Q\\E{1}",
+                "(?<=a)*b",
+                "(?<!a){2}b",
+                "(?)a",
+            )
+        for (pattern in refused) {
+            assertFailsWith<IllegalArgumentException>(pattern) { SignalFilter.regexLiteral(Regex(pattern)) }
+        }
+        assertEquals("/(?=a)*a/", SignalFilter.regexLiteral(Regex("(?=a)*a")))
+        assertEquals("/a*/", SignalFilter.regexLiteral(Regex("a*\\Q\\E")))
+        assertEquals("/a{1}/", SignalFilter.regexLiteral(Regex("a\\Q\\E{1}")))
+        assertEquals("/(?<n>a){2}[a]{2}(a)*/", SignalFilter.regexLiteral(Regex("(?<n>a){2}[a]{2}(a)*")))
     }
 }

@@ -285,8 +285,10 @@ public fun HTMLTag.dataRef(
 }
 
 /**
- * `data-indicator="signal"`: a boolean signal that is `true` while a fetch is in flight. Written
- * as `data-indicator:signal__case.x` when [case] is set; see [signalNameAttribute].
+ * `data-indicator="signal"`: a boolean signal that is `true` while a fetch started by this same
+ * element is in flight; Datastar's client counts no other, not even one from an element inside
+ * it, so put it on the element whose action fetches. Written as `data-indicator:signal__case.x`
+ * when [case] is set; see [signalNameAttribute].
  */
 public fun HTMLTag.dataIndicator(
     signal: String,
