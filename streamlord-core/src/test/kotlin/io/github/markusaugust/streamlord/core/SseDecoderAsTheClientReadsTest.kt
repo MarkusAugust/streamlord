@@ -1,11 +1,17 @@
 package io.github.markusaugust.streamlord.core
 
+import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
+import io.github.markusaugust.streamlord.core.json.JsonArray
+import io.github.markusaugust.streamlord.core.json.JsonObject
+import io.github.markusaugust.streamlord.core.json.JsonParser
+import io.github.markusaugust.streamlord.core.json.mergePatchAsClient
 import io.github.markusaugust.streamlord.core.protocol.SseDecoder
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -159,6 +165,47 @@ class SseDecoderAsTheClientReadsTest {
     fun `a data line with no space after its key is malformed`() {
         assertFailsWith<DatastarEventValidationException> {
             SseDecoder.decode("event: datastar-patch-elements\ndata: selector #x\ndata: mode remove\ndata: elements\n\n")
+        }
+    }
+
+    /**
+     * Each frame in `client-decoder-cases.json` was run through Datastar 1.0.4 built from source in
+     * happy-dom, on a page holding `<div id="wrap"><div id="target">old</div></div>` and the
+     * signal `keep: 1`, with `startViewTransition` counting its calls. None made the client throw,
+     * so none may make the decoder throw, and each must decode to what the client did: no event
+     * where the page did not change, a removal where the target went, the view transition the
+     * client started, and the store it ended up with.
+     */
+    @Test
+    fun `decodes each frame to what the client did with it`() {
+        val cases = JsonParser.parse(javaClass.getResource("/client-decoder-cases.json")!!.readText()) as JsonArray
+        assertEquals(52, cases.size)
+        val untouched = "<divid=\"wrap\"><divid=\"target\">old</div></div>"
+        for (case in cases.objects()) {
+            val name = case.string("name")!!
+            val event = SseDecoder.decode(case.string("sse")!!).singleOrNull()
+            val body = case.string("body")!!
+            val raw = case["argsRaw"] as JsonObject
+            if (raw.containsKey("signals")) {
+                val patch = assertIs<PatchSignals>(event, name)
+                val store =
+                    mergePatchAsClient(JsonParser.parseObject("""{"keep":1}"""), JsonParser.parse(patch.signals), patch.onlyIfMissing)
+                assertEquals(case["signals"], store, name)
+                continue
+            }
+            // White space the client inserts as bare text is no change to the page.
+            if (body.filterNot { it.isWhitespace() } == untouched && case.int("viewTransitions") == 0) {
+                assertNull(event, name)
+                continue
+            }
+            val patch = assertIs<PatchElements>(event, name)
+            assertEquals(case.int("viewTransitions") == 1, patch.useViewTransition, name)
+            if ("id=\"target\"" !in body) {
+                assertEquals(ElementPatchMode.REMOVE, patch.mode, name)
+                assertEquals("#target", patch.selector, name)
+            } else {
+                assertEquals(raw.string("elements") ?: "", patch.elements, name)
+            }
         }
     }
 
