@@ -146,4 +146,59 @@ class Jackson2SignalsCodecTest {
                 .build()
         assertEquals(Page(3), Jackson2SignalsCodec(mapper).decode<Page>("""{"page":3}"""))
     }
+
+    data class Item(
+        val n: Int = 0,
+    )
+
+    data class Held(
+        val xs: List<Int> = emptyList(),
+        val m: Map<String, Int> = emptyMap(),
+        val items: List<Item> = emptyList(),
+        val tags: Set<String> = emptySet(),
+        val names: Array<String> = emptyArray(),
+        val maybe: List<Int?> = emptyList(),
+        val maybeMap: Map<String, Int?> = emptyMap(),
+    )
+
+    // A null where the type holds none would reach the handler as a NullPointerException.
+    @Test
+    fun `a null inside a collection that holds none is refused, whatever the mapper says`() {
+        for (c in listOf(
+            codec,
+            Jackson2SignalsCodec(
+                com.fasterxml.jackson.module.kotlin
+                    .jacksonObjectMapper(),
+            ),
+        )) {
+            for (body in listOf(
+                """{"xs":[1,null]}""",
+                """{"m":{"a":null}}""",
+                """{"items":[null]}""",
+                """{"tags":[null]}""",
+                """{"names":["a",null]}""",
+            )) {
+                assertFailsWith<SignalsDecodeException>(body) { c.decode<Held>(body) }
+            }
+            val held = c.decode<Held>("""{"maybe":[1,null],"maybeMap":{"a":null}}""")
+            assertEquals(listOf(1, null), held.maybe)
+            assertEquals(mapOf("a" to null), held.maybeMap)
+            assertFailsWith<SignalsDecodeException> { c.decode<Map<String, Int>>("""{"a":null}""") }
+            assertEquals(mapOf("a" to null), c.decode<Map<String, Int?>>("""{"a":null}"""))
+        }
+    }
+
+    // jacksonObjectMapper() refuses unknown properties, as Jackson 2 does by default.
+    @Test
+    fun `ignores the signals the type does not name with a mapper that refuses them`() {
+        val mapper =
+            com.fasterxml.jackson.module.kotlin
+                .jacksonObjectMapper()
+        assertEquals(Page(2), Jackson2SignalsCodec(mapper).decode<Page>("""{"page":2,"other":1}"""))
+        // The codec reads through a copy; the mapper handed to it keeps its own rules.
+        assertFailsWith<com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException> {
+            mapper.readValue("""{"page":2,"other":1}""", Page::class.java)
+        }
+        assertEquals(listOf(1, null), mapper.readValue("""{"xs":[1,null]}""", Held::class.java).xs)
+    }
 }

@@ -24,7 +24,8 @@ class ReadSignalsTest {
     private class FakeRequest(
         override val method: String,
         private val query: Map<String, String> = emptyMap(),
-        private val headers: Map<String, String> = emptyMap(),
+        // What Datastar's client sends with every body.
+        private val headers: Map<String, String> = mapOf("Content-Type" to "application/json"),
         private val body: String = "",
     ) : IncomingRequest {
         var bodyReads = 0

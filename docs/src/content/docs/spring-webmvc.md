@@ -245,8 +245,9 @@ the rest.
 
 ## What this page does not cover
 
-`SignalsTooLargeException` should be mapped to `413`, and `JsonParseException` and
-`SignalsDecodeException` to `400`. `@Import(StreamlordExceptionHandler::class)` does exactly that,
+`SignalsTooLargeException` should be mapped to `413`, `JsonParseException` and
+`SignalsDecodeException` to `400`, and `SignalsMediaTypeException`, a body not declared
+`application/json`, to `415`. `@Import(StreamlordExceptionHandler::class)` does exactly that,
 or write the `@ControllerAdvice` yourself. An advice that answers an exception thrown inside a
 stream that has started ends it as if it had finished, and Datastar's client does not reconnect;
 throw the exception on when `response.isCommitted`, as `StreamlordExceptionHandler` does, and the

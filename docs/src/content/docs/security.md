@@ -65,6 +65,13 @@ reading*:
 - a chunked body is cut off one byte past the limit;
 - nothing larger than the cap ever sits in memory.
 
+Signals read into a type are refused when objects and arrays nest more than 64 deep, before any
+codec sees them. kotlinx.serialization reads a `JsonElement` by recursion, and twenty kilobytes
+of `[` overflowed its stack: a `StackOverflowError` is no exception, so it went past every
+handler to a 500. The limit is `Streamlord.MAX_SIGNALS_DEPTH`, the same 64 the built-in parser
+and writer keep, so Jackson's own limits, 500 in Jackson 3 and 1000 in Jackson 2, are never
+reached.
+
 The parser caps nesting depth at 64 and the length of a number at 1000 characters, rejects
 everything RFC 8259 rejects, and is run on every build against twenty thousand random inputs and
 twenty thousand mutated documents, from fixed seeds, so the same ones each time. The second cap is there because a
@@ -75,9 +82,11 @@ is not the signals you expected to `400`. The second is `JsonParseException` fro
 reader and `SignalsDecodeException` from a codec, and unmapped they are a `500`: a stranger
 posting `query=gate` where JSON was expected gets a stack trace's worth of blame put on your
 server. Any other `SignalsCodecException`, a value JSON cannot hold on the way out, is your own
-bug, and a `500` is right for it.
+bug, and a `500` is right for it. A third, `SignalsMediaTypeException`, is a body not declared
+`application/json`, which [Forms from other sites](#forms-from-other-sites) explains; it is a
+`SignalsDecodeException`, so it is a `400` if you map nothing more, and a `415` if you do.
 Streamlord will not register a handler behind your back. On Spring it ships one you import
-yourself, `StreamlordExceptionHandler`; on Ktor it is three handlers in `StatusPages`.
+yourself, `StreamlordExceptionHandler`; on Ktor it is four handlers in `StatusPages`.
 
 ```kotlin sample=ktor-application
 install(StatusPages) {
@@ -89,6 +98,9 @@ install(StatusPages) {
     }
     exception<SignalsDecodeException> { call, _ ->
         call.respond(io.ktor.http.HttpStatusCode.BadRequest)
+    }
+    exception<SignalsMediaTypeException> { call, _ ->
+        call.respond(io.ktor.http.HttpStatusCode.UnsupportedMediaType)
     }
 }
 ```
@@ -324,9 +336,46 @@ holes and that is Streamlord, which is what [`interpolate`](/strings/) does. Han
 string and the provenance is already gone, so the escaping was your template engine's job and
 stays there.
 
+## Forms from other sites
+
+A page on any other site can hold this form, and a visitor who is signed in to yours sends it
+with their cookies:
+
+```html
+<form method="post" action="https://your.site/transfer" enctype="text/plain">
+  <input name='{"amount":1000,"to":"gorvek","pad":"' value='"}'>
+</form>
+```
+
+The body is `{"amount":1000,"to":"gorvek","pad":"="}`, which is JSON. A form may send only
+`text/plain`, `application/x-www-form-urlencoded` and `multipart/form-data`, and the browser sends
+those without asking your server first. To send `application/json` to another site it has to ask
+first, with a CORS preflight, and your server does not say yes.
+
+Datastar's client declares every body that carries signals `Content-Type: application/json`, so
+Streamlord refuses a body declared any other way, or not at all, with `SignalsMediaTypeException`
+before any codec reads it. `StreamlordExceptionHandler` answers it with `415`, as does the
+`StatusPages` block above. A declared type is checked before the body is read. Signals in the
+query string, which `@get` and `@delete` send, are not affected, nor is a request with neither a
+body nor a `Content-Type`. A request your own page sends with `contentType: 'form'` carries a
+form rather than signals, and reading signals from it is refused the same way.
+
+A client of your own that cannot set the header can be let through, at the cost of the check:
+
+```kotlin sample=statements
+val streamlord = Streamlord(requireJsonContentType = false)
+```
+
+On Ktor, `install(StreamlordPlugin) { requireJsonContentType = false }` does the same.
+
+This closes the cheapest way in, not every way. A handler that changes something on `GET`, or a
+CORS policy that answers yes to other sites, opens it again, so keep CSRF tokens or `SameSite`
+cookies as well.
+
 ## What is still yours
 
 Authentication, authorisation, CSRF tokens, rate limiting and audit logging. Streamlord takes no
 view, and nothing enters your chain that you did not install: `CspNoncePlugin` above is opt-in
-like everything else. The one place it touches the subject is that your CSRF token is just
-another value in the markup, and the DSL will put it wherever you say.
+like everything else. It touches CSRF in two places: it refuses signals a form on another site
+can send, as [Forms from other sites](#forms-from-other-sites) describes, and your CSRF token is
+just another value in the markup, which the DSL will put wherever you say.

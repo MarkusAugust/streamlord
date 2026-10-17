@@ -49,7 +49,30 @@ class StreamlordExceptionHandlerTest {
     private fun MockMvc.post(
         path: String,
         body: String,
-    ) = perform(MockMvcRequestBuilders.post(path).contentType("application/json").content(body)).andReturn().response
+        contentType: String = "application/json",
+    ) = perform(MockMvcRequestBuilders.post(path).contentType(contentType).content(body)).andReturn().response
+
+    // What a <form enctype="text/plain"> on another site sends, which needs no preflight.
+    @Test
+    fun `a body not declared application json is 415`() {
+        val response = mvc(StreamlordExceptionHandler()).post("/read", """{"a":1,"p":"="}""", "text/plain")
+
+        assertEquals(415, response.status)
+        assertEquals("", response.contentAsString)
+        assertEquals(200, mvc(StreamlordExceptionHandler()).post("/read", """{"a":1}""").status)
+    }
+
+    // A handler that knows only the decode failure answers it as one.
+    @RestControllerAdvice
+    class DecodeOnly {
+        @ExceptionHandler(SignalsDecodeException::class)
+        fun decode(): ResponseEntity<String> = ResponseEntity.badRequest().body("decode")
+    }
+
+    @Test
+    fun `an advice that maps only the decode failure answers 400`() {
+        assertEquals(400, mvc(DecodeOnly()).post("/read", """{"a":1}""", "text/plain").status)
+    }
 
     @Test
     fun `signals over the limit are 413`() {

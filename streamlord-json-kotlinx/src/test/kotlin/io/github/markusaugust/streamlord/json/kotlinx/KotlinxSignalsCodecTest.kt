@@ -6,6 +6,7 @@ import io.github.markusaugust.streamlord.core.port.driven.decode
 import io.github.markusaugust.streamlord.core.port.driven.encode
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.buildClassSerialDescriptor
 import kotlinx.serialization.descriptors.element
@@ -14,6 +15,7 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.encoding.decodeStructure
 import kotlinx.serialization.encoding.encodeStructure
+import kotlinx.serialization.json.JsonElement
 import kotlin.reflect.typeOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -97,6 +99,41 @@ class KotlinxSignalsCodecTest {
         // A list of a class nobody named fails for the same reason the class would.
         val refused = assertFailsWith<SignalsCodecException> { codec.encode(listOf(Other("gorvek"))) }
         assertTrue(refused.message!!.contains("Other"))
+    }
+
+    // The list is looked up whole, and that lookup reads the class of what it holds, never the map.
+    @Test
+    fun `naming required refuses a container of a named type until the container is named`() {
+        val codec = KotlinxSignalsCodec(serializers = mapOf(typeOf<Signals>() to ShoutingSignals), requireNamedSerializers = true)
+        for (refused in listOf(
+            assertFailsWith<SignalsCodecException> { codec.decode<List<Signals>>("""[{"search":"ASH"}]""") },
+            assertFailsWith<SignalsCodecException> { codec.decode<Map<String, Signals>>("""{"a":{"search":"ASH"}}""") },
+            assertFailsWith<SignalsCodecException> { codec.decode<Map<String, List<Signals>>>("""{"a":[]}""") },
+        )) {
+            assertTrue(refused.message!!.contains("No serializer was named"), refused.message)
+        }
+
+        val named =
+            KotlinxSignalsCodec(
+                serializers = mapOf(typeOf<List<Signals>>() to ListSerializer(ShoutingSignals)),
+                requireNamedSerializers = true,
+            )
+        assertEquals(listOf(Signals(search = "ash")), named.decode<List<Signals>>("""[{"search":"ASH"}]"""))
+    }
+
+    @Serializable
+    data class Loose(
+        val page: Int = 1,
+        val extra: JsonElement? = null,
+    )
+
+    // A JsonElement is read by recursion; a caller that skips Streamlord.readSignals still gets a 400.
+    @Test
+    fun `nesting too deep for the stack is a decode failure`() {
+        val depth = 200_000
+        val body = """{"page":2,"extra":""" + "[".repeat(depth) + "]".repeat(depth) + "}"
+        assertFailsWith<SignalsDecodeException> { codec.decode<Loose>(body) }
+        assertEquals(2, codec.decode<Loose>("""{"page":2,"extra":[[[]]]}""").page)
     }
 
     @Test

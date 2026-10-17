@@ -1,15 +1,25 @@
 package io.github.markusaugust.streamlord.json.jackson2
 
+import com.fasterxml.jackson.annotation.JsonSetter
+import com.fasterxml.jackson.annotation.Nulls
 import com.fasterxml.jackson.core.JsonProcessingException
+import com.fasterxml.jackson.databind.AnnotationIntrospector
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.exc.InvalidDefinitionException
+import com.fasterxml.jackson.databind.introspect.Annotated
+import com.fasterxml.jackson.databind.introspect.AnnotatedParameter
+import com.fasterxml.jackson.databind.introspect.NopAnnotationIntrospector
 import io.github.markusaugust.streamlord.core.SignalsCodecException
 import io.github.markusaugust.streamlord.core.SignalsDecodeException
 import io.github.markusaugust.streamlord.core.port.driven.SignalsCodec
+import java.lang.reflect.Constructor
+import java.lang.reflect.Method
 import kotlin.reflect.KClass
 import kotlin.reflect.KType
+import kotlin.reflect.full.valueParameters
 import kotlin.reflect.javaType
+import kotlin.reflect.jvm.kotlinFunction
 
 /**
  * A [SignalsCodec] backed by Jackson 2 (`com.fasterxml.jackson`).
@@ -18,13 +28,19 @@ import kotlin.reflect.javaType
  * every other JSON in the realm. [default] builds a mapper with every module on the classpath
  * registered, including `jackson-module-kotlin` when present.
  *
- * Three rules hold whatever the mapper says, because the type is what a request may send. A
+ * Five rules hold whatever the mapper says, because the type is what a request may send. A
  * `null` for a primitive, such as `val id: Long`, is refused rather than read as `0`, which is
  * what Jackson 2 and Spring Boot's mapper do by default; this holds when the parameter has a
  * default and when the mapper has the Kotlin module's `NullIsSameAsDefault` on, so declare it
- * `Int?` if the page may send `null`. A Kotlin parameter must be sent unless it has a default or,
- * unlike with kotlinx, takes `null`; a Java creator keeps the mapper's rule. And nothing may
- * follow the JSON value.
+ * `Int?` if the page may send `null`. A `null` inside a Kotlin parameter's `List<Int>`,
+ * `Set<Item>`, `Array<String>` or `Map<String, Int>` is refused too, as the Kotlin module's
+ * `StrictNullChecks` refuses it, so declare the element `Int?` if it may be `null`. A Kotlin
+ * parameter must be sent unless it has a default or, unlike with kotlinx, takes `null`; a Java
+ * creator keeps the mapper's rule. A key the type does not name is ignored, as the other codecs
+ * ignore it, where Jackson 2's own default refuses it. And nothing may follow the JSON value.
+ *
+ * The codec reads through a copy of the mapper, made once, so the mapper you hand it is never
+ * changed. A mapper of a subclass that does not override `copy()` cannot be used.
  *
  * A Kotlin class or interface in the type needs `jackson-module-kotlin` on the mapper, even one
  * Jackson could build without it, such as a class with `var` properties. Without the module
@@ -37,8 +53,22 @@ import kotlin.reflect.javaType
  * ```
  */
 public class Jackson2SignalsCodec(
-    private val mapper: ObjectMapper,
+    mapper: ObjectMapper,
 ) : SignalsCodec {
+    /*
+     * A copy, so the caller's mapper keeps its own rules and its own cache of deserializers: one
+     * built with the rule below would otherwise be cached for every other read it makes.
+     */
+    private val mapper: ObjectMapper =
+        mapper.copy().also { copy ->
+            if (hasKotlinModule(copy)) {
+                copy.setAnnotationIntrospectors(
+                    copy.serializationConfig.annotationIntrospector,
+                    AnnotationIntrospector.pair(copy.deserializationConfig.annotationIntrospector, ContentNulls),
+                )
+            }
+        }
+
     override fun encode(
         value: Any?,
         type: KType,
@@ -56,15 +86,18 @@ public class Jackson2SignalsCodec(
     ): T =
         try {
             val kotlin = kotlinClassIn(type)
-            if (kotlin != null && !hasKotlinModule()) throw noKotlinModule(type, kotlin)
+            if (kotlin != null && !hasKotlinModule(mapper)) throw noKotlinModule(type, kotlin)
             val javaType = mapper.typeFactory.constructType(type.javaType)
             mapper
                 .readerFor(javaType)
                 .with(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES, DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+                .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
                 // A Kotlin parameter with no default must be sent, as kotlinx has it; the Kotlin module
                 // still lets one that takes null go missing. A Java creator keeps the mapper's rule.
                 .let { if (kotlin != null) it.with(DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES) else it }
-                .readValue<T>(json) ?: throw SignalsDecodeException("Signals decoded to null for $type")
+                .readValue<T>(json)
+                ?.also { refuseNullValues(it, type) }
+                ?: throw SignalsDecodeException("Signals decoded to null for $type")
         } catch (e: InvalidDefinitionException) {
             // The type itself cannot be built, whatever the request sends: the server's to fix.
             throw SignalsCodecException("Could not decode signals into $type", e)
@@ -72,18 +105,32 @@ public class Jackson2SignalsCodec(
             throw SignalsDecodeException("Could not decode signals into $type", e)
         }
 
-    /*
-     * The module id is recorded only while IGNORE_DUPLICATE_MODULE_REGISTRATIONS is on, its
-     * default; the introspector it adds is there either way.
-     */
-    private fun hasKotlinModule(): Boolean =
-        KOTLIN_MODULE in mapper.registeredModuleIds ||
-            mapper.deserializationConfig.annotationIntrospector
-                .allIntrospectors()
-                .any { it.javaClass.name.startsWith("com.fasterxml.jackson.module.kotlin.") }
-
     public companion object {
         private const val KOTLIN_MODULE = "com.fasterxml.jackson.module.kotlin.KotlinModule"
+
+        /*
+         * The module id is recorded only while IGNORE_DUPLICATE_MODULE_REGISTRATIONS is on, its
+         * default; the introspector it adds is there either way.
+         */
+        private fun hasKotlinModule(mapper: ObjectMapper): Boolean =
+            KOTLIN_MODULE in mapper.registeredModuleIds ||
+                mapper.deserializationConfig.annotationIntrospector
+                    .allIntrospectors()
+                    .any { it.javaClass.name.startsWith("com.fasterxml.jackson.module.kotlin.") }
+
+        /*
+         * The Kotlin module checks what a constructor holds, not the type asked for, so a
+         * Map<String, Int> read whole is checked here.
+         */
+        private fun refuseNullValues(
+            value: Any,
+            type: KType,
+        ) {
+            val values = type.arguments.getOrNull(1)?.type
+            if (value is Map<*, *> && values?.isMarkedNullable == false && null in value.values) {
+                throw SignalsDecodeException("Signals held null where $type takes none")
+            }
+        }
 
         /** The first Kotlin class or interface in [type] or its arguments; an enum Jackson reads by name either way. */
         private fun kotlinClassIn(type: KType): KClass<*>? {
@@ -101,16 +148,44 @@ public class Jackson2SignalsCodec(
                 "jackson-module-kotlin, without which Jackson reads it past its constructor",
         )
 
-        /**
-         * A codec over a fresh mapper with every module on the classpath registered.
-         *
-         * Unknown properties are ignored, as Spring Boot's own mapper and the other codecs
-         * ignore them. The browser sends its whole store, and a type names only the signals one
-         * handler accepts; Jackson 2's own default would refuse every such request.
-         */
-        public fun default(): Jackson2SignalsCodec =
-            Jackson2SignalsCodec(
-                ObjectMapper().findAndRegisterModules().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false),
-            )
+        /** A codec over a fresh mapper with every module on the classpath registered. */
+        public fun default(): Jackson2SignalsCodec = Jackson2SignalsCodec(ObjectMapper().findAndRegisterModules())
+    }
+}
+
+/*
+ * The Kotlin module's StrictNullChecks, for a mapper that has it off, as it is by default in
+ * Jackson 2: a Kotlin creator parameter whose collection, array or map holds a type that cannot
+ * be null fails on a null in it, the way @JsonSetter(contentNulls = FAIL) would. It runs after
+ * the mapper's own introspectors, so an annotation on the parameter still decides. Installed only
+ * beside the Kotlin module, which brings kotlin-reflect with it.
+ */
+private object ContentNulls : NopAnnotationIntrospector() {
+    private fun readResolve(): Any = ContentNulls
+
+    override fun findSetterInfo(ann: Annotated): JsonSetter.Value {
+        val parameter = ann as? AnnotatedParameter ?: return JsonSetter.Value.empty()
+        val content =
+            when {
+                parameter.type.isArrayType || parameter.type.isCollectionLikeType -> 0
+                parameter.type.isMapLikeType -> 1
+                else -> return JsonSetter.Value.empty()
+            }
+        val function =
+            when (val owner = parameter.owner.member) {
+                is Constructor<*> -> owner.kotlinFunction
+                is Method -> owner.kotlinFunction
+                else -> null
+            }
+        val nonNull =
+            function
+                ?.valueParameters
+                ?.getOrNull(parameter.index)
+                ?.type
+                ?.arguments
+                ?.getOrNull(content)
+                ?.type
+                ?.isMarkedNullable == false
+        return if (nonNull) JsonSetter.Value.forContentNulls(Nulls.FAIL) else JsonSetter.Value.empty()
     }
 }

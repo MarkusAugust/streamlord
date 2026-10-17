@@ -19,13 +19,17 @@ import kotlin.reflect.javaType
  * bean) so signals obey the same rules as every other JSON in the realm. [default] builds a
  * mapper that discovers registered modules, including `jackson-module-kotlin` when present.
  *
- * Three rules hold whatever the mapper says, because the type is what a request may send. A
+ * Four rules hold whatever the mapper says, because the type is what a request may send. A
  * `null` for a primitive is refused, also when the parameter has a default and when the mapper
  * has the Kotlin module's `NullIsSameAsDefault` on, so declare it `Int?` if the page may send
  * `null`. A Kotlin parameter must be sent unless it has a default or, unlike with kotlinx, takes
  * `null`, even when the mapper turns off `FAIL_ON_NULL_FOR_PRIMITIVES`, which otherwise lets a
- * missing `val id: Long` arrive as `0`; a Java creator keeps the mapper's rule. And nothing may
- * follow the JSON value.
+ * missing `val id: Long` arrive as `0`; a Java creator keeps the mapper's rule. A key the type
+ * does not name is ignored, as the other codecs ignore it, even when the mapper turns on
+ * `FAIL_ON_UNKNOWN_PROPERTIES`. And nothing may follow the JSON value.
+ *
+ * A `null` inside a `List<Int>` or `Map<String, Int>` is refused by the Kotlin module's
+ * `StrictNullChecks`, on by default in Jackson 3; a mapper that turns it off lets one through.
  *
  * A Kotlin class or interface in the type needs `jackson-module-kotlin` on the mapper, even one
  * Jackson could build without it, such as a class with `var` properties. Without the module
@@ -62,10 +66,13 @@ public class JacksonSignalsCodec(
             mapper
                 .readerFor(javaType)
                 .with(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES, DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+                .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
                 // A Kotlin parameter with no default must be sent, as kotlinx has it; the Kotlin module
                 // still lets one that takes null go missing. A Java creator keeps the mapper's rule.
                 .let { if (kotlin != null) it.with(DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES) else it }
-                .readValue<T>(json) ?: throw SignalsDecodeException("Signals decoded to null for $type")
+                .readValue<T>(json)
+                ?.also { refuseNullValues(it, type) }
+                ?: throw SignalsDecodeException("Signals decoded to null for $type")
         } catch (e: InvalidDefinitionException) {
             // The type itself cannot be built, whatever the request sends: the server's to fix.
             throw SignalsCodecException("Could not decode signals into $type", e)
@@ -77,6 +84,20 @@ public class JacksonSignalsCodec(
 
     public companion object {
         private const val KOTLIN_MODULE = "tools.jackson.module.kotlin.KotlinModule"
+
+        /*
+         * The Kotlin module checks what a constructor holds, not the type asked for, so a
+         * Map<String, Int> read whole is checked here.
+         */
+        private fun refuseNullValues(
+            value: Any,
+            type: KType,
+        ) {
+            val values = type.arguments.getOrNull(1)?.type
+            if (value is Map<*, *> && values?.isMarkedNullable == false && null in value.values) {
+                throw SignalsDecodeException("Signals held null where $type takes none")
+            }
+        }
 
         /** The first Kotlin class or interface in [type] or its arguments; an enum Jackson reads by name either way. */
         private fun kotlinClassIn(type: KType): KClass<*>? {

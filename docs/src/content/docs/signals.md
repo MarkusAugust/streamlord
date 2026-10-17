@@ -95,7 +95,9 @@ on [Testing](/testing/).
 If you also want it to fail at request time, that is your codec's own setting rather than
 something Streamlord adds: `KotlinxSignalsCodec(json = Json { ignoreUnknownKeys = false })`
 refuses a body carrying anything the type does not name. It is worth a test and a poor fit for
-production, because it makes every handler fail the moment any page gains a signal.
+production, because it makes every handler fail the moment any page gains a signal. The Jackson
+codecs have no such setting: they ignore unknown keys even when your mapper is set to refuse
+them, since that is Jackson 2's own default and every handler would otherwise fail.
 
 ## Which codec
 
@@ -112,12 +114,20 @@ then fails at runtime on an `ObjectMapper` that is not the one Spring configured
 ## Where the codecs differ
 
 All three ignore keys the type does not name and refuse a body with anything after the JSON
-value. All three also refuse a `null` for a primitive, and a missing Kotlin parameter that has no
-default and cannot be `null`. For Jackson, Streamlord enforces these whatever your mapper is set
-to, because Jackson 2 and Spring Boot's mapper would otherwise turn a missing `val id: Long` into
-`0`. The `null` is refused even for a primitive with a default, and even when the mapper has the
-Kotlin module's `NullIsSameAsDefault` on: declare the property `Int?` if a page may send `null`.
-A Java class read through Jackson, such as a record, keeps the mapper's rule for a missing value.
+value. All three also refuse a `null` for a primitive, a `null` inside a `List<Int>`,
+`Set<Item>` or `Map<String, Int>`, and a missing Kotlin parameter that has no default and cannot
+be `null`. For Jackson, Streamlord enforces these whatever your mapper is set to, because Jackson
+2 and Spring Boot's mapper would otherwise turn a missing `val id: Long` into `0`, refuse every
+request that carries a signal the type does not name, and hand your handler a `List<Int>` with a
+`null` in it. The `null` is refused even for a primitive with a default, and even when the mapper
+has the Kotlin module's `NullIsSameAsDefault` on: declare the property `Int?`, or the element
+`List<Int?>`, if a page may send `null`. A Java class read through Jackson, such as a record,
+keeps the mapper's rule for a missing value. With Jackson 3 the `null` inside a collection is
+refused by the Kotlin module's `StrictNullChecks`, which is on unless your mapper turns it off.
+
+Objects and arrays nested more than 64 deep are refused before any codec reads them, so all
+three, and the built-in reader, answer a body of twenty thousand `[` with a 400 rather than a
+`StackOverflowError`.
 
 A Kotlin class or interface read through Jackson needs `jackson-module-kotlin` on the mapper.
 Without it Jackson drops what the browser sent or leaves `null` in a property that cannot hold
@@ -129,11 +139,23 @@ They differ on the rest:
 | Body or value | kotlinx | Jackson 3 and 2 |
 |---|---|---|
 | `{"page":3.7}` into `page: Int` | refused | `3` |
-| `{"name":5}` into `name: String` | refused | `"5"` |
+| `{"page":1.0}` into `page: Int`, or `{"id":12.0}` into `id: Long` | refused | `1`, `12` |
+| `{"page":" 3"}` into `page: Int` | refused | `3` |
 | `{"page":"3"}` into `page: Int` | `3` | `3` |
+| `{"name":5}` into `name: String` | refused | `"5"` |
+| `{"name":true}` into `name: String` | refused | `"true"` |
+| `{"b":1}` into `b: Boolean` | refused | `true` |
+| `{"d":"NaN"}` into `d: Double` | refused | `NaN` |
+| `{"d":1e400}` into `d: Double` | refused | `Infinity` |
+| `{"d":-0}` into `d: Double` | `-0.0` | `0.0` |
+| a raw tab or other control character inside a string, which JSON does not allow | read as it is | refused |
 | `{}` into `q: String?` with no default | refused | `null` |
+| reading into `Map<String, Any?>` | `SignalsCodecException`, a 500 | read |
 | writing `Double.NaN` or an infinity | `SignalsCodecException` | the string `"NaN"`, so the signal changes type in the browser |
 | writing a `Map<String, Any?>` | `SignalsCodecException` | written |
+
+With Jackson, a client can put `NaN` or `Infinity` into a `Double` your handler computes with;
+check the value with `isFinite()` where it matters, or read it through kotlinx.
 
 A body that is refused throws `SignalsDecodeException`, which `StreamlordExceptionHandler`
 answers with a 400.

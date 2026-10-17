@@ -59,6 +59,12 @@ only the plumbing differs. A codec that cannot read them throws `SignalsDecodeEx
 unless you map it: `@Import(StreamlordExceptionHandler::class)` answers it with `400`, as on
 WebMVC.
 
+The body never passes through `readSignals` here, so its check of the `Content-Type` is yours.
+Declare the mapping `consumes = ["application/json"]`, so a form on another site cannot post
+signals to it, as [Security](/security/#forms-from-other-sites) explains; Spring answers anything
+else with `415`. A body nested too deep to read is still refused by the codec, with
+`SignalsDecodeException`, though at the codec's own depth rather than at 64.
+
 ## Cancellation
 
 When the client goes away, WebFlux cancels the subscription, which cancels the coroutine behind

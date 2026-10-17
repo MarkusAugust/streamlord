@@ -53,6 +53,9 @@ All notable changes to Streamlord are recorded here. The format follows
 - `Casing.heldKey` in `streamlord-html`: refuses an attribute key whose signal, as Datastar's
   client reads it after lowercasing, cutting at `__` and applying `__case`, it cannot hold.
 
+- `SignalsMediaTypeException`, `Streamlord.requireJsonContentType` with the same setting on the
+  Ktor plugin, and `Streamlord.MAX_SIGNALS_DEPTH`; see Changed.
+
 ### Changed
 
 - A dotted name in the pairs of `patchSignals`, `removeSignals` and `dataSignals` now nests, as
@@ -231,6 +234,38 @@ All notable changes to Streamlord are recorded here. The format follows
   Kotlin source still compiles against them and code compiled against 0.12 does not link. The
   `signalsTooLarge` and `signalsUnreadable` handlers of `StreamlordExceptionHandler` take the
   exception; the 0.12 signatures remain, hidden.
+- `readSignals` and `readSignalsJson`, on Ktor and Spring, refuse signals in a request body that
+  is not declared `application/json` with `SignalsMediaTypeException`, which
+  `StreamlordExceptionHandler` answers with `415`. Datastar's client declares every body it sends
+  signals in that way; a `<form enctype="text/plain">` on another site could post JSON-shaped
+  text without a preflight, and it was read as signals, measured in Chrome on Ktor CIO and Spring
+  Tomcat. A declared type is checked before the body is read; a body with no `Content-Type` is
+  refused once it is found not to be empty. Query-string signals are not affected.
+  `Streamlord(requireJsonContentType = false)`, or `requireJsonContentType = false` in the Ktor
+  plugin, turns the check off. On Ktor, map the exception to `415` in `StatusPages`; a block that
+  maps only `SignalsDecodeException` answers it with `400`, since it is one. `SignalsDecodeException`
+  is now `open`.
+- Signals read into a type are refused with `SignalsDecodeException`, a `400`, when objects and
+  arrays nest more than `Streamlord.MAX_SIGNALS_DEPTH`, 64, deep, before any codec reads them. It
+  is the depth the built-in parser and writer already kept. `KotlinxSignalsCodec` overflowed its
+  stack on twenty kilobytes of `[` into a `JsonElement`, and the `StackOverflowError` went past
+  every handler: real Ktor CIO answered `500`. The codec also turns that error into
+  `SignalsDecodeException` for a caller that decodes a body itself, as on WebFlux.
+- `Jackson2SignalsCodec` refuses a `null` inside a Kotlin parameter's `List<Int>`, `Set`,
+  `Array` or `Map<String, Int>`, as `StrictNullChecks` in the Kotlin module would, with
+  `default()` and with a mapper of your own; it reached the handler as a `NullPointerException`.
+  Both Jackson codecs refuse a `null` value when the type asked for is itself a `Map<String, Int>`.
+  An element type declared nullable, `List<Int?>`, still takes one.
+- Both Jackson codecs ignore keys the type does not name whatever the mapper says, as the docs
+  promised. `Jackson2SignalsCodec(jacksonObjectMapper())` refused every request that carried a
+  signal the type did not name. `Jackson2SignalsCodec` reads through a copy of the mapper made
+  once, so the mapper handed to it is not changed; a mapper of a subclass that does not override
+  `copy()` cannot be used.
+- `KotlinxSignalsCodec(requireNamedSerializers = true)` refuses a container of a named type, such
+  as `List<Signals>`, until the container is named itself, as
+  `typeOf<List<Signals>>() to ListSerializer(Signals.serializer())`. The list is looked up whole,
+  and that lookup reads the class of what it holds, the reflective path a native image cannot
+  take, so the check let through exactly what it is there to catch.
 
 ### Fixed
 

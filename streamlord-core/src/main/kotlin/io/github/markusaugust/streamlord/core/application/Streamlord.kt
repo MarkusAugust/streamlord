@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.core.application
 
 import io.github.markusaugust.streamlord.core.SignalsCodecException
 import io.github.markusaugust.streamlord.core.SignalsDecodeException
+import io.github.markusaugust.streamlord.core.SignalsMediaTypeException
 import io.github.markusaugust.streamlord.core.SignalsTooLargeException
 import io.github.markusaugust.streamlord.core.StreamRefusedException
 import io.github.markusaugust.streamlord.core.StreamlordException
@@ -77,6 +78,13 @@ public typealias Signals = JsonObject
  *   with the request passed. Each event is flushed through the compressor whole, so nothing waits
  *   for the next, and the window carries across events, so a render that repeats most of the
  *   last costs little. Off by default. Not WebFlux: its flows are only mapped.
+ * @property requireJsonContentType Refuse signals in a request body unless its `Content-Type` is
+ *   `application/json`, with [SignalsMediaTypeException], a `415`. Datastar's client declares
+ *   every body it sends signals in that way. A `<form>` on another site can post `text/plain`
+ *   that reads as JSON, and the browser sends it without asking this server first; it cannot do
+ *   the same with `application/json`. On by default; turn it off only for a client of your own
+ *   that cannot set the header. Signals in the query string are not affected, nor is a request
+ *   with neither a body nor a `Content-Type`.
  */
 public class Streamlord(
     public val codec: SignalsCodec = BuiltInSignalsCodec,
@@ -85,6 +93,7 @@ public class Streamlord(
     public val attributePrefixes: List<String> = ElementsGuard.defaultPrefixes,
     public val heartbeat: Duration? = DEFAULT_HEARTBEAT,
     public val compress: Boolean = false,
+    public val requireJsonContentType: Boolean = true,
 ) {
     init {
         require(maxSignalsSize > 0) { "maxSignalsSize must be positive" }
@@ -101,7 +110,18 @@ public class Streamlord(
         maxSignalsSize: Int = DEFAULT_MAX_SIGNALS_SIZE,
         guardElements: Boolean = false,
         attributePrefixes: List<String> = ElementsGuard.defaultPrefixes,
-    ) : this(codec, maxSignalsSize, guardElements, attributePrefixes, DEFAULT_HEARTBEAT, false)
+    ) : this(codec, maxSignalsSize, guardElements, attributePrefixes, DEFAULT_HEARTBEAT, false, true)
+
+    /** The constructor as 0.12 had it, before [requireJsonContentType], for code compiled against it. */
+    @Deprecated("Kept for binary compatibility.", level = DeprecationLevel.HIDDEN)
+    public constructor(
+        codec: SignalsCodec = BuiltInSignalsCodec,
+        maxSignalsSize: Int = DEFAULT_MAX_SIGNALS_SIZE,
+        guardElements: Boolean = false,
+        attributePrefixes: List<String> = ElementsGuard.defaultPrefixes,
+        heartbeat: Duration? = DEFAULT_HEARTBEAT,
+        compress: Boolean = false,
+    ) : this(codec, maxSignalsSize, guardElements, attributePrefixes, heartbeat, compress, true)
 
     /**
      * Open a [DatastarStream] over a sink. Adapters call this; you rarely need to.
@@ -214,16 +234,26 @@ public class Streamlord(
     /**
      * The raw JSON text of the signals in a request, or `null` when there are none.
      * Applies the protocol rule: query parameter `datastar` for GET and DELETE, body otherwise.
+     *
+     * While [requireJsonContentType] is on, a request whose body is declared anything but
+     * `application/json` throws [SignalsMediaTypeException] before the body is read, and so does
+     * a body that is not empty and declared nothing at all.
      */
     public suspend fun readSignalsJson(request: IncomingRequest): String? {
+        val inQuery = request.carriesSignalsInQuery
+        val checked = !inQuery && requireJsonContentType
+        val contentType = if (checked) request.header(CONTENT_TYPE) else null
+        // Before the read: a container may already have taken a form body apart.
+        if (checked && contentType != null && !isJson(contentType)) throw SignalsMediaTypeException(contentType)
         val raw =
-            if (request.carriesSignalsInQuery) {
+            if (inQuery) {
                 request.queryParameter(DatastarProtocol.SIGNALS_PARAMETER)
             } else {
                 request.bodyText(maxSignalsSize)
             }
         val text = raw?.takeIf { it.isNotBlank() } ?: return null
         if (text.length > maxSignalsSize) throw SignalsTooLargeException(text.length.toLong(), maxSignalsSize)
+        if (checked && contentType == null) throw SignalsMediaTypeException(null)
         return text
     }
 
@@ -231,12 +261,20 @@ public class Streamlord(
     public suspend fun readSignals(request: IncomingRequest): Signals =
         readSignalsJson(request)?.let { JsonParser.parseObject(it) } ?: JsonObject.EMPTY
 
-    /** The signals decoded into [type] by the codec, or `null` when the request carried none. */
+    /**
+     * The signals decoded into [type] by the codec, or `null` when the request carried none.
+     *
+     * Signals nested deeper than [MAX_SIGNALS_DEPTH] throw [SignalsDecodeException] before the
+     * codec sees them, whichever codec it is.
+     */
     public suspend fun <T : Any> readSignals(
         request: IncomingRequest,
         type: KType,
     ): T? {
         val json = readSignalsJson(request) ?: return null
+        if (JsonParser.nestsDeeperThan(json, MAX_SIGNALS_DEPTH)) {
+            throw SignalsDecodeException("Signals nested deeper than $MAX_SIGNALS_DEPTH levels")
+        }
         return try {
             codec.decode(json, type)
         } catch (e: StreamlordException) {
@@ -251,6 +289,15 @@ public class Streamlord(
         public const val DEFAULT_MAX_SIGNALS_SIZE: Int = 1_048_576
 
         /**
+         * How deep objects and arrays may nest in signals read into a type: 64, the depth the
+         * built-in parser reads and [io.github.markusaugust.streamlord.core.json.JsonWriter]
+         * writes. It is checked before the codec runs, because a codec that recurses, as
+         * kotlinx.serialization does into a `JsonElement`, overflows the stack on twenty
+         * kilobytes of brackets, and a `StackOverflowError` is no exception a handler can answer.
+         */
+        public const val MAX_SIGNALS_DEPTH: Int = JsonParser.DEFAULT_MAX_DEPTH
+
+        /**
          * Thirty seconds: under the idle timeouts of most proxies and load balancers, at one
          * comment per silent half minute per stream. A proxy that closes sooner wants a shorter
          * one.
@@ -261,6 +308,12 @@ public class Streamlord(
         public val Default: Streamlord = Streamlord()
     }
 }
+
+private const val CONTENT_TYPE = "Content-Type"
+
+/** `application/json` in any case, with or without parameters such as a charset. */
+private fun isJson(contentType: String?): Boolean =
+    contentType?.substringBefore(';')?.trim()?.equals(DatastarProtocol.CONTENT_TYPE_JSON, ignoreCase = true) == true
 
 private fun requireHeartbeat(heartbeat: Duration?) {
     require(heartbeat == null || heartbeat.isPositive()) { "heartbeat must be positive, or null for none" }

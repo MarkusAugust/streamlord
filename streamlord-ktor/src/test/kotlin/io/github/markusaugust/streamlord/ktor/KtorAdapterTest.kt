@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.ktor
 
+import io.github.markusaugust.streamlord.core.SignalsMediaTypeException
 import io.github.markusaugust.streamlord.core.SignalsTooLargeException
 import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
@@ -257,10 +258,51 @@ class KtorAdapterTest {
                     }
                 }
             }
-            val big = client.post("/s") { setBody("{\"a\":\"" + "x".repeat(10_000) + "\"}") }
+            val big =
+                client.post("/s") {
+                    contentType(ContentType.Application.Json)
+                    setBody("{\"a\":\"" + "x".repeat(10_000) + "\"}")
+                }
             assertEquals(HttpStatusCode.PayloadTooLarge, big.status)
             assertEquals("too large: 10008", big.bodyAsText())
-            assertEquals("ok", client.post("/s") { setBody("{\"a\":1}") }.bodyAsText())
+            val ok =
+                client.post("/s") {
+                    contentType(ContentType.Application.Json)
+                    setBody("{\"a\":1}")
+                }
+            assertEquals("ok", ok.bodyAsText())
+        }
+
+    // A <form enctype="text/plain"> on another site posts this without a preflight.
+    @Test
+    fun `a body not declared application json is refused, unless the plugin is told otherwise`() =
+        testApplication {
+            routing {
+                post("/s") {
+                    try {
+                        call.respond("ok " + call.readSignals().int("a"))
+                    } catch (e: SignalsMediaTypeException) {
+                        call.respond(HttpStatusCode.UnsupportedMediaType, "refused " + e.contentType)
+                    }
+                }
+            }
+            val form = client.post("/s") { setBody("{\"a\":1}") }
+            assertEquals(HttpStatusCode.UnsupportedMediaType, form.status)
+            assertEquals("refused text/plain; charset=UTF-8", form.bodyAsText())
+            val json =
+                client.post("/s") {
+                    contentType(ContentType.Application.Json)
+                    setBody("{\"a\":1}")
+                }
+            assertEquals("ok 1", json.bodyAsText())
+        }
+
+    @Test
+    fun `the plugin can let any content type through`() =
+        testApplication {
+            install(StreamlordPlugin) { requireJsonContentType = false }
+            routing { post("/s") { call.respond("ok " + call.readSignals().int("a")) } }
+            assertEquals("ok 1", client.post("/s") { setBody("{\"a\":1}") }.bodyAsText())
         }
 
     @Test

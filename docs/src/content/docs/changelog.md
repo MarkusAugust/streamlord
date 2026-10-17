@@ -9,6 +9,12 @@ with a sentence about what to do.
 
 ## Unreleased
 
+**Signals in a body must be sent as `application/json`.** Datastar's client always does, so pages
+change nothing. A client of your own that posts signals without that `Content-Type` now gets
+`SignalsMediaTypeException`: set the header, or pass `requireJsonContentType = false`. On Ktor,
+map the exception to `415` in `StatusPages`; [Security](/security/#forms-from-other-sites) has
+the block and the reason.
+
 ## 0.12.0
 
 **Spring Boot 3 is no longer supported.** The Spring adapter is built for Boot 4 (Framework 7.0,

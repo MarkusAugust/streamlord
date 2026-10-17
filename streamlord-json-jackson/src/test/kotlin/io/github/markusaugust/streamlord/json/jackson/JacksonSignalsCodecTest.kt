@@ -131,4 +131,30 @@ class JacksonSignalsCodecTest {
             assertFailsWith<SignalsDecodeException> { c.decode<JavaSignals>("""{"name":"a","n":null}""") }
         }
     }
+
+    @Test
+    fun `ignores the signals the type does not name with a mapper that refuses them`() {
+        val strict =
+            JsonMapper
+                .builder()
+                .addModule(KotlinModule.Builder().build())
+                .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                .build()
+        assertEquals(Page(2), JacksonSignalsCodec(strict).decode<Page>("""{"page":2,"other":1}"""))
+    }
+
+    data class Held(
+        val xs: List<Int> = emptyList(),
+        val m: Map<String, Int> = emptyMap(),
+    )
+
+    @Test
+    fun `a null inside a collection that holds none is refused`() {
+        for (body in listOf("""{"xs":[1,null]}""", """{"m":{"a":null}}""")) {
+            assertFailsWith<SignalsDecodeException>(body) { codec.decode<Held>(body) }
+        }
+        // The Kotlin module checks a constructor's parameters; a map read whole is checked by the codec.
+        assertFailsWith<SignalsDecodeException> { codec.decode<Map<String, Int>>("""{"a":null}""") }
+        assertEquals(mapOf("a" to null), codec.decode<Map<String, Int?>>("""{"a":null}"""))
+    }
 }
