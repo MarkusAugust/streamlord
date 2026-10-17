@@ -7,12 +7,20 @@ import io.github.markusaugust.streamlord.core.port.driven.BufferedSseSink
 import io.github.markusaugust.streamlord.core.port.driven.SseSink
 import io.github.markusaugust.streamlord.core.protocol.SseDecoder
 import io.github.markusaugust.streamlord.core.protocol.SseEncoder
+import kotlinx.coroutines.CancellableContinuation
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Delay
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import java.util.PriorityQueue
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.resume
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -182,27 +190,82 @@ class SendLatestTest {
             }
         }
 
-    // A render that never suspends, as a blocking template engine's does, still counts.
+    // A render that never suspends, as a blocking template engine's does, still counts. It moves
+    // the clock without giving up the thread, so the interval counts it only if it started first.
     @Test
-    fun `a render that never suspends counts towards the interval`() =
-        runBlocking {
-            val sentAt = ArrayList<Long>()
-            val start = System.nanoTime()
-            val sink =
-                object : SseSink {
-                    override suspend fun write(text: String) {
-                        sentAt += (System.nanoTime() - start) / 1_000_000
-                    }
-
-                    override suspend fun flush() = Unit
+    fun `a render that never suspends counts towards the interval`() {
+        val clock = HandClock()
+        val sentAt = ArrayList<Long>()
+        val sink =
+            object : SseSink {
+                override suspend fun write(text: String) {
+                    sentAt += clock.now
                 }
 
-            Streamlord().stream(sink).sendLatest(flowOf(1, 2), minInterval = 200.milliseconds) {
-                Thread.sleep(150)
-                count(it)
+                override suspend fun flush() = Unit
             }
 
-            val gap = sentAt[1] - sentAt[0]
-            kotlin.test.assertTrue(gap in 190..330, "sent at $sentAt")
+        clock.run {
+            Streamlord().stream(sink).sendLatest(flowOf(1, 2), minInterval = 200.milliseconds) {
+                clock.now += 150
+                count(it)
+            }
         }
+
+        assertEquals(listOf(150L, 350L), sentAt)
+        assertEquals(400L, clock.now)
+    }
+}
+
+/**
+ * One thread, and a clock that moves when a test moves it or when every coroutine waits on a
+ * delay. A test scheduler runs whatever is queued as its time advances, so it cannot stand for a
+ * render that holds the thread while time passes.
+ */
+@OptIn(InternalCoroutinesApi::class)
+private class HandClock :
+    CoroutineDispatcher(),
+    Delay {
+    var now = 0L
+
+    private class Timer(
+        val at: Long,
+        val order: Long,
+        val continuation: CancellableContinuation<Unit>,
+    )
+
+    private val ready = ArrayDeque<Runnable>()
+    private val timers = PriorityQueue(compareBy<Timer>({ it.at }, { it.order }))
+    private var scheduled = 0L
+
+    override fun dispatch(
+        context: CoroutineContext,
+        block: Runnable,
+    ) {
+        ready.addLast(block)
+    }
+
+    override fun scheduleResumeAfterDelay(
+        timeMillis: Long,
+        continuation: CancellableContinuation<Unit>,
+    ) {
+        timers.add(Timer(now + timeMillis, scheduled++, continuation))
+    }
+
+    fun run(block: suspend () -> Unit) {
+        var outcome: Result<Unit>? = null
+        CoroutineScope(this).launch { outcome = runCatching { block() } }
+        while (outcome == null) {
+            val task = ready.removeFirstOrNull()
+            if (task != null) {
+                task.run()
+                continue
+            }
+            val timer = checkNotNull(timers.poll()) { "nothing left to run or wait for" }
+            if (!timer.continuation.isActive) continue
+            now = maxOf(now, timer.at)
+            timer.continuation.resume(Unit)
+        }
+        outcome!!.getOrThrow()
+    }
 }
