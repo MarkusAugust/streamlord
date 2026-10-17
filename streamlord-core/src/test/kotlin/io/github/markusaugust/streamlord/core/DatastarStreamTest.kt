@@ -77,14 +77,28 @@ class DatastarStreamTest {
             val stream = Streamlord.Default.stream(sink)
             stream.patchSignals("form.email" to "g@x", "form.name" to "G", "form" to mapOf("age" to 3), "n" to 1)
             stream.removeSignals("form.email", "n")
+            stream.removeSignals("x.y", "x", "x")
             assertEquals(
                 "event: datastar-patch-signals\ndata: signals {\"form\":{\"email\":\"g@x\",\"name\":\"G\",\"age\":3},\"n\":1}\n\n" +
-                    "event: datastar-patch-signals\ndata: signals {\"form\":{\"email\":null},\"n\":null}\n\n",
+                    "event: datastar-patch-signals\ndata: signals {\"form\":{\"email\":null},\"n\":null}\n\n" +
+                    "event: datastar-patch-signals\ndata: signals {\"x\":null}\n\n",
                 sink.text(),
             )
-            for (pairs in listOf(arrayOf("a" to 1, "a.b" to 2), arrayOf("a" to 1, "a" to 2), arrayOf("constructor.prototype.x" to 1))) {
+            val refused =
+                listOf(
+                    arrayOf("a" to 1, "a.b" to 2),
+                    arrayOf("a" to 1, "a" to 2),
+                    arrayOf("constructor.prototype.x" to 1),
+                    arrayOf("toString.name" to 1),
+                    arrayOf("constructor" to 1),
+                    arrayOf("a..b" to 1),
+                    arrayOf("a." to 1),
+                )
+            for (pairs in refused) {
                 assertFailsWith<DatastarEventValidationException>(pairs.joinToString()) { stream.patchSignals(*pairs) }
             }
+            val clash = assertFailsWith<DatastarEventValidationException> { stream.patchSignals("n" to 1, "a" to 1, "a.b" to 2) }
+            assertEquals("signal a is given a value and also names signals under it", clash.message)
         }
 
     @Test

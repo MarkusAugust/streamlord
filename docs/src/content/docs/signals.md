@@ -176,17 +176,26 @@ is not a quirk of Streamlord; it is what the protocol says, and it is how you de
 
 A dotted name reaches a nested signal: `patchSignals("form.email" to "")` patches `$form.email`,
 the signal `data-signals:form.email` declares, and `removeSignals("form.email")` removes it.
+Where `form` is missing or holds a plain value, the client makes it an empty object first, as a
+merge patch says.
 
 Some keys Datastar's client cannot hold, and a patch carrying one throws
 `DatastarEventValidationException` before anything is sent, whether it came from pairs, a codec
 or a JSON string, at any depth:
 
-- `__proto__` makes the client's merge throw halfway through, and no later signal reaches the
-  page until it is reloaded;
-- `constructor` with an object under it reaches `Object.prototype` and changes every object on
-  the page;
-- a key holding `.` inside an object is stored as one key, which `$a.b` does not reach, and the
-  client drops its value when it sends the signals with a request.
+- `__proto__`, which the client never stores; with an object under it, its merge throws halfway
+  through, and no later signal reaches the page until it is reloaded;
+- a property every object already has (`constructor`, `toString`, `valueOf`, `hasOwnProperty`
+  and the rest of `Object.prototype`) with an object under it, which the client writes into the
+  built-in property before every request: `constructor.prototype` reaches every object on the
+  page, and `toString.name` makes every later request fail. A plain value or an array under
+  such a key is fine, so `{"team": {"constructor": "Ferrari"}}` goes through;
+- a key holding `.`, which the client stores as one key that `$a.b` does not reach, and drops
+  when it sends the signals with a request.
+
+A name in the pairs is held to more, since an object may come under any of its parts: no part
+may be empty or one of those properties, so `patchSignals("constructor" to 1)` throws too. The
+same holds for every name the HTML DSL writes.
 
 ## Signals that stay in the browser
 

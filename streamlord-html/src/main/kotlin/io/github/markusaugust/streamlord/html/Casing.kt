@@ -67,12 +67,12 @@ public object Casing {
     /**
      * A name that declares a signal: what [validate] admits, and only ASCII letters, digits and
      * `_`, in parts joined by `.` or `-`. Datastar's client reads nothing else after a `$`, so
-     * `$über` or `$a:b` would reach no signal. No part may be `__proto__` or `constructor`, which
-     * the client cannot hold ([SignalNames]).
+     * `$über` or `$a:b` would reach no signal. No part, as written or as Datastar camel-cases it,
+     * may be a property every object has, such as `constructor` or `toString` ([SignalNames]).
      */
     public fun signalName(name: String): String {
         validate(name)
-        SignalNames.pathProblem(name)?.let { throw InvalidSignalNameException(name, "names no signal the client can hold: $it") }
+        (SignalNames.pathProblem(name) ?: SignalNames.pathProblem(camel(name)))?.let { throw InvalidSignalNameException(name, it) }
         if (!SIGNAL_NAME.matches(name)) {
             throw InvalidSignalNameException(
                 name,

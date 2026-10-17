@@ -47,14 +47,17 @@ public object Wire {
      * A key the client cannot hold, at any depth, is rejected too; see [SignalNames].
      */
     internal fun signals(value: String): String {
-        val keys: (String) -> Unit = { key ->
-            SignalNames.keyProblem(key)?.let { throw DatastarEventValidationException("signals hold the key '$key': $it") }
-        }
-        if (!JsonShape.isObject(value, keys)) {
+        var refused: String? = null
+        val shaped =
+            JsonShape.isObject(value) { key, objectUnder ->
+                if (refused == null) refused = SignalNames.keyProblem(key, objectUnder)?.let { "signals hold the key '$key': $it" }
+            }
+        if (!shaped) {
             throw DatastarEventValidationException(
                 "signals must be one JSON object: Datastar's client runs signals that are not JSON as JavaScript",
             )
         }
+        refused?.let { throw DatastarEventValidationException(it) }
         return value
     }
 

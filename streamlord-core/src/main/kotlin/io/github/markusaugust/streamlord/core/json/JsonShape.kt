@@ -15,12 +15,14 @@ internal object JsonShape {
 
     /**
      * Whether [text] is one JSON object and nothing else, as RFC 8259 writes it. [onKey] is handed
-     * every key at every depth, decoded as `JSON.parse` decodes it, and may throw.
+     * every key at every depth, decoded as `JSON.parse` decodes it, with whether an object, not an
+     * array or a plain value, stands under it.
      */
     fun isObject(
         text: String,
-        onKey: ((String) -> Unit)? = null,
+        onKey: ((key: String, objectUnder: Boolean) -> Unit)? = null,
     ): Boolean {
+        var key: String? = null
         val n = text.length
         var i = space(text, 0)
         if (i >= n || text[i] != '{') return false
@@ -43,7 +45,7 @@ internal object JsonShape {
                         val start = i
                         i = string(text, i)
                         if (i < 0) return false
-                        onKey?.invoke(decoded(text, start + 1, i - 1))
+                        if (onKey != null) key = decoded(text, start + 1, i - 1)
                         state = COLON
                     }
                 }
@@ -55,6 +57,8 @@ internal object JsonShape {
                 }
 
                 VALUE_OR_CLOSE, VALUE -> {
+                    key?.let { onKey?.invoke(it, c == '{') }
+                    key = null
                     when {
                         c == ']' && state == VALUE_OR_CLOSE -> {
                             open.removeLast()
@@ -176,7 +180,7 @@ internal object JsonShape {
         from: Int,
         to: Int,
     ): String {
-        if (text.indexOf('\\', from).let { it < 0 || it >= to }) return text.substring(from, to)
+        if ((from until to).none { text[it] == '\\' }) return text.substring(from, to)
         val out = StringBuilder(to - from)
         var i = from
         while (i < to) {

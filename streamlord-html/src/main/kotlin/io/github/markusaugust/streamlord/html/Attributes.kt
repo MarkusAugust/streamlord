@@ -85,7 +85,9 @@ public fun HTMLTag.dataSignals(
  * name: `first-name` declares `$user.firstName`, the signal `signal("user.first-name")` refers to,
  * and a dotted name nests, so `"user.first-name" to ""` declares the same signal. A key inside a
  * map holding `.` is refused, since the client would store it as one key that `$a.b` does not
- * reach. A [io.github.markusaugust.streamlord.core.json.JsonValue] is written as it is.
+ * reach, and so is one it cannot hold with what is under it ([SignalNames]). A
+ * [io.github.markusaugust.streamlord.core.json.JsonObject] is a map, and its keys are read the
+ * same way.
  */
 public fun HTMLTag.dataSignals(
     vararg signals: Pair<String, Any?>,
@@ -96,12 +98,7 @@ public fun HTMLTag.dataSignals(
     keyed.groupBy { it.first }.values.firstOrNull { it.size > 1 }?.let {
         throw InvalidSignalNameException(it.first().first, "is given twice once the keys are read in camelCase")
     }
-    val nested =
-        try {
-            SignalNames.nest(keyed)
-        } catch (e: IllegalArgumentException) {
-            throw InvalidSignalNameException(keyed.first().first, e.message ?: "clashes with another signal")
-        }
+    val nested = SignalNames.nest(keyed) { name, reason -> throw InvalidSignalNameException(name, reason) }
     attributes[ds("signals${signalMods(null, ifMissing)}")] = JsonWriter.writeExpression(nested)
 }
 
@@ -114,9 +111,9 @@ private fun camelKeys(
         is Map<*, *> -> {
             val out = LinkedHashMap<Any?, Any?>(value.size)
             for ((k, v) in value) {
-                val problem = SignalNames.keyProblem(k.toString())
-                if (problem != null) throw InvalidSignalNameException("$path.$k", "is a key the client cannot hold: $problem")
                 val key = if (k is String) Casing.camel(k) else k
+                val problem = SignalNames.keyProblem(k.toString(), v is Map<*, *>) ?: SignalNames.keyProblem(key.toString(), v is Map<*, *>)
+                if (problem != null) throw InvalidSignalNameException("$path.$k", "is a key the client cannot hold: $problem")
                 if (key in out) throw InvalidSignalNameException("$path.$k", "is given twice once the keys are read in camelCase")
                 out[key] = camelKeys(v, "$path.$k")
             }

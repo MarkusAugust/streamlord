@@ -6,6 +6,7 @@ import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
+import io.github.markusaugust.streamlord.core.domain.SignalNames
 import io.github.markusaugust.streamlord.core.domain.Wire
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol.DataLines
 import kotlin.time.Duration
@@ -156,7 +157,7 @@ public object SseDecoder {
             val key = if (space < 0) line else line.substring(0, space)
             // The client gathers the lines in a plain object, where a key Object.prototype already
             // has finds no list to push to and throws (fetch.ts:118); the client then reconnects.
-            if (key in PROTOTYPE_KEYS) {
+            if (key in SignalNames.PROTOTYPE_NAMES) {
                 throw DatastarEventValidationException(
                     "A data line's key '$key' is one Datastar's client fails on: it names a property every object has",
                 )
@@ -166,22 +167,6 @@ public object SseDecoder {
         }
         return groups.mapValues { it.value.joinToString("\n") }
     }
-
-    private val PROTOTYPE_KEYS =
-        setOf(
-            "__proto__",
-            "constructor",
-            "hasOwnProperty",
-            "isPrototypeOf",
-            "propertyIsEnumerable",
-            "toLocaleString",
-            "toString",
-            "valueOf",
-            "__defineGetter__",
-            "__defineSetter__",
-            "__lookupGetter__",
-            "__lookupSetter__",
-        )
 
     // Digits only, as the SSE grammar has it, where toLongOrNull also takes a sign. Zero is digits
     // too, but it has the client reconnect at once and again without end.

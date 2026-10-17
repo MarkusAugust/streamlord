@@ -202,24 +202,25 @@ public interface DatastarStream {
         send(PatchSignals(JsonWriter.write(nested(signals.asList())), onlyIfMissing, eventId, retry))
     }
 
-    /** Remove signals by name, dotted for a nested one. Sugar for patching them to `null`. */
+    /**
+     * Remove signals by name. Sugar for patching them to `null`. A dotted name removes a nested
+     * signal; where its parent is missing or holds a plain value, the client makes the parent an
+     * empty object, as a merge patch says. A name under another one being removed is left out.
+     */
     public suspend fun removeSignals(
         vararg names: String,
         eventId: String? = null,
         retry: Duration? = null,
     ) {
-        send(PatchSignals(JsonWriter.write(nested(names.map { it to null })), eventId = eventId, retry = retry))
+        val removed = names.distinct().filter { name -> names.none { name.startsWith("$it.") } }
+        send(PatchSignals(JsonWriter.write(nested(removed.map { it to null })), eventId = eventId, retry = retry))
     }
 
     private fun nested(pairs: List<Pair<String, Any?>>): Map<String, Any?> {
         for ((name, _) in pairs) {
-            SignalNames.pathProblem(name)?.let { throw DatastarEventValidationException("signal $name: $it") }
+            SignalNames.pathProblem(name)?.let { throw DatastarEventValidationException("signal $name $it") }
         }
-        return try {
-            SignalNames.nest(pairs)
-        } catch (e: IllegalArgumentException) {
-            throw DatastarEventValidationException(e.message ?: "signals clash")
-        }
+        return SignalNames.nest(pairs)
     }
 
     /** Execute JavaScript in the browser. See [ExecuteScript]. */

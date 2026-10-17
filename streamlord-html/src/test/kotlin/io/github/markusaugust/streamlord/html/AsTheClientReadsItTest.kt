@@ -197,15 +197,27 @@ class AsTheClientReadsItTest {
     // with an object under it reaches Object.prototype.
     @Test
     fun `a name the client cannot hold is refused`() {
-        for (name in listOf("constructor", "constructor.prototype.x", "a.constructor", "__proto__.x")) {
+        val names = listOf("constructor", "constructor.prototype.x", "a.constructor", "__proto__.x", "toString.name", "to-string.name")
+        for (name in names) {
             assertFailsWith<InvalidSignalNameException>(name) { elements { div { dataSignals(name, "1") } } }
             assertFailsWith<InvalidSignalNameException>(name) { elements { div { dataSignals(name to 1) } } }
             assertFailsWith<InvalidSignalNameException>(name) { elements { div { dataBind(name) } } }
+            assertFailsWith<InvalidSignalNameException>(name) { elements { div { dataRef(name) } } }
+            assertFailsWith<InvalidSignalNameException>(name) { elements { div { dataIndicator(name) } } }
             assertFailsWith<InvalidSignalNameException>(name) { elements { div { dataComputed(name, "1") } } }
         }
         val prototypeUnder = "a" to mapOf("constructor" to mapOf("prototype" to 1))
         assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals(prototypeUnder) } } }
+        val camelUnder = "a" to mapOf("to-string" to mapOf("name" to 1))
+        assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals(camelUnder) } } }
+        // With a plain value under it, the client holds such a key.
+        assertEquals(
+            """<div data-signals="{&quot;team&quot;:{&quot;constructor&quot;:&quot;Ferrari&quot;}}"></div>""",
+            elements { div { dataSignals("team" to mapOf("constructor" to "Ferrari")) } },
+        )
         assertEquals("""<div data-signals:constructors="1"></div>""", elements { div { dataSignals("constructors", "1") } })
+        val clash = assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("n" to 1, "a" to 1, "a.b" to 2) } } }
+        assertEquals("a", clash.name)
     }
 
     // CSS custom properties are case-sensitive and the browser lowercases the key.

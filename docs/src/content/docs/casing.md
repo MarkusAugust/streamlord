@@ -45,8 +45,8 @@ div {
 ```
 
 A dotted name in the pairs nests, as the keyed form does: `"user.first-name" to ""` declares the
-same `$user.firstName`. A dotted key inside a map is refused, because the client would store it
-as one key that `$user.first-name` does not reach.
+same `$user.firstName`. A dotted key inside a map is refused, because the client would store
+`{"a.b": 1}` as one key that `$a.b` does not reach.
 
 A key the DSL does not write keeps its hyphen: the object form, `dataSignals("{'foo-bar': 1}")`,
 and a signal patched from the server. In an expression Datastar reads `$foo-bar` as the signal
