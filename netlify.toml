@@ -11,9 +11,12 @@
 #
 # Netlify reads BUN_VERSION, but whether it acts on it with the lockfile in docs/ rather than
 # in the base is its business, so the command does not rely on it. A Bun other than
-# BUN_VERSION on PATH, or none, and it fetches that version from the npm registry, which checks
-# the package's integrity, into a directory of its own put first on PATH. Node and npm are in
-# every Netlify build image. If the Bun that answers is still not the one asked for, it stops.
+# BUN_VERSION on PATH, or none, and it fetches that version from the npm registry into a
+# directory of its own put first on PATH. npm checks each tarball it fetches, bun's and the
+# one with the binary for this platform, against the integrity hash the registry lists for
+# that exact version. Node and npm are in every Netlify build image. If the Bun that answers
+# is still not the one asked for, it stops. The build script runs Astro through `bun x`, not
+# `bunx`, so the Bun checked here is the one that runs it.
 
 [build]
   base = "."

@@ -214,15 +214,17 @@ All notable changes to Streamlord are recorded here. The format follows
   comment Dependabot keeps in step; the Gradle wrapper by `distributionSha256Sum`; the demo's base
   image by digest; the Railway CLI by version; Bun by version both in CI and in the Netlify build
   that deploys the documentation, which now installs from the frozen lockfile and runs Astro under
-  Bun as CI does. When Netlify hands that build another Bun, or none, it fetches the pinned one
-  from the npm registry, and stops if it still has the wrong one. Checkouts no longer persist the
-  token in `.git/config`, the Railway token reaches only the two steps that deploy, and the three
-  publish jobs run in a `release` environment that takes release tags alone. The image is pushed
-  by a job of its own, which alone holds `packages: write`, runs on master alone and deploys one
-  push at a time. The IntelliJ publish job stops when the signing certificate secrets are
-  missing, where it published an unsigned plugin under a workflow that looked as if it signed it.
-  The javadoc jars carry `META-INF/LICENSE`, as the licence page promises and the other jars do,
-  and every published main jar names an `Automatic-Module-Name`.
+  the Bun it checked, through `bun x`, as CI does. When Netlify hands that build another Bun, or
+  none, it fetches the pinned one from the npm registry, whose integrity hash for that exact version
+  npm checks the download against, and stops if it still has the wrong one. Checkouts no longer
+  persist the token in `.git/config`, the Railway token reaches only the two steps that deploy, and
+  the three publish jobs run in a `release` environment that takes release tags alone. The image is
+  pushed by a job of its own, which alone holds `packages: write`, runs on master alone, deploys one
+  run at a time and skips a commit that master has already moved past, so an older run never deploys
+  over a newer one. The IntelliJ publish job stops when the signing certificate secrets are missing,
+  where it published an unsigned plugin under a workflow that looked as if it signed it. The javadoc
+  jars carry `META-INF/LICENSE`, as the licence page promises and the other jars do, and every
+  published main jar names an `Automatic-Module-Name`.
 - `checkDocSamples` fails in CI on a page whose coordinates or wire transcripts it would have
   rewritten, so a release commit that forgets them goes red on the tag; locally it still rewrites
   them. The test-only Tomcat is 11.0.27, past three advisories on 11.0.24. The native image
