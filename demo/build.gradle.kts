@@ -82,6 +82,8 @@ graalvmNative {
                 "--initialize-at-build-time=kotlinx.serialization.json.JsonImpl",
                 "--initialize-at-build-time=kotlinx.serialization.json.ClassDiscriminatorMode",
                 "--initialize-at-build-time=kotlinx.serialization.modules.SerializersModuleKt",
+                // The -H: options below are experimental, and GraalVM refuses them without this one first.
+                "-H:+UnlockExperimentalVMOptions",
                 "-H:+InstallExitHandlers",
                 "-H:+ReportUnsupportedElementsAtRuntime",
                 "-H:+ReportExceptionStackTraces",

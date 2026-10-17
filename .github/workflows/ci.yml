@@ -30,8 +30,9 @@ jobs:
       image: ${{ steps.paths.outputs.image }}
     steps:
       # The whole history, because this job's only question is what a commit changed.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Work out which parts the change touches
@@ -92,8 +93,10 @@ jobs:
               streamlord-analysis/*) kotlin=true; intellij=true ;;
               streamlord-html/*|streamlord-ktor/*|streamlord-json-kotlinx/*)
                 kotlin=true; image=true ;;
-              streamlord-*/*|docs-samples/*|playground/*)
+              streamlord-*/*|docs-samples/*)
                 kotlin=true ;;
+              # The README carries coordinates checkDocSamples verifies, and LICENSE goes into every jar.
+              README.md|LICENSE)  kotlin=true ;;
               # The version catalog and the settings scripts are the plugin's build too.
               gradle/*|gradlew*|*.gradle.kts|gradle.properties)
                 kotlin=true; image=true; intellij=true ;;
@@ -115,14 +118,16 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.kotlin == 'true'
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: 21
 
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
         with:
           cache-provider: basic
 
@@ -131,7 +136,7 @@ jobs:
 
       - name: Upload test reports
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: test-reports
           path: '**/build/reports/tests/**'
@@ -145,9 +150,11 @@ jobs:
       run:
         working-directory: editors/vscode
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: npm
@@ -160,7 +167,7 @@ jobs:
       - run: npx vsce package --no-dependencies
 
       - name: Upload vsix
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: streamlord-vsix
           path: editors/vscode/*.vsix
@@ -174,14 +181,16 @@ jobs:
       run:
         working-directory: editors/intellij
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: 21
 
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
         with:
           cache-provider: basic
 
@@ -189,14 +198,14 @@ jobs:
         run: ./gradlew buildPlugin test verifyPlugin --no-daemon
 
       - name: Upload plugin archive
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: streamlord-intellij
           path: editors/intellij/build/distributions/*.zip
 
       - name: Upload verifier reports
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: intellij-verifier-reports
           path: editors/intellij/build/reports/pluginVerifier/**
@@ -210,11 +219,14 @@ jobs:
       run:
         working-directory: docs
     steps:
-      - uses: actions/checkout@v7
-
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          bun-version: latest
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          # The Bun that wrote docs/bun.lock (lockfile version 2); a floating tag is a build nobody has run.
+          bun-version: 1.4.3
 
       - run: bun install --frozen-lockfile
 
@@ -247,22 +259,25 @@ jobs:
     permissions:
       contents: read
       packages: write
-    # On the job, not the step: the secrets context is not available in a step's `if`, and
-    # a step's own env is not reliably visible to its own condition. Empty anywhere but
-    # master, so a release branch or a tag never holds the token.
+    # Whether to deploy, on the job: the secrets context is not available in a step's `if`,
+    # and a step's own env is not reliably visible to its own condition. The token itself
+    # goes to the two Railway steps alone, below; the Gradle build, the actions and the
+    # docker build never hold it.
     env:
-      RAILWAY_TOKEN: ${{ github.ref == 'refs/heads/master' && secrets.RAILWAY_TOKEN || '' }}
+      HAS_RAILWAY: ${{ github.ref == 'refs/heads/master' && secrets.RAILWAY_TOKEN != '' }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # GraalVM rather than Temurin: this job compiles the service to a native image.
-      - uses: graalvm/setup-graalvm@v1
+      - uses: graalvm/setup-graalvm@27b360dbb857524eaf0b4c4cef364d38e5b4f173 # v1.6.7
         with:
           java-version: "21"
           distribution: graalvm-community
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
         with:
           cache-provider: basic
 
@@ -455,7 +470,7 @@ jobs:
           exit-code: "1"
 
       # Everything from here on reaches the outside world, and only master does that.
-      - uses: docker/login-action@v4
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         if: github.ref == 'refs/heads/master'
         with:
           registry: ghcr.io
@@ -477,9 +492,11 @@ jobs:
       #
       # Skipped, not failed, when the secret is absent, so a fork still builds an image.
       - name: Redeploy streamlord-live
-        if: github.ref == 'refs/heads/master' && env.RAILWAY_TOKEN != ''
+        if: env.HAS_RAILWAY == 'true'
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
-          npm install -g @railway/cli
+          npm install -g @railway/cli@5.70.0
           railway redeploy --service streamlord-live --from-source --yes
 
       # redeploy returns as soon as Railway accepts the request, and the container it
@@ -488,7 +505,7 @@ jobs:
       # that never started once passed this step. So it waits for /health to name the
       # commit being deployed, and nothing else counts as arrived.
       - name: Check that the deployment answers
-        if: github.ref == 'refs/heads/master' && env.RAILWAY_TOKEN != ''
+        if: env.HAS_RAILWAY == 'true'
         env:
           SERVICE: https://streamlord-live-production.up.railway.app
         run: |
@@ -565,13 +582,18 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/vscode-v')
     needs: [vscode]
     runs-on: ubuntu-latest
+    # The release environment takes release tags alone. The publishing secrets are still repository
+    # secrets; moved into the environment, they would be readable from these runs and no other.
+    environment: release
     defaults:
       run:
         working-directory: editors/vscode
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: npm
@@ -597,18 +619,23 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/intellij-v')
     needs: [intellij]
     runs-on: ubuntu-latest
+    # The release environment takes release tags alone. The publishing secrets are still repository
+    # secrets; moved into the environment, they would be readable from these runs and no other.
+    environment: release
     defaults:
       run:
         working-directory: editors/intellij
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: 21
 
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
         with:
           cache-provider: basic
 
@@ -617,6 +644,18 @@ jobs:
           tag="${GITHUB_REF_NAME#intellij-v}"
           version="$(grep '^pluginVersion=' gradle.properties | cut -d= -f2)"
           if [ "$tag" != "$version" ]; then echo "tag $tag != pluginVersion $version"; exit 1; fi
+
+      # The plugin is signed when the three certificate secrets are set, and the signing task is
+      # silently skipped when they are not. An unsigned release is not what the workflow says it
+      # does, so it stops here instead.
+      - name: Check that the signing certificate is there
+        env:
+          HAS_CERTIFICATE: ${{ secrets.JETBRAINS_CERTIFICATE_CHAIN != '' && secrets.JETBRAINS_PRIVATE_KEY != '' && secrets.JETBRAINS_PRIVATE_KEY_PASSWORD != '' }}
+        run: |
+          if [ "$HAS_CERTIFICATE" != "true" ]; then
+            echo "::error::JETBRAINS_CERTIFICATE_CHAIN, JETBRAINS_PRIVATE_KEY and JETBRAINS_PRIVATE_KEY_PASSWORD must all be set; without them publishPlugin uploads an unsigned plugin."
+            exit 1
+          fi
 
       - name: Publish to the JetBrains Marketplace
         run: ./gradlew publishPlugin --no-daemon
@@ -634,19 +673,24 @@ jobs:
     # Central until it has compiled and answered.
     needs: [sdk, demo-image]
     runs-on: ubuntu-latest
+    # The release environment takes release tags alone. The publishing secrets are still repository
+    # secrets; moved into the environment, they would be readable from these runs and no other.
+    environment: release
     # On this job alone, because it is the only one that writes anything to the repository:
     # the release it announces at the end. The other seven keep the read-only default.
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: 21
 
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
         with:
           cache-provider: basic
 
@@ -727,14 +771,16 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: 21
 
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
         with:
           cache-provider: basic
 

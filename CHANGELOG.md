@@ -182,6 +182,21 @@ All notable changes to Streamlord are recorded here. The format follows
   without a route; "Apply recommended colors" reads the user settings alone, so a workspace's
   token rules are no longer copied into them.
 
+- The build and the workflows are pinned: every GitHub Action by commit, with its version in a
+  comment Dependabot keeps in step; the Gradle wrapper by `distributionSha256Sum`; the demo's base
+  image by digest; Bun and the Railway CLI by version. Checkouts no longer persist the token in
+  `.git/config`, the Railway token reaches only the two steps that deploy, and the three publish
+  jobs run in a `release` environment that takes release tags alone. The IntelliJ publish job
+  stops when the signing certificate secrets are missing, where it published an unsigned plugin
+  under a workflow that looked as if it signed it. The javadoc jars carry `META-INF/LICENSE`, as
+  the licence page promises and the other jars do, and every published main jar names an
+  `Automatic-Module-Name`.
+- `checkDocSamples` fails in CI on a page whose coordinates or wire transcripts it would have
+  rewritten, so a release commit that forgets them goes red on the tag; locally it still rewrites
+  them. The test-only Tomcat is 11.0.27, past three advisories on 11.0.24. The native image
+  passes `-H:+UnlockExperimentalVMOptions` ahead of the experimental options GraalVM will refuse
+  without it, and two constructs Gradle 10 removes are gone from the build scripts.
+
 ### Fixed
 
 - `Jackson2SignalsCodec.default()`, and any Jackson 2 mapper such as Spring Boot's, read a missing

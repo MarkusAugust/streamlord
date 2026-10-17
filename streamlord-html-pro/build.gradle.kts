@@ -18,9 +18,10 @@ dependencies {
  * `./gradlew :streamlord-html-pro:playgroundClasses` compiles it on request, and will usually
  * fail. That is the bench reporting the errors it was written to provoke.
  */
-val playground: SourceSet by sourceSets.creating {
-    kotlin.srcDir(rootProject.file("playground"))
-}
+val playground: SourceSet =
+    sourceSets.create("playground") {
+        kotlin.srcDir(rootProject.file("playground"))
+    }
 
 dependencies {
     // Only so the editor can resolve it. Nothing here is compiled by a normal build.

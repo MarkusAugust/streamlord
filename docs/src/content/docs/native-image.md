@@ -37,6 +37,7 @@ graalvmNative {
                 "--initialize-at-build-time=kotlinx.serialization.json.JsonImpl",
                 "--initialize-at-build-time=kotlinx.serialization.json.ClassDiscriminatorMode",
                 "--initialize-at-build-time=kotlinx.serialization.modules.SerializersModuleKt",
+                "-H:+UnlockExperimentalVMOptions",
                 "-H:+InstallExitHandlers",
                 "-H:+ReportUnsupportedElementsAtRuntime",
                 "-H:+ReportExceptionStackTraces",
@@ -54,8 +55,10 @@ C header beside it.
 
 The list of build arguments is Ktor's, from
 [ktor-samples/graalvm](https://github.com/ktorio/ktor-samples/tree/main/graalvm), and this is it
-whole. It is also, in this order, every build argument the service behind this site uses, bar the
-container flag that step 4 adds on Linux. Take it whole rather than adding entries one at a time
+whole, with one line of our own: `-H:+UnlockExperimentalVMOptions`, because the three `-H:+`
+options after it are experimental and GraalVM is about to refuse them without it. It is also, in
+this order, every build argument the service behind this site uses, bar the container flag that
+step 4 adds on Linux. Take it whole rather than adding entries one at a time
 against a theory of what an error means: three attempts here were spent doing that, and each
 theory was wrong.
 
