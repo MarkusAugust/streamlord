@@ -1,9 +1,15 @@
 package io.github.markusaugust.streamlord.intellij
 
 import com.intellij.lang.injection.InjectedLanguageManager
+import com.intellij.openapi.editor.DefaultLanguageHighlighterColors
+import com.intellij.openapi.editor.colors.EditorColorsManager
+import com.intellij.openapi.editor.colors.impl.AbstractColorsScheme
+import com.intellij.openapi.editor.colors.impl.EditorColorsSchemeImpl
+import com.intellij.openapi.editor.markup.TextAttributes
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import io.github.markusaugust.streamlord.intellij.documentation.StreamlordDocumentationProvider
 import io.github.markusaugust.streamlord.intellij.highlighting.DatastarColors
+import java.awt.Color
 
 class EditorFeaturesTest : BasePlatformTestCase() {
     fun `test hover documents attributes actions and dsl functions`() {
@@ -17,6 +23,24 @@ class EditorFeaturesTest : BasePlatformTestCase() {
         val fn = provider.documentationAt(myFixture.file, myFixture.file.text.indexOf("dataOnClick") + 3)!!
         assertTrue(fn.first, fn.first.contains("<b>data-on</b>"))
         assertNull(provider.documentationAt(myFixture.file, myFixture.file.text.indexOf("data-on-intersect") + 3))
+    }
+
+    // A theme is a scheme built on Default or Darcula that sets the standard keys. Whatever it gives
+    // a static field, a signal gets, in a scheme of each kind the IDE has.
+    fun `test the theme colours the datastar tokens`() {
+        val schemes = EditorColorsManager.getInstance().allSchemes
+        assertTrue(schemes.isNotEmpty())
+        for (scheme in schemes) {
+            val parent = (scheme as? AbstractColorsScheme)?.parentScheme ?: scheme
+            val theme = EditorColorsSchemeImpl(parent)
+            theme.setAttributes(DefaultLanguageHighlighterColors.STATIC_FIELD, TextAttributes(Color(0x123456), null, null, null, 0))
+            assertEquals(parent.name, Color(0x123456), theme.getAttributes(DatastarColors.SIGNAL)?.foregroundColor)
+            assertEquals(
+                parent.name,
+                parent.getAttributes(DefaultLanguageHighlighterColors.STATIC_FIELD),
+                parent.getAttributes(DatastarColors.SIGNAL),
+            )
+        }
     }
 
     fun `test datastar tokens are coloured in html and in kotlin strings`() {

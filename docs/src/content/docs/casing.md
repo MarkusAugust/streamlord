@@ -95,12 +95,20 @@ In an *expression*, `$foo-bar` is not `$foo` minus `bar`. Datastar reads the hyp
 the signal name, so `$count-1` is the signal `count-1` and not "count minus one". Write
 `$count - 1` with spaces, or use camelCase names and avoid the question.
 
+Sometimes `$foo-bar` is what you mean, because the page stores a signal with that hyphen: a key
+of the object form, `data-signals="{'foo-bar': 1}"`, a name in the value of `data-bind`,
+`data-ref` or `data-indicator`, `data-bind="foo-bar"`, a key with `__case.kebab`, or a key whose
+hyphen comes before a digit, `data-signals:item-2`, which camel casing leaves alone. The editors
+read the declarations of the file as the client stores them and say nothing about `$foo-bar`
+when it is declared there.
+
 ## Handled is not hidden
 
 The DSL corrects your casing silently, which would be a bad trade if you never learned the rule.
 So the VS Code extension puts a hint on every such call saying what actually goes on the wire.
 For strings and templates it flags a capital letter in a key (with the kebab-case fix) and a
-hyphen after a signal (with the camelCase or spaced-subtraction fix).
+hyphen after a signal that nothing in the file declares with its hyphen (with the camelCase or
+spaced-subtraction fix).
 
 The default per attribute lives in `catalog/datastar-1.0.4.json` as `keyCase`, and both the SDK's
 tests and the extensions read it from there.

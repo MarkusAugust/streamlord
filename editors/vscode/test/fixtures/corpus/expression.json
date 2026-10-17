@@ -16,7 +16,7 @@
     {"name":"a line break between an action and its parenthesis","source":"@post\n('/x')","issues":[{"code":"action-space","start":0,"end":6,"fixes":["@post('/x')"]}]},
     {"name":"a hyphenated signal with a capital","source":"$a-B","issues":[{"code":"signal-kebab","start":0,"end":4,"fixes":["$aB","$a - B"]}]},
     {"name":"a hyphenated signal that is a subtraction","source":"$n-1","issues":[{"code":"signal-kebab","start":0,"end":4,"fixes":["$n - 1"]}]},
-    {"name":"a hyphenated signal in a string and in template code","source":"'$a-b' + `$c-d ${$e-f}`","issues":[{"code":"signal-kebab","start":17,"end":21,"fixes":["'$a-b' + `$c-d ${$eF}`","'$a-b' + `$c-d ${$e - f}`"]}]},
+    {"name":"a hyphenated signal in a string, in the text of a template literal with a ${, which the client rewrites, and in its code","source":"'$a-b' + `$c-d ${$e-f}`","issues":[{"code":"literal-rewritten","start":10,"end":14},{"code":"signal-kebab","start":17,"end":21,"fixes":["'$a-b' + `$c-d ${$eF}`","'$a-b' + `$c-d ${$e - f}`"]}]},
     {"name":"an object literal","source":"{a: 1, b: $c}","issues":[]},
     {"name":"an empty expression","source":"  ","issues":[{"code":"empty-expression","start":0,"end":2}]},
     {"name":"division after a postfix increment","source":"$a++ / 2","issues":[]},
@@ -36,6 +36,19 @@
     {"name":"an await at the top level","source":"await @post('/save')","issues":[{"code":"expression-syntax"}]},
     {"name":"a signal declared with let","source":"let $x = 1","issues":[{"code":"expression-syntax"}]},
     {"name":"a signal as an object key","source":"x = {$a: 1}","issues":[{"code":"expression-syntax"}]},
-    {"name":"a signal path assigned to","source":"$user.name = 'x'; $items[0] = 2","issues":[]}
+    {"name":"a signal path assigned to","source":"$user.name = 'x'; $items[0] = 2","issues":[]},
+    {"name":"a signal in the text of a template literal that also holds a ${, which the client rewrites","source":"`total: $total ${$a}`","issues":[{"code":"literal-rewritten","start":8,"end":14}]},
+    {"name":"an action in the text of a template literal that also holds a ${, which the client rewrites","source":"`mail @home(x) ${$a}`","issues":[{"code":"literal-rewritten","start":6,"end":11}]},
+    {"name":"a signal in the text of a template literal without a ${, which the client steps over","source":"`cost $c`","issues":[]},
+    {"name":"a signal inside a regular expression, which the client rewrites","source":"/$re/.test($s)","issues":[{"code":"literal-rewritten","start":1,"end":4}]},
+    {"name":"a quote in a comment, which the client pairs with a later one","source":"$a = 1 // don't\n$b = 'x'","issues":[{"code":"signal-not-read","start":16,"end":18}]},
+    {"name":"a quote in a regular expression, which the client pairs with a later one","source":"/'/.test($a) && $b == 'x'","issues":[{"code":"signal-not-read","start":9,"end":11},{"code":"signal-not-read","start":16,"end":18}]},
+    {"name":"an apostrophe in a template literal, which the client pairs with a later quote","source":"`it's ${$b}` + 'x'","issues":[{"code":"signal-not-read","start":8,"end":10}]},
+    {"name":"a double quote in a block comment, which the client pairs with a later one","source":"$a = 1 /* say \"hi */; $b = \"x\"","issues":[{"code":"signal-not-read","start":22,"end":24}]},
+    {"name":"an action without its parenthesis","source":"@get","issues":[{"code":"expression-syntax"}]},
+    {"name":"an action without its parenthesis, assigned","source":"$f = @peek","issues":[{"code":"expression-syntax"}]},
+    {"name":"an action right after a signal","source":"$a@get('/x')","issues":[{"code":"expression-syntax"}]},
+    {"name":"a signal named with a letter beyond ASCII","source":"$år + 1","issues":[{"code":"signal-not-read","start":0,"end":3}]},
+    {"name":"new.target, which the function body Datastar compiles allows","source":"new.target === undefined","issues":[]}
   ]
 }

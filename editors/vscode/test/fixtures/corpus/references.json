@@ -1,0 +1,14 @@
+{
+  "$comment": "Cases both editors must judge alike. Each case is a source and the issues expected for it, sorted by start, end and code; offsets count UTF-16 code units. An issue without start and end is checked by code only: the two JavaScript parsers do not always place a syntax error on the same character. fixes holds the whole source after each quick fix, in the order offered. A source here is HTML: each issue is a signal one of its expressions reads that no attribute of the same source declares, as the client stores signals, so the cases hold both editors to the same reads and the same declarations.",
+  "kind": "references",
+  "cases": [
+    {"name":"a signal in the code of a template literal","source":"<div data-on:click=\"x = `a ${$z} ${$y.w}`\"></div>","issues":[{"code":"unknown-signal","start":29,"end":31},{"code":"unknown-signal","start":35,"end":39}]},
+    {"name":"a signal inside a regular expression is not read","source":"<div data-on:click=\"/$re/.test($s)\"></div>","issues":[{"code":"unknown-signal","start":31,"end":33}]},
+    {"name":"signals in comments are not read","source":"<div data-on:click=\"$e /* $f */ + 1 // $c\n$d\"></div>","issues":[{"code":"unknown-signal","start":20,"end":22},{"code":"unknown-signal","start":42,"end":44}]},
+    {"name":"a dollar inside a longer name and in a string is no signal","source":"<div data-on:click=\"foo$bar + '$x' + $q.0.name\"></div>","issues":[{"code":"unknown-signal","start":37,"end":46}]},
+    {"name":"an attribute name in capitals declares the lowercase key","source":"<div DATA-SIGNALS:FOO=\"1\" data-text=\"$foo\"></div>","issues":[]},
+    {"name":"a capital in a key is lowercased by the browser","source":"<div data-signals:fooBar=\"1\" data-text=\"$fooBar + $foobar\"></div>","issues":[{"code":"unknown-signal","start":40,"end":47,"fixes":["<div data-signals:fooBar=\"1\" data-text=\"$foobar + $foobar\"></div>"]}]},
+    {"name":"a nested object declares its keys under its key","source":"<div data-signals=\"{user: {name: 'x'}}\" data-text=\"$user.name + $name\"></div>","issues":[{"code":"unknown-signal","start":64,"end":69}]},
+    {"name":"the value of data-bind names the signal as written","source":"<input data-bind=\"userName\"><div data-text=\"$userName + $username\"></div>","issues":[{"code":"unknown-signal","start":56,"end":65,"fixes":["<input data-bind=\"userName\"><div data-text=\"$userName + $userName\"></div>"]}]}
+  ]
+}

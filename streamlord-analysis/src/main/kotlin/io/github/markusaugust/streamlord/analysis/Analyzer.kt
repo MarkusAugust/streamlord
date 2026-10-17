@@ -126,11 +126,15 @@ public class Analyzer(
         return s.takeIf { STATEMENT_END.matchesAt(src, it.end) }
     }
 
-    /** The kebab-case signals [src] declares as written, with `__case.kebab`, so `$my-value` is not a slip there. */
+    /**
+     * The signals with a hyphen [src] declares as the client stores them, so `$my-value` is not a slip
+     * there: `data-signals:my-value__case.kebab`, `data-bind="my-value"`, `{'my-value': 1}`, or
+     * `data-signals:a-1`, which camel casing leaves as it is.
+     */
     private fun hyphenatedSignals(
         src: String,
         language: SourceLanguage,
-    ): Set<String> = if ("__case.kebab" in src) collectSignalDefinitions(src, language).filterTo(HashSet()) { '-' in it } else emptySet()
+    ): Set<String> = collectSignalDefinitions(src, language).filterTo(HashSet()) { '-' in it }
 
     /**
      * `attributes["data-on:click"] = "$count++"` judged as the attribute it writes: the name as in

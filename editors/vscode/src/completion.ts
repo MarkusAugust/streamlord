@@ -41,7 +41,8 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
     const s = selectStringArg(site, spec.arg, spec.named) ?? site.args.map((a) => a.string).find((x) => x && x.start < offset && offset <= x.end) ?? null;
     if (!s || offset <= s.start || offset > s.contentEnd + (s.unterminated ? 1 : 0)) return [];
     const text = src.slice(s.contentStart, offset);
-    return [...this.expressionItems(text, document, position, offset - text.length, true), ...this.modifierPropertyItems(src, offset, site.name)];
+    const patch = catalog.attributesByKotlin.get(site.name)?.name === "on-signal-patch";
+    return [...this.expressionItems(text, document, position, offset - text.length, true, patch), ...this.modifierPropertyItems(src, offset, site.name)];
   }
 
   /** `selector = "#|"` on any DSL call, or the first argument of removeElements: ids and classes from the workspace. */
@@ -93,7 +94,7 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
     if (inValue) {
       const parsed = parseAttributeName((inValue[1] ?? "").toLowerCase(), prefix);
       if (parsed?.spec && (parsed.spec.valueKind === "expression" || parsed.spec.valueKind === "signal")) {
-        return this.expressionItems(inValue[2] ?? "", document, position, offset - (inValue[2] ?? "").length, parsed.spec.valueKind === "expression");
+        return this.expressionItems(inValue[2] ?? "", document, position, offset - (inValue[2] ?? "").length, parsed.spec.valueKind === "expression", parsed.spec.name === "on-signal-patch");
       }
       return [];
     }
@@ -152,7 +153,8 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
     });
   }
 
-  private expressionItems(textBefore: string, document: vscode.TextDocument, position: vscode.Position, textStartOffset: number, allowActions: boolean): vscode.CompletionItem[] {
+  /** `patch` is a name only in `data-on-signal-patch`, the one attribute the client hands it to. */
+  private expressionItems(textBefore: string, document: vscode.TextDocument, position: vscode.Position, textStartOffset: number, allowActions: boolean, patchInScope = false): vscode.CompletionItem[] {
     const sig = signalPrefixAt(textBefore, textBefore.length);
     if (sig !== null) {
       const local = this.signals.forFile(document.uri.toString());
@@ -181,7 +183,7 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
     }
     const scope = /(?:^|[^A-Za-z0-9_$])([a-z]*)$/.exec(textBefore);
     if (scope && (scope[1] ?? "").length > 0) {
-      return ["el", "evt", "patch"].map((v) => new vscode.CompletionItem(v, vscode.CompletionItemKind.Variable));
+      return ["el", "evt", ...(patchInScope ? ["patch"] : [])].map((v) => new vscode.CompletionItem(v, vscode.CompletionItemKind.Variable));
     }
     return [];
   }

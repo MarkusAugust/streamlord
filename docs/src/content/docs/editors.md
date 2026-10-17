@@ -81,14 +81,18 @@ IntelliJ IDEA 2026.1 and newer, Community and Ultimate alike.
 **Diagnostics with quick fixes** for Datastar expressions and markup: inside Kotlin strings,
 whether handed to the DSL or standing free, and in HTML and template files. Kotlin `$`
 interpolation traps, syntax errors with the right column, missing ids, unknown attributes and
-modifiers, capitals in keys.
+modifiers, capitals in keys, signal names the client cannot hold, and the places where Datastar's
+own rewrite of an expression does what JavaScript would not, such as a `$name` in the text of a
+template literal that also holds a `${...}`.
 
 **Completions** for signals, actions, attributes, modifiers, ids and classes. Signals are
 collected from the whole project, since the page that declares one is rarely the file that reads
 it.
 
 **Hover documentation**, snippets, and syntax highlighting of the Datastar tokens only, never
-of your Kotlin or your HTML, which belong to your theme.
+of your Kotlin or your HTML, which belong to your theme. In IntelliJ the Datastar tokens take
+their colours from your theme too: a signal is coloured as a static field, an action as a
+function call.
 
 **A Stream Inspector** that shows a live SSE stream decoded rather than as raw text, with saved
 requests in `.streamlord/inspector.json` that the two editors share.

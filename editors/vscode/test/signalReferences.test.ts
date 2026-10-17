@@ -94,7 +94,7 @@ fun f() { patchSignals("total" to 1); dataText("\${'$'}query + \${'$'}total") }`
 
   it("json text handed to patchSignals defines its keys", () => {
     const src = 'fun f() { sse.patchSignals("""{"count": 1, "form": {"email": ""}}""") }';
-    assert.deepEqual([...collectSignalDefinitions(src, "kotlin")].sort(), ["count", "email", "form"]);
+    assert.deepEqual([...collectSignalDefinitions(src, "kotlin")].sort(), ["count", "form", "form.email"]);
   });
 
   it("no fix when nothing is close", () => {

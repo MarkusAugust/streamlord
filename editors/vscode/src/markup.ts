@@ -1,5 +1,6 @@
 import { catalog, distance, parseAttributeName, type AttributeSpec } from "./catalog.ts";
-import { attributeDoc, DOCS, quoteAt, validateExpression, type Fix, type Issue } from "./expression.ts";
+import { attributeDoc, DOCS, expressionError, jsRegions, quoteAt, Region, validateExpression, type Fix, type Issue } from "./expression.ts";
+import { clientKeyName, objectKeys, signalNameProblem, signalPathProblem, PROTOTYPE_NAMES } from "./signals.ts";
 
 /**
  * Markup checks for the HTML Datastar patches: complete elements, ids where the protocol needs
@@ -435,10 +436,12 @@ export function validateAttributes(tag: Tag, prefix: string, tagSource?: string,
     if (spec.keyRequired && !parsed.key) {
       issues.push({ start: attr.nameStart, end: nameEnd, message: `${prefix}${spec.name} needs a key, e.g. ${spec.forms[0] ?? ""}.`, severity: "error", code: "missing-key", link: attributeDoc(spec.name) });
     }
-    if (!spec.keyed && parsed.key !== null) {
+    if (!spec.keyed && parsed.key !== null && !spec.keys.includes(parsed.key)) {
       issues.push({ start: attr.nameStart, end: nameEnd, message: `${prefix}${spec.name} does not take a key.`, severity: "error", code: "unexpected-key", link: attributeDoc(spec.name) });
     }
     if (parsed.key !== null) issues.push(...validateKeyCase(attr, parsed, spec, prefix));
+    const named = validateSignalNames(attr, parsed, spec, prefix);
+    issues.push(...named);
     issues.push(...validateDottedKey(attr, parsed, spec, prefix));
     const hasKey = !!parsed.key;
     const hasValue = !!attr.value;
@@ -508,7 +511,9 @@ export function validateAttributes(tag: Tag, prefix: string, tagSource?: string,
         issues.push({ ...issue, ...source(issue.start, issue.end), ...(fixes ? { fixes } : {}) });
       }
     }
-    if (attr.value !== null && spec.valueKind === "signal" && attr.value.trim().length > 0 && !hasTemplateSyntax(attr.value) && !/^[A-Za-z_$][A-Za-z0-9_.$-]*$/.test(attr.value.trim())) {
+    if (attr.value !== null && spec.valueKind === "filter" && attr.value.trim().length > 0 && !hasTemplateSyntax(attr.value)) issues.push(...validateFilter(attr, spec, prefix));
+    if (spec.name === "computed" && parsed.key === null && attr.value !== null && attr.value.trim().length > 0 && !hasTemplateSyntax(attr.value)) issues.push(...validateComputedObject(attr, prefix));
+    if (attr.value !== null && spec.valueKind === "signal" && attr.value.trim().length > 0 && !hasTemplateSyntax(attr.value) && !named.some((i) => i.start >= attr.valueStart) && !/^[A-Za-z_$][A-Za-z0-9_.$-]*$/.test(attr.value.trim())) {
       issues.push({ start: attr.valueStart, end: attr.valueStart + attr.value.length, message: `${prefix}${spec.name} takes a signal name, not an expression.`, severity: "warning", code: "signal-name-expected" });
     }
     if (spec.valueKind === "none" && attr.value !== null && attr.value.trim().length > 0) {
@@ -580,7 +585,12 @@ export function keyReading(spec: AttributeSpec, name: string, wire: string): str
  */
 export function rawKeyNote(spec: AttributeSpec, prefix: string, key: string): string {
   if (keyKind(spec) !== "raw" || spec.valueKind !== "expression") return "";
-  if (spec.name === "style") return ` The object form would set ${kebab(key)}. Name the property in lowercase.`;
+  if (spec.name === "style") {
+    // The object form writes a key kebab-case too (style.ts:50 in 1.0.4), so no form keeps a capital.
+    return key.startsWith("--")
+      ? ` No form keeps a capital in a custom property: name it in kebab-case, here and in the CSS, as ${kebab(key)}.`
+      : ` A CSS property is written in kebab-case: ${prefix}${spec.name}:${kebab(key)}.`;
+  }
   return ` For a name that really has capitals, such as SVG's viewBox, use the object form: ${prefix}${spec.name}="{${key}: ...}".`;
 }
 
@@ -607,6 +617,169 @@ function validateDottedKey(attr: Attribute, parsed: { key: string | null }, spec
   }];
 }
 
+/**
+ * The signal an attribute declares, when the client cannot hold it or no `$` reference reaches it:
+ * the key as the client reads it (`clientKeyName`), the name in the value of `data-bind`,
+ * `data-ref` and `data-indicator`, and the keys of the object form. The DSL holds a name to the same
+ * rules (`SignalNames` in streamlord-core, `Casing.signalName` and `Casing.heldKey` in
+ * streamlord-html).
+ */
+function validateSignalNames(attr: Attribute, parsed: { key: string | null }, spec: AttributeSpec, prefix: string): Issue[] {
+  if (keyKind(spec) !== "signal") return [];
+  const out: Issue[] = [];
+  const name = prefix + spec.name;
+  const colon = attr.name.indexOf(":");
+  // data-signals:__proto__ has no key to the client: the `__` starts the modifiers, and no plugin is named `signals:`.
+  if (parsed.key && colon >= 0) {
+    const written = attr.name.slice(colon + 1);
+    const held = clientKeyName(asciiLowercase(written));
+    const keyStart = attr.nameStart + colon + 1;
+    const keyEnd = keyStart + (written.split("__")[0] ?? "").length;
+    const path = signalPathProblem(held);
+    const reach = path ? null : signalNameProblem(held);
+    if (path || reach) {
+      out.push({
+        start: keyStart,
+        end: keyEnd,
+        message: `Datastar's client reads this key as the signal ${held}, which ${path ?? reach}.`,
+        severity: path ? "error" : "warning",
+        code: "signal-name",
+        link: attributeDoc(spec.name),
+      });
+    }
+  }
+  const value = attr.value;
+  if (value === null || value.trim().length === 0 || hasTemplateSyntax(value)) return out;
+  const decoded = decodeEntities(value);
+  const source = (from: number, to: number) => ({ start: attr.valueStart + (decoded.map[from] ?? 0), end: attr.valueStart + (decoded.map[to] ?? value.length) });
+  if (spec.valueKind === "signal" && /^[\p{L}\p{Nd}_$.-]+$/u.test(decoded.text)) {
+    const held = decoded.text;
+    const path = signalPathProblem(held);
+    const reach = path ? null : signalNameProblem(held);
+    if (path || reach) {
+      const fixes: Fix[] = !path && held.startsWith("$") && signalNameProblem(held.slice(1)) === null ? [{ title: `Change to ${held.slice(1)}`, ...source(0, 1), text: "" }] : [];
+      out.push({
+        ...source(0, decoded.text.length),
+        message: `${name} declares the signal ${held}, as written, which ${path ?? reach}.`,
+        severity: path ? "error" : "warning",
+        code: "signal-name",
+        link: attributeDoc(spec.name),
+        ...(fixes.length ? { fixes } : {}),
+      });
+    }
+  }
+  const text = decoded.text;
+  const open = text.indexOf("{");
+  if (parsed.key === null && (spec.name === "signals" || spec.name === "computed") && open >= 0 && text.slice(0, open).trim() === "" && text.trimEnd().endsWith("}")) {
+    const body = text.slice(open + 1, text.lastIndexOf("}"));
+    for (const k of objectKeys(body)) {
+      const at = source(open + 1 + k.start, open + 1 + k.end);
+      if (k.key === "__proto__") {
+        out.push({ ...at, message: `In an object literal __proto__ sets the object's prototype, so Datastar gets no signal from it.`, severity: "warning", code: "signal-name", link: attributeDoc(spec.name) });
+      } else if (k.object && PROTOTYPE_NAMES.has(k.key)) {
+        out.push({
+          ...at,
+          message: `Every object already has ${k.key}, so the client writes the object under it into the built-in one and drops the signal.`,
+          severity: "error",
+          code: "signal-name",
+          link: attributeDoc(spec.name),
+        });
+      } else {
+        const reach = signalNameProblem(k.key);
+        if (reach) out.push({ ...at, message: `This declares the signal ${k.path}, as written, which ${reach}.`, severity: "warning", code: "signal-name", link: attributeDoc(spec.name) });
+      }
+    }
+  }
+  return out;
+}
+
+/** What starts a value that is no function: a literal, a signal read, or an operator. */
+const NOT_A_FUNCTION = /^(?:[0-9'"`[$!+\-~]|(?:true|false|null|undefined|NaN|new)\b)/;
+
+/**
+ * `data-computed` without a key takes an object of functions (computed.ts in 1.0.4): any other value
+ * declares nothing, and a value under a key that is no function raises ComputedExpectedFunction.
+ */
+function validateComputedObject(attr: Attribute, prefix: string): Issue[] {
+  const value = attr.value ?? "";
+  const decoded = decodeEntities(value);
+  const text = decoded.text;
+  const open = text.indexOf("{");
+  const source = (from: number, to: number) => ({ start: attr.valueStart + (decoded.map[from] ?? 0), end: attr.valueStart + (decoded.map[to] ?? value.length) });
+  const name = `${prefix}computed`;
+  if (open < 0 || text.slice(0, open).trim() !== "") {
+    return [{
+      ...source(0, text.length),
+      message: `Without a key, ${name} takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: ${name}:total.`,
+      severity: "warning",
+      code: "computed-value",
+      link: attributeDoc("computed"),
+    }];
+  }
+  const body = text.slice(open + 1, text.lastIndexOf("}") < open ? text.length : text.lastIndexOf("}"));
+  const out: Issue[] = [];
+  for (const k of objectKeys(body)) {
+    if (k.object || !NOT_A_FUNCTION.test(body.slice(k.valueStart))) continue;
+    out.push({
+      ...source(open + 1 + k.start, open + 1 + k.end),
+      message: `Without a key, each value of ${name} must be a function, such as ${k.key}: () => ...; Datastar raises ComputedExpectedFunction for ${k.key}.`,
+      severity: "error",
+      code: "computed-value",
+      link: attributeDoc("computed"),
+    });
+  }
+  return out;
+}
+
+/**
+ * The value of `data-json-signals` and `data-on-signal-patch-filter`: JSON, or else JavaScript the
+ * client evaluates as `return (value)` without rewriting signals (`jsStrToObject` in text.ts), whose
+ * `include` and `exclude` become regular expressions (`filtered` in signals.ts).
+ */
+function validateFilter(attr: Attribute, spec: AttributeSpec, prefix: string): Issue[] {
+  const value = attr.value ?? "";
+  const decoded = decodeEntities(value);
+  const text = decoded.text;
+  const source = (from: number, to: number) => ({ start: attr.valueStart + (decoded.map[from] ?? 0), end: attr.valueStart + (decoded.map[Math.max(to, from + 1)] ?? value.length) });
+  const name = prefix + spec.name;
+  const out: Issue[] = [];
+  let json = false;
+  try {
+    JSON.parse(text);
+    json = true;
+  } catch {
+    const err = expressionError(text);
+    if (err) {
+      return [{ ...source(err.pos, err.raisedAt), message: `Datastar filter: ${err.message}`, severity: "error", code: "expression-syntax", link: attributeDoc(spec.name) }];
+    }
+    const regions = jsRegions(text);
+    for (const m of text.matchAll(/\$[A-Za-z_][\w$]*/g)) {
+      if (regions[m.index] !== Region.CODE || /[\w$]/.test(text[m.index - 1] ?? "")) continue;
+      out.push({
+        ...source(m.index, m.index + m[0].length),
+        message: `Datastar evaluates the value of ${name} without signals, so ${m[0]} is a JavaScript variable here, which does not exist.`,
+        severity: "warning",
+        code: "signal-not-read",
+        link: attributeDoc(spec.name),
+      });
+    }
+  }
+  // include: '/^foo/i' is the pattern /\/^foo\/i/, slashes and all: a string is taken as the pattern itself.
+  for (const m of text.matchAll(/(["']?)(include|exclude)\1\s*:\s*(["'])\/((?:\\.|(?!\3).)*)\/([a-z]*)\3/g)) {
+    const at = m.index + m[0].length - (m[4]!.length + m[5]!.length + 4);
+    const literal = `/${m[4]}/${m[5]}`;
+    out.push({
+      ...source(at, m.index + m[0].length),
+      message: `A string ${m[2]} is the pattern itself, so its slashes${m[5] ? " and flags" : ""} are matched as text. Write the regular expression literal ${literal}.`,
+      severity: "warning",
+      code: "filter-pattern",
+      link: attributeDoc(spec.name),
+      ...(json ? {} : { fixes: [{ title: `Change to ${literal}`, ...source(at, m.index + m[0].length), text: literal }] }),
+    });
+  }
+  return out;
+}
+
 function validateKeyCase(attr: Attribute, parsed: { key: string | null; base: string; modifiers: { name: string; args: string[] }[] }, spec: AttributeSpec, prefix: string): Issue[] {
   const colon = attr.name.indexOf(":");
   if (colon < 0 || !spec.keyCase) return [];
@@ -630,6 +803,7 @@ function validateKeyCase(attr: Attribute, parsed: { key: string | null; base: st
       const end = attr.valueStart + value.length + (attr.quoted ? 1 : 0);
       fixes.push({ title: "Use the object form", start: attr.nameStart, end, text: `${name}=${quote}{${key}: ${value}}${quote}` });
     }
+    if (spec.name === "style" && !key.startsWith("--")) fixes.push({ title: `Change to ${kebab(key)}`, start: keyStart, end: keyStart + key.length, text: kebab(key) });
     return [{
       start: keyStart,
       end: keyStart + key.length,
@@ -729,6 +903,29 @@ function validateModifierArgs(spec: AttributeSpec["modifiers"][number], args: st
     }
     case "duration": {
       const [d, ...flags] = args;
+      const later = flags.findIndex((f) => DURATION.test(f));
+      const known = (a: string) => (spec.flags ?? []).includes(a);
+      if (d && !DURATION.test(d) && known(d) && later >= 0 && flags.every((f, k) => k === later || known(f))) {
+        // __debounce.leading.500ms: the client reads the first argument as the duration.
+        const ordered = [flags[later]!, d, ...flags.filter((_, k) => k !== later)];
+        const fixed = `__${spec.name}.${ordered.join(".")}`;
+        fail(`Datastar reads the first argument of __${spec.name} as its duration, so with .${d} first it reads none and does not wait. The duration comes first: ${fixed}.`, [
+          { title: `Change to ${fixed}`, start: start + spec.name.length, end, text: "." + ordered.join(".") },
+        ]);
+        break;
+      }
+      if (d && /^\d+$/.test(d) && flags[0] !== undefined && /^\d+(ms|s)?$/.test(flags[0])) {
+        // __debounce.1.5s: the dot ends the duration, which the client reads as 1 ms.
+        const unit = flags[0].endsWith("ms") ? "ms" : flags[0].endsWith("s") ? "s" : "ms";
+        const ms = Number(`${d}.${flags[0].replace(/(ms|s)$/, "")}`) * (unit === "s" ? 1000 : 1);
+        const whole = Number.isInteger(ms) ? `${ms}ms` : null;
+        fail(
+          `Datastar reads __${spec.name}.${d}.${flags[0]} as ${d} ms: a dot separates arguments, so a duration has no fraction.${whole ? ` Write __${spec.name}.${whole}.` : ""}`,
+          whole ? [{ title: `Change to __${spec.name}.${whole}`, start: start + spec.name.length, end: start + spec.name.length + 2 + d.length + flags[0].length, text: `.${whole}` }] : undefined,
+        );
+        for (const f of flags.slice(1)) if (!known(f)) fail(`Unknown flag .${f} for __${spec.name}. Allowed: ${(spec.flags ?? []).map((x) => "." + x).join(", ") || "none"}.`);
+        break;
+      }
       if (!d || !DURATION.test(d)) {
         fail(`__${spec.name} needs a duration such as __${spec.name}.500ms or __${spec.name}.1s.`);
         if (!d) issues[issues.length - 1]!.fixes = [{ title: `Add .500ms`, start: start + spec.name.length, end: start + spec.name.length, text: ".500ms" }];

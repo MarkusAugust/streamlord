@@ -116,7 +116,8 @@ class SignalIndex(
         text: String,
         language: SourceLanguage,
     ): Entry {
-        val entry = Entry(stamp, text.length, collectSignals(text, language), collectSignalDefinitions(text, language), collectSelectors(text))
+        val entry =
+            Entry(stamp, text.length, collectSignals(text, language), collectSignalDefinitions(text, language), collectSelectors(text))
         val previous = entries.put(key, entry)
         if (previous?.definitions != entry.definitions) dropUnion()
         return entry
@@ -146,8 +147,13 @@ class SignalIndex(
         markup += FileTypeIndex.getFiles(HtmlFileType.INSTANCE, scope)
         // A template file is markup whatever type the IDE gives it, so it is found by its extension.
         for (extension in markupExtensions()) markup += FilenameIndex.getAllFilesByExt(project, extension, scope)
-        val files = markup.asSequence().filter(::indexable).take(FILE_CAP) +
-            FileTypeIndex.getFiles(KotlinFileType.INSTANCE, scope).asSequence().filter(::indexable).take(FILE_CAP)
+        val files =
+            markup.asSequence().filter(::indexable).take(FILE_CAP) +
+                FileTypeIndex
+                    .getFiles(KotlinFileType.INSTANCE, scope)
+                    .asSequence()
+                    .filter(::indexable)
+                    .take(FILE_CAP)
         val seen = HashSet<String>()
         for (vf in files) {
             val language = languageOf(vf) ?: continue

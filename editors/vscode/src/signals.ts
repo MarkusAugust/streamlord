@@ -18,17 +18,21 @@ const KOTLIN_READS: RegExp[] = [/\$\{'\$'\}([A-Za-z_][A-Za-z0-9_.]*)/g, /\\\$([A
 /** `$name = ...` in an expression: Datastar creates a signal it is assigned to, so the assignment defines it. */
 const ASSIGNED_SIGNAL = /(?:\$|\$\{'\$'\})([A-Za-z_][A-Za-z0-9_.]*)\s*=(?![=>])/g;
 
-/** Declarations in markup. These also run over Kotlin, where they only ever match inside HTML strings. */
+/**
+ * Declarations in markup, read as the client stores them. These also run over Kotlin, where they
+ * only ever match inside HTML strings. The browser lowercases an attribute name, so the name is
+ * matched in any case and its key is lowercased: `data-signals:fooBar` declares `foobar`.
+ */
 const HTML_ATTRIBUTE_PATTERNS: RegExp[] = [
-  /data-(?:star-)?(?:signals|bind|indicator|ref|computed|match-media):([A-Za-z_][A-Za-z0-9_.-]*)/g,
-  /data-(?:star-)?(?:bind|indicator|ref)(?:__[^=\s]*)?="([A-Za-z_][A-Za-z0-9_.]*)"/g,
+  // The key with its modifiers, which may name the casing: data-signals:my-value__case.snake.
+  /data-(?:star-)?(?:signals|bind|indicator|ref|computed|match-media):([^\s=>"'/\\]+)/gi,
+  // The value form names the signal as written: data-bind="user-name" is the signal user-name.
+  /data-(?:star-)?(?:bind|indicator|ref)(?:__[^=\s>]*)?=(?:\\?"([^"\\\s]+)\\?"|'([^'\s]+)')/gi,
   // The object form may sit in either kind of quote: JSON written by hand is `data-signals='{"query": ""}'`.
   // data-computed="{total: () => ...}" declares its keys the same way.
-  /data-(?:star-)?(?:signals|computed)(?:__[^=\s]*)?=(?:"\{([^"]*)\}"|'\{([^']*)\}')/g,
+  /data-(?:star-)?(?:signals|computed)(?:__[^=\s>]*)?=(?:"\{([^"]*)\}"|'\{([^']*)\}')/gi,
 ];
 
-/** A key of the object form: bare or quoted, and inside a Kotlin string quoted with escaped quotes. */
-const OBJECT_KEY = /(?:^|[{,])\s*(?:\\?["'])?([A-Za-z_][A-Za-z0-9_]*)(?:\\?["'])?\s*:/g;
 
 /** A bare `$name` is a signal in markup; in Kotlin it is a template, so it stays out of the Kotlin list. */
 const HTML_PATTERNS: RegExp[] = [...HTML_ATTRIBUTE_PATTERNS, /\$([A-Za-z_][A-Za-z0-9_.]*)/g];
@@ -42,7 +46,6 @@ const PROPERTY = /(?:@SerialName\(\s*(?:value\s*=\s*)?"([^"]*)"\s*\)\s*(?:@\w+(?
 
 const PAIR_CALLS: ReadonlySet<string> = new Set(["dataSignals", "patchSignals", "removeSignals", "respondSignals", "datastarSignals"]);
 const JSON_CALLS: ReadonlySet<string> = new Set(["patchSignals", "respondSignals", "datastarSignals"]);
-const CASE_MODIFIER = /__case\.([a-z]+)/;
 const PAIR = /"([A-Za-z_][A-Za-z0-9_.-]*)"\s+to\b/g;
 const NAME = /^"([A-Za-z_][A-Za-z0-9_.-]*)"$/;
 
@@ -71,7 +74,8 @@ function collect(src: string, language: "kotlin" | "html", reads: boolean): Set<
         for (const pair of a.text.matchAll(PAIR)) if (pair[1]) out.add(site.name === "dataSignals" ? toCamel(pair[1]) : pair[1]);
         // patchSignals("""{"count": 1}"""): the signals as JSON text.
         if (JSON_CALLS.has(site.name) && a.string && /^\s*\{/.test(a.string.text)) {
-          for (const key of a.string.text.matchAll(OBJECT_KEY)) if (key[1]) out.add(key[1]);
+          const json = a.string.text;
+          for (const path of objectKeyPaths(json.slice(json.indexOf("{") + 1, json.lastIndexOf("}")))) out.add(path);
         }
         const name = NAME.exec(a.text);
         if (!name?.[1]) return;
@@ -89,15 +93,16 @@ function collect(src: string, language: "kotlin" | "html", reads: boolean): Set<
     while ((m = re.exec(src)) !== null) {
       // A keyed attribute may carry modifiers after the key: data-signals:foo-bar__ifmissing. The
       // object form's body is captured whole, `__` and all.
-      const keyed = re === HTML_ATTRIBUTE_PATTERNS[0];
-      const captured = keyed ? (m[1] ?? "").split("__")[0] ?? "" : (m[1] ?? m[2] ?? "");
+      const captured = m[1] ?? m[2] ?? "";
       if (re === HTML_ATTRIBUTE_PATTERNS[2]) {
-        for (const key of captured.matchAll(OBJECT_KEY)) {
-          if (key[1]) out.add(key[1]);
-        }
-      } else if (captured) {
+        for (const path of objectKeyPaths(captured)) out.add(path);
+      } else if (re === HTML_ATTRIBUTE_PATTERNS[0]) {
         // `__case` names the signal: data-signals:my-value__case.snake is `$my_value`.
-        out.add(keyed ? keyName(captured, CASE_MODIFIER.exec(m[1] ?? "")?.[1] ?? null) : toCamel(captured));
+        out.add(clientKeyName(captured.replace(/[A-Z]/g, (c) => c.toLowerCase())));
+      } else if (re === HTML_ATTRIBUTE_PATTERNS[1]) {
+        out.add(captured);
+      } else if (captured) {
+        out.add(toCamel(captured));
       }
     }
   }
@@ -126,23 +131,152 @@ function matchingParen(src: string, open: number): number {
   return -1;
 }
 
+/** The properties of `Object.prototype` in a browser: every object already has them (`SignalNames` in streamlord-core). */
+export const PROTOTYPE_NAMES: ReadonlySet<string> = new Set([
+  "__proto__",
+  "constructor",
+  "hasOwnProperty",
+  "isPrototypeOf",
+  "propertyIsEnumerable",
+  "toLocaleString",
+  "toString",
+  "valueOf",
+  "__defineGetter__",
+  "__defineSetter__",
+  "__lookupGetter__",
+  "__lookupSetter__",
+]);
+
 /**
- * The signal a kebab-case key names under a `__case` modifier: camel by default (`foo-bar` is
- * `fooBar`), `snake` (`foo_bar`), `pascal` (`FooBar`) or `kebab` (`foo-bar`, as written).
+ * Why the client cannot hold a signal at `path`, written with dots as `data-signals:a.b` writes it,
+ * or null when it can. The client follows the path without a guard, so a part every object already
+ * has writes into the built-in one: `__proto__.x` and `constructor.prototype.x` set `x` on every
+ * object of the page (`SignalNames.pathProblem` in streamlord-core says the same).
  */
-export function keyName(key: string, kase: string | null): string {
-  switch (kase) {
-    case "kebab":
-      return key;
-    case "snake":
-      return key.replaceAll("-", "_");
-    case "pascal": {
-      const camel = toCamel(key);
-      return camel.charAt(0).toUpperCase() + camel.slice(1);
-    }
-    default:
-      return toCamel(key);
+export function signalPathProblem(path: string): string | null {
+  const parts = path.split(".");
+  if (parts.some((p) => p.length === 0)) return "has an empty part, which no $ reference reaches";
+  const part = parts.find((p) => PROTOTYPE_NAMES.has(p));
+  return part ? `has the part ${part}, which every object already has, so the client writes into the built-in one instead of holding a signal` : null;
+}
+
+/** What the client reads after a `$`: ASCII letters, digits and `_`, in parts joined by `.` or `-` (engine.ts:449 in 1.0.4). */
+const REACHABLE_NAME = /^[A-Za-z0-9_]+(?:[.-][A-Za-z0-9_]+)*$/;
+
+/** Why no `$` reference reaches a signal named `name`, or null when one does. */
+export function signalNameProblem(name: string): string | null {
+  if (REACHABLE_NAME.test(name)) return null;
+  if (name.startsWith("$")) return `holds the $ itself, so $${name.slice(1)} does not reach it: that reads the signal ${name.slice(1)}`;
+  if (/[^\x00-\x7F]/.test(name)) return "no $ reference reaches: Datastar reads only ASCII letters, digits and _ after a $, so the browser looks for a JavaScript variable instead";
+  return "no $ reference reaches: Datastar reads ASCII letters, digits and _ after a $, in parts joined by . or -";
+}
+
+const CASE_FNS: Record<string, (s: string) => string> = {
+  camel: (s) => s.replace(/-[a-z]/g, (x) => x[1]!.toUpperCase()),
+  snake: (s) => s.replace(/-/g, "_"),
+  pascal: (s) => (s[0] ?? "").toUpperCase() + CASE_FNS.camel!(s.slice(1)),
+};
+
+/**
+ * The signal the client makes of an attribute key written with its modifiers, as the browser hands
+ * it over: `parseAttributeKey` (engine.ts) cuts the modifiers off at the first `__`, and
+ * `modifyCasing` (text.ts) applies each `__case` given, in order, camel when none is. A casing it
+ * does not know, kebab among them, leaves the key as it is.
+ */
+export function clientKeyName(written: string): string {
+  const [key = "", ...rawModifiers] = written.split("__");
+  const modifiers = new Map<string, string[]>();
+  for (const raw of rawModifiers) {
+    const [label = "", ...args] = raw.split(".");
+    modifiers.set(label, [...new Set(args)]);
   }
+  let name = key;
+  for (const c of modifiers.get("case") ?? ["camel"]) name = CASE_FNS[c]?.(name) || name;
+  return name;
+}
+
+/**
+ * The signal paths the object form of `data-signals` or `data-computed` declares, `body` being the
+ * text between its outer braces: each key as written, and the keys of an object under a key with
+ * that key before them, as the client's `mergePatch` stores them. `{user: {name: 'x'}}` declares
+ * `user` and `user.name`. A key may be bare or quoted, and inside a Kotlin string its quotes may be
+ * escaped; an object that is not the value of a key, inside a function or a list, declares nothing.
+ */
+export function objectKeyPaths(body: string): string[] {
+  return objectKeys(body).map((k) => k.path);
+}
+
+/** A key of the object form: its path, where it is written, where its value starts, and whether that value is an object. */
+export interface ObjectKey {
+  path: string;
+  key: string;
+  start: number;
+  end: number;
+  valueStart: number;
+  object: boolean;
+}
+
+/** The keys `objectKeyPaths` names, with where each is written in `body`. */
+export function objectKeys(body: string): ObjectKey[] {
+  const out: ObjectKey[] = [];
+  // The open brackets: the path of an object that is the value of a key, or null for anything else.
+  const frames: (string | null)[] = [""];
+  let expectKey = true;
+  let objectFor: string | null = null;
+  let i = 0;
+  const skipSpace = () => {
+    while (i < body.length && /\s/.test(body[i]!)) i++;
+  };
+  while (i < body.length) {
+    const top = frames[frames.length - 1];
+    if (expectKey && top !== null && top !== undefined) {
+      expectKey = false;
+      skipSpace();
+      let key: string | null = null;
+      const keyStart = i;
+      const escaped = body[i] === "\\" && (body[i + 1] === '"' || body[i + 1] === "'");
+      const quote = escaped ? body[i + 1] : body[i];
+      if (quote === '"' || quote === "'") {
+        const from = i + (escaped ? 2 : 1);
+        let j = from;
+        while (j < body.length && body[j] !== quote && !(body[j] === "\\" && body[j + 1] === quote)) j++;
+        key = body.slice(from, j);
+        i = j + (body[j] === "\\" ? 2 : 1);
+      } else {
+        const m = /^[A-Za-z0-9_$]+/.exec(body.slice(i));
+        if (m) {
+          key = m[0];
+          i += key.length;
+        }
+      }
+      const keyEnd = i;
+      skipSpace();
+      if (key !== null && body[i] === ":") {
+        const path = top === "" ? key : `${top}.${key}`;
+        i++;
+        skipSpace();
+        objectFor = body[i] === "{" ? path : null;
+        out.push({ path, key, start: keyStart, end: keyEnd, valueStart: i, object: objectFor !== null });
+      }
+      continue;
+    }
+    const c = body[i]!;
+    if (c === '"' || c === "'" || c === "`") {
+      let j = i + 1;
+      while (j < body.length && body[j] !== c) j += body[j] === "\\" ? 2 : 1;
+      i = j + 1;
+      continue;
+    }
+    if (c === "{") {
+      frames.push(objectFor);
+      expectKey = objectFor !== null;
+    } else if (c === "[" || c === "(") frames.push(null);
+    else if ((c === "}" || c === "]" || c === ")") && frames.length > 1) frames.pop();
+    else if (c === ",") expectKey = true;
+    objectFor = null;
+    i++;
+  }
+  return out;
 }
 
 /** Datastar exposes kebab-case keys as camelCase signals by default. */

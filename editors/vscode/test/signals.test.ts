@@ -30,7 +30,8 @@ data class PageSignals(
   });
 
   it("the object form declares quoted keys in either kind of quote", () => {
-    assert.deepEqual(html(`<div data-signals='{"query": "", "nested": {"deep": 1}}'></div>`), ["deep", "nested", "query"]);
+    // A key of an object under a key is a signal under that one, as the client stores it.
+    assert.deepEqual(html(`<div data-signals='{"query": "", "nested": {"deep": 1}}'></div>`), ["nested", "nested.deep", "query"]);
     assert.deepEqual(html(`<div data-signals__ifmissing="{'single': 1, bare: 2}"></div>`), ["bare", "single"]);
     assert.deepEqual(kotlin(String.raw`val k = "<div data-signals='{\"esc\": 1}'></div>"`), ["esc"]);
   });

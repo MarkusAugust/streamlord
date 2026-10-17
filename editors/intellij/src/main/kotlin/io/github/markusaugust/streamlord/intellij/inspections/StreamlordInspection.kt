@@ -112,11 +112,29 @@ class PreferredReplaceTextFix(
 /** `$count` in a Kotlin string is a Kotlin template, not a signal: the interpolation trap. */
 class KotlinInterpolationInspection : StreamlordInspection(setOf("kotlin-interpolation"))
 
-/** Datastar expression syntax, unknown actions, Pro actions, kebab-case signals. */
+/**
+ * Datastar expression syntax, unknown actions, Pro actions, kebab-case signals, and what the
+ * client's own rewrite of an expression does that JavaScript would not.
+ */
 class DatastarExpressionInspection :
-    StreamlordInspection(setOf("expression-syntax", "empty-expression", "unknown-action", "action-space", "pro-action", "signal-kebab"))
+    StreamlordInspection(
+        setOf(
+            "expression-syntax",
+            "empty-expression",
+            "unknown-action",
+            "action-space",
+            "pro-action",
+            "signal-kebab",
+            "literal-rewritten",
+            "signal-not-read",
+            "statement-split",
+        ),
+    )
 
-/** `data-*` attribute names, keys, modifiers and their arguments, values, and an indicator with nothing to show. */
+/**
+ * `data-*` attribute names, keys, modifiers and their arguments, values, an indicator with nothing
+ * to show, signal names the client cannot hold, and the values it evaluates as filters or computeds.
+ */
 class DatastarAttributeInspection :
     StreamlordInspection(
         setOf(
@@ -134,6 +152,9 @@ class DatastarAttributeInspection :
             "pro-attribute",
             "prefix-mismatch",
             "indicator-without-action",
+            "signal-name",
+            "computed-value",
+            "filter-pattern",
         ),
     )
 
@@ -180,7 +201,17 @@ object InspectionCodes {
     val all: Set<String> =
         setOf("kotlin-interpolation") +
             setOf("unknown-signal") +
-            setOf("expression-syntax", "empty-expression", "unknown-action", "action-space", "pro-action", "signal-kebab") +
+            setOf(
+                "expression-syntax",
+                "empty-expression",
+                "unknown-action",
+                "action-space",
+                "pro-action",
+                "signal-kebab",
+                "literal-rewritten",
+                "signal-not-read",
+                "statement-split",
+            ) +
             setOf(
                 "unknown-attribute",
                 "unknown-modifier",
@@ -196,6 +227,9 @@ object InspectionCodes {
                 "pro-attribute",
                 "prefix-mismatch",
                 "indicator-without-action",
+                "signal-name",
+                "computed-value",
+                "filter-pattern",
             ) +
             setOf("key-case", "key-case-wire") +
             setOf(

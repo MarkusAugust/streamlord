@@ -4,6 +4,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import { analyzeHtml, analyzeKotlin } from "../src/analyze.ts";
 import { validateExpression, type Issue } from "../src/expression.ts";
 import { validateMarkup } from "../src/markup.ts";
+import { signalReferencesInHtml, unknownSignalIssue } from "../src/signalReferences.ts";
+import { collectSignalDefinitions } from "../src/signals.ts";
 
 /**
  * The corpus in `fixtures/corpus` is read by this suite and by `CorpusTest.kt`, so the two
@@ -29,6 +31,11 @@ const run: Record<string, (c: Case) => Issue[]> = {
   markup: (c) => validateMarkup(c.source, { requireIds: c.requireIds ?? false, prefix: "data-", checkAttributes: true }),
   html: (c) => analyzeHtml(c.source, opts),
   kotlin: (c) => analyzeKotlin(c.source, opts),
+  // The signals the source reads that it does not itself declare.
+  references: (c) => {
+    const defined = collectSignalDefinitions(c.source, "html");
+    return signalReferencesInHtml(c.source, "data-").flatMap((r) => unknownSignalIssue(r, defined) ?? []);
+  },
 };
 const byCode = (a: Issue, b: Issue) => ((a.code ?? "") < (b.code ?? "") ? -1 : (a.code ?? "") > (b.code ?? "") ? 1 : 0);
 const dir = new URL("./fixtures/corpus/", import.meta.url);

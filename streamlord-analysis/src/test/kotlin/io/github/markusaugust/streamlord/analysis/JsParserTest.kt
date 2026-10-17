@@ -322,7 +322,8 @@ class JsParserTest {
             "function* g() { yield 1 }",
             "with (\$a) { b }",
         )
-        bad("new.target", pos = 0)
+        // The top level is the body of the function Datastar compiles, where new.target is allowed.
+        ok("new.target", "() => new.target")
         bad("super.x", message = "'super' keyword outside a method")
         bad("a.#x", message = "Private field '#x' must be declared in an enclosing class")
         bad("class A { constructor() {} constructor() {} }", message = "Duplicate constructor in the same class")

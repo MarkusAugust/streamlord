@@ -234,6 +234,52 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- The editors read a page's signals as Datastar's client stores them. `signal-kebab` said "no key
+  declares" a `$my-key` the page declares with its hyphen, in the object form
+  (`{'my-key': 1}`), in the value of `data-bind`, `data-ref` or `data-indicator`, or as
+  `data-signals:a-1`, which camel casing leaves alone, and its fix to `$myKey` broke a page that
+  worked; it now speaks only when the file does not declare `my-key`. A key in capitals declares
+  the lowercase signal the browser hands over (`DATA-SIGNALS:FOO` is `foo`, `data-signals:fooBar`
+  is `foobar`), the value of `data-bind` names the signal as written, and a key of a nested
+  object is a signal under its parent (`{user: {name: 'x'}}` is `user.name`, not `name`).
+- The editors judge an expression by the client's own two patterns, `statementRe` and the
+  rewrite (engine.ts:415-416 and 448-449 in 1.0.4), ported as written, with the actions
+  included. The text of a template literal that also holds a `${...}` is rewritten by the client,
+  so `` `total: $total ${$a}` `` shows `total: $['total'] A`; that, and a `$name` inside a regular
+  expression, is now a warning (`literal-rewritten`). A `'` in a comment, a regular expression or
+  a template opens a string to the client's pattern, which then leaves a later `$b` as a
+  JavaScript variable; that is a warning (`signal-not-read`), as is `$år`, which the client does
+  not read because only ASCII follows a `$`. `@get` without its parenthesis, which the client
+  does not rewrite, is the syntax error it is in the browser, where `@` used to become `_`.
+  `new.target` is accepted, since the client compiles the body of a function.
+- The editors flag signal names the client cannot hold or no `$` reaches (`signal-name`):
+  `__proto__`, `constructor` or another property of `Object.prototype` as a part of the name,
+  which writes into every object of the page, also once the client has read the key
+  (`data-signals:_-proto-_.x__case.snake` is `__proto__.x`); an object under such a key in the
+  object form; a `$` in `data-bind="$user"`, which makes the signal `$user` that `$user` does not
+  reach; and a letter beyond ASCII.
+- The editors check the filters of `data-json-signals` and `data-on-signal-patch-filter`, which
+  the client evaluates without signals: a regular expression that does not compile is an error,
+  a `$name` there is a warning, and so is a pattern written as a string with its slashes and
+  flags, with the literal as the fix. `data-on-signal-patch:filter`, a key 1.0.4 accepts, is no
+  longer an error; the catalog lists it under `keys`, read as `AttributeSpec.keys` in
+  `streamlord-analysis`. `data-computed` without a key warns when its value is no object of functions,
+  and errs where the client raises `ComputedExpectedFunction`. A `;` inside brackets in a value
+  that is read, which the client splits all the same, losing the value, is a warning.
+- The editors explain a duration after a flag, `__debounce.leading.500ms`, in one message with
+  the reordered modifier as the fix, where they gave two, and a fraction, `__debounce.1.5s`,
+  which the client reads as 1 ms, with `__debounce.1500ms` as the fix. The advice for
+  `data-style:backgroundColor` is the kebab-case property, with the fix, where "name the
+  property in lowercase" led to a property that does not exist.
+- The two editors read the same signals in an expression: IntelliJ now reads a signal in the code
+  of a template literal, and VS Code no longer reads one inside a regular expression; a signal in
+  a comment is read by neither. VS Code no longer offers `patch` outside `data-on-signal-patch`,
+  where it is not defined.
+- The IntelliJ plugin no longer sets colours for the Default and Darcula schemes, which won over
+  every theme built on them. Each Datastar token takes the colour the theme gives a standard key.
+- The VS Code package carries acorn's licence, in `ThirdPartyNotices.txt`, beside the bundle that
+  includes acorn.
+
 - A signal patch could carry a key Datastar's client cannot hold, from pairs, a codec or a JSON
   string, at any depth. `__proto__` with an object under it made its merge throw halfway through
   a batch it never closed, so no later signal reached the page. An object under a property of

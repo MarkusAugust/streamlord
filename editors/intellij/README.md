@@ -30,6 +30,18 @@ function that returns HTML, a `val` holding a fragment), and in HTML and templat
   `$count-1`), which Datastar swallows into one signal name. Both come with the fix. In the DSL
   the SDK writes a camelCase key correctly on its own, and a weak warning on the call shows what
   goes on the wire.
+- What Datastar's own rewrite of an expression does that JavaScript would not: a `$name` or
+  `@name(` in the text of a template literal that also holds a `${...}`, or inside a regular
+  expression, is rewritten there too; a `'` in a comment, a regular expression or a template
+  pairs with a later quote, and the `$name` between them stays a JavaScript variable; `$år` is no
+  signal, since only ASCII follows a `$`; and `@get` without its parenthesis is a syntax error.
+- Signal names Datastar's client cannot hold or no `$` reaches: `__proto__`, `constructor` or
+  another property of `Object.prototype` as a part of the name, also once `__case` has turned the
+  key into it, a `$` in `data-bind="$user"`, and a letter beyond ASCII.
+- Values the client evaluates or splits: a filter of `data-json-signals` or
+  `data-on-signal-patch-filter` that does not compile or reads a signal, a pattern written as a
+  string, `data-computed` without a key whose value is no object of functions, and a `;` inside
+  brackets in a value that is read, where the client splits it and loses the value.
 
 A string counts as HTML when it opens with a tag, a comment or a doctype, or when it carries
 `@Language("HTML")` or a `// language=HTML` comment. Multi-dollar literals (`$$"""..."""`,
@@ -54,8 +66,10 @@ has no KDoc to show.
 
 **Highlighting** of Datastar expressions inside DSL strings and HTML strings, and of `data-*`
 attributes in HTML: prefix, plugin, key, modifiers and modifier arguments each get their own
-colour, and the attribute value is coloured as a Datastar expression. Only the Datastar tokens
-are coloured; your theme keeps everything else. Settings | Editor | Color Scheme | Streamlord.
+colour, and the attribute value is coloured as a Datastar expression. The plugin brings no colours
+of its own: each token takes the colour your theme gives a standard one, a signal that of a static
+field and an action that of a function call. Settings | Editor | Color Scheme | Streamlord lets you
+change them.
 
 **HTML injection** into Kotlin strings that open with a tag but carry no `@Language("HTML")`, so
 tags complete and close as in an HTML file. Streamlord's own parameters carry the annotation

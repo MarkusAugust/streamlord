@@ -126,8 +126,9 @@ describe("markup", () => {
     // A kebab-case attribute would set aria-label; the object form keeps the name. No form keeps a style property's capitals.
     expect(issues[5]!.fixes!.map((f) => f.text)).toEqual([`data-attr="{ariaLabel: 'x'}"`]);
     expect(issues[5]!.message).toContain("sets arialabel, not ariaLabel");
-    expect(issues[6]!.fixes).toEqual([]);
-    expect(issues[6]!.message).toContain("would set background-color. Name the property in lowercase");
+    // A CSS property is kebab-case, which is also the fix; lowercase alone would name no property.
+    expect(issues[6]!.fixes!.map((f) => f.text)).toEqual(["background-color"]);
+    expect(issues[6]!.message).toContain("A CSS property is written in kebab-case: data-style:background-color.");
     expect(issues[0]!.message).toContain("$foobar");
     expect(src.slice(issues[0]!.start, issues[0]!.end)).toBe("fooBar");
     const fine = `<div data-signals:foo-bar="1" data-on:widget-loaded__case.camel="x()" data-bind="fooBar" data-signals="{fooBar: 1}" data-class:hover:bg-red-500="$x"></div>`;
@@ -138,7 +139,7 @@ describe("markup", () => {
     expect(explicit.map((i) => i.fixes![0]!.text)).toEqual(["foo-bar", "widget-loaded"]);
     expect(explicit[0]!.message).toContain("foo-bar__case.kebab");
     const custom = analyzeHtml(`<div data-style:--myColor="$c"></div>`, opts);
-    expect(custom[0]!.message).toContain("sets --mycolor, not --myColor. The object form would set --my-color");
+    expect(custom[0]!.message).toContain("sets --mycolor, not --myColor. No form keeps a capital in a custom property: name it in kebab-case, here and in the CSS, as --my-color.");
     expect(custom[0]!.fixes).toEqual([]);
     // The aliased prefix gets the same treatment when configured.
     expect(codes(analyzeHtml(`<div data-star-signals:fooBar="1"></div>`, { prefix: "data-star-", checkHtmlAttributes: true }))).toEqual(["key-case"]);

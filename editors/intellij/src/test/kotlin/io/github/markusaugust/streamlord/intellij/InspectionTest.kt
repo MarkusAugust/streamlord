@@ -139,19 +139,23 @@ class InspectionTest : BasePlatformTestCase() {
                 "s.patchElements(\"<li>x</li>\", mode = ElementPatchMode.APPEND); s.removeElements(\" \"); s.removeElements(\"a\\nb\")",
                 "s.executeScript(\"'</script>'\"); dataSignals(\"fooBar\", \"1\"); s.patchElements(\"text </b>\")",
                 "s.patchElements(\"\"\"<span id=\"busy\" data-indicator:busy></span>\"\"\")",
+                "s.patchElements(\"\"\"<div id=\"n\" data-bind=\"__proto__.x\" data-computed=\"\${'$'}a\" data-json-signals=\"{include: '/a/i'}\"",
+                " data-text=\"`\${'$'}t \${'$'}{1}` + ((n) => { n; return n })(1)\" data-on:click=\"x // '\n\${'$'}b = 'y'\"></div>\"\"\")",
             ).joinToString("\n")
         val codes = analyzer.analyzeKotlin(src).mapNotNull { it.code }.toSet()
         val unclaimed = codes - InspectionCodes.all
         assertEquals(emptySet<String>(), unclaimed)
         assertTrue(codes.toString(), codes.size > 15)
         assertTrue(codes.toString(), "indicator-without-action" in codes)
+        val added = setOf("literal-rewritten", "signal-not-read", "statement-split", "signal-name", "computed-value", "filter-pattern")
+        assertEquals(added, codes.intersect(added))
     }
 
     fun `test each issue keeps its own severity until the profile sets one for the family`() {
         myFixture.configureByText("Mixed.kt", "fun f() { dataText(\"\${'\$'}a-b +\") }")
         val own = myFixture.doHighlighting()
         assertEquals(HighlightSeverity.ERROR, own.single { it.description?.startsWith("Datastar expression:") == true }.severity)
-        assertEquals(HighlightSeverity.WARNING, own.single { it.description?.contains("no key declares") == true }.severity)
+        assertEquals(HighlightSeverity.WARNING, own.single { it.description?.contains("nothing here declares") == true }.severity)
         val key = HighlightDisplayKey.find("DatastarExpressionInspection")!!
         val profile = InspectionProjectProfileManager.getInstance(project).currentProfile
         profile.setErrorLevel(key, HighlightDisplayLevel.WEAK_WARNING, project)
@@ -160,7 +164,7 @@ class InspectionTest : BasePlatformTestCase() {
             myFixture.configureByText("Mixed2.kt", "fun f() { dataText(\"\${'\$'}a-b +\") }")
             val set = myFixture.doHighlighting()
             assertEquals(HighlightSeverity.WEAK_WARNING, set.single { it.description?.startsWith("Datastar expression:") == true }.severity)
-            assertEquals(HighlightSeverity.WEAK_WARNING, set.single { it.description?.contains("no key declares") == true }.severity)
+            assertEquals(HighlightSeverity.WEAK_WARNING, set.single { it.description?.contains("nothing here declares") == true }.severity)
         } finally {
             profile.setErrorLevel(key, HighlightDisplayLevel.ERROR, project)
         }

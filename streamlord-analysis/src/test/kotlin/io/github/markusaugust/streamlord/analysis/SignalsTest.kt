@@ -42,7 +42,8 @@ class SignalsTest {
 
     @Test
     fun `the object form declares quoted keys in either kind of quote`() {
-        assertEquals(listOf("deep", "nested", "query"), html("""<div data-signals='{"query": "", "nested": {"deep": 1}}'></div>"""))
+        // A key of an object under a key is a signal under that one, as the client stores it.
+        assertEquals(listOf("nested", "nested.deep", "query"), html("""<div data-signals='{"query": "", "nested": {"deep": 1}}'></div>"""))
         assertEquals(listOf("bare", "single"), html("""<div data-signals__ifmissing="{'single': 1, bare: 2}"></div>"""))
         assertEquals(listOf("esc"), kotlin("""val k = "<div data-signals='{\"esc\": 1}'></div>""""))
     }

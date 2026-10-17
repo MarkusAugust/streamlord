@@ -50,6 +50,8 @@ public data class AttributeSpec(
      * written, as the body of an event handler.
      */
     val returnsValue: Boolean = false,
+    /** Keys a keyless attribute accepts all the same: `data-on-signal-patch:filter` (onSignalPatch.ts:27 in 1.0.4). */
+    val keys: List<String> = emptyList(),
 )
 
 public data class ActionSpec(
@@ -137,6 +139,7 @@ public class Catalog private constructor(
                     doc = a.string("doc") ?: "",
                     requires = a.string("requires")?.let { Requires.valueOf(it.uppercase()) },
                     returnsValue = a.boolean("returnsValue") ?: false,
+                    keys = a.array("keys")?.strings() ?: emptyList(),
                 )
             }
         actions =

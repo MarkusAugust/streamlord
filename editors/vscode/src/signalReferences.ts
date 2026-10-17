@@ -1,6 +1,6 @@
 import { ALL_SITE_NAMES, ATTRIBUTES_INDEX, attributesIndexValue, lexCached, markupString } from "./analyze.ts";
 import { catalog, distance, parseAttributeName } from "./catalog.ts";
-import { DOCS, jsCodeMask, type Issue } from "./expression.ts";
+import { clientSignalReads, DOCS, type Issue } from "./expression.ts";
 import { PLACEHOLDER, toSource, type KotlinString } from "./kotlinStrings.ts";
 import { asciiLowercase, decodeEntities, hasTemplateSyntax, tokenize } from "./markup.ts";
 import { findCallSites, isHtmlString, selectStringArg } from "./scanner.ts";
@@ -19,20 +19,17 @@ export interface SignalReference {
   name: string;
 }
 
-const SIGNAL = /\$([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)/g;
-
-/** The signals an expression reads, with offsets relative to `text`. A `$foo-bar` is left to the `signal-kebab` check. */
+/**
+ * The signals an expression reads, with offsets relative to `text`: what the client rewrites as a
+ * signal where JavaScript runs it (see `clientSignalReads`), shared with `SignalReferences.kt`. A
+ * `$foo-bar` is left to the `signal-kebab` check, and a name opening with a digit is no name a
+ * page declares.
+ */
 export function expressionSignalReferences(text: string): SignalReference[] {
   const out: SignalReference[] = [];
-  const code = jsCodeMask(text);
-  for (const m of text.matchAll(SIGNAL)) {
-    const name = m[1] ?? "";
-    const start = m.index;
-    const end = start + m[0].length;
-    if (!code[start] || /[A-Za-z0-9_$]/.test(text[start - 1] ?? "")) continue;
-    if (text[end] === "-" && /[A-Za-z0-9_]/.test(text[end + 1] ?? "")) continue;
-    if (name.includes(PLACEHOLDER)) continue;
-    out.push({ start, end, name });
+  for (const r of clientSignalReads(text)) {
+    if (r.name.includes("-") || !/^[A-Za-z_]/.test(r.name) || r.name.includes(PLACEHOLDER)) continue;
+    out.push({ start: r.start, end: r.end, name: r.name });
   }
   return out;
 }

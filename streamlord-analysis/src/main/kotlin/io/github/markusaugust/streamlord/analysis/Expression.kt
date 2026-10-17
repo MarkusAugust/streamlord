@@ -2,20 +2,17 @@ package io.github.markusaugust.streamlord.analysis
 
 /*
  * Validation of Datastar expressions. A Datastar expression is JavaScript in which `$name` is a
- * signal (a legal JS identifier already) and `@name(...)` is an action (not legal JS). Replacing
- * every `@` with `_` yields JavaScript of identical length, so the parser's positions map 1:1.
+ * signal and `@name(` is an action. The client rewrites both with one pattern before it compiles
+ * the text (see [clientRewrite]), so the syntax is judged on the rewritten text, and what the
+ * pattern does differently from JavaScript, it is told about.
  */
 
-/**
- * `$foo-bar`, `$count-1`, `$total-el.offsetWidth`: Datastar reads a signal with the pattern `\$(\w+(?:[.-]\w+)*)`,
- * so a hyphen followed by a word character is swallowed into the name. Only `$a-$b` is a subtraction.
- */
-private val HYPHENATED_SIGNAL = Regex("""\$[A-Za-z_][A-Za-z0-9_.]*(?:-[A-Za-z0-9_][A-Za-z0-9_.]*)+""")
 private val HYPHEN_WORD = Regex("""-([A-Za-z0-9_])""")
-private val ACTION = Regex("""@([A-Za-z_$][A-Za-z0-9_$]*)(\s*)\(""")
+private val SPACED_ACTION = Regex("""@([A-Za-z_$][A-Za-z0-9_$]*)(\s+)\(""")
 private val SIGNAL_PREFIX = Regex("""\$([A-Za-z_][A-Za-z0-9_.]*)?$""")
 private val ACTION_PREFIX = Regex("""@([A-Za-z_][A-Za-z0-9_]*)?$""")
 private val KEBAB_PART = Regex("""-([a-z])""")
+private val WORD_CHAR = Regex("""\w""")
 
 /** The quote of the single-, double- or backtick-quoted JavaScript string literal the offset is inside, or null. */
 internal fun quoteAt(
@@ -40,23 +37,77 @@ internal fun quoteAt(
     return quote
 }
 
+/** What a character of an expression is to JavaScript; see [jsRegions]. */
+internal object Region {
+    const val CODE: Byte = 0
+    const val STRING: Byte = 1
+    const val TEMPLATE: Byte = 2
+    const val REGEX: Byte = 3
+    const val COMMENT: Byte = 4
+}
+
+/** A character JavaScript continues a name with: ASCII, `_`, `$`, or a letter or decimal digit beyond ASCII. */
+internal fun Char?.isJsNamePart(): Boolean =
+    this != null &&
+        (
+            this in 'A'..'Z' || this in 'a'..'z' || this in '0'..'9' || this == '_' || this == '$' ||
+                (this >= '\u0080' && (isLetter() || category == CharCategory.DECIMAL_DIGIT_NUMBER))
+        )
+
+/** The words after which a `/` opens a regular expression rather than dividing. */
+private val REGEX_AFTER_WORD =
+    setOf("return", "typeof", "instanceof", "in", "of", "new", "delete", "void", "throw", "case", "do", "else", "yield", "await")
+
+/** The words whose parenthesised head may be followed by a statement that opens with a regular expression. */
+private val HEAD_WORDS = setOf("if", "while", "for", "with")
+
+/** The end of the regular expression literal that opens at [from], or null when none closes on its line. */
+private fun regexEnd(
+    text: String,
+    from: Int,
+): Int? {
+    var j = from + 1
+    var inClass = false
+    while (j < text.length && text[j] != '\n') {
+        val c = text[j]
+        if (c == '\\') {
+            j++
+        } else if (c == '[') {
+            inClass = true
+        } else if (c == ']') {
+            inClass = false
+        } else if (c == '/' && !inClass) {
+            j++
+            while (j < text.length && text[j].isJsNamePart()) j++
+            return j
+        }
+        j++
+    }
+    return null
+}
+
 /**
- * Which offsets of an expression are code: not a string literal, not the text of a template
- * literal, not a comment. Datastar rewrites signals and actions in code only, and inside the
- * `${ }` of a template literal, which is code here too. A regular expression literal is not
- * recognised; a quote inside one opens a string.
+ * What each character of an expression is to JavaScript: code, a string, the text of a template
+ * literal, a regular expression or a comment. The code of a `${ }` is code. Whether a `/` divides
+ * or opens a regular expression is told by what precedes it, as a tokenizer tells it. Shared with
+ * the VS Code extension (`jsRegions` in expression.ts), which this follows step by step.
  */
-internal fun jsCodeMask(text: String): BooleanArray {
-    val mask = BooleanArray(text.length) { true }
+internal fun jsRegions(text: String): ByteArray {
+    val kind = ByteArray(text.length)
     // One entry per open `${`, counting the braces opened inside it.
     val braces = ArrayList<Int>()
+    // One entry per open parenthesis: whether it is the head of an `if`, `while`, `for` or `with`.
+    val parens = ArrayList<Boolean>()
+    var regexAllowed = true
+    var lastWord = ""
 
-    fun blank(
+    fun mark(
         from: Int,
         to: Int,
+        k: Byte,
     ): Int {
         val end = minOf(to, text.length)
-        for (k in from until end) mask[k] = false
+        for (x in from until end) kind[x] = k
         return end
     }
 
@@ -66,20 +117,22 @@ internal fun jsCodeMask(text: String): BooleanArray {
         while (j < text.length) {
             when {
                 text[j] == '\\' -> {
-                    j = blank(j, j + 2)
+                    j = mark(j, j + 2, Region.TEMPLATE)
                 }
 
                 text[j] == '`' -> {
-                    return blank(j, j + 1)
+                    regexAllowed = false
+                    return mark(j, j + 1, Region.TEMPLATE)
                 }
 
                 text.startsWith("\${", j) -> {
                     braces += 0
-                    return j + 2
+                    regexAllowed = true
+                    return mark(j, j + 2, Region.TEMPLATE)
                 }
 
                 else -> {
-                    j = blank(j, j + 1)
+                    j = mark(j, j + 1, Region.TEMPLATE)
                 }
             }
         }
@@ -88,49 +141,108 @@ internal fun jsCodeMask(text: String): BooleanArray {
     var i = 0
     while (i < text.length) {
         val c = text[i]
+        val word = lastWord
+        lastWord = ""
         when {
             c == '\'' || c == '"' -> {
                 var j = i + 1
                 while (j < text.length && text[j] != c) j += if (text[j] == '\\') 2 else 1
-                i = blank(i, j + 1)
+                i = mark(i, j + 1, Region.STRING)
+                regexAllowed = false
             }
 
             c == '`' -> {
-                mask[i] = false
+                kind[i] = Region.TEMPLATE
                 i = template(i + 1)
             }
 
             c == '/' && text.getOrNull(i + 1) == '/' -> {
                 val nl = text.indexOf('\n', i)
-                i = blank(i, if (nl < 0) text.length else nl)
+                i = mark(i, if (nl < 0) text.length else nl, Region.COMMENT)
+                lastWord = word
             }
 
             c == '/' && text.getOrNull(i + 1) == '*' -> {
                 val close = text.indexOf("*/", i + 2)
-                i = blank(i, if (close < 0) text.length else close + 2)
+                i = mark(i, if (close < 0) text.length else close + 2, Region.COMMENT)
+                lastWord = word
             }
 
-            c == '{' && braces.isNotEmpty() -> {
-                braces[braces.size - 1]++
+            c == '/' && regexAllowed && regexEnd(text, i) != null -> {
+                i = mark(i, regexEnd(text, i)!!, Region.REGEX)
+                regexAllowed = false
+            }
+
+            c == '{' -> {
+                if (braces.isNotEmpty()) braces[braces.size - 1]++
+                i++
+                regexAllowed = true
+            }
+
+            c == '}' -> {
+                if (braces.isNotEmpty() && braces.last() == 0) {
+                    braces.removeAt(braces.size - 1)
+                    kind[i] = Region.TEMPLATE
+                    i = template(i + 1)
+                } else {
+                    if (braces.isNotEmpty()) braces[braces.size - 1]--
+                    i++
+                    regexAllowed = false
+                }
+            }
+
+            c == '(' -> {
+                parens += word in HEAD_WORDS
+                i++
+                regexAllowed = true
+            }
+
+            c == ')' -> {
+                regexAllowed = parens.removeLastOrNull() ?: false
                 i++
             }
 
-            c == '}' && braces.isNotEmpty() -> {
-                if (braces.last() == 0) {
-                    braces.removeAt(braces.size - 1)
-                    i = template(i + 1)
-                } else {
-                    braces[braces.size - 1]--
-                    i++
+            c == ']' -> {
+                i++
+                regexAllowed = false
+            }
+
+            (c == '+' || c == '-') && text.getOrNull(i + 1) == c -> {
+                // A postfix `++` leaves a value, a prefix one expects one: what came before still decides.
+                i += 2
+            }
+
+            c in '0'..'9' -> {
+                var j = i + 1
+                while (j < text.length &&
+                    (text[j].let { it in 'A'..'Z' || it in 'a'..'z' || it in '0'..'9' || it == '_' || it == '.' })
+                ) {
+                    j++
                 }
+                i = j
+                regexAllowed = false
+            }
+
+            c.isJsNamePart() -> {
+                var j = i + 1
+                while (j < text.length && text[j].isJsNamePart()) j++
+                lastWord = text.substring(i, j)
+                regexAllowed = lastWord in REGEX_AFTER_WORD
+                i = j
+            }
+
+            c.isJsWhitespace() -> {
+                lastWord = word
+                i++
             }
 
             else -> {
                 i++
+                regexAllowed = true
             }
         }
     }
-    return mask
+    return kind
 }
 
 /** `foo-bar` -> `fooBar`, as Datastar reads a kebab-case key. */
@@ -177,11 +289,12 @@ private fun delimitedEnd(
 }
 
 /**
- * The statements of a value-returning expression, as Datastar's `genRx` matches them (engine.ts:412
- * in 1.0.4): runs of anything but `;`, where a quoted string, a regex literal and a no-argument
- * IIFE are stepped over whole, `;` and all. Written as a scan rather than the client's one regular
- * expression, which Java's engine recurses on and overflows for a few kilobytes of text; the two
- * agree token for token, since each alternative is tried in the client's order at every offset.
+ * The statements of a value-returning expression, as `statementRe` of Datastar's `genRx` matches
+ * them (engine.ts:415-416 in 1.0.4): runs of anything but `;`, where a quoted string, a regex
+ * literal and a no-argument IIFE are stepped over whole, `;` and all. Written as a scan rather than
+ * the client's one regular expression, which Java's engine recurses on and overflows for a few
+ * kilobytes of text; the two agree token for token, since each alternative is tried in the client's
+ * order at every offset, and `ClientRewriteTest` holds the scan to the client's expression as written.
  */
 internal fun clientStatements(text: String): List<IntRange> {
     val out = ArrayList<IntRange>()
@@ -209,17 +322,38 @@ internal fun clientStatements(text: String): List<IntRange> {
 }
 
 /** JavaScript as Datastar compiles an expression, with a map from each of its offsets back to the expression. */
-internal class ClientScript(
+internal open class ClientScript(
     val js: String,
     private val origin: IntArray,
 ) {
     fun toExpression(offset: Int): Int = origin[offset.coerceIn(0, origin.size - 1)]
 }
 
-/** A signal reference as the client reads one (engine.ts:448 in 1.0.4): `\w` and `.`/`-` joined parts. */
+/** A `$name.path` or an `@name(` the client rewrites; [end] is the end of what it replaces. */
+internal data class Rewrite(
+    val signal: Boolean,
+    val start: Int,
+    val end: Int,
+    val name: String,
+)
+
+/** The text as the client rewrites it, what it rewrote, and the quoted runs it stepped over and left as written. */
+internal class ClientRewrite(
+    js: String,
+    origin: IntArray,
+    val rewrites: List<Rewrite>,
+    val runs: List<IntRange>,
+) : ClientScript(js, origin)
+
+/** The client's signal pattern (engine.ts:449 in 1.0.4): `\w` and `.`/`-` joined parts. */
 private val CLIENT_SIGNAL = Regex("""\$(\w+(?:[.-]\w+)*)""")
 
+/** The client's action pattern: a name and the parenthesis right after it. */
+private val CLIENT_ACTION = Regex("""@([A-Za-z_$][\w$]*)\(""")
+
 private fun signalPath(name: String): String = "$" + name.split('.').joinToString("") { "['$it']" }
+
+private fun actionCall(name: String): String = "__action(\"$name\",evt,"
 
 /** What `.` in the client's pattern does not match. */
 private fun Char.isLineTerminator(): Boolean = this == '\n' || this == '\r' || this == '\u2028' || this == '\u2029'
@@ -265,18 +399,20 @@ private fun templateEnd(
 }
 
 /**
- * The text with every `$name.path` written as the client writes it before compiling (engine.ts:448
- * in 1.0.4), so a signal can be no parameter, declared name or property key, as it cannot be in the
- * browser. The client does it with one pattern: a quoted string or a template literal without `${`
- * is stepped over, a `${...}` with no brace inside has its signals rewritten, and a `$name.path`
- * outside them becomes `$['name']['path']`. Here it is a scan, since Java's engine recurses on
- * that pattern's loops and overflows on a long string of escapes; the alternatives are tried in the
- * client's order at every offset. Every character of a rewritten reference maps back to where the
- * reference began.
+ * The text as the client writes it before compiling, with what it rewrote (engine.ts:448-449 in
+ * 1.0.4). The client does it with one pattern: a quoted string or a template literal without `${`
+ * is stepped over and left as written, a `${...}` with no brace inside has its signals and then its
+ * actions rewritten, and outside them a `$name.path` becomes `$['name']['path']` and an `@name(` a
+ * call of the action dispatcher. Here it is a scan, since Java's engine recurses on that pattern's
+ * loops and overflows on a long string of escapes; the alternatives are tried in the client's order
+ * at every offset, and `ClientRewriteTest` holds the scan to the client's pattern as written. Every
+ * character of a rewritten reference maps back to where the reference began.
  */
-internal fun clientSignals(text: String): ClientScript {
+internal fun clientRewrite(text: String): ClientRewrite {
     val js = StringBuilder()
     val origin = ArrayList<Int>(text.length + 16)
+    val rewrites = ArrayList<Rewrite>()
+    val runs = ArrayList<IntRange>()
 
     fun copy(
         from: Int,
@@ -288,13 +424,34 @@ internal fun clientSignals(text: String): ClientScript {
         }
     }
 
-    /** A signal reference starting at [from], rewritten; the offset just past it, or null when none starts here. */
-    fun signal(from: Int): Int? {
-        val m = CLIENT_SIGNAL.matchAt(text, from) ?: return null
-        val written = signalPath(m.groupValues[1])
-        repeat(written.length) { origin += from }
+    fun put(r: Rewrite) {
+        val written = if (r.signal) signalPath(r.name) else actionCall(r.name)
+        repeat(written.length) { origin += r.start }
         js.append(written)
-        return m.range.last + 1
+        rewrites += r
+    }
+
+    fun interpolation(
+        from: Int,
+        to: Int,
+    ) {
+        val inner = text.substring(from, to)
+        val found = ArrayList<Rewrite>()
+        for (m in CLIENT_SIGNAL.findAll(inner)) found += Rewrite(true, from + m.range.first, from + m.range.last + 1, m.groupValues[1])
+        // An action the signal pass has already rewritten a part of is no longer there to match.
+        for (m in CLIENT_ACTION.findAll(inner)) {
+            val start = from + m.range.first
+            val end = from + m.range.last + 1
+            if (found.none { it.start < end && start < it.end }) found += Rewrite(false, start, end, m.groupValues[1])
+        }
+        found.sortBy { it.start }
+        var i = from
+        for (r in found) {
+            copy(i, r.start)
+            put(r)
+            i = r.end
+        }
+        copy(i, to)
     }
     var i = 0
     while (i < text.length) {
@@ -302,11 +459,17 @@ internal fun clientSignals(text: String): ClientScript {
         val end =
             when {
                 c == '"' || c == '\'' -> {
-                    quotedEnd(text, i, c)?.also { copy(i, it) }
+                    quotedEnd(text, i, c)?.also {
+                        copy(i, it)
+                        runs += i until it
+                    }
                 }
 
                 c == '`' -> {
-                    templateEnd(text, i)?.also { copy(i, it) }
+                    templateEnd(text, i)?.also {
+                        copy(i, it)
+                        runs += i until it
+                    }
                 }
 
                 c == '$' && text.getOrNull(i + 1) == '{' -> {
@@ -315,20 +478,24 @@ internal fun clientSignals(text: String): ClientScript {
                         null
                     } else {
                         copy(i, i + 2)
-                        var k = i + 2
-                        while (k < close) {
-                            k = signal(k) ?: run {
-                                copy(k, k + 1)
-                                k + 1
-                            }
-                        }
+                        interpolation(i + 2, close)
                         copy(close, close + 1)
                         close + 1
                     }
                 }
 
                 c == '$' -> {
-                    signal(i)
+                    CLIENT_SIGNAL.matchAt(text, i)?.let { m ->
+                        put(Rewrite(true, i, m.range.last + 1, m.groupValues[1]))
+                        m.range.last + 1
+                    }
+                }
+
+                c == '@' -> {
+                    CLIENT_ACTION.matchAt(text, i)?.let { m ->
+                        put(Rewrite(false, i, m.range.last + 1, m.groupValues[1]))
+                        m.range.last + 1
+                    }
                 }
 
                 else -> {
@@ -341,7 +508,19 @@ internal fun clientSignals(text: String): ClientScript {
         }
     }
     origin += text.length
-    return ClientScript(js.toString(), origin.toIntArray())
+    return ClientRewrite(js.toString(), origin.toIntArray(), rewrites, runs)
+}
+
+/**
+ * The signals the client reads in [text]: the references it rewrites where JavaScript runs them,
+ * not in a string, a template's text, a regular expression or a comment, and not the tail of a
+ * longer name such as `foo$bar`.
+ */
+internal fun clientSignalReads(text: String): List<Rewrite> {
+    val regions = jsRegions(text)
+    return clientRewrite(text).rewrites.filter {
+        it.signal && regions[it.start] == Region.CODE && !text.getOrNull(it.start - 1).isJsNamePart()
+    }
 }
 
 /**
@@ -400,6 +579,37 @@ internal fun clientScript(
     return ClientScript(js.toString(), origin.toIntArray())
 }
 
+/** The offsets of the `;` at which the client splits a value-returning [text] into statements. */
+private fun statementSplits(text: String): Set<Int> {
+    val start = text.indexOfFirst { !it.isJsWhitespace() }
+    if (start < 0) return emptySet()
+    val trimmed = text.substring(start, text.indexOfLast { !it.isJsWhitespace() } + 1)
+    val covered = BooleanArray(trimmed.length)
+    for (r in clientStatements(trimmed)) for (k in r) covered[k] = true
+    return trimmed.indices
+        .filter { !covered[it] }
+        .map { start + it }
+        .toSet()
+}
+
+/** Where a character the client paired as a quote sits, for the message that names it. */
+private fun placeOf(region: Byte): String =
+    when (region) {
+        Region.COMMENT -> " in a comment"
+        Region.REGEX -> " in a regular expression"
+        Region.TEMPLATE -> " in a template literal"
+        Region.STRING -> " in a string"
+        else -> ""
+    }
+
+/** The syntax error of [js] read as one expression, the way a filter value is evaluated (`return (value)`), or null. */
+internal fun expressionError(js: String): JsSyntaxError? {
+    val err = JsParser.error("return ($js\n)") ?: return null
+
+    fun shift(n: Int): Int = (n - 8).coerceIn(0, js.length)
+    return JsSyntaxError(err.message ?: "Syntax error", shift(err.pos), shift(err.raisedAt))
+}
+
 /** The checks of one Datastar expression: syntax, kebab-case signals, unknown and Pro actions. */
 public class ExpressionValidator(
     private val catalog: Catalog = Catalog.default,
@@ -419,99 +629,260 @@ public class ExpressionValidator(
         if (text.isBlank()) {
             return listOf(Issue(0, maxOf(text.length, 1), "Empty Datastar expression.", Severity.WARNING, "empty-expression"))
         }
-        // An action is legal JavaScript once its @ is a letter; a signal is written as the client writes it.
-        val signals = clientSignals(text.replace('@', '_'))
-        val script = returnsValue?.let { clientScript(signals.js, it) }
-        val js = script?.js ?: signals.js
-        val err = if (script != null) JsParser.error(js) else JsParser.error(js)?.takeUnless { objectLiteralParses(js) }
-        if (err != null) {
-            fun toText(offset: Int): Int = signals.toExpression(script?.toExpression(offset) ?: offset)
-            val pos = minOf(toText(err.pos), text.length)
-            val end = maxOf(pos + 1, minOf(toText(err.raisedAt), text.length))
-            issues += Issue(pos, end, "Datastar expression: ${err.message}", Severity.ERROR, "expression-syntax", Docs.EXPRESSIONS)
-        }
-        val code = jsCodeMask(text)
-        for (k in HYPHENATED_SIGNAL.findAll(text)) {
-            val written = k.value
-            if (!code[k.range.first]) continue
-            // data-signals:my-value__case.kebab declares $my-value as written, and the expression reaches it.
-            val named = written.substring(1)
-            if (hyphenatedSignals.any { named == it || named.startsWith("$it.") }) continue
-            val head = written.substringBefore('-')
-            val rest = written.substringAfter('-')
-            // `-1`, `-2px`: nobody names a signal that; the author subtracts. `-bar`: a kebab-case key, or a subtraction of a variable.
-            val subtraction = rest.first().isDigit()
-            val camel = written.replace(HYPHEN_WORD) { it.groupValues[1].uppercase() }
-            val spaced = written.replace(HYPHEN_WORD) { " - " + it.groupValues[1] }
-            val fixes = ArrayList<Fix>()
-            if (!subtraction) fixes += Fix("Change to $camel", k.range.first, k.range.last + 1, camel)
-            fixes += Fix("Write $spaced", k.range.first, k.range.last + 1, spaced)
+        // As the client does it: the statements split and wrapped first, the signals and actions rewritten after.
+        val script = returnsValue?.let { clientScript(text, it) } ?: ClientScript(text, IntArray(text.length + 1) { it })
+        val js = script.js
+        val rewritten = clientRewrite(js)
+        val regions = jsRegions(js)
+
+        fun fromScript(offset: Int): Int = script.toExpression(offset)
+
+        fun toText(offset: Int): Int = script.toExpression(rewritten.toExpression(offset))
+
+        fun span(
+            start: Int,
+            end: Int,
+        ): Pair<Int, Int> = fromScript(start) to fromScript(end - 1) + 1
+
+        // The client leaves `@get (` as written, which the browser cannot parse; this says why.
+        val spaced = HashSet<Int>()
+        for (m in SPACED_ACTION.findAll(js)) {
+            if (regions[m.range.first] != Region.CODE) continue
+            val name = m.groupValues[1]
+            val start = fromScript(m.range.first)
+            val end = start + 1 + name.length
+            val paren = start + m.value.length - 1
+            spaced += start
             issues +=
                 Issue(
-                    start = k.range.first,
-                    end = k.range.last + 1,
+                    start = start,
+                    end = paren,
                     message =
-                        if (subtraction) {
-                            "Datastar reads $written as one signal named ${written.substring(1)}, not as $head minus $rest. " +
-                                "For a subtraction write $spaced, with spaces."
-                        } else {
-                            "Datastar reads $written as one signal named ${written.substring(1)}, which no key declares: " +
-                                "a key ${head.substring(
-                                    1,
-                                )}-${rest.substringBefore('.')} is the signal $camel. For a subtraction write $spaced, with spaces."
-                        },
-                    severity = Severity.WARNING,
-                    code = "signal-kebab",
-                    link = Docs.SIGNALS,
-                    fixes = fixes,
+                        "Datastar reads an action only as @$name( with nothing before the parenthesis. " +
+                            "With a space the @ reaches the browser, which cannot parse it.",
+                    severity = Severity.ERROR,
+                    code = "action-space",
+                    link = Docs.ACTIONS,
+                    fixes = listOf(Fix("Remove the space", end, paren, "")),
                 )
         }
-        for (m in ACTION.findAll(text)) {
-            val name = m.groupValues[1]
-            val spec = catalog.actionsByName[name]
-            val start = m.range.first
-            val end = start + 1 + name.length
-            if (!code[start]) continue
-            if (m.groupValues[2].isNotEmpty()) {
+
+        val err =
+            if (returnsValue !=
+                null
+            ) {
+                JsParser.error(rewritten.js)
+            } else {
+                JsParser.error(rewritten.js)?.takeUnless { objectLiteralParses(rewritten.js) }
+            }
+        if (err != null) {
+            val pos = minOf(toText(err.pos), text.length)
+            val end = maxOf(pos + 1, minOf(toText(err.raisedAt), text.length))
+            if (pos !in
+                spaced
+            ) {
                 issues +=
-                    Issue(
-                        start = start,
-                        end = m.range.last,
-                        message =
-                            "Datastar reads an action only as @$name( with nothing before the parenthesis. " +
-                                "With a space the @ reaches the browser, which cannot parse it.",
-                        severity = Severity.ERROR,
-                        code = "action-space",
-                        link = Docs.ACTIONS,
-                        fixes = listOf(Fix("Remove the space", end, m.range.last, "")),
-                    )
+                    Issue(pos, end, "Datastar expression: ${err.message}", Severity.ERROR, "expression-syntax", Docs.EXPRESSIONS)
+            }
+        }
+
+        for (r in rewritten.rewrites) {
+            val region = regions[r.start]
+            if (region == Region.COMMENT) continue
+            val written = js.substring(r.start, if (r.signal) r.end else r.end - 1)
+            val (start, end) = span(r.start, r.start + written.length)
+            if (region != Region.CODE) {
+                issues += literalRewritten(r, written, region, start, end)
                 continue
             }
-            if (spec == null) {
-                val near = catalog.actions.map { it.name }.firstOrNull { it.equals(name, ignoreCase = true) }
-                issues +=
-                    Issue(
-                        start = start,
-                        end = end,
-                        message = if (near != null) "Unknown action @$name. Did you mean @$near?" else "Unknown action @$name.",
-                        severity = Severity.WARNING,
-                        code = "unknown-action",
-                        link = Docs.ACTIONS,
-                        fixes = if (near != null) listOf(Fix("Change to @$near", start, end, "@$near")) else emptyList(),
-                    )
-            } else if (spec.pro) {
+            if (r.signal) {
+                if ('-' in r.name) kebabIssue(r, written, start, end, hyphenatedSignals)?.let { issues += it }
+                continue
+            }
+            issues += actionIssues(r.name, start)
+        }
+
+        // A `$name` in code the client did not rewrite reaches the browser as a JavaScript variable.
+        val rewrittenAt = rewritten.rewrites.mapTo(HashSet()) { it.start }
+        for (p in js.indices) {
+            if (js[p] != '$' || regions[p] != Region.CODE || p in rewrittenAt || js.getOrNull(p - 1).isJsNamePart()) continue
+            val next = js.getOrNull(p + 1) ?: continue
+            if (next == '$') continue
+            if (WORD_CHAR.matches(next.toString())) {
+                val written = CLIENT_SIGNAL.matchAt(js, p)?.value ?: "$"
+                val run = rewritten.runs.firstOrNull { p in it }
+                val why =
+                    run?.let {
+                        val q = js[it.first]
+                        ": its pattern takes the $q${placeOf(regions[it.first])} before it for the start of a string, " +
+                            "and leaves everything up to the next $q as written"
+                    } ?: ""
+                val (start, end) = span(p, p + written.length)
                 issues +=
                     Issue(
                         start,
                         end,
-                        "@$name is a Datastar Pro action; it needs the Pro bundle.",
-                        Severity.HINT,
-                        "pro-action",
-                        Docs.ACTIONS,
+                        "Datastar does not rewrite $written$why. The browser reads $written as a JavaScript variable, not as the signal.",
+                        Severity.WARNING,
+                        "signal-not-read",
+                        Docs.EXPRESSIONS,
+                    )
+            } else if (next.isJsNamePart()) {
+                var q = p + 1
+                while (q < js.length && js[q].isJsNamePart()) q++
+                val written = js.substring(p, q)
+                val (start, end) = span(p, q)
+                issues +=
+                    Issue(
+                        start,
+                        end,
+                        "Datastar reads only ASCII letters, digits and _ after a \$, so $written is no signal: " +
+                            "the browser looks for a JavaScript variable named $written and fails.",
+                        Severity.WARNING,
+                        "signal-not-read",
+                        Docs.SIGNALS,
                     )
             }
         }
+
+        // A `;` inside brackets splits the expression all the same, and what it computed is lost.
+        if (returnsValue == true && err == null) issues += statementSplitIssue(text)
         return issues
+    }
+
+    private fun literalRewritten(
+        r: Rewrite,
+        written: String,
+        region: Byte,
+        start: Int,
+        end: Int,
+    ): Issue {
+        val becomes = if (r.signal) signalPath(r.name) else "${actionCall(r.name)}...)"
+        val advice =
+            when {
+                region == Region.TEMPLATE && r.signal -> {
+                    " Write \${$written} for the signal's value, or put the text in a quoted string, which Datastar leaves as written."
+                }
+
+                region == Region.TEMPLATE -> {
+                    " Put the text in a quoted string, which Datastar leaves as written."
+                }
+
+                region == Region.REGEX -> {
+                    " Build the pattern with new RegExp('...'): Datastar leaves a quoted string as written."
+                }
+
+                else -> {
+                    ""
+                }
+            }
+        val why =
+            when (region) {
+                Region.TEMPLATE -> ", because the literal also holds a \${...}, so the text holds that"
+                Region.REGEX -> ", which changes the pattern"
+                else -> ", because its pattern pairs the quotes before it differently, so the string holds that"
+            }
+        return Issue(
+            start,
+            end,
+            "Datastar rewrites $written${placeOf(region)} into $becomes$why.$advice",
+            Severity.WARNING,
+            "literal-rewritten",
+            Docs.EXPRESSIONS,
+        )
+    }
+
+    private fun kebabIssue(
+        r: Rewrite,
+        written: String,
+        start: Int,
+        end: Int,
+        hyphenatedSignals: Set<String>,
+    ): Issue? {
+        // data-signals:my-value__case.kebab, data-bind="my-value" or {'my-value': 1} declares $my-value as written, and the expression reaches it.
+        if (hyphenatedSignals.any { r.name == it || r.name.startsWith("$it.") }) return null
+        val head = written.substringBefore('-')
+        val rest = written.substringAfter('-')
+        // `-1`, `-2px`: nobody names a signal that; the author subtracts. `-bar`: a kebab-case key, or a subtraction of a variable.
+        val subtraction = rest.first().isDigit()
+        val camel = written.replace(HYPHEN_WORD) { it.groupValues[1].uppercase() }
+        val spaced = written.replace(HYPHEN_WORD) { " - " + it.groupValues[1] }
+        val fixes = ArrayList<Fix>()
+        if (!subtraction) fixes += Fix("Change to $camel", start, end, camel)
+        fixes += Fix("Write $spaced", start, end, spaced)
+        return Issue(
+            start = start,
+            end = end,
+            message =
+                if (subtraction) {
+                    "Datastar reads $written as one signal named ${r.name}, not as $head minus $rest. For a subtraction write $spaced, with spaces."
+                } else {
+                    "Datastar reads $written as one signal named ${r.name}, and nothing here declares it: " +
+                        "a key ${head.substring(
+                            1,
+                        )}-${rest.substringBefore('.')} is the signal $camel. For a subtraction write $spaced, with spaces."
+                },
+            severity = Severity.WARNING,
+            code = "signal-kebab",
+            link = Docs.SIGNALS,
+            fixes = fixes,
+        )
+    }
+
+    private fun actionIssues(
+        name: String,
+        start: Int,
+    ): List<Issue> {
+        val spec = catalog.actionsByName[name]
+        val end = start + 1 + name.length
+        if (spec == null) {
+            val near = catalog.actions.map { it.name }.firstOrNull { it.equals(name, ignoreCase = true) }
+            return listOf(
+                Issue(
+                    start = start,
+                    end = end,
+                    message = if (near != null) "Unknown action @$name. Did you mean @$near?" else "Unknown action @$name.",
+                    severity = Severity.WARNING,
+                    code = "unknown-action",
+                    link = Docs.ACTIONS,
+                    fixes = if (near != null) listOf(Fix("Change to @$near", start, end, "@$near")) else emptyList(),
+                ),
+            )
+        }
+        if (spec.pro) {
+            return listOf(
+                Issue(start, end, "@$name is a Datastar Pro action; it needs the Pro bundle.", Severity.HINT, "pro-action", Docs.ACTIONS),
+            )
+        }
+        return emptyList()
+    }
+
+    private fun statementSplitIssue(text: String): List<Issue> {
+        val regions = jsRegions(text)
+        val splits = statementSplits(text)
+        var depth = 0
+        for (k in text.indices) {
+            if (k in splits && depth > 0) {
+                return listOf(
+                    Issue(
+                        k,
+                        k + 1,
+                        "Datastar splits an expression whose value is used at every ; outside quotes, this one inside brackets too, " +
+                            "and returns only what the last piece gives: the value is lost. " +
+                            "A function without parameters called at once, (() => { ... })(), is kept whole.",
+                        Severity.WARNING,
+                        "statement-split",
+                        Docs.EXPRESSIONS,
+                    ),
+                )
+            }
+            if (regions[k] != Region.CODE) continue
+            when (text[k]) {
+                '(', '[', '{' -> depth++
+                ')', ']', '}' -> if (depth > 0) depth--
+            }
+        }
+        return emptyList()
     }
 }
 

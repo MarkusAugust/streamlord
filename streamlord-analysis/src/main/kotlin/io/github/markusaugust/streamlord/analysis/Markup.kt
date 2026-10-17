@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.json.JsonParser
+
 /*
  * Markup checks for the HTML Datastar patches: complete elements, ids where the protocol needs
  * them, and well-formed `data-*` attributes. A deliberately small tokenizer, not a browser.
@@ -64,6 +66,20 @@ private val UNQUOTED_VALUE = Regex("""^[^\s>]*""")
 
 /** Datastar reads `500ms`, `1s`, and a bare number as milliseconds. */
 private val DURATION = Regex("""^\d+(ms|s)?$""")
+private val WHOLE_NUMBER = Regex("""^\d+$""")
+
+/** A value that looks like a name, so that its problems as a name are told rather than called an expression. */
+private val NAME_LIKE = Regex("""[\p{L}\p{Nd}_$.-]+""")
+
+/** What starts a value that is no function: a literal, a signal read, or an operator. */
+private val NOT_A_FUNCTION = Regex("""^(?:[0-9'"`\[$!+\-~]|(?:true|false|null|undefined|NaN|new)\b)""")
+
+/** A string given as a filter's pattern: `include: '/^foo/i'`. */
+private val STRING_PATTERN = Regex("""(["']?)(include|exclude)\1\s*:\s*(["'])/((?:\\.|(?!\3).)*)/([a-z]*)\3""")
+
+/** A `$name` in a filter, which the client evaluates without rewriting signals. */
+private val FILTER_SIGNAL = Regex("""\$[A-Za-z_][\w$]*""")
+private val WORD_CHAR_CLASS = Regex("""\w""")
 private val IDENT = Regex("""^[A-Za-z_][A-Za-z0-9_-]*$""")
 private val SIGNAL_NAME = Regex("""^[A-Za-z_$][A-Za-z0-9_.$-]*$""")
 private val HAS_CAPITAL = Regex("""[A-Z]""")
@@ -501,9 +517,22 @@ public fun rawKeyNote(
     key: String,
 ): String =
     when {
-        keyKind(spec) != KeyKind.RAW || spec.valueKind != ValueKind.EXPRESSION -> ""
-        spec.name == "style" -> " The object form would set ${kebab(key)}. Name the property in lowercase."
-        else -> " For a name that really has capitals, such as SVG's viewBox, use the object form: $prefix${spec.name}=\"{$key: ...}\"."
+        keyKind(spec) != KeyKind.RAW || spec.valueKind != ValueKind.EXPRESSION -> {
+            ""
+        }
+
+        // The object form writes a key kebab-case too (style.ts:50 in 1.0.4), so no form keeps a capital.
+        spec.name == "style" && key.startsWith("--") -> {
+            " No form keeps a capital in a custom property: name it in kebab-case, here and in the CSS, as ${kebab(key)}."
+        }
+
+        spec.name == "style" -> {
+            " A CSS property is written in kebab-case: $prefix${spec.name}:${kebab(key)}."
+        }
+
+        else -> {
+            " For a name that really has capitals, such as SVG's viewBox, use the object form: $prefix${spec.name}=\"{$key: ...}\"."
+        }
     }
 
 /** The markup and attribute rules, bound to one catalog. */
@@ -719,10 +748,12 @@ public class MarkupValidator(
                         link,
                     )
             }
-            if (!spec.keyed && parsed.key != null) {
+            if (!spec.keyed && parsed.key != null && parsed.key !in spec.keys) {
                 issues += Issue(attr.nameStart, nameEnd, "$prefix${spec.name} does not take a key.", Severity.ERROR, "unexpected-key", link)
             }
             if (parsed.key != null) issues += validateKeyCase(attr, parsed, spec, prefix)
+            val named = validateSignalNames(attr, parsed, spec, prefix)
+            issues += named
             issues += validateDottedKey(attr, parsed, spec, prefix)
             val hasKey = !parsed.key.isNullOrEmpty()
             val hasValue = !attr.value.isNullOrEmpty()
@@ -834,8 +865,14 @@ public class MarkupValidator(
                         )
                 }
             }
+            if (value != null && spec.valueKind == ValueKind.FILTER && value.isNotBlank() && !hasTemplateSyntax(value)) {
+                issues += validateFilter(attr, spec, prefix)
+            }
+            if (spec.name == "computed" && parsed.key == null && value != null && value.isNotBlank() && !hasTemplateSyntax(value)) {
+                issues += validateComputedObject(attr, prefix)
+            }
             if (value != null && spec.valueKind == ValueKind.SIGNAL && value.isNotBlank() && !hasTemplateSyntax(value) &&
-                !SIGNAL_NAME.matches(value.trim())
+                named.none { it.start >= attr.valueStart } && !SIGNAL_NAME.matches(value.trim())
             ) {
                 issues +=
                     Issue(
@@ -931,6 +968,249 @@ public class MarkupValidator(
     }
 
     /**
+     * The signal an attribute declares, when the client cannot hold it or no `$` reference reaches
+     * it: the key as the client reads it ([clientKeyName]), the name in the value of `data-bind`,
+     * `data-ref` and `data-indicator`, and the keys of the object form. The DSL holds a name to the
+     * same rules (`SignalNames` in streamlord-core, `Casing.signalName` and `Casing.heldKey` in
+     * streamlord-html).
+     */
+    private fun validateSignalNames(
+        attr: Attribute,
+        parsed: ParsedAttribute,
+        spec: AttributeSpec,
+        prefix: String,
+    ): List<Issue> {
+        if (keyKind(spec) != KeyKind.SIGNAL) return emptyList()
+        val out = ArrayList<Issue>()
+        val name = prefix + spec.name
+        val link = Docs.attribute(spec.name)
+        val colon = attr.name.indexOf(':')
+        // data-signals:__proto__ has no key to the client: the `__` starts the modifiers, and no plugin is named `signals:`.
+        if (!parsed.key.isNullOrEmpty() && colon >= 0) {
+            val written = attr.name.substring(colon + 1)
+            val held = clientKeyName(written.asciiLowercase())
+            val keyStart = attr.nameStart + colon + 1
+            val keyEnd = keyStart + written.substringBefore("__").length
+            val path = signalPathProblem(held)
+            val reach = if (path == null) signalNameProblem(held) else null
+            if (path != null || reach != null) {
+                out +=
+                    Issue(
+                        keyStart,
+                        keyEnd,
+                        "Datastar's client reads this key as the signal $held, which ${path ?: reach}.",
+                        if (path != null) Severity.ERROR else Severity.WARNING,
+                        "signal-name",
+                        link,
+                    )
+            }
+        }
+        val value = attr.value
+        if (value == null || value.isBlank() || hasTemplateSyntax(value)) return out
+        val decoded = decodeEntities(value)
+
+        fun source(
+            from: Int,
+            to: Int,
+        ): Pair<Int, Int> = attr.valueStart + decoded.toSource(from) to attr.valueStart + decoded.toSource(to)
+        if (spec.valueKind == ValueKind.SIGNAL && NAME_LIKE.matches(decoded.text)) {
+            val held = decoded.text
+            val path = signalPathProblem(held)
+            val reach = if (path == null) signalNameProblem(held) else null
+            if (path != null || reach != null) {
+                val (start, end) = source(0, held.length)
+                val fixes =
+                    if (path == null && held.startsWith("$") && signalNameProblem(held.drop(1)) == null) {
+                        val (fs, fe) = source(0, 1)
+                        listOf(Fix("Change to ${held.drop(1)}", fs, fe, ""))
+                    } else {
+                        emptyList()
+                    }
+                out +=
+                    Issue(
+                        start,
+                        end,
+                        "$name declares the signal $held, as written, which ${path ?: reach}.",
+                        if (path != null) Severity.ERROR else Severity.WARNING,
+                        "signal-name",
+                        link,
+                        fixes,
+                    )
+            }
+        }
+        val text = decoded.text
+        val open = text.indexOf('{')
+        if (parsed.key == null && (spec.name == "signals" || spec.name == "computed") && open >= 0 &&
+            text.substring(0, open).isBlank() && text.trimEnd().endsWith("}")
+        ) {
+            val body = text.substring(open + 1, text.lastIndexOf('}'))
+            for (k in objectKeys(body)) {
+                val (start, end) = source(open + 1 + k.start, open + 1 + k.end)
+                when {
+                    k.key == "__proto__" -> {
+                        out +=
+                            Issue(
+                                start,
+                                end,
+                                "In an object literal __proto__ sets the object's prototype, so Datastar gets no signal from it.",
+                                Severity.WARNING,
+                                "signal-name",
+                                link,
+                            )
+                    }
+
+                    k.objectUnder && k.key in PROTOTYPE_NAMES -> {
+                        out +=
+                            Issue(
+                                start,
+                                end,
+                                "Every object already has ${k.key}, so the client writes the object under it into the built-in one and drops the signal.",
+                                Severity.ERROR,
+                                "signal-name",
+                                link,
+                            )
+                    }
+
+                    else -> {
+                        signalNameProblem(k.key)?.let {
+                            out +=
+                                Issue(
+                                    start,
+                                    end,
+                                    "This declares the signal ${k.path}, as written, which $it.",
+                                    Severity.WARNING,
+                                    "signal-name",
+                                    link,
+                                )
+                        }
+                    }
+                }
+            }
+        }
+        return out
+    }
+
+    /**
+     * `data-computed` without a key takes an object of functions (computed.ts in 1.0.4): any other
+     * value declares nothing, and a value under a key that is no function raises ComputedExpectedFunction.
+     */
+    private fun validateComputedObject(
+        attr: Attribute,
+        prefix: String,
+    ): List<Issue> {
+        val value = attr.value ?: ""
+        val decoded = decodeEntities(value)
+        val text = decoded.text
+        val open = text.indexOf('{')
+        val name = "${prefix}computed"
+        val link = Docs.attribute("computed")
+
+        fun source(
+            from: Int,
+            to: Int,
+        ): Pair<Int, Int> = attr.valueStart + decoded.toSource(from) to attr.valueStart + decoded.toSource(to)
+        if (open < 0 || text.substring(0, open).isNotBlank()) {
+            val (start, end) = source(0, text.length)
+            return listOf(
+                Issue(
+                    start,
+                    end,
+                    "Without a key, $name takes an object of functions, such as {total: () => \$a + 1}: Datastar declares no signal " +
+                        "from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: $name:total.",
+                    Severity.WARNING,
+                    "computed-value",
+                    link,
+                ),
+            )
+        }
+        val close = text.lastIndexOf('}')
+        val body = text.substring(open + 1, if (close < open) text.length else close)
+        return objectKeys(body).filter { !it.objectUnder && NOT_A_FUNCTION.containsMatchIn(body.substring(it.valueStart)) }.map {
+            val (start, end) = source(open + 1 + it.start, open + 1 + it.end)
+            Issue(
+                start,
+                end,
+                "Without a key, each value of $name must be a function, such as ${it.key}: () => ...; " +
+                    "Datastar raises ComputedExpectedFunction for ${it.key}.",
+                Severity.ERROR,
+                "computed-value",
+                link,
+            )
+        }
+    }
+
+    /**
+     * The value of `data-json-signals` and `data-on-signal-patch-filter`: JSON, or else JavaScript the
+     * client evaluates as `return (value)` without rewriting signals (`jsStrToObject` in text.ts),
+     * whose `include` and `exclude` become regular expressions (`filtered` in signals.ts).
+     */
+    private fun validateFilter(
+        attr: Attribute,
+        spec: AttributeSpec,
+        prefix: String,
+    ): List<Issue> {
+        val value = attr.value ?: ""
+        val decoded = decodeEntities(value)
+        val text = decoded.text
+        val name = prefix + spec.name
+        val link = Docs.attribute(spec.name)
+
+        fun source(
+            from: Int,
+            to: Int,
+        ): Pair<Int, Int> = attr.valueStart + decoded.toSource(from) to attr.valueStart + decoded.toSource(maxOf(to, from + 1))
+        val out = ArrayList<Issue>()
+        val json = runCatching { JsonParser.parse(text) }.isSuccess
+        if (!json) {
+            val err = expressionError(text)
+            if (err != null) {
+                val (start, end) = source(err.pos, err.raisedAt)
+                return listOf(Issue(start, end, "Datastar filter: ${err.message}", Severity.ERROR, "expression-syntax", link))
+            }
+            val regions = jsRegions(text)
+            for (m in FILTER_SIGNAL.findAll(text)) {
+                val at = m.range.first
+                val before = text.getOrNull(at - 1)
+                if (regions[at] != Region.CODE ||
+                    (before != null && (before == '$' || WORD_CHAR_CLASS.matches(before.toString())))
+                ) {
+                    continue
+                }
+                val (start, end) = source(at, m.range.last + 1)
+                out +=
+                    Issue(
+                        start,
+                        end,
+                        "Datastar evaluates the value of $name without signals, so ${m.value} is a JavaScript variable here, which does not exist.",
+                        Severity.WARNING,
+                        "signal-not-read",
+                        link,
+                    )
+            }
+        }
+        // include: '/^foo/i' is the pattern /\/^foo\/i/, slashes and all: a string is taken as the pattern itself.
+        for (m in STRING_PATTERN.findAll(text)) {
+            val pattern = m.groupValues[4]
+            val flags = m.groupValues[5]
+            val at = m.range.last + 1 - (pattern.length + flags.length + 4)
+            val literal = "/$pattern/$flags"
+            val (start, end) = source(at, m.range.last + 1)
+            out +=
+                Issue(
+                    start,
+                    end,
+                    "A string ${m.groupValues[2]} is the pattern itself, so its slashes${if (flags.isNotEmpty()) " and flags" else ""} " +
+                        "are matched as text. Write the regular expression literal $literal.",
+                    Severity.WARNING,
+                    "filter-pattern",
+                    link,
+                    if (json) emptyList() else listOf(Fix("Change to $literal", start, end, literal)),
+                )
+        }
+        return out
+    }
+
+    /**
      * The browser lowercases attribute names, so a capital letter in a key never reaches Datastar:
      * `data-signals:fooBar` declares `$foobar`, `data-on:widgetLoaded` listens to `widgetloaded`.
      * The fix writes the key as [wireKey] says, so that the name the author typed is the name the
@@ -979,6 +1259,8 @@ public class MarkupValidator(
                 if (spec.name == "attr" && value != null && quote != null) {
                     val end = attr.valueEnd + if (attr.quoted) 1 else 0
                     listOf(Fix("Use the object form", attr.nameStart, end, "$name=$quote{$key: $value}$quote"))
+                } else if (spec.name == "style" && !key.startsWith("--")) {
+                    listOf(Fix("Change to ${kebab(key)}", keyStart, keyStart + key.length, kebab(key)))
                 } else {
                     emptyList()
                 }
@@ -1071,6 +1353,45 @@ public class MarkupValidator(
 
             ModifierType.DURATION -> {
                 val d = args.firstOrNull()
+                val flags = args.drop(1)
+                val later = flags.indexOfFirst { DURATION.matches(it) }
+                val at = start + spec.name.length
+                if (d != null && !DURATION.matches(d) && d in spec.flags && later >= 0 &&
+                    flags.withIndex().all { (k, f) -> k == later || f in spec.flags }
+                ) {
+                    // __debounce.leading.500ms: the client reads the first argument as the duration.
+                    val ordered = listOf(flags[later], d) + flags.filterIndexed { k, _ -> k != later }
+                    val fixed = "__${spec.name}.${ordered.joinToString(".")}"
+                    fail(
+                        "Datastar reads the first argument of __${spec.name} as its duration, " +
+                            "so with .$d first it reads none and does not wait. The duration comes first: $fixed.",
+                        listOf(Fix("Change to $fixed", at, end, "." + ordered.joinToString("."))),
+                    )
+                    return issues
+                }
+                val next = flags.firstOrNull()
+                if (d != null && WHOLE_NUMBER.matches(d) && next != null && DURATION.matches(next)) {
+                    // __debounce.1.5s: the dot ends the duration, which the client reads as 1 ms.
+                    val seconds = next.endsWith("s") && !next.endsWith("ms")
+                    val ms = "$d.${next.removeSuffix("ms").removeSuffix("s")}".toDouble() * if (seconds) 1000 else 1
+                    val whole = if (ms == Math.floor(ms) && !ms.isInfinite()) "${ms.toLong()}ms" else null
+                    fail(
+                        "Datastar reads __${spec.name}.$d.$next as $d ms: a dot separates arguments, so a duration has no fraction." +
+                            (whole?.let { " Write __${spec.name}.$it." } ?: ""),
+                        whole?.let { listOf(Fix("Change to __${spec.name}.$it", at, at + 2 + d.length + next.length, ".$it")) }
+                            ?: emptyList(),
+                    )
+                    for (f in flags.drop(1)) {
+                        if (f !in spec.flags) {
+                            fail(
+                                "Unknown flag .$f for __${spec.name}. Allowed: ${spec.flags.joinToString(
+                                    ", ",
+                                ) { ".$it" }.ifEmpty { "none" }}.",
+                            )
+                        }
+                    }
+                    return issues
+                }
                 if (d == null || !DURATION.matches(d)) {
                     val at = start + spec.name.length
                     fail(

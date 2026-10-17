@@ -23,11 +23,31 @@ class CorpusTest {
     ): List<Issue> {
         val source = case.string("source")!!
         return when (kind) {
-            "expression" -> analyzer.validateExpression(source)
-            "markup" -> analyzer.validateMarkup(source, MarkupOptions(case.boolean("requireIds") ?: false, "data-", true))
-            "html" -> analyzer.analyzeHtml(source, opts)
-            "kotlin" -> analyzer.analyzeKotlin(source, opts)
-            else -> error("Unknown corpus kind $kind")
+            "expression" -> {
+                analyzer.validateExpression(source)
+            }
+
+            "markup" -> {
+                analyzer.validateMarkup(source, MarkupOptions(case.boolean("requireIds") ?: false, "data-", true))
+            }
+
+            "html" -> {
+                analyzer.analyzeHtml(source, opts)
+            }
+
+            "kotlin" -> {
+                analyzer.analyzeKotlin(source, opts)
+            }
+
+            // The signals the source reads that it does not itself declare.
+            "references" -> {
+                val defined = collectSignalDefinitions(source, SourceLanguage.HTML)
+                analyzer.signalReferencesInHtml(source, opts).mapNotNull { unknownSignalIssue(it, defined) }
+            }
+
+            else -> {
+                error("Unknown corpus kind $kind")
+            }
         }
     }
 

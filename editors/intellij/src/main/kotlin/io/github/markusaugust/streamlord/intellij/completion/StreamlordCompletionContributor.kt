@@ -122,7 +122,8 @@ class StreamlordCompletionContributor : CompletionContributor() {
                     ?: return
             if (offset <= s.start || offset > s.contentEnd + (if (s.unterminated) 1 else 0)) return
             val text = src.substring(s.contentStart, offset)
-            if (expressionItems(text, index, file, result, allowActions = true)) result.stopHere()
+            val patch = catalog.attributesByKotlin[site.name]?.name == "on-signal-patch"
+            if (expressionItems(text, index, file, result, allowActions = true, patchInScope = patch)) result.stopHere()
         }
 
         /** `selector = "#|"` on any DSL call, or the first argument of removeElements: ids and classes from the project. */
@@ -210,6 +211,7 @@ class StreamlordCompletionContributor : CompletionContributor() {
                         result,
                         allowActions =
                             spec.valueKind == ValueKind.EXPRESSION,
+                        patchInScope = spec.name == "on-signal-patch",
                     )
                 }
                 return false
@@ -333,6 +335,7 @@ class StreamlordCompletionContributor : CompletionContributor() {
             file: PsiFile,
             result: CompletionResultSet,
             allowActions: Boolean,
+            patchInScope: Boolean = false,
         ): Boolean {
             val catalog = StreamlordAnalysis.getInstance(file.project).catalog
             val sig = signalPrefixAt(textBefore, textBefore.length)
@@ -371,11 +374,8 @@ class StreamlordCompletionContributor : CompletionContributor() {
             val scope = Regex("""(?:^|[^A-Za-z0-9_$])([a-z]*)$""").find(textBefore)
             if (scope != null && scope.groupValues[1].isNotEmpty()) {
                 val matcher = result.withPrefixMatcher(PlainPrefixMatcher(scope.groupValues[1]))
-                for (v in listOf(
-                    "el",
-                    "evt",
-                    "patch",
-                )) {
+                // `patch` is a name only in `data-on-signal-patch`, the one attribute the client hands it to.
+                for (v in listOfNotNull("el", "evt", "patch".takeIf { patchInScope })) {
                     matcher.addFixed(LookupElementBuilder.create(v).withTypeText("Datastar scope").withIcon(AllIcons.Nodes.Variable))
                 }
             }
