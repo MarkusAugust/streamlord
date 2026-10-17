@@ -158,6 +158,12 @@ public data class SignalFilter(
                             i += 2
                         }
 
+                        // The client rewrites `$` before a word character as a signal, also here.
+                        ch == '$' -> {
+                            append(if (pattern.getOrNull(i + 1)?.let { it.isLetterOrDigit() || it == '_' } == true) "$(?:)" else "$")
+                            i++
+                        }
+
                         else -> {
                             appendChar(ch)
                             i++
@@ -306,10 +312,12 @@ public data class SignalFilter(
 
         private const val LINE_TERMINATORS = "\n\r\u2028\u2029"
 
-        // Datastar's client knows no regex literals: a quote in one opens a string that hides the
-        // signals after it, and `\` before the closing `/` reads as an escape. A quote or `&` would
-        // also end or change an attribute pasted into a string.
-        private const val AS_HEX = "'\"`&\\"
+        // Datastar's client reads regex literals when it cuts an expression into statements, where
+        // `\` before the closing `/` reads as an escape, but not when it rewrites signals and
+        // actions: there a quote opens a string that hides the signals after it, and `$name` and
+        // `@name(` are rewritten. A quote or `&` would also end or change an attribute pasted into
+        // a string.
+        private const val AS_HEX = "'\"`&\\$@"
 
         /** [ch] as text that matches itself in a JavaScript literal, in a class or out of one. */
         private fun StringBuilder.appendLiteral(ch: Char) {
@@ -318,7 +326,7 @@ public data class SignalFilter(
                 ch == '\r' -> append("\\r")
                 ch == '\u2028' -> append("\\u2028")
                 ch == '\u2029' -> append("\\u2029")
-                ch in AS_HEX -> append("\\x").append(ch.code.toString(16))
+                ch in AS_HEX -> append("\\x").append(ch.code.toString(16).padStart(2, '0'))
                 ch.isLetterOrDigit() || ch == '_' || ch.code > 0x7F -> append(ch)
                 else -> append('\\').append(ch)
             }

@@ -185,26 +185,69 @@ class AsTheClientReadsItTest {
     }
 
     // engine.ts:415-416: how the client cuts an attribute's expression into statements before it
-    // compiles them. It takes `\\'` and `\\"` for an escaped quote, so a string that ends in `\`
-    // would run on, and a `;` after it would cut the expression in the middle of a string.
+    // compiles them. It reads a quote after a `\` as escaped, so a string that ends in `\` would
+    // run on, and a `;` after it would cut the expression in the middle of a string.
     private val statements =
         Regex(
             """(?:\/(?:\\\/|[^/])*\/|"(?:\\"|[^"])*"|'(?:\\'|[^'])*'|`(?:\\`|[^`])*`|""" +
                 """\(\s*(?:(?:function)\s*\(\s*\)|(?:\(\s*\))\s*=>)\s*(?:\{[\s\S]*?\}|[^;){]*)\s*\)\s*\(\s*\)|[^;])+""",
         )
 
+    // engine.ts:448: how it then rewrites `$name` as a signal and `@name(` as an action. It skips
+    // strings but knows no regex literals, so a quote in one hides the signals after it.
+    private val rewrites =
+        Regex(
+            """(?:"[^"\\]*(?:\\.[^"\\]*)*"|'[^'\\]*(?:\\.[^'\\]*)*'|`[^`\\$]*(?:(?:\\.|\$(?!\{))[^`\\$]*)*`)|""" +
+                """\$\{([^{}]*)\}|\$(\w+(?:[.-]\w+)*)|@([A-Za-z_$][\w$]*)\(""",
+        )
+
     private fun statementsIn(expression: String) = statements.findAll(expression).map { it.value.trim() }.toList()
+
+    private fun rewritten(
+        expression: String,
+        group: Int,
+    ) = rewrites.findAll(expression).mapNotNull { it.groups[group]?.value }.toList()
+
+    private fun signalsIn(expression: String) = rewritten(expression, 2)
+
+    private fun actionsIn(expression: String) = rewritten(expression, 3)
+
+    private fun signalsAttribute(html: String) =
+        Regex("""data-signals="([^"]*)"""")
+            .find(html)!!
+            .groupValues[1]
+            .replace("&quot;", "\"")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&amp;", "&")
 
     @Test
     fun `a value ending in a backslash stays inside its string`() {
         for (value in listOf("C:\\", "a\\'", "\\\"", "x\\\\")) {
             assertEquals(1, statementsIn(js(value) + " + " + js(";")).size, value)
-            assertEquals(1, statementsIn(set("v", value)).size, value)
-            assertEquals(1, statementsIn(JsonWriter.writeExpression(mapOf("p1" to value, "p2" to ";"))).size, value)
+            val pairs = signalsAttribute(elements { div { dataSignals("p1" to value, "p2" to ";") } })
+            assertEquals(1, statementsIn(pairs).size, value)
         }
-        for (pattern in listOf("x\\\\", "it's", "a\"b", "back`tick")) {
-            assertEquals(2, statementsIn(setAll(true, SignalFilter(include = Regex(pattern))) + "; " + set("msg", "done")).size, pattern)
+    }
+
+    @Test
+    fun `a regex filter hides no signal or action after it`() {
+        val patterns = listOf("x\\\\", "it's", "a\"b", "back`tick", "^[_\$a-z]+\$", "^a\$b", "\\\$x", "a@b(c)?")
+        for (pattern in patterns) {
+            val expression = setAll(true, SignalFilter(include = Regex(pattern))) + "; " + set("msg", "done")
+            assertEquals(2, statementsIn(expression).size, pattern)
+            assertEquals(listOf("msg"), signalsIn(expression), pattern)
+            assertEquals(listOf("setAll"), actionsIn(expression), pattern)
         }
+        assertEquals("/^[_\\x24a-z]+\$/", SignalFilter.regexLiteral(Regex("^[_\$a-z]+\$")))
+        assertEquals("/^a\$(?:)b/", SignalFilter.regexLiteral(Regex("^a\$b")))
+        assertEquals("/\\x24x a\\x40b/", SignalFilter.regexLiteral(Regex("\\\$x a@b")))
+    }
+
+    @Test
+    fun `an object key holding a dollar is quoted`() {
+        assertEquals("{'\$a': 1, b_1: 2}", JsLiteral.write(mapOf("\$a" to 1, "b_1" to 2)))
+        assertEquals(listOf("o"), signalsIn(set("o", mapOf("\$a" to 1, "_\$x" to 2))))
     }
 
     // The single quotes around a literal are the only ones it holds, so it can stand between the

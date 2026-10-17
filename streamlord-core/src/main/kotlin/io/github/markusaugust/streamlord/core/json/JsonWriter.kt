@@ -30,7 +30,7 @@ public object JsonWriter {
     /**
      * [write], for JSON that Datastar's client reads as an expression, such as the value of
      * `data-signals`: `\` is written as `\u005c`. The client cuts an expression into statements
-     * at each `;` outside a string and takes `\\"` for an escaped quote, so `{"a": "C:\\", "b":
+     * at each `;` outside a string and reads a quote after a `\` as escaped, so `{"a": "C:\\", "b":
      * ";"}` would be cut inside the second string and lose every signal in it.
      */
     public fun writeExpression(

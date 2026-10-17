@@ -18,16 +18,17 @@ import io.github.markusaugust.streamlord.core.json.JsonWriter
  * maps, iterables, arrays and [JsonValue]s.
  */
 public object JsLiteral {
-    private val IDENTIFIER = Regex("[A-Za-z_$][A-Za-z0-9_$]*")
+    // No `$`: the client rewrites `$a` as a signal anywhere outside a string, so such a key is quoted.
+    private val IDENTIFIER = Regex("[A-Za-z_][A-Za-z0-9_]*")
 
     /**
      * A single-quoted JavaScript string literal. `</` and `<!` are broken up so the text is also
      * safe inside a `<script>` element, where `<!--` followed by `<script` would keep it open.
      *
-     * Quotes, `&` and `\` are written as `\xHH`. No quote can then end an attribute pasted into
-     * a string or a template, no entity is decoded on the way, and no `\` stands before a quote,
-     * where Datastar's client, splitting an expression into statements, takes `\\'` for an
-     * escaped quote and reads on past the end of the string.
+     * Single and double quotes, `&` and `\` are written as `\xHH`. No quote can then end an
+     * attribute pasted into a string or a template, no entity is decoded on the way, and no `\`
+     * stands before a quote, where Datastar's client, splitting an expression into statements,
+     * would read the quote after it as escaped and run on past the end of the string.
      */
     public fun string(value: String): String =
         buildString(value.length + 2) {
@@ -47,7 +48,7 @@ public object JsLiteral {
                     '\u2028' -> append("\\u2028")
                     '\u2029' -> append("\\u2029")
                     '/' -> if (previous == '<') append("\\/") else append('/')
-                    '<' -> if (value.getOrNull(i + 1) == '!') append("\\x3C") else append('<')
+                    '<' -> if (value.getOrNull(i + 1) == '!') append("\\x3c") else append('<')
                     else -> if (c < ' ') append("\\u%04x".format(c.code)) else append(c)
                 }
                 previous = c
