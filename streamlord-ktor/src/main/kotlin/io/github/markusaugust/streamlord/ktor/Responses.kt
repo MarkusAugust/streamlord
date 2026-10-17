@@ -102,6 +102,8 @@ private suspend fun ApplicationCall.respondStream(
             .any { it.trim().equals("close", true) }
     if (request.httpVersion == "HTTP/1.1" && !closing) response.header("Connection", "keep-alive")
     val gzip = streamlord.compress && DatastarProtocol.acceptsGzip(request.headers[HttpHeaders.AcceptEncoding])
+    // Before anything is written: on Tomcat, which request a failure may cut.
+    markEngine(this)
     respond(
         object : OutgoingContent.WriteChannelContent() {
             override val contentType: ContentType = ContentType.Text.EventStream

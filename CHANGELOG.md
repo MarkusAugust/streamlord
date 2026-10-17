@@ -234,12 +234,6 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
-- On Ktor's Tomcat and Jetty engines, a `respondDatastar` block that threw ended the stream with
-  its last chunk, as if it had finished, gzipped or not, and Datastar's client did not reconnect:
-  the page stopped updating without a word. The connection is now cut there, as CIO and Netty
-  already cut it, on Tomcat 10.1 and 11 and Jetty 11 and 12, over HTTP/1.1 and HTTP/2. It is done
-  by reflection, with no new dependency; on an engine Streamlord does not know, the stream ends
-  as the engine ends it, as before.
 - A signal patch could carry a key Datastar's client cannot hold, from pairs, a codec or a JSON
   string, at any depth. `__proto__` with an object under it made its merge throw halfway through
   a batch it never closed, so no later signal reached the page. An object under a property of
@@ -335,6 +329,13 @@ All notable changes to Streamlord are recorded here. The format follows
   them as if they had finished, which the client does not retry. Ktor gives a writer no way to wait
   for the engine, so a failure now waits a moment, at most a second for a stalled reader, before it
   is thrown on; over 200 failures of each kind on each engine, none lost a frame or ended cleanly.
+  Ktor's Tomcat and Jetty engines ended a failed body with its last chunk, as if it had finished,
+  gzipped or not, so the client did not reconnect and the page stopped updating without a word.
+  Streamlord now cuts the connection there too, on Tomcat 10.1 and 11 and Jetty 11 and 12, over
+  HTTP/1.1 and HTTP/2, where only the stream is reset. It does so by reflection, with no new
+  dependency, and on Tomcat only once Ktor has completed the request, so that a reused facade
+  never reaches another one; on an engine Streamlord does not know, the stream ends as the
+  engine ends it.
 - `respondDatastar` on a call already answered throws `IllegalStateException`. It did nothing on
   CIO and threw Netty's own exception from the header loop.
 - Neither Ktor nor Spring WebMVC sends `Connection: keep-alive` to a request that asked to close.

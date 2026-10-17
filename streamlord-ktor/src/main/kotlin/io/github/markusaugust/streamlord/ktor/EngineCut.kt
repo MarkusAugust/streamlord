@@ -2,8 +2,11 @@ package io.github.markusaugust.streamlord.ktor
 
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.engine.BaseApplicationResponse
+import io.ktor.util.AttributeKey
+import java.lang.reflect.Field
 import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Proxy
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.function.Function
 
 /*
@@ -26,7 +29,7 @@ internal fun cutConnection(
     // Whatever goes wrong here, a native image's missing reflection metadata included, the failure
     // the caller rethrows is the block's, not this one.
     return try {
-        tomcat(response, cause) || jettyCore(response, cause) || jettyServlet(response, cause)
+        tomcat(response) || jettyCore(response, cause) || jettyServlet(response, cause)
     } catch (e: Throwable) {
         false
     }
@@ -38,20 +41,89 @@ private fun servletRequest(response: BaseApplicationResponse): Any? {
     return getter.invoke(request)
 }
 
-// Tomcat 10.1 and 11: CLOSE_NOW on the Coyote request behind the facade. HTTP/1.1 closes, HTTP/2 resets the stream.
-private fun tomcat(
-    response: BaseApplicationResponse,
-    cause: Throwable,
-): Boolean {
+private fun field(
+    type: Class<*>,
+    name: String,
+): Field {
+    val found = generateSequence(type) { it.superclass }.firstNotNullOf { c -> c.declaredFields.firstOrNull { it.name == name } }
+    found.isAccessible = true
+    return found
+}
+
+/*
+ * Tomcat 10.1 and 11. The cut waits for Ktor: raising CLOSE_NOW at once has Tomcat finish and
+ * recycle the request while Ktor still holds it, which with discardFacades=false reached other
+ * requests. Instead the Coyote response's action hook is wrapped, and when the adapter asks whether
+ * the request failed, during the dispatch Ktor's complete() set going, on Tomcat's own thread, the
+ * processor's error state is raised first. Tomcat then takes its own failure path: no last chunk,
+ * an HTTP/1.1 connection closed, an HTTP/2 stream reset. The AsyncContext noted before anything was
+ * written tells this request from the next one a reused facade may serve.
+ */
+private val TomcatRequestKey = AttributeKey<Any>("streamlord.tomcat.async", portableTypeInfo<Any>())
+
+/** Note which Tomcat request serves [call], before anything is written. Nothing on another engine. */
+internal fun markEngine(call: ApplicationCall) {
+    try {
+        val response = call.attributes.getOrNull(BaseApplicationResponse.EngineResponseAttributeKey) ?: return
+        val facade = servletRequest(response) ?: return
+        if (facade.javaClass.name != "org.apache.catalina.connector.RequestFacade") return
+        val async = facade.javaClass.getMethod("getAsyncContext").invoke(facade) ?: return
+        call.attributes.put(TomcatRequestKey, async)
+    } catch (e: Throwable) {
+        // Not async, or not a Tomcat this knows: no cut.
+    }
+}
+
+private fun tomcat(response: BaseApplicationResponse): Boolean {
+    val ours = response.call.attributes.getOrNull(TomcatRequestKey) ?: return false
     val facade = servletRequest(response) ?: return false
-    if (facade.javaClass.name != "org.apache.catalina.connector.RequestFacade") return false
-    val field = facade.javaClass.getDeclaredField("request")
-    field.isAccessible = true
-    val catalina = field.get(facade)
-    val coyote = catalina.javaClass.getMethod("getCoyoteRequest").invoke(catalina)
-    val actionCode = Class.forName("org.apache.coyote.ActionCode", false, coyote.javaClass.classLoader)
-    val closeNow = actionCode.getField("CLOSE_NOW").get(null)
-    coyote.javaClass.getMethod("action", actionCode, Any::class.java).invoke(coyote, closeNow, cause)
+    val catalina = field(facade.javaClass, "request").get(facade) ?: return false
+    val asyncNow = catalina.javaClass.getMethod("getAsyncContextInternal")
+    // Tomcat has given this request up already, and the facade may serve another.
+    if (asyncNow.invoke(catalina) !== ours) return false
+    val coyoteRequest = catalina.javaClass.getMethod("getCoyoteRequest").invoke(catalina)
+    val coyote = coyoteRequest.javaClass.getMethod("getResponse").invoke(coyoteRequest)
+    val loader = coyote.javaClass.classLoader
+    val hookField = field(coyote.javaClass, "hook")
+    val processor = hookField.get(coyote) ?: return false
+    val errorStateField = field(processor.javaClass, "errorState")
+    val errorState = Class.forName("org.apache.coyote.ErrorState", false, loader)
+    val closeNow = errorState.getField("CLOSE_NOW").get(null)
+    val mostSevere = errorState.getMethod("getMostSevere", errorState)
+    val actionCode = Class.forName("org.apache.coyote.ActionCode", false, loader)
+    val isError = actionCode.getField("IS_ERROR").get(null)
+    val isCompleting = actionCode.getField("ASYNC_IS_COMPLETING").get(null)
+    val hookType = Class.forName("org.apache.coyote.ActionHook", false, loader)
+    lateinit var hook: Any
+
+    fun unhook() {
+        if (hookField.get(coyote) === hook) hookField.set(coyote, processor)
+    }
+    hook =
+        Proxy.newProxyInstance(loader, arrayOf(hookType)) { self, method, args ->
+            when (method.name) {
+                "equals" -> return@newProxyInstance self === args?.get(0)
+                "hashCode" -> return@newProxyInstance System.identityHashCode(self)
+                "toString" -> return@newProxyInstance processor.toString()
+            }
+            if (asyncNow.invoke(catalina) !== ours) {
+                // The request ended some other way, and the processor serves another now.
+                unhook()
+            } else if (args[0] === isError) {
+                val completing = AtomicBoolean()
+                method.invoke(processor, isCompleting, completing)
+                if (completing.get()) {
+                    errorStateField.set(processor, mostSevere.invoke(errorStateField.get(processor), closeNow))
+                    unhook()
+                }
+            }
+            try {
+                method.invoke(processor, *args)
+            } catch (e: InvocationTargetException) {
+                throw e.targetException
+            }
+        }
+    hookField.set(coyote, hook)
     return true
 }
 
