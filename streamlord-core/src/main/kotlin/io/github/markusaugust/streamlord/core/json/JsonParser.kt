@@ -33,6 +33,38 @@ public object JsonParser {
         maxDepth: Int = DEFAULT_MAX_DEPTH,
     ): JsonObject = parse(text, maxDepth) as? JsonObject ?: throw JsonParseException("Expected a JSON object", 0)
 
+    /**
+     * Whether [text] opens objects and arrays more than [maxDepth] deep, counted as [parse] counts
+     * them and with strings skipped. It reads the text once and builds nothing, so a codec that
+     * recurses can be spared input that would blow its stack. Text that is not JSON is the
+     * parser's to refuse.
+     */
+    internal fun nestsDeeperThan(
+        text: String,
+        maxDepth: Int,
+    ): Boolean {
+        var depth = 0
+        var inString = false
+        var i = 0
+        while (i < text.length) {
+            val c = text[i]
+            if (inString) {
+                when (c) {
+                    '\\' -> i++
+                    '"' -> inString = false
+                }
+            } else {
+                when (c) {
+                    '"' -> inString = true
+                    '{', '[' -> if (++depth > maxDepth) return true
+                    '}', ']' -> depth--
+                }
+            }
+            i++
+        }
+        return false
+    }
+
     private class Cursor(
         private val s: String,
         private val maxDepth: Int,

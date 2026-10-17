@@ -12,9 +12,14 @@ public class io/github/markusaugust/streamlord/core/SignalsCodecException : io/g
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 }
 
-public final class io/github/markusaugust/streamlord/core/SignalsDecodeException : io/github/markusaugust/streamlord/core/SignalsCodecException {
+public class io/github/markusaugust/streamlord/core/SignalsDecodeException : io/github/markusaugust/streamlord/core/SignalsCodecException {
 	public fun <init> (Ljava/lang/String;Ljava/lang/Throwable;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+}
+
+public final class io/github/markusaugust/streamlord/core/SignalsMediaTypeException : io/github/markusaugust/streamlord/core/SignalsDecodeException {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun getContentType ()Ljava/lang/String;
 }
 
 public final class io/github/markusaugust/streamlord/core/SignalsTooLargeException : io/github/markusaugust/streamlord/core/StreamlordException {
@@ -49,11 +54,14 @@ public final class io/github/markusaugust/streamlord/core/application/StreamAuth
 public final class io/github/markusaugust/streamlord/core/application/Streamlord {
 	public static final field Companion Lio/github/markusaugust/streamlord/core/application/Streamlord$Companion;
 	public static final field DEFAULT_MAX_SIGNALS_SIZE I
+	public static final field MAX_SIGNALS_DEPTH I
 	public fun <init> ()V
 	public synthetic fun <init> (Lio/github/markusaugust/streamlord/core/port/driven/SignalsCodec;IZLjava/util/List;)V
 	public synthetic fun <init> (Lio/github/markusaugust/streamlord/core/port/driven/SignalsCodec;IZLjava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public synthetic fun <init> (Lio/github/markusaugust/streamlord/core/port/driven/SignalsCodec;IZLjava/util/List;Lkotlin/time/Duration;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public synthetic fun <init> (Lio/github/markusaugust/streamlord/core/port/driven/SignalsCodec;IZLjava/util/List;Lkotlin/time/Duration;ZLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Lio/github/markusaugust/streamlord/core/port/driven/SignalsCodec;IZLjava/util/List;Lkotlin/time/Duration;ZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Lio/github/markusaugust/streamlord/core/port/driven/SignalsCodec;IZLjava/util/List;Lkotlin/time/Duration;ZZLkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun encode (Lkotlinx/coroutines/flow/Flow;)Lkotlinx/coroutines/flow/Flow;
 	public final fun getAttributePrefixes ()Ljava/util/List;
 	public final fun getCodec ()Lio/github/markusaugust/streamlord/core/port/driven/SignalsCodec;
@@ -61,6 +69,7 @@ public final class io/github/markusaugust/streamlord/core/application/Streamlord
 	public final fun getGuardElements ()Z
 	public final fun getHeartbeat-FghU774 ()Lkotlin/time/Duration;
 	public final fun getMaxSignalsSize ()I
+	public final fun getRequireJsonContentType ()Z
 	public final fun guard (Lio/github/markusaugust/streamlord/core/domain/DatastarEvent;)Lio/github/markusaugust/streamlord/core/domain/DatastarEvent;
 	public final fun guard (Lio/github/markusaugust/streamlord/core/domain/DatastarResponse;)Lio/github/markusaugust/streamlord/core/domain/DatastarResponse;
 	public final fun readSignals (Lio/github/markusaugust/streamlord/core/port/driven/IncomingRequest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;

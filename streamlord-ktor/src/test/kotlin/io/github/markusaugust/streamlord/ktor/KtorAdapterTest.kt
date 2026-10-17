@@ -1,5 +1,8 @@
 package io.github.markusaugust.streamlord.ktor
 
+import io.github.markusaugust.streamlord.core.JsonParseException
+import io.github.markusaugust.streamlord.core.SignalsDecodeException
+import io.github.markusaugust.streamlord.core.SignalsMediaTypeException
 import io.github.markusaugust.streamlord.core.SignalsTooLargeException
 import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
@@ -19,6 +22,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.application.install
+import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
@@ -257,10 +261,121 @@ class KtorAdapterTest {
                     }
                 }
             }
-            val big = client.post("/s") { setBody("{\"a\":\"" + "x".repeat(10_000) + "\"}") }
+            val big =
+                client.post("/s") {
+                    contentType(ContentType.Application.Json)
+                    setBody("{\"a\":\"" + "x".repeat(10_000) + "\"}")
+                }
             assertEquals(HttpStatusCode.PayloadTooLarge, big.status)
             assertEquals("too large: 10008", big.bodyAsText())
-            assertEquals("ok", client.post("/s") { setBody("{\"a\":1}") }.bodyAsText())
+            val ok =
+                client.post("/s") {
+                    contentType(ContentType.Application.Json)
+                    setBody("{\"a\":1}")
+                }
+            assertEquals("ok", ok.bodyAsText())
+        }
+
+    // A <form enctype="text/plain"> on another site posts this without a preflight.
+    @Test
+    fun `a body not declared application json is refused without the plugin`() =
+        testApplication {
+            routing {
+                post("/s") {
+                    try {
+                        call.respond("ok " + call.readSignals().int("a"))
+                    } catch (e: SignalsMediaTypeException) {
+                        call.respond(HttpStatusCode.UnsupportedMediaType, "refused " + e.contentType)
+                    }
+                }
+            }
+            val form = client.post("/s") { setBody("{\"a\":1}") }
+            assertEquals(HttpStatusCode.UnsupportedMediaType, form.status)
+            assertEquals("refused text/plain; charset=UTF-8", form.bodyAsText())
+            val json =
+                client.post("/s") {
+                    contentType(ContentType.Application.Json)
+                    setBody("{\"a\":1}")
+                }
+            assertEquals("ok 1", json.bodyAsText())
+        }
+
+    // The four handlers on the Security page: the most specific one answers.
+    @Test
+    fun `StatusPages answers a body not declared application json with 415`() =
+        testApplication {
+            install(StatusPages) {
+                exception<SignalsTooLargeException> { call, _ -> call.respond(HttpStatusCode.PayloadTooLarge) }
+                exception<JsonParseException> { call, _ -> call.respond(HttpStatusCode.BadRequest) }
+                exception<SignalsDecodeException> { call, _ -> call.respond(HttpStatusCode.BadRequest) }
+                exception<SignalsMediaTypeException> { call, _ -> call.respond(HttpStatusCode.UnsupportedMediaType) }
+            }
+            routing { post("/s") { call.respond("ok " + call.readSignals().int("a")) } }
+            val bodies =
+                listOf(
+                    ContentType.Text.Plain to "{\"a\":1}",
+                    ContentType.Application.FormUrlEncoded to "a=1",
+                    ContentType.parse("multipart/form-data; boundary=x") to "--x\r\n\r\n1\r\n--x--\r\n",
+                )
+            for ((type, body) in bodies) {
+                val response =
+                    client.post("/s") {
+                        contentType(type)
+                        setBody(body)
+                    }
+                assertEquals(HttpStatusCode.UnsupportedMediaType, response.status, "$type")
+            }
+            val ok =
+                client.post("/s") {
+                    contentType(ContentType.Application.Json)
+                    setBody("{\"a\":1}")
+                }
+            assertEquals("ok 1", ok.bodyAsText())
+        }
+
+    // SignalsMediaTypeException is a SignalsDecodeException, so a block written before it still answers.
+    @Test
+    fun `StatusPages with only the decode handler answers a body not declared application json with 400`() =
+        testApplication {
+            install(StatusPages) {
+                exception<SignalsDecodeException> { call, _ -> call.respond(HttpStatusCode.BadRequest) }
+            }
+            routing { post("/s") { call.respond("ok " + call.readSignals().int("a")) } }
+            for (type in listOf(ContentType.Text.Plain, ContentType.Application.FormUrlEncoded)) {
+                val response =
+                    client.post("/s") {
+                        contentType(type)
+                        setBody("{\"a\":1}")
+                    }
+                assertEquals(HttpStatusCode.BadRequest, response.status, "$type")
+            }
+        }
+
+    @Test
+    fun `the plugin can let any content type through`() =
+        testApplication {
+            install(StreamlordPlugin) { requireJsonContentType = false }
+            routing { post("/s") { call.respond("ok " + call.readSignals().int("a")) } }
+            assertEquals("ok 1", client.post("/s") { setBody("{\"a\":1}") }.bodyAsText())
+        }
+
+    // The plugin builds its own Streamlord, so its default is not Streamlord.Default's.
+    @Test
+    fun `the plugin refuses a body not declared application json unless told otherwise`() =
+        testApplication {
+            install(StreamlordPlugin)
+            routing {
+                post("/s") {
+                    try {
+                        call.respond("ok " + call.readSignals().int("a"))
+                    } catch (e: SignalsMediaTypeException) {
+                        call.respond(HttpStatusCode.UnsupportedMediaType, "refused " + e.contentType)
+                    }
+                }
+            }
+            val form = client.post("/s") { setBody("{\"a\":1}") }
+            assertEquals(HttpStatusCode.UnsupportedMediaType, form.status)
+            assertEquals("refused text/plain; charset=UTF-8", form.bodyAsText())
         }
 
     @Test

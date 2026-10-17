@@ -23,6 +23,7 @@ dependencies {
     testImplementation(libs.ktor.server.jetty.jakarta)
     testImplementation(project(":streamlord-test"))
     testImplementation(libs.ktor.server.compression)
+    testImplementation(libs.ktor.server.status.pages)
 }
 
 /*

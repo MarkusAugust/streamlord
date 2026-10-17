@@ -201,7 +201,11 @@ class StreamEdgesTest {
 
     @Test
     fun `signals read with no size limit`() {
-        val request = MockHttpServletRequest("POST", "/").apply { setContent("""{"a":1}""".toByteArray()) }
+        val request =
+            MockHttpServletRequest("POST", "/").apply {
+                contentType = "application/json"
+                setContent("""{"a":1}""".toByteArray())
+            }
 
         assertEquals(1, request.readSignals(Streamlord(maxSignalsSize = Int.MAX_VALUE)).int("a"))
     }

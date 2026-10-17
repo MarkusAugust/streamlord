@@ -35,7 +35,9 @@ be asked again whether it may still run, which is on [Operations](/operations/).
 long, 30 seconds unless you set it, for the proxies in between, unless the stream passes a
 `heartbeat` of its own to `respondDatastar`; it is on [Operations](/operations/#heartbeats).
 `compress` gzips every stream whose request takes it; it is on
-[Operations](/operations/#compression).
+[Operations](/operations/#compression). `requireJsonContentType`, on unless you set it to `false`,
+refuses signals in a body not declared `application/json`; it is on
+[Security](/security/#forms-from-other-sites).
 
 ## One-shot streams
 
@@ -172,6 +174,7 @@ you one without the null check.
 
 Error handling is yours. `SignalsTooLargeException` is thrown while the body is being read, and
 you will want it mapped to `413` in a `StatusPages` block, with `JsonParseException` and
-`SignalsDecodeException` mapped to `400` beside it; [Security](/security/) has the block.
+`SignalsDecodeException` mapped to `400` beside it, and `SignalsMediaTypeException`, a body not
+declared `application/json`, to `415`; [Security](/security/) has the block.
 Authentication, rate limiting and tracing are Ktor's, unchanged; Streamlord adds no interceptors
 and has no opinion about them.

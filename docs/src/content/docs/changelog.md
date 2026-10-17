@@ -9,6 +9,31 @@ with a sentence about what to do.
 
 ## Unreleased
 
+**Signals in a body must be sent as `application/json`.** Datastar's client always does, so pages
+change nothing. A client of your own that posts signals without that `Content-Type` now gets
+`SignalsMediaTypeException`: set the header, or pass `requireJsonContentType = false`. On Ktor,
+map the exception to `415` in `StatusPages`; [Security](/security/#forms-from-other-sites) has
+the block and the reason.
+
+**The Jackson codecs ignore keys your type does not name, even when your mapper refuses them.**
+A mapper with `FAIL_ON_UNKNOWN_PROPERTIES` on, as `jacksonObjectMapper()` has it, no longer fails
+every request that carries a signal the type does not name; nothing to change unless a test of
+yours counted on that failure. `Jackson2SignalsCodec` reads through a copy of the mapper you hand
+it, made once, so that mapper keeps its own rules; a mapper of a subclass that does not override
+`copy()` cannot be used.
+
+**`Jackson2SignalsCodec` refuses a `null` inside a Kotlin parameter's `List<Int>`.** A page that
+sends one gets a `400`; declare the element `List<Int?>` if it may. A mapper set to skip such a
+`null` with `setDefaultSetterInfo` no longer does for these parameters: put
+`@JsonSetter(contentNulls = Nulls.SKIP)` on the parameter instead. [Signals](/signals/#where-the-codecs-differ)
+lists where each codec refuses a `null`.
+
+**`requireNamedSerializers = true` wants a container named whole.** A `List<Signals>` that went
+through because `Signals` was named now fails with `SignalsCodecException` until you add
+`typeOf<List<Signals>>() to ListSerializer(Signals.serializer())` to `serializers`; naming
+`Signals` alone does not reach the list. [Native image](/native-image/#2-name-your-serializers)
+shows it.
+
 ## 0.12.0
 
 **Spring Boot 3 is no longer supported.** The Spring adapter is built for Boot 4 (Framework 7.0,
