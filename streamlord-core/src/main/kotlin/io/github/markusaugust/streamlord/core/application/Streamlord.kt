@@ -50,7 +50,10 @@ public typealias Signals = JsonObject
  * @property codec Turns signals into JSON and back. Defaults to the dependency-free built-in.
  * @property maxSignalsSize Upper bound for incoming signal payloads: bytes for a request body,
  *   characters for the `datastar` query parameter. Exceeding it raises [SignalsTooLargeException]
- *   before any parsing happens, and adapters stop reading the body at this size.
+ *   before any parsing happens, and adapters stop reading the body at this size. The query
+ *   parameter of `@get` and `@delete` meets the server's limit on the request line long before:
+ *   about 4 KiB on Netty and Reactor Netty, 8 KiB on CIO, Tomcat and Jetty, refused with a 400,
+ *   414 or 431 that Datastar's client does not retry. Large signals go in the body of a `@post`.
  * @property guardElements Run [ElementsGuard] over the HTML of every element patch and elements
  *   response that leaves through this instance, so a `data-*` attribute whose expression a
  *   Kotlin string template ate (`data-text="$count"` shipping as `data-text=""`) throws

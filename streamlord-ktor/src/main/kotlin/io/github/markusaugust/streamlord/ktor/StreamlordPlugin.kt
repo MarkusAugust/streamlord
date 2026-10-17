@@ -19,7 +19,11 @@ public class StreamlordPluginConfig {
     /** Codec for typed signals. Defaults to the dependency-free built-in codec. */
     public var codec: SignalsCodec? = null
 
-    /** Upper bound for incoming signal payloads: bytes for bodies, characters for the query parameter. */
+    /**
+     * Upper bound for incoming signal payloads: bytes for bodies, characters for the query
+     * parameter. The engine refuses a request line long before the query parameter gets near
+     * it: about 4 KiB on Netty and 8 KiB on CIO, Tomcat and Jetty. Large signals go in a `@post`.
+     */
     public var maxSignalsSize: Int = Streamlord.DEFAULT_MAX_SIGNALS_SIZE
 
     /**

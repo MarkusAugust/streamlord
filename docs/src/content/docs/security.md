@@ -65,6 +65,20 @@ reading*:
 - a chunked body is cut off one byte past the limit;
 - nothing larger than the cap ever sits in memory.
 
+The cap is the same for the `datastar` query parameter that `@get` and `@delete` send, but the
+server's limit on the request line comes long before it. Measured with the signal `{"q": "aaa…"}`:
+
+| Server | Refused from a request line of about | With |
+|---|---|---|
+| Ktor on Netty | 4 KiB | 400 |
+| Spring WebFlux (Reactor Netty) | 4 KiB | 414 |
+| Ktor on CIO, Ktor on Tomcat, Spring on Tomcat | 8 KiB | 400 |
+| Ktor on Jetty, Spring on Jetty | 8 KiB | 431, then 414 |
+
+The request never reaches your handler, and Datastar's client reports an `error` and does not
+try again. Send signals that can grow, such as a long text or a list, with `@post`, which carries
+them in the body.
+
 Signals read into a type are refused when objects and arrays nest more than 64 deep, before any
 codec sees them. kotlinx.serialization reads a `JsonElement` by recursion, and twenty kilobytes
 of `[` overflowed its stack: a `StackOverflowError` is no exception, so it went past every
@@ -88,6 +102,14 @@ bug, and a `500` is right for it. A third, `SignalsMediaTypeException`, is a bod
 Streamlord will not register a handler behind your back. On Spring it ships one you import
 yourself, `StreamlordExceptionHandler`; on Ktor it is four handlers in `StatusPages`.
 
+Without `StatusPages`, Ktor 3.6 answers an unhandled exception with a `500` whose body is the
+exception's message, as `text/plain`, on CIO, Netty, Tomcat and Jetty alike. Streamlord's
+messages then reach whoever sent the request: `Unexpected end of input (at position 5)` for
+`?datastar={"a":`, `Incoming signals are 1100008 in size; the limit is 1048576` for a body that
+is too large, and the type a codec failed to decode into. Map the four exceptions below, and
+put a catch-all `exception<Throwable>` in `StatusPages` that answers `500` without the message,
+so that nothing your own code throws is shown either.
+
 ```kotlin sample=ktor-application
 install(StatusPages) {
     exception<SignalsTooLargeException> { call, _ ->
@@ -101,6 +123,10 @@ install(StatusPages) {
     }
     exception<SignalsMediaTypeException> { call, _ ->
         call.respond(io.ktor.http.HttpStatusCode.UnsupportedMediaType)
+    }
+    // Everything else: a 500 that does not show the message.
+    exception<Throwable> { call, _ ->
+        call.respond(io.ktor.http.HttpStatusCode.InternalServerError)
     }
 }
 ```

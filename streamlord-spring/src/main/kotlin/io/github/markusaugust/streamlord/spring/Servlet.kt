@@ -67,9 +67,10 @@ import kotlin.time.Duration
  *   `suspend` controller no longer finds once it has suspended. With
  *   [Streamlord.compress] on, the stream is gzipped when this request's `Accept-Encoding` takes
  *   it; without the request, it is not.
- * @param timeout How long Spring lets this stream run before it cuts it, in place of the
+ * @param timeout How long Spring lets this stream run before it ends it, in place of the
  *   application's `spring.mvc.async.request-timeout`, whose own default is the container's 30
- *   seconds. [Duration.INFINITE] lifts the limit, which is safe only with a heartbeat, on by
+ *   seconds. Tomcat and Jetty then end the response cleanly, as if the stream had finished, so
+ *   Datastar's client does not reconnect. [Duration.INFINITE] lifts the limit, which is safe only with a heartbeat, on by
  *   default: without one, a client that vanished without closing its connection holds the stream's
  *   thread for good. `null`, the default, leaves Spring's setting alone. The container checks for
  *   timeouts about once a second, so one lands up to a second late. One that is not positive throws
