@@ -57,6 +57,14 @@ class SignalsTest {
     }
 
     @Test
+    fun `the assertion reads its signals`() {
+        assertEquals(
+            AssertSignals(heads = 13, expect = 14),
+            SIGNALS.decode("""{"heads":13,"expect":14,"tool":"test"}"""),
+        )
+    }
+
+    @Test
     fun `the judge reads its signals`() {
         assertEquals(
             JudgeSignals(source = "<div></div>"),

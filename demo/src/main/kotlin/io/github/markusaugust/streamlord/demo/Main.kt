@@ -109,6 +109,7 @@ internal val SIGNALS: KotlinxSignalsCodec =
                 typeOf<ModeSignals>() to ModeSignals.serializer(),
                 typeOf<FeedSignals>() to FeedSignals.serializer(),
                 typeOf<JudgeSignals>() to JudgeSignals.serializer(),
+                typeOf<AssertSignals>() to AssertSignals.serializer(),
             ),
         requireNamedSerializers = true,
     )
@@ -259,6 +260,12 @@ public fun Application.live() {
         get("/feed") {
             val signals = call.readSignalsOr(FeedSignals())
             call.respondDatastar(feedEvents(signals).asFlow())
+        }
+
+        // The same feed, read back by streamlord-test and held to the two assertions the test
+        // panel shows. The count to expect comes from the page's field, so a wrong one fails.
+        post("/assert") {
+            call.respondDatastar(assertEvents(call.readSignalsOr(AssertSignals())).asFlow())
         }
 
         /*
