@@ -427,8 +427,9 @@ import "../styles/global.css"
         grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
         gap: var(--fs-spacing-5);
       }
+      /* The server and the client write into the panels, so a long word must break, not widen the page. */
       .panel {
-        min-inline-size: 0;
+        overflow-wrap: anywhere;
         display: grid;
         gap: var(--fs-spacing-2);
         align-content: start;
@@ -456,11 +457,8 @@ import "../styles/global.css"
         font-size: var(--font-size-xs);
         color: var(--fs-color-neutral-text-subtle);
       }
-      /* The server writes these, so a long identifier in a hit must break rather than widen the page. */
       .panel__body {
         min-height: 3rem;
-        min-inline-size: 0;
-        overflow-wrap: anywhere;
       }
       .gallery__modes {
         display: flex;
