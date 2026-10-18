@@ -72,12 +72,13 @@ a Datastar expression: `{{ }}`, `{% %}`, `${ }`, `<% %>`, `[# ]`, and JTE's and 
 control-flow keywords. That covers most engines whatever they are called, and it is a closed set
 in `Markup.kt` with no way to add to it.
 
-An engine outside it, Qute with `{name}`, Closure with `{$name}`, Rocker with `@name`, is fine
-everywhere except one place, which was measured rather than assumed. Expression attributes such
-as `data-text` produce no findings, because the expression check only fires on shapes no working
-expression has. Attributes that take a signal name do: `data-bind="{name}"` reports
-`signal-name-expected`, since a signal name is held to a strict pattern and a brace is not in it.
-The file is correct and the editor says it is not.
+An engine outside it, Qute with `{name}`, Closure with `{$name}`, Rocker with `@name`, is judged
+as Datastar would judge the unrendered text, which was measured rather than assumed. Attributes
+that take a signal name report `signal-name-expected` for all three, since a signal name is held
+to a strict pattern and neither a brace nor an `@` is in it. Closure's and Rocker's tags are also an
+`expression-syntax` error in attributes that return a value, such as `data-text="{$name}"`,
+because the client cannot compile that text either. The rendered file is correct and the editor
+says it is not.
 
 Planned: `AnalyzeOptions` takes the delimiter pairs your engine uses, and the editors read them
 from a setting. Small, and the only reason it is not higher is that it affects one rule for
@@ -86,8 +87,10 @@ engines outside a set that already covers most of them.
 ### Until then
 
 Nothing, for the attributes that take a signal name, which is why this is on the list rather than
-in the "considered" pile. Everything else about your engine already works, and none of it touches
-what Streamlord puts on the wire. [Templates](/templates/) says which half is which.
+in the "considered" pile. In an attribute that returns text, a Closure or Rocker tag inside a
+JavaScript string, `data-text="'{$name}'"`, gives no findings and renders to a string literal.
+Everything else about your engine already works, and none of it touches what Streamlord puts on
+the wire. [Templates](/templates/) says which half is which.
 
 ## Concurrent stream limits
 
