@@ -51,12 +51,18 @@ class CorpusTest {
         }
     }
 
-    /** One issue as a line: its code, its range unless the case leaves the range open, and the source after each fix. */
+    /**
+     * One issue as a line: its code, its range unless the case leaves the range open, its severity
+     * and its message where the case gives them, and the source after each fix.
+     */
     private fun line(
         code: String?,
         range: Pair<Int, Int>?,
+        severity: String?,
+        message: String?,
         fixes: List<String>,
-    ) = listOfNotNull(code, range?.let { "${it.first}-${it.second}" }).joinToString(" ") + fixes.joinToString("") { "\n  fix: $it" }
+    ) = listOfNotNull(code, range?.let { "${it.first}-${it.second}" }, severity).joinToString(" ") +
+        (message?.let { "\n  message: $it" } ?: "") + fixes.joinToString("") { "\n  fix: $it" }
 
     @Test
     fun `judges every case of the shared corpus as written`() {
@@ -69,12 +75,26 @@ class CorpusTest {
                 val actual = run(corpus.string("kind")!!, case).sortedWith(compareBy({ it.start }, { it.end }, { it.code }))
                 val seen =
                     actual.mapIndexed { n, i ->
-                        val open = expected.getOrNull(n)?.let { it.int("start") == null } ?: false
-                        line(i.code, if (open) null else i.start to i.end, i.fixes.map { it.apply(source) })
+                        val e = expected.getOrNull(n)
+                        val open = e?.let { it.int("start") == null } ?: false
+                        val severity = i.severity.name.lowercase()
+                        line(
+                            i.code,
+                            if (open) null else i.start to i.end,
+                            severity.takeIf { e?.string("severity") != null },
+                            i.message.takeIf { e?.string("message") != null },
+                            i.fixes.map { it.apply(source) },
+                        )
                     }
                 val wanted =
                     expected.map { e ->
-                        line(e.string("code"), e.int("start")?.let { it to e.int("end")!! }, e.array("fixes")?.strings() ?: emptyList())
+                        line(
+                            e.string("code"),
+                            e.int("start")?.let { it to e.int("end")!! },
+                            e.string("severity"),
+                            e.string("message"),
+                            e.array("fixes")?.strings() ?: emptyList(),
+                        )
                     }
                 assertEquals(wanted, seen, "${file.name}: ${case.string("name")}")
             }

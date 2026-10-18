@@ -29,8 +29,13 @@ private val KOTLIN_READS =
  * matched in any case and its key is lowercased: `data-signals:fooBar` declares `foobar`.
  */
 
-/** The key with its modifiers, which may name the casing: `data-signals:my-value__case.snake`. */
-private val KEYED_ATTRIBUTE = Regex("""(?i)data-(?:star-)?(?:signals|bind|indicator|ref|computed|match-media):([^\s=>"'/\\]+)""")
+/**
+ * The key with its modifiers, which may name the casing: `data-signals:my-value__case.snake`. A key
+ * the client could hold and nothing else, so that template syntax (`data-signals:${key}`,
+ * `data-signals:{{ name }}`, `data-signals:th:text`) declares nothing.
+ */
+private val KEYED_ATTRIBUTE =
+    Regex("""(?i)data-(?:star-)?(?:signals|bind|indicator|ref|computed|match-media):([\p{L}\p{N}_.-]+)(?=[\s=>"'/\\]|$)""")
 
 /** The value form names the signal as written: `data-bind="user-name"` is the signal `user-name`. */
 private val VALUE_ATTRIBUTE = Regex("""(?i)data-(?:star-)?(?:bind|indicator|ref)(?:__[^=\s>]*)?=(?:\\?"([^"\\\s]+)\\?"|'([^'\s]+)')""")
@@ -157,40 +162,50 @@ internal val PROTOTYPE_NAMES =
 /**
  * Why the client cannot hold a signal at [path], written with dots as `data-signals:a.b` writes it,
  * or null when it can. The client follows the path without a guard, so a part every object already
- * has writes into the built-in one: `__proto__.x` and `constructor.prototype.x` set `x` on every
- * object of the page (`SignalNames.pathProblem` in streamlord-core says the same).
+ * has, with more of the path under it, writes into the built-in one: `__proto__.x` and
+ * `constructor.prototype.x` set `x` on every object of the page. The last part is held as a key of
+ * its own (`data-signals:constructor="1"` is `$constructor`) unless [objectUnder] says an
+ * object goes under it; `__proto__` is never held. `SignalNames.pathProblem` in streamlord-core is
+ * stricter, since a name written in code may carry an object under it at any part.
  */
-internal fun signalPathProblem(path: String): String? {
+internal fun signalPathProblem(
+    path: String,
+    objectUnder: Boolean = false,
+): String? {
     val parts = path.split('.')
     if (parts.any { it.isEmpty() }) return "has an empty part, which no \$ reference reaches"
-    return parts.firstOrNull { it in PROTOTYPE_NAMES }?.let {
-        "has the part $it, which every object already has, so the client writes into the built-in one instead of holding a signal"
-    }
+    return parts
+        .withIndex()
+        .firstOrNull { (i, p) -> p == "__proto__" || (p in PROTOTYPE_NAMES && (i < parts.lastIndex || objectUnder)) }
+        ?.let {
+            "has the part ${it.value}, which every object already has, so the client writes into the built-in one instead of holding a signal"
+        }
 }
 
 /** What the client reads after a `$`: ASCII letters, digits and `_`, in parts joined by `.` or `-` (engine.ts:449 in 1.0.4). */
 private val REACHABLE_NAME = Regex("""[A-Za-z0-9_]+(?:[.-][A-Za-z0-9_]+)*""")
 
-/** Why no `$` reference reaches a signal named [name], or null when one does. */
-internal fun signalNameProblem(name: String): String? =
-    when {
-        REACHABLE_NAME.matches(name) -> {
-            null
-        }
+/** `$['my key']`, the read that reaches a signal at [parts] whatever its name: the client leaves a `$[` as written. */
+internal fun bracketRead(parts: List<String>): String =
+    "$" + parts.joinToString("") { p -> "['" + p.replace("\\", "\\\\").replace("'", "\\'") + "']" }
 
-        name.startsWith("$") -> {
-            "holds the \$ itself, so \$${name.drop(1)} does not reach it: that reads the signal ${name.drop(1)}"
-        }
-
-        name.any { it > '\u007F' } -> {
-            "no \$ reference reaches: Datastar reads only ASCII letters, digits and _ after a \$, " +
-                "so the browser looks for a JavaScript variable instead"
-        }
-
-        else -> {
-            "no \$ reference reaches: Datastar reads ASCII letters, digits and _ after a \$, in parts joined by . or -"
-        }
+/**
+ * Why no `$name` reaches a signal named [name], or null when one does. [parts] is the path the
+ * bracket form names, the name split at its dots unless given.
+ */
+internal fun signalNameProblem(
+    name: String,
+    parts: List<String> = name.split('.'),
+): String? {
+    if (REACHABLE_NAME.matches(name)) return null
+    if (name.startsWith("$")) return "holds the \$ itself, so \$${name.drop(1)} does not reach it: that reads the signal ${name.drop(1)}"
+    val bracket = "only the bracket form ${bracketRead(parts)} reads it"
+    return if (name.any { it > '\u007F' }) {
+        "no \$name reaches: Datastar reads only ASCII letters, digits and _ after a \$, so the browser looks for a JavaScript variable instead; $bracket"
+    } else {
+        "no \$name reaches: Datastar reads ASCII letters, digits and _ after a \$, in parts joined by . or -; $bracket"
     }
+}
 
 private fun caseCamel(s: String): String = KEBAB_LETTER.replace(s) { it.value.substring(1).uppercase() }
 
@@ -239,6 +254,8 @@ internal data class ObjectKey(
  * that key before them, as the client's `mergePatch` stores them. `{user: {name: 'x'}}` declares
  * `user` and `user.name`. A key may be bare or quoted, and inside a Kotlin string its quotes may be
  * escaped; an object that is not the value of a key, inside a function or a list, declares nothing.
+ * An object literal spread into another declares its keys there; what a spread of anything else
+ * brings is not known.
  */
 internal fun objectKeyPaths(body: String): List<String> = objectKeys(body).map { it.path }
 
@@ -294,6 +311,13 @@ internal fun objectKeys(body: String): List<ObjectKey> {
             i = j + 1
             continue
         }
+        // `...{b: 2}` spreads its keys into the object it stands in: `{a: 1, ...{b: 2}}` declares `b`.
+        if (c == '.' && body.startsWith("...", i) && top != null) {
+            i += 3
+            skipSpace()
+            if (body.getOrNull(i) == '{') objectFor = top
+            continue
+        }
         when (c) {
             '{' -> {
                 frames += objectFor
@@ -322,18 +346,3 @@ private val BARE_KEY = Regex("""[A-Za-z0-9_$]+""")
 
 /** What `\s` matches in JavaScript. */
 private fun Char.isJsSpace(): Boolean = isWhitespace() || this == '\u00A0' || this == '\uFEFF'
-
-/**
- * The signal a kebab-case key names under a `__case` modifier: camel by default (`foo-bar` is
- * `fooBar`), `snake` (`foo_bar`), `pascal` (`FooBar`) or `kebab` (`foo-bar`, as written).
- */
-public fun keyName(
-    key: String,
-    case: String?,
-): String =
-    when (case) {
-        "kebab" -> key
-        "snake" -> key.replace('-', '_')
-        "pascal" -> toCamel(key).replaceFirstChar { it.uppercaseChar() }
-        else -> toCamel(key)
-    }

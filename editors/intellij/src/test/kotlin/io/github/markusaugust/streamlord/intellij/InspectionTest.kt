@@ -139,7 +139,7 @@ class InspectionTest : BasePlatformTestCase() {
                 "s.patchElements(\"<li>x</li>\", mode = ElementPatchMode.APPEND); s.removeElements(\" \"); s.removeElements(\"a\\nb\")",
                 "s.executeScript(\"'</script>'\"); dataSignals(\"fooBar\", \"1\"); s.patchElements(\"text </b>\")",
                 "s.patchElements(\"\"\"<span id=\"busy\" data-indicator:busy></span>\"\"\")",
-                "s.patchElements(\"\"\"<div id=\"n\" data-bind=\"__proto__.x\" data-computed=\"\${'$'}a\" data-json-signals=\"{include: '/a/i'}\"",
+                "s.patchElements(\"\"\"<div id=\"n\" data-bind=\"__proto__.x\" data-computed=\"\${'$'}a + 1\" data-json-signals=\"{include: '/a/i'}\"",
                 " data-text=\"`\${'$'}t \${'$'}{1}` + ((n) => { n; return n })(1)\" data-on:click=\"x // '\n\${'$'}b = 'y'\"></div>\"\"\")",
             ).joinToString("\n")
         val codes = analyzer.analyzeKotlin(src).mapNotNull { it.code }.toSet()

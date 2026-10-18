@@ -6,7 +6,8 @@ with the right name as a quick fix, Datastar Pro actions (a hint: they need the 
 It also tells where Datastar's own rewrite of an expression does what JavaScript would not: a <code>$name</code> in the text of a
 template literal that also holds a <code>${...}</code>, or inside a regular expression, is rewritten there too; a quote in a comment
 or a regular expression leaves a later <code>$name</code> as a JavaScript variable; and a <code>;</code> inside brackets splits a
-value that is read, which loses it.
+value that is read, which loses it. The filters of <code>data-json-signals</code> and <code>data-on-signal-patch-filter</code>, which
+the client evaluates without signals, are checked here too: one that does not compile, and a <code>$name</code> in one.
 <!-- tooltip end -->
 </body>
 </html>

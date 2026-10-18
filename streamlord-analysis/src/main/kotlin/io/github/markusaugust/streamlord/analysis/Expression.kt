@@ -61,29 +61,49 @@ private val REGEX_AFTER_WORD =
 /** The words whose parenthesised head may be followed by a statement that opens with a regular expression. */
 private val HEAD_WORDS = setOf("if", "while", "for", "with")
 
-/** The end of the regular expression literal that opens at [from], or null when none closes on its line. */
-private fun regexEnd(
-    text: String,
-    from: Int,
-): Int? {
-    var j = from + 1
-    var inClass = false
-    while (j < text.length && text[j] != '\n') {
+/**
+ * Where a regular expression literal ends when its scan reaches each offset, outside a class and
+ * inside one (`2 * offset` and `2 * offset + 1`), or -1 when it does not close on its line: past
+ * the closing `/` and its flags. Filled from the end in one pass, so that a text full of `/` that
+ * never close is read in linear time rather than scanned to the end of the line once for each.
+ */
+private fun regexEnds(text: String): IntArray {
+    val n = text.length
+    val out = IntArray(2 * (n + 2)) { -1 }
+    for (j in n - 1 downTo 0) {
         val c = text[j]
-        if (c == '\\') {
-            j++
-        } else if (c == '[') {
-            inClass = true
-        } else if (c == ']') {
-            inClass = false
-        } else if (c == '/' && !inClass) {
-            j++
-            while (j < text.length && text[j].isJsNamePart()) j++
-            return j
+        for (inClass in 0..1) {
+            out[2 * j + inClass] =
+                when {
+                    c == '\n' -> {
+                        -1
+                    }
+
+                    c == '\\' -> {
+                        out[2 * (j + 2) + inClass]
+                    }
+
+                    c == '[' -> {
+                        out[2 * (j + 1) + 1]
+                    }
+
+                    c == ']' -> {
+                        out[2 * (j + 1)]
+                    }
+
+                    c == '/' && inClass == 0 -> {
+                        var end = j + 1
+                        while (end < n && text[end].isJsNamePart()) end++
+                        end
+                    }
+
+                    else -> {
+                        out[2 * (j + 1) + inClass]
+                    }
+                }
         }
-        j++
     }
-    return null
+    return out
 }
 
 /**
@@ -100,6 +120,13 @@ internal fun jsRegions(text: String): ByteArray {
     val parens = ArrayList<Boolean>()
     var regexAllowed = true
     var lastWord = ""
+    var ends: IntArray? = null
+
+    /** The end of the regular expression literal that opens at [from], or null when none closes on its line. */
+    fun regexEnd(from: Int): Int? {
+        val all = ends ?: regexEnds(text).also { ends = it }
+        return all[2 * (from + 1)].takeIf { it >= 0 }
+    }
 
     fun mark(
         from: Int,
@@ -168,8 +195,8 @@ internal fun jsRegions(text: String): ByteArray {
                 lastWord = word
             }
 
-            c == '/' && regexAllowed && regexEnd(text, i) != null -> {
-                i = mark(i, regexEnd(text, i)!!, Region.REGEX)
+            c == '/' && regexAllowed && regexEnd(i) != null -> {
+                i = mark(i, regexEnd(i)!!, Region.REGEX)
                 regexAllowed = false
             }
 
@@ -251,7 +278,7 @@ public fun toCamel(name: String): String = if ('-' in name) KEBAB_PART.replace(n
 /** The characters `String.prototype.trim` removes: WhiteSpace and LineTerminator, which `Char.isWhitespace` is not. */
 private const val JS_WHITESPACE = "\t\n\u000B\u000C\r \u00A0\u1680\u2028\u2029\u202F\u205F\u3000\uFEFF"
 
-private fun Char.isJsWhitespace(): Boolean = this in JS_WHITESPACE || this in '\u2000'..'\u200A'
+internal fun Char.isJsWhitespace(): Boolean = this in JS_WHITESPACE || this in '\u2000'..'\u200A'
 
 private const val JS_SPACE = """[\t\n\u000B\u000C\r \u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]"""
 
@@ -592,6 +619,29 @@ private fun statementSplits(text: String): Set<Int> {
         .toSet()
 }
 
+/**
+ * What to write for a `$name` in the text of a template literal that the client rewrites: `${$name}`
+ * for the signal's value, `${'$'}name` to keep the text. A name that opens with a digit, `$5`, is
+ * text: nobody names a signal that.
+ */
+private fun templateAdvice(written: String): String {
+    val text = "\${'$'}" + written.drop(1)
+    val keep = "write $text or put the text in a quoted string, which Datastar leaves as written."
+    val digit = written.getOrNull(1)?.isDigit() == true
+    return if (digit) " To keep the text, $keep" else " Write \${$written} for the signal's value. To keep the text, $keep"
+}
+
+/** The quote that opens the string [offset] is in, by the [regions] of [js]. */
+private fun stringQuote(
+    js: String,
+    regions: ByteArray,
+    offset: Int,
+): Char? {
+    var k = offset
+    while (k > 0 && regions[k - 1] == Region.STRING) k--
+    return js.getOrNull(k)
+}
+
 /** Where a character the client paired as a quote sits, for the message that names it. */
 private fun placeOf(region: Byte): String =
     when (region) {
@@ -667,23 +717,14 @@ public class ExpressionValidator(
                 )
         }
 
-        val err =
-            if (returnsValue !=
-                null
-            ) {
-                JsParser.error(rewritten.js)
-            } else {
-                JsParser.error(rewritten.js)?.takeUnless { objectLiteralParses(rewritten.js) }
-            }
+        val parseError = JsParser.error(rewritten.js)
+        // Without a known attribute an expression may also be an object literal, which a script reads as a block.
+        val err = if (returnsValue == null) parseError?.takeUnless { objectLiteralParses(rewritten.js) } else parseError
         if (err != null) {
             val pos = minOf(toText(err.pos), text.length)
             val end = maxOf(pos + 1, minOf(toText(err.raisedAt), text.length))
-            if (pos !in
-                spaced
-            ) {
-                issues +=
-                    Issue(pos, end, "Datastar expression: ${err.message}", Severity.ERROR, "expression-syntax", Docs.EXPRESSIONS)
-            }
+            val message = "Datastar expression: ${err.message}"
+            if (pos !in spaced) issues += Issue(pos, end, message, Severity.ERROR, "expression-syntax", Docs.EXPRESSIONS)
         }
 
         for (r in rewritten.rewrites) {
@@ -692,7 +733,7 @@ public class ExpressionValidator(
             val written = js.substring(r.start, if (r.signal) r.end else r.end - 1)
             val (start, end) = span(r.start, r.start + written.length)
             if (region != Region.CODE) {
-                issues += literalRewritten(r, written, region, start, end)
+                issues += literalRewritten(r, written, region, stringQuote(js, regions, r.start), start, end)
                 continue
             }
             if (r.signal) {
@@ -754,6 +795,7 @@ public class ExpressionValidator(
         r: Rewrite,
         written: String,
         region: Byte,
+        quote: Char?,
         start: Int,
         end: Int,
     ): Issue {
@@ -761,7 +803,7 @@ public class ExpressionValidator(
         val advice =
             when {
                 region == Region.TEMPLATE && r.signal -> {
-                    " Write \${$written} for the signal's value, or put the text in a quoted string, which Datastar leaves as written."
+                    templateAdvice(written)
                 }
 
                 region == Region.TEMPLATE -> {
@@ -776,11 +818,26 @@ public class ExpressionValidator(
                     ""
                 }
             }
+        // The rewrite writes a quote of its own, which ends a string opened with the same one.
+        val inserted = if (r.signal) '\'' else '"'
         val why =
-            when (region) {
-                Region.TEMPLATE -> ", because the literal also holds a \${...}, so the text holds that"
-                Region.REGEX -> ", which changes the pattern"
-                else -> ", because its pattern pairs the quotes before it differently, so the string holds that"
+            when {
+                region == Region.TEMPLATE -> {
+                    ", because the literal also holds a \${...}, so the text holds that"
+                }
+
+                region == Region.REGEX -> {
+                    ", which changes the pattern"
+                }
+
+                quote == inserted -> {
+                    ", because its pattern pairs the quotes before it differently. The $inserted it writes ends the string, " +
+                        "so the browser cannot parse the expression"
+                }
+
+                else -> {
+                    ", because its pattern pairs the quotes before it differently, so the string holds that"
+                }
             }
         return Issue(
             start,

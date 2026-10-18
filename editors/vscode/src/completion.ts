@@ -41,7 +41,8 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
     const s = selectStringArg(site, spec.arg, spec.named) ?? site.args.map((a) => a.string).find((x) => x && x.start < offset && offset <= x.end) ?? null;
     if (!s || offset <= s.start || offset > s.contentEnd + (s.unterminated ? 1 : 0)) return [];
     const text = src.slice(s.contentStart, offset);
-    const patch = catalog.attributesByKotlin.get(site.name)?.name === "on-signal-patch";
+    // dataOnSignalPatch also writes the filter, so the call is looked up among the attribute's own names.
+    const patch = catalog.attributesByName.get("on-signal-patch")?.kotlin.includes(site.name) ?? false;
     return [...this.expressionItems(text, document, position, offset - text.length, true, patch), ...this.modifierPropertyItems(src, offset, site.name)];
   }
 

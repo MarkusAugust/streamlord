@@ -1,5 +1,5 @@
 {
-  "$comment": "Cases both editors must judge alike. Each case is a source and the issues expected for it, sorted by start, end and code; offsets count UTF-16 code units. An issue without start and end is checked by code only: the two JavaScript parsers do not always place a syntax error on the same character. fixes holds the whole source after each quick fix, in the order offered.",
+  "$comment": "Cases both editors must judge alike. Each case is a source and the issues expected for it, sorted by start, end and code; offsets count UTF-16 code units. An issue without start and end is checked by code only: the two JavaScript parsers do not always place a syntax error on the same character. fixes holds the whole source after each quick fix, in the order offered. The severity and message, where a case gives them, are checked as well.",
   "kind": "kotlin",
   "cases": [
     {"name":"an interpolated signal","source":"dataOnClick(\"$count++\")","issues":[{"code":"kotlin-interpolation","start":13,"end":19,"fixes":["dataOnClick(increment(\"count\"))","dataOnClick($$\"$count++\")","dataOnClick(\"${'$'}count++\")","dataOnClick(\"\\$count++\")"]}]},

@@ -67,23 +67,31 @@ const REGEX_AFTER_WORD: ReadonlySet<string> = new Set(["return", "typeof", "inst
 /** The words whose parenthesised head may be followed by a statement that opens with a regular expression. */
 const HEAD_WORDS: ReadonlySet<string> = new Set(["if", "while", "for", "with"]);
 
-/** The end of the regular expression literal that opens at `from`, or null when none closes on its line. */
-function regexEnd(text: string, from: number): number | null {
-  let j = from + 1;
-  let inClass = false;
-  while (j < text.length && text[j] !== "\n") {
+/**
+ * Where a regular expression literal ends when its scan reaches each offset, outside a class and
+ * inside one (`2 * offset` and `2 * offset + 1`), or -1 when it does not close on its line: past
+ * the closing `/` and its flags. Filled from the end in one pass, so that a text full of `/` that
+ * never close is read in linear time rather than scanned to the end of the line once for each.
+ */
+function regexEnds(text: string): Int32Array {
+  const n = text.length;
+  const out = new Int32Array(2 * (n + 2)).fill(-1);
+  for (let j = n - 1; j >= 0; j--) {
     const c = text[j];
-    if (c === "\\") j++;
-    else if (c === "[") inClass = true;
-    else if (c === "]") inClass = false;
-    else if (c === "/" && !inClass) {
-      j++;
-      while (j < text.length && isIdentPart(text[j])) j++;
-      return j;
+    for (let inClass = 0; inClass <= 1; inClass++) {
+      let end: number;
+      if (c === "\n") end = -1;
+      else if (c === "\\") end = out[2 * (j + 2) + inClass]!;
+      else if (c === "[") end = out[2 * (j + 1) + 1]!;
+      else if (c === "]") end = out[2 * (j + 1)]!;
+      else if (c === "/" && inClass === 0) {
+        end = j + 1;
+        while (end < n && isIdentPart(text[end])) end++;
+      } else end = out[2 * (j + 1) + inClass]!;
+      out[2 * j + inClass] = end;
     }
-    j++;
   }
-  return null;
+  return out;
 }
 
 /**
@@ -100,6 +108,13 @@ export function jsRegions(text: string): Uint8Array {
   const parens: boolean[] = [];
   let regexAllowed = true;
   let lastWord = "";
+  let ends: Int32Array | null = null;
+  /** The end of the regular expression literal that opens at `from`, or null when none closes on its line. */
+  const regexEnd = (from: number) => {
+    ends ??= regexEnds(text);
+    const end = ends[2 * (from + 1)]!;
+    return end < 0 ? null : end;
+  };
   const mark = (from: number, to: number, k: number) => {
     const end = Math.min(to, text.length);
     kind.fill(k, from, end);
@@ -142,8 +157,8 @@ export function jsRegions(text: string): Uint8Array {
       const close = text.indexOf("*/", i + 2);
       i = mark(i, close < 0 ? text.length : close + 2, Region.COMMENT);
       lastWord = word;
-    } else if (c === "/" && regexAllowed && regexEnd(text, i) !== null) {
-      i = mark(i, regexEnd(text, i)!, Region.REGEX);
+    } else if (c === "/" && regexAllowed && regexEnd(i) !== null) {
+      i = mark(i, regexEnd(i)!, Region.REGEX);
       regexAllowed = false;
     } else if (c === "{") {
       if (braces.length > 0) braces[braces.length - 1]!++;
@@ -417,6 +432,24 @@ function statementSplits(text: string): number[] {
   return out;
 }
 
+/**
+ * What to write for a `$name` in the text of a template literal that the client rewrites: `${$name}`
+ * for the signal's value, `${'$'}name` to keep the text. A name that opens with a digit, `$5`, is
+ * text: nobody names a signal that.
+ */
+function templateAdvice(written: string): string {
+  const text = `\${'$'}${written.slice(1)}`;
+  const keep = `write ${text} or put the text in a quoted string, which Datastar leaves as written.`;
+  return /^\$[0-9]/.test(written) ? ` To keep the text, ${keep}` : ` Write \${${written}} for the signal's value. To keep the text, ${keep}`;
+}
+
+/** The quote that opens the string `offset` is in, by the regions of `js`. */
+function stringQuote(js: string, regions: Uint8Array, offset: number): string {
+  let k = offset;
+  while (k > 0 && regions[k - 1] === Region.STRING) k--;
+  return js[k] ?? "";
+}
+
 /** Where a character the client paired as a quote sits, for the message that names it. */
 function placeOf(region: number): string {
   switch (region) {
@@ -500,7 +533,7 @@ export function validateExpression(text: string, returnsValue?: boolean, hyphena
       const advice =
         region === Region.TEMPLATE
           ? r.kind === "signal"
-            ? ` Write \${${written}} for the signal's value, or put the text in a quoted string, which Datastar leaves as written.`
+            ? templateAdvice(written)
             : " Put the text in a quoted string, which Datastar leaves as written."
           : region === Region.REGEX
             ? " Build the pattern with new RegExp('...'): Datastar leaves a quoted string as written."
@@ -510,7 +543,9 @@ export function validateExpression(text: string, returnsValue?: boolean, hyphena
           ? ", because the literal also holds a ${...}, so the text holds that"
           : region === Region.REGEX
             ? ", which changes the pattern"
-            : ", because its pattern pairs the quotes before it differently, so the string holds that";
+            : stringQuote(script.js, regions, r.start) === (r.kind === "signal" ? "'" : '"')
+              ? `, because its pattern pairs the quotes before it differently. The ${r.kind === "signal" ? "'" : '"'} it writes ends the string, so the browser cannot parse the expression`
+              : ", because its pattern pairs the quotes before it differently, so the string holds that";
       issues.push({
         start,
         end,

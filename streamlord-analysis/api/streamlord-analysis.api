@@ -974,7 +974,6 @@ public final class io/github/markusaugust/streamlord/analysis/SignalsKt {
 	public static final fun collectDeclaredSignals (Ljava/lang/String;Lio/github/markusaugust/streamlord/analysis/SourceLanguage;)Ljava/util/Set;
 	public static final fun collectSignalDefinitions (Ljava/lang/String;Lio/github/markusaugust/streamlord/analysis/SourceLanguage;)Ljava/util/Set;
 	public static final fun collectSignals (Ljava/lang/String;Lio/github/markusaugust/streamlord/analysis/SourceLanguage;)Ljava/util/Set;
-	public static final fun keyName (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
 }
 
 public final class io/github/markusaugust/streamlord/analysis/SiteIssues {

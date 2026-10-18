@@ -110,6 +110,14 @@ describe("completion provider", () => {
     assert.deepEqual(vals.map((i) => i.label), ["500ms", "1s", "300ms", "100ms"]);
   });
 
+  it("offers patch only in data-on-signal-patch, where the client defines it", () => {
+    const labels = (src: string, language: string, at = src.length) => complete(new MockDocument(src, language), 0, at, index).map((i) => i.label);
+    assert.ok(labels(`<div data-on-signal-patch="pat`, "html").includes("patch"));
+    assert.ok(labels(`dataOnSignalPatch("pat")`, "kotlin", 22).includes("patch"));
+    const elsewhere = labels(`<div data-on:click="pat`, "html");
+    assert.ok(elsewhere.includes("evt") && !elsewhere.includes("patch"), elsewhere.join());
+  });
+
   it("offers signals inside html attribute values", () => {
     const hdoc = new MockDocument(`<div data-text="$`, "html");
     const items = complete(hdoc, 0, 17, index);

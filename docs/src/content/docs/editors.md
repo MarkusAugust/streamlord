@@ -91,8 +91,10 @@ it.
 
 **Hover documentation**, snippets, and syntax highlighting of the Datastar tokens only, never
 of your Kotlin or your HTML, which belong to your theme. In IntelliJ the Datastar tokens take
-their colours from your theme too: a signal is coloured as a static field, an action as a
-function call.
+their colours from your theme too: a signal is coloured as a static field, a backend action such
+as `@get` as a keyword, and any other action as a function call. IntelliJ's own schemes give a
+function call and a class name no colour, so there an action, an attribute key and a modifier
+argument read as plain text; Settings | Editor | Color Scheme | Streamlord gives them one.
 
 **A Stream Inspector** that shows a live SSE stream decoded rather than as raw text, with saved
 requests in `.streamlord/inspector.json` that the two editors share.

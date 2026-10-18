@@ -48,4 +48,17 @@ class CompletionTest : BasePlatformTestCase() {
         val items = myFixture.completeBasic()?.map { it.lookupString } ?: emptyList()
         assertTrue(items.toString(), "data-on" in items)
     }
+
+    fun `test patch is offered only in data-on-signal-patch, where the client defines it`() {
+        myFixture.configureByText("page.html", "<div data-on-signal-patch=\"pat<caret>\"></div>")
+        // The one item is inserted straight away.
+        myFixture.completeBasic()
+        assertTrue(myFixture.editor.document.text, "\"patch\"" in myFixture.editor.document.text)
+        myFixture.configureByText("Feed.kt", "fun f() { dataOnSignalPatch(\"pat<caret>\") }")
+        myFixture.completeBasic()
+        assertTrue(myFixture.editor.document.text, "\"patch\"" in myFixture.editor.document.text)
+        myFixture.configureByText("page2.html", "<div data-on:click=\"pat<caret>\"></div>")
+        val items = myFixture.completeBasic()?.map { it.lookupString } ?: emptyList()
+        assertFalse(items.toString(), "patch" in items || "\"patch\"" in myFixture.editor.document.text)
+    }
 }

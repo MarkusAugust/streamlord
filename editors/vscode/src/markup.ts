@@ -1,6 +1,6 @@
 import { catalog, distance, parseAttributeName, type AttributeSpec } from "./catalog.ts";
-import { attributeDoc, DOCS, expressionError, jsRegions, quoteAt, Region, validateExpression, type Fix, type Issue } from "./expression.ts";
-import { clientKeyName, objectKeys, signalNameProblem, signalPathProblem, PROTOTYPE_NAMES } from "./signals.ts";
+import { attributeDoc, DOCS, expressionError, isIdentPart, jsRegions, quoteAt, Region, validateExpression, type Fix, type Issue } from "./expression.ts";
+import { clientKeyName, objectKeys, signalNameProblem, signalPathProblem, PROTOTYPE_NAMES, type ObjectKey } from "./signals.ts";
 
 /**
  * Markup checks for the HTML Datastar patches: complete elements, ids where the protocol needs
@@ -440,7 +440,9 @@ export function validateAttributes(tag: Tag, prefix: string, tagSource?: string,
       issues.push({ start: attr.nameStart, end: nameEnd, message: `${prefix}${spec.name} does not take a key.`, severity: "error", code: "unexpected-key", link: attributeDoc(spec.name) });
     }
     if (parsed.key !== null) issues.push(...validateKeyCase(attr, parsed, spec, prefix));
-    const named = validateSignalNames(attr, parsed, spec, prefix);
+    // data-signals:${key}: a template construct cut the name short, so its key is not yet written.
+    const cut = tagSource !== undefined && tagSource[attr.nameStart - tag.start + attr.name.length] === "{";
+    const named = validateSignalNames(attr, parsed, spec, prefix, cut);
     issues.push(...named);
     issues.push(...validateDottedKey(attr, parsed, spec, prefix));
     const hasKey = !!parsed.key;
@@ -624,18 +626,20 @@ function validateDottedKey(attr: Attribute, parsed: { key: string | null }, spec
  * rules (`SignalNames` in streamlord-core, `Casing.signalName` and `Casing.heldKey` in
  * streamlord-html).
  */
-function validateSignalNames(attr: Attribute, parsed: { key: string | null }, spec: AttributeSpec, prefix: string): Issue[] {
+function validateSignalNames(attr: Attribute, parsed: { key: string | null }, spec: AttributeSpec, prefix: string, cut: boolean): Issue[] {
   if (keyKind(spec) !== "signal") return [];
   const out: Issue[] = [];
   const name = prefix + spec.name;
   const colon = attr.name.indexOf(":");
   // data-signals:__proto__ has no key to the client: the `__` starts the modifiers, and no plugin is named `signals:`.
-  if (parsed.key && colon >= 0) {
+  if (parsed.key && colon >= 0 && !cut) {
     const written = attr.name.slice(colon + 1);
     const held = clientKeyName(asciiLowercase(written));
     const keyStart = attr.nameStart + colon + 1;
     const keyEnd = keyStart + (written.split("__")[0] ?? "").length;
-    const path = signalPathProblem(held);
+    // data-signals:constructor="{a: 1}" puts an object under the last part, which the client then writes into the built-in one.
+    const objectUnder = spec.name === "signals" && decodeEntities(attr.value ?? "").text.trimStart().startsWith("{");
+    const path = signalPathProblem(held, objectUnder);
     const reach = path ? null : signalNameProblem(held);
     if (path || reach) {
       out.push({
@@ -685,7 +689,7 @@ function validateSignalNames(attr: Attribute, parsed: { key: string | null }, sp
           link: attributeDoc(spec.name),
         });
       } else {
-        const reach = signalNameProblem(k.key);
+        const reach = signalNameProblem(k.key, keyParts(k));
         if (reach) out.push({ ...at, message: `This declares the signal ${k.path}, as written, which ${reach}.`, severity: "warning", code: "signal-name", link: attributeDoc(spec.name) });
       }
     }
@@ -693,12 +697,133 @@ function validateSignalNames(attr: Attribute, parsed: { key: string | null }, sp
   return out;
 }
 
-/** What starts a value that is no function: a literal, a signal read, or an operator. */
-const NOT_A_FUNCTION = /^(?:[0-9'"`[$!+\-~]|(?:true|false|null|undefined|NaN|new)\b)/;
+/** The path of a key of the object form, part by part, as the bracket form `$['a']['my key']` names it. */
+function keyParts(k: ObjectKey): string[] {
+  return k.path === k.key ? [k.key] : [...k.path.slice(0, k.path.length - k.key.length - 1).split("."), k.key];
+}
+
+/** A number literal, whole. */
+const NUMBER = /^(?:0[xX][\da-fA-F_]+|0[bB][01_]+|0[oO][0-7_]+|(?:\d[\d_]*(?:\.[\d_]*)?|\.\d[\d_]*)(?:[eE][+-]?\d+)?)n?$/;
+const NO_FUNCTION_WORDS = /^(?:true|false|null|undefined|NaN|Infinity)$/;
+
+/**
+ * Whether the JavaScript expression `value` is sure to give no function: a literal (a number, a
+ * string, a template, a regular expression, an array), a unary operation, or operands joined by an
+ * arithmetic, bitwise or comparison operator. A name, a call, `new`, or anything with `?`, `||`,
+ * `&&`, `??`, `=`, `=>` or `,` at its top level may give one, and is not judged. Shared with the
+ * analysis module (`certainlyNoFunction` in Markup.kt).
+ */
+export function certainlyNoFunction(value: string): boolean {
+  const v = value.trim();
+  if (v.length === 0) return false;
+  if (NUMBER.test(v) || NO_FUNCTION_WORDS.test(v)) return true;
+  const regions = jsRegions(v);
+  let depth = 0;
+  let binary = false;
+  let unary = false;
+  // Whether what came last at the top level ends an operand, and whether anything came yet.
+  let operand = false;
+  let started = false;
+  // The literals and brackets that open an operand at the top level, and whether a name, an
+  // operator or a member access stands there as well.
+  let groups = 0;
+  let code = false;
+  let lastRegion: number = Region.CODE;
+  for (let i = 0; i < v.length; i++) {
+    const c = v[i]!;
+    const r = regions[i]!;
+    if (r === Region.TEMPLATE && c === "$" && v[i + 1] === "{" && v[i - 1] !== "\\") {
+      depth++;
+      i++;
+      continue;
+    }
+    if (r === Region.TEMPLATE && c === "}" && depth > 0 && regions[i - 1] === Region.CODE) {
+      depth--;
+      continue;
+    }
+    if (r === Region.CODE && (c === "(" || c === "[" || c === "{")) {
+      if (depth === 0) {
+        if (operand) code = true;
+        else groups++;
+        started = true;
+        lastRegion = Region.CODE;
+      }
+      depth++;
+      continue;
+    }
+    if (r === Region.CODE && (c === ")" || c === "]" || c === "}")) {
+      depth = Math.max(depth - 1, 0);
+      if (depth === 0) operand = true;
+      continue;
+    }
+    if (depth > 0 || r === Region.COMMENT) continue;
+    if (r !== Region.CODE) {
+      if (r !== lastRegion) {
+        if (operand) code = true;
+        else groups++;
+      }
+      lastRegion = r;
+      operand = true;
+      started = true;
+      continue;
+    }
+    lastRegion = Region.CODE;
+    if (/\s/.test(c)) continue;
+    if (c === "?" || c === "," || (c === "=" && v[i + 1] === ">") || ((c === "|" || c === "&") && v[i + 1] === c)) return false;
+    if (c === "=" && v[i + 1] !== "=" && !"=!<>".includes(v[i - 1] ?? "x")) return false;
+    if (isIdentPart(c)) {
+      let j = i + 1;
+      while (j < v.length && isIdentPart(v[j])) j++;
+      const word = v.slice(i, j);
+      i = j - 1;
+      if (operand && (word === "in" || word === "instanceof")) {
+        binary = true;
+        operand = false;
+      } else if (!started && (word === "typeof" || word === "void" || word === "delete")) {
+        unary = true;
+      } else {
+        operand = true;
+        code = true;
+      }
+      started = true;
+      continue;
+    }
+    if (c === ".") {
+      code = true;
+      continue;
+    }
+    if (!"+-*/%<>&|^!=~".includes(c)) return false;
+    if (operand) binary = true;
+    else if (!started) unary = true;
+    operand = false;
+    code = true;
+    started = true;
+  }
+  if (depth !== 0) return false;
+  if (binary || unary) return true;
+  return groups === 1 && !code && (regions[0] !== Region.CODE || v[0] === "[");
+}
+
+/** Where the value that starts at `from` in an object's `body` ends: at the `,` after it or the bracket that closes the object. */
+function valueEnd(body: string, regions: Uint8Array, from: number): number {
+  let depth = 0;
+  for (let i = from; i < body.length; i++) {
+    if (regions[i] !== Region.CODE) continue;
+    const c = body[i];
+    if (c === "(" || c === "[" || c === "{") depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      if (depth === 0) return i;
+      depth--;
+    } else if (c === "," && depth === 0) return i;
+  }
+  return body.length;
+}
 
 /**
  * `data-computed` without a key takes an object of functions (computed.ts in 1.0.4): any other value
  * declares nothing, and a value under a key that is no function raises ComputedExpectedFunction.
+ * Only a value sure to be no function is judged: `fns`, `{total: $a ? f : g}` and
+ * `{total: new Function(...)}` may well give one.
  */
 function validateComputedObject(attr: Attribute, prefix: string): Issue[] {
   const value = attr.value ?? "";
@@ -708,6 +833,7 @@ function validateComputedObject(attr: Attribute, prefix: string): Issue[] {
   const source = (from: number, to: number) => ({ start: attr.valueStart + (decoded.map[from] ?? 0), end: attr.valueStart + (decoded.map[to] ?? value.length) });
   const name = `${prefix}computed`;
   if (open < 0 || text.slice(0, open).trim() !== "") {
+    if (!certainlyNoFunction(text)) return [];
     return [{
       ...source(0, text.length),
       message: `Without a key, ${name} takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: ${name}:total.`,
@@ -717,9 +843,10 @@ function validateComputedObject(attr: Attribute, prefix: string): Issue[] {
     }];
   }
   const body = text.slice(open + 1, text.lastIndexOf("}") < open ? text.length : text.lastIndexOf("}"));
+  const regions = jsRegions(body);
   const out: Issue[] = [];
   for (const k of objectKeys(body)) {
-    if (k.object || !NOT_A_FUNCTION.test(body.slice(k.valueStart))) continue;
+    if (k.object || !certainlyNoFunction(body.slice(k.valueStart, valueEnd(body, regions, k.valueStart)))) continue;
     out.push({
       ...source(open + 1 + k.start, open + 1 + k.end),
       message: `Without a key, each value of ${name} must be a function, such as ${k.key}: () => ...; Datastar raises ComputedExpectedFunction for ${k.key}.`,
@@ -764,18 +891,49 @@ function validateFilter(attr: Attribute, spec: AttributeSpec, prefix: string): I
       });
     }
   }
-  // include: '/^foo/i' is the pattern /\/^foo\/i/, slashes and all: a string is taken as the pattern itself.
-  for (const m of text.matchAll(/(["']?)(include|exclude)\1\s*:\s*(["'])\/((?:\\.|(?!\3).)*)\/([a-z]*)\3/g)) {
-    const at = m.index + m[0].length - (m[4]!.length + m[5]!.length + 4);
-    const literal = `/${m[4]}/${m[5]}`;
+  for (const p of stringPatterns(text)) {
+    const literal = `/${p.pattern}/${p.flags}`;
+    // The string's escapes would mean something else in a literal, so the fix is offered only without them.
+    const fixes = json || p.pattern.includes("\\") ? [] : [{ title: `Change to ${literal}`, ...source(p.start, p.end), text: literal }];
     out.push({
-      ...source(at, m.index + m[0].length),
-      message: `A string ${m[2]} is the pattern itself, so its slashes${m[5] ? " and flags" : ""} are matched as text. Write the regular expression literal ${literal}.`,
+      ...source(p.start, p.end),
+      message:
+        `Datastar cuts one / from each end of a string ${p.key} and takes the rest as the pattern, so /${p.flags} stays in it and is matched as text, not read as flags. ` +
+        (json ? `JSON holds no regular expression: write the value as JavaScript, with the literal ${literal}.` : `Write the regular expression literal ${literal}.`),
       severity: "warning",
       code: "filter-pattern",
       link: attributeDoc(spec.name),
-      ...(json ? {} : { fixes: [{ title: `Change to ${literal}`, ...source(at, m.index + m[0].length), text: literal }] }),
+      ...(fixes.length ? { fixes } : {}),
     });
+  }
+  return out;
+}
+
+/** `include: '` or `"exclude": "`, a pattern given as a string that opens with a slash. */
+const STRING_PATTERN_HEAD = /(["']?)(include|exclude)\1\s*:\s*(["'])\//g;
+const REGEX_FLAGS = /^[dgimsuyv]+$/;
+
+/**
+ * The patterns of a filter written as a string with a slash before them and flags after the last
+ * one: `include: '/^foo/i'`. The client's `toRegExp` (signals.ts:752 in 1.0.4) cuts one `/` from
+ * each end and nothing else, so `'/^foo/'` works and `'/^foo/i'` looks for `/i`. A scan rather
+ * than one regular expression, which backtracks without end on a run of escapes. Shared with the
+ * analysis module (`stringPatterns` in Markup.kt).
+ */
+export function stringPatterns(text: string): { key: string; start: number; end: number; pattern: string; flags: string }[] {
+  const out: { key: string; start: number; end: number; pattern: string; flags: string }[] = [];
+  for (const m of text.matchAll(STRING_PATTERN_HEAD)) {
+    const quote = m[3]!;
+    const start = m.index + m[0].length - 2;
+    let j = start + 1;
+    while (j < text.length && text[j] !== quote) j += text[j] === "\\" ? 2 : 1;
+    if (j >= text.length) continue;
+    const content = text.slice(start + 1, j);
+    // An escaped slash is a slash all the same once the string is read: '\/' is '/'.
+    const slash = content.lastIndexOf("/");
+    const flags = content.slice(slash + 1);
+    if (slash <= 0 || !REGEX_FLAGS.test(flags)) continue;
+    out.push({ key: m[2]!, start, end: j + 1, pattern: content.slice(1, slash), flags });
   }
   return out;
 }
@@ -905,13 +1063,17 @@ function validateModifierArgs(spec: AttributeSpec["modifiers"][number], args: st
       const [d, ...flags] = args;
       const later = flags.findIndex((f) => DURATION.test(f));
       const known = (a: string) => (spec.flags ?? []).includes(a);
-      if (d && !DURATION.test(d) && known(d) && later >= 0 && flags.every((f, k) => k === later || known(f))) {
+      if (d && !DURATION.test(d) && known(d) && later >= 0) {
         // __debounce.leading.500ms: the client reads the first argument as the duration.
         const ordered = [flags[later]!, d, ...flags.filter((_, k) => k !== later)];
         const fixed = `__${spec.name}.${ordered.join(".")}`;
-        fail(`Datastar reads the first argument of __${spec.name} as its duration, so with .${d} first it reads none and does not wait. The duration comes first: ${fixed}.`, [
-          { title: `Change to ${fixed}`, start: start + spec.name.length, end, text: "." + ordered.join(".") },
-        ]);
+        const unknown = flags.filter((f, k) => k !== later && !known(f));
+        // With a flag it does not know, the reordered modifier would fail in turn, so it is no fix.
+        fail(
+          `Datastar reads the first argument of __${spec.name} as its duration, so with .${d} first it reads none and does not wait. The duration comes first: ${fixed}.`,
+          unknown.length === 0 ? [{ title: `Change to ${fixed}`, start: start + spec.name.length, end, text: "." + ordered.join(".") }] : undefined,
+        );
+        for (const f of unknown) fail(`Unknown flag .${f} for __${spec.name}. Allowed: ${(spec.flags ?? []).map((x) => "." + x).join(", ") || "none"}.`);
         break;
       }
       if (d && /^\d+$/.test(d) && flags[0] !== undefined && /^\d+(ms|s)?$/.test(flags[0])) {
@@ -919,9 +1081,11 @@ function validateModifierArgs(spec: AttributeSpec["modifiers"][number], args: st
         const unit = flags[0].endsWith("ms") ? "ms" : flags[0].endsWith("s") ? "s" : "ms";
         const ms = Number(`${d}.${flags[0].replace(/(ms|s)$/, "")}`) * (unit === "s" ? 1000 : 1);
         const whole = Number.isInteger(ms) ? `${ms}ms` : null;
+        // With a flag it does not know after it, the whole duration would fail in turn, so it is no fix.
+        const fixable = whole !== null && flags.slice(1).every(known);
         fail(
           `Datastar reads __${spec.name}.${d}.${flags[0]} as ${d} ms: a dot separates arguments, so a duration has no fraction.${whole ? ` Write __${spec.name}.${whole}.` : ""}`,
-          whole ? [{ title: `Change to __${spec.name}.${whole}`, start: start + spec.name.length, end: start + spec.name.length + 2 + d.length + flags[0].length, text: `.${whole}` }] : undefined,
+          fixable ? [{ title: `Change to __${spec.name}.${whole}`, start: start + spec.name.length, end: start + spec.name.length + 2 + d.length + flags[0].length, text: `.${whole}` }] : undefined,
         );
         for (const f of flags.slice(1)) if (!known(f)) fail(`Unknown flag .${f} for __${spec.name}. Allowed: ${(spec.flags ?? []).map((x) => "." + x).join(", ") || "none"}.`);
         break;

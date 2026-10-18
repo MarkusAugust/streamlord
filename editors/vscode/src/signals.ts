@@ -24,8 +24,10 @@ const ASSIGNED_SIGNAL = /(?:\$|\$\{'\$'\})([A-Za-z_][A-Za-z0-9_.]*)\s*=(?![=>])/
  * matched in any case and its key is lowercased: `data-signals:fooBar` declares `foobar`.
  */
 const HTML_ATTRIBUTE_PATTERNS: RegExp[] = [
-  // The key with its modifiers, which may name the casing: data-signals:my-value__case.snake.
-  /data-(?:star-)?(?:signals|bind|indicator|ref|computed|match-media):([^\s=>"'/\\]+)/gi,
+  // The key with its modifiers, which may name the casing: data-signals:my-value__case.snake. A key
+  // the client could hold and nothing else, so that template syntax (data-signals:${key},
+  // data-signals:{{ name }}, data-signals:th:text) declares nothing.
+  /data-(?:star-)?(?:signals|bind|indicator|ref|computed|match-media):([\p{L}\p{N}_.-]+)(?=[\s=>"'/\\]|$)/giu,
   // The value form names the signal as written: data-bind="user-name" is the signal user-name.
   /data-(?:star-)?(?:bind|indicator|ref)(?:__[^=\s>]*)?=(?:\\?"([^"\\\s]+)\\?"|'([^'\s]+)')/gi,
   // The object form may sit in either kind of quote: JSON written by hand is `data-signals='{"query": ""}'`.
@@ -150,25 +152,37 @@ export const PROTOTYPE_NAMES: ReadonlySet<string> = new Set([
 /**
  * Why the client cannot hold a signal at `path`, written with dots as `data-signals:a.b` writes it,
  * or null when it can. The client follows the path without a guard, so a part every object already
- * has writes into the built-in one: `__proto__.x` and `constructor.prototype.x` set `x` on every
- * object of the page (`SignalNames.pathProblem` in streamlord-core says the same).
+ * has, with more of the path under it, writes into the built-in one: `__proto__.x` and
+ * `constructor.prototype.x` set `x` on every object of the page. The last part is held as a key of
+ * its own (`data-signals:constructor="1"` is `$constructor`) unless `objectUnder` says an object
+ * goes under it; `__proto__` is never held. `SignalNames.pathProblem` in streamlord-core is
+ * stricter, since a name written in code may carry an object under it at any part.
  */
-export function signalPathProblem(path: string): string | null {
+export function signalPathProblem(path: string, objectUnder = false): string | null {
   const parts = path.split(".");
   if (parts.some((p) => p.length === 0)) return "has an empty part, which no $ reference reaches";
-  const part = parts.find((p) => PROTOTYPE_NAMES.has(p));
+  const part = parts.find((p, i) => p === "__proto__" || (PROTOTYPE_NAMES.has(p) && (i < parts.length - 1 || objectUnder)));
   return part ? `has the part ${part}, which every object already has, so the client writes into the built-in one instead of holding a signal` : null;
 }
 
 /** What the client reads after a `$`: ASCII letters, digits and `_`, in parts joined by `.` or `-` (engine.ts:449 in 1.0.4). */
 const REACHABLE_NAME = /^[A-Za-z0-9_]+(?:[.-][A-Za-z0-9_]+)*$/;
 
-/** Why no `$` reference reaches a signal named `name`, or null when one does. */
-export function signalNameProblem(name: string): string | null {
+/** `$['my key']`, the read that reaches a signal at `parts` whatever its name: the client leaves a `$[` as written. */
+export function bracketRead(parts: string[]): string {
+  return "$" + parts.map((p) => `['${p.replace(/[\\']/g, "\\$&")}']`).join("");
+}
+
+/**
+ * Why no `$name` reaches a signal named `name`, or null when one does. `parts` is the path the
+ * bracket form names, the name split at its dots unless given.
+ */
+export function signalNameProblem(name: string, parts: string[] = name.split(".")): string | null {
   if (REACHABLE_NAME.test(name)) return null;
   if (name.startsWith("$")) return `holds the $ itself, so $${name.slice(1)} does not reach it: that reads the signal ${name.slice(1)}`;
-  if (/[^\x00-\x7F]/.test(name)) return "no $ reference reaches: Datastar reads only ASCII letters, digits and _ after a $, so the browser looks for a JavaScript variable instead";
-  return "no $ reference reaches: Datastar reads ASCII letters, digits and _ after a $, in parts joined by . or -";
+  const bracket = `only the bracket form ${bracketRead(parts)} reads it`;
+  if (/[^\x00-\x7F]/.test(name)) return `no $name reaches: Datastar reads only ASCII letters, digits and _ after a $, so the browser looks for a JavaScript variable instead; ${bracket}`;
+  return `no $name reaches: Datastar reads ASCII letters, digits and _ after a $, in parts joined by . or -; ${bracket}`;
 }
 
 const CASE_FNS: Record<string, (s: string) => string> = {
@@ -201,6 +215,8 @@ export function clientKeyName(written: string): string {
  * that key before them, as the client's `mergePatch` stores them. `{user: {name: 'x'}}` declares
  * `user` and `user.name`. A key may be bare or quoted, and inside a Kotlin string its quotes may be
  * escaped; an object that is not the value of a key, inside a function or a list, declares nothing.
+ * An object literal spread into another declares its keys there; what a spread of anything else
+ * brings is not known.
  */
 export function objectKeyPaths(body: string): string[] {
   return objectKeys(body).map((k) => k.path);
@@ -265,6 +281,13 @@ export function objectKeys(body: string): ObjectKey[] {
       let j = i + 1;
       while (j < body.length && body[j] !== c) j += body[j] === "\\" ? 2 : 1;
       i = j + 1;
+      continue;
+    }
+    // `...{b: 2}` spreads its keys into the object it stands in: `{a: 1, ...{b: 2}}` declares `b`.
+    if (c === "." && body.startsWith("...", i) && top !== null && top !== undefined) {
+      i += 3;
+      skipSpace();
+      if (body[i] === "{") objectFor = top;
       continue;
     }
     if (c === "{") {

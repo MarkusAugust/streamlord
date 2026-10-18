@@ -16,6 +16,8 @@ interface Expected {
   code: string;
   start?: number;
   end?: number;
+  severity?: string;
+  message?: string;
   fixes?: string[];
 }
 interface Case {
@@ -48,8 +50,10 @@ describe("shared corpus", () => {
         const actual = [...run[corpus.kind]!(c)].sort((a, b) => a.start - b.start || a.end - b.end || byCode(a, b));
         const seen = actual.map((i, n) => {
           const o: Expected = { code: i.code ?? "" };
-          // An expected issue without a range is checked by code only.
+          // An expected issue without a range is checked by code only; a severity or a message is checked where the case gives one.
           if (c.issues[n]?.start !== undefined || !c.issues[n]) Object.assign(o, { start: i.start, end: i.end });
+          if (c.issues[n]?.severity !== undefined) o.severity = i.severity;
+          if (c.issues[n]?.message !== undefined) o.message = i.message;
           if (i.fixes?.length) o.fixes = i.fixes.map((f) => c.source.slice(0, f.start) + f.text + c.source.slice(f.end));
           return o;
         });

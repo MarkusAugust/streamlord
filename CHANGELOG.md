@@ -52,6 +52,12 @@ All notable changes to Streamlord are recorded here. The format follows
   `data-signals:a.b` does and hands a clash to a function of yours.
 - `Casing.heldKey` in `streamlord-html`: refuses an attribute key whose signal, as Datastar's
   client reads it after lowercasing, cutting at `__` and applying `__case`, it cannot hold.
+- `streamlord-analysis`, for both editors, six diagnostics, described under Fixed:
+  `literal-rewritten` and `signal-not-read`, where the client's rewrite of an expression does what
+  JavaScript would not; `signal-name`, a signal name the client cannot hold or no `$name`
+  reaches; `filter-pattern`, a filter pattern written as a string with flags; `computed-value`,
+  a value of `data-computed` that is no function; and `statement-split`, a `;` inside brackets in
+  a value that is read.
 
 ### Changed
 
@@ -232,6 +238,11 @@ All notable changes to Streamlord are recorded here. The format follows
   `signalsTooLarge` and `signalsUnreadable` handlers of `StreamlordExceptionHandler` take the
   exception; the 0.12 signatures remain, hidden.
 
+### Removed
+
+- `keyName(key, case)` in `streamlord-analysis`, which nothing called and which named a signal
+  otherwise than the client does: it took one `__case` and camel-cased a key the client leaves.
+
 ### Fixed
 
 - The editors read a page's signals as Datastar's client stores them. `signal-kebab` said "no key
@@ -252,31 +263,42 @@ All notable changes to Streamlord are recorded here. The format follows
   not read because only ASCII follows a `$`. `@get` without its parenthesis, which the client
   does not rewrite, is the syntax error it is in the browser, where `@` used to become `_`.
   `new.target` is accepted, since the client compiles the body of a function.
-- The editors flag signal names the client cannot hold or no `$` reaches (`signal-name`):
-  `__proto__`, `constructor` or another property of `Object.prototype` as a part of the name,
-  which writes into every object of the page, also once the client has read the key
-  (`data-signals:_-proto-_.x__case.snake` is `__proto__.x`); an object under such a key in the
-  object form; a `$` in `data-bind="$user"`, which makes the signal `$user` that `$user` does not
-  reach; and a letter beyond ASCII.
+- The editors flag signal names the client cannot hold or no `$name` reaches (`signal-name`):
+  `__proto__` anywhere in the name, and `constructor` or another property of `Object.prototype`
+  with more of the name under it, which writes into every object of the page, also once the
+  client has read the key (`data-signals:_-proto-_.x__case.snake` is `__proto__.x`); an object
+  under such a name, in the object form or as the value of `data-signals:constructor`; a `$` in
+  `data-bind="$user"`, which makes the signal `$user` that `$user` does not reach; and a letter
+  beyond ASCII or a space, where the message names the bracket form, `$['my key']`, that does
+  reach it. Such a name as the last part with a plain value under it, `data-signals:constructor="1"`
+  or `data-bind="toString"`, is held as its own key and is not flagged. A key with template
+  syntax in it, `data-signals:${key}` or `data-signals:{{ name }}`, declares no signal, and an
+  object spread into the object form, `{a: 1, ...{b: 2}}`, declares its keys.
 - The editors check the filters of `data-json-signals` and `data-on-signal-patch-filter`, which
   the client evaluates without signals: a regular expression that does not compile is an error,
-  a `$name` there is a warning, and so is a pattern written as a string with its slashes and
-  flags, with the literal as the fix. `data-on-signal-patch:filter`, a key 1.0.4 accepts, is no
-  longer an error; the catalog lists it under `keys`, read as `AttributeSpec.keys` in
-  `streamlord-analysis`. `data-computed` without a key warns when its value is no object of functions,
-  and errs where the client raises `ComputedExpectedFunction`. A `;` inside brackets in a value
-  that is read, which the client splits all the same, losing the value, is a warning.
+  a `$name` there is a warning, and so is a pattern written as a string with flags after its
+  last slash (`filter-pattern`): the client cuts one `/` from each end of the string, so
+  `'/^user/'` works and `'/^user/i'` matches the text `/i`; the fix is the literal `/^user/i`.
+  `data-on-signal-patch:filter`, a key 1.0.4 accepts, is no longer an error; the catalog lists it
+  under `keys`, read as `AttributeSpec.keys` in `streamlord-analysis`. `data-computed` without a
+  key warns when its value is sure to be no object of functions, and errs where the client raises
+  `ComputedExpectedFunction` for a value sure to be no function: a literal, a unary operation or
+  an arithmetic one, not a name, a call or a `?:`, which may give one. A `;` inside brackets in
+  a value that is read, which the client splits all the same, losing the value, is a warning.
 - The editors explain a duration after a flag, `__debounce.leading.500ms`, in one message with
   the reordered modifier as the fix, where they gave two, and a fraction, `__debounce.1.5s`,
-  which the client reads as 1 ms, with `__debounce.1500ms` as the fix. The advice for
+  which the client reads as 1 ms, with `__debounce.1500ms` as the fix; with a flag the client
+  does not know after them, that flag is named and no fix is offered. The advice for
   `data-style:backgroundColor` is the kebab-case property, with the fix, where "name the
   property in lowercase" led to a property that does not exist.
 - The two editors read the same signals in an expression: IntelliJ now reads a signal in the code
   of a template literal, and VS Code no longer reads one inside a regular expression; a signal in
-  a comment is read by neither. VS Code no longer offers `patch` outside `data-on-signal-patch`,
-  where it is not defined.
+  a comment is read by neither. Neither editor offers `patch` outside `data-on-signal-patch` and
+  `dataOnSignalPatch`, where it is not defined.
 - The IntelliJ plugin no longer sets colours for the Default and Darcula schemes, which won over
   every theme built on them. Each Datastar token takes the colour the theme gives a standard key.
+  IntelliJ's own schemes give a function call and a class name no colour, so there an action
+  other than a backend one, an attribute key and a modifier argument read as plain text.
 - The VS Code package carries acorn's licence, in `ThirdPartyNotices.txt`, beside the bundle that
   includes acorn.
 

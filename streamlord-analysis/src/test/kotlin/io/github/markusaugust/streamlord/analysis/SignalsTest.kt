@@ -47,4 +47,13 @@ class SignalsTest {
         assertEquals(listOf("bare", "single"), html("""<div data-signals__ifmissing="{'single': 1, bare: 2}"></div>"""))
         assertEquals(listOf("esc"), kotlin("""val k = "<div data-signals='{\"esc\": 1}'></div>""""))
     }
+
+    @Test
+    fun `a key with template syntax in it declares nothing`() {
+        val keys =
+            "<div data-signals:${'$'}{key}=\"1\"></div><div data-signals:{{ name }}=\"1\"></div><div data-signals:th:text=\"1\"></div>" +
+                "<div data-signals:<%= k %>=\"1\"></div><div data-signals:foo{{x}}=\"1\"></div>"
+        assertEquals(listOf("user-name", "år"), html(keys + "<div data-bind:user-name__case.kebab></div><div data-signals:år=\"1\"></div>"))
+        assertEquals(emptyList(), kotlin("val x = \"<div data-signals:${'$'}{name}=\\\"1\\\"></div>\""))
+    }
 }

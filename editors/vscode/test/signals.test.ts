@@ -35,4 +35,10 @@ data class PageSignals(
     assert.deepEqual(html(`<div data-signals__ifmissing="{'single': 1, bare: 2}"></div>`), ["bare", "single"]);
     assert.deepEqual(kotlin(String.raw`val k = "<div data-signals='{\"esc\": 1}'></div>"`), ["esc"]);
   });
+
+  it("a key with template syntax in it declares nothing", () => {
+    const keys = `<div data-signals:\${key}="1"></div><div data-signals:{{ name }}="1"></div><div data-signals:th:text="1"></div><div data-signals:<%= k %>="1"></div><div data-signals:foo{{x}}="1"></div>`;
+    assert.deepEqual(html(keys + `<div data-bind:user-name__case.kebab></div><div data-signals:år="1"></div>`), ["user-name", "år"]);
+    assert.deepEqual(kotlin(`val x = "<div data-signals:\${name}=\\"1\\"></div>"`), []);
+  });
 });

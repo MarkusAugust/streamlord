@@ -122,7 +122,8 @@ class StreamlordCompletionContributor : CompletionContributor() {
                     ?: return
             if (offset <= s.start || offset > s.contentEnd + (if (s.unterminated) 1 else 0)) return
             val text = src.substring(s.contentStart, offset)
-            val patch = catalog.attributesByKotlin[site.name]?.name == "on-signal-patch"
+            // dataOnSignalPatch also writes the filter, so the call is looked up among the attribute's own names.
+            val patch = catalog.attributesByName["on-signal-patch"]?.kotlin?.contains(site.name) == true
             if (expressionItems(text, index, file, result, allowActions = true, patchInScope = patch)) result.stopHere()
         }
 
