@@ -6,7 +6,6 @@ import io.github.markusaugust.streamlord.core.domain.SignalsResponse
 import io.github.markusaugust.streamlord.core.domain.Wire
 import io.github.markusaugust.streamlord.core.json.JsonNumber
 import io.github.markusaugust.streamlord.core.json.JsonWriter
-import org.junit.jupiter.api.Timeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -66,13 +65,39 @@ class ScriptAndSignalsContextTest {
         assertTrue("one JSON object" in broken.message.orEmpty(), broken.message)
     }
 
-    // Each key is read once. Read in proportion to the rest of the text, these 200 000 keys took
-    // nine seconds; read once, ten milliseconds. The limit sits far from both.
+    // Each key is read once. Read in proportion to the rest of the text, 200 000 keys took nine
+    // seconds; read once, ten milliseconds. A busy machine stretches any time, so the test compares
+    // two texts in the same run that end in the same long string: read once, two thousand keys in
+    // front of it add next to nothing; read to the end, each adds the whole string again.
     @Test
-    @Timeout(5)
     fun `checking the keys takes time in proportion to the text`() {
-        val rows = (1..100_000).joinToString(",", "{\"rows\":[", "]}") { "{\"id\":$it,\"name\":\"n$it\"}" }
-        assertEquals(rows, PatchSignals(rows).signals)
+        val tail = "\"tail\":\"" + "x".repeat(4_000_000) + "\"}"
+        val one = "{\"k\":1,$tail"
+        val many = (1..2_000).joinToString(",", "{", ",") { "\"k$it\":$it" } + tail
+        assertEquals(many, PatchSignals(many).signals)
+
+        fun nanos(text: String): Long {
+            val started = System.nanoTime()
+            PatchSignals(text)
+            return System.nanoTime() - started
+        }
+        // Warmed up, then the fastest of several, taken in turn, so both see the same machine. Read
+        // once, the two come out about even; read to the end, the keys made it some 300 times slower.
+        repeat(3) {
+            nanos(one)
+            nanos(many)
+        }
+        var fastestOne = Long.MAX_VALUE
+        var fastestMany = Long.MAX_VALUE
+        repeat(10) {
+            fastestOne = minOf(fastestOne, nanos(one))
+            fastestMany = minOf(fastestMany, nanos(many))
+        }
+        val ratio = fastestMany.toDouble() / fastestOne
+        // What this does not catch: a cost that grows with the square of the keys alone, each key
+        // checked against those before it, say. Two thousand keys are too few beside the long string
+        // for that to show.
+        assertTrue(ratio < 50, "two thousand keys made it $ratio times slower: $fastestOne ns, then $fastestMany ns")
     }
 
     @Test

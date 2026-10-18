@@ -20,6 +20,8 @@ import org.springframework.web.servlet.config.annotation.EnableWebMvc
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -47,25 +49,34 @@ class StreamExecutorTest {
         val own: ThreadPoolTaskExecutor = executor("own")
 
         val shutDown: ThreadPoolTaskExecutor = executor("gone").apply { shutdown() }
+
+        // Completed once /hold has the MVC thread, and by the test to let it go.
+        var holding = CompletableFuture<Unit>()
+        var letGo = CompletableFuture<Unit>()
     }
 
     @RestController
     class Streams {
-        // Holds its thread for a second and a half.
+        // Holds its thread until the test lets it go.
         @GetMapping("/hold")
         fun hold(response: HttpServletResponse): StreamingResponseBody =
             response.datastarStream(heartbeat = null) {
                 patchSignals("held" to true)
-                Thread.sleep(1500)
+                holding.complete(Unit)
+                letGo.get(30, TimeUnit.SECONDS)
             }
 
         @GetMapping("/shared")
         fun shared(response: HttpServletResponse): StreamingResponseBody =
-            response.datastarStream { patchSignals("thread" to Thread.currentThread().name) }
+            response.datastarStream {
+                patchSignals("thread" to Thread.currentThread().name, "afterHold" to letGo.isDone)
+            }
 
         @GetMapping("/own")
         fun own(response: HttpServletResponse): StreamingResponseBody =
-            response.datastarStream(executor = own) { patchSignals("thread" to Thread.currentThread().name) }
+            response.datastarStream(executor = own) {
+                patchSignals("thread" to Thread.currentThread().name, "afterHold" to letGo.isDone)
+            }
 
         @GetMapping("/own-flow")
         fun ownFlow(response: HttpServletResponse): StreamingResponseBody =
@@ -73,7 +84,7 @@ class StreamExecutorTest {
                 flow {
                     emit(
                         io.github.markusaugust.streamlord.core.domain
-                            .PatchSignals("{\"flow\":true}"),
+                            .PatchSignals("{\"flow\":true,\"afterHold\":${letGo.isDone}}"),
                     )
                 },
                 executor = own,
@@ -129,6 +140,8 @@ class StreamExecutorTest {
 
     @BeforeTest
     fun start() {
+        holding = CompletableFuture()
+        letGo = CompletableFuture()
         tomcat = RealTomcat(Mvc::class.java)
     }
 
@@ -137,39 +150,54 @@ class StreamExecutorTest {
         tomcat.close()
     }
 
-    /** The body of [path], and how long it took, while /hold has the MVC thread. */
-    private fun whileHeld(path: String): Pair<String, Long> {
+    /** /hold, which has the MVC thread once [holding] completes and until [letGo] does. */
+    private fun hold(): CompletableFuture<List<String>> {
         val held = CompletableFuture.supplyAsync { tomcat.get("/hold").body().use { it.toList() } }
-        Thread.sleep(200)
-        val started = System.nanoTime()
-        val body = tomcat.get(path).body().use { it.toList().joinToString("\n") }
-        val millis = (System.nanoTime() - started) / 1_000_000
-        held.join()
-        return body to millis
+        holding.get(30, TimeUnit.SECONDS)
+        return held
     }
 
+    /** The body of [path], read in full while /hold still has the MVC thread. */
+    private fun whileHeld(path: String): String {
+        val held = hold()
+        try {
+            return tomcat.get(path).body().use { it.toList().joinToString("\n") }
+        } finally {
+            letGo.complete(Unit)
+            held.join()
+        }
+    }
+
+    // The stream is asked for while /hold has the one MVC thread, and given a moment to run; it
+    // may only run once /hold lets the thread go.
     @Test
     fun `without its own executor a stream waits for the MVC thread`() {
-        val (body, millis) = whileHeld("/shared")
+        val held = hold()
+        val shared = CompletableFuture.supplyAsync { tomcat.get("/shared").body().use { it.toList().joinToString("\n") } }
+        assertFailsWith<TimeoutException> { shared.get(500, TimeUnit.MILLISECONDS) }
+        letGo.complete(Unit)
+        held.join()
+        val body = shared.get(30, TimeUnit.SECONDS)
 
         assertTrue("mvc-" in body, body)
-        assertTrue(millis > 1000, "answered in $millis ms while the MVC thread was held")
+        assertTrue("\"afterHold\":true" in body, body)
     }
 
+    // Answered in full before /hold lets the MVC thread go, which it does only after.
     @Test
     fun `with its own executor a stream runs at once`() {
-        val (body, millis) = whileHeld("/own")
+        val body = whileHeld("/own")
 
         assertTrue("own-" in body, body)
-        assertTrue(millis < 1000, "answered in $millis ms")
+        assertTrue("\"afterHold\":false" in body, body)
     }
 
     @Test
     fun `the flow variant takes an executor`() {
-        val (body, millis) = whileHeld("/own-flow")
+        val body = whileHeld("/own-flow")
 
         assertTrue("\"flow\":true" in body, body)
-        assertTrue(millis < 1000, "answered in $millis ms")
+        assertTrue("\"afterHold\":false" in body, body)
     }
 
     @Test

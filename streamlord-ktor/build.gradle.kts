@@ -64,3 +64,29 @@ val testOldestKtor = tasks.register<Test>("testOldestKtor") {
 }
 
 tasks.check { dependsOn(testOldestKtor) }
+
+/*
+ * Ktor's javax servlet engine, ktor-server-tomcat on Tomcat 9, has classes of other names than the
+ * jakarta one the adapter reaches into, and its Tomcat cannot share a classpath with Tomcat 11, so
+ * its tests have a source set and a classpath of their own.
+ */
+val javaxTomcatTest: SourceSet = sourceSets.create("javaxTomcatTest") {
+    compileClasspath += sourceSets.main.get().output
+    runtimeClasspath += sourceSets.main.get().output
+}
+
+dependencies {
+    "javaxTomcatTestImplementation"(kotlin("test-junit5"))
+    "javaxTomcatTestImplementation"(project(":streamlord-core"))
+    "javaxTomcatTestImplementation"(libs.ktor.server.core)
+    "javaxTomcatTestImplementation"(libs.ktor.server.tomcat)
+}
+
+val testJavaxTomcat = tasks.register<Test>("testJavaxTomcat") {
+    description = "Runs the Ktor adapter tests for Ktor's javax servlet engine, on Tomcat 9."
+    group = "verification"
+    testClassesDirs = javaxTomcatTest.output.classesDirs
+    classpath = javaxTomcatTest.runtimeClasspath
+}
+
+tasks.check { dependsOn(testJavaxTomcat) }

@@ -9,6 +9,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import java.io.ByteArrayOutputStream
 import java.net.Socket
+import java.net.SocketTimeoutException
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -41,10 +42,11 @@ class TomcatFacadeTest {
                         }
                     }
                     get("/ok") {
+                        val id = call.request.queryParameters["id"]
                         call.respondDatastar(heartbeat = null) {
-                            patchSignals("ok" to 1)
+                            patchSignals("ok" to id, "step" to 1)
                             delay(5)
-                            patchSignals("ok" to 2)
+                            patchSignals("ok" to id, "step" to 2)
                         }
                     }
                 }
@@ -62,48 +64,54 @@ class TomcatFacadeTest {
                         .port
                 }
             val pool = Executors.newFixedThreadPool(32)
-            val problems =
+            val found =
                 (0 until 400)
                     .map { i ->
                         pool.submit(
                             Callable {
                                 if (i % 2 == 0) {
-                                    val r = gets(port, "/after", 1)
+                                    val r = gets(port, listOf("/after")).single()
                                     when {
                                         "\"ok\"" in r -> "a failing stream got an ok frame:\n$r"
-                                        discardFacades && r.endsWith("0\r\n\r\n") -> "a failing stream ended as if it had finished"
+                                        discardFacades && r.endsWith("\r\n0\r\n\r\n") -> "a failing stream ended as if whole:\n$r"
                                         else -> null
                                     }
                                 } else {
-                                    val r = gets(port, "/ok", 5)
-                                    val frames = Regex("datastar-patch-signals").findAll(r).count()
-                                    when {
-                                        "failing" in r -> "a kept-alive stream got a failing frame:\n$r"
-                                        frames != 10 -> "a kept-alive connection had $frames frames, not 10:\n$r"
-                                        !r.endsWith("\r\n0\r\n\r\n") -> "a kept-alive stream was cut:\n$r"
-                                        else -> null
+                                    // Each request its own id, so a frame of any other stream shows.
+                                    val ids = (0 until 5).map { "$i-$it" }
+                                    gets(port, ids.map { "/ok?id=$it" }).zip(ids).firstNotNullOfOrNull { (r, id) ->
+                                        val frames = Regex("\"ok\":\"([^\"]*)\"").findAll(r).map { it.groupValues[1] }.toList()
+                                        when {
+                                            "failing" in r -> "a kept-alive stream got a failing frame:\n$r"
+                                            frames.any { it != id } -> "the stream of $id got another's frame:\n$r"
+                                            frames.size != 2 -> "the stream of $id had ${frames.size} frames, not 2:\n$r"
+                                            !r.endsWith("\r\n0\r\n\r\n") -> "the stream of $id was cut:\n$r"
+                                            else -> null
+                                        }
                                     }
                                 }
                             },
                         )
-                    }.mapNotNull { it.get(30, TimeUnit.SECONDS) }
+                    }.mapNotNull { it.get(120, TimeUnit.SECONDS) }
             pool.shutdown()
-            assertTrue(problems.isEmpty(), "${problems.size} problems, the first: ${problems.firstOrNull()}")
+            assertTrue(found.isEmpty(), "${found.size} of 400 connections went wrong, the first: ${found.firstOrNull()}")
         } finally {
             server.stop(100, 500)
         }
     }
 
-    /** [count] GETs on one kept-alive connection, each read to its last chunk or until the connection ends. */
+    /**
+     * GETs of [paths] in turn on one kept-alive connection, each read to its last chunk or until the
+     * connection ends. One that does neither in twenty seconds says so: the limit stands for
+     * "never", so a slow machine does not pass for a stream cut short.
+     */
     private fun gets(
         port: Int,
-        path: String,
-        count: Int,
-    ): String =
+        paths: List<String>,
+    ): List<String> =
         Socket("localhost", port).use { socket ->
-            socket.soTimeout = 3000
-            val all = StringBuilder()
-            repeat(count) {
+            socket.soTimeout = 20_000
+            paths.map { path ->
                 socket.getOutputStream().write("GET $path HTTP/1.1\r\nHost: x\r\n\r\n".toByteArray())
                 val out = ByteArrayOutputStream()
                 val buffer = ByteArray(8192)
@@ -114,10 +122,11 @@ class TomcatFacadeTest {
                         out.write(buffer, 0, n)
                         if (out.toString(Charsets.ISO_8859_1).endsWith("\r\n0\r\n\r\n")) break
                     }
+                } catch (_: SocketTimeoutException) {
+                    out.write("[silent for 20 s]".toByteArray())
                 } catch (_: java.io.IOException) {
                 }
-                all.append(out.toString(Charsets.ISO_8859_1))
+                out.toString(Charsets.ISO_8859_1)
             }
-            all.toString()
         }
 }

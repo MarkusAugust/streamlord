@@ -14,9 +14,11 @@ import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.filter.ShallowEtagHeaderFilter
+import org.springframework.web.servlet.AsyncHandlerInterceptor
 import org.springframework.web.servlet.config.annotation.EnableWebMvc
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody
-import java.io.ByteArrayOutputStream
 import java.net.Socket
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
@@ -35,6 +37,7 @@ class StreamEdgesTest {
         val streamlord = Streamlord(compress = true, heartbeat = null)
         var gate = CompletableFuture<Unit>()
         var resume = CompletableDeferred<Unit>()
+        var suspended = CompletableFuture<Unit>()
     }
 
     @RestController
@@ -66,7 +69,7 @@ class StreamEdgesTest {
         fun gated(response: HttpServletResponse): StreamingResponseBody =
             response.datastarStream(streamlord) {
                 patchSignals("n" to 1)
-                gate.get(5, TimeUnit.SECONDS)
+                gate.get(30, TimeUnit.SECONDS)
                 patchSignals("n" to 2)
             }
 
@@ -79,6 +82,8 @@ class StreamEdgesTest {
 
         @GetMapping("/release")
         fun release(response: HttpServletResponse): StreamingResponseBody {
+            // Only once /stale has suspended: resumed any earlier, it would go on on its own thread.
+            suspended.get(30, TimeUnit.SECONDS)
             resume.complete(Unit)
             return response.datastarStream(streamlord) { patchSignals("released" to true) }
         }
@@ -87,9 +92,25 @@ class StreamEdgesTest {
     @Configuration(proxyBeanMethods = false)
     @EnableWebMvc
     @Import(StreamlordExceptionHandler::class)
-    class Mvc {
+    class Mvc : WebMvcConfigurer {
         @Bean
         fun streams() = Streams()
+
+        // Spring runs a suspend handler until it suspends, then starts the async cycle and lets its
+        // thread go; only then is /stale sure to wait for /release.
+        override fun addInterceptors(registry: InterceptorRegistry) {
+            registry.addInterceptor(
+                object : AsyncHandlerInterceptor {
+                    override fun afterConcurrentHandlingStarted(
+                        request: HttpServletRequest,
+                        response: HttpServletResponse,
+                        handler: Any,
+                    ) {
+                        if (request.requestURI == "/stale") suspended.complete(Unit)
+                    }
+                },
+            )
+        }
     }
 
     private lateinit var tomcat: RealTomcat
@@ -98,6 +119,7 @@ class StreamEdgesTest {
     fun start() {
         gate = CompletableFuture()
         resume = CompletableDeferred()
+        suspended = CompletableFuture()
         tomcat = RealTomcat(Mvc::class.java)
     }
 
@@ -106,26 +128,10 @@ class StreamEdgesTest {
         tomcat.close()
     }
 
-    /** The raw bytes of a GET until the server closes the connection or stops sending. */
     private fun raw(
         path: String,
         headers: String = "",
-    ): String =
-        Socket("localhost", tomcat.port).use { socket ->
-            socket.soTimeout = 5000
-            socket.getOutputStream().write("GET $path HTTP/1.1\r\nHost: x\r\n$headers\r\n".toByteArray())
-            val out = ByteArrayOutputStream()
-            val buffer = ByteArray(8192)
-            try {
-                while (true) {
-                    val n = socket.getInputStream().read(buffer)
-                    if (n < 0) break
-                    out.write(buffer, 0, n)
-                }
-            } catch (_: java.net.SocketTimeoutException) {
-            }
-            out.toString(Charsets.ISO_8859_1)
-        }
+    ): String = rawGet(tomcat.port, path, headers)
 
     @Test
     fun `an error answer carries none of the stream's own headers`() {
@@ -167,7 +173,7 @@ class StreamEdgesTest {
 
     private fun readGated(port: Int) {
         Socket("localhost", port).use { socket ->
-            socket.soTimeout = 3000
+            socket.soTimeout = 30_000
             socket.getOutputStream().write("GET /gated HTTP/1.1\r\nHost: x\r\n\r\n".toByteArray())
             val seen = StringBuilder()
             val buffer = ByteArray(8192)
@@ -183,12 +189,12 @@ class StreamEdgesTest {
 
     @Test
     fun `a suspend controller resumed on another request's thread cannot set that request's timeout`() {
-        val stale = CompletableFuture.supplyAsync { raw("/stale") }
-        Thread.sleep(300)
+        val staleAnswer = CompletableFuture.supplyAsync { raw("/stale") }
         val released = raw("/release")
 
         assertTrue(released.startsWith("HTTP/1.1 200"), released)
-        assertTrue(stale.get(10, TimeUnit.SECONDS).startsWith("HTTP/1.1 500"))
+        val answer = staleAnswer.get(60, TimeUnit.SECONDS)
+        assertTrue(answer.startsWith("HTTP/1.1 500"), answer)
     }
 
     @Test

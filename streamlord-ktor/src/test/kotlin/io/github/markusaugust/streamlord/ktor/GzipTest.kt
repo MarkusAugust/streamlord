@@ -9,6 +9,8 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.server.application.install
+import io.ktor.server.cio.CIO
+import io.ktor.server.engine.embeddedServer
 import io.ktor.server.plugins.compression.Compression
 import io.ktor.server.plugins.compression.gzip
 import io.ktor.server.plugins.compression.matchContentType
@@ -17,9 +19,13 @@ import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.ktor.utils.io.ByteChannel
 import io.ktor.utils.io.readAvailable
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import java.io.ByteArrayInputStream
+import java.net.Socket
 import java.util.zip.GZIPInputStream
 import java.util.zip.Inflater
 import kotlin.test.Test
@@ -27,6 +33,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 class GzipTest {
     private val wire =
@@ -92,27 +99,88 @@ class GzipTest {
         }
 
     // The heartbeat's comments go through the same compressor, between the events, in one member.
+    // The event waits until the client has read a comment out of the member, so on a real server:
+    // the test host hands the client nothing before the stream ends. A comment may also follow
+    // the event before the stream ends.
     @Test
-    fun `heartbeats on a gzipped stream arrive inside the gzip member`() =
-        testApplication {
-            install(StreamlordPlugin) {
-                compress = true
-                heartbeat = 50.milliseconds
-            }
-            routing {
-                get("/feed") {
-                    call.respondDatastar {
-                        delay(180.milliseconds)
-                        patchSignals("n" to 1)
+    fun `heartbeats on a gzipped stream arrive inside the gzip member`() {
+        val heard = CompletableDeferred<Unit>()
+        val server =
+            embeddedServer(CIO, port = 0) {
+                install(StreamlordPlugin) {
+                    compress = true
+                    heartbeat = 50.milliseconds
+                }
+                routing {
+                    get("/feed") {
+                        call.respondDatastar {
+                            withTimeout(30.seconds) { heard.await() }
+                            patchSignals("n" to 1)
+                        }
                     }
                 }
-            }
+            }.start(wait = false)
+        try {
+            val port =
+                runBlocking {
+                    server.engine
+                        .resolvedConnectors()
+                        .first()
+                        .port
+                }
+            val body =
+                Socket("localhost", port).use { socket ->
+                    socket.soTimeout = 30_000
+                    socket.getOutputStream().write("GET /feed HTTP/1.1\r\nHost: x\r\nAccept-Encoding: gzip\r\n\r\n".toByteArray())
+                    val read = StringBuilder()
+                    val buffer = ByteArray(4096)
+                    while (!read.endsWith("\r\n0\r\n\r\n")) {
+                        val count = socket.getInputStream().read(buffer)
+                        if (count < 0) break
+                        read.append(String(buffer, 0, count, Charsets.ISO_8859_1))
+                        if (": keep-alive\n\n" in inflated(dechunked(read))) heard.complete(Unit)
+                    }
+                    dechunked(read)
+                }
+            val text = gunzip(body)
 
-            val text = gunzip(client.get("/feed") { header(HttpHeaders.AcceptEncoding, "gzip") }.bodyAsBytes())
-
-            assertTrue(text.startsWith(": "), text)
-            assertTrue(text.endsWith("event: datastar-patch-signals\ndata: signals {\"n\":1}\n\n"), text)
+            assertTrue(text.startsWith(": keep-alive\n\n"), text)
+            assertEquals("event: datastar-patch-signals\ndata: signals {\"n\":1}\n\n", text.replace(": keep-alive\n\n", ""))
+        } finally {
+            server.stop(100, 500)
         }
+    }
+
+    /** The body of a chunked answer, as far as its chunks have arrived whole. */
+    private fun dechunked(answer: CharSequence): ByteArray {
+        val text = answer.toString()
+        var at = text.indexOf("\r\n\r\n").takeIf { it >= 0 }?.plus(4) ?: return ByteArray(0)
+        val body = StringBuilder()
+        while (true) {
+            val line = text.indexOf("\r\n", at).takeIf { it >= 0 } ?: break
+            val size = text.substring(at, line).toInt(16)
+            if (size == 0 || line + 2 + size > text.length) break
+            body.append(text, line + 2, line + 2 + size)
+            at = line + 2 + size + 2
+        }
+        return body.toString().toByteArray(Charsets.ISO_8859_1)
+    }
+
+    /** What a gzip member so far inflates to, past its ten bytes of header. */
+    private fun inflated(member: ByteArray): String {
+        if (member.size <= 10) return ""
+        val inflater = Inflater(true)
+        inflater.setInput(member, 10, member.size - 10)
+        val out = StringBuilder()
+        val buffer = ByteArray(4096)
+        while (true) {
+            val count = inflater.inflate(buffer)
+            if (count == 0) break
+            out.append(String(buffer, 0, count, Charsets.UTF_8))
+        }
+        inflater.end()
+        return out.toString()
+    }
 
     @Test
     fun `a heartbeat for one stream reaches a gzipped stream`() =

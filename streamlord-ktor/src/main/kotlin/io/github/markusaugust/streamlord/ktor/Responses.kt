@@ -25,9 +25,16 @@ import io.ktor.server.response.respondText
 import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.writeFully
 import io.ktor.utils.io.writeStringUtf8
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.yield
@@ -69,11 +76,15 @@ import kotlin.time.Duration.Companion.seconds
  *   writes at once: Netty sends no headers before the first byte of the body, and closes a
  *   response that has written nothing for ten seconds, while the handler waits on.
  *
- * A block that throws ends the stream after a moment for the frames it sent to go out, which is
- * as much as Ktor allows a writer, and the connection is then cut, which Datastar's client
- * retries. CIO and Netty cut it themselves; on Tomcat, with the async servlet Ktor's engine sets
- * up and a connector that discards its facades, and on Jetty, Streamlord cuts it. Anywhere else
- * the stream ends as the engine ends it.
+ * A block that throws ends the stream. The frames it sent get a moment to go out, at most a
+ * second for a reader who stopped reading, which is as much as Ktor allows a writer, and the
+ * connection is then cut, which Datastar's client retries. On Ktor's servlet engine, Tomcat's
+ * among them, the failure is thrown only once Ktor's writer is done, so that no byte of the
+ * stream reaches the request the container serves next, or, for a call cancelled meanwhile whose
+ * writer cannot be found, once that second is up. CIO and Netty cut the connection
+ * themselves; on Tomcat, with the async servlet Ktor's engine sets up and a connector that
+ * discards its facades, and on Jetty, Streamlord cuts it. Anywhere else the stream ends as the
+ * engine ends it.
  */
 @JvmName("respondDatastar")
 public suspend fun ApplicationCall.respondDatastar(
@@ -104,8 +115,12 @@ private suspend fun ApplicationCall.respondStream(
     if (request.httpVersion == "HTTP/1.1" && !closing) response.header("Connection", "keep-alive")
     val gzip = streamlord.compress && DatastarProtocol.acceptsGzip(request.headers[HttpHeaders.AcceptEncoding])
     // Before anything is written: on Tomcat, which request a failure may cut.
-    markEngine(this)
-    respond(
+    val servlet = markEngine(this)
+    // What the servlet response's scope runs before the body, so that the writer Ktor starts for
+    // it can be told apart where Ktor's field for it is gone.
+    val before = if (servlet) servletJobs(this) else null
+    var failure: Throwable? = null
+    val content =
         object : OutgoingContent.WriteChannelContent() {
             override val contentType: ContentType = ContentType.Text.EventStream
             override val status: HttpStatusCode = status
@@ -132,6 +147,7 @@ private suspend fun ApplicationCall.respondStream(
                 }
 
             override suspend fun writeTo(channel: ByteWriteChannel) {
+                val started = if (servlet) servletJobs(this@respondStream) else null
                 try {
                     if (gzip) {
                         streamlord.streamGzipped(channel, authorisation, heartbeat, block)
@@ -139,6 +155,19 @@ private suspend fun ApplicationCall.respondStream(
                         streamlord.stream(ChannelSseSink(channel), authorisation, heartbeat, block = block)
                     }
                 } catch (e: Throwable) {
+                    if (servlet) {
+                        // The body ends as if it had finished, which Ktor waits for its writer to
+                        // take, and the failure is thrown once it has, so the request completes only
+                        // after the writer is done with it.
+                        val active = currentCoroutineContext().isActive
+                        val writers = servletWriters(this@respondStream, before, started, currentCoroutineContext()[Job])
+                        withContext(NonCancellable) { endServletBody(channel, e, active, writers) }
+                        if (active) {
+                            failure = e
+                            return
+                        }
+                        throw e
+                    }
                     // Ktor closes the channel with the failure, and the engine then drops what it
                     // has not yet taken from it. ktor-io gives a writer no way to wait for that,
                     // so the engine is given a moment, bounded for a reader who stopped reading.
@@ -154,9 +183,60 @@ private suspend fun ApplicationCall.respondStream(
                     throw e
                 }
             }
-        },
-        portableTypeInfo<OutgoingContent>(),
-    )
+        }
+    try {
+        respond(content, portableTypeInfo<OutgoingContent>())
+    } catch (t: Throwable) {
+        // What went wrong after the block failed is not to hide the failure.
+        failure?.let {
+            if (it !== t) it.addSuppressed(t)
+            throw it
+        }
+        throw t
+    }
+    failure?.let { throw it }
+}
+
+/**
+ * End a failed body on Ktor's servlet engine so that its [writers] are done before the call is.
+ * The frames get the time they have on any engine; a reader who stopped reading would hold the
+ * writers until the container gives up on the connection, so those that are Ktor's own are stopped
+ * once that time is up. An [active] call goes on to wait for its writer, as it does for a body that
+ * finished. A call that was cancelled does not, so that wait is made here, and where no writers
+ * were found, `null`, the time is waited out instead. Writers only guessed from the response's
+ * scope may be the application's: they are never stopped, and a cancelled call waits for them for
+ * as long as they run, so that none is still writing once the call is done.
+ */
+private suspend fun ApplicationCall.endServletBody(
+    channel: ByteWriteChannel,
+    cause: Throwable,
+    active: Boolean,
+    writers: ServletWriters?,
+) {
+    val owned = if (writers?.owned == true) writers.jobs else emptyList()
+    if (owned.isNotEmpty()) {
+        // cancel(null) rather than cancel(): the bridge for the default argument is not in every
+        // kotlinx-coroutines that a Ktor from 3.0 brings.
+        val stop =
+            application.launch {
+                delay(LAST_FRAMES_LIMIT)
+                owned.forEach { it.cancel(null) }
+            }
+        owned.forEach { writer -> writer.invokeOnCompletion { if (owned.all { it.isCompleted }) stop.cancel(null) } }
+    }
+    // Jetty 11 behind Ktor's servlet aborts at once, so the frames get their moment first.
+    withTimeoutOrNull(LAST_FRAMES_LIMIT) {
+        runCatching { channel.flush() }
+        yield()
+        delay(LAST_FRAMES_GRACE)
+    }
+    cutConnection(this, cause)
+    if (!active) {
+        withTimeoutOrNull(LAST_FRAMES_LIMIT) {
+            runCatching { channel.flushAndClose() }
+            if (writers == null) awaitCancellation() else writers.jobs.joinAll()
+        } ?: if (owned.isNotEmpty()) owned.forEach { it.cancelAndJoin() } else writers?.jobs?.joinAll()
+    }
 }
 
 /** Respond with a Datastar SSE stream that drains [events] in order until the flow completes. */
@@ -289,8 +369,13 @@ public suspend fun ApplicationCall.respondScript(
     respondResponse(ScriptResponse(script, attributes), status)
 }
 
-/** How long a failed stream waits for the engine to take its last frames, and at most for a stalled reader. */
+/** How long a failed stream gives the engine to take its last frames before the connection is cut. */
 private val LAST_FRAMES_GRACE = 50.milliseconds
+
+/**
+ * The most a failed stream waits for its last frames, for a reader who stopped reading, before the
+ * connection is cut and Ktor's servlet writer is stopped.
+ */
 private val LAST_FRAMES_LIMIT = 1.seconds
 
 /** The gzipped stream: [Streamlord.stream] over a [GzipChannelSseSink], ended as a whole member. */
