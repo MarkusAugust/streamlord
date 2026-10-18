@@ -13,9 +13,9 @@ know why.
 
 ```kotlin tab="Gradle" group=install label="Build tool" sample=none
 dependencies {
-    implementation("io.github.markusaugust.streamlord:streamlord-ktor:0.12.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-html:0.12.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-json-kotlinx:0.12.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-ktor:0.13.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-html:0.13.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-json-kotlinx:0.13.0")
 }
 ```
 
@@ -23,17 +23,17 @@ dependencies {
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-ktor</artifactId>
-  <version>0.12.0</version>
+  <version>0.13.0</version>
 </dependency>
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-html</artifactId>
-  <version>0.12.0</version>
+  <version>0.13.0</version>
 </dependency>
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-json-kotlinx</artifactId>
-  <version>0.12.0</version>
+  <version>0.13.0</version>
 </dependency>
 ```
 
@@ -41,9 +41,9 @@ dependencies {
 
 ```kotlin tab="Gradle" group=install label="Build tool" sample=none
 dependencies {
-    implementation("io.github.markusaugust.streamlord:streamlord-spring:0.12.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-html:0.12.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-json-jackson:0.12.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-spring:0.13.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-html:0.13.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-json-jackson:0.13.0")
 }
 ```
 
@@ -51,17 +51,17 @@ dependencies {
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-spring</artifactId>
-  <version>0.12.0</version>
+  <version>0.13.0</version>
 </dependency>
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-html</artifactId>
-  <version>0.12.0</version>
+  <version>0.13.0</version>
 </dependency>
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-json-jackson</artifactId>
-  <version>0.12.0</version>
+  <version>0.13.0</version>
 </dependency>
 ```
 
@@ -115,29 +115,23 @@ Resolved from the build, not from memory. `kotlin-stdlib` is left out of all thr
 
 **`streamlord-json-kotlinx`**
 
-```deps=streamlord-json-kotlinx sample=none
-streamlord-json-kotlinx
-└── org.jetbrains.kotlinx:kotlinx-serialization-json 1.11.0
-    └── org.jetbrains.kotlinx:kotlinx-serialization-core 1.11.0
-```
+<!-- deps=streamlord-json-kotlinx -->
+- `org.jetbrains.kotlinx:kotlinx-serialization-json 1.11.0`
+  - `org.jetbrains.kotlinx:kotlinx-serialization-core 1.11.0`
 
 **`streamlord-json-jackson`**: Jackson 3
 
-```deps=streamlord-json-jackson sample=none
-streamlord-json-jackson
-└── tools.jackson.core:jackson-databind 3.2.3
-    ├── tools.jackson.core:jackson-core 3.2.3
-    └── com.fasterxml.jackson.core:jackson-annotations 2.22
-```
+<!-- deps=streamlord-json-jackson -->
+- `tools.jackson.core:jackson-databind 3.2.3`
+  - `tools.jackson.core:jackson-core 3.2.3`
+  - `com.fasterxml.jackson.core:jackson-annotations 2.22`
 
 **`streamlord-json-jackson2`**: Jackson 2
 
-```deps=streamlord-json-jackson2 sample=none
-streamlord-json-jackson2
-└── com.fasterxml.jackson.core:jackson-databind 2.22.3
-    ├── com.fasterxml.jackson.core:jackson-core 2.22.3
-    └── com.fasterxml.jackson.core:jackson-annotations 2.22
-```
+<!-- deps=streamlord-json-jackson2 -->
+- `com.fasterxml.jackson.core:jackson-databind 2.22.3`
+  - `com.fasterxml.jackson.core:jackson-core 2.22.3`
+  - `com.fasterxml.jackson.core:jackson-annotations 2.22`
 
 Jackson 3 still takes its annotations from the 2.x artifact; that is Jackson's own arrangement,
 not something Streamlord does.
@@ -168,7 +162,7 @@ Both were resolved rather than reasoned about, and neither is a surprise you can
 ```kotlin sample=none
 dependencies {
     // Take Boot's Jackson, whatever it is.
-    implementation("io.github.markusaugust.streamlord:streamlord-json-jackson:0.12.0") {
+    implementation("io.github.markusaugust.streamlord:streamlord-json-jackson:0.13.0") {
         exclude(group = "tools.jackson.core")
     }
 }
@@ -247,5 +241,67 @@ static files. **1.0.4** is what this release speaks.
 ## Versions
 
 JDK 21 builds Streamlord; the artifacts target JDK 17, the oldest realm both Ktor 3 and Spring
-Framework 7 still tolerate. Kotlin 2.4. The Spring adapter is compiled and tested against
-Framework 7.0 (Boot 4) on every build. Boot 3 is not supported.
+Framework 7 still tolerate. Kotlin 2.4 builds it, to the level of Kotlin 2.2, so a project on
+Kotlin 2.2 or newer compiles against it; Boot 4.0 manages 2.2, and the documentation's examples are
+compiled with 2.2 on every build. The Ktor adapter runs on Ktor 3.0 and newer. Its tests run on
+the newest and on 3.0, all but the one for `HttpRequestLifecycle`, which came in 3.4. The Spring
+adapter is compiled and tested against Framework 7.0 (Boot 4) on every build. Boot 3 is not
+supported.
+
+On Ktor 3.0 with the Netty engine, look at the Netty underneath. `ktor-server-netty` 3.0.0 brings
+Netty 4.1.114.Final, which has known vulnerabilities, among them HTTP request smuggling in
+`netty-codec-http` ([CVE-2026-33870](https://github.com/advisories/GHSA-pwqr-wmgm-9rr8)) and the
+MadeYouReset attack on HTTP/2 ([CVE-2025-55163](https://github.com/advisories/GHSA-prj3-ccx8-p6x4)).
+Streamlord brings neither Ktor nor Netty, so the remedy is in your build. Either move to a newer
+Ktor (3.6.0 brings Netty 4.2.17.Final), or keep Ktor and raise Netty to the newest 4.1 release,
+4.1.139.Final at the time of writing; neither had an advisory against it then. The adapter's
+tests on Ktor 3.0 run on that Netty. In Gradle:
+
+```kotlin sample=none
+dependencies {
+    implementation(platform("io.netty:netty-bom:4.1.139.Final"))
+}
+```
+
+In Maven, import the same BOM:
+
+```xml
+<dependencyManagement>
+  <dependencies>
+    <dependency>
+      <groupId>io.netty</groupId>
+      <artifactId>netty-bom</artifactId>
+      <version>4.1.139.Final</version>
+      <type>pom</type>
+      <scope>import</scope>
+    </dependency>
+  </dependencies>
+</dependencyManagement>
+```
+
+`./gradlew dependencyInsight --dependency netty-codec-http --configuration runtimeClasspath` or
+`mvn dependency:tree` shows which Netty you run.
+
+`streamlord-json-kotlinx` is the one module that can raise your Kotlin standard library. It takes
+kotlinx.serialization 1.11.0, which asks for `kotlin-stdlib` 2.3.20, so in a Gradle project on
+Kotlin 2.2 the newer one wins:
+
+```text
+$ ./gradlew dependencyInsight --dependency kotlin-stdlib --configuration runtimeClasspath
+org.jetbrains.kotlin:kotlin-stdlib:2.3.20
+   Selection reasons:
+      - By conflict resolution: between versions 2.3.20, 2.2.21 and 2.1.0
+```
+
+That does no harm. The Kotlin 2.2 compiler reads a standard library one version ahead, and a
+project on 2.2.0 with `allWarningsAsErrors` builds against it without a warning. The other way
+round holds too: everything kotlinx.serialization 1.11.0 calls in the standard library is in
+2.2.0 already, so it runs on the 2.2 standard library that Maven keeps when you declare it
+yourself. Under Spring Boot 4.0 the BOM moves kotlinx.serialization down to 1.9.0, and the codec
+runs on that too. To hold Gradle to your own standard library:
+
+```kotlin sample=none
+dependencies {
+    implementation("org.jetbrains.kotlin:kotlin-stdlib") { version { strictly("2.2.21") } }
+}
+```

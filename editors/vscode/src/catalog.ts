@@ -17,6 +17,8 @@ export interface AttributeSpec {
   forms: string[];
   keyed: boolean;
   keyRequired: boolean;
+  /** Keys a keyless attribute accepts all the same: `data-on-signal-patch:filter` (onSignalPatch.ts:27 in 1.0.4). */
+  keys: string[];
   /**
    * How Datastar reads the key, which the browser has lowercased: `camel` turns `foo-bar` into
    * the signal `fooBar`; `kebab` keeps it unless `__case` says otherwise (events, classes);
@@ -33,6 +35,12 @@ export interface AttributeSpec {
    * value; `exclusive` wants the signal as a key or as a value, exactly one of the two.
    */
   requires?: "value" | "exclusive";
+  /**
+   * Whether Datastar reads the expression's value: it then splits the text into statements on `;`
+   * and wraps the last one in `return (...)` before compiling. The others are compiled as written,
+   * as the body of an event handler.
+   */
+  returnsValue: boolean;
 }
 
 export interface ActionSpec {
@@ -103,6 +111,7 @@ function build(): Catalog {
     forms: a.forms as string[],
     keyed: a.keyed as boolean,
     keyRequired: (a.keyRequired as boolean | undefined) ?? false,
+    keys: (a.keys as string[] | undefined) ?? [],
     keyCase: a.keyCase as AttributeSpec["keyCase"],
     valueKind: a.valueKind as AttributeSpec["valueKind"],
     kotlin: a.kotlin as string[],
@@ -110,6 +119,7 @@ function build(): Catalog {
     onlyOn: a.onlyOn as string[] | undefined,
     doc: a.doc as string,
     requires: a.requires as AttributeSpec["requires"],
+    returnsValue: (a.returnsValue as boolean | undefined) ?? false,
   }));
   const actions: ActionSpec[] = (raw.actions as unknown as Record<string, unknown>[]).map((a) => ({
     name: a.name as string,
@@ -119,8 +129,12 @@ function build(): Catalog {
     kotlin: a.kotlin as string,
     doc: a.doc as string,
   }));
+  // dataOnSignalPatch writes data-on-signal-patch from its string and the filter companion from a
+  // SignalFilter, so a helper is the attribute its string argument fills, never the filter.
   const attributesByKotlin = new Map<string, AttributeSpec>();
-  for (const a of attributes) for (const k of a.kotlin) attributesByKotlin.set(k, a);
+  for (const a of attributes) {
+    for (const k of a.kotlin) if (attributesByKotlin.get(k)?.valueKind !== "expression" || a.valueKind === "expression") attributesByKotlin.set(k, a);
+  }
   const sites = raw.kotlinCallSites as unknown as Record<string, Record<string, CallSiteSpec>>;
   return {
     version: raw.version,

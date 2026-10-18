@@ -4,8 +4,10 @@ name: Security
 # vulnerability. Everything here reports to the repository's Security tab rather than failing
 # a build, because an advisory published on a Tuesday is not something a pull request did.
 #
-# The one check that does fail a build is in ci.yml, on the streamlord-live image, just before
-# it is pushed: that is the moment a known vulnerability can still be kept from shipping.
+# The one check that does fail a build is in ci.yml, on the streamlord-live image: on master
+# just before it is pushed, which is the moment a known vulnerability can still be kept from
+# shipping, and on a release branch, as the warning before anything is tagged. On a release
+# tag it only reports.
 
 on:
   push:
@@ -41,14 +43,16 @@ jobs:
           - build: IntelliJ plugin
             root: editors/intellij
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: 21
 
-      - uses: gradle/actions/dependency-submission@v6
+      - uses: gradle/actions/dependency-submission@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
         with:
           build-root-directory: ${{ matrix.root }}
           cache-provider: basic
@@ -60,7 +64,9 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # Pinned to a commit rather than a tag. In March 2026 this action's tags were moved to
       # point at code that read CI secrets, and a tag is only as fixed as whoever can push it.
@@ -78,7 +84,7 @@ jobs:
           format: sarif
           output: trivy-repository.sarif
 
-      - uses: github/codeql-action/upload-sarif@v4
+      - uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
         with:
           sarif_file: trivy-repository.sarif
           category: trivy-repository
@@ -98,7 +104,7 @@ jobs:
         id: owner
         run: echo "name=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
 
-      - uses: docker/login-action@v4
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -112,7 +118,7 @@ jobs:
           format: sarif
           output: trivy-image.sarif
 
-      - uses: github/codeql-action/upload-sarif@v4
+      - uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
         with:
           sarif_file: trivy-image.sarif
           category: trivy-image

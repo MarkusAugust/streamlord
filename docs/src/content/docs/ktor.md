@@ -12,7 +12,7 @@ Ktor is the Sword. The adapter is two plugins and a set of extension functions o
 `respondScript`), four that read (`readSignals`, `readSignalsOr`, `readSignalsJson`,
 `asIncomingRequest`), several of them with overloads, and three properties, `streamlord`,
 `isDatastarRequest` and `cspNonce`. It brings no Ktor version of its own. Ktor is `compileOnly`, so
-you stay on whatever you had.
+you stay on whatever you had, from Ktor 3.0 on.
 
 ## The plugin
 
@@ -32,9 +32,12 @@ owns the Content Security Policy nonce at both ends and gives `call.cspNonce` it
 be asked again whether it may still run, which is on [Operations](/operations/).
 
 `heartbeat` in the plugin writes a keep-alive comment on every stream that has been silent that
-long, for the proxies in between; it is on [Operations](/operations/#heartbeats).
+long, 30 seconds unless you set it, for the proxies in between, unless the stream passes a
+`heartbeat` of its own to `respondDatastar`; it is on [Operations](/operations/#heartbeats).
 `compress` gzips every stream whose request takes it; it is on
-[Operations](/operations/#compression).
+[Operations](/operations/#compression). `requireJsonContentType`, on unless you set it to `false`,
+refuses signals in a body not declared `application/json`; it is on
+[Security](/security/#forms-from-other-sites).
 
 ## One-shot streams
 
@@ -59,6 +62,67 @@ post("/search") {
 This is the shape most endpoints take. It is a stream in the protocol sense, a
 `text/event-stream` response that can carry many frames, but it lives for milliseconds.
 
+Read the signals and set a session or a cookie before `respondDatastar`, as the example does. The
+`200` and its headers go out as the stream opens, so a `SignalsTooLargeException` thrown inside
+the block can no longer become a `413`, and a session set there throws `TooLateSessionSetException`.
+
+## When the block fails
+
+A block that throws ends the stream: the frames it sent go out, and the connection is then cut,
+which Datastar's client retries. Ktor offers a writer no way to wait for the engine to send what it
+was given, and without one CIO dropped the last frames, or the whole response, and Netty often
+ended a failed response as if it had finished. So a failure waits a moment for the engine, at most
+a second for a reader who stopped reading, before it is thrown on. Over 200 failures on CIO and
+on Netty, on a local socket, every frame arrived and every stream was cut; under heavy load that
+is not a promise. Catch what you can inside the block and send the page what it should show.
+
+CIO and Netty cut the connection themselves. Tomcat and Jetty end a failed response with its last
+chunk, as if it had finished, and Datastar's client does not retry a stream that finished, so
+Streamlord cuts the connection under them: Tomcat 10.1 and 11, Jetty 12 from Ktor 3.3 and Jetty 11
+before it, over HTTP/1.1 and HTTP/2, where only the stream is reset. It reaches into the engine by
+reflection to do it, since no API Ktor has does, and on Tomcat it waits until Ktor has completed the
+request. Ktor's javax engine, `ktor-server-tomcat` on Tomcat 9, is cut the same way over HTTP/1.1. On
+a Tomcat connector set to keep its facades (`discardFacades = false`) Streamlord cuts nothing. On
+another engine, or if an engine's insides move,
+nothing is cut either, and the stream ends as the engine ends it; catching the failure inside the
+block is then the only way to tell the page.
+
+On Ktor's servlet engine, jakarta or javax, which Tomcat runs and a WAR deploys, Streamlord also
+holds the failure back until the engine's response writer is done: a failed stream ends its body as
+if it had finished, which Ktor waits for its writer to take, and `respondDatastar` throws the
+failure once the writer is done, whatever was thrown, a `CancellationException` included. The
+frames get the same second as on any other engine; a writer still held by a reader who stopped
+reading is then stopped. Should a later Ktor hide its writer, Streamlord waits for what the response
+started instead, for as long as it runs, and stops none of it, as that may be the application's own.
+
+With `discardFacades = false` Streamlord cuts nothing, so a failed stream ends there as if it had
+finished, with its last chunk, and Datastar's client does not retry it. Leave the setting at its
+default, or catch the failure inside the block and tell the page.
+
+A body of your own, a `respondBytesWriter` among them, is best ended the same way: catch the failure
+inside the writer and end the body normally, so the engine finishes the response itself:
+
+```kotlin sample=ktor-routing
+get("/muster") {
+    call.respondBytesWriter(ContentType.Text.Plain) {
+        try {
+            for (rider in listOf("Gorvek", "Hask", "Brann")) {
+                check(rider != "Hask") { "$rider did not answer" }
+                writeStringUtf8("$rider rides\n")
+            }
+        } catch (e: IllegalStateException) {
+            // Ended here, the engine finishes the response itself.
+            writeStringUtf8("The muster broke off: ${e.message}\n")
+        }
+    }
+}
+```
+
+On Netty, keep the heartbeat on, or write within ten seconds of the open: Netty sends no headers
+before the first byte of the body, and closes a response that has written nothing for ten seconds,
+with no headers at all, while the handler waits on. `heartbeat = null` there is for a stream that
+writes at once.
+
 ## Long-lived streams
 
 Hand `respondDatastar` a `Flow` instead of a block, and the response stays open for as long as
@@ -80,11 +144,12 @@ their frames.
 
 Ktor does not cancel a handler because its client has gone. A stream that keeps writing ends
 when a write fails with an `IOException`, which usually takes a few writes after the client left:
-the first ones still land in the operating system's buffer. A stream that waits without writing,
-for an event that has not happened yet, waits on with nobody listening.
+the first ones still land in the operating system's buffer. The heartbeat, on by default, makes a
+stream that waits write too, so it ends a few heartbeats after the client left. With the heartbeat
+off, a stream that waits for an event that has not happened yet waits on with nobody listening.
 
-Install Ktor's `HttpRequestLifecycle` on the route, and the handler is cancelled the moment the
-connection closes:
+Install Ktor's `HttpRequestLifecycle`, which came in Ktor 3.4, on the route, and the handler is
+cancelled the moment the connection closes:
 
 ```kotlin sample=ktor-routing
 route("/counter") {
@@ -141,6 +206,7 @@ you one without the null check.
 
 Error handling is yours. `SignalsTooLargeException` is thrown while the body is being read, and
 you will want it mapped to `413` in a `StatusPages` block, with `JsonParseException` and
-`SignalsDecodeException` mapped to `400` beside it; [Security](/security/) has the block.
+`SignalsDecodeException` mapped to `400` beside it, and `SignalsMediaTypeException`, a body not
+declared `application/json`, to `415`; [Security](/security/) has the block.
 Authentication, rate limiting and tracing are Ktor's, unchanged; Streamlord adds no interceptors
 and has no opinion about them.

@@ -136,6 +136,7 @@ abstract class ExtractDocSamples : DefaultTask() {
                     "import io.ktor.server.application.*\nimport io.ktor.server.routing.*\n" +
                     "import io.ktor.server.testing.*\n" +
                     "import io.ktor.server.engine.*\nimport io.ktor.server.cio.*\nimport io.ktor.server.response.*\n" +
+                    "import io.ktor.http.ContentType\nimport io.ktor.http.contentType\n" +
                     "import io.ktor.http.HttpStatusCode\nimport kotlinx.coroutines.test.runTest\nimport java.net.URI\n" +
                     "import java.net.http.HttpClient\nimport java.net.http.HttpRequest\nimport java.net.http.HttpResponse\n" +
                     "import io.ktor.client.request.*\nimport io.ktor.client.statement.*\n" +
@@ -154,9 +155,9 @@ abstract class ExtractDocSamples : DefaultTask() {
 
     /**
      * A handler method that takes the Streamlord bean as a parameter. It compiles, and Spring
-     * then treats the parameter as a model attribute and constructs a fresh default instance,
-     * so the codec and the guard on the real bean are silently ignored. The bean has to come
-     * through the constructor.
+     * then treats the parameter as a model attribute and tries to construct one, which fails on
+     * the value-class `heartbeat`: every request answers 500 with `BeanInstantiationException`,
+     * on WebMVC and WebFlux alike. The bean has to come through the constructor.
      */
     private val handlerTakingTheBean =
         Regex("""@(?:Get|Post|Put|Patch|Delete|Request)Mapping\b(?:(?!\bfun\b)[\s\S])*?\bfun\s+\w+\s*\([^)]*:\s*Streamlord\b""")
@@ -169,6 +170,7 @@ abstract class ExtractDocSamples : DefaultTask() {
 
         val problems = mutableListOf<Problem>()
         val transcripts = mutableListOf<Pair<String, String>>()
+        val htmlSamples = mutableListOf<Pair<String, String>>()
         var written = 0
 
         val markdown =
@@ -219,17 +221,20 @@ abstract class ExtractDocSamples : DefaultTask() {
                         Problem(
                             page.name,
                             fenceLine,
-                            "a handler method takes Streamlord as a parameter. Spring builds a new default instance " +
-                                "for it instead of injecting the bean; take the bean in the controller's constructor.",
+                            "a handler method takes Streamlord as a parameter. Spring treats it as a model attribute " +
+                                "and fails to construct one, so every request answers 500 with " +
+                                "BeanInstantiationException; take the bean in the controller's constructor.",
                         )
                     continue
                 }
 
-                val source = wrap(context, body, "sample_${page.nameWithoutExtension.replace('-', '_')}_$fenceLine")
+                val name = "sample_${page.nameWithoutExtension.replace('-', '_')}_$fenceLine"
+                val source = wrap(context, body, name)
                 if (source == null) {
                     problems += Problem(page.name, fenceLine, "unknown context '$context'. Known: $known, and none.")
                     continue
                 }
+                if (context == "html") htmlSamples += "${page.name}:$fenceLine" to name
 
                 out.resolve("sample_${page.nameWithoutExtension.replace('-', '_')}_$fenceLine.kt").writeText(source)
                 written++
@@ -271,7 +276,40 @@ abstract class ExtractDocSamples : DefaultTask() {
             """.trimIndent(),
         )
 
-        logger.lifecycle("Extracted $written documentation samples and ${transcripts.size} transcripts.")
+        /*
+         * The markup samples run as well as compile: kotlinx.html refuses some things only while
+         * it renders, such as an attribute set after a child was written, and so does the DSL,
+         * which checks names and expressions as it writes them.
+         */
+        val samples =
+            htmlSamples.joinToString(",\n") { (where, fn) ->
+                val literal = where.replace("\\", "\\\\").replace("\"", "\\\"").replace("$", "\\$")
+                "        \"$literal\" to { div { $fn() } }"
+            }
+        out.resolve("HtmlSamples.kt").writeText(
+            """
+            import kotlinx.html.div
+            import kotlinx.html.stream.createHTML
+            import kotlin.system.exitProcess
+
+            /** Generated. Renders every sample=html block and names each one that throws. */
+            fun main() {
+                val all: List<Pair<String, kotlinx.html.TagConsumer<String>.() -> Unit>> = listOf(
+            $samples
+                )
+                val failed = all.mapNotNull { (where, sample) ->
+                    runCatching { createHTML(prettyPrint = false).sample() }.exceptionOrNull()?.let { "  ${'$'}where  ${'$'}it" }
+                }
+                if (failed.isNotEmpty()) {
+                    System.err.println("These sample=html blocks throw when they render:\n" + failed.joinToString("\n"))
+                    exitProcess(1)
+                }
+                println("Rendered ${'$'}{all.size} html samples.")
+            }
+            """.trimIndent(),
+        )
+
+        logger.lifecycle("Extracted $written documentation samples, ${htmlSamples.size} of them markup, and ${transcripts.size} transcripts.")
     }
 }
 
@@ -315,14 +353,15 @@ tasks.named("check") { dependsOn(tasks.named("checkDocSamples")) }
  * the moment someone bumps a version in libs.versions.toml. This resolves each module the way a
  * consumer would and fails when the page disagrees.
  *
- * A block opts in by naming its module:
+ * A tree is a nested list that opts in with a comment naming its module, and ends at the first
+ * blank line:
  *
- *     ```deps=streamlord-json-jackson2 sample=none
- *     com.fasterxml.jackson.core:jackson-databind 2.22.3
- *     ```
+ *     <!-- deps=streamlord-json-jackson2 -->
+ *     - `com.fasterxml.jackson.core:jackson-databind 2.22.3`
+ *       - `com.fasterxml.jackson.core:jackson-core 2.22.3`
  *
- * Only coordinates are compared, not the drawing around them, so the tree glyphs
- * stay a presentation choice.
+ * Only coordinates are compared. Where one breaks on a phone is decided by the site's build, in
+ * docs/src/plugins/rehype-code-breaks.mjs, not by the page.
  */
 val documentedModules =
     listOf("streamlord-json-kotlinx", "streamlord-json-jackson", "streamlord-json-jackson2")
@@ -354,26 +393,17 @@ abstract class CheckDocDependencies : DefaultTask() {
         val claims = mutableMapOf<String, MutableSet<String>>()
         val coordinate = Regex("""([\w.\-]+):([\w.\-]+)[ :]+([\w.\-]+)""")
 
+        val marker = Regex("""^<!-- deps=([\w-]+) -->$""")
+
         for (page in pages.get().asFile.walkTopDown().filter { it.extension == "md" }) {
             val lines = page.readLines()
-            var index = 0
-            while (index < lines.size) {
-                val info = lines[index].takeIf { it.startsWith("```") }?.removePrefix("```")?.trim()
-                if (info == null) {
-                    index++
-                    continue
-                }
-                val end = lines.drop(index + 1).indexOfFirst { it.startsWith("```") }
-                if (end < 0) break
-                val body = lines.subList(index + 1, index + 1 + end)
-                index += end + 2
-
-                val module = info.split(" ").firstOrNull { it.startsWith("deps=") }?.removePrefix("deps=")
-                    ?: continue
-
+            for ((index, line) in lines.withIndex()) {
+                val module = marker.find(line.trim())?.groupValues?.get(1) ?: continue
                 val found = claims.getOrPut(module) { mutableSetOf() }
-                for (line in body) {
-                    coordinate.find(line)?.let { found += normalise("${it.groupValues[1]}:${it.groupValues[2]}:${it.groupValues[3]}") }
+                for (item in lines.drop(index + 1).takeWhile { it.isNotBlank() }) {
+                    coordinate.find(item)?.let {
+                        found += normalise("${it.groupValues[1]}:${it.groupValues[2]}:${it.groupValues[3]}")
+                    }
                 }
             }
         }
@@ -383,7 +413,7 @@ abstract class CheckDocDependencies : DefaultTask() {
         for ((module, actual) in resolved.get()) {
             val claimed = claims[module]
             if (claimed == null) {
-                problems += "  $module: no block on any page declares deps=$module"
+                problems += "  $module: no tree on any page declares deps=$module"
                 continue
             }
 
@@ -416,7 +446,7 @@ val checkDocDependencies =
         for (module in documentedModules) {
             val configuration =
                 configurations.detachedConfiguration(
-                    project.dependencies.create(project.project(":$module")),
+                    project.dependencies.project(":$module"),
                 )
             resolved.put(
                 module,
@@ -433,6 +463,17 @@ val checkDocDependencies =
 
 tasks.named("checkDocSamples") { dependsOn(checkDocDependencies) }
 
+
+val runHtmlSamples =
+    tasks.register<JavaExec>("runHtmlSamples") {
+        description = "Renders every sample=html block of the documentation and fails on one that throws."
+        group = "verification"
+        dependsOn(tasks.named("compileKotlin"))
+        classpath = sourceSets.main.get().runtimeClasspath
+        mainClass.set("HtmlSamplesKt")
+    }
+
+tasks.named("checkDocSamples") { dependsOn(runHtmlSamples) }
 
 /*
  * Runs the generated dispatcher, so the bytes on the page are the bytes Streamlord's own
@@ -462,6 +503,10 @@ abstract class ApplyWireTranscripts : DefaultTask() {
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val transcripts: DirectoryProperty
 
+    /** In CI a stale page fails the build rather than being rewritten into a workspace nobody commits. */
+    @get:Input
+    abstract val failOnChange: Property<Boolean>
+
     /*
      * Neither an input nor an output. The task edits its own source directory, a shape
      * Gradle's model has no room for: declaring it both ways is a dependency cycle, and
@@ -479,6 +524,7 @@ abstract class ApplyWireTranscripts : DefaultTask() {
                 .associate { it.nameWithoutExtension to it.readText().trimEnd('\n') + "\n" }
 
         var changed = 0
+        val stale = ArrayList<String>()
 
         for (page in pages.get().asFile.walkTopDown().filter { it.extension == "md" }) {
             val lines = page.readLines().toMutableList()
@@ -515,11 +561,17 @@ abstract class ApplyWireTranscripts : DefaultTask() {
             }
 
             if (touched) {
-                page.writeText(lines.joinToString("\n") + "\n")
+                if (failOnChange.get()) stale += page.name else page.writeText(lines.joinToString("\n") + "\n")
                 changed++
             }
         }
 
+        if (stale.isNotEmpty()) {
+            throw GradleException(
+                "The wire transcripts are stale on ${stale.joinToString(", ")}. " +
+                    "Run ./gradlew :docs-samples:checkDocSamples locally and commit what it rewrites.",
+            )
+        }
         logger.lifecycle(
             if (changed == 0) "Wire transcripts on the pages are current."
             else "Rewrote the wire transcripts on $changed page(s). Commit the change.",
@@ -534,6 +586,7 @@ val applyWireTranscripts =
         dependsOn(generateWireTranscripts)
         transcripts.set(layout.buildDirectory.dir("wire"))
         pages.set(rootProject.layout.projectDirectory.dir("docs/src/content/docs"))
+        failOnChange.set(providers.environmentVariable("CI").map { it.isNotBlank() }.orElse(false))
         outputs.upToDateWhen { false }
     }
 
@@ -547,10 +600,14 @@ tasks.named("checkDocSamples") { dependsOn(applyWireTranscripts) }
  * Both spellings are covered, the Gradle coordinate and the Maven element, because the install
  * page carries a tab for each.
  *
- * It does not close the window between bumping the version and the tag finishing its publish,
+ * A snapshot is left out. Between releases the release branch carries `-SNAPSHOT`, and the pages
+ * should go on naming the release a reader can download; writing the snapshot in would also make
+ * every merge of master into the branch conflict on these lines.
+ *
+ * It does not close the window between the release commit and the tag finishing its publish,
  * during which the pages name a release Maven Central has not seen yet. Closing that would mean
- * tracking the last successful publish separately; bumping and tagging in one push, as the
- * README prescribes, keeps the window short instead.
+ * tracking the last successful publish separately; tagging the release commit straight away, as
+ * RELEASING.md prescribes, keeps the window short instead.
  */
 abstract class ApplyProjectVersion : DefaultTask() {
     @get:Input
@@ -559,6 +616,10 @@ abstract class ApplyProjectVersion : DefaultTask() {
     /** The Maven group. Not called `group`: a Task already has one, and it is its own. */
     @get:Input
     abstract val coordinateGroup: Property<String>
+
+    /** In CI a stale page fails the build rather than being rewritten into a workspace nobody commits. */
+    @get:Input
+    abstract val failOnChange: Property<Boolean>
 
     /** Rewritten in place, so neither an input nor an output. See ApplyWireTranscripts. */
     @get:Internal
@@ -570,6 +631,10 @@ abstract class ApplyProjectVersion : DefaultTask() {
     @TaskAction
     fun apply() {
         val version = version.get()
+        if (version.endsWith("-SNAPSHOT")) {
+            logger.lifecycle("$version is a snapshot: the documented coordinates keep the last release.")
+            return
+        }
         val group = coordinateGroup.get()
 
         val gradleCoordinate = Regex("""(${Regex.escape(group)}:[\w-]+:)[\w.\-]+""")
@@ -580,6 +645,7 @@ abstract class ApplyProjectVersion : DefaultTask() {
         val files =
             pages.get().asFile.walkTopDown().filter { it.extension == "md" } + extraPages.files
         var changed = 0
+        val stale = ArrayList<String>()
 
         for (page in files) {
             val before = page.readText()
@@ -589,11 +655,17 @@ abstract class ApplyProjectVersion : DefaultTask() {
                     .replace(mavenDependency) { "${it.groupValues[1]}$version${it.groupValues[2]}" }
 
             if (after != before) {
-                page.writeText(after)
+                if (failOnChange.get()) stale += page.name else page.writeText(after)
                 changed++
             }
         }
 
+        if (stale.isNotEmpty()) {
+            throw GradleException(
+                "The documented coordinates do not name $version on ${stale.joinToString(", ")}. " +
+                    "Run ./gradlew :docs-samples:checkDocSamples locally and commit what it rewrites.",
+            )
+        }
         logger.lifecycle(
             if (changed == 0) "Documented coordinates already name $version."
             else "Rewrote the coordinates to $version on $changed file(s). Commit the change.",
@@ -609,7 +681,70 @@ val applyProjectVersion =
         coordinateGroup.set(rootProject.group.toString())
         pages.set(rootProject.layout.projectDirectory.dir("docs/src/content/docs"))
         extraPages.from(rootProject.layout.projectDirectory.file("README.md"))
+        failOnChange.set(providers.environmentVariable("CI").map { it.isNotBlank() }.orElse(false))
         outputs.upToDateWhen { false }
     }
 
 tasks.named("checkDocSamples") { dependsOn(applyProjectVersion) }
+
+/*
+ * The examples compiled again by the oldest Kotlin a consumer may use, against the modules as
+ * they are built, with that Kotlin's own standard library. The modules are compiled by a newer
+ * Kotlin, whose metadata an older compiler refuses to read past one version ahead, and the
+ * build alone never shows it.
+ */
+val kotlinFloor = libs.versions.kotlinFloor.get()
+
+val kotlinFloorCompiler: Configuration = configurations.create("kotlinFloorCompiler")
+val kotlinFloorPlugins: Configuration = configurations.create("kotlinFloorPlugins") { isTransitive = false }
+val kotlinFloorClasspath: Configuration = configurations.create("kotlinFloorClasspath") {
+    extendsFrom(configurations.compileClasspath.get())
+    attributes {
+        attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage.JAVA_API))
+        attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category.LIBRARY))
+    }
+    resolutionStrategy.eachDependency { if (requested.group == "org.jetbrains.kotlin") useVersion(kotlinFloor) }
+}
+
+dependencies {
+    kotlinFloorCompiler("org.jetbrains.kotlin:kotlin-compiler-embeddable:$kotlinFloor")
+    kotlinFloorPlugins("org.jetbrains.kotlin:kotlin-serialization-compiler-plugin-embeddable:$kotlinFloor")
+}
+
+val checkKotlinFloor =
+    tasks.register<JavaExec>("checkKotlinFloor") {
+        description = "Compiles the documentation's examples with Kotlin $kotlinFloor, as the oldest consumer would."
+        group = "verification"
+        // The generated samples by way of their task, which wires the dependency.
+        val sources = files(layout.projectDirectory.dir("src/main/kotlin"), generateDocSamples.map { it.target })
+        val output = layout.buildDirectory.dir("kotlin-floor")
+        inputs.files(sources).withPathSensitivity(PathSensitivity.RELATIVE)
+        inputs.files(kotlinFloorClasspath, kotlinFloorPlugins)
+        outputs.dir(output)
+        classpath = kotlinFloorCompiler
+        mainClass.set("org.jetbrains.kotlin.cli.jvm.K2JVMCompiler")
+        javaLauncher.set(javaToolchains.launcherFor { languageVersion.set(JavaLanguageVersion.of(21)) })
+        // Locals, so the provider holds files and not the build script.
+        val compileClasspath: FileCollection = kotlinFloorClasspath
+        val plugins: FileCollection = kotlinFloorPlugins
+        val sourcePaths: FileCollection = sources
+        val outputPath = output.map { it.asFile.absolutePath }
+        argumentProviders.add(
+            CommandLineArgumentProvider {
+                listOf(
+                    "-no-stdlib",
+                    "-no-reflect",
+                    "-jvm-target",
+                    "17",
+                    "-Xjsr305=strict",
+                    "-Xplugin=" + plugins.singleFile.absolutePath,
+                    "-classpath",
+                    compileClasspath.asPath,
+                    "-d",
+                    outputPath.get(),
+                ) + sourcePaths.files.map { it.absolutePath }
+            },
+        )
+    }
+
+tasks.named("check") { dependsOn(checkKotlinFloor) }

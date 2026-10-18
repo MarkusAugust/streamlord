@@ -3,12 +3,38 @@
 # editors/vscode, and a build confined to docs/ would not have them.
 #
 # Gradle is not needed here. The wire transcripts and the dependency trees are written into
-# the markdown by :docs-samples and committed, so this build is Bun and nothing else.
+# the markdown by :docs-samples and committed, so the build itself is Bun and nothing else.
+#
+# The same build as the docs job in .github/workflows/ci.yml: the Bun that wrote docs/bun.lock,
+# a lockfile that must not change, and Astro run by Bun rather than Node. Another Bun rewrites
+# the lockfile without a word and installs other versions than the ones CI built with.
+#
+# Netlify reads BUN_VERSION, but whether it acts on it with the lockfile in docs/ rather than
+# in the base is its business, so the command does not rely on it. A Bun other than
+# BUN_VERSION on PATH, or none, and it fetches that version from the npm registry into a
+# directory of its own put first on PATH. npm checks each tarball it fetches, bun's and the
+# one with the binary for this platform, against the integrity hash the registry lists for
+# that exact version. Node and npm are in every Netlify build image. If the Bun that answers
+# is still not the one asked for, it stops. The build script runs Astro through `bun x`, not
+# `bunx`, so the Bun checked here is the one that runs it.
 
 [build]
   base = "."
-  command = "cd docs && bun install && npx astro build"
+  command = '''
+    v="$(bun --version 2>/dev/null)"
+    if [ "$v" != "$BUN_VERSION" ]; then
+      echo "Bun ${v:-missing} on PATH, installing $BUN_VERSION from npm"
+      pinned="$(mktemp -d)" &&
+        npm install --global --prefix "$pinned" --no-audit --no-fund "bun@$BUN_VERSION" || exit 1
+      PATH="$pinned/bin:$PATH"
+      v="$(bun --version 2>/dev/null)"
+    fi
+    [ "$v" = "$BUN_VERSION" ] || { echo "Bun ${v:-missing}, not $BUN_VERSION"; exit 1; }
+    cd docs && bun install --frozen-lockfile && bun run build
+  '''
   publish = "docs/dist"
 
 [build.environment]
+  # Keep in step with bun-version in the docs job of .github/workflows/ci.yml.
+  BUN_VERSION = "1.4.3"
   NODE_VERSION = "22.23.0"

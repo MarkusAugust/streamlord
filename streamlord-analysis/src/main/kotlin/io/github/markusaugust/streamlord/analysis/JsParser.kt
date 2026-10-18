@@ -2,9 +2,9 @@ package io.github.markusaugust.streamlord.analysis
 
 /**
  * A syntax check for JavaScript, enough to judge a Datastar expression. It follows acorn step by
- * step (script mode, the latest ECMAScript, `return` and `await` allowed at the top level, as in
- * an event handler), so that the VS Code extension (which uses acorn) and the IntelliJ plugin
- * agree on what parses and on where an error sits. It keeps only as much of a tree as the early
+ * step (script mode, the latest ECMAScript, `return` and `new.target` allowed at the top level and
+ * `await` not, as in the function body Datastar compiles), so that the VS Code extension (which uses acorn)
+ * and the IntelliJ plugin agree on what parses and on where an error sits. It keeps only as much of a tree as the early
  * errors need: which expressions can be assigned to, which names a pattern binds.
  *
  * A few messages are friendlier than acorn's ("Unexpected end of input"); the verdict is the same.
@@ -427,12 +427,16 @@ private class Parser(
             if (flags and (SCOPE_CLASS_STATIC_BLOCK or SCOPE_CLASS_FIELD_INIT) != 0) return false
             if (flags and SCOPE_FUNCTION != 0) return flags and SCOPE_ASYNC != 0
         }
-        return true
+        // acorn's allowAwaitOutsideFunction, off: Datastar compiles with Function(), which is not async.
+        return false
     }
 
+    // The top level is the body of the function Datastar compiles with `Function()`, which allows
+    // `new.target` as any function body does; acorn has no option for it, and the extension
+    // overrides the same check.
     private fun allowNewDotTarget(): Boolean =
         scopeStack.any {
-            it.flags and (SCOPE_CLASS_STATIC_BLOCK or SCOPE_CLASS_FIELD_INIT) != 0 ||
+            it.flags and (SCOPE_TOP or SCOPE_CLASS_STATIC_BLOCK or SCOPE_CLASS_FIELD_INIT) != 0 ||
                 (it.flags and SCOPE_FUNCTION != 0 && it.flags and SCOPE_ARROW == 0)
         }
 

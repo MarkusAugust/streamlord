@@ -34,7 +34,8 @@ import io.github.markusaugust.streamlord.core.json.JsonNull
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonValue
-import io.github.markusaugust.streamlord.core.json.mergePatch
+import io.github.markusaugust.streamlord.core.json.SignalPatchException
+import io.github.markusaugust.streamlord.core.json.mergePatchAsClient
 import io.github.markusaugust.streamlord.intellij.Streamlord
 import java.awt.BorderLayout
 import java.awt.Component
@@ -68,7 +69,7 @@ class InspectorPanel(
     private val running = RunningServers.getInstance(project)
     private val client = StreamClient()
     private var connection: StreamClient.Connection? = null
-    private var signals: JsonValue = JsonObject.EMPTY
+    private var signals: JsonObject = JsonObject.EMPTY
     private var count = 0
 
     /** An entry of the request list: a saved request, a recent one, or the blank one at the top. */
@@ -85,9 +86,9 @@ class InspectorPanel(
     private val method = ComboBox(Requests.METHODS.toTypedArray())
     private val signalsField = JBTextArea(3, 40).mono()
     private val headersField = JBTextArea(2, 40).mono()
-    private val resolved = JBLabel().apply { foreground = JBColor.GRAY }
+    private val resolved = plainLabel().apply { foreground = JBColor.GRAY }
     private val dirty = JBLabel("● modified").apply { foreground = JBColor.namedColor("Label.warningForeground", JBColor.ORANGE) }
-    private val status = JBLabel("idle")
+    private val status = plainLabel("idle")
     private val frames = JPanel().apply { layout = BoxLayout(this, BoxLayout.Y_AXIS) }
     private val storeView = JBTextArea("{}").mono().apply { isEditable = false }
     private val variablesView = JBTextArea("").mono().apply { isEditable = false }
@@ -115,6 +116,11 @@ class InspectorPanel(
         add(split, BorderLayout.CENTER)
         choices.renderer =
             object : DefaultListCellRenderer() {
+                // A saved name comes from a file the project shares: text, never Swing HTML. Set before any text is.
+                init {
+                    putClientProperty("html.disable", true)
+                }
+
                 override fun getListCellRendererComponent(
                     list: JList<*>?,
                     value: Any?,
@@ -483,19 +489,31 @@ class InspectorPanel(
         ApplicationManager.getApplication().invokeLater(block, project.disposed)
     }
 
+    /** The store as the client would hold it after this frame, see [mergePatchAsClient]; `onlyIfMissing` is read as the client reads it (patchSignals.ts:16, text.ts:24 in 1.0.4). */
     private fun applyFrame(frame: DatastarFrame) {
         if (frame.event != "datastar-patch-signals") return
         val text = frame.args["signals"] ?: return
-        try {
-            var patch = JsonParser.parse(text)
-            if (frame.args["onlyIfMissing"] == "true" && patch is JsonObject) {
-                val existing = signals as? JsonObject ?: JsonObject.EMPTY
-                patch = JsonObject(patch.filterKeys { !existing.containsKey(it) })
+        val patch =
+            try {
+                JsonParser.parse(text)
+            } catch (_: Exception) {
+                // invalid JSON in the stream is shown raw in the frame itself
+                return
             }
-            signals = mergePatch(signals, patch)
+        try {
+            signals = mergePatchAsClient(signals, patch, isStringTrue(frame.args["onlyIfMissing"]))
             storeView.text = pretty(signals)
-        } catch (_: Exception) {
-            // invalid JSON in the stream is shown raw in the frame itself
+        } catch (e: SignalPatchException) {
+            // The client keeps the keys it set before the one it failed on, and so does the store
+            // shown. A throw also leaves its update batch open (signals.ts:695-708), so the bindings
+            // on the page stop redrawing.
+            signals = e.store
+            storeView.text = pretty(signals)
+            if (e.refused) {
+                error("Streamlord refuses this signal patch on purpose: ${e.message}. $REFUSED")
+            } else {
+                error("The signal store cannot take this patch: ${e.message}. $CLIENT_THROWS")
+            }
         }
     }
 
@@ -518,7 +536,7 @@ class InspectorPanel(
         frames.removeAll()
         count = 0
         frames.add(
-            JBLabel(message).apply {
+            plainLabel(message).apply {
                 foreground = JBColor.GRAY
                 border = JBUI.Borders.empty(8)
             },
@@ -555,7 +573,7 @@ class InspectorPanel(
 
     private fun addComment(text: String) {
         prepend(
-            JBLabel("${time(System.currentTimeMillis())}  : $text").apply {
+            plainLabel("${time(System.currentTimeMillis())}  : $text").apply {
                 foreground = JBColor.GRAY
                 font = font.deriveFont(Font.ITALIC)
                 border = JBUI.Borders.empty(2, 4)
@@ -589,7 +607,7 @@ class InspectorPanel(
         useBaseUrl: String? = null,
     ) {
         val label =
-            JBLabel(message).apply {
+            plainLabel(message).apply {
                 foreground = JBColor.RED
                 border = JBUI.Borders.empty(2, 4)
             }
@@ -639,7 +657,7 @@ class InspectorPanel(
             }
         header.forEachIndexed { i, h ->
             left.add(
-                JBLabel(h).apply {
+                plainLabel(h).apply {
                     if (i == 1) {
                         foreground = color
                         font = font.deriveFont(Font.BOLD)
@@ -650,7 +668,7 @@ class InspectorPanel(
         }
         head.add(left, BorderLayout.WEST)
         head.add(
-            JBLabel(right).apply {
+            plainLabel(right).apply {
                 foreground = JBColor.GRAY
                 horizontalAlignment = SwingConstants.RIGHT
             },
@@ -677,6 +695,17 @@ class InspectorPanel(
         return card
     }
 
+    /**
+     * Swing renders a label whose text starts with `<html>` as HTML, images and all. Event names,
+     * content types and saved names come from a server or a shared file, so every label here is
+     * text. The flag has to be there before the text is set: Swing reads it when the text changes.
+     */
+    private fun plainLabel(text: String = ""): JBLabel =
+        JBLabel().apply {
+            putClientProperty("html.disable", true)
+            this.text = text
+        }
+
     private fun notify(message: String) {
         NotificationGroupManager
             .getInstance()
@@ -692,12 +721,26 @@ class InspectorPanel(
         private const val LOG_GRACE_MS = 400L
         private val TIME = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
 
+        private const val CLIENT_THROWS =
+            "Datastar's client throws on it too, and the bindings already on the page then stop redrawing until it is " +
+                "reloaded, though the signals still change, element patches still land and new bindings show the current value."
+        private const val REFUSED = "The store shown keeps the keys before it."
+
         fun time(at: Long): String = TIME.format(Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()))
 
         fun suggestName(r: SavedRequest): String =
             runCatching {
                 "${r.method} ${java.net.URI(r.url.replace(Regex("""\{\{[^}]+\}\}"""), "http://x")).path}"
             }.getOrDefault("${r.method} ${r.url}")
+
+        /**
+         * `isStringTrue` in the client's utils/text.ts: `"true"` after JavaScript's `trim()`, which
+         * also takes U+FEFF and, unlike Kotlin's, leaves U+001C to U+001F.
+         */
+        fun isStringTrue(value: String?): Boolean = value != null && value.trim(::isJsSpace) == "true"
+
+        private fun isJsSpace(c: Char): Boolean =
+            c in "\t\n\u000B\u000C\r\uFEFF\u2028\u2029" || Character.getType(c) == Character.SPACE_SEPARATOR.toInt()
 
         /** Two-space indented JSON, as the VS Code inspector shows it. */
         fun pretty(

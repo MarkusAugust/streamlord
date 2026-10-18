@@ -38,7 +38,6 @@ class JsParserTest {
             "({count: 0, name: '', nested: {a: [1, 2, 3]}}); [1, 2]",
             "{count: 0}",
             "_get('/x', {filterSignals: {include: /^form\\./, exclude: /_$/}})",
-            "await _post('/save'); \$done = true",
             "return \$x > 1 ? 'a' : 'b'",
             "if (\$a) { \$b = 1 } else \$b = 2",
             "for (const x of \$items) console.log(x)",
@@ -323,7 +322,8 @@ class JsParserTest {
             "function* g() { yield 1 }",
             "with (\$a) { b }",
         )
-        bad("new.target", pos = 0)
+        // The top level is the body of the function Datastar compiles, where new.target is allowed.
+        ok("new.target", "() => new.target")
         bad("super.x", message = "'super' keyword outside a method")
         bad("a.#x", message = "Private field '#x' must be declared in an enclosing class")
         bad("class A { constructor() {} constructor() {} }", message = "Duplicate constructor in the same class")
@@ -332,6 +332,8 @@ class JsParserTest {
         bad("x = {set a() {}}", message = "setter should have exactly one param")
         bad("new a?.b()")
         bad("() => await x")
+        // Datastar compiles with Function(), which is not async: the browser refuses a top-level await too.
+        bad("await _post('/save'); \$done = true", message = "Unexpected token")
         bad("enum = 1", message = "The keyword 'enum' is reserved")
     }
 

@@ -30,7 +30,11 @@ import kotlin.time.Duration.Companion.seconds
  * @property every How long a verdict stands before it is asked for again. Checking before every
  *   patch would make a chatty stream as expensive as its check, so the answer is reused for this
  *   long. The first check happens when the stream opens, before anything is written, because the
- *   cheapest place to refuse a connection is before it starts.
+ *   cheapest place to refuse a connection is before it starts. Its age is measured on the
+ *   monotonic clock, not the coroutine's, so virtual time under `runTest` does not age it. While
+ *   an expired verdict is being asked for again, other writes are not held back: any number of
+ *   frames can go out on the old one until the new one arrives, and an [allows] slower than
+ *   [every] can be asked again before it has answered.
  * @property onRefused Run on the stream after a refusal and before it closes, so the reader can
  *   be told. Patch an element, patch a signal, `redirect("/login")`: the stream is still open
  *   here and this is the last thing that goes down it. The default says nothing and closes.
@@ -39,7 +43,9 @@ import kotlin.time.Duration.Companion.seconds
  *   limit stops it between frames, never inside one: Ktor copies a whole frame into the response
  *   before the write can suspend, and a servlet write blocks its thread and cannot be cut. So the
  *   limit bounds a suspending [onRefused], and not a blocking one.
- * @property allows The question. `false` ends the stream.
+ * @property allows The question. `false` ends the stream. On Spring WebMVC the heartbeat asks it
+ *   from a thread of `Dispatchers.IO`, so it cannot rely on the request's thread-locals; read
+ *   what it needs before the stream opens. The same holds for [onRefused].
  */
 public class StreamAuthorisation(
     public val every: Duration = DEFAULT_INTERVAL,

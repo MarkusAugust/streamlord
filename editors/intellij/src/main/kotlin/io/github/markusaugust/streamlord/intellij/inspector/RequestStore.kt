@@ -29,24 +29,38 @@ class RequestStore(
 
     fun baseDir(): VirtualFile? = project.guessProjectDir()
 
-    /** Project-relative path of the requests file. */
-    fun requestsPath(): String = settings.state.requestsFile.ifBlank { Requests.REQUESTS_FILE }
+    /** Project-relative path of the requests file; a path that leaves the project falls back to the default, and a save says so. */
+    fun requestsPath(): String {
+        val configured = settings.state.requestsFile
+        return if (configured.isBlank() || Requests.requestsPathProblem(configured) != null) Requests.REQUESTS_FILE else configured
+    }
 
     fun requestsFile(): VirtualFile? = baseDir()?.findFileByRelativePath(requestsPath())
 
+    /** The requests file; a file that is missing is empty, one that is not JSON says so in [RequestsFile.error]. */
     fun read(): RequestsFile {
         val file = requestsFile() ?: return RequestsFile.EMPTY
-        return ApplicationManager.getApplication().runReadAction(Computable { Requests.parseRequestsFile(VfsUtil.loadText(file)) })
+        return ApplicationManager.getApplication().runReadAction(
+            Computable { Requests.parseRequestsFile(VfsUtil.loadText(file), requestsPath()) },
+        )
     }
 
     fun saved(): List<SavedRequest> = read().requests
 
     fun save(request: SavedRequest) {
-        write(Requests.upsert(read(), request))
+        write(Requests.upsert(writable(), request))
     }
 
     fun delete(name: String) {
-        write(Requests.remove(read(), name))
+        write(Requests.remove(writable(), name))
+    }
+
+    /** The file to write over, or the reason it cannot be: writing an empty list over a file that did not parse would lose what it holds. */
+    private fun writable(): RequestsFile {
+        Requests.requestsPathProblem(settings.state.requestsFile)?.let { throw IllegalStateException("$it Nothing was saved.") }
+        val file = read()
+        file.error?.let { throw IllegalStateException("$it Fix the file before saving, so the requests in it are not lost.") }
+        return file
     }
 
     private fun write(file: RequestsFile) {

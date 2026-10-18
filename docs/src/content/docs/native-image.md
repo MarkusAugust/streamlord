@@ -37,6 +37,7 @@ graalvmNative {
                 "--initialize-at-build-time=kotlinx.serialization.json.JsonImpl",
                 "--initialize-at-build-time=kotlinx.serialization.json.ClassDiscriminatorMode",
                 "--initialize-at-build-time=kotlinx.serialization.modules.SerializersModuleKt",
+                "-H:+UnlockExperimentalVMOptions",
                 "-H:+InstallExitHandlers",
                 "-H:+ReportUnsupportedElementsAtRuntime",
                 "-H:+ReportExceptionStackTraces",
@@ -54,8 +55,10 @@ C header beside it.
 
 The list of build arguments is Ktor's, from
 [ktor-samples/graalvm](https://github.com/ktorio/ktor-samples/tree/main/graalvm), and this is it
-whole. It is also, in this order, every build argument the service behind this site uses, bar the
-container flag that step 4 adds on Linux. Take it whole rather than adding entries one at a time
+whole, with one line of our own: `-H:+UnlockExperimentalVMOptions`, because the three `-H:+`
+options after it are experimental and GraalVM is about to refuse them without it. It is also, in
+this order, every build argument the service behind this site uses, bar the container flag that
+step 4 adds on Linux. Take it whole rather than adding entries one at a time
 against a theory of what an error means: three attempts here were spent doing that, and each
 theory was wrong.
 
@@ -89,8 +92,17 @@ KotlinxSignalsCodec(
 ```
 
 It asks only for what an image cannot resolve by itself: your own classes, and containers holding
-them. `String`, `Int`, `List<String>` and the rest are answered from a table inside
-kotlinx.serialization that ships in the bytecode like any other code, so strict lets them through.
+them. A container is named whole, because kotlinx.serialization looks up `List<SearchSignals>` by
+reading the class of what it holds, which is the reflection an image cannot do; naming
+`SearchSignals` alone does not cover it:
+
+```kotlin sample=none
+typeOf<List<SearchSignals>>() to ListSerializer(SearchSignals.serializer())
+```
+
+`String`, `Int`, `List<String>` and the rest are answered from a table inside
+kotlinx.serialization that ships in the bytecode like any other code, so `requireNamedSerializers`
+lets them through.
 
 It is worth turning on the day you add the second signals class, because the failure it prevents is
 a silent one. Leave it out and the codec falls back to asking kotlinx.serialization to find the

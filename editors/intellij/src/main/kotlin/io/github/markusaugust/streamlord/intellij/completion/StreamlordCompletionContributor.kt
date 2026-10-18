@@ -122,7 +122,9 @@ class StreamlordCompletionContributor : CompletionContributor() {
                     ?: return
             if (offset <= s.start || offset > s.contentEnd + (if (s.unterminated) 1 else 0)) return
             val text = src.substring(s.contentStart, offset)
-            if (expressionItems(text, index, file, result, allowActions = true)) result.stopHere()
+            // dataOnSignalPatch also writes the filter, so the call is looked up among the attribute's own names.
+            val patch = catalog.attributesByName["on-signal-patch"]?.kotlin?.contains(site.name) == true
+            if (expressionItems(text, index, file, result, allowActions = true, patchInScope = patch)) result.stopHere()
         }
 
         /** `selector = "#|"` on any DSL call, or the first argument of removeElements: ids and classes from the project. */
@@ -210,6 +212,7 @@ class StreamlordCompletionContributor : CompletionContributor() {
                         result,
                         allowActions =
                             spec.valueKind == ValueKind.EXPRESSION,
+                        patchInScope = spec.name == "on-signal-patch",
                     )
                 }
                 return false
@@ -288,7 +291,8 @@ class StreamlordCompletionContributor : CompletionContributor() {
                 }
                 return
             }
-            val matcher = result.withPrefixMatcher(PlainPrefixMatcher(current))
+            // By name, as VS Code lists them.
+            val matcher = result.withPrefixMatcher(PlainPrefixMatcher(current)).withRelevanceSorter(sorter { 0 })
             for (m in spec.modifiers) {
                 val detail =
                     "__${m.name}" +
@@ -333,6 +337,7 @@ class StreamlordCompletionContributor : CompletionContributor() {
             file: PsiFile,
             result: CompletionResultSet,
             allowActions: Boolean,
+            patchInScope: Boolean = false,
         ): Boolean {
             val catalog = StreamlordAnalysis.getInstance(file.project).catalog
             val sig = signalPrefixAt(textBefore, textBefore.length)
@@ -364,18 +369,22 @@ class StreamlordCompletionContributor : CompletionContributor() {
             if (!allowActions) return false
             val act = actionPrefixAt(textBefore, textBefore.length)
             if (act != null) {
-                val matcher = result.withPrefixMatcher(PlainPrefixMatcher("@$act"))
+                // By name, Pro after the rest, as VS Code lists them.
+                val pro =
+                    catalog.actions
+                        .filter { it.pro }
+                        .map { "@${it.name}" }
+                        .toSet()
+                val matcher =
+                    result.withPrefixMatcher(PlainPrefixMatcher("@$act")).withRelevanceSorter(sorter { if (it in pro) 1 else 0 })
                 for (a in catalog.actions) matcher.addFixed(actionElement(a))
                 return true
             }
             val scope = Regex("""(?:^|[^A-Za-z0-9_$])([a-z]*)$""").find(textBefore)
             if (scope != null && scope.groupValues[1].isNotEmpty()) {
                 val matcher = result.withPrefixMatcher(PlainPrefixMatcher(scope.groupValues[1]))
-                for (v in listOf(
-                    "el",
-                    "evt",
-                    "patch",
-                )) {
+                // `patch` is a name only in `data-on-signal-patch`, the one attribute the client hands it to.
+                for (v in listOfNotNull("el", "evt", "patch".takeIf { patchInScope })) {
                     matcher.addFixed(LookupElementBuilder.create(v).withTypeText("Datastar scope").withIcon(AllIcons.Nodes.Variable))
                 }
             }
@@ -409,25 +418,22 @@ class StreamlordCompletionContributor : CompletionContributor() {
                     a.name == "peek" -> 1
                     else -> 1
                 }
-            return PrioritizedLookupElement.withPriority(
-                LookupElementBuilder
-                    .create("@${a.name}")
-                    .withTypeText((if (a.pro) "Pro · " else "") + a.signature)
-                    .withIcon(AllIcons.Nodes.Function)
-                    .withInsertHandler { context, _ ->
-                        EditorModificationUtil.insertStringAtCaret(context.editor, insert)
-                        context.editor.caretModel.moveToOffset(context.editor.caretModel.offset - caretBack)
-                        if (a.kind ==
-                            "backend"
-                        ) {
-                            context.editor.selectionModel.setSelection(
-                                context.editor.caretModel.offset - 5,
-                                context.editor.caretModel.offset,
-                            )
-                        }
-                    },
-                if (a.pro) 5.0 else 10.0,
-            )
+            return LookupElementBuilder
+                .create("@${a.name}")
+                .withTypeText((if (a.pro) "Pro · " else "") + a.signature)
+                .withIcon(AllIcons.Nodes.Function)
+                .withInsertHandler { context, _ ->
+                    EditorModificationUtil.insertStringAtCaret(context.editor, insert)
+                    context.editor.caretModel.moveToOffset(context.editor.caretModel.offset - caretBack)
+                    if (a.kind ==
+                        "backend"
+                    ) {
+                        context.editor.selectionModel.setSelection(
+                            context.editor.caretModel.offset - 5,
+                            context.editor.caretModel.offset,
+                        )
+                    }
+                }
         }
 
         /** Documentation of an attribute for the lookup, as HTML. */

@@ -36,16 +36,21 @@ export function withRecommendedColors(current: TokenColors): TokenColors {
   };
 }
 
+/** The user's own setting, not the value merged across scopes: a workspace's rules must not be copied into user settings. */
+function userTokenColors(config: vscode.WorkspaceConfiguration): TokenColors {
+  return (config.inspect<TokenColors>("tokenColorCustomizations")?.globalValue ?? {}) as TokenColors;
+}
+
 export async function applyRecommendedColors(): Promise<void> {
   const config = vscode.workspace.getConfiguration("editor");
-  const current = (config.get<TokenColors>("tokenColorCustomizations") ?? {}) as TokenColors;
+  const current = userTokenColors(config);
   await config.update("tokenColorCustomizations", withRecommendedColors(current), vscode.ConfigurationTarget.Global);
   void vscode.window.showInformationMessage("Streamlord: recommended colors written to your user settings (dark and light). Run “Streamlord: Remove recommended colors” to undo.");
 }
 
 export async function removeRecommendedColors(): Promise<void> {
   const config = vscode.workspace.getConfiguration("editor");
-  const current = (config.get<TokenColors>("tokenColorCustomizations") ?? {}) as TokenColors;
+  const current = userTokenColors(config);
   const next = withoutOurs(current);
   await config.update("tokenColorCustomizations", Object.keys(next).length > 0 ? next : undefined, vscode.ConfigurationTarget.Global);
   void vscode.window.showInformationMessage("Streamlord: recommended colors removed.");

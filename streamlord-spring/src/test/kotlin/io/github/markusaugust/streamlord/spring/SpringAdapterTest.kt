@@ -9,9 +9,11 @@ import io.github.markusaugust.streamlord.core.domain.ExecuteScript
 import io.github.markusaugust.streamlord.core.domain.InterpolatedExpressionException
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
+import io.github.markusaugust.streamlord.core.port.driving.DatastarStream
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
 import io.github.markusaugust.streamlord.json.jackson.JacksonSignalsCodec
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
@@ -46,7 +48,8 @@ class SpringAdapterTest {
 
         assertTrue(response.contentType!!.startsWith("text/event-stream"))
         assertEquals("no-cache", response.getHeader("Cache-Control"))
-        assertEquals("keep-alive", response.getHeader("Connection"))
+        // No request given and none that Spring MVC is handling, so nothing says it is HTTP/1.1.
+        assertNull(response.getHeader("Connection"))
         assertEquals(
             "event: datastar-patch-elements\ndata: elements <div id=\"a\">1</div>\n\n" +
                 "event: datastar-patch-signals\ndata: signals {\"query\":\"ash\",\"page\":2}\n\n" +
@@ -66,6 +69,97 @@ class SpringAdapterTest {
         assertTrue(": keep-alive" in response.contentAsString, response.contentAsString)
     }
 
+    // The heartbeat runs on Dispatchers.IO, so a block that blocks its own thread does not hold it.
+    @Test
+    fun `a block that blocks its thread still gets its heartbeat`() {
+        val response = MockHttpServletResponse()
+        response
+            .datastarStream(Streamlord(heartbeat = 50.milliseconds)) { Thread.sleep(300) }
+            .writeTo(response.outputStream)
+
+        assertTrue(": keep-alive" in response.contentAsString, response.contentAsString)
+    }
+
+    @Test
+    fun `a heartbeat for one stream applies when the bean has none`() {
+        val response = MockHttpServletResponse()
+        response
+            .datastarStream(Streamlord(), heartbeat = 50.milliseconds) { delay(300.milliseconds) }
+            .writeTo(response.outputStream)
+
+        assertTrue(": keep-alive" in response.contentAsString, response.contentAsString)
+    }
+
+    @Test
+    fun `null for one stream silences the bean's heartbeat`() {
+        val response = MockHttpServletResponse()
+        response
+            .datastarStream(Streamlord(heartbeat = 50.milliseconds), heartbeat = null) { delay(300.milliseconds) }
+            .writeTo(response.outputStream)
+
+        assertEquals("", response.contentAsString)
+    }
+
+    @Test
+    fun `the flow variant takes a heartbeat for its stream`() {
+        val response = MockHttpServletResponse()
+        val events = flow<DatastarEvent> { delay(300.milliseconds) }
+        response
+            .datastarStream(events, Streamlord(), heartbeat = 50.milliseconds)
+            .writeTo(response.outputStream)
+
+        assertTrue(": keep-alive" in response.contentAsString, response.contentAsString)
+    }
+
+    // At the controller, while a status can still be sent, rather than once the body is running.
+    @Test
+    fun `a heartbeat that is not positive fails when the stream is asked for`() {
+        assertFailsWith<IllegalArgumentException> {
+            MockHttpServletResponse().datastarStream(heartbeat = 0.milliseconds) {}
+        }
+    }
+
+    @Test
+    fun `a heartbeat for one stream reaches a gzipped stream`() {
+        val request = MockHttpServletRequest("GET", "/feed").apply { addHeader("Accept-Encoding", "gzip") }
+        val response = MockHttpServletResponse()
+
+        response
+            .datastarStream(Streamlord(compress = true), request, heartbeat = 50.milliseconds) { delay(300.milliseconds) }
+            .writeTo(response.outputStream)
+
+        val text =
+            java.util.zip
+                .GZIPInputStream(response.contentAsByteArray.inputStream())
+                .readBytes()
+                .decodeToString()
+        assertTrue(text.startsWith(": keep-alive"), text)
+    }
+
+    // The JVM entry point code compiled against 0.12 calls: it must keep the bean's heartbeat.
+    @Test
+    fun `the 0_12 signature still applies the bean's heartbeat`() {
+        val response = MockHttpServletResponse()
+        val block: suspend DatastarStream.() -> Unit = { delay(300.milliseconds) }
+        val old =
+            Class.forName("io.github.markusaugust.streamlord.spring.ServletKt").getMethod(
+                "datastarStream\$default",
+                jakarta.servlet.http.HttpServletResponse::class.java,
+                Streamlord::class.java,
+                jakarta.servlet.http.HttpServletRequest::class.java,
+                io.github.markusaugust.streamlord.core.application.StreamAuthorisation::class.java,
+                Function2::class.java,
+                Int::class.javaPrimitiveType,
+                Any::class.java,
+            )
+
+        // Mask 0b110: request and authorisation left to their defaults.
+        val body = old.invoke(null, response, Streamlord(heartbeat = 50.milliseconds), null, null, block, 0b110, null)
+        (body as org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody).writeTo(response.outputStream)
+
+        assertTrue(": keep-alive" in response.contentAsString, response.contentAsString)
+    }
+
     @Test
     fun `a compressing bean gzips the stream for a request that takes it`() {
         val request = MockHttpServletRequest("GET", "/feed").apply { addHeader("Accept-Encoding", "gzip, br") }
@@ -79,7 +173,10 @@ class SpringAdapterTest {
         assertEquals(listOf("Accept-Encoding"), response.getHeaders("Vary"))
         assertEquals(
             "event: datastar-patch-signals\ndata: signals {\"n\":1}\n\n",
-            java.util.zip.GZIPInputStream(response.contentAsByteArray.inputStream()).readBytes().decodeToString(),
+            java.util.zip
+                .GZIPInputStream(response.contentAsByteArray.inputStream())
+                .readBytes()
+                .decodeToString(),
         )
     }
 
@@ -106,21 +203,18 @@ class SpringAdapterTest {
 
         assertFailsWith<IllegalStateException> { body.writeTo(response.outputStream) }
         assertFailsWith<java.io.EOFException> {
-            java.util.zip.GZIPInputStream(response.contentAsByteArray.inputStream()).readBytes()
+            java.util.zip
+                .GZIPInputStream(response.contentAsByteArray.inputStream())
+                .readBytes()
         }
     }
 
-    // A container refuses prepareForSse's setBufferSize on a committed response before this is
-    // reached; the mock does not, which leaves the check itself to test.
+    // Its headers have gone out, with whatever content type they carried.
     @Test
-    fun `a committed response is never gzipped`() {
-        val request = MockHttpServletRequest("GET", "/feed").apply { addHeader("Accept-Encoding", "gzip") }
+    fun `a committed response cannot become a stream`() {
         val response = MockHttpServletResponse().apply { setCommitted(true) }
 
-        response.datastarStream(Streamlord(compress = true), request) { patchSignals("n" to 1) }.writeTo(response.outputStream)
-
-        assertNull(response.getHeader("Content-Encoding"))
-        assertEquals("event: datastar-patch-signals\ndata: signals {\"n\":1}\n\n", response.contentAsString)
+        assertFailsWith<IllegalStateException> { response.datastarStream { patchSignals("n" to 1) } }
     }
 
     @Test
@@ -160,7 +254,8 @@ class SpringAdapterTest {
                 contentType = "application/json"
             }
         assertEquals(Search("fire"), post.readSignals<Search>(streamlord))
-        assertEquals(Search("fire"), post.readSignalsOr(Search(), streamlord).let { Search("fire") })
+        // A body read once is gone; a second read is not a request without signals.
+        assertFailsWith<IllegalStateException> { post.readSignalsOr(Search(), streamlord) }
 
         val empty = MockHttpServletRequest("GET", "/x")
         assertNull(empty.readSignals<Search>(streamlord))

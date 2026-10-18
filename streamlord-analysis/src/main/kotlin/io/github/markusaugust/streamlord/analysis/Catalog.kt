@@ -44,6 +44,14 @@ public data class AttributeSpec(
     val onlyOn: List<String>?,
     val doc: String,
     val requires: Requires? = null,
+    /**
+     * Whether Datastar reads the expression's value: it then splits the text into statements on
+     * `;` and wraps the last one in `return (...)` before compiling. The others are compiled as
+     * written, as the body of an event handler.
+     */
+    val returnsValue: Boolean = false,
+    /** Keys a keyless attribute accepts all the same: `data-on-signal-patch:filter` (onSignalPatch.ts:27 in 1.0.4). */
+    val keys: List<String> = emptyList(),
 )
 
 public data class ActionSpec(
@@ -130,6 +138,8 @@ public class Catalog private constructor(
                     onlyOn = a.array("onlyOn")?.strings(),
                     doc = a.string("doc") ?: "",
                     requires = a.string("requires")?.let { Requires.valueOf(it.uppercase()) },
+                    returnsValue = a.boolean("returnsValue") ?: false,
+                    keys = a.array("keys")?.strings() ?: emptyList(),
                 )
             }
         actions =
@@ -157,7 +167,18 @@ public class Catalog private constructor(
     }
 
     public val attributesByName: Map<String, AttributeSpec> = attributes.associateBy { it.name }
-    public val attributesByKotlin: Map<String, AttributeSpec> = attributes.flatMap { a -> a.kotlin.map { it to a } }.toMap()
+
+    /**
+     * The attribute each DSL helper writes from its string argument. dataOnSignalPatch writes
+     * data-on-signal-patch from its string and the filter companion from a SignalFilter, so a
+     * helper is never its filter.
+     */
+    public val attributesByKotlin: Map<String, AttributeSpec> =
+        buildMap {
+            for (a in attributes) {
+                for (k in a.kotlin) if (get(k)?.valueKind != ValueKind.EXPRESSION || a.valueKind == ValueKind.EXPRESSION) put(k, a)
+            }
+        }
     public val actionsByName: Map<String, ActionSpec> = actions.associateBy { it.name }
 
     /** Every DSL function the analysis looks at, of every kind. */

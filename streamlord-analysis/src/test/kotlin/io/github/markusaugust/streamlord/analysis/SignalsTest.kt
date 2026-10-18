@@ -21,6 +21,11 @@ class SignalsTest {
     }
 
     @Test
+    fun `the pairs form camel-cases its keys as the keyed form does, and a patch keeps them`() {
+        assertEquals(listOf("foo-bar", "fooBar"), kotlin("dataSignals(\"foo-bar\" to 7); patchSignals(\"foo-bar\" to 1)"))
+    }
+
+    @Test
     fun `a property goes by its serial name, and a parenthesis does not end the class`() {
         val src =
             """
@@ -37,8 +42,25 @@ class SignalsTest {
 
     @Test
     fun `the object form declares quoted keys in either kind of quote`() {
-        assertEquals(listOf("deep", "nested", "query"), html("""<div data-signals='{"query": "", "nested": {"deep": 1}}'></div>"""))
+        // A key of an object under a key is a signal under that one, as the client stores it.
+        assertEquals(listOf("nested", "nested.deep", "query"), html("""<div data-signals='{"query": "", "nested": {"deep": 1}}'></div>"""))
         assertEquals(listOf("bare", "single"), html("""<div data-signals__ifmissing="{'single': 1, bare: 2}"></div>"""))
         assertEquals(listOf("esc"), kotlin("""val k = "<div data-signals='{\"esc\": 1}'></div>""""))
+    }
+
+    @Test
+    fun `a spread of a variable may define any signal, and names none to complete`() {
+        val src = """<div data-signals="{a: 1, ...init, b: {...more}}"></div>"""
+        assertEquals(listOf("a", "b"), html(src))
+        assertEquals(listOf("*", "a", "b"), collectSignalDefinitions(src, SourceLanguage.HTML).sorted())
+    }
+
+    @Test
+    fun `a key with template syntax in it declares nothing`() {
+        val keys =
+            "<div data-signals:${'$'}{key}=\"1\"></div><div data-signals:{{ name }}=\"1\"></div><div data-signals:th:text=\"1\"></div>" +
+                "<div data-signals:<%= k %>=\"1\"></div><div data-signals:foo{{x}}=\"1\"></div>"
+        assertEquals(listOf("user-name", "år"), html(keys + "<div data-bind:user-name__case.kebab></div><div data-signals:år=\"1\"></div>"))
+        assertEquals(emptyList(), kotlin("val x = \"<div data-signals:${'$'}{name}=\\\"1\\\"></div>\""))
     }
 }

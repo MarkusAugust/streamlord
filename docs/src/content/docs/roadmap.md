@@ -7,9 +7,10 @@ description: "What is planned but not shipped, in the order it will land, and wh
 >
 > Gorvek of Bonereach
 
-None of this is in 0.12.0. It is written down so you can see what is coming, decide whether to
-wait for it, and know what to do today instead. Everything that touches your code is opt-in when
-it lands, the way [`guardElements`](/strings/) is, with one exception that is marked as such.
+Nothing on this page has shipped yet; an item leaves it in the release that delivers it. It is
+written down so you can see what is coming, decide whether to wait for it, and know what to do
+today instead. Everything that touches your code is opt-in when it lands, the way
+[`guardElements`](/strings/) is, with one exception that is marked as such.
 
 | Order | Planned | What it changes | What you do today |
 |---|---|---|---|
@@ -51,17 +52,18 @@ is what signals are for.
 
 The inspector opens a real Datastar request, exactly as the browser client would, parses the
 stream, and keeps every frame it decoded. It also keeps the signal store, applying each
-`datastar-patch-signals` as an RFC 7386 merge and honouring `onlyIfMissing`, so what it shows is
-what the client would hold.
+`datastar-patch-signals` with `mergePatchAsClient`, the merge as Datastar's client does it
+(RFC 7386 for an ordinary patch, but `onlyIfMissing` leaf by leaf, and an object onto an array
+sets its indices), so what it shows is what the client would hold.
 
-What it does not keep is the store at each step. `signals = mergePatch(signals, patch)` overwrites,
-so there is one running value and no way back. When a handler emits fifteen frames in half a
-second, you watch the number settle and cannot ask what it was at frame nine.
+What it does not keep is the store at each step. `signals = mergePatchAsClient(signals, patch)`
+overwrites, so there is one running value and no way back. When a handler emits fifteen frames in
+half a second, you watch the number settle and cannot ask what it was at frame nine.
 
-Planned: a position control over the frames already on screen. Step back, and the store panel
-shows what the client would have held at that point. This needs no new capture and no protocol
-work: every frame is kept with its arguments, `mergePatch` is a pure function, so the store at any
-index is a fold from the start. The work is the control and the wiring, in both plugins.
+Planned: a position control over the frames already on screen. Step back, and the store panel shows
+what the client would have held at that point. This needs no new capture and no protocol work:
+every frame is kept with its arguments, `mergePatchAsClient` is a pure function, so the store at
+any index is a fold from the start. The work is the control and the wiring, in both plugins.
 
 ## Delimiters the analysis has not met
 
@@ -70,12 +72,15 @@ a Datastar expression: `{{ }}`, `{% %}`, `${ }`, `<% %>`, `[# ]`, and JTE's and 
 control-flow keywords. That covers most engines whatever they are called, and it is a closed set
 in `Markup.kt` with no way to add to it.
 
-An engine outside it, Qute with `{name}`, Closure with `{$name}`, Rocker with `@name`, is fine
-everywhere except one place, which was measured rather than assumed. Expression attributes such
-as `data-text` produce no findings, because the expression check only fires on shapes no working
-expression has. Attributes that take a signal name do: `data-bind="{name}"` reports
-`signal-name-expected`, since a signal name is held to a strict pattern and a brace is not in it.
-The file is correct and the editor says it is not.
+An engine outside it, Qute with `{name}`, Closure with `{$name}`, Rocker with `@name`, has its
+expressions judged as Datastar would judge the unrendered text, which was measured rather than
+assumed. Attributes that take a signal name report `signal-name-expected` for all three. There
+the editors are stricter than the client, which makes a signal named `{$name}` from
+`data-bind="{$name}"`: no `$name` can reach such a signal, so a brace or an `@` in a signal name
+is almost always a mistake. In the rendered file the tag is gone, and the editor says it is
+wrong. In expressions the findings are right about the unrendered text, and a tag does not
+belong there in any case;
+[Templates](/templates/#do-not-render-a-value-into-an-expression) shows what to write instead.
 
 Planned: `AnalyzeOptions` takes the delimiter pairs your engine uses, and the editors read them
 from a setting. Small, and the only reason it is not higher is that it affects one rule for
@@ -84,8 +89,20 @@ engines outside a set that already covers most of them.
 ### Until then
 
 Nothing, for the attributes that take a signal name, which is why this is on the list rather than
-in the "considered" pile. Everything else about your engine already works, and none of it touches
-what Streamlord puts on the wire. [Templates](/templates/) says which half is which.
+in the "considered" pile. A value the page shows goes in an attribute of its own and is read
+with `el.dataset`, which gives no findings for any of the three tags and runs nothing the value
+holds:
+
+```html
+<span data-value="{$name}" data-text="el.dataset.value"></span>
+```
+
+That holds where the attribute is in quotes and the engine escapes the value for HTML, and only
+where the expression uses the value as text, as `data-text` does, not as a URL or a handler;
+[Templates](/templates/#do-not-render-a-value-into-an-expression) has the cases. Never put the
+tag in a JavaScript string, `data-text="'{$name}'"`: the browser undoes the engine's HTML
+escaping before Datastar reads the attribute, so a value with a quote in it is code. Everything
+else about your engine already works, and none of it touches what Streamlord puts on the wire.
 
 ## Concurrent stream limits
 
@@ -139,7 +156,7 @@ and a template that has fallen a version behind teaches the wrong API with full 
 repository covering both adapters, or the `demo` module documented as the thing to copy, carries
 the same weight for a fraction of the upkeep.
 
-It waits for 1.0 because the API is still moving. Three releases this week changed the surface,
+It waits for 1.0 because the API is still moving. Every release so far has changed the surface,
 and each of them would have aged a template silently.
 
 ### Until then
@@ -162,8 +179,8 @@ Weighed and set aside for now, with the reason, so the same ground is not covere
   Datastar client copes; the browser's own throttling does that properly. Cutting a stream off to
   see whether the *server* notices is the useful half, and the Stop button already does it.
 - **An `ElementsRenderer` port.** The 0.1.0 roadmap planned one for 0.3: template engines behind
-  an interface, configured once, rather than called at each site. Eight releases went past it and
-  the argument got weaker each time. It would buy no new ability, only move `pebble.render(...)`
+  an interface, configured once, rather than called at each site. Every release since went past it
+  and the argument got weaker each time. It would buy no new ability, only move `pebble.render(...)`
   from the call site into a configuration, and it would cost a module per engine to version and
   keep in step. Worse, it would make the engines we wrote adapters for first-class and everything
   else a thing you glue together yourself, when today any engine works, including one you wrote

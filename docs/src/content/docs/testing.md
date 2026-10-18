@@ -39,6 +39,31 @@ fun `the feed appends one item and sets the count`() =
 
 Needs `ktor-server-test-host` and `streamlord-test` in `testImplementation`.
 
+### Declare a posted body as JSON
+
+`setBody` with a string declares the body `text/plain`, and `readSignals` refuses that with
+`SignalsMediaTypeException`. Declare it `application/json`, as Datastar's client does:
+
+```kotlin sample=test
+@Test
+fun `a search reads the query it was sent`() =
+    testApplication {
+        routing {
+            post("/search") {
+                call.respondText("found " + call.readSignals().string("query"))
+            }
+        }
+
+        val response =
+            client.post("/search") {
+                contentType(ContentType.Application.Json)
+                setBody("""{"query":"gate"}""")
+            }
+
+        assertEquals("found gate", response.bodyAsText())
+    }
+```
+
 ### Keep a streamed test response under 1 MiB on Ktor 3.6.0
 
 The test host in Ktor 3.6.0 hangs on a streamed response of 1 MiB or more, and the test fails
@@ -93,13 +118,29 @@ events.assertNoSignal("draft")
 
 ### It is a list, and it binds no test framework
 
-The decoder reads the body the way the browser does, so a test cannot pass on a response the
-client would not act on: a last frame with no blank line after it is not an event, and a frame the
-client would reject fails the test instead of being read charitably.
+The decoder reads the body the way Datastar's client does, so a test cannot pass on a response the
+client would not act on: a last frame with no blank line after it is not an event, a line without a
+colon is skipped, and a frame Streamlord's rules refuse fails the test instead of being read
+charitably. That includes, on any message, Datastar's or not, an `id` the client could not send
+back as `last-event-id` unchanged, by Streamlord's rule (anything but printable ASCII, or a space
+at either end) and a `retry` that is not a whole number of milliseconds from 1 to `Int.MAX_VALUE`.
+The client takes both from every message it reads. It takes `retry: 0` too, as a reconnect with no
+wait whose backoff never grows, and reads `1e3` as a second; Streamlord writes neither, so a test
+fails on a stream that does. `LiveDatastarStream` judges the end of a stream the same way.
 
 `datastarEvents` returns a `List<DatastarEvent>`, so your own assertions work on it unchanged and
 these are a convenience rather than a cage. `events.messages` has the raw SSE messages too, for a
 test about a heartbeat comment or a resume id.
+
+A stream silent from its start gets a `: keep-alive` comment after five seconds by default, and
+after that one whenever it has been silent for 30 seconds. They are
+messages, not events, so the event assertions never see them. Under `runTest`, virtual time skips
+ahead whenever every coroutine waits, so a stream whose block waits on a real thread writes comment
+after comment without pause: give such a test `Streamlord(heartbeat = null)`.
+
+A `StreamAuthorisation` verdict ages on the real clock, not the virtual one, so a `delay(every)`
+under `runTest` never makes the stream ask again. A test that wants it to ask again waits in real
+time, with a short `every`.
 
 Nothing in `streamlord-test` depends on a test framework. A failure is an `AssertionError`, which
 every runner understands, so kotlin.test, JUnit 4 and 5, Kotest and TestNG all work and none of
@@ -144,7 +185,9 @@ fun `the panel patches inner html`() {
 ```
 
 `MockHttpServletRequest` does the other direction when you want to check signal reading, and it
-takes a body or a `datastar` query parameter like the real thing.
+takes a body or a `datastar` query parameter like the real thing. Give a body
+`contentType = "application/json"` as well, as Datastar's client does; without it, reading the
+signals throws `SignalsMediaTypeException`.
 
 ## Without a framework at all
 
@@ -215,9 +258,11 @@ Needs `ktor-server-cio`, or the engine you deploy on, next to `streamlord-test`.
 `@SpringBootTest(webEnvironment = RANDOM_PORT)` gives the real server and `@LocalServerPort` the
 port, from a Kotlin test: the class is coroutine API, called inside `runTest` or `runBlocking`.
 
-The answer has to start within the timeout, five seconds by default, and a server sends its
-headers with its first flush. A handler that writes nothing until a command arrives holds `open`
-until it does, which is one more reason for a live view to send the current state first.
+The answer has to start within the timeout, five seconds by default. Ktor's CIO sends the headers
+as soon as the response opens; Netty holds them until the first byte of the body, so on Netty a
+handler that writes nothing until a command arrives holds `open` until it does, which is one more
+reason for a live view to send the current state first. The heartbeat's first comment comes at
+five seconds too, so it cannot be counted on to open the stream within the timeout.
 
 Three things it does:
 
@@ -292,7 +337,7 @@ Add the artifact where your tests can see it:
 
 ```kotlin sample=none
 dependencies {
-    testImplementation("io.github.markusaugust.streamlord:streamlord-analysis:0.12.0")
+    testImplementation("io.github.markusaugust.streamlord:streamlord-analysis:0.13.0")
 }
 ```
 

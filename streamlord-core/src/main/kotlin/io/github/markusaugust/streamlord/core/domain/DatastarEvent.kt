@@ -22,7 +22,15 @@ public sealed interface DatastarEvent {
     /** Optional SSE `id:` line, used by browsers for replay after reconnection. */
     public val eventId: String?
 
-    /** Optional SSE `retry:` line. `null` leaves the browser default (1000 ms) in place. */
+    /**
+     * Optional SSE `retry:` line, a whole number of milliseconds from 1 to [Int.MAX_VALUE]: how
+     * long the client waits before it reconnects. It holds for the rest of the action, across reconnects too, until a
+     * later frame sets another. `null` leaves the client's current interval in place, which is
+     * the action's `retryInterval` (1000 ms unless set) until a frame has changed it. 1000 ms is
+     * never written, as the SDK specification has it, so a stream that has changed the interval
+     * goes back with 999 or 1001 ms. `retryMaxCount` only counts reconnects that never reach a
+     * 200, and `retryMaxWait` caps the backoff after the first wait, not this value.
+     */
     public val retry: Duration?
 }
 
@@ -33,7 +41,12 @@ public sealed interface DatastarEvent {
  * and when no [selector] is given each of them must carry an `id` so the client can find its
  * counterpart.
  *
- * @property elements The HTML to patch. May be `null` only when [mode] is [ElementPatchMode.REMOVE].
+ * @property elements The HTML to patch. May be `null` only when [mode] is [ElementPatchMode.REMOVE],
+ *   and only white space as HTML counts it (tab, line feed, form feed, carriage return, space)
+ *   only for [ElementPatchMode.INNER], where it empties the target. An `outer` or `replace`
+ *   without a [selector] takes only elements, so there anything Kotlin's `isBlank()` counts as
+ *   blank is refused too, a no-break space and U+3000 among them; with a selector, and in the
+ *   other modes, the client inserts those as text, and they are taken.
  * @property selector CSS selector for the target. Required for every mode except OUTER and REPLACE.
  * @property mode How the elements are driven into the DOM. Defaults to OUTER (morph).
  * @property namespace The namespace of the new elements. Defaults to HTML.
@@ -58,8 +71,16 @@ public data class PatchElements(
         if (mode.requiresSelector && selector == null) {
             throw DatastarEventValidationException("Patch mode '${mode.wire}' requires a selector")
         }
-        if (mode != ElementPatchMode.REMOVE && elements.isNullOrBlank()) {
-            throw DatastarEventValidationException("Patch mode '${mode.wire}' requires elements")
+        // An inner patch of nothing empties its target, the one way to clear a container.
+        val empty = if (mode == ElementPatchMode.INNER) elements == null else Wire.noElements(elements, mode, selector)
+        if (mode != ElementPatchMode.REMOVE && empty) {
+            throw DatastarEventValidationException(
+                if (mode == ElementPatchMode.INNER) {
+                    "Patch mode 'inner' requires elements; pass \"\" to empty the target"
+                } else {
+                    "Patch mode '${mode.wire}' requires elements"
+                },
+            )
         }
     }
 
@@ -86,7 +107,11 @@ public data class PatchElements(
  * a key with a value is set, a key set to `null` is removed, nested objects merge recursively.
  *
  * @property signals A JSON object as text. Use a codec or the built-in
- *   [io.github.markusaugust.streamlord.core.json.JsonWriter] to produce it.
+ *   [io.github.markusaugust.streamlord.core.json.JsonWriter] to produce it. Anything else
+ *   throws [io.github.markusaugust.streamlord.core.DatastarEventValidationException]: Datastar's
+ *   client runs signals that are not JSON as JavaScript. A key the client cannot hold, at any
+ *   depth, throws the same: `__proto__`, a property of `Object.prototype` with an object under
+ *   it, or one holding `.` ([SignalNames]).
  * @property onlyIfMissing Only set signals that do not already exist on the client.
  */
 public data class PatchSignals(
@@ -97,7 +122,7 @@ public data class PatchSignals(
 ) : DatastarEvent {
     init {
         validateCommon(eventId, retry)
-        if (signals.isBlank()) throw DatastarEventValidationException("signals must not be blank")
+        Wire.signals(signals)
     }
 }
 
@@ -109,10 +134,14 @@ public data class PatchSignals(
  * @property autoRemove Add `data-effect="el.remove()"` so the script tag vanishes after it runs. The
  *   attribute follows [io.github.markusaugust.streamlord.core.protocol.DatastarAttributes.prefix], so the
  *   aliased bundle gets `data-star-effect`.
- * @property attributes Extra attributes for the script tag, such as `type`. Not a CSP nonce:
- *   under CSP mode Datastar re-creates every script it patches in and sets the nonce itself,
- *   from the one the page was loaded with, so a nonce passed here is overwritten. With CSP mode
- *   off it is simply ignored. The nonce that matters is the one on the document's `<html>`.
+ * @property attributes Extra attributes for the script tag, such as `type`. Under CSP mode
+ *   Datastar re-creates every script it patches in and sets the nonce itself, from the one the
+ *   page was loaded with, so a nonce passed here is overwritten. With CSP mode off the client
+ *   copies the script's attributes as the page then holds them, and under a policy sent as a
+ *   header the browser has already emptied a nonce attribute by then (HTML's nonce hiding), so
+ *   the copy carries none; only a policy from a `<meta>` tag leaves it. Use CSP mode. Not the
+ *   effect attribute while [autoRemove] is on: the browser keeps the first of two, yours, and
+ *   the removal would be lost.
  */
 public data class ExecuteScript(
     @Language("JavaScript") val script: String,
@@ -125,6 +154,11 @@ public data class ExecuteScript(
         validateCommon(eventId, retry)
         if (script.isBlank()) throw DatastarEventValidationException("script must not be blank")
         attributes.keys.forEach(Wire::attributeName)
+        if (autoRemove && attributes.keys.any { it.equals(DatastarAttributes.name("effect"), ignoreCase = true) }) {
+            throw DatastarEventValidationException(
+                "autoRemove's el.remove() would be dropped in favour of your effect attribute; pass autoRemove = false",
+            )
+        }
     }
 
     /** The script element exactly as it is sent to the browser. */
@@ -160,15 +194,8 @@ private fun validateCommon(
     eventId: String?,
     retry: Duration?,
 ) {
-    eventId?.let {
-        if (it.isEmpty()) throw DatastarEventValidationException("eventId must not be empty")
-        Wire.singleLine(it, "eventId")
-    }
-    retry?.let {
-        if (!it.isPositive() || it.isInfinite()) {
-            throw DatastarEventValidationException("retry must be a positive, finite duration")
-        }
-    }
+    eventId?.let(Wire::eventId)
+    retry?.let(Wire::retry)
 }
 
 /** The same event with [id] as its SSE `id:`, or none when it is `null`. */

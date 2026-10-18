@@ -95,15 +95,15 @@ ul {
         id = "task-${task}"
         dataSignals("_done${task}" to done)
         dataClass("done", signal("_done${task}"))
-        button {
-            dataOnClick(statements(toggle("_done${task}"), post("/tasks/${task}/toggle")))
-            +"Done"
-        }
         dataOnFetch(
             "['${FetchEventType.ERROR}', '${FetchEventType.RETRIES_FAILED}']" +
                 ".includes(evt.detail.type) " +
                 "&& evt.detail.el.closest('#task-${task}') && (${set("_done${task}", done)})",
         )
+        button {
+            dataOnClick(statements(toggle("_done${task}"), post("/tasks/${task}/toggle")))
+            +"Done"
+        }
     }
 }
 ```

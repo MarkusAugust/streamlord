@@ -6,6 +6,7 @@ import io.github.markusaugust.streamlord.core.port.driven.decode
 import io.github.markusaugust.streamlord.core.port.driven.encode
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.buildClassSerialDescriptor
 import kotlinx.serialization.descriptors.element
@@ -14,6 +15,7 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.encoding.decodeStructure
 import kotlinx.serialization.encoding.encodeStructure
+import kotlinx.serialization.json.JsonElement
 import kotlin.reflect.typeOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -99,6 +101,41 @@ class KotlinxSignalsCodecTest {
         assertTrue(refused.message!!.contains("Other"))
     }
 
+    // The list is looked up whole, and that lookup reads the class of what it holds, never the map.
+    @Test
+    fun `naming required refuses a container of a named type until the container is named`() {
+        val codec = KotlinxSignalsCodec(serializers = mapOf(typeOf<Signals>() to ShoutingSignals), requireNamedSerializers = true)
+        for (refused in listOf(
+            assertFailsWith<SignalsCodecException> { codec.decode<List<Signals>>("""[{"search":"ASH"}]""") },
+            assertFailsWith<SignalsCodecException> { codec.decode<Map<String, Signals>>("""{"a":{"search":"ASH"}}""") },
+            assertFailsWith<SignalsCodecException> { codec.decode<Map<String, List<Signals>>>("""{"a":[]}""") },
+        )) {
+            assertTrue(refused.message!!.contains("No serializer was named"), refused.message)
+        }
+
+        val named =
+            KotlinxSignalsCodec(
+                serializers = mapOf(typeOf<List<Signals>>() to ListSerializer(ShoutingSignals)),
+                requireNamedSerializers = true,
+            )
+        assertEquals(listOf(Signals(search = "ash")), named.decode<List<Signals>>("""[{"search":"ASH"}]"""))
+    }
+
+    @Serializable
+    data class Loose(
+        val page: Int = 1,
+        val extra: JsonElement? = null,
+    )
+
+    // A JsonElement is read by recursion; a caller that skips Streamlord.readSignals still gets a 400.
+    @Test
+    fun `nesting too deep for the stack is a decode failure`() {
+        val depth = 200_000
+        val body = """{"page":2,"extra":""" + "[".repeat(depth) + "]".repeat(depth) + "}"
+        assertFailsWith<SignalsDecodeException> { codec.decode<Loose>(body) }
+        assertEquals(2, codec.decode<Loose>("""{"page":2,"extra":[[[]]]}""").page)
+    }
+
     @Test
     fun `wraps failures`() {
         assertFailsWith<SignalsDecodeException> { codec.decode<Signals>("""{"count":"not a number"}""") }
@@ -145,5 +182,43 @@ class KotlinxSignalsCodecTest {
     fun `a body of the wrong shape does not blame the serializers`() {
         val e = assertFailsWith<SignalsCodecException> { KotlinxSignalsCodec().decode<Map<String, Int>>("""{"a":"no"}""") }
         assertFalse("serializer" in e.message.orEmpty().lowercase(), e.message)
+    }
+
+    @Serializable
+    enum class Colour { RED, GREEN }
+
+    @Serializable
+    data class Painted(
+        val c: Colour,
+    )
+
+    // Jackson reads a number as the constant at that position; the table on the Signals page has both.
+    @Test
+    fun `an enum is read by name only`() {
+        assertEquals(Painted(Colour.GREEN), codec.decode<Painted>("""{"c":"GREEN"}"""))
+        for (body in listOf("""{"c":0}""", """{"c":"0"}""")) {
+            assertFailsWith<SignalsDecodeException>(body) { codec.decode<Painted>(body) }
+        }
+    }
+
+    @Serializable
+    data class Numbered(
+        val xs: Array<Int>,
+    )
+
+    // kotlinx.serialization builds an int[] for it and fails to cast it, on every body.
+    @Test
+    fun `an Array of a primitive looked up by type is the server's, with the fix in the message`() {
+        for (body in listOf("[1,2]", "[1,null]", "nope")) {
+            val failure = assertFailsWith<SignalsCodecException>(body) { codec.decode<Array<Int>>(body) }
+            assertFalse(failure is SignalsDecodeException, "$failure")
+            assertTrue("IntArray" in failure.message.orEmpty(), failure.message)
+        }
+        assertFailsWith<SignalsCodecException> { codec.decode<List<Array<Long>>>("[[1]]") }
+        assertEquals(listOf(1, 2), codec.decode<IntArray>("[1,2]").toList())
+        assertEquals(listOf(1, null), codec.decode<Array<Int?>>("[1,null]").toList())
+        assertEquals(listOf("a"), codec.decode<Array<String>>("""["a"]""").toList())
+        // The compiler plugin's serializer for a property is right.
+        assertEquals(listOf(1, 2), codec.decode<Numbered>("""{"xs":[1,2]}""").xs.toList())
     }
 }

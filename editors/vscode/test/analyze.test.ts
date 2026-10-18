@@ -16,7 +16,7 @@ import { validateExpression } from "../src/expression.ts";
 import { validateMarkup } from "../src/markup.ts";
 import { collectSignals } from "../src/signals.ts";
 import { collectSelectors } from "../src/selectors.ts";
-import { decodeDatastar, mergePatch, SseParser } from "../src/sse.ts";
+import { decodeDatastar, mergePatchAsClient, SseParser } from "../src/sse.ts";
 
 const opts = { prefix: "data-", checkHtmlAttributes: true };
 const codes = (issues: { code?: string }[]) => issues.map((i) => i.code);
@@ -122,7 +122,13 @@ describe("markup", () => {
     const src = `<div data-signals:fooBar="1" data-computed:fullName="1" data-bind:MySignal data-on:widgetLoaded="x()" data-class:isOpen="$open" data-attr:ariaLabel="'x'" data-style:backgroundColor="'red'"></div>`;
     const issues = analyzeHtml(src, opts);
     expect(codes(issues)).toEqual(["key-case", "key-case", "key-case", "key-case", "key-case", "key-case", "key-case"]);
-    expect(issues.map((i) => i.fixes![0]!.text)).toEqual(["foo-bar", "full-name", "my-signal__case.pascal", "widget-loaded__case.camel", "is-open__case.camel", "aria-label", "background-color"]);
+    expect(issues.slice(0, 5).map((i) => i.fixes![0]!.text)).toEqual(["foo-bar", "full-name", "my-signal__case.pascal", "widget-loaded__case.camel", "is-open__case.camel"]);
+    // A kebab-case attribute would set aria-label; the object form keeps the name. No form keeps a style property's capitals.
+    expect(issues[5]!.fixes!.map((f) => f.text)).toEqual([`data-attr="{ariaLabel: 'x'}"`]);
+    expect(issues[5]!.message).toContain("sets arialabel, not ariaLabel");
+    // A CSS property is kebab-case, which is also the fix; lowercase alone would name no property.
+    expect(issues[6]!.fixes!.map((f) => f.text)).toEqual(["background-color"]);
+    expect(issues[6]!.message).toContain("A CSS property is written in kebab-case: data-style:background-color.");
     expect(issues[0]!.message).toContain("$foobar");
     expect(src.slice(issues[0]!.start, issues[0]!.end)).toBe("fooBar");
     const fine = `<div data-signals:foo-bar="1" data-on:widget-loaded__case.camel="x()" data-bind="fooBar" data-signals="{fooBar: 1}" data-class:hover:bg-red-500="$x"></div>`;
@@ -133,7 +139,8 @@ describe("markup", () => {
     expect(explicit.map((i) => i.fixes![0]!.text)).toEqual(["foo-bar", "widget-loaded"]);
     expect(explicit[0]!.message).toContain("foo-bar__case.kebab");
     const custom = analyzeHtml(`<div data-style:--myColor="$c"></div>`, opts);
-    expect(custom.map((i) => i.fixes![0]!.text)).toEqual(["--my-color"]);
+    expect(custom[0]!.message).toContain("sets --mycolor, not --myColor. No form keeps a capital in a custom property: name it in kebab-case, here and in the CSS, as --my-color.");
+    expect(custom[0]!.fixes).toEqual([]);
     // The aliased prefix gets the same treatment when configured.
     expect(codes(analyzeHtml(`<div data-star-signals:fooBar="1"></div>`, { prefix: "data-star-", checkHtmlAttributes: true }))).toEqual(["key-case"]);
   });
@@ -398,7 +405,7 @@ describe("sse", () => {
     expect(decodeDatastar(b[2]!).args.signals).toBe('{"n":1}');
   });
   it("merge-patches signals", () => {
-    expect(mergePatch({ a: 1, u: { n: "x", e: "y" } }, { a: null, u: { e: null, t: 1 }, l: [1] })).toEqual({ u: { n: "x", t: 1 }, l: [1] });
+    expect(JSON.stringify(mergePatchAsClient({ a: 1, u: { n: "x", e: "y" } }, { a: null, u: { e: null, t: 1 }, l: [1] }))).toEqual('{"u":{"n":"x","t":1},"l":[1]}');
   });
 });
 

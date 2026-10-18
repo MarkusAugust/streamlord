@@ -13,10 +13,15 @@ sourceSets.main {
     resources.srcDir(rootProject.file("catalog"))
 }
 
-// CorpusTest reads the cases the VS Code extension shares with it. Declared, so a change to a
-// case alone runs the tests again rather than finding them up to date.
+// CorpusTest and SseCorpusTest read the cases the VS Code extension shares with them. Declared,
+// so a change to a case alone runs the tests again rather than finding them up to date or cached.
 tasks.test {
-    inputs.dir(rootProject.layout.projectDirectory.dir("editors/vscode/test/fixtures/corpus"))
+    inputs
+        .dir(rootProject.layout.projectDirectory.dir("editors/vscode/test/fixtures/corpus"))
         .withPropertyName("corpus")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs
+        .dir(rootProject.layout.projectDirectory.dir("editors/vscode/test/fixtures/sse"))
+        .withPropertyName("sseCorpus")
         .withPathSensitivity(PathSensitivity.RELATIVE)
 }

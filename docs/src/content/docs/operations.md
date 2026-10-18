@@ -82,14 +82,34 @@ Two SSE fields the
 and Datastar's own reference never mentions.
 
 **`retry:`** sets the client's base retry interval, overriding
-`retryInterval` (`fetch.ts:669`). **Observed.** Streamlord omits the line when it is the
-protocol default of 1000 ms, as the specification says to.
+`retryInterval` (`fetch.ts:669`). **Observed.** It holds for the rest of the action, across
+reconnects, until a later frame sets another. The first reconnect waits the full value;
+`retryMaxWait` only caps the backoff steps after it (`fetch.ts:539-542`). Streamlord omits
+the line when it writes as the protocol default of 1000 ms, as the specification says to, so a
+stream that has changed the interval goes back to it with 999 or 1001 ms:
+
+```kotlin sample=stream
+patchSignals("phase" to "busy", retry = 5.seconds)
+patchSignals("phase" to "idle", retry = 1001.milliseconds)
+```
+
+A retry is a whole number of milliseconds from 1 to `Int.MAX_VALUE`, since the line carries whole
+milliseconds. Under one it would read `retry: 0`: a reconnect with no wait, whose backoff never
+grows, since zero times `retryScaler` is zero. Above the limit the browser's timer overflows. An
+event with either fails when it is built. A short retry has a cost of its own: a server that
+answers 200 and then drops the connection is reconnected to on that schedule without end, since
+`retryMaxCount` only counts attempts that never reach a 200.
 
 **`id:`**, when you send one, is kept by the client and put on the **next** attempt as a
 `last-event-id` request header (`fetch.ts:662`). **Observed.** An event without an id leaves the
 header as it was: the client changes it only when an `id:` line arrives, and drops it only on an
-empty one (`fetch.ts:665`). **Observed.** Streamlord cannot send an empty id; it refuses one when
-the event is built.
+empty one (`fetch.ts:665`). **Observed.** An event cannot carry an empty id; it is refused when
+the event is built. An `SseFrame` built by hand can, to drop the header on purpose. Streamlord
+also keeps an id to printable ASCII with no space at either end, which comes back as it was
+written: `fetch` cannot send a character above U+00FF, Node's `fetch` refuses a control
+character, Tomcat and Netty answer one with 400, which ends the client's retries, and Ktor's CIO
+reads the header as UTF-8, so a Latin-1 character arrives as U+FFFD. A space at either end is
+stripped on the way. A tab inside an id would come back, and is refused all the same.
 
 So once a stream has sent an id, every retry and every reopen after a hidden tab carries the last
 id the client received. The header goes only when the action runs again. A new `@get` starts
@@ -130,31 +150,44 @@ case-insensitively, so either spelling finds it.
 ## Heartbeats
 
 An idle proxy closes a connection that has been silent too long. An SSE comment is the cheapest
-thing you can put on the wire: the client ignores it, the proxy sees traffic. Set an interval once
-and every stream gets one:
+thing you can put on the wire: the client ignores it, the proxy sees traffic. Every stream
+Streamlord opens has one: a stream that has written nothing for 30 seconds gets a `: keep-alive`
+comment, and any frame starts the wait again, so a busy stream carries none. The heartbeat runs
+alongside your handler and stops when it returns.
+
+The first comes sooner, after five seconds of silence from the start. Some servers send no
+headers until the first byte of the body and give up on a response that has written nothing for a
+while: Netty does after ten seconds. A stream that writes within those five seconds carries no
+early comment.
+
+Thirty seconds sits under the idle timeout of most proxies, but a proxy that closes after exactly
+thirty silent seconds races it. Set the interval below your proxy's, once, or turn it off with
+`null`:
 
 ```kotlin sample=ktor-application
 install(StreamlordPlugin) { heartbeat = 15.seconds }
 ```
 
 On Spring it is a parameter of the bean you already declare,
-`Streamlord(codec = JacksonSignalsCodec(mapper), heartbeat = 15.seconds)`. A stream that has written nothing
-for that long gets a `: keep-alive` comment, and any frame starts the wait again, so a busy stream
-carries none. The heartbeat runs alongside your handler and stops when it returns.
+`Streamlord(codec = JacksonSignalsCodec(mapper), heartbeat = 15.seconds)`.
 
-Fifteen seconds sits under every default idle timeout we have met. Raise it once you know your
-own proxy's.
-
-Three things it does not do:
+Four things it does not do:
 
 - **It does not keep Datastar's client alive.** The client has no idle timeout of its own: its
   `fetch` runs without a timer, and its retry counter resets when a 200 arrives, not per frame. The
   heartbeat is for what sits between you and the browser, and for finding out on the server that
-  the reader has gone: the comment is a write, and a write to a closed connection fails.
-- **It does not run beside a blocked thread.** On WebMVC the stream runs inside `runBlocking` on
-  one thread. A handler that blocks that thread, a JDBC call or a `Thread.sleep`, holds the
-  heartbeat back until it returns. Suspend instead, or move the blocking call to
-  `Dispatchers.IO` with `withContext`.
+  the reader has gone: the comment is a write, and a write to a closed connection fails. It
+  takes a few: the first still land in the operating system's buffer. Over a local socket, the
+  stream ended four to five intervals after the client left on Ktor's CIO, about two minutes at
+  the default, and two intervals on Netty, about one minute.
+- **It does not run on the request's thread on WebMVC.** The block runs inside `runBlocking` on
+  that thread, and the heartbeat on `Dispatchers.IO`, so a JDBC call or a `Thread.sleep` in the
+  block does not hold the comment back. Two things follow. An authorisation's `allows()` and
+  `onRefused`, when the heartbeat asks, run on an IO thread without the request's thread-locals,
+  Spring Security's context among them: read what they need before the stream opens. And a
+  comment stuck in a write to a slow reader holds one of the threads `Dispatchers.IO` shares with
+  the rest of the application, at least 64 by default. On Ktor, suspend rather than block, as anywhere in
+  a handler.
 - **It does not stop a blocking call.** When the stream ends early, because the client left,
   `allows()` refused or Spring's timeout fired, its coroutine is cancelled, and cancellation
   waits for the next suspension point. A call that blocks inside `withContext(Dispatchers.IO)`
@@ -173,31 +206,37 @@ With a [`StreamAuthorisation`](#asking-again-while-the-stream-runs) on the strea
 asks the question like any other write once `every` has passed, so an idle stream is checked on
 the heartbeat's schedule and a refusal ends it there.
 
-The interval is one per `Streamlord`. A stream that needs a shorter one can write its own on top,
-by hand; a longer one, or none, takes a second `Streamlord`, which on Spring is a second bean
-handed to that controller:
+The interval is set once per `Streamlord`, and one stream can take its own: `heartbeat` on
+`respondDatastar` or `datastarStream`, or `null` for none. A report that goes quiet for two
+minutes after its first patch, behind a proxy stricter than the rest, can keep its own connection
+warm without changing anyone else's:
 
 ```kotlin sample=ktor-routing
-get("/slow") {
-    call.respondDatastar {
-        coroutineScope {
-            val heartbeat = launch {
-                while (true) {
-                    delay(5.seconds)
-                    comment()
-                }
-            }
-            try {
-                patchElements("""<div id="report">Working</div>""")
-                delay(120.seconds)
-                patchElements("""<div id="report">Done</div>""")
-            } finally {
-                heartbeat.cancel()
-            }
-        }
+get("/report") {
+    call.respondDatastar(heartbeat = 5.seconds) {
+        patchElements("""<div id="report">Working</div>""")
+        delay(120.seconds)
+        patchElements("""<div id="report">Done</div>""")
     }
 }
 ```
+
+On Spring it is the same parameter:
+
+```kotlin sample=spring
+@GetMapping("/report")
+fun report(
+    request: HttpServletRequest,
+    response: HttpServletResponse,
+): org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody =
+    response.datastarStream(request = request, heartbeat = 5.seconds) {
+        patchElements("""<div id="report">Working</div>""")
+        delay(120.seconds)
+        patchElements("""<div id="report">Done</div>""")
+    }
+```
+
+One that is not positive throws where you call it, before the response starts.
 
 ## Compression
 
@@ -212,7 +251,9 @@ On Spring it is the bean, `Streamlord(codec = JacksonSignalsCodec(mapper), compr
 `datastarStream` needs the request to see what the browser accepts. A stream is gzipped only when
 the request's `Accept-Encoding` takes it, and then carries `Content-Encoding: gzip`; with
 `compress` on, every stream carries `Vary: Accept-Encoding`, on Ktor and on WebMVC when the request
-is given and the response is not yet committed. It works over plain
+is given and nothing was written to the response before the stream opened. A response something
+has already written to through its output stream is streamed without gzip, since those bytes
+would sit in front of the gzip member. It works over plain
 HTTP too; browsers ask for Brotli only over HTTPS, which is how they behave in general and is
 **not measured here**.
 
@@ -267,7 +308,8 @@ Streamlord sets two headers on every stream it opens, which is `respondDatastar`
 
 `Connection: keep-alive` is added **only for HTTP/1.1**, because the header is forbidden over
 HTTP/2 and the specification says as much. Ktor reads the request's protocol version by itself.
-The servlet adapter does too, when you hand it the request:
+The servlet adapter reads it from the request you hand it, or else from the one Spring MVC is
+handling for that response:
 
 ```kotlin sample=spring
 @GetMapping("/feed")
@@ -280,8 +322,18 @@ fun feed(
     }
 ```
 
-Without the request the header is set anyway, which is right for the servlet containers that
-still speak HTTP/1.1 and harmless for the ones that drop it themselves.
+With neither, the header is left out: outside a request Spring MVC is handling, and in a
+`suspend` controller after it has suspended, since Spring's request holder does not follow it to
+the thread it resumes on. Pass the request there. Tomcat drops connection headers from requests
+over HTTP/2 but not from responses, and curl and Node refuse a response that carries one.
+
+On Spring the servlet engine has a say too. The adapter sets the header only when the request
+asked neither for keep-alive nor to close. Tomcat answers a request that asked for keep-alive
+with its own `Connection: keep-alive`, and one that asked to close with `Connection: close`. It
+also closes a connection on its own, on the 100th request on it by default
+(`server.tomcat.max-keep-alive-requests`); a stream that is that request carries both
+`Connection: keep-alive` and `Connection: close`, and Tomcat closes the connection after it.
+Jetty never sends `Connection: keep-alive` on a stream, whatever the request asked.
 
 On WebFlux the headers belong to the response and a `Flow` is only its body. Return the bare flow
 from `asServerSentEvents` and Spring sets the content type and nothing else, so behind nginx the
@@ -308,8 +360,9 @@ reactively.
 
 **Spring WebMVC** does hold one. `datastarStream` returns a `StreamingResponseBody` and bridges
 into the suspending core with `runBlocking`, inside `datastarStream`, which occupies the executing thread
-for as long as the stream is open. Which thread that is belongs to Spring, not to Streamlord: it
-is the MVC async task executor. Boot's default is a pool of **eight** platform threads with an
+for as long as the stream is open. Which thread that is belongs to Spring unless the stream asks
+for its own: it is the MVC async task executor, or the `executor` passed to `datastarStream` (see
+[Spring WebMVC](/spring-webmvc/#streams-that-stay-open)). Boot's default is a pool of **eight** platform threads with an
 unbounded queue behind it, so the ninth stream does not get a thread. It waits in the queue with
 its response open and nothing written, for as long as the first eight stay open, and nothing logs
 it. Twenty streams opened against a default Boot 4.0 application: eight were running after two and
@@ -428,9 +481,12 @@ store; Streamlord fixes the contract and not the logic.
 Four things it does, each for a reason:
 
 - **It asks at the open, before your handler runs.** The cheapest place to refuse a connection is
-  before it starts, and a refusal there writes nothing at all.
+  before it starts, and a refusal there writes nothing of your handler's; only what `onRefused`
+  writes goes out. On Ktor the `200` and its headers are already on their way.
 - **It asks again on an interval, not before every patch.** A chatty stream would otherwise cost
   one database round trip per patch. The verdict stands for `every`, five seconds by default.
+  The write that finds the verdict stale waits for the new one; other writes go out on the old one
+  until it arrives.
 - **A refusal ends the stream** rather than letting it fall silent, so the client sees a finished
   response instead of an idle server. Your handler stops where it stood; nothing after the refused
   write runs. A handler that catches the exception and carries on gains nothing by it: every
@@ -460,6 +516,10 @@ you want. A reader who should be let back in reloads or follows your redirect; o
 is not hammering your endpoint in the meantime.
 
 On Spring the parameter is the same, on `datastarStream(streamlord, request, authorisation) { }`.
+
+On WebMVC the heartbeat asks from a thread of `Dispatchers.IO`, without the request's
+thread-locals, Spring Security's context among them, while the first answer and the block have
+them. Read what `allows` needs before the stream opens; see [Heartbeats](#heartbeats).
 
 ## Not covered here yet
 

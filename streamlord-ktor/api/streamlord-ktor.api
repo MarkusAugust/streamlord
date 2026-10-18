@@ -14,18 +14,29 @@ public final class io/github/markusaugust/streamlord/ktor/CspNonceKt {
 }
 
 public final class io/github/markusaugust/streamlord/ktor/ResponsesKt {
-	public static final fun respondDatastar (Lio/ktor/server/application/ApplicationCall;Lio/github/markusaugust/streamlord/core/domain/DatastarResponse;Lio/ktor/http/HttpStatusCode;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public static final fun respondDatastar (Lio/ktor/server/application/ApplicationCall;Lio/ktor/http/HttpStatusCode;Lio/github/markusaugust/streamlord/core/application/StreamAuthorisation;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public static final fun respondDatastar (Lio/ktor/server/application/ApplicationCall;Lkotlinx/coroutines/flow/Flow;Lio/ktor/http/HttpStatusCode;Lio/github/markusaugust/streamlord/core/application/StreamAuthorisation;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static final fun respondDatastar (Lio/ktor/server/application/ApplicationCall;Lio/github/markusaugust/streamlord/core/application/StreamAuthorisation;Lkotlin/time/Duration;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static final synthetic fun respondDatastar (Lio/ktor/server/application/ApplicationCall;Lio/github/markusaugust/streamlord/core/domain/DatastarResponse;Lio/ktor/http/HttpStatusCode;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static final fun respondDatastar (Lio/ktor/server/application/ApplicationCall;Lio/github/markusaugust/streamlord/core/domain/DatastarResponse;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static final synthetic fun respondDatastar (Lio/ktor/server/application/ApplicationCall;Lio/ktor/http/HttpStatusCode;Lio/github/markusaugust/streamlord/core/application/StreamAuthorisation;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static final fun respondDatastar (Lio/ktor/server/application/ApplicationCall;Lkotlinx/coroutines/flow/Flow;Lio/github/markusaugust/streamlord/core/application/StreamAuthorisation;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static final synthetic fun respondDatastar (Lio/ktor/server/application/ApplicationCall;Lkotlinx/coroutines/flow/Flow;Lio/ktor/http/HttpStatusCode;Lio/github/markusaugust/streamlord/core/application/StreamAuthorisation;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun respondDatastar$default (Lio/ktor/server/application/ApplicationCall;Lio/github/markusaugust/streamlord/core/application/StreamAuthorisation;Lkotlin/time/Duration;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public static synthetic fun respondDatastar$default (Lio/ktor/server/application/ApplicationCall;Lio/github/markusaugust/streamlord/core/domain/DatastarResponse;Lio/ktor/http/HttpStatusCode;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public static synthetic fun respondDatastar$default (Lio/ktor/server/application/ApplicationCall;Lio/ktor/http/HttpStatusCode;Lio/github/markusaugust/streamlord/core/application/StreamAuthorisation;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static synthetic fun respondDatastar$default (Lio/ktor/server/application/ApplicationCall;Lkotlinx/coroutines/flow/Flow;Lio/github/markusaugust/streamlord/core/application/StreamAuthorisation;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public static synthetic fun respondDatastar$default (Lio/ktor/server/application/ApplicationCall;Lkotlinx/coroutines/flow/Flow;Lio/ktor/http/HttpStatusCode;Lio/github/markusaugust/streamlord/core/application/StreamAuthorisation;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
-	public static final fun respondElements (Lio/ktor/server/application/ApplicationCall;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLio/ktor/http/HttpStatusCode;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static final synthetic fun respondElements (Lio/ktor/server/application/ApplicationCall;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLio/ktor/http/HttpStatusCode;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static final fun respondElements (Lio/ktor/server/application/ApplicationCall;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun respondElements$default (Lio/ktor/server/application/ApplicationCall;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLio/ktor/http/HttpStatusCode;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
-	public static final fun respondScript (Lio/ktor/server/application/ApplicationCall;Ljava/lang/String;Ljava/util/Map;Lio/ktor/http/HttpStatusCode;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun respondElements$default (Lio/ktor/server/application/ApplicationCall;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static final synthetic fun respondScript (Lio/ktor/server/application/ApplicationCall;Ljava/lang/String;Ljava/util/Map;Lio/ktor/http/HttpStatusCode;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static final fun respondScript (Lio/ktor/server/application/ApplicationCall;Ljava/lang/String;Ljava/util/Map;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun respondScript$default (Lio/ktor/server/application/ApplicationCall;Ljava/lang/String;Ljava/util/Map;Lio/ktor/http/HttpStatusCode;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
-	public static final fun respondSignals (Lio/ktor/server/application/ApplicationCall;Ljava/lang/String;ZLio/ktor/http/HttpStatusCode;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun respondScript$default (Lio/ktor/server/application/ApplicationCall;Ljava/lang/String;Ljava/util/Map;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static final synthetic fun respondSignals (Lio/ktor/server/application/ApplicationCall;Ljava/lang/String;ZLio/ktor/http/HttpStatusCode;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static final fun respondSignals (Lio/ktor/server/application/ApplicationCall;Ljava/lang/String;ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun respondSignals$default (Lio/ktor/server/application/ApplicationCall;Ljava/lang/String;ZLio/ktor/http/HttpStatusCode;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static synthetic fun respondSignals$default (Lio/ktor/server/application/ApplicationCall;Ljava/lang/String;ZLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 }
 
 public final class io/github/markusaugust/streamlord/ktor/SignalsKt {
@@ -43,6 +54,7 @@ public final class io/github/markusaugust/streamlord/ktor/StreamlordPluginConfig
 	public final fun getGuardElements ()Z
 	public final fun getHeartbeat-FghU774 ()Lkotlin/time/Duration;
 	public final fun getMaxSignalsSize ()I
+	public final fun getRequireJsonContentType ()Z
 	public final fun getStreamlord ()Lio/github/markusaugust/streamlord/core/application/Streamlord;
 	public final fun setAttributePrefixes (Ljava/util/List;)V
 	public final fun setCodec (Lio/github/markusaugust/streamlord/core/port/driven/SignalsCodec;)V
@@ -50,6 +62,7 @@ public final class io/github/markusaugust/streamlord/ktor/StreamlordPluginConfig
 	public final fun setGuardElements (Z)V
 	public final fun setHeartbeat-BwNAW2A (Lkotlin/time/Duration;)V
 	public final fun setMaxSignalsSize (I)V
+	public final fun setRequireJsonContentType (Z)V
 	public final fun setStreamlord (Lio/github/markusaugust/streamlord/core/application/Streamlord;)V
 }
 

@@ -6,8 +6,9 @@ import kotlin.time.Duration
 
 /**
  * Options for the backend actions `@get`, `@post`, `@put`, `@patch`, `@delete` and `@query`,
- * rendered as a JavaScript object literal. Only values that differ from Datastar's own defaults
- * are written, so the common case renders nothing at all.
+ * rendered as a JavaScript object literal. Only the options you set are written, so the common
+ * case renders nothing at all; one set to the value Datastar takes by default is written all
+ * the same, and means what leaving it out means.
  */
 public class FetchOptions {
     /** `'json'` (default) or `'form'`. */
@@ -30,8 +31,12 @@ public class FetchOptions {
 
     /** Retry policy: `'auto'` (default), `'error'`, `'always'`, `'never'`. */
     public var retry: Retry? = null
+
+    /** Written in whole milliseconds, a fraction rounded down, as a modifier's duration is. */
     public var retryInterval: Duration? = null
     public var retryScaler: Double? = null
+
+    /** Written in whole milliseconds, a fraction rounded down, as a modifier's duration is. */
     public var retryMaxWait: Duration? = null
     public var retryMaxCount: Int? = null
 
@@ -119,11 +124,15 @@ public class FetchOptions {
                 retry?.let { add("retry: ${js(it.wire)}") }
                 retryInterval?.let { add("retryInterval: ${it.wholeMilliseconds()}") }
                 retryScaler?.let {
-                    require(it.isFinite()) { "retryScaler must be a finite number, not $it" }
+                    // Below zero the backoff turns into no wait at all.
+                    require(it.isFinite() && it >= 0) { "retryScaler must be a finite number of 0 or more, not $it" }
                     add("retryScaler: $it")
                 }
                 retryMaxWait?.let { add("retryMaxWait: ${it.wholeMilliseconds()}") }
-                retryMaxCount?.let { add("retryMaxCount: $it") }
+                retryMaxCount?.let {
+                    require(it >= 0) { "retryMaxCount must be 0 or more, not $it" }
+                    add("retryMaxCount: $it")
+                }
                 requestCancellation?.let { add("requestCancellation: ${js(it.wire)}") }
                 (payloadExpr ?: payload?.let { JsLiteral.write(it) })?.let { add("payload: $it") }
                 responseOverrides?.toJs()?.let { add("responseOverrides: $it") }

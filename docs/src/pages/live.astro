@@ -400,6 +400,8 @@ import "../styles/global.css"
         margin: 0 auto;
         padding: var(--fs-spacing-8) var(--fs-spacing-5) var(--fs-spacing-16);
         display: grid;
+        /* One column that may shrink below its content, or the widest panel sets the page. */
+        grid-template-columns: minmax(0, 1fr);
         gap: var(--fs-spacing-4);
       }
       .page > p {
@@ -421,10 +423,13 @@ import "../styles/global.css"
       .panels {
         margin-block-start: var(--fs-spacing-6);
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+        /* min() so a screen narrower than one column gets one column, not a sideways scroll. */
+        grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
         gap: var(--fs-spacing-5);
       }
+      /* The server and the client write into the panels, so a long word must break, not widen the page. */
       .panel {
+        overflow-wrap: anywhere;
         display: grid;
         gap: var(--fs-spacing-2);
         align-content: start;
@@ -464,7 +469,7 @@ import "../styles/global.css"
         margin-block-start: var(--fs-spacing-4);
         display: grid;
         gap: var(--fs-spacing-4);
-        grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
         align-items: start;
       }
       .gallery__wall {

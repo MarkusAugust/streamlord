@@ -6,6 +6,34 @@ import { decodeDatastar, SseParser, type SseMessage } from "../src/sse.ts";
 const data = (messages: SseMessage[]): string[][] => messages.map((m) => m.data);
 
 describe("sse parser", () => {
+  // Joined as the client joins data lines, so empty ones before the first with text are gone, and
+  // a message without data has the one empty line the client splits it into.
+  it("data is joined as the client joins it before it is split", () => {
+    const [leading] = new SseParser().feed("event: datastar-patch-elements\ndata:\ndata: elements <p>x</p>\n\n");
+    const [none] = new SseParser().feed("event: datastar-x\n\n");
+    assert.deepEqual(decodeDatastar(leading!).args, { elements: "<p>x</p>" });
+    assert.deepEqual(decodeDatastar(none!).args, { "": "" });
+  });
+
+  // As the client splits it: without a space the key is the line minus its last character, and
+  // the value is the whole line (fetch.ts:115-117).
+  it("a data line without a space is split as the client splits it", () => {
+    const [message] = new SseParser().feed("event: datastar-patch-signals\ndata: signals\n\n");
+    assert.deepEqual(decodeDatastar(message!).args, { signal: "signals" });
+  });
+
+  // One long line in small pieces used to be scanned again from its start on every piece.
+  it("a long line in small pieces is read in linear time", () => {
+    const parser = new SseParser();
+    const started = performance.now();
+    parser.feed("data: ");
+    for (let i = 0; i < 80_000; i++) parser.feed("0123456789");
+    const messages = parser.feed("\n\n");
+    const millis = performance.now() - started;
+    assert.equal(messages[0]!.data[0]!.length, 800_000);
+    assert.ok(millis < 2_000, `took ${millis} ms`);
+  });
+
   it("a CRLF split across two chunks is one line ending", () => {
     const p = new SseParser();
     assert.deepEqual(p.feed("data: x\r"), []);

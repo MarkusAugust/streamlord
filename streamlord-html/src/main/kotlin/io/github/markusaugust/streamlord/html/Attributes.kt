@@ -4,6 +4,7 @@ package io.github.markusaugust.streamlord.html
 
 import io.github.markusaugust.streamlord.core.domain.CspNonce
 import io.github.markusaugust.streamlord.core.domain.ExpressionGuard
+import io.github.markusaugust.streamlord.core.domain.SignalNames
 import io.github.markusaugust.streamlord.core.json.JsonWriter
 import kotlinx.html.HTMLTag
 import io.github.markusaugust.streamlord.core.protocol.DatastarAttributes as CoreDatastarAttributes
@@ -69,23 +70,69 @@ public fun HTMLTag.dataSignals(
     case: Case? = null,
     ifMissing: Boolean = false,
 ) {
-    val (key, mod) = Casing.key(name, case, Case.CAMEL)
-    attributes[ds("signals:$key${signalMods(mod, ifMissing)}")] = ExpressionGuard.check(expression)
+    val (key, mod) = Casing.key(Casing.signalName(name), case, Case.CAMEL)
+    attributes[ds("signals:" + Casing.heldKey(name, Casing.withModifiers(name, key, signalMods(mod, ifMissing))))] =
+        ExpressionGuard.check(expression)
 }
 
 /**
  * `data-signals` from Kotlin values, serialised with the built-in JSON writer.
  *
  * ```kotlin
- * div { dataSignals("count" to 0, "user" to mapOf("name" to "")) }
+ * div { dataSignals("count" to 0, "user" to mapOf("first-name" to "")) }
  * ```
+ *
+ * The keys of the pairs and of every map inside them are read the way the keyed form reads its
+ * name: `first-name` declares `$user.firstName`, the signal `signal("user.first-name")` refers to,
+ * and a dotted name nests, so `"user.first-name" to ""` declares the same signal. A key inside a
+ * map holding `.` is refused, since the client would store it as one key that `$a.b` does not
+ * reach, and so is one it cannot hold with what is under it ([SignalNames]). A
+ * [io.github.markusaugust.streamlord.core.json.JsonObject] is a map, and its keys are read the
+ * same way.
  */
 public fun HTMLTag.dataSignals(
     vararg signals: Pair<String, Any?>,
     ifMissing: Boolean = false,
 ) {
-    attributes[ds("signals${signalMods(null, ifMissing)}")] = JsonWriter.write(signals.toMap())
+    signals.forEach { Casing.signalName(it.first) }
+    val keyed = signals.map { (name, value) -> Casing.camel(name) to camelKeys(value, name) }
+    keyed.groupBy { it.first }.values.firstOrNull { it.size > 1 }?.let {
+        throw InvalidSignalNameException(it.first().first, "is given twice once the keys are read in camelCase")
+    }
+    val nested = SignalNames.nest(keyed) { name, reason -> throw InvalidSignalNameException(name, reason) }
+    attributes[ds("signals${signalMods(null, ifMissing)}")] = JsonWriter.writeExpression(nested)
 }
+
+/** [value] with the keys of every map in it camel-cased, as Datastar reads a key in `data-signals:`. */
+private fun camelKeys(
+    value: Any?,
+    path: String,
+): Any? =
+    when (value) {
+        is Map<*, *> -> {
+            val out = LinkedHashMap<Any?, Any?>(value.size)
+            for ((k, v) in value) {
+                val key = if (k is String) Casing.camel(k) else k
+                val problem = SignalNames.keyProblem(key.toString(), v is Map<*, *>)
+                if (problem != null) throw InvalidSignalNameException("$path.$k", "is a key the client cannot hold: $problem")
+                if (key in out) throw InvalidSignalNameException("$path.$k", "is given twice once the keys are read in camelCase")
+                out[key] = camelKeys(v, "$path.$k")
+            }
+            out
+        }
+
+        is Iterable<*> -> {
+            value.mapIndexed { i, v -> camelKeys(v, "$path.$i") }
+        }
+
+        is Array<*> -> {
+            value.mapIndexed { i, v -> camelKeys(v, "$path.$i") }
+        }
+
+        else -> {
+            value
+        }
+    }
 
 /** `data-computed="{name: () => expression}"`: the values are callables. The keys are used as written; see [dataSignals]. */
 public fun HTMLTag.dataComputed(expression: String) {
@@ -98,8 +145,8 @@ public fun HTMLTag.dataComputed(
     expression: String,
     case: Case? = null,
 ) {
-    val (key, mod) = Casing.key(name, case, Case.CAMEL)
-    attributes[ds("computed:$key${caseMod(mod)}")] = ExpressionGuard.check(expression)
+    val (key, mod) = Casing.key(Casing.signalName(name), case, Case.CAMEL)
+    attributes[ds("computed:" + Casing.heldKey(name, Casing.withModifiers(name, key, caseMod(mod))))] = ExpressionGuard.check(expression)
 }
 
 /** `data-json-signals`: renders the signal store as JSON into the element. Handy while debugging. */
@@ -140,7 +187,7 @@ public fun HTMLTag.dataOn(
     val mods = OnModifiers().apply(modifiers)
     val (key, mod) = Casing.key(event, mods.case, Case.KEBAB)
     mods.case = mod
-    attributes[ds("on:$key${mods.build()}")] = ExpressionGuard.check(expression)
+    attributes[ds("on:" + Casing.withModifiers(event, key, mods.build()))] = ExpressionGuard.check(expression)
 }
 
 public fun HTMLTag.dataOnClick(
@@ -239,8 +286,10 @@ public fun HTMLTag.dataRef(
 }
 
 /**
- * `data-indicator="signal"`: a boolean signal that is `true` while a fetch is in flight. Written
- * as `data-indicator:signal__case.x` when [case] is set; see [signalNameAttribute].
+ * `data-indicator="signal"`: a boolean signal that is `true` while a fetch started by this same
+ * element is in flight; Datastar's client counts no other, not even one from an element inside
+ * it, so put it on the element whose action fetches. Written as `data-indicator:signal__case.x`
+ * when [case] is set; see [signalNameAttribute].
  */
 public fun HTMLTag.dataIndicator(
     signal: String,
@@ -262,10 +311,10 @@ private fun HTMLTag.signalNameAttribute(
     modifiers: (Case?) -> String,
 ) {
     if (case == null) {
-        attributes[ds("$attribute${modifiers(null)}")] = Casing.camel(Casing.validate(name))
+        attributes[ds("$attribute${modifiers(null)}")] = Casing.camel(Casing.signalName(name))
     } else {
-        val (key, mod) = Casing.key(name, case, Case.CAMEL)
-        attributes[ds("$attribute:$key${modifiers(mod)}")] = ""
+        val (key, mod) = Casing.key(Casing.signalName(name), case, Case.CAMEL)
+        attributes[ds("$attribute:" + Casing.heldKey(name, Casing.withModifiers(name, key, modifiers(mod))))] = ""
     }
 }
 
@@ -290,8 +339,15 @@ public fun HTMLTag.dataClass(
     expression: String,
     case: Case? = null,
 ) {
-    val (key, mod) = Casing.key(name, case, Case.KEBAB)
-    attributes[ds("class:$key${caseMod(mod)}")] = ExpressionGuard.check(expression)
+    val (key, mod) =
+        Casing.key(
+            name,
+            case,
+            Case.KEBAB,
+            "Write it in one case, or, for a class you cannot rename, use the object form, " +
+                "dataClass(\"{'$name': ...}\"), whose keys Datastar uses as written",
+        )
+    attributes[ds("class:" + Casing.withModifiers(name, key, caseMod(mod)))] = ExpressionGuard.check(expression)
 }
 
 /** `data-style="{property: expression}"`. */
@@ -299,11 +355,22 @@ public fun HTMLTag.dataStyle(expression: String) {
     attributes[ds("style")] = ExpressionGuard.check(expression)
 }
 
-/** `data-style:property="expression"`. A camelCase [property] such as `backgroundColor` is written as `background-color`. */
+/**
+ * `data-style:property="expression"`. A camelCase [property] such as `backgroundColor` is written
+ * as `background-color`. A custom property keeps its case in CSS, and Datastar cannot set one
+ * with capitals, such as `--brandColor`: the browser lowercases the key, and the object form
+ * turns each capital into a hyphen. So it is refused; name the property in lowercase.
+ */
 public fun HTMLTag.dataStyle(
     property: String,
     expression: String,
 ) {
+    if (property.startsWith("--") && property.any { it.isUpperCase() }) {
+        throw InvalidSignalNameException(
+            property,
+            "is a custom property with capitals, which Datastar cannot set in either form; name it in lowercase",
+        )
+    }
     attributes[ds("style:${Casing.plainKey(property)}")] = ExpressionGuard.check(expression)
 }
 

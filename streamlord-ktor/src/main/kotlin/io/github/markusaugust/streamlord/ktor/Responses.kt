@@ -15,23 +15,36 @@ import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
 import io.ktor.http.ContentType
 import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.OutgoingContent
 import io.ktor.http.headersOf
-import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.httpVersion
 import io.ktor.server.response.header
-import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
 import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.writeFully
 import io.ktor.utils.io.writeStringUtf8
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.yield
+import org.intellij.lang.annotations.Language
 import java.io.ByteArrayOutputStream
 import java.util.zip.GZIPOutputStream
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.withTimeoutOrNull
-import org.intellij.lang.annotations.Language
 import kotlin.reflect.typeOf
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Respond with a Datastar SSE stream and run [block] against it.
@@ -42,8 +55,8 @@ import kotlin.reflect.typeOf
  * Ktor does not cancel the handler when the client disconnects. A block that keeps writing ends
  * when a write fails with an `IOException`, usually a few writes after the client left; a block
  * that waits without writing waits on. Install
- * Ktor's `HttpRequestLifecycle` with `cancelCallOnClose = true` on the route, and the handler is
- * cancelled as the connection closes, on the CIO and Netty engines.
+ * Ktor's `HttpRequestLifecycle` (Ktor 3.4 and newer) with `cancelCallOnClose = true` on the
+ * route, and the handler is cancelled as the connection closes, on the CIO and Netty engines.
  *
  * ```kotlin
  * get("/feed") {
@@ -53,17 +66,61 @@ import kotlin.reflect.typeOf
  *     }
  * }
  * ```
+ *
+ * The JVM name stays plain through `@JvmName`: a `Duration` parameter would otherwise add a
+ * hash of the signature to it, which changes with every parameter added.
+ *
+ * @param heartbeat A keep-alive comment after this long without a frame, for this stream alone,
+ *   or `null` for none. Defaults to the configured [Streamlord.heartbeat]. One that is not
+ *   positive throws here, before the response starts. On Netty, `null` is for a stream that
+ *   writes at once: Netty sends no headers before the first byte of the body, and closes a
+ *   response that has written nothing for ten seconds, while the handler waits on.
+ *
+ * A block that throws ends the stream. The frames it sent get a moment to go out, at most a
+ * second for a reader who stopped reading, which is as much as Ktor allows a writer, and the
+ * connection is then cut, which Datastar's client retries. On Ktor's servlet engine, Tomcat's
+ * among them, the failure is thrown only once Ktor's writer is done, so that no byte of the
+ * stream reaches the request the container serves next, or, for a call cancelled meanwhile whose
+ * writer cannot be found, once that second is up. CIO and Netty cut the connection
+ * themselves; on Tomcat, with the async servlet Ktor's engine sets up and a connector that
+ * discards its facades, and on Jetty, Streamlord cuts it. Anywhere else the stream ends as the
+ * engine ends it.
  */
+@JvmName("respondDatastar")
 public suspend fun ApplicationCall.respondDatastar(
-    status: HttpStatusCode = HttpStatusCode.OK,
     authorisation: StreamAuthorisation? = null,
+    heartbeat: Duration? = streamlord.heartbeat,
     block: suspend DatastarStream.() -> Unit,
 ) {
+    respondStream(HttpStatusCode.OK, authorisation, heartbeat, block)
+}
+
+private suspend fun ApplicationCall.respondStream(
+    status: HttpStatusCode,
+    authorisation: StreamAuthorisation?,
+    heartbeat: Duration?,
+    block: suspend DatastarStream.() -> Unit,
+) {
+    require(heartbeat == null || heartbeat.isPositive()) { "heartbeat must be positive, or null for none" }
+    check(!response.isCommitted && !response.isSent) { "The response has already been sent, so it cannot become an event stream" }
     val streamlord = this.streamlord
     for ((name, value) in DatastarProtocol.SSE_RESPONSE_HEADERS) response.header(name, value)
-    if (request.httpVersion == "HTTP/1.1") response.header("Connection", "keep-alive")
+    // HTTP/2 forbids it, and a request that asked to close is not to be told otherwise.
+    val closing =
+        request.headers
+            .getAll(HttpHeaders.Connection)
+            .orEmpty()
+            .flatMap { it.split(',') }
+            .any { it.trim().equals("close", true) }
+    if (request.httpVersion == "HTTP/1.1" && !closing) response.header("Connection", "keep-alive")
     val gzip = streamlord.compress && DatastarProtocol.acceptsGzip(request.headers[HttpHeaders.AcceptEncoding])
-    respond(
+    // Before anything is written: on Tomcat, which request a failure may cut.
+    val servlet = markEngine(this)
+    // What the servlet response's scope runs before the body, so that the writer Ktor starts for
+    // it can be told apart where Ktor's field for it is gone.
+    val before = if (servlet) servletJobs(this) else null
+    var failure: Throwable? = null
+    val content =
         object : OutgoingContent.WriteChannelContent() {
             override val contentType: ContentType = ContentType.Text.EventStream
             override val status: HttpStatusCode = status
@@ -90,83 +147,247 @@ public suspend fun ApplicationCall.respondDatastar(
                 }
 
             override suspend fun writeTo(channel: ByteWriteChannel) {
-                if (gzip) {
-                    streamlord.streamGzipped(channel, authorisation, block)
-                } else {
-                    streamlord.stream(ChannelSseSink(channel), authorisation, block)
+                val started = if (servlet) servletJobs(this@respondStream) else null
+                try {
+                    if (gzip) {
+                        streamlord.streamGzipped(channel, authorisation, heartbeat, block)
+                    } else {
+                        streamlord.stream(ChannelSseSink(channel), authorisation, heartbeat, block = block)
+                    }
+                } catch (e: Throwable) {
+                    if (servlet) {
+                        // The body ends as if it had finished, which Ktor waits for its writer to
+                        // take, and the failure is thrown once it has, so the request completes only
+                        // after the writer is done with it.
+                        val active = currentCoroutineContext().isActive
+                        val writers = servletWriters(this@respondStream, before, started, currentCoroutineContext()[Job])
+                        withContext(NonCancellable) { endServletBody(channel, e, active, writers) }
+                        if (active) {
+                            failure = e
+                            return
+                        }
+                        throw e
+                    }
+                    // Ktor closes the channel with the failure, and the engine then drops what it
+                    // has not yet taken from it. ktor-io gives a writer no way to wait for that,
+                    // so the engine is given a moment, bounded for a reader who stopped reading.
+                    withContext(NonCancellable) {
+                        withTimeoutOrNull(LAST_FRAMES_LIMIT) {
+                            runCatching { channel.flush() }
+                            yield()
+                            delay(LAST_FRAMES_GRACE)
+                        }
+                        // Tomcat and Jetty would end the response as if it had finished, which Datastar does not retry.
+                        cutConnection(this@respondStream, e)
+                    }
+                    throw e
                 }
             }
-        },
-    )
+        }
+    try {
+        respond(content, portableTypeInfo<OutgoingContent>())
+    } catch (t: Throwable) {
+        // What went wrong after the block failed is not to hide the failure.
+        failure?.let {
+            if (it !== t) it.addSuppressed(t)
+            throw it
+        }
+        throw t
+    }
+    failure?.let { throw it }
+}
+
+/**
+ * End a failed body on Ktor's servlet engine so that its [writers] are done before the call is.
+ * The frames get the time they have on any engine; a reader who stopped reading would hold the
+ * writers until the container gives up on the connection, so those that are Ktor's own are stopped
+ * once that time is up. An [active] call goes on to wait for its writer, as it does for a body that
+ * finished. A call that was cancelled does not, so that wait is made here, and where no writers
+ * were found, `null`, the time is waited out instead. Writers only guessed from the response's
+ * scope may be the application's: they are never stopped, and a cancelled call waits for them for
+ * as long as they run, so that none is still writing once the call is done.
+ */
+private suspend fun ApplicationCall.endServletBody(
+    channel: ByteWriteChannel,
+    cause: Throwable,
+    active: Boolean,
+    writers: ServletWriters?,
+) {
+    val owned = if (writers?.owned == true) writers.jobs else emptyList()
+    if (owned.isNotEmpty()) {
+        // cancel(null) rather than cancel(): the bridge for the default argument is not in every
+        // kotlinx-coroutines that a Ktor from 3.0 brings.
+        val stop =
+            application.launch {
+                delay(LAST_FRAMES_LIMIT)
+                owned.forEach { it.cancel(null) }
+            }
+        owned.forEach { writer -> writer.invokeOnCompletion { if (owned.all { it.isCompleted }) stop.cancel(null) } }
+    }
+    // Jetty 11 behind Ktor's servlet aborts at once, so the frames get their moment first.
+    withTimeoutOrNull(LAST_FRAMES_LIMIT) {
+        runCatching { channel.flush() }
+        yield()
+        delay(LAST_FRAMES_GRACE)
+    }
+    cutConnection(this, cause)
+    if (!active) {
+        withTimeoutOrNull(LAST_FRAMES_LIMIT) {
+            runCatching { channel.flushAndClose() }
+            if (writers == null) awaitCancellation() else writers.jobs.joinAll()
+        } ?: if (owned.isNotEmpty()) owned.forEach { it.cancelAndJoin() } else writers?.jobs?.joinAll()
+    }
 }
 
 /** Respond with a Datastar SSE stream that drains [events] in order until the flow completes. */
+@JvmName("respondDatastar")
+public suspend fun ApplicationCall.respondDatastar(
+    events: Flow<DatastarEvent>,
+    authorisation: StreamAuthorisation? = null,
+    heartbeat: Duration? = streamlord.heartbeat,
+) {
+    respondStream(HttpStatusCode.OK, authorisation, heartbeat) { sendAll(events) }
+}
+
+/** [respondDatastar] as 0.12 had it, with a status and before `heartbeat`, for code compiled against it. */
+@Deprecated("Kept for binary compatibility.", level = DeprecationLevel.HIDDEN)
+public suspend fun ApplicationCall.respondDatastar(
+    status: HttpStatusCode = HttpStatusCode.OK,
+    authorisation: StreamAuthorisation? = null,
+    block: suspend DatastarStream.() -> Unit,
+) {
+    respondStream(status, authorisation, streamlord.heartbeat, block)
+}
+
+/** The [Flow] variant of [respondDatastar] as 0.12 had it, for code compiled against it. */
+@Deprecated("Kept for binary compatibility.", level = DeprecationLevel.HIDDEN)
 public suspend fun ApplicationCall.respondDatastar(
     events: Flow<DatastarEvent>,
     status: HttpStatusCode = HttpStatusCode.OK,
     authorisation: StreamAuthorisation? = null,
 ) {
-    respondDatastar(status, authorisation) { sendAll(events) }
+    respondStream(status, authorisation, streamlord.heartbeat) { sendAll(events) }
 }
 
-/** Respond with a single non-SSE Datastar response: `text/html`, `application/json` or `text/javascript`. */
-public suspend fun ApplicationCall.respondDatastar(
+/**
+ * Respond with a single non-SSE Datastar response: `text/html`, `application/json` or
+ * `text/javascript`. Always `200 OK`: Datastar's client reads the body of no other status.
+ */
+public suspend fun ApplicationCall.respondDatastar(response: DatastarResponse) {
+    respondResponse(response, HttpStatusCode.OK)
+}
+
+private suspend fun ApplicationCall.respondResponse(
     response: DatastarResponse,
-    status: HttpStatusCode = HttpStatusCode.OK,
+    status: HttpStatusCode,
 ) {
     streamlord.guard(response)
     for ((name, value) in response.headers) this.response.header(name, value)
     respondText(response.body, ContentType.parse(response.contentType), status)
 }
 
-/** Respond with HTML to be patched as elements, without opening a stream. */
+/** Respond with HTML to be patched as elements, without opening a stream. Always `200 OK`, as [respondDatastar]. */
 public suspend fun ApplicationCall.respondElements(
     @Language("HTML") elements: String,
     selector: String? = null,
     mode: ElementPatchMode = ElementPatchMode.DEFAULT,
     namespace: ElementNamespace = ElementNamespace.DEFAULT,
     useViewTransition: Boolean = false,
-    status: HttpStatusCode = HttpStatusCode.OK,
 ) {
-    respondDatastar(ElementsResponse(elements, selector, mode, namespace, useViewTransition), status)
+    respondDatastar(ElementsResponse(elements, selector, mode, namespace, useViewTransition))
 }
 
-/** Respond with a JSON object to be patched as signals, without opening a stream. */
+/** Respond with a JSON object to be patched as signals, without opening a stream. Always `200 OK`. */
 public suspend fun ApplicationCall.respondSignals(
     @Language("JSON") signals: String,
     onlyIfMissing: Boolean = false,
-    status: HttpStatusCode = HttpStatusCode.OK,
 ) {
-    respondDatastar(SignalsResponse(signals, onlyIfMissing), status)
+    respondDatastar(SignalsResponse(signals, onlyIfMissing))
 }
 
-/** Respond with any value the codec can encode, to be patched as signals. */
+/** Respond with any value the codec can encode, to be patched as signals. Always `200 OK`. */
 public suspend inline fun <reified T> ApplicationCall.respondSignals(
     value: T,
     onlyIfMissing: Boolean = false,
-    status: HttpStatusCode = HttpStatusCode.OK,
 ) {
-    respondSignals(streamlord.codec.encode(value, typeOf<T>()), onlyIfMissing, status)
+    respondSignals(streamlord.codec.encode(value, typeOf<T>()), onlyIfMissing)
 }
 
-/** Respond with JavaScript to execute, without opening a stream. */
+/** Respond with JavaScript to execute, without opening a stream. Always `200 OK`. */
 public suspend fun ApplicationCall.respondScript(
     @Language("JavaScript") script: String,
     attributes: Map<String, String> = emptyMap(),
+) {
+    respondDatastar(ScriptResponse(script, attributes))
+}
+
+/*
+ * The 0.12 signatures with a status, which Datastar's client ignored the body of for anything but
+ * 200. Kept for code compiled against them; the inline respondSignals, inlined into such code,
+ * calls the String one.
+ */
+
+/** [respondDatastar] for a [DatastarResponse] as 0.12 had it, for code compiled against it. */
+@Deprecated("Kept for binary compatibility.", level = DeprecationLevel.HIDDEN)
+public suspend fun ApplicationCall.respondDatastar(
+    response: DatastarResponse,
     status: HttpStatusCode = HttpStatusCode.OK,
 ) {
-    respondDatastar(ScriptResponse(script, attributes), status)
+    respondResponse(response, status)
 }
+
+/** [respondElements] as 0.12 had it, for code compiled against it. */
+@Deprecated("Kept for binary compatibility.", level = DeprecationLevel.HIDDEN)
+public suspend fun ApplicationCall.respondElements(
+    elements: String,
+    selector: String? = null,
+    mode: ElementPatchMode = ElementPatchMode.DEFAULT,
+    namespace: ElementNamespace = ElementNamespace.DEFAULT,
+    useViewTransition: Boolean = false,
+    status: HttpStatusCode = HttpStatusCode.OK,
+) {
+    respondResponse(ElementsResponse(elements, selector, mode, namespace, useViewTransition), status)
+}
+
+/** [respondSignals] as 0.12 had it, for code compiled against it. */
+@Deprecated("Kept for binary compatibility.", level = DeprecationLevel.HIDDEN)
+public suspend fun ApplicationCall.respondSignals(
+    signals: String,
+    onlyIfMissing: Boolean = false,
+    status: HttpStatusCode = HttpStatusCode.OK,
+) {
+    respondResponse(SignalsResponse(signals, onlyIfMissing), status)
+}
+
+/** [respondScript] as 0.12 had it, for code compiled against it. */
+@Deprecated("Kept for binary compatibility.", level = DeprecationLevel.HIDDEN)
+public suspend fun ApplicationCall.respondScript(
+    script: String,
+    attributes: Map<String, String> = emptyMap(),
+    status: HttpStatusCode = HttpStatusCode.OK,
+) {
+    respondResponse(ScriptResponse(script, attributes), status)
+}
+
+/** How long a failed stream gives the engine to take its last frames before the connection is cut. */
+private val LAST_FRAMES_GRACE = 50.milliseconds
+
+/**
+ * The most a failed stream waits for its last frames, for a reader who stopped reading, before the
+ * connection is cut and Ktor's servlet writer is stopped.
+ */
+private val LAST_FRAMES_LIMIT = 1.seconds
 
 /** The gzipped stream: [Streamlord.stream] over a [GzipChannelSseSink], ended as a whole member. */
 internal suspend fun Streamlord.streamGzipped(
     channel: ByteWriteChannel,
     authorisation: StreamAuthorisation?,
+    heartbeat: Duration?,
     block: suspend DatastarStream.() -> Unit,
 ) {
     val sink = GzipChannelSseSink(channel)
     try {
-        if (stream(sink, authorisation, block)) {
+        if (stream(sink, authorisation, heartbeat, block = block)) {
             sink.finish()
         } else {
             // Refused: a reader that stalled the last words would stall the trailer too, so it
@@ -207,7 +428,8 @@ internal class GzipChannelSseSink(
 
     /**
      * End the gzip member, so the client's decoder sees a whole stream. Only after a stream that
-     * ended well: one cut short by an exception is left unterminated, so the client sees it fail.
+     * ended well. A browser takes an unended member for a whole one when the body ends, so what
+     * tells the client that a stream failed is the cut connection, not the missing trailer.
      */
     suspend fun finish() {
         gzip.finish()

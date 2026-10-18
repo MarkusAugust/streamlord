@@ -100,7 +100,7 @@ What happens to a value is decided by where it landed, not by where it came from
 |---|---|
 | Element text | Escaped |
 | A quoted attribute that is not Datastar's | Escaped |
-| The start of a URL attribute: `href`, `src`, `action` | Escaped, and **refused** unless it is relative, `http`, `https`, `mailto` or `tel` |
+| A URL attribute: `href`, `src`, `action`, and `values`, `to` or `from` on an SVG animation | Escaped, and **refused** unless the whole value, every hole filled, is relative, `http`, `https`, `mailto` or `tel` |
 | A `style` attribute | **Refused**, unless it is a number |
 | A `data-*` attribute Datastar reads | **Refused**, unless it is a number or a boolean |
 | An event handler such as `onclick`, or `srcdoc` | **Refused** |
@@ -108,9 +108,17 @@ What happens to a value is decided by where it landed, not by where it came from
 | Inside `<script>` or `<style>` | **Refused** |
 
 So the `url` in the example above may be `/heads/1` or `https://thurn.example/`, and a
-`javascript:` URL throws instead of becoming a link that runs. A hole further into the value,
-such as the last segment of a path the markup begins, is an ordinary attribute, because the
-markup already chose where it points.
+`javascript:` URL throws instead of becoming a link that runs. The value is judged whole, as the
+browser reads it: a hole that ends a path the markup begins takes anything, because the markup
+already chose where it points, and `href="%s%s"` cannot be made into `javascript:` across its two
+holes.
+
+The markup is read the way the browser's tokenizer reads it, comments, end tags and all, and
+twice: as HTML and as the inside of an `<svg>` or `<math>`, where a `title` or a `textarea` holds
+elements rather than text. A value has to be safe both ways, since a patch with an SVG namespace
+carries no `<svg>` of its own. So a `title` or a `textarea` that shows markup as a code sample cannot
+take a hole inside a `data-*` attribute of that sample; put the whole sample in one hole instead,
+where it is text either way.
 
 The refusals are the point. Escaping cannot save these: a value in a `data-*` attribute
 becomes part of a Datastar expression, and your own server signed the page it arrived on; a value

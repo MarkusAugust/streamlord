@@ -78,8 +78,61 @@ public object ElementsGuard {
      */
     public val defaultPrefixes: List<String> = listOf("data-star-", "data-")
 
-    private val ENTITY = Regex("&(?:(amp|lt|gt|quot|apos)|#(\\d+)|#[xX]([0-9a-fA-F]+));")
-    private val NAMED_ENTITIES = mapOf("amp" to "&", "lt" to "<", "gt" to ">", "quot" to "\"", "apos" to "'")
+    // A numeric reference decodes with or without its semicolon. A named one needs it, except the
+    // legacy few the standard lets go without, which in an attribute decode unless a letter, a
+    // digit or = follows: &lt 1 is < 1 and &amp&amp is &&.
+    private val ENTITY =
+        Regex("&(?:([A-Za-z]+);|(amp|AMP|lt|LT|gt|GT|quot|QUOT)(?![A-Za-z0-9=;])|#(\\d+);?|#[xX]([0-9a-fA-F]+);?)")
+
+    /** The named references for the ASCII a Datastar expression is made of (the HTML standard's table). */
+    private val NAMED_ENTITIES =
+        mapOf(
+            "amp" to "&",
+            "AMP" to "&",
+            "lt" to "<",
+            "LT" to "<",
+            "gt" to ">",
+            "GT" to ">",
+            "quot" to "\"",
+            "QUOT" to "\"",
+            "apos" to "'",
+            "plus" to "+",
+            "equals" to "=",
+            "excl" to "!",
+            "quest" to "?",
+            "colon" to ":",
+            "semi" to ";",
+            "comma" to ",",
+            "period" to ".",
+            "lpar" to "(",
+            "rpar" to ")",
+            "lsqb" to "[",
+            "lbrack" to "[",
+            "rsqb" to "]",
+            "rbrack" to "]",
+            "lcub" to "{",
+            "lbrace" to "{",
+            "rcub" to "}",
+            "rbrace" to "}",
+            "verbar" to "|",
+            "vert" to "|",
+            "VerticalLine" to "|",
+            "grave" to "`",
+            "DiacriticalGrave" to "`",
+            "sol" to "/",
+            "bsol" to "\\",
+            "ast" to "*",
+            "midast" to "*",
+            "percnt" to "%",
+            "Hat" to "^",
+            "dollar" to "$",
+            "num" to "#",
+            "commat" to "@",
+            "lowbar" to "_",
+            "UnderBar" to "_",
+            "Tab" to "\t",
+            "NewLine" to "\n",
+        )
 
     /**
      * kotlinx.html and every template engine escape attribute values, some with numeric entities
@@ -91,9 +144,10 @@ public object ElementsGuard {
             value
         } else {
             ENTITY.replace(value) { m ->
-                val (named, decimal, hex) = m.destructured
+                val (named, legacy, decimal, hex) = m.destructured
                 when {
-                    named.isNotEmpty() -> NAMED_ENTITIES.getValue(named)
+                    named.isNotEmpty() -> NAMED_ENTITIES[named] ?: m.value
+                    legacy.isNotEmpty() -> NAMED_ENTITIES.getValue(legacy)
                     decimal.isNotEmpty() -> codePoint(decimal.toIntOrNull()) ?: m.value
                     else -> codePoint(hex.toIntOrNull(16)) ?: m.value
                 }
@@ -112,20 +166,57 @@ public object ElementsGuard {
     public fun check(
         elements: String,
         prefixes: List<String> = defaultPrefixes,
+    ): String = check(elements, prefixes, foreign = false)
+
+    /**
+     * [check], reading the markup as the inside of an `<svg>` or `<math>` too when [foreign] says
+     * the patch lands in one, or when the markup opens one itself.
+     */
+    internal fun check(
+        elements: String,
+        prefixes: List<String>,
+        foreign: Boolean,
     ): String {
         // Longest first, so `data-x-` is tried before `data-` whatever order the caller used.
         val ordered = if (prefixes === defaultPrefixes) prefixes else prefixes.sortedByDescending { it.length }
+        val roots = ArrayList<Int>()
         scanMarkup(
             elements,
             object : MarkupVisitor {
                 override fun attribute(
+                    tag: String,
                     name: String,
                     valueStart: Int,
                     valueEnd: Int,
                     quoted: Boolean,
                 ) = checkAttribute(name, if (valueStart < 0) null else elements.substring(valueStart, valueEnd), ordered)
+
+                override fun tag(
+                    start: Int,
+                    end: Int,
+                ) {
+                    if (foreignRoot(elements, start) != null) roots += start
+                }
             },
         )
+        // Inside an svg or a math, a title or a textarea holds elements rather than text. Read that
+        // way only there, since in HTML the markup they show is text, and often meant so.
+        val spans = if (foreign) listOf(elements) else foreignSpans(elements, roots)
+        for (span in spans) {
+            scanMarkup(
+                span,
+                object : MarkupVisitor {
+                    override fun attribute(
+                        tag: String,
+                        name: String,
+                        valueStart: Int,
+                        valueEnd: Int,
+                        quoted: Boolean,
+                    ) = checkAttribute(name, if (valueStart < 0) null else span.substring(valueStart, valueEnd), ordered)
+                },
+                foreign = true,
+            )
+        }
         return elements
     }
 
@@ -198,3 +289,42 @@ public class MistypedAttributeException(
         "Attribute $attribute is not a Datastar attribute, but is one letter away from $suggestion. " +
             "Did you mean that? The browser ignores an unknown data-* attribute without a word.",
     )
+
+/** `svg` or `math` when the tag at [start] opens one of them, otherwise `null`. */
+private fun foreignRoot(
+    html: String,
+    start: Int,
+): String? =
+    listOf("svg", "math").firstOrNull {
+        html.regionMatches(start + 1, it, 0, it.length, ignoreCase = true) &&
+            html.getOrNull(start + 1 + it.length).let { c -> c == null || c in " \t\n\u000C\r/>" }
+    }
+
+/**
+ * Each svg or math the HTML reading found, from its start tag to its own end tag, nested ones
+ * counted, or to the end of the markup when it is never closed.
+ */
+private fun foreignSpans(
+    html: String,
+    roots: List<Int>,
+): List<String> {
+    val spans = ArrayList<String>()
+    var covered = 0
+    for (start in roots) {
+        if (start < covered) continue
+        val name = foreignRoot(html, start) ?: continue
+        val token = Regex("<(/?)$name(?=[\\s/>]|$)", RegexOption.IGNORE_CASE)
+        var depth = 0
+        var end = html.length
+        for (m in token.findAll(html, start)) {
+            depth += if (m.groupValues[1].isEmpty()) 1 else -1
+            if (depth == 0) {
+                end = html.indexOf('>', m.range.last).let { if (it < 0) html.length else it + 1 }
+                break
+            }
+        }
+        spans += html.substring(start, end)
+        covered = end
+    }
+    return spans
+}

@@ -1,8 +1,9 @@
 import { catalog, parseAttributeName, type CallSiteSpec } from "./catalog.ts";
-import { attributeDoc, DOCS, validateExpression, type Fix, type Issue } from "./expression.ts";
+import { attributeDoc, DOCS, quoteAt, validateExpression, type Fix, type Issue } from "./expression.ts";
 import { PLACEHOLDER, toSource, type Interpolation, type KotlinString } from "./kotlinStrings.ts";
-import { asciiLowercase, indexOfAsciiIgnoreCase, keyReading, rawKeyNote, tokenize, validateAttributes, validateMarkup, wireKey } from "./markup.ts";
+import { asciiLowercase, indexOfAsciiIgnoreCase, keyReading, rawKeyNote, tokenize, validateAttributes, validateMarkup, wireKey, type Attribute, type Tag } from "./markup.ts";
 import { findCallSites, isHtmlString, lexKotlin, namedArgText, selectStringArg, stringAt, type CallSite } from "./scanner.ts";
+import { collectSignalDefinitions } from "./signals.ts";
 
 /**
  * Editor-independent analysis: Kotlin source in, issues with source offsets out.
@@ -38,6 +39,18 @@ for (const name of VALUE_UNLESS_CASED_HELPERS) (ALL_SITE_NAMES as Set<string>).a
  * the file again. Bounded: a file past the cap is lexed each time rather than kept resident.
  */
 const LEX_CACHE_CAP = 256 * 1024;
+
+/** kotlinx.html's own way to write any attribute: `attributes["data-on:click"] = "..."`. */
+export const ATTRIBUTES_INDEX = /\battributes\s*\[\s*"(data-[^"\\]*)"\s*]\s*=\s*/g;
+
+/**
+ * The signals with a hyphen `src` declares as the client stores them, so `$my-value` is not a slip
+ * there: `data-signals:my-value__case.kebab`, `data-bind="my-value"`, `{'my-value': 1}`, or
+ * `data-signals:a-1`, which camel casing leaves as it is.
+ */
+export function hyphenatedSignals(src: string, language: "kotlin" | "html"): ReadonlySet<string> {
+  return new Set([...collectSignalDefinitions(src, language)].filter((n) => n.includes("-")));
+}
 let lastLex: { src: string; lex: ReturnType<typeof lexKotlin> } | null = null;
 export function lexCached(src: string): ReturnType<typeof lexKotlin> {
   if (src.length > LEX_CACHE_CAP) return lexKotlin(src);
@@ -49,11 +62,12 @@ export function analyzeKotlin(src: string, opts: AnalyzeOptions): Issue[] {
   const issues: Issue[] = [];
   const claimed = new Set<number>();
   const lex = lexCached(src);
+  const hyphenated = hyphenatedSignals(src, "kotlin");
   for (const site of findCallSites(src, ALL_SITE_NAMES, lex.mask)) {
     const expr = catalog.callSites.expression[site.name];
-    if (expr) issues.push(...checkExpressionSite(site, expr, src));
+    if (expr) issues.push(...checkExpressionSite(site, expr, src, hyphenated));
     const html = catalog.callSites.html[site.name];
-    if (html) issues.push(...checkHtmlSite(site, html, opts, src));
+    if (html) issues.push(...checkHtmlSite(site, html, opts, src, hyphenated));
     const script = catalog.callSites.script[site.name];
     if (script) issues.push(...checkScriptSite(site, script));
     const selector = catalog.callSites.selector[site.name];
@@ -61,9 +75,65 @@ export function analyzeKotlin(src: string, opts: AnalyzeOptions): Issue[] {
     issues.push(...checkKeyCaseSite(site, src));
     for (const a of site.args) if (a.string) claimed.add(a.string.start);
   }
+  for (const m of src.matchAll(ATTRIBUTES_INDEX)) {
+    if (lex.mask[m.index ?? 0] === 0) continue;
+    const value = attributesIndexValue(src, m, lex.strings);
+    if (value) claimed.add(value.start);
+    issues.push(...checkAttributesIndex(m, value, opts, src, hyphenated));
+  }
   for (const s of lex.strings) {
     if (claimed.has(s.start) || s.unterminated || !isHtmlString(src, s)) continue;
-    issues.push(...checkFreeHtmlString(s, opts, src));
+    issues.push(...checkFreeHtmlString(s, opts, src, hyphenated));
+  }
+  return issues;
+}
+
+/** What may follow the value of an assignment: the end of the statement, nothing more of an expression. */
+const STATEMENT_END = /[ \t]*(?:[;}\n\r]|$)/y;
+
+/** The string literal assigned in an `attributes["..."] =` match, when it is the whole value: not the first half of a concatenation. */
+export function attributesIndexValue(src: string, m: RegExpMatchArray, strings: KotlinString[]): KotlinString | null {
+  const at = (m.index ?? 0) + m[0].length;
+  const s = stringAt(src, at + 1, strings);
+  if (!s || s.start !== at || s.unterminated) return null;
+  STATEMENT_END.lastIndex = s.end;
+  return STATEMENT_END.test(src) ? s : null;
+}
+
+/**
+ * `attributes["data-on:click"] = "$count++"` judged as the attribute it writes: the name as in
+ * markup, the value as the expression a DSL call takes, with Kotlin's interpolation trap. A
+ * value that is not a literal is taken for a template, so only the name is judged.
+ */
+function checkAttributesIndex(m: RegExpMatchArray, value: KotlinString | null, opts: AnalyzeOptions, src: string, hyphenated: ReadonlySet<string>): Issue[] {
+  if (!opts.checkHtmlAttributes) return [];
+  const name = m[1] ?? "";
+  const nameStart = (m.index ?? 0) + m[0].indexOf('"') + 1;
+  // The attribute in a space of its own, `name="value"`: the name at 0, the value after the `="`.
+  const valueStart = name.length + 2;
+  const text = value?.text ?? PLACEHOLDER;
+  const attribute: Attribute = { name, nameStart: 0, value: text, valueStart, quoted: true };
+  const tag: Tag = { name: "div", start: 0, end: valueStart + text.length + 1, closing: false, selfClosing: false, attributes: [attribute] };
+  const issues: Issue[] = [];
+  const kind = parseAttributeName(asciiLowercase(name), opts.prefix)?.spec?.valueKind;
+  if (value && (kind === "expression" || kind === "signal")) issues.push(...inStringLiterals(value, interpolationIssues(value, src)));
+  // With a template in the value the interpolation issue speaks for it, as at a DSL call.
+  const judgeValue = value !== null && !(value.text.includes(PLACEHOLDER) && value.interpolations.some((i) => i.kind === "simple"));
+  // A range in the value maps through the literal as a whole, so an error at its end keeps a width.
+  const range = (start: number, end: number) => (end <= name.length ? { start: nameStart + start, end: nameStart + end } : toSource(value!, start - valueStart, end - valueStart));
+  for (const i of validateAttributes(tag, opts.prefix, undefined, hyphenated, true)) {
+    const inName = i.end <= name.length;
+    if (!inName && !judgeValue) continue;
+    const fixes = i.fixes
+      ?.filter((f) => (f.end <= name.length) === inName)
+      .map((f) => {
+        if (inName) return { ...f, start: nameStart + f.start, end: nameStart + f.end };
+        // In the literal's own coordinates, so a `\$` the source wrote is written back.
+        const inValue = { ...f, start: f.start - valueStart, end: f.end - valueStart };
+        const at = toSource(value!, inValue.start, Math.max(inValue.end, inValue.start + 1));
+        return { ...f, start: at.start, end: f.start === f.end ? at.start : at.end, text: keepDollarEscape(value!, src, inValue) };
+      });
+    issues.push({ ...i, ...range(i.start, i.end), ...(fixes ? { fixes } : {}) });
   }
   return issues;
 }
@@ -98,9 +168,9 @@ export function markupString(site: CallSite, spec: CallSiteSpec): KotlinString |
  * returns markup, a `val` with a fragment. Nothing is known about how it will be patched, so
  * only the attributes are checked, as in a template file; ids and completeness are not.
  */
-function checkFreeHtmlString(s: KotlinString, opts: AnalyzeOptions, src: string): Issue[] {
+function checkFreeHtmlString(s: KotlinString, opts: AnalyzeOptions, src: string, hyphenated: ReadonlySet<string>): Issue[] {
   const issues: Issue[] = interpolationHints(s, src, opts.prefix);
-  if (opts.checkHtmlAttributes) issues.push(...mapIssues(s, src, analyzeHtml(s.text, opts)));
+  if (opts.checkHtmlAttributes) issues.push(...mapIssues(s, src, analyzeHtmlWith(s.text, opts, hyphenated)));
   return issues;
 }
 
@@ -187,12 +257,14 @@ function interpolationIssues(s: KotlinString, src: string): Issue[] {
 function interpolationHints(s: KotlinString, src: string, prefix: string): Issue[] {
   const tags = tokenize(s.text).tags;
   /** `whole` when the template is the entire attribute value, `part` when it sits inside a larger expression. */
-  const inExpression = (decoded: number): "whole" | "part" | null => {
+  const inExpression = (decoded: number): "whole" | "part" | "string" | null => {
     for (const t of tags) {
       for (const a of t.attributes) {
         if (a.value === null || decoded < a.valueStart || decoded >= a.valueStart + a.value.length) continue;
         const parsed = parseAttributeName(asciiLowercase(a.name), prefix);
         if (parsed?.spec?.valueKind !== "expression") return null;
+        // @post('/x/$id'): inside quotes a $ is never a signal, so the Kotlin value is what is meant.
+        if (quoteAt(a.value, decoded - a.valueStart) !== null) return "string";
         // data-signals:count="$initial" seeds a signal from the server, like the object form does.
         if (parsed.spec.name === "signals") return "part";
         return a.value.trim() === PLACEHOLDER ? "whole" : "part";
@@ -223,6 +295,7 @@ function interpolationHints(s: KotlinString, src: string, prefix: string): Issue
         message: `Kotlin interpolates $${name} inside a Datastar expression. Meant as a server value, that is fine; meant as the signal $${name}, make the literal $$"""...""" (Kotlin 2.2+) or escape as \${'$'}${name}.`,
       };
     }
+    if (where === "string") return { ...i, severity: "hint" as const, fixes: undefined, message: stringLiteralMessage(name) };
     return { ...i, severity: "hint" as const, fixes: undefined, message: `Kotlin interpolates $${name} into the HTML. Make sure it is escaped.` };
   });
 }
@@ -248,18 +321,36 @@ function keepDollarEscape(s: KotlinString, src: string, fix: Fix): string {
   return escape.length > 1 ? escape + fix.text.slice(1) : fix.text;
 }
 
-function checkExpressionSite(site: CallSite, spec: CallSiteSpec, src: string): Issue[] {
+function checkExpressionSite(site: CallSite, spec: CallSiteSpec, src: string, hyphenated: ReadonlySet<string>): Issue[] {
   if (spec.onlyIfStringArgs && site.args.some((a) => a.named === null && a.string === null)) return [];
   const s = selectStringArg(site, spec.arg, spec.named);
   if (!s || s.unterminated) return [];
-  const issues = interpolationIssues(s, src);
+  const issues = inStringLiterals(s, interpolationIssues(s, src));
   const text = s.text;
   if (text.includes(PLACEHOLDER) && s.interpolations.some((i) => i.kind === "simple")) return issues;
-  issues.push(...mapIssues(s, src, validateExpression(text)));
+  issues.push(...mapIssues(s, src, validateExpression(text, catalog.attributesByKotlin.get(site.name)?.returnsValue, hyphenated)));
   return issues;
 }
 
-function checkHtmlSite(site: CallSite, spec: CallSiteSpec, opts: AnalyzeOptions, src: string): Issue[] {
+/**
+ * A template inside a JavaScript string literal of the expression, `@post('/x/$id')`, is no
+ * trap: Datastar leaves a `$` inside quotes alone (engine.ts:448 in 1.0.4), so a signal was
+ * never possible there, and the Kotlin value is what the author wants. Said as a hint, since
+ * the literal could also have meant the text `$id`.
+ */
+function inStringLiterals(s: KotlinString, issues: Issue[]): Issue[] {
+  return issues.map((i) => {
+    const ip = s.interpolations.find((x) => x.start === i.start);
+    if (!ip || quoteAt(s.text, ip.decodedStart) === null) return i;
+    return { ...i, severity: "hint" as const, fixes: undefined, message: stringLiteralMessage(ip.text) };
+  });
+}
+
+function stringLiteralMessage(name: string): string {
+  return `Kotlin interpolates $${name} into this JavaScript string; the browser gets its value as text. A $ inside quotes is never a signal.`;
+}
+
+function checkHtmlSite(site: CallSite, spec: CallSiteSpec, opts: AnalyzeOptions, src: string, hyphenated: ReadonlySet<string>): Issue[] {
   const s = markupString(site, spec);
   if (!s && !site.trailingLambda) return [];
   if (s?.unterminated) return [];
@@ -289,7 +380,7 @@ function checkHtmlSite(site: CallSite, spec: CallSiteSpec, opts: AnalyzeOptions,
   }
   // A mode that cannot be read here (a variable) may be one that needs no ids.
   const requireIds = selector === null && (!modeArg || mode === "outer");
-  if (s) issues.push(...mapIssues(s, src, validateMarkup(s.text, { requireIds, prefix: opts.prefix, checkAttributes: opts.checkHtmlAttributes })));
+  if (s) issues.push(...mapIssues(s, src, validateMarkup(s.text, { requireIds, prefix: opts.prefix, checkAttributes: opts.checkHtmlAttributes, hyphenatedSignals: hyphenated })));
   return issues;
 }
 
@@ -369,10 +460,14 @@ function checkSelectorSite(site: CallSite, spec: CallSiteSpec): Issue[] {
 
 /** Analyse an HTML document (a template): attributes and expressions only, no id or completeness rules. */
 export function analyzeHtml(src: string, opts: AnalyzeOptions): Issue[] {
+  return analyzeHtmlWith(src, opts, hyphenatedSignals(src, "html"));
+}
+
+function analyzeHtmlWith(src: string, opts: AnalyzeOptions, hyphenated: ReadonlySet<string>): Issue[] {
   const issues: Issue[] = [];
   for (const tag of tokenize(src).tags) {
     if (tag.closing) continue;
-    issues.push(...validateAttributes(tag, opts.prefix, src.slice(tag.start, tag.end)));
+    issues.push(...validateAttributes(tag, opts.prefix, src.slice(tag.start, tag.end), hyphenated));
   }
   return issues;
 }

@@ -37,7 +37,10 @@ input {
 ```
 
 Durations are `kotlin.time.Duration`, which means `300.milliseconds` and `1.seconds` rather than
-a string you have to get the unit right in.
+a string you have to get the unit right in. They are written in whole milliseconds, a fraction
+rounded down: `1.5.milliseconds` becomes `__debounce.1ms`. Datastar's client could not read more,
+since it splits a modifier at each `.` and takes `__debounce.1.5ms` for 1 ms. One shorter than a
+millisecond would be written as zero and is refused.
 
 ## Actions render their options only when set
 
@@ -53,7 +56,9 @@ so the attribute stays as short as what you actually asked for.
 
 Everything the helpers quote (`js()`, `set()`, `setAll()`, the fetch options, the Pro actions)
 is written as a JavaScript literal in single quotes, the way the Datastar documentation writes
-it. The same text therefore works unchanged in the DSL, in a string and in a template.
+it. Single and double quotes, `&` and `\` inside a value are written as `\x22`, `\x26`
+and the like, so the same text works unchanged in the DSL and between the double quotes of an
+attribute in a string or a template.
 
 ## Feeding streams directly
 

@@ -72,8 +72,7 @@ class ModesTest {
         assertTrue(signalsAfter(ModeSignals("reset", stoneGone = true)).contains(""""stoneGone": false"""))
     }
 
-    private fun signalsAfter(signals: ModeSignals) =
-        (modeEvents(signals).last() as PatchSignals).signals
+    private fun signalsAfter(signals: ModeSignals) = (modeEvents(signals).last() as PatchSignals).signals
 
     @Test
     fun `an unknown mode falls back rather than failing`() {

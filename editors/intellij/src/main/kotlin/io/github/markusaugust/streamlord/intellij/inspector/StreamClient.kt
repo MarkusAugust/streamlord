@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.intellij.inspector
 
 import io.github.markusaugust.streamlord.analysis.DatastarFrame
 import io.github.markusaugust.streamlord.analysis.Requests
+import io.github.markusaugust.streamlord.analysis.SseMessage
 import io.github.markusaugust.streamlord.analysis.SseParser
 import io.github.markusaugust.streamlord.analysis.decodeDatastar
 import io.github.markusaugust.streamlord.core.json.JsonParser
@@ -162,11 +163,18 @@ class StreamClient(
                     handlers.onStatus(Status.CLOSED)
                     return
                 }
-                val contentType = response.headers().firstValue("content-type").orElse("")
+                // Every value, joined as fetch's Headers.get joins them, so a second type is seen.
+                val contentType = response.headers().allValues("content-type").joinToString(", ")
                 val http = "${response.statusCode()} ${reason(response.statusCode())}".trim()
                 handlers.onStatus(Status.OPEN, http, contentType)
-                if (!contentType.contains("text/event-stream")) {
-                    val text = body.readBytes().toString(Charsets.UTF_8)
+                if (!Requests.readsAsStream(response.statusCode(), contentType)) {
+                    val text =
+                        Requests.unreadBody(response.statusCode(), contentType) ?: run {
+                            // Up to the limit, so a large response does not land in memory whole.
+                            val bytes = body.readNBytes(Requests.NON_STREAM_LIMIT + 1)
+                            val read = String(bytes, 0, minOf(bytes.size, Requests.NON_STREAM_LIMIT), Charsets.UTF_8)
+                            if (bytes.size > Requests.NON_STREAM_LIMIT) read + Requests.NON_STREAM_CUT else read
+                        }
                     val datastarHeaders = LinkedHashMap<String, String>()
                     for ((k, v) in response.headers().map()) {
                         if (k.lowercase().startsWith("datastar-")) {
@@ -198,16 +206,12 @@ class StreamClient(
         headers: Map<String, String>,
     ): HttpRequest {
         val bodyless = method == "GET" || method == "DELETE"
-        val builder =
-            HttpRequest
-                .newBuilder(URI(url))
-                .header("Accept", "text/event-stream")
-                .header("Datastar-Request", "true")
-        for ((k, v) in headers) builder.header(k, v)
+        val builder = HttpRequest.newBuilder(URI(url))
+        // The user's headers replace the client's own, Content-Type included, as they do in the client.
+        for ((k, v) in Requests.requestHeaders(method, headers)) builder.setHeader(k, v)
         if (bodyless) {
             builder.method(method, HttpRequest.BodyPublishers.noBody())
         } else {
-            builder.header("Content-Type", "application/json")
             builder.method(method, HttpRequest.BodyPublishers.ofString(signalsJson))
         }
         return builder.build()
@@ -229,20 +233,22 @@ class StreamClient(
             val reader = InputStreamReader(body, Charsets.UTF_8)
             val parser = SseParser()
             val buffer = CharArray(8192)
-            var first = true
+
+            fun show(msg: SseMessage) {
+                if (msg.isComment) {
+                    handlers.onComment(msg.comments.joinToString("\n"))
+                } else {
+                    handlers.onFrame(decodeDatastar(msg))
+                }
+            }
+            // A byte order mark is the parser's to drop, before each field as the client drops it.
             while (!aborted.get()) {
                 val n = reader.read(buffer)
-                if (n < 0) break
-                // One byte order mark opens the stream; it is not part of the first field's name.
-                val from = if (first && buffer[0] == '﻿') 1 else 0
-                first = false
-                for (msg in parser.feed(String(buffer, from, n - from))) {
-                    if (msg.isComment) {
-                        handlers.onComment(msg.comments.joinToString("\n"))
-                    } else {
-                        handlers.onFrame(decodeDatastar(msg))
-                    }
+                if (n < 0) {
+                    parser.finish()?.let(::show)
+                    break
                 }
+                parser.feed(String(buffer, 0, n)).forEach(::show)
             }
         }
 

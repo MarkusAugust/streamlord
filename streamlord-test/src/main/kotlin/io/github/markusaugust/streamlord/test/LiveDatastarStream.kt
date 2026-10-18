@@ -5,6 +5,7 @@ import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
+import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
 import io.github.markusaugust.streamlord.core.protocol.SseDecoder
 import io.github.markusaugust.streamlord.core.protocol.SseMessage
 import io.github.markusaugust.streamlord.core.protocol.SseReader
@@ -129,7 +130,9 @@ public class LiveDatastarStream private constructor(
         val assertion = { seen: DatastarEvents -> seen.assertPatchElements(selector, mode, elements, containing) }
         return lock.withLock {
             val start = elementsPlace.at
-            awaitMatch(elementsPlace, timeout, describe = { failure(movedPast = start) { assertion(DatastarEvents(events.drop(start), emptyList())) } }) { event ->
+            awaitMatch(elementsPlace, timeout, describe = {
+                failure(movedPast = start) { assertion(DatastarEvents(events.drop(start), emptyList())) }
+            }) { event ->
                 (event as? PatchElements)?.takeIf { holds { assertion(DatastarEvents(listOf(it), emptyList())) } }
             }
         }
@@ -287,7 +290,13 @@ public class LiveDatastarStream private constructor(
         if (chunk == null) {
             ended = true
             endedBy = result.exceptionOrNull()
-            reader.finish()?.let { messages = messages + it }
+            val trailing =
+                try {
+                    reader.finish()
+                } catch (e: StreamlordException) {
+                    throw AssertionError(received.withStream("The stream ended on a line Streamlord's rules refuse: ${e.message}"), e)
+                }
+            trailing?.let { messages = messages + it }
             return false
         }
         take(chunk)
@@ -303,7 +312,7 @@ public class LiveDatastarStream private constructor(
                 try {
                     SseDecoder.event(message)
                 } catch (e: StreamlordException) {
-                    throw AssertionError(received.withStream("The stream carried a frame the client would reject: ${e.message}"), e)
+                    throw AssertionError(received.withStream("The stream carried a frame Streamlord's rules refuse: ${e.message}"), e)
                 }
             if (event != null) events = events + event
         }
@@ -318,11 +327,13 @@ public class LiveDatastarStream private constructor(
 
         /**
          * Open [uri] with a `GET` the way the browser's Datastar does, with `Datastar-Request: true`
-         * and `Accept: text/event-stream`, and read it as it arrives.
+         * and the client's `Accept`, and read it as it arrives.
          *
-         * The answer has to start within [timeout]. A server sends its headers with its first
-         * flush, so a handler that writes nothing until a command arrives holds `open` until it
-         * does; send the current state on open, as a live view does anyway.
+         * The answer has to start within [timeout]. Ktor's CIO sends the headers as soon as the
+         * response opens; Netty holds them until the first byte of the body, so on Netty a handler
+         * that writes nothing until a command arrives holds `open` until it does, the heartbeat's
+         * first comment at five seconds being no margin. Send the current state on open, as a live
+         * view does anyway.
          *
          * @param headers Added to the request, for a session cookie or an authorisation header.
          * @throws AssertionError when the connection fails, no answer starts within [timeout], or
@@ -339,7 +350,7 @@ public class LiveDatastarStream private constructor(
                     // An infinite wait is no timeout at all; the JDK cannot hold one that long.
                     .apply { if (timeout.isFinite()) timeout(timeout.toJavaDuration()) }
                     .header("Datastar-Request", "true")
-                    .header("Accept", "text/event-stream")
+                    .header("Accept", DatastarProtocol.ACCEPT)
                     .apply { headers.forEach { (name, value) -> header(name, value) } }
                     .GET()
                     .build()
@@ -362,7 +373,9 @@ public class LiveDatastarStream private constructor(
             val encoding = response.headers().firstValue("Content-Encoding").orElse("identity")
             if (!encoding.trim().equals("identity", ignoreCase = true)) {
                 body.close()
-                throw AssertionError("$uri answered with Content-Encoding '$encoding', which this reader does not decode; leave Accept-Encoding out of the headers")
+                throw AssertionError(
+                    "$uri answered with Content-Encoding '$encoding', which this reader does not decode; leave Accept-Encoding out of the headers",
+                )
             }
             // The stream itself is what close() closes: a read in progress holds the reader's lock.
             return of(InputStreamReader(body, Charsets.UTF_8), onClose = body)

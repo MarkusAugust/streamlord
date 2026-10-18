@@ -6,9 +6,14 @@ import io.github.markusaugust.streamlord.analysis.NamePart
 import io.github.markusaugust.streamlord.analysis.TokenKind
 
 /**
- * The colours of what Datastar adds. Every key falls back to a standard key of the user's
- * scheme, so no theme is overridden; the plugin's own palette (dark and light) only gives the
- * Datastar concepts a face of their own, and the colour settings page lets the user change it.
+ * The colours of what Datastar adds. Every key falls back to a standard key of the user's scheme
+ * and the plugin ships no colours of its own, so a token takes whatever the theme gives that
+ * standard key: a signal is coloured as a static field, a backend action as a keyword, any other
+ * action as a function call. IntelliJ's own schemes give a function call and a class name no
+ * colour, so there an action, an attribute key and a modifier argument are plain text. A colour
+ * the plugin set for the Default or Darcula scheme would win over the theme in every scheme built
+ * on them, which is how themes are built. The colour settings page lets the user give a token a
+ * face of its own.
  */
 object DatastarColors {
     private fun key(

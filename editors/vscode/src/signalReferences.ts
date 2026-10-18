@@ -1,7 +1,8 @@
-import { ALL_SITE_NAMES, lexCached, markupString } from "./analyze.ts";
+import { ALL_SITE_NAMES, ATTRIBUTES_INDEX, attributesIndexValue, lexCached, markupString } from "./analyze.ts";
 import { catalog, distance, parseAttributeName } from "./catalog.ts";
-import { DOCS, jsCodeMask, type Issue } from "./expression.ts";
+import { clientSignalReads, DOCS, type Issue } from "./expression.ts";
 import { PLACEHOLDER, toSource, type KotlinString } from "./kotlinStrings.ts";
+import { ANY_SIGNAL } from "./signals.ts";
 import { asciiLowercase, decodeEntities, hasTemplateSyntax, tokenize } from "./markup.ts";
 import { findCallSites, isHtmlString, selectStringArg } from "./scanner.ts";
 
@@ -19,20 +20,17 @@ export interface SignalReference {
   name: string;
 }
 
-const SIGNAL = /\$([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)/g;
-
-/** The signals an expression reads, with offsets relative to `text`. A `$foo-bar` is left to the `signal-kebab` check. */
+/**
+ * The signals an expression reads, with offsets relative to `text`: what the client rewrites as a
+ * signal where JavaScript runs it (see `clientSignalReads`), shared with `SignalReferences.kt`. A
+ * `$foo-bar` is left to the `signal-kebab` check, and a name opening with a digit is no name a
+ * page declares.
+ */
 export function expressionSignalReferences(text: string): SignalReference[] {
   const out: SignalReference[] = [];
-  const code = jsCodeMask(text);
-  for (const m of text.matchAll(SIGNAL)) {
-    const name = m[1] ?? "";
-    const start = m.index;
-    const end = start + m[0].length;
-    if (!code[start] || /[A-Za-z0-9_$]/.test(text[start - 1] ?? "")) continue;
-    if (text[end] === "-" && /[A-Za-z0-9_]/.test(text[end + 1] ?? "")) continue;
-    if (name.includes(PLACEHOLDER)) continue;
-    out.push({ start, end, name });
+  for (const r of clientSignalReads(text)) {
+    if (r.name.includes("-") || !/^[A-Za-z_]/.test(r.name) || r.name.includes(PLACEHOLDER)) continue;
+    out.push({ start: r.start, end: r.end, name: r.name });
   }
   return out;
 }
@@ -81,6 +79,13 @@ export function signalReferencesInKotlin(src: string, prefix: string): SignalRef
       if (s && !s.unterminated) add(s, signalReferencesInHtml(s.text, prefix));
     }
   }
+  for (const m of src.matchAll(ATTRIBUTES_INDEX)) {
+    if (lex.mask[m.index ?? 0] === 0) continue;
+    const s = attributesIndexValue(src, m, lex.strings);
+    if (!s) continue;
+    claimed.add(s.start);
+    if (parseAttributeName(asciiLowercase(m[1] ?? ""), prefix)?.spec?.valueKind === "expression") add(s, expressionSignalReferences(s.text));
+  }
   for (const s of lex.strings) {
     if (claimed.has(s.start) || s.unterminated || !isHtmlString(src, s)) continue;
     add(s, signalReferencesInHtml(s.text, prefix));
@@ -91,10 +96,11 @@ export function signalReferencesInKotlin(src: string, prefix: string): SignalRef
 /**
  * Does the workspace define the signal `path` reads? It does when it defines the path itself, a
  * signal the path reaches into (`$user.name.length` with `user` defined), or a signal inside the
- * path (`$form` with `form.email` defined).
+ * path (`$form` with `form.email` defined). A spread of a variable into the object form,
+ * `{...init}`, may declare any signal, written `*`.
  */
 export function isKnownSignal(path: string, defined: ReadonlySet<string>): boolean {
-  if (defined.has(path)) return true;
+  if (defined.has(path) || defined.has(ANY_SIGNAL)) return true;
   let p = path;
   while (p.includes(".")) {
     p = p.slice(0, p.lastIndexOf("."));
@@ -111,7 +117,7 @@ export function nearestSignal(name: string, defined: ReadonlySet<string>): strin
   let best: string | null = null;
   let bestDistance = Infinity;
   for (const d of defined) {
-    if (d === name) continue;
+    if (d === name || d === ANY_SIGNAL) continue;
     const far = distance(name.toLowerCase(), d.toLowerCase());
     if (far <= limit && far < bestDistance) {
       best = d;

@@ -1,11 +1,15 @@
 package io.github.markusaugust.streamlord.core.port.driving
 
+import io.github.markusaugust.streamlord.core.DatastarEventValidationException
 import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.ExecuteScript
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
+import io.github.markusaugust.streamlord.core.domain.SignalNames
+import io.github.markusaugust.streamlord.core.domain.interpolate
+import io.github.markusaugust.streamlord.core.domain.safeUrl
 import io.github.markusaugust.streamlord.core.domain.withEventId
 import io.github.markusaugust.streamlord.core.json.JsonWriter
 import io.github.markusaugust.streamlord.core.port.driven.SignalsCodec
@@ -13,9 +17,9 @@ import io.github.markusaugust.streamlord.core.protocol.SseEncoder
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.launch
 import org.intellij.lang.annotations.Language
 import kotlin.reflect.typeOf
 import kotlin.time.Duration
@@ -183,10 +187,10 @@ public interface DatastarStream {
 
     /**
      * Patch signals from key/value pairs. Values may be primitives, maps, lists or `null`
-     * (which removes the signal).
+     * (which removes the signal). A dotted name reaches a nested signal, as `$user.name` does.
      *
      * ```kotlin
-     * patchSignals("count" to 42, "user" to mapOf("name" to "Gorvek"), "draft" to null)
+     * patchSignals("count" to 42, "user.name" to "Gorvek", "draft" to null)
      * ```
      */
     public suspend fun patchSignals(
@@ -195,16 +199,28 @@ public interface DatastarStream {
         eventId: String? = null,
         retry: Duration? = null,
     ) {
-        send(PatchSignals(JsonWriter.write(signals.toMap()), onlyIfMissing, eventId, retry))
+        send(PatchSignals(JsonWriter.write(nested(signals.asList())), onlyIfMissing, eventId, retry))
     }
 
-    /** Remove signals by name. Sugar for patching them to `null`. */
+    /**
+     * Remove signals by name. Sugar for patching them to `null`. A dotted name removes a nested
+     * signal; where its parent is missing or holds a plain value, the client makes the parent an
+     * empty object, as a merge patch says. A name under another one being removed is left out.
+     */
     public suspend fun removeSignals(
         vararg names: String,
         eventId: String? = null,
         retry: Duration? = null,
     ) {
-        send(PatchSignals(JsonWriter.write(names.associateWith { null }), eventId = eventId, retry = retry))
+        val removed = names.distinct().filter { name -> names.none { name.startsWith("$it.") } }
+        send(PatchSignals(JsonWriter.write(nested(removed.map { it to null })), eventId = eventId, retry = retry))
+    }
+
+    private fun nested(pairs: List<Pair<String, Any?>>): Map<String, Any?> {
+        for ((name, _) in pairs) {
+            SignalNames.pathProblem(name)?.let { throw DatastarEventValidationException("signal $name $it") }
+        }
+        return SignalNames.nest(pairs)
     }
 
     /** Execute JavaScript in the browser. See [ExecuteScript]. */
@@ -222,8 +238,13 @@ public interface DatastarStream {
      * Send the browser to another page. The URL is safely quoted. The navigation runs from a
      * `setTimeout`, as the official SDKs do, so the script element is applied and removed before
      * the page unloads.
+     *
+     * @throws IllegalArgumentException for a URL with a scheme that does more than navigate, such
+     *   as `javascript:`, which the browser would run on the page: only a relative URL or an
+     *   `http`, `https`, `mailto` or `tel` one is followed, as [interpolate] has it.
      */
     public suspend fun redirect(url: String) {
+        require(safeUrl(url)) { "redirect follows a relative URL or an http, https, mailto or tel one, not '$url'" }
         executeScript("setTimeout(() => { window.location.href = ${JsonWriter.writeString(url)} })")
     }
 

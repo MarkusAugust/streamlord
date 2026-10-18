@@ -36,6 +36,12 @@ for (const file of pages) {
   const html = readFileSync(file, "utf8")
   const from = file.replace(/^dist/, "").replace(/\/index\.html$/, "") || "/"
 
+  // A same-page anchor is checked against this page's own ids.
+  for (const match of html.matchAll(/href="#([^"]+)"/g)) {
+    if (!ids.get(file)?.has(match[1]))
+      problems.push(`${from} -> #${match[1]} (no such anchor on the page)`)
+  }
+
   for (const match of html.matchAll(/href="(\/[^"]*)"/g)) {
     const [path, anchor] = match[1].split("#")
 

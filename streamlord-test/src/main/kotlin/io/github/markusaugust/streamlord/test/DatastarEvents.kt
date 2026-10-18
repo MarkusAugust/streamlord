@@ -13,6 +13,7 @@ import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonValue
 import io.github.markusaugust.streamlord.core.json.JsonWriter
+import io.github.markusaugust.streamlord.core.json.mergePatchAsClient
 import io.github.markusaugust.streamlord.core.protocol.SseDecoder
 import io.github.markusaugust.streamlord.core.protocol.SseEncoder
 import io.github.markusaugust.streamlord.core.protocol.SseMessage
@@ -49,7 +50,9 @@ public class DatastarEvents(
      * So a signal patched twice reads as its last value, and one patched to `null` is gone,
      * which is what a test usually means when it asks what a signal ended up as. `onlyIfMissing`
      * is honoured leaf by leaf, as the client honours it: a nested object is still walked, and
-     * only the values that are already there are left alone.
+     * only the values that are already there are left alone. A `null` inside a stored array, and
+     * the hole a deleted index leaves, read as `""`, which is what the client hands an expression
+     * and sends to the server. See `mergePatchAsClient`.
      *
      * @throws AssertionError if a patch carried signals that are not a JSON object.
      */
@@ -67,43 +70,17 @@ public class DatastarEvents(
         store
     }
 
-    /** One level of the client's merge: `mergePatch` and `mergeInner` in Datastar's `signals.ts`. */
+    /** The client's merge, with the hole limit of the core function turned into the assertion it is here. */
     private fun fold(
         target: JsonObject,
         patch: JsonObject,
         ifMissing: Boolean,
-    ): JsonObject {
-        val out = LinkedHashMap<String, JsonValue>(target)
-        for ((key, value) in patch) {
-            val existing = out[key]
-            when {
-                value is JsonNull -> if (!ifMissing) out.remove(key)
-                value is JsonObject && existing is JsonArray -> out[key] = foldIntoArray(existing, value, ifMissing)
-                value is JsonObject -> out[key] = fold(existing as? JsonObject ?: JsonObject.EMPTY, value, ifMissing)
-                !(ifMissing && key in out) -> out[key] = value
-            }
+    ): JsonObject =
+        try {
+            mergePatchAsClient(target, patch, ifMissing)
+        } catch (e: IllegalArgumentException) {
+            throw AssertionError(e.message)
         }
-        return JsonObject(out)
-    }
-
-    /** The client keeps an array an array when an object is patched onto it, and reads the keys as indices. */
-    private fun foldIntoArray(
-        target: JsonArray,
-        patch: JsonObject,
-        ifMissing: Boolean,
-    ): JsonValue {
-        val items = target.toMutableList()
-        for ((key, value) in patch) {
-            val index = key.toIntOrNull()?.takeIf { it in 0..items.size } ?: continue
-            when {
-                value is JsonNull -> Unit
-                index == items.size -> items += value
-                value is JsonObject && items[index] is JsonObject -> items[index] = fold(items[index] as JsonObject, value, ifMissing)
-                !ifMissing -> items[index] = value
-            }
-        }
-        return JsonArray(items)
-    }
 
     /**
      * One element patch matching every argument given, ignoring the arguments left out.
@@ -217,23 +194,11 @@ public class DatastarEvents(
     }
 
     /**
-     * The value at a dotted path in the folded store, or `null` when nothing is there. A key may
-     * itself hold a dot, so at each level the longest key that exists is taken first.
+     * The value at a dotted path in the folded store, or `null` when nothing is there. No key holds
+     * a dot: [PatchSignals] refuses one, since the client could not reach it.
      */
-    private fun path(name: String): JsonValue? = path(signals, name.split('.'))
-
-    private fun path(
-        here: JsonValue,
-        segments: List<String>,
-    ): JsonValue? {
-        if (segments.isEmpty()) return here
-        val fields = here as? JsonObject ?: return null
-        for (taken in segments.size downTo 1) {
-            val next = fields[segments.subList(0, taken).joinToString(".")] ?: continue
-            path(next, segments.subList(taken, segments.size))?.let { return it }
-        }
-        return null
-    }
+    private fun path(name: String): JsonValue? =
+        name.split('.').fold<String, JsonValue?>(signals) { here, key -> (here as? JsonObject)?.get(key) }
 
     /** JSON equality with numbers compared by value, so `13` is `13.0`. */
     private fun same(

@@ -1,5 +1,9 @@
 package io.github.markusaugust.streamlord.intellij
 
+import com.intellij.codeHighlighting.HighlightDisplayLevel
+import com.intellij.codeInsight.daemon.HighlightDisplayKey
+import com.intellij.lang.annotation.HighlightSeverity
+import com.intellij.profile.codeInspection.InspectionProjectProfileManager
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.inspections.DatastarAttributeInspection
@@ -135,11 +139,69 @@ class InspectionTest : BasePlatformTestCase() {
                 "s.patchElements(\"<li>x</li>\", mode = ElementPatchMode.APPEND); s.removeElements(\" \"); s.removeElements(\"a\\nb\")",
                 "s.executeScript(\"'</script>'\"); dataSignals(\"fooBar\", \"1\"); s.patchElements(\"text </b>\")",
                 "s.patchElements(\"\"\"<span id=\"busy\" data-indicator:busy></span>\"\"\")",
+                "s.patchElements(\"\"\"<div id=\"n\" data-bind=\"__proto__.x\" data-computed=\"\${'$'}a + 1\" data-json-signals=\"{include: '/a/i'}\"",
+                " data-text=\"`\${'$'}t \${'$'}{1}` + ((n) => { n; return n })(1)\" data-on:click=\"x // '\n\${'$'}b = 'y'\"></div>\"\"\")",
             ).joinToString("\n")
         val codes = analyzer.analyzeKotlin(src).mapNotNull { it.code }.toSet()
         val unclaimed = codes - InspectionCodes.all
         assertEquals(emptySet<String>(), unclaimed)
         assertTrue(codes.toString(), codes.size > 15)
         assertTrue(codes.toString(), "indicator-without-action" in codes)
+        val added = setOf("literal-rewritten", "signal-not-read", "statement-split", "signal-name", "computed-value", "filter-pattern")
+        assertEquals(added, codes.intersect(added))
+    }
+
+    fun `test a modifier datastar ignores is a warning, and one it reads into the event an error`() {
+        myFixture.configureByText(
+            "mods.html",
+            "<button data-on:click__onse=\"\$a = 1\" data-on:input__=\"\$a = 1\" data-on:click.prevent=\"\$a = 1\"></button>",
+        )
+        val highlights = myFixture.doHighlighting().filter { it.inspectionToolId == "DatastarAttributeInspection" }
+        assertEquals(
+            listOf("onse" to HighlightSeverity.WARNING, "__" to HighlightSeverity.WARNING, "click.prevent" to HighlightSeverity.ERROR),
+            highlights.sortedBy { it.startOffset }.map { it.text to it.severity },
+        )
+    }
+
+    fun `test an indicator datastar refuses shows what the analysis and vs code show`() {
+        // The platform hides a warning that an error on the same range covers, so the analysis
+        // must not give one there.
+        for (source in listOf(
+            "<div data-indicator></div>",
+            "<span data-indicator:busy=\"busy\"></span>",
+            "<span data-indicator:busy></span>",
+        )) {
+            myFixture.configureByText("indicator.html", source)
+            val expected =
+                StreamlordAnalysis
+                    .getInstance(project)
+                    .htmlIssues(myFixture.file)
+                    .map { Triple(it.start, it.end, it.message) }
+            val shown =
+                myFixture
+                    .doHighlighting()
+                    .filter { it.inspectionToolId == "DatastarAttributeInspection" }
+                    .map { Triple(it.startOffset, it.endOffset, it.description.substringBefore(" See ")) }
+            assertEquals(source, expected.sortedBy { it.third }, shown.sortedBy { it.third })
+        }
+    }
+
+    fun `test each issue keeps its own severity until the profile sets one for the family`() {
+        myFixture.configureByText("Mixed.kt", "fun f() { dataText(\"\${'\$'}a-b +\") }")
+        val own = myFixture.doHighlighting()
+        assertEquals(HighlightSeverity.ERROR, own.single { it.description?.startsWith("Datastar expression:") == true }.severity)
+        assertEquals(HighlightSeverity.WARNING, own.single { it.description?.contains("nothing here declares") == true }.severity)
+        val key = HighlightDisplayKey.find("DatastarExpressionInspection")!!
+        val profile = InspectionProjectProfileManager.getInstance(project).currentProfile
+        profile.setErrorLevel(key, HighlightDisplayLevel.WEAK_WARNING, project)
+        try {
+            // A fresh file: the daemon keeps the highlights of an unchanged document.
+            myFixture.configureByText("Mixed2.kt", "fun f() { dataText(\"\${'\$'}a-b +\") }")
+            val set = myFixture.doHighlighting()
+            assertEquals(HighlightSeverity.WEAK_WARNING, set.single { it.description?.startsWith("Datastar expression:") == true }.severity)
+            assertEquals(HighlightSeverity.WEAK_WARNING, set.single { it.description?.contains("nothing here declares") == true }.severity)
+        } finally {
+            profile.setErrorLevel(key, HighlightDisplayLevel.ERROR, project)
+        }
     }
 }

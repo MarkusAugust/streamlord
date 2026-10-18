@@ -65,10 +65,12 @@ export async function llmsFullTxt(site: URL): Promise<string> {
 /**
  * The Markdown as a reader outside the site needs it: a fence keeps its language
  * and loses the attributes only this site's build reads (`sample=`, `tab=`), and
- * a link within the site becomes a full address.
+ * a link within the site becomes a full address. The comment that marks a
+ * dependency tree for the build's check is left out.
  */
 function plain(body: string, site: URL): string {
   return body
+    .replace(/^<!-- deps=[^>]*-->\n/gm, "")
     .replace(
       /^(\s*(?:`{3,}|~{3,}))(\S*)[^\n]*$/gm,
       (_, fence: string, first: string) =>

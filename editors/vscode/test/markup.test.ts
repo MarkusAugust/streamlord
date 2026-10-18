@@ -106,3 +106,28 @@ describe("markup structure", () => {
     assert.deepEqual(analyzeHtml('<textarea><div data-onn:click="1"></textarea><title><div data-onn:y="1"></title>', opts), []);
   });
 });
+
+describe("time", () => {
+  // Each of these took seconds, or minutes, with the form it replaces and takes milliseconds now:
+  // the limit leaves a slow machine a wide margin.
+  const within = (ms: number, f: () => unknown) => {
+    const start = performance.now();
+    f();
+    const took = performance.now() - start;
+    assert.ok(took < ms, `took ${took.toFixed(0)} ms`);
+  };
+
+  it("reads a filter string full of escapes without backtracking", () => {
+    within(1000, () => analyzeHtml(`<pre data-json-signals="{include: '/${"\\\\".repeat(19)}x'}"></pre>`, opts));
+    within(1000, () => analyzeHtml(`<pre data-json-signals='{"include": "/^${Array.from({ length: 16 }, (_, i) => `a${i}`).join("\\\\.")}"}'></pre>`, opts));
+  });
+
+  it("reads a line of slashes that never close in linear time", () => {
+    within(1000, () => analyzeHtml(`<div data-text="${"(/[".repeat(20000)}"></div>`, opts));
+  });
+
+  it("tells each signal in a string the client pairs otherwise in linear time", () => {
+    // 60 KB of rewrites inside one string, each told which quote opens it.
+    within(2000, () => analyzeHtml(`<div data-text="/'/.test('x') + '${"$a ".repeat(20000)}'"></div>`, opts));
+  });
+});

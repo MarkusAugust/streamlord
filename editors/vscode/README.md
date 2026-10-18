@@ -16,8 +16,9 @@ strings alongside the Streamlord SDK.
 function that returns HTML, a `val` holding a fragment), and in `.html` and template files:
 
 - Kotlin interpolation of signals: `"$count++"` becomes `"++"` at runtime. Flagged as an error
-  with the fix spelled out. In HTML strings, `$name` inside a `data-*` expression is the same
-  error; `$name` in text is a hint, since there it is usually meant.
+  with the fix spelled out. In HTML strings, `$name` inside a `data-*` expression is a warning,
+  since a server value is often meant there; `$name` in text, or inside a JavaScript string such
+  as `@post('/x/$id')`, is a hint, since there it is what you want.
 - Datastar expression syntax, checked with a real JavaScript parser, with the error at the
   right column.
 - Unknown actions (`@Post`), Pro actions and Pro attributes (hint: they need the Pro bundle).
@@ -32,6 +33,23 @@ function that returns HTML, a `val` holding a fragment), and in `.html` and temp
   kebab-case key (plus `__case.camel` for `data-on` and `data-class`), and the camelCase signal
   or the spaced subtraction. In the DSL the SDK writes a camelCase key correctly
   on its own, and a hint on the call shows what goes on the wire.
+- What Datastar's own rewrite of an expression does that JavaScript would not: a `$name` or
+  `@name(` in the text of a template literal that also holds a `${...}`, or inside a regular
+  expression, is rewritten there too; a `'` in a comment, a regular expression or a template
+  pairs with a later quote, and the `$name` between them stays a JavaScript variable; `$år` is no
+  signal, since only ASCII follows a `$`; and `@get` without its parenthesis is a syntax error.
+- Signal names Datastar's client cannot hold or no `$name` reaches: `__proto__` anywhere in the
+  name, `constructor` or another property of `Object.prototype` with more of the name or an object
+  under it (`data-signals:constructor.x`), also once `__case` has turned the key into it, a `$` in
+  `data-bind="$user"`, and a letter beyond ASCII, where the message names the bracket form,
+  `$['år']`, that does reach it. `data-signals:constructor="1"` is held, and says nothing.
+- Values the client evaluates or splits: a filter of `data-json-signals` or
+  `data-on-signal-patch-filter` that does not compile or reads a signal, a pattern written as a
+  string with flags after its last slash, `'/^user/i'`, there or in the `filterSignals` of an
+  action, where the client cuts one `/` from each end and matches the `/i` as text (`'/^user/'`
+  works as it is), `data-computed` without a key
+  whose value is sure to be no function, and a `;` inside brackets in a value that is read, where
+  the client splits it and loses the value.
 
 A string counts as HTML when it opens with a tag, a comment or a doctype, or when it carries
 IntelliJ's injection marker: `@Language("HTML")` on the function or property, or a
@@ -78,8 +96,11 @@ into your user settings; `Streamlord: Remove recommended colors` takes it out ag
 
 **Stream Inspector** (`Streamlord: Open Stream Inspector`): connect to a running endpoint with
 a method, signals and headers; every SSE event arrives decoded, and the signal store is kept
-exactly as the client would keep it. Non-SSE Datastar responses are shown with their
-`datastar-*` headers.
+exactly as the client would keep it.
+It asks as Datastar's client does, with the same `Accept`, and reads what the client reads: a
+200 that is not HTML, JSON or JavaScript is decoded as a stream, whatever its `Content-Type`. Any
+other response is shown with its `datastar-*` headers and up to 1 MiB of its body; a
+`text/event-stream` response with any status but 200 is not read, as the client reads none.
 
 - **Saved requests** live in `.streamlord/inspector.json` in the workspace (commit it to share
   with the team, or ignore it). Save one with **Save**, and pick it again from the Request
@@ -142,6 +163,8 @@ exactly as the client would keep it. Non-SSE Datastar responses are shown with t
 | `streamlord.languages` | html, jte, kte, ftl, velocity, mustache, pebble, twig, … | Language ids that get the HTML side. Reload after changing. |
 | `streamlord.attributePrefix` | `data-` | `data-star-` when you load the aliased bundle. |
 | `streamlord.inspector.defaultUrl` | `http://localhost:8080/` | `{{baseUrl}}` unless `.streamlord/env.json` sets `baseUrl`. |
+| `streamlord.inspector.requestsFile` | `.streamlord/inspector.json` | Workspace-relative file holding the saved inspector requests. |
+| `streamlord.inspector.codeLens` | `true` | Show “Open in Stream Inspector” above Ktor and Spring routes. |
 
 ## Datastar Pro
 
@@ -154,10 +177,13 @@ Pro bundle you license and load yourself.
 ```
 npm ci
 npm test           # unit tests: analysis, providers (with a vscode mock), grammars (real TextMate engine)
-npm run test:live  # the Stream Inspector client against a running Datastar server (STREAMLORD_LIVE_URL, default http://localhost:8080/api)
+npm run test:live  # the Stream Inspector client against the demo service (STREAMLORD_LIVE_URL, default http://localhost:8080)
 npm run build      # generates html-customdata.json and snippets/html.json from the catalog, then dist/extension.js
 npm run package    # streamlord-<version>.vsix
 ```
+
+`test:live` needs the repository's demo running: `./gradlew :demo:run` from the repository root,
+then `npm run test:live` here.
 
 Press F5 in the `streamlord.code-workspace` to launch an Extension Development Host.
 
@@ -167,7 +193,8 @@ The extension is published to the VS Code Marketplace from CI only, never from a
 machine. Bump `version` in `package.json`, commit, then push a tag `vscode-v<version>`. The
 `publish-vscode` job checks that the tag matches, builds, tests, and runs `vsce publish` with
 the `VSCE_PAT` repository secret (an Azure DevOps personal access token with the Marketplace
-*Manage* scope for the `MarkusAugust` publisher).
+*Manage* scope for the `MarkusAugust` publisher). Which branch the bump goes on, and when the
+tag may be pushed, is in [the repository README](https://github.com/MarkusAugust/streamlord#building-and-releasing).
 
 No `.vsix` is ever committed; `npm run package` only builds one locally for installing by hand. The
 attribute and action catalog lives in `../../catalog/` and is verified against the Kotlin DSL

@@ -1,0 +1,234 @@
+package io.github.markusaugust.streamlord.spring
+
+import io.github.markusaugust.streamlord.core.port.driving.patchSignals
+import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flow
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
+import org.springframework.core.task.TaskRejectedException
+import org.springframework.http.ResponseEntity
+import org.springframework.mock.web.MockHttpServletRequest
+import org.springframework.mock.web.MockHttpServletResponse
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
+import org.springframework.web.bind.annotation.ExceptionHandler
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.servlet.config.annotation.AsyncSupportConfigurer
+import org.springframework.web.servlet.config.annotation.EnableWebMvc
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
+
+/**
+ * A real Tomcat whose Spring MVC executor has one thread, as Boot's would once its eight are
+ * taken: a stream holding it makes the next one wait, unless that one brings its own executor.
+ */
+class StreamExecutorTest {
+    companion object {
+        fun executor(name: String): ThreadPoolTaskExecutor =
+            ThreadPoolTaskExecutor().apply {
+                corePoolSize = 1
+                maxPoolSize = 1
+                setThreadNamePrefix("$name-")
+                setDaemon(true)
+                initialize()
+            }
+
+        val own: ThreadPoolTaskExecutor = executor("own")
+
+        val shutDown: ThreadPoolTaskExecutor = executor("gone").apply { shutdown() }
+
+        // Completed once /hold has the MVC thread, and by the test to let it go.
+        var holding = CompletableFuture<Unit>()
+        var letGo = CompletableFuture<Unit>()
+    }
+
+    @RestController
+    class Streams {
+        // Holds its thread until the test lets it go.
+        @GetMapping("/hold")
+        fun hold(response: HttpServletResponse): StreamingResponseBody =
+            response.datastarStream(heartbeat = null) {
+                patchSignals("held" to true)
+                holding.complete(Unit)
+                letGo.get(30, TimeUnit.SECONDS)
+            }
+
+        @GetMapping("/shared")
+        fun shared(response: HttpServletResponse): StreamingResponseBody =
+            response.datastarStream {
+                patchSignals("thread" to Thread.currentThread().name, "afterHold" to letGo.isDone)
+            }
+
+        @GetMapping("/own")
+        fun own(response: HttpServletResponse): StreamingResponseBody =
+            response.datastarStream(executor = own) {
+                patchSignals("thread" to Thread.currentThread().name, "afterHold" to letGo.isDone)
+            }
+
+        @GetMapping("/own-flow")
+        fun ownFlow(response: HttpServletResponse): StreamingResponseBody =
+            response.datastarStream(
+                flow {
+                    emit(
+                        io.github.markusaugust.streamlord.core.domain
+                            .PatchSignals("{\"flow\":true,\"afterHold\":${letGo.isDone}}"),
+                    )
+                },
+                executor = own,
+            )
+
+        // Spring sets its own executor again for the cycle that runs the stream of a suspend handler.
+        @GetMapping("/own-suspended")
+        suspend fun ownSuspended(
+            request: HttpServletRequest,
+            response: HttpServletResponse,
+        ): StreamingResponseBody {
+            delay(10.milliseconds)
+            return response.datastarStream(request = request, executor = own) { patchSignals("thread" to Thread.currentThread().name) }
+        }
+    }
+
+    @RestController
+    class Rejected {
+        @GetMapping("/rejected")
+        fun rejected(response: HttpServletResponse): StreamingResponseBody =
+            response.datastarStream(executor = shutDown) { patchSignals("ran" to true) }
+    }
+
+    @RestController
+    class Mapped {
+        @GetMapping("/mapped")
+        fun mapped(response: HttpServletResponse): StreamingResponseBody =
+            response.datastarStream(executor = shutDown) { patchSignals("ran" to true) }
+
+        @ExceptionHandler(TaskRejectedException::class)
+        fun busy(): ResponseEntity<String> = ResponseEntity.status(503).body("busy")
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    @EnableWebMvc
+    class Mvc : WebMvcConfigurer {
+        override fun configureAsyncSupport(configurer: AsyncSupportConfigurer) {
+            configurer.setTaskExecutor(executor("mvc"))
+            configurer.setDefaultTimeout(10_000)
+        }
+
+        @Bean
+        fun streams() = Streams()
+
+        @Bean
+        fun rejected() = Rejected()
+
+        @Bean
+        fun mapped() = Mapped()
+    }
+
+    private lateinit var tomcat: RealTomcat
+
+    @BeforeTest
+    fun start() {
+        holding = CompletableFuture()
+        letGo = CompletableFuture()
+        tomcat = RealTomcat(Mvc::class.java)
+    }
+
+    @AfterTest
+    fun stop() {
+        tomcat.close()
+    }
+
+    /** /hold, which has the MVC thread once [holding] completes and until [letGo] does. */
+    private fun hold(): CompletableFuture<List<String>> {
+        val held = CompletableFuture.supplyAsync { tomcat.get("/hold").body().use { it.toList() } }
+        holding.get(30, TimeUnit.SECONDS)
+        return held
+    }
+
+    /** The body of [path], read in full while /hold still has the MVC thread. */
+    private fun whileHeld(path: String): String {
+        val held = hold()
+        try {
+            return tomcat.get(path).body().use { it.toList().joinToString("\n") }
+        } finally {
+            letGo.complete(Unit)
+            held.join()
+        }
+    }
+
+    // The stream is asked for while /hold has the one MVC thread, and given a moment to run; it
+    // may only run once /hold lets the thread go.
+    @Test
+    fun `without its own executor a stream waits for the MVC thread`() {
+        val held = hold()
+        val shared = CompletableFuture.supplyAsync { tomcat.get("/shared").body().use { it.toList().joinToString("\n") } }
+        assertFailsWith<TimeoutException> { shared.get(500, TimeUnit.MILLISECONDS) }
+        letGo.complete(Unit)
+        held.join()
+        val body = shared.get(30, TimeUnit.SECONDS)
+
+        assertTrue("mvc-" in body, body)
+        assertTrue("\"afterHold\":true" in body, body)
+    }
+
+    // Answered in full before /hold lets the MVC thread go, which it does only after.
+    @Test
+    fun `with its own executor a stream runs at once`() {
+        val body = whileHeld("/own")
+
+        assertTrue("own-" in body, body)
+        assertTrue("\"afterHold\":false" in body, body)
+    }
+
+    @Test
+    fun `the flow variant takes an executor`() {
+        val body = whileHeld("/own-flow")
+
+        assertTrue("\"flow\":true" in body, body)
+        assertTrue("\"afterHold\":false" in body, body)
+    }
+
+    @Test
+    fun `a suspend controller's executor runs the stream`() {
+        val body = tomcat.get("/own-suspended").body().use { it.toList().joinToString("\n") }
+
+        assertTrue("own-" in body, body)
+    }
+
+    @Test
+    fun `an executor that rejects the stream fails before anything is written`() {
+        val response = tomcat.get("/rejected")
+        val body = response.body().use { it.toList().joinToString("\n") }
+
+        assertEquals(500, response.statusCode(), body)
+        assertFalse("ran" in body, body)
+    }
+
+    @Test
+    fun `a rejection reaches an exception handler`() {
+        val response = tomcat.get("/mapped")
+        val body = response.body().use { it.toList().joinToString("\n") }
+
+        assertEquals(503, response.statusCode(), body)
+        assertEquals("busy", body)
+    }
+
+    @Test
+    fun `an executor outside Spring MVC fails rather than being ignored`() {
+        assertFailsWith<IllegalStateException> {
+            MockHttpServletResponse().datastarStream(request = MockHttpServletRequest(), executor = own) {}
+        }
+    }
+}

@@ -1,10 +1,15 @@
 package io.github.markusaugust.streamlord.ktor
 
+import io.github.markusaugust.streamlord.core.JsonParseException
+import io.github.markusaugust.streamlord.core.SignalsDecodeException
+import io.github.markusaugust.streamlord.core.SignalsMediaTypeException
 import io.github.markusaugust.streamlord.core.SignalsTooLargeException
+import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.InterpolatedExpressionException
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.core.json.JsonWriter
+import io.github.markusaugust.streamlord.core.port.driving.DatastarStream
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
 import io.github.markusaugust.streamlord.html.patchElements
 import io.github.markusaugust.streamlord.json.kotlinx.KotlinxSignalsCodec
@@ -17,6 +22,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.application.install
+import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
@@ -25,11 +31,13 @@ import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.withContext
 import kotlinx.html.div
 import kotlinx.html.id
 import kotlinx.serialization.Serializable
+import kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -57,6 +65,109 @@ class KtorAdapterTest {
             val body = client.get("/quiet").bodyAsText()
 
             assertTrue(": keep-alive" in body, body)
+        }
+
+    @Test
+    fun `a heartbeat for one stream applies when the plugin sets none`() =
+        testApplication {
+            routing {
+                get("/quiet") {
+                    call.respondDatastar(heartbeat = 50.milliseconds) {
+                        withContext(Dispatchers.Default) { delay(300.milliseconds) }
+                    }
+                }
+            }
+
+            val body = client.get("/quiet").bodyAsText()
+
+            assertTrue(": keep-alive" in body, body)
+        }
+
+    @Test
+    fun `null for one stream silences the plugin's heartbeat`() =
+        testApplication {
+            install(StreamlordPlugin) { heartbeat = 50.milliseconds }
+            routing {
+                get("/quiet") {
+                    call.respondDatastar(heartbeat = null) {
+                        withContext(Dispatchers.Default) { delay(300.milliseconds) }
+                    }
+                }
+            }
+
+            assertEquals("", client.get("/quiet").bodyAsText())
+        }
+
+    @Test
+    fun `the flow variant takes a heartbeat for its stream`() =
+        testApplication {
+            routing {
+                get("/quiet") {
+                    call.respondDatastar(
+                        flow<DatastarEvent> { withContext(Dispatchers.Default) { delay(300.milliseconds) } },
+                        heartbeat = 50.milliseconds,
+                    )
+                }
+            }
+
+            val body = client.get("/quiet").bodyAsText()
+
+            assertTrue(": keep-alive" in body, body)
+        }
+
+    // The JVM entry point code compiled against 0.12 calls: it must keep the plugin's heartbeat.
+    @Test
+    fun `the 0_12 signature still applies the plugin's heartbeat`() =
+        testApplication {
+            install(StreamlordPlugin) { heartbeat = 50.milliseconds }
+            routing {
+                get("/quiet") {
+                    val block: suspend DatastarStream.() -> Unit = {
+                        withContext(Dispatchers.Default) { delay(300.milliseconds) }
+                    }
+                    val old =
+                        Class.forName("io.github.markusaugust.streamlord.ktor.ResponsesKt").getMethod(
+                            "respondDatastar\$default",
+                            io.ktor.server.application.ApplicationCall::class.java,
+                            HttpStatusCode::class.java,
+                            io.github.markusaugust.streamlord.core.application.StreamAuthorisation::class.java,
+                            Function2::class.java,
+                            kotlin.coroutines.Continuation::class.java,
+                            Int::class.javaPrimitiveType,
+                            Any::class.java,
+                        )
+                    // Mask 0b11: status and authorisation left to their defaults.
+                    suspendCoroutineUninterceptedOrReturn<Any?> { continuation ->
+                        old.invoke(null, call, null, null, block, continuation, 0b11, null)
+                    }
+                }
+            }
+
+            val body = client.get("/quiet").bodyAsText()
+
+            assertTrue(": keep-alive" in body, body)
+        }
+
+    // Before the response starts, so the failure can still become a status.
+    @Test
+    fun `a heartbeat that is not positive fails before the response starts`() =
+        testApplication {
+            var failure: Throwable? = null
+            routing {
+                get("/quiet") {
+                    try {
+                        call.respondDatastar(heartbeat = 0.milliseconds) {}
+                    } catch (e: IllegalArgumentException) {
+                        failure = e
+                        call.respondText("refused", status = HttpStatusCode.BadRequest)
+                    }
+                }
+            }
+
+            val response = client.get("/quiet")
+
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+            assertTrue(failure is IllegalArgumentException)
         }
 
     @Test
@@ -136,6 +247,36 @@ class KtorAdapterTest {
             assertEquals("none", client.get("/none").bodyAsText())
         }
 
+    // Ktor's own RequestAlreadyConsumedException said nothing of where the signals went; Spring says so.
+    @Test
+    fun `a body read twice says it was already read`() =
+        testApplication {
+            install(StreamlordPlugin)
+            routing {
+                post("/s") {
+                    call.readSignalsJson()
+                    val message =
+                        try {
+                            call.readSignals()
+                            "read twice"
+                        } catch (e: IllegalStateException) {
+                            e.message
+                        }
+                    call.respondText(message ?: "")
+                }
+            }
+            val body =
+                client
+                    .post("/s") {
+                        contentType(ContentType.Application.Json)
+                        setBody("{\"a\":1}")
+                    }.bodyAsText()
+            assertEquals(
+                "The request body was already read, by call.receive, a plugin or an earlier read, so the signals in it are gone",
+                body,
+            )
+        }
+
     @Test
     fun `oversized bodies are cut off at the limit`() =
         testApplication {
@@ -150,10 +291,121 @@ class KtorAdapterTest {
                     }
                 }
             }
-            val big = client.post("/s") { setBody("{\"a\":\"" + "x".repeat(10_000) + "\"}") }
+            val big =
+                client.post("/s") {
+                    contentType(ContentType.Application.Json)
+                    setBody("{\"a\":\"" + "x".repeat(10_000) + "\"}")
+                }
             assertEquals(HttpStatusCode.PayloadTooLarge, big.status)
             assertEquals("too large: 10008", big.bodyAsText())
-            assertEquals("ok", client.post("/s") { setBody("{\"a\":1}") }.bodyAsText())
+            val ok =
+                client.post("/s") {
+                    contentType(ContentType.Application.Json)
+                    setBody("{\"a\":1}")
+                }
+            assertEquals("ok", ok.bodyAsText())
+        }
+
+    // A <form enctype="text/plain"> on another site posts this without a preflight.
+    @Test
+    fun `a body not declared application json is refused without the plugin`() =
+        testApplication {
+            routing {
+                post("/s") {
+                    try {
+                        call.respond("ok " + call.readSignals().int("a"))
+                    } catch (e: SignalsMediaTypeException) {
+                        call.respond(HttpStatusCode.UnsupportedMediaType, "refused " + e.contentType)
+                    }
+                }
+            }
+            val form = client.post("/s") { setBody("{\"a\":1}") }
+            assertEquals(HttpStatusCode.UnsupportedMediaType, form.status)
+            assertEquals("refused text/plain; charset=UTF-8", form.bodyAsText())
+            val json =
+                client.post("/s") {
+                    contentType(ContentType.Application.Json)
+                    setBody("{\"a\":1}")
+                }
+            assertEquals("ok 1", json.bodyAsText())
+        }
+
+    // The four handlers on the Security page: the most specific one answers.
+    @Test
+    fun `StatusPages answers a body not declared application json with 415`() =
+        testApplication {
+            install(StatusPages) {
+                exception<SignalsTooLargeException> { call, _ -> call.respond(HttpStatusCode.PayloadTooLarge) }
+                exception<JsonParseException> { call, _ -> call.respond(HttpStatusCode.BadRequest) }
+                exception<SignalsDecodeException> { call, _ -> call.respond(HttpStatusCode.BadRequest) }
+                exception<SignalsMediaTypeException> { call, _ -> call.respond(HttpStatusCode.UnsupportedMediaType) }
+            }
+            routing { post("/s") { call.respond("ok " + call.readSignals().int("a")) } }
+            val bodies =
+                listOf(
+                    ContentType.Text.Plain to "{\"a\":1}",
+                    ContentType.Application.FormUrlEncoded to "a=1",
+                    ContentType.parse("multipart/form-data; boundary=x") to "--x\r\n\r\n1\r\n--x--\r\n",
+                )
+            for ((type, body) in bodies) {
+                val response =
+                    client.post("/s") {
+                        contentType(type)
+                        setBody(body)
+                    }
+                assertEquals(HttpStatusCode.UnsupportedMediaType, response.status, "$type")
+            }
+            val ok =
+                client.post("/s") {
+                    contentType(ContentType.Application.Json)
+                    setBody("{\"a\":1}")
+                }
+            assertEquals("ok 1", ok.bodyAsText())
+        }
+
+    // SignalsMediaTypeException is a SignalsDecodeException, so a block written before it still answers.
+    @Test
+    fun `StatusPages with only the decode handler answers a body not declared application json with 400`() =
+        testApplication {
+            install(StatusPages) {
+                exception<SignalsDecodeException> { call, _ -> call.respond(HttpStatusCode.BadRequest) }
+            }
+            routing { post("/s") { call.respond("ok " + call.readSignals().int("a")) } }
+            for (type in listOf(ContentType.Text.Plain, ContentType.Application.FormUrlEncoded)) {
+                val response =
+                    client.post("/s") {
+                        contentType(type)
+                        setBody("{\"a\":1}")
+                    }
+                assertEquals(HttpStatusCode.BadRequest, response.status, "$type")
+            }
+        }
+
+    @Test
+    fun `the plugin can let any content type through`() =
+        testApplication {
+            install(StreamlordPlugin) { requireJsonContentType = false }
+            routing { post("/s") { call.respond("ok " + call.readSignals().int("a")) } }
+            assertEquals("ok 1", client.post("/s") { setBody("{\"a\":1}") }.bodyAsText())
+        }
+
+    // The plugin builds its own Streamlord, so its default is not Streamlord.Default's.
+    @Test
+    fun `the plugin refuses a body not declared application json unless told otherwise`() =
+        testApplication {
+            install(StreamlordPlugin)
+            routing {
+                post("/s") {
+                    try {
+                        call.respond("ok " + call.readSignals().int("a"))
+                    } catch (e: SignalsMediaTypeException) {
+                        call.respond(HttpStatusCode.UnsupportedMediaType, "refused " + e.contentType)
+                    }
+                }
+            }
+            val form = client.post("/s") { setBody("{\"a\":1}") }
+            assertEquals(HttpStatusCode.UnsupportedMediaType, form.status)
+            assertEquals("refused text/plain; charset=UTF-8", form.bodyAsText())
         }
 
     @Test

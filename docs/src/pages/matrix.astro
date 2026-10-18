@@ -5,8 +5,9 @@ import "../styles/global.css"
 // that every cell the theme generates can be looked at in both themes at once, which is
 // the only way to catch a colour that is technically passing and still wrong.
 
-// Family by role is the whole colour system in 0.22: there are no scales and no steps, so
-// this grid is exhaustive apart from the two layers below it.
+// Family by role is the colour system in the Fristil that package.json names: there are no
+// scales and no steps. With the grounds and the three colours that belong to no family, all
+// below it, the page shows every --fs-color token.
 const families = [
   "accent",
   "visited",
@@ -34,6 +35,10 @@ const roles = [
 // The neutral family alone carries the page, so it has these three in addition to its
 // roles. They are what every text and border promise is measured against.
 const grounds = ["canvas", "surface", "raised"]
+
+// Fristil's core defines these outside the families: the disabled pair points at neutral
+// tokens, and the overlay is translucent, so its hex carries an alpha byte.
+const unfamilied = ["disabled-surface", "disabled-text", "overlay"]
 
 // The colours from the design-system-architecture deck, which are not part of the theme.
 // They stay here because the site's own look came from them, and drift shows up fastest
@@ -101,6 +106,22 @@ const deckColors = [
                   <code class="cell__hex" data-hex></code>
                 </div>
                 <code>{ground}</code>
+              </div>
+            ))
+          }
+        </div>
+      </section>
+
+      <section>
+        <h2 class="fs-heading" data-size="s">Outside the families</h2>
+        <div class="row">
+          {
+            unfamilied.map((name) => (
+              <div class="sample">
+                <div class="sample__face" style={`background:var(--fs-color-${name})`}>
+                  <code class="cell__hex" data-hex></code>
+                </div>
+                <code>{name}</code>
               </div>
             ))
           }
@@ -209,6 +230,11 @@ const deckColors = [
         gap: var(--fs-spacing-10);
         padding-block: var(--fs-spacing-6) var(--fs-spacing-16);
       }
+      /* A grid item is as wide as its content by default, which would let the matrix widen the
+         page instead of scrolling inside itself. */
+      .page > section {
+        min-inline-size: 0;
+      }
       .row {
         display: flex;
         flex-wrap: wrap;
@@ -310,10 +336,9 @@ const deckColors = [
       const hex = (colour: string): string => {
         const parts = colour.match(/\d+(\.\d+)?/g)
         if (!parts || parts.length < 3) return colour
-        return `#${parts
-          .slice(0, 3)
-          .map((part) => Number(part).toString(16).padStart(2, "0"))
-          .join("")}`
+        const bytes = parts.slice(0, 3).map(Number)
+        if (parts.length > 3) bytes.push(Math.round(Number(parts[3]) * 255))
+        return `#${bytes.map((byte) => byte.toString(16).padStart(2, "0")).join("")}`
       }
 
       const labelSwatches = () => {

@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.html
 
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 
 /** Casing applied by `__case` modifiers when a signal or event name is derived from an attribute key. */
 public enum class Case(
@@ -16,9 +17,35 @@ public enum class Case(
  * A regex filter of the shape Datastar expects: `{include: /.../, exclude: /.../}`.
  * Used by `data-json-signals`, `data-on-signal-patch-filter`, `filterSignals` and `@setAll`.
  *
- * The patterns are written as JavaScript regex literals, so they must be valid in both
- * dialects. [RegexOption.IGNORE_CASE], [RegexOption.MULTILINE] and [RegexOption.DOT_MATCHES_ALL]
- * become the `i`, `m` and `s` flags; the other options have no JavaScript equivalent and are refused.
+ * The patterns are written as JavaScript regex literals. [RegexOption.IGNORE_CASE],
+ * [RegexOption.MULTILINE] and [RegexOption.DOT_MATCHES_ALL] become the `i`, `m` and `s` flags;
+ * the other options have no JavaScript equivalent and are refused. The quoting of
+ * [Regex.escape], `\Q...\E`, is written out as escaped text, an octal escape as `\xHH`, and a
+ * character outside the Basic Multilingual Plane is grouped so a quantifier takes all of it.
+ * Quotes, backticks, `&`, `\`, `$` and `@` are written as `\xHH`, and a `$` anchor before a word
+ * character as `$(?:)`: Datastar's client rewrites `$name` and `@name(` inside a regex literal
+ * too, and a quote in one would hide the signals after it.
+ * Syntax that JavaScript, without the `u` flag, reads differently or refuses is refused: inline
+ * flags, the empty `(?)`, possessive and stacked quantifiers, a quantifier with nothing to
+ * repeat (at the start, after `|` or `(`, or on `^`, `$`, `\b`, `\B` or a lookbehind), atomic
+ * groups, `\A`, `\z`, `\Z`, `\G`, `\p{...}`, `\x{...}`, `\b{...}`, `\c` before anything but
+ * a capital, a back reference to no group, followed by a digit or before its group has closed
+ * (`(a\1)`, `\1(a)`), escaped surrogates, a character outside the Basic Multilingual Plane in
+ * a class, the other Java-only escapes, and nested or intersected classes.
+ *
+ * Some syntax both dialects share still means slightly different things at the edges, and is
+ * written as it is: `\s` and `\b` count Unicode spaces and word characters differently, `$`
+ * without [RegexOption.MULTILINE] also matches before a final line break in Java only, `^` with
+ * it matches at the end of the input in JavaScript only, and `.` takes a character outside the
+ * Basic Multilingual Plane as one in Java and as two in JavaScript. Java counts NEL (U+0085) as
+ * a line break, so `.` does not match it and `^` and `$` with [RegexOption.MULTILINE] match next
+ * to it; JavaScript reads it as an ordinary character. With [RegexOption.IGNORE_CASE] Kotlin
+ * folds case the Unicode way, and JavaScript without the `u` flag never folds a character
+ * outside ASCII into one inside it: `k` matches the Kelvin sign (U+212A) and `s` the long s
+ * (U+017F) in Kotlin only. A back reference to a group that took no part in the match, as in
+ * `(a)?\1` or `(a)|b\1`, never matches in Java and matches as empty in JavaScript. In a repeat,
+ * Java keeps what a group took on an earlier pass and JavaScript clears it at each pass, so
+ * `(?:(a)|b\1)+`, which is written as it is, matches `ab` in JavaScript only.
  */
 public data class SignalFilter(
     val include: Regex? = null,
@@ -52,29 +79,381 @@ public data class SignalFilter(
                         else -> throw IllegalArgumentException("Regex option $option has no JavaScript equivalent")
                     }
                 }
-            // Kotlin's inline flags have no spelling in a JavaScript literal, which would refuse the group.
-            require(!INLINE_FLAGS.containsMatchIn(regex.pattern)) {
-                "Inline flags such as (?i) are not JavaScript; pass RegexOption.IGNORE_CASE to Regex(...) instead"
-            }
+            val body = javaScriptBody(regex.pattern).replace(ANCHOR_BEFORE_WORD) { "$(?:)" }
             // An empty literal is `//`, which JavaScript reads as the start of a comment.
-            if (regex.pattern.isEmpty()) return "/(?:)/$flags"
-            return "/" + escapeSlashes(regex.pattern).replace("\n", "\\n").replace("\r", "\\r") + "/" + flags
+            if (body.isEmpty()) return "/(?:)/$flags"
+            return "/$body/$flags"
         }
 
-        private val INLINE_FLAGS = Regex("""\(\?[a-zA-Z-]+[:)]""")
+        // Escapes Java reads one way and JavaScript, without the u flag, another or not at all.
+        private const val JAVA_ONLY_ESCAPES = "AzZGhHRXeapPvVNE"
 
-        private fun escapeSlashes(pattern: String): String =
-            buildString(pattern.length + 4) {
-                var escaped = false
-                for (ch in pattern) {
-                    when {
-                        escaped -> escaped = false
-                        ch == '\\' -> escaped = true
-                        ch == '/' -> append('\\')
+        /**
+         * The pattern as the body of a JavaScript literal, read the way Java reads it: `\Q...\E` as
+         * escaped text, `/` and the line terminators escaped so the literal stays one token, quotes,
+         * backticks, `&`, `\`, `$` and `@` as `\xHH` so the client reads the expression around it
+         * intact, an octal escape as `\xHH`, a character outside the Basic Multilingual Plane
+         * grouped so that a quantifier takes all of it, and what JavaScript would read otherwise or
+         * refuse, refused. [regexLiteral] then writes a `$` anchor before a word character as `$(?:)`.
+         */
+        private fun javaScriptBody(pattern: String): String {
+            val groups = capturingGroups(pattern)
+            return buildString(pattern.length + 4) {
+                var i = 0
+                var inClass = false
+                // 1 after a quantifier, 2 once a ? has made it lazy; one more would stack, which JavaScript refuses.
+                var quantifier = 0
+                // Whether what was written last takes a quantifier. Without the u flag JavaScript refuses
+                // one with nothing to repeat: at the start, after `|` or `(`, and after an anchor, `\b`,
+                // `\B` or a lookbehind, all of which Java quantifies or reads as a literal.
+                var atom = false
+                val open = ArrayDeque<OpenGroup>()
+                // The capturing groups opened so far, and the numbers and names of those closed.
+                var opened = 0
+                val closed = HashSet<String>()
+                while (i < pattern.length) {
+                    val ch = pattern[i]
+                    if (ch == '\\' && i + 1 < pattern.length) {
+                        val next = pattern[i + 1]
+                        val from = length
+                        i = escape(pattern, i, inClass, groups, closed)
+                        // An empty \Q\E writes nothing, so what came before it is still what a quantifier takes.
+                        if (!inClass && (next != 'Q' || length > from)) {
+                            atom = next != 'b' && next != 'B'
+                            quantifier = 0
+                        }
+                        continue
                     }
-                    append(ch)
+                    if (inClass) {
+                        when {
+                            ch == ']' -> {
+                                inClass = false
+                                atom = true
+                            }
+
+                            ch == '[' -> {
+                                javaOnly("a [ inside a class", "Java reads it as a nested class; escape it")
+                            }
+
+                            ch == '&' && pattern.getOrNull(
+                                i + 1,
+                            ) == '&' -> {
+                                javaOnly("&& inside a class", "Java reads it as an intersection")
+                            }
+
+                            ch.isSurrogate() -> {
+                                javaOnly(OUTSIDE_BMP_IN_CLASS, "JavaScript reads it as two characters without the u flag")
+                            }
+                        }
+                        appendChar(ch)
+                        i++
+                        continue
+                    }
+                    when {
+                        ch == '[' -> {
+                            inClass = true
+                            // A ] right after [ or [^ is a literal in Java and closes an empty class in JavaScript.
+                            val first = if (pattern.getOrNull(i + 1) == '^') i + 2 else i + 1
+                            if (pattern.getOrNull(first) == ']') javaOnly("a ] first in a class", "escape it")
+                            append(ch)
+                            i++
+                        }
+
+                        ch == '(' && pattern.getOrNull(i + 1) == '?' -> {
+                            val kind = pattern.getOrNull(i + 2)
+                            if (kind == '>') javaOnly("an atomic group (?>...)")
+                            if (kind != null && (kind.isLetter() || kind == '-')) {
+                                javaOnly("an inline flag such as (?i)", "pass RegexOption.IGNORE_CASE to Regex(...) instead")
+                            }
+                            if (kind == ')') javaOnly("an empty flag group (?)", "JavaScript refuses it")
+                            val lookbehind = kind == '<' && pattern.getOrNull(i + 3).let { it == '=' || it == '!' }
+                            // The whole opening, `(?:`, `(?<=` or `(?<name>`, so what comes next is the group's first term.
+                            val end =
+                                when {
+                                    lookbehind -> i + 4
+                                    kind == '<' -> pattern.indexOf('>', i).let { if (it < 0) pattern.length else it + 1 }
+                                    else -> minOf(i + 3, pattern.length)
+                                }
+                            val name = if (kind == '<' && !lookbehind) pattern.substring(i + 3, maxOf(i + 3, end - 1)) else null
+                            open.addLast(OpenGroup(lookbehind, if (name != null) ++opened else 0, name))
+                            append(pattern, i, end)
+                            i = end
+                            atom = false
+                            quantifier = 0
+                            continue
+                        }
+
+                        ch == '(' -> {
+                            open.addLast(OpenGroup(false, ++opened, null))
+                            append(ch)
+                            i++
+                            atom = false
+                            quantifier = 0
+                            continue
+                        }
+
+                        // A lookbehind takes no quantifier in JavaScript; a lookahead does, without the u flag.
+                        ch == ')' -> {
+                            val group = open.removeLastOrNull()
+                            atom = group?.lookbehind != true
+                            if (group != null && group.number > 0) {
+                                closed += group.number.toString()
+                                group.name?.let { closed += it }
+                            }
+                            append(ch)
+                            i++
+                            quantifier = 0
+                            continue
+                        }
+
+                        ch == '*' || ch == '+' || ch == '?' -> {
+                            quantifier =
+                                when {
+                                    quantifier == 1 && ch == '?' -> 2
+                                    quantifier == 1 && ch == '+' -> javaOnly("a possessive quantifier")
+                                    quantifier != 0 -> javaOnly("a quantifier on a quantifier", "JavaScript refuses it")
+                                    !atom -> nothingToRepeat(ch.toString())
+                                    else -> 1
+                                }
+                            append(ch)
+                            i++
+                            continue
+                        }
+
+                        ch == '{' && pattern.getOrNull(i + 1)?.isDigit() == true -> {
+                            if (quantifier != 0) javaOnly("a quantifier on a quantifier", "JavaScript refuses it")
+                            if (!atom) nothingToRepeat("{")
+                            val close = pattern.indexOf('}', i).let { if (it < 0) pattern.length - 1 else it }
+                            append(pattern, i, close + 1)
+                            i = close + 1
+                            quantifier = 1
+                            continue
+                        }
+
+                        ch.isHighSurrogate() && pattern.getOrNull(i + 1)?.isLowSurrogate() == true -> {
+                            appendSupplementary(ch, pattern[i + 1])
+                            i += 2
+                        }
+
+                        // An anchor; a literal `$`, escaped or in a class, is written as `\x24`.
+                        ch == '$' || ch == '^' || ch == '|' -> {
+                            append(ch)
+                            i++
+                            atom = false
+                            quantifier = 0
+                            continue
+                        }
+
+                        else -> {
+                            appendChar(ch)
+                            i++
+                        }
+                    }
+                    atom = true
+                    quantifier = 0
                 }
             }
+        }
+
+        /** Writes the escape at [at] and returns where the pattern goes on. */
+        private fun StringBuilder.escape(
+            pattern: String,
+            at: Int,
+            inClass: Boolean,
+            groups: Int,
+            closed: Set<String>,
+        ): Int {
+            val next = pattern[at + 1]
+            val after = pattern.getOrNull(at + 2)
+            when {
+                next == 'Q' -> {
+                    val end = pattern.indexOf("\\E", at + 2).let { if (it < 0) pattern.length else it }
+                    var j = at + 2
+                    while (j < end) {
+                        val c = pattern[j]
+                        if (c.isSurrogate()) {
+                            if (inClass) javaOnly(OUTSIDE_BMP_IN_CLASS, "JavaScript reads it as two characters without the u flag")
+                            if (c.isHighSurrogate() && j + 1 < end && pattern[j + 1].isLowSurrogate()) {
+                                appendSupplementary(c, pattern[j + 1])
+                                j += 2
+                                continue
+                            }
+                        }
+                        appendLiteral(c)
+                        j++
+                    }
+                    return minOf(end + 2, pattern.length)
+                }
+
+                next in JAVA_ONLY_ESCAPES -> {
+                    javaOnly("\\$next")
+                }
+
+                (next == 'x' || next == 'b') && after == '{' -> {
+                    javaOnly("\\$next{...}")
+                }
+
+                // Java takes any character after \c and flips one bit; JavaScript takes only a letter, modulo 32.
+                next == 'c' -> {
+                    if (after == null || after !in 'A'..'Z') javaOnly("\\c before anything but A to Z")
+                    append("\\c").append(after)
+                    return at + 3
+                }
+
+                next == 'u' -> {
+                    val unit = pattern.substring(at + 2, minOf(at + 6, pattern.length)).toIntOrNull(16)
+                    if (unit != null && unit in 0xD800..0xDFFF) javaOnly("an escaped surrogate", "write the character itself")
+                    append('\\').append(next)
+                }
+
+                // Java's octal: \0 and one to three digits up to 0377. JavaScript reads more or fewer.
+                next == '0' -> {
+                    var j = at + 2
+                    var value = 0
+                    while (j < pattern.length && j < at + 5 && pattern[j] in '0'..'7' && value * 8 + (pattern[j] - '0') <= 0xFF) {
+                        value = value * 8 + (pattern[j] - '0')
+                        j++
+                    }
+                    append("\\x").append(value.toString(16).padStart(2, '0'))
+                    return j
+                }
+
+                // Java reads as many digits as still name a group and JavaScript splits them its own
+                // way, or reads an octal escape where no group exists; so one digit naming a group.
+                next in '1'..'9' -> {
+                    if (inClass) javaOnly("\\$next in a class")
+                    if (next - '0' > groups) javaOnly("\\$next", "it names no group, and JavaScript reads it as an octal escape")
+                    if (next.toString() !in closed) backReferenceTooEarly("\\$next")
+                    if (after?.isDigit() == true) {
+                        javaOnly("\\$next followed by a digit", "the two dialects split the number differently; write (?:\\$next)$after")
+                    }
+                    append('\\').append(next)
+                }
+
+                next == 'k' && after == '<' -> {
+                    val end = pattern.indexOf('>', at).let { if (it < 0) pattern.length else it }
+                    val name = pattern.substring(at + 3, end)
+                    if (name !in closed) backReferenceTooEarly("\\k<$name>")
+                    append('\\').append(next)
+                }
+
+                next in LINE_TERMINATORS || next in AS_HEX -> {
+                    appendLiteral(next)
+                }
+
+                else -> {
+                    append('\\').append(next)
+                }
+            }
+            return at + 2
+        }
+
+        /** The capturing groups of [pattern], numbered and named, outside classes and quoting. */
+        private fun capturingGroups(pattern: String): Int {
+            var count = 0
+            var i = 0
+            var inClass = false
+            while (i < pattern.length) {
+                val ch = pattern[i]
+                when {
+                    ch == '\\' && pattern.getOrNull(i + 1) == 'Q' -> {
+                        i = pattern.indexOf("\\E", i + 2).let { if (it < 0) pattern.length else it + 1 }
+                    }
+
+                    ch == '\\' -> {
+                        i++
+                    }
+
+                    inClass -> {
+                        if (ch == ']') inClass = false
+                    }
+
+                    ch == '[' -> {
+                        inClass = true
+                    }
+
+                    ch == '(' -> {
+                        val named = pattern.startsWith("(?<", i) && pattern.getOrNull(i + 3)?.isLetter() == true
+                        if (pattern.getOrNull(i + 1) != '?' || named) count++
+                    }
+                }
+                i++
+            }
+            return count
+        }
+
+        private const val OUTSIDE_BMP_IN_CLASS = "a character outside the Basic Multilingual Plane in a class"
+
+        /** A character JavaScript holds as two units, grouped so that a quantifier after it takes both. */
+        private fun StringBuilder.appendSupplementary(
+            high: Char,
+            low: Char,
+        ) {
+            append("(?:").append(high).append(low).append(')')
+        }
+
+        private fun StringBuilder.appendChar(ch: Char) {
+            when (ch) {
+                '/' -> append("\\/")
+                in LINE_TERMINATORS, in AS_HEX -> appendLiteral(ch)
+                else -> append(ch)
+            }
+        }
+
+        private const val LINE_TERMINATORS = "\n\r\u2028\u2029"
+
+        // Datastar's client rewrites `$name` and `@name(` everywhere outside a string, in a regex
+        // literal too, where a quote opens what it takes for a string and hides the signals after
+        // it. In an attribute whose value it reads, such as `data-text`, it also cuts the expression
+        // into statements, and `\` before the closing `/` reads as an escape. A quote or `&` would
+        // also end or change an attribute pasted into a string.
+        private const val AS_HEX = "'\"`&\\$@"
+
+        // A literal `$` is written as `\x24`, so every `$` left in the body is an anchor; before
+        // the client's `\w`, it would rewrite one as a signal, wherever the character came from.
+        private val ANCHOR_BEFORE_WORD = Regex("""\$(?=[A-Za-z0-9_])""")
+
+        /** [ch] as text that matches itself in a JavaScript literal, in a class or out of one. */
+        private fun StringBuilder.appendLiteral(ch: Char) {
+            when {
+                ch == '\n' -> append("\\n")
+                ch == '\r' -> append("\\r")
+                ch == '\u2028' -> append("\\u2028")
+                ch == '\u2029' -> append("\\u2029")
+                ch in AS_HEX -> append("\\x").append(ch.code.toString(16).padStart(2, '0'))
+                ch.isLetterOrDigit() || ch == '_' || ch.code > 0x7F -> append(ch)
+                else -> append('\\').append(ch)
+            }
+        }
+
+        /** A group opened in the pattern; [number] is 0 for one that captures nothing. */
+        private class OpenGroup(
+            val lookbehind: Boolean,
+            val number: Int,
+            val name: String?,
+        )
+
+        // JavaScript matches such a reference as empty. Java fails it on a group's first pass, and
+        // in a repeat matches what the group took on the pass before: (a|b\1)+ takes "aba" in Java only.
+        private fun backReferenceTooEarly(reference: String): Nothing =
+            javaOnly(
+                "$reference before its group has closed",
+                "JavaScript matches it as empty, and Java fails it or, in a repeated group, matches what the group took on the pass before",
+            )
+
+        private fun nothingToRepeat(quantifier: String): Nothing =
+            javaOnly(
+                "a $quantifier with nothing to repeat, at the start, after |, (, an anchor, \\b, \\B or a lookbehind",
+                "JavaScript refuses it",
+            )
+
+        private fun javaOnly(
+            what: String,
+            hint: String? = null,
+        ): Nothing =
+            throw IllegalArgumentException(
+                "$what is Java regex syntax that JavaScript reads differently or refuses" + (hint?.let { ": $it" } ?: ""),
+            )
     }
 }
 
@@ -82,12 +461,30 @@ public data class SignalFilter(
 internal fun Duration.toModifier(): String = "${wholeMilliseconds()}ms"
 
 /**
- * Datastar counts in whole milliseconds. A shorter positive duration would be written as zero,
- * which says something other than what was asked for, so it is refused instead.
+ * The duration in whole milliseconds, a fraction rounded down: 1.5 ms is written as 1 ms.
+ * Datastar's client reads no fraction from a modifier, since it splits one at each `.` and
+ * `__debounce.1.5ms` reaches it as `1` and `5ms`, of which it takes the first, 1 ms. A
+ * positive duration shorter than a millisecond would be written as zero, which says something
+ * other than what was asked for, so it is refused. The browser's timers take a negative wait as
+ * none and wrap one over [Int.MAX_VALUE] milliseconds, about 24.8 days, into a negative one, so
+ * both fire at once and are refused too.
  */
 internal fun Duration.wholeMilliseconds(): Long {
+    require(!isNegative() && this <= Int.MAX_VALUE.milliseconds) {
+        "$this is outside what the browser's timers take: 0 to ${Int.MAX_VALUE}ms"
+    }
     require(!isPositive() || inWholeMilliseconds > 0) { "$this is shorter than a millisecond, the smallest duration Datastar reads" }
     return inWholeMilliseconds
+}
+
+/** Refuse a flag that would be dropped because the duration it belongs to is not set. */
+internal fun requireDuration(
+    duration: Duration?,
+    vararg flags: Pair<String, Boolean>,
+    name: String,
+) {
+    if (duration != null) return
+    flags.firstOrNull { it.second }?.let { throw IllegalArgumentException("${it.first} needs $name, which is not set") }
 }
 
 /**
@@ -103,6 +500,8 @@ public open class TimingModifiers {
     public var throttleTrailing: Boolean = false
 
     internal fun appendTiming(sb: StringBuilder) {
+        requireDuration(debounce, "debounceLeading" to debounceLeading, "debounceNoTrailing" to debounceNoTrailing, name = "debounce")
+        requireDuration(throttle, "throttleNoLeading" to throttleNoLeading, "throttleTrailing" to throttleTrailing, name = "throttle")
         delay?.let { sb.append("__delay.").append(it.toModifier()) }
         debounce?.let {
             sb.append("__debounce.").append(it.toModifier())
@@ -155,12 +554,14 @@ public class IntersectModifiers : TimingModifiers() {
     public var half: Boolean = false
     public var full: Boolean = false
 
-    /** Percentage (0-100) of the element that must be visible. */
+    /** Percentage (0-100) of the element that must be visible. Datastar reads one of [half], [full] and this. */
     public var threshold: Int? = null
     public var viewTransition: Boolean = false
 
     override fun build(): String =
         buildString {
+            // Datastar's client takes full over half over threshold, so a second one would be dropped.
+            require(listOf(half, full, threshold != null).count { it } <= 1) { "half, full and threshold are alternatives; set one" }
             if (once) append("__once")
             if (exit) append("__exit")
             if (half) append("__half")
@@ -184,7 +585,10 @@ public class IntervalModifiers {
 
     internal fun build(): String =
         buildString {
+            requireDuration(duration, "leading" to leading, name = "duration")
             duration?.let {
+                // A zero interval runs the expression as often as the browser's timers allow.
+                require(it.isPositive()) { "duration must be positive, not $it" }
                 append("__duration.").append(it.toModifier())
                 if (leading) append(".leading")
             }
@@ -200,20 +604,26 @@ public class BindModifiers {
      */
     public var case: Case? = null
 
-    /** Bind to a specific element property instead of the default. */
+    /**
+     * Bind to a specific element property instead of the default. The browser lowercases the
+     * modifier and Datastar's client camel-cases it back with its own rules, so a name it cannot
+     * give back, such as `x2y` (read as `x2Y`) or `_value` (read as `Value`), is refused.
+     */
     public var prop: String? = null
 
-    /** Events that sync the element back into the signal. */
+    /**
+     * Events that sync the element back into the signal. Datastar listens to each as the browser
+     * hands it the modifier, so an event with a capital (lowercased) or a `.` (split in two) is refused.
+     */
     public var events: List<String> = emptyList()
 
     internal fun build(): String =
         buildString {
             case?.let { append("__case.").append(it.wire) }
-            // The browser lowercases attribute names and the client camel-cases the modifier back.
-            prop?.let { append("__prop.").append(Casing.kebab(it)) }
+            prop?.let { append("__prop.").append(Casing.bindProp(it)) }
             if (events.isNotEmpty()) {
                 append("__event")
-                events.forEach { append('.').append(it) }
+                events.forEach { append('.').append(Casing.bindEvent(it)) }
             }
         }
 }

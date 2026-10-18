@@ -10,7 +10,7 @@ import kotlin.time.Duration
 
 /**
  * Configuration for the [StreamlordPlugin]. Either hand over a fully built [streamlord], or set
- * [codec] and [maxSignalsLength] and let the plugin build one.
+ * [codec] and [maxSignalsSize] and let the plugin build one.
  */
 public class StreamlordPluginConfig {
     /** A pre-built instance. Takes precedence over the other properties when set. */
@@ -19,7 +19,11 @@ public class StreamlordPluginConfig {
     /** Codec for typed signals. Defaults to the dependency-free built-in codec. */
     public var codec: SignalsCodec? = null
 
-    /** Upper bound for incoming signal payloads: bytes for bodies, characters for the query parameter. */
+    /**
+     * Upper bound for incoming signal payloads: bytes for bodies, characters for the query
+     * parameter. The engine refuses a request line long before the query parameter gets near
+     * it: about 4 KiB on Netty and 8 KiB on CIO, Tomcat and Jetty. Large signals go in a `@post`.
+     */
     public var maxSignalsSize: Int = Streamlord.DEFAULT_MAX_SIGNALS_SIZE
 
     /**
@@ -35,9 +39,11 @@ public class StreamlordPluginConfig {
 
     /**
      * Write an SSE comment whenever a stream has been silent this long, so an idle proxy keeps the
-     * connection open. Any frame resets the wait. Off when null, which is the default.
+     * connection open. Any frame resets the wait. [Streamlord.DEFAULT_HEARTBEAT] unless set; null
+     * turns it off. One stream can take its own, or none, through the `heartbeat` parameter of
+     * `respondDatastar`.
      */
-    public var heartbeat: Duration? = null
+    public var heartbeat: Duration? = Streamlord.DEFAULT_HEARTBEAT
 
     /**
      * Gzip, and only gzip, every stream whose request takes it, flushed event by event so nothing waits. Leave
@@ -47,6 +53,13 @@ public class StreamlordPluginConfig {
      */
     public var compress: Boolean = false
 
+    /**
+     * Refuse signals in a request body that is not declared `application/json`, as Datastar's
+     * client always declares it, so a form on another site cannot post them. On by default; see
+     * [Streamlord.requireJsonContentType].
+     */
+    public var requireJsonContentType: Boolean = true
+
     internal fun build(): Streamlord =
         streamlord ?: Streamlord(
             codec = codec ?: Streamlord.Default.codec,
@@ -55,10 +68,11 @@ public class StreamlordPluginConfig {
             attributePrefixes = attributePrefixes,
             heartbeat = heartbeat,
             compress = compress,
+            requireJsonContentType = requireJsonContentType,
         )
 }
 
-internal val StreamlordKey: AttributeKey<Streamlord> = AttributeKey("Streamlord")
+internal val StreamlordKey: AttributeKey<Streamlord> = AttributeKey("Streamlord", portableTypeInfo<Streamlord>())
 
 /**
  * Installs a configured [Streamlord] into the application, so every `call.respondDatastar { }`

@@ -41,7 +41,9 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
     const s = selectStringArg(site, spec.arg, spec.named) ?? site.args.map((a) => a.string).find((x) => x && x.start < offset && offset <= x.end) ?? null;
     if (!s || offset <= s.start || offset > s.contentEnd + (s.unterminated ? 1 : 0)) return [];
     const text = src.slice(s.contentStart, offset);
-    return [...this.expressionItems(text, document, position, offset - text.length, true), ...this.modifierPropertyItems(src, offset, site.name)];
+    // dataOnSignalPatch also writes the filter, so the call is looked up among the attribute's own names.
+    const patch = catalog.attributesByName.get("on-signal-patch")?.kotlin.includes(site.name) ?? false;
+    return [...this.expressionItems(text, document, position, offset - text.length, true, patch), ...this.modifierPropertyItems(src, offset, site.name)];
   }
 
   /** `selector = "#|"` on any DSL call, or the first argument of removeElements: ids and classes from the workspace. */
@@ -93,7 +95,7 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
     if (inValue) {
       const parsed = parseAttributeName((inValue[1] ?? "").toLowerCase(), prefix);
       if (parsed?.spec && (parsed.spec.valueKind === "expression" || parsed.spec.valueKind === "signal")) {
-        return this.expressionItems(inValue[2] ?? "", document, position, offset - (inValue[2] ?? "").length, parsed.spec.valueKind === "expression");
+        return this.expressionItems(inValue[2] ?? "", document, position, offset - (inValue[2] ?? "").length, parsed.spec.valueKind === "expression", parsed.spec.name === "on-signal-patch");
       }
       return [];
     }
@@ -140,8 +142,9 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
         return item;
       });
     }
-    return parsed.spec.modifiers.map((m) => {
+    return [...parsed.spec.modifiers].sort((x, y) => byName(x.name, y.name)).map((m) => {
       const item = new vscode.CompletionItem(m.name, vscode.CompletionItemKind.Keyword);
+      item.sortText = m.name;
       item.detail = `__${m.name}` + (m.type === "flag" ? "" : m.type === "duration" ? ".<duration>" : m.type === "enum" ? `.<${(m.values ?? []).join("|")}>` : m.type === "int" ? ".<n>" : ".<name>");
       item.range = new vscode.Range(position.translate(0, -current.length), position);
       if (m.type === "duration") item.insertText = new vscode.SnippetString(`${m.name}.\${1:500ms}`);
@@ -152,7 +155,8 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
     });
   }
 
-  private expressionItems(textBefore: string, document: vscode.TextDocument, position: vscode.Position, textStartOffset: number, allowActions: boolean): vscode.CompletionItem[] {
+  /** `patch` is a name only in `data-on-signal-patch`, the one attribute the client hands it to. */
+  private expressionItems(textBefore: string, document: vscode.TextDocument, position: vscode.Position, textStartOffset: number, allowActions: boolean, patchInScope = false): vscode.CompletionItem[] {
     const sig = signalPrefixAt(textBefore, textBefore.length);
     if (sig !== null) {
       const local = this.signals.forFile(document.uri.toString());
@@ -169,7 +173,7 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
     if (!allowActions) return [];
     const act = actionPrefixAt(textBefore, textBefore.length);
     if (act !== null) {
-      return catalog.actions.map((a) => {
+      return [...catalog.actions].sort((x, y) => Number(x.pro) - Number(y.pro) || byName(x.name, y.name)).map((a) => {
         const item = new vscode.CompletionItem("@" + a.name, vscode.CompletionItemKind.Function);
         item.detail = (a.pro ? "Pro · " : "") + a.signature;
         item.documentation = a.doc;
@@ -181,7 +185,7 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
     }
     const scope = /(?:^|[^A-Za-z0-9_$])([a-z]*)$/.exec(textBefore);
     if (scope && (scope[1] ?? "").length > 0) {
-      return ["el", "evt", "patch"].map((v) => new vscode.CompletionItem(v, vscode.CompletionItemKind.Variable));
+      return ["el", "evt", ...(patchInScope ? ["patch"] : [])].map((v) => new vscode.CompletionItem(v, vscode.CompletionItemKind.Variable));
     }
     return [];
   }
@@ -215,4 +219,12 @@ function casingNote(a: AttributeSpec): string {
     default:
       return "the key is used as written, after the browser has lowercased it. Write it in kebab-case; for a name that really has capitals (SVG's `viewBox`), use the object form.";
   }
+}
+
+/**
+ * Actions and modifiers are offered by name, Pro after the rest, as the IntelliJ plugin orders
+ * them; sortText carries the order, since VS Code sorts by it.
+ */
+function byName(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }

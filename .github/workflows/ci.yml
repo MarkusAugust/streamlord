@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    # A release branch collects the next version's pull requests before any of it is released,
+    # so its tip is tested on every push the way master's is.
+    branches: [master, "release/**"]
     tags: ["vscode-v*", "intellij-v*", "v*"]
   pull_request:
   workflow_dispatch:
@@ -26,10 +28,12 @@ jobs:
       intellij: ${{ steps.paths.outputs.intellij }}
       docs: ${{ steps.paths.outputs.docs }}
       image: ${{ steps.paths.outputs.image }}
+      ktlint: ${{ steps.paths.outputs.ktlint }}
     steps:
       # The whole history, because this job's only question is what a commit changed.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Work out which parts the change touches
@@ -38,7 +42,7 @@ jobs:
           set -euo pipefail
 
           everything() {
-            for part in kotlin vscode intellij docs image; do
+            for part in kotlin vscode intellij docs image ktlint; do
               echo "$part=true" >> "$GITHUB_OUTPUT"
             done
             echo "$1"
@@ -66,15 +70,21 @@ jobs:
           echo "Changed:"
           echo "$files" | sed 's/^/  /'
 
-          kotlin=false; vscode=false; intellij=false; docs=false; image=false
+          kotlin=false; vscode=false; intellij=false; docs=false; image=false; ktlint=false
           while IFS= read -r file; do
             [ -z "$file" ] && continue
+            # Any Kotlin file, wherever it lives, and the rules it is held to, at the root or
+            # in an .editorconfig nearer the sources.
+            case "$file" in
+              *.kt|.editorconfig|*/.editorconfig) ktlint=true ;;
+            esac
             case "$file" in
               # This file decides what runs, so a change to it runs everything.
               .github/workflows/*)
-                kotlin=true; vscode=true; intellij=true; docs=true; image=true ;;
+                kotlin=true; vscode=true; intellij=true; docs=true; image=true; ktlint=true ;;
               # The corpus both editors' checks are held to: CorpusTest in the SDK reads it too.
-              editors/vscode/test/fixtures/corpus/*) vscode=true; kotlin=true; intellij=true ;;
+              # And the SSE corpus both inspectors read, SseCorpusTest in streamlord-analysis too.
+              editors/vscode/test/fixtures/corpus/*|editors/vscode/test/fixtures/sse/*) vscode=true; kotlin=true; intellij=true ;;
               editors/vscode/*)   vscode=true ;;
               editors/intellij/*) intellij=true ;;
               # The catalog feeds the analysis, and VS Code's generated custom data.
@@ -83,14 +93,18 @@ jobs:
               # they are Kotlin sources and image content as much as they are prose.
               docs/src/content/docs/*) docs=true; kotlin=true; image=true ;;
               docs/*)             docs=true ;;
+              # Netlify's build of the site, which deploys from master with no other check.
+              netlify.toml)       docs=true ;;
               demo/*)             kotlin=true; image=true ;;
               # The IntelliJ plugin builds streamlord-analysis, and core beneath it, from source.
               streamlord-core/*)  kotlin=true; image=true; intellij=true ;;
               streamlord-analysis/*) kotlin=true; intellij=true ;;
               streamlord-html/*|streamlord-ktor/*|streamlord-json-kotlinx/*)
                 kotlin=true; image=true ;;
-              streamlord-*/*|docs-samples/*|playground/*)
+              streamlord-*/*|docs-samples/*)
                 kotlin=true ;;
+              # The README carries coordinates checkDocSamples verifies, and LICENSE goes into every jar.
+              README.md|LICENSE)  kotlin=true ;;
               # The version catalog and the settings scripts are the plugin's build too.
               gradle/*|gradlew*|*.gradle.kts|gradle.properties)
                 kotlin=true; image=true; intellij=true ;;
@@ -103,8 +117,9 @@ jobs:
             echo "intellij=$intellij"
             echo "docs=$docs"
             echo "image=$image"
+            echo "ktlint=$ktlint"
           } >> "$GITHUB_OUTPUT"
-          echo "Running: kotlin=$kotlin vscode=$vscode intellij=$intellij docs=$docs image=$image"
+          echo "Running: kotlin=$kotlin vscode=$vscode intellij=$intellij docs=$docs image=$image ktlint=$ktlint"
 
   sdk:
     name: Kotlin SDK
@@ -112,14 +127,16 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.kotlin == 'true'
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: 21
 
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
         with:
           cache-provider: basic
 
@@ -128,10 +145,45 @@ jobs:
 
       - name: Upload test reports
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: test-reports
           path: '**/build/reports/tests/**'
+
+  ktlint:
+    name: Kotlin style
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.ktlint == 'true'
+    # The CLI rather than a Gradle plugin: one jar, no new dependency in the build, and it covers
+    # the IntelliJ plugin's sources as well, which are a build of their own. The checksum is the
+    # one GitHub lists for the release asset; a new version needs both changed together.
+    env:
+      KTLINT_VERSION: 1.8.0
+      KTLINT_SHA256: a3fd620207d5c40da6ca789b95e7f823c54e854b7fade7f613e91096a3706d75
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Fetch ktlint
+        run: |
+          set -euo pipefail
+          curl -sSfL -o "$RUNNER_TEMP/ktlint" \
+            "https://github.com/pinterest/ktlint/releases/download/$KTLINT_VERSION/ktlint"
+          echo "$KTLINT_SHA256  $RUNNER_TEMP/ktlint" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/ktlint"
+
+      # Relative globs: ktlint walks from here. The .kts build scripts are left out, as they
+      # are everywhere ktlint is run in this repository.
+      - name: Check the Kotlin sources
+        run: |
+          "$RUNNER_TEMP/ktlint" --relative "**/*.kt" "!**/build/**" "!**/node_modules/**"
 
   vscode:
     name: VS Code extension
@@ -142,9 +194,11 @@ jobs:
       run:
         working-directory: editors/vscode
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: npm
@@ -157,7 +211,7 @@ jobs:
       - run: npx vsce package --no-dependencies
 
       - name: Upload vsix
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: streamlord-vsix
           path: editors/vscode/*.vsix
@@ -171,14 +225,16 @@ jobs:
       run:
         working-directory: editors/intellij
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: 21
 
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
         with:
           cache-provider: basic
 
@@ -186,14 +242,14 @@ jobs:
         run: ./gradlew buildPlugin test verifyPlugin --no-daemon
 
       - name: Upload plugin archive
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: streamlord-intellij
           path: editors/intellij/build/distributions/*.zip
 
       - name: Upload verifier reports
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: intellij-verifier-reports
           path: editors/intellij/build/reports/pluginVerifier/**
@@ -207,11 +263,15 @@ jobs:
       run:
         working-directory: docs
     steps:
-      - uses: actions/checkout@v7
-
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          bun-version: latest
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          # The Bun that wrote docs/bun.lock (lockfile version 2); a floating tag is a build nobody has run.
+          # BUN_VERSION in netlify.toml is the same pin for the build that deploys.
+          bun-version: 1.4.3
 
       - run: bun install --frozen-lockfile
 
@@ -230,28 +290,34 @@ jobs:
   demo-image:
     name: streamlord-live image
     runs-on: ubuntu-latest
-    # Only from master. A pull request has already had the service compiled and its
-    # examples checked by the sdk job; pushing an image nobody deploys is noise.
-    if: github.ref == 'refs/heads/master' && needs.changes.outputs.image == 'true'
+    # Built and run on master, on a release branch and on a release tag; pushed and deployed
+    # from master alone, by demo-deploy. A release branch is where a native-image failure
+    # should surface, before anything is tagged, and the tag run is what publish-maven-central
+    # waits for. A pull request has already had the service compiled and its examples checked
+    # by the sdk job. vscode-v tags start with refs/tags/v too, hence the exception.
+    if: >-
+      (github.ref == 'refs/heads/master'
+        || startsWith(github.ref, 'refs/heads/release/')
+        || (startsWith(github.ref, 'refs/tags/v') && !startsWith(github.ref, 'refs/tags/vscode-v')))
+      && needs.changes.outputs.image == 'true'
     needs: [changes, sdk]
+    # Read-only, on every ref: the push is a job of its own so that packages: write exists
+    # only in a run that pushes. A permission cannot be given by condition.
     permissions:
       contents: read
-      packages: write
-    # On the job, not the step: the secrets context is not available in a step's `if`, and
-    # a step's own env is not reliably visible to its own condition.
-    env:
-      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # GraalVM rather than Temurin: this job compiles the service to a native image.
-      - uses: graalvm/setup-graalvm@v1
+      - uses: graalvm/setup-graalvm@27b360dbb857524eaf0b4c4cef364d38e5b4f173 # v1.6.7
         with:
           java-version: "21"
           distribution: graalvm-community
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
         with:
           cache-provider: basic
 
@@ -419,35 +485,101 @@ jobs:
             && { echo "::error::the remove carried elements, which it must not"; exit 1; }
           echo "  a remove went out as a selector and a mode"
 
-      # Known vulnerabilities in the image that is about to be pushed, and the last point at
-      # which one can still be kept out of production. The binary is scanned in its sources
-      # by security.yml, so what this mostly sees is the Debian under distroless.
+      # Known vulnerabilities in the image. On master this is the last point at which one can
+      # still be kept out of production; on a release branch it is the warning before
+      # anything is tagged. The binary is scanned in its sources by security.yml, so what
+      # this mostly sees is the Debian under distroless.
       #
       # Only HIGH and CRITICAL, and only those with a fixed version: an advisory with no fix
       # is one this build cannot act on, and failing over it would hold every deployment
       # hostage to Debian's schedule. security.yml lists the rest in the Security tab.
       #
+      # On a tag it reports and does not fail. The image is not what a tag publishes, and a
+      # base-image advisory, or a scanner that cannot fetch its database, should not hold a
+      # Maven Central release back; the release branch has already shown the finding.
+      # continue-on-error rather than exit-code, because exit-code governs findings only.
+      #
       # Pinned to a commit; security.yml says why.
       - name: Scan the image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        continue-on-error: ${{ startsWith(github.ref, 'refs/tags/') }}
         with:
           image-ref: ghcr.io/${{ steps.owner.outputs.name }}/streamlord-live:${{ github.sha }}
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
 
-      - uses: docker/login-action@v4
+      # The image that was run and scanned above, handed to demo-deploy as it is.
+      - name: Save the image
+        if: github.ref == 'refs/heads/master'
+        env:
+          IMAGE: ghcr.io/${{ steps.owner.outputs.name }}/streamlord-live
+        run: docker save "$IMAGE:$GITHUB_SHA" "$IMAGE:latest" -o streamlord-live.tar
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: github.ref == 'refs/heads/master'
+        with:
+          name: streamlord-live-image
+          path: streamlord-live.tar
+          retention-days: 1
+
+  demo-deploy:
+    name: streamlord-live deploy
+    runs-on: ubuntu-latest
+    # Everything in this job reaches the outside world, and only master does that.
+    if: github.ref == 'refs/heads/master'
+    needs: [demo-image]
+    # Two pushes to master close together deploy one after the other, never side by side, and
+    # the second waits for the first rather than cancelling it halfway through a deploy.
+    concurrency:
+      group: demo-deploy
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: write
+    # Whether to deploy, on the job: the secrets context is not available in a step's `if`,
+    # and a step's own env is not reliably visible to its own condition. The token itself
+    # goes to the two Railway steps alone, below; nothing else in the job holds it.
+    env:
+      HAS_RAILWAY: ${{ secrets.RAILWAY_TOKEN != '' }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: streamlord-live-image
+
+      - name: Load the image
+        run: docker load -i streamlord-live.tar
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push the image
+      # The group above deploys one run at a time, but not in push order: an older run whose
+      # image took longer reaches this job after a newer one has deployed, and GitHub keeps
+      # one waiting job per group, cancelling the one already waiting. A commit master has
+      # moved past is not pushed or deployed, and the job stays green, since nothing failed.
+      - name: Check that this commit is still master's tip
+        id: tip
         env:
-          IMAGE: ghcr.io/${{ steps.owner.outputs.name }}/streamlord-live
+          GH_TOKEN: ${{ github.token }}
         run: |
-          docker push "$IMAGE:$GITHUB_SHA"
-          docker push "$IMAGE:latest"
+          set -euo pipefail
+          tip=$(gh api "repos/$GITHUB_REPOSITORY/commits/master" --jq .sha)
+          if [ "$tip" = "$GITHUB_SHA" ]; then
+            echo "latest=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "latest=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::master is at $tip now, not $GITHUB_SHA; leaving the deployment to the newer run"
+          fi
+
+      - name: Push the image
+        if: steps.tip.outputs.latest == 'true'
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/streamlord-live"
+          docker push "$image:$GITHUB_SHA"
+          docker push "$image:latest"
 
       # Railway pins the digest it deployed with, so a new :latest in the registry is a
       # tag nothing is watching: the service kept answering from an image two commits
@@ -456,9 +588,11 @@ jobs:
       #
       # Skipped, not failed, when the secret is absent, so a fork still builds an image.
       - name: Redeploy streamlord-live
-        if: env.RAILWAY_TOKEN != ''
+        if: steps.tip.outputs.latest == 'true' && env.HAS_RAILWAY == 'true'
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
-          npm install -g @railway/cli
+          npm install -g @railway/cli@5.70.0
           railway redeploy --service streamlord-live --from-source --yes
 
       # redeploy returns as soon as Railway accepts the request, and the container it
@@ -467,7 +601,7 @@ jobs:
       # that never started once passed this step. So it waits for /health to name the
       # commit being deployed, and nothing else counts as arrived.
       - name: Check that the deployment answers
-        if: env.RAILWAY_TOKEN != ''
+        if: steps.tip.outputs.latest == 'true' && env.HAS_RAILWAY == 'true'
         env:
           SERVICE: https://streamlord-live-production.up.railway.app
         run: |
@@ -544,13 +678,18 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/vscode-v')
     needs: [vscode]
     runs-on: ubuntu-latest
+    # The release environment holds the publishing secrets and takes the release tags, and master and
+    # the release branches for verify-signing, which is run by hand.
+    environment: release
     defaults:
       run:
         working-directory: editors/vscode
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: npm
@@ -576,18 +715,23 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/intellij-v')
     needs: [intellij]
     runs-on: ubuntu-latest
+    # The release environment holds the publishing secrets and takes the release tags, and master and
+    # the release branches for verify-signing, which is run by hand.
+    environment: release
     defaults:
       run:
         working-directory: editors/intellij
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: 21
 
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
         with:
           cache-provider: basic
 
@@ -596,6 +740,18 @@ jobs:
           tag="${GITHUB_REF_NAME#intellij-v}"
           version="$(grep '^pluginVersion=' gradle.properties | cut -d= -f2)"
           if [ "$tag" != "$version" ]; then echo "tag $tag != pluginVersion $version"; exit 1; fi
+
+      # The plugin is signed when the three certificate secrets are set, and the signing task is
+      # silently skipped when they are not. An unsigned release is not what the workflow says it
+      # does, so it stops here instead.
+      - name: Check that the signing certificate is there
+        env:
+          HAS_CERTIFICATE: ${{ secrets.JETBRAINS_CERTIFICATE_CHAIN != '' && secrets.JETBRAINS_PRIVATE_KEY != '' && secrets.JETBRAINS_PRIVATE_KEY_PASSWORD != '' }}
+        run: |
+          if [ "$HAS_CERTIFICATE" != "true" ]; then
+            echo "::error::JETBRAINS_CERTIFICATE_CHAIN, JETBRAINS_PRIVATE_KEY and JETBRAINS_PRIVATE_KEY_PASSWORD must all be set; without them publishPlugin uploads an unsigned plugin."
+            exit 1
+          fi
 
       - name: Publish to the JetBrains Marketplace
         run: ./gradlew publishPlugin --no-daemon
@@ -608,21 +764,30 @@ jobs:
   publish-maven-central:
     name: Publish to Maven Central
     if: startsWith(github.ref, 'refs/tags/v') && !startsWith(github.ref, 'refs/tags/vscode-v')
-    needs: [sdk]
+    # The image too: a release is tagged before it reaches master, so this run is the first
+    # place the native image is built from the released commit, and nothing goes to Maven
+    # Central until it has compiled and answered.
+    needs: [sdk, demo-image]
     runs-on: ubuntu-latest
+    # The release environment holds the publishing secrets and takes the release tags, and master and
+    # the release branches for verify-signing, which is run by hand.
+    environment: release
     # On this job alone, because it is the only one that writes anything to the repository:
-    # the release it announces at the end. The other seven keep the read-only default.
+    # the release it announces at the end. The others keep the read-only default, apart from
+    # demo-deploy, which writes to the container registry.
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: 21
 
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
         with:
           cache-provider: basic
 
@@ -702,15 +867,20 @@ jobs:
     name: Verify signing secrets (manual)
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    # The signing key lives in the release environment, so a run from a branch the environment
+    # does not take stops here, before the key is read.
+    environment: release
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: 21
 
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
         with:
           cache-provider: basic
 

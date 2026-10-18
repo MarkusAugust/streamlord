@@ -18,12 +18,14 @@ class SearchEchoTest {
         testApplication {
             application { live() }
 
+            // A word no docs page holds, so the reply echoes the query instead of listing hits.
             val body =
                 client
-                    .get("/search?datastar=%7B%22query%22%3A%22%3Cscript%3Ealert(1)%3C%2Fscript%3E%22%7D")
+                    .get("/search?datastar=%7B%22query%22%3A%22%3Cscript%3Ezqxjvw()%3C%2Fscript%3E%22%7D")
                     .bodyAsText()
 
-            assertTrue(body.contains("&lt;script&gt;alert(1)&lt;/script&gt;"), body)
+            assertTrue(body.contains("Nothing matches"), "the reply listed hits instead of echoing the query: $body")
+            assertTrue(body.contains("&lt;script&gt;zqxjvw()&lt;/script&gt;"), body)
             assertFalse(body.contains("<script>"), "the query reached the page as markup")
         }
 }

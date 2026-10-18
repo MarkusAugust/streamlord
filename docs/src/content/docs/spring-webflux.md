@@ -25,9 +25,9 @@ event. Return the bare flow from a controller and Spring sets the content type a
 header, so prefer the response. Everything before these is your flow, and everything after is
 Spring's.
 
-The frames are written by Spring's own encoder, so they are spelled Spring's way: `event:` with
-no space after the colon, and `id:` ahead of `event:`. The fields and the data are the ones Ktor
-and WebMVC send, and the Datastar client reads both spellings alike.
+The frames are written by Spring's own encoder, so they are spelled Spring's way: no space after
+any colon, `event:datastar-patch-signals`, and `id:` ahead of `event:`. The fields and the data
+are the ones Ktor and WebMVC send, and the Datastar client reads both spellings alike.
 
 ## The guard
 
@@ -46,9 +46,10 @@ class CounterController(private val streamlord: Streamlord) {
 }
 ```
 
-Not as a parameter of the handler method. Spring builds a new default `Streamlord` for a
-parameter of that type instead of injecting your bean, so the guard you switched on would be off
-again and nothing would say so.
+Not as a parameter of the handler method. Spring tries to build a new `Streamlord` for a
+parameter of that type instead of injecting your bean, fails on the constructor, and answers
+every request to that handler with `500` and a `BeanInstantiationException`, as
+[on WebMVC](/spring-webmvc/).
 
 ## Reading signals
 
@@ -58,6 +59,14 @@ to the codec yourself. The protocol rule for *where* the signals live is the sam
 only the plumbing differs. A codec that cannot read them throws `SignalsDecodeException`, a `500`
 unless you map it: `@Import(StreamlordExceptionHandler::class)` answers it with `400`, as on
 WebMVC.
+
+The body never passes through `readSignals` here, so its check of the `Content-Type` is yours.
+Declare the mapping `consumes = ["application/json"]`, so a form on another site cannot post
+signals to it, as [Security](/security/#forms-from-other-sites) explains; Spring answers anything
+else with `415`. Nor does the limit of 64 levels of nesting apply. Jackson refuses a body nested
+past its own limit, by default 500 levels in Jackson 3 and 1000 in Jackson 2, with `SignalsDecodeException`.
+kotlinx has no limit: it reads what the stack holds, and turns the `StackOverflowError` of a body
+nested deeper than that into `SignalsDecodeException`.
 
 ## Cancellation
 

@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.test
 
+import io.github.markusaugust.streamlord.core.DatastarEventValidationException
 import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.domain.ExecuteScript
 import io.github.markusaugust.streamlord.core.domain.PatchElements
@@ -7,6 +8,7 @@ import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.core.protocol.SseEncoder
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
 /** The assertions against what the Datastar 1.0.4 client ends up holding for the same stream. */
@@ -41,11 +43,16 @@ class AsTheBrowserHoldsItTest {
     }
 
     @Test
-    fun `a key that holds a dot is found`() {
-        val events = stream(PatchSignals("""{"a.b":1,"c":{"d.e":2}}"""))
-
-        events.assertSignal("a.b", 1)
-        events.assertSignal("c.d.e", 2)
+    fun `a key the client cannot hold fails where it is read`() {
+        // Streamlord can no longer send one; another server can, and the client would lose it.
+        for (key in listOf("a.b", "__proto__", "constructor")) {
+            val failure =
+                assertFailsWith<DatastarEventValidationException>(key) {
+                    datastarEvents("event: datastar-patch-signals\ndata: signals {\"c\":{\"$key\":{}}}\n\n")
+                }
+            assertTrue("'$key'" in failure.message.orEmpty(), failure.message)
+        }
+        stream(PatchSignals("""{"c":{"d":{"e":2}}}""")).assertSignal("c.d.e", 2)
     }
 
     @Test
@@ -54,8 +61,13 @@ class AsTheBrowserHoldsItTest {
     }
 
     @Test
-    fun `signals that are not json fail the assertion, not the test run`() {
-        assertFailsWith<AssertionError> { stream(PatchSignals("{count: 1}")).assertSignal("count", 1) }
+    fun `signals that are not json fail where they are read`() {
+        // Streamlord can no longer send them; another server can, and the client would run them.
+        val failure =
+            assertFailsWith<DatastarEventValidationException> {
+                datastarEvents("event: datastar-patch-signals\ndata: signals {count: 1}\n\n")
+            }
+        assertTrue("runs signals that are not JSON as JavaScript" in failure.message.orEmpty(), failure.message)
     }
 
     @Test
@@ -69,5 +81,26 @@ class AsTheBrowserHoldsItTest {
     @Test
     fun `markup is compared as the wire carries it`() {
         stream(PatchElements("<p id=\"a\">one\r\ntwo</p>")).assertPatchElements(elements = "<p id=\"a\">one\r\ntwo</p>")
+    }
+
+    // signals.ts mergeInner: an index past the end extends the array, and null leaves a hole.
+    // The client reads a hole, and a null it holds, as an empty string: that is what `$list[1]` gives and what `@post` sends.
+    @Test
+    fun `a patch onto an array extends it, and a hole reads as an empty string as it does in the client`() {
+        val events =
+            stream(
+                PatchSignals("""{"list":["a","b","c"]}"""),
+                PatchSignals("""{"list":{"5":"x"}}"""),
+                PatchSignals("""{"list":{"1":null,"01":"never","name":"never"}}"""),
+            )
+
+        events.assertSignal("list", listOf("a", "", "c", "", "", "x"))
+    }
+
+    @Test
+    fun `an index far past the end fails rather than fill memory`() {
+        val events = stream(PatchSignals("""{"list":["a"]}"""), PatchSignals("""{"list":{"100000000":"x"}}"""))
+
+        assertFailsWith<AssertionError> { events.assertSignal("list", listOf("a")) }
     }
 }

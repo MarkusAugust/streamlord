@@ -33,7 +33,7 @@ public class CspNonceConfig {
     public var reportOnly: Boolean = false
 }
 
-internal val CspNonceKey: AttributeKey<String> = AttributeKey<String>("StreamlordCspNonce")
+internal val CspNonceKey: AttributeKey<String> = AttributeKey("StreamlordCspNonce", portableTypeInfo<String>())
 
 /**
  * Generates one CSP nonce per call, writes the policy header from it, and hands the same value

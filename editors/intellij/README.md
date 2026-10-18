@@ -30,6 +30,23 @@ function that returns HTML, a `val` holding a fragment), and in HTML and templat
   `$count-1`), which Datastar swallows into one signal name. Both come with the fix. In the DSL
   the SDK writes a camelCase key correctly on its own, and a weak warning on the call shows what
   goes on the wire.
+- What Datastar's own rewrite of an expression does that JavaScript would not: a `$name` or
+  `@name(` in the text of a template literal that also holds a `${...}`, or inside a regular
+  expression, is rewritten there too; a `'` in a comment, a regular expression or a template
+  pairs with a later quote, and the `$name` between them stays a JavaScript variable; `$år` is no
+  signal, since only ASCII follows a `$`; and `@get` without its parenthesis is a syntax error.
+- Signal names Datastar's client cannot hold or no `$name` reaches: `__proto__` anywhere in the
+  name, `constructor` or another property of `Object.prototype` with more of the name or an object
+  under it (`data-signals:constructor.x`), also once `__case` has turned the key into it, a `$` in
+  `data-bind="$user"`, and a letter beyond ASCII, where the message names the bracket form,
+  `$['år']`, that does reach it. `data-signals:constructor="1"` is held, and says nothing.
+- Values the client evaluates or splits: a filter of `data-json-signals` or
+  `data-on-signal-patch-filter` that does not compile or reads a signal, a pattern written as a
+  string with flags after its last slash, `'/^user/i'`, there or in the `filterSignals` of an
+  action, where the client cuts one `/` from each end and matches the `/i` as text (`'/^user/'`
+  works as it is), `data-computed` without a key
+  whose value is sure to be no function, and a `;` inside brackets in a value that is read, where
+  the client splits it and loses the value.
 
 A string counts as HTML when it opens with a tag, a comment or a doctype, or when it carries
 `@Language("HTML")` or a `// language=HTML` comment. Multi-dollar literals (`$$"""..."""`,
@@ -54,8 +71,12 @@ has no KDoc to show.
 
 **Highlighting** of Datastar expressions inside DSL strings and HTML strings, and of `data-*`
 attributes in HTML: prefix, plugin, key, modifiers and modifier arguments each get their own
-colour, and the attribute value is coloured as a Datastar expression. Only the Datastar tokens
-are coloured; your theme keeps everything else. Settings | Editor | Color Scheme | Streamlord.
+colour, and the attribute value is coloured as a Datastar expression. The plugin brings no colours
+of its own: each token takes the colour your theme gives a standard one, a signal that of a static
+field, a backend action such as `@get` that of a keyword, and any other action that of a function
+call. IntelliJ's own schemes give a function call and a class name no colour, so there an action,
+an attribute key and a modifier argument read as plain text. Settings | Editor | Color Scheme |
+Streamlord lets you give any of them one.
 
 **HTML injection** into Kotlin strings that open with a tag but carry no `@Language("HTML")`, so
 tags complete and close as in an HTML file. Streamlord's own parameters carry the annotation
@@ -72,7 +93,11 @@ alone: an attribute value that contains it cannot be judged before rendering.
 
 **Stream Inspector** (the Streamlord tool window): connect to a running endpoint with a method,
 signals and headers; every SSE event arrives decoded, and the signal store is kept exactly as
-the client would keep it. Non-SSE Datastar responses are shown with their `datastar-*` headers.
+the client would keep it.
+It asks as Datastar's client does, with the same `Accept`, and reads what the client reads: a
+200 that is not HTML, JSON or JavaScript is decoded as a stream, whatever its `Content-Type`. Any
+other response is shown with its `datastar-*` headers and up to 1 MiB of its body; a
+`text/event-stream` response with any status but 200 is not read, as the client reads none.
 
 - **Saved requests** live in `.streamlord/inspector.json` in the project, the same file the VS
   Code extension uses (commit it to share with the team, or ignore it). Save one with **Save**,
@@ -143,7 +168,8 @@ Settings | Tools | Streamlord:
 | Gutter icons on routes | on | "Open in Stream Inspector" on Ktor and Spring routes. |
 
 The inspections are under Settings | Editor | Inspections | Streamlord, one per family
-(interpolation, expression, attribute, key casing, patch markup), each with its own severity.
+(interpolation, expression, attribute, signal no file defines, key casing, patch markup), each
+with its own severity.
 
 ## Datastar Pro
 
@@ -171,6 +197,9 @@ The plugin is published to the JetBrains Marketplace from CI only, never from a 
 machine. Bump `pluginVersion` in `gradle.properties`, add the release to `CHANGELOG.md`, commit,
 then push a tag `intellij-v<version>`. The `publish-intellij` job checks that the tag matches,
 builds, tests, verifies against the supported IDE releases and runs `publishPlugin` with the
-`JETBRAINS_MARKETPLACE_TOKEN` repository secret (a Marketplace permanent token for the
-`MarkusAugust` vendor); `JETBRAINS_CERTIFICATE_CHAIN`, `JETBRAINS_PRIVATE_KEY` and
-`JETBRAINS_PRIVATE_KEY_PASSWORD` sign the archive when present.
+`JETBRAINS_MARKETPLACE_TOKEN` secret of the `release` environment (a Marketplace permanent token
+for the `MarkusAugust` vendor). `JETBRAINS_CERTIFICATE_CHAIN`, `JETBRAINS_PRIVATE_KEY` and
+`JETBRAINS_PRIVATE_KEY_PASSWORD` sign the archive, and all three are required: when one is
+missing, the job stops before `publishPlugin` rather than upload an unsigned plugin. Which branch
+the bump goes on, and when the tag may be pushed, is in
+[the repository README](https://github.com/MarkusAugust/streamlord#building-and-releasing).

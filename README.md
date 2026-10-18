@@ -60,9 +60,13 @@ get("/feed") {
 }
 ```
 
-Both send the same headers and the same bytes. The first leaves the flushing, the line splitting,
-the selector rules, the JSON and the headers to you; [the introduction](https://streamlord-docs.netlify.app/introduction/)
-lists what each of those costs.
+Both send the same bytes, and the same headers to a request that keeps the connection open. To
+one whose `Connection` header asks to close it, the first still sends `keep-alive` on CIO, Netty
+and Tomcat, where Tomcat puts its own `close` beside it, and `respondDatastar` does not; Jetty
+drops the `keep-alive` itself, so there the two match. The first leaves the flushing, the line
+splitting, the selector rules, the JSON and the headers to you;
+[the introduction](https://streamlord-docs.netlify.app/introduction/) lists what each of those
+costs.
 
 ## Three ways to write markup
 
@@ -86,8 +90,8 @@ kotlinx.html DSL.
 
 ```kotlin sample=none
 dependencies {
-    implementation("io.github.markusaugust.streamlord:streamlord-ktor:0.12.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-html:0.12.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-ktor:0.13.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-html:0.13.0")
 }
 ```
 
@@ -129,11 +133,11 @@ fails when the code no longer matches it. That catches a change that compiles an
 code built against the previous release. After a change you meant, run
 `./gradlew updateKotlinAbi` and commit the dump with it.
 
-Releases go to Maven Central from CI only: bump `version` in `gradle.properties`, commit, push
-a tag `v<version>`. The `publish-maven-central` job checks that the tag matches, then signs and
-publishes every module under `io.github.markusaugust.streamlord` through the Central Portal
-with automatic release. The VS Code extension has its own tag, `vscode-v<version>`, and the
-IntelliJ plugin `intellij-v<version>`.
+Releases go to Maven Central from CI only, from a tag `v<version>` on the release branch. The
+`publish-maven-central` job checks that the tag matches, then signs and publishes every module
+under `io.github.markusaugust.streamlord` through the Central Portal with automatic release.
+The VS Code extension has its own tag, `vscode-v<version>`, and the IntelliJ plugin
+`intellij-v<version>`. [RELEASING.md](RELEASING.md) has the branch model and every step.
 
 ## Running the documentation site locally
 
@@ -167,15 +171,15 @@ pages show.
 
 MIT. Take it, wield it, and may your streams never buffer. It costs nothing, and every released
 version stays MIT: that permission cannot be withdrawn, not even by me. Use it commercially,
-change it, ship it inside something closed. The one condition is that the copyright notice
-travels with it.
+change it, ship it inside something closed. The one condition is that the copyright notice and
+the licence text travel with it, and every jar carries both as `META-INF/LICENSE`.
 
 The name Streamlord and the mark are not part of that grant. Fork the code freely; do not call
 the result Streamlord.
 
 Contributions: issues are always welcome. Pull requests are taken after a conversation, and
 whoever contributes signs [CLA.md](CLA.md). The whole picture is on
-[the documentation site](https://streamlord.sobernetics.no/licence/).
+[the documentation site](https://streamlord-docs.netlify.app/licence/).
 
 *Gorvek, Sarn, Gallowmark and every other name in this grimoire are our own
 invention. Any resemblance to legends told at other tables is the mead's doing.*
