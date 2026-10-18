@@ -71,7 +71,8 @@ public fun HTMLTag.dataSignals(
     ifMissing: Boolean = false,
 ) {
     val (key, mod) = Casing.key(Casing.signalName(name), case, Case.CAMEL)
-    attributes[ds("signals:" + Casing.heldKey(name, "$key${signalMods(mod, ifMissing)}"))] = ExpressionGuard.check(expression)
+    attributes[ds("signals:" + Casing.heldKey(name, Casing.withModifiers(name, key, signalMods(mod, ifMissing))))] =
+        ExpressionGuard.check(expression)
 }
 
 /**
@@ -145,7 +146,7 @@ public fun HTMLTag.dataComputed(
     case: Case? = null,
 ) {
     val (key, mod) = Casing.key(Casing.signalName(name), case, Case.CAMEL)
-    attributes[ds("computed:" + Casing.heldKey(name, "$key${caseMod(mod)}"))] = ExpressionGuard.check(expression)
+    attributes[ds("computed:" + Casing.heldKey(name, Casing.withModifiers(name, key, caseMod(mod))))] = ExpressionGuard.check(expression)
 }
 
 /** `data-json-signals`: renders the signal store as JSON into the element. Handy while debugging. */
@@ -186,7 +187,7 @@ public fun HTMLTag.dataOn(
     val mods = OnModifiers().apply(modifiers)
     val (key, mod) = Casing.key(event, mods.case, Case.KEBAB)
     mods.case = mod
-    attributes[ds("on:$key${mods.build()}")] = ExpressionGuard.check(expression)
+    attributes[ds("on:" + Casing.withModifiers(event, key, mods.build()))] = ExpressionGuard.check(expression)
 }
 
 public fun HTMLTag.dataOnClick(
@@ -285,8 +286,10 @@ public fun HTMLTag.dataRef(
 }
 
 /**
- * `data-indicator="signal"`: a boolean signal that is `true` while a fetch is in flight. Written
- * as `data-indicator:signal__case.x` when [case] is set; see [signalNameAttribute].
+ * `data-indicator="signal"`: a boolean signal that is `true` while a fetch started by this same
+ * element is in flight; Datastar's client counts no other, not even one from an element inside
+ * it, so put it on the element whose action fetches. Written as `data-indicator:signal__case.x`
+ * when [case] is set; see [signalNameAttribute].
  */
 public fun HTMLTag.dataIndicator(
     signal: String,
@@ -311,7 +314,7 @@ private fun HTMLTag.signalNameAttribute(
         attributes[ds("$attribute${modifiers(null)}")] = Casing.camel(Casing.signalName(name))
     } else {
         val (key, mod) = Casing.key(Casing.signalName(name), case, Case.CAMEL)
-        attributes[ds("$attribute:" + Casing.heldKey(name, "$key${modifiers(mod)}"))] = ""
+        attributes[ds("$attribute:" + Casing.heldKey(name, Casing.withModifiers(name, key, modifiers(mod))))] = ""
     }
 }
 
@@ -336,8 +339,15 @@ public fun HTMLTag.dataClass(
     expression: String,
     case: Case? = null,
 ) {
-    val (key, mod) = Casing.key(name, case, Case.KEBAB)
-    attributes[ds("class:$key${caseMod(mod)}")] = ExpressionGuard.check(expression)
+    val (key, mod) =
+        Casing.key(
+            name,
+            case,
+            Case.KEBAB,
+            "Write it in one case, or, for a class you cannot rename, use the object form, " +
+                "dataClass(\"{'$name': ...}\"), whose keys Datastar uses as written",
+        )
+    attributes[ds("class:" + Casing.withModifiers(name, key, caseMod(mod)))] = ExpressionGuard.check(expression)
 }
 
 /** `data-style="{property: expression}"`. */

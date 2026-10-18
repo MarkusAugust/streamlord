@@ -327,6 +327,14 @@ With neither, the header is left out: outside a request Spring MVC is handling, 
 the thread it resumes on. Pass the request there. Tomcat drops connection headers from requests
 over HTTP/2 but not from responses, and curl and Node refuse a response that carries one.
 
+On Spring the servlet engine has a say too. The adapter sets the header only when the request
+asked neither for keep-alive nor to close. Tomcat answers a request that asked for keep-alive
+with its own `Connection: keep-alive`, and one that asked to close with `Connection: close`. It
+also closes a connection on its own, on the 100th request on it by default
+(`server.tomcat.max-keep-alive-requests`); a stream that is that request carries both
+`Connection: keep-alive` and `Connection: close`, and Tomcat closes the connection after it.
+Jetty never sends `Connection: keep-alive` on a stream, whatever the request asked.
+
 On WebFlux the headers belong to the response and a `Flow` is only its body. Return the bare flow
 from `asServerSentEvents` and Spring sets the content type and nothing else, so behind nginx the
 events are held back until the stream ends. `asDatastarResponse` returns the same flow with both

@@ -29,6 +29,10 @@ public class JsonObject(
     Map<String, JsonValue> {
     private val fields: Map<String, JsonValue> = LinkedHashMap(fields)
 
+    // Set by mergePatchAsClient once it has this object in JavaScript's key order all the way
+    // down, so that the next fold need not look again. Only ever goes from false to true.
+    internal var jsOrdered: Boolean = false
+
     override val entries: Set<Map.Entry<String, JsonValue>> get() = fields.entries
     override val keys: Set<String> get() = fields.keys
     override val size: Int get() = fields.size
@@ -91,6 +95,9 @@ public class JsonArray(
 ) : JsonValue,
     List<JsonValue> by items.toList() {
     private val items: List<JsonValue> = items.toList()
+
+    // As on JsonObject: every object inside is in JavaScript's key order.
+    internal var jsOrdered: Boolean = false
 
     public fun strings(): List<String> = mapNotNull { (it as? JsonString)?.value }
 

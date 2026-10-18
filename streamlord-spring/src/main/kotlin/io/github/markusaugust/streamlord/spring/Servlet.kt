@@ -67,9 +67,10 @@ import kotlin.time.Duration
  *   `suspend` controller no longer finds once it has suspended. With
  *   [Streamlord.compress] on, the stream is gzipped when this request's `Accept-Encoding` takes
  *   it; without the request, it is not.
- * @param timeout How long Spring lets this stream run before it cuts it, in place of the
+ * @param timeout How long Spring lets this stream run before it ends it, in place of the
  *   application's `spring.mvc.async.request-timeout`, whose own default is the container's 30
- *   seconds. [Duration.INFINITE] lifts the limit, which is safe only with a heartbeat, on by
+ *   seconds. Tomcat and Jetty then end the response cleanly, as if the stream had finished, so
+ *   Datastar's client does not reconnect. [Duration.INFINITE] lifts the limit, which is safe only with a heartbeat, on by
  *   default: without one, a client that vanished without closing its connection holds the stream's
  *   thread for good. `null`, the default, leaves Spring's setting alone. The container checks for
  *   timeouts about once a second, so one lands up to a second late. One that is not positive throws
@@ -327,16 +328,23 @@ internal fun HttpServletResponse.prepareStream(request: HttpServletRequest?): Bo
 /**
  * Whether the stream may say `Connection: keep-alive`: an HTTP/1.1 request that did not ask to
  * close. HTTP/2 has no such header, and a client that sent `Connection: close` is not contradicted.
+ * One that asked for keep-alive itself gets Tomcat's answer, which comes on top of a header set
+ * here: `Connection: keep-alive, keep-alive`.
+ *
+ * Tomcat may still close the connection on its own, after the header is set and out of sight of
+ * the servlet API: on the request that reaches `maxKeepAliveRequests`, the 100th on a connection
+ * by default, it adds `Connection: close`, and the response carries both; Tomcat closes the
+ * connection after it all the same. Jetty drops the header from every response.
  */
 private fun wantsKeepAlive(request: HttpServletRequest?): Boolean {
     if (request == null || !request.protocol.equals("HTTP/1.1", ignoreCase = true)) return false
-    val closing =
+    val tokens =
         request
             .getHeaders("Connection")
             .toList()
             .flatMap { it.split(',') }
-            .any { it.trim().equals("close", ignoreCase = true) }
-    return !closing
+            .map { it.trim() }
+    return tokens.none { it.equals("close", ignoreCase = true) || it.equals("keep-alive", ignoreCase = true) }
 }
 
 /**

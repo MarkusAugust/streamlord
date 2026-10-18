@@ -107,6 +107,7 @@ public final class io/github/markusaugust/streamlord/html/Casing {
 	public final fun reference (Ljava/lang/String;)Ljava/lang/String;
 	public final fun signalName (Ljava/lang/String;)Ljava/lang/String;
 	public final fun validate (Ljava/lang/String;)Ljava/lang/String;
+	public final fun withModifiers (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
 }
 
 public final class io/github/markusaugust/streamlord/html/DatastarAttributes {

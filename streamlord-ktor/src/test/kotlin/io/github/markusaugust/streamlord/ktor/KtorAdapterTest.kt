@@ -247,6 +247,36 @@ class KtorAdapterTest {
             assertEquals("none", client.get("/none").bodyAsText())
         }
 
+    // Ktor's own RequestAlreadyConsumedException said nothing of where the signals went; Spring says so.
+    @Test
+    fun `a body read twice says it was already read`() =
+        testApplication {
+            install(StreamlordPlugin)
+            routing {
+                post("/s") {
+                    call.readSignalsJson()
+                    val message =
+                        try {
+                            call.readSignals()
+                            "read twice"
+                        } catch (e: IllegalStateException) {
+                            e.message
+                        }
+                    call.respondText(message ?: "")
+                }
+            }
+            val body =
+                client
+                    .post("/s") {
+                        contentType(ContentType.Application.Json)
+                        setBody("{\"a\":1}")
+                    }.bodyAsText()
+            assertEquals(
+                "The request body was already read, by call.receive, a plugin or an earlier read, so the signals in it are gone",
+                body,
+            )
+        }
+
     @Test
     fun `oversized bodies are cut off at the limit`() =
         testApplication {

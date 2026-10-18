@@ -34,6 +34,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 - `Casing.signalName`, the check a name that declares a signal passes: what `Casing.validate`
   admits, and only ASCII letters, digits and `_` in parts joined by `.` or `-`.
+- `Casing.withModifiers`: a key with its modifiers after it, refused where the key ends in `_`,
+  which the client would read as part of the `__` that starts the modifiers.
 - `mergePatchAsClient` in `streamlord-core`: the signal store as Datastar's client reads it after
   a patch, which RFC 7386 is not: `onlyIfMissing` leaf by leaf, an object onto an array by index,
   an array or a string at the top level as keys, a `length` key resizing an array, and a `null`
@@ -52,12 +54,41 @@ All notable changes to Streamlord are recorded here. The format follows
   `data-signals:a.b` does and hands a clash to a function of yours.
 - `Casing.heldKey` in `streamlord-html`: refuses an attribute key whose signal, as Datastar's
   client reads it after lowercasing, cutting at `__` and applying `__case`, it cannot hold.
+- `SignalPatchException` in `streamlord-core`, an `IllegalArgumentException` that
+  `mergePatchAsClient` throws for a patch the client fails on partway through; its `store` is the
+  store as the client keeps it then, with the keys before the failing one applied.
 
 - `SignalsMediaTypeException`, `Streamlord.requireJsonContentType` with the same setting on the
   Ktor plugin, and `Streamlord.MAX_SIGNALS_DEPTH`; see Changed, Fixed and Security.
 
 ### Changed
 
+- `dataOn` and `dataClass` refuse a name that mixes capitals with a hyphen before a lower-case
+  letter, such as `fooBar-baz`. No key gives it back: the `__case.camel` the capitals need turns
+  the hyphen into a capital too, so the client listened for, or toggled, `fooBarBaz`.
+- `BindModifiers.events` are checked as `dataOn` checks an event, and one with a capital or a `.`
+  is refused: the client listened for it in lowercase, or as two events split at the `.`.
+- `BindModifiers.prop` is written so that Datastar's own camel-casing gives it back, a leading
+  capital included (`URL` as `-u-r-l`), and one it cannot give back is refused: `x2y` came back
+  as `x2Y`, `_value` as `Value`, `my_prop` as `myProp`.
+- A key or name with a no-break space or another space JavaScript's `\s` has and Java's lacks,
+  or with a NUL, is refused like any other white space: the client split a class on it, and the
+  HTML parser turned a NUL into U+FFFD.
+- A name that ends in `_` is refused by `dataOn`, `dataClass`, `dataSignals`, `dataComputed`,
+  `dataBind`, `dataRef`, `dataIndicator`, `dataMatchMedia` and `dataPersist` where a modifier
+  follows it: the client cuts the attribute name at the first `__`, so `dataClass("B_", ...)`,
+  written `b___case.pascal`, set the class `b`, and `dataSignals("b_", ..., ifMissing = true)`
+  declared `$b` and lost its `__ifmissing`. Without a modifier it is written as before.
+- A Kotlin `Regex` with a back reference before its group has closed, `(a\1)`, `\1(a)` or
+  `(?<n>a\k<n>)`, is refused by `SignalFilter`: JavaScript matches it as empty, and Java fails it
+  or, in a repeated group such as `(a|b\1)+`, matches what the group took on the pass before, so
+  the filter took signals Kotlin would not. `(?:(a)|b\1)+`, whose reference comes after its group,
+  is written as it is and still differs: JavaScript clears the group at each pass and Java keeps
+  it, so it matches `ab` in JavaScript only.
+- A Kotlin `Regex` with a quantifier that has nothing to repeat, such as `$?`, `^{2}`, `\b*`, a
+  `{1}` at the start, after `|` or `(`, on a lookbehind or after an empty `\Q\E`, and the empty
+  `(?)`, is refused by `SignalFilter`. Java takes them; JavaScript refuses the literal with
+  "Nothing to repeat", which stopped Datastar for the rest of the page.
 - A dotted name in the pairs of `patchSignals`, `removeSignals` and `dataSignals` now nests, as
   `data-signals:form.email` does: `patchSignals("form.email" to "x")` patches `$form.email`. It
   used to send the key `"form.email"`, which the client stores as one key that `$form.email`
@@ -268,6 +299,52 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- `mergePatchAsClient` now folds a patch exactly as the 1.0.4 client does, held to the client's
+  `mergePatch` built from source over 329 scenarios: a `length` is turned into a number the
+  JavaScript way (`[]` and `false` are 0, `"2"` is 2), deleting a `length` throws, a patch that
+  throws keeps the keys before it, and keys are walked and kept in JavaScript's order, also in
+  objects inside arrays and in a store that a number, a boolean or `null` hands back unchanged. A
+  fold copies each object and array on the patch's path in full width and hands the rest back as
+  the same values, so a small patch into a large store costs time linear in the width of the
+  levels the patch goes through, not in the size of the store.
+- `SseDecoder` read some frames the client takes as malformed. An empty
+  `viewTransitionSelector` is none; an element patch with no elements, or only white space as
+  HTML counts it (tab, line feed, form feed, carriage return, space), in a mode that needs them
+  decodes to what the client does with it: an `outer` or `replace` with a selector takes the
+  target out and leaves the white space in its place as a text node, and comes back as a removal;
+  an `inner` puts the white space in place of the target's children; an `append`, `prepend`,
+  `before` or `after` inserts it as a text node and changes no element, and is no event, as is an
+  `outer` or `replace` without a selector whose elements hold no tag. A no-break space, U+3000,
+  U+001C or any other character is text the client inserts, measured in Chrome, and comes back as
+  elements; `PatchElements` and `ElementsResponse` take such elements too, where Kotlin's
+  `isBlank()` refused them, except in an `outer` or `replace` without a selector, where the client
+  takes only elements and they would patch nothing. A frame that changes no element but asks for
+  `useViewTransition` is no event, though the client starts a view transition around it. Flags are read with JavaScript's `trim()`, so `true` followed by a
+  byte order mark is true and `true` followed by U+001C is not.
+- A string with half of a surrogate pair reached the client as `?` from a codec, in elements and
+  in a script response. Signals now carry it as `\ud800`, as the built-in writer does, and
+  elements as U+FFFD; so does a script from `respondScript` or `datastarScript`, with its
+  attributes, as `executeScript` already did in a stream.
+- `dataClass` on a class that mixes capitals with a hyphen before a lower-case letter, such as
+  `MuiButton-root`, says to use the object form, `dataClass("{'MuiButton-root': ...}")`, which
+  keeps it as written; "write it in one case" could not be followed for a class from a library.
+- On Spring with Tomcat, a stream answered a request that sent `Connection: keep-alive` with
+  `Connection: keep-alive, keep-alive`: Tomcat adds its own to such a request. The stream now
+  leaves the header to Tomcat then, and still sets none over HTTP/2 or when the request asks to
+  close.
+- On Ktor, reading the signals of a body that was already read threw Ktor's own
+  `RequestAlreadyConsumedException`; it now says, as on Spring, that the body was read before.
+- The documentation of `maxSignalsSize` and the security page said the 1 MiB cap holds for the
+  `datastar` query parameter. The server refuses the request line at 4 to 8 KiB, with a status
+  Datastar's client does not retry; the page now gives the numbers per server and points large
+  signals to `@post`.
+- The security page now says that Ktor 3.6 without `StatusPages` sends an exception's message in
+  the 500, and shows a catch-all that does not.
+- KDoc: `timeout` on `datastarStream` said Spring cuts the stream, where Tomcat and Jetty end it
+  cleanly and the client does not reconnect; `dataIndicator` counts only fetches from its own
+  element; `FetchOptions` writes an option set to its default value; `SignalFilter` names the
+  differences at NEL and with `IGNORE_CASE`, where Kotlin folds the Kelvin sign into `k` and the
+  long s into `s` and JavaScript does not.
 - A signal patch could carry a key Datastar's client cannot hold, from pairs, a codec or a JSON
   string, at any depth. `__proto__` with an object under it made its merge throw halfway through
   a batch it never closed, so no later signal reached the page. An object under a property of

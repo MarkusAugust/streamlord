@@ -115,7 +115,11 @@ public object ExpressionGuard {
     private val KEYWORD_NEEDS_LEFT = Regex("^(in|instanceof)\\b")
     private val KEYWORD_NEEDS_RIGHT = Regex("(?<![.\\w$])(in|instanceof|typeof|void|delete|new|await)$")
 
-    /** A binary `+` or `-` at the start, set apart from what follows: `$a + 1` without its `$a`. */
+    /**
+     * A binary `+` or `-` at the start, set apart from what follows: `$a + 1` without its `$a`, and
+     * `$a - $b` without its `$a`, which leaves `- $b`. A sign is written against its operand, so
+     * `-$x`, `-1` and `+$n` pass; `- $x` with a space is refused, since it is what `$a - $x` leaves.
+     */
     private val LEADING_BINARY = Regex("^[+\\-]\\s")
 
     /** A template literal's `${}` with nothing in it, which is not JavaScript at all: `` `${$n}` `` without its `$n`. */
@@ -130,7 +134,9 @@ public object ExpressionGuard {
      * A statement that is nothing but `++` or `--` (`$count ++`, with its operand, is fine); an operator that needs a left operand right
      * after an opening `(`, `[`, `{` or a `,`; or an operator that needs a right operand right
      * before a closing `)`, `]`, `}` or a `,`. That last shape is what `{count: $count}` and
-     * `@post('/x', {n: $n})` leave behind: `{count: }`. A `.` counts unless it starts a spread
+     * `@post('/x', {n: $n})` leave behind: `{count: }`. A hole in an array, `[, 1]`, `[ , 1]` or
+     * `[1, , 2]`, is JavaScript but is refused all the same: it is what `[$a, 1]`, `[ $a, 1]` and
+     * `[1, $a, 2]` leave behind; write `[undefined, 1]` instead. A `.` counts unless it starts a spread
      * (`...$items`) or a decimal (`.5`); a trailing comma (`[1, 2,]`) is valid and not counted;
      * String and regex literals are blanked first (`':)'`, `split(/[,;]/)`), so their contents
      * never count.

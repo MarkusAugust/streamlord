@@ -41,7 +41,12 @@ public sealed interface DatastarEvent {
  * and when no [selector] is given each of them must carry an `id` so the client can find its
  * counterpart.
  *
- * @property elements The HTML to patch. May be `null` only when [mode] is [ElementPatchMode.REMOVE].
+ * @property elements The HTML to patch. May be `null` only when [mode] is [ElementPatchMode.REMOVE],
+ *   and only white space as HTML counts it (tab, line feed, form feed, carriage return, space)
+ *   only for [ElementPatchMode.INNER], where it empties the target. An `outer` or `replace`
+ *   without a [selector] takes only elements, so there anything Kotlin's `isBlank()` counts as
+ *   blank is refused too, a no-break space and U+3000 among them; with a selector, and in the
+ *   other modes, the client inserts those as text, and they are taken.
  * @property selector CSS selector for the target. Required for every mode except OUTER and REPLACE.
  * @property mode How the elements are driven into the DOM. Defaults to OUTER (morph).
  * @property namespace The namespace of the new elements. Defaults to HTML.
@@ -67,7 +72,7 @@ public data class PatchElements(
             throw DatastarEventValidationException("Patch mode '${mode.wire}' requires a selector")
         }
         // An inner patch of nothing empties its target, the one way to clear a container.
-        val empty = if (mode == ElementPatchMode.INNER) elements == null else elements.isNullOrBlank()
+        val empty = if (mode == ElementPatchMode.INNER) elements == null else Wire.noElements(elements, mode, selector)
         if (mode != ElementPatchMode.REMOVE && empty) {
             throw DatastarEventValidationException(
                 if (mode == ElementPatchMode.INNER) {
