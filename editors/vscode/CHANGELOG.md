@@ -2,6 +2,60 @@
 
 All notable changes to the Streamlord extension are recorded here.
 
+## 0.9.0
+
+- Expressions are judged as Datastar's client compiles them. Every `$name.path` is rewritten
+  first, so a signal used as a parameter, `$items.map($i => $i.name)`, is the syntax error it is
+  in the browser; a `;` inside a block or a `//` comment at the end of `data-text`, `data-show`
+  and the other attributes whose value is returned is an error; so is `await` at the top level.
+  `&dollar;` and the other references for ASCII punctuation are read as the browser reads them.
+- Six new checks, each tested against the 1.0.4 client: `literal-rewritten`, a `$name` in a
+  regular expression or in a template literal that also holds a `${...}`, which the client
+  rewrites; `signal-not-read`, a `'` in a comment, a regular expression or a template that makes
+  the client leave a later `$b` alone, and `$år`, since only ASCII follows a `$`; `signal-name`,
+  a name the client cannot hold or no `$name` reaches, such as `__proto__`, `constructor.x` or
+  `data-bind="$user"`, with the bracket form `$['my key']` named where one reaches it;
+  `filter-pattern`, a filter written as a string with flags, `'/^user/i'`, with the literal
+  `/^user/i` as the fix; `computed-value`, a value of `data-computed` that cannot be a function;
+  and `statement-split`, a `;` inside brackets in a value that is read.
+- The pre-1.0 syntax, `data-on-click`, `data-on-load` and `data-bind-value`, which 1.0 ignores,
+  is flagged with the 1.0 form as the fix. `data-on:click.prevent` is an error: the client
+  listens for an event named `click.prevent`, and the expression never runs on a click.
+- Modifiers are judged by what the client does with them. An unknown modifier, an argument on a
+  modifier that takes none (`__prevent.foo`) and an unknown flag (`__debounce.150ms.foo`) are
+  warnings that Datastar ignores them, and on `data-on` the warning names the event the
+  expression really listens for. `__debounce.1.5s`, which the client reads as 1 ms, is an error
+  with `__debounce.1500ms` as the fix, and a duration after a flag gets one message with the
+  reordered modifier as the fix.
+- An attribute with an empty key, such as `data-indicator:`, gets one warning that it does
+  nothing, with a fix that drops the colon where the attribute then runs.
+- Fewer false findings: `$id` inside a JavaScript string, `@post('/x/$id')`, is a hint about the
+  server value it is; a `$my-value` the page declares with `__case.kebab`, or as `{'my-key': 1}`,
+  is no longer called unknown, and its fix no longer breaks the page; a key with template syntax
+  in it, `data-on:${evt}` or `attributes["data-on:$evt"]`, waits for the rendered page;
+  `data-on-signal-patch:filter` is accepted; and `dataSignals("foo-bar", "1")` declares
+  `$fooBar`, as the DSL writes it. A signal inside a regular expression is no longer read.
+- Stream Inspector: it asks and reads as Datastar's client does. It sends the client's `Accept`,
+  in the request and in the curl line; reads a 200 that is not HTML, JSON or JavaScript as a
+  stream; shows any other response, any status but 200 among them, read up to 1 MiB; and shows
+  a closing comment, a message with only a `retry`, and an explicit `event: message`. A `retry`
+  too large for a 32-bit int shows as none, where the previous one was kept.
+- Stream Inspector: the signal store is kept as the client keeps it, by the same rules as the
+  server SDK's, so a `length` key turns into a number as in the browser and a string patch is
+  split by UTF-16 unit. A patch the client fails on partway shows the keys it kept before the
+  failing one, with the reason beside it, and says that the bindings on the page then stop
+  redrawing until it is reloaded. A `__proto__` in a patch is refused, and the inspector says why.
+- Stream Inspector: your headers replace the client's own, `Content-Type` included, where yours
+  was overridden. Copy as curl writes the body with `--data-raw`, so signals that start with `@`
+  are no longer read from a file. Signals written as an object in `inspector.json` are sent as
+  written, where a number past 2^53 was rounded. A requests file that is not JSON is not saved
+  over; a byte order mark no longer hides what `inspector.json` or `env.json` holds; and a
+  requests-file path that leaves the workspace falls back to the default.
+- "Open Stream Inspector with route" is gone from the command palette, where it failed without a
+  route. "Apply recommended colors" reads your user settings alone, so a workspace's token rules
+  are no longer copied into them.
+- The package carries acorn's licence in `ThirdPartyNotices.txt`.
+
 ## 0.8.0
 
 - A `data-indicator` on an element that sends no request is a warning: the indicator only turns on
