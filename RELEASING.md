@@ -14,10 +14,12 @@ commit, and only a repository admin can create, move or delete a release tag (`v
 `intellij-v*`, `vscode-v*`). They do not enforce it on the admin: the rulesets let an admin
 bypass them, require no green check before a merge and no review, so a red pull request can
 still be merged into `master`, which deploys. Merging is a decision taken on a green run, by
-hand. The three publish jobs run in the `release` environment, which takes the release tags
-alone. The publishing secrets are repository secrets today, readable from any run; moving them
-into the environment is what would make them readable from release tags alone, and then
-`verify-signing`, which runs by hand on a branch, needs the environment and a branch policy too.
+hand. The publishing secrets live in the `release` environment, not in the repository: the three
+publish jobs and `verify-signing` run in it, and it takes the release tags, `master` and
+`release/**`, the last two for `verify-signing`, which runs by hand. `RAILWAY_TOKEN` stays a
+repository secret, for the demo deploy on `master`, and so does `VSCE_PAT` until VS Code
+publishing moves to Microsoft Entra ID, before Azure DevOps retires global tokens on
+1 December 2026.
 
 ## Day to day
 
