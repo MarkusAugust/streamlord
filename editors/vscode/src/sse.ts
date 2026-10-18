@@ -159,9 +159,9 @@ export function decodeDatastar(msg: SseMessage): DatastarFrame {
  * Raised by `mergePatchAsClient` partway through a patch the client fails on, or one Streamlord
  * refuses. The client has by then applied the keys before the one that failed and keeps them, so
  * `store` is the store as it reads afterwards, and the next patch folds into that. `refused` is
- * false where the client throws on the patch too, and true where Streamlord refuses on purpose a
- * patch it does not model, which the client may well take. The same as `SignalPatchException` in
- * streamlord-core.
+ * true where Streamlord refuses the patch on purpose, whatever the client does with it, and the
+ * message then says what the client does; false where the client throws on it too. The same as
+ * `SignalPatchException` in streamlord-core.
  */
 export class SignalPatchError extends Error {
   constructor(
@@ -196,14 +196,15 @@ export class SignalPatchError extends Error {
  * Objects are made without a prototype, so `constructor` is a signal name and nothing else. A
  * patch that throws, here or in the client, has its earlier keys applied: the error is a
  * `SignalPatchError` that carries the store as the client keeps it. Two kinds of patch are refused
- * on purpose, with `refused` set, though the client may take them. More than `holeLimit` indices
+ * on purpose, with `refused` set, whatever the client does with them. More than `holeLimit` indices
  * past the end of an array, which would fill memory with the holes the client never allocates.
  * And a key named `__proto__` anywhere in the patch, at any depth and inside array values too,
- * whatever it holds. The client gives the object holding it a foreign prototype, after which it
- * throws on some later keys, replaces the object on a later patch, or, with a second `__proto__`
- * under the first, writes into `String.prototype`; only a `null` in a patch object changes nothing
- * there, and it is refused as well, so that one rule holds. The store in the error is the patch
- * cut before the key that holds the `__proto__`, at the level where it stands, or before the key
+ * whatever it holds. Where its value is an object with keys, the client mostly throws at that key,
+ * and the bindings on the page stop redrawing. Otherwise it gives the object holding the key a
+ * foreign prototype, after which it throws on some later keys, replaces the object on a later
+ * patch, or, with a second `__proto__` under the first, writes into `String.prototype`; only a
+ * `null` in a patch object changes nothing there, and it is refused as well, so that one rule
+ * holds. The store in the error is the patch cut before the key that holds the `__proto__`, at the level where it stands, or before the key
  * whose value is the array it is inside: the store the client keeps where it throws on that key.
  * Where the client does not throw, Streamlord refuses on purpose rather than model a store the
  * client no longer holds as plain JSON. A store passed in with a key `__proto__`, which no fold
@@ -215,8 +216,8 @@ export class SignalPatchError extends Error {
  */
 export function mergePatchAsClient(store: Record<string, unknown>, patch: unknown, ifMissing = false, holeLimit = 10_000): Record<string, unknown> {
   // `Object.entries` walks an array's indices and a string's UTF-16 units, as `for ... in` does.
-  if (patch === null || (typeof patch !== "object" && typeof patch !== "string")) return store;
   const root = copyObject(store);
+  if (patch === null || (typeof patch !== "object" && typeof patch !== "string")) return root;
   try {
     if (Object.hasOwn(store, PROTO)) throw new Refusal(STORE_PROTO_REFUSED);
     new ClientMerge(ifMissing, holeLimit).fold(Object.entries(patch), root);
@@ -341,7 +342,7 @@ const PROTO = "__proto__";
 
 /** Why a patch with a key `__proto__` is refused; `PROTO_REFUSED` in streamlord-core's JsonMerge.kt gives the same text. */
 export const PROTO_REFUSED =
-  "A key named __proto__ gives the object holding it a foreign prototype in Datastar's client, which then throws on some later keys, replaces the object on a later patch, or with a second __proto__ writes into String.prototype; Streamlord does not model it and refuses the patch";
+  "A key named __proto__ whose value is an object with keys mostly makes Datastar's client throw at that key, and the bindings on the page then stop redrawing. Otherwise the client gives the object holding the key a foreign prototype, which then throws on some later keys, replaces the object on a later patch, or with a second __proto__ writes into String.prototype. Streamlord does not model it and refuses the patch";
 
 export const STORE_PROTO_REFUSED = "The store holds a key named __proto__, which Datastar's client never holds; Streamlord does not fold a patch into the object that has it";
 

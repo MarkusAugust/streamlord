@@ -63,12 +63,14 @@ All notable changes to Streamlord are recorded here. The format follows
 - `SignalPatchException` in `streamlord-core`, an `IllegalArgumentException` that
   `mergePatchAsClient` throws for a patch the client fails on partway through; its `store` is the
   store as the client keeps it then, with the keys before the failing one applied, and its
-  `refused` says whether the client throws too or Streamlord refuses on purpose a patch the
-  client may take. It refuses two kinds: more indices past the end of an array than `holeLimit`,
-  and a key `__proto__` anywhere in a patch, inside array values too, whatever it holds. The
-  client gives the object holding that key a foreign prototype, and then, measured against its
-  source, throws on some later keys, replaces the object on a later patch, or with a second
-  `__proto__` under the first writes into `String.prototype`. The store carried is the patch cut
+  `refused` says Streamlord refuses the patch on purpose, whatever the client does with it, and
+  the message then says what the client does. It refuses two kinds: more indices past the end of
+  an array than `holeLimit`, and a key `__proto__` anywhere in a patch, inside array values too,
+  whatever it holds. Where its value is an object with keys, the client mostly throws at that
+  key, measured in Chrome, and the bindings on the page stop redrawing. Otherwise it gives the
+  object holding the key a foreign prototype, and then, measured against its source, throws on
+  some later keys, replaces the object on a later patch, or with a second `__proto__` under the
+  first writes into `String.prototype`. The store carried is the patch cut
   before the key that holds the `__proto__`, which is what the client keeps where it throws on
   that key. A store passed in with a key `__proto__` is refused once a patch reaches the object
   that has it.

@@ -710,12 +710,14 @@ class InspectorTest : BasePlatformTestCase() {
         fun labels() = UIUtil.findComponentsOfType(panel, JLabel::class.java).map { it.text }
         patch("""{"a":[1]}""")
         val store = UIUtil.findComponentsOfType(panel, JBTextArea::class.java).single { it.text.startsWith("{\n") }
-        patch("""{"b":1,"o":{"__proto__":5},"c":2}""")
+        patch("""{"b":1,"o":{"__proto__":{"x":1}},"c":2}""")
         assertEquals("""{"a":[1],"b":1,"o":{}}""", JsonParser.parse(store.text).toJson())
         val proto =
-            "Streamlord refuses this signal patch on purpose: A key named __proto__ gives the object holding it a foreign prototype " +
-                "in Datastar's client, which then throws on some later keys, replaces the object on a later patch, or with a second " +
-                "__proto__ writes into String.prototype; Streamlord does not model it and refuses the patch. " +
+            "Streamlord refuses this signal patch on purpose: A key named __proto__ whose value is an object with keys mostly " +
+                "makes Datastar's client throw at that key, and the bindings on the page then stop redrawing. Otherwise the client " +
+                "gives the object holding the key a foreign prototype, which then throws on some later keys, replaces the object on " +
+                "a later patch, or with a second __proto__ writes into String.prototype. Streamlord does not model it and refuses " +
+                "the patch. " +
                 "The store shown keeps the keys before it."
         assertTrue(labels().toString(), proto in labels())
         patch("""{"a":{"20000":1}}""")

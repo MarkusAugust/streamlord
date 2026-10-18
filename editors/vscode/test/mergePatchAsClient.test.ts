@@ -96,6 +96,14 @@ describe("mergePatchAsClient", () => {
     }
   });
 
+  it("hands back a store without a prototype for a patch that patches nothing", () => {
+    for (const patch of [5, true, null]) {
+      const out = mergePatchAsClient({ a: 1 }, patch);
+      assert.equal(Object.getPrototypeOf(out), null, String(patch));
+      assert.equal(JSON.stringify(out), '{"a":1}');
+    }
+  });
+
   it("leaves the store it is given as it was", () => {
     const store = { a: [1, 2], o: { k: 1 } };
     const before = JSON.stringify(store);

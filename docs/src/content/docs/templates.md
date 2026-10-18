@@ -95,17 +95,20 @@ attribute of its own, which the browser hands over as text, and read it with `el
 ```
 
 This holds only where `data-value` is in quotes and the engine escapes the value for HTML. Qute
-escapes only in HTML and XML templates and never a `RawString`, Rocker only in `.rocker.html`
-templates and never under `@raw`, and a `|safe`, `.raw` or `@raw` turns the escaping off.
-Measured: unescaped, `x" data-init="window.__pwn=1` runs, and so does a value in a `data-value`
-without quotes.
+escapes only in HTML and XML templates and Rocker only in `.rocker.html` templates, and each
+engine's raw output turns the escaping off: Qute's `.raw`, `.safe` and `RawString`, Pebble's
+`|raw`, Thymeleaf's `th:utext` and `[(...)]`, Closure's `|noAutoescape` and ordained content,
+and Rocker's `@raw`. Measured: unescaped, `x" data-init="window.__pwn=1` runs, and so does a
+value in a `data-value` without quotes.
 
 It makes the value text only where the expression uses it as text: in `data-text`, `data-show`,
 `data-class` and `data-signals`, and in `data-attr` on a plain attribute such as `title`. Not in
-`data-attr:href` or `data-attr:src`, an `on*` handler, `srcdoc` or `style`, and not as the URL of
-`@get(...)`. Measured: `javascript:window.__pwn=1` in `data-value` runs from `data-attr:href` once
-the link is clicked, and from `data-attr:onclick`, and `@get(el.dataset.value)` with another
-site's address sends every signal on the page there, though `fetch` refuses a `javascript:` URL.
+`data-attr:href` or `data-attr:src`, an `on*` handler, `srcdoc` or `style`, a `data-*` attribute,
+and not as the URL of `@get(...)`. Measured: `javascript:window.__pwn=1` in `data-value` runs
+from `data-attr:href` once the link is clicked, and from `data-attr:onclick`. `window.__pwn=1`
+runs from `data-attr:data-init`, and from `data-attr:data-on:click` once clicked, since Datastar
+compiles the attribute it has just set. And `@get(el.dataset.value)` with another site's address
+sends every signal on the page there, though `fetch` refuses a `javascript:` URL.
 Check such a value on the server, or write the markup with
 [`interpolate`](/strings/#values-from-outside), which refuses a hole in a Datastar attribute, an
 event handler, `srcdoc` or `style`, and a URL that is not relative, `http`, `https`, `mailto` or
