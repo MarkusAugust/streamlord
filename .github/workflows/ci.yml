@@ -678,8 +678,8 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/vscode-v')
     needs: [vscode]
     runs-on: ubuntu-latest
-    # The release environment takes release tags alone. The publishing secrets are still repository
-    # secrets; moved into the environment, they would be readable from these runs and no other.
+    # The release environment holds the publishing secrets and takes the release tags, and master and
+    # the release branches for verify-signing, which is run by hand.
     environment: release
     defaults:
       run:
@@ -715,8 +715,8 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/intellij-v')
     needs: [intellij]
     runs-on: ubuntu-latest
-    # The release environment takes release tags alone. The publishing secrets are still repository
-    # secrets; moved into the environment, they would be readable from these runs and no other.
+    # The release environment holds the publishing secrets and takes the release tags, and master and
+    # the release branches for verify-signing, which is run by hand.
     environment: release
     defaults:
       run:
@@ -769,8 +769,8 @@ jobs:
     # Central until it has compiled and answered.
     needs: [sdk, demo-image]
     runs-on: ubuntu-latest
-    # The release environment takes release tags alone. The publishing secrets are still repository
-    # secrets; moved into the environment, they would be readable from these runs and no other.
+    # The release environment holds the publishing secrets and takes the release tags, and master and
+    # the release branches for verify-signing, which is run by hand.
     environment: release
     # On this job alone, because it is the only one that writes anything to the repository:
     # the release it announces at the end. The others keep the read-only default, apart from
@@ -867,6 +867,9 @@ jobs:
     name: Verify signing secrets (manual)
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    # The signing key lives in the release environment, so a run from a branch the environment
+    # does not take stops here, before the key is read.
+    environment: release
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
