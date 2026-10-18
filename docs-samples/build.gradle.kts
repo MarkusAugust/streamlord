@@ -356,11 +356,11 @@ tasks.named("check") { dependsOn(tasks.named("checkDocSamples")) }
  * blank line:
  *
  *     <!-- deps=streamlord-json-jackson2 -->
- *     - <code>com.fasterxml.jackson.core:<wbr><span class="unbroken">jackson-databind</span> 2.22.3</code>
- *       - <code>com.fasterxml.jackson.core:<wbr><span class="unbroken">jackson-core</span> 2.22.3</code>
+ *     - `com.fasterxml.jackson.core:jackson-databind 2.22.3`
+ *       - `com.fasterxml.jackson.core:jackson-core 2.22.3`
  *
- * Only coordinates are compared, with the tags taken out, so the `<wbr>` and the span that let a
- * coordinate break at its colon on a phone, and not at a hyphen, stay a presentation choice.
+ * Only coordinates are compared. Where one breaks on a phone is decided by the site's build, in
+ * docs/src/plugins/rehype-code-breaks.mjs, not by the page.
  */
 val documentedModules =
     listOf("streamlord-json-kotlinx", "streamlord-json-jackson", "streamlord-json-jackson2")
@@ -393,7 +393,6 @@ abstract class CheckDocDependencies : DefaultTask() {
         val coordinate = Regex("""([\w.\-]+):([\w.\-]+)[ :]+([\w.\-]+)""")
 
         val marker = Regex("""^<!-- deps=([\w-]+) -->$""")
-        val tag = Regex("<[^>]+>")
 
         for (page in pages.get().asFile.walkTopDown().filter { it.extension == "md" }) {
             val lines = page.readLines()
@@ -401,7 +400,7 @@ abstract class CheckDocDependencies : DefaultTask() {
                 val module = marker.find(line.trim())?.groupValues?.get(1) ?: continue
                 val found = claims.getOrPut(module) { mutableSetOf() }
                 for (item in lines.drop(index + 1).takeWhile { it.isNotBlank() }) {
-                    coordinate.find(item.replace(tag, ""))?.let {
+                    coordinate.find(item)?.let {
                         found += normalise("${it.groupValues[1]}:${it.groupValues[2]}:${it.groupValues[3]}")
                     }
                 }

@@ -53,8 +53,8 @@ is what signals are for.
 The inspector opens a real Datastar request, exactly as the browser client would, parses the
 stream, and keeps every frame it decoded. It also keeps the signal store, applying each
 `datastar-patch-signals` with `mergePatchAsClient`, the merge as Datastar's client does it
-(which is not quite RFC 7386: `onlyIfMissing` leaf by leaf, an object onto an array sets its
-indices), so what it shows is what the client would hold.
+(RFC 7386 for an ordinary patch, but `onlyIfMissing` leaf by leaf, and an object onto an array
+sets its indices), so what it shows is what the client would hold.
 
 What it does not keep is the store at each step. `signals = mergePatchAsClient(signals, patch)`
 overwrites, so there is one running value and no way back. When a handler emits fifteen frames in

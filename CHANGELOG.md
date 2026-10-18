@@ -448,17 +448,19 @@ All notable changes to Streamlord are recorded here. The format follows
   data the server never meant to send. A NUL in data is still written, since markup can carry one.
   This reverses 0.12.0, where `SseDecoder` dropped an `id` with a NUL in it and read on: the id is
   now kept as written, and decoding fails on it.
-- The Spring pages give the real symptom of a handler that takes `Streamlord` as a parameter:
-  every request answers `500` with `BeanInstantiationException`, on WebMVC and WebFlux, rather
-  than running on a default instance. The security page says why the writer escapes U+2028 when
-  current browsers accept it raw, and that it escapes `<!` as well as `</`, and the introduction
-  and the README that a request with `Connection: close` gets different headers from the version
-  written by hand. The roadmap no longer says what a named release lacks and describes the store
-  panel with the merge it uses, `mergePatchAsClient`. The install page draws the codec dependency
-  trees as lists that break only at a coordinate's colon on a phone, not as text art. The editor
-  READMEs list the IntelliJ inspection for a signal no file defines, the Stream Inspector's two
-  settings and the required signing secrets, and VS Code's `test:live` runs against the
-  repository's own demo rather than a service outside it.
+- The Spring pages give the real symptom of a handler that takes `Streamlord` as a parameter: every
+  request answers `500` with `BeanInstantiationException`, on WebMVC and WebFlux, rather than
+  running on a default instance. The security page says why the writer escapes U+2028 when current
+  browsers accept it raw, and that it escapes `<!` as well as `</`, and the introduction and the
+  README that a request asking to close gets `Connection: keep-alive` from the version written by
+  hand on CIO, Netty and Tomcat, and not from `respondDatastar`. The roadmap no longer says what a
+  named release lacks and describes the store panel with the merge it uses, `mergePatchAsClient`.
+  The install page draws the codec dependency trees as lists, not as text art; on a phone a
+  coordinate breaks at a dot, at its colon and before its version, and at a hyphen in its name only
+  on a line narrower than the name. Inline code written in Markdown breaks after a `.`, `::`, `/` or
+  `(` before it breaks inside a name. The editor READMEs list the IntelliJ inspection for a signal
+  no file defines, the Stream Inspector's two settings and the required signing secrets, and VS
+  Code's `test:live` runs against the repository's own demo rather than a service outside it.
 
 ## [0.12.0] - 2026-10-11
 

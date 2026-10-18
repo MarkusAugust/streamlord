@@ -60,9 +60,9 @@ get("/feed") {
 }
 ```
 
-Both send the same bytes, one event at a time, and the same headers unless the request sends
-`Connection: close`; the headers below say what the first gets wrong then. The difference is
-what the first one leaves to you:
+Both send the same bytes, one event at a time, and the same headers to a request that keeps the
+connection open; the headers below say what the first gets wrong on one that asks to close it. The
+difference is what the first one leaves to you:
 
 - **Flushing.** Every event needs its `flush()`. Leave one out and the event waits in a buffer
   until the next flush or the end of the response, which on a stream that stays open can be
@@ -78,7 +78,9 @@ what the first one leaves to you:
 - **The headers.** `Cache-Control: no-cache` because the specification asks for it,
   `X-Accel-Buffering: no` because nginx holds the stream back without it, and
   `Connection: keep-alive` on HTTP/1.1 only, because HTTP/2 forbids it, and not to a request
-  that sent `Connection: close`, which the version by hand still answers with `keep-alive`.
+  whose `Connection` header asks to close. The version by hand still answers that one with
+  `keep-alive` on CIO, Netty and Tomcat, where Tomcat sends its own `close` beside it; Jetty
+  drops the `keep-alive` itself.
   `respondDatastar` sets all three and reads the protocol version and the request's own
   `Connection` itself.
 

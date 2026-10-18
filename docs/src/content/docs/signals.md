@@ -171,8 +171,11 @@ get("/feed") {
 }
 ```
 
-A signal patched to `null` is **removed**, because signal patches are RFC 7386 merge patches. That
-is not a quirk of Streamlord; it is what the protocol says, and it is how you delete.
+A signal patched to `null` is **removed**, because the protocol makes a signal patch an RFC 7386
+merge patch, and Datastar's client follows the RFC for one like this. That is not a quirk of
+Streamlord; it is how you delete. Where the client parts from the RFC, on arrays, on
+`onlyIfMissing` and on a patch that is not an object, `mergePatchAsClient` in `streamlord-core`
+folds a patch the way the client does.
 
 A dotted name reaches a nested signal: `patchSignals("form.email" to "")` patches `$form.email`,
 the signal `data-signals:form.email` declares, and `removeSignals("form.email")` removes it.

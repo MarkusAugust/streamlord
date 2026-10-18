@@ -60,9 +60,11 @@ get("/feed") {
 }
 ```
 
-Both send the same bytes, and the same headers unless the request sends `Connection: close`: then
-the first still answers `Connection: keep-alive`, and `respondDatastar` answers `close`. The first
-leaves the flushing, the line splitting, the selector rules, the JSON and the headers to you;
+Both send the same bytes, and the same headers to a request that keeps the connection open. To
+one whose `Connection` header asks to close it, the first still sends `keep-alive` on CIO, Netty
+and Tomcat, where Tomcat puts its own `close` beside it, and `respondDatastar` does not; Jetty
+drops the `keep-alive` itself, so there the two match. The first leaves the flushing, the line
+splitting, the selector rules, the JSON and the headers to you;
 [the introduction](https://streamlord-docs.netlify.app/introduction/) lists what each of those
 costs.
 

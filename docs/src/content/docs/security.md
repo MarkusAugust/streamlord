@@ -32,7 +32,8 @@ client, and JSON you hand to `executeScript` lands in a `<script>` element.
 `</` and `<!` are the two that matter in every browser. Inside a `<script>`, `</script>` ends the
 element wherever it stands, in a string or not, and the rest of the JSON becomes markup. A
 `<!--<script>` does the opposite: the parser then reads the next `</script>` as part of the
-script, so the element stays open and swallows the rest of the page. In Chrome,
+script, so the element stays open and takes in the markup after it as script text, up to the
+first `-->` and the `</script>` after that, or to the end of the page if no `-->` comes. In Chrome,
 `<script>window.a = {"s":"<!--<script>"}</script>` followed by a paragraph and a second script
 leaves one script element, which never runs, and no paragraph; written as `\u003c!--<script>`,
 both scripts run and the paragraph is there.

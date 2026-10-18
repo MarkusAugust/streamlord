@@ -180,4 +180,5 @@ builds, tests, verifies against the supported IDE releases and runs `publishPlug
 `MarkusAugust` vendor). `JETBRAINS_CERTIFICATE_CHAIN`, `JETBRAINS_PRIVATE_KEY` and
 `JETBRAINS_PRIVATE_KEY_PASSWORD` sign the archive, and all three are required: when one is
 missing, the job stops before `publishPlugin` rather than upload an unsigned plugin. Which branch
-the bump goes on, and when the tag may be pushed, is in [the repository README](https://github.com/MarkusAugust/streamlord#building-and-releasing).
+the bump goes on, and when the tag may be pushed, is in
+[the repository README](https://github.com/MarkusAugust/streamlord#building-and-releasing).
