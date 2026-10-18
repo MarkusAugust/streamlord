@@ -40,8 +40,8 @@ both scripts run and the paragraph is there.
 
 U+2028 and U+2029 are line terminators in JavaScript and ordinary characters in JSON. Since
 ES2019 a string literal may hold them, so in a current browser a raw one does no harm: in
-Chrome 155 with Datastar 1.0.4, `data-signals:r='{"s":"a<U+2028>b<U+2029>c"}'` with the raw
-characters gives the same five-character string as the escaped form. An engine older than
+Chrome 155 with Datastar 1.0.4, `data-signals:r` set to `'{"s":"a<U+2028>b<U+2029>c"}'`, with the
+raw characters, gives the same five-character string as the escaped form. An engine older than
 Chrome 66, Firefox 62 or Safari 12, and Edge before 79, ends the string at the character and
 throws `SyntaxError`, and so does a tool that reads JavaScript by the older rules. Written as
 `\u2028`, the JSON means the same thing to every reader, at a cost of three bytes per character.

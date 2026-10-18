@@ -80,9 +80,8 @@ difference is what the first one leaves to you:
   `Connection: keep-alive` on HTTP/1.1 only, because HTTP/2 forbids it, and not to a request
   whose `Connection` header asks to close. The version by hand still answers that one with
   `keep-alive` on CIO, Netty and Tomcat, where Tomcat sends its own `close` beside it; Jetty
-  drops the `keep-alive` itself.
-  `respondDatastar` sets all three and reads the protocol version and the request's own
-  `Connection` itself.
+  drops the `keep-alive` itself. `respondDatastar` sets all three and reads the protocol version
+  and the request's own `Connection` itself.
 
 ## Three ways to write markup
 
