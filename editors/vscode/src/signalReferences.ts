@@ -2,6 +2,7 @@ import { ALL_SITE_NAMES, ATTRIBUTES_INDEX, attributesIndexValue, lexCached, mark
 import { catalog, distance, parseAttributeName } from "./catalog.ts";
 import { clientSignalReads, DOCS, type Issue } from "./expression.ts";
 import { PLACEHOLDER, toSource, type KotlinString } from "./kotlinStrings.ts";
+import { ANY_SIGNAL } from "./signals.ts";
 import { asciiLowercase, decodeEntities, hasTemplateSyntax, tokenize } from "./markup.ts";
 import { findCallSites, isHtmlString, selectStringArg } from "./scanner.ts";
 
@@ -95,10 +96,11 @@ export function signalReferencesInKotlin(src: string, prefix: string): SignalRef
 /**
  * Does the workspace define the signal `path` reads? It does when it defines the path itself, a
  * signal the path reaches into (`$user.name.length` with `user` defined), or a signal inside the
- * path (`$form` with `form.email` defined).
+ * path (`$form` with `form.email` defined). A spread of a variable into the object form,
+ * `{...init}`, may declare any signal, written `*`.
  */
 export function isKnownSignal(path: string, defined: ReadonlySet<string>): boolean {
-  if (defined.has(path)) return true;
+  if (defined.has(path) || defined.has(ANY_SIGNAL)) return true;
   let p = path;
   while (p.includes(".")) {
     p = p.slice(0, p.lastIndexOf("."));
@@ -115,7 +117,7 @@ export function nearestSignal(name: string, defined: ReadonlySet<string>): strin
   let best: string | null = null;
   let bestDistance = Infinity;
   for (const d of defined) {
-    if (d === name) continue;
+    if (d === name || d === ANY_SIGNAL) continue;
     const far = distance(name.toLowerCase(), d.toLowerCase());
     if (far <= limit && far < bestDistance) {
       best = d;

@@ -167,7 +167,18 @@ public class Catalog private constructor(
     }
 
     public val attributesByName: Map<String, AttributeSpec> = attributes.associateBy { it.name }
-    public val attributesByKotlin: Map<String, AttributeSpec> = attributes.flatMap { a -> a.kotlin.map { it to a } }.toMap()
+
+    /**
+     * The attribute each DSL helper writes from its string argument. dataOnSignalPatch writes
+     * data-on-signal-patch from its string and the filter companion from a SignalFilter, so a
+     * helper is never its filter.
+     */
+    public val attributesByKotlin: Map<String, AttributeSpec> =
+        buildMap {
+            for (a in attributes) {
+                for (k in a.kotlin) if (get(k)?.valueKind != ValueKind.EXPRESSION || a.valueKind == ValueKind.EXPRESSION) put(k, a)
+            }
+        }
     public val actionsByName: Map<String, ActionSpec> = actions.associateBy { it.name }
 
     /** Every DSL function the analysis looks at, of every kind. */

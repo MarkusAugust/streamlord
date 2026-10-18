@@ -11,6 +11,8 @@
     {"name":"a nested object declares its keys under its key","source":"<div data-signals=\"{user: {name: 'x'}}\" data-text=\"$user.name + $name\"></div>","issues":[{"code":"unknown-signal","start":64,"end":69}]},
     {"name":"the value of data-bind names the signal as written","source":"<input data-bind=\"userName\"><div data-text=\"$userName + $username\"></div>","issues":[{"code":"unknown-signal","start":56,"end":65,"fixes":["<input data-bind=\"userName\"><div data-text=\"$userName + $userName\"></div>"]}]},
     {"name":"a digit after a dollar and a hyphenated signal are no reads to check","source":"<div data-text=\"$1 + $x-y\"></div>","issues":[]},
-    {"name":"an object spread into the object form declares its keys","source":"<div data-signals=\"{a: 1, ...{b: 2}, c: {...{d: 3}}}\" data-text=\"$a + $b + $c.d + $e\"></div>","issues":[{"code":"unknown-signal","start":82,"end":84,"fixes":["<div data-signals=\"{a: 1, ...{b: 2}, c: {...{d: 3}}}\" data-text=\"$a + $b + $c.d + $a\"></div>"]}]}
+    {"name":"an object spread into the object form declares its keys","source":"<div data-signals=\"{a: 1, ...{b: 2}, c: {...{d: 3}}}\" data-text=\"$a + $b + $c.d + $e\"></div>","issues":[{"code":"unknown-signal","start":82,"end":84,"fixes":["<div data-signals=\"{a: 1, ...{b: 2}, c: {...{d: 3}}}\" data-text=\"$a + $b + $c.d + $a\"></div>"]}]},
+    {"name":"a spread of something not an object literal, which may declare any signal","source":"<div data-signals=\"{...$x}\"></div><div data-signals=\"{...(true ? {b: 12} : {})}\"></div><div data-text=\"$y + $b\"></div>","issues":[]},
+    {"name":"a spread of a variable under a key, which declares nothing beside that key","source":"<div data-signals=\"{a: {...window.init}}\"></div><div data-text=\"$a.y + $q\"></div>","issues":[{"code":"unknown-signal","start":71,"end":73,"fixes":["<div data-signals=\"{a: {...window.init}}\"></div><div data-text=\"$a.y + $a\"></div>"]}]}
   ]
 }

@@ -27,6 +27,10 @@
     {"name":"the kotlinx attributes form with a near-miss name","source":"attributes[\"data-onn:click\"] = \"x()\"","issues":[{"code":"unknown-attribute","start":12,"end":26,"fixes":["attributes[\"data-on:click\"] = \"x()\""]}]},
     {"name":"the kotlinx attributes form with a template and a broken expression","source":"attributes[\"data-text\"] = \"$a +\"","issues":[{"code":"kotlin-interpolation","start":27,"end":29,"fixes":["attributes[\"data-text\"] = $$\"$a +\"","attributes[\"data-text\"] = \"${'$'}a +\"","attributes[\"data-text\"] = \"\\$a +\""]}]},
     {"name":"the kotlinx attributes form with a broken expression","source":"attributes[\"data-text\"] = \"$\" + \"a +\"","issues":[]},
-    {"name":"the kotlinx attributes form keeps the dollar escape in a fix","source":"attributes[\"data-text\"] = \"\\$my-value\"","issues":[{"code":"signal-kebab","start":27,"end":37,"fixes":["attributes[\"data-text\"] = \"\\$myValue\"","attributes[\"data-text\"] = \"\\$my - value\""]}]}
+    {"name":"the kotlinx attributes form keeps the dollar escape in a fix","source":"attributes[\"data-text\"] = \"\\$my-value\"","issues":[{"code":"signal-kebab","start":27,"end":37,"fixes":["attributes[\"data-text\"] = \"\\$myValue\"","attributes[\"data-text\"] = \"\\$my - value\""]}]},
+    {"name":"the expression of dataOnSignalPatch, judged as the attribute it fills","source":"dataOnSignalPatch(\"if (\\$a) \\$b = 1\", SignalFilter.exclude(\"^_\"))","issues":[{"code":"expression-syntax"}]},
+    {"name":"a Kotlin template in the key of the kotlinx attributes form","source":"attributes[\"data-signals:$key\"] = \"1\"\nattributes[\"data-bind:${key}\"] = \"\"\nattributes[\"data-computed:${key}\"] = \"\\$a + 1\"\nattributes[\"data-on:$evt\"] = \"\\$n++\"","issues":[]},
+    {"name":"a Kotlin template in the key of an attribute in an HTML string","source":"val s = \"<div data-signals:$key=\\\"1\\\" data-class:${c}=\\\"true\\\"></div>\"","issues":[{"code":"kotlin-interpolation","start":27,"end":31}]},
+    {"name":"a pattern in the filterSignals of an action in a DSL call","source":"dataOnClick(\"@post('/x', {filterSignals: {include: '/^user/i'}})\")","issues":[{"code":"filter-pattern","start":51,"end":61,"fixes":["dataOnClick(\"@post('/x', {filterSignals: {include: /^user/i}})\")"]}]}
   ]
 }

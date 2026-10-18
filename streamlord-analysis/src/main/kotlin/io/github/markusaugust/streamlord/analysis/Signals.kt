@@ -139,6 +139,8 @@ private fun collect(
     }
     // The placeholder the analysis writes for a Kotlin template is never a signal, whatever file it turns up in.
     out.removeAll { PLACEHOLDER in it }
+    // What a spread may declare is no name to complete.
+    if (reads) out.remove(ANY_SIGNAL)
     return out
 }
 
@@ -238,9 +240,13 @@ internal fun clientKeyName(written: String): String {
     return name
 }
 
-/** A key of the object form: its path, where it is written, where its value starts, and whether that value is an object. */
+/**
+ * A key of the object form: its path, the parts of that path as the keys are written (`'a.b'` is
+ * one part), where it is written, where its value starts, and whether that value is an object.
+ */
 internal data class ObjectKey(
     val path: String,
+    val parts: List<String>,
     val key: String,
     val start: Int,
     val end: Int,
@@ -255,17 +261,36 @@ internal data class ObjectKey(
  * `user` and `user.name`. A key may be bare or quoted, and inside a Kotlin string its quotes may be
  * escaped; an object that is not the value of a key, inside a function or a list, declares nothing.
  * An object literal spread into another declares its keys there; what a spread of anything else
- * brings is not known.
+ * brings is not known. Spread into the object itself, `{...init}`, it may be any signal, written
+ * `*` (see [isKnownSignal]); under a key, `{user: {...init}}`, it is under `user`, which is declared.
  */
-internal fun objectKeyPaths(body: String): List<String> = objectKeys(body).map { it.path }
+internal fun objectKeyPaths(body: String): List<String> {
+    val spread = Spread()
+    val paths = objectKeys(body, spread).map { it.path }
+    return if (spread.any) paths + ANY_SIGNAL else paths
+}
 
-/** The keys [objectKeyPaths] names, with where each is written in [body]. */
-internal fun objectKeys(body: String): List<ObjectKey> {
+/** What a spread of a variable into the object form may declare: any signal. */
+internal const val ANY_SIGNAL: String = "*"
+
+/** Whether an object spreads something other than an object literal into itself. */
+internal class Spread {
+    var any: Boolean = false
+}
+
+/**
+ * The keys [objectKeyPaths] names, with where each is written in [body]. [spread] is set when the
+ * object itself spreads something other than an object literal.
+ */
+internal fun objectKeys(
+    body: String,
+    spread: Spread = Spread(),
+): List<ObjectKey> {
     val out = ArrayList<ObjectKey>()
-    // The open brackets: the path of an object that is the value of a key, or null for anything else.
-    val frames = arrayListOf<String?>("")
+    // The open brackets: the parts of the path of an object that is the value of a key, or null for anything else.
+    val frames = arrayListOf<List<String>?>(emptyList())
     var expectKey = true
-    var objectFor: String? = null
+    var objectFor: List<String>? = null
     var i = 0
 
     fun skipSpace() {
@@ -296,11 +321,11 @@ internal fun objectKeys(body: String): List<ObjectKey> {
             val keyEnd = minOf(i, body.length)
             skipSpace()
             if (key != null && body.getOrNull(i) == ':') {
-                val path = if (top.isEmpty()) key else "$top.$key"
+                val parts = top + key
                 i++
                 skipSpace()
-                objectFor = if (body.getOrNull(i) == '{') path else null
-                out += ObjectKey(path, key, keyStart, keyEnd, i, objectFor != null)
+                objectFor = if (body.getOrNull(i) == '{') parts else null
+                out += ObjectKey(parts.joinToString("."), parts, key, keyStart, keyEnd, i, objectFor != null)
             }
             continue
         }
@@ -315,7 +340,11 @@ internal fun objectKeys(body: String): List<ObjectKey> {
         if (c == '.' && body.startsWith("...", i) && top != null) {
             i += 3
             skipSpace()
-            if (body.getOrNull(i) == '{') objectFor = top
+            if (body.getOrNull(i) == '{') {
+                objectFor = top
+            } else if (top.isEmpty()) {
+                spread.any = true
+            }
             continue
         }
         when (c) {

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { collectSignals } from "../src/signals.ts";
+import { collectSignalDefinitions, collectSignals } from "../src/signals.ts";
 
 /** The cases of the analysis module's `SignalsTest.kt`. */
 const kotlin = (src: string): string[] => [...collectSignals(src, "kotlin")].sort();
@@ -34,6 +34,12 @@ data class PageSignals(
     assert.deepEqual(html(`<div data-signals='{"query": "", "nested": {"deep": 1}}'></div>`), ["nested", "nested.deep", "query"]);
     assert.deepEqual(html(`<div data-signals__ifmissing="{'single': 1, bare: 2}"></div>`), ["bare", "single"]);
     assert.deepEqual(kotlin(String.raw`val k = "<div data-signals='{\"esc\": 1}'></div>"`), ["esc"]);
+  });
+
+  it("a spread of a variable may define any signal, and names none to complete", () => {
+    const src = `<div data-signals="{a: 1, ...init, b: {...more}}"></div>`;
+    assert.deepEqual(html(src), ["a", "b"]);
+    assert.deepEqual([...collectSignalDefinitions(src, "html")].sort(), ["*", "a", "b"]);
   });
 
   it("a key with template syntax in it declares nothing", () => {

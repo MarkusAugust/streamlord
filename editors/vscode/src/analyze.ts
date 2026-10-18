@@ -121,7 +121,7 @@ function checkAttributesIndex(m: RegExpMatchArray, value: KotlinString | null, o
   const judgeValue = value !== null && !(value.text.includes(PLACEHOLDER) && value.interpolations.some((i) => i.kind === "simple"));
   // A range in the value maps through the literal as a whole, so an error at its end keeps a width.
   const range = (start: number, end: number) => (end <= name.length ? { start: nameStart + start, end: nameStart + end } : toSource(value!, start - valueStart, end - valueStart));
-  for (const i of validateAttributes(tag, opts.prefix, undefined, hyphenated)) {
+  for (const i of validateAttributes(tag, opts.prefix, undefined, hyphenated, true)) {
     const inName = i.end <= name.length;
     if (!inName && !judgeValue) continue;
     const fixes = i.fixes

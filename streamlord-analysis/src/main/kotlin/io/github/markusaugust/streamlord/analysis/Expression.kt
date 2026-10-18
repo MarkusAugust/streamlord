@@ -631,15 +631,14 @@ private fun templateAdvice(written: String): String {
     return if (digit) " To keep the text, $keep" else " Write \${$written} for the signal's value. To keep the text, $keep"
 }
 
-/** The quote that opens the string [offset] is in, by the [regions] of [js]. */
-private fun stringQuote(
-    js: String,
-    regions: ByteArray,
-    offset: Int,
-): Char? {
-    var k = offset
-    while (k > 0 && regions[k - 1] == Region.STRING) k--
-    return js.getOrNull(k)
+/**
+ * For each offset, where the run of string characters it is in starts: the quote that opens the
+ * string. One pass, so that a string full of rewrites is not walked back once for each.
+ */
+private fun stringStarts(regions: ByteArray): IntArray {
+    val out = IntArray(regions.size)
+    for (k in regions.indices) out[k] = if (k > 0 && regions[k - 1] == Region.STRING) out[k - 1] else k
+    return out
 }
 
 /** Where a character the client paired as a quote sits, for the message that names it. */
@@ -651,6 +650,172 @@ private fun placeOf(region: Byte): String =
         Region.STRING -> " in a string"
         else -> ""
     }
+
+/** `include: '` or `"exclude": "`, a pattern given as a string that opens with a slash. */
+private val STRING_PATTERN_HEAD = Regex("""(["']?)(include|exclude)\1\s*:\s*(["'`])/""")
+
+/**
+ * The flags a filter's pattern may end with. `d` is left out: it changes nothing a filter does, so
+ * nobody writes it there, and the tail of a path such as `'/users/id'` is then not read as flags.
+ */
+private val REGEX_FLAGS = Regex("""[gimsuyv]+""")
+
+/** A pattern of a filter written as a string with flags after its last slash; see [stringPatterns]. */
+internal data class StringPattern(
+    val key: String,
+    val start: Int,
+    val end: Int,
+    val pattern: String,
+    val flags: String,
+)
+
+/** Whether the key that opens at [at] is a key of the code: bare in code, or quoted with the quote opening a string there. */
+private fun keyOpens(
+    text: String,
+    regions: ByteArray,
+    at: Int,
+    quoted: Boolean,
+): Boolean {
+    val opens =
+        if (quoted) {
+            regions[at] == Region.STRING && regions.getOrNull(at - 1) != Region.STRING
+        } else {
+            regions[at] == Region.CODE
+        }
+    return opens && !text.getOrNull(at - 1).isJsNamePart()
+}
+
+/**
+ * The patterns of a filter written as a string with a slash before them and flags after the last
+ * one: `include: '/^foo/i'`. The client's `toRegExp` (signals.ts:752 in 1.0.4) cuts one `/` from
+ * each end and nothing else, so `'/^foo/'` works and `'/^foo/i'` looks for `/i`. Only the keys of
+ * the object between [from] and [to] count: not `xinclude`, nor a key in a string or a comment. A
+ * template literal counts when it holds no `${`. A scan rather than one regular expression, which
+ * backtracks without end on a run of escapes. Shared with the VS Code extension (`stringPatterns`
+ * in expression.ts).
+ */
+internal fun stringPatterns(
+    text: String,
+    regions: ByteArray = jsRegions(text),
+    from: Int = 0,
+    to: Int = text.length,
+): List<StringPattern> {
+    val out = ArrayList<StringPattern>()
+    var m = STRING_PATTERN_HEAD.find(text, from)
+    while (m != null && m.range.first < to) {
+        val match = m
+        m = m.next()
+        if (!keyOpens(text, regions, match.range.first, match.groupValues[1].isNotEmpty())) continue
+        val quote = match.groupValues[3][0]
+        val start = match.range.last - 1
+        var j = start + 1
+        while (j < to && text[j] != quote && !(quote == '`' && text.startsWith("\${", j))) j += if (text[j] == '\\') 2 else 1
+        if (j >= to || text[j] != quote) continue
+        val content = text.substring(start + 1, j)
+        // An escaped slash is a slash all the same once the string is read: '\/' is '/'.
+        val slash = content.lastIndexOf('/')
+        val flags = content.substring(slash + 1)
+        if (slash <= 0 || !REGEX_FLAGS.matches(flags)) continue
+        out += StringPattern(match.groupValues[2], start, j + 1, content.substring(1, slash), flags)
+    }
+    return out
+}
+
+/** Flags a regular expression literal takes: each once, and `u` and `v` not together. */
+private fun validFlags(flags: String): Boolean = flags.toSet().size == flags.length && !('u' in flags && 'v' in flags)
+
+/** [pattern] as the body of a literal: a `/` escaped, as `SignalFilter.regexLiteral` in streamlord-html writes it. */
+private fun literalBody(pattern: String): String {
+    if (pattern.isEmpty()) return "(?:)"
+    return buildString {
+        var i = 0
+        while (i < pattern.length) {
+            if (pattern[i] == '\\') {
+                append(pattern, i, minOf(i + 2, pattern.length))
+                i += 2
+                continue
+            }
+            append(if (pattern[i] == '/') "\\/" else pattern[i].toString())
+            i++
+        }
+    }
+}
+
+/** A character that would not stand in a literal as it stands in the string: an escape, a quote, a reference. */
+private val UNFIXABLE_IN_PATTERN = Regex("""[\\'"`&]""")
+
+/**
+ * The `filter-pattern` warnings for the string patterns of the object between [from] and [to] in
+ * [text]: a filter's value, [json] when it is JSON, or the `filterSignals` of an action. Shared
+ * with the VS Code extension (`filterPatternIssues` in expression.ts).
+ */
+internal fun filterPatternIssues(
+    text: String,
+    regions: ByteArray,
+    from: Int,
+    to: Int,
+    json: Boolean,
+    link: String,
+): List<Issue> =
+    stringPatterns(text, regions, from, to).map { p ->
+        val literal = "/${literalBody(p.pattern)}/${p.flags}"
+        val valid = validFlags(p.flags)
+        val advice =
+            when {
+                !valid -> {
+                    "As flags ${p.flags} would not do either: each is given once, and u and v not together. " +
+                        "Write a regular expression literal${if (json) ", in JavaScript rather than JSON," else ""} with the flags meant."
+                }
+
+                json -> {
+                    "JSON holds no regular expression: write the value as JavaScript, with the literal $literal."
+                }
+
+                else -> {
+                    "Write the regular expression literal $literal."
+                }
+            }
+        // The string's escapes would mean something else in a literal, and a quote or a reference in an attribute would need its own,
+        // so the fix is offered only without them.
+        val fixable = valid && !json && !UNFIXABLE_IN_PATTERN.containsMatchIn(p.pattern)
+        Issue(
+            p.start,
+            p.end,
+            "Datastar cuts one / from each end of a string ${p.key} and takes the rest as the pattern, " +
+                "so /${p.flags} stays in it and is matched as text, not read as flags. $advice",
+            Severity.WARNING,
+            "filter-pattern",
+            link,
+            if (fixable) listOf(Fix("Change to $literal", p.start, p.end, literal)) else emptyList(),
+        )
+    }
+
+/** `filterSignals: {` in the options of an action, which the client reads with the same `toRegExp`. */
+private val FILTER_SIGNALS = Regex("""(["']?)filterSignals\1\s*:\s*\{""")
+
+/** The `filter-pattern` warnings for the `filterSignals` of the actions in [text]. */
+private fun filterSignalsIssues(text: String): List<Issue> {
+    if ("filterSignals" !in text) return emptyList()
+    val regions = jsRegions(text)
+    val out = ArrayList<Issue>()
+    for (m in FILTER_SIGNALS.findAll(text)) {
+        if (!keyOpens(text, regions, m.range.first, m.groupValues[1].isNotEmpty())) continue
+        val open = m.range.last
+        var depth = 0
+        var close = text.length
+        for (i in open until text.length) {
+            if (regions[i] != Region.CODE) continue
+            if (text[i] == '{') {
+                depth++
+            } else if (text[i] == '}' && --depth == 0) {
+                close = i + 1
+                break
+            }
+        }
+        out += filterPatternIssues(text, regions, open, close, false, Docs.ACTIONS)
+    }
+    return out
+}
 
 /** The syntax error of [js] read as one expression, the way a filter value is evaluated (`return (value)`), or null. */
 internal fun expressionError(js: String): JsSyntaxError? {
@@ -727,13 +892,14 @@ public class ExpressionValidator(
             if (pos !in spaced) issues += Issue(pos, end, message, Severity.ERROR, "expression-syntax", Docs.EXPRESSIONS)
         }
 
+        val starts by lazy { stringStarts(regions) }
         for (r in rewritten.rewrites) {
             val region = regions[r.start]
             if (region == Region.COMMENT) continue
             val written = js.substring(r.start, if (r.signal) r.end else r.end - 1)
             val (start, end) = span(r.start, r.start + written.length)
             if (region != Region.CODE) {
-                issues += literalRewritten(r, written, region, stringQuote(js, regions, r.start), start, end)
+                issues += literalRewritten(r, written, region, js.getOrNull(starts[r.start]), start, end)
                 continue
             }
             if (r.signal) {
@@ -788,6 +954,7 @@ public class ExpressionValidator(
 
         // A `;` inside brackets splits the expression all the same, and what it computed is lost.
         if (returnsValue == true && err == null) issues += statementSplitIssue(text)
+        issues += filterSignalsIssues(text)
         return issues
     }
 

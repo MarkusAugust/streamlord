@@ -125,4 +125,9 @@ describe("time", () => {
   it("reads a line of slashes that never close in linear time", () => {
     within(1000, () => analyzeHtml(`<div data-text="${"(/[".repeat(20000)}"></div>`, opts));
   });
+
+  it("tells each signal in a string the client pairs otherwise in linear time", () => {
+    // 60 KB of rewrites inside one string, each told which quote opens it.
+    within(2000, () => analyzeHtml(`<div data-text="/'/.test('x') + '${"$a ".repeat(20000)}'"></div>`, opts));
+  });
 });

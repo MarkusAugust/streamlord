@@ -54,13 +54,14 @@ internal fun markupSignalReferences(
 /**
  * Does the project define the signal [path] reads? It does when it defines the path itself, a
  * signal the path reaches into (`$user.name.length` with `user` defined), or a signal inside the
- * path (`$form` with `form.email` defined).
+ * path (`$form` with `form.email` defined). A spread of a variable into the object form,
+ * `{...init}`, may declare any signal, written `*`.
  */
 public fun isKnownSignal(
     path: String,
     defined: Set<String>,
 ): Boolean {
-    if (path in defined) return true
+    if (path in defined || ANY_SIGNAL in defined) return true
     var p = path
     while ('.' in p) {
         p = p.substringBeforeLast('.')
@@ -78,7 +79,7 @@ public fun nearestSignal(
     val limit = if (name.length <= 4) 1 else 2
     return defined
         .asSequence()
-        .filter { it != name }
+        .filter { it != name && it != ANY_SIGNAL }
         .map { it to distance(name.lowercase(), it.lowercase()) }
         .filter { it.second <= limit }
         .minByOrNull { it.second }

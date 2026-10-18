@@ -167,4 +167,12 @@ class MarkupTest {
         html("<div data-text=\"${"(/[".repeat(2000)}\"></div>")
         within(2000) { html("<div data-text=\"${"(/[".repeat(20000)}\"></div>") }
     }
+
+    @Test
+    fun `tells each signal in a string the client pairs otherwise in linear time`() {
+        // 60 KB of rewrites inside one string, each told which quote opens it; a tenth first, so the compiler is not timed.
+        fun page(n: Int) = "<div data-text=\"/'/.test('x') + '${"\$a ".repeat(n)}'\"></div>"
+        html(page(2000))
+        within(2000) { html(page(20000)) }
+    }
 }

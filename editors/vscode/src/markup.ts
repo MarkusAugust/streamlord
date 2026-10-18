@@ -1,5 +1,5 @@
 import { catalog, distance, parseAttributeName, type AttributeSpec } from "./catalog.ts";
-import { attributeDoc, DOCS, expressionError, isIdentPart, jsRegions, quoteAt, Region, validateExpression, type Fix, type Issue } from "./expression.ts";
+import { attributeDoc, DOCS, expressionError, filterPatternIssues, isIdentPart, jsRegions, quoteAt, Region, validateExpression, type Fix, type Issue } from "./expression.ts";
 import { clientKeyName, objectKeys, signalNameProblem, signalPathProblem, PROTOTYPE_NAMES, type ObjectKey } from "./signals.ts";
 
 /**
@@ -146,6 +146,11 @@ function templateConstructEnd(html: string, at: number): number {
     else if (html[i] === ")" && --depth === 0) return i + 1;
   }
   return at;
+}
+
+/** Whether a template construct starts at `at` in a tag's text, where it cuts the attribute name before it short: `${`, `{{`, `<%`. */
+function cutByTemplate(tagSource: string, at: number): boolean {
+  return tagSource[at] === "{" || templateConstructEnd(tagSource, at) > at;
 }
 
 export interface Attribute {
@@ -377,8 +382,15 @@ const DURATION = /^\d+(ms|s)?$/;
 const LONG_NAME = 6;
 const IDENT = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 
-/** Validate the Datastar attributes on one tag; with its text, a template construct the tokenizer stepped over is seen too. */
-export function validateAttributes(tag: Tag, prefix: string, tagSource?: string, hyphenatedSignals: ReadonlySet<string> = NO_SIGNALS): Issue[] {
+/** A Kotlin template, `$name` or `${...}`, in a name written in Kotlin source. */
+const KOTLIN_TEMPLATE = /\$[A-Za-z_{]/;
+
+/**
+ * Validate the Datastar attributes on one tag; with its text, a template construct the tokenizer
+ * stepped over is seen too. `kotlin` says the names are written in Kotlin source, where `$name`
+ * and `${...}` are templates.
+ */
+export function validateAttributes(tag: Tag, prefix: string, tagSource?: string, hyphenatedSignals: ReadonlySet<string> = NO_SIGNALS, kotlin = false): Issue[] {
   const issues: Issue[] = [];
   for (const attr of tag.attributes) {
     const lower = asciiLowercase(attr.name);
@@ -390,6 +402,12 @@ export function validateAttributes(tag: Tag, prefix: string, tagSource?: string,
     const parsed = parseAttributeName(lower, prefix);
     if (!parsed) continue;
     const nameEnd = attr.nameStart + attr.name.length;
+    // data-on:${evt}, data-signals:{{ name }}, attributes["data-bind:$key"]: a template construct
+    // cut the name short or stands in it, so the key, its modifiers and the value that went with
+    // the name are not known until the page is rendered.
+    const cut = tagSource !== undefined && cutByTemplate(tagSource, nameEnd - tag.start);
+    const templated = cut || hasTemplateSyntax(attr.name) || (kotlin && KOTLIN_TEMPLATE.test(attr.name));
+    if (!parsed.spec && templated) continue;
     if (!parsed.spec) {
       // The rule of the runtime guard. A key or a modifier makes a custom attribute implausible, so
       // any one-letter neighbour is a typo. A bare name (data-test, data-kind, data-effects) is an
@@ -433,21 +451,19 @@ export function validateAttributes(tag: Tag, prefix: string, tagSource?: string,
     if (spec.pro) {
       issues.push({ start: attr.nameStart, end: nameEnd, message: `${prefix}${spec.name} is a Datastar Pro attribute; it needs the Pro bundle.`, severity: "hint", code: "pro-attribute", link: attributeDoc(spec.name) });
     }
-    if (spec.keyRequired && !parsed.key) {
+    if (spec.keyRequired && !parsed.key && !templated) {
       issues.push({ start: attr.nameStart, end: nameEnd, message: `${prefix}${spec.name} needs a key, e.g. ${spec.forms[0] ?? ""}.`, severity: "error", code: "missing-key", link: attributeDoc(spec.name) });
     }
-    if (!spec.keyed && parsed.key !== null && !spec.keys.includes(parsed.key)) {
+    if (!spec.keyed && parsed.key !== null && !spec.keys.includes(parsed.key) && !templated) {
       issues.push({ start: attr.nameStart, end: nameEnd, message: `${prefix}${spec.name} does not take a key.`, severity: "error", code: "unexpected-key", link: attributeDoc(spec.name) });
     }
-    if (parsed.key !== null) issues.push(...validateKeyCase(attr, parsed, spec, prefix));
-    // data-signals:${key}: a template construct cut the name short, so its key is not yet written.
-    const cut = tagSource !== undefined && tagSource[attr.nameStart - tag.start + attr.name.length] === "{";
-    const named = validateSignalNames(attr, parsed, spec, prefix, cut);
+    if (parsed.key !== null && !templated) issues.push(...validateKeyCase(attr, parsed, spec, prefix));
+    const named = validateSignalNames(attr, parsed, spec, prefix, templated);
     issues.push(...named);
-    issues.push(...validateDottedKey(attr, parsed, spec, prefix));
-    const hasKey = !!parsed.key;
+    if (!templated) issues.push(...validateDottedKey(attr, parsed, spec, prefix));
+    const hasKey = !!parsed.key || templated;
     const hasValue = !!attr.value;
-    if (spec.requires === "value" && !hasValue) {
+    if (spec.requires === "value" && !hasValue && !cut) {
       issues.push({ start: attr.nameStart, end: nameEnd, message: `${prefix}${spec.name} needs a value; without one Datastar raises ValueRequired.`, severity: "error", code: "missing-value", link: attributeDoc(spec.name) });
     }
     if (spec.requires === "exclusive" && hasKey === hasValue) {
@@ -465,7 +481,7 @@ export function validateAttributes(tag: Tag, prefix: string, tagSource?: string,
     if (spec.onlyOn && !spec.onlyOn.includes(tag.name)) {
       issues.push({ start: attr.nameStart, end: nameEnd, message: `${prefix}${spec.name} only works on <${spec.onlyOn.join(">, <")}>.`, severity: "warning", code: "wrong-element" });
     }
-    for (const mod of parsed.modifiers) {
+    for (const mod of templated ? [] : parsed.modifiers) {
       const mend = attr.nameStart + mod.offset + mod.text.length;
       // An empty modifier has no text to underline: the `__` that opens it is marked.
       const mstart = mod.text.length === 0 ? mend - 2 : mend - mod.text.length;
@@ -638,7 +654,7 @@ function validateSignalNames(attr: Attribute, parsed: { key: string | null }, sp
     const keyStart = attr.nameStart + colon + 1;
     const keyEnd = keyStart + (written.split("__")[0] ?? "").length;
     // data-signals:constructor="{a: 1}" puts an object under the last part, which the client then writes into the built-in one.
-    const objectUnder = spec.name === "signals" && decodeEntities(attr.value ?? "").text.trimStart().startsWith("{");
+    const objectUnder = spec.name === "signals" && mayGiveObject(decodeEntities(attr.value ?? "").text);
     const path = signalPathProblem(held, objectUnder);
     const reach = path ? null : signalNameProblem(held);
     if (path || reach) {
@@ -689,17 +705,59 @@ function validateSignalNames(attr: Attribute, parsed: { key: string | null }, sp
           link: attributeDoc(spec.name),
         });
       } else {
-        const reach = signalNameProblem(k.key, keyParts(k));
-        if (reach) out.push({ ...at, message: `This declares the signal ${k.path}, as written, which ${reach}.`, severity: "warning", code: "signal-name", link: attributeDoc(spec.name) });
+        const parts = keyParts(k);
+        const reach = signalNameProblem(k.key, parts);
+        if (reach) out.push({ ...at, message: `This declares the signal ${parts.join(".")}, as written, which ${reach}.`, severity: "warning", code: "signal-name", link: attributeDoc(spec.name) });
       }
     }
   }
   return out;
 }
 
-/** The path of a key of the object form, part by part, as the bracket form `$['a']['my key']` names it. */
+/**
+ * The path of a key of the object form, part by part as the keys are written and read as the
+ * client gets them, for the bracket form: `{'a.b': {'c d': 1}}` is `$['a.b']['c d']`, `{'a\\b': 1}`
+ * is the key a\b.
+ */
 function keyParts(k: ObjectKey): string[] {
-  return k.path === k.key ? [k.key] : [...k.path.slice(0, k.path.length - k.key.length - 1).split("."), k.key];
+  return k.parts.map((p) => p.replace(/\\(.)/gs, "$1"));
+}
+
+/**
+ * Whether the JavaScript expression `value` may give an object literal it holds: one that opens the
+ * value or stands where the value of a group, a conditional or a `||`, `&&`, `??` or `,` comes
+ * from, as in `({x: 1})`, `$a ? {x: 1} : 0` and `null || {x: 1}`. An object passed to a call, put
+ * in an array or returned by a function does not count, and a value with `=>` in it is a function.
+ * Shared with the analysis module (`mayGiveObject` in Markup.kt).
+ */
+export function mayGiveObject(value: string): boolean {
+  const regions = jsRegions(value);
+  // One entry per open bracket: whether it is a group, through which the value comes.
+  const open: boolean[] = [];
+  // The last character of code outside a string, a template or a comment, `x` after one of those.
+  let last = "";
+  let beforeLast = "";
+  for (let i = 0; i < value.length; i++) {
+    const r = regions[i];
+    if (r === Region.COMMENT) continue;
+    const c = value[i]!;
+    if (r !== Region.CODE) {
+      beforeLast = last;
+      last = "x";
+      continue;
+    }
+    if (/\s/.test(c)) continue;
+    const through = open.every((g) => g);
+    if (through && c === "=" && value[i + 1] === ">") return false;
+    // At the start, after `(`, `?` (and `??`), `:`, `,`, `||` or `&&`.
+    const opensOperand = last === "" || "(?:,".includes(last) || ((last === "|" || last === "&") && beforeLast === last);
+    if (c === "{" && through && opensOperand) return true;
+    if (c === "(" || c === "[" || c === "{") open.push(c === "(" && opensOperand);
+    else if (c === ")" || c === "]" || c === "}") open.pop();
+    beforeLast = last;
+    last = c;
+  }
+  return false;
 }
 
 /** A number literal, whole. */
@@ -708,10 +766,10 @@ const NO_FUNCTION_WORDS = /^(?:true|false|null|undefined|NaN|Infinity)$/;
 
 /**
  * Whether the JavaScript expression `value` is sure to give no function: a literal (a number, a
- * string, a template, a regular expression, an array), a unary operation, or operands joined by an
- * arithmetic, bitwise or comparison operator. A name, a call, `new`, or anything with `?`, `||`,
- * `&&`, `??`, `=`, `=>` or `,` at its top level may give one, and is not judged. Shared with the
- * analysis module (`certainlyNoFunction` in Markup.kt).
+ * string, a template, a regular expression, an array with such an item), a unary operation, or
+ * operands joined by an arithmetic, bitwise or comparison operator. A name, a call, `new`, or
+ * anything with `?`, `||`, `&&`, `??`, `=`, `=>` or `,` at its top level may give one, and is not
+ * judged. Shared with the analysis module (`certainlyNoFunction` in Markup.kt).
  */
 export function certainlyNoFunction(value: string): boolean {
   const v = value.trim();
@@ -801,7 +859,30 @@ export function certainlyNoFunction(value: string): boolean {
   }
   if (depth !== 0) return false;
   if (binary || unary) return true;
-  return groups === 1 && !code && (regions[0] !== Region.CODE || v[0] === "[");
+  if (groups !== 1 || code) return false;
+  // The client takes the functions out of an array as it does out of an object (`updateLeaves`
+  // in paths.ts), so an array gives no function only where one of its items is sure to give none.
+  if (v[0] === "[") return arrayItems(v, regions).some(certainlyNoFunction);
+  return regions[0] !== Region.CODE;
+}
+
+/** The items of the array literal `v`, split at the commas of its top level. */
+function arrayItems(v: string, regions: Uint8Array): string[] {
+  const items: string[] = [];
+  let depth = 0;
+  let from = 1;
+  for (let i = 0; i < v.length; i++) {
+    if (regions[i] !== Region.CODE) continue;
+    const c = v[i];
+    if (c === "(" || c === "[" || c === "{") depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      if (--depth === 0) items.push(v.slice(from, i));
+    } else if (c === "," && depth === 1) {
+      items.push(v.slice(from, i));
+      from = i + 1;
+    }
+  }
+  return items;
 }
 
 /** Where the value that starts at `from` in an object's `body` ends: at the `,` after it or the bracket that closes the object. */
@@ -891,49 +972,8 @@ function validateFilter(attr: Attribute, spec: AttributeSpec, prefix: string): I
       });
     }
   }
-  for (const p of stringPatterns(text)) {
-    const literal = `/${p.pattern}/${p.flags}`;
-    // The string's escapes would mean something else in a literal, so the fix is offered only without them.
-    const fixes = json || p.pattern.includes("\\") ? [] : [{ title: `Change to ${literal}`, ...source(p.start, p.end), text: literal }];
-    out.push({
-      ...source(p.start, p.end),
-      message:
-        `Datastar cuts one / from each end of a string ${p.key} and takes the rest as the pattern, so /${p.flags} stays in it and is matched as text, not read as flags. ` +
-        (json ? `JSON holds no regular expression: write the value as JavaScript, with the literal ${literal}.` : `Write the regular expression literal ${literal}.`),
-      severity: "warning",
-      code: "filter-pattern",
-      link: attributeDoc(spec.name),
-      ...(fixes.length ? { fixes } : {}),
-    });
-  }
-  return out;
-}
-
-/** `include: '` or `"exclude": "`, a pattern given as a string that opens with a slash. */
-const STRING_PATTERN_HEAD = /(["']?)(include|exclude)\1\s*:\s*(["'])\//g;
-const REGEX_FLAGS = /^[dgimsuyv]+$/;
-
-/**
- * The patterns of a filter written as a string with a slash before them and flags after the last
- * one: `include: '/^foo/i'`. The client's `toRegExp` (signals.ts:752 in 1.0.4) cuts one `/` from
- * each end and nothing else, so `'/^foo/'` works and `'/^foo/i'` looks for `/i`. A scan rather
- * than one regular expression, which backtracks without end on a run of escapes. Shared with the
- * analysis module (`stringPatterns` in Markup.kt).
- */
-export function stringPatterns(text: string): { key: string; start: number; end: number; pattern: string; flags: string }[] {
-  const out: { key: string; start: number; end: number; pattern: string; flags: string }[] = [];
-  for (const m of text.matchAll(STRING_PATTERN_HEAD)) {
-    const quote = m[3]!;
-    const start = m.index + m[0].length - 2;
-    let j = start + 1;
-    while (j < text.length && text[j] !== quote) j += text[j] === "\\" ? 2 : 1;
-    if (j >= text.length) continue;
-    const content = text.slice(start + 1, j);
-    // An escaped slash is a slash all the same once the string is read: '\/' is '/'.
-    const slash = content.lastIndexOf("/");
-    const flags = content.slice(slash + 1);
-    if (slash <= 0 || !REGEX_FLAGS.test(flags)) continue;
-    out.push({ key: m[2]!, start, end: j + 1, pattern: content.slice(1, slash), flags });
+  for (const issue of filterPatternIssues(text, jsRegions(text), 0, text.length, json, attributeDoc(spec.name))) {
+    out.push({ ...issue, ...source(issue.start, issue.end), ...(issue.fixes ? { fixes: issue.fixes.map((f) => ({ ...f, ...source(f.start, f.end) })) } : {}) });
   }
   return out;
 }
@@ -1068,12 +1108,13 @@ function validateModifierArgs(spec: AttributeSpec["modifiers"][number], args: st
         const ordered = [flags[later]!, d, ...flags.filter((_, k) => k !== later)];
         const fixed = `__${spec.name}.${ordered.join(".")}`;
         const unknown = flags.filter((f, k) => k !== later && !known(f));
-        // With a flag it does not know, the reordered modifier would fail in turn, so it is no fix.
+        // Only with every other argument a flag it knows is the reordered modifier the one meant:
+        // __debounce.leading.1.5s would become __debounce.1.leading.5s.
         fail(
-          `Datastar reads the first argument of __${spec.name} as its duration, so with .${d} first it reads none and does not wait. The duration comes first: ${fixed}.`,
+          `Datastar reads the first argument of __${spec.name} as its duration, so with .${d} first it reads none and does not wait. The duration comes first${unknown.length === 0 ? `: ${fixed}` : ""}.`,
           unknown.length === 0 ? [{ title: `Change to ${fixed}`, start: start + spec.name.length, end, text: "." + ordered.join(".") }] : undefined,
         );
-        for (const f of unknown) fail(`Unknown flag .${f} for __${spec.name}. Allowed: ${(spec.flags ?? []).map((x) => "." + x).join(", ") || "none"}.`);
+        for (const f of unknown) if (!DURATION.test(f)) fail(`Unknown flag .${f} for __${spec.name}. Allowed: ${(spec.flags ?? []).map((x) => "." + x).join(", ") || "none"}.`);
         break;
       }
       if (d && /^\d+$/.test(d) && flags[0] !== undefined && /^\d+(ms|s)?$/.test(flags[0])) {

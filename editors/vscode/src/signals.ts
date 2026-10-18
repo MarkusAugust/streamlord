@@ -120,6 +120,8 @@ function collect(src: string, language: "kotlin" | "html", reads: boolean): Set<
   }
   // The placeholder the analysis writes for a Kotlin template is never a signal, whatever file it turns up in.
   for (const name of out) if (name.includes(PLACEHOLDER)) out.delete(name);
+  // What a spread may declare is no name to complete.
+  if (reads) out.delete(ANY_SIGNAL);
   return out;
 }
 
@@ -216,15 +218,25 @@ export function clientKeyName(written: string): string {
  * `user` and `user.name`. A key may be bare or quoted, and inside a Kotlin string its quotes may be
  * escaped; an object that is not the value of a key, inside a function or a list, declares nothing.
  * An object literal spread into another declares its keys there; what a spread of anything else
- * brings is not known.
+ * brings is not known. Spread into the object itself, `{...init}`, it may be any signal, written
+ * `*` (see `isKnownSignal`); under a key, `{user: {...init}}`, it is under `user`, which is declared.
  */
 export function objectKeyPaths(body: string): string[] {
-  return objectKeys(body).map((k) => k.path);
+  const spread = { any: false };
+  const paths = objectKeys(body, spread).map((k) => k.path);
+  return spread.any ? [...paths, ANY_SIGNAL] : paths;
 }
 
-/** A key of the object form: its path, where it is written, where its value starts, and whether that value is an object. */
+/** What a spread of a variable into the object form may declare: any signal. */
+export const ANY_SIGNAL = "*";
+
+/**
+ * A key of the object form: its path, the parts of that path as the keys are written (`'a.b'` is
+ * one part), where it is written, where its value starts, and whether that value is an object.
+ */
 export interface ObjectKey {
   path: string;
+  parts: string[];
   key: string;
   start: number;
   end: number;
@@ -232,13 +244,16 @@ export interface ObjectKey {
   object: boolean;
 }
 
-/** The keys `objectKeyPaths` names, with where each is written in `body`. */
-export function objectKeys(body: string): ObjectKey[] {
+/**
+ * The keys `objectKeyPaths` names, with where each is written in `body`. `spread.any` is set when
+ * the object itself spreads something other than an object literal.
+ */
+export function objectKeys(body: string, spread: { any: boolean } = { any: false }): ObjectKey[] {
   const out: ObjectKey[] = [];
-  // The open brackets: the path of an object that is the value of a key, or null for anything else.
-  const frames: (string | null)[] = [""];
+  // The open brackets: the parts of the path of an object that is the value of a key, or null for anything else.
+  const frames: (string[] | null)[] = [[]];
   let expectKey = true;
-  let objectFor: string | null = null;
+  let objectFor: string[] | null = null;
   let i = 0;
   const skipSpace = () => {
     while (i < body.length && /\s/.test(body[i]!)) i++;
@@ -268,11 +283,11 @@ export function objectKeys(body: string): ObjectKey[] {
       const keyEnd = i;
       skipSpace();
       if (key !== null && body[i] === ":") {
-        const path = top === "" ? key : `${top}.${key}`;
+        const parts = [...top, key];
         i++;
         skipSpace();
-        objectFor = body[i] === "{" ? path : null;
-        out.push({ path, key, start: keyStart, end: keyEnd, valueStart: i, object: objectFor !== null });
+        objectFor = body[i] === "{" ? parts : null;
+        out.push({ path: parts.join("."), parts, key, start: keyStart, end: keyEnd, valueStart: i, object: objectFor !== null });
       }
       continue;
     }
@@ -288,6 +303,7 @@ export function objectKeys(body: string): ObjectKey[] {
       i += 3;
       skipSpace();
       if (body[i] === "{") objectFor = top;
+      else if (top.length === 0) spread.any = true;
       continue;
     }
     if (c === "{") {

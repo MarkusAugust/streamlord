@@ -177,7 +177,7 @@ public class Analyzer(
             } else {
                 value!!.toSource(start - valueStart, end - valueStart)
             }
-        for (i in markup.validateAttributes(tag, opts.prefix, null, hyphenated)) {
+        for (i in markup.validateAttributes(tag, opts.prefix, null, hyphenated, kotlin = true)) {
             val inName = i.end <= name.length
             if (!inName && !judgeValue) continue
             val r = range(i.start, i.end)

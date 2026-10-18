@@ -267,30 +267,53 @@ All notable changes to Streamlord are recorded here. The format follows
   `__proto__` anywhere in the name, and `constructor` or another property of `Object.prototype`
   with more of the name under it, which writes into every object of the page, also once the
   client has read the key (`data-signals:_-proto-_.x__case.snake` is `__proto__.x`); an object
-  under such a name, in the object form or as the value of `data-signals:constructor`; a `$` in
+  under such a name, in the object form or as the value of `data-signals:constructor`, also
+  through parentheses, a conditional or `||` (`({x: 1})`, `$c ? {x: 1} : 0`); a `$` in
   `data-bind="$user"`, which makes the signal `$user` that `$user` does not reach; and a letter
-  beyond ASCII or a space, where the message names the bracket form, `$['my key']`, that does
-  reach it. Such a name as the last part with a plain value under it, `data-signals:constructor="1"`
-  or `data-bind="toString"`, is held as its own key and is not flagged. A key with template
-  syntax in it, `data-signals:${key}` or `data-signals:{{ name }}`, declares no signal, and an
-  object spread into the object form, `{a: 1, ...{b: 2}}`, declares its keys.
+  beyond ASCII or a space, where the message names the bracket form that does reach it,
+  `$['my key']`, with a quoted key as one part (`$['a.b']['c d']`). Such a name as the last part
+  with a plain value under it, `data-signals:constructor="1"` or `data-bind="toString"`, is held
+  as its own key and is not flagged. A key with template syntax in it, `data-signals:${key}`,
+  `data-signals:{{ name }}` or, in Kotlin, `attributes["data-signals:$key"]`, declares no signal
+  and is not judged. An object spread into the object form, `{a: 1, ...{b: 2}}`, declares its
+  keys, and a spread of anything else, `{...init}`, may declare any signal, so the file then
+  calls no `$name` unknown.
 - The editors check the filters of `data-json-signals` and `data-on-signal-patch-filter`, which
   the client evaluates without signals: a regular expression that does not compile is an error,
   a `$name` there is a warning, and so is a pattern written as a string with flags after its
   last slash (`filter-pattern`): the client cuts one `/` from each end of the string, so
-  `'/^user/'` works and `'/^user/i'` matches the text `/i`; the fix is the literal `/^user/i`.
+  `'/^user/'` works and `'/^user/i'` matches the text `/i`; the fix is the literal `/^user/i`,
+  with a `/` inside the pattern escaped, and flags given twice or `u` with `v` get no fix. The
+  `filterSignals` of an action, which the client reads the same way, is checked too. A key that
+  only ends in `include`, a key in a comment, and a tail with `d` in it, as in the path
+  `'/users/id'`, are not read as a pattern with flags; a template literal without `${` is.
   `data-on-signal-patch:filter`, a key 1.0.4 accepts, is no longer an error; the catalog lists it
   under `keys`, read as `AttributeSpec.keys` in `streamlord-analysis`. `data-computed` without a
   key warns when its value is sure to be no object of functions, and errs where the client raises
   `ComputedExpectedFunction` for a value sure to be no function: a literal, a unary operation or
-  an arithmetic one, not a name, a call or a `?:`, which may give one. A `;` inside brackets in
-  a value that is read, which the client splits all the same, losing the value, is a warning.
+  an arithmetic one, not a name, a call or a `?:`, which may give one; an array only with an
+  item sure to be no function, since the client takes the functions out of an array. A `;`
+  inside brackets in a value that is read, which the client splits all the same, losing the
+  value, is a warning.
 - The editors explain a duration after a flag, `__debounce.leading.500ms`, in one message with
   the reordered modifier as the fix, where they gave two, and a fraction, `__debounce.1.5s`,
   which the client reads as 1 ms, with `__debounce.1500ms` as the fix; with a flag the client
-  does not know after them, that flag is named and no fix is offered. The advice for
+  does not know after them, that flag is named and no fix is offered. The reordered modifier is
+  named only when every other argument is a flag the client knows, so `__debounce.leading.1.5s`
+  is not told to become `__debounce.1.leading.5s`. The advice for
   `data-style:backgroundColor` is the kebab-case property, with the fix, where "name the
   property in lowercase" led to a property that does not exist.
+- The editors judge the expression of `dataOnSignalPatch("...")` as `data-on-signal-patch`, whose
+  value the client returns, so `if ($a) $b = 1` is the syntax error it is in the browser; it was
+  judged as the filter the helper also writes, and the hover and the documentation showed the
+  filter. `Catalog.attributesByKotlin` in `streamlord-analysis` maps a helper to the attribute
+  its string fills.
+- Template syntax in the key of any attribute, `data-on:${evt}`, `data-class:{{ c }}`,
+  `data-on:<%= evt %>`, or a Kotlin template in the key of `attributes["data-on:$evt"]`, leaves
+  the key, its modifiers and the value that went with it unjudged until the page is rendered,
+  where the editors reported a missing value, a missing key or an unknown modifier on pages that
+  work. `MarkupValidator.validateAttributes` in `streamlord-analysis` takes `kotlin` for names
+  written in Kotlin source.
 - The two editors read the same signals in an expression: IntelliJ now reads a signal in the code
   of a template literal, and VS Code no longer reads one inside a regular expression; a signal in
   a comment is read by neither. Neither editor offers `patch` outside `data-on-signal-patch` and

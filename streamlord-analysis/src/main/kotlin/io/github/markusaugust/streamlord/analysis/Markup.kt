@@ -80,9 +80,15 @@ private val HAS_CAPITAL = Regex("""[A-Z]""")
 private val LEADING_CAPITAL = Regex("""^[A-Z]""")
 private val HAS_LOWERCASE = Regex("""[a-z]""")
 
-/** The path of a key of the object form, part by part, as the bracket form `$['a']['my key']` names it. */
-private fun keyParts(k: ObjectKey): List<String> =
-    if (k.path == k.key) listOf(k.key) else k.path.substring(0, k.path.length - k.key.length - 1).split('.') + k.key
+/** A JavaScript escape in a key as written: `\\` is a backslash, `\'` a quote. */
+private val KEY_ESCAPE = Regex("""\\(.)""", RegexOption.DOT_MATCHES_ALL)
+
+/**
+ * The path of a key of the object form, part by part as the keys are written and read as the
+ * client gets them, for the bracket form: `{'a.b': {'c d': 1}}` is `$['a.b']['c d']`, `{'a\\b': 1}`
+ * is the key a\b.
+ */
+private fun keyParts(k: ObjectKey): List<String> = k.parts.map { p -> KEY_ESCAPE.replace(p) { it.groupValues[1] } }
 
 /** A number literal, whole. */
 private val NUMBER = Regex("""(?:0[xX][\da-fA-F_]+|0[bB][01_]+|0[oO][0-7_]+|(?:\d[\d_]*(?:\.[\d_]*)?|\.\d[\d_]*)(?:[eE][+-]?\d+)?)n?""")
@@ -93,10 +99,11 @@ private const val OPERATOR_CHARS = "+-*/%<>&|^!=~"
 
 /**
  * Whether the JavaScript expression [value] is sure to give no function: a literal (a number, a
- * string, a template, a regular expression, an array), a unary operation, or operands joined by an
- * arithmetic, bitwise or comparison operator. A name, a call, `new`, or anything with `?`, `||`,
- * `&&`, `??`, `=`, `=>` or `,` at its top level may give one, and is not judged. Shared with the
- * VS Code extension (`certainlyNoFunction` in markup.ts), which this follows step by step.
+ * string, a template, a regular expression, an array with such an item), a unary operation, or
+ * operands joined by an arithmetic, bitwise or comparison operator. A name, a call, `new`, or
+ * anything with `?`, `||`, `&&`, `??`, `=`, `=>` or `,` at its top level may give one, and is not
+ * judged. Shared with the VS Code extension (`certainlyNoFunction` in markup.ts), which this
+ * follows step by step.
  */
 internal fun certainlyNoFunction(value: String): Boolean {
     val v = value.trim()
@@ -210,7 +217,81 @@ internal fun certainlyNoFunction(value: String): Boolean {
     }
     if (depth != 0) return false
     if (binary || unary) return true
-    return groups == 1 && !code && (regions[0] != Region.CODE || v[0] == '[')
+    if (groups != 1 || code) return false
+    // The client takes the functions out of an array as it does out of an object (`updateLeaves`
+    // in paths.ts), so an array gives no function only where one of its items is sure to give none.
+    if (v[0] == '[') return arrayItems(v, regions).any { certainlyNoFunction(it) }
+    return regions[0] != Region.CODE
+}
+
+/** The items of the array literal [v], split at the commas of its top level. */
+private fun arrayItems(
+    v: String,
+    regions: ByteArray,
+): List<String> {
+    val items = ArrayList<String>()
+    var depth = 0
+    var from = 1
+    for (i in v.indices) {
+        if (regions[i] != Region.CODE) continue
+        when (v[i]) {
+            '(', '[', '{' -> {
+                depth++
+            }
+
+            ')', ']', '}' -> {
+                if (--depth == 0) items += v.substring(from, i)
+            }
+
+            ',' -> {
+                if (depth == 1) {
+                    items += v.substring(from, i)
+                    from = i + 1
+                }
+            }
+        }
+    }
+    return items
+}
+
+/**
+ * Whether the JavaScript expression [value] may give an object literal it holds: one that opens the
+ * value or stands where the value of a group, a conditional or a `||`, `&&`, `??` or `,` comes
+ * from, as in `({x: 1})`, `$a ? {x: 1} : 0` and `null || {x: 1}`. An object passed to a call, put
+ * in an array or returned by a function does not count, and a value with `=>` in it is a function.
+ * Shared with the VS Code extension (`mayGiveObject` in markup.ts).
+ */
+internal fun mayGiveObject(value: String): Boolean {
+    val regions = jsRegions(value)
+    // One entry per open bracket: whether it is a group, through which the value comes.
+    val open = ArrayList<Boolean>()
+    // The last character of code outside a string, a template or a comment, `x` after one of those.
+    var last: Char? = null
+    var beforeLast: Char? = null
+    for (i in value.indices) {
+        val r = regions[i]
+        if (r == Region.COMMENT) continue
+        val c = value[i]
+        if (r != Region.CODE) {
+            beforeLast = last
+            last = 'x'
+            continue
+        }
+        if (c.isJsWhitespace()) continue
+        val through = open.all { it }
+        if (through && c == '=' && value.getOrNull(i + 1) == '>') return false
+        // At the start, after `(`, `?` (and `??`), `:`, `,`, `||` or `&&`.
+        val opensOperand = last == null || last in "(?:," || ((last == '|' || last == '&') && beforeLast == last)
+        if (c == '{' && through && opensOperand) return true
+        if (c == '(' || c == '[' || c == '{') {
+            open += c == '(' && opensOperand
+        } else if ((c == ')' || c == ']' || c == '}') && open.isNotEmpty()) {
+            open.removeAt(open.size - 1)
+        }
+        beforeLast = last
+        last = c
+    }
+    return false
 }
 
 /** Where the value that starts at [from] in an object's [body] ends: at the `,` after it or the bracket that closes the object. */
@@ -238,44 +319,6 @@ private fun valueEnd(
         }
     }
     return body.length
-}
-
-/** `include: '` or `"exclude": "`, a pattern given as a string that opens with a slash. */
-private val STRING_PATTERN_HEAD = Regex("""(["']?)(include|exclude)\1\s*:\s*(["'])/""")
-private val REGEX_FLAGS = Regex("""[dgimsuyv]+""")
-
-/** A pattern of a filter written as a string with flags after its last slash; see [stringPatterns]. */
-internal data class StringPattern(
-    val key: String,
-    val start: Int,
-    val end: Int,
-    val pattern: String,
-    val flags: String,
-)
-
-/**
- * The patterns of a filter written as a string with a slash before them and flags after the last
- * one: `include: '/^foo/i'`. The client's `toRegExp` (signals.ts:752 in 1.0.4) cuts one `/` from
- * each end and nothing else, so `'/^foo/'` works and `'/^foo/i'` looks for `/i`. A scan rather
- * than one regular expression, which backtracks without end on a run of escapes. Shared with the
- * VS Code extension (`stringPatterns` in markup.ts).
- */
-internal fun stringPatterns(text: String): List<StringPattern> {
-    val out = ArrayList<StringPattern>()
-    for (m in STRING_PATTERN_HEAD.findAll(text)) {
-        val quote = m.groupValues[3][0]
-        val start = m.range.last - 1
-        var j = start + 1
-        while (j < text.length && text[j] != quote) j += if (text[j] == '\\') 2 else 1
-        if (j >= text.length) continue
-        val content = text.substring(start + 1, j)
-        // An escaped slash is a slash all the same once the string is read: '\/' is '/'.
-        val slash = content.lastIndexOf('/')
-        val flags = content.substring(slash + 1)
-        if (slash <= 0 || !REGEX_FLAGS.matches(flags)) continue
-        out += StringPattern(m.groupValues[2], start, j + 1, content.substring(1, slash), flags)
-    }
-    return out
 }
 
 /*
@@ -467,6 +510,15 @@ private fun templateConstructEnd(
         }
     }
 }
+
+/** Whether a template construct starts at [at] in a tag's text, where it cuts the attribute name before it short: `${`, `{{`, `<%`. */
+private fun cutByTemplate(
+    tagSource: String,
+    at: Int,
+): Boolean = tagSource.getOrNull(at) == '{' || (at < tagSource.length && templateConstructEnd(tagSource, at) > at)
+
+/** A Kotlin template, `$name` or `${...}`, in a name written in Kotlin source. */
+private val KOTLIN_TEMPLATE = Regex("""\$[A-Za-z_{]""")
 
 public data class Attribute(
     val name: String,
@@ -834,13 +886,15 @@ public class MarkupValidator(
 
     /**
      * Validate the Datastar attributes on one tag, whose text is [tagSource]: with it, a template
-     * construct the tokenizer stepped over inside the tag is seen too.
+     * construct the tokenizer stepped over inside the tag is seen too. [kotlin] says the names are
+     * written in Kotlin source, where `$name` and `${...}` are templates.
      */
     public fun validateAttributes(
         tag: Tag,
         prefix: String,
         tagSource: String?,
         hyphenatedSignals: Set<String> = emptySet(),
+        kotlin: Boolean = false,
     ): List<Issue> {
         val issues = ArrayList<Issue>()
         for (attr in tag.attributes) {
@@ -860,6 +914,12 @@ public class MarkupValidator(
             val parsed = catalog.parseAttributeName(lower, prefix) ?: continue
             val nameEnd = attr.nameEnd
             val spec = parsed.spec
+            // data-on:${evt}, data-signals:{{ name }}, attributes["data-bind:$key"]: a template construct
+            // cut the name short or stands in it, so the key, its modifiers and the value that went with
+            // the name are not known until the page is rendered.
+            val cut = tagSource != null && cutByTemplate(tagSource, nameEnd - tag.start)
+            val templated = cut || hasTemplateSyntax(attr.name) || (kotlin && KOTLIN_TEMPLATE.containsMatchIn(attr.name))
+            if (spec == null && templated) continue
             if (spec == null) {
                 // The rule of the runtime guard. A key or a modifier makes a custom attribute implausible, so
                 // any one-letter neighbour is a typo. A bare name (data-test, data-kind, data-effects) is an
@@ -929,7 +989,7 @@ public class MarkupValidator(
                         link,
                     )
             }
-            if (spec.keyRequired && parsed.key.isNullOrEmpty()) {
+            if (spec.keyRequired && parsed.key.isNullOrEmpty() && !templated) {
                 issues +=
                     Issue(
                         attr.nameStart,
@@ -940,18 +1000,16 @@ public class MarkupValidator(
                         link,
                     )
             }
-            if (!spec.keyed && parsed.key != null && parsed.key !in spec.keys) {
+            if (!spec.keyed && parsed.key != null && parsed.key !in spec.keys && !templated) {
                 issues += Issue(attr.nameStart, nameEnd, "$prefix${spec.name} does not take a key.", Severity.ERROR, "unexpected-key", link)
             }
-            if (parsed.key != null) issues += validateKeyCase(attr, parsed, spec, prefix)
-            // data-signals:${key}: a template construct cut the name short, so its key is not yet written.
-            val cut = tagSource?.getOrNull(attr.nameEnd - tag.start) == '{'
-            val named = validateSignalNames(attr, parsed, spec, prefix, cut)
+            if (parsed.key != null && !templated) issues += validateKeyCase(attr, parsed, spec, prefix)
+            val named = validateSignalNames(attr, parsed, spec, prefix, templated)
             issues += named
-            issues += validateDottedKey(attr, parsed, spec, prefix)
-            val hasKey = !parsed.key.isNullOrEmpty()
+            if (!templated) issues += validateDottedKey(attr, parsed, spec, prefix)
+            val hasKey = !parsed.key.isNullOrEmpty() || templated
             val hasValue = !attr.value.isNullOrEmpty()
-            if (spec.requires == Requires.VALUE && !hasValue) {
+            if (spec.requires == Requires.VALUE && !hasValue && !cut) {
                 issues +=
                     Issue(
                         attr.nameStart,
@@ -987,7 +1045,7 @@ public class MarkupValidator(
                         "wrong-element",
                     )
             }
-            for (mod in parsed.modifiers) {
+            for (mod in if (templated) emptyList() else parsed.modifiers) {
                 val mend = attr.nameStart + mod.offset + mod.text.length
                 // An empty modifier has no text to underline: the `__` that opens it is marked.
                 val mstart = if (mod.text.isEmpty()) mend - 2 else mend - mod.text.length
@@ -1187,7 +1245,7 @@ public class MarkupValidator(
             val keyStart = attr.nameStart + colon + 1
             val keyEnd = keyStart + written.substringBefore("__").length
             // data-signals:constructor="{a: 1}" puts an object under the last part, which the client then writes into the built-in one.
-            val objectUnder = spec.name == "signals" && decodeEntities(attr.value ?: "").text.trimStart().startsWith("{")
+            val objectUnder = spec.name == "signals" && mayGiveObject(decodeEntities(attr.value ?: "").text)
             val path = signalPathProblem(held, objectUnder)
             val reach = if (path == null) signalNameProblem(held) else null
             if (path != null || reach != null) {
@@ -1269,12 +1327,13 @@ public class MarkupValidator(
                     }
 
                     else -> {
-                        signalNameProblem(k.key, keyParts(k))?.let {
+                        val parts = keyParts(k)
+                        signalNameProblem(k.key, parts)?.let {
                             out +=
                                 Issue(
                                     start,
                                     end,
-                                    "This declares the signal ${k.path}, as written, which $it.",
+                                    "This declares the signal ${parts.joinToString(".")}, as written, which $it.",
                                     Severity.WARNING,
                                     "signal-name",
                                     link,
@@ -1391,27 +1450,13 @@ public class MarkupValidator(
                     )
             }
         }
-        for (p in stringPatterns(text)) {
-            val literal = "/${p.pattern}/${p.flags}"
-            val (start, end) = source(p.start, p.end)
-            val advice =
-                if (json) {
-                    "JSON holds no regular expression: write the value as JavaScript, with the literal $literal."
-                } else {
-                    "Write the regular expression literal $literal."
-                }
-            // The string's escapes would mean something else in a literal, so the fix is offered only without them.
-            val fixes = if (json || '\\' in p.pattern) emptyList() else listOf(Fix("Change to $literal", start, end, literal))
+        for (issue in filterPatternIssues(text, jsRegions(text), 0, text.length, json, link)) {
+            val (start, end) = source(issue.start, issue.end)
             out +=
-                Issue(
-                    start,
-                    end,
-                    "Datastar cuts one / from each end of a string ${p.key} and takes the rest as the pattern, " +
-                        "so /${p.flags} stays in it and is matched as text, not read as flags. $advice",
-                    Severity.WARNING,
-                    "filter-pattern",
-                    link,
-                    fixes,
+                issue.copy(
+                    start = start,
+                    end = end,
+                    fixes = issue.fixes.map { f -> source(f.start, f.end).let { (s, e) -> f.copy(start = s, end = e) } },
                 )
         }
         return out
@@ -1568,13 +1613,16 @@ public class MarkupValidator(
                     val ordered = listOf(flags[later], d) + flags.filterIndexed { k, _ -> k != later }
                     val fixed = "__${spec.name}.${ordered.joinToString(".")}"
                     val unknown = flags.filterIndexed { k, f -> k != later && f !in spec.flags }
-                    // With a flag it does not know, the reordered modifier would fail in turn, so it is no fix.
+                    // Only with every other argument a flag it knows is the reordered modifier the one meant:
+                    // __debounce.leading.1.5s would become __debounce.1.leading.5s.
                     fail(
                         "Datastar reads the first argument of __${spec.name} as its duration, " +
-                            "so with .$d first it reads none and does not wait. The duration comes first: $fixed.",
+                            "so with .$d first it reads none and does not wait. The duration comes first" +
+                            (if (unknown.isEmpty()) ": $fixed." else "."),
                         if (unknown.isEmpty()) listOf(Fix("Change to $fixed", at, end, "." + ordered.joinToString("."))) else emptyList(),
                     )
                     for (f in unknown) {
+                        if (DURATION.matches(f)) continue
                         fail(
                             "Unknown flag .$f for __${spec.name}. Allowed: ${spec.flags.joinToString(", ") { ".$it" }.ifEmpty { "none" }}.",
                         )

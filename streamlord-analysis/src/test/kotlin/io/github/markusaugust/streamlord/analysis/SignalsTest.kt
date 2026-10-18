@@ -49,6 +49,13 @@ class SignalsTest {
     }
 
     @Test
+    fun `a spread of a variable may define any signal, and names none to complete`() {
+        val src = """<div data-signals="{a: 1, ...init, b: {...more}}"></div>"""
+        assertEquals(listOf("a", "b"), html(src))
+        assertEquals(listOf("*", "a", "b"), collectSignalDefinitions(src, SourceLanguage.HTML).sorted())
+    }
+
+    @Test
     fun `a key with template syntax in it declares nothing`() {
         val keys =
             "<div data-signals:${'$'}{key}=\"1\"></div><div data-signals:{{ name }}=\"1\"></div><div data-signals:th:text=\"1\"></div>" +

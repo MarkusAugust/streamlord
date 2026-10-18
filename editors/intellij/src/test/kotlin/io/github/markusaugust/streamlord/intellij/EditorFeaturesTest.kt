@@ -23,6 +23,10 @@ class EditorFeaturesTest : BasePlatformTestCase() {
         val fn = provider.documentationAt(myFixture.file, myFixture.file.text.indexOf("dataOnClick") + 3)!!
         assertTrue(fn.first, fn.first.contains("<b>data-on</b>"))
         assertNull(provider.documentationAt(myFixture.file, myFixture.file.text.indexOf("data-on-intersect") + 3))
+        // dataOnSignalPatch also writes the filter, but its expression fills data-on-signal-patch.
+        myFixture.configureByText("Feed.kt", "fun f() { dataOnSignalPatch(\"console.log(patch)\") }")
+        val patch = provider.documentationAt(myFixture.file, myFixture.file.text.indexOf("dataOnSignalPatch") + 3)!!
+        assertTrue(patch.first, patch.first.contains("<b>data-on-signal-patch</b>") && !patch.first.contains("data-on-signal-patch-filter"))
     }
 
     // A theme is a scheme built on Default or Darcula that sets the standard keys. Whatever it gives

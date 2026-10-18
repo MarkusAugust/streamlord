@@ -443,11 +443,14 @@ function templateAdvice(written: string): string {
   return /^\$[0-9]/.test(written) ? ` To keep the text, ${keep}` : ` Write \${${written}} for the signal's value. To keep the text, ${keep}`;
 }
 
-/** The quote that opens the string `offset` is in, by the regions of `js`. */
-function stringQuote(js: string, regions: Uint8Array, offset: number): string {
-  let k = offset;
-  while (k > 0 && regions[k - 1] === Region.STRING) k--;
-  return js[k] ?? "";
+/**
+ * For each offset of `js`, where the run of string characters it is in starts: the quote that
+ * opens the string. One pass, so that a string full of rewrites is not walked back once for each.
+ */
+function stringStarts(regions: Uint8Array): Int32Array {
+  const out = new Int32Array(regions.length);
+  for (let k = 0; k < regions.length; k++) out[k] = k > 0 && regions[k - 1] === Region.STRING ? out[k - 1]! : k;
+  return out;
 }
 
 /** Where a character the client paired as a quote sits, for the message that names it. */
@@ -464,6 +467,128 @@ function placeOf(region: number): string {
     default:
       return "";
   }
+}
+
+/** `include: '` or `"exclude": "`, a pattern given as a string that opens with a slash. */
+const STRING_PATTERN_HEAD = /(["']?)(include|exclude)\1\s*:\s*(["'`])\//g;
+
+/**
+ * The flags a filter's pattern may end with. `d` is left out: it changes nothing a filter does, so
+ * nobody writes it there, and the tail of a path such as `'/users/id'` is then not read as flags.
+ */
+const REGEX_FLAGS = /^[gimsuyv]+$/;
+
+export interface StringPattern {
+  key: string;
+  start: number;
+  end: number;
+  pattern: string;
+  flags: string;
+}
+
+/**
+ * The patterns of a filter written as a string with a slash before them and flags after the last
+ * one: `include: '/^foo/i'`. The client's `toRegExp` (signals.ts:752 in 1.0.4) cuts one `/` from
+ * each end and nothing else, so `'/^foo/'` works and `'/^foo/i'` looks for `/i`. Only the keys of
+ * the object between `from` and `to` count: not `xinclude`, nor a key in a string or a comment. A
+ * template literal counts when it holds no `${`. A scan rather than one regular expression, which
+ * backtracks without end on a run of escapes. Shared with the analysis module (`stringPatterns`
+ * in Expression.kt).
+ */
+export function stringPatterns(text: string, regions: Uint8Array = jsRegions(text), from = 0, to = text.length): StringPattern[] {
+  const out: StringPattern[] = [];
+  const head = new RegExp(STRING_PATTERN_HEAD.source, "g");
+  head.lastIndex = from;
+  for (let m = head.exec(text); m !== null && m.index < to; m = head.exec(text)) {
+    const at = m.index;
+    const keyOpens = m[1] ? regions[at] === Region.STRING && regions[at - 1] !== Region.STRING : regions[at] === Region.CODE;
+    if (!keyOpens || isIdentPart(text[at - 1])) continue;
+    const quote = m[3]!;
+    const start = at + m[0].length - 2;
+    let j = start + 1;
+    while (j < to && text[j] !== quote && !(quote === "`" && text.startsWith("${", j))) j += text[j] === "\\" ? 2 : 1;
+    if (j >= to || text[j] !== quote) continue;
+    const content = text.slice(start + 1, j);
+    // An escaped slash is a slash all the same once the string is read: '\/' is '/'.
+    const slash = content.lastIndexOf("/");
+    const flags = content.slice(slash + 1);
+    if (slash <= 0 || !REGEX_FLAGS.test(flags)) continue;
+    out.push({ key: m[2]!, start, end: j + 1, pattern: content.slice(1, slash), flags });
+  }
+  return out;
+}
+
+/** Flags a regular expression literal takes: each once, and `u` and `v` not together. */
+function validFlags(flags: string): boolean {
+  return new Set(flags).size === flags.length && !(flags.includes("u") && flags.includes("v"));
+}
+
+/** `pattern` as the body of a literal: a `/` escaped, as `SignalFilter.regexLiteral` in streamlord-html writes it. */
+function literalBody(pattern: string): string {
+  if (pattern.length === 0) return "(?:)";
+  let out = "";
+  for (let i = 0; i < pattern.length; i++) {
+    if (pattern[i] === "\\") {
+      out += pattern.slice(i, i + 2);
+      i++;
+    } else out += pattern[i] === "/" ? "\\/" : pattern[i];
+  }
+  return out;
+}
+
+/**
+ * The `filter-pattern` warnings for the string patterns of the object between `from` and `to` in
+ * `text`: a filter's value, `json` when it is JSON, or the `filterSignals` of an action. Shared
+ * with the analysis module (`filterPatternIssues` in Expression.kt).
+ */
+export function filterPatternIssues(text: string, regions: Uint8Array, from: number, to: number, json: boolean, link: string): Issue[] {
+  return stringPatterns(text, regions, from, to).map((p) => {
+    const literal = `/${literalBody(p.pattern)}/${p.flags}`;
+    const valid = validFlags(p.flags);
+    const advice = !valid
+      ? `As flags ${p.flags} would not do either: each is given once, and u and v not together. Write a regular expression literal${json ? ", in JavaScript rather than JSON," : ""} with the flags meant.`
+      : json
+        ? `JSON holds no regular expression: write the value as JavaScript, with the literal ${literal}.`
+        : `Write the regular expression literal ${literal}.`;
+    // The string's escapes would mean something else in a literal, and a quote or a reference in an attribute would need its own, so the fix is offered only without them.
+    const fixable = valid && !json && !/[\\'"`&]/.test(p.pattern);
+    return {
+      start: p.start,
+      end: p.end,
+      message: `Datastar cuts one / from each end of a string ${p.key} and takes the rest as the pattern, so /${p.flags} stays in it and is matched as text, not read as flags. ${advice}`,
+      severity: "warning" as const,
+      code: "filter-pattern",
+      link,
+      ...(fixable ? { fixes: [{ title: `Change to ${literal}`, start: p.start, end: p.end, text: literal }] } : {}),
+    };
+  });
+}
+
+/** `filterSignals: {` in the options of an action, which the client reads with the same `toRegExp`. */
+const FILTER_SIGNALS = /(["']?)filterSignals\1\s*:\s*\{/g;
+
+/** The `filter-pattern` warnings for the `filterSignals` of the actions in `text`. */
+function filterSignalsIssues(text: string): Issue[] {
+  if (!text.includes("filterSignals")) return [];
+  const regions = jsRegions(text);
+  const out: Issue[] = [];
+  for (const m of text.matchAll(FILTER_SIGNALS)) {
+    const keyOpens = m[1] ? regions[m.index] === Region.STRING && regions[m.index - 1] !== Region.STRING : regions[m.index] === Region.CODE;
+    if (!keyOpens || isIdentPart(text[m.index - 1])) continue;
+    const open = m.index + m[0].length - 1;
+    let depth = 0;
+    let close = text.length;
+    for (let i = open; i < text.length; i++) {
+      if (regions[i] !== Region.CODE) continue;
+      if (text[i] === "{") depth++;
+      else if (text[i] === "}" && --depth === 0) {
+        close = i + 1;
+        break;
+      }
+    }
+    out.push(...filterPatternIssues(text, regions, open, close, false, DOCS.actions));
+  }
+  return out;
 }
 
 /**
@@ -523,6 +648,7 @@ export function validateExpression(text: string, returnsValue?: boolean, hyphena
     }
   }
 
+  let starts: Int32Array | null = null;
   for (const r of rewritten.rewrites) {
     const region = regions[r.start] ?? Region.CODE;
     if (region === Region.COMMENT) continue;
@@ -543,7 +669,7 @@ export function validateExpression(text: string, returnsValue?: boolean, hyphena
           ? ", because the literal also holds a ${...}, so the text holds that"
           : region === Region.REGEX
             ? ", which changes the pattern"
-            : stringQuote(script.js, regions, r.start) === (r.kind === "signal" ? "'" : '"')
+            : script.js[(starts ??= stringStarts(regions))[r.start]!] === (r.kind === "signal" ? "'" : '"')
               ? `, because its pattern pairs the quotes before it differently. The ${r.kind === "signal" ? "'" : '"'} it writes ends the string, so the browser cannot parse the expression`
               : ", because its pattern pairs the quotes before it differently, so the string holds that";
       issues.push({
@@ -658,6 +784,7 @@ export function validateExpression(text: string, returnsValue?: boolean, hyphena
       else if ((c === ")" || c === "]" || c === "}") && depth > 0) depth--;
     }
   }
+  issues.push(...filterSignalsIssues(text));
   return issues;
 }
 

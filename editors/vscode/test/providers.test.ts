@@ -154,6 +154,13 @@ describe("hover provider", () => {
     assert.match(String((attr?.contents as unknown as { value: string }).value), /__threshold/);
   });
 
+  it("documents dataOnSignalPatch as the attribute its expression fills, not the filter it also writes", () => {
+    const kdoc = new MockDocument(`div { dataOnSignalPatch("console.log(patch)", SignalFilter.exclude("^_")) }`, "kotlin");
+    const value = String((hover.provideHover(kdoc as never, new Position(0, 10) as never)?.contents as unknown as { value: string }).value);
+    assert.match(value, /\*\*data-on-signal-patch\*\*/);
+    assert.doesNotMatch(value, /data-on-signal-patch-filter/);
+  });
+
   it("documents attributes inside html strings in kotlin", () => {
     const kdoc = new MockDocument(`val x = """<div data-on-intersect__once="x()">"""`, "kotlin");
     const attr = hover.provideHover(kdoc as never, new Position(0, 20) as never);

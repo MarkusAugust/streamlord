@@ -42,8 +42,9 @@ function that returns HTML, a `val` holding a fragment), and in HTML and templat
   `$['år']`, that does reach it. `data-signals:constructor="1"` is held, and says nothing.
 - Values the client evaluates or splits: a filter of `data-json-signals` or
   `data-on-signal-patch-filter` that does not compile or reads a signal, a pattern written as a
-  string with flags after its last slash, `'/^user/i'`, where the client cuts one `/` from each
-  end and matches the `/i` as text (`'/^user/'` works as it is), `data-computed` without a key
+  string with flags after its last slash, `'/^user/i'`, there or in the `filterSignals` of an
+  action, where the client cuts one `/` from each end and matches the `/i` as text (`'/^user/'`
+  works as it is), `data-computed` without a key
   whose value is sure to be no function, and a `;` inside brackets in a value that is read, where
   the client splits it and loses the value.
 
