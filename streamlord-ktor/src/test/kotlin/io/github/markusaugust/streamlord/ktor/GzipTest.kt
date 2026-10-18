@@ -8,10 +8,10 @@ import io.ktor.client.statement.bodyAsBytes
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
+import io.ktor.server.application.install
 import io.ktor.server.plugins.compression.Compression
 import io.ktor.server.plugins.compression.gzip
 import io.ktor.server.plugins.compression.matchContentType
-import io.ktor.server.application.install
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
@@ -154,8 +154,13 @@ class GzipTest {
     @Test
     fun `a render that repeats the last costs a fraction of the first`() =
         runTest {
-            val rows = (0 until 200).joinToString("") { "<tr id=\"row-$it\"><td class=\"name\">Item $it</td><td class=\"qty\">${it * 7 % 13}</td></tr>" }
-            val first = "event: datastar-patch-elements\ndata: selector #view\ndata: mode inner\ndata: elements <table id=\"t\">$rows</table>\n\n"
+            val rows =
+                (0 until 200).joinToString("") {
+                    "<tr id=\"row-$it\"><td class=\"name\">Item $it</td><td class=\"qty\">${it * 7 % 13}</td></tr>"
+                }
+            val first =
+                "event: datastar-patch-elements\ndata: selector #view\ndata: mode inner\n" +
+                    "data: elements <table id=\"t\">$rows</table>\n\n"
             val second = first.replace("Item 17<", "Item 17 (sold)<")
             val channel = ByteChannel()
             val sink = GzipChannelSseSink(channel)

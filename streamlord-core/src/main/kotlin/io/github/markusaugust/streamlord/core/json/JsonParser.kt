@@ -22,13 +22,53 @@ public object JsonParser {
     public const val MAX_NUMBER_LENGTH: Int = 1000
 
     /** Parse any JSON value. */
-    public fun parse(text: String, maxDepth: Int = DEFAULT_MAX_DEPTH): JsonValue = Cursor(text, maxDepth).parseDocument()
+    public fun parse(
+        text: String,
+        maxDepth: Int = DEFAULT_MAX_DEPTH,
+    ): JsonValue = Cursor(text, maxDepth).parseDocument()
 
     /** Parse text that must be a JSON object, as signals always are. */
-    public fun parseObject(text: String, maxDepth: Int = DEFAULT_MAX_DEPTH): JsonObject =
-        parse(text, maxDepth) as? JsonObject ?: throw JsonParseException("Expected a JSON object", 0)
+    public fun parseObject(
+        text: String,
+        maxDepth: Int = DEFAULT_MAX_DEPTH,
+    ): JsonObject = parse(text, maxDepth) as? JsonObject ?: throw JsonParseException("Expected a JSON object", 0)
 
-    private class Cursor(private val s: String, private val maxDepth: Int) {
+    /**
+     * Whether [text] opens objects and arrays more than [maxDepth] deep, counted as [parse] counts
+     * them and with strings skipped. It reads the text once and builds nothing, so a codec that
+     * recurses can be spared input that would blow its stack. Text that is not JSON is the
+     * parser's to refuse.
+     */
+    internal fun nestsDeeperThan(
+        text: String,
+        maxDepth: Int,
+    ): Boolean {
+        var depth = 0
+        var inString = false
+        var i = 0
+        while (i < text.length) {
+            val c = text[i]
+            if (inString) {
+                when (c) {
+                    '\\' -> i++
+                    '"' -> inString = false
+                }
+            } else {
+                when (c) {
+                    '"' -> inString = true
+                    '{', '[' -> if (++depth > maxDepth) return true
+                    '}', ']' -> depth--
+                }
+            }
+            i++
+        }
+        return false
+    }
+
+    private class Cursor(
+        private val s: String,
+        private val maxDepth: Int,
+    ) {
         private var i = 0
 
         fun parseDocument(): JsonValue {
@@ -72,13 +112,18 @@ public object JsonParser {
                 fields[key] = parseValue(depth)
                 skipWhitespace()
                 when (peek()) {
-                    ',' -> i++
+                    ',' -> {
+                        i++
+                    }
+
                     '}' -> {
                         i++
                         return JsonObject(fields)
                     }
 
-                    else -> fail("Expected ',' or '}'")
+                    else -> {
+                        fail("Expected ',' or '}'")
+                    }
                 }
             }
         }
@@ -97,13 +142,18 @@ public object JsonParser {
                 items += parseValue(depth)
                 skipWhitespace()
                 when (peek()) {
-                    ',' -> i++
+                    ',' -> {
+                        i++
+                    }
+
                     ']' -> {
                         i++
                         return JsonArray(items)
                     }
 
-                    else -> fail("Expected ',' or ']'")
+                    else -> {
+                        fail("Expected ',' or ']'")
+                    }
                 }
             }
         }
@@ -178,7 +228,10 @@ public object JsonParser {
             return JsonNumber(s.substring(start, i))
         }
 
-        private fun literal(word: String, value: JsonValue): JsonValue {
+        private fun literal(
+            word: String,
+            value: JsonValue,
+        ): JsonValue {
             if (!s.startsWith(word, i)) fail("Invalid literal")
             i += word.length
             return value

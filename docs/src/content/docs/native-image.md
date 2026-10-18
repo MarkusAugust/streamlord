@@ -92,8 +92,17 @@ KotlinxSignalsCodec(
 ```
 
 It asks only for what an image cannot resolve by itself: your own classes, and containers holding
-them. `String`, `Int`, `List<String>` and the rest are answered from a table inside
-kotlinx.serialization that ships in the bytecode like any other code, so strict lets them through.
+them. A container is named whole, because kotlinx.serialization looks up `List<SearchSignals>` by
+reading the class of what it holds, which is the reflection an image cannot do; naming
+`SearchSignals` alone does not cover it:
+
+```kotlin sample=none
+typeOf<List<SearchSignals>>() to ListSerializer(SearchSignals.serializer())
+```
+
+`String`, `Int`, `List<String>` and the rest are answered from a table inside
+kotlinx.serialization that ships in the bytecode like any other code, so `requireNamedSerializers`
+lets them through.
 
 It is worth turning on the day you add the second signals class, because the failure it prevents is
 a silent one. Leave it out and the codec falls back to asking kotlinx.serialization to find the

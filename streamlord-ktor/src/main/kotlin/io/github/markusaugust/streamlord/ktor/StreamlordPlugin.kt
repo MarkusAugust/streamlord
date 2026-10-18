@@ -49,6 +49,13 @@ public class StreamlordPluginConfig {
      */
     public var compress: Boolean = false
 
+    /**
+     * Refuse signals in a request body that is not declared `application/json`, as Datastar's
+     * client always declares it, so a form on another site cannot post them. On by default; see
+     * [Streamlord.requireJsonContentType].
+     */
+    public var requireJsonContentType: Boolean = true
+
     internal fun build(): Streamlord =
         streamlord ?: Streamlord(
             codec = codec ?: Streamlord.Default.codec,
@@ -57,6 +64,7 @@ public class StreamlordPluginConfig {
             attributePrefixes = attributePrefixes,
             heartbeat = heartbeat,
             compress = compress,
+            requireJsonContentType = requireJsonContentType,
         )
 }
 

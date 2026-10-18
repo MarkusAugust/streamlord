@@ -6,7 +6,9 @@ import io.github.markusaugust.streamlord.core.DatastarEventValidationException
  * The namespace in which new elements are conjured. HTML is the default realm; SVG and MathML
  * are older tongues that the browser will only parse when told so explicitly.
  */
-public enum class ElementNamespace(public val wire: String) {
+public enum class ElementNamespace(
+    public val wire: String,
+) {
     HTML("html"),
     SVG("svg"),
     MATHML("mathml"),
