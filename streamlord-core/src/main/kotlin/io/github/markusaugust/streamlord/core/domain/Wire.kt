@@ -69,6 +69,22 @@ public object Wire {
      */
     internal fun htmlBlank(html: String?): Boolean = html == null || html.all { it == ' ' || it in "\t\n\u000C\r" }
 
+    /**
+     * Whether [html] gives the client nothing to patch in [mode]: [htmlBlank], or, for an `outer`
+     * or `replace` without a selector, blank as Kotlin's `isBlank()` has it. That patch takes only
+     * the elements from what it is sent, so a no-break space or U+3000 there changes nothing.
+     */
+    internal fun noElements(
+        html: String?,
+        mode: ElementPatchMode,
+        selector: String?,
+    ): Boolean =
+        if (selector == null && (mode == ElementPatchMode.OUTER || mode == ElementPatchMode.REPLACE)) {
+            html.isNullOrBlank()
+        } else {
+            htmlBlank(html)
+        }
+
     /** Split text into lines on `\r\n`, `\r` or `\n`, exactly as the SSE grammar does. */
     public fun lines(text: String): List<String> = text.split(LINE_BREAKS)
 

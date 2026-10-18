@@ -80,8 +80,11 @@ All notable changes to Streamlord are recorded here. The format follows
   written `b___case.pascal`, set the class `b`, and `dataSignals("b_", ..., ifMissing = true)`
   declared `$b` and lost its `__ifmissing`. Without a modifier it is written as before.
 - A Kotlin `Regex` with a back reference before its group has closed, `(a\1)`, `\1(a)` or
-  `(?<n>a\k<n>)`, is refused by `SignalFilter`: Java never matches it there, and JavaScript
-  matches it as empty, so the filter took signals Kotlin would not.
+  `(?<n>a\k<n>)`, is refused by `SignalFilter`: JavaScript matches it as empty, and Java fails it
+  or, in a repeated group such as `(a|b\1)+`, matches what the group took on the pass before, so
+  the filter took signals Kotlin would not. `(?:(a)|b\1)+`, whose reference comes after its group,
+  is written as it is and still differs: JavaScript clears the group at each pass and Java keeps
+  it, so it matches `ab` in JavaScript only.
 - A Kotlin `Regex` with a quantifier that has nothing to repeat, such as `$?`, `^{2}`, `\b*`, a
   `{1}` at the start, after `|` or `(`, on a lookbehind or after an empty `\Q\E`, and the empty
   `(?)`, is refused by `SignalFilter`. Java takes them; JavaScript refuses the literal with
@@ -298,21 +301,26 @@ All notable changes to Streamlord are recorded here. The format follows
 ### Fixed
 
 - `mergePatchAsClient` now folds a patch exactly as the 1.0.4 client does, held to the client's
-  `mergePatch` built from source over 326 scenarios: a `length` is turned into a number the
+  `mergePatch` built from source over 329 scenarios: a `length` is turned into a number the
   JavaScript way (`[]` and `false` are 0, `"2"` is 2), deleting a `length` throws, a patch that
   throws keeps the keys before it, and keys are walked and kept in JavaScript's order, also in
-  objects inside arrays. A fold copies only what the patch reaches and hands the rest back as the
-  same values, so a stream of small patches into a large store costs what the patches touch.
+  objects inside arrays and in a store that a number, a boolean or `null` hands back unchanged. A
+  fold copies each object and array on the patch's path in full width and hands the rest back as
+  the same values, so a small patch into a large store costs time linear in the width of the
+  levels the patch goes through, not in the size of the store.
 - `SseDecoder` read some frames the client takes as malformed. An empty
   `viewTransitionSelector` is none; an element patch with no elements, or only white space as
   HTML counts it (tab, line feed, form feed, carriage return, space), in a mode that needs them
-  decodes to what the client does with it: an `outer` or `replace` with a selector removes the
-  target, an `inner` empties it, and the rest are no event, as is an `outer` or `replace` without
-  a selector whose elements hold no tag. A no-break space, U+3000, U+001C or any other character
-  is text the client inserts, measured in Chrome, and comes back as elements; `PatchElements` and
-  `ElementsResponse` take such elements too, where Kotlin's `isBlank()` refused them. A frame
-  that changes nothing but asks for `useViewTransition` is no event, though the client starts a
-  view transition around it. Flags are read with JavaScript's `trim()`, so `true` followed by a
+  decodes to what the client does with it: an `outer` or `replace` with a selector takes the
+  target out and leaves the white space in its place as a text node, and comes back as a removal;
+  an `inner` puts the white space in place of the target's children; an `append`, `prepend`,
+  `before` or `after` inserts it as a text node and changes no element, and is no event, as is an
+  `outer` or `replace` without a selector whose elements hold no tag. A no-break space, U+3000,
+  U+001C or any other character is text the client inserts, measured in Chrome, and comes back as
+  elements; `PatchElements` and `ElementsResponse` take such elements too, where Kotlin's
+  `isBlank()` refused them, except in an `outer` or `replace` without a selector, where the client
+  takes only elements and they would patch nothing. A frame that changes no element but asks for
+  `useViewTransition` is no event, though the client starts a view transition around it. Flags are read with JavaScript's `trim()`, so `true` followed by a
   byte order mark is true and `true` followed by U+001C is not.
 - A string with half of a surrogate pair reached the client as `?` from a codec, in elements and
   in a script response. Signals now carry it as `\ud800`, as the built-in writer does, and

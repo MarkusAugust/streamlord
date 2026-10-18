@@ -330,6 +330,11 @@ internal fun HttpServletResponse.prepareStream(request: HttpServletRequest?): Bo
  * close. HTTP/2 has no such header, and a client that sent `Connection: close` is not contradicted.
  * One that asked for keep-alive itself gets Tomcat's answer, which comes on top of a header set
  * here: `Connection: keep-alive, keep-alive`.
+ *
+ * Tomcat may still close the connection on its own, after the header is set and out of sight of
+ * the servlet API: on the request that reaches `maxKeepAliveRequests`, the 100th on a connection
+ * by default, it adds `Connection: close`, and the response carries both; Tomcat closes the
+ * connection after it all the same. Jetty drops the header from every response.
  */
 private fun wantsKeepAlive(request: HttpServletRequest?): Boolean {
     if (request == null || !request.protocol.equals("HTTP/1.1", ignoreCase = true)) return false

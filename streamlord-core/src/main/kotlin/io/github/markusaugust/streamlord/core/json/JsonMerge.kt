@@ -62,8 +62,10 @@ public class SignalPatchException(
  * client, has its earlier keys applied: the exception is a [SignalPatchException] that carries
  * the store as the client keeps it.
  *
- * Only the part of [store] the patch reaches is copied; the rest of the result is the very same
- * values, so folding a stream of small patches into a large store costs what the patches touch.
+ * Each fold copies, in full width, every object and array on the path the patch goes through,
+ * from the top down, and hands the rest of the result back as the very same values. Folding a
+ * small patch into a large store therefore costs time linear in the width of the levels it goes
+ * through, not in the size of the store.
  */
 public fun mergePatchAsClient(
     store: JsonObject,
@@ -76,7 +78,7 @@ public fun mergePatchAsClient(
             is JsonObject -> patch
             is JsonArray -> patch.withIndex().associate { (i, v) -> i.toString() to v }
             is JsonString -> patch.value.withIndex().associate { (i, c) -> i.toString() to JsonString(c.toString()) }
-            else -> return store
+            else -> return inJsOrderDeep(store) as JsonObject
         }
     val root = JsObject(LinkedHashMap<String, Any>(store))
     try {

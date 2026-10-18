@@ -35,14 +35,16 @@ class MergePatchAsClientTest {
      * the 1.0.4 source (engine/signals.ts) under Bun and happy-dom, a fresh store per scenario, and
      * `client` is `JSON.stringify` of the root after each step, or `THROWS` and the root once the
      * step threw. The audit's 317 scenarios (17 by hand, 300 at random with seed 7) plus the cases
-     * around `length`, a throw partway through a patch and key order.
+     * around `length`, a throw partway through a patch and key order. A scenario with a `store`
+     * starts from that text as parsed here, out of JavaScript's key order, where the client starts
+     * from `JSON.parse` of it.
      */
     @Test
     fun `folds each step as the client's own mergePatch does`() {
         val scenarios = JsonParser.parse(javaClass.getResource("/client-merge-differential.json")!!.readText()) as JsonArray
-        assertEquals(326, scenarios.size)
+        assertEquals(329, scenarios.size)
         for (scenario in scenarios.objects()) {
-            var store = JsonObject.EMPTY
+            var store = scenario.string("store")?.let(JsonParser::parseObject) ?: JsonObject.EMPTY
             for ((i, step) in scenario.array("steps")!!.objects().withIndex()) {
                 val patch = JsonParser.parse(step.string("signals")!!)
                 val got =
@@ -57,8 +59,8 @@ class MergePatchAsClientTest {
         }
     }
 
-    // A fold copies only what the patch reaches, so a stream of small patches into a large store
-    // costs what the patches touch: what is left alone is the very same value, not a copy of it.
+    // A fold copies each level on the patch's path in full width and no more: what is left alone
+    // is the very same value, not a copy of it.
     @Test
     fun `leaves what a patch does not reach as it was`() {
         val big = "{" + (0 until 2000).joinToString(",") { "\"k$it\":{\"v\":$it,\"l\":[1,{\"b\":2,\"0\":3}]}" } + "}"

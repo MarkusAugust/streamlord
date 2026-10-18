@@ -9,6 +9,8 @@ import kotlinx.html.input
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.microseconds
@@ -520,13 +522,19 @@ class AsTheClientReadsItTest {
         )
     }
 
-    // Java never matches a back reference to a group that has not closed; JavaScript, measured in
-    // headless Chrome, matches it as empty: /^(a\1)$/ and /^\1(a)$/ both match "a".
+    // JavaScript, measured in headless Chrome, matches a back reference to a group that has not
+    // closed as empty: /^(a\1)$/ and /^\1(a)$/ both match "a". Java fails it on the group's first
+    // pass, and in a repeat matches what the group took before: ^(a|b\1)+$ takes "aba" in Java and
+    // "ab" in JavaScript.
     @Test
     fun `a back reference before its group has closed is refused`() {
-        for (pattern in listOf("(a\\1)", "\\1(a)", "(a(b)\\1)", "(?<n>a\\k<n>)", "(?:a\\1)(b)")) {
+        for (pattern in listOf("(a\\1)", "\\1(a)", "(a(b)\\1)", "(?<n>a\\k<n>)", "(?:a\\1)(b)", "(a|b\\1)+")) {
             assertFailsWith<IllegalArgumentException>(pattern) { SignalFilter.regexLiteral(Regex(pattern)) }
         }
+        assertTrue(Regex("^(a|b\\1)+$").matches("aba"))
+        val message = assertFailsWith<IllegalArgumentException> { SignalFilter.regexLiteral(Regex("(a|b\\1)+")) }.message!!
+        assertFalse("never matches" in message, message)
+        assertTrue("repeated group" in message, message)
         assertEquals("/(a)\\1/", SignalFilter.regexLiteral(Regex("(a)\\1")))
         assertEquals("/((a)\\2)/", SignalFilter.regexLiteral(Regex("((a)\\2)")))
         assertEquals("/(a(b)\\2)/", SignalFilter.regexLiteral(Regex("(a(b)\\2)")))

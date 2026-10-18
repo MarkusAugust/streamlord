@@ -36,7 +36,7 @@ public data class ElementsResponse(
 ) : DatastarResponse {
     init {
         // An inner patch of nothing empties its target, and a remove needs no elements at all.
-        if (Wire.htmlBlank(elements) && mode != ElementPatchMode.INNER && mode != ElementPatchMode.REMOVE) {
+        if (Wire.noElements(elements, mode, selector) && mode != ElementPatchMode.INNER && mode != ElementPatchMode.REMOVE) {
             throw DatastarEventValidationException("elements must not be blank")
         }
         selector?.let { Wire.selector(it) }

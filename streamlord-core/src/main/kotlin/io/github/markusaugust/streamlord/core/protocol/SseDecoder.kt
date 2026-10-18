@@ -39,15 +39,17 @@ public object SseDecoder {
      * signals. A flag is `true` when it reads `true` once JavaScript's `trim()` is done with it,
      * and an empty selector or `viewTransitionSelector` is none. An element patch with no
      * elements, or only white space as HTML counts it (tab, line feed, form feed, carriage return
-     * and space), in a mode that needs them is what the client makes of it: `outer` or `replace`
-     * with a selector removes the target, so it comes back as a [ElementPatchMode.REMOVE],
-     * `inner` empties it, and the rest change nothing and are no event. So is an `outer` or
-     * `replace` without a selector whose elements hold no tag, since the client takes only the
-     * elements from it. Any other character, a no-break space among them, is text the client
-     * inserts, and the patch comes back with it.
+     * and space), in a mode that needs them is what the client makes of it. `outer` or `replace`
+     * with a selector takes the target out and leaves that white space, if any, in its place as a
+     * text node, so it comes back as a [ElementPatchMode.REMOVE]; `inner` puts the white space in
+     * place of the target's children and comes back as itself. `append`, `prepend`, `before` and
+     * `after` insert the white space as a text node and change no element, and are no event. So
+     * is an `outer` or `replace` without a selector whose elements hold no tag, since the client
+     * takes only the elements from it. Any other character, a no-break space among them, is text
+     * the client inserts, and the patch comes back with it.
      *
      * Such a frame that also asks for `useViewTransition` still has the client start a view
-     * transition, around a patch that changes nothing; it is no event all the same, and only the
+     * transition, around a patch that changes no element; it is no event all the same, and only the
      * one that removes the target carries the transition.
      *
      * @throws DatastarEventValidationException if a Datastar frame names a mode or namespace that

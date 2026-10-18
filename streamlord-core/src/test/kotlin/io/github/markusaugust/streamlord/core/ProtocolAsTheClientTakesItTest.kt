@@ -28,6 +28,24 @@ class ProtocolAsTheClientTakesItTest {
         assertEquals("event: x\nid: \n\n", SseFrame("x", id = "").render())
     }
 
+    // Chrome on the 1.0.4 bundle: an outer or replace without a selector takes only elements, so a
+    // no-break space there leaves the page as it was; with a selector, or appended, it is text.
+    @Test
+    fun `elements that show as blank are refused where the client takes only elements`() {
+        for (blank in listOf("\u00a0", "\u3000", "\u001c", " \u00a0\n")) {
+            for (mode in listOf(ElementPatchMode.OUTER, ElementPatchMode.REPLACE)) {
+                assertFailsWith<DatastarEventValidationException>("$mode ${blank.map { it.code }}") { PatchElements(blank, mode = mode) }
+                assertFailsWith<DatastarEventValidationException>("$mode ${blank.map { it.code }}") { ElementsResponse(blank, mode = mode) }
+                PatchElements(blank, selector = "#t", mode = mode)
+                ElementsResponse(blank, selector = "#t", mode = mode)
+            }
+            for (mode in listOf(ElementPatchMode.INNER, ElementPatchMode.APPEND, ElementPatchMode.PREPEND, ElementPatchMode.BEFORE)) {
+                PatchElements(blank, selector = "#t", mode = mode)
+                ElementsResponse(blank, selector = "#t", mode = mode)
+            }
+        }
+    }
+
     // fetch.ts:118 gathers the data lines in a plain object; a key Object.prototype has finds no
     // list there, and the client throws and reconnects.
     @Test

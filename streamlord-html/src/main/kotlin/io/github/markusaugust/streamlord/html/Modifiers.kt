@@ -43,7 +43,9 @@ public enum class Case(
  * folds case the Unicode way, and JavaScript without the `u` flag never folds a character
  * outside ASCII into one inside it: `k` matches the Kelvin sign (U+212A) and `s` the long s
  * (U+017F) in Kotlin only. A back reference to a group that took no part in the match, as in
- * `(a)?\1` or `(a)|b\1`, never matches in Java and matches as empty in JavaScript.
+ * `(a)?\1` or `(a)|b\1`, never matches in Java and matches as empty in JavaScript. In a repeat,
+ * Java keeps what a group took on an earlier pass and JavaScript clears it at each pass, so
+ * `(?:(a)|b\1)+`, which is written as it is, matches `ab` in JavaScript only.
  */
 public data class SignalFilter(
     val include: Regex? = null,
@@ -431,11 +433,12 @@ public data class SignalFilter(
             val name: String?,
         )
 
-        // Java never matches a back reference to a group that has not captured yet; JavaScript matches it as empty.
+        // JavaScript matches such a reference as empty. Java fails it on a group's first pass, and
+        // in a repeat matches what the group took on the pass before: (a|b\1)+ takes "aba" in Java only.
         private fun backReferenceTooEarly(reference: String): Nothing =
             javaOnly(
                 "$reference before its group has closed",
-                "Java never matches it there and JavaScript matches it as empty",
+                "JavaScript matches it as empty, and Java fails it or, in a repeated group, matches what the group took on the pass before",
             )
 
         private fun nothingToRepeat(quantifier: String): Nothing =
