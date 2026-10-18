@@ -237,6 +237,13 @@ Streamlord; it is how you delete. Where the client parts from the RFC, on arrays
 `onlyIfMissing` and on a patch that is not an object, `mergePatchAsClient` in `streamlord-core`
 folds a patch the way the client does.
 
+A patch the client fails on partway, such as a `length` an array cannot take, makes
+`mergePatchAsClient` throw `SignalPatchException` with the store as the client keeps it, the keys
+before the failing one applied, and both Stream Inspectors show that store and the reason. In
+the browser the damage outlasts the patch: Datastar 1.0.4 leaves its update batch open after the
+throw, so signals still change but the page stops updating until it is reloaded. Measured in
+Chrome, a `data-text` stayed where it was while clicks moved its signal on.
+
 A dotted name reaches a nested signal: `patchSignals("form.email" to "")` patches `$form.email`,
 the signal `data-signals:form.email` declares, and `removeSignals("form.email")` removes it.
 Where `form` is missing or holds a plain value, the client makes it an empty object first, as a
@@ -246,8 +253,9 @@ Some keys Datastar's client cannot hold, and a patch carrying one throws
 `DatastarEventValidationException` before anything is sent, whether it came from pairs, a codec
 or a JSON string, at any depth:
 
-- `__proto__`, which the client never stores; with an object under it, its merge throws halfway
-  through, and no later signal reaches the page until it is reloaded;
+- `__proto__`, which the client never stores but sets as the prototype of the object holding it;
+  with an object under it, its merge throws halfway through, and the page stops updating until it
+  is reloaded;
 - a property every object already has (`constructor`, `toString`, `valueOf`, `hasOwnProperty`
   and the rest of `Object.prototype`) with an object under it, which the client writes into the
   built-in property before every request: `constructor.prototype` reaches every object on the

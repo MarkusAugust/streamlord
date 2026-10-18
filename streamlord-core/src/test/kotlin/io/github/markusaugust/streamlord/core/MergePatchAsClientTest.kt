@@ -39,11 +39,16 @@ class MergePatchAsClientTest {
      * pairs, and keys named `__proto__` or after what `Object.prototype` holds. A scenario with a `store`
      * starts from that text as parsed here, out of JavaScript's key order, where the client starts
      * from `JSON.parse` of it.
+     *
+     * A step with `refused` is one this fold throws on by design: a `__proto__` that is not `null`
+     * in the patch's objects, which the client takes for a prototype, throwing on some values and
+     * not on others. Its `kept` is the client's root after the same patch cut off before that key,
+     * and the client takes the rest of the scenario from there, in a fresh store.
      */
     @Test
     fun `folds each step as the client's own mergePatch does`() {
         val scenarios = JsonParser.parse(javaClass.getResource("/client-merge-differential.json")!!.readText()) as JsonArray
-        assertEquals(339, scenarios.size)
+        assertEquals(350, scenarios.size)
         for (scenario in scenarios.objects()) {
             var store = scenario.string("store")?.let(JsonParser::parseObject) ?: JsonObject.EMPTY
             for ((i, step) in scenario.array("steps")!!.objects().withIndex()) {
@@ -53,11 +58,43 @@ class MergePatchAsClientTest {
                         mergePatchAsClient(store, patch, step.boolean("onlyIfMissing")!!).also { store = it }.toJson()
                     } catch (e: SignalPatchException) {
                         store = e.store
+                        if (step.string("refused") != null) assertEquals(PROTO_MESSAGE, e.message)
                         "THROWS " + e.store.toJson()
                     }
-                assertEquals(step.string("client"), got, "${scenario.string("name")} step $i")
+                val expected = step.string("kept")?.let { "THROWS $it" } ?: step.string("client")
+                assertEquals(expected, got, "${scenario.string("name")} step $i")
             }
         }
+    }
+
+    // The client sets the value as the object's prototype: the scenarios show the store it keeps
+    // going wrong on a later patch, so the fold refuses rather than show one the client does not hold.
+    @Test
+    fun `refuses __proto__ with a value and passes over it with null`() {
+        val store = JsonParser.parseObject("""{"o":{"k":1},"a":[1]}""")
+        for (value in listOf("1", "\"s\"", "true", "[]", "[1]", "{}", """{"x":1}""")) {
+            for (patch in listOf("""{"b":1,"__proto__":$value}""", """{"o":{"m":1,"__proto__":$value,"n":2}}""")) {
+                val e = assertFailsWith<SignalPatchException>(patch) { mergePatchAsClient(store, JsonParser.parse(patch)) }
+                assertEquals(PROTO_MESSAGE, e.message)
+                assertEquals(
+                    if (patch.startsWith("{\"b\"")) """{"o":{"k":1},"a":[1],"b":1}""" else """{"o":{"k":1,"m":1},"a":[1]}""",
+                    e.store.toJson(),
+                    patch,
+                )
+            }
+        }
+        assertEquals(
+            """{"o":{"k":1,"m":1},"a":[1]}""",
+            mergePatchAsClient(store, JsonParser.parse("""{"o":{"__proto__":null,"m":1}}""")).toJson(),
+        )
+        // In an array value the key is not shown, and the object that had it is replaced by the next patch into it.
+        val held = mergePatchAsClient(store, JsonParser.parse("""{"a":[{"__proto__":null,"k":1}]}"""))
+        assertEquals("""{"o":{"k":1},"a":[{"k":1}]}""", held.toJson())
+        val next = mergePatchAsClient(held, JsonParser.parse("""{"o":{"j":1}}"""))
+        assertEquals(
+            """{"o":{"k":1,"j":1},"a":[{"z":2}]}""",
+            mergePatchAsClient(next, JsonParser.parse("""{"a":{"0":{"z":2}}}""")).toJson(),
+        )
     }
 
     // A fold copies each level on the patch's path in full width and no more: what is left alone
@@ -96,5 +133,11 @@ class MergePatchAsClientTest {
             ) { mergePatchAsClient(store, JsonParser.parse("""{"a":{"length":$length}}""")) }
         }
         assertEquals("""{"a":[1]}""", store.toJson())
+    }
+
+    private companion object {
+        const val PROTO_MESSAGE =
+            "The client sets a signal named __proto__ as the prototype of the object holding it, " +
+                "and its store cannot be shown as JSON after that"
     }
 }

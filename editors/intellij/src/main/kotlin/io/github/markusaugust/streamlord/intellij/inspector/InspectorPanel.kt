@@ -505,9 +505,10 @@ class InspectorPanel(
             storeView.text = pretty(signals)
         } catch (e: SignalPatchException) {
             // The client keeps the keys it set before the one it failed on, and so does the store shown.
+            // A throw also leaves its update batch open (signals.ts:695-708), so the page redraws nothing more.
             signals = e.store
             storeView.text = pretty(signals)
-            error("The signal store cannot take this patch: ${e.message}")
+            error("The signal store cannot take this patch: ${e.message}. $PAGE_STOPS")
         }
     }
 
@@ -714,6 +715,9 @@ class InspectorPanel(
         /** How long a failed request waits for the server to finish logging why. */
         private const val LOG_GRACE_MS = 400L
         private val TIME = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
+
+        private const val PAGE_STOPS =
+            "Where Datastar's client throws on a patch, the page in the browser stops updating until it is reloaded."
 
         fun time(at: Long): String = TIME.format(Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()))
 

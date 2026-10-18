@@ -28,7 +28,11 @@ describe("inspector signal store", () => {
     const signals = posted.filter((m) => m.type === "signals").map((m) => JSON.stringify(m.signals));
     assert.deepEqual(signals, ['{"a":[1,2]}', '{"a":[7,2],"b":1}']);
     const errors = posted.filter((m) => m.type === "error").map((m) => m.message);
-    assert.deepEqual(errors, ['The signal store cannot take this patch: Invalid array length -1 in a signal patch']);
+    // The client leaves its batch open after a throw, so the page stops redrawing (measured in Chrome).
+    assert.deepEqual(errors, [
+      "The signal store cannot take this patch: Invalid array length -1 in a signal patch. " +
+        "Where Datastar's client throws on a patch, the page in the browser stops updating until it is reloaded.",
+    ]);
     apply('{"d":3}');
     assert.equal(JSON.stringify(posted.at(-1)?.signals), '{"a":[7,2],"b":1,"d":3}');
   });

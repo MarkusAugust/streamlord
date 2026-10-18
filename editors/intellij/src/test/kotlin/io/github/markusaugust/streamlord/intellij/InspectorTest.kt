@@ -688,7 +688,11 @@ class InspectorTest : BasePlatformTestCase() {
         patch("""{"b":1,"a":{"0":7,"length":-1},"c":2}""")
         assertEquals("""{"a":[7,2],"b":1}""", JsonParser.parse(store.text).toJson())
         val labels = UIUtil.findComponentsOfType(panel, JLabel::class.java).map { it.text }
-        assertTrue(labels.toString(), "The signal store cannot take this patch: Invalid array length -1 in a signal patch" in labels)
+        // The client leaves its batch open after a throw, so the page stops redrawing (measured in Chrome).
+        val expected =
+            "The signal store cannot take this patch: Invalid array length -1 in a signal patch. " +
+                "Where Datastar's client throws on a patch, the page in the browser stops updating until it is reloaded."
+        assertTrue(labels.toString(), expected in labels)
         patch("""{"d":3}""")
         assertEquals("""{"a":[7,2],"b":1,"d":3}""", JsonParser.parse(store.text).toJson())
     }

@@ -192,11 +192,14 @@ export class SignalPatchError extends Error {
  *
  * Objects are made without a prototype, so `constructor` is a signal name and nothing else. More
  * than `holeLimit` indices past the end of an array throws, rather than fill memory with the holes
- * the client never allocates, and so does a key named `__proto__` that holds an object or an array,
- * which the client takes for the prototype and fails on or corrupts the store with. One that holds
- * anything else is passed over, as the client passes it over. A patch that throws, here or in the client, has its
- * earlier keys applied: the error is a `SignalPatchError` that carries the store as the client
- * keeps it.
+ * the client never allocates. So does a key named `__proto__` with any value but `null`, anywhere in
+ * the patch's objects, where the client throws on some values and not on others: it sets the value
+ * as the prototype of the object holding the key, and its store cannot be shown as JSON after that.
+ * A `__proto__` set to `null` changes nothing, as in the client. Inside an array value the key is
+ * dropped whatever it holds, since the client's store never shows it there, and the object that held
+ * it is replaced by the next patch that reaches it, as the client replaces it. A patch that throws,
+ * here or in the client, has its earlier keys applied: the error is a `SignalPatchError` that carries
+ * the store as the client keeps it, and for `__proto__` the store as it was before that key.
  *
  * The store passed in is never changed. Each object and array on the patch's path is copied, and
  * the rest of the result is the very same values.
@@ -224,9 +227,9 @@ class ClientMerge {
 
   fold(patch: [string, unknown][], node: Node): void {
     for (const [key, value] of patch) {
-      // The client sets an object or array as the prototype, and does nothing with anything else.
+      // The client sets any value but null as the node's prototype, and a null deletes nothing.
       if (key === "__proto__") {
-        if (value !== null && typeof value === "object") throw new Error("The client cannot hold a signal named __proto__");
+        if (value !== null) throw new Error(PROTO_REFUSED);
         continue;
       }
       if (value === null) {
@@ -240,7 +243,7 @@ class ClientMerge {
   private mergeInner(patch: unknown, key: string, parent: Node): void {
     if (isPojo(patch)) {
       const current = this.get(parent, key);
-      const node: Node = Array.isArray(current) ? [...current] : isPojo(current) ? copyObject(current) : emptyObject();
+      const node: Node = Array.isArray(current) ? [...current] : isPojo(current) && !replacedByClient.has(current) ? copyObject(current) : emptyObject();
       this.set(parent, key, node, node);
       this.fold(Object.entries(patch), node);
     } else if (!(this.ifMissing && this.has(parent, key))) {
@@ -323,13 +326,23 @@ function jsNumber(value: unknown): number {
   }
 }
 
-/** A value as the client's store reads it back: every `null` inside it is `""`. */
+const PROTO_REFUSED = "The client sets a signal named __proto__ as the prototype of the object holding it, and its store cannot be shown as JSON after that";
+
+// Objects in an array value that came with a `__proto__` key: the client gave each a prototype other
+// than Object's, so the next patch that reaches one replaces it.
+const replacedByClient = new WeakSet<object>();
+
+/**
+ * A value as the client's store reads it back: every `null` inside it is `""`, and a `__proto__`
+ * key is not there, though the object that had it is replaced by the next patch that reaches it.
+ */
 function asRead(value: unknown): unknown {
   if (value === null) return "";
   if (Array.isArray(value)) return value.map(asRead);
   if (typeof value === "object") {
     const out = emptyObject();
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) out[k] = asRead(v);
+    if (Object.hasOwn(value, "__proto__")) replacedByClient.add(out);
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) if (k !== "__proto__") out[k] = asRead(v);
     return out;
   }
   return value;

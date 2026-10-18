@@ -72,13 +72,15 @@ a Datastar expression: `{{ }}`, `{% %}`, `${ }`, `<% %>`, `[# ]`, and JTE's and 
 control-flow keywords. That covers most engines whatever they are called, and it is a closed set
 in `Markup.kt` with no way to add to it.
 
-An engine outside it, Qute with `{name}`, Closure with `{$name}`, Rocker with `@name`, is judged
-as Datastar would judge the unrendered text, which was measured rather than assumed. Attributes
-that take a signal name report `signal-name-expected` for all three, since a signal name is held
-to a strict pattern and neither a brace nor an `@` is in it. Closure's and Rocker's tags are also an
-`expression-syntax` error in attributes that return a value, such as `data-text="{$name}"`,
-because the client cannot compile that text either. The rendered file is correct and the editor
-says it is not.
+An engine outside it, Qute with `{name}`, Closure with `{$name}`, Rocker with `@name`, has its
+expressions judged as Datastar would judge the unrendered text, which was measured rather than
+assumed. Attributes that take a signal name report `signal-name-expected` for all three. There
+the editors are stricter than the client, which makes a signal named `{$name}` from
+`data-bind="{$name}"`: no `$name` can reach such a signal, so a brace or an `@` in a signal name
+is almost always a mistake. In the rendered file the tag is gone, and the editor says it is
+wrong. In expressions the findings are right about the unrendered text, and a tag does not
+belong there in any case; [Templates](/templates/#if-your-engine-is-not-one-of-those) shows what
+to write instead.
 
 Planned: `AnalyzeOptions` takes the delimiter pairs your engine uses, and the editors read them
 from a setting. Small, and the only reason it is not higher is that it affects one rule for
@@ -87,10 +89,18 @@ engines outside a set that already covers most of them.
 ### Until then
 
 Nothing, for the attributes that take a signal name, which is why this is on the list rather than
-in the "considered" pile. In an attribute that returns text, a Closure or Rocker tag inside a
-JavaScript string, `data-text="'{$name}'"`, gives no findings and renders to a string literal.
-Everything else about your engine already works, and none of it touches what Streamlord puts on
-the wire. [Templates](/templates/) says which half is which.
+in the "considered" pile. A value the page shows goes in an attribute of its own and is read
+with `el.dataset`, which gives no findings for any of the three tags and runs nothing the value
+holds:
+
+```html
+<span data-value="{$name}" data-text="el.dataset.value"></span>
+```
+
+Never put the tag in a JavaScript string, `data-text="'{$name}'"`: the browser undoes the
+engine's HTML escaping before Datastar reads the attribute, so a value with a quote in it is
+code. Everything else about your engine already works, and none of it touches what Streamlord
+puts on the wire.
 
 ## Concurrent stream limits
 

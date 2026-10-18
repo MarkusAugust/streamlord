@@ -15,6 +15,8 @@ import { openStream } from "./streamClient.ts";
 /** How long a failed request waits for the server to finish logging why. */
 const LOG_GRACE_MS = 400;
 
+const PAGE_STOPS = "Where Datastar's client throws on a patch, the page in the browser stops updating until it is reloaded.";
+
 export class Inspector {
   private panel: vscode.WebviewPanel | null = null;
   private abort: AbortController | null = null;
@@ -236,11 +238,12 @@ export class Inspector {
       this.post({ type: "signals", signals: this.signals });
     } catch (e) {
       // The client keeps the keys it set before the one it failed on, and so does the store shown.
+      // A throw also leaves its update batch open (signals.ts:695-708), so the page redraws nothing more.
       if (e instanceof SignalPatchError) {
         this.signals = e.store;
         this.post({ type: "signals", signals: this.signals });
       }
-      this.post({ type: "error", message: `The signal store cannot take this patch: ${(e as Error).message}` });
+      this.post({ type: "error", message: `The signal store cannot take this patch: ${(e as Error).message}. ${PAGE_STOPS}` });
     }
   }
 }

@@ -33,6 +33,10 @@ public class JsonObject(
     // down, so that the next fold need not look again. Only ever goes from false to true.
     internal var jsOrdered: Boolean = false
 
+    // Set by mergePatchAsClient on an object in an array value that came with a `__proto__` key:
+    // the client gave it a prototype other than Object's, so the next patch that reaches it replaces it.
+    internal var clientReplaces: Boolean = false
+
     override val entries: Set<Map.Entry<String, JsonValue>> get() = fields.entries
     override val keys: Set<String> get() = fields.keys
     override val size: Int get() = fields.size

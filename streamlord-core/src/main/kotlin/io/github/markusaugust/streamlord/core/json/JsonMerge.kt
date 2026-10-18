@@ -57,11 +57,15 @@ public class SignalPatchException(
  * fills a hole with `""` on the first read, so a hole is missing to `onlyIfMissing` only until then.
  *
  * More than [holeLimit] indices past the end of an array throws rather than fill memory with the
- * holes the client never allocates, and so does a key named `__proto__` that holds an object or an
- * array, which the client takes for the prototype and fails on or corrupts the store with. One that
- * holds anything else is passed over, as the client passes it over. A patch that throws, here or in the
- * client, has its earlier keys applied: the exception is a [SignalPatchException] that carries
- * the store as the client keeps it.
+ * holes the client never allocates. So does a key named `__proto__` with any value but `null`,
+ * anywhere in the patch's objects, where the client throws on some values and not on others: it
+ * sets the value as the prototype of the object holding the key, and its store cannot be shown as
+ * JSON after that. A `__proto__` set to `null` changes nothing, as in the client. Inside an array
+ * value the key is dropped whatever it holds, since the client's store never shows it there, and
+ * the object that held it is replaced by the next patch that reaches it, as the client replaces it.
+ * A patch that throws, here or in the client, has its earlier keys applied: the exception is a
+ * [SignalPatchException] that carries the store as the client keeps it, and for `__proto__` the
+ * store as it was before that key.
  *
  * Each fold copies, in full width, every object and array on the path the patch goes through,
  * from the top down, and hands the rest of the result back as the very same values. Folding a
@@ -104,7 +108,7 @@ private class JsArray(
 private fun open(value: Any?): Any? =
     when (value) {
         is JsObject, is JsArray -> value
-        is JsonObject -> JsObject(LinkedHashMap<String, Any>(value))
+        is JsonObject -> if (value.clientReplaces) null else JsObject(LinkedHashMap<String, Any>(value))
         is JsonArray -> JsArray(ArrayList<Any>(value))
         else -> null
     }
@@ -136,7 +140,7 @@ private fun inJsOrderDeep(value: JsonValue): JsonValue =
             val fields = value.mapValues { inJsOrderDeep(it.value) }
             val ordered = inJsOrder(fields)
             val same = ordered.keys.toList() == value.keys.toList() && fields.all { (k, v) -> v === value[k] }
-            (if (same) value else JsonObject(ordered)).also { it.jsOrdered = true }
+            (if (same) value else JsonObject(ordered).also { it.clientReplaces = value.clientReplaces }).also { it.jsOrdered = true }
         }
 
         value is JsonArray && !value.jsOrdered -> {
@@ -160,9 +164,9 @@ private class ClientMerge(
         node: Any,
     ) {
         for ((key, value) in inJsOrder(patch)) {
-            // The client sets an object or array as the prototype, and does nothing with anything else.
+            // The client sets any value but null as the node's prototype, and a null deletes nothing.
             if (key == "__proto__") {
-                require(value !is JsonObject && value !is JsonArray) { "The client cannot hold a signal named __proto__" }
+                require(value is JsonNull) { PROTO_REFUSED }
                 continue
             }
             if (value is JsonNull) {
@@ -301,11 +305,30 @@ private fun jsNumber(value: Any): Double =
 
 private val EMPTY = JsonString("")
 
-/** A value as the client's store reads it back: every `null` inside it is `""`. */
+private const val PROTO_REFUSED =
+    "The client sets a signal named __proto__ as the prototype of the object holding it, " +
+        "and its store cannot be shown as JSON after that"
+
+/**
+ * A value as the client's store reads it back: every `null` inside it is `""`, and a `__proto__`
+ * key is not there, though the object that had it is replaced by the next patch that reaches it.
+ */
 private fun asRead(value: JsonValue): JsonValue =
     when (value) {
-        is JsonNull -> EMPTY
-        is JsonArray -> JsonArray(value.map(::asRead))
-        is JsonObject -> JsonObject(value.mapValues { asRead(it.value) })
-        else -> value
+        is JsonNull -> {
+            EMPTY
+        }
+
+        is JsonArray -> {
+            JsonArray(value.map(::asRead))
+        }
+
+        is JsonObject -> {
+            JsonObject(value.filterKeys { it != "__proto__" }.mapValues { asRead(it.value) })
+                .also { it.clientReplaces = "__proto__" in value }
+        }
+
+        else -> {
+            value
+        }
     }
