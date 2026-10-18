@@ -21,17 +21,19 @@ import io.ktor.server.application.Application
 import io.ktor.server.application.install
 import io.ktor.server.application.log
 import io.ktor.server.cio.CIO
+import io.ktor.server.engine.defaultExceptionStatusCode
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.plugins.statuspages.StatusPages
-import io.ktor.server.request.path
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.serialization.Serializable
+import java.io.IOException
 import kotlin.reflect.typeOf
 
 /**
@@ -126,7 +128,7 @@ public fun Application.live() {
     install(StreamlordPlugin) {
         codec = SIGNALS
         // The largest store any page here sends is the judge's, a 1 KiB paste and a few flags.
-        // Four times that, and a body above it is refused before it is read.
+        // Four times that, and a body above it is never read into memory.
         maxSignalsSize = 4096
     }
 
@@ -165,8 +167,16 @@ public fun Application.live() {
      * The four handlers the security page prescribes, and the catch-all under them. Without
      * them Ktor answers an unhandled exception with its message as the body, and a decode
      * message names the type it could not read into; a message from this service's own code
-     * could quote a paste. Every body here is a fixed text, and the catch-all notes what it
-     * caught by class alone.
+     * could quote a paste. Every body here is a fixed text.
+     *
+     * The catch-all answers Ktor's own exceptions with Ktor's own status, so a request with
+     * `%ZZ` in its path or its query is the 400 it would be without StatusPages, and not a 500.
+     * A reader who leaves a stream is an IOException from the write; there is nobody to answer,
+     * and nothing of this service's went wrong. Cancellation is the engine's and is thrown on.
+     *
+     * What is left is logged by the class of what was caught, and nothing from the request,
+     * which the reader shaped. The service has no logging backend, so none of it is written
+     * until one is added; the calls are here for that day.
      */
     install(StatusPages) {
         exception<SignalsTooLargeException> { call, _ ->
@@ -182,8 +192,25 @@ public fun Application.live() {
             call.respondText("Signals must be sent as application/json", status = HttpStatusCode.UnsupportedMediaType)
         }
         exception<Throwable> { call, cause ->
-            call.application.log.error("Unhandled on {}: {}", call.request.path(), cause::class.simpleName)
-            call.respondText("Something went wrong", status = HttpStatusCode.InternalServerError)
+            when (cause) {
+                is CancellationException -> {
+                    throw cause
+                }
+
+                is IOException -> {
+                    call.application.log.debug("A reader left: {}", cause::class.simpleName)
+                }
+
+                else -> {
+                    val status = defaultExceptionStatusCode(cause)
+                    if (status != null) {
+                        call.respondText(status.description, status = status)
+                    } else {
+                        call.application.log.error("Unhandled: {}", cause::class.simpleName)
+                        call.respondText("Something went wrong", status = HttpStatusCode.InternalServerError)
+                    }
+                }
+            }
         }
     }
 
@@ -236,10 +263,10 @@ public fun Application.live() {
 
         /*
          * The editors' check, as a route. The paste is read, judged and answered, and that is
-         * all: it is not logged and not kept, and the one exception that can name it is turned
-         * into a verdict here rather than handed to StatusPages. The page that calls this
-         * declares `data-signals` before `data-on-signal-patch` on the same element; the other
-         * order posts once on load.
+         * all: it is not logged and not kept. A body past the plugin's limit is caught here so
+         * that the reader gets a verdict rather than the 413 the page would never show. The
+         * page that calls this declares `data-signals` before `data-on-signal-patch` on the
+         * same element; the other order posts once on load.
          */
         post("/judge") {
             val events =

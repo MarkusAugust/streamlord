@@ -369,12 +369,14 @@ post("/judge") {
         patchElements(selector = "#verdict", mode = ElementPatchMode.INNER) {
             if (issues.isEmpty()) p { +"The browser will see exactly this." }
             ul {
-                // Every button carries the whole paste again, so the first eight findings with
-                // two fixes each are the answer; the rest is a count.
+                // Every button carries the whole paste again, so the first eight findings are
+                // the answer, with two fixes each and eight buttons in all; the rest is a count.
+                var buttons = 8
                 issues.take(8).forEach { issue ->
                     li {
                         +"${issue.severity.name.lowercase()}: ${issue.message}"
-                        issue.fixes.take(2).forEach { fix ->
+                        issue.fixes.take(minOf(2, buttons)).forEach { fix ->
+                            buttons--
                             // The whole text with the fix applied, as a JavaScript literal; set() escapes it.
                             button { dataOnClick(set("source", fix.apply(source))); +fix.title }
                         }
@@ -410,10 +412,12 @@ the debounce is what keeps a paste from being judged one keystroke at a time:
 the client sees `source` arrive and posts once on load.
 
 Hold the limit on the server, as above, and set the plugin's `maxSignalsSize` a little above it, so
-a body that could never be a legitimate paste is refused: before it is read when the request
-declares its length, and at the limit when it does not. Read the paste, judge it and answer; do
-not log it and do not keep it, in an error message least of all. The `StatusPages` handlers on
-[Security](/security/#bounded-input) keep Ktor's own messages out of the body as well.
+a body that could never be a legitimate paste is never read into memory: a declared length above
+the limit is refused on the headers, and a body that declares none is read up to the limit and no
+further. The connection still drains the rest, since the engine keeps it for the next request;
+what the limit bounds is the memory, not the bytes on the wire. Read the paste, judge it and
+answer; do not log it and do not keep it, in an error message least of all. The `StatusPages`
+handlers on [Security](/security/#bounded-input) keep Ktor's own messages out of the body as well.
 
 ## Signals the pages never declare
 

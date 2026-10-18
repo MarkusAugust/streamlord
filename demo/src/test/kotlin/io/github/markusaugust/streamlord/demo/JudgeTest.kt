@@ -8,8 +8,13 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
+import io.ktor.server.application.Application
+import io.ktor.server.cio.CIO
+import io.ktor.server.engine.embeddedServer
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
+import kotlinx.coroutines.runBlocking
+import java.net.Socket
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -83,7 +88,7 @@ class JudgeTest {
         }
 
     @Test
-    fun `the verdict shows eight findings with two fixes each and counts the rest`() =
+    fun `the verdict shows eight findings, eight fixes in all, and counts the rest`() =
         testApplication {
             application { live() }
 
@@ -92,9 +97,56 @@ class JudgeTest {
 
             assertTrue(body.contains("12 things the browser would not do"), body)
             assertEquals(8, Regex("class=\"judge__finding\"").findAll(body).count(), body)
-            assertEquals(16, Regex("judge__fix").findAll(body).count(), body)
             assertTrue(body.contains("and 4 more"), body)
+
+            // Two fixes to each of the first four findings, and none to the fifth onwards.
+            val findings = body.split("<li class=\"judge__finding\"").drop(1)
+            assertEquals(listOf(2, 2, 2, 2, 0, 0, 0, 0), findings.map { Regex("judge__fix").findAll(it).count() }, body)
         }
+
+    @Test
+    fun `a paste of quotes with eight findings is eight buttons, not sixteen`() =
+        testApplication {
+            application { live() }
+
+            // Each button is the paste again, and a quote in it is four bytes.
+            val body = judge("dataOnClick(\"" + "\$a".repeat(8) + "'".repeat(990) + "\")").bodyAsText()
+
+            assertEquals(8, Regex("judge__fix").findAll(body).count(), body.take(300))
+            assertTrue(body.encodeToByteArray().size < 40_000, body.encodeToByteArray().size.toString())
+        }
+
+    /**
+     * Over a socket against CIO, because a client refuses to send `%ZZ` and the test engine does
+     * not parse requests: the 400 is the engine's BadRequestException reaching the catch-all.
+     */
+    @Test
+    fun `what Ktor itself cannot parse is Ktor's own status, not a 500`() {
+        val server = embeddedServer(CIO, port = 0, host = "127.0.0.1", module = Application::live).start()
+        try {
+            val port =
+                runBlocking {
+                    server.engine
+                        .resolvedConnectors()
+                        .first()
+                        .port
+                }
+            for (target in listOf("/feed?datastar=%7B%22heads%22%3A1%ZZ%7D", "/fe%ZZed")) {
+                val response =
+                    Socket("127.0.0.1", port).use { socket ->
+                        socket.getOutputStream().write(
+                            "GET $target HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".encodeToByteArray(),
+                        )
+                        socket.getInputStream().readBytes().decodeToString()
+                    }
+
+                assertTrue(response.startsWith("HTTP/1.1 400 "), response)
+                assertTrue(response.endsWith("\r\n\r\nBad Request"), response)
+            }
+        } finally {
+            server.stop(0, 0)
+        }
+    }
 
     @Test
     fun `one byte over the limit is the verdict about the limit, and no analysis`() =

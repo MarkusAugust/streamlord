@@ -29,8 +29,15 @@ internal const val SOURCE_MAX = 1024
 /** How many findings the verdict shows. The rest are counted: a paste wrong five hundred times over has had its answer by the eighth. */
 internal const val FINDINGS_MAX = 8
 
-/** How many fixes a finding offers, the preferred first. Each button carries the whole fixed text; the analysis offers up to four. */
+/** How many fixes one finding offers, the preferred first. The analysis offers up to four. */
 internal const val FIXES_MAX = 2
+
+/**
+ * How many fix buttons the whole verdict carries, the first findings served first. Each button
+ * is the whole paste again, and a quote in it is four bytes: eight buttons is the ceiling on what
+ * one request can get back for 1 KiB.
+ */
+internal const val FIXES_TOTAL = 8
 
 /**
  * What the reader typed. `data-bind:source` on the field keeps it in the signal, and the section
@@ -61,7 +68,7 @@ public data class Fixed(
  *
  * [fixed] holds the whole text with each fix applied, which is what the button has to put back in
  * the field. A `Fix` is a range replacement, and its text alone is the helper call without the
- * line it belongs to. At most [FIXES_MAX] of them.
+ * line it belongs to. At most [FIXES_MAX] of them, and none once the verdict has [FIXES_TOTAL].
  */
 public data class Finding(
     val issue: Issue,
@@ -95,9 +102,11 @@ private val analyzer = Analyzer()
  * On [Dispatchers.Default], because the analysis is a lexer and a parser over the paste, which is
  * CPU, and the server's threads are for the connections.
  *
- * Only the first [FINDINGS_MAX] issues become findings, with [FIXES_MAX] fixes each, because every
- * fix is the whole paste over again: a 1 KiB paste that is wrong five hundred times, with four fixes
- * to each, is two megabytes of buttons for an answer that fits in eight lines.
+ * Only the first [FINDINGS_MAX] issues become findings, with [FIXES_MAX] fixes each and
+ * [FIXES_TOTAL] fixes in all, because every fix is the whole paste over again: a 1 KiB paste that
+ * is wrong five hundred times, with four fixes to each, is two megabytes of buttons for an answer
+ * that fits in eight lines, and eight findings with two fixes each is still sixteen copies of a
+ * paste whose quotes the attribute writes as four bytes apiece.
  */
 public suspend fun judge(source: String): Judgement =
     withContext(Dispatchers.Default) {
@@ -107,9 +116,12 @@ public suspend fun judge(source: String): Judgement =
                 Judged.HTML -> analyzer.analyzeHtml(source)
                 Judged.KOTLIN -> analyzer.analyzeKotlin(source)
             }
+        var left = FIXES_TOTAL
         val findings =
             issues.take(FINDINGS_MAX).map { issue ->
-                Finding(issue, issue.fixes.take(FIXES_MAX).map { Fixed(it.title, it.apply(source)) })
+                val fixes = issue.fixes.take(minOf(FIXES_MAX, left))
+                left -= fixes.size
+                Finding(issue, fixes.map { Fixed(it.title, it.apply(source)) })
             }
         Judgement(judged, findings, total = issues.size, errors = issues.count { it.severity == Severity.ERROR })
     }
@@ -119,11 +131,14 @@ public suspend fun judge(source: String): Judgement =
  *
  * The limit is checked here and not in the plugin, so that a paste over it gets a verdict on the
  * page rather than a 413 the client turns into a fetch error nobody reads. The plugin's own limit
- * is four times this: a body that declares a length above it is refused before it is read, and
- * one that declares none is read up to the limit and no further.
+ * is four times this: a body that declares a length above it is not read into memory, and one
+ * that declares none is read up to the limit and no further. The connection still drains the
+ * rest, since CIO keeps it open for the next request.
  *
  * An analysis that throws is noted in [log] by the exception's class alone, so a broken analysis
- * shows up without the paste, which is nobody's business and which the message would quote.
+ * shows up without the paste, which is nobody's business and which the message would quote. The
+ * service has no logging backend, so the note goes nowhere until one is added; it is written for
+ * that day.
  */
 public suspend fun judgeEvents(
     signals: JudgeSignals,
