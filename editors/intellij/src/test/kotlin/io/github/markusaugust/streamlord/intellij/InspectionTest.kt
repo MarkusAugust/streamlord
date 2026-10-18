@@ -151,6 +151,41 @@ class InspectionTest : BasePlatformTestCase() {
         assertEquals(added, codes.intersect(added))
     }
 
+    fun `test a modifier datastar ignores is a warning, and one it reads into the event an error`() {
+        myFixture.configureByText(
+            "mods.html",
+            "<button data-on:click__onse=\"\$a = 1\" data-on:input__=\"\$a = 1\" data-on:click.prevent=\"\$a = 1\"></button>",
+        )
+        val highlights = myFixture.doHighlighting().filter { it.inspectionToolId == "DatastarAttributeInspection" }
+        assertEquals(
+            listOf("onse" to HighlightSeverity.WARNING, "__" to HighlightSeverity.WARNING, "click.prevent" to HighlightSeverity.ERROR),
+            highlights.sortedBy { it.startOffset }.map { it.text to it.severity },
+        )
+    }
+
+    fun `test an indicator datastar refuses shows what the analysis and vs code show`() {
+        // The platform hides a warning that an error on the same range covers, so the analysis
+        // must not give one there.
+        for (source in listOf(
+            "<div data-indicator></div>",
+            "<span data-indicator:busy=\"busy\"></span>",
+            "<span data-indicator:busy></span>",
+        )) {
+            myFixture.configureByText("indicator.html", source)
+            val expected =
+                StreamlordAnalysis
+                    .getInstance(project)
+                    .htmlIssues(myFixture.file)
+                    .map { Triple(it.start, it.end, it.message) }
+            val shown =
+                myFixture
+                    .doHighlighting()
+                    .filter { it.inspectionToolId == "DatastarAttributeInspection" }
+                    .map { Triple(it.startOffset, it.endOffset, it.description.substringBefore(" See ")) }
+            assertEquals(source, expected.sortedBy { it.third }, shown.sortedBy { it.third })
+        }
+    }
+
     fun `test each issue keeps its own severity until the profile sets one for the family`() {
         myFixture.configureByText("Mixed.kt", "fun f() { dataText(\"\${'\$'}a-b +\") }")
         val own = myFixture.doHighlighting()

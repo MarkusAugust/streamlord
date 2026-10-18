@@ -291,7 +291,8 @@ class StreamlordCompletionContributor : CompletionContributor() {
                 }
                 return
             }
-            val matcher = result.withPrefixMatcher(PlainPrefixMatcher(current))
+            // By name, as VS Code lists them.
+            val matcher = result.withPrefixMatcher(PlainPrefixMatcher(current)).withRelevanceSorter(sorter { 0 })
             for (m in spec.modifiers) {
                 val detail =
                     "__${m.name}" +
@@ -368,7 +369,14 @@ class StreamlordCompletionContributor : CompletionContributor() {
             if (!allowActions) return false
             val act = actionPrefixAt(textBefore, textBefore.length)
             if (act != null) {
-                val matcher = result.withPrefixMatcher(PlainPrefixMatcher("@$act"))
+                // By name, Pro after the rest, as VS Code lists them.
+                val pro =
+                    catalog.actions
+                        .filter { it.pro }
+                        .map { "@${it.name}" }
+                        .toSet()
+                val matcher =
+                    result.withPrefixMatcher(PlainPrefixMatcher("@$act")).withRelevanceSorter(sorter { if (it in pro) 1 else 0 })
                 for (a in catalog.actions) matcher.addFixed(actionElement(a))
                 return true
             }
@@ -410,25 +418,22 @@ class StreamlordCompletionContributor : CompletionContributor() {
                     a.name == "peek" -> 1
                     else -> 1
                 }
-            return PrioritizedLookupElement.withPriority(
-                LookupElementBuilder
-                    .create("@${a.name}")
-                    .withTypeText((if (a.pro) "Pro · " else "") + a.signature)
-                    .withIcon(AllIcons.Nodes.Function)
-                    .withInsertHandler { context, _ ->
-                        EditorModificationUtil.insertStringAtCaret(context.editor, insert)
-                        context.editor.caretModel.moveToOffset(context.editor.caretModel.offset - caretBack)
-                        if (a.kind ==
-                            "backend"
-                        ) {
-                            context.editor.selectionModel.setSelection(
-                                context.editor.caretModel.offset - 5,
-                                context.editor.caretModel.offset,
-                            )
-                        }
-                    },
-                if (a.pro) 5.0 else 10.0,
-            )
+            return LookupElementBuilder
+                .create("@${a.name}")
+                .withTypeText((if (a.pro) "Pro · " else "") + a.signature)
+                .withIcon(AllIcons.Nodes.Function)
+                .withInsertHandler { context, _ ->
+                    EditorModificationUtil.insertStringAtCaret(context.editor, insert)
+                    context.editor.caretModel.moveToOffset(context.editor.caretModel.offset - caretBack)
+                    if (a.kind ==
+                        "backend"
+                    ) {
+                        context.editor.selectionModel.setSelection(
+                            context.editor.caretModel.offset - 5,
+                            context.editor.caretModel.offset,
+                        )
+                    }
+                }
         }
 
         /** Documentation of an attribute for the lookup, as HTML. */

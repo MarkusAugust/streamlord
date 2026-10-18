@@ -318,6 +318,35 @@ All notable changes to Streamlord are recorded here. The format follows
   Kotlin parameter's `List<Int>` with a `400` where the mapper dropped it, as the Kotlin module's
   own `StrictNullChecks` does on Jackson 2 and 3. `@JsonSetter(contentNulls = Nulls.SKIP)` on the
   parameter still drops it.
+- Both editors give an unknown modifier, such as `data-on:click__onse`, an empty `__` or
+  `__debounce_150ms`, as a warning rather than an error, and say that Datastar ignores it: the
+  1.0.4 client runs the expression without it, measured in Chrome. A modifier written after a dot
+  in an event, `data-on:click.prevent`, is an error rather than a warning, since the client then
+  listens for an event named `click.prevent` and the expression never runs on a click. The shared
+  corpus holds both editors to these severities.
+- Both editors give an argument on a modifier that takes none, `__prevent.foo` or
+  `__prevent.stop`, and a flag a timing modifier does not know, `__debounce.150ms.foo`, as a
+  warning rather than an error, and say that Datastar ignores it: the 1.0.4 client still prevents
+  the default or waits the 150 ms and drops the rest, measured in Chrome. With `__prevent.stop` the
+  click still reaches the parent, and the warning offers `__prevent__stop`. An argument that
+  changes what the client does stays an error: a flag before the duration, a duration with a
+  fraction, `__debounce.1.5s`, which the client reads as 1 ms, and `__case.foo` where the default
+  case changes the key. On `data-signals`, `data-computed`, `data-bind`, `data-ref` and
+  `data-indicator` the client camel-cases a key by default and leaves it as written with a case it
+  has no function for, so `data-signals:my-key__case.foo` declares `$my-key`, not `$myKey`. On
+  `data-on` and `data-class` the default is kebab, which the client also leaves as written, so
+  `__case.foo` changes nothing there and is a warning: `data-on:my-event__case.foo` listens for
+  `my-event`, measured in Chrome. A second value after a case the client knows is a warning that
+  Datastar ignores it, `__case.camel.foo`, and an error where the client applies it as well,
+  `__case.camel.snake`.
+- The warning on an unknown modifier in `data-on` says which event the expression listens for. With
+  `data-on:my__event` it is `my`: the client cuts the event name at the first `__`, so an event
+  named `my__event` never reaches the expression. With `__case` it is the name as the client
+  recases it: `my-event` with `__case.kebab`, `myEvent` with `__case.camel`, measured in Chrome.
+- In IntelliJ, actions and modifiers in completion keep their order after use: by name, Pro
+  actions after the rest, as in VS Code. The platform used to move an item up the list once the
+  user had picked it a few times. A test picks items with the platform's usage statistics on and
+  checks that the order holds.
 
 ### Removed
 
@@ -326,6 +355,20 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- `data-indicator:`, a colon with nothing after it, got the error that Datastar raises
+  `KeyOrValueRequired`. The 1.0.4 client raises nothing: it looks for an attribute named
+  `indicator:`, finds none and leaves the element alone, measured in Chrome. Both editors now warn
+  that an attribute with an empty key does nothing, on every Datastar attribute (`data-on:` was an
+  error that it needs a key, `data-text:` one that it takes none, and `data-signals:="{a: 1}"` got
+  nothing), and offer to drop the colon where the attribute then runs: with a value, or on an
+  attribute that takes none, such as `data-json-signals:` and `data-ignore:`. Without the colon
+  and with no value, `data-text` and `data-attr` raise `ValueRequired` and `data-bind`, `data-ref`
+  and `data-indicator` raise `KeyOrValueRequired`, measured in Chrome, so there the warning says
+  what is missing besides the colon and offers no fix.
+  `data-indicator:="busy"` no longer gets the warning that nothing on the element sends a request.
+- `data-indicator` with neither a key nor a value, or with both, got the error Datastar raises and
+  also the warning that nothing on the element sends a request. VS Code showed both, IntelliJ hid
+  the warning under the error. Both editors now give only the error.
 - The Templates page and the roadmap said a template tag the analysis does not know gives no
   findings in expression attributes. Measured in Chrome, none of Qute's `{name}`, Closure's
   `{$name}` and Rocker's `@name` works in an expression: Qute's tags are a `ReferenceError` or a
@@ -740,6 +783,9 @@ All notable changes to Streamlord are recorded here. The format follows
   cookies and without a CORS preflight, and `readSignals` read it as signals, measured in Chrome on
   Ktor CIO and Spring Tomcat. It is now refused with `SignalsMediaTypeException`; Changed has what
   that asks of a client of your own.
+- The install page says that Ktor 3.0's Netty engine brings Netty 4.1.114.Final, which has known
+  vulnerabilities, and shows how to raise Netty in Gradle and Maven or move to a newer Ktor. The
+  adapter's tests on Ktor 3.0 run on the raised Netty, 4.1.139.Final, rather than on 4.1.114.
 
 ## [0.12.0] - 2026-10-11
 

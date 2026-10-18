@@ -43,6 +43,10 @@ val oldestKtorTest: SourceSet = sourceSets.create("oldestKtorTest") {
 }
 
 configurations.named("oldestKtorTestImplementation") { extendsFrom(configurations.testImplementation.get()) }
+dependencies {
+    // Ktor 3.0's Netty raised past its advisories, the way install.md tells a user on Ktor 3.0 to.
+    "oldestKtorTestImplementation"(platform(libs.netty.bom.oldestKtor))
+}
 configurations.named("oldestKtorTestRuntimeOnly") { extendsFrom(configurations.testRuntimeOnly.get()) }
 listOf("oldestKtorTestCompileClasspath", "oldestKtorTestRuntimeClasspath").forEach { name ->
     configurations.named(name) {

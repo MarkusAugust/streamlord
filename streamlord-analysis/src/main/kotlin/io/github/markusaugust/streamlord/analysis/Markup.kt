@@ -723,6 +723,69 @@ public fun wireKey(
     return if (wanted == defaultCase) base else "${base}__case.$wanted"
 }
 
+/**
+ * What `data-x:` with an empty key lacks besides the colon dropped: null when the attribute runs
+ * without it as it stands, else the error the client raises.
+ */
+private fun emptyKeyNeeds(
+    spec: AttributeSpec,
+    hasValue: Boolean,
+    cut: Boolean,
+): String? =
+    when {
+        hasValue -> null
+        spec.requires == Requires.VALUE && !cut -> "ValueRequired"
+        spec.requires == Requires.EXCLUSIVE -> "KeyOrValueRequired"
+        else -> null
+    }
+
+private fun emptyKeyAdvice(
+    spec: AttributeSpec,
+    prefix: String,
+    hasValue: Boolean,
+    cut: Boolean,
+): String {
+    if (spec.keyRequired) return "The key follows the colon, e.g. ${spec.forms.firstOrNull() ?: ""}."
+    return when (emptyKeyNeeds(spec, hasValue, cut)) {
+        "ValueRequired" -> {
+            "Without the colon it is $prefix${spec.name}, which also needs a value; without one Datastar raises ValueRequired."
+        }
+
+        "KeyOrValueRequired" -> {
+            "It needs a signal, as the key after the colon, e.g. ${spec.forms.getOrElse(0) { "" }}, or as the value without the colon, " +
+                "e.g. ${spec.forms.getOrElse(1) { "" }}; without one Datastar raises KeyOrValueRequired."
+        }
+
+        else -> {
+            "Without the colon it is $prefix${spec.name}."
+        }
+    }
+}
+
+/** The cases the 1.0.4 client has a function for (utils/text.ts); any other value leaves the key as it is. */
+private val CASE_FNS: Map<String, (String) -> String> =
+    mapOf(
+        "camel" to ::camelCase,
+        "snake" to { s -> s.replace('-', '_') },
+        "pascal" to { s -> if (s.isEmpty()) s else s.substring(0, 1).uppercase() + camelCase(s.substring(1)) },
+    )
+
+private val HYPHEN_LOWER = Regex("-[a-z]")
+
+private fun camelCase(s: String): String = HYPHEN_LOWER.replace(s) { it.value.substring(1).uppercase() }
+
+/** The key as the client recases it: each value of the last `__case` in turn, or the attribute's default without one. */
+private fun clientCase(
+    key: String,
+    modifiers: List<ParsedModifier>,
+    defaultCase: String,
+): String {
+    val mod = modifiers.lastOrNull { it.name == "case" }
+    var out = key
+    for (c in mod?.args?.distinct() ?: listOf(defaultCase)) out = CASE_FNS[c]?.invoke(out)?.ifEmpty { null } ?: out
+    return out
+}
+
 /** What a key is to Datastar: the noun the messages and the hover use, from `keyCase` in the catalog. */
 public enum class KeyKind { SIGNAL, EVENT, CLASS, RAW }
 
@@ -978,6 +1041,30 @@ public class MarkupValidator(
                 continue
             }
             val link = Docs.attribute(spec.name)
+            if (parsed.key == "" && !templated) {
+                // data-indicator: the client splits the key off at a colon with something after it, so it
+                // looks up an attribute named indicator:, finds none and leaves the element alone.
+                val colonEnd = attr.nameStart + prefix.length + spec.name.length + 1
+                issues +=
+                    Issue(
+                        start = attr.nameStart,
+                        end = nameEnd,
+                        message =
+                            "$prefix${spec.name}: has an empty key, so Datastar reads ${spec.name}: as an attribute it does not have " +
+                                "and does nothing with it. " + emptyKeyAdvice(spec, prefix, !attr.value.isNullOrEmpty(), cut),
+                        severity = Severity.WARNING,
+                        code = "unknown-attribute",
+                        link = link,
+                        // Only where the attribute runs without the colon: data-text with no value raises ValueRequired.
+                        fixes =
+                            if (spec.keyRequired || emptyKeyNeeds(spec, !attr.value.isNullOrEmpty(), cut) != null) {
+                                emptyList()
+                            } else {
+                                listOf(Fix("Change to $prefix${spec.name}", colonEnd - 1, colonEnd, ""))
+                            },
+                    )
+                continue
+            }
             if (spec.pro) {
                 issues +=
                     Issue(
@@ -1045,14 +1132,23 @@ public class MarkupValidator(
                         "wrong-element",
                     )
             }
+            // data-on:my__event: the event is the key before the first __, so the name the author may have
+            // meant whole is cut there, and recased as __case says.
+            val listensFor =
+                if (spec.name == "on" && !parsed.key.isNullOrEmpty()) {
+                    ", so it listens for the event ${clientCase(parsed.key, parsed.modifiers, "kebab")}"
+                } else {
+                    ""
+                }
             for (mod in if (templated) emptyList() else parsed.modifiers) {
                 val mend = attr.nameStart + mod.offset + mod.text.length
                 // An empty modifier has no text to underline: the `__` that opens it is marked.
                 val mstart = if (mod.text.isEmpty()) mend - 2 else mend - mod.text.length
                 val mspec = spec.modifiers.firstOrNull { it.name == mod.name }
                 if (mspec == null) {
-                    // __debounce_150ms: an argument joined with an underscore, which Datastar reads
-                    // as one unknown name. Arguments follow a dot.
+                    // Datastar ignores a modifier it does not know and runs the handler anyway, so
+                    // these are warnings. __debounce_150ms: an argument joined with an underscore,
+                    // which Datastar reads as one unknown name. Arguments follow a dot.
                     val dotted = dottedArguments(mod.name, spec)
                     if (dotted != null) {
                         issues +=
@@ -1060,8 +1156,9 @@ public class MarkupValidator(
                                 start = mstart,
                                 end = mend,
                                 message =
-                                    "Unknown modifier __${mod.name} on $prefix${spec.name}. A modifier's arguments follow a dot: __$dotted.",
-                                severity = Severity.ERROR,
+                                    "Unknown modifier __${mod.name} on $prefix${spec.name}, which Datastar ignores$listensFor. " +
+                                        "A modifier's arguments follow a dot: __$dotted.",
+                                severity = Severity.WARNING,
                                 code = "unknown-modifier",
                                 link = link,
                                 fixes = listOf(Fix("Change to __$dotted", mstart, mstart + mod.name.length, dotted)),
@@ -1074,12 +1171,9 @@ public class MarkupValidator(
                             start = mstart,
                             end = mend,
                             message =
-                                if (near != null) {
-                                    "Unknown modifier __${mod.name} on $prefix${spec.name}. Did you mean __$near?"
-                                } else {
-                                    "Unknown modifier __${mod.name} on $prefix${spec.name}."
-                                },
-                            severity = Severity.ERROR,
+                                "Unknown modifier __${mod.name} on $prefix${spec.name}, which Datastar ignores$listensFor." +
+                                    (near?.let { " Did you mean __$it?" } ?: ""),
+                            severity = Severity.WARNING,
                             code = "unknown-modifier",
                             link = link,
                             fixes =
@@ -1094,7 +1188,7 @@ public class MarkupValidator(
                     continue
                 }
                 val present = parsed.modifiers.filter { it !== mod }.map { it.name }
-                issues += validateModifierArgs(mspec, mod.args, mstart, mend, spec, present).map { it.copy(link = link) }
+                issues += validateModifierArgs(mspec, mod.args, mstart, mend, spec, present, listensFor).map { it.copy(link = link) }
             }
             val value = attr.value
             if (value != null && spec.valueKind == ValueKind.EXPRESSION && value.isNotBlank() && !hasTemplateSyntax(value)) {
@@ -1157,8 +1251,15 @@ public class MarkupValidator(
         val indicator =
             tag.attributes.firstOrNull {
                 val lower = it.name.asciiLowercase()
-                lower == "${prefix}indicator" || lower.startsWith("${prefix}indicator:") || lower.startsWith("${prefix}indicator__")
+                // data-indicator: with an empty key is no indicator at all, and says so on its own.
+                lower == "${prefix}indicator" ||
+                    lower.startsWith("${prefix}indicator__") ||
+                    (lower.startsWith("${prefix}indicator:") && !catalog.parseAttributeName(lower, prefix)?.key.isNullOrEmpty())
             } ?: return emptyList()
+        // With both a key and a value, or neither, Datastar raises before the indicator exists,
+        // and the error on the same name says so.
+        val hasKey = !catalog.parseAttributeName(indicator.name.asciiLowercase(), prefix)?.key.isNullOrEmpty()
+        if (hasKey == !indicator.value.isNullOrEmpty()) return emptyList()
         // Template syntax in a value, or attributes spread into the tag by name, leave what it
         // sends unknown until rendered.
         if ((tagSource != null && hasTemplateSyntax(tagSource)) ||
@@ -1187,7 +1288,8 @@ public class MarkupValidator(
 
     /**
      * `data-on:click.prevent`: a modifier written after a dot, which Datastar reads as part of the
-     * event name. Only for events; a dot in a signal key is a path.
+     * event name, so the listener waits for an event that never comes. An error, unlike an unknown
+     * modifier, which Datastar ignores. Only for events; a dot in a signal key is a path.
      */
     private fun validateDottedKey(
         attr: Attribute,
@@ -1206,12 +1308,10 @@ public class MarkupValidator(
             Issue(
                 start = keyStart,
                 end = keyStart + key.length,
-                message = "Datastar reads $key as ${keyReading(
-                    spec,
-                    key,
-                    key,
-                )}, dots and all. A modifier follows two underscores: $prefix${spec.name}:$fixed.",
-                severity = Severity.WARNING,
+                message =
+                    "Datastar reads $key as ${keyReading(spec, key, key)}, dots and all, so the expression never runs on ${pieces[0]}. " +
+                        "A modifier follows two underscores: $prefix${spec.name}:$fixed.",
+                severity = Severity.ERROR,
                 code = "unknown-modifier",
                 link = Docs.attribute(spec.name),
                 fixes = listOf(Fix("Change to $fixed", keyStart, keyStart + key.length, fixed)),
@@ -1573,6 +1673,7 @@ public class MarkupValidator(
         end: Int,
         attribute: AttributeSpec,
         present: Collection<String> = emptyList(),
+        listensFor: String = "",
     ): List<Issue> {
         val issues = ArrayList<Issue>()
 
@@ -1582,24 +1683,39 @@ public class MarkupValidator(
         ) {
             issues += Issue(start, end, message, Severity.ERROR, "modifier-args", fixes = fixes)
         }
+
+        // Arguments the client never reads: the modifier still does what it does, so these are warnings.
+        fun ignored(
+            message: String,
+            fixes: List<Fix> = emptyList(),
+        ) {
+            issues += Issue(start, end, message, Severity.WARNING, "modifier-args", fixes = fixes)
+        }
+
+        fun unknownFlag(f: String) =
+            ignored(
+                "Unknown flag .$f for __${spec.name}, which Datastar ignores. " +
+                    "Allowed: ${spec.flags.joinToString(", ") { ".$it" }.ifEmpty { "none" }}.",
+            )
         when (spec.type) {
             ModifierType.FLAG -> {
                 // __prevent.stop: a second modifier joined with a dot, read as an argument.
+                val dropped = "__${spec.name} takes no arguments; Datastar ignores ${args.joinToString("") { ".$it" }}."
                 val siblings = attribute.modifiers.filter { it.type == ModifierType.FLAG && it.name != spec.name }.map { it.name }
                 if (args.isNotEmpty() && args.all { it in siblings }) {
                     // Each once, and not one the attribute already has.
                     val joined = args.distinct().filter { it !in present }.joinToString("") { "__$it" }
                     val at = start + spec.name.length
                     if (joined.isEmpty()) {
-                        fail("__${spec.name} takes no arguments.", listOf(Fix("Change to __${spec.name}", at, end, "")))
+                        ignored(dropped, listOf(Fix("Change to __${spec.name}", at, end, "")))
                     } else {
-                        fail(
-                            "__${spec.name} takes no arguments. Each modifier starts with two underscores: __${spec.name}$joined.",
+                        ignored(
+                            "$dropped Each modifier starts with two underscores: __${spec.name}$joined.",
                             listOf(Fix("Change to __${spec.name}$joined", at, end, joined)),
                         )
                     }
                 } else if (args.isNotEmpty()) {
-                    fail("__${spec.name} takes no arguments.")
+                    ignored(dropped)
                 }
             }
 
@@ -1622,10 +1738,7 @@ public class MarkupValidator(
                         if (unknown.isEmpty()) listOf(Fix("Change to $fixed", at, end, "." + ordered.joinToString("."))) else emptyList(),
                     )
                     for (f in unknown) {
-                        if (DURATION.matches(f)) continue
-                        fail(
-                            "Unknown flag .$f for __${spec.name}. Allowed: ${spec.flags.joinToString(", ") { ".$it" }.ifEmpty { "none" }}.",
-                        )
+                        if (!DURATION.matches(f)) unknownFlag(f)
                     }
                     return issues
                 }
@@ -1649,13 +1762,7 @@ public class MarkupValidator(
                         },
                     )
                     for (f in flags.drop(1)) {
-                        if (f !in spec.flags) {
-                            fail(
-                                "Unknown flag .$f for __${spec.name}. Allowed: ${spec.flags.joinToString(
-                                    ", ",
-                                ) { ".$it" }.ifEmpty { "none" }}.",
-                            )
-                        }
+                        if (f !in spec.flags) unknownFlag(f)
                     }
                     return issues
                 }
@@ -1667,18 +1774,37 @@ public class MarkupValidator(
                     )
                 }
                 for (f in args.drop(1)) {
-                    if (f !in spec.flags) {
-                        fail(
-                            "Unknown flag .$f for __${spec.name}. Allowed: ${spec.flags.joinToString(", ") { ".$it" }.ifEmpty { "none" }}.",
-                        )
-                    }
+                    if (f !in spec.flags) unknownFlag(f)
                 }
             }
 
             ModifierType.ENUM -> {
                 val v = args.firstOrNull()
-                if (v == null || v !in spec.values) fail("__${spec.name} needs one of: ${spec.values.joinToString(", ") { ".$it" }}.")
-                if (args.size > 1) fail("__${spec.name} takes a single value.")
+                val rest = args.drop(1)
+                val allowed = spec.values.joinToString(", ") { ".$it" }
+                if (v == null || v !in spec.values) {
+                    // The client leaves the key as it is for a case it has no function for. Where the default
+                    // is kebab, which it has none for either, that is the key without the modifier.
+                    if (spec.name == "case" && attribute.keyCase == KeyCase.KEBAB) {
+                        val also = rest.filter { it !in CASE_FNS }.joinToString("") { ".$it" }
+                        val head =
+                            if (v != null) {
+                                "Unknown value .$v for __case, which Datastar ignores" + if (also.isEmpty()) "" else ", as it does $also"
+                            } else {
+                                "Datastar ignores __case without a value"
+                            }
+                        ignored("$head$listensFor. Allowed: $allowed.")
+                    } else {
+                        fail("__${spec.name} needs one of: $allowed.")
+                    }
+                }
+                // __case.camel.foo: the client applies each value it has a function for and skips the rest.
+                val applied = if (spec.name == "case") rest.filter { it in CASE_FNS } else rest
+                if (applied.isNotEmpty()) {
+                    fail("__${spec.name} takes a single value.")
+                } else if (rest.isNotEmpty() && v != null && v in spec.values) {
+                    ignored("__${spec.name} takes a single value; Datastar ignores ${rest.joinToString("") { ".$it" }}$listensFor.")
+                }
             }
 
             ModifierType.INT -> {
