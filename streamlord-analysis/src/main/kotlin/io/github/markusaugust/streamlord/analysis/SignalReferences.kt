@@ -18,26 +18,16 @@ public data class SignalReference(
     val site: CallSite? = null,
 )
 
-/** The signals an expression reads, with offsets relative to [text]. A `$foo-bar` is left to the `signal-kebab` check. */
-internal fun expressionSignalReferences(text: String): List<SignalReference> {
-    val out = ArrayList<SignalReference>()
-    val tokens = tokenizeExpression(text)
-    for ((i, t) in tokens.withIndex()) {
-        if (t.kind != TokenKind.SIGNAL) continue
-        val head = text.substring(t.start, t.end).removePrefix("$")
-        val path = tokens.getOrNull(i + 1)?.takeIf { it.kind == TokenKind.SIGNAL_PATH && it.start == t.end }
-        // `${'$'}count` reads as an escape token and then a signal token holding the name alone.
-        val start = tokens.getOrNull(i - 1)?.takeIf { it.kind == TokenKind.KOTLIN_DOLLAR_ESCAPE && it.end == t.start }?.start ?: t.start
-        val end = path?.end ?: t.end
-        // `foo$bar` and `$$x` are JavaScript identifiers that hold a dollar, not signals.
-        if (text.getOrNull(start - 1)?.let { it.isIdentPart() || it == '$' } == true) continue
-        if (text.getOrNull(end) == '-' && text.getOrNull(end + 1)?.let { it.isLetterOrDigit() || it == '_' } == true) continue
-        val name = head + (path?.let { text.substring(it.start, it.end) } ?: "")
-        if (PLACEHOLDER in name) continue
-        out += SignalReference(start, end, name)
-    }
-    return out
-}
+/**
+ * The signals an expression reads, with offsets relative to [text]: what the client rewrites as a
+ * signal where JavaScript runs it (see [clientSignalReads]), shared with `signalReferences.ts`. A
+ * `$foo-bar` is left to the `signal-kebab` check, and a name opening with a digit is no name a
+ * page declares.
+ */
+internal fun expressionSignalReferences(text: String): List<SignalReference> =
+    clientSignalReads(text)
+        .filter { r -> '-' !in r.name && r.name.first().let { it == '_' || it in 'A'..'Z' || it in 'a'..'z' } && PLACEHOLDER !in r.name }
+        .map { SignalReference(it.start, it.end, it.name) }
 
 /** The signals the expressions of an HTML fragment or document read, with offsets relative to [html]. */
 internal fun markupSignalReferences(
@@ -64,13 +54,14 @@ internal fun markupSignalReferences(
 /**
  * Does the project define the signal [path] reads? It does when it defines the path itself, a
  * signal the path reaches into (`$user.name.length` with `user` defined), or a signal inside the
- * path (`$form` with `form.email` defined).
+ * path (`$form` with `form.email` defined). A spread of a variable into the object form,
+ * `{...init}`, may declare any signal, written `*`.
  */
 public fun isKnownSignal(
     path: String,
     defined: Set<String>,
 ): Boolean {
-    if (path in defined) return true
+    if (path in defined || ANY_SIGNAL in defined) return true
     var p = path
     while ('.' in p) {
         p = p.substringBeforeLast('.')
@@ -88,7 +79,7 @@ public fun nearestSignal(
     val limit = if (name.length <= 4) 1 else 2
     return defined
         .asSequence()
-        .filter { it != name }
+        .filter { it != name && it != ANY_SIGNAL }
         .map { it to distance(name.lowercase(), it.lowercase()) }
         .filter { it.second <= limit }
         .minByOrNull { it.second }

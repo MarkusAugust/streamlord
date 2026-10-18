@@ -193,6 +193,7 @@
       "name": "on-signal-patch",
       "forms": ["data-on-signal-patch=\"expr\""],
       "keyed": false,
+      "keys": ["filter"],
       "valueKind": "expression",
       "returnsValue": true,
       "requires": "value",

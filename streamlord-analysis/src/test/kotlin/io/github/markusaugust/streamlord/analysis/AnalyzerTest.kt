@@ -169,8 +169,9 @@ class AnalyzerTest {
         // A kebab-case attribute would set aria-label; the object form keeps the name. No form keeps a style property's capitals.
         assertEquals("data-attr=\"{ariaLabel: 'x'}\"", issues[5].fixes.single().text)
         assertContains(issues[5].message, "sets arialabel, not ariaLabel")
-        assertEquals(emptyList(), issues[6].fixes)
-        assertContains(issues[6].message, "would set background-color. Name the property in lowercase")
+        // A CSS property is kebab-case, which is also the fix; lowercase alone would name no property.
+        assertEquals(listOf("background-color"), issues[6].fixes.map { it.text })
+        assertContains(issues[6].message, "A CSS property is written in kebab-case: data-style:background-color.")
         assertContains(issues[0].message, "\$foobar")
         assertEquals("fooBar", src.substring(issues[0].start, issues[0].end))
         val fine =
@@ -186,7 +187,10 @@ class AnalyzerTest {
         assertEquals(listOf("foo-bar", "widget-loaded"), explicit.map { it.fixes[0].text })
         assertContains(explicit[0].message, "foo-bar__case.kebab")
         val custom = analyzer.analyzeHtml("<div data-style:--myColor=\"\$c\"></div>", opts)
-        assertContains(custom.single().message, "sets --mycolor, not --myColor. The object form would set --my-color")
+        assertContains(
+            custom.single().message,
+            "sets --mycolor, not --myColor. No form keeps a capital in a custom property: name it in kebab-case, here and in the CSS, as --my-color.",
+        )
         assertEquals(emptyList(), custom.single().fixes)
         assertEquals(
             listOf("key-case"),

@@ -110,6 +110,14 @@ describe("completion provider", () => {
     assert.deepEqual(vals.map((i) => i.label), ["500ms", "1s", "300ms", "100ms"]);
   });
 
+  it("offers patch only in data-on-signal-patch, where the client defines it", () => {
+    const labels = (src: string, language: string, at = src.length) => complete(new MockDocument(src, language), 0, at, index).map((i) => i.label);
+    assert.ok(labels(`<div data-on-signal-patch="pat`, "html").includes("patch"));
+    assert.ok(labels(`dataOnSignalPatch("pat")`, "kotlin", 22).includes("patch"));
+    const elsewhere = labels(`<div data-on:click="pat`, "html");
+    assert.ok(elsewhere.includes("evt") && !elsewhere.includes("patch"), elsewhere.join());
+  });
+
   it("offers signals inside html attribute values", () => {
     const hdoc = new MockDocument(`<div data-text="$`, "html");
     const items = complete(hdoc, 0, 17, index);
@@ -144,6 +152,13 @@ describe("hover provider", () => {
     const attr = hover.provideHover(hdoc as never, new Position(0, 10) as never);
     assert.match(String((attr?.contents as unknown as { value: string }).value), /data-on-intersect/);
     assert.match(String((attr?.contents as unknown as { value: string }).value), /__threshold/);
+  });
+
+  it("documents dataOnSignalPatch as the attribute its expression fills, not the filter it also writes", () => {
+    const kdoc = new MockDocument(`div { dataOnSignalPatch("console.log(patch)", SignalFilter.exclude("^_")) }`, "kotlin");
+    const value = String((hover.provideHover(kdoc as never, new Position(0, 10) as never)?.contents as unknown as { value: string }).value);
+    assert.match(value, /\*\*data-on-signal-patch\*\*/);
+    assert.doesNotMatch(value, /data-on-signal-patch-filter/);
   });
 
   it("documents attributes inside html strings in kotlin", () => {

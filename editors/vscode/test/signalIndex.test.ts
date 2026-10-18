@@ -58,7 +58,8 @@ describe("signal index", () => {
       assert.deepEqual([...index.allDefinitions()], ["old"]);
       await building;
       assert.ok(index.ready);
-      assert.deepEqual([...index.allDefinitions()].sort(), ["edited", "fromDisk"]);
+      // The browser lowercases the attribute name, key and all.
+      assert.deepEqual([...index.allDefinitions()].sort(), ["edited", "fromdisk"]);
     } finally {
       workspace.findFiles = findFiles;
       workspace.textDocuments = [];

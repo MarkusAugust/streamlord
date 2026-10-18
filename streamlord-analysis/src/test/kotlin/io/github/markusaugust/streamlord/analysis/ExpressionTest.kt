@@ -44,10 +44,13 @@ class ExpressionTest {
     }
 
     @Test
-    fun `judges a hyphenated signal in the code of a template literal and not in its text`() {
+    fun `judges a hyphenated signal in the code of a template literal and tells that the client rewrites its text`() {
         val src = $$"'$a-b' + `$c-d ${$e-f}`"
         val issues = expr(src)
-        assertEquals(listOf("signal-kebab"), codes(issues))
-        assertEquals($$"$e-f", src.substring(issues[0].start, issues[0].end))
+        // The literal holds a ${...}, so the client's pattern does not step over it: $c-d in its text becomes $['c-d'].
+        assertEquals(listOf("literal-rewritten", "signal-kebab"), codes(issues))
+        assertEquals($$"$c-d", src.substring(issues[0].start, issues[0].end))
+        assertEquals($$"$e-f", src.substring(issues[1].start, issues[1].end))
+        assertEquals(emptyList(), expr($$"`$c-d`"))
     }
 }

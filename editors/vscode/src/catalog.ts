@@ -17,6 +17,8 @@ export interface AttributeSpec {
   forms: string[];
   keyed: boolean;
   keyRequired: boolean;
+  /** Keys a keyless attribute accepts all the same: `data-on-signal-patch:filter` (onSignalPatch.ts:27 in 1.0.4). */
+  keys: string[];
   /**
    * How Datastar reads the key, which the browser has lowercased: `camel` turns `foo-bar` into
    * the signal `fooBar`; `kebab` keeps it unless `__case` says otherwise (events, classes);
@@ -109,6 +111,7 @@ function build(): Catalog {
     forms: a.forms as string[],
     keyed: a.keyed as boolean,
     keyRequired: (a.keyRequired as boolean | undefined) ?? false,
+    keys: (a.keys as string[] | undefined) ?? [],
     keyCase: a.keyCase as AttributeSpec["keyCase"],
     valueKind: a.valueKind as AttributeSpec["valueKind"],
     kotlin: a.kotlin as string[],
@@ -126,8 +129,12 @@ function build(): Catalog {
     kotlin: a.kotlin as string,
     doc: a.doc as string,
   }));
+  // dataOnSignalPatch writes data-on-signal-patch from its string and the filter companion from a
+  // SignalFilter, so a helper is the attribute its string argument fills, never the filter.
   const attributesByKotlin = new Map<string, AttributeSpec>();
-  for (const a of attributes) for (const k of a.kotlin) attributesByKotlin.set(k, a);
+  for (const a of attributes) {
+    for (const k of a.kotlin) if (attributesByKotlin.get(k)?.valueKind !== "expression" || a.valueKind === "expression") attributesByKotlin.set(k, a);
+  }
   const sites = raw.kotlinCallSites as unknown as Record<string, Record<string, CallSiteSpec>>;
   return {
     version: raw.version,

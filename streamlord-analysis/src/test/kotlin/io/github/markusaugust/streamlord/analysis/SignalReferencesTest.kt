@@ -118,7 +118,7 @@ class SignalReferencesTest {
     fun `json text handed to patchSignals defines its keys`() {
         val q = "\"\"\""
         val src = "fun f() { sse.patchSignals($q{\"count\": 1, \"form\": {\"email\": \"\"}}$q) }"
-        assertEquals(setOf("count", "form", "email"), collectSignalDefinitions(src, SourceLanguage.KOTLIN))
+        assertEquals(setOf("count", "form", "form.email"), collectSignalDefinitions(src, SourceLanguage.KOTLIN))
     }
 
     @Test

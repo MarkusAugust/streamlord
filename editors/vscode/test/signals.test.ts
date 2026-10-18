@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { collectSignals } from "../src/signals.ts";
+import { collectSignalDefinitions, collectSignals } from "../src/signals.ts";
 
 /** The cases of the analysis module's `SignalsTest.kt`. */
 const kotlin = (src: string): string[] => [...collectSignals(src, "kotlin")].sort();
@@ -30,8 +30,21 @@ data class PageSignals(
   });
 
   it("the object form declares quoted keys in either kind of quote", () => {
-    assert.deepEqual(html(`<div data-signals='{"query": "", "nested": {"deep": 1}}'></div>`), ["deep", "nested", "query"]);
+    // A key of an object under a key is a signal under that one, as the client stores it.
+    assert.deepEqual(html(`<div data-signals='{"query": "", "nested": {"deep": 1}}'></div>`), ["nested", "nested.deep", "query"]);
     assert.deepEqual(html(`<div data-signals__ifmissing="{'single': 1, bare: 2}"></div>`), ["bare", "single"]);
     assert.deepEqual(kotlin(String.raw`val k = "<div data-signals='{\"esc\": 1}'></div>"`), ["esc"]);
+  });
+
+  it("a spread of a variable may define any signal, and names none to complete", () => {
+    const src = `<div data-signals="{a: 1, ...init, b: {...more}}"></div>`;
+    assert.deepEqual(html(src), ["a", "b"]);
+    assert.deepEqual([...collectSignalDefinitions(src, "html")].sort(), ["*", "a", "b"]);
+  });
+
+  it("a key with template syntax in it declares nothing", () => {
+    const keys = `<div data-signals:\${key}="1"></div><div data-signals:{{ name }}="1"></div><div data-signals:th:text="1"></div><div data-signals:<%= k %>="1"></div><div data-signals:foo{{x}}="1"></div>`;
+    assert.deepEqual(html(keys + `<div data-bind:user-name__case.kebab></div><div data-signals:år="1"></div>`), ["user-name", "år"]);
+    assert.deepEqual(kotlin(`val x = "<div data-signals:\${name}=\\"1\\"></div>"`), []);
   });
 });

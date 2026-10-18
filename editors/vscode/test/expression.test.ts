@@ -35,10 +35,13 @@ describe("expressions", () => {
     assert.equal(apply(src, issue!.fixes![0]!), "$aB");
   });
 
-  it("judges a hyphenated signal in the code of a template literal, not in its text", () => {
+  it("judges a hyphenated signal in the code of a template literal, and tells that the client rewrites its text", () => {
     const src = "'$a-b' + `$c-d ${$e-f}`";
     const issues = validateExpression(src);
-    assert.deepEqual(codes(issues), ["signal-kebab"]);
-    assert.equal(src.slice(issues[0]!.start, issues[0]!.end), "$e-f");
+    // The literal holds a ${...}, so the client's pattern does not step over it: $c-d in its text becomes $['c-d'].
+    assert.deepEqual(codes(issues), ["literal-rewritten", "signal-kebab"]);
+    assert.equal(src.slice(issues[0]!.start, issues[0]!.end), "$c-d");
+    assert.equal(src.slice(issues[1]!.start, issues[1]!.end), "$e-f");
+    assert.deepEqual(validateExpression("`$c-d`"), []);
   });
 });

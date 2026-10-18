@@ -43,11 +43,12 @@ const LEX_CACHE_CAP = 256 * 1024;
 /** kotlinx.html's own way to write any attribute: `attributes["data-on:click"] = "..."`. */
 export const ATTRIBUTES_INDEX = /\battributes\s*\[\s*"(data-[^"\\]*)"\s*]\s*=\s*/g;
 
-const NO_SIGNALS: ReadonlySet<string> = new Set();
-
-/** The kebab-case signals `src` declares as written, with `__case.kebab`, so `$my-value` is not a slip there. */
+/**
+ * The signals with a hyphen `src` declares as the client stores them, so `$my-value` is not a slip
+ * there: `data-signals:my-value__case.kebab`, `data-bind="my-value"`, `{'my-value': 1}`, or
+ * `data-signals:a-1`, which camel casing leaves as it is.
+ */
 export function hyphenatedSignals(src: string, language: "kotlin" | "html"): ReadonlySet<string> {
-  if (!src.includes("__case.kebab")) return NO_SIGNALS;
   return new Set([...collectSignalDefinitions(src, language)].filter((n) => n.includes("-")));
 }
 let lastLex: { src: string; lex: ReturnType<typeof lexKotlin> } | null = null;
@@ -120,7 +121,7 @@ function checkAttributesIndex(m: RegExpMatchArray, value: KotlinString | null, o
   const judgeValue = value !== null && !(value.text.includes(PLACEHOLDER) && value.interpolations.some((i) => i.kind === "simple"));
   // A range in the value maps through the literal as a whole, so an error at its end keeps a width.
   const range = (start: number, end: number) => (end <= name.length ? { start: nameStart + start, end: nameStart + end } : toSource(value!, start - valueStart, end - valueStart));
-  for (const i of validateAttributes(tag, opts.prefix, undefined, hyphenated)) {
+  for (const i of validateAttributes(tag, opts.prefix, undefined, hyphenated, true)) {
     const inName = i.end <= name.length;
     if (!inName && !judgeValue) continue;
     const fixes = i.fixes
