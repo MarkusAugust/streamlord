@@ -81,9 +81,10 @@ it.
    IntelliJ job refuses to publish unless `JETBRAINS_CERTIFICATE_CHAIN`, `JETBRAINS_PRIVATE_KEY`
    and `JETBRAINS_PRIVATE_KEY_PASSWORD` are set, since without them the plugin went out unsigned
    while the workflow looked as if it signed it. All three are in the `release` environment; the
-   certificate is self-signed and runs for a year, so renew it before October 2027. Not before: each tag runs on its own, and pushed together with `v<version>` the plugins could
-   publish while Maven Central is still building or failing. Push at most three tags at a time;
-   GitHub starts no workflow for a push of more.
+   certificate is self-signed and runs for a year, so renew it before October 2027. Not before:
+   each tag runs on its own, and pushed together with `v<version>` the plugins could publish while
+   Maven Central is still building or failing. Push at most three tags at a time; GitHub starts no
+   workflow for a push of more.
 9. Pull request from the release branch into `master`, merged with a merge commit. The tag is
    then reachable from `master`.
 

@@ -138,9 +138,9 @@ their own. You reach for a codec module only when you want data classes as signa
 
 ```kotlin sample=none
 dependencies {
-    implementation("io.github.markusaugust.streamlord:streamlord-ktor:0.12.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-html:0.12.0")          // optional
-    implementation("io.github.markusaugust.streamlord:streamlord-json-kotlinx:0.12.0")  // optional
+    implementation("io.github.markusaugust.streamlord:streamlord-ktor:0.13.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-html:0.13.0")          // optional
+    implementation("io.github.markusaugust.streamlord:streamlord-json-kotlinx:0.13.0")  // optional
 }
 ```
 
