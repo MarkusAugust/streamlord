@@ -273,7 +273,8 @@ All notable changes to Streamlord are recorded here. The format follows
   none, it fetches the pinned one from the npm registry, whose integrity hash for that exact version
   npm checks the download against, and stops if it still has the wrong one. Checkouts no longer
   persist the token in `.git/config`, the Railway token reaches only the two steps that deploy, and
-  the three publish jobs run in a `release` environment that takes release tags alone. The image is
+  the publishing secrets live in a `release` environment that the three publish jobs and
+  `verify-signing` run in, and that takes the release tags, `master` and the release branches. The image is
   pushed by a job of its own, which alone holds `packages: write`, runs on master alone, deploys one
   run at a time and skips a commit that master has already moved past, so an older run never deploys
   over a newer one. The IntelliJ publish job stops when the signing certificate secrets are missing,

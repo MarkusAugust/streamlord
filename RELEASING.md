@@ -19,7 +19,9 @@ publish jobs and `verify-signing` run in it, and it takes the release tags, `mas
 `release/**`, the last two for `verify-signing`, which runs by hand. `RAILWAY_TOKEN` stays a
 repository secret, for the demo deploy on `master`, and so does `VSCE_PAT` until VS Code
 publishing moves to Microsoft Entra ID, before Azure DevOps retires global tokens on
-1 December 2026.
+1 December 2026. The environment asks for no reviewer, so any job a merged pull request adds to
+`master` or a release branch with `environment: release` can read these secrets; with one
+maintainer that is the trade-off taken.
 
 ## Day to day
 
@@ -78,9 +80,8 @@ it.
 8. Then the editor tags, `intellij-v<version>` and `vscode-v<version>`, on the same commit. The
    IntelliJ job refuses to publish unless `JETBRAINS_CERTIFICATE_CHAIN`, `JETBRAINS_PRIVATE_KEY`
    and `JETBRAINS_PRIVATE_KEY_PASSWORD` are set, since without them the plugin went out unsigned
-   while the workflow looked as if it signed it. None of the three exists yet: create them from a
-   JetBrains plugin signing certificate before the next IntelliJ release, or the run stops there. Not
-   before: each tag runs on its own, and pushed together with `v<version>` the plugins could
+   while the workflow looked as if it signed it. All three are in the `release` environment; the
+   certificate is self-signed and runs for a year, so renew it before October 2027. Not before: each tag runs on its own, and pushed together with `v<version>` the plugins could
    publish while Maven Central is still building or failing. Push at most three tags at a time;
    GitHub starts no workflow for a push of more.
 9. Pull request from the release branch into `master`, merged with a merge commit. The tag is
