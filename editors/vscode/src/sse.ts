@@ -156,15 +156,18 @@ export function decodeDatastar(msg: SseMessage): DatastarFrame {
 
 
 /**
- * Raised by `mergePatchAsClient` for a patch the client fails on, or that it refuses, partway
- * through. The client has by then applied the keys before the one that failed and keeps them, so
- * `store` is the store as it reads afterwards, and the next patch folds into that. The same as
- * `SignalPatchException` in streamlord-core.
+ * Raised by `mergePatchAsClient` partway through a patch the client fails on, or one Streamlord
+ * refuses. The client has by then applied the keys before the one that failed and keeps them, so
+ * `store` is the store as it reads afterwards, and the next patch folds into that. `refused` is
+ * false where the client throws on the patch too, and true where Streamlord refuses on purpose a
+ * patch it does not model, which the client may well take. The same as `SignalPatchException` in
+ * streamlord-core.
  */
 export class SignalPatchError extends Error {
   constructor(
     message: string,
     readonly store: Record<string, unknown>,
+    readonly refused: boolean,
   ) {
     super(message);
     this.name = "SignalPatchError";
@@ -190,16 +193,22 @@ export class SignalPatchError extends Error {
  * reads once a binding has touched it: the client fills a hole with `""` on the first read, so a
  * hole is missing to `onlyIfMissing` only until then.
  *
- * Objects are made without a prototype, so `constructor` is a signal name and nothing else. More
- * than `holeLimit` indices past the end of an array throws, rather than fill memory with the holes
- * the client never allocates. So does a key named `__proto__` with any value but `null`, anywhere in
- * the patch's objects, where the client throws on some values and not on others: it sets the value
- * as the prototype of the object holding the key, and its store cannot be shown as JSON after that.
- * A `__proto__` set to `null` changes nothing, as in the client. Inside an array value the key is
- * dropped whatever it holds, since the client's store never shows it there, and the object that held
- * it is replaced by the next patch that reaches it, as the client replaces it. A patch that throws,
- * here or in the client, has its earlier keys applied: the error is a `SignalPatchError` that carries
- * the store as the client keeps it, and for `__proto__` the store as it was before that key.
+ * Objects are made without a prototype, so `constructor` is a signal name and nothing else. A
+ * patch that throws, here or in the client, has its earlier keys applied: the error is a
+ * `SignalPatchError` that carries the store as the client keeps it. Two kinds of patch are refused
+ * on purpose, with `refused` set, though the client may take them. More than `holeLimit` indices
+ * past the end of an array, which would fill memory with the holes the client never allocates.
+ * And a key named `__proto__` anywhere in the patch, at any depth and inside array values too,
+ * whatever it holds. The client gives the object holding it a foreign prototype, after which it
+ * throws on some later keys, replaces the object on a later patch, or, with a second `__proto__`
+ * under the first, writes into `String.prototype`; only a `null` in a patch object changes nothing
+ * there, and it is refused as well, so that one rule holds. The store in the error is the patch
+ * cut before the key that holds the `__proto__`, at the level where it stands, or before the key
+ * whose value is the array it is inside: the store the client keeps where it throws on that key.
+ * Where the client does not throw, Streamlord refuses on purpose rather than model a store the
+ * client no longer holds as plain JSON. A store passed in with a key `__proto__`, which no fold
+ * leaves and the client never holds, is refused the same way once a patch reaches the object that
+ * has it.
  *
  * The store passed in is never changed. Each object and array on the patch's path is copied, and
  * the rest of the result is the very same values.
@@ -209,9 +218,10 @@ export function mergePatchAsClient(store: Record<string, unknown>, patch: unknow
   if (patch === null || (typeof patch !== "object" && typeof patch !== "string")) return store;
   const root = copyObject(store);
   try {
+    if (Object.hasOwn(store, PROTO)) throw new Refusal(STORE_PROTO_REFUSED);
     new ClientMerge(ifMissing, holeLimit).fold(Object.entries(patch), root);
   } catch (e) {
-    throw new SignalPatchError((e as Error).message, root);
+    throw new SignalPatchError((e as Error).message, root, e instanceof Refusal);
   }
   return root;
 }
@@ -227,11 +237,7 @@ class ClientMerge {
 
   fold(patch: [string, unknown][], node: Node): void {
     for (const [key, value] of patch) {
-      // The client sets any value but null as the node's prototype, and a null deletes nothing.
-      if (key === "__proto__") {
-        if (value !== null) throw new Error(PROTO_REFUSED);
-        continue;
-      }
+      if (key === PROTO) throw new Refusal(PROTO_REFUSED);
       if (value === null) {
         if (!this.ifMissing) this.delete(node, key);
       } else {
@@ -243,11 +249,13 @@ class ClientMerge {
   private mergeInner(patch: unknown, key: string, parent: Node): void {
     if (isPojo(patch)) {
       const current = this.get(parent, key);
-      const node: Node = Array.isArray(current) ? [...current] : isPojo(current) && !replacedByClient.has(current) ? copyObject(current) : emptyObject();
+      if (isPojo(current) && Object.hasOwn(current, PROTO)) throw new Refusal(STORE_PROTO_REFUSED);
+      const node: Node = Array.isArray(current) ? [...current] : isPojo(current) ? copyObject(current) : emptyObject();
       this.set(parent, key, node, node);
       this.fold(Object.entries(patch), node);
-    } else if (!(this.ifMissing && this.has(parent, key))) {
-      this.set(parent, key, asRead(patch), patch);
+    } else {
+      if (holdsProto(patch)) throw new Refusal(PROTO_REFUSED);
+      if (!(this.ifMissing && this.has(parent, key))) this.set(parent, key, asRead(patch), patch);
     }
   }
 
@@ -272,7 +280,7 @@ class ClientMerge {
     if (key === "length") {
       const length = jsNumber(raw);
       if (!(Number.isInteger(length) && length >= 0 && length <= 4294967295)) throw new Error(`Invalid array length ${JSON.stringify(raw)} in a signal patch`);
-      if (length > parent.length + this.holeLimit) throw new Error(`Signal patch length ${length} is more than ${this.holeLimit} past the end of an array of ${parent.length}`);
+      if (length > parent.length + this.holeLimit) throw new Refusal(`Signal patch length ${length} is more than ${this.holeLimit} past the end of an array of ${parent.length}${HOLES}`);
       const before = parent.length;
       parent.length = length;
       if (length > before) parent.fill("", before);
@@ -281,7 +289,7 @@ class ClientMerge {
     // A key that is not an index is a property JSON.stringify leaves out.
     const index = arrayIndex(key);
     if (index === null) return;
-    if (index > parent.length + this.holeLimit) throw new Error(`Signal patch index ${index} is more than ${this.holeLimit} past the end of an array of ${parent.length}`);
+    if (index > parent.length + this.holeLimit) throw new Refusal(`Signal patch index ${index} is more than ${this.holeLimit} past the end of an array of ${parent.length}${HOLES}`);
     while (parent.length < index) parent.push("");
     parent[index] = value;
   }
@@ -326,23 +334,33 @@ function jsNumber(value: unknown): number {
   }
 }
 
-const PROTO_REFUSED = "The client sets a signal named __proto__ as the prototype of the object holding it, and its store cannot be shown as JSON after that";
+/** A patch Streamlord refuses on purpose, which the client may take. */
+class Refusal extends Error {}
 
-// Objects in an array value that came with a `__proto__` key: the client gave each a prototype other
-// than Object's, so the next patch that reaches one replaces it.
-const replacedByClient = new WeakSet<object>();
+const PROTO = "__proto__";
 
-/**
- * A value as the client's store reads it back: every `null` inside it is `""`, and a `__proto__`
- * key is not there, though the object that had it is replaced by the next patch that reaches it.
- */
+/** Why a patch with a key `__proto__` is refused; `PROTO_REFUSED` in streamlord-core's JsonMerge.kt gives the same text. */
+export const PROTO_REFUSED =
+  "A key named __proto__ gives the object holding it a foreign prototype in Datastar's client, which then throws on some later keys, replaces the object on a later patch, or with a second __proto__ writes into String.prototype; Streamlord does not model it and refuses the patch";
+
+export const STORE_PROTO_REFUSED = "The store holds a key named __proto__, which Datastar's client never holds; Streamlord does not fold a patch into the object that has it";
+
+const HOLES = ": the client takes it, and Streamlord does not fill memory with the holes";
+
+/** Whether a key `__proto__` stands anywhere in `value`, as `JSON.parse` leaves it, an own key. */
+function holdsProto(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(holdsProto);
+  if (value === null || typeof value !== "object") return false;
+  return Object.hasOwn(value, PROTO) || Object.values(value).some(holdsProto);
+}
+
+/** A value as the client's store reads it back: every `null` inside it is `""`. */
 function asRead(value: unknown): unknown {
   if (value === null) return "";
   if (Array.isArray(value)) return value.map(asRead);
   if (typeof value === "object") {
     const out = emptyObject();
-    if (Object.hasOwn(value, "__proto__")) replacedByClient.add(out);
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) if (k !== "__proto__") out[k] = asRead(v);
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) out[k] = asRead(v);
     return out;
   }
   return value;

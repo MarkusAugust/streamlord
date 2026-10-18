@@ -3,13 +3,17 @@ package io.github.markusaugust.streamlord.core
 import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
+import io.github.markusaugust.streamlord.core.json.PROTO_REFUSED
+import io.github.markusaugust.streamlord.core.json.STORE_PROTO_REFUSED
 import io.github.markusaugust.streamlord.core.json.SignalPatchException
 import io.github.markusaugust.streamlord.core.json.mergePatchAsClient
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNotSame
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 /**
  * Each case in `client-store-cases.json` was run through the real Datastar 1.0.4 `mergePatch`
@@ -40,15 +44,15 @@ class MergePatchAsClientTest {
      * starts from that text as parsed here, out of JavaScript's key order, where the client starts
      * from `JSON.parse` of it.
      *
-     * A step with `refused` is one this fold throws on by design: a `__proto__` that is not `null`
-     * in the patch's objects, which the client takes for a prototype, throwing on some values and
-     * not on others. Its `kept` is the client's root after the same patch cut off before that key,
-     * and the client takes the rest of the scenario from there, in a fresh store.
+     * A step with `refused` is one this fold refuses on purpose: a key `__proto__` anywhere in the
+     * patch. Its `client` is still what the client shows for the patch as written, and its `kept`
+     * is the client's root after the same patch cut before the key that holds the `__proto__`; the
+     * client takes the rest of the scenario from there, in a fresh store.
      */
     @Test
     fun `folds each step as the client's own mergePatch does`() {
         val scenarios = JsonParser.parse(javaClass.getResource("/client-merge-differential.json")!!.readText()) as JsonArray
-        assertEquals(350, scenarios.size)
+        assertEquals(366, scenarios.size)
         for (scenario in scenarios.objects()) {
             var store = scenario.string("store")?.let(JsonParser::parseObject) ?: JsonObject.EMPTY
             for ((i, step) in scenario.array("steps")!!.objects().withIndex()) {
@@ -58,7 +62,9 @@ class MergePatchAsClientTest {
                         mergePatchAsClient(store, patch, step.boolean("onlyIfMissing")!!).also { store = it }.toJson()
                     } catch (e: SignalPatchException) {
                         store = e.store
-                        if (step.string("refused") != null) assertEquals(PROTO_MESSAGE, e.message)
+                        val refused = step.boolean("refused") == true
+                        assertEquals(refused, e.refused, "${scenario.string("name")} step $i")
+                        if (refused) assertEquals(PROTO_REFUSED, e.message)
                         "THROWS " + e.store.toJson()
                     }
                 val expected = step.string("kept")?.let { "THROWS $it" } ?: step.string("client")
@@ -67,34 +73,45 @@ class MergePatchAsClientTest {
         }
     }
 
-    // The client sets the value as the object's prototype: the scenarios show the store it keeps
-    // going wrong on a later patch, so the fold refuses rather than show one the client does not hold.
+    // Measured against the 1.0.4 source: the client gives the object a foreign prototype, then
+    // throws on some later keys, replaces the object on a later patch, or pollutes String.prototype.
     @Test
-    fun `refuses __proto__ with a value and passes over it with null`() {
+    fun `refuses a key __proto__ anywhere in the patch, whatever it holds`() {
         val store = JsonParser.parseObject("""{"o":{"k":1},"a":[1]}""")
-        for (value in listOf("1", "\"s\"", "true", "[]", "[1]", "{}", """{"x":1}""")) {
-            for (patch in listOf("""{"b":1,"__proto__":$value}""", """{"o":{"m":1,"__proto__":$value,"n":2}}""")) {
-                val e = assertFailsWith<SignalPatchException>(patch) { mergePatchAsClient(store, JsonParser.parse(patch)) }
-                assertEquals(PROTO_MESSAGE, e.message)
-                assertEquals(
-                    if (patch.startsWith("{\"b\"")) """{"o":{"k":1},"a":[1],"b":1}""" else """{"o":{"k":1,"m":1},"a":[1]}""",
-                    e.store.toJson(),
-                    patch,
-                )
+        for (value in listOf("null", "1", "\"s\"", "true", "[]", "[1]", "{}", """{"x":1}""", """{"__proto__":{"y":1}}""")) {
+            for ((patch, kept) in listOf(
+                """{"b":1,"__proto__":$value}""" to """{"o":{"k":1},"a":[1],"b":1}""",
+                """{"o":{"m":1,"__proto__":$value,"n":2}}""" to """{"o":{"k":1,"m":1},"a":[1]}""",
+                """{"b":1,"l":[0,{"__proto__":$value,"k":1}],"c":2}""" to """{"o":{"k":1},"a":[1],"b":1}""",
+                """{"o":{"m":1,"l":[[{"k":{"__proto__":$value}}]]}}""" to """{"o":{"k":1,"m":1},"a":[1]}""",
+                """{"a":{"0":2,"1":[{"__proto__":$value}]}}""" to """{"o":{"k":1},"a":[2]}""",
+                """[5,[{"__proto__":$value}]]""" to """{"0":5,"o":{"k":1},"a":[1]}""",
+            )) {
+                for (ifMissing in listOf(false, true)) {
+                    val e = assertFailsWith<SignalPatchException>(patch) { mergePatchAsClient(store, JsonParser.parse(patch), ifMissing) }
+                    assertEquals(PROTO_REFUSED, e.message)
+                    assertTrue(e.refused)
+                    if (!ifMissing) assertEquals(kept, e.store.toJson(), patch)
+                }
             }
         }
+        assertEquals("""{"o":{"k":1},"a":[1]}""", store.toJson())
+    }
+
+    // A store the client never holds: refused where a patch reaches the object with the key.
+    @Test
+    fun `refuses to fold into an object of the store that has a key __proto__`() {
+        val store = JsonParser.parseObject("""{"a":[{"k":1},{"__proto__":null,"k":2}],"o":{"k":1}}""")
         assertEquals(
-            """{"o":{"k":1,"m":1},"a":[1]}""",
-            mergePatchAsClient(store, JsonParser.parse("""{"o":{"__proto__":null,"m":1}}""")).toJson(),
+            """{"a":[{"k":1,"m":1},{"__proto__":null,"k":2}],"o":{"k":1}}""",
+            mergePatchAsClient(store, JsonParser.parse("""{"a":{"0":{"m":1}}}""")).toJson(),
         )
-        // In an array value the key is not shown, and the object that had it is replaced by the next patch into it.
-        val held = mergePatchAsClient(store, JsonParser.parse("""{"a":[{"__proto__":null,"k":1}]}"""))
-        assertEquals("""{"o":{"k":1},"a":[{"k":1}]}""", held.toJson())
-        val next = mergePatchAsClient(held, JsonParser.parse("""{"o":{"j":1}}"""))
-        assertEquals(
-            """{"o":{"k":1,"j":1},"a":[{"z":2}]}""",
-            mergePatchAsClient(next, JsonParser.parse("""{"a":{"0":{"z":2}}}""")).toJson(),
-        )
+        val e = assertFailsWith<SignalPatchException> { mergePatchAsClient(store, JsonParser.parse("""{"o":{"j":1},"a":{"1":{"m":1}}}""")) }
+        assertEquals(STORE_PROTO_REFUSED, e.message)
+        assertTrue(e.refused)
+        assertEquals("""{"a":[{"k":1},{"__proto__":null,"k":2}],"o":{"k":1,"j":1}}""", e.store.toJson())
+        val top = JsonParser.parseObject("""{"__proto__":null,"k":1}""")
+        assertTrue(assertFailsWith<SignalPatchException> { mergePatchAsClient(top, JsonParser.parse("""{"x":1}""")) }.refused)
     }
 
     // A fold copies each level on the patch's path in full width and no more: what is left alone
@@ -124,20 +141,18 @@ class MergePatchAsClientTest {
     @Test
     fun `refuses what the client cannot hold`() {
         val store = JsonParser.parseObject("""{"a":[1]}""")
-        assertFailsWith<IllegalArgumentException> { mergePatchAsClient(store, JsonParser.parse("""{"a":{"20000":1}}""")) }
-        assertFailsWith<IllegalArgumentException> { mergePatchAsClient(store, JsonParser.parse("""{"__proto__":{"polluted":1}}""")) }
+        // The client takes these as holes; the fold refuses on purpose.
+        for (patch in listOf("""{"a":{"20000":1}}""", """{"a":{"length":20000}}""")) {
+            assertTrue(assertFailsWith<SignalPatchException>(patch) { mergePatchAsClient(store, JsonParser.parse(patch)) }.refused)
+        }
         // The browser's RangeError: a length that is not a whole number of zero or more.
         for (length in listOf("-1", "\"x\"", "1.5")) {
-            assertFailsWith<IllegalArgumentException>(
-                length,
-            ) { mergePatchAsClient(store, JsonParser.parse("""{"a":{"length":$length}}""")) }
+            val e =
+                assertFailsWith<SignalPatchException>(length) {
+                    mergePatchAsClient(store, JsonParser.parse("""{"a":{"length":$length}}"""))
+                }
+            assertFalse(e.refused)
         }
         assertEquals("""{"a":[1]}""", store.toJson())
-    }
-
-    private companion object {
-        const val PROTO_MESSAGE =
-            "The client sets a signal named __proto__ as the prototype of the object holding it, " +
-                "and its store cannot be shown as JSON after that"
     }
 }

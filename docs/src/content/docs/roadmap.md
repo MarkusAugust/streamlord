@@ -79,8 +79,8 @@ the editors are stricter than the client, which makes a signal named `{$name}` f
 `data-bind="{$name}"`: no `$name` can reach such a signal, so a brace or an `@` in a signal name
 is almost always a mistake. In the rendered file the tag is gone, and the editor says it is
 wrong. In expressions the findings are right about the unrendered text, and a tag does not
-belong there in any case; [Templates](/templates/#if-your-engine-is-not-one-of-those) shows what
-to write instead.
+belong there in any case;
+[Templates](/templates/#do-not-render-a-value-into-an-expression) shows what to write instead.
 
 Planned: `AnalyzeOptions` takes the delimiter pairs your engine uses, and the editors read them
 from a setting. Small, and the only reason it is not higher is that it affects one rule for
@@ -97,10 +97,12 @@ holds:
 <span data-value="{$name}" data-text="el.dataset.value"></span>
 ```
 
-Never put the tag in a JavaScript string, `data-text="'{$name}'"`: the browser undoes the
-engine's HTML escaping before Datastar reads the attribute, so a value with a quote in it is
-code. Everything else about your engine already works, and none of it touches what Streamlord
-puts on the wire.
+That holds where the attribute is in quotes and the engine escapes the value for HTML, and only
+where the expression uses the value as text, as `data-text` does, not as a URL or a handler;
+[Templates](/templates/#do-not-render-a-value-into-an-expression) has the cases. Never put the
+tag in a JavaScript string, `data-text="'{$name}'"`: the browser undoes the engine's HTML
+escaping before Datastar reads the attribute, so a value with a quote in it is code. Everything
+else about your engine already works, and none of it touches what Streamlord puts on the wire.
 
 ## Concurrent stream limits
 

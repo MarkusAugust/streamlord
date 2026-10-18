@@ -570,7 +570,8 @@ public final class io/github/markusaugust/streamlord/core/json/JsonWriter {
 }
 
 public final class io/github/markusaugust/streamlord/core/json/SignalPatchException : java/lang/IllegalArgumentException {
-	public fun <init> (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/json/JsonObject;)V
+	public fun <init> (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/json/JsonObject;Z)V
+	public final fun getRefused ()Z
 	public final fun getStore ()Lio/github/markusaugust/streamlord/core/json/JsonObject;
 }
 

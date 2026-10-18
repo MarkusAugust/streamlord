@@ -24,13 +24,17 @@ public fun mergePatch(
 }
 
 /**
- * Raised by [mergePatchAsClient] for a patch the client fails on, or that it refuses, partway
- * through. The client has by then applied the keys before the one that failed and keeps them, so
+ * Raised by [mergePatchAsClient] partway through a patch the client fails on, or one Streamlord
+ * refuses. The client has by then applied the keys before the one that failed and keeps them, so
  * [store] is the store as it reads afterwards, and the next patch folds into that.
+ *
+ * [refused] is `false` where the client throws on the patch too, and `true` where Streamlord
+ * refuses on purpose a patch it does not model, which the client may well take.
  */
 public class SignalPatchException(
     message: String,
     public val store: JsonObject,
+    public val refused: Boolean,
 ) : IllegalArgumentException(message)
 
 /**
@@ -56,16 +60,21 @@ public class SignalPatchException(
  * `RangeError` does. This is the store as it reads once a binding has touched it: the client
  * fills a hole with `""` on the first read, so a hole is missing to `onlyIfMissing` only until then.
  *
- * More than [holeLimit] indices past the end of an array throws rather than fill memory with the
- * holes the client never allocates. So does a key named `__proto__` with any value but `null`,
- * anywhere in the patch's objects, where the client throws on some values and not on others: it
- * sets the value as the prototype of the object holding the key, and its store cannot be shown as
- * JSON after that. A `__proto__` set to `null` changes nothing, as in the client. Inside an array
- * value the key is dropped whatever it holds, since the client's store never shows it there, and
- * the object that held it is replaced by the next patch that reaches it, as the client replaces it.
  * A patch that throws, here or in the client, has its earlier keys applied: the exception is a
- * [SignalPatchException] that carries the store as the client keeps it, and for `__proto__` the
- * store as it was before that key.
+ * [SignalPatchException] that carries the store as the client keeps it. Two kinds of patch are
+ * refused on purpose, with [SignalPatchException.refused] set, though the client may take them.
+ * More than [holeLimit] indices past the end of an array, which would fill memory with the holes
+ * the client never allocates. And a key named `__proto__` anywhere in the patch, at any depth and
+ * inside array values too, whatever it holds. The client gives the object holding it a foreign
+ * prototype, after which it throws on some later keys, replaces the object on a later patch, or,
+ * with a second `__proto__` under the first, writes into `String.prototype`; only a `null` in a
+ * patch object changes nothing there, and it is refused as well, so that one rule holds. The
+ * store in the exception is the patch cut before the key that holds the `__proto__`, at the level
+ * where it stands, or before the key whose value is the array it is inside: the store the client
+ * keeps where it throws on that key. Where the client does not throw, Streamlord refuses on
+ * purpose rather than model a store the client no longer holds as plain JSON. A store passed in
+ * with a key `__proto__`, which no fold leaves and the client never holds, is refused the same
+ * way once a patch reaches the object that has it.
  *
  * Each fold copies, in full width, every object and array on the path the patch goes through,
  * from the top down, and hands the rest of the result back as the very same values. Folding a
@@ -87,9 +96,11 @@ public fun mergePatchAsClient(
         }
     val root = JsObject(LinkedHashMap<String, Any>(store))
     try {
+        if (PROTO in store) throw Refusal(STORE_PROTO_REFUSED)
         ClientMerge(ifMissing, holeLimit).fold(keys, root)
     } catch (e: IllegalArgumentException) {
-        throw SignalPatchException(e.message ?: "The client cannot take this signal patch", freeze(root) as JsonObject)
+        val message = e.message ?: "The client cannot take this signal patch"
+        throw SignalPatchException(message, freeze(root) as JsonObject, refused = e is Refusal)
     }
     return freeze(root) as JsonObject
 }
@@ -108,7 +119,7 @@ private class JsArray(
 private fun open(value: Any?): Any? =
     when (value) {
         is JsObject, is JsArray -> value
-        is JsonObject -> if (value.clientReplaces) null else JsObject(LinkedHashMap<String, Any>(value))
+        is JsonObject -> if (PROTO in value) throw Refusal(STORE_PROTO_REFUSED) else JsObject(LinkedHashMap<String, Any>(value))
         is JsonArray -> JsArray(ArrayList<Any>(value))
         else -> null
     }
@@ -140,7 +151,7 @@ private fun inJsOrderDeep(value: JsonValue): JsonValue =
             val fields = value.mapValues { inJsOrderDeep(it.value) }
             val ordered = inJsOrder(fields)
             val same = ordered.keys.toList() == value.keys.toList() && fields.all { (k, v) -> v === value[k] }
-            (if (same) value else JsonObject(ordered).also { it.clientReplaces = value.clientReplaces }).also { it.jsOrdered = true }
+            (if (same) value else JsonObject(ordered)).also { it.jsOrdered = true }
         }
 
         value is JsonArray && !value.jsOrdered -> {
@@ -164,11 +175,7 @@ private class ClientMerge(
         node: Any,
     ) {
         for ((key, value) in inJsOrder(patch)) {
-            // The client sets any value but null as the node's prototype, and a null deletes nothing.
-            if (key == "__proto__") {
-                require(value is JsonNull) { PROTO_REFUSED }
-                continue
-            }
+            if (key == PROTO) throw Refusal(PROTO_REFUSED)
             if (value is JsonNull) {
                 if (!ifMissing) delete(node, key)
             } else {
@@ -187,8 +194,9 @@ private class ClientMerge(
             val node = open(current) ?: JsObject()
             if (node !== current) set(parent, target, node)
             fold(patch, node)
-        } else if (!(ifMissing && has(parent, target))) {
-            set(parent, target, asRead(patch))
+        } else {
+            if (holdsProto(patch)) throw Refusal(PROTO_REFUSED)
+            if (!(ifMissing && has(parent, target))) set(parent, target, asRead(patch))
         }
     }
 
@@ -223,8 +231,8 @@ private class ClientMerge(
         if (key == "length") {
             val length = arrayLength(value)
             require(length != null) { "Invalid array length ${freeze(value).toJson()} in a signal patch" }
-            require(length <= items.size + holeLimit) {
-                "Signal patch length $length is more than $holeLimit past the end of an array of ${items.size}"
+            if (length > items.size + holeLimit) {
+                throw Refusal("Signal patch length $length is more than $holeLimit past the end of an array of ${items.size}$HOLES")
             }
             while (items.size > length) items.removeAt(items.size - 1)
             while (items.size < length) items.add(EMPTY)
@@ -232,9 +240,9 @@ private class ClientMerge(
         }
         // A key that is not an index is a property JSON.stringify leaves out.
         val index = arrayIndex(key) ?: return
-        require(
-            index <= items.size + holeLimit,
-        ) { "Signal patch index $index is more than $holeLimit past the end of an array of ${items.size}" }
+        if (index > items.size + holeLimit) {
+            throw Refusal("Signal patch index $index is more than $holeLimit past the end of an array of ${items.size}$HOLES")
+        }
         while (items.size <= index) items.add(EMPTY)
         items[index.toInt()] = value
     }
@@ -305,14 +313,34 @@ private fun jsNumber(value: Any): Double =
 
 private val EMPTY = JsonString("")
 
-private const val PROTO_REFUSED =
-    "The client sets a signal named __proto__ as the prototype of the object holding it, " +
-        "and its store cannot be shown as JSON after that"
+/** A patch Streamlord refuses on purpose, which the client may take. */
+private class Refusal(
+    message: String,
+) : IllegalArgumentException(message)
 
-/**
- * A value as the client's store reads it back: every `null` inside it is `""`, and a `__proto__`
- * key is not there, though the object that had it is replaced by the next patch that reaches it.
- */
+private const val PROTO = "__proto__"
+
+/** Why a patch with a key `__proto__` is refused; the VS Code fold in sse.ts gives the same text. */
+internal const val PROTO_REFUSED =
+    "A key named __proto__ gives the object holding it a foreign prototype in Datastar's client, " +
+        "which then throws on some later keys, replaces the object on a later patch, or with a second " +
+        "__proto__ writes into String.prototype; Streamlord does not model it and refuses the patch"
+
+internal const val STORE_PROTO_REFUSED =
+    "The store holds a key named __proto__, which Datastar's client never holds; " +
+        "Streamlord does not fold a patch into the object that has it"
+
+private const val HOLES = ": the client takes it, and Streamlord does not fill memory with the holes"
+
+/** Whether a key `__proto__` stands anywhere in [value]. */
+private fun holdsProto(value: JsonValue): Boolean =
+    when (value) {
+        is JsonObject -> PROTO in value || value.values.any(::holdsProto)
+        is JsonArray -> value.any(::holdsProto)
+        else -> false
+    }
+
+/** A value as the client's store reads it back: every `null` inside it is `""`. */
 private fun asRead(value: JsonValue): JsonValue =
     when (value) {
         is JsonNull -> {
@@ -324,8 +352,7 @@ private fun asRead(value: JsonValue): JsonValue =
         }
 
         is JsonObject -> {
-            JsonObject(value.filterKeys { it != "__proto__" }.mapValues { asRead(it.value) })
-                .also { it.clientReplaces = "__proto__" in value }
+            JsonObject(value.mapValues { asRead(it.value) })
         }
 
         else -> {

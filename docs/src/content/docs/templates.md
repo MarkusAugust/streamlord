@@ -58,29 +58,8 @@ The editors report `expression-syntax` where the client cannot compile the text:
 `@name` as above, and `{item.name}` in `data-text`. A name the page lacks, such as Qute's
 `{count}`, is no syntax error, and they say nothing about it.
 
-**Do not render a value into an expression, in any engine.** Putting the tag in a JavaScript
-string, `data-text="'{$name}'"`, looks like the fix and is code injection. The engine escapes
-the value for HTML, the browser undoes that escaping when it reads the attribute, and Datastar
-runs what is left as JavaScript. Measured: `O'Brien`, `a\` and a line break each stop the
-expression from compiling, and `x' + (window.__pwn = 1) + '` runs. Put the value in an attribute
-of its own, which the browser hands over as text, and read it with `el.dataset`:
-
-```html
-<!-- Before: the value is JavaScript. O'Brien breaks it, and x' + (window.__pwn = 1) + ' runs. -->
-<span data-text="'{$name}'"></span>
-
-<!-- After: the value is text, whatever it holds. -->
-<span data-value="{$name}" data-text="el.dataset.value"></span>
-
-<!-- Text that never changes needs no Datastar: the engine's own escaping is enough. -->
-<span>{$name}</span>
-```
-
-Qute's `{name}` and Rocker's `@name` go in `data-value` the same way. With the `el.dataset` form,
-`Gorvek`, `O'Brien`, `x' + (window.__pwn = 1) + '`, `a\`, a line break and
-`</span><img src=x onerror=alert(1)>` each show as written and nothing runs, and the editors
-report nothing for any of the three tags. It is the rule `interpolate` enforces in Kotlin, where
-`data-text="%s"` throws; [Values from outside](/strings/#values-from-outside) says why.
+What to write instead is under
+[Do not render a value into an expression](#do-not-render-a-value-into-an-expression).
 
 **Attributes that take a signal name report all three.** `data-bind="{name}"`,
 `data-bind="{$name}"`, `data-bind="@name"` and the same tags in `data-indicator` and its kind
@@ -94,6 +73,52 @@ it, and there is currently no way to tell the analysis otherwise. It is on
 
 Nothing about rendering is affected either way. This is the editor's opinion of your file, not
 Streamlord's opinion of your markup.
+
+## Do not render a value into an expression
+
+This holds in every engine, Pebble and Thymeleaf as much as the three above. Putting the tag in a
+JavaScript string, `data-text="'{$name}'"`, looks like the fix and is code injection. The engine
+escapes the value for HTML, the browser undoes that escaping when it reads the attribute, and
+Datastar runs what is left as JavaScript. Measured: `O'Brien`, `a\` and a line break each stop
+the expression from compiling, and `x' + (window.__pwn = 1) + '` runs. Put the value in an
+attribute of its own, which the browser hands over as text, and read it with `el.dataset`:
+
+```html
+<!-- Before: the value is JavaScript. O'Brien breaks it, and x' + (window.__pwn = 1) + ' runs. -->
+<span data-text="'{$name}'"></span>
+
+<!-- After: the value is text, whatever it holds. -->
+<span data-value="{$name}" data-text="el.dataset.value"></span>
+
+<!-- Text that never changes needs no Datastar: the engine's own escaping is enough. -->
+<span>{$name}</span>
+```
+
+This holds only where `data-value` is in quotes and the engine escapes the value for HTML. Qute
+escapes only in HTML and XML templates and never a `RawString`, Rocker only in `.rocker.html`
+templates and never under `@raw`, and a `|safe`, `.raw` or `@raw` turns the escaping off.
+Measured: unescaped, `x" data-init="window.__pwn=1` runs, and so does a value in a `data-value`
+without quotes.
+
+It makes the value text only where the expression uses it as text: in `data-text`, `data-show`,
+`data-class` and `data-signals`, and in `data-attr` on a plain attribute such as `title`. Not in
+`data-attr:href` or `data-attr:src`, an `on*` handler, `srcdoc` or `style`, and not as the URL of
+`@get(...)`. Measured: `javascript:window.__pwn=1` in `data-value` runs from `data-attr:href` once
+the link is clicked, and from `data-attr:onclick`, and `@get(el.dataset.value)` with another
+site's address sends every signal on the page there, though `fetch` refuses a `javascript:` URL.
+Check such a value on the server, or write the markup with
+[`interpolate`](/strings/#values-from-outside), which refuses a hole in a Datastar attribute, an
+event handler, `srcdoc` or `style`, and a URL that is not relative, `http`, `https`, `mailto` or
+`tel`.
+
+`el.dataset` is not reactive: a changed `data-value` shows once the server morphs the element
+anew, not when a script calls `setAttribute`.
+
+Qute's `{name}` and Rocker's `@name` go in `data-value` the same way. With the `el.dataset` form,
+`Gorvek`, `O'Brien`, `x' + (window.__pwn = 1) + '`, `a\`, a line break and
+`</span><img src=x onerror=alert(1)>` each show as written and nothing runs, and the editors
+report nothing for any of the three tags. It is the rule `interpolate` enforces in Kotlin, where
+`data-text="%s"` throws; [Values from outside](/strings/#values-from-outside) says why.
 
 ## The guard
 

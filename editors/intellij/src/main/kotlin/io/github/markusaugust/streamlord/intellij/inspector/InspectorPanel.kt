@@ -504,11 +504,16 @@ class InspectorPanel(
             signals = mergePatchAsClient(signals, patch, isStringTrue(frame.args["onlyIfMissing"]))
             storeView.text = pretty(signals)
         } catch (e: SignalPatchException) {
-            // The client keeps the keys it set before the one it failed on, and so does the store shown.
-            // A throw also leaves its update batch open (signals.ts:695-708), so the page redraws nothing more.
+            // The client keeps the keys it set before the one it failed on, and so does the store
+            // shown. A throw also leaves its update batch open (signals.ts:695-708), so the bindings
+            // on the page stop redrawing.
             signals = e.store
             storeView.text = pretty(signals)
-            error("The signal store cannot take this patch: ${e.message}. $PAGE_STOPS")
+            if (e.refused) {
+                error("Streamlord refuses this signal patch on purpose: ${e.message}. $REFUSED")
+            } else {
+                error("The signal store cannot take this patch: ${e.message}. $CLIENT_THROWS")
+            }
         }
     }
 
@@ -716,8 +721,10 @@ class InspectorPanel(
         private const val LOG_GRACE_MS = 400L
         private val TIME = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
 
-        private const val PAGE_STOPS =
-            "Where Datastar's client throws on a patch, the page in the browser stops updating until it is reloaded."
+        private const val CLIENT_THROWS =
+            "Datastar's client throws on it too, and the bindings already on the page then stop redrawing until it is " +
+                "reloaded, though the signals still change, element patches still land and new bindings show the current value."
+        private const val REFUSED = "The store shown keeps the keys before it."
 
         fun time(at: Long): String = TIME.format(Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()))
 

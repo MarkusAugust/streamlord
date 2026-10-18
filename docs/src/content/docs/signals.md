@@ -241,8 +241,14 @@ A patch the client fails on partway, such as a `length` an array cannot take, ma
 `mergePatchAsClient` throw `SignalPatchException` with the store as the client keeps it, the keys
 before the failing one applied, and both Stream Inspectors show that store and the reason. In
 the browser the damage outlasts the patch: Datastar 1.0.4 leaves its update batch open after the
-throw, so signals still change but the page stops updating until it is reloaded. Measured in
-Chrome, a `data-text` stayed where it was while clicks moved its signal on.
+throw, so the bindings already on the page stop redrawing until it is reloaded. Measured in
+Chrome, a `data-text` stayed where it was while clicks moved its signal on, while element
+patches still landed and a binding added after the throw showed the current value.
+
+Two kinds of patch the client may well take are refused on purpose, with `refused` set on the
+exception, and the inspectors say so instead: a key `__proto__` anywhere in the patch, whatever
+it holds, which the client does not keep as plain JSON, and more indices past the end of an
+array than `holeLimit`, which the client keeps as holes.
 
 A dotted name reaches a nested signal: `patchSignals("form.email" to "")` patches `$form.email`,
 the signal `data-signals:form.email` declares, and `removeSignals("form.email")` removes it.
@@ -253,9 +259,11 @@ Some keys Datastar's client cannot hold, and a patch carrying one throws
 `DatastarEventValidationException` before anything is sent, whether it came from pairs, a codec
 or a JSON string, at any depth:
 
-- `__proto__`, which the client never stores but sets as the prototype of the object holding it;
-  with an object under it, its merge throws halfway through, and the page stops updating until it
-  is reloaded;
+- `__proto__`, which the client never stores but sets as the prototype of the object holding it.
+  With `{"x": 1}`, `{"0": 1}` or `{"length": 5}` under it, its merge throws halfway through, and
+  the bindings already on the page stop redrawing until it is reloaded. With `{}` or
+  `{"x": null}` it throws nothing, and `{"__proto__": {"y": 1}}` under it sets `y` on
+  `String.prototype`;
 - a property every object already has (`constructor`, `toString`, `valueOf`, `hasOwnProperty`
   and the rest of `Object.prototype`) with an object under it, which the client writes into the
   built-in property before every request: `constructor.prototype` reaches every object on the

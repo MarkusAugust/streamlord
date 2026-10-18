@@ -688,13 +688,42 @@ class InspectorTest : BasePlatformTestCase() {
         patch("""{"b":1,"a":{"0":7,"length":-1},"c":2}""")
         assertEquals("""{"a":[7,2],"b":1}""", JsonParser.parse(store.text).toJson())
         val labels = UIUtil.findComponentsOfType(panel, JLabel::class.java).map { it.text }
-        // The client leaves its batch open after a throw, so the page stops redrawing (measured in Chrome).
+        // The client leaves its batch open after a throw, so the bindings on the page stop
+        // redrawing (measured in Chrome).
         val expected =
             "The signal store cannot take this patch: Invalid array length -1 in a signal patch. " +
-                "Where Datastar's client throws on a patch, the page in the browser stops updating until it is reloaded."
+                "Datastar's client throws on it too, and the bindings already on the page then stop redrawing until it is reloaded, " +
+                "though the signals still change, element patches still land and new bindings show the current value."
         assertTrue(labels.toString(), expected in labels)
         patch("""{"d":3}""")
         assertEquals("""{"a":[7,2],"b":1,"d":3}""", JsonParser.parse(store.text).toJson())
+    }
+
+    // A patch Streamlord refuses on purpose says so, and nothing about the page standing still.
+    fun `test a patch Streamlord refuses on purpose says so`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        val apply = panel.javaClass.getDeclaredMethod("applyFrame", DatastarFrame::class.java).apply { isAccessible = true }
+
+        fun patch(signals: String) =
+            apply.invoke(panel, DatastarFrame("datastar-patch-signals", null, null, mapOf("signals" to signals), "", 0L))
+
+        fun labels() = UIUtil.findComponentsOfType(panel, JLabel::class.java).map { it.text }
+        patch("""{"a":[1]}""")
+        val store = UIUtil.findComponentsOfType(panel, JBTextArea::class.java).single { it.text.startsWith("{\n") }
+        patch("""{"b":1,"o":{"__proto__":5},"c":2}""")
+        assertEquals("""{"a":[1],"b":1,"o":{}}""", JsonParser.parse(store.text).toJson())
+        val proto =
+            "Streamlord refuses this signal patch on purpose: A key named __proto__ gives the object holding it a foreign prototype " +
+                "in Datastar's client, which then throws on some later keys, replaces the object on a later patch, or with a second " +
+                "__proto__ writes into String.prototype; Streamlord does not model it and refuses the patch. " +
+                "The store shown keeps the keys before it."
+        assertTrue(labels().toString(), proto in labels())
+        patch("""{"a":{"20000":1}}""")
+        val holes =
+            "Streamlord refuses this signal patch on purpose: Signal patch index 20000 is more than 10000 past the end of an array " +
+                "of 1: the client takes it, and Streamlord does not fill memory with the holes. The store shown keeps the keys before it."
+        assertTrue(labels().toString(), holes in labels())
+        assertEquals("""{"a":[1],"b":1,"o":{}}""", JsonParser.parse(store.text).toJson())
     }
 
     // Measured in headless Chrome with the 1.0.4 bundle: the characters that may stand on both sides
