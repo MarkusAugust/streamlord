@@ -59,7 +59,13 @@ class LiveStreamTest {
                     }
                 }
             }.start()
-        port = runBlocking { server.engine.resolvedConnectors().first().port }
+        port =
+            runBlocking {
+                server.engine
+                    .resolvedConnectors()
+                    .first()
+                    .port
+            }
     }
 
     @AfterTest

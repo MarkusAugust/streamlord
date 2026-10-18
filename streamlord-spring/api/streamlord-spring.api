@@ -88,6 +88,7 @@ public final class io/github/markusaugust/streamlord/spring/ServletSseSink : io/
 
 public final class io/github/markusaugust/streamlord/spring/StreamlordExceptionHandler {
 	public fun <init> ()V
+	public final fun signalsNotJson (Lio/github/markusaugust/streamlord/core/SignalsMediaTypeException;)Lorg/springframework/http/ResponseEntity;
 	public final synthetic fun signalsTooLarge ()Lorg/springframework/http/ResponseEntity;
 	public final fun signalsTooLarge (Lio/github/markusaugust/streamlord/core/SignalsTooLargeException;)Lorg/springframework/http/ResponseEntity;
 	public final synthetic fun signalsUnreadable ()Lorg/springframework/http/ResponseEntity;

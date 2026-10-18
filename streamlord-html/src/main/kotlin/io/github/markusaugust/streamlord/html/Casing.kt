@@ -38,7 +38,10 @@ public class InvalidSignalNameException(
 public object Casing {
     private val UPPER = Regex("[A-Z]")
     private val KEBAB = Regex("-([a-z])")
-    private val FORBIDDEN = Regex("[\\s\"'<>=/]")
+
+    // Java's \s, the spaces JavaScript's \s adds (class.ts splits a class list on it), NUL, which
+    // the HTML parser turns into U+FFFD, and the characters that end an attribute or its name.
+    private val FORBIDDEN = Regex("[\\s\\x00\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff\"'<>=/]")
 
     // What Datastar's client finds behind a `$`: ASCII word characters, in parts joined by `.` or `-`.
     private val SIGNAL_NAME = Regex("[A-Za-z0-9_]+(?:[.-][A-Za-z0-9_]+)*")
@@ -53,11 +56,14 @@ public object Casing {
     /** Datastar's own reading of a key: `-x` becomes `X`. */
     public fun camel(name: String): String = name.replace(KEBAB) { it.groupValues[1].uppercase() }
 
-    /** A key or signal name must be non-blank and free of whitespace, quotes and the characters that end an attribute or its name. */
+    /**
+     * A key or signal name must be non-blank and free of whitespace (as Java or JavaScript counts
+     * it, so a no-break space too), NUL, quotes and the characters that end an attribute or its name.
+     */
     public fun validate(name: String): String {
         if (name.isBlank()) throw InvalidSignalNameException(name, "is blank")
         if (FORBIDDEN.containsMatchIn(name)) {
-            throw InvalidSignalNameException(name, "contains whitespace, quotes or a character that ends an attribute or its name")
+            throw InvalidSignalNameException(name, "contains whitespace, NUL, quotes or a character that ends an attribute or its name")
         }
         // Datastar splits an attribute name at the first `__`: what follows is read as modifiers.
         if ("__" in name) throw InvalidSignalNameException(name, "contains __, where Datastar starts reading modifiers")
@@ -85,19 +91,73 @@ public object Casing {
     /**
      * The key and the `__case` to write so that the client derives exactly [name].
      * [default] is what the client applies to the key when no `__case` is given.
+     *
+     * Where the default keeps the key as written (`on`, `class`), a name that mixes capitals with
+     * a hyphen before a lower-case letter, such as `fooBar-baz`, is refused: the capitals need
+     * `__case.camel` or `__case.pascal`, which turns every such hyphen into a capital too, and the
+     * browser has lowercased the key, so no key and case give the name back. An explicit `case`
+     * is applied as asked.
      */
     public fun key(
         name: String,
         case: Case?,
         default: Case,
+    ): Pair<String, Case?> = key(name, case, default, "Write it in one case")
+
+    /** [key], with [advice] on what to write instead of a name no key gives back. */
+    internal fun key(
+        name: String,
+        case: Case?,
+        default: Case,
+        advice: String,
     ): Pair<String, Case?> {
         validate(name)
         if (!UPPER.containsMatchIn(name)) return name to case
         val key = kebab(name)
         if (case != null) return key to case
         val wanted = if (name.first().isUpperCase()) Case.PASCAL else Case.CAMEL
+        if (default == Case.KEBAB && clientCase(key, wanted) != name) {
+            throw InvalidSignalNameException(
+                name,
+                "mixes capitals with a hyphen before a lower-case letter; Datastar's client turns that hyphen " +
+                    "into a capital as well, so it would read ${clientCase(key, wanted)}. $advice",
+            )
+        }
         return key to (if (wanted == default) null else wanted)
     }
+
+    /**
+     * [key] with the [modifiers] written after it. The client cuts the attribute name at the first
+     * `__`, so a key that ends in `_` before a modifier loses that `_` to it: `b_` with
+     * `__case.pascal` is `b___case.pascal`, read as the key `b` and a modifier `_case`. Such a key
+     * is refused; without modifiers it is written as it is.
+     */
+    public fun withModifiers(
+        name: String,
+        key: String,
+        modifiers: String,
+    ): String {
+        if (modifiers.isNotEmpty() && key.endsWith('_')) {
+            throw InvalidSignalNameException(
+                name,
+                "ends in _, which runs into the __ of the modifiers after it ($key$modifiers), so Datastar's client " +
+                    "would read the key as ${key.dropLast(1)}",
+            )
+        }
+        return key + modifiers
+    }
+
+    /** [key] as Datastar's client reads it with [case] applied (`caseFns` in text.ts); kebab leaves it as it is. */
+    internal fun clientCase(
+        key: String,
+        case: Case,
+    ): String =
+        when (case) {
+            Case.CAMEL -> camel(key)
+            Case.SNAKE -> key.replace('-', '_')
+            Case.PASCAL -> key.take(1).uppercase() + camel(key.drop(1))
+            Case.KEBAB -> key
+        }
 
     /**
      * [written], the key and modifiers of an attribute that declares the signal [name], once the
@@ -115,16 +175,59 @@ public object Casing {
         val cases = modifiers.lastOrNull { it.first() == "case" }?.drop(1) ?: listOf("camel")
         val held =
             cases.fold(parts.first()) { key, case ->
-                when (case) {
-                    "camel" -> camel(key)
-                    "snake" -> key.replace('-', '_')
-                    "pascal" -> key.take(1).uppercase() + camel(key.drop(1))
-                    else -> key
-                }
+                Case.entries.firstOrNull { it.wire == case }?.let { clientCase(key, it) } ?: key
             }
         SignalNames.pathProblem(held)?.let { throw InvalidSignalNameException(name, "is read by Datastar's client as $held, which $it") }
         return written
     }
+
+    /**
+     * [prop] as the `__prop` modifier of `data-bind`: one hyphen before each capital, a leading
+     * one included. The browser lowercases it and bind.ts reads it back with its own `camel`,
+     * which also splits letters from digits and turns `_` into a hyphen; a name that does not
+     * come back as written is refused.
+     */
+    internal fun bindProp(prop: String): String {
+        validate(prop)
+        if ('.' in prop) throw InvalidSignalNameException(prop, "contains ., where Datastar starts reading the next modifier value")
+        val wire = prop.replace(UPPER) { "-" + it.value.lowercase() }
+        val read = clientCamel(wire.lowercase())
+        if (read != prop) {
+            throw InvalidSignalNameException(prop, "is read back by Datastar's client from the __prop modifier as $read")
+        }
+        return wire
+    }
+
+    /** [event] as a value of the `__event` modifier of `data-bind`, which Datastar listens to as the browser hands it over. */
+    internal fun bindEvent(event: String): String {
+        validate(event)
+        if ('.' in event) throw InvalidSignalNameException(event, "contains ., which splits it into two events in the __event modifier")
+        if (UPPER.containsMatchIn(event)) {
+            throw InvalidSignalNameException(
+                event,
+                "has capitals, which the browser lowercases in the __event modifier, so Datastar would listen to ${event.lowercase()}",
+            )
+        }
+        return event
+    }
+
+    // `camel` in Datastar's utils/text.ts: its own `kebab`, then a capital for the character after each hyphen.
+    private val CLIENT_KEBAB =
+        listOf(
+            Regex("([A-Z]+)([A-Z][a-z])"),
+            Regex("([a-z0-9])([A-Z])"),
+            Regex("([A-Za-z])([0-9]+)"),
+            Regex("([0-9]+)([A-Za-z])"),
+        )
+    private val CLIENT_SPACE = Regex("[\\s_]+")
+    private val CLIENT_HYPHEN = Regex("-.")
+
+    private fun clientCamel(name: String): String =
+        CLIENT_KEBAB
+            .fold(name) { s, re -> re.replace(s, "$1-$2") }
+            .replace(CLIENT_SPACE, "-")
+            .lowercase()
+            .replace(CLIENT_HYPHEN) { it.value.substring(1).uppercase() }
 
     /** The key for an attribute whose key is used as written (`attr`, `style`, `animate`): `ariaLabel` -> `aria-label`. */
     public fun plainKey(name: String): String = kebab(validate(name))

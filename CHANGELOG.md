@@ -34,6 +34,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 - `Casing.signalName`, the check a name that declares a signal passes: what `Casing.validate`
   admits, and only ASCII letters, digits and `_` in parts joined by `.` or `-`.
+- `Casing.withModifiers`: a key with its modifiers after it, refused where the key ends in `_`,
+  which the client would read as part of the `__` that starts the modifiers.
 - `mergePatchAsClient` in `streamlord-core`: the signal store as Datastar's client reads it after
   a patch, which RFC 7386 is not: `onlyIfMissing` leaf by leaf, an object onto an array by index,
   an array or a string at the top level as keys, a `length` key resizing an array, and a `null`
@@ -58,9 +60,41 @@ All notable changes to Streamlord are recorded here. The format follows
   reaches; `filter-pattern`, a filter pattern written as a string with flags; `computed-value`,
   a value of `data-computed` that is no function; and `statement-split`, a `;` inside brackets in
   a value that is read.
+- `SignalPatchException` in `streamlord-core`, an `IllegalArgumentException` that
+  `mergePatchAsClient` throws for a patch the client fails on partway through; its `store` is the
+  store as the client keeps it then, with the keys before the failing one applied.
+
+- `SignalsMediaTypeException`, `Streamlord.requireJsonContentType` with the same setting on the
+  Ktor plugin, and `Streamlord.MAX_SIGNALS_DEPTH`; see Changed, Fixed and Security.
 
 ### Changed
 
+- `dataOn` and `dataClass` refuse a name that mixes capitals with a hyphen before a lower-case
+  letter, such as `fooBar-baz`. No key gives it back: the `__case.camel` the capitals need turns
+  the hyphen into a capital too, so the client listened for, or toggled, `fooBarBaz`.
+- `BindModifiers.events` are checked as `dataOn` checks an event, and one with a capital or a `.`
+  is refused: the client listened for it in lowercase, or as two events split at the `.`.
+- `BindModifiers.prop` is written so that Datastar's own camel-casing gives it back, a leading
+  capital included (`URL` as `-u-r-l`), and one it cannot give back is refused: `x2y` came back
+  as `x2Y`, `_value` as `Value`, `my_prop` as `myProp`.
+- A key or name with a no-break space or another space JavaScript's `\s` has and Java's lacks,
+  or with a NUL, is refused like any other white space: the client split a class on it, and the
+  HTML parser turned a NUL into U+FFFD.
+- A name that ends in `_` is refused by `dataOn`, `dataClass`, `dataSignals`, `dataComputed`,
+  `dataBind`, `dataRef`, `dataIndicator`, `dataMatchMedia` and `dataPersist` where a modifier
+  follows it: the client cuts the attribute name at the first `__`, so `dataClass("B_", ...)`,
+  written `b___case.pascal`, set the class `b`, and `dataSignals("b_", ..., ifMissing = true)`
+  declared `$b` and lost its `__ifmissing`. Without a modifier it is written as before.
+- A Kotlin `Regex` with a back reference before its group has closed, `(a\1)`, `\1(a)` or
+  `(?<n>a\k<n>)`, is refused by `SignalFilter`: JavaScript matches it as empty, and Java fails it
+  or, in a repeated group such as `(a|b\1)+`, matches what the group took on the pass before, so
+  the filter took signals Kotlin would not. `(?:(a)|b\1)+`, whose reference comes after its group,
+  is written as it is and still differs: JavaScript clears the group at each pass and Java keeps
+  it, so it matches `ab` in JavaScript only.
+- A Kotlin `Regex` with a quantifier that has nothing to repeat, such as `$?`, `^{2}`, `\b*`, a
+  `{1}` at the start, after `|` or `(`, on a lookbehind or after an empty `\Q\E`, and the empty
+  `(?)`, is refused by `SignalFilter`. Java takes them; JavaScript refuses the literal with
+  "Nothing to repeat", which stopped Datastar for the rest of the page.
 - A dotted name in the pairs of `patchSignals`, `removeSignals` and `dataSignals` now nests, as
   `data-signals:form.email` does: `patchSignals("form.email" to "x")` patches `$form.email`. It
   used to send the key `"form.email"`, which the client stores as one key that `$form.email`
@@ -103,8 +137,7 @@ All notable changes to Streamlord are recorded here. The format follows
   is kept in `messages()` as written; decoding fails on one that would not come back as written
   as `last-event-id`, by the rule events are built with: printable ASCII, no space at either
   end. A `retry` that is not a whole number of milliseconds from 1 to `Int.MAX_VALUE` fails too.
-  Both
-  are checked on every message, Datastar's or not, and on an unfinished one at the end, since
+  Both are checked on every message, Datastar's or not, and on an unfinished one at the end, since
   the client takes them per line; `SseReader.finish()` and `LiveDatastarStream` check that last
   one as well. A data line with no space after its key fails: the client would read the key as
   the line minus its last character. `onlyIfMissing` and `useViewTransition` are true with spaces
@@ -218,18 +251,32 @@ All notable changes to Streamlord are recorded here. The format follows
 
 - The build and the workflows are pinned: every GitHub Action by commit, with its version in a
   comment Dependabot keeps in step; the Gradle wrapper by `distributionSha256Sum`; the demo's base
-  image by digest; Bun and the Railway CLI by version. Checkouts no longer persist the token in
-  `.git/config`, the Railway token reaches only the two steps that deploy, and the three publish
-  jobs run in a `release` environment that takes release tags alone. The IntelliJ publish job
-  stops when the signing certificate secrets are missing, where it published an unsigned plugin
-  under a workflow that looked as if it signed it. The javadoc jars carry `META-INF/LICENSE`, as
-  the licence page promises and the other jars do, and every published main jar names an
-  `Automatic-Module-Name`.
+  image by digest; the Railway CLI by version; Bun by version both in CI and in the Netlify build
+  that deploys the documentation, which now installs from the frozen lockfile and runs Astro under
+  the Bun it checked, through `bun x`, as CI does. When Netlify hands that build another Bun, or
+  none, it fetches the pinned one from the npm registry, whose integrity hash for that exact version
+  npm checks the download against, and stops if it still has the wrong one. Checkouts no longer
+  persist the token in `.git/config`, the Railway token reaches only the two steps that deploy, and
+  the three publish jobs run in a `release` environment that takes release tags alone. The image is
+  pushed by a job of its own, which alone holds `packages: write`, runs on master alone, deploys one
+  run at a time and skips a commit that master has already moved past, so an older run never deploys
+  over a newer one. The IntelliJ publish job stops when the signing certificate secrets are missing,
+  where it published an unsigned plugin under a workflow that looked as if it signed it. The javadoc
+  jars carry `META-INF/LICENSE`, as the licence page promises and the other jars do, and every
+  published main jar names an `Automatic-Module-Name`.
 - `checkDocSamples` fails in CI on a page whose coordinates or wire transcripts it would have
   rewritten, so a release commit that forgets them goes red on the tag; locally it still rewrites
   them. The test-only Tomcat is 11.0.27, past three advisories on 11.0.24. The native image
   passes `-H:+UnlockExperimentalVMOptions` ahead of the experimental options GraalVM will refuse
-  without it, and two constructs Gradle 10 removes are gone from the build scripts.
+  without it, and three constructs Gradle 10 removes are gone from the build scripts; the
+  warnings left come from the Dokka and GraalVM plugins.
+- The Kotlin sources follow ktlint, and CI checks them with ktlint 1.8.0 on every change to a
+  Kotlin file or to an `.editorconfig`, so the formatting IntelliJ's ktlint plugin applies on
+  save no longer rewrites lines nobody meant to touch. A change to `netlify.toml` alone runs the
+  documentation build.
+- `SendLatestTest`, which checks that `sendLatest` counts a render that never suspends, ran on the
+  wall clock and failed under load. It runs on a clock the test drives, and no longer fails on a
+  busy machine.
 
 - `streamlord-analysis`, which only the two editors consume, changed the signatures of
   `ExpressionValidator.validate`, `MarkupValidator.validateAttributes`, `Requests.parseRequestsFile`,
@@ -237,6 +284,24 @@ All notable changes to Streamlord are recorded here. The format follows
   Kotlin source still compiles against them and code compiled against 0.12 does not link. The
   `signalsTooLarge` and `signalsUnreadable` handlers of `StreamlordExceptionHandler` take the
   exception; the 0.12 signatures remain, hidden.
+- `readSignals` and `readSignalsJson`, on Ktor and Spring, refuse signals in a request body that
+  is not declared `application/json` with `SignalsMediaTypeException`, which
+  `StreamlordExceptionHandler` answers with `415`; Security has the reason. Datastar's client
+  declares every body it sends signals in that way, so pages change nothing, but a client of your
+  own must set the header. A declared type is checked before the body is read; a body with no
+  `Content-Type` is read and refused once it is found not to be blank. Query-string signals are
+  not affected. `Streamlord(requireJsonContentType = false)`, or `requireJsonContentType = false`
+  in the Ktor plugin, turns the check off. On Ktor, map the exception to `415` in `StatusPages`;
+  a block that maps only `SignalsDecodeException` answers it with `400`, since it is one.
+  `SignalsDecodeException` is now `open`.
+- `Jackson2SignalsCodec` reads through a copy of the mapper handed to it, made once, so that
+  mapper's rules and cache are not changed; a mapper of a subclass that does not override
+  `copy()` cannot be used.
+- `Jackson2SignalsCodec` over a mapper whose default is to skip a `null` in a collection,
+  `setDefaultSetterInfo(JsonSetter.Value.forContentNulls(Nulls.SKIP))`, now refuses one in a
+  Kotlin parameter's `List<Int>` with a `400` where the mapper dropped it, as the Kotlin module's
+  own `StrictNullChecks` does on Jackson 2 and 3. `@JsonSetter(contentNulls = Nulls.SKIP)` on the
+  parameter still drops it.
 
 ### Removed
 
@@ -324,7 +389,52 @@ All notable changes to Streamlord are recorded here. The format follows
   other than a backend one, an attribute key and a modifier argument read as plain text.
 - The VS Code package carries acorn's licence, in `ThirdPartyNotices.txt`, beside the bundle that
   includes acorn.
-
+- `mergePatchAsClient` now folds a patch exactly as the 1.0.4 client does, held to the client's
+  `mergePatch` built from source over 329 scenarios: a `length` is turned into a number the
+  JavaScript way (`[]` and `false` are 0, `"2"` is 2), deleting a `length` throws, a patch that
+  throws keeps the keys before it, and keys are walked and kept in JavaScript's order, also in
+  objects inside arrays and in a store that a number, a boolean or `null` hands back unchanged. A
+  fold copies each object and array on the patch's path in full width and hands the rest back as
+  the same values, so a small patch into a large store costs time linear in the width of the
+  levels the patch goes through, not in the size of the store.
+- `SseDecoder` read some frames the client takes as malformed. An empty
+  `viewTransitionSelector` is none; an element patch with no elements, or only white space as
+  HTML counts it (tab, line feed, form feed, carriage return, space), in a mode that needs them
+  decodes to what the client does with it: an `outer` or `replace` with a selector takes the
+  target out and leaves the white space in its place as a text node, and comes back as a removal;
+  an `inner` puts the white space in place of the target's children; an `append`, `prepend`,
+  `before` or `after` inserts it as a text node and changes no element, and is no event, as is an
+  `outer` or `replace` without a selector whose elements hold no tag. A no-break space, U+3000,
+  U+001C or any other character is text the client inserts, measured in Chrome, and comes back as
+  elements; `PatchElements` and `ElementsResponse` take such elements too, where Kotlin's
+  `isBlank()` refused them, except in an `outer` or `replace` without a selector, where the client
+  takes only elements and they would patch nothing. A frame that changes no element but asks for
+  `useViewTransition` is no event, though the client starts a view transition around it. Flags are read with JavaScript's `trim()`, so `true` followed by a
+  byte order mark is true and `true` followed by U+001C is not.
+- A string with half of a surrogate pair reached the client as `?` from a codec, in elements and
+  in a script response. Signals now carry it as `\ud800`, as the built-in writer does, and
+  elements as U+FFFD; so does a script from `respondScript` or `datastarScript`, with its
+  attributes, as `executeScript` already did in a stream.
+- `dataClass` on a class that mixes capitals with a hyphen before a lower-case letter, such as
+  `MuiButton-root`, says to use the object form, `dataClass("{'MuiButton-root': ...}")`, which
+  keeps it as written; "write it in one case" could not be followed for a class from a library.
+- On Spring with Tomcat, a stream answered a request that sent `Connection: keep-alive` with
+  `Connection: keep-alive, keep-alive`: Tomcat adds its own to such a request. The stream now
+  leaves the header to Tomcat then, and still sets none over HTTP/2 or when the request asks to
+  close.
+- On Ktor, reading the signals of a body that was already read threw Ktor's own
+  `RequestAlreadyConsumedException`; it now says, as on Spring, that the body was read before.
+- The documentation of `maxSignalsSize` and the security page said the 1 MiB cap holds for the
+  `datastar` query parameter. The server refuses the request line at 4 to 8 KiB, with a status
+  Datastar's client does not retry; the page now gives the numbers per server and points large
+  signals to `@post`.
+- The security page now says that Ktor 3.6 without `StatusPages` sends an exception's message in
+  the 500, and shows a catch-all that does not.
+- KDoc: `timeout` on `datastarStream` said Spring cuts the stream, where Tomcat and Jetty end it
+  cleanly and the client does not reconnect; `dataIndicator` counts only fetches from its own
+  element; `FetchOptions` writes an option set to its default value; `SignalFilter` names the
+  differences at NEL and with `IGNORE_CASE`, where Kotlin folds the Kelvin sign into `k` and the
+  long s into `s` and JavaScript does not.
 - A signal patch could carry a key Datastar's client cannot hold, from pairs, a codec or a JSON
   string, at any depth. `__proto__` with an object under it made its merge throw halfway through
   a batch it never closed, so no later signal reached the page. An object under a property of
@@ -420,6 +530,13 @@ All notable changes to Streamlord are recorded here. The format follows
   them as if they had finished, which the client does not retry. Ktor gives a writer no way to wait
   for the engine, so a failure now waits a moment, at most a second for a stalled reader, before it
   is thrown on; over 200 failures of each kind on each engine, none lost a frame or ended cleanly.
+  Ktor's Tomcat and Jetty engines ended a failed body with its last chunk, as if it had finished,
+  gzipped or not, so the client did not reconnect and the page stopped updating without a word.
+  Streamlord now cuts the connection there too, on Tomcat 10.1 and 11 and Jetty 11 and 12, over
+  HTTP/1.1 and HTTP/2, where only the stream is reset. It does so by reflection, with no new
+  dependency, and on Tomcat only once Ktor has completed the request, and not on a connector set
+  to keep its facades, where a cut reached other requests. On an engine Streamlord does not know,
+  the stream ends as the engine ends it.
 - `respondDatastar` on a call already answered throws `IllegalStateException`. It did nothing on
   CIO and threw Netty's own exception from the header loop.
 - Neither Ktor nor Spring WebMVC sends `Connection: keep-alive` to a request that asked to close.
@@ -428,8 +545,9 @@ All notable changes to Streamlord are recorded here. The format follows
 - `LiveDatastarStream` sends the client's `Accept`, now `DatastarProtocol.ACCEPT`, and words a
   frame it fails on as one Streamlord's rules refuse: the client takes `retry: 0` and `1e3`.
 - The pages give the measured disconnect figures (four to five heartbeats on CIO, two on Netty),
-  say which engine sends its headers when, and what Netty does with `heartbeat = null`; and the core, `streamlord-test` and the Ktor tests also run on the newest
-  coroutines release, and `HttpRequestLifecycle` is tested on Netty.
+  say which engine sends its headers when, and what Netty does with `heartbeat = null`.
+- The core, `streamlord-test` and the Ktor tests also run on the newest coroutines release, and
+  `HttpRequestLifecycle` is tested on Netty.
 - On Spring WebMVC, a failure inside a stream that has started is cut off, as the documentation
   said, also when `StreamlordExceptionHandler` handles it: the handler throws the exception on
   when the response is committed. It used to answer, which ended the chunked body as if the stream
@@ -532,6 +650,57 @@ All notable changes to Streamlord are recorded here. The format follows
   data the server never meant to send. A NUL in data is still written, since markup can carry one.
   This reverses 0.12.0, where `SseDecoder` dropped an `id` with a NUL in it and read on: the id is
   now kept as written, and decoding fails on it.
+- Signals read into a type are refused with `SignalsDecodeException`, a `400`, when objects and
+  arrays nest more than `Streamlord.MAX_SIGNALS_DEPTH`, 64, deep, before any codec reads them. It
+  is the depth the built-in parser and writer already kept. `KotlinxSignalsCodec` overflowed its
+  stack on twenty kilobytes of `[` into a `JsonElement`, and the `StackOverflowError` went past
+  every handler: real Ktor CIO answered `500`. The codec also turns that error into
+  `SignalsDecodeException` for a caller that decodes a body itself, as on WebFlux. Through
+  `readSignals`, the Jackson codecs, which allowed 1000 and 500 levels, stop at 64 as well.
+- `Jackson2SignalsCodec` refuses a `null` inside the `List<Int>`, `Set`, `Array` or
+  `Map<String, Int>` of a Kotlin constructor or `@JsonCreator` parameter, at any depth, as
+  `StrictNullChecks` in the Kotlin module would, with `default()` and with a mapper of your own,
+  also in a class with a value class parameter; it reached the handler as a
+  `NullPointerException`. A parameter's `List<T>` is left alone, since what `T` stands for is
+  known only to the type read, so `Page<Int?>` takes a `null` and `Page<Int>` does too. A `var`
+  in the class body, a value class holding a list and a Java class's collections still take
+  `null`. Both Jackson codecs refuse a `null` inside a `List<Int>`, `Array<String>` or
+  `Map<String, List<Int>>` read whole, at any depth, which the Kotlin module does not check. An
+  element type declared nullable, `List<Int?>`, still takes one. The Signals page lists where
+  each codec refuses a `null` and where it does not.
+- `KotlinxSignalsCodec` threw `ClassCastException` past every handler on any body read into an
+  `Array<Int>`, or another array of a primitive type looked up by type, since kotlinx.serialization
+  builds an `int[]` for it. It now throws `SignalsCodecException`, a `500`, that says to declare
+  it `IntArray` or `List<Int>`. A property of that type in a class is read as before.
+- Both Jackson codecs ignore keys the type does not name whatever the mapper says, as the docs
+  promised. `Jackson2SignalsCodec(jacksonObjectMapper())`, and any mapper with
+  `FAIL_ON_UNKNOWN_PROPERTIES` on, refused every request that carried a signal the type did not
+  name.
+- `KotlinxSignalsCodec(requireNamedSerializers = true)` let a container of a named type, such as
+  `List<Signals>`, through, although the list is looked up whole and that lookup reads the class
+  of what it holds, the reflective path a native image cannot take. It is now refused until the
+  container is named itself, as `typeOf<List<Signals>>() to ListSerializer(Signals.serializer())`.
+- The Spring pages give the real symptom of a handler that takes `Streamlord` as a parameter: every
+  request answers `500` with `BeanInstantiationException`, on WebMVC and WebFlux, rather than
+  running on a default instance. The security page says why the writer escapes U+2028 when current
+  browsers accept it raw, and that it escapes `<!` as well as `</`, and the introduction and the
+  README that a request asking to close gets `Connection: keep-alive` from the version written by
+  hand on CIO, Netty and Tomcat, and not from `respondDatastar`. The roadmap no longer says what a
+  named release lacks and describes the store panel with the merge it uses, `mergePatchAsClient`.
+  The install page draws the codec dependency trees as lists, not as text art; on a phone a
+  coordinate breaks at a dot, at its colon and before its version, and at a hyphen in its name only
+  on a line narrower than the name. Inline code written in Markdown breaks after a `.`, `::`, `/` or
+  `(` before it breaks inside a name. The editor READMEs list the IntelliJ inspection for a signal
+  no file defines, the Stream Inspector's two settings and the required signing secrets, and VS
+  Code's `test:live` runs against the repository's own demo rather than a service outside it.
+
+### Security
+
+- Signals in a request body are read only when it is declared `application/json`. A
+  `<form enctype="text/plain">` on another site can post JSON-shaped text with the visitor's
+  cookies and without a CORS preflight, and `readSignals` read it as signals, measured in Chrome on
+  Ktor CIO and Spring Tomcat. It is now refused with `SignalsMediaTypeException`; Changed has what
+  that asks of a client of your own.
 
 ## [0.12.0] - 2026-10-11
 

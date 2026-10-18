@@ -1,13 +1,19 @@
 package io.github.markusaugust.streamlord.html
 
+import io.github.markusaugust.streamlord.core.domain.ExpressionGuard
+import io.github.markusaugust.streamlord.core.domain.InterpolatedExpressionException
 import kotlinx.html.DIV
 import kotlinx.html.button
 import kotlinx.html.div
+import kotlinx.html.input
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.microseconds
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -340,5 +346,198 @@ class AsTheClientReadsItTest {
         assertEquals("\$v = '\\x22><img src=x onerror=alert(1)> \\x26 \\x27it\\x27 `x`'", literal)
         val regex = SignalFilter.regexLiteral(Regex("it's \"a\" `b` & c\\\\"))
         assertEquals("/it\\x27s \\x22a\\x22 \\x60b\\x60 \\x26 c\\x5c/", regex)
+    }
+
+    // Run through modifyCasing from the 1.0.4 source: no key over {a, b, -} up to nine
+    // characters, with any chain of up to three __case values, gives a name of the shape aB-b.
+    @Test
+    fun `an event or class name mixing capitals with a hyphen before a lower-case letter is refused`() {
+        for (name in listOf("fooBar-baz", "foo-barBaz", "Foo-bar", "--brandColor")) {
+            assertFailsWith<InvalidSignalNameException>(name) { elements { div { dataClass(name, "true") } } }
+            assertFailsWith<InvalidSignalNameException>(name) { elements { div { dataOn(name, "x()") } } }
+        }
+        assertEquals(
+            """<div data-class:foo--bar__case.camel="true" data-on:item-1__case.pascal="x()" data-class:foo-bar="true"></div>""",
+            elements {
+                div {
+                    dataClass("foo-Bar", "true")
+                    dataOn("Item-1", "x()")
+                    dataClass("foo-bar", "true")
+                }
+            },
+        )
+        // A signal name with a hyphen is camel-cased on purpose, as signal() reads it.
+        assertEquals("""<div data-signals:foo-bar-baz="1"></div>""", elements { div { dataSignals("fooBar-baz", "1") } })
+    }
+
+    // bind.ts listens to each __event value as the browser hands it over, lowercased, after
+    // parseAttributeKey has split the modifier at each `.`.
+    @Test
+    fun `a bind event the client would not listen to is refused`() {
+        for (event in listOf("myChange", "my.change", "a__b", "", "a b")) {
+            assertFailsWith<InvalidSignalNameException>(event) { elements { input { dataBind("v") { events = listOf(event) } } } }
+        }
+        assertEquals(
+            """<input data-bind__event.my-change.input="v">""",
+            elements { input { dataBind("v") { events = listOf("my-change", "input") } } },
+        )
+    }
+
+    // bind.ts reads __prop with its own camel(), whose kebab splits letters from digits and turns `_` into a hyphen.
+    @Test
+    fun `a bind property comes back from the client as written or is refused`() {
+        for (prop in listOf("x2y", "_private", "my_prop", "a.b")) {
+            assertFailsWith<InvalidSignalNameException>(prop) { elements { input { dataBind("v") { this.prop = prop } } } }
+        }
+        assertEquals(
+            """<input data-bind__prop.-u-r-l="v" data-bind__prop.inner-h-t-m-l="w" data-bind__prop.x2-y="z">""",
+            elements {
+                input {
+                    dataBind("v") { prop = "URL" }
+                    dataBind("w") { prop = "innerHTML" }
+                    dataBind("z") { prop = "x2Y" }
+                }
+            },
+        )
+    }
+
+    // class.ts splits a class list on JavaScript's \s, which has the no-break space; the HTML
+    // parser turns NUL into U+FFFD.
+    @Test
+    fun `a key with a no-break space or a NUL is refused`() {
+        for (name in listOf("a\u00a0b", "a\u0000b", "a\u2028b", "a\ufeffb", "a\u3000b")) {
+            assertFailsWith<InvalidSignalNameException>(name) { elements { div { dataClass(name, "true") } } }
+        }
+    }
+
+    // parseAttributeKey splits a modifier at each `.`, so `__delay.1.5ms` reaches tagToMs as `1` and
+    // `5ms`, and it takes the first: 1 ms. Headless Chrome on the 1.0.4 bundle ran
+    // `data-on:click__delay.1.900ms` within 100 ms of the click. The DSL writes the same 1 ms.
+    @Test
+    fun `a fraction of a millisecond is rounded down, as the client reads it`() {
+        assertEquals("""<button data-on:click__debounce.1ms="x()"></button>""", click { debounce = 1.5.milliseconds })
+        assertEquals("""<button data-on:click__delay.1900ms="x()"></button>""", click { delay = 1900.9.milliseconds })
+        val options =
+            post("/x") {
+                retryInterval = 1500.microseconds
+                retryMaxWait = 2999.microseconds
+            }
+        assertEquals("@post('/x', {retryInterval: 1, retryMaxWait: 2})", options)
+        assertFailsWith<IllegalArgumentException> { click { debounce = 999.microseconds } }
+    }
+
+    // What `$a - $b`, `$a + $b`, `$a - $y - $z` and `$a - $b * 2` leave once Kotlin has eaten
+    // `$a`, and what `[ $a, 1]` leaves. A sign against its operand still passes.
+    @Test
+    fun `what a template leaves of a binary operator or an array is refused`() {
+        for (expression in listOf(" - \$b", " + \$b", " - \$y - \$z", " - \$b * 2", "- \$b", "\$x = [ , 1]", "\$x = [, 1]", "[1, , 2]")) {
+            assertFailsWith<InterpolatedExpressionException>(expression) {
+                elements { div { dataText(expression) } }
+            }
+        }
+        for (expression in listOf("-\$x", "-1", "+\$n", "!\$open", "-\$x * 2", "\$x = [undefined, 1]")) {
+            assertEquals(expression, ExpressionGuard.check(expression))
+        }
+    }
+
+    // Each refused here is refused by Chrome with "Nothing to repeat" or "Invalid group"; the
+    // ones written are what it compiles. The fuzz in the audit's harness checks the rest.
+    @Test
+    fun `a quantifier with nothing to repeat is refused`() {
+        val refused =
+            listOf(
+                "$?",
+                "$*",
+                "$+",
+                "\${1,2}",
+                "^{2}",
+                "^*",
+                "\\b*",
+                "\\B{1}",
+                "{1}",
+                "{1,2}",
+                "a|{1}",
+                "a|*",
+                "(?<!{1}a)",
+                "(?<=*a)",
+                "(?={1}a)",
+                "(?!*a)",
+                "({1})",
+                "(?:*a)",
+                "\\Q\\E{1}",
+                "(?<=a)*b",
+                "(?<!a){2}b",
+                "(?)a",
+            )
+        for (pattern in refused) {
+            assertFailsWith<IllegalArgumentException>(pattern) { SignalFilter.regexLiteral(Regex(pattern)) }
+        }
+        assertEquals("/(?=a)*a/", SignalFilter.regexLiteral(Regex("(?=a)*a")))
+        assertEquals("/a*/", SignalFilter.regexLiteral(Regex("a*\\Q\\E")))
+        assertEquals("/a{1}/", SignalFilter.regexLiteral(Regex("a\\Q\\E{1}")))
+        assertEquals("/(?<n>a){2}[a]{2}(a)*/", SignalFilter.regexLiteral(Regex("(?<n>a){2}[a]{2}(a)*")))
+    }
+
+    // Headless Chrome on the 1.0.4 bundle: `data-class:b___case.pascal` set the class `b`, since
+    // the client cuts the name at the first `__`; `data-class:b_` set `b_`.
+    @Test
+    fun `a key that ends in _ before a modifier is refused`() {
+        val refused =
+            listOf<DIV.() -> Unit>(
+                { dataClass("B_", "true") },
+                { dataClass("b_", "true", Case.CAMEL) },
+                { dataOn("my-event_", "x()") { debounce = 1.milliseconds } },
+                { dataSignals("b_", "1", ifMissing = true) },
+                { dataComputed("b_", "1", Case.SNAKE) },
+                { dataRef("b_", Case.CAMEL) },
+            )
+        for (attribute in refused) {
+            assertFailsWith<InvalidSignalNameException> { elements { div { attribute(this) } } }
+        }
+        assertEquals(
+            """<div data-class:b_="true" data-on:my-event_="x()" data-signals:b_="1"></div>""",
+            elements {
+                div {
+                    dataClass("b_", "true")
+                    dataOn("my-event_", "x()")
+                    dataSignals("b_", "1")
+                }
+            },
+        )
+    }
+
+    // In headless Chrome `data-class="{'MuiButton-root': true}"` set the class `MuiButton-root`.
+    @Test
+    fun `a class no key gives back points to the object form`() {
+        val e = assertFailsWith<InvalidSignalNameException> { elements { div { dataClass("MuiButton-root", "true") } } }
+        assertEquals(
+            "Name \"MuiButton-root\" mixes capitals with a hyphen before a lower-case letter; Datastar's client turns that " +
+                "hyphen into a capital as well, so it would read MuiButtonRoot. Write it in one case, or, for a class you " +
+                "cannot rename, use the object form, dataClass(\"{'MuiButton-root': ...}\"), whose keys Datastar uses as written.",
+            e.message,
+        )
+        assertEquals(
+            """<div data-class="{'MuiButton-root': true}"></div>""",
+            elements { div { dataClass("{'MuiButton-root': true}") } },
+        )
+    }
+
+    // JavaScript, measured in headless Chrome, matches a back reference to a group that has not
+    // closed as empty: /^(a\1)$/ and /^\1(a)$/ both match "a". Java fails it on the group's first
+    // pass, and in a repeat matches what the group took before: ^(a|b\1)+$ takes "aba" in Java and
+    // "ab" in JavaScript.
+    @Test
+    fun `a back reference before its group has closed is refused`() {
+        for (pattern in listOf("(a\\1)", "\\1(a)", "(a(b)\\1)", "(?<n>a\\k<n>)", "(?:a\\1)(b)", "(a|b\\1)+")) {
+            assertFailsWith<IllegalArgumentException>(pattern) { SignalFilter.regexLiteral(Regex(pattern)) }
+        }
+        assertTrue(Regex("^(a|b\\1)+$").matches("aba"))
+        val message = assertFailsWith<IllegalArgumentException> { SignalFilter.regexLiteral(Regex("(a|b\\1)+")) }.message!!
+        assertFalse("never matches" in message, message)
+        assertTrue("repeated group" in message, message)
+        assertEquals("/(a)\\1/", SignalFilter.regexLiteral(Regex("(a)\\1")))
+        assertEquals("/((a)\\2)/", SignalFilter.regexLiteral(Regex("((a)\\2)")))
+        assertEquals("/(a(b)\\2)/", SignalFilter.regexLiteral(Regex("(a(b)\\2)")))
+        assertEquals("/(?<n>a)\\k<n>/", SignalFilter.regexLiteral(Regex("(?<n>a)\\k<n>")))
     }
 }

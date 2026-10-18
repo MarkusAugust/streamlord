@@ -33,7 +33,9 @@ import kotlin.reflect.KType
  *
  * Pass `requireNamedSerializers = true` with them and a type that was left out fails here, on the
  * JVM, with the name of the class, rather than in the image, on the first request, as a decode
- * that cannot find a serializer it was never given.
+ * that cannot find a serializer it was never given. A `List<Signals>` is named whole, as
+ * `typeOf<List<Signals>>() to ListSerializer(Signals.serializer())`: naming `Signals` alone does
+ * not reach the list.
  *
  * It is about serializers and nothing else. Whether a body carrying signals the type does not
  * name is refused is [json]'s `ignoreUnknownKeys`, which defaults to ignoring them.
@@ -65,6 +67,7 @@ public class KotlinxSignalsCodec(
         type: KType,
     ): T =
         serializerFor(type).let { serializer ->
+            if (type !in serializers) refusePrimitiveArrays(type, type)
             try {
                 @Suppress("UNCHECKED_CAST")
                 this.json.decodeFromString(serializer, json) as T
@@ -72,6 +75,10 @@ public class KotlinxSignalsCodec(
                 throw SignalsDecodeException("Could not decode signals into $type", e)
             } catch (e: IllegalArgumentException) {
                 throw SignalsDecodeException("Could not decode signals into $type", e)
+            } catch (e: StackOverflowError) {
+                // A JsonElement is read by recursion. Streamlord.readSignals refuses such depth
+                // first; this is for a caller that hands the codec a body itself, as on WebFlux.
+                throw SignalsDecodeException("Could not decode signals into $type: nested too deep", e)
             }
         }
 
@@ -97,18 +104,20 @@ public class KotlinxSignalsCodec(
      * plugin generated beside it.
      *
      * So the rule is the boundary between the two: anything outside `kotlin`, `kotlinx` and
-     * `java` has to be named, and a container has to be named if what it holds does, so a
-     * `List<Signals>` fails for the same reason `Signals` does.
+     * `java` has to be named, and a container has to be named if it holds such a type at any
+     * depth, so a `List<Signals>` fails for the same reason `Signals` does. That holds when
+     * `Signals` is named itself: the container is looked up whole, and the lookup reads the class
+     * of what it holds without consulting [serializers].
      */
-    private fun needsNaming(type: KType): Boolean {
-        if (serializers.containsKey(type)) return false
+    private fun needsNaming(type: KType): Boolean = !serializers.containsKey(type) && readsOwnClass(type)
 
+    private fun readsOwnClass(type: KType): Boolean {
         val own = (type.classifier as? KClass<*>)?.qualifiedName
-        val ownNeedsNaming =
+        val ownIsRead =
             own == null ||
                 !(own.startsWith("kotlin.") || own.startsWith("kotlinx.") || own.startsWith("java."))
 
-        return ownNeedsNaming || type.arguments.any { argument -> argument.type?.let { needsNaming(it) } == true }
+        return ownIsRead || type.arguments.any { argument -> argument.type?.let { readsOwnClass(it) } == true }
     }
 
     /**
@@ -133,7 +142,8 @@ public class KotlinxSignalsCodec(
             throw SignalsCodecException(
                 "No serializer was named for $type, and this codec requires named serializers. Add " +
                     "typeOf<$type>() to KotlinxSignalsCodec(serializers = ...), a reflective " +
-                    "lookup would work here and fail in a GraalVM native image.",
+                    "lookup would work here and fail in a GraalVM native image. A container is " +
+                    "looked up whole, so naming what it holds is not enough.",
             )
         }
 
@@ -146,6 +156,29 @@ public class KotlinxSignalsCodec(
         } catch (e: IllegalArgumentException) {
             throw SignalsCodecException(lookupFailed(type), e)
         }
+    }
+
+    /*
+     * The serializer kotlinx.serialization builds for an Array<Int> from its KType makes an int[]
+     * and casts it to Array<Any?>, so every decode would end in a ClassCastException. One the
+     * compiler plugin generates for a property is right, so this checks only the type looked up.
+     */
+    private fun refusePrimitiveArrays(
+        type: KType,
+        whole: KType,
+    ) {
+        val element = type.arguments.singleOrNull()?.type
+        val elementClass = element?.classifier as? KClass<*>
+        // Array::class is Array<Any>'s; an Array<Int> has a class of its own.
+        val isArray = (type.classifier as? KClass<*>)?.java?.isArray == true
+        if (isArray && elementClass != null && !element.isMarkedNullable && elementClass.javaPrimitiveType != null) {
+            throw SignalsCodecException(
+                "Could not decode signals into $whole: kotlinx.serialization cannot read an " +
+                    "Array<${elementClass.simpleName}> looked up by type. Declare it " +
+                    "${elementClass.simpleName}Array or List<${elementClass.simpleName}> instead.",
+            )
+        }
+        type.arguments.forEach { argument -> argument.type?.let { refusePrimitiveArrays(it, whole) } }
     }
 
     private fun lookupFailed(type: KType): String =

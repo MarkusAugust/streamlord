@@ -24,6 +24,67 @@ public object Wire {
     // </script> no longer ends the element.
     private val OPEN_SCRIPT = Regex("<(script)(?=[\\t\\n\\u000C\\r />])", RegexOption.IGNORE_CASE)
 
+    /**
+     * [json] with each surrogate that lacks its other half written as a `\uXXXX` escape, which is
+     * how the built-in writer and `JSON.stringify` keep one: UTF-8 cannot carry it, and the bytes
+     * would otherwise read `?`. In valid JSON such a surrogate can only stand inside a string.
+     */
+    internal fun loneSurrogatesEscaped(json: String): String = mapLoneSurrogates(json) { "\\u%04x".format(it.code) }
+
+    /**
+     * [html] with each surrogate that lacks its other half as U+FFFD, the replacement character the
+     * browser itself puts in its place: no byte and no character reference brings one into HTML.
+     */
+    internal fun loneSurrogatesReplaced(html: String): String = mapLoneSurrogates(html) { "\uFFFD" }
+
+    private inline fun mapLoneSurrogates(
+        text: String,
+        replacement: (Char) -> String,
+    ): String {
+        val first = text.indices.firstOrNull { isLone(text, it) } ?: return text
+        val out = StringBuilder(text.length + 8).append(text, 0, first)
+        for (i in first until text.length) {
+            if (isLone(text, i)) out.append(replacement(text[i])) else out.append(text[i])
+        }
+        return out.toString()
+    }
+
+    private fun isLone(
+        text: String,
+        i: Int,
+    ): Boolean {
+        val c = text[i]
+        return when {
+            c.isHighSurrogate() -> text.getOrNull(i + 1)?.isLowSurrogate() != true
+            c.isLowSurrogate() -> text.getOrNull(i - 1)?.isHighSurrogate() != true
+            else -> false
+        }
+    }
+
+    /**
+     * Whether [html] is missing or only white space as HTML counts it: tab, line feed, form feed,
+     * carriage return and space, which the browser shows as nothing between elements. Any other
+     * character is text it shows, a no-break space, U+3000 and U+001C among them, which Kotlin's
+     * `isBlank()` counts as blank, and JavaScript's `trim()` too for the first two.
+     */
+    internal fun htmlBlank(html: String?): Boolean = html == null || html.all { it == ' ' || it in "\t\n\u000C\r" }
+
+    /**
+     * Whether [html] gives the client nothing to patch in [mode]: [htmlBlank], or, for an `outer`
+     * or `replace` without a selector, blank as Kotlin's `isBlank()` has it. That patch takes only
+     * the elements from what it is sent, so a no-break space or U+3000 there changes nothing.
+     */
+    internal fun noElements(
+        html: String?,
+        mode: ElementPatchMode,
+        selector: String?,
+    ): Boolean =
+        if (selector == null && (mode == ElementPatchMode.OUTER || mode == ElementPatchMode.REPLACE)) {
+            html.isNullOrBlank()
+        } else {
+            htmlBlank(html)
+        }
+
     /** Split text into lines on `\r\n`, `\r` or `\n`, exactly as the SSE grammar does. */
     public fun lines(text: String): List<String> = text.split(LINE_BREAKS)
 

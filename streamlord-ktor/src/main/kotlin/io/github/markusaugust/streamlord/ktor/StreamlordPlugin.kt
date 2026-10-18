@@ -19,7 +19,11 @@ public class StreamlordPluginConfig {
     /** Codec for typed signals. Defaults to the dependency-free built-in codec. */
     public var codec: SignalsCodec? = null
 
-    /** Upper bound for incoming signal payloads: bytes for bodies, characters for the query parameter. */
+    /**
+     * Upper bound for incoming signal payloads: bytes for bodies, characters for the query
+     * parameter. The engine refuses a request line long before the query parameter gets near
+     * it: about 4 KiB on Netty and 8 KiB on CIO, Tomcat and Jetty. Large signals go in a `@post`.
+     */
     public var maxSignalsSize: Int = Streamlord.DEFAULT_MAX_SIGNALS_SIZE
 
     /**
@@ -49,6 +53,13 @@ public class StreamlordPluginConfig {
      */
     public var compress: Boolean = false
 
+    /**
+     * Refuse signals in a request body that is not declared `application/json`, as Datastar's
+     * client always declares it, so a form on another site cannot post them. On by default; see
+     * [Streamlord.requireJsonContentType].
+     */
+    public var requireJsonContentType: Boolean = true
+
     internal fun build(): Streamlord =
         streamlord ?: Streamlord(
             codec = codec ?: Streamlord.Default.codec,
@@ -57,6 +68,7 @@ public class StreamlordPluginConfig {
             attributePrefixes = attributePrefixes,
             heartbeat = heartbeat,
             compress = compress,
+            requireJsonContentType = requireJsonContentType,
         )
 }
 

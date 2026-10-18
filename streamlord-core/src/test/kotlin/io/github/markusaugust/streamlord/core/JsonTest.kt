@@ -15,13 +15,13 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 
 class JsonTest {
-
     @Test
     fun `parses the shapes signals take`() {
-        val obj = JsonParser.parseObject(
-            """{"search":"ash","count":3,"ratio":0.5,"big":12345678901234,"on":true,"gone":null,
+        val obj =
+            JsonParser.parseObject(
+                """{"search":"ash","count":3,"ratio":0.5,"big":12345678901234,"on":true,"gone":null,
                "user":{"name":"Gorvek","tags":["a","b"]},"esc":"q\"\\\/\n\u00e6\ud83d\ude00"}""",
-        )
+            )
         assertEquals("ash", obj.string("search"))
         assertEquals(3, obj.int("count"))
         assertEquals(0.5, obj.double("ratio"))
@@ -49,8 +49,23 @@ class JsonTest {
     @Test
     fun `rejects what the standard rejects`() {
         listOf(
-            "{'a':1}", "{a:1}", "[1,]", "{\"a\":1,}", "01", "1.", ".5", "NaN", "[1] x", "\"unterminated",
-            "\"tab\tinside\"", "{\"a\":1}}", "", "tru", "[1 2]", "\"\\x41\"", "\"\\u12\"",
+            "{'a':1}",
+            "{a:1}",
+            "[1,]",
+            "{\"a\":1,}",
+            "01",
+            "1.",
+            ".5",
+            "NaN",
+            "[1] x",
+            "\"unterminated",
+            "\"tab\tinside\"",
+            "{\"a\":1}}",
+            "",
+            "tru",
+            "[1 2]",
+            "\"\\x41\"",
+            "\"\\u12\"",
         ).forEach { bad ->
             assertFailsWith<JsonParseException>("should reject: $bad") { JsonParser.parse(bad) }
         }
@@ -71,13 +86,23 @@ class JsonTest {
 
     @Test
     fun `writes plain kotlin values`() {
-        val json = JsonWriter.write(
-            linkedMapOf(
-                "s" to "x", "i" to 1, "l" to 2L, "d" to 1.5, "b" to true, "n" to null,
-                "list" to listOf(1, "two"), "arr" to intArrayOf(3), "map" to mapOf("k" to "v"),
-                "enum" to Thread.State.NEW, "dec" to BigDecimal("1.10"), "c" to 'c',
-            ),
-        )
+        val json =
+            JsonWriter.write(
+                linkedMapOf(
+                    "s" to "x",
+                    "i" to 1,
+                    "l" to 2L,
+                    "d" to 1.5,
+                    "b" to true,
+                    "n" to null,
+                    "list" to listOf(1, "two"),
+                    "arr" to intArrayOf(3),
+                    "map" to mapOf("k" to "v"),
+                    "enum" to Thread.State.NEW,
+                    "dec" to BigDecimal("1.10"),
+                    "c" to 'c',
+                ),
+            )
         assertEquals(
             """{"s":"x","i":1,"l":2,"d":1.5,"b":true,"n":null,"list":[1,"two"],"arr":[3],"map":{"k":"v"},"enum":"NEW","dec":1.10,"c":"c"}""",
             json,
@@ -107,7 +132,9 @@ class JsonTest {
 
     @Test
     fun `refuses arbitrary objects and non-finite numbers`() {
-        class Sorcerer(val name: String)
+        class Sorcerer(
+            val name: String,
+        )
         assertFailsWith<SignalsCodecException> { JsonWriter.write(Sorcerer("x")) }
         assertFailsWith<SignalsCodecException> { JsonWriter.write(Double.NaN) }
     }

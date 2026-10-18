@@ -11,7 +11,9 @@ import io.github.markusaugust.streamlord.core.DatastarEventValidationException
  *
  * [wire] is the exact token Datastar 1.0.4 expects on the `mode` data line.
  */
-public enum class ElementPatchMode(public val wire: String) {
+public enum class ElementPatchMode(
+    public val wire: String,
+) {
     /** Morph the entire element, preserving state. The default, and the wise choice. */
     OUTER("outer"),
 

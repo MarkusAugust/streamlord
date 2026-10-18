@@ -23,55 +23,66 @@ import kotlin.time.Duration.Companion.milliseconds
  * whitespace-normalised HTML.
  */
 class GoldenConformanceTest {
-
     @TestFactory
-    fun golden(): List<DynamicTest> = listOf("get", "post").flatMap { kind ->
-        val dir = File("src/test/resources/golden/$kind")
-        assertTrue(dir.isDirectory, "golden directory missing: ${dir.absolutePath}")
-        dir.listFiles()!!.filter { it.isDirectory }.sortedBy { it.name }.map { case ->
-            DynamicTest.dynamicTest("$kind/${case.name}") {
-                val input = JsonParser.parseObject(File(case, "input.json").readText())
-                val expected = File(case, "output.txt").readText()
-                val actual = input.array("events")!!.objects().joinToString("") { SseEncoder.encode(toEvent(it)) }
-                assertSseEquivalent(expected, actual)
+    fun golden(): List<DynamicTest> =
+        listOf("get", "post").flatMap { kind ->
+            val dir = File("src/test/resources/golden/$kind")
+            assertTrue(dir.isDirectory, "golden directory missing: ${dir.absolutePath}")
+            dir.listFiles()!!.filter { it.isDirectory }.sortedBy { it.name }.map { case ->
+                DynamicTest.dynamicTest("$kind/${case.name}") {
+                    val input = JsonParser.parseObject(File(case, "input.json").readText())
+                    val expected = File(case, "output.txt").readText()
+                    val actual = input.array("events")!!.objects().joinToString("") { SseEncoder.encode(toEvent(it)) }
+                    assertSseEquivalent(expected, actual)
+                }
             }
         }
-    }
 
     /** Maps the golden input format onto Streamlord events; this is what an SDK test server does. */
     private fun toEvent(e: JsonObject): DatastarEvent {
         val eventId = e.string("eventId")
         val retry = e.int("retryDuration")?.milliseconds
         return when (val type = e.string("type")) {
-            "patchElements" -> PatchElements(
-                elements = e.string("elements"),
-                selector = e.string("selector"),
-                mode = e.string("mode")?.let(ElementPatchMode::fromWire) ?: ElementPatchMode.DEFAULT,
-                useViewTransition = e.boolean("useViewTransition") ?: false,
-                eventId = eventId,
-                retry = retry,
-            )
+            "patchElements" -> {
+                PatchElements(
+                    elements = e.string("elements"),
+                    selector = e.string("selector"),
+                    mode = e.string("mode")?.let(ElementPatchMode::fromWire) ?: ElementPatchMode.DEFAULT,
+                    useViewTransition = e.boolean("useViewTransition") ?: false,
+                    eventId = eventId,
+                    retry = retry,
+                )
+            }
 
-            "patchSignals" -> PatchSignals(
-                signals = e.string("signals-raw") ?: e.obj("signals")!!.toJson(),
-                onlyIfMissing = e.boolean("onlyIfMissing") ?: false,
-                eventId = eventId,
-                retry = retry,
-            )
+            "patchSignals" -> {
+                PatchSignals(
+                    signals = e.string("signals-raw") ?: e.obj("signals")!!.toJson(),
+                    onlyIfMissing = e.boolean("onlyIfMissing") ?: false,
+                    eventId = eventId,
+                    retry = retry,
+                )
+            }
 
-            "executeScript" -> ExecuteScript(
-                script = e.string("script")!!,
-                autoRemove = e.boolean("autoRemove") ?: true,
-                attributes = e.obj("attributes")?.mapValues { (_, v) -> v.toKotlin().toString() } ?: emptyMap(),
-                eventId = eventId,
-                retry = retry,
-            )
+            "executeScript" -> {
+                ExecuteScript(
+                    script = e.string("script")!!,
+                    autoRemove = e.boolean("autoRemove") ?: true,
+                    attributes = e.obj("attributes")?.mapValues { (_, v) -> v.toKotlin().toString() } ?: emptyMap(),
+                    eventId = eventId,
+                    retry = retry,
+                )
+            }
 
-            else -> error("unknown golden event type $type")
+            else -> {
+                error("unknown golden event type $type")
+            }
         }
     }
 
-    private fun assertSseEquivalent(expected: String, actual: String) {
+    private fun assertSseEquivalent(
+        expected: String,
+        actual: String,
+    ) {
         val exp = parseEvents(expected)
         val act = parseEvents(actual)
         assertEquals(exp.size, act.size, "event count\nexpected:\n$expected\nactual:\n$actual")
@@ -88,12 +99,16 @@ class GoldenConformanceTest {
         }
     }
 
-    private class SseEvent(val fields: Map<String, List<String>>, val data: Map<String, List<String>>)
+    private class SseEvent(
+        val fields: Map<String, List<String>>,
+        val data: Map<String, List<String>>,
+    )
 
     private fun parseEvents(text: String): List<SseEvent> {
         val events = mutableListOf<SseEvent>()
         var fields = mutableMapOf<String, MutableList<String>>()
         var data = mutableMapOf<String, MutableList<String>>()
+
         fun flush() {
             if (fields.isNotEmpty() || data.isNotEmpty()) events += SseEvent(fields, data)
             fields = mutableMapOf()
@@ -119,5 +134,9 @@ class GoldenConformanceTest {
     }
 
     private fun normalizeHtml(lines: List<String>): String =
-        lines.joinToString("\n").replace(Regex("\\s+"), " ").replace("> <", "><").trim()
+        lines
+            .joinToString("\n")
+            .replace(Regex("\\s+"), " ")
+            .replace("> <", "><")
+            .trim()
 }

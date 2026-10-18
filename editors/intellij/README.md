@@ -168,7 +168,8 @@ Settings | Tools | Streamlord:
 | Gutter icons on routes | on | "Open in Stream Inspector" on Ktor and Spring routes. |
 
 The inspections are under Settings | Editor | Inspections | Streamlord, one per family
-(interpolation, expression, attribute, key casing, patch markup), each with its own severity.
+(interpolation, expression, attribute, signal no file defines, key casing, patch markup), each
+with its own severity.
 
 ## Datastar Pro
 
@@ -197,6 +198,8 @@ machine. Bump `pluginVersion` in `gradle.properties`, add the release to `CHANGE
 then push a tag `intellij-v<version>`. The `publish-intellij` job checks that the tag matches,
 builds, tests, verifies against the supported IDE releases and runs `publishPlugin` with the
 `JETBRAINS_MARKETPLACE_TOKEN` repository secret (a Marketplace permanent token for the
-`MarkusAugust` vendor); `JETBRAINS_CERTIFICATE_CHAIN`, `JETBRAINS_PRIVATE_KEY` and
-`JETBRAINS_PRIVATE_KEY_PASSWORD` sign the archive when present. Which branch the bump goes on,
-and when the tag may be pushed, is in [the repository README](https://github.com/MarkusAugust/streamlord#building-and-releasing).
+`MarkusAugust` vendor). `JETBRAINS_CERTIFICATE_CHAIN`, `JETBRAINS_PRIVATE_KEY` and
+`JETBRAINS_PRIVATE_KEY_PASSWORD` sign the archive, and all three are required: when one is
+missing, the job stops before `publishPlugin` rather than upload an unsigned plugin. Which branch
+the bump goes on, and when the tag may be pushed, is in
+[the repository README](https://github.com/MarkusAugust/streamlord#building-and-releasing).

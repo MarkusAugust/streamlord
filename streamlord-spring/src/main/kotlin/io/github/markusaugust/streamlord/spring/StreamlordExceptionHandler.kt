@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.spring
 
 import io.github.markusaugust.streamlord.core.JsonParseException
 import io.github.markusaugust.streamlord.core.SignalsDecodeException
+import io.github.markusaugust.streamlord.core.SignalsMediaTypeException
 import io.github.markusaugust.streamlord.core.SignalsTooLargeException
 import org.springframework.core.Ordered
 import org.springframework.core.annotation.Order
@@ -15,7 +16,9 @@ import org.springframework.web.context.request.ServletRequestAttributes
 /**
  * Answers signals that cannot be read with the status they deserve instead of a `500`:
  * [SignalsTooLargeException] with `413 Content Too Large`, and [JsonParseException] and
- * [SignalsDecodeException], a body that is not the signals you expected, with `400 Bad Request`.
+ * [SignalsDecodeException], a body that is not the signals you expected, with `400 Bad Request`,
+ * and [SignalsMediaTypeException], a body not declared `application/json`, with
+ * `415 Unsupported Media Type`.
  * Any other [io.github.markusaugust.streamlord.core.SignalsCodecException], such as a value
  * JSON cannot hold on the way out, is the server's fault and stays a `500`.
  * The answer is the status and no body. A body would need a message converter for it, and a
@@ -56,6 +59,10 @@ public class StreamlordExceptionHandler {
 
     @ExceptionHandler(JsonParseException::class, SignalsDecodeException::class)
     public fun signalsUnreadable(e: Exception): ResponseEntity<Void> = notStarted(e).let { ResponseEntity.badRequest().build() }
+
+    @ExceptionHandler(SignalsMediaTypeException::class)
+    public fun signalsNotJson(e: SignalsMediaTypeException): ResponseEntity<Void> =
+        notStarted(e).let { ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).build() }
 
     /** [signalsTooLarge] as 0.12 had it, for code compiled against it; not a handler. */
     @Deprecated("Kept for binary compatibility.", level = DeprecationLevel.HIDDEN)

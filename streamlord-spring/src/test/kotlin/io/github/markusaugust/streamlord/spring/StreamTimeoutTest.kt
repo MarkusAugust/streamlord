@@ -29,16 +29,22 @@ class StreamTimeoutTest {
     @RestController
     class Streams {
         @GetMapping("/default")
-        fun default(request: HttpServletRequest, response: HttpServletResponse): StreamingResponseBody =
-            response.datastarStream(request = request) { patchSignals("n" to 1) }
+        fun default(
+            request: HttpServletRequest,
+            response: HttpServletResponse,
+        ): StreamingResponseBody = response.datastarStream(request = request) { patchSignals("n" to 1) }
 
         @GetMapping("/infinite")
-        fun infinite(request: HttpServletRequest, response: HttpServletResponse): StreamingResponseBody =
-            response.datastarStream(request = request, timeout = Duration.INFINITE) { patchSignals("n" to 1) }
+        fun infinite(
+            request: HttpServletRequest,
+            response: HttpServletResponse,
+        ): StreamingResponseBody = response.datastarStream(request = request, timeout = Duration.INFINITE) { patchSignals("n" to 1) }
 
         @GetMapping("/five")
-        fun five(request: HttpServletRequest, response: HttpServletResponse): StreamingResponseBody =
-            response.datastarStream(request = request, timeout = 5.seconds) { patchSignals("n" to 1) }
+        fun five(
+            request: HttpServletRequest,
+            response: HttpServletResponse,
+        ): StreamingResponseBody = response.datastarStream(request = request, timeout = 5.seconds) { patchSignals("n" to 1) }
 
         // Without the request: the adapter finds it through Spring's RequestContextHolder.
         @GetMapping("/held")
@@ -46,17 +52,26 @@ class StreamTimeoutTest {
             response.datastarStream(timeout = 5.seconds) { patchSignals("n" to 1) }
 
         @GetMapping("/tiny")
-        fun tiny(request: HttpServletRequest, response: HttpServletResponse): StreamingResponseBody =
-            response.datastarStream(request = request, timeout = 500.microseconds) { patchSignals("n" to 1) }
+        fun tiny(
+            request: HttpServletRequest,
+            response: HttpServletResponse,
+        ): StreamingResponseBody = response.datastarStream(request = request, timeout = 500.microseconds) { patchSignals("n" to 1) }
 
         @GetMapping("/flow")
-        fun flow(request: HttpServletRequest, response: HttpServletResponse): StreamingResponseBody =
-            response.datastarStream(kotlinx.coroutines.flow.flowOf(), Streamlord(), request, timeout = 5.seconds)
+        fun flow(
+            request: HttpServletRequest,
+            response: HttpServletResponse,
+        ): StreamingResponseBody = response.datastarStream(kotlinx.coroutines.flow.flowOf(), Streamlord(), request, timeout = 5.seconds)
     }
 
     private val mvc: MockMvc = MockMvcBuilders.standaloneSetup(Streams()).setAsyncRequestTimeout(200).build()
 
-    private fun timeoutOf(path: String): Long = mvc.perform(get(path)).andReturn().request.asyncContext!!.timeout
+    private fun timeoutOf(path: String): Long =
+        mvc
+            .perform(get(path))
+            .andReturn()
+            .request.asyncContext!!
+            .timeout
 
     @Test
     fun `without a timeout the stream keeps Spring's`() = assertEquals(200, timeoutOf("/default"))

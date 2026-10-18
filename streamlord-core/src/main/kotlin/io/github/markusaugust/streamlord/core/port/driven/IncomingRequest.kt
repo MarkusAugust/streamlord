@@ -44,7 +44,10 @@ public val IncomingRequest.carriesSignalsInQuery: Boolean
  * Helper for adapters: reject a declared content length above [maxBytes] before a single byte
  * is read. A missing or negative length (chunked transfer) passes; the bounded read catches it.
  */
-public fun rejectDeclaredLengthAbove(maxBytes: Int, declaredLength: Long?) {
+public fun rejectDeclaredLengthAbove(
+    maxBytes: Int,
+    declaredLength: Long?,
+) {
     if (declaredLength != null && declaredLength > maxBytes) {
         throw SignalsTooLargeException(declaredLength, maxBytes)
     }

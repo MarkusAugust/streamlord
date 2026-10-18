@@ -37,10 +37,25 @@ public open class SignalsCodecException(
  * missing or of the wrong kind, or JSON that is no object at all. The client sent them, so it is
  * a `400`, where a [SignalsCodecException] of any other kind is a `500`.
  */
-public class SignalsDecodeException(
+public open class SignalsDecodeException(
     message: String,
     cause: Throwable? = null,
 ) : SignalsCodecException(message, cause)
+
+/**
+ * Raised when a request body carrying signals is not declared `application/json`, as every body
+ * Datastar's client sends signals in is. A form on another site can post `text/plain` that reads
+ * as JSON without the browser asking this server first; JSON it cannot send that way. The answer
+ * is a `415`, and a handler that knows only [SignalsDecodeException] still answers a `400`.
+ *
+ * [contentType] is the header as the request had it, or `null` when it had none.
+ */
+public class SignalsMediaTypeException(
+    public val contentType: String?,
+) : SignalsDecodeException(
+        "Signals in a request body must be sent as application/json; this one is " +
+            (contentType?.let { "'$it'" } ?: "without a Content-Type"),
+    )
 
 /**
  * Raised when an incoming signal payload exceeds the limit configured on

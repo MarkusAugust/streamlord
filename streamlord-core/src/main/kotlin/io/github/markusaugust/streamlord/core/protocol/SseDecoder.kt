@@ -8,6 +8,7 @@ import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.core.domain.SignalNames
 import io.github.markusaugust.streamlord.core.domain.Wire
+import io.github.markusaugust.streamlord.core.json.JsText
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol.DataLines
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -35,7 +36,21 @@ public object SseDecoder {
      * It reads a stream the way Datastar's client does, so that a test cannot pass on a response
      * the client would not act on. A last message with no blank line after it is not an event,
      * mode and namespace tokens are matched exactly as written, and a signal patch needs its
-     * signals.
+     * signals. A flag is `true` when it reads `true` once JavaScript's `trim()` is done with it,
+     * and an empty selector or `viewTransitionSelector` is none. An element patch with no
+     * elements, or only white space as HTML counts it (tab, line feed, form feed, carriage return
+     * and space), in a mode that needs them is what the client makes of it. `outer` or `replace`
+     * with a selector takes the target out and leaves that white space, if any, in its place as a
+     * text node, so it comes back as a [ElementPatchMode.REMOVE]; `inner` puts the white space in
+     * place of the target's children and comes back as itself. `append`, `prepend`, `before` and
+     * `after` insert the white space as a text node and change no element, and are no event. So
+     * is an `outer` or `replace` without a selector whose elements hold no tag, since the client
+     * takes only the elements from it. Any other character, a no-break space among them, is text
+     * the client inserts, and the patch comes back with it.
+     *
+     * Such a frame that also asks for `useViewTransition` still has the client start a view
+     * transition, around a patch that changes no element; it is no event all the same, and only the
+     * one that removes the target carries the transition.
      *
      * @throws DatastarEventValidationException if a Datastar frame names a mode or namespace that
      *   does not exist, has no `signals` where it needs them, or has a data line with no space
@@ -112,17 +127,52 @@ public object SseDecoder {
         val id = message.id?.takeIf { it.isNotEmpty() }
         return when (message.event) {
             DatastarProtocol.Events.PATCH_ELEMENTS -> {
-                PatchElements(
-                    elements = args[DataLines.ELEMENTS],
-                    // An empty selector is none to the client, which then patches by id (patchElements.ts:43).
-                    selector = args[DataLines.SELECTOR]?.takeIf { it.isNotEmpty() },
-                    mode = args[DataLines.MODE]?.let(::mode) ?: ElementPatchMode.DEFAULT,
-                    namespace = args[DataLines.NAMESPACE]?.let(::namespace) ?: ElementNamespace.DEFAULT,
-                    useViewTransition = args[DataLines.USE_VIEW_TRANSITION]?.trim() == "true",
-                    viewTransitionSelector = args[DataLines.VIEW_TRANSITION_SELECTOR],
-                    eventId = id,
-                    retry = retry,
-                )
+                // An empty selector is none to the client, which then patches by id (patchElements.ts:43);
+                // an empty view transition selector has it run the transition on the document (:71).
+                val selector = args[DataLines.SELECTOR]?.takeIf { it.isNotEmpty() }
+                val mode = args[DataLines.MODE]?.let(::mode) ?: ElementPatchMode.DEFAULT
+                val elements = args[DataLines.ELEMENTS]
+                // The client checks the namespace whatever the elements.
+                val namespace = args[DataLines.NAMESPACE]?.let(::namespace) ?: ElementNamespace.DEFAULT
+                val useViewTransition = isTrue(args[DataLines.USE_VIEW_TRANSITION])
+                val viewTransitionSelector = args[DataLines.VIEW_TRANSITION_SELECTOR]?.takeIf { it.isNotEmpty() }
+                // The client patches in nothing where the elements are missing or only white space:
+                // that empties the target of an inner patch, and removes that of an outer or replace one.
+                // Without a selector, those two take only elements, so text without a tag is nothing too.
+                val nothing =
+                    mode != ElementPatchMode.REMOVE &&
+                        mode != ElementPatchMode.INNER &&
+                        (Wire.htmlBlank(elements) || (selector == null && '<' !in elements!!)) &&
+                        !(mode.requiresSelector && selector == null)
+                when {
+                    nothing && selector != null && (mode == ElementPatchMode.OUTER || mode == ElementPatchMode.REPLACE) -> {
+                        PatchElements(
+                            selector = selector,
+                            mode = ElementPatchMode.REMOVE,
+                            useViewTransition = useViewTransition,
+                            viewTransitionSelector = viewTransitionSelector,
+                            eventId = id,
+                            retry = retry,
+                        )
+                    }
+
+                    nothing -> {
+                        null
+                    }
+
+                    else -> {
+                        PatchElements(
+                            elements = if (mode == ElementPatchMode.INNER) elements ?: "" else elements,
+                            selector = selector,
+                            mode = mode,
+                            namespace = namespace,
+                            useViewTransition = useViewTransition,
+                            viewTransitionSelector = viewTransitionSelector,
+                            eventId = id,
+                            retry = retry,
+                        )
+                    }
+                }
             }
 
             DatastarProtocol.Events.PATCH_SIGNALS -> {
@@ -130,7 +180,7 @@ public object SseDecoder {
                     signals =
                         args[DataLines.SIGNALS]
                             ?: throw DatastarEventValidationException("A signal patch carried no signals line; the client rejects it"),
-                    onlyIfMissing = args[DataLines.ONLY_IF_MISSING]?.trim() == "true",
+                    onlyIfMissing = isTrue(args[DataLines.ONLY_IF_MISSING]),
                     eventId = id,
                     retry = retry,
                 )
@@ -141,6 +191,9 @@ public object SseDecoder {
             }
         }
     }
+
+    // isStringTrue in the client's utils/text.ts, with JavaScript's trim().
+    private fun isTrue(value: String?): Boolean = value != null && JsText.trim(value) == "true"
 
     /**
      * Data lines grouped by their first word and rejoined with newlines, which is how the client

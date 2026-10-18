@@ -163,6 +163,8 @@ other response is shown with its `datastar-*` headers and up to 1 MiB of its bod
 | `streamlord.languages` | html, jte, kte, ftl, velocity, mustache, pebble, twig, … | Language ids that get the HTML side. Reload after changing. |
 | `streamlord.attributePrefix` | `data-` | `data-star-` when you load the aliased bundle. |
 | `streamlord.inspector.defaultUrl` | `http://localhost:8080/` | `{{baseUrl}}` unless `.streamlord/env.json` sets `baseUrl`. |
+| `streamlord.inspector.requestsFile` | `.streamlord/inspector.json` | Workspace-relative file holding the saved inspector requests. |
+| `streamlord.inspector.codeLens` | `true` | Show “Open in Stream Inspector” above Ktor and Spring routes. |
 
 ## Datastar Pro
 
@@ -175,10 +177,13 @@ Pro bundle you license and load yourself.
 ```
 npm ci
 npm test           # unit tests: analysis, providers (with a vscode mock), grammars (real TextMate engine)
-npm run test:live  # the Stream Inspector client against a running Datastar server (STREAMLORD_LIVE_URL, default http://localhost:8080/api)
+npm run test:live  # the Stream Inspector client against the demo service (STREAMLORD_LIVE_URL, default http://localhost:8080)
 npm run build      # generates html-customdata.json and snippets/html.json from the catalog, then dist/extension.js
 npm run package    # streamlord-<version>.vsix
 ```
+
+`test:live` needs the repository's demo running: `./gradlew :demo:run` from the repository root,
+then `npm run test:live` here.
 
 Press F5 in the `streamlord.code-workspace` to launch an Extension Development Host.
 

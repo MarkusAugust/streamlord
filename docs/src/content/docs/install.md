@@ -115,29 +115,23 @@ Resolved from the build, not from memory. `kotlin-stdlib` is left out of all thr
 
 **`streamlord-json-kotlinx`**
 
-```deps=streamlord-json-kotlinx sample=none
-streamlord-json-kotlinx
-└── org.jetbrains.kotlinx:kotlinx-serialization-json 1.11.0
-    └── org.jetbrains.kotlinx:kotlinx-serialization-core 1.11.0
-```
+<!-- deps=streamlord-json-kotlinx -->
+- `org.jetbrains.kotlinx:kotlinx-serialization-json 1.11.0`
+  - `org.jetbrains.kotlinx:kotlinx-serialization-core 1.11.0`
 
 **`streamlord-json-jackson`**: Jackson 3
 
-```deps=streamlord-json-jackson sample=none
-streamlord-json-jackson
-└── tools.jackson.core:jackson-databind 3.2.3
-    ├── tools.jackson.core:jackson-core 3.2.3
-    └── com.fasterxml.jackson.core:jackson-annotations 2.22
-```
+<!-- deps=streamlord-json-jackson -->
+- `tools.jackson.core:jackson-databind 3.2.3`
+  - `tools.jackson.core:jackson-core 3.2.3`
+  - `com.fasterxml.jackson.core:jackson-annotations 2.22`
 
 **`streamlord-json-jackson2`**: Jackson 2
 
-```deps=streamlord-json-jackson2 sample=none
-streamlord-json-jackson2
-└── com.fasterxml.jackson.core:jackson-databind 2.22.3
-    ├── com.fasterxml.jackson.core:jackson-core 2.22.3
-    └── com.fasterxml.jackson.core:jackson-annotations 2.22
-```
+<!-- deps=streamlord-json-jackson2 -->
+- `com.fasterxml.jackson.core:jackson-databind 2.22.3`
+  - `com.fasterxml.jackson.core:jackson-core 2.22.3`
+  - `com.fasterxml.jackson.core:jackson-annotations 2.22`
 
 Jackson 3 still takes its annotations from the 2.x artifact; that is Jackson's own arrangement,
 not something Streamlord does.
@@ -253,3 +247,27 @@ compiled with 2.2 on every build. The Ktor adapter runs on Ktor 3.0 and newer. I
 the newest and on 3.0, all but the one for `HttpRequestLifecycle`, which came in 3.4. The Spring
 adapter is compiled and tested against Framework 7.0 (Boot 4) on every build. Boot 3 is not
 supported.
+
+`streamlord-json-kotlinx` is the one module that can raise your Kotlin standard library. It takes
+kotlinx.serialization 1.11.0, which asks for `kotlin-stdlib` 2.3.20, so in a Gradle project on
+Kotlin 2.2 the newer one wins:
+
+```text
+$ ./gradlew dependencyInsight --dependency kotlin-stdlib --configuration runtimeClasspath
+org.jetbrains.kotlin:kotlin-stdlib:2.3.20
+   Selection reasons:
+      - By conflict resolution: between versions 2.3.20, 2.2.21 and 2.1.0
+```
+
+That does no harm. The Kotlin 2.2 compiler reads a standard library one version ahead, and a
+project on 2.2.0 with `allWarningsAsErrors` builds against it without a warning. The other way
+round holds too: everything kotlinx.serialization 1.11.0 calls in the standard library is in
+2.2.0 already, so it runs on the 2.2 standard library that Maven keeps when you declare it
+yourself. Under Spring Boot 4.0 the BOM moves kotlinx.serialization down to 1.9.0, and the codec
+runs on that too. To hold Gradle to your own standard library:
+
+```kotlin sample=none
+dependencies {
+    implementation("org.jetbrains.kotlin:kotlin-stdlib") { version { strictly("2.2.21") } }
+}
+```
