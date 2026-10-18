@@ -5,8 +5,10 @@ import io.github.markusaugust.streamlord.core.DatastarEventValidationException
 /**
  * The signal names Datastar's client cannot hold, measured against its 1.0.4 store.
  *
- * - `__proto__` is never stored: with an object under it the merge throws halfway through a
- *   batch it never closes, and no later signal change reaches the page until it is reloaded.
+ * - `__proto__` is never stored. With some objects under it, `{"x": 1}` among them, the merge
+ *   throws halfway through a batch it never closes, and the bindings already on the page stop
+ *   redrawing until it is reloaded; `{"__proto__": {"y": 1}}` under it sets `y` on
+ *   `String.prototype`.
  * - A name every object already has, such as `constructor` or `toString`, is fine with a plain
  *   value under it. With an object under it, the client's `pathToObj`, which runs before every
  *   request that sends signals, writes into the built-in one: `{"constructor": {"prototype":
@@ -48,7 +50,8 @@ public object SignalNames {
     ): String? =
         when {
             key == "__proto__" -> {
-                "the client never stores __proto__, and with an object under it its merge throws and no later signal reaches the page"
+                "the client never stores __proto__: with some objects under it its merge throws and the page's " +
+                    "bindings stop redrawing, and a second __proto__ under it writes into String.prototype"
             }
 
             objectUnder && key in PROTOTYPE_NAMES -> {

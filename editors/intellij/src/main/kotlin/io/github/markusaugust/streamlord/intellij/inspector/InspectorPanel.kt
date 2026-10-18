@@ -34,6 +34,7 @@ import io.github.markusaugust.streamlord.core.json.JsonNull
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonValue
+import io.github.markusaugust.streamlord.core.json.SignalPatchException
 import io.github.markusaugust.streamlord.core.json.mergePatchAsClient
 import io.github.markusaugust.streamlord.intellij.Streamlord
 import java.awt.BorderLayout
@@ -500,10 +501,19 @@ class InspectorPanel(
                 return
             }
         try {
-            signals = mergePatchAsClient(signals, patch, frame.args["onlyIfMissing"]?.trim() == "true")
+            signals = mergePatchAsClient(signals, patch, isStringTrue(frame.args["onlyIfMissing"]))
             storeView.text = pretty(signals)
-        } catch (e: IllegalArgumentException) {
-            error("The signal store cannot take this patch: ${e.message}")
+        } catch (e: SignalPatchException) {
+            // The client keeps the keys it set before the one it failed on, and so does the store
+            // shown. A throw also leaves its update batch open (signals.ts:695-708), so the bindings
+            // on the page stop redrawing.
+            signals = e.store
+            storeView.text = pretty(signals)
+            if (e.refused) {
+                error("Streamlord refuses this signal patch on purpose: ${e.message}. $REFUSED")
+            } else {
+                error("The signal store cannot take this patch: ${e.message}. $CLIENT_THROWS")
+            }
         }
     }
 
@@ -711,12 +721,26 @@ class InspectorPanel(
         private const val LOG_GRACE_MS = 400L
         private val TIME = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
 
+        private const val CLIENT_THROWS =
+            "Datastar's client throws on it too, and the bindings already on the page then stop redrawing until it is " +
+                "reloaded, though the signals still change, element patches still land and new bindings show the current value."
+        private const val REFUSED = "The store shown keeps the keys before it."
+
         fun time(at: Long): String = TIME.format(Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()))
 
         fun suggestName(r: SavedRequest): String =
             runCatching {
                 "${r.method} ${java.net.URI(r.url.replace(Regex("""\{\{[^}]+\}\}"""), "http://x")).path}"
             }.getOrDefault("${r.method} ${r.url}")
+
+        /**
+         * `isStringTrue` in the client's utils/text.ts: `"true"` after JavaScript's `trim()`, which
+         * also takes U+FEFF and, unlike Kotlin's, leaves U+001C to U+001F.
+         */
+        fun isStringTrue(value: String?): Boolean = value != null && value.trim(::isJsSpace) == "true"
+
+        private fun isJsSpace(c: Char): Boolean =
+            c in "\t\n\u000B\u000C\r\uFEFF\u2028\u2029" || Character.getType(c) == Character.SPACE_SEPARATOR.toInt()
 
         /** Two-space indented JSON, as the VS Code inspector shows it. */
         fun pretty(

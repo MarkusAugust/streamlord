@@ -237,6 +237,21 @@ Streamlord; it is how you delete. Where the client parts from the RFC, on arrays
 `onlyIfMissing` and on a patch that is not an object, `mergePatchAsClient` in `streamlord-core`
 folds a patch the way the client does.
 
+A patch the client fails on partway, such as a `length` an array cannot take, makes
+`mergePatchAsClient` throw `SignalPatchException` with the store as the client keeps it, the keys
+before the failing one applied, and both Stream Inspectors show that store and the reason. In
+the browser the damage outlasts the patch: Datastar 1.0.4 leaves its update batch open after the
+throw, so the bindings already on the page stop redrawing until it is reloaded. Measured in
+Chrome, a `data-text` stayed where it was while clicks moved its signal on, while element
+patches still landed and a binding added after the throw showed the current value.
+
+Two kinds of patch are refused on purpose, whatever the client does with them, with `refused`
+set on the exception, and the inspectors say so and what the client does. One is a key
+`__proto__` anywhere in the patch, whatever it holds. Where its value is an object with keys,
+such as `{"__proto__":{"x":1}}`, the client mostly throws at that key, and the bindings stop
+redrawing as above; otherwise it keeps an object that is no longer plain JSON. The other is more
+indices past the end of an array than `holeLimit`, which the client takes and keeps as holes.
+
 A dotted name reaches a nested signal: `patchSignals("form.email" to "")` patches `$form.email`,
 the signal `data-signals:form.email` declares, and `removeSignals("form.email")` removes it.
 Where `form` is missing or holds a plain value, the client makes it an empty object first, as a
@@ -246,8 +261,11 @@ Some keys Datastar's client cannot hold, and a patch carrying one throws
 `DatastarEventValidationException` before anything is sent, whether it came from pairs, a codec
 or a JSON string, at any depth:
 
-- `__proto__`, which the client never stores; with an object under it, its merge throws halfway
-  through, and no later signal reaches the page until it is reloaded;
+- `__proto__`, which the client never stores but sets as the prototype of the object holding it.
+  With `{"x": 1}`, `{"0": 1}` or `{"length": 5}` under it, its merge throws halfway through, and
+  the bindings already on the page stop redrawing until it is reloaded. With `{}` or
+  `{"x": null}` it throws nothing, and `{"__proto__": {"y": 1}}` under it sets `y` on
+  `String.prototype`;
 - a property every object already has (`constructor`, `toString`, `valueOf`, `hasOwnProperty`
   and the rest of `Object.prototype`) with an object under it, which the client writes into the
   built-in property before every request: `constructor.prototype` reaches every object on the

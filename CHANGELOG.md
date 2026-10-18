@@ -62,7 +62,18 @@ All notable changes to Streamlord are recorded here. The format follows
   a value that is read.
 - `SignalPatchException` in `streamlord-core`, an `IllegalArgumentException` that
   `mergePatchAsClient` throws for a patch the client fails on partway through; its `store` is the
-  store as the client keeps it then, with the keys before the failing one applied.
+  store as the client keeps it then, with the keys before the failing one applied, and its
+  `refused` says Streamlord refuses the patch on purpose, whatever the client does with it, and
+  the message then says what the client does. It refuses two kinds: more indices past the end of
+  an array than `holeLimit`, and a key `__proto__` anywhere in a patch, inside array values too,
+  whatever it holds. Where its value is an object with keys, the client mostly throws at that
+  key, measured in Chrome, and the bindings on the page stop redrawing. Otherwise it gives the
+  object holding the key a foreign prototype, and then, measured against its source, throws on
+  some later keys, replaces the object on a later patch, or with a second `__proto__` under the
+  first writes into `String.prototype`. The store carried is the patch cut
+  before the key that holds the `__proto__`, which is what the client keeps where it throws on
+  that key. A store passed in with a key `__proto__` is refused once a patch reaches the object
+  that has it.
 
 - `SignalsMediaTypeException`, `Streamlord.requireJsonContentType` with the same setting on the
   Ktor plugin, and `Streamlord.MAX_SIGNALS_DEPTH`; see Changed, Fixed and Security.
@@ -230,12 +241,17 @@ All notable changes to Streamlord are recorded here. The format follows
   = "..."`, kotlinx.html's own form, is judged as the attribute it writes, interpolation trap
   included.
 - Both Stream Inspectors keep the signal store as the client keeps it, see `mergePatchAsClient`,
-  and read `onlyIfMissing` with its spaces trimmed, as the client does. The user's headers replace
-  the client's own, `Content-Type` included, where IntelliJ added a second one and VS Code
-  overrode the user's. Copy as curl writes the body with `--data-raw`, since with `--data` curl
-  read signals that start with `@` from the file they name. Signals written as an object in
-  `inspector.json` are sent as written, where VS Code rounded a number past 2^53 and the two
-  editors spelled them differently.
+  and read `onlyIfMissing` with JavaScript's `trim()`, as the client does, which takes U+FEFF and
+  leaves U+001C to U+001F where Kotlin's does the opposite. A patch that fails partway leaves the
+  keys before the failing one in the store shown, as the client keeps them, with the reason
+  beside it. VS Code's port of the fold answers to the same 366 scenarios as the core's, run
+  through the client's own `mergePatch`, so it now turns a `length` into a number as the browser
+  does, fails on an object under `length` with `onlyIfMissing` too, and splits a string patch by
+  UTF-16 unit. The user's headers replace the client's own, `Content-Type` included, where
+  IntelliJ added a second one and VS Code overrode the user's. Copy as curl writes the body with
+  `--data-raw`, since with `--data` curl read signals that start with `@` from the file they
+  name. Signals written as an object in `inspector.json` are sent as written, where VS Code
+  rounded a number past 2^53 and the two editors spelled them differently.
 - Both Stream Inspectors refuse to save over a requests file that is not JSON and say why, where
   a save wrote an empty list over it; a byte order mark in `inspector.json` or `env.json` no
   longer hides what they hold, in either editor; and a requests-file path that leaves the
@@ -310,6 +326,22 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- The Templates page and the roadmap said a template tag the analysis does not know gives no
+  findings in expression attributes. Measured in Chrome, none of Qute's `{name}`, Closure's
+  `{$name}` and Rocker's `@name` works in an expression: Qute's tags are a `ReferenceError` or a
+  `SyntaxError` (a bare `{name}` only seems to work, through `window.name`), `{$name}` is a
+  `SyntaxError` where the attribute returns a value, and `@name` is one in every expression
+  attribute. The pages now say so, and that the editors hold signal names to a stricter pattern
+  than the client. They show the value in an attribute of its own, read with `el.dataset`, where
+  the engine escapes it and the attribute is quoted, for the attributes that use it as text, and
+  warn against putting the tag in a JavaScript string, `data-text="'{$name}'"`, which runs a
+  value such as `x' + (window.__pwn = 1) + '` as code once the browser has undone the engine's
+  HTML escaping.
+- Both Stream Inspectors say, beside a patch Datastar's client throws on, that the bindings
+  already on the page then stop redrawing until it is reloaded, since the client leaves its
+  update batch open after the throw, though the signals still change, element patches still land
+  and new bindings show the current value. Beside a patch Streamlord refuses on purpose, a
+  `__proto__` or more holes than `holeLimit`, they say that and why instead.
 - The editors read a page's signals as Datastar's client stores them. `signal-kebab` said "no key
   declares" a `$my-key` the page declares with its hyphen, in the object form
   (`{'my-key': 1}`), in the value of `data-bind`, `data-ref` or `data-indicator`, or as
@@ -436,8 +468,9 @@ All notable changes to Streamlord are recorded here. The format follows
   differences at NEL and with `IGNORE_CASE`, where Kotlin folds the Kelvin sign into `k` and the
   long s into `s` and JavaScript does not.
 - A signal patch could carry a key Datastar's client cannot hold, from pairs, a codec or a JSON
-  string, at any depth. `__proto__` with an object under it made its merge throw halfway through
-  a batch it never closed, so no later signal reached the page. An object under a property of
+  string, at any depth. `__proto__` with some objects under it, `{"x": 1}` among them, made its
+  merge throw halfway through a batch it never closed, so the bindings already on the page
+  stopped redrawing until it was reloaded. An object under a property of
   `Object.prototype` was written into the built-in one before every request:
   `{"constructor": {"prototype": {"x": 1}}}` set `x` on `Object.prototype` for every object on
   the page, and `{"toString": {"name": 1}}` made every later request fail. A dotted key was

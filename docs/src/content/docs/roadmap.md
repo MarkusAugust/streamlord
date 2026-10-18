@@ -72,12 +72,15 @@ a Datastar expression: `{{ }}`, `{% %}`, `${ }`, `<% %>`, `[# ]`, and JTE's and 
 control-flow keywords. That covers most engines whatever they are called, and it is a closed set
 in `Markup.kt` with no way to add to it.
 
-An engine outside it, Qute with `{name}`, Closure with `{$name}`, Rocker with `@name`, is fine
-everywhere except one place, which was measured rather than assumed. Expression attributes such
-as `data-text` produce no findings, because the expression check only fires on shapes no working
-expression has. Attributes that take a signal name do: `data-bind="{name}"` reports
-`signal-name-expected`, since a signal name is held to a strict pattern and a brace is not in it.
-The file is correct and the editor says it is not.
+An engine outside it, Qute with `{name}`, Closure with `{$name}`, Rocker with `@name`, has its
+expressions judged as Datastar would judge the unrendered text, which was measured rather than
+assumed. Attributes that take a signal name report `signal-name-expected` for all three. There
+the editors are stricter than the client, which makes a signal named `{$name}` from
+`data-bind="{$name}"`: no `$name` can reach such a signal, so a brace or an `@` in a signal name
+is almost always a mistake. In the rendered file the tag is gone, and the editor says it is
+wrong. In expressions the findings are right about the unrendered text, and a tag does not
+belong there in any case;
+[Templates](/templates/#do-not-render-a-value-into-an-expression) shows what to write instead.
 
 Planned: `AnalyzeOptions` takes the delimiter pairs your engine uses, and the editors read them
 from a setting. Small, and the only reason it is not higher is that it affects one rule for
@@ -86,8 +89,20 @@ engines outside a set that already covers most of them.
 ### Until then
 
 Nothing, for the attributes that take a signal name, which is why this is on the list rather than
-in the "considered" pile. Everything else about your engine already works, and none of it touches
-what Streamlord puts on the wire. [Templates](/templates/) says which half is which.
+in the "considered" pile. A value the page shows goes in an attribute of its own and is read
+with `el.dataset`, which gives no findings for any of the three tags and runs nothing the value
+holds:
+
+```html
+<span data-value="{$name}" data-text="el.dataset.value"></span>
+```
+
+That holds where the attribute is in quotes and the engine escapes the value for HTML, and only
+where the expression uses the value as text, as `data-text` does, not as a URL or a handler;
+[Templates](/templates/#do-not-render-a-value-into-an-expression) has the cases. Never put the
+tag in a JavaScript string, `data-text="'{$name}'"`: the browser undoes the engine's HTML
+escaping before Datastar reads the attribute, so a value with a quote in it is code. Everything
+else about your engine already works, and none of it touches what Streamlord puts on the wire.
 
 ## Concurrent stream limits
 

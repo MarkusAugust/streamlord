@@ -676,4 +676,82 @@ class InspectorTest : BasePlatformTestCase() {
         val store = UIUtil.findComponentsOfType(panel, JBTextArea::class.java).single { it.text.startsWith("{\n") }
         assertEquals("""{"user":{"name":"a","age":1},"list":[1,2,3]}""", JsonParser.parse(store.text).toJson())
     }
+
+    fun `test a patch that fails partway leaves the keys before it in the store, as the client does`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        val apply = panel.javaClass.getDeclaredMethod("applyFrame", DatastarFrame::class.java).apply { isAccessible = true }
+
+        fun patch(signals: String) =
+            apply.invoke(panel, DatastarFrame("datastar-patch-signals", null, null, mapOf("signals" to signals), "", 0L))
+        patch("""{"a":[1,2]}""")
+        val store = UIUtil.findComponentsOfType(panel, JBTextArea::class.java).single { it.text.startsWith("{\n") }
+        patch("""{"b":1,"a":{"0":7,"length":-1},"c":2}""")
+        assertEquals("""{"a":[7,2],"b":1}""", JsonParser.parse(store.text).toJson())
+        val labels = UIUtil.findComponentsOfType(panel, JLabel::class.java).map { it.text }
+        // The client leaves its batch open after a throw, so the bindings on the page stop
+        // redrawing (measured in Chrome).
+        val expected =
+            "The signal store cannot take this patch: Invalid array length -1 in a signal patch. " +
+                "Datastar's client throws on it too, and the bindings already on the page then stop redrawing until it is reloaded, " +
+                "though the signals still change, element patches still land and new bindings show the current value."
+        assertTrue(labels.toString(), expected in labels)
+        patch("""{"d":3}""")
+        assertEquals("""{"a":[7,2],"b":1,"d":3}""", JsonParser.parse(store.text).toJson())
+    }
+
+    // A patch Streamlord refuses on purpose says so, and nothing about the page standing still.
+    fun `test a patch Streamlord refuses on purpose says so`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        val apply = panel.javaClass.getDeclaredMethod("applyFrame", DatastarFrame::class.java).apply { isAccessible = true }
+
+        fun patch(signals: String) =
+            apply.invoke(panel, DatastarFrame("datastar-patch-signals", null, null, mapOf("signals" to signals), "", 0L))
+
+        fun labels() = UIUtil.findComponentsOfType(panel, JLabel::class.java).map { it.text }
+        patch("""{"a":[1]}""")
+        val store = UIUtil.findComponentsOfType(panel, JBTextArea::class.java).single { it.text.startsWith("{\n") }
+        patch("""{"b":1,"o":{"__proto__":{"x":1}},"c":2}""")
+        assertEquals("""{"a":[1],"b":1,"o":{}}""", JsonParser.parse(store.text).toJson())
+        val proto =
+            "Streamlord refuses this signal patch on purpose: A key named __proto__ whose value is an object with keys mostly " +
+                "makes Datastar's client throw at that key, and the bindings on the page then stop redrawing. Otherwise the client " +
+                "gives the object holding the key a foreign prototype, which then throws on some later keys, replaces the object on " +
+                "a later patch, or with a second __proto__ writes into String.prototype. Streamlord does not model it and refuses " +
+                "the patch. " +
+                "The store shown keeps the keys before it."
+        assertTrue(labels().toString(), proto in labels())
+        patch("""{"a":{"20000":1}}""")
+        val holes =
+            "Streamlord refuses this signal patch on purpose: Signal patch index 20000 is more than 10000 past the end of an array " +
+                "of 1: the client takes it, and Streamlord does not fill memory with the holes. The store shown keeps the keys before it."
+        assertTrue(labels().toString(), holes in labels())
+        assertEquals("""{"a":[1],"b":1,"o":{}}""", JsonParser.parse(store.text).toJson())
+    }
+
+    // Measured in headless Chrome with the 1.0.4 bundle: the characters that may stand on both sides
+    // of `true` in onlyIfMissing and still make it true.
+    fun `test onlyIfMissing is trimmed as JavaScript trims it`() {
+        val measured =
+            "0009 000a 000b 000c 000d 0020 00a0 1680 2000 2001 2002 2003 2004 2005 2006 2007 2008 2009 200a 2028 2029 202f 205f 3000 feff"
+        val kept = (0..0xFFFF).map { it.toChar() }.filter { InspectorPanel.isStringTrue("${it}true$it") }
+        assertEquals(measured, kept.joinToString(" ") { "%04x".format(it.code) })
+        assertFalse(InspectorPanel.isStringTrue("TRUE"))
+        assertFalse(InspectorPanel.isStringTrue(null))
+
+        val panel = InspectorPanel(project, testRootDisposable)
+        val apply = panel.javaClass.getDeclaredMethod("applyFrame", DatastarFrame::class.java).apply { isAccessible = true }
+
+        fun patch(
+            signals: String,
+            onlyIfMissing: String,
+        ) {
+            val args = mapOf("signals" to signals, "onlyIfMissing" to onlyIfMissing)
+            apply.invoke(panel, DatastarFrame("datastar-patch-signals", null, null, args, "", 0L))
+        }
+        patch("""{"a":1}""", "")
+        patch("""{"a":2,"b":2}""", "\uFEFFtrue\u2028")
+        patch("""{"b":3,"c":3}""", "\u001Ctrue")
+        val store = UIUtil.findComponentsOfType(panel, JBTextArea::class.java).single { it.text.startsWith("{\n") }
+        assertEquals("""{"a":1,"b":3,"c":3}""", JsonParser.parse(store.text).toJson())
+    }
 }

@@ -3,7 +3,7 @@ import { baseUrlSuggestion, compactSignals, describeVariables, emptyBodyHint, EN
 import type { RequestStore } from "./requestStore.ts";
 import type { RunningServers } from "./serverLog.ts";
 import type { Route } from "./routes.ts";
-import { mergePatchAsClient, type DatastarFrame } from "./sse.ts";
+import { mergePatchAsClient, SignalPatchError, type DatastarFrame } from "./sse.ts";
 import { openStream } from "./streamClient.ts";
 
 /**
@@ -14,6 +14,10 @@ import { openStream } from "./streamClient.ts";
  */
 /** How long a failed request waits for the server to finish logging why. */
 const LOG_GRACE_MS = 400;
+
+const CLIENT_THROWS =
+  "Datastar's client throws on it too, and the bindings already on the page then stop redrawing until it is reloaded, though the signals still change, element patches still land and new bindings show the current value.";
+const REFUSED = "The store shown keeps the keys before it.";
 
 export class Inspector {
   private panel: vscode.WebviewPanel | null = null;
@@ -235,7 +239,19 @@ export class Inspector {
       this.signals = mergePatchAsClient(this.signals, patch, (frame.args.onlyIfMissing ?? "").trim() === "true");
       this.post({ type: "signals", signals: this.signals });
     } catch (e) {
-      this.post({ type: "error", message: `The signal store cannot take this patch: ${(e as Error).message}` });
+      // The client keeps the keys it set before the one it failed on, and so does the store shown. A
+      // throw also leaves its update batch open (signals.ts:695-708), so the bindings on the page stop
+      // redrawing.
+      if (!(e instanceof SignalPatchError)) {
+        this.post({ type: "error", message: `The signal store cannot take this patch: ${(e as Error).message}` });
+        return;
+      }
+      this.signals = e.store;
+      this.post({ type: "signals", signals: this.signals });
+      const message = e.refused
+        ? `Streamlord refuses this signal patch on purpose: ${e.message}. ${REFUSED}`
+        : `The signal store cannot take this patch: ${e.message}. ${CLIENT_THROWS}`;
+      this.post({ type: "error", message });
     }
   }
 }

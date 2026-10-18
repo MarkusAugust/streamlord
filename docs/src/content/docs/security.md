@@ -58,18 +58,25 @@ written in a string or a template, a quote in a value cannot end it.
 ## Signal names the client cannot hold
 
 Every object in a browser already has `constructor`, `toString` and ten other properties from
-`Object.prototype`. In Datastar 1.0.4's store, an object under `__proto__` makes the merge throw
-and leaves the page deaf to every later signal. An object under one of the others is written
-into the built-in property before every request that sends signals: `{"constructor":
-{"prototype": {"x": 1}}}` sets `x` on `Object.prototype`, and `{"toString": {"name": 1}}` makes
-every later request on the page fail. A map of names typed by users, broadcast to every viewer,
-could otherwise do either to every page that shows it.
+`Object.prototype`. In Datastar 1.0.4's store, what `__proto__` holds becomes the prototype of the
+object holding it. With `{"x": 1}`, `{"0": 1}` or `{"length": 5}` under it the merge throws
+halfway, and the bindings already on the page stop redrawing until it is reloaded. With `{}` or
+`{"x": null}` it throws nothing, and a second `__proto__` under the first throws nothing either:
+`{"__proto__": {"__proto__": {"y": 1}}}` sets `y` on `String.prototype`, so every string on the
+page has it, measured under Bun, in Chrome and over a real SSE stream. An object under one of
+the others is written into the built-in property before every request that sends signals:
+`{"constructor": {"prototype": {"x": 1}}}` sets `x` on `Object.prototype`, and
+`{"toString": {"name": 1}}` makes every later request on the page fail. A map of names typed by
+users, broadcast to every viewer, could otherwise do any of this to every page that shows it.
 
 So a signal patch never carries such a key, at any depth, whether it came from pairs, a codec or
-a JSON string. A name the DSL writes is checked as the client will read it, after the browser
+a JSON string. `patchSignals` checks every key with `SignalNames` and refuses `__proto__` with
+any value. A name the DSL writes is checked as the client will read it, after the browser
 lowercases the key and the client cuts it at `__` and applies any `__case`, and never has such
 a part. Streamlord throws instead, before anything is sent;
-[Patching signals back](/signals/#patching-signals-back) has the rule.
+[Patching signals back](/signals/#patching-signals-back) has the rule. The client itself refuses
+nothing, so a server that sends `datastar-patch-signals` without Streamlord has to refuse these
+keys the same way.
 What you write yourself as an expression, such as `dataSignals("{constructor: {...}}")`, is
 JavaScript, and is not checked.
 
