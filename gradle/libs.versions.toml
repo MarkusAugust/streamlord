@@ -14,6 +14,11 @@ kotlinxHtml = "0.12.0"
 ktor = "3.6.0"
 # The oldest Ktor the adapter promises to run on; testOldestKtor runs its tests against it.
 ktorOldest = "3.0.0"
+# The Netty testOldestKtor runs Ktor 3.0's Netty engine on. Ktor 3.0.0 brings 4.1.114.Final, which
+# has known vulnerabilities; this is the 4.1 release install.md tells a user on Ktor 3.0 to raise
+# it to, so the promise is tested on what users are told to run. It stays on 4.1, the line
+# Ktor 3.0 was built against.
+nettyOldestKtor = "4.1.139.Final"
 spring = "7.0.9"
 servlet = "6.1.0"
 # Spring Boot 4.0.8 pins 11.0.24, which has three advisories fixed in 11.0.25; the tests run the current 11.0 line.
@@ -53,6 +58,8 @@ ktor-server-jetty-jakarta = { module = "io.ktor:ktor-server-jetty-jakarta", vers
 ktor-server-compression = { module = "io.ktor:ktor-server-compression", version.ref = "ktor" }
 ktor-server-cors = { module = "io.ktor:ktor-server-cors", version.ref = "ktor" }
 ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
+# Test-only, for :streamlord-ktor's testOldestKtor; see nettyOldestKtor.
+netty-bom-oldestKtor = { module = "io.netty:netty-bom", version.ref = "nettyOldestKtor" }
 spring-web = { module = "org.springframework:spring-web", version.ref = "spring" }
 spring-webmvc = { module = "org.springframework:spring-webmvc", version.ref = "spring" }
 spring-test = { module = "org.springframework:spring-test", version.ref = "spring" }

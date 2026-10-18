@@ -73,11 +73,25 @@ describe("completion provider", () => {
   it("offers actions after @ with pro last", () => {
     const items = complete(doc, 3, 18, index);
     const labels = items.map((i) => i.label);
-    assert.equal(labels[0], "@get");
-    assert.ok(labels.indexOf("@clipboard") > labels.indexOf("@peek"));
+    assert.ok(labels.indexOf("@clipboard") > labels.indexOf("@toggleAll"));
     assert.ok(items.every((i) => String(i.label).startsWith("@")));
     const post = items.find((i) => i.label === "@post");
     assert.match(String((post?.insertText as { value: string }).value), /^@post\('\$\{1:\/path\}'\)$/);
+  });
+
+  it("lists actions and modifiers by name, Pro last, as IntelliJ does", () => {
+    // VS Code shows items by sortText, then by label; the provider's own order is the same.
+    const shown = (items: { label: unknown; sortText?: string }[]) => {
+      const key = (i: { label: unknown; sortText?: string }) => (i.sortText ?? String(i.label)).toLowerCase();
+      const sorted = [...items].sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0)).map((i) => String(i.label));
+      assert.deepEqual(items.map((i) => String(i.label)), sorted);
+      return sorted;
+    };
+    assert.deepEqual(shown(complete(doc, 3, 18, index)), ["@delete", "@get", "@patch", "@peek", "@post", "@put", "@query", "@setAll", "@toggleAll", "@clipboard", "@fit", "@intl"]);
+    const hdoc = new MockDocument(`<div data-on:click__\n<div data-on-intersect__\n<input data-bind:value__`, "html");
+    assert.deepEqual(shown(complete(hdoc, 0, 20, index)), ["capture", "case", "debounce", "delay", "document", "once", "outside", "passive", "prevent", "stop", "throttle", "viewtransition", "window"]);
+    assert.deepEqual(shown(complete(hdoc, 1, 24, index)), ["debounce", "delay", "exit", "full", "half", "once", "threshold", "throttle", "viewtransition"]);
+    assert.deepEqual(shown(complete(hdoc, 2, 24, index)), ["case", "event", "prop"]);
   });
 
   it("offers ids after # in a selector argument and classes after .", () => {

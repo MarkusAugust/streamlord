@@ -318,6 +318,15 @@ All notable changes to Streamlord are recorded here. The format follows
   Kotlin parameter's `List<Int>` with a `400` where the mapper dropped it, as the Kotlin module's
   own `StrictNullChecks` does on Jackson 2 and 3. `@JsonSetter(contentNulls = Nulls.SKIP)` on the
   parameter still drops it.
+- Both editors give an unknown modifier, such as `data-on:click__onse`, an empty `__` or
+  `__debounce_150ms`, as a warning rather than an error, and say that Datastar ignores it: the
+  1.0.4 client runs the expression without it, measured in Chrome. A modifier written after a dot
+  in an event, `data-on:click.prevent`, is an error rather than a warning, since the client then
+  listens for an event named `click.prevent` and the expression never runs on a click. The shared
+  corpus holds both editors to these severities.
+- Both editors list actions and modifiers in completion by name, Pro actions after the rest. VS
+  Code handed them over in the catalog's order and IntelliJ left the order to the platform; each
+  now sets it, and the same lists are tested in both.
 
 ### Removed
 
@@ -326,6 +335,9 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- `data-indicator` with neither a key nor a value, or with both, got the error Datastar raises and
+  also the warning that nothing on the element sends a request. VS Code showed both, IntelliJ hid
+  the warning under the error. Both editors now give only the error.
 - The Templates page and the roadmap said a template tag the analysis does not know gives no
   findings in expression attributes. Measured in Chrome, none of Qute's `{name}`, Closure's
   `{$name}` and Rocker's `@name` works in an expression: Qute's tags are a `ReferenceError` or a
@@ -740,6 +752,9 @@ All notable changes to Streamlord are recorded here. The format follows
   cookies and without a CORS preflight, and `readSignals` read it as signals, measured in Chrome on
   Ktor CIO and Spring Tomcat. It is now refused with `SignalsMediaTypeException`; Changed has what
   that asks of a client of your own.
+- The install page says that Ktor 3.0's Netty engine brings Netty 4.1.114.Final, which has known
+  vulnerabilities, and shows how to raise Netty in Gradle and Maven or move to a newer Ktor. The
+  adapter's tests on Ktor 3.0 run on the raised Netty, 4.1.139.Final, rather than on 4.1.114.
 
 ## [0.12.0] - 2026-10-11
 

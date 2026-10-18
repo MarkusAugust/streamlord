@@ -16,6 +16,41 @@ class CompletionTest : BasePlatformTestCase() {
         assertTrue(items.toString(), "@post" in items && "@clipboard" in items)
     }
 
+    fun `test actions and modifiers are listed by name, pro last, as in vs code`() {
+        val actions =
+            listOf("@delete", "@get", "@patch", "@peek", "@post", "@put", "@query", "@setAll", "@toggleAll", "@clipboard", "@fit", "@intl")
+        myFixture.configureByText("Feed.kt", "fun f() { dataOnClick(\"@<caret>\") }")
+        assertEquals(actions, myFixture.completeBasic()!!.map { it.lookupString })
+        myFixture.configureByText("page.html", "<div data-on:click=\"@<caret>\"></div>")
+        assertEquals(actions, myFixture.completeBasic()!!.map { it.lookupString })
+        val modifiers =
+            mapOf(
+                "<div data-on:click__<caret>" to
+                    listOf(
+                        "capture",
+                        "case",
+                        "debounce",
+                        "delay",
+                        "document",
+                        "once",
+                        "outside",
+                        "passive",
+                        "prevent",
+                        "stop",
+                        "throttle",
+                        "viewtransition",
+                        "window",
+                    ),
+                "<div data-on-intersect__<caret>" to
+                    listOf("debounce", "delay", "exit", "full", "half", "once", "threshold", "throttle", "viewtransition"),
+                "<input data-bind:value__<caret>" to listOf("case", "event", "prop"),
+            )
+        modifiers.entries.forEachIndexed { n, (source, expected) ->
+            myFixture.configureByText("mods$n.html", source)
+            assertEquals(source, expected, myFixture.completeBasic()!!.map { it.lookupString })
+        }
+    }
+
     fun `test ids and classes in a selector argument`() {
         myFixture.addFileToProject("other.html", "<div id=\"feed\" class=\"card\"></div>")
         myFixture.configureByText(

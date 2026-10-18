@@ -142,8 +142,9 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
         return item;
       });
     }
-    return parsed.spec.modifiers.map((m) => {
+    return [...parsed.spec.modifiers].sort((x, y) => byName(x.name, y.name)).map((m) => {
       const item = new vscode.CompletionItem(m.name, vscode.CompletionItemKind.Keyword);
+      item.sortText = m.name;
       item.detail = `__${m.name}` + (m.type === "flag" ? "" : m.type === "duration" ? ".<duration>" : m.type === "enum" ? `.<${(m.values ?? []).join("|")}>` : m.type === "int" ? ".<n>" : ".<name>");
       item.range = new vscode.Range(position.translate(0, -current.length), position);
       if (m.type === "duration") item.insertText = new vscode.SnippetString(`${m.name}.\${1:500ms}`);
@@ -172,7 +173,7 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
     if (!allowActions) return [];
     const act = actionPrefixAt(textBefore, textBefore.length);
     if (act !== null) {
-      return catalog.actions.map((a) => {
+      return [...catalog.actions].sort((x, y) => Number(x.pro) - Number(y.pro) || byName(x.name, y.name)).map((a) => {
         const item = new vscode.CompletionItem("@" + a.name, vscode.CompletionItemKind.Function);
         item.detail = (a.pro ? "Pro · " : "") + a.signature;
         item.documentation = a.doc;
@@ -218,4 +219,12 @@ function casingNote(a: AttributeSpec): string {
     default:
       return "the key is used as written, after the browser has lowercased it. Write it in kebab-case; for a name that really has capitals (SVG's `viewBox`), use the object form.";
   }
+}
+
+/**
+ * Actions and modifiers are offered by name, Pro after the rest, as the IntelliJ plugin orders
+ * them; sortText carries the order, since VS Code sorts by it.
+ */
+function byName(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }

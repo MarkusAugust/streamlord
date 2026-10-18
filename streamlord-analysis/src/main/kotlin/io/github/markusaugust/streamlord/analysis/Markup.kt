@@ -1051,8 +1051,9 @@ public class MarkupValidator(
                 val mstart = if (mod.text.isEmpty()) mend - 2 else mend - mod.text.length
                 val mspec = spec.modifiers.firstOrNull { it.name == mod.name }
                 if (mspec == null) {
-                    // __debounce_150ms: an argument joined with an underscore, which Datastar reads
-                    // as one unknown name. Arguments follow a dot.
+                    // Datastar ignores a modifier it does not know and runs the handler anyway, so
+                    // these are warnings. __debounce_150ms: an argument joined with an underscore,
+                    // which Datastar reads as one unknown name. Arguments follow a dot.
                     val dotted = dottedArguments(mod.name, spec)
                     if (dotted != null) {
                         issues +=
@@ -1060,8 +1061,9 @@ public class MarkupValidator(
                                 start = mstart,
                                 end = mend,
                                 message =
-                                    "Unknown modifier __${mod.name} on $prefix${spec.name}. A modifier's arguments follow a dot: __$dotted.",
-                                severity = Severity.ERROR,
+                                    "Unknown modifier __${mod.name} on $prefix${spec.name}, which Datastar ignores. " +
+                                        "A modifier's arguments follow a dot: __$dotted.",
+                                severity = Severity.WARNING,
                                 code = "unknown-modifier",
                                 link = link,
                                 fixes = listOf(Fix("Change to __$dotted", mstart, mstart + mod.name.length, dotted)),
@@ -1074,12 +1076,9 @@ public class MarkupValidator(
                             start = mstart,
                             end = mend,
                             message =
-                                if (near != null) {
-                                    "Unknown modifier __${mod.name} on $prefix${spec.name}. Did you mean __$near?"
-                                } else {
-                                    "Unknown modifier __${mod.name} on $prefix${spec.name}."
-                                },
-                            severity = Severity.ERROR,
+                                "Unknown modifier __${mod.name} on $prefix${spec.name}, which Datastar ignores." +
+                                    (near?.let { " Did you mean __$it?" } ?: ""),
+                            severity = Severity.WARNING,
                             code = "unknown-modifier",
                             link = link,
                             fixes =
@@ -1159,6 +1158,10 @@ public class MarkupValidator(
                 val lower = it.name.asciiLowercase()
                 lower == "${prefix}indicator" || lower.startsWith("${prefix}indicator:") || lower.startsWith("${prefix}indicator__")
             } ?: return emptyList()
+        // With both a key and a value, or neither, Datastar raises before the indicator exists,
+        // and the error on the same name says so.
+        val hasKey = !catalog.parseAttributeName(indicator.name.asciiLowercase(), prefix)?.key.isNullOrEmpty()
+        if (hasKey == !indicator.value.isNullOrEmpty()) return emptyList()
         // Template syntax in a value, or attributes spread into the tag by name, leave what it
         // sends unknown until rendered.
         if ((tagSource != null && hasTemplateSyntax(tagSource)) ||
@@ -1187,7 +1190,8 @@ public class MarkupValidator(
 
     /**
      * `data-on:click.prevent`: a modifier written after a dot, which Datastar reads as part of the
-     * event name. Only for events; a dot in a signal key is a path.
+     * event name, so the listener waits for an event that never comes. An error, unlike an unknown
+     * modifier, which Datastar ignores. Only for events; a dot in a signal key is a path.
      */
     private fun validateDottedKey(
         attr: Attribute,
@@ -1206,12 +1210,10 @@ public class MarkupValidator(
             Issue(
                 start = keyStart,
                 end = keyStart + key.length,
-                message = "Datastar reads $key as ${keyReading(
-                    spec,
-                    key,
-                    key,
-                )}, dots and all. A modifier follows two underscores: $prefix${spec.name}:$fixed.",
-                severity = Severity.WARNING,
+                message =
+                    "Datastar reads $key as ${keyReading(spec, key, key)}, dots and all, so the expression never runs on ${pieces[0]}. " +
+                        "A modifier follows two underscores: $prefix${spec.name}:$fixed.",
+                severity = Severity.ERROR,
                 code = "unknown-modifier",
                 link = Docs.attribute(spec.name),
                 fixes = listOf(Fix("Change to $fixed", keyStart, keyStart + key.length, fixed)),

@@ -248,6 +248,40 @@ the newest and on 3.0, all but the one for `HttpRequestLifecycle`, which came in
 adapter is compiled and tested against Framework 7.0 (Boot 4) on every build. Boot 3 is not
 supported.
 
+On Ktor 3.0 with the Netty engine, look at the Netty underneath. `ktor-server-netty` 3.0.0 brings
+Netty 4.1.114.Final, which has known vulnerabilities, among them HTTP request smuggling in
+`netty-codec-http` ([CVE-2026-33870](https://github.com/advisories/GHSA-pwqr-wmgm-9rr8)) and the
+MadeYouReset attack on HTTP/2 ([CVE-2025-55163](https://github.com/advisories/GHSA-prj3-ccx8-p6x4)).
+Streamlord brings neither Ktor nor Netty, so the remedy is in your build. Either move to a newer
+Ktor (3.6.0 brings Netty 4.2.17.Final), or keep Ktor and raise Netty to the newest 4.1 release,
+4.1.139.Final at the time of writing; neither had an advisory against it then. The adapter's
+tests on Ktor 3.0 run on that Netty. In Gradle:
+
+```kotlin sample=none
+dependencies {
+    implementation(platform("io.netty:netty-bom:4.1.139.Final"))
+}
+```
+
+In Maven, import the same BOM:
+
+```xml
+<dependencyManagement>
+  <dependencies>
+    <dependency>
+      <groupId>io.netty</groupId>
+      <artifactId>netty-bom</artifactId>
+      <version>4.1.139.Final</version>
+      <type>pom</type>
+      <scope>import</scope>
+    </dependency>
+  </dependencies>
+</dependencyManagement>
+```
+
+`./gradlew dependencyInsight --dependency netty-codec-http --configuration runtimeClasspath` or
+`mvn dependency:tree` shows which Netty you run.
+
 `streamlord-json-kotlinx` is the one module that can raise your Kotlin standard library. It takes
 kotlinx.serialization 1.11.0, which asks for `kotlin-stdlib` 2.3.20, so in a Gradle project on
 Kotlin 2.2 the newer one wins:

@@ -487,15 +487,16 @@ export function validateAttributes(tag: Tag, prefix: string, tagSource?: string,
       const mstart = mod.text.length === 0 ? mend - 2 : mend - mod.text.length;
       const mspec = spec.modifiers.find((m) => m.name === mod.name);
       if (!mspec) {
-        // __debounce_150ms: an argument joined with an underscore, which Datastar reads as one
-        // unknown name. Arguments follow a dot.
+        // Datastar ignores a modifier it does not know and runs the handler anyway, so these are
+        // warnings. __debounce_150ms: an argument joined with an underscore, which Datastar reads
+        // as one unknown name. Arguments follow a dot.
         const dotted = dottedArguments(mod.name, spec);
         if (dotted) {
           issues.push({
             start: mstart,
             end: mend,
-            message: `Unknown modifier __${mod.name} on ${prefix}${spec.name}. A modifier's arguments follow a dot: __${dotted}.`,
-            severity: "error",
+            message: `Unknown modifier __${mod.name} on ${prefix}${spec.name}, which Datastar ignores. A modifier's arguments follow a dot: __${dotted}.`,
+            severity: "warning",
             code: "unknown-modifier",
             link: attributeDoc(spec.name),
             fixes: [{ title: `Change to __${dotted}`, start: mstart, end: mstart + mod.name.length, text: dotted }],
@@ -506,8 +507,8 @@ export function validateAttributes(tag: Tag, prefix: string, tagSource?: string,
         issues.push({
           start: mstart,
           end: mend,
-          message: near ? `Unknown modifier __${mod.name} on ${prefix}${spec.name}. Did you mean __${near}?` : `Unknown modifier __${mod.name} on ${prefix}${spec.name}.`,
-          severity: "error",
+          message: `Unknown modifier __${mod.name} on ${prefix}${spec.name}, which Datastar ignores.` + (near ? ` Did you mean __${near}?` : ""),
+          severity: "warning",
           code: "unknown-modifier",
           link: attributeDoc(spec.name),
           fixes: near ? [{ title: `Change to __${near}`, start: mstart, end: mstart + mod.name.length, text: near }] : undefined,
@@ -614,7 +615,8 @@ export function rawKeyNote(spec: AttributeSpec, prefix: string, key: string): st
 
 /**
  * `data-on:click.prevent`: a modifier written after a dot, which Datastar reads as part of the
- * event name. Only for events; a dot in a signal key is a path.
+ * event name, so the listener waits for an event that never comes. An error, unlike an unknown
+ * modifier, which Datastar ignores. Only for events; a dot in a signal key is a path.
  */
 function validateDottedKey(attr: Attribute, parsed: { key: string | null }, spec: AttributeSpec, prefix: string): Issue[] {
   const key = parsed.key;
@@ -627,8 +629,8 @@ function validateDottedKey(attr: Attribute, parsed: { key: string | null }, spec
   return [{
     start: keyStart,
     end: keyStart + key.length,
-    message: `Datastar reads ${key} as ${keyReading(spec, key, key)}, dots and all. A modifier follows two underscores: ${prefix}${spec.name}:${fixed}.`,
-    severity: "warning",
+    message: `Datastar reads ${key} as ${keyReading(spec, key, key)}, dots and all, so the expression never runs on ${pieces[0]}. A modifier follows two underscores: ${prefix}${spec.name}:${fixed}.`,
+    severity: "error",
     code: "unknown-modifier",
     link: attributeDoc(spec.name),
     fixes: [{ title: `Change to ${fixed}`, start: keyStart, end: keyStart + key.length, text: fixed }],
@@ -1046,6 +1048,9 @@ function indicatorWithoutAction(tag: Tag, prefix: string, tagSource?: string): I
     return lower === `${prefix}indicator` || lower.startsWith(`${prefix}indicator:`) || lower.startsWith(`${prefix}indicator__`);
   });
   if (!indicator) return [];
+  // With both a key and a value, or neither, Datastar raises before the indicator exists, and the
+  // error on the same name says so.
+  if (!!parseAttributeName(asciiLowercase(indicator.name), prefix)?.key === !!indicator.value) return [];
   // Template syntax in a value, or attributes spread into the tag by name, leave what it sends unknown until rendered.
   if ((tagSource !== undefined && hasTemplateSyntax(tagSource)) || tag.attributes.some((a) => (a.value !== null && hasTemplateSyntax(a.value)) || !PLAIN_ATTRIBUTE_NAME.test(a.name))) return [];
   const sends = tag.attributes.some((a) => asciiLowercase(a.name).startsWith(prefix) && a.value !== null && BACKEND_ACTION.test(decodeEntities(a.value).text));

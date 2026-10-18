@@ -47,6 +47,10 @@ updates:
       # Held on the 0.11 line for the GraalVM 21 toolchain; see gradle/libs.versions.toml.
       - dependency-name: "org.graalvm.buildtools.native"
         update-types: ["version-update:semver-major"]
+      # The Netty testOldestKtor runs Ktor 3.0 on stays on 4.1, the line Ktor 3.0 was built
+      # against; see nettyOldestKtor in gradle/libs.versions.toml.
+      - dependency-name: "io.netty:netty-bom"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /editors/vscode
