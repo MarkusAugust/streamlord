@@ -2,6 +2,64 @@
 
 All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here.
 
+## 0.7.0
+
+- Expressions are judged as Datastar's client compiles them. Every `$name.path` is rewritten
+  first, so a signal used as a parameter, `$items.map($i => $i.name)`, is the syntax error it is
+  in the browser; a `;` inside a block or a `//` comment at the end of `data-text`, `data-show`
+  and the other attributes whose value is returned is an error; so is `await` at the top level.
+  `&dollar;` and the other references for ASCII punctuation are read as the browser reads them.
+- Six new checks, each tested against the 1.0.4 client: `literal-rewritten`, a `$name` in a
+  regular expression or in a template literal that also holds a `${...}`, which the client
+  rewrites; `signal-not-read`, a `'` in a comment, a regular expression or a template that makes
+  the client leave a later `$b` alone, and `$år`, since only ASCII follows a `$`; `signal-name`,
+  a name the client cannot hold or no `$name` reaches, such as `__proto__`, `constructor.x` or
+  `data-bind="$user"`, with the bracket form `$['my key']` named where one reaches it;
+  `filter-pattern`, a filter written as a string with flags, `'/^user/i'`, with the literal
+  `/^user/i` as the fix; `computed-value`, a value of `data-computed` that cannot be a function;
+  and `statement-split`, a `;` inside brackets in a value that is read.
+- The pre-1.0 syntax, `data-on-click`, `data-on-load` and `data-bind-value`, which 1.0 ignores,
+  is flagged with the 1.0 form as the fix. `data-on:click.prevent` is an error: the client
+  listens for an event named `click.prevent`, and the expression never runs on a click.
+- Modifiers are judged by what the client does with them. An unknown modifier, an argument on a
+  modifier that takes none (`__prevent.foo`) and an unknown flag (`__debounce.150ms.foo`) are
+  warnings that Datastar ignores them, and on `data-on` the warning names the event the
+  expression really listens for. `__debounce.1.5s`, which the client reads as 1 ms, is an error
+  with `__debounce.1500ms` as the fix, and a duration after a flag gets one message with the
+  reordered modifier as the fix.
+- An attribute with an empty key, such as `data-indicator:`, gets one warning that it does
+  nothing, with a fix that drops the colon where the attribute then runs.
+- A `data-indicator` with both a key and a value, or with neither, gets only the error Datastar
+  raises, and no longer the warning that the indicator tracks no request as well.
+- Fewer false findings: `$id` inside a JavaScript string, `@post('/x/$id')`, is a hint about the
+  server value it is; a `$my-value` the page declares with `__case.kebab`, or as `{'my-key': 1}`,
+  is no longer called unknown, and its fix no longer breaks the page; a key with template syntax
+  in it, `data-on:${evt}` or `attributes["data-on:$evt"]`, waits for the rendered page;
+  `data-on-signal-patch:filter` is accepted; and `dataSignals("foo-bar", "1")` declares
+  `$fooBar`, as the DSL writes it. A signal in the code of a template literal is now read.
+- Stream Inspector: it asks and reads as Datastar's client does. It sends the client's `Accept`,
+  in the request and in the curl line; reads a 200 that is not HTML, JSON or JavaScript as a
+  stream; shows any other response, any status but 200 among them, read up to 1 MiB; and shows
+  a closing comment, a message with only a `retry`, and an explicit `event: message`.
+- Stream Inspector: the signal store is kept as the client keeps it. A patch the client fails on
+  partway shows the keys it kept before the failing one, with the reason beside it, and says
+  that the bindings on the page then stop redrawing until it is reloaded. A `__proto__` in a
+  patch is refused, and the inspector says why.
+- Stream Inspector: your headers replace the client's own, `Content-Type` included, where a
+  second one was added. Copy as curl writes the body with `--data-raw`, so signals that start
+  with `@` are no longer read from a file. A requests file that is not JSON is not saved over;
+  a byte order mark no longer hides what `inspector.json` or `env.json` holds; and a
+  requests-file path that leaves the project falls back to the default.
+- The inspections take the severity you set in the inspection profile. The inspector shows
+  event names, content types and saved names as text, where one that started with `<html>` was
+  rendered. The `data-init="@get(...)"` live template is named `data-init-get`.
+- Completion keeps actions and modifiers in one order, by name with the Pro ones last, as in
+  VS Code; they no longer move up the list as you use them.
+- The plugin no longer sets colours for the Default and Darcula schemes, which won over every
+  theme built on them. Each Datastar token takes the colour your theme gives a standard key. In
+  IntelliJ's own schemes, an action, an attribute key and a modifier argument then show as plain
+  text.
+
 ## 0.6.1
 
 - Stream Inspector: a stream no longer stops with "Input length = 1" when a character such as

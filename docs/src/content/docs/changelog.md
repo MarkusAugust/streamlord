@@ -7,13 +7,86 @@ description: "What each release changed, and what it asks of your code."
 repository is authoritative and complete. This page carries only what changes how you write code,
 with a sentence about what to do.
 
-## Unreleased
+## 0.13.0
+
+**Drop `status` from the response helpers.** `respondDatastar`, `respondElements`,
+`respondSignals` and `respondScript` on Ktor, and `datastarElements`, `datastarSignals`,
+`datastarScript` and `toResponseEntity` on Spring, no longer take one: Datastar's client reads
+neither a stream nor a body with any status but 200, so any other made the response do nothing.
+Source that passes one, also as the first positional argument of `respondDatastar`, no longer
+compiles; delete the argument. Code compiled against 0.12 still links.
+
+**Every stream has a heartbeat now.** A stream silent for 30 seconds carries a `: keep-alive`
+comment, and one silent from the start gets its first after five seconds, or after the interval
+if that is shorter, on Ktor and on Spring WebMVC, unless you set `heartbeat = null` on the
+instance, in the plugin or on one stream. That first comment commits the response, so a block that
+waits longer than that and then fails cuts the stream off instead of answering with a status. On
+Spring WebMVC the heartbeat asks your `StreamAuthorisation` from an IO thread, without the
+request's thread-locals, Spring Security's context among them: read what `allows()` needs before
+the stream opens, or it refuses a stream that used to stay open. A test
+that calls `Streamlord.stream` under `runTest`, with a block that waits on a real thread, gets
+comment after comment while virtual time skips ahead: give it `Streamlord(heartbeat = null)`. A
+test that counts `events.messages` counts the comments too. See
+[Operations](/operations/#heartbeats) and [Testing](/testing/).
+
+**Pass the block after the parentheses.** `respondDatastar` and `datastarStream` take a
+`heartbeat` for one stream, and `datastarStream` a `timeout` and an `executor` as well, so a
+lambda or a function reference written inside the parentheses as the last positional argument,
+`datastarStream(streamlord, request, authorisation, { … })`, lands on `timeout` or `heartbeat`
+and no longer compiles. Write `datastarStream(streamlord, request, authorisation) { … }`, or name it
+`block = …`. Java source written against 0.12 no longer compiles either: the new parameters take
+a `kotlin.time.Duration`, which Java can only pass as `null`, and a `null` heartbeat means none
+at all. Binaries compiled against 0.12 still link.
+[Spring WebMVC](/spring-webmvc/#streams-that-stay-open) shows `timeout` and `executor`.
 
 **Signals in a body must be sent as `application/json`.** Datastar's client always does, so pages
 change nothing. A client of your own that posts signals without that `Content-Type` now gets
 `SignalsMediaTypeException`: set the header, or pass `requireJsonContentType = false`. On Ktor,
 map the exception to `415` in `StatusPages`; [Security](/security/#forms-from-other-sites) has
 the block and the reason.
+
+**Name signals the way Datastar's client reads them.** Names that reached the client as another
+name, or as none, now throw where you write them:
+
+- The pairs form of `dataSignals` camel-cases its keys, as the keyed form does:
+  `dataSignals("foo-bar" to 7)` declares `$fooBar`, where it declared `foo-bar`. Read `$fooBar` in
+  the page.
+- A dotted name in `patchSignals`, `removeSignals` and the pairs of `dataSignals` nests:
+  `patchSignals("form.email" to "x")` patches `$form.email`, where it sent one key that
+  `$form.email` did not reach. `patchSignals` throws on a name given twice.
+- A name that declares a signal is ASCII letters, digits and `_`, in parts joined by `.` or `-`.
+  `über`, `a:b`, a `/`, an empty part and a part such as `constructor`, `toString` or `__proto__`
+  throw `InvalidSignalNameException`.
+- A name that ends in `_` before a modifier, a name in `dataOn` or `dataClass` that mixes capitals
+  with a hyphen before a lower-case letter (`fooBar-baz`), a `BindModifiers.events` with a capital
+  or a `.`, a `BindModifiers.prop` Datastar cannot give back (`x2y`, `_value`, `my_prop`) and a
+  custom property with capitals in `dataStyle` are refused. A class from a library, such as
+  `MuiButton-root`, goes in the object form: `dataClass("{'MuiButton-root': ...}")`.
+
+[Casing](/casing/) has the rule the names now follow.
+
+**Durations, retries and ids the browser cannot honour throw.** A modifier duration that is
+negative or over `Int.MAX_VALUE` milliseconds, a flag such as `debounceLeading` without its
+duration, more than one of `half`, `full` and `threshold` on `dataOnIntersect`, an interval of
+zero, and a negative
+`retryMaxCount` or `retryScaler` throw where you write them. An event with a `retry` that is not a
+whole number of milliseconds from 1 to `Int.MAX_VALUE`, or an `eventId` that is not printable
+ASCII or has a space at either end, throws `DatastarEventValidationException`. `SignalFilter`
+refuses a Kotlin `Regex` that JavaScript reads otherwise or refuses, such as a possessive
+quantifier, `\A` or `\p{...}`: write the pattern as JavaScript would read it.
+
+**A test may go red that used to be green.** `streamlord-test` reads a stream as Datastar's client
+does: a `retry` or an `id` the client would not keep, a data line with no space after its key and
+signals that are not one JSON object fail the decode, and `assertSignal` no longer looks for a key
+holding a dot. The literals the HTML helpers write escape quotes, `&` and `\`, so `'it\'s'` is now
+`'it\x27s'`, and `dataSignals` writes `\` as `\u005c`. If a test compared that text, compare the
+new; if one fails on a stream, the browser was not doing what the test said.
+
+**The Jackson codecs refuse a missing or `null` primitive.** `{}` into
+`data class Delete(val id: Long)` used to reach the handler as `Delete(id=0)`; it is a `400` now.
+A Kotlin class needs `jackson-module-kotlin` on the mapper you hand the codec, and without it a
+decode throws `SignalsCodecException`: register the module. Text after the JSON value is a `400`
+too.
 
 **The Jackson codecs ignore keys your type does not name, even when your mapper refuses them.**
 A mapper with `FAIL_ON_UNKNOWN_PROPERTIES` on, as `jacksonObjectMapper()` has it, no longer fails
@@ -33,6 +106,24 @@ through because `Signals` was named now fails with `SignalsCodecException` until
 `typeOf<List<Signals>>() to ListSerializer(Signals.serializer())` to `serializers`; naming
 `Signals` alone does not reach the list. [Native image](/native-image/#2-name-your-serializers)
 shows it.
+
+**On Ktor, a failed stream is cut, so Datastar's client reconnects.** The frames the block sent
+before it threw go out first. Tomcat and Jetty ended such a stream as if it had finished, and now
+cut it as CIO and Netty do. On Ktor's servlet engine, Streamlord throws a stream's failure only
+once the engine's response writer has finished. Catch inside the block what the page should show;
+[Ktor](/ktor/#when-the-block-fails) says which engines are cut and shows how to end a
+`respondBytesWriter` of your own.
+
+**`StreamlordExceptionHandler` takes the exception in its handlers.** Only if you call
+`signalsTooLarge` or `signalsUnreadable` yourself: pass the exception. The 0.12 signatures remain,
+hidden, for code compiled against them, and the new `signalsNotJson` answers
+`SignalsMediaTypeException` with `415`.
+
+**`streamlord-analysis` changed signatures.** Only if you call it yourself:
+`ExpressionValidator.validate`, `MarkupValidator.validateAttributes`, `Requests.parseRequestsFile`,
+`MarkupOptions`, `RequestsFile` and `AttributeSpec` take new parameters with defaults, so Kotlin
+source compiles, but code compiled against 0.12 does not link until you rebuild it. `keyName` is
+gone; it named a signal otherwise than the client does.
 
 ## 0.12.0
 
