@@ -324,9 +324,21 @@ All notable changes to Streamlord are recorded here. The format follows
   in an event, `data-on:click.prevent`, is an error rather than a warning, since the client then
   listens for an event named `click.prevent` and the expression never runs on a click. The shared
   corpus holds both editors to these severities.
-- Both editors list actions and modifiers in completion by name, Pro actions after the rest. VS
-  Code handed them over in the catalog's order and IntelliJ left the order to the platform; each
-  now sets it, and the same lists are tested in both.
+- Both editors give an argument on a modifier that takes none, `__prevent.foo` or
+  `__prevent.stop`, and a flag a timing modifier does not know, `__debounce.150ms.foo`, as a
+  warning rather than an error, and say that Datastar ignores it: the 1.0.4 client still prevents
+  the default or waits the 150 ms and drops the rest, measured in Chrome. With `__prevent.stop` the
+  click still reaches the parent, and the warning offers `__prevent__stop`. An argument that
+  changes what the client does stays an error: `__case.foo`, which leaves the key as written, a
+  flag before the duration, and a duration with a fraction, `__debounce.1.5s`, which the client
+  reads as 1 ms.
+- The warning on an unknown modifier in `data-on` says which event the expression listens for. With
+  `data-on:my__event` it is `my`: the client cuts the event name at the first `__`, so an event
+  named `my__event` never reaches the expression, measured in Chrome.
+- In IntelliJ, actions and modifiers in completion keep their order after use: by name, Pro
+  actions after the rest, as in VS Code. The platform used to move an item up the list once the
+  user had picked it a few times. A test picks items with the platform's usage statistics on and
+  checks that the order holds.
 
 ### Removed
 
@@ -335,6 +347,13 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- `data-indicator:`, a colon with nothing after it, got the error that Datastar raises
+  `KeyOrValueRequired`. The 1.0.4 client raises nothing: it looks for an attribute named
+  `indicator:`, finds none and leaves the element alone, measured in Chrome. Both editors now warn
+  that an attribute with an empty key does nothing, on every Datastar attribute (`data-on:` was an
+  error that it needs a key, `data-text:` one that it takes none, and `data-signals:="{a: 1}"` got
+  nothing), and offer to drop the colon where the attribute works without a key.
+  `data-indicator:="busy"` no longer gets the warning that nothing on the element sends a request.
 - `data-indicator` with neither a key nor a value, or with both, got the error Datastar raises and
   also the warning that nothing on the element sends a request. VS Code showed both, IntelliJ hid
   the warning under the error. Both editors now give only the error.

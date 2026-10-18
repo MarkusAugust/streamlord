@@ -448,6 +448,22 @@ export function validateAttributes(tag: Tag, prefix: string, tagSource?: string,
       continue;
     }
     const spec = parsed.spec;
+    if (parsed.key === "" && !templated) {
+      // data-indicator: the client splits the key off at a colon with something after it, so it
+      // looks up an attribute named indicator:, finds none and leaves the element alone.
+      const colonEnd = attr.nameStart + prefix.length + spec.name.length + 1;
+      issues.push({
+        start: attr.nameStart,
+        end: nameEnd,
+        message: `${prefix}${spec.name}: has an empty key, so Datastar reads ${spec.name}: as an attribute it does not have and does nothing with it. ` +
+          (spec.keyRequired ? `The key follows the colon, e.g. ${spec.forms[0] ?? ""}.` : `Without the colon it is ${prefix}${spec.name}.`),
+        severity: "warning",
+        code: "unknown-attribute",
+        link: attributeDoc(spec.name),
+        fixes: spec.keyRequired ? undefined : [{ title: `Change to ${prefix}${spec.name}`, start: colonEnd - 1, end: colonEnd, text: "" }],
+      });
+      continue;
+    }
     if (spec.pro) {
       issues.push({ start: attr.nameStart, end: nameEnd, message: `${prefix}${spec.name} is a Datastar Pro attribute; it needs the Pro bundle.`, severity: "hint", code: "pro-attribute", link: attributeDoc(spec.name) });
     }
@@ -481,6 +497,9 @@ export function validateAttributes(tag: Tag, prefix: string, tagSource?: string,
     if (spec.onlyOn && !spec.onlyOn.includes(tag.name)) {
       issues.push({ start: attr.nameStart, end: nameEnd, message: `${prefix}${spec.name} only works on <${spec.onlyOn.join(">, <")}>.`, severity: "warning", code: "wrong-element" });
     }
+    // data-on:my__event: the event is the key before the first __, so the name the author may have
+    // meant whole is cut there. With __case the client recases it, so the name is left unsaid.
+    const listensFor = spec.name === "on" && parsed.key && !parsed.modifiers.some((m) => m.name === "case") ? `, so it listens for the event ${parsed.key}` : "";
     for (const mod of templated ? [] : parsed.modifiers) {
       const mend = attr.nameStart + mod.offset + mod.text.length;
       // An empty modifier has no text to underline: the `__` that opens it is marked.
@@ -495,7 +514,7 @@ export function validateAttributes(tag: Tag, prefix: string, tagSource?: string,
           issues.push({
             start: mstart,
             end: mend,
-            message: `Unknown modifier __${mod.name} on ${prefix}${spec.name}, which Datastar ignores. A modifier's arguments follow a dot: __${dotted}.`,
+            message: `Unknown modifier __${mod.name} on ${prefix}${spec.name}, which Datastar ignores${listensFor}. A modifier's arguments follow a dot: __${dotted}.`,
             severity: "warning",
             code: "unknown-modifier",
             link: attributeDoc(spec.name),
@@ -507,7 +526,7 @@ export function validateAttributes(tag: Tag, prefix: string, tagSource?: string,
         issues.push({
           start: mstart,
           end: mend,
-          message: `Unknown modifier __${mod.name} on ${prefix}${spec.name}, which Datastar ignores.` + (near ? ` Did you mean __${near}?` : ""),
+          message: `Unknown modifier __${mod.name} on ${prefix}${spec.name}, which Datastar ignores${listensFor}.` + (near ? ` Did you mean __${near}?` : ""),
           severity: "warning",
           code: "unknown-modifier",
           link: attributeDoc(spec.name),
@@ -1045,7 +1064,8 @@ const MODIFIER_WORD = /^[a-z][a-z0-9]*(?:_[A-Za-z0-9]+)+$/;
 function indicatorWithoutAction(tag: Tag, prefix: string, tagSource?: string): Issue[] {
   const indicator = tag.attributes.find((a) => {
     const lower = asciiLowercase(a.name);
-    return lower === `${prefix}indicator` || lower.startsWith(`${prefix}indicator:`) || lower.startsWith(`${prefix}indicator__`);
+    // data-indicator: with an empty key is no indicator at all, and says so on its own.
+    return lower === `${prefix}indicator` || lower.startsWith(`${prefix}indicator__`) || (lower.startsWith(`${prefix}indicator:`) && !!parseAttributeName(lower, prefix)?.key);
   });
   if (!indicator) return [];
   // With both a key and a value, or neither, Datastar raises before the indicator exists, and the
@@ -1084,23 +1104,27 @@ function dottedArguments(name: string, spec: AttributeSpec): string | null {
 function validateModifierArgs(spec: AttributeSpec["modifiers"][number], args: string[], start: number, end: number, attrName: string, attribute: AttributeSpec, present: string[] = []): Issue[] {
   const issues: Issue[] = [];
   const fail = (message: string, fixes?: Issue["fixes"]) => issues.push({ start, end, message, severity: "error", code: "modifier-args", ...(fixes ? { fixes } : {}) });
+  // Arguments the client never reads: the modifier still does what it does, so these are warnings.
+  const ignored = (message: string, fixes?: Issue["fixes"]) => issues.push({ start, end, message, severity: "warning", code: "modifier-args", ...(fixes ? { fixes } : {}) });
+  const unknownFlag = (f: string) => ignored(`Unknown flag .${f} for __${spec.name}, which Datastar ignores. Allowed: ${(spec.flags ?? []).map((x) => "." + x).join(", ") || "none"}.`);
   switch (spec.type) {
     case "flag": {
       // __prevent.stop: a second modifier joined with a dot, read as an argument.
+      const dropped = `__${spec.name} takes no arguments; Datastar ignores ${args.map((a) => "." + a).join("")}.`;
       const siblings = attribute.modifiers.filter((m) => m.type === "flag" && m.name !== spec.name).map((m) => m.name);
       if (args.length > 0 && args.every((a) => siblings.includes(a))) {
         // Each once, and not one the attribute already has.
         const joined = [...new Set(args)].filter((a) => !present.includes(a)).map((a) => "__" + a).join("");
         const at = start + spec.name.length;
         if (joined.length === 0) {
-          fail(`__${spec.name} takes no arguments.`, [{ title: `Change to __${spec.name}`, start: at, end, text: "" }]);
+          ignored(dropped, [{ title: `Change to __${spec.name}`, start: at, end, text: "" }]);
         } else {
-          fail(`__${spec.name} takes no arguments. Each modifier starts with two underscores: __${spec.name}${joined}.`, [
+          ignored(`${dropped} Each modifier starts with two underscores: __${spec.name}${joined}.`, [
             { title: `Change to __${spec.name}${joined}`, start: at, end, text: joined },
           ]);
         }
       } else if (args.length > 0) {
-        fail(`__${spec.name} takes no arguments.`);
+        ignored(dropped);
       }
       break;
     }
@@ -1119,7 +1143,7 @@ function validateModifierArgs(spec: AttributeSpec["modifiers"][number], args: st
           `Datastar reads the first argument of __${spec.name} as its duration, so with .${d} first it reads none and does not wait. The duration comes first${unknown.length === 0 ? `: ${fixed}` : ""}.`,
           unknown.length === 0 ? [{ title: `Change to ${fixed}`, start: start + spec.name.length, end, text: "." + ordered.join(".") }] : undefined,
         );
-        for (const f of unknown) if (!DURATION.test(f)) fail(`Unknown flag .${f} for __${spec.name}. Allowed: ${(spec.flags ?? []).map((x) => "." + x).join(", ") || "none"}.`);
+        for (const f of unknown) if (!DURATION.test(f)) unknownFlag(f);
         break;
       }
       if (d && /^\d+$/.test(d) && flags[0] !== undefined && /^\d+(ms|s)?$/.test(flags[0])) {
@@ -1133,14 +1157,14 @@ function validateModifierArgs(spec: AttributeSpec["modifiers"][number], args: st
           `Datastar reads __${spec.name}.${d}.${flags[0]} as ${d} ms: a dot separates arguments, so a duration has no fraction.${whole ? ` Write __${spec.name}.${whole}.` : ""}`,
           fixable ? [{ title: `Change to __${spec.name}.${whole}`, start: start + spec.name.length, end: start + spec.name.length + 2 + d.length + flags[0].length, text: `.${whole}` }] : undefined,
         );
-        for (const f of flags.slice(1)) if (!known(f)) fail(`Unknown flag .${f} for __${spec.name}. Allowed: ${(spec.flags ?? []).map((x) => "." + x).join(", ") || "none"}.`);
+        for (const f of flags.slice(1)) if (!known(f)) unknownFlag(f);
         break;
       }
       if (!d || !DURATION.test(d)) {
         fail(`__${spec.name} needs a duration such as __${spec.name}.500ms or __${spec.name}.1s.`);
         if (!d) issues[issues.length - 1]!.fixes = [{ title: `Add .500ms`, start: start + spec.name.length, end: start + spec.name.length, text: ".500ms" }];
       }
-      for (const f of flags) if (!(spec.flags ?? []).includes(f)) fail(`Unknown flag .${f} for __${spec.name}. Allowed: ${(spec.flags ?? []).map((x) => "." + x).join(", ") || "none"}.`);
+      for (const f of flags) if (!known(f)) unknownFlag(f);
       break;
     }
     case "enum": {

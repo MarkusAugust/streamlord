@@ -31,7 +31,7 @@ class TemplateTextTest : BasePlatformTestCase() {
         // The value is wrapped in `return (...)` as Datastar compiles it, so the text ends at a `)` rather than at the end of the input.
         assertEquals(
             listOf(
-                "Unknown modifier __debunce on data-on, which Datastar ignores. Did you mean __debounce?",
+                "Unknown modifier __debunce on data-on, which Datastar ignores, so it listens for the event click. Did you mean __debounce?",
                 "Datastar expression: Unexpected token",
             ),
             descriptions("template.jte").sorted().reversed(),
