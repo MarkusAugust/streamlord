@@ -676,4 +676,47 @@ class InspectorTest : BasePlatformTestCase() {
         val store = UIUtil.findComponentsOfType(panel, JBTextArea::class.java).single { it.text.startsWith("{\n") }
         assertEquals("""{"user":{"name":"a","age":1},"list":[1,2,3]}""", JsonParser.parse(store.text).toJson())
     }
+
+    fun `test a patch that fails partway leaves the keys before it in the store, as the client does`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        val apply = panel.javaClass.getDeclaredMethod("applyFrame", DatastarFrame::class.java).apply { isAccessible = true }
+
+        fun patch(signals: String) =
+            apply.invoke(panel, DatastarFrame("datastar-patch-signals", null, null, mapOf("signals" to signals), "", 0L))
+        patch("""{"a":[1,2]}""")
+        val store = UIUtil.findComponentsOfType(panel, JBTextArea::class.java).single { it.text.startsWith("{\n") }
+        patch("""{"b":1,"a":{"0":7,"length":-1},"c":2}""")
+        assertEquals("""{"a":[7,2],"b":1}""", JsonParser.parse(store.text).toJson())
+        val labels = UIUtil.findComponentsOfType(panel, JLabel::class.java).map { it.text }
+        assertTrue(labels.toString(), "The signal store cannot take this patch: Invalid array length -1 in a signal patch" in labels)
+        patch("""{"d":3}""")
+        assertEquals("""{"a":[7,2],"b":1,"d":3}""", JsonParser.parse(store.text).toJson())
+    }
+
+    // Measured in headless Chrome with the 1.0.4 bundle: the characters that may stand on both sides
+    // of `true` in onlyIfMissing and still make it true.
+    fun `test onlyIfMissing is trimmed as JavaScript trims it`() {
+        val measured =
+            "0009 000a 000b 000c 000d 0020 00a0 1680 2000 2001 2002 2003 2004 2005 2006 2007 2008 2009 200a 2028 2029 202f 205f 3000 feff"
+        val kept = (0..0xFFFF).map { it.toChar() }.filter { InspectorPanel.isStringTrue("${it}true$it") }
+        assertEquals(measured, kept.joinToString(" ") { "%04x".format(it.code) })
+        assertFalse(InspectorPanel.isStringTrue("TRUE"))
+        assertFalse(InspectorPanel.isStringTrue(null))
+
+        val panel = InspectorPanel(project, testRootDisposable)
+        val apply = panel.javaClass.getDeclaredMethod("applyFrame", DatastarFrame::class.java).apply { isAccessible = true }
+
+        fun patch(
+            signals: String,
+            onlyIfMissing: String,
+        ) {
+            val args = mapOf("signals" to signals, "onlyIfMissing" to onlyIfMissing)
+            apply.invoke(panel, DatastarFrame("datastar-patch-signals", null, null, args, "", 0L))
+        }
+        patch("""{"a":1}""", "")
+        patch("""{"a":2,"b":2}""", "\uFEFFtrue\u2028")
+        patch("""{"b":3,"c":3}""", "\u001Ctrue")
+        val store = UIUtil.findComponentsOfType(panel, JBTextArea::class.java).single { it.text.startsWith("{\n") }
+        assertEquals("""{"a":1,"b":3,"c":3}""", JsonParser.parse(store.text).toJson())
+    }
 }

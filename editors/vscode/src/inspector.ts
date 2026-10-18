@@ -3,7 +3,7 @@ import { baseUrlSuggestion, compactSignals, describeVariables, emptyBodyHint, EN
 import type { RequestStore } from "./requestStore.ts";
 import type { RunningServers } from "./serverLog.ts";
 import type { Route } from "./routes.ts";
-import { mergePatchAsClient, type DatastarFrame } from "./sse.ts";
+import { mergePatchAsClient, SignalPatchError, type DatastarFrame } from "./sse.ts";
 import { openStream } from "./streamClient.ts";
 
 /**
@@ -235,6 +235,11 @@ export class Inspector {
       this.signals = mergePatchAsClient(this.signals, patch, (frame.args.onlyIfMissing ?? "").trim() === "true");
       this.post({ type: "signals", signals: this.signals });
     } catch (e) {
+      // The client keeps the keys it set before the one it failed on, and so does the store shown.
+      if (e instanceof SignalPatchError) {
+        this.signals = e.store;
+        this.post({ type: "signals", signals: this.signals });
+      }
       this.post({ type: "error", message: `The signal store cannot take this patch: ${(e as Error).message}` });
     }
   }

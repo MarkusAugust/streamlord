@@ -35,14 +35,15 @@ class MergePatchAsClientTest {
      * the 1.0.4 source (engine/signals.ts) under Bun and happy-dom, a fresh store per scenario, and
      * `client` is `JSON.stringify` of the root after each step, or `THROWS` and the root once the
      * step threw. The audit's 317 scenarios (17 by hand, 300 at random with seed 7) plus the cases
-     * around `length`, a throw partway through a patch and key order. A scenario with a `store`
+     * around `length`, a throw partway through a patch and key order, a string patch of surrogate
+     * pairs, and keys named `__proto__` or after what `Object.prototype` holds. A scenario with a `store`
      * starts from that text as parsed here, out of JavaScript's key order, where the client starts
      * from `JSON.parse` of it.
      */
     @Test
     fun `folds each step as the client's own mergePatch does`() {
         val scenarios = JsonParser.parse(javaClass.getResource("/client-merge-differential.json")!!.readText()) as JsonArray
-        assertEquals(329, scenarios.size)
+        assertEquals(339, scenarios.size)
         for (scenario in scenarios.objects()) {
             var store = scenario.string("store")?.let(JsonParser::parseObject) ?: JsonObject.EMPTY
             for ((i, step) in scenario.array("steps")!!.objects().withIndex()) {

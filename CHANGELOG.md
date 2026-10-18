@@ -62,7 +62,9 @@ All notable changes to Streamlord are recorded here. The format follows
   a value that is read.
 - `SignalPatchException` in `streamlord-core`, an `IllegalArgumentException` that
   `mergePatchAsClient` throws for a patch the client fails on partway through; its `store` is the
-  store as the client keeps it then, with the keys before the failing one applied.
+  store as the client keeps it then, with the keys before the failing one applied. A key
+  `__proto__` throws it when it holds an object or an array, which the client sets as the
+  prototype; with anything else under it the key is passed over, as the client passes it over.
 
 - `SignalsMediaTypeException`, `Streamlord.requireJsonContentType` with the same setting on the
   Ktor plugin, and `Streamlord.MAX_SIGNALS_DEPTH`; see Changed, Fixed and Security.
@@ -230,9 +232,14 @@ All notable changes to Streamlord are recorded here. The format follows
   = "..."`, kotlinx.html's own form, is judged as the attribute it writes, interpolation trap
   included.
 - Both Stream Inspectors keep the signal store as the client keeps it, see `mergePatchAsClient`,
-  and read `onlyIfMissing` with its spaces trimmed, as the client does. The user's headers replace
-  the client's own, `Content-Type` included, where IntelliJ added a second one and VS Code
-  overrode the user's. Copy as curl writes the body with `--data-raw`, since with `--data` curl
+  and read `onlyIfMissing` with JavaScript's `trim()`, as the client does, which takes U+FEFF and
+  leaves U+001C to U+001F where Kotlin's does the opposite. A patch that fails partway leaves the
+  keys before the failing one in the store shown, as the client keeps them, with the reason
+  beside it. VS Code's port of the fold answers to the same 339 scenarios as the core's, run
+  through the client's own `mergePatch`, so it now turns a `length` into a number as the browser
+  does, fails on an object under `length` with `onlyIfMissing` too, and splits a string patch by
+  UTF-16 unit. The user's headers replace the client's own, `Content-Type` included, where
+  IntelliJ added a second one and VS Code overrode the user's. Copy as curl writes the body with `--data-raw`, since with `--data` curl
   read signals that start with `@` from the file they name. Signals written as an object in
   `inspector.json` are sent as written, where VS Code rounded a number past 2^53 and the two
   editors spelled them differently.
@@ -310,6 +317,12 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- The Templates page and the roadmap said a template tag the analysis does not know gives no
+  findings in expression attributes. That holds for Qute's `{name}`. Closure's `{$name}` and
+  Rocker's `@name` in an attribute that returns a value, such as `data-text`, are an
+  `expression-syntax` error in both editors, as the same text is a `SyntaxError` in the client,
+  measured in Chrome. The pages now say so and show the tag inside a JavaScript string, which
+  gives no findings.
 - The editors read a page's signals as Datastar's client stores them. `signal-kebab` said "no key
   declares" a `$my-key` the page declares with its hyphen, in the object form
   (`{'my-key': 1}`), in the value of `data-bind`, `data-ref` or `data-indicator`, or as

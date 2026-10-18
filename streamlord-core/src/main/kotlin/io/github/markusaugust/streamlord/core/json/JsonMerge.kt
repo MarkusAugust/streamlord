@@ -57,8 +57,9 @@ public class SignalPatchException(
  * fills a hole with `""` on the first read, so a hole is missing to `onlyIfMissing` only until then.
  *
  * More than [holeLimit] indices past the end of an array throws rather than fill memory with the
- * holes the client never allocates, and so does a key named `__proto__`, which the client takes
- * for the prototype and fails on or does nothing with. A patch that throws, here or in the
+ * holes the client never allocates, and so does a key named `__proto__` that holds an object or an
+ * array, which the client takes for the prototype and fails on or corrupts the store with. One that
+ * holds anything else is passed over, as the client passes it over. A patch that throws, here or in the
  * client, has its earlier keys applied: the exception is a [SignalPatchException] that carries
  * the store as the client keeps it.
  *
@@ -159,7 +160,11 @@ private class ClientMerge(
         node: Any,
     ) {
         for ((key, value) in inJsOrder(patch)) {
-            require(key != "__proto__") { "The client cannot hold a signal named __proto__" }
+            // The client sets an object or array as the prototype, and does nothing with anything else.
+            if (key == "__proto__") {
+                require(value !is JsonObject && value !is JsonArray) { "The client cannot hold a signal named __proto__" }
+                continue
+            }
             if (value is JsonNull) {
                 if (!ifMissing) delete(node, key)
             } else {
