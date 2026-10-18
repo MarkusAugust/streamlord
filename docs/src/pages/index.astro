@@ -4,19 +4,16 @@ import sobernetics from "../assets/sobernetics.svg?raw"
 import CodeBlock from "../components/CodeBlock.astro"
 import Logo from "../components/Logo.astro"
 import VersionBadge from "../components/VersionBadge.astro"
+import { SERVICE } from "../config"
 import { FAVICON } from "../icon"
-import { NAVIGATION } from "../navigation"
-import { DESCRIPTION, TAGLINE } from "../project"
+import { href, NAVIGATION } from "../navigation"
+import { DESCRIPTION, MAVEN_GROUP, TAGLINE, VERSION } from "../project"
 import { datastarLangs, hangingIndent, shikiThemes } from "../shiki"
 import "../styles/global.css"
 
 // Written the way it would be written, not the way a phone would like it. A narrow screen
 // wraps the long line with a hanging indent (see hangingIndent in src/shiki.ts), and this
 // block is a poster on every screen wide enough to hold it, which is most of them.
-// The one section of the list the hero has just made a promise about, so the eye should find
-// it without being shouted at. Named here rather than in the markup, because it is a choice.
-const FEATURED = "The tooling"
-
 const SAMPLE = `get("/feed") {
     call.respondDatastar {
         patchElements(selector = "#feed", mode = ElementPatchMode.APPEND) {
@@ -25,6 +22,74 @@ const SAMPLE = `get("/feed") {
         patchSignals("heads" to 13)
     }
 }`
+
+// The handler above is what streamlord-live runs at /feed, with one difference: the count
+// comes from the page's signals and goes back one higher, so a press from 13 is 14. These two
+// lines are what a test says about that response; both names are streamlord-test's own.
+const ASSERTED = `events.assertPatchElements(selector = "#feed", mode = ElementPatchMode.APPEND, containing = "A new head")
+events.assertSignal("heads", 14)`
+
+// What the judge's field holds on arrival: the one mistake every Kotlin project makes first.
+const PREFILL = `dataOnClick("$count++")`
+
+// Three more, each a different verdict: a near-miss attribute, a modifier with the wrong
+// separator, and a hyphen the browser reads as part of a signal's name. The third is Kotlin,
+// so the reader sees both analyses answer.
+const TRIES = [
+  { label: "data-onn:click", source: `<button data-onn:click="1">` },
+  { label: "click.prevent", source: `<div data-on:click.prevent="$go()">` },
+  { label: "$a-b in Kotlin", source: `dataText("\${'$'}a-b")` },
+]
+
+// A JavaScript string literal for a Datastar expression. Single quotes, so the double quotes
+// the snippets are full of need no escaping, and the client leaves a `$` inside a string alone.
+const js = (text: string) =>
+  `'${text.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`
+
+// The test from the testing page that reads a project's own sources, as it stands there.
+const CI_TEST = `private val analyzer = Analyzer()
+
+@Test
+fun \`no source file interpolates a signal into Datastar\`() {
+    val offenders =
+        java.io.File("src/main/kotlin")
+            .walkTopDown()
+            .filter { it.extension == "kt" }
+            .flatMap { file ->
+                val source = file.readText()
+                analyzer
+                    .analyzeKotlin(source)
+                    .filter { it.severity == Severity.ERROR }
+                    .map { it.format(file.path, source) }
+            }.toList()
+
+    assertTrue(offenders.isEmpty(), offenders.joinToString("\\n"))
+}`
+
+const DEPENDENCY = `testImplementation("${MAVEN_GROUP}:streamlord-analysis:${VERSION}")`
+
+const TOOLS = [
+  {
+    title: "The SDK",
+    text: "Adapters for Ktor and Spring over one core. The kotlinx.html DSL, and codecs for kotlinx.serialization and Jackson.",
+    href: "/install/",
+  },
+  {
+    title: "Test assertions",
+    text: "datastarEvents reads the response back into the events it carried. Assert the patch and the signal you meant, nothing else.",
+    href: "/testing/",
+  },
+  {
+    title: "The analysis",
+    text: "The $ check as a library. One test walks src/main/kotlin and fails CI on a signal Kotlin swallowed.",
+    href: "/testing/#the--check-in-ci-with-no-editor-open",
+  },
+  {
+    title: "The editors",
+    text: "VS Code and IntelliJ. Datastar read as a language inside attributes and Kotlin strings, with the fix a click away.",
+    href: "/editors/",
+  },
+]
 ---
 
 <!doctype html>
@@ -48,6 +113,15 @@ const SAMPLE = `get("/feed") {
     />
     <link rel="canonical" href={Astro.site} />
     <link rel="icon" href={FAVICON} type="image/svg+xml" />
+    <!--
+      Datastar, because the page runs the example rather than printing it. The button under
+      the code and the judge's field are attributes and signals against streamlord-live, and
+      there is no script of ours between a press and the server.
+    -->
+    <script
+      type="module"
+      src="https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.4/bundles/datastar.js"
+    ></script>
   </head>
   <body>
     <a class="fs-skip-link" href="#content">Skip to content</a>
@@ -66,12 +140,11 @@ const SAMPLE = `get("/feed") {
         <VersionBadge />
         <p class="hero__line">{TAGLINE}</p>
         <p class="hero__sub">
-          Datastar lives in strings your compiler never reads. Streamlord checks them anyway:
-          in your editor as you type, when the event is built, and before a byte reaches the
-          browser. Ktor and Spring included.
+          An SDK for Ktor and Spring, assertions for your tests, an analysis for your CI, and
+          two editor extensions.
         </p>
 
-        <div class="hero__sample">
+        <div class="sample">
           <Code
             code={SAMPLE}
             lang="kotlin"
@@ -79,6 +152,46 @@ const SAMPLE = `get("/feed") {
             langs={datastarLangs}
             transformers={[hangingIndent]}
           />
+        </div>
+
+        <!--
+          The handler above, run. The signals stand on the block itself, so the count the
+          server reads is the one on the page: 13 on arrival, one more per press. `wire` tells
+          the service there is a #wire to patch the frames into, as the live page does.
+        -->
+        <div class="run" data-signals="{heads: 13, wire: true}">
+          <div class="run__row">
+            <button class="fs-button" type="button" data-on:click={`@get('${SERVICE}/feed')`}>
+              Run it
+            </button>
+            <p class="run__heads">
+              <code>$heads</code>
+              <span class="run__count" data-text="$heads"></span>
+            </p>
+          </div>
+
+          <ul id="feed" class="run__feed" aria-live="polite"></ul>
+
+          <div class="run__wire">
+            <p class="run__label">On the wire</p>
+            <div id="wire" class="run__frames">
+              <p class="fs-paragraph" data-size="small">
+                Press Run. The frames the server sends come back here, encoded by the same
+                encoder the golden-file tests check.
+              </p>
+            </div>
+          </div>
+
+          <p class="run__label">Asserted the same way in your tests:</p>
+          <div class="sample sample--wrap">
+            <Code
+              code={ASSERTED}
+              lang="kotlin"
+              themes={shikiThemes}
+              langs={datastarLangs}
+              transformers={[hangingIndent]}
+            />
+          </div>
         </div>
 
         <!--
@@ -117,26 +230,124 @@ const SAMPLE = `get("/feed") {
     </header>
 
     <main class="page" id="content">
-      {
-        NAVIGATION.map((section) => (
-          <section class="section" data-featured={section.title === FEATURED ? "" : undefined}>
-            <h2 class="fs-heading" data-size="s">{section.title}</h2>
-            <ul class="fs-list" data-variant="plain">
-              {section.pages.map((page) => (
-                <li>
-                  <a class="fs-link" href={`/${page.slug}/`}>
-                    {page.title}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))
-      }
+      <!--
+        The editors' check, behind a route. `data-signals` stands before `data-on-signal-patch`
+        on purpose: in the other order the client sees `source` arrive and posts once on load.
+        The field binds the signal and the three buttons set it, so every way of changing the
+        text reaches the judge through the same debounced watch.
+      -->
+      <section
+        class="block judge"
+        data-signals={`{source: ${js(PREFILL)}}`}
+        data-on-signal-patch__debounce.300ms={`@post('${SERVICE}/judge')`}
+        data-on-signal-patch-filter="{include: /^source$/}"
+      >
+        <h2 class="fs-heading" data-size="m">Judge it yourself.</h2>
+        <p class="block__lead">The same analysis your editor and your CI run. Type, and it judges.</p>
+
+        <label class="fs-label" for="source">Markup or Kotlin</label>
+        <textarea
+          class="fs-textarea judge__source"
+          id="source"
+          rows="3"
+          maxlength="1024"
+          spellcheck="false"
+          data-bind:source
+        ></textarea>
+
+        <div class="judge__tries">
+          <span class="judge__or">Or try</span>
+          {
+            TRIES.map((attempt) => (
+              <button
+                class="fs-button"
+                data-variant="secondary"
+                type="button"
+                data-on:click={`$source = ${js(attempt.source)}`}
+              >
+                <code>{attempt.label}</code>
+              </button>
+            ))
+          }
+        </div>
+
+        <div id="verdict" class="judge__box" aria-live="polite">
+          <p class="fs-paragraph judge__how" data-size="small">
+            Change a character, or press one of the three, and the verdict lands here.
+          </p>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2 class="fs-heading" data-size="m">Four tools, designed together. Adopt one, or all of them.</h2>
+        <div class="tools">
+          {
+            TOOLS.map((tool) => (
+              <a class="fs-card tool" data-interactive href={tool.href}>
+                <span class="fs-card__title">{tool.title}</span>
+                <p class="fs-paragraph" data-size="small">{tool.text}</p>
+              </a>
+            ))
+          }
+        </div>
+        <p class="facts">
+          <a class="fs-link" href="/architecture/">The core imports no framework.</a>
+          <a class="fs-link" href="/spring-webmvc/">Spring auto-configures nothing.</a>
+          <a class="fs-link" href="/install/">The install page resolves its trees from the build.</a>
+        </p>
+      </section>
+
+      <section class="block">
+        <h2 class="fs-heading" data-size="m">Try it on the repo you have open right now.</h2>
+        <p class="block__lead">
+          One dependency and one test, and every Datastar string under{" "}
+          <code>src/main/kotlin</code> is read before it ships.
+        </p>
+        <div class="sample">
+          <Code
+            code={DEPENDENCY}
+            lang="kotlin"
+            themes={shikiThemes}
+            langs={datastarLangs}
+            transformers={[hangingIndent]}
+          />
+        </div>
+        <div class="sample">
+          <Code
+            code={CI_TEST}
+            lang="kotlin"
+            themes={shikiThemes}
+            langs={datastarLangs}
+            transformers={[hangingIndent]}
+          />
+        </div>
+      </section>
     </main>
 
-    <footer class="colophon">
-      <a class="sobernetics" href="https://sobernetics.no"><Fragment set:html={sobernetics} /></a>
+    <footer class="foot">
+      <!-- The whole site, one line a section, so the foot of the poster is also its map. -->
+      <nav class="map" aria-label="All pages">
+        {
+          NAVIGATION.map((section) => (
+            <p class="map__line">
+              <span class="map__section">{section.title}</span>
+              {section.pages.map((page, i) => (
+                <>
+                  {/* Spaces inside the span, so a line may break at a dot: the template puts none between elements. */}
+                  {i > 0 && <span class="map__dot" aria-hidden="true"> · </span>}
+                  <a class="fs-link" href={href(page.slug)}>
+                    {page.title}
+                  </a>
+                </>
+              ))}
+            </p>
+          ))
+        }
+      </nav>
+
+      <div class="colophon">
+        <a class="sobernetics" href="https://sobernetics.no"><Fragment set:html={sobernetics} /></a>
+      </div>
     </footer>
 
     <CodeBlock />
@@ -144,14 +355,36 @@ const SAMPLE = `get("/feed") {
     <style>
       /* The foot of the page: a rule and real room above it, so the mark reads as a signature
          under the content rather than as another line of it. */
-      .colophon {
+      .foot {
         max-width: 60rem;
         margin: var(--fs-spacing-16) auto var(--fs-spacing-10);
-        padding: var(--fs-spacing-5) var(--fs-spacing-6) 0;
+        padding: var(--fs-spacing-5) var(--fs-spacing-5) 0;
         border-top: 1px solid var(--fs-color-neutral-border-subtle);
       }
+      .map {
+        display: grid;
+        gap: var(--fs-spacing-2);
+      }
+      .map__line {
+        margin: 0;
+        min-inline-size: 0;
+        font-size: var(--font-size-s);
+        line-height: var(--fs-line-height-article);
+        color: var(--fs-color-neutral-text-subtle);
+      }
+      .map__section {
+        margin-inline-end: var(--fs-spacing-2);
+        font-weight: var(--font-weight-semibold);
+        color: var(--fs-color-neutral-text-strong);
+      }
+      .map__dot {
+        color: var(--fs-color-neutral-text-subtle);
+      }
+      .colophon {
+        margin-block-start: var(--fs-spacing-8);
+      }
 
-            /* The Søbernetics mark. Small on purpose, and small is the whole of how it stays quiet: the
+      /* The Søbernetics mark. Small on purpose, and small is the whole of how it stays quiet: the
          opacity this first had took it to 3.5:1 against the ground, which is below the contrast
          required of a link, and on one page left it all but invisible. Subtlety is size, not a
          washed-out colour.
@@ -221,23 +454,28 @@ const SAMPLE = `get("/feed") {
         color: var(--fs-color-neutral-text-subtle);
         line-height: var(--fs-line-height-article);
       }
-      .hero__sample {
+
+      /*
+       * Every code block on the page, in the hero and below it.
+       *
+       * A grid item may not shrink below its content by default, and `pre` does not wrap,
+       * so this one measured 666px inside a 390px phone. The column grew to fit it, the
+       * document became 686px wide, and `.hero`, which is only as wide as the viewport,
+       * covered a little over half of it: the dark ground ended mid-screen and the rest of
+       * the page showed through beside it. `overflow-x: auto` on the block never engaged,
+       * because nothing was ever too narrow for it.
+       *
+       * Zero minimum, and the column can be as narrow as the phone. Then the code scrolls
+       * inside its own box, which is what it was always meant to do.
+       */
+      .sample {
         inline-size: 100%;
-        margin-block-start: var(--fs-spacing-3);
-        /*
-         * A grid item may not shrink below its content by default, and `pre` does not wrap,
-         * so this one measured 666px inside a 390px phone. The column grew to fit it, the
-         * document became 686px wide, and `.hero`, which is only as wide as the viewport,
-         * covered a little over half of it: the dark ground ended mid-screen and the rest of
-         * the page showed through beside it. `overflow-x: auto` on the block never engaged,
-         * because nothing was ever too narrow for it.
-         *
-         * Zero minimum, and the column can be as narrow as the phone. Then the code scrolls
-         * inside its own box, which is what it was always meant to do.
-         */
         min-inline-size: 0;
       }
-      .hero__sample :global(pre) {
+      .hero__inner > .sample {
+        margin-block-start: var(--fs-spacing-3);
+      }
+      .sample :global(pre) {
         margin: 0;
         padding: var(--fs-spacing-4);
         border-radius: var(--fs-spacing-1);
@@ -250,25 +488,112 @@ const SAMPLE = `get("/feed") {
          */
         font-size: clamp(0.7rem, 2.9vw, var(--font-size-s));
       }
-      .hero__sample :global(code) {
+      .sample :global(code) {
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       }
       /* The same hanging indent the articles use, for a screen narrower than this sample. */
-      .hero__sample :global(pre code) {
+      .sample :global(pre code) {
         white-space: normal;
       }
-      .hero__sample :global(pre .line) {
+      .sample :global(pre .line) {
         display: block;
         white-space: pre;
         min-block-size: 1lh;
       }
+      /* The assertion is one long call, and a wrapped call reads better than a scrolled one at
+         any width; the poster above keeps its shape until a phone. */
       @media (max-width: 40rem) {
-        .hero__sample :global(pre .line) {
+        .sample :global(pre .line) {
           white-space: pre-wrap;
           overflow-wrap: break-word;
           padding-inline-start: calc(var(--indent, 0) * 1ch + 2ch);
           text-indent: calc((var(--indent, 0) * 1ch + 2ch) * -1);
         }
+      }
+      .sample--wrap :global(pre .line) {
+        white-space: pre-wrap;
+        overflow-wrap: break-word;
+        padding-inline-start: calc(var(--indent, 0) * 1ch + 2ch);
+        text-indent: calc((var(--indent, 0) * 1ch + 2ch) * -1);
+      }
+
+      /* The example, run. The server writes into the list and the frames, so both are :global. */
+      .run {
+        inline-size: 100%;
+        min-inline-size: 0;
+        display: grid;
+        gap: var(--fs-spacing-3);
+      }
+      .run__row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--fs-spacing-4);
+      }
+      .run__heads {
+        margin: 0;
+        color: var(--fs-color-neutral-text-subtle);
+      }
+      .run__heads code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      .run__count {
+        margin-inline-start: var(--fs-spacing-1);
+        font-weight: var(--font-weight-bold);
+        font-variant-numeric: tabular-nums;
+        color: var(--fs-color-accent-fill);
+      }
+      .run__feed {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: var(--fs-spacing-1);
+      }
+      .run__feed :global(li) {
+        padding: var(--fs-spacing-1) var(--fs-spacing-3);
+        border-inline-start: 2px solid var(--fs-color-accent-fill);
+        font-size: var(--font-size-s);
+      }
+      .run__feed :global(.feed__verdict) {
+        border-inline-start-color: var(--fs-color-warning-text);
+        color: var(--fs-color-neutral-text-subtle);
+      }
+      .run__label {
+        margin: 0;
+        font-size: var(--font-size-xxs);
+        font-weight: var(--font-weight-semibold);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--fs-color-neutral-text-subtle);
+      }
+      .run__wire {
+        display: grid;
+        gap: var(--fs-spacing-2);
+        /* A frame is one long line until it wraps, and a wide one must not widen the hero. */
+        min-inline-size: 0;
+        overflow-wrap: anywhere;
+      }
+      .run__frames {
+        display: grid;
+        gap: var(--fs-spacing-2);
+      }
+      .run__frames > p {
+        margin: 0;
+        color: var(--fs-color-neutral-text-subtle);
+      }
+      /* The frames, as the live page shows them: the server writes these, so they are styled here. */
+      .run__frames :global(.wire__frame) {
+        margin: 0;
+        padding: var(--fs-spacing-3);
+        overflow-x: auto;
+        background: var(--fs-color-neutral-surface);
+        border-radius: var(--fs-spacing-1);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: var(--font-size-xs);
+        line-height: var(--fs-line-height-compact);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
       }
 
       .hero__actions {
@@ -303,35 +628,112 @@ const SAMPLE = `get("/feed") {
         font-style: normal;
       }
 
-      /*
-       * Multi-column, not a grid: the sections are lists of very different lengths, and a
-       * grid row is only as short as its tallest cell. Columns balance the height instead,
-       * so a one-page section beside a six-page one leaves no hole. `columns: 13rem 3` is
-       * "at most three, none narrower than 13rem", which collapses to one on a phone.
-       */
       .page {
         max-width: 60rem;
         margin: 0 auto;
-        padding: var(--fs-spacing-10) var(--fs-spacing-5) var(--fs-spacing-16);
-        columns: 13rem 3;
-        column-gap: var(--fs-spacing-8);
+        padding: var(--fs-spacing-10) var(--fs-spacing-5) 0;
+        display: grid;
+        gap: var(--fs-spacing-12);
+        /* One column that may shrink below its content, or the widest block sets the page. */
+        grid-template-columns: minmax(0, 1fr);
       }
-      .section {
+      .block {
+        display: grid;
+        gap: var(--fs-spacing-3);
+        justify-items: start;
+        min-inline-size: 0;
+      }
+      .block > .fs-heading {
+        margin: 0;
+      }
+      .block__lead {
+        margin: 0;
+        max-width: 60ch;
+        color: var(--fs-color-neutral-text-subtle);
+        line-height: var(--fs-line-height-article);
+      }
+      .block__lead code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+
+      .judge__source {
+        max-inline-size: 48rem;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: var(--font-size-s);
+      }
+      .judge__tries {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--fs-spacing-2);
+      }
+      .judge__tries code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: var(--font-size-s);
+      }
+      .judge__or {
+        font-size: var(--font-size-s);
+        color: var(--fs-color-neutral-text-subtle);
+      }
+      /* The verdict is written by the server in Fristil's classes, so what is left to style is ours. */
+      .judge__box {
+        inline-size: 100%;
+        max-inline-size: 48rem;
+        min-block-size: 3rem;
         display: grid;
         gap: var(--fs-spacing-2);
-        break-inside: avoid;
-        margin-block-end: var(--fs-spacing-8);
+        overflow-wrap: anywhere;
       }
-      /* The heading only, in the wordmark's blue. Enough to find, not enough to look broken. */
-      .section[data-featured] h2 {
-        color: var(--fs-color-accent-fill);
+      .judge__box :global(.judge__how) {
+        margin: 0;
+        color: var(--fs-color-neutral-text-subtle);
       }
-      .section ul {
+      .judge__box :global(.judge__findings) {
         margin: 0;
         padding: 0;
-        list-style: none;
         display: grid;
-        gap: var(--fs-spacing-1);
+        gap: var(--fs-spacing-2);
+      }
+      .judge__box :global(.judge__finding) {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--fs-spacing-1) var(--fs-spacing-2);
+      }
+      .judge__box :global(.judge__severity) {
+        font-size: var(--font-size-xxs);
+        font-weight: var(--font-weight-semibold);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .judge__box :global(.judge__code) {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: var(--font-size-xs);
+        color: var(--fs-color-neutral-text-subtle);
+      }
+
+      .tools {
+        inline-size: 100%;
+        display: grid;
+        /* Four across at the page's full width, two on a tablet, one on a phone. */
+        grid-template-columns: repeat(auto-fit, minmax(min(13rem, 100%), 1fr));
+        gap: var(--fs-spacing-3);
+      }
+      .tool {
+        color: inherit;
+      }
+      .tool .fs-card__title {
+        color: var(--fs-color-accent-fill);
+      }
+      .tool p {
+        color: var(--fs-color-neutral-text-subtle);
+      }
+      .facts {
+        margin: var(--fs-spacing-2) 0 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--fs-spacing-1) var(--fs-spacing-4);
+        font-size: var(--font-size-s);
       }
     </style>
   </body>
