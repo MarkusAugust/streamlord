@@ -14,15 +14,19 @@ All notable changes to Streamlord are recorded here. The format follows
   that sends `wire`. `POST /judge` is the editors' analysis behind a route: it reads the `source`
   signal, judges it with `analyzeHtml` when it starts with `<` and `analyzeKotlin` otherwise, and
   patches the verdict into `#verdict`, each issue in the analysis's own words and each fix as a
-  button that writes the fixed text back into `$source`. It reads at most 1 KiB and says so
-  beyond that; the paste is neither logged nor kept. `streamlord-analysis` is on the service's
-  classpath for it, and its catalog is named for the native image, which CI now proves by
-  calling both routes on the image before it is pushed.
+  button that writes the fixed text back into `$source`. It shows the first eight findings with
+  two fixes each and counts the rest, since every button carries the whole paste; it reads at
+  most 1 KiB of UTF-8 and says so beyond that; the paste is neither logged nor kept.
+  `streamlord-analysis` is on the service's classpath for it, and its catalog is named for the
+  native image, which CI now proves by calling both routes on the image before it is pushed.
 
 ### Changed
 
 - streamlord-live's `maxSignalsSize` is 4 KiB, down from the SDK's 1 MiB: the largest store any
   of its pages sends is the judge's paste and a few flags.
+- streamlord-live maps the four exceptions the security page names in `StatusPages`, with a
+  catch-all under them: signals it cannot read are a `400` and a wrong media type a `415`, each
+  with a fixed body, where before the exception's message was the body of a `500`.
 
 ## [0.13.0] - 2026-10-18
 

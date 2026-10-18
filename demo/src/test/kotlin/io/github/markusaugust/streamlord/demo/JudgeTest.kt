@@ -83,7 +83,21 @@ class JudgeTest {
         }
 
     @Test
-    fun `one character over the limit is the verdict about the limit, and no analysis`() =
+    fun `the verdict shows eight findings with two fixes each and counts the rest`() =
+        testApplication {
+            application { live() }
+
+            // Twelve interpolated signals: twelve findings, four fixes to each.
+            val body = judge("dataOnClick(\"" + "\$a".repeat(12) + "\")").bodyAsText()
+
+            assertTrue(body.contains("12 things the browser would not do"), body)
+            assertEquals(8, Regex("class=\"judge__finding\"").findAll(body).count(), body)
+            assertEquals(16, Regex("judge__fix").findAll(body).count(), body)
+            assertTrue(body.contains("and 4 more"), body)
+        }
+
+    @Test
+    fun `one byte over the limit is the verdict about the limit, and no analysis`() =
         testApplication {
             application { live() }
 
@@ -92,7 +106,23 @@ class JudgeTest {
 
             val body = judge(source).bodyAsText()
 
-            assertTrue(body.contains("The judge reads at most 1 KiB."), body)
+            assertTrue(body.contains("The judge reads at most 1 KiB of UTF-8."), body)
+            assertFalse(body.contains("Read as"), body)
+        }
+
+    @Test
+    fun `the limit counts bytes of UTF-8, not characters`() =
+        testApplication {
+            application { live() }
+
+            // Half the characters, one byte over: a limit on the length would read this.
+            val source = "<a " + "ø".repeat(511)
+            assertEquals(SOURCE_MAX + 1, source.encodeToByteArray().size)
+            assertTrue(source.length < SOURCE_MAX)
+
+            val body = judge(source).bodyAsText()
+
+            assertTrue(body.contains("The judge reads at most 1 KiB of UTF-8."), body)
             assertFalse(body.contains("Read as"), body)
         }
 
@@ -104,7 +134,41 @@ class JudgeTest {
             val response = judge("((((".repeat(2000))
 
             assertEquals(HttpStatusCode.OK, response.status)
-            assertTrue(response.bodyAsText().contains("The judge reads at most 1 KiB."), response.bodyAsText())
+            assertTrue(response.bodyAsText().contains("The judge reads at most 1 KiB of UTF-8."), response.bodyAsText())
+        }
+
+    @Test
+    fun `signals the route cannot read are a 400 that quotes nothing`() =
+        testApplication {
+            application { live() }
+
+            val feed = client.get("/feed?datastar=%7B%22heads%22%3A%22abc%22%7D")
+            assertEquals(HttpStatusCode.BadRequest, feed.status)
+            assertEquals("Signals could not be read", feed.bodyAsText())
+
+            val judge =
+                client.post("/judge") {
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"source":"secretpaste""")
+                }
+            assertEquals(HttpStatusCode.BadRequest, judge.status)
+            assertFalse(judge.bodyAsText().contains("secretpaste"), judge.bodyAsText())
+        }
+
+    @Test
+    fun `a body that is not JSON by its media type is a 415 that quotes nothing`() =
+        testApplication {
+            application { live() }
+
+            val response =
+                client.post("/judge") {
+                    contentType(ContentType.Text.Plain)
+                    setBody("""{"source":"secretpaste"}""")
+                }
+
+            assertEquals(HttpStatusCode.UnsupportedMediaType, response.status)
+            assertFalse(response.bodyAsText().contains("secretpaste"), response.bodyAsText())
+            assertFalse(response.bodyAsText().contains("text/plain"), response.bodyAsText())
         }
 
     @Test

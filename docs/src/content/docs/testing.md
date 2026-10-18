@@ -353,9 +353,9 @@ connections:
 ```kotlin sample=ktor-routing
 post("/judge") {
     val source = call.readSignals().string("source") ?: ""
-    if (source.length > 1024) {
+    if (source.encodeToByteArray().size > 1024) {
         call.respondDatastar {
-            patchElements("<p>The judge reads at most 1 KiB.</p>", selector = "#verdict", mode = ElementPatchMode.INNER)
+            patchElements("<p>The judge reads at most 1 KiB of UTF-8.</p>", selector = "#verdict", mode = ElementPatchMode.INNER)
         }
         return@post
     }
@@ -369,15 +369,18 @@ post("/judge") {
         patchElements(selector = "#verdict", mode = ElementPatchMode.INNER) {
             if (issues.isEmpty()) p { +"The browser will see exactly this." }
             ul {
-                issues.forEach { issue ->
+                // Every button carries the whole paste again, so the first eight findings with
+                // two fixes each are the answer; the rest is a count.
+                issues.take(8).forEach { issue ->
                     li {
                         +"${issue.severity.name.lowercase()}: ${issue.message}"
-                        issue.fixes.forEach { fix ->
-                            // The whole text with the fix applied, as a JavaScript literal; js() escapes it.
-                            button { dataOnClick("\$source = ${js(fix.apply(source))}"); +fix.title }
+                        issue.fixes.take(2).forEach { fix ->
+                            // The whole text with the fix applied, as a JavaScript literal; set() escapes it.
+                            button { dataOnClick(set("source", fix.apply(source))); +fix.title }
                         }
                     }
                 }
+                if (issues.size > 8) li { +"and ${issues.size - 8} more" }
             }
         }
     }
@@ -385,7 +388,8 @@ post("/judge") {
 ```
 
 A `Fix` is a range replacement, so `fix.apply(source)` is the text the field should hold next, not
-`fix.text`, which is the helper call without the line it belongs to.
+`fix.text`, which is the helper call without the line it belongs to. The limit counts bytes of
+UTF-8, as the plugin's does, so the two limits are in the same unit.
 
 The page binds the field and asks again whenever `source` changes, so the keyboard and the fix
 buttons reach the judge the same way. `data-on-signal-patch` with a filter is what does that, and
@@ -402,9 +406,14 @@ the debounce is what keeps a paste from being judged one keystroke at a time:
 </section>
 ```
 
+`data-signals` has to stand before `data-on-signal-patch` on the same element: in the other order
+the client sees `source` arrive and posts once on load.
+
 Hold the limit on the server, as above, and set the plugin's `maxSignalsSize` a little above it, so
-a body that could never be a legitimate paste is refused before it is read. Read the paste, judge
-it and answer; do not log it and do not keep it, in an error message least of all.
+a body that could never be a legitimate paste is refused: before it is read when the request
+declares its length, and at the limit when it does not. Read the paste, judge it and answer; do
+not log it and do not keep it, in an error message least of all. The `StatusPages` handlers on
+[Security](/security/#bounded-input) keep Ktor's own messages out of the body as well.
 
 ## Signals the pages never declare
 

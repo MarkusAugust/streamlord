@@ -22,9 +22,10 @@ public data class FeedSignals(
  * The front page's code example, run.
  *
  * The hero shows a handler that appends one `li` to `#feed` and patches `heads`. This is that
- * handler, with the count read from the request instead of written as 13, so pressing the button
- * twice counts to two rather than to thirteen twice. No state here: the store carries the count,
- * the server adds one, and the page is the only place the number lives.
+ * handler, with the count read from the request instead of written as 13, so the server counts
+ * on from whatever the page holds: two presses are 14 and then 15, not 14 twice. No state here:
+ * the store carries the count, the server adds one, and the page is the only place the number
+ * lives.
  *
  * A count outside what the wall holds gets a verdict, as a line in the feed, and no new count. An
  * exception would be a 500 for a value nobody could have reached by pressing the button, and the

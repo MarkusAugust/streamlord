@@ -1,5 +1,8 @@
 package io.github.markusaugust.streamlord.demo
 
+import io.github.markusaugust.streamlord.core.JsonParseException
+import io.github.markusaugust.streamlord.core.SignalsDecodeException
+import io.github.markusaugust.streamlord.core.SignalsMediaTypeException
 import io.github.markusaugust.streamlord.core.SignalsTooLargeException
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
@@ -16,10 +19,12 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
+import io.ktor.server.application.log
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.plugins.statuspages.StatusPages
+import io.ktor.server.request.path
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
@@ -156,9 +161,29 @@ public fun Application.live() {
         maxAgeInSeconds = 86_400
     }
 
+    /*
+     * The four handlers the security page prescribes, and the catch-all under them. Without
+     * them Ktor answers an unhandled exception with its message as the body, and a decode
+     * message names the type it could not read into; a message from this service's own code
+     * could quote a paste. Every body here is a fixed text, and the catch-all notes what it
+     * caught by class alone.
+     */
     install(StatusPages) {
         exception<SignalsTooLargeException> { call, _ ->
             call.respondText("Signals too large", status = HttpStatusCode.PayloadTooLarge)
+        }
+        exception<JsonParseException> { call, _ ->
+            call.respondText("Signals are not JSON", status = HttpStatusCode.BadRequest)
+        }
+        exception<SignalsDecodeException> { call, _ ->
+            call.respondText("Signals could not be read", status = HttpStatusCode.BadRequest)
+        }
+        exception<SignalsMediaTypeException> { call, _ ->
+            call.respondText("Signals must be sent as application/json", status = HttpStatusCode.UnsupportedMediaType)
+        }
+        exception<Throwable> { call, cause ->
+            call.application.log.error("Unhandled on {}: {}", call.request.path(), cause::class.simpleName)
+            call.respondText("Something went wrong", status = HttpStatusCode.InternalServerError)
         }
     }
 
@@ -212,12 +237,14 @@ public fun Application.live() {
         /*
          * The editors' check, as a route. The paste is read, judged and answered, and that is
          * all: it is not logged and not kept, and the one exception that can name it is turned
-         * into a verdict here rather than handed to StatusPages.
+         * into a verdict here rather than handed to StatusPages. The page that calls this
+         * declares `data-signals` before `data-on-signal-patch` on the same element; the other
+         * order posts once on load.
          */
         post("/judge") {
             val events =
                 try {
-                    judgeEvents(call.readSignalsOr(JudgeSignals()))
+                    judgeEvents(call.readSignalsOr(JudgeSignals()), call.application.log)
                 } catch (_: SignalsTooLargeException) {
                     tooLargeEvents()
                 }
