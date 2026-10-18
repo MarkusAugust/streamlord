@@ -3,6 +3,9 @@ package io.github.markusaugust.streamlord.ktor
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.engine.BaseApplicationResponse
 import io.ktor.util.AttributeKey
+import io.ktor.utils.io.ChannelJob
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import java.lang.reflect.Field
 import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Proxy
@@ -51,7 +54,7 @@ private fun field(
 }
 
 /*
- * Tomcat 10.1 and 11. The cut waits for Ktor: raising CLOSE_NOW at once has Tomcat finish and
+ * Tomcat 9, 10.1 and 11. The cut waits for Ktor: raising CLOSE_NOW at once has Tomcat finish and
  * recycle the request while Ktor still holds it, which with discardFacades=false reached other
  * requests. Instead the Coyote response's action hook is wrapped, and when the adapter asks whether
  * the request failed, during the dispatch Ktor's complete() set going, on Tomcat's own thread, the
@@ -61,23 +64,97 @@ private fun field(
  */
 private val TomcatRequestKey = AttributeKey<Any>("streamlord.tomcat.async", portableTypeInfo<Any>())
 
-/** Note which Tomcat request serves [call], before anything is written. Nothing on another engine. */
-internal fun markEngine(call: ApplicationCall) {
+/**
+ * Note which Tomcat request serves [call], before anything is written; on another engine, note
+ * nothing. Returns whether [call] is answered through Ktor's servlet engine, on any container,
+ * where a failure must wait for Ktor's writer, as [respondDatastar] says.
+ */
+internal fun markEngine(call: ApplicationCall): Boolean {
+    val response = call.attributes.getOrNull(BaseApplicationResponse.EngineResponseAttributeKey) ?: return false
+    val servlet = generateSequence<Class<*>>(response.javaClass) { it.superclass }.any { it.name in SERVLET_RESPONSES }
     try {
-        val response = call.attributes.getOrNull(BaseApplicationResponse.EngineResponseAttributeKey) ?: return
-        val facade = servletRequest(response) ?: return
-        if (facade.javaClass.name != "org.apache.catalina.connector.RequestFacade") return
-        // A connector that keeps its facades hands the one Ktor holds to the next request; with
-        // the cut, a failing stream's frame was once seen on another connection. No cut there.
-        val catalina = field(facade.javaClass, "request").get(facade) ?: return
-        val connector = catalina.javaClass.getMethod("getConnector").invoke(catalina) ?: return
-        if (connector.javaClass.getMethod("getDiscardFacades").invoke(connector) != true) return
-        val async = facade.javaClass.getMethod("getAsyncContext").invoke(facade) ?: return
+        val facade = servletRequest(response) ?: return servlet
+        if (facade.javaClass.name != "org.apache.catalina.connector.RequestFacade") return servlet
+        // A connector that keeps its facades hands the one Ktor holds to the next request, which
+        // then cannot be told from this one. No cut there.
+        val catalina = field(facade.javaClass, "request").get(facade) ?: return servlet
+        val connector = catalina.javaClass.getMethod("getConnector").invoke(catalina) ?: return servlet
+        if (connector.javaClass.getMethod("getDiscardFacades").invoke(connector) != true) return servlet
+        val async = facade.javaClass.getMethod("getAsyncContext").invoke(facade) ?: return servlet
         call.attributes.put(TomcatRequestKey, async)
     } catch (e: Throwable) {
         // Not async, or not a Tomcat this knows: no cut.
     }
+    return servlet
 }
+
+// Jakarta for Tomcat 10.1 and 11, javax for ktor-server-tomcat and its Tomcat 9.
+private val SERVLET_RESPONSES =
+    setOf("io.ktor.server.servlet.jakarta.ServletApplicationResponse", "io.ktor.server.servlet.ServletApplicationResponse")
+
+private val writerField =
+    object : ClassValue<Field?>() {
+        override fun computeValue(type: Class<*>): Field? =
+            try {
+                field(type, "responseJob")
+            } catch (e: Throwable) {
+                null
+            }
+    }
+
+/**
+ * The coroutines that run under the scope of [call]'s servlet response, or `null` where the
+ * response has none. Ktor starts its writer in that scope.
+ */
+internal fun servletJobs(call: ApplicationCall): Set<Job>? =
+    try {
+        val response = call.attributes.getOrNull(BaseApplicationResponse.EngineResponseAttributeKey) as? CoroutineScope
+        response
+            ?.coroutineContext
+            ?.get(Job)
+            ?.children
+            ?.toSet()
+    } catch (e: Throwable) {
+        null
+    }
+
+/**
+ * The coroutines Ktor's servlet engine writes a body with. [owned] when read from Ktor's own field:
+ * they are its writer, and may be stopped. Otherwise they are what the response's scope started as
+ * the body began, which coroutines of the application's may be too, and are only waited for.
+ */
+internal class ServletWriters(
+    val jobs: List<Job>,
+    val owned: Boolean,
+)
+
+/**
+ * The coroutines Ktor's servlet engine writes [call]'s body with, once the body has started, or
+ * `null` on another engine, one whose insides have moved, or where none could be found. Read from
+ * Ktor's field where it has one, and otherwise taken as what the response's scope started between
+ * [before], noted before the body, and [started], noted as it began, less the coroutine that asks
+ * and its own parents.
+ */
+internal fun servletWriters(
+    call: ApplicationCall,
+    before: Set<Job>?,
+    started: Set<Job>?,
+    asking: Job?,
+): ServletWriters? {
+    try {
+        val response = call.attributes.getOrNull(BaseApplicationResponse.EngineResponseAttributeKey) ?: return null
+        val writer = writerField.get(response.javaClass)?.get(response) as? Lazy<*>
+        if (writer != null && !writer.isInitialized()) return ServletWriters(emptyList(), owned = true)
+        (writer?.value as? ChannelJob)?.let { return ServletWriters(listOf(it.job), owned = true) }
+    } catch (e: Throwable) {
+        // Moved insides: the scope may still tell.
+    }
+    if (before == null || started == null) return null
+    val found = (started - before).filter { asking == null || !it.isOrHolds(asking) }
+    return if (found.isEmpty()) null else ServletWriters(found, owned = false)
+}
+
+private fun Job.isOrHolds(job: Job): Boolean = this === job || children.any { it.isOrHolds(job) }
 
 private fun tomcat(response: BaseApplicationResponse): Boolean {
     val ours = response.call.attributes.getOrNull(TomcatRequestKey) ?: return false

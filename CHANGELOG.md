@@ -566,10 +566,16 @@ All notable changes to Streamlord are recorded here. The format follows
   Ktor's Tomcat and Jetty engines ended a failed body with its last chunk, as if it had finished,
   gzipped or not, so the client did not reconnect and the page stopped updating without a word.
   Streamlord now cuts the connection there too, on Tomcat 10.1 and 11 and Jetty 11 and 12, over
-  HTTP/1.1 and HTTP/2, where only the stream is reset. It does so by reflection, with no new
-  dependency, and on Tomcat only once Ktor has completed the request, and not on a connector set
-  to keep its facades, where a cut reached other requests. On an engine Streamlord does not know,
-  the stream ends as the engine ends it.
+  HTTP/1.1 and HTTP/2, where only the stream is reset, and on Tomcat 9 under Ktor's javax engine
+  over HTTP/1.1. It does so by reflection, with no new dependency, and on Tomcat only once Ktor
+  has completed the request, and not on a connector set to keep its facades, where a cut reached
+  other requests. On an engine Streamlord does not know, the stream ends as the engine ends it.
+- On Ktor's servlet engine, jakarta and javax alike, `respondDatastar` throws a stream's failure,
+  whatever was thrown, only once the engine's response writer has finished, and a cancelled call
+  waits for that writer before the cancellation goes on. The frames still get at most a second for
+  a reader who stopped reading, after which the writer is stopped where Streamlord can tell it is
+  Ktor's, and the cut is as before. The Ktor page shows how to end a `respondBytesWriter` of your
+  own normally when it fails.
 - `respondDatastar` on a call already answered throws `IllegalStateException`. It did nothing on
   CIO and threw Netty's own exception from the header loop.
 - Neither Ktor nor Spring WebMVC sends `Connection: keep-alive` to a request that asked to close.

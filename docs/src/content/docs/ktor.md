@@ -78,13 +78,45 @@ is not a promise. Catch what you can inside the block and send the page what it 
 
 CIO and Netty cut the connection themselves. Tomcat and Jetty end a failed response with its last
 chunk, as if it had finished, and Datastar's client does not retry a stream that finished, so
-Streamlord cuts the connection under them: Tomcat 10.1 and 11, Jetty 12 from Ktor 3.3 and Jetty
-11 before it, over HTTP/1.1 and HTTP/2, where only the stream is reset. It reaches into the
-engine by reflection to do it, since no API Ktor has does, and on Tomcat it waits until Ktor has
-completed the request. A Tomcat connector set to keep its facades (`discardFacades = false`) hands
-the one Ktor holds to the next request, and there Streamlord cuts nothing. On another engine, or
-if an engine's insides move, nothing is cut either, and the stream ends as the engine ends it;
-catching the failure inside the block is then the only way to tell the page.
+Streamlord cuts the connection under them: Tomcat 10.1 and 11, Jetty 12 from Ktor 3.3 and Jetty 11
+before it, over HTTP/1.1 and HTTP/2, where only the stream is reset. It reaches into the engine by
+reflection to do it, since no API Ktor has does, and on Tomcat it waits until Ktor has completed the
+request. Ktor's javax engine, `ktor-server-tomcat` on Tomcat 9, is cut the same way over HTTP/1.1. A
+Tomcat connector set to keep its facades (`discardFacades = false`) hands the one Ktor holds to the
+next request, and there Streamlord cuts nothing. On another engine, or if an engine's insides move,
+nothing is cut either, and the stream ends as the engine ends it; catching the failure inside the
+block is then the only way to tell the page.
+
+On Ktor's servlet engine, jakarta or javax, which Tomcat runs and a WAR deploys, Streamlord also
+holds the failure back until the engine's response writer is done: a failed stream ends its body as
+if it had finished, which Ktor waits for its writer to take, and `respondDatastar` throws the
+failure once the writer is done, whatever was thrown, a `CancellationException` included. The
+frames get the same second as on any other engine; a writer still held by a reader who stopped
+reading is then stopped. Should a later Ktor hide its writer, Streamlord waits for what the response
+started instead, for as long as it runs, and stops none of it, as that may be the application's own.
+
+With `discardFacades = false` Streamlord cuts nothing, so a failed stream ends there as if it had
+finished, with its last chunk, and Datastar's client does not retry it. Leave the setting at its
+default, or catch the failure inside the block and tell the page.
+
+A body of your own, a `respondBytesWriter` among them, is best ended the same way: catch the failure
+inside the writer and end the body normally, so the engine finishes the response itself:
+
+```kotlin sample=ktor-routing
+get("/muster") {
+    call.respondBytesWriter(ContentType.Text.Plain) {
+        try {
+            for (rider in listOf("Gorvek", "Hask", "Brann")) {
+                check(rider != "Hask") { "$rider did not answer" }
+                writeStringUtf8("$rider rides\n")
+            }
+        } catch (e: IllegalStateException) {
+            // Ended here, the engine finishes the response itself.
+            writeStringUtf8("The muster broke off: ${e.message}\n")
+        }
+    }
+}
+```
 
 On Netty, keep the heartbeat on, or write within ten seconds of the open: Netty sends no headers
 before the first byte of the body, and closes a response that has written nothing for ten seconds,

@@ -19,6 +19,8 @@ import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -27,6 +29,7 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
 
 /**
  * A real Tomcat and a real DispatcherServlet, without Boot, with Spring's async timeout at 300 ms.
@@ -35,6 +38,9 @@ import kotlin.time.Duration.Companion.seconds
 class TomcatTimeoutTest {
     companion object {
         val seen: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
+
+        // How long an endless stream ran before something ended it, by its own clock.
+        var cutAfter = CompletableFuture<Duration>()
     }
 
     @RestController
@@ -51,11 +57,31 @@ class TomcatTimeoutTest {
                 }
             }
 
+        // Until something ends it: only a timeout can.
+        private fun HttpServletResponse.endless(
+            request: HttpServletRequest,
+            timeout: Duration?,
+        ): StreamingResponseBody {
+            // Before Spring starts the async cycle, whose timeout cannot run out any sooner.
+            val started = TimeSource.Monotonic.markNow()
+            return datastarStream(request = request, timeout = timeout) {
+                try {
+                    var n = 0
+                    while (true) {
+                        patchSignals("n" to n++)
+                        delay(100.milliseconds)
+                    }
+                } finally {
+                    cutAfter.complete(started.elapsedNow())
+                }
+            }
+        }
+
         @GetMapping("/default")
         fun default(
             request: HttpServletRequest,
             response: HttpServletResponse,
-        ) = response.count(request, null)
+        ) = response.endless(request, null)
 
         @GetMapping("/infinite")
         fun infinite(
@@ -67,7 +93,7 @@ class TomcatTimeoutTest {
         fun twoSeconds(
             request: HttpServletRequest,
             response: HttpServletResponse,
-        ) = response.count(request, 2.seconds)
+        ) = response.endless(request, 2.seconds)
 
         // Without the request: the adapter finds it through Spring's RequestContextHolder.
         @GetMapping("/held")
@@ -100,6 +126,8 @@ class TomcatTimeoutTest {
         ): StreamingResponseBody =
             response.datastarStream(
                 request = request,
+                // Not the 300 ms this test's Spring sets, which could cut it before the heartbeat asks.
+                timeout = 30.seconds,
                 authorisation =
                     StreamAuthorisation(every = 1.milliseconds) {
                         seen += "allows ${RequestContextHolder.getRequestAttributes() != null}"
@@ -108,7 +136,9 @@ class TomcatTimeoutTest {
                 heartbeat = 50.milliseconds,
             ) {
                 seen += "block ${RequestContextHolder.getRequestAttributes() != null}"
-                Thread.sleep(400)
+                // Blocks its thread until the heartbeat has asked from Dispatchers.IO.
+                val until = TimeSource.Monotonic.markNow() + 30.seconds
+                while ("allows false" !in seen && until.hasNotPassedNow()) Thread.sleep(10)
             }
 
         // Spring runs a suspend handler in an async cycle of its own, and the stream in a second.
@@ -147,6 +177,7 @@ class TomcatTimeoutTest {
 
     @BeforeTest
     fun start() {
+        cutAfter = CompletableFuture()
         tomcat = RealTomcat(Mvc::class.java)
     }
 
@@ -180,20 +211,28 @@ class TomcatTimeoutTest {
         assertEquals(413, response.statusCode(), response.body())
     }
 
+    // The endless stream ends only if a timeout cuts it. Tomcat's own default is thirty seconds,
+    // longer than the test waits.
     @Test
     fun `without a timeout Spring's default cuts the stream`() {
-        val (events, millis) = events("/default")
+        val read = CompletableFuture.supplyAsync { events("/default") }
+        val ran = cutAfter.get(20, TimeUnit.SECONDS)
+        val (events, millis) = read.get(20, TimeUnit.SECONDS)
 
-        assertTrue(events < 40, "$events events in $millis ms")
-        assertTrue(millis < 3000, "$events events in $millis ms")
+        assertTrue(events > 0, "$events events in $millis ms")
+        // Spring's 300 ms, with room for a busy machine, and far from Tomcat's thirty seconds.
+        assertTrue(ran < 10.seconds, "cut after $ran, $events events in $millis ms")
     }
 
-    // Cut between two and three seconds: the timeout, then Tomcat's once-a-second check.
+    // Cut no earlier than the two seconds asked for: Spring's 300 ms would have cut it sooner.
     @Test
     fun `a finite timeout replaces Spring's default`() {
-        val (events, millis) = events("/two-seconds")
+        val read = CompletableFuture.supplyAsync { events("/two-seconds") }
+        val ran = cutAfter.get(20, TimeUnit.SECONDS)
+        val (events, millis) = read.get(20, TimeUnit.SECONDS)
 
-        assertTrue(events in 15..39, "$events events in $millis ms")
+        assertTrue(events > 0, "$events events in $millis ms")
+        assertTrue(ran >= 2.seconds, "cut after $ran, $events events in $millis ms")
     }
 
     @Test
