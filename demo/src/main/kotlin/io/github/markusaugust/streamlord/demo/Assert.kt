@@ -11,44 +11,38 @@ import kotlinx.html.p
 import kotlinx.html.pre
 import kotlinx.serialization.Serializable
 
-/** The count the page holds, as `/feed` reads it, and the count the reader's field says to expect. */
+/** Whether the panel's second button was pressed: the test then expects 99, which the feed never says. */
 @Serializable
 public data class AssertSignals(
-    val heads: Int = 0,
-    val expect: Int = 0,
+    val broken: Boolean = false,
 )
 
+/** What the test expects, and what the broken one expects instead. */
+internal const val EXPECTED = FEED_START + 1
+internal const val BROKEN_EXPECTATION = 99
+
 /**
- * The front page's test panel: the feed, read back by streamlord-test and held to two assertions.
+ * The front page's test panel: a fresh feed from 13, read back by streamlord-test and held to
+ * two assertions.
  *
- * The events are the ones `/feed` sends for the same count, without the wire panel, put on the
- * wire and read back with `datastarEvents`, which is what a test against the route does. The two
- * assertions are the two lines the panel shows beside the field. A count the wall cannot hold
- * is the feed's own verdict, and then the first assertion is what fails, which is the truth.
+ * The events are the ones `/feed` sends for 13, without the wire panel, put on the wire and
+ * read back with `datastarEvents`, which is what a test against the route does. The count on
+ * the page is not read: the panel shows this stream, so this stream is what it asserts. The
+ * two assertions are the two lines the panel shows, and `broken` swaps the second one's 14
+ * for 99, so the reader can see a test fail.
  *
  * A failure is the reader's `AssertionError`, and its message goes to the page as it is, since
  * the message is the point: it prints the whole stream, so the first question a red test raises
  * is answered in the same breath.
  */
 public fun assertEvents(signals: AssertSignals): List<DatastarEvent> {
-    if (signals.expect !in 0..HEADS_MAX) {
-        return listOf(
-            assertionPatch {
-                div("fs-alert") {
-                    attributes["data-color"] = "warning"
-                    p("fs-alert__title") { +"Not a count" }
-                    p { +"The wall counts from nought to $HEADS_MAX heads; ${signals.expect} is not a count it keeps." }
-                }
-            },
-        )
-    }
-
-    val wire = feedEvents(FeedSignals(heads = signals.heads)).joinToString("") { SseEncoder.encode(it) }
+    val expected = if (signals.broken) BROKEN_EXPECTATION else EXPECTED
+    val wire = feedEvents(FeedSignals(heads = FEED_START)).joinToString("") { SseEncoder.encode(it) }
     val events = datastarEvents(wire)
     val failure =
         try {
             events.assertPatchElements(selector = "#feed", mode = ElementPatchMode.APPEND, containing = "A new head")
-            events.assertSignal("heads", signals.expect)
+            events.assertSignal("heads", expected)
             null
         } catch (e: AssertionError) {
             e.message ?: "AssertionError"
@@ -66,6 +60,10 @@ public fun assertEvents(signals: AssertSignals): List<DatastarEvent> {
                 div("fs-alert") {
                     attributes["data-color"] = "danger"
                     pre("assertion__said") { +failure }
+                }
+                p("fs-paragraph assertion__why") {
+                    attributes["data-size"] = "small"
+                    +"This is what the test reader prints when a stream is not what the code said."
                 }
             }
         },

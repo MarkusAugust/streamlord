@@ -496,29 +496,29 @@ jobs:
             || { echo "::error::/feed did not count 13 to 14"; echo "$feed" | head -8; exit 1; }
           echo "  the feed counted a head"
 
-          # The test panel: the feed read back by streamlord-test's reader and held to two
-          # assertions. One that passes proves the reader is in the image; one that fails
-          # proves the failure comes back as the reader's own message, with the stream in it.
+          # The test panel: a fresh feed from 13 read back by streamlord-test's reader and held
+          # to two assertions. The test as written proves the reader is in the image; the broken
+          # one proves the failure comes back as the reader's own message, with the stream in it.
           passed=$(curl -s --max-time 5 -X POST \
             -H 'Content-Type: application/json' \
             -H "Origin: $ORIGIN" \
-            -d '{"heads":13,"expect":14}' \
+            -d '{"broken":false}' \
             http://localhost:8080/assert)
 
           echo "$passed" | grep -q 'Both assertions passed' \
-            || { echo "::error::/assert did not pass on 14. Is streamlord-test in the image?"; echo "$passed" | head -8; exit 1; }
+            || { echo "::error::/assert did not pass. Is streamlord-test in the image?"; echo "$passed" | head -8; exit 1; }
 
           failed=$(curl -s --max-time 5 -X POST \
             -H 'Content-Type: application/json' \
             -H "Origin: $ORIGIN" \
-            -d '{"heads":13,"expect":15}' \
+            -d '{"broken":true}' \
             http://localhost:8080/assert)
 
-          echo "$failed" | grep -q 'is 14, expected 15' \
-            || { echo "::error::/assert did not fail on 15 with the reader's message"; echo "$failed" | head -8; exit 1; }
+          echo "$failed" | grep -q 'is 14, expected 99' \
+            || { echo "::error::/assert did not fail on broken with the reader's message"; echo "$failed" | head -8; exit 1; }
           echo "$failed" | grep -q 'The stream carried 2 events' \
             || { echo "::error::/assert failed without printing the stream"; exit 1; }
-          echo "  the assertions passed on 14 and failed on 15, stream and all"
+          echo "  the assertions passed as written and failed when broken, stream and all"
 
           # The judge reads the analysis's catalog as a resource by name, which is exactly the
           # kind of file a native image leaves out. A verdict with the editors' own message in

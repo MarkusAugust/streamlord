@@ -15,9 +15,9 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * The test panel's route, against the service as Main.kt assembles it: the feed read back by
- * streamlord-test, a pass when the field says what the feed sends, and the reader's own failure,
- * stream and all, when it does not.
+ * The test panel's route, against the service as Main.kt assembles it: a fresh feed from 13 read
+ * back by streamlord-test, a pass on the expectation the panel shows, and the reader's own
+ * failure, stream and all, when `broken` asks for 99.
  */
 class AssertTest {
     private suspend fun ApplicationTestBuilder.assert(body: String): HttpResponse =
@@ -27,11 +27,11 @@ class AssertTest {
         }
 
     @Test
-    fun `thirteen heads and an expectation of fourteen is a pass that counts the events`() =
+    fun `the test passes and counts the events`() =
         testApplication {
             application { live() }
 
-            val body = assert("""{"heads":13,"expect":14}""").bodyAsText()
+            val body = assert("""{"broken":false}""").bodyAsText()
 
             assertTrue(body.contains("data: selector #assertion"), body)
             assertTrue(body.contains("data: mode inner"), body)
@@ -42,55 +42,44 @@ class AssertTest {
         }
 
     @Test
-    fun `an expectation of fifteen is the reader's failure, with the stream in it`() =
+    fun `the count on the page is not read, so the test passes whatever it holds`() =
         testApplication {
             application { live() }
 
-            val body = assert("""{"heads":13,"expect":15}""").bodyAsText()
+            val body = assert("""{"heads":500,"wire":true,"tool":"test"}""").bodyAsText()
+
+            assertTrue(body.contains("Both assertions passed."), body)
+            assertFalse(body.contains("#wire"), body)
+        }
+
+    @Test
+    fun `broken is the reader's failure on 99, with the stream in it`() =
+        testApplication {
+            application { live() }
+
+            val body = assert("""{"broken":true}""").bodyAsText()
 
             assertTrue(body.contains("""data-color="danger""""), body)
             assertTrue(body.contains("assertion__said"), body)
             // The reader's own words, which name the signal and both numbers.
             assertTrue(body.contains("heads"), body)
-            assertTrue(body.contains("is 14, expected 15"), body)
+            assertTrue(body.contains("is 14, expected 99"), body)
             // And the stream it read, event by event, as every failure of the reader prints it.
             assertTrue(body.contains("The stream carried 2 events:"), body)
             assertTrue(body.contains("datastar-patch-elements"), body)
             assertTrue(body.contains("A new head hangs on the wall"), body)
             assertTrue(body.contains("datastar-patch-signals"), body)
+            // The one line under the red, which says what the reader just showed.
+            assertTrue(body.contains("This is what the test reader prints"), body)
             assertFalse(body.contains("Both assertions passed"), body)
         }
 
     @Test
-    fun `a count the wall cannot hold fails the first assertion, since the feed hung no head`() =
+    fun `broken that is not a boolean is a 400 that quotes nothing`() =
         testApplication {
             application { live() }
 
-            val body = assert("""{"heads":${HEADS_MAX + 1},"expect":14}""").bodyAsText()
-
-            assertTrue(body.contains("""data-color="danger""""), body)
-            assertTrue(body.contains("No element patch with selector #feed, mode append, elements containing A new head"), body)
-            assertTrue(body.contains("is not a count it keeps"), body)
-        }
-
-    @Test
-    fun `an expectation the wall cannot hold is told so, and nothing is asserted`() =
-        testApplication {
-            application { live() }
-
-            val body = assert("""{"heads":13,"expect":-1}""").bodyAsText()
-
-            assertTrue(body.contains("""data-color="warning""""), body)
-            assertTrue(body.contains("-1 is not a count it keeps"), body)
-            assertFalse(body.contains("The stream carried"), body)
-        }
-
-    @Test
-    fun `an expectation that is not a number is a 400 that quotes nothing`() =
-        testApplication {
-            application { live() }
-
-            val response = assert("""{"heads":13,"expect":"fourteen"}""")
+            val response = assert("""{"broken":"yes"}""")
 
             assertEquals(HttpStatusCode.BadRequest, response.status)
             assertEquals("Signals could not be read", response.bodyAsText())

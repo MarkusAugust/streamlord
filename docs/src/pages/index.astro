@@ -5,6 +5,7 @@ import CodeBlock from "../components/CodeBlock.astro"
 import Logo from "../components/Logo.astro"
 import VersionBadge from "../components/VersionBadge.astro"
 import { SERVICE } from "../config"
+import feed13 from "../generated/feed-13.sse?raw"
 import { FAVICON } from "../icon"
 import { NAVIGATION } from "../navigation"
 import {
@@ -18,6 +19,11 @@ import {
 } from "../project"
 import { datastarLangs, hangingIndent, shikiThemes } from "../shiki"
 import "../styles/global.css"
+
+// What /feed sends from 13, frame by frame, as the test panel shows it before the assertions.
+// Written by ./gradlew :docs-samples:checkDocSamples from the service's own handler and
+// encoder, and stale in CI the day either changes; never typed here.
+const FEED_FRAMES = feed13.trim().split("\n\n")
 
 // The one section of the list the hero has just made a promise about, so the eye should find
 // it without being shouted at. Named here rather than in the markup, because it is a choice.
@@ -37,7 +43,8 @@ const SAMPLE = `get("/feed") {
 
 // The handler above is what streamlord-live runs at /feed, with one difference: the count
 // comes from the page's signals and goes back one higher, so a press from 13 is 14. These two
-// lines are what a test says about that response; both names are streamlord-test's own.
+// lines are what a test says about that response; both names are streamlord-test's own. The
+// test panel runs exactly these against a fresh stream from 13, whatever the page counts.
 const ASSERTED = `events.assertPatchElements(selector = "#feed", mode = ElementPatchMode.APPEND, containing = "A new head")
 events.assertSignal("heads", 14)`
 
@@ -111,7 +118,7 @@ const TOOLS = [
   },
   {
     id: "test",
-    title: "Test assertions",
+    title: "Assert what it sent",
     line: "Read the response back. Assert what you meant.",
     fact: `${MERGE_SCENARIOS} scenarios held to the client's own mergePatch`,
   },
@@ -222,11 +229,11 @@ const TOOLS = [
         One stage, four tools. Every signal the stage uses stands on this element, and so
         before any `data-on-signal-patch` below it: in the other order the client sees `source`
         arrive and posts once on load. `tool` picks the panel; `heads` and `wire` are the feed's,
-        `expect` the test's, `source` the judge's.
+        `broken` the test's, `source` the judge's.
       -->
       <section
         class="block stage"
-        data-signals={`{tool: 'sdk', heads: 13, wire: true, expect: 14, source: ${js(PREFILL)}}`}
+        data-signals={`{tool: 'sdk', heads: 13, wire: true, broken: false, source: ${js(PREFILL)}}`}
       >
         <h2 class="fs-heading" data-size="m">Four tools, designed together.</h2>
         <p class="block__lead">One mistake, one stream, four ways to see it. Adopt one, or all of them.</p>
@@ -281,11 +288,26 @@ const TOOLS = [
               The handler above, run. The count the server reads is the one on the page: 13 on
               arrival, one more per press. `wire` tells the service there is a #wire to patch
               the frames into, as the live page does.
+
+              Reset is a route too: no attribute removes what the server appended (data-text
+              on the list would undo the appends themselves), so the server patches the list
+              and the frames empty, which is Datastar's one way to clear a container. Disabled
+              until there is something to reset.
             -->
             <div class="run">
               <div class="run__row">
                 <button class="fs-button" type="button" data-on:click={`@get('${SERVICE}/feed')`}>
                   Run it
+                </button>
+                <button
+                  class="fs-button"
+                  data-variant="secondary"
+                  type="button"
+                  disabled
+                  data-attr:disabled="$heads === 13"
+                  data-on:click={`@get('${SERVICE}/feed/reset')`}
+                >
+                  Reset
                 </button>
                 <p class="run__heads">
                   <code>$heads</code>
@@ -297,12 +319,12 @@ const TOOLS = [
 
               <div class="run__wire">
                 <p class="run__label">On the wire</p>
-                <div id="wire" class="run__frames">
-                  <p class="fs-paragraph" data-size="small">
-                    Press Run. The frames the server sends come back here, encoded by the same
-                    encoder the golden-file tests check.
-                  </p>
-                </div>
+                <!-- Beside #wire, not in it, so a reset that empties the frames brings it back. -->
+                <p class="fs-paragraph run__empty" data-size="small" data-show="$heads === 13">
+                  Press Run. The frames the server sends come back here, encoded by the same
+                  encoder the golden-file tests check.
+                </p>
+                <div id="wire" class="run__frames"></div>
               </div>
 
               <p class="run__label">Asserted the same way in your tests:</p>
@@ -318,7 +340,12 @@ const TOOLS = [
             </div>
           </div>
 
-          <!-- 2. The test: the same stream, read back by streamlord-test and held to two lines. -->
+          <!--
+            2. The test: a fresh stream from 13, shown first, then read back by streamlord-test
+            and held to the two lines. Nothing to type: Run runs the test as written, and Break
+            runs it expecting 99, so the reader sees what a failure prints. The server reads
+            `broken` and nothing else; the count on the page plays no part.
+          -->
           <div
             class="scene__panel"
             role="tabpanel"
@@ -327,27 +354,33 @@ const TOOLS = [
             data-show="$tool === 'test'"
             style="display: none"
           >
-            <p class="block__lead">The same stream, read by the test reader.</p>
+            <p class="block__lead">The stream, read back by the test reader and held to two lines.</p>
+
+            <p class="run__label">What <code>/feed</code> sends, counting from 13:</p>
+            <div class="assert__frames">{FEED_FRAMES.map((frame) => <pre class="wire__frame">{frame}</pre>)}</div>
+
+            <p class="run__label">The test:</p>
+            <pre class="asserts"><code>events.assertPatchElements(selector = <span class="asserts__str">"#feed"</span>, mode = ElementPatchMode.APPEND, containing = <span class="asserts__str">"A new head"</span>)
+events.assertSignal(<span class="asserts__str">"heads"</span>, <span class="asserts__num">14</span>)</code></pre>
 
             <div class="assert__row">
-              <label class="fs-label" for="expect">expect heads to be</label>
-              <input class="fs-input assert__expect" id="expect" type="number" min="0" max="10000" data-bind:expect />
-              <button class="fs-button" type="button" data-on:click={`@post('${SERVICE}/assert')`}>
-                Assert it
+              <button class="fs-button" type="button" data-on:click={`$broken = false; @post('${SERVICE}/assert')`}>
+                Run this test
+              </button>
+              <button
+                class="fs-button"
+                data-variant="secondary"
+                type="button"
+                data-on:click={`$broken = true; @post('${SERVICE}/assert')`}
+              >
+                Break it
               </button>
             </div>
-            <p class="assert__note">
-              The feed counts on from <code data-text="$heads"></code>, as a press of Run does.
-            </p>
-
-            <!-- The two lines a test says, with the field's number where the test's would be. -->
-            <pre class="asserts"><code>events.assertPatchElements(selector = <span class="asserts__str">"#feed"</span>, mode = ElementPatchMode.APPEND, containing = <span class="asserts__str">"A new head"</span>)
-events.assertSignal(<span class="asserts__str">"heads"</span>, <span class="asserts__num" data-text="$expect">14</span>)</code></pre>
 
             <div id="assertion" class="assert__box" aria-live="polite">
               <p class="fs-paragraph" data-size="small">
-                Press Assert. Green when the stream says what the field says; the reader's own
-                failure, stream and all, when it does not.
+                Run it and the test is green. Break it and the test expects 99 instead, and the
+                reader's own failure lands here, stream and all.
               </p>
             </div>
           </div>
@@ -745,8 +778,10 @@ events.assertSignal(<span class="asserts__str">"heads"</span>, <span class="asse
         color: var(--fs-color-neutral-text-subtle);
       }
       .run__heads code,
-      .assert__note code {
+      .run__label code {
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        text-transform: none;
+        letter-spacing: 0;
       }
       .run__count {
         margin-inline-start: var(--fs-spacing-1);
@@ -785,16 +820,21 @@ events.assertSignal(<span class="asserts__str">"heads"</span>, <span class="asse
         min-inline-size: 0;
         overflow-wrap: anywhere;
       }
-      .run__frames {
+      .run__frames,
+      .assert__frames {
+        inline-size: 100%;
+        min-inline-size: 0;
         display: grid;
         gap: var(--fs-spacing-2);
       }
-      .run__frames > p {
+      .run__empty {
         margin: 0;
         color: var(--fs-color-neutral-text-subtle);
       }
-      /* The frames, as the live page shows them: the server writes these, so they are styled here. */
-      .run__frames :global(.wire__frame) {
+      /* The frames, as the live page shows them. The server writes the SDK panel's, so those
+         are :global; the test panel's are written here from the generated transcript. */
+      .run__frames :global(.wire__frame),
+      .assert__frames .wire__frame {
         margin: 0;
         padding: var(--fs-spacing-3);
         overflow-x: auto;
@@ -807,21 +847,12 @@ events.assertSignal(<span class="asserts__str">"heads"</span>, <span class="asse
         overflow-wrap: anywhere;
       }
 
-      /* The test: a field, a button and the two lines, then the reader's verdict. */
+      /* The test: the frames, the two lines, two buttons, then the reader's verdict. */
       .assert__row {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
         gap: var(--fs-spacing-3);
-      }
-      .assert__expect {
-        inline-size: 6rem;
-        font-variant-numeric: tabular-nums;
-      }
-      .assert__note {
-        margin: 0;
-        font-size: var(--fs-font-size-s);
-        color: var(--fs-color-neutral-text-subtle);
       }
       .asserts {
         inline-size: 100%;
@@ -858,6 +889,10 @@ events.assertSignal(<span class="asserts__str">"heads"</span>, <span class="asse
         line-height: var(--fs-line-height-compact);
         white-space: pre-wrap;
         overflow-wrap: anywhere;
+      }
+      .assert__box :global(.assertion__why) {
+        margin: 0;
+        color: var(--fs-color-neutral-text-subtle);
       }
 
       .judge__source {

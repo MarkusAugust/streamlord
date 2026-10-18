@@ -20,14 +20,22 @@ All notable changes to Streamlord are recorded here. The format follows
   logged nor kept.
   `streamlord-analysis` is on the service's classpath for it, and its catalog is named for the
   native image, which CI now proves by calling both routes on the image before it is pushed.
-- `POST /assert` on streamlord-live, for the front page's test panel: it reads `heads` and
-  `expect` from the signals, puts the events `GET /feed` would send for that count on the wire,
-  reads them back with `streamlord-test`'s `datastarEvents`, and runs the two assertions the
-  panel shows, `assertPatchElements(selector = "#feed", mode = APPEND, containing = "A new
-  head")` and `assertSignal("heads", expect)`. A pass is a green alert in `#assertion` that
-  counts the events; a failure is the reader's own `AssertionError` message, stream and all, in
-  a red one. `streamlord-test` is on the service's classpath for it, and CI calls the route on
-  the image with an expectation that passes and one that fails.
+- `POST /assert` on streamlord-live, for the front page's test panel: it puts the events
+  `GET /feed` sends for 13 on the wire, reads them back with `streamlord-test`'s
+  `datastarEvents`, and runs the two assertions the panel shows, `assertPatchElements(selector
+  = "#feed", mode = APPEND, containing = "A new head")` and `assertSignal("heads", 14)`. The one
+  signal it reads is `broken`, which makes the second assertion expect 99 instead, so the panel
+  can show a failure; the count on the page plays no part. A pass is a green alert in
+  `#assertion` that counts the events; a failure is the reader's own `AssertionError` message,
+  stream and all, in a red one, with a line under it saying so. `streamlord-test` is on the
+  service's classpath for it, and CI calls the route on the image both ways.
+- `GET /feed/reset` on streamlord-live, for the front page's Reset button: it patches `#feed` and
+  `#wire` empty and `heads` back to 13. A route because no Datastar attribute removes what the
+  server appended; an inner patch of nothing is the one way to clear a container.
+- The front page's test panel shows the stream it asserts, frame by frame, before the two
+  assertions. The frames are written by `:docs-samples:checkDocSamples` into
+  `docs/src/generated/feed-13.sse` from the service's own handler and encoder, and CI fails when
+  the file is stale, as it does for the `wire=` fences on the pages.
 
 ### Changed
 

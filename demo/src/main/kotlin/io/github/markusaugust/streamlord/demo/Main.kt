@@ -262,8 +262,13 @@ public fun Application.live() {
             call.respondDatastar(feedEvents(signals).asFlow())
         }
 
-        // The same feed, read back by streamlord-test and held to the two assertions the test
-        // panel shows. The count to expect comes from the page's field, so a wrong one fails.
+        // The panel as it arrived: the list and the frames emptied, the count back at 13.
+        get("/feed/reset") {
+            call.respondDatastar(resetEvents().asFlow())
+        }
+
+        // A fresh feed from 13, read back by streamlord-test and held to the two assertions the
+        // test panel shows. `broken` makes the second expect 99, so the reader sees a failure.
         post("/assert") {
             call.respondDatastar(assertEvents(call.readSignalsOr(AssertSignals())).asFlow())
         }

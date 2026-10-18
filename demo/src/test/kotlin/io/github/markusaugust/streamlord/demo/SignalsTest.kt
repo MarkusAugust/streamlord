@@ -59,8 +59,8 @@ class SignalsTest {
     @Test
     fun `the assertion reads its signals`() {
         assertEquals(
-            AssertSignals(heads = 13, expect = 14),
-            SIGNALS.decode("""{"heads":13,"expect":14,"tool":"test"}"""),
+            AssertSignals(broken = true),
+            SIGNALS.decode("""{"broken":true,"heads":13,"tool":"test"}"""),
         )
     }
 

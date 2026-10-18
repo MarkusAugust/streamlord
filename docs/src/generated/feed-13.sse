@@ -1,0 +1,7 @@
+event: datastar-patch-elements
+data: selector #feed
+data: mode append
+data: elements <li>A new head hangs on the wall</li>
+
+event: datastar-patch-signals
+data: signals {"heads": 14}
