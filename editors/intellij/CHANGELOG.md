@@ -29,6 +29,8 @@ All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here
   reordered modifier as the fix.
 - An attribute with an empty key, such as `data-indicator:`, gets one warning that it does
   nothing, with a fix that drops the colon where the attribute then runs.
+- A `data-indicator` with both a key and a value, or with neither, gets only the error Datastar
+  raises, and no longer the warning that the indicator tracks no request as well.
 - Fewer false findings: `$id` inside a JavaScript string, `@post('/x/$id')`, is a hint about the
   server value it is; a `$my-value` the page declares with `__case.kebab`, or as `{'my-key': 1}`,
   is no longer called unknown, and its fix no longer breaks the page; a key with template syntax

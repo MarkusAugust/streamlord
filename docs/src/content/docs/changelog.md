@@ -17,8 +17,13 @@ Source that passes one, also as the first positional argument of `respondDatasta
 compiles; delete the argument. Code compiled against 0.12 still links.
 
 **Every stream has a heartbeat now.** A stream silent for 30 seconds carries a `: keep-alive`
-comment, and one silent from the start gets its first after five seconds, on Ktor and on Spring
-WebMVC, unless you set `heartbeat = null` on the instance, in the plugin or on one stream. A test
+comment, and one silent from the start gets its first after five seconds, or after the interval
+if that is shorter, on Ktor and on Spring WebMVC, unless you set `heartbeat = null` on the
+instance, in the plugin or on one stream. That first comment commits the response, so a block that
+waits longer than that and then fails cuts the stream off instead of answering with a status. On
+Spring WebMVC the heartbeat asks your `StreamAuthorisation` from an IO thread, without the
+request's thread-locals, Spring Security's context among them: read what `allows()` needs before
+the stream opens, or it refuses a stream that used to stay open. A test
 that calls `Streamlord.stream` under `runTest`, with a block that waits on a real thread, gets
 comment after comment while virtual time skips ahead: give it `Streamlord(heartbeat = null)`. A
 test that counts `events.messages` counts the comments too. See
@@ -27,8 +32,8 @@ test that counts `events.messages` counts the comments too. See
 **Pass the block after the parentheses.** `respondDatastar` and `datastarStream` take a
 `heartbeat` for one stream, and `datastarStream` a `timeout` and an `executor` as well, so a
 lambda or a function reference written inside the parentheses as the last positional argument,
-`datastarStream(streamlord, request, authorisation, { … })`, lands on one of them and no longer
-compiles. Write `datastarStream(streamlord, request, authorisation) { … }`, or name it
+`datastarStream(streamlord, request, authorisation, { … })`, lands on `timeout` or `heartbeat`
+and no longer compiles. Write `datastarStream(streamlord, request, authorisation) { … }`, or name it
 `block = …`. Java source written against 0.12 no longer compiles either: the new parameters take
 a `kotlin.time.Duration`, which Java can only pass as `null`, and a `null` heartbeat means none
 at all. Binaries compiled against 0.12 still link.
@@ -62,7 +67,8 @@ name, or as none, now throw where you write them:
 
 **Durations, retries and ids the browser cannot honour throw.** A modifier duration that is
 negative or over `Int.MAX_VALUE` milliseconds, a flag such as `debounceLeading` without its
-duration, `half`, `full` and `threshold` together on `dataOnIntersect`, and a negative
+duration, more than one of `half`, `full` and `threshold` on `dataOnIntersect`, an interval of
+zero, and a negative
 `retryMaxCount` or `retryScaler` throw where you write them. An event with a `retry` that is not a
 whole number of milliseconds from 1 to `Int.MAX_VALUE`, or an `eventId` that is not printable
 ASCII or has a space at either end, throws `DatastarEventValidationException`. `SignalFilter`
@@ -79,7 +85,8 @@ new; if one fails on a stream, the browser was not doing what the test said.
 **The Jackson codecs refuse a missing or `null` primitive.** `{}` into
 `data class Delete(val id: Long)` used to reach the handler as `Delete(id=0)`; it is a `400` now.
 A Kotlin class needs `jackson-module-kotlin` on the mapper you hand the codec, and without it a
-decode throws `SignalsCodecException`: register the module.
+decode throws `SignalsCodecException`: register the module. Text after the JSON value is a `400`
+too.
 
 **The Jackson codecs ignore keys your type does not name, even when your mapper refuses them.**
 A mapper with `FAIL_ON_UNKNOWN_PROPERTIES` on, as `jacksonObjectMapper()` has it, no longer fails

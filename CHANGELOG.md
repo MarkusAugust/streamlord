@@ -296,7 +296,6 @@ All notable changes to Streamlord are recorded here. The format follows
 - `SendLatestTest`, which checks that `sendLatest` counts a render that never suspends, ran on the
   wall clock and failed under load. It runs on a clock the test drives, and no longer fails on a
   busy machine.
-
 - `streamlord-analysis`, which only the two editors consume, changed the signatures of
   `ExpressionValidator.validate`, `MarkupValidator.validateAttributes`, `Requests.parseRequestsFile`,
   `MarkupOptions`, `RequestsFile` and `AttributeSpec` with new parameters that have defaults, so
@@ -614,8 +613,8 @@ All notable changes to Streamlord are recorded here. The format follows
   Streamlord now cuts the connection there too, on Tomcat 10.1 and 11 and Jetty 11 and 12, over
   HTTP/1.1 and HTTP/2, where only the stream is reset, and on Tomcat 9 under Ktor's javax engine
   over HTTP/1.1. It does so by reflection, with no new dependency, and on Tomcat only once Ktor
-  has completed the request, and not on a connector set to keep its facades, where a cut reached
-  other requests. On an engine Streamlord does not know, the stream ends as the engine ends it.
+  has completed the request, and not on a connector set to keep its facades
+  (`discardFacades = false`). On an engine Streamlord does not know, the stream ends as the engine ends it.
 - On Ktor's servlet engine, jakarta and javax alike, `respondDatastar` throws a stream's failure,
   whatever was thrown, only once the engine's response writer has finished, and a cancelled call
   waits for that writer before the cancellation goes on. The frames still get at most a second for
