@@ -121,7 +121,8 @@ body {
 .marketplace__id {
   font-size: var(--font-size-xs);
   color: var(--fs-color-neutral-text-subtle);
-  word-break: break-all;
+  /* The <wbr> after each dot is where it breaks; this is for a card narrower than a part. */
+  overflow-wrap: break-word;
 }
 
 /*

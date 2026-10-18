@@ -155,9 +155,9 @@ abstract class ExtractDocSamples : DefaultTask() {
 
     /**
      * A handler method that takes the Streamlord bean as a parameter. It compiles, and Spring
-     * then treats the parameter as a model attribute and constructs a fresh default instance,
-     * so the codec and the guard on the real bean are silently ignored. The bean has to come
-     * through the constructor.
+     * then treats the parameter as a model attribute and tries to construct one, which fails on
+     * the value-class `heartbeat`: every request answers 500 with `BeanInstantiationException`,
+     * on WebMVC and WebFlux alike. The bean has to come through the constructor.
      */
     private val handlerTakingTheBean =
         Regex("""@(?:Get|Post|Put|Patch|Delete|Request)Mapping\b(?:(?!\bfun\b)[\s\S])*?\bfun\s+\w+\s*\([^)]*:\s*Streamlord\b""")
@@ -221,8 +221,9 @@ abstract class ExtractDocSamples : DefaultTask() {
                         Problem(
                             page.name,
                             fenceLine,
-                            "a handler method takes Streamlord as a parameter. Spring builds a new default instance " +
-                                "for it instead of injecting the bean; take the bean in the controller's constructor.",
+                            "a handler method takes Streamlord as a parameter. Spring treats it as a model attribute " +
+                                "and fails to construct one, so every request answers 500 with " +
+                                "BeanInstantiationException; take the bean in the controller's constructor.",
                         )
                     continue
                 }
@@ -352,14 +353,15 @@ tasks.named("check") { dependsOn(tasks.named("checkDocSamples")) }
  * the moment someone bumps a version in libs.versions.toml. This resolves each module the way a
  * consumer would and fails when the page disagrees.
  *
- * A block opts in by naming its module:
+ * A tree is a nested list that opts in with a comment naming its module, and ends at the first
+ * blank line:
  *
- *     ```deps=streamlord-json-jackson2 sample=none
- *     com.fasterxml.jackson.core:jackson-databind 2.22.3
- *     ```
+ *     <!-- deps=streamlord-json-jackson2 -->
+ *     - `com.fasterxml.jackson.core:jackson-databind 2.22.3`
+ *       - `com.fasterxml.jackson.core:jackson-core 2.22.3`
  *
- * Only coordinates are compared, not the drawing around them, so the tree glyphs
- * stay a presentation choice.
+ * Only coordinates are compared. Where one breaks on a phone is decided by the site's build, in
+ * docs/src/plugins/rehype-code-breaks.mjs, not by the page.
  */
 val documentedModules =
     listOf("streamlord-json-kotlinx", "streamlord-json-jackson", "streamlord-json-jackson2")
@@ -391,26 +393,17 @@ abstract class CheckDocDependencies : DefaultTask() {
         val claims = mutableMapOf<String, MutableSet<String>>()
         val coordinate = Regex("""([\w.\-]+):([\w.\-]+)[ :]+([\w.\-]+)""")
 
+        val marker = Regex("""^<!-- deps=([\w-]+) -->$""")
+
         for (page in pages.get().asFile.walkTopDown().filter { it.extension == "md" }) {
             val lines = page.readLines()
-            var index = 0
-            while (index < lines.size) {
-                val info = lines[index].takeIf { it.startsWith("```") }?.removePrefix("```")?.trim()
-                if (info == null) {
-                    index++
-                    continue
-                }
-                val end = lines.drop(index + 1).indexOfFirst { it.startsWith("```") }
-                if (end < 0) break
-                val body = lines.subList(index + 1, index + 1 + end)
-                index += end + 2
-
-                val module = info.split(" ").firstOrNull { it.startsWith("deps=") }?.removePrefix("deps=")
-                    ?: continue
-
+            for ((index, line) in lines.withIndex()) {
+                val module = marker.find(line.trim())?.groupValues?.get(1) ?: continue
                 val found = claims.getOrPut(module) { mutableSetOf() }
-                for (line in body) {
-                    coordinate.find(line)?.let { found += normalise("${it.groupValues[1]}:${it.groupValues[2]}:${it.groupValues[3]}") }
+                for (item in lines.drop(index + 1).takeWhile { it.isNotBlank() }) {
+                    coordinate.find(item)?.let {
+                        found += normalise("${it.groupValues[1]}:${it.groupValues[2]}:${it.groupValues[3]}")
+                    }
                 }
             }
         }
@@ -420,7 +413,7 @@ abstract class CheckDocDependencies : DefaultTask() {
         for ((module, actual) in resolved.get()) {
             val claimed = claims[module]
             if (claimed == null) {
-                problems += "  $module: no block on any page declares deps=$module"
+                problems += "  $module: no tree on any page declares deps=$module"
                 continue
             }
 

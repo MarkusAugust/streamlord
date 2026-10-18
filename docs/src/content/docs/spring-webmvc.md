@@ -73,10 +73,20 @@ would hold the events back until the stream ends; the stream writes past its
 `ContentCachingResponseWrapper`, and the events leave as they are sent.
 
 **Do not take it as a parameter of the handler method.** `fun search(streamlord: Streamlord)`
-compiles and starts, and Spring then treats the parameter as a model attribute: it constructs a
-new `Streamlord` with every default, for each request, and never looks at your bean. The codec
-you configured is gone, so a typed read fails with `BuiltInSignalsCodec cannot decode into
-SearchSignals`, and `guardElements` is quietly off. The constructor is the only way in.
+compiles and starts, and Spring then treats the parameter as a model attribute: it tries to
+build a new `Streamlord` for each request instead of passing your bean, and cannot: `heartbeat`
+is a `Duration`, a Kotlin value class, and the arguments Spring prepares do not fit the
+constructor the JVM sees. Every request to that handler answers `500` before the handler runs,
+and Tomcat logs a `BeanInstantiationException`, here with its first line shortened at each
+`...`:
+
+```text
+... threw exception [Request processing failed: org.springframework.beans.BeanInstantiationException: ...] with root cause
+
+java.lang.IllegalArgumentException: Number of provided arguments must be less than or equal to the number of constructor parameters
+```
+
+The constructor is the only way in.
 
 ## Streams that stay open
 

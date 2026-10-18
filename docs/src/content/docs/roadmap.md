@@ -7,9 +7,10 @@ description: "What is planned but not shipped, in the order it will land, and wh
 >
 > Gorvek of Bonereach
 
-None of this is in 0.12.0. It is written down so you can see what is coming, decide whether to
-wait for it, and know what to do today instead. Everything that touches your code is opt-in when
-it lands, the way [`guardElements`](/strings/) is, with one exception that is marked as such.
+Nothing on this page has shipped yet; an item leaves it in the release that delivers it. It is
+written down so you can see what is coming, decide whether to wait for it, and know what to do
+today instead. Everything that touches your code is opt-in when it lands, the way
+[`guardElements`](/strings/) is, with one exception that is marked as such.
 
 | Order | Planned | What it changes | What you do today |
 |---|---|---|---|
@@ -51,17 +52,18 @@ is what signals are for.
 
 The inspector opens a real Datastar request, exactly as the browser client would, parses the
 stream, and keeps every frame it decoded. It also keeps the signal store, applying each
-`datastar-patch-signals` as an RFC 7386 merge and honouring `onlyIfMissing`, so what it shows is
-what the client would hold.
+`datastar-patch-signals` with `mergePatchAsClient`, the merge as Datastar's client does it
+(RFC 7386 for an ordinary patch, but `onlyIfMissing` leaf by leaf, and an object onto an array
+sets its indices), so what it shows is what the client would hold.
 
-What it does not keep is the store at each step. `signals = mergePatch(signals, patch)` overwrites,
-so there is one running value and no way back. When a handler emits fifteen frames in half a
-second, you watch the number settle and cannot ask what it was at frame nine.
+What it does not keep is the store at each step. `signals = mergePatchAsClient(signals, patch)`
+overwrites, so there is one running value and no way back. When a handler emits fifteen frames in
+half a second, you watch the number settle and cannot ask what it was at frame nine.
 
-Planned: a position control over the frames already on screen. Step back, and the store panel
-shows what the client would have held at that point. This needs no new capture and no protocol
-work: every frame is kept with its arguments, `mergePatch` is a pure function, so the store at any
-index is a fold from the start. The work is the control and the wiring, in both plugins.
+Planned: a position control over the frames already on screen. Step back, and the store panel shows
+what the client would have held at that point. This needs no new capture and no protocol work:
+every frame is kept with its arguments, `mergePatchAsClient` is a pure function, so the store at
+any index is a fold from the start. The work is the control and the wiring, in both plugins.
 
 ## Delimiters the analysis has not met
 
