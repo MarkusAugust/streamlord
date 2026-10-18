@@ -6,6 +6,24 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Two routes on streamlord-live, the service behind the documentation site, for the front page
+  to run. `GET /feed` is the hero's code example as a handler: it reads `heads` from the signals,
+  appends one `li` to `#feed` and patches `heads` back one higher, with the frames for a page
+  that sends `wire`. `POST /judge` is the editors' analysis behind a route: it reads the `source`
+  signal, judges it with `analyzeHtml` when it starts with `<` and `analyzeKotlin` otherwise, and
+  patches the verdict into `#verdict`, each issue in the analysis's own words and each fix as a
+  button that writes the fixed text back into `$source`. It reads at most 1 KiB and says so
+  beyond that; the paste is neither logged nor kept. `streamlord-analysis` is on the service's
+  classpath for it, and its catalog is named for the native image, which CI now proves by
+  calling both routes on the image before it is pushed.
+
+### Changed
+
+- streamlord-live's `maxSignalsSize` is 4 KiB, down from the SDK's 1 MiB: the largest store any
+  of its pages sends is the judge's paste and a few flags.
+
 ## [0.13.0] - 2026-10-18
 
 ### Added

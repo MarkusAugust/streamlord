@@ -341,6 +341,71 @@ dependencies {
 }
 ```
 
+### The same check, behind a route
+
+The analysis takes a string, so it judges what a reader pastes as readily as what CI reads from
+disk. The service behind this site does exactly that at `/judge`: the paste arrives as the
+`source` signal, is read as a template when it starts with `<` and as Kotlin otherwise, and the
+verdict is patched into the page with each fix as a button. The analysis is a lexer and a parser
+over the paste, so it runs on `Dispatchers.Default` and leaves the server's threads to the
+connections:
+
+```kotlin sample=ktor-routing
+post("/judge") {
+    val source = call.readSignals().string("source") ?: ""
+    if (source.length > 1024) {
+        call.respondDatastar {
+            patchElements("<p>The judge reads at most 1 KiB.</p>", selector = "#verdict", mode = ElementPatchMode.INNER)
+        }
+        return@post
+    }
+
+    val issues =
+        withContext(Dispatchers.Default) {
+            if (source.trimStart().startsWith("<")) Analyzer().analyzeHtml(source) else Analyzer().analyzeKotlin(source)
+        }
+
+    call.respondDatastar {
+        patchElements(selector = "#verdict", mode = ElementPatchMode.INNER) {
+            if (issues.isEmpty()) p { +"The browser will see exactly this." }
+            ul {
+                issues.forEach { issue ->
+                    li {
+                        +"${issue.severity.name.lowercase()}: ${issue.message}"
+                        issue.fixes.forEach { fix ->
+                            // The whole text with the fix applied, as a JavaScript literal; js() escapes it.
+                            button { dataOnClick("\$source = ${js(fix.apply(source))}"); +fix.title }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+A `Fix` is a range replacement, so `fix.apply(source)` is the text the field should hold next, not
+`fix.text`, which is the helper call without the line it belongs to.
+
+The page binds the field and asks again whenever `source` changes, so the keyboard and the fix
+buttons reach the judge the same way. `data-on-signal-patch` with a filter is what does that, and
+the debounce is what keeps a paste from being judged one keystroke at a time:
+
+```html
+<section
+  data-signals="{source: ''}"
+  data-on-signal-patch__debounce.300ms="@post('/judge')"
+  data-on-signal-patch-filter="{include: /^source$/}"
+>
+  <textarea data-bind:source></textarea>
+  <div id="verdict"></div>
+</section>
+```
+
+Hold the limit on the server, as above, and set the plugin's `maxSignalsSize` a little above it, so
+a body that could never be a legitimate paste is refused before it is read. Read the paste, judge
+it and answer; do not log it and do not keep it, in an error message least of all.
+
 ## Signals the pages never declare
 
 A handler reads signals into a type. The pages declare them in markup. Nothing holds the two

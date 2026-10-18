@@ -485,6 +485,32 @@ jobs:
             && { echo "::error::the remove carried elements, which it must not"; exit 1; }
           echo "  a remove went out as a selector and a mode"
 
+          # The front page's example: the count comes out of the signals and goes back one higher.
+          feed=$(curl -s --max-time 5 \
+            -H 'Accept: text/event-stream' \
+            'http://localhost:8080/feed?datastar=%7B%22heads%22%3A13%7D')
+
+          echo "$feed" | grep -q '<li>A new head hangs on the wall</li>' \
+            || { echo "::error::/feed hung no head"; echo "$feed" | head -8; exit 1; }
+          echo "$feed" | grep -q '"heads": 14' \
+            || { echo "::error::/feed did not count 13 to 14"; echo "$feed" | head -8; exit 1; }
+          echo "  the feed counted a head"
+
+          # The judge reads the analysis's catalog as a resource by name, which is exactly the
+          # kind of file a native image leaves out. A verdict with the editors' own message in
+          # it proves the catalog is in the image; a 500 here is what a missing one looks like.
+          judge=$(curl -s --max-time 10 -X POST \
+            -H 'Content-Type: application/json' \
+            -H "Origin: $ORIGIN" \
+            -d '{"source":"dataOnClick(\"$count++\")"}' \
+            http://localhost:8080/judge)
+
+          echo "$judge" | grep -q 'Kotlin interpolates $count here' \
+            || { echo "::error::/judge gave no verdict. Is the catalog in the image?"; echo "$judge" | head -8; exit 1; }
+          echo "$judge" | grep -q 'judge__fix' \
+            || { echo "::error::/judge offered no fix"; exit 1; }
+          echo "  the judge read a paste and offered a fix"
+
       # Known vulnerabilities in the image. On master this is the last point at which one can
       # still be kept out of production; on a release branch it is the warning before
       # anything is tagged. The binary is scanned in its sources by security.yml, so what

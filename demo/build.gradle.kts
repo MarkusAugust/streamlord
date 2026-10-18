@@ -13,6 +13,9 @@ dependencies {
     implementation(project(":streamlord-ktor"))
     implementation(project(":streamlord-html"))
     implementation(project(":streamlord-json-kotlinx"))
+    // The judge: the editors' analysis behind a route. Its catalog is a resource read by name;
+    // resource-config.json names it for the native image.
+    implementation(project(":streamlord-analysis"))
 
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.cio)
@@ -22,7 +25,6 @@ dependencies {
 
     testImplementation(kotlin("test"))
     testImplementation(libs.ktor.server.test.host)
-    testImplementation(project(":streamlord-analysis"))
     testImplementation(libs.kotlinx.coroutines.test)
 }
 
@@ -38,8 +40,8 @@ application {
  * here. The smoke test that follows the deploy is what makes that acceptable, because a binary
  * that starts and cannot serve fails the job before it reaches the site.
  *
- * META-INF/native-image/resource-config.json names index.json, which is read by name and so
- * appears nowhere in the bytecode.
+ * META-INF/native-image/resource-config.json names index.json and the analysis's catalog,
+ * datastar-1.0.4.json, both read by name and so appearing nowhere in the bytecode.
  */
 graalvmNative {
     binaries {

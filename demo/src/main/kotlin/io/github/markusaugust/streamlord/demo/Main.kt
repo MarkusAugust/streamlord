@@ -100,6 +100,8 @@ internal val SIGNALS: KotlinxSignalsCodec =
                 typeOf<CounterSignals>() to CounterSignals.serializer(),
                 typeOf<MusterSignals>() to MusterSignals.serializer(),
                 typeOf<ModeSignals>() to ModeSignals.serializer(),
+                typeOf<FeedSignals>() to FeedSignals.serializer(),
+                typeOf<JudgeSignals>() to JudgeSignals.serializer(),
             ),
         requireNamedSerializers = true,
     )
@@ -118,6 +120,9 @@ public fun Application.live() {
      */
     install(StreamlordPlugin) {
         codec = SIGNALS
+        // The largest store any page here sends is the judge's, a 1 KiB paste and a few flags.
+        // Four times that, and a body above it is refused before it is read.
+        maxSignalsSize = 4096
     }
 
     /*
@@ -196,6 +201,27 @@ public fun Application.live() {
         // adapter drains it whole, which is the API this demo exists to show.
         get("/counter") {
             call.respondDatastar(counterEvents(call.readSignalsOr(CounterSignals())))
+        }
+
+        // The front page's code example, run: one li onto #feed and the count patched back.
+        get("/feed") {
+            val signals = call.readSignalsOr(FeedSignals())
+            call.respondDatastar(feedEvents(signals).asFlow())
+        }
+
+        /*
+         * The editors' check, as a route. The paste is read, judged and answered, and that is
+         * all: it is not logged and not kept, and the one exception that can name it is turned
+         * into a verdict here rather than handed to StatusPages.
+         */
+        post("/judge") {
+            val events =
+                try {
+                    judgeEvents(call.readSignalsOr(JudgeSignals()))
+                } catch (_: SignalsTooLargeException) {
+                    tooLargeEvents()
+                }
+            call.respondDatastar(events.asFlow())
         }
 
         get("/search") {
