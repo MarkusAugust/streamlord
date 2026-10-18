@@ -56,7 +56,7 @@ it.
    - `CHANGELOG.md`: rename `## [Unreleased]` to `## [<version>] - <date>` and open a new empty
      `## [Unreleased]` above it. The publish job takes the release notes from that section and
      refuses to publish without it.
-   - `docs/src/content/docs/changelog.md` and the version prose in `roadmap.md`.
+   - `docs/src/content/docs/changelog.md`, and in `roadmap.md` take out what the release delivers.
    - `.github/dependabot.yml`: `target-branch` to the next release branch.
    In CI `checkDocSamples` fails on a page it would have rewritten, so a release commit that
    skips this step goes red on the tag rather than publishing pages that name the old release.

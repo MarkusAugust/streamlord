@@ -131,8 +131,7 @@ All notable changes to Streamlord are recorded here. The format follows
   is kept in `messages()` as written; decoding fails on one that would not come back as written
   as `last-event-id`, by the rule events are built with: printable ASCII, no space at either
   end. A `retry` that is not a whole number of milliseconds from 1 to `Int.MAX_VALUE` fails too.
-  Both
-  are checked on every message, Datastar's or not, and on an unfinished one at the end, since
+  Both are checked on every message, Datastar's or not, and on an unfinished one at the end, since
   the client takes them per line; `SseReader.finish()` and `LiveDatastarStream` check that last
   one as well. A data line with no space after its key fails: the client would read the key as
   the line minus its last character. `onlyIfMissing` and `useViewTransition` are true with spaces
@@ -456,8 +455,9 @@ All notable changes to Streamlord are recorded here. The format follows
 - `LiveDatastarStream` sends the client's `Accept`, now `DatastarProtocol.ACCEPT`, and words a
   frame it fails on as one Streamlord's rules refuse: the client takes `retry: 0` and `1e3`.
 - The pages give the measured disconnect figures (four to five heartbeats on CIO, two on Netty),
-  say which engine sends its headers when, and what Netty does with `heartbeat = null`; and the core, `streamlord-test` and the Ktor tests also run on the newest
-  coroutines release, and `HttpRequestLifecycle` is tested on Netty.
+  say which engine sends its headers when, and what Netty does with `heartbeat = null`.
+- The core, `streamlord-test` and the Ktor tests also run on the newest coroutines release, and
+  `HttpRequestLifecycle` is tested on Netty.
 - On Spring WebMVC, a failure inside a stream that has started is cut off, as the documentation
   said, also when `StreamlordExceptionHandler` handles it: the handler throws the exception on
   when the response is committed. It used to answer, which ended the chunked body as if the stream
@@ -590,6 +590,19 @@ All notable changes to Streamlord are recorded here. The format follows
   `List<Signals>`, through, although the list is looked up whole and that lookup reads the class
   of what it holds, the reflective path a native image cannot take. It is now refused until the
   container is named itself, as `typeOf<List<Signals>>() to ListSerializer(Signals.serializer())`.
+- The Spring pages give the real symptom of a handler that takes `Streamlord` as a parameter: every
+  request answers `500` with `BeanInstantiationException`, on WebMVC and WebFlux, rather than
+  running on a default instance. The security page says why the writer escapes U+2028 when current
+  browsers accept it raw, and that it escapes `<!` as well as `</`, and the introduction and the
+  README that a request asking to close gets `Connection: keep-alive` from the version written by
+  hand on CIO, Netty and Tomcat, and not from `respondDatastar`. The roadmap no longer says what a
+  named release lacks and describes the store panel with the merge it uses, `mergePatchAsClient`.
+  The install page draws the codec dependency trees as lists, not as text art; on a phone a
+  coordinate breaks at a dot, at its colon and before its version, and at a hyphen in its name only
+  on a line narrower than the name. Inline code written in Markdown breaks after a `.`, `::`, `/` or
+  `(` before it breaks inside a name. The editor READMEs list the IntelliJ inspection for a signal
+  no file defines, the Stream Inspector's two settings and the required signing secrets, and VS
+  Code's `test:live` runs against the repository's own demo rather than a service outside it.
 
 ### Security
 

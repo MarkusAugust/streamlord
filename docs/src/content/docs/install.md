@@ -115,29 +115,23 @@ Resolved from the build, not from memory. `kotlin-stdlib` is left out of all thr
 
 **`streamlord-json-kotlinx`**
 
-```deps=streamlord-json-kotlinx sample=none
-streamlord-json-kotlinx
-└── org.jetbrains.kotlinx:kotlinx-serialization-json 1.11.0
-    └── org.jetbrains.kotlinx:kotlinx-serialization-core 1.11.0
-```
+<!-- deps=streamlord-json-kotlinx -->
+- `org.jetbrains.kotlinx:kotlinx-serialization-json 1.11.0`
+  - `org.jetbrains.kotlinx:kotlinx-serialization-core 1.11.0`
 
 **`streamlord-json-jackson`**: Jackson 3
 
-```deps=streamlord-json-jackson sample=none
-streamlord-json-jackson
-└── tools.jackson.core:jackson-databind 3.2.3
-    ├── tools.jackson.core:jackson-core 3.2.3
-    └── com.fasterxml.jackson.core:jackson-annotations 2.22
-```
+<!-- deps=streamlord-json-jackson -->
+- `tools.jackson.core:jackson-databind 3.2.3`
+  - `tools.jackson.core:jackson-core 3.2.3`
+  - `com.fasterxml.jackson.core:jackson-annotations 2.22`
 
 **`streamlord-json-jackson2`**: Jackson 2
 
-```deps=streamlord-json-jackson2 sample=none
-streamlord-json-jackson2
-└── com.fasterxml.jackson.core:jackson-databind 2.22.3
-    ├── com.fasterxml.jackson.core:jackson-core 2.22.3
-    └── com.fasterxml.jackson.core:jackson-annotations 2.22
-```
+<!-- deps=streamlord-json-jackson2 -->
+- `com.fasterxml.jackson.core:jackson-databind 2.22.3`
+  - `com.fasterxml.jackson.core:jackson-core 2.22.3`
+  - `com.fasterxml.jackson.core:jackson-annotations 2.22`
 
 Jackson 3 still takes its annotations from the 2.x artifact; that is Jackson's own arrangement,
 not something Streamlord does.

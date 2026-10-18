@@ -24,6 +24,15 @@
     border-radius: 3px;
     background: var(--fs-color-neutral-surface);
     font-size: 0.9em;
+    /* The last resort for a name with no <wbr> in it (see rehype-code-breaks.mjs) that is still
+       wider than its line: it breaks anywhere rather than widen the page. */
+    overflow-wrap: break-word;
+  }
+  /* Part of an inline code span that breaks at a <wbr> beside it, and at a hyphen inside only
+     on a line too narrow for the whole of it. */
+  .prose code .unbroken {
+    display: inline-block;
+    max-width: 100%;
   }
   .prose code {
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
