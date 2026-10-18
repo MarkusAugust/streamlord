@@ -455,12 +455,12 @@ export function validateAttributes(tag: Tag, prefix: string, tagSource?: string,
       issues.push({
         start: attr.nameStart,
         end: nameEnd,
-        message: `${prefix}${spec.name}: has an empty key, so Datastar reads ${spec.name}: as an attribute it does not have and does nothing with it. ` +
-          (spec.keyRequired ? `The key follows the colon, e.g. ${spec.forms[0] ?? ""}.` : `Without the colon it is ${prefix}${spec.name}.`),
+        message: `${prefix}${spec.name}: has an empty key, so Datastar reads ${spec.name}: as an attribute it does not have and does nothing with it. ` + emptyKeyAdvice(spec, prefix, !!attr.value, cut),
         severity: "warning",
         code: "unknown-attribute",
         link: attributeDoc(spec.name),
-        fixes: spec.keyRequired ? undefined : [{ title: `Change to ${prefix}${spec.name}`, start: colonEnd - 1, end: colonEnd, text: "" }],
+        // Only where the attribute runs without the colon: data-text with no value raises ValueRequired.
+        fixes: spec.keyRequired || emptyKeyNeeds(spec, !!attr.value, cut) ? undefined : [{ title: `Change to ${prefix}${spec.name}`, start: colonEnd - 1, end: colonEnd, text: "" }],
       });
       continue;
     }
@@ -498,8 +498,8 @@ export function validateAttributes(tag: Tag, prefix: string, tagSource?: string,
       issues.push({ start: attr.nameStart, end: nameEnd, message: `${prefix}${spec.name} only works on <${spec.onlyOn.join(">, <")}>.`, severity: "warning", code: "wrong-element" });
     }
     // data-on:my__event: the event is the key before the first __, so the name the author may have
-    // meant whole is cut there. With __case the client recases it, so the name is left unsaid.
-    const listensFor = spec.name === "on" && parsed.key && !parsed.modifiers.some((m) => m.name === "case") ? `, so it listens for the event ${parsed.key}` : "";
+    // meant whole is cut there, and recased as __case says.
+    const listensFor = spec.name === "on" && parsed.key ? `, so it listens for the event ${clientCase(parsed.key, parsed.modifiers, "kebab")}` : "";
     for (const mod of templated ? [] : parsed.modifiers) {
       const mend = attr.nameStart + mod.offset + mod.text.length;
       // An empty modifier has no text to underline: the `__` that opens it is marked.
@@ -535,7 +535,7 @@ export function validateAttributes(tag: Tag, prefix: string, tagSource?: string,
         continue;
       }
       const present = parsed.modifiers.filter((m) => m !== mod).map((m) => m.name);
-      issues.push(...validateModifierArgs(mspec, mod.args, mstart, mend, prefix + spec.name, spec, present).map((i) => ({ ...i, link: attributeDoc(spec.name) })));
+      issues.push(...validateModifierArgs(mspec, mod.args, mstart, mend, prefix + spec.name, spec, present, listensFor).map((i) => ({ ...i, link: attributeDoc(spec.name) })));
     }
     if (attr.value !== null && spec.valueKind === "expression" && attr.value.trim().length > 0 && !hasTemplateSyntax(attr.value)) {
       const decoded = decodeEntities(attr.value);
@@ -560,6 +560,45 @@ export function validateAttributes(tag: Tag, prefix: string, tagSource?: string,
   }
   issues.push(...indicatorWithoutAction(tag, prefix, tagSource));
   return issues;
+}
+
+/**
+ * What `data-x:` with an empty key lacks besides the colon dropped: null when the attribute runs
+ * without it as it stands, else the error the client raises.
+ */
+function emptyKeyNeeds(spec: AttributeSpec, hasValue: boolean, cut: boolean): "ValueRequired" | "KeyOrValueRequired" | null {
+  if (hasValue) return null;
+  if (spec.requires === "value" && !cut) return "ValueRequired";
+  if (spec.requires === "exclusive") return "KeyOrValueRequired";
+  return null;
+}
+
+function emptyKeyAdvice(spec: AttributeSpec, prefix: string, hasValue: boolean, cut: boolean): string {
+  if (spec.keyRequired) return `The key follows the colon, e.g. ${spec.forms[0] ?? ""}.`;
+  switch (emptyKeyNeeds(spec, hasValue, cut)) {
+    case "ValueRequired":
+      return `Without the colon it is ${prefix}${spec.name}, which also needs a value; without one Datastar raises ValueRequired.`;
+    case "KeyOrValueRequired":
+      return `It needs a signal, as the key after the colon, e.g. ${spec.forms[0] ?? ""}, or as the value without the colon, e.g. ${spec.forms[1] ?? ""}; without one Datastar raises KeyOrValueRequired.`;
+    default:
+      return `Without the colon it is ${prefix}${spec.name}.`;
+  }
+}
+
+/** The cases the 1.0.4 client has a function for (utils/text.ts); any other value leaves the key as it is. */
+const camelCase = (s: string): string => s.replace(/-[a-z]/g, (x) => x[1]!.toUpperCase());
+const CASE_FNS = new Map<string, (s: string) => string>([
+  ["camel", camelCase],
+  ["snake", (s) => s.replace(/-/g, "_")],
+  ["pascal", (s) => (s.length > 0 ? s[0]!.toUpperCase() + camelCase(s.slice(1)) : s)],
+]);
+
+/** The key as the client recases it: each value of the last `__case` in turn, or the attribute's default without one. */
+function clientCase(key: string, modifiers: { name: string; args: string[] }[], defaultCase: string): string {
+  const mod = modifiers.filter((m) => m.name === "case").at(-1);
+  let out = key;
+  for (const c of mod ? new Set(mod.args) : [defaultCase]) out = CASE_FNS.get(c)?.(out) || out;
+  return out;
 }
 
 /** `fooBar` -> `foo-bar`, one hyphen per capital, which Datastar's camel conversion turns back into `fooBar`. */
@@ -1101,7 +1140,7 @@ function dottedArguments(name: string, spec: AttributeSpec): string | null {
   return head + "." + args.join(".");
 }
 
-function validateModifierArgs(spec: AttributeSpec["modifiers"][number], args: string[], start: number, end: number, attrName: string, attribute: AttributeSpec, present: string[] = []): Issue[] {
+function validateModifierArgs(spec: AttributeSpec["modifiers"][number], args: string[], start: number, end: number, attrName: string, attribute: AttributeSpec, present: string[] = [], listensFor = ""): Issue[] {
   const issues: Issue[] = [];
   const fail = (message: string, fixes?: Issue["fixes"]) => issues.push({ start, end, message, severity: "error", code: "modifier-args", ...(fixes ? { fixes } : {}) });
   // Arguments the client never reads: the modifier still does what it does, so these are warnings.
@@ -1169,8 +1208,22 @@ function validateModifierArgs(spec: AttributeSpec["modifiers"][number], args: st
     }
     case "enum": {
       const [v, ...rest] = args;
-      if (!v || !(spec.values ?? []).includes(v)) fail(`__${spec.name} needs one of: ${(spec.values ?? []).map((x) => "." + x).join(", ")}.`);
-      if (rest.length > 0) fail(`__${spec.name} takes a single value.`);
+      const values = spec.values ?? [];
+      const allowed = values.map((x) => "." + x).join(", ");
+      if (!v || !values.includes(v)) {
+        // The client leaves the key as it is for a case it has no function for. Where the default
+        // is kebab, which it has none for either, that is the key without the modifier.
+        if (spec.name === "case" && attribute.keyCase === "kebab") {
+          const also = rest.filter((r) => !CASE_FNS.has(r)).map((r) => "." + r).join("");
+          ignored(`${v ? `Unknown value .${v} for __case, which Datastar ignores${also ? `, as it does ${also}` : ""}` : "Datastar ignores __case without a value"}${listensFor}. Allowed: ${allowed}.`);
+        } else {
+          fail(`__${spec.name} needs one of: ${allowed}.`);
+        }
+      }
+      // __case.camel.foo: the client applies each value it has a function for and skips the rest.
+      const applied = spec.name === "case" ? rest.filter((r) => CASE_FNS.has(r)) : rest;
+      if (applied.length > 0) fail(`__${spec.name} takes a single value.`);
+      else if (rest.length > 0 && v && values.includes(v)) ignored(`__${spec.name} takes a single value; Datastar ignores ${rest.map((r) => "." + r).join("")}${listensFor}.`);
       break;
     }
     case "int": {
