@@ -59,7 +59,9 @@ lowercases it either way.
 An event or class name that mixes capitals with a hyphen before a lower-case letter, such as
 `fooBar-baz`, cannot travel in a key: the capitals need `__case.camel`, and that turns the hyphen
 into a capital too, so the client would listen for or toggle `fooBarBaz`. `dataOn` and
-`dataClass` refuse it; write the name in one case, `fooBarBaz` or `foo-bar-baz`. In `dataBind`,
+`dataClass` refuse it; write the name in one case, `fooBarBaz` or `foo-bar-baz`. A class you
+cannot rename, such as `MuiButton-root` from a component library, goes in the object form,
+`dataClass("{'MuiButton-root': \$active}")`, whose keys the client uses as written. In `dataBind`,
 the `events` are used as the browser hands them over, so one with a capital (which arrives in
 lowercase) or a `.` (which splits it in two) is refused, and a `prop` is refused when Datastar's
 own camel-casing would not give it back: `x2y` comes back as `x2Y`, `_value` as `Value`. `dataBind`, `dataRef` and `dataIndicator` write the name in the
@@ -68,6 +70,11 @@ key only.
 
 The object forms (`dataSignals("{...}")`, `dataComputed("{...}")`, `dataClass("{...}")`) use the
 keys of the object as written and take no `case`.
+
+A name that ends in `_` is written as it is, `data-class:b_`, until a modifier follows it. The
+client cuts the attribute name at the first `__`, so `b_` with `__case.pascal` would be
+`b___case.pascal`, read as the key `b` and a modifier it does not know. The DSL refuses such a
+name wherever it would put a modifier after it.
 
 ## Keys that are not signal names
 

@@ -138,7 +138,7 @@ public fun HTMLTag.dataMatchMedia(
 ) {
     val (key, mod) = Casing.key(Casing.signalName(signal), case, Case.CAMEL)
     val mods = mod?.let { "__case.${it.wire}" } ?: ""
-    attributes[ds("match-media:" + Casing.heldKey(signal, "$key$mods"))] = js(mediaQuery)
+    attributes[ds("match-media:" + Casing.heldKey(signal, Casing.withModifiers(signal, key, mods)))] = js(mediaQuery)
 }
 
 /** `data-on-raf="expression"` (Pro): run on every animation frame. */
@@ -172,8 +172,8 @@ public fun HTMLTag.dataPersist(
     val name =
         buildString {
             append(ds("persist"))
-            key?.let { append(':').append(Casing.plainKey(it)) }
-            if (session) append("__session")
+            val modifiers = if (session) "__session" else ""
+            key?.let { append(':').append(Casing.withModifiers(it, Casing.plainKey(it), modifiers)) } ?: append(modifiers)
         }
     attributes[name] = filter?.toJs() ?: ""
 }

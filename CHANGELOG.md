@@ -34,6 +34,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 - `Casing.signalName`, the check a name that declares a signal passes: what `Casing.validate`
   admits, and only ASCII letters, digits and `_` in parts joined by `.` or `-`.
+- `Casing.withModifiers`: a key with its modifiers after it, refused where the key ends in `_`,
+  which the client would read as part of the `__` that starts the modifiers.
 - `mergePatchAsClient` in `streamlord-core`: the signal store as Datastar's client reads it after
   a patch, which RFC 7386 is not: `onlyIfMissing` leaf by leaf, an object onto an array by index,
   an array or a string at the top level as keys, a `length` key resizing an array, and a `null`
@@ -72,9 +74,14 @@ All notable changes to Streamlord are recorded here. The format follows
 - A key or name with a no-break space or another space JavaScript's `\s` has and Java's lacks,
   or with a NUL, is refused like any other white space: the client split a class on it, and the
   HTML parser turned a NUL into U+FFFD.
-- A duration that is not a whole number of milliseconds, such as `1.5.milliseconds`, is refused
-  in the modifiers and the fetch options, as one under a millisecond already was. It was rounded
-  down without a word.
+- A name that ends in `_` is refused by `dataOn`, `dataClass`, `dataSignals`, `dataComputed`,
+  `dataBind`, `dataRef`, `dataIndicator`, `dataMatchMedia` and `dataPersist` where a modifier
+  follows it: the client cuts the attribute name at the first `__`, so `dataClass("B_", ...)`,
+  written `b___case.pascal`, set the class `b`, and `dataSignals("b_", ..., ifMissing = true)`
+  declared `$b` and lost its `__ifmissing`. Without a modifier it is written as before.
+- A Kotlin `Regex` with a back reference before its group has closed, `(a\1)`, `\1(a)` or
+  `(?<n>a\k<n>)`, is refused by `SignalFilter`: Java never matches it there, and JavaScript
+  matches it as empty, so the filter took signals Kotlin would not.
 - A Kotlin `Regex` with a quantifier that has nothing to repeat, such as `$?`, `^{2}`, `\b*`, a
   `{1}` at the start, after `|` or `(`, on a lookbehind or after an empty `\Q\E`, and the empty
   `(?)`, is refused by `SignalFilter`. Java takes them; JavaScript refuses the literal with
@@ -290,22 +297,30 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
-- `ExpressionGuard` let two expressions the client compiles through: `- $x`, a sign before a
-  signal, and `[ , 1]`, a hole at the start of an array written with a space. `[, 1]`, what
-  `[$a, 1]` leaves behind, is still refused.
 - `mergePatchAsClient` now folds a patch exactly as the 1.0.4 client does, held to the client's
   `mergePatch` built from source over 326 scenarios: a `length` is turned into a number the
   JavaScript way (`[]` and `false` are 0, `"2"` is 2), deleting a `length` throws, a patch that
   throws keeps the keys before it, and keys are walked and kept in JavaScript's order, also in
-  objects inside arrays.
+  objects inside arrays. A fold copies only what the patch reaches and hands the rest back as the
+  same values, so a stream of small patches into a large store costs what the patches touch.
 - `SseDecoder` read some frames the client takes as malformed. An empty
-  `viewTransitionSelector` is none; an element patch with no elements, or only white space, in a
-  mode that needs them decodes to what the client does with it: an `outer` or `replace` with a
-  selector removes the target, an `inner` empties it, and the rest are no event. Flags are read
-  with JavaScript's `trim()`, so `true` followed by a byte order mark is true and `true` followed
-  by U+001C is not.
-- A string with half of a surrogate pair reached the client as `?` from a codec and in elements.
-  Signals now carry it as `\ud800`, as the built-in writer does, and elements as U+FFFD.
+  `viewTransitionSelector` is none; an element patch with no elements, or only white space as
+  HTML counts it (tab, line feed, form feed, carriage return, space), in a mode that needs them
+  decodes to what the client does with it: an `outer` or `replace` with a selector removes the
+  target, an `inner` empties it, and the rest are no event, as is an `outer` or `replace` without
+  a selector whose elements hold no tag. A no-break space, U+3000, U+001C or any other character
+  is text the client inserts, measured in Chrome, and comes back as elements; `PatchElements` and
+  `ElementsResponse` take such elements too, where Kotlin's `isBlank()` refused them. A frame
+  that changes nothing but asks for `useViewTransition` is no event, though the client starts a
+  view transition around it. Flags are read with JavaScript's `trim()`, so `true` followed by a
+  byte order mark is true and `true` followed by U+001C is not.
+- A string with half of a surrogate pair reached the client as `?` from a codec, in elements and
+  in a script response. Signals now carry it as `\ud800`, as the built-in writer does, and
+  elements as U+FFFD; so does a script from `respondScript` or `datastarScript`, with its
+  attributes, as `executeScript` already did in a stream.
+- `dataClass` on a class that mixes capitals with a hyphen before a lower-case letter, such as
+  `MuiButton-root`, says to use the object form, `dataClass("{'MuiButton-root': ...}")`, which
+  keeps it as written; "write it in one case" could not be followed for a class from a library.
 - On Spring with Tomcat, a stream answered a request that sent `Connection: keep-alive` with
   `Connection: keep-alive, keep-alive`: Tomcat adds its own to such a request. The stream now
   leaves the header to Tomcat then, and still sets none over HTTP/2 or when the request asks to

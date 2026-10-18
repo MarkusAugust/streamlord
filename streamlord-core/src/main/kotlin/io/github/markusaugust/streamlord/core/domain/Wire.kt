@@ -61,6 +61,14 @@ public object Wire {
         }
     }
 
+    /**
+     * Whether [html] is missing or only white space as HTML counts it: tab, line feed, form feed,
+     * carriage return and space, which the browser shows as nothing between elements. Any other
+     * character is text it shows, a no-break space, U+3000 and U+001C among them, which Kotlin's
+     * `isBlank()` counts as blank, and JavaScript's `trim()` too for the first two.
+     */
+    internal fun htmlBlank(html: String?): Boolean = html == null || html.all { it == ' ' || it in "\t\n\u000C\r" }
+
     /** Split text into lines on `\r\n`, `\r` or `\n`, exactly as the SSE grammar does. */
     public fun lines(text: String): List<String> = text.split(LINE_BREAKS)
 

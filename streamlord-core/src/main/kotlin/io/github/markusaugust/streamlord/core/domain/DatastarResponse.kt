@@ -36,7 +36,7 @@ public data class ElementsResponse(
 ) : DatastarResponse {
     init {
         // An inner patch of nothing empties its target, and a remove needs no elements at all.
-        if (elements.isBlank() && mode != ElementPatchMode.INNER && mode != ElementPatchMode.REMOVE) {
+        if (Wire.htmlBlank(elements) && mode != ElementPatchMode.INNER && mode != ElementPatchMode.REMOVE) {
             throw DatastarEventValidationException("elements must not be blank")
         }
         selector?.let { Wire.selector(it) }
@@ -79,7 +79,11 @@ public data class SignalsResponse(
         get() = if (onlyIfMissing) mapOf(DatastarProtocol.Headers.ONLY_IF_MISSING to "true") else emptyMap()
 }
 
-/** A `text/javascript` body executed in the browser. Mirrors [ExecuteScript]. */
+/**
+ * A `text/javascript` body executed in the browser. Mirrors [ExecuteScript], also in that a
+ * surrogate without its other half, in the script or an attribute, reaches the client as U+FFFD,
+ * as it does in the `<script>` element a stream sends: UTF-8 has no bytes for it.
+ */
 public data class ScriptResponse(
     @Language("JavaScript") val script: String,
     val attributes: Map<String, String> = emptyMap(),
@@ -91,14 +95,17 @@ public data class ScriptResponse(
     }
 
     override val contentType: String get() = DatastarProtocol.CONTENT_TYPE_JAVASCRIPT
-    override val body: String get() = script
+    override val body: String get() = Wire.loneSurrogatesReplaced(script)
     override val headers: Map<String, String>
         get() =
             if (attributes.isEmpty()) {
                 emptyMap()
             } else {
                 // As \u escapes: the header reaches the client as Latin-1, and JSON.parse restores them.
-                mapOf(DatastarProtocol.Headers.SCRIPT_ATTRIBUTES to asciiOnly(JsonWriter.write(attributes)))
+                mapOf(
+                    DatastarProtocol.Headers.SCRIPT_ATTRIBUTES to
+                        asciiOnly(JsonWriter.write(attributes.mapValues { Wire.loneSurrogatesReplaced(it.value) })),
+                )
             }
 }
 

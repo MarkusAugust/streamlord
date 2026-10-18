@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.html
 
+import io.github.markusaugust.streamlord.core.domain.ExpressionGuard
+import io.github.markusaugust.streamlord.core.domain.InterpolatedExpressionException
 import kotlinx.html.DIV
 import kotlinx.html.button
 import kotlinx.html.div
@@ -406,21 +408,33 @@ class AsTheClientReadsItTest {
         }
     }
 
-    // tagToMs reads 1.5ms as 1.5; the DSL writes whole milliseconds, so it may not round.
+    // parseAttributeKey splits a modifier at each `.`, so `__delay.1.5ms` reaches tagToMs as `1` and
+    // `5ms`, and it takes the first: 1 ms. Headless Chrome on the 1.0.4 bundle ran
+    // `data-on:click__delay.1.900ms` within 100 ms of the click. The DSL writes the same 1 ms.
     @Test
-    fun `a duration that is not a whole number of milliseconds is refused`() {
-        assertFailsWith<IllegalArgumentException> { click { debounce = 1.5.milliseconds } }
-        assertFailsWith<IllegalArgumentException> { post("/x") { retryInterval = 1500.microseconds } }
-        assertEquals("""<button data-on:click__debounce.2ms="x()"></button>""", click { debounce = 2.milliseconds })
+    fun `a fraction of a millisecond is rounded down, as the client reads it`() {
+        assertEquals("""<button data-on:click__debounce.1ms="x()"></button>""", click { debounce = 1.5.milliseconds })
+        assertEquals("""<button data-on:click__delay.1900ms="x()"></button>""", click { delay = 1900.9.milliseconds })
+        val options =
+            post("/x") {
+                retryInterval = 1500.microseconds
+                retryMaxWait = 2999.microseconds
+            }
+        assertEquals("@post('/x', {retryInterval: 1, retryMaxWait: 2})", options)
+        assertFailsWith<IllegalArgumentException> { click { debounce = 999.microseconds } }
     }
 
-    // Both compile as Datastar's client builds an expression; a template that ate a signal leaves neither.
+    // What `$a - $b`, `$a + $b`, `$a - $y - $z` and `$a - $b * 2` leave once Kotlin has eaten
+    // `$a`, and what `[ $a, 1]` leaves. A sign against its operand still passes.
     @Test
-    fun `a sign before a signal and a hole at the start of an array pass the guard`() {
-        assertEquals("""<div data-text="- ${'$'}x"></div>""", elements { div { dataText("- \$x") } })
-        assertEquals("""<div data-on:click="${'$'}x = [ , 1]"></div>""", elements { div { dataOnClick("\$x = [ , 1]") } })
-        assertFailsWith<io.github.markusaugust.streamlord.core.domain.InterpolatedExpressionException> {
-            elements { div { dataOnClick("\$x = [, 1]") } }
+    fun `what a template leaves of a binary operator or an array is refused`() {
+        for (expression in listOf(" - \$b", " + \$b", " - \$y - \$z", " - \$b * 2", "- \$b", "\$x = [ , 1]", "\$x = [, 1]", "[1, , 2]")) {
+            assertFailsWith<InterpolatedExpressionException>(expression) {
+                elements { div { dataText(expression) } }
+            }
+        }
+        for (expression in listOf("-\$x", "-1", "+\$n", "!\$open", "-\$x * 2", "\$x = [undefined, 1]")) {
+            assertEquals(expression, ExpressionGuard.check(expression))
         }
     }
 
@@ -460,5 +474,62 @@ class AsTheClientReadsItTest {
         assertEquals("/a*/", SignalFilter.regexLiteral(Regex("a*\\Q\\E")))
         assertEquals("/a{1}/", SignalFilter.regexLiteral(Regex("a\\Q\\E{1}")))
         assertEquals("/(?<n>a){2}[a]{2}(a)*/", SignalFilter.regexLiteral(Regex("(?<n>a){2}[a]{2}(a)*")))
+    }
+
+    // Headless Chrome on the 1.0.4 bundle: `data-class:b___case.pascal` set the class `b`, since
+    // the client cuts the name at the first `__`; `data-class:b_` set `b_`.
+    @Test
+    fun `a key that ends in _ before a modifier is refused`() {
+        val refused =
+            listOf<DIV.() -> Unit>(
+                { dataClass("B_", "true") },
+                { dataClass("b_", "true", Case.CAMEL) },
+                { dataOn("my-event_", "x()") { debounce = 1.milliseconds } },
+                { dataSignals("b_", "1", ifMissing = true) },
+                { dataComputed("b_", "1", Case.SNAKE) },
+                { dataRef("b_", Case.CAMEL) },
+            )
+        for (attribute in refused) {
+            assertFailsWith<InvalidSignalNameException> { elements { div { attribute(this) } } }
+        }
+        assertEquals(
+            """<div data-class:b_="true" data-on:my-event_="x()" data-signals:b_="1"></div>""",
+            elements {
+                div {
+                    dataClass("b_", "true")
+                    dataOn("my-event_", "x()")
+                    dataSignals("b_", "1")
+                }
+            },
+        )
+    }
+
+    // In headless Chrome `data-class="{'MuiButton-root': true}"` set the class `MuiButton-root`.
+    @Test
+    fun `a class no key gives back points to the object form`() {
+        val e = assertFailsWith<InvalidSignalNameException> { elements { div { dataClass("MuiButton-root", "true") } } }
+        assertEquals(
+            "Name \"MuiButton-root\" mixes capitals with a hyphen before a lower-case letter; Datastar's client turns that " +
+                "hyphen into a capital as well, so it would read MuiButtonRoot. Write it in one case, or, for a class you " +
+                "cannot rename, use the object form, dataClass(\"{'MuiButton-root': ...}\"), whose keys Datastar uses as written.",
+            e.message,
+        )
+        assertEquals(
+            """<div data-class="{'MuiButton-root': true}"></div>""",
+            elements { div { dataClass("{'MuiButton-root': true}") } },
+        )
+    }
+
+    // Java never matches a back reference to a group that has not closed; JavaScript, measured in
+    // headless Chrome, matches it as empty: /^(a\1)$/ and /^\1(a)$/ both match "a".
+    @Test
+    fun `a back reference before its group has closed is refused`() {
+        for (pattern in listOf("(a\\1)", "\\1(a)", "(a(b)\\1)", "(?<n>a\\k<n>)", "(?:a\\1)(b)")) {
+            assertFailsWith<IllegalArgumentException>(pattern) { SignalFilter.regexLiteral(Regex(pattern)) }
+        }
+        assertEquals("/(a)\\1/", SignalFilter.regexLiteral(Regex("(a)\\1")))
+        assertEquals("/((a)\\2)/", SignalFilter.regexLiteral(Regex("((a)\\2)")))
+        assertEquals("/(a(b)\\2)/", SignalFilter.regexLiteral(Regex("(a(b)\\2)")))
+        assertEquals("/(?<n>a)\\k<n>/", SignalFilter.regexLiteral(Regex("(?<n>a)\\k<n>")))
     }
 }

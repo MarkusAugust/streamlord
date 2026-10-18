@@ -31,8 +31,12 @@ public class FetchOptions {
 
     /** Retry policy: `'auto'` (default), `'error'`, `'always'`, `'never'`. */
     public var retry: Retry? = null
+
+    /** Written in whole milliseconds, a fraction rounded down, as a modifier's duration is. */
     public var retryInterval: Duration? = null
     public var retryScaler: Double? = null
+
+    /** Written in whole milliseconds, a fraction rounded down, as a modifier's duration is. */
     public var retryMaxWait: Duration? = null
     public var retryMaxCount: Int? = null
 

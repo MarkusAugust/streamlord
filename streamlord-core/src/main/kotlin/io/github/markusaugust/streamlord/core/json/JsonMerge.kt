@@ -46,7 +46,10 @@ public class SignalPatchException(
  * deleted index leaves, read as `""` and are not missing to the next `onlyIfMissing`.
  *
  * Keys are walked and kept in JavaScript's order, array indices ascending first, so `toJson()`
- * of the result is the client's `JSON.stringify`. A key `length` on an array resizes it, as the
+ * of the result holds the same keys in the same order, with the same values, as the client's
+ * `JSON.stringify`, though not always the same text: a number keeps the text it came with (`2.0`,
+ * `-0`, `1e2`, where `JSON.stringify` writes `2`, `0` and `100`), and the built-in writer escapes
+ * some characters it writes as they are, U+2028 and U+2029 among them. A key `length` on an array resizes it, as the
  * client's store does: the value is turned into a number the way JavaScript does it (`[]`,
  * `false` and `""` are 0, `"2"` and `[2]` are 2), shorter drops the tail and longer adds `""`;
  * one that does not come out a whole number of zero or more throws, as the browser's
@@ -58,6 +61,9 @@ public class SignalPatchException(
  * for the prototype and fails on or does nothing with. A patch that throws, here or in the
  * client, has its earlier keys applied: the exception is a [SignalPatchException] that carries
  * the store as the client keeps it.
+ *
+ * Only the part of [store] the patch reaches is copied; the rest of the result is the very same
+ * values, so folding a stream of small patches into a large store costs what the patches touch.
  */
 public fun mergePatchAsClient(
     store: JsonObject,
@@ -72,7 +78,7 @@ public fun mergePatchAsClient(
             is JsonString -> patch.value.withIndex().associate { (i, c) -> i.toString() to JsonString(c.toString()) }
             else -> return store
         }
-    val root = thaw(store) as JsObject
+    val root = JsObject(LinkedHashMap<String, Any>(store))
     try {
         ClientMerge(ifMissing, holeLimit).fold(keys, root)
     } catch (e: IllegalArgumentException) {
@@ -81,7 +87,8 @@ public fun mergePatchAsClient(
     return freeze(root) as JsonObject
 }
 
-// The store while a patch folds into it: mutable objects and arrays, with JsonValue leaves.
+// The store while a patch folds into it: the objects and arrays the patch reaches, opened one
+// level at a time, and below them the JsonValues it does not reach, left as they are.
 private class JsObject(
     val fields: LinkedHashMap<String, Any> = LinkedHashMap(),
 )
@@ -90,21 +97,57 @@ private class JsArray(
     val items: ArrayList<Any> = ArrayList(),
 )
 
-private fun thaw(value: JsonValue): Any =
+/** [value] as a node a patch can change, opened one level deep, or `null` for one that holds no keys. */
+private fun open(value: Any?): Any? =
     when (value) {
-        is JsonObject -> JsObject(value.mapValuesTo(LinkedHashMap()) { thaw(it.value) })
-        is JsonArray -> JsArray(value.mapTo(ArrayList()) { thaw(it) })
-        else -> value
+        is JsObject, is JsArray -> value
+        is JsonObject -> JsObject(LinkedHashMap<String, Any>(value))
+        is JsonArray -> JsArray(ArrayList<Any>(value))
+        else -> null
     }
 
+// In place, since a node is frozen once, as the fold ends.
 private fun freeze(value: Any): JsonValue =
     when (value) {
-        is JsArray -> JsonArray(value.items.map { freeze(it) })
-        is JsObject -> JsonObject(inJsOrder(value.fields.mapValues { freeze(it.value) }))
-        else -> value as JsonValue
+        is JsArray -> {
+            value.items.replaceAll(::freeze)
+            @Suppress("UNCHECKED_CAST")
+            JsonArray(value.items as List<JsonValue>).also { it.jsOrdered = true }
+        }
+
+        is JsObject -> {
+            value.fields.replaceAll { _, v -> freeze(v) }
+            @Suppress("UNCHECKED_CAST")
+            JsonObject(inJsOrder(value.fields as Map<String, JsonValue>)).also { it.jsOrdered = true }
+        }
+
+        else -> {
+            inJsOrderDeep(value as JsonValue)
+        }
     }
 
-/** `mergePatch` and `mergeInner` in signals.ts, on the store as [thaw] lays it out. */
+/** [value] with every object in it in JavaScript's key order: the same instance where it already is. */
+private fun inJsOrderDeep(value: JsonValue): JsonValue =
+    when {
+        value is JsonObject && !value.jsOrdered -> {
+            val fields = value.mapValues { inJsOrderDeep(it.value) }
+            val ordered = inJsOrder(fields)
+            val same = ordered.keys.toList() == value.keys.toList() && fields.all { (k, v) -> v === value[k] }
+            (if (same) value else JsonObject(ordered)).also { it.jsOrdered = true }
+        }
+
+        value is JsonArray && !value.jsOrdered -> {
+            val items = value.map(::inJsOrderDeep)
+            val same = items.indices.all { items[it] === value[it] }
+            (if (same) value else JsonArray(items)).also { it.jsOrdered = true }
+        }
+
+        else -> {
+            value
+        }
+    }
+
+/** `mergePatch` and `mergeInner` in signals.ts, on the store as [open] lays it out. */
 private class ClientMerge(
     private val ifMissing: Boolean,
     private val holeLimit: Int,
@@ -129,14 +172,12 @@ private class ClientMerge(
         parent: Any,
     ) {
         if (patch is JsonObject) {
-            var node = get(parent, target)
-            if (node !is JsObject && node !is JsArray) {
-                node = JsObject()
-                set(parent, target, node)
-            }
+            val current = get(parent, target)
+            val node = open(current) ?: JsObject()
+            if (node !== current) set(parent, target, node)
             fold(patch, node)
         } else if (!(ifMissing && has(parent, target))) {
-            set(parent, target, thaw(asRead(patch)))
+            set(parent, target, asRead(patch))
         }
     }
 
@@ -238,10 +279,10 @@ private fun jsNumber(value: Any): Double =
         }
 
         // An array is read through its text, the items joined by commas: one item is that item's text.
-        is JsArray -> {
-            when (value.items.size) {
+        is JsonArray -> {
+            when (value.size) {
                 0 -> 0.0
-                1 -> value.items[0].let { if (it is JsonBoolean || it is JsObject) Double.NaN else jsNumber(it) }
+                1 -> value[0].let { if (it is JsonBoolean || it is JsonObject) Double.NaN else jsNumber(it) }
                 else -> Double.NaN
             }
         }

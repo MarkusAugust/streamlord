@@ -6,6 +6,7 @@ import io.github.markusaugust.streamlord.core.domain.ElementsResponse
 import io.github.markusaugust.streamlord.core.domain.ExecuteScript
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
+import io.github.markusaugust.streamlord.core.domain.ScriptResponse
 import io.github.markusaugust.streamlord.core.domain.SignalsResponse
 import io.github.markusaugust.streamlord.core.protocol.DatastarAttributes
 import io.github.markusaugust.streamlord.core.protocol.SseEncoder
@@ -183,5 +184,22 @@ class SseEncoderTest {
         val elements = SseEncoder.encode(PatchElements("<p id=\"a\">x\uD800y😀</p>"))
         assertEquals("event: datastar-patch-elements\ndata: elements <p id=\"a\">x\uFFFDy😀</p>\n\n", elements)
         assertEquals("<p id=\"a\">x\uFFFDy</p>", ElementsResponse("<p id=\"a\">x\uDC00y</p>").body)
+    }
+
+    // A stream sends a script as a <script> element, where half a surrogate pair is U+FFFD; a
+    // script response sends the same, where the writer used to put `?`.
+    @Test
+    fun `a lone surrogate in a script reaches the client as it does in a stream`() {
+        val script = "x('\uD800');"
+        val stream = SseEncoder.encode(ExecuteScript(script, attributes = mapOf("data-x" to "a\uDC00")))
+        assertEquals(
+            "event: datastar-patch-elements\ndata: selector body\ndata: mode append\n" +
+                "data: elements <script data-x=\"a\uFFFD\" data-effect=\"el.remove()\">x('\uFFFD');</script>\n\n",
+            stream,
+        )
+        val response = ScriptResponse(script, mapOf("data-x" to "a\uDC00"))
+        assertEquals("x('\uFFFD');", response.body)
+        assertEquals(response.body, String(response.body.toByteArray(Charsets.UTF_8), Charsets.UTF_8))
+        assertEquals("{\"data-x\":\"a\\ufffd\"}", response.headers.values.single())
     }
 }

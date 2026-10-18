@@ -102,6 +102,14 @@ public object Casing {
         name: String,
         case: Case?,
         default: Case,
+    ): Pair<String, Case?> = key(name, case, default, "Write it in one case")
+
+    /** [key], with [advice] on what to write instead of a name no key gives back. */
+    internal fun key(
+        name: String,
+        case: Case?,
+        default: Case,
+        advice: String,
     ): Pair<String, Case?> {
         validate(name)
         if (!UPPER.containsMatchIn(name)) return name to case
@@ -112,10 +120,31 @@ public object Casing {
             throw InvalidSignalNameException(
                 name,
                 "mixes capitals with a hyphen before a lower-case letter; Datastar's client turns that hyphen " +
-                    "into a capital as well, so it would read ${clientCase(key, wanted)}. Write it in one case",
+                    "into a capital as well, so it would read ${clientCase(key, wanted)}. $advice",
             )
         }
         return key to (if (wanted == default) null else wanted)
+    }
+
+    /**
+     * [key] with the [modifiers] written after it. The client cuts the attribute name at the first
+     * `__`, so a key that ends in `_` before a modifier loses that `_` to it: `b_` with
+     * `__case.pascal` is `b___case.pascal`, read as the key `b` and a modifier `_case`. Such a key
+     * is refused; without modifiers it is written as it is.
+     */
+    public fun withModifiers(
+        name: String,
+        key: String,
+        modifiers: String,
+    ): String {
+        if (modifiers.isNotEmpty() && key.endsWith('_')) {
+            throw InvalidSignalNameException(
+                name,
+                "ends in _, which runs into the __ of the modifiers after it ($key$modifiers), so Datastar's client " +
+                    "would read the key as ${key.dropLast(1)}",
+            )
+        }
+        return key + modifiers
     }
 
     /** [key] as Datastar's client reads it with [case] applied (`caseFns` in text.ts); kebab leaves it as it is. */

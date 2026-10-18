@@ -29,9 +29,9 @@ public enum class Case(
  * flags, the empty `(?)`, possessive and stacked quantifiers, a quantifier with nothing to
  * repeat (at the start, after `|` or `(`, or on `^`, `$`, `\b`, `\B` or a lookbehind), atomic
  * groups, `\A`, `\z`, `\Z`, `\G`, `\p{...}`, `\x{...}`, `\b{...}`, `\c` before anything but
- * a capital, a back reference to no group or followed by a digit, escaped surrogates, a
- * character outside the Basic Multilingual Plane in a class, the other Java-only escapes, and
- * nested or intersected classes.
+ * a capital, a back reference to no group, followed by a digit or before its group has closed
+ * (`(a\1)`, `\1(a)`), escaped surrogates, a character outside the Basic Multilingual Plane in
+ * a class, the other Java-only escapes, and nested or intersected classes.
  *
  * Some syntax both dialects share still means slightly different things at the edges, and is
  * written as it is: `\s` and `\b` count Unicode spaces and word characters differently, `$`
@@ -42,7 +42,8 @@ public enum class Case(
  * to it; JavaScript reads it as an ordinary character. With [RegexOption.IGNORE_CASE] Kotlin
  * folds case the Unicode way, and JavaScript without the `u` flag never folds a character
  * outside ASCII into one inside it: `k` matches the Kelvin sign (U+212A) and `s` the long s
- * (U+017F) in Kotlin only.
+ * (U+017F) in Kotlin only. A back reference to a group that took no part in the match, as in
+ * `(a)?\1` or `(a)|b\1`, never matches in Java and matches as empty in JavaScript.
  */
 public data class SignalFilter(
     val include: Regex? = null,
@@ -104,14 +105,16 @@ public data class SignalFilter(
                 // one with nothing to repeat: at the start, after `|` or `(`, and after an anchor, `\b`,
                 // `\B` or a lookbehind, all of which Java quantifies or reads as a literal.
                 var atom = false
-                // For each open group, whether it is a lookbehind.
-                val open = ArrayDeque<Boolean>()
+                val open = ArrayDeque<OpenGroup>()
+                // The capturing groups opened so far, and the numbers and names of those closed.
+                var opened = 0
+                val closed = HashSet<String>()
                 while (i < pattern.length) {
                     val ch = pattern[i]
                     if (ch == '\\' && i + 1 < pattern.length) {
                         val next = pattern[i + 1]
                         val from = length
-                        i = escape(pattern, i, inClass, groups)
+                        i = escape(pattern, i, inClass, groups, closed)
                         // An empty \Q\E writes nothing, so what came before it is still what a quantifier takes.
                         if (!inClass && (next != 'Q' || length > from)) {
                             atom = next != 'b' && next != 'B'
@@ -162,7 +165,6 @@ public data class SignalFilter(
                             }
                             if (kind == ')') javaOnly("an empty flag group (?)", "JavaScript refuses it")
                             val lookbehind = kind == '<' && pattern.getOrNull(i + 3).let { it == '=' || it == '!' }
-                            open.addLast(lookbehind)
                             // The whole opening, `(?:`, `(?<=` or `(?<name>`, so what comes next is the group's first term.
                             val end =
                                 when {
@@ -170,6 +172,8 @@ public data class SignalFilter(
                                     kind == '<' -> pattern.indexOf('>', i).let { if (it < 0) pattern.length else it + 1 }
                                     else -> minOf(i + 3, pattern.length)
                                 }
+                            val name = if (kind == '<' && !lookbehind) pattern.substring(i + 3, maxOf(i + 3, end - 1)) else null
+                            open.addLast(OpenGroup(lookbehind, if (name != null) ++opened else 0, name))
                             append(pattern, i, end)
                             i = end
                             atom = false
@@ -178,7 +182,7 @@ public data class SignalFilter(
                         }
 
                         ch == '(' -> {
-                            open.addLast(false)
+                            open.addLast(OpenGroup(false, ++opened, null))
                             append(ch)
                             i++
                             atom = false
@@ -188,7 +192,12 @@ public data class SignalFilter(
 
                         // A lookbehind takes no quantifier in JavaScript; a lookahead does, without the u flag.
                         ch == ')' -> {
-                            atom = open.removeLastOrNull() != true
+                            val group = open.removeLastOrNull()
+                            atom = group?.lookbehind != true
+                            if (group != null && group.number > 0) {
+                                closed += group.number.toString()
+                                group.name?.let { closed += it }
+                            }
                             append(ch)
                             i++
                             quantifier = 0
@@ -250,6 +259,7 @@ public data class SignalFilter(
             at: Int,
             inClass: Boolean,
             groups: Int,
+            closed: Set<String>,
         ): Int {
             val next = pattern[at + 1]
             val after = pattern.getOrNull(at + 2)
@@ -311,9 +321,17 @@ public data class SignalFilter(
                 next in '1'..'9' -> {
                     if (inClass) javaOnly("\\$next in a class")
                     if (next - '0' > groups) javaOnly("\\$next", "it names no group, and JavaScript reads it as an octal escape")
+                    if (next.toString() !in closed) backReferenceTooEarly("\\$next")
                     if (after?.isDigit() == true) {
                         javaOnly("\\$next followed by a digit", "the two dialects split the number differently; write (?:\\$next)$after")
                     }
+                    append('\\').append(next)
+                }
+
+                next == 'k' && after == '<' -> {
+                    val end = pattern.indexOf('>', at).let { if (it < 0) pattern.length else it }
+                    val name = pattern.substring(at + 3, end)
+                    if (name !in closed) backReferenceTooEarly("\\k<$name>")
                     append('\\').append(next)
                 }
 
@@ -406,6 +424,20 @@ public data class SignalFilter(
             }
         }
 
+        /** A group opened in the pattern; [number] is 0 for one that captures nothing. */
+        private class OpenGroup(
+            val lookbehind: Boolean,
+            val number: Int,
+            val name: String?,
+        )
+
+        // Java never matches a back reference to a group that has not captured yet; JavaScript matches it as empty.
+        private fun backReferenceTooEarly(reference: String): Nothing =
+            javaOnly(
+                "$reference before its group has closed",
+                "Java never matches it there and JavaScript matches it as empty",
+            )
+
         private fun nothingToRepeat(quantifier: String): Nothing =
             javaOnly(
                 "a $quantifier with nothing to repeat, at the start, after |, (, an anchor, \\b, \\B or a lookbehind",
@@ -426,18 +458,19 @@ public data class SignalFilter(
 internal fun Duration.toModifier(): String = "${wholeMilliseconds()}ms"
 
 /**
- * Datastar is given whole milliseconds, which it hands to the browser's timers. A shorter
- * positive duration would be written as zero, and a fraction such as 1.5 ms rounded down, which
- * says something other than what was asked for, so both are refused instead. The timers take a
- * negative wait as none and wrap one over [Int.MAX_VALUE] milliseconds, about 24.8 days, into a
- * negative one, so both fire at once and are refused too.
+ * The duration in whole milliseconds, a fraction rounded down: 1.5 ms is written as 1 ms.
+ * Datastar's client reads no fraction from a modifier, since it splits one at each `.` and
+ * `__debounce.1.5ms` reaches it as `1` and `5ms`, of which it takes the first, 1 ms. A
+ * positive duration shorter than a millisecond would be written as zero, which says something
+ * other than what was asked for, so it is refused. The browser's timers take a negative wait as
+ * none and wrap one over [Int.MAX_VALUE] milliseconds, about 24.8 days, into a negative one, so
+ * both fire at once and are refused too.
  */
 internal fun Duration.wholeMilliseconds(): Long {
     require(!isNegative() && this <= Int.MAX_VALUE.milliseconds) {
         "$this is outside what the browser's timers take: 0 to ${Int.MAX_VALUE}ms"
     }
     require(!isPositive() || inWholeMilliseconds > 0) { "$this is shorter than a millisecond, the smallest duration Datastar reads" }
-    require(inWholeMilliseconds.milliseconds == this) { "$this is not a whole number of milliseconds, which is what Datastar is given" }
     return inWholeMilliseconds
 }
 

@@ -8,6 +8,8 @@ import io.github.markusaugust.streamlord.core.json.mergePatchAsClient
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotSame
+import kotlin.test.assertSame
 
 /**
  * Each case in `client-store-cases.json` was run through the real Datastar 1.0.4 `mergePatch`
@@ -53,6 +55,30 @@ class MergePatchAsClientTest {
                 assertEquals(step.string("client"), got, "${scenario.string("name")} step $i")
             }
         }
+    }
+
+    // A fold copies only what the patch reaches, so a stream of small patches into a large store
+    // costs what the patches touch: what is left alone is the very same value, not a copy of it.
+    @Test
+    fun `leaves what a patch does not reach as it was`() {
+        val big = "{" + (0 until 2000).joinToString(",") { "\"k$it\":{\"v\":$it,\"l\":[1,{\"b\":2,\"0\":3}]}" } + "}"
+        val first = mergePatchAsClient(JsonObject.EMPTY, JsonParser.parse("{\"big\":$big,\"other\":{\"n\":1}}"))
+        val second = mergePatchAsClient(first, JsonParser.parse("{\"count\":1,\"big\":{\"k1\":{\"v\":9}}}"))
+        assertSame(first.obj("other"), second.obj("other"))
+        assertNotSame(first.obj("big"), second.obj("big"))
+        assertSame(first.obj("big")!!.obj("k2"), second.obj("big")!!.obj("k2"))
+        assertSame(first.obj("big")!!.obj("k1")!!.array("l"), second.obj("big")!!.obj("k1")!!.array("l"))
+        assertEquals("""{"v":9,"l":[1,{"0":3,"b":2}]}""", second.obj("big")!!.obj("k1")!!.toJson())
+
+        // A store from elsewhere is put in JavaScript's key order once, where it is out of it, and
+        // kept as it is where it is in it already.
+        val parsed = JsonParser.parseObject("""{"a":{"x":1,"0":2},"b":{"y":1},"c":[{"z":1,"1":2}]}""")
+        val folded = mergePatchAsClient(parsed, JsonParser.parse("""{"d":1}"""))
+        assertEquals("""{"a":{"0":2,"x":1},"b":{"y":1},"c":[{"1":2,"z":1}],"d":1}""", folded.toJson())
+        assertSame(parsed.obj("b"), folded.obj("b"))
+        val again = mergePatchAsClient(folded, JsonParser.parse("""{"d":2}"""))
+        assertSame(folded.obj("a"), again.obj("a"))
+        assertSame(folded.array("c"), again.array("c"))
     }
 
     @Test

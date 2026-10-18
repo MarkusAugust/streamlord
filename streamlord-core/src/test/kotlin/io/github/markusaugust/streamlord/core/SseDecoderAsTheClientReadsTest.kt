@@ -173,13 +173,19 @@ class SseDecoderAsTheClientReadsTest {
      * happy-dom, on a page holding `<div id="wrap"><div id="target">old</div></div>` and the
      * signal `keep: 1`, with `startViewTransition` counting its calls. None made the client throw,
      * so none may make the decoder throw, and each must decode to what the client did: no event
-     * where the page did not change, a removal where the target went, the view transition the
-     * client started, and the store it ended up with.
+     * where the page did not change, a removal where the target went and nothing took its place,
+     * the elements as sent where the client put them in, a no-break space or U+001C among them,
+     * the view transition the client started, and the store it ended up with. The one exception,
+     * documented on [SseDecoder.decode]: a frame that changes nothing but asks for a view
+     * transition, which the client starts around nothing, is no event.
      */
     @Test
     fun `decodes each frame to what the client did with it`() {
         val cases = JsonParser.parse(javaClass.getResource("/client-decoder-cases.json")!!.readText()) as JsonArray
-        assertEquals(52, cases.size)
+        assertEquals(83, cases.size)
+
+        // White space as HTML counts it, which the page shows as nothing between elements.
+        fun shown(html: String) = html.filterNot { it in " \t\n\u000C\r" }
         val untouched = "<divid=\"wrap\"><divid=\"target\">old</div></div>"
         for (case in cases.objects()) {
             val name = case.string("name")!!
@@ -193,14 +199,13 @@ class SseDecoderAsTheClientReadsTest {
                 assertEquals(case["signals"], store, name)
                 continue
             }
-            // White space the client inserts as bare text is no change to the page.
-            if (body.filterNot { it.isWhitespace() } == untouched && case.int("viewTransitions") == 0) {
+            if (shown(body) == untouched) {
                 assertNull(event, name)
                 continue
             }
             val patch = assertIs<PatchElements>(event, name)
             assertEquals(case.int("viewTransitions") == 1, patch.useViewTransition, name)
-            if ("id=\"target\"" !in body) {
+            if (shown(body) == "<divid=\"wrap\"></div>") {
                 assertEquals(ElementPatchMode.REMOVE, patch.mode, name)
                 assertEquals("#target", patch.selector, name)
             } else {

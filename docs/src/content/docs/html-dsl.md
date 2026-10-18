@@ -37,7 +37,10 @@ input {
 ```
 
 Durations are `kotlin.time.Duration`, which means `300.milliseconds` and `1.seconds` rather than
-a string you have to get the unit right in.
+a string you have to get the unit right in. They are written in whole milliseconds, a fraction
+rounded down: `1.5.milliseconds` becomes `__debounce.1ms`. Datastar's client could not read more,
+since it splits a modifier at each `.` and takes `__debounce.1.5ms` for 1 ms. One shorter than a
+millisecond would be written as zero and is refused.
 
 ## Actions render their options only when set
 
