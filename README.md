@@ -13,9 +13,12 @@ the browser. It is four tools, designed together: an SDK for Ktor and Spring, as
 for your tests, an analysis for your CI, and two editor extensions. Adopt one, or all of them.
 
 > *The elders of Bonereach asked Gorvek what a warrior wants of a stream.*
+>
 > *"That it flows when I say flow. That it stops when I say stop. That it carries my will to
 > the far shore, and nothing else."*
+>
 > *"And the JavaScript?"*
+>
 > *"I do not know the word."*
 >
 > Gorvek of Bonereach, who walked out of the Ashfall with iron in his hand
@@ -34,8 +37,8 @@ Streamlord is still 0.x: the API can change between minor versions, and
 
 Adapters for Ktor and Spring, both [Spring MVC](https://streamlord-docs.netlify.app/spring-webmvc/)
 and [WebFlux](https://streamlord-docs.netlify.app/spring-webflux/), over one core that imports
-no framework. This route adds a line to a list and updates a counter, written by hand against
-the protocol:
+no framework. Here is a route that adds a line to a list and updates a counter, first written
+by hand against the protocol:
 
 ```kotlin sample=ktor-routing
 get("/feed") {
@@ -87,9 +90,9 @@ events.assertSignal("heads", 13)
 
 ## An analysis for your CI
 
-`streamlord-analysis` makes the same check the editors make, as a library. One test walks your
-sources and fails the build on every `"$count"` that Kotlin interpolates (the trap shown under
-the editors below), even in files no editor ever opened:
+`streamlord-analysis` is the editors' check as a library. One test walks your sources and fails
+the build wherever Kotlin interpolates a signal into a Datastar expression, as in
+`dataText("$count")`, even in files no editor ever opened:
 
 ```kotlin sample=test
 private val analyzer = Analyzer()
@@ -112,7 +115,7 @@ fun `no source file interpolates a signal into Datastar`() {
 }
 ```
 
-## Two editor extensions
+## The editors
 
 A [VS Code extension](https://marketplace.visualstudio.com/items?itemName=MarkusAugust.streamlord)
 and an [IntelliJ IDEA plugin](https://plugins.jetbrains.com/plugin/34587-streamlord) read
@@ -125,15 +128,16 @@ Inspector that shows the events a response sent.
 `dataText("$count")` compiles when `count` is in scope, and sends the browser a number instead
 of the signal. The editor marks it before you build.
 
-Your project needs no part of the SDK for them, so they work just as well beside the official
-one. VS Code checks a template file once an extension for that engine is installed, since that
+The editors need no part of the Streamlord SDK, so they work just as well in a project on the
+official SDK. VS Code checks a template file once an extension for that engine is installed, since that
 is what tells VS Code the file's language.
 [The editors page](https://streamlord-docs.netlify.app/editors/) has the rest.
 
 ## Three ways to write markup
 
 Write HTML with the kotlinx.html DSL above, as a Kotlin string, or with a template engine
-(Pebble, Thymeleaf, JTE, kte, FreeMarker, Velocity, Mustache). Every entry point that takes HTML takes a
+(Pebble, Thymeleaf, JTE, kte, FreeMarker, Velocity, Mustache).
+Every entry point that takes HTML takes a
 `String`, so all three are equals, and both editors check Datastar in all three.
 [Choosing a style](https://streamlord-docs.netlify.app/choosing-a-style/) helps you pick.
 
@@ -170,12 +174,10 @@ security model, the editors and the architecture, as well as
 [live views](https://streamlord-docs.netlify.app/live-views/),
 [GraalVM native image](https://streamlord-docs.netlify.app/native-image/) and
 [Datastar Pro](https://streamlord-docs.netlify.app/datastar-pro/), whose attributes Streamlord
-writes without shipping any Pro code. To start by writing a stream,
-go to [your first stream](https://streamlord-docs.netlify.app/first-stream/).
+writes without shipping any Pro code. To begin,
+[write your first stream](https://streamlord-docs.netlify.app/first-stream/).
 
-What is coming is on [the roadmap](https://streamlord-docs.netlify.app/roadmap/), and
-[the changelog page](https://streamlord-docs.netlify.app/changelog/) summarises the changes that
-affect how you write code.
+What is coming is on [the roadmap](https://streamlord-docs.netlify.app/roadmap/).
 
 ## Licence
 

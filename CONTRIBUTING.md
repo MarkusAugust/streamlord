@@ -30,7 +30,7 @@ stale on either turns the build red. The coordinates and the wire transcripts ar
 place from the project's own version and encoder, and the build says which page it changed so you
 can commit it.
 
-Every published module's public surface is written down in `api/<module>.api`, and `build`
+Every published module's public surface is written down in `<module>/api/<module>.api`, and `build`
 fails when the code no longer matches it. That catches a change that compiles and still breaks
 code built against the previous release. After a change you meant, run
 `./gradlew updateKotlinAbi` and commit the dump with it.
