@@ -4,27 +4,117 @@ import sobernetics from "../assets/sobernetics.svg?raw"
 import CodeBlock from "../components/CodeBlock.astro"
 import Logo from "../components/Logo.astro"
 import VersionBadge from "../components/VersionBadge.astro"
+import { SERVICE } from "../config"
+import { fence } from "../fences"
+import feed13 from "../generated/feed-13.sse?raw"
 import { FAVICON } from "../icon"
 import { NAVIGATION } from "../navigation"
-import { DESCRIPTION, TAGLINE } from "../project"
+import {
+  CORPUS_CASES,
+  DESCRIPTION,
+  KTOR_VERSION,
+  MAVEN_GROUP,
+  MERGE_SCENARIOS,
+  TAGLINE,
+  VERSION,
+} from "../project"
+import samples from "../samples/front-page.md?raw"
 import { datastarLangs, hangingIndent, shikiThemes } from "../shiki"
 import "../styles/global.css"
 
-// Written the way it would be written, not the way a phone would like it. A narrow screen
-// wraps the long line with a hanging indent (see hangingIndent in src/shiki.ts), and this
-// block is a poster on every screen wide enough to hold it, which is most of them.
+// What /feed sends from 13, frame by frame, as the test panel shows it before the assertions.
+// Written by ./gradlew :docs-samples:checkDocSamples from the service's own handler and
+// encoder, and stale in CI the day either changes; never typed here.
+const FEED_FRAMES = feed13.trim().split("\n\n")
+
 // The one section of the list the hero has just made a promise about, so the eye should find
 // it without being shouted at. Named here rather than in the markup, because it is a choice.
 const FEATURED = "The tooling"
 
-const SAMPLE = `get("/feed") {
-    call.respondDatastar {
-        patchElements(selector = "#feed", mode = ElementPatchMode.APPEND) {
-            li { +"A new head hangs on the wall" }
-        }
-        patchSignals("heads" to 13)
-    }
-}`
+// Written the way it would be written, not the way a phone would like it. A narrow screen
+// wraps the long line with a hanging indent (see hangingIndent in src/shiki.ts), and this
+// block is a poster on every screen wide enough to hold it, which is most of them.
+//
+// The three pieces of Kotlin on this page come from samples/front-page.md, which docs-samples
+// compiles with the pages' own fences, so none of them can outlive the API it shows.
+const SAMPLE = fence(samples, "feed")
+
+// The handler above is what streamlord-live runs at /feed, with one difference: the count
+// comes from the page's signals and goes back one higher, so a press from 13 is 14. These two
+// lines are what a test says about that response; both names are streamlord-test's own. The
+// test panel runs exactly these against a fresh stream from 13, whatever the page counts.
+const ASSERTED = fence(samples, "asserted")
+
+// What the judge's field holds on arrival: the one mistake every Kotlin project makes first.
+const PREFILL = `dataOnClick("$count++")`
+
+// Three more, each a different verdict: a near-miss attribute, a modifier with the wrong
+// separator, and a hyphen the browser reads as part of a signal's name. The third is Kotlin,
+// so the reader sees both analyses answer.
+const TRIES = [
+  { label: "data-onn:click", source: `<button data-onn:click="1">` },
+  { label: "click.prevent", source: `<div data-on:click.prevent="$go()">` },
+  { label: "$a-b in Kotlin", source: `dataText("\${'$'}a-b")` },
+]
+
+// A JavaScript string literal for a Datastar expression. Single quotes, so the double quotes
+// the snippets are full of need no escaping, and the client leaves a `$` inside a string alone.
+const js = (text: string) =>
+  `'${text.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`
+
+// The editors' diagnostic on the prefill, word for word as the analysis writes it, and the
+// fixes it offers in the order it offers them. The judge on this page says the same; the
+// frame below shows where it is said in an editor.
+// Kotlin's idiom for a literal dollar, in two halves so the linter does not read it as a placeholder.
+const IDIOM = "$" + "{'$'}"
+const DIAGNOSTIC = `Kotlin interpolates $count here; the browser will never see a signal. Write signal("count"), make the literal $$"..." (Kotlin 2.2+), or escape as ${IDIOM}count.`
+const DIAGNOSTIC_CODE = "kotlin-interpolation"
+const QUICK_FIXES = [
+  `Use increment("count")`,
+  "Make it a $$ literal, where $count is a signal",
+  `Escape as ${IDIOM}count`,
+  "Escape as \\$count",
+]
+
+const VSCODE =
+  "https://marketplace.visualstudio.com/items?itemName=MarkusAugust.streamlord"
+const INTELLIJ = "https://plugins.jetbrains.com/plugin/34587-streamlord"
+
+// The test from the testing page that reads a project's own sources, as it stands there.
+const CI_TEST = fence(samples, "ci-test")
+
+const DEPENDENCY = `testImplementation("${MAVEN_GROUP}:streamlord-analysis:${VERSION}")`
+
+// The four cards are tabs, and each carries one number the build reads from the repository,
+// so none of them can go stale on its own. The version catalog names Ktor; it names the
+// Spring Framework rather than Boot, and Boot 4 is what manages that Framework, so Boot's
+// major is written here beside the Ktor the catalog gives.
+const TOOLS = [
+  {
+    id: "sdk",
+    title: "The SDK",
+    line: "Adapters for Ktor and Spring over one core.",
+    fact: `Ktor ${KTOR_VERSION.split(".").slice(0, 2).join(".")} and Spring Boot 4`,
+  },
+  {
+    id: "test",
+    title: "Assert what it sent",
+    line: "Read the response back. Assert what you meant.",
+    fact: `${MERGE_SCENARIOS} scenarios held to the client's own mergePatch`,
+  },
+  {
+    id: "analysis",
+    title: "The analysis",
+    line: "One test walks src/main/kotlin and fails on a swallowed signal.",
+    fact: "Runs in CI. No editor needed.",
+  },
+  {
+    id: "editors",
+    title: "The editors",
+    line: "VS Code and IntelliJ, with the fix a click away.",
+    fact: `${CORPUS_CASES} cases both editors judge alike`,
+  },
+]
 ---
 
 <!doctype html>
@@ -48,6 +138,15 @@ const SAMPLE = `get("/feed") {
     />
     <link rel="canonical" href={Astro.site} />
     <link rel="icon" href={FAVICON} type="image/svg+xml" />
+    <!--
+      Datastar, because the page runs the example rather than printing it. The tabs, the
+      buttons and the judge's field are attributes and signals against streamlord-live, and
+      there is no script of ours between a press and the server.
+    -->
+    <script
+      type="module"
+      src="https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.4/bundles/datastar.js"
+    ></script>
   </head>
   <body>
     <a class="fs-skip-link" href="#content">Skip to content</a>
@@ -66,20 +165,9 @@ const SAMPLE = `get("/feed") {
         <VersionBadge />
         <p class="hero__line">{TAGLINE}</p>
         <p class="hero__sub">
-          Datastar lives in strings your compiler never reads. Streamlord checks them anyway:
-          in your editor as you type, when the event is built, and before a byte reaches the
-          browser. Ktor and Spring included.
+          An SDK for Ktor and Spring, assertions for your tests, an analysis for your CI, and
+          two editor extensions.
         </p>
-
-        <div class="hero__sample">
-          <Code
-            code={SAMPLE}
-            lang="kotlin"
-            themes={shikiThemes}
-            langs={datastarLangs}
-            transformers={[hangingIndent]}
-          />
-        </div>
 
         <!--
           The reader here has chosen Datastar and is choosing a library for it, so the row
@@ -117,6 +205,291 @@ const SAMPLE = `get("/feed") {
     </header>
 
     <main class="page" id="content">
+      <!--
+        One stage, four tools. Every signal the stage uses stands on this element, and so
+        before any `data-on-signal-patch` below it: in the other order the client sees `source`
+        arrive and posts once on load. `tool` picks the panel; `heads` and `wire` are the feed's,
+        `broken` the test's, `source` the judge's.
+      -->
+      <section
+        class="block stage"
+        data-signals={`{tool: 'sdk', heads: 13, wire: true, broken: false, source: ${js(PREFILL)}}`}
+      >
+        <h2 class="fs-heading" data-size="m">Four tools, designed together.</h2>
+        <p class="block__lead">One mistake, one stream, four ways to see it. Adopt one, or all of them.</p>
+
+        <!-- The cards are the tabs: a button each, selected by the signal, so Tab and Enter work as they do anywhere. -->
+        <div class="tools" role="tablist" aria-label="The four tools">
+          {
+            TOOLS.map((tool) => (
+              <button
+                class="fs-card tool"
+                data-interactive
+                type="button"
+                role="tab"
+                id={`tab-${tool.id}`}
+                aria-controls={`panel-${tool.id}`}
+                aria-selected={tool.id === "sdk" ? "true" : "false"}
+                data-on:click={`$tool = '${tool.id}'`}
+                data-attr:aria-selected={`$tool === '${tool.id}' ? 'true' : 'false'`}
+              >
+                <span class="fs-card__title">{tool.title}</span>
+                <span class="fs-paragraph tool__line" data-size="small">{tool.line}</span>
+                <span class="tool__fact">{tool.fact}</span>
+              </button>
+            ))
+          }
+        </div>
+
+        <!--
+          The panels, one shown at a time. The three that are not the first start hidden in the
+          markup as well, so the page does not flash all four before the client has run.
+        -->
+        <div class="scene">
+          <!-- 1. The SDK: the handler, run, and the frames it put on the wire. -->
+          <div
+            class="scene__panel"
+            role="tabpanel"
+            id="panel-sdk"
+            aria-labelledby="tab-sdk"
+            data-show="$tool === 'sdk'"
+          >
+            <div class="sample">
+              <Code
+                code={SAMPLE}
+                lang="kotlin"
+                themes={shikiThemes}
+                langs={datastarLangs}
+                transformers={[hangingIndent]}
+              />
+            </div>
+
+            <!--
+              The handler above, run. The count the server reads is the one on the page: 13 on
+              arrival, one more per press. `wire` tells the service there is a #wire to patch
+              the frames into, as the live page does.
+
+              Reset is a route too: no attribute removes what the server appended (data-text
+              on the list would undo the appends themselves), so the server patches the list
+              and the frames empty, which is Datastar's one way to clear a container. Disabled
+              until there is something to reset.
+            -->
+            <div class="run">
+              <div class="run__row">
+                <button class="fs-button" type="button" data-on:click={`@get('${SERVICE}/feed')`}>
+                  Run it
+                </button>
+                <button
+                  class="fs-button"
+                  data-variant="secondary"
+                  type="button"
+                  disabled
+                  data-attr:disabled="$heads === 13"
+                  data-on:click={`@get('${SERVICE}/feed/reset')`}
+                >
+                  Reset
+                </button>
+                <p class="run__heads">
+                  <code>$heads</code>
+                  <span class="run__count" data-text="$heads"></span>
+                </p>
+              </div>
+
+              <ul id="feed" class="run__feed" aria-live="polite"></ul>
+
+              <div class="run__wire">
+                <p class="run__label">On the wire</p>
+                <!-- Beside #wire, not in it, so a reset that empties the frames brings it back. -->
+                <p class="fs-paragraph run__empty" data-size="small" data-show="$heads === 13">
+                  Press Run. The frames the server sends come back here, encoded by the same
+                  encoder the golden-file tests check.
+                </p>
+                <div id="wire" class="run__frames"></div>
+              </div>
+
+              <p class="run__label">Asserted the same way in your tests:</p>
+              <div class="sample sample--wrap">
+                <Code
+                  code={ASSERTED}
+                  lang="kotlin"
+                  themes={shikiThemes}
+                  langs={datastarLangs}
+                  transformers={[hangingIndent]}
+                />
+              </div>
+            </div>
+          </div>
+
+          <!--
+            2. The test: a fresh stream from 13, shown first, then read back by streamlord-test
+            and held to the two lines. Nothing to type: Run runs the test as written, and Break
+            runs it expecting 99, so the reader sees what a failure prints. The server reads
+            `broken` and nothing else; the count on the page plays no part.
+          -->
+          <div
+            class="scene__panel"
+            role="tabpanel"
+            id="panel-test"
+            aria-labelledby="tab-test"
+            data-show="$tool === 'test'"
+            style="display: none"
+          >
+            <p class="block__lead">The stream, read back by the test reader and held to two lines.</p>
+
+            <p class="run__label">What <code>/feed</code> sends, counting from 13:</p>
+            <div class="assert__frames">{FEED_FRAMES.map((frame) => <pre class="wire__frame">{frame}</pre>)}</div>
+
+            <p class="run__label">The test:</p>
+            <div class="sample sample--wrap">
+              <Code
+                code={ASSERTED}
+                lang="kotlin"
+                themes={shikiThemes}
+                langs={datastarLangs}
+                transformers={[hangingIndent]}
+              />
+            </div>
+
+            <div class="assert__row">
+              <button class="fs-button" type="button" data-on:click={`$broken = false; @post('${SERVICE}/assert')`}>
+                Run this test
+              </button>
+              <button
+                class="fs-button"
+                data-variant="secondary"
+                type="button"
+                data-on:click={`$broken = true; @post('${SERVICE}/assert')`}
+              >
+                Break it
+              </button>
+            </div>
+
+            <div id="assertion" class="assert__box" aria-live="polite">
+              <p class="fs-paragraph" data-size="small">
+                Run it and the test is green. Break it and the test expects 99 instead, and the
+                reader's own failure lands here, stream and all.
+              </p>
+            </div>
+          </div>
+
+          <!--
+            3. The analysis: the editors' check behind a route. The field binds `source`, the
+            three buttons set it, and the panel watches that one signal and posts, debounced,
+            so every way of changing the text reaches the judge the same way.
+          -->
+          <div
+            class="scene__panel judge"
+            role="tabpanel"
+            id="panel-analysis"
+            aria-labelledby="tab-analysis"
+            data-show="$tool === 'analysis'"
+            style="display: none"
+            data-on-signal-patch__debounce.300ms={`@post('${SERVICE}/judge')`}
+            data-on-signal-patch-filter="{include: /^source$/}"
+          >
+            <p class="block__lead">The same analysis your editor and your CI run. Type, and it judges.</p>
+
+            <label class="fs-label" for="source">Markup or Kotlin</label>
+            <textarea
+              class="fs-textarea judge__source"
+              id="source"
+              rows="3"
+              maxlength="1024"
+              spellcheck="false"
+              data-bind:source
+            ></textarea>
+
+            <div class="judge__tries">
+              <span class="judge__or">Or try</span>
+              {
+                TRIES.map((attempt) => (
+                  <button
+                    class="fs-button"
+                    data-variant="secondary"
+                    type="button"
+                    data-on:click={`$source = ${js(attempt.source)}`}
+                  >
+                    <code>{attempt.label}</code>
+                  </button>
+                ))
+              }
+            </div>
+
+            <div id="verdict" class="judge__box" aria-live="polite">
+              <p class="fs-paragraph judge__how" data-size="small">
+                Change a character, or press one of the three, and the verdict lands here.
+              </p>
+            </div>
+          </div>
+
+          <!--
+            4. The editors: the same mistake where the editor shows it. The frame is markup and
+            CSS; the diagnostic is the analysis's own text, and the hover is :hover and
+            :focus-visible, so the keyboard reaches it too.
+          -->
+          <div
+            class="scene__panel"
+            role="tabpanel"
+            id="panel-editors"
+            aria-labelledby="tab-editors"
+            data-show="$tool === 'editors'"
+            style="display: none"
+          >
+            <p class="block__lead">The same mistake, where the editor shows it. Hover the string.</p>
+
+            <div class="ed" aria-label="An editor window">
+              <div class="ed__bar" aria-hidden="true">
+                <span class="ed__dot"></span><span class="ed__dot"></span><span class="ed__dot"></span>
+                <span class="ed__file">Wall.kt</span>
+              </div>
+              {/* The lines are blocks, so no newline stands between them: in a pre it would be a line of its own. */}
+              <pre class="ed__code"><code><span class="ed__line"><span class="ed__n" aria-hidden="true">1</span>button {"{"}</span><span class="ed__line"><span class="ed__n" aria-hidden="true">2</span>    dataOnClick(<span class="ed__str">"<span class="ed__trap" tabindex="0" aria-describedby="ed-tip">$count++</span><span class="ed__tip" role="tooltip" id="ed-tip"><span class="ed__msg">{DIAGNOSTIC} <span class="ed__source">streamlord(<span class="ed__link">{DIAGNOSTIC_CODE}</span>)</span></span><span class="ed__fixes-title">Quick fixes</span><ul class="ed__fixes">{QUICK_FIXES.map((fix) => <li>{fix}</li>)}</ul></span>"</span>)</span><span class="ed__line"><span class="ed__n" aria-hidden="true">3</span>    +<span class="ed__str">"Hang a head"</span></span><span class="ed__line"><span class="ed__n" aria-hidden="true">4</span>{"}"}</span></code></pre>
+            </div>
+
+            <p class="ed__where">
+              Both editors say this.
+              <a class="fs-link" href={VSCODE}>VS Code Marketplace</a>
+              <span class="map__dot" aria-hidden="true"> · </span>
+              <a class="fs-link" href={INTELLIJ}>JetBrains Marketplace</a>
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2 class="fs-heading" data-size="m">Try it on the repo you have open right now.</h2>
+        <p class="block__lead">
+          One dependency and one test, and every Datastar string under{" "}
+          <code>src/main/kotlin</code> is read before it ships.
+        </p>
+        <div class="sample">
+          <Code
+            code={DEPENDENCY}
+            lang="kotlin"
+            themes={shikiThemes}
+            langs={datastarLangs}
+            transformers={[hangingIndent]}
+          />
+        </div>
+        <div class="sample">
+          <Code
+            code={CI_TEST}
+            lang="kotlin"
+            themes={shikiThemes}
+            langs={datastarLangs}
+            transformers={[hangingIndent]}
+          />
+        </div>
+      </section>
+    </main>
+
+    <!--
+      The foot of the poster on the same ground as its head: the map and the mark sit on the
+      hero's deep colour, so the page opens and closes dark around the lit stage in the middle.
+    -->
+    <div class="foot">
+      <!-- The whole site, a section a column, so the foot of the poster is also its map. -->
+      <nav class="map" aria-label="All pages">
       {
         NAVIGATION.map((section) => (
           <section class="section" data-featured={section.title === FEATURED ? "" : undefined}>
@@ -133,11 +506,12 @@ const SAMPLE = `get("/feed") {
           </section>
         ))
       }
-    </main>
+      </nav>
 
-    <footer class="colophon">
-      <a class="sobernetics" href="https://sobernetics.no"><Fragment set:html={sobernetics} /></a>
-    </footer>
+      <footer class="colophon">
+        <a class="sobernetics" href="https://sobernetics.no"><Fragment set:html={sobernetics} /></a>
+      </footer>
+    </div>
 
     <CodeBlock />
 
@@ -146,12 +520,12 @@ const SAMPLE = `get("/feed") {
          under the content rather than as another line of it. */
       .colophon {
         max-width: 60rem;
-        margin: var(--fs-spacing-16) auto var(--fs-spacing-10);
+        margin: var(--fs-spacing-16) auto 0;
         padding: var(--fs-spacing-5) var(--fs-spacing-6) 0;
         border-top: 1px solid var(--fs-color-neutral-border-subtle);
       }
 
-            /* The Søbernetics mark. Small on purpose, and small is the whole of how it stays quiet: the
+      /* The Søbernetics mark. Small on purpose, and small is the whole of how it stays quiet: the
          opacity this first had took it to 3.5:1 against the ground, which is below the contrast
          required of a link, and on one page left it all but invisible. Subtlety is size, not a
          washed-out colour.
@@ -212,7 +586,7 @@ const SAMPLE = `get("/feed") {
       }
       .hero__line {
         margin: 0;
-        font-size: var(--font-size-l);
+        font-size: var(--fs-font-size-l);
         color: var(--fs-color-neutral-text-strong);
       }
       .hero__sub {
@@ -221,56 +595,6 @@ const SAMPLE = `get("/feed") {
         color: var(--fs-color-neutral-text-subtle);
         line-height: var(--fs-line-height-article);
       }
-      .hero__sample {
-        inline-size: 100%;
-        margin-block-start: var(--fs-spacing-3);
-        /*
-         * A grid item may not shrink below its content by default, and `pre` does not wrap,
-         * so this one measured 666px inside a 390px phone. The column grew to fit it, the
-         * document became 686px wide, and `.hero`, which is only as wide as the viewport,
-         * covered a little over half of it: the dark ground ended mid-screen and the rest of
-         * the page showed through beside it. `overflow-x: auto` on the block never engaged,
-         * because nothing was ever too narrow for it.
-         *
-         * Zero minimum, and the column can be as narrow as the phone. Then the code scrolls
-         * inside its own box, which is what it was always meant to do.
-         */
-        min-inline-size: 0;
-      }
-      .hero__sample :global(pre) {
-        margin: 0;
-        padding: var(--fs-spacing-4);
-        border-radius: var(--fs-spacing-1);
-        border: 1px solid rgba(0, 177, 250, 0.2);
-        overflow-x: auto;
-        /*
-         * Down a step on a phone and no further: below about 11px a monospace font stops
-         * being read and starts being decoded. The sample is written narrow enough that this
-         * is the whole of it. The scroll below is a safety net, not the plan.
-         */
-        font-size: clamp(0.7rem, 2.9vw, var(--font-size-s));
-      }
-      .hero__sample :global(code) {
-        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      }
-      /* The same hanging indent the articles use, for a screen narrower than this sample. */
-      .hero__sample :global(pre code) {
-        white-space: normal;
-      }
-      .hero__sample :global(pre .line) {
-        display: block;
-        white-space: pre;
-        min-block-size: 1lh;
-      }
-      @media (max-width: 40rem) {
-        .hero__sample :global(pre .line) {
-          white-space: pre-wrap;
-          overflow-wrap: break-word;
-          padding-inline-start: calc(var(--indent, 0) * 1ch + 2ch);
-          text-indent: calc((var(--indent, 0) * 1ch + 2ch) * -1);
-        }
-      }
-
       .hero__actions {
         display: flex;
         flex-wrap: wrap;
@@ -299,8 +623,438 @@ const SAMPLE = `get("/feed") {
       }
       .creed__who {
         margin: var(--fs-spacing-3) 0 0;
-        font-size: var(--font-size-s);
+        font-size: var(--fs-font-size-s);
         font-style: normal;
+      }
+
+      .page {
+        max-width: 60rem;
+        margin: 0 auto;
+        padding: var(--fs-spacing-10) var(--fs-spacing-5) 0;
+        display: grid;
+        gap: var(--fs-spacing-12);
+        /* One column that may shrink below its content, or the widest block sets the page. */
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .block {
+        display: grid;
+        gap: var(--fs-spacing-3);
+        justify-items: start;
+        min-inline-size: 0;
+      }
+      .block > .fs-heading {
+        margin: 0;
+      }
+      .block__lead {
+        margin: 0;
+        max-width: 60ch;
+        color: var(--fs-color-neutral-text-subtle);
+        line-height: var(--fs-line-height-article);
+      }
+      .block__lead code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+
+      /*
+       * Every code block on the page.
+       *
+       * A grid item may not shrink below its content by default, and `pre` does not wrap,
+       * so this one measured 666px inside a 390px phone. The column grew to fit it, the
+       * document became 686px wide, and the dark ground ended mid-screen. Zero minimum, and
+       * the column can be as narrow as the phone; then the code scrolls inside its own box.
+       */
+      .sample {
+        inline-size: 100%;
+        min-inline-size: 0;
+      }
+      .sample :global(pre) {
+        margin: 0;
+        padding: var(--fs-spacing-4);
+        border-radius: var(--fs-spacing-1);
+        border: 1px solid rgba(0, 177, 250, 0.2);
+        overflow-x: auto;
+        /*
+         * Down a step on a phone and no further: below about 11px a monospace font stops
+         * being read and starts being decoded. The sample is written narrow enough that this
+         * is the whole of it. The scroll below is a safety net, not the plan.
+         */
+        font-size: clamp(0.7rem, 2.9vw, var(--fs-font-size-s));
+      }
+      .sample :global(code) {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      /* The same hanging indent the articles use, for a screen narrower than this sample. */
+      .sample :global(pre code) {
+        white-space: normal;
+      }
+      .sample :global(pre .line) {
+        display: block;
+        white-space: pre;
+        min-block-size: 1lh;
+      }
+      /* The assertion is one long call, and a wrapped call reads better than a scrolled one at
+         any width; the poster above keeps its shape until a phone. */
+      @media (max-width: 40rem) {
+        .sample :global(pre .line) {
+          white-space: pre-wrap;
+          overflow-wrap: break-word;
+          padding-inline-start: calc(var(--indent, 0) * 1ch + 2ch);
+          text-indent: calc((var(--indent, 0) * 1ch + 2ch) * -1);
+        }
+      }
+      .sample--wrap :global(pre .line) {
+        white-space: pre-wrap;
+        overflow-wrap: break-word;
+        padding-inline-start: calc(var(--indent, 0) * 1ch + 2ch);
+        text-indent: calc((var(--indent, 0) * 1ch + 2ch) * -1);
+      }
+
+      /* The four cards, as tabs: four across at full width, two on a tablet, one on a phone. */
+      .tools {
+        inline-size: 100%;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(13rem, 100%), 1fr));
+        gap: var(--fs-spacing-3);
+      }
+      .tool {
+        inline-size: 100%;
+        align-items: start;
+        color: inherit;
+      }
+      .tool .fs-card__title {
+        color: var(--fs-color-accent-fill);
+      }
+      .tool p {
+        color: var(--fs-color-neutral-text-subtle);
+      }
+      /* A span, because a button holds phrasing content only; it lays out as the paragraph it replaces. */
+      .tool__line {
+        display: block;
+      }
+      .tool__fact {
+        margin-block-start: auto;
+        padding-block-start: var(--fs-spacing-1);
+        font-size: var(--fs-font-size-xs);
+        font-weight: var(--fs-font-weight-semibold);
+        color: var(--fs-color-neutral-text-strong);
+      }
+      /* The chosen card: the neon border the hero uses, at full strength, and nothing else moves. */
+      .tool[aria-selected="true"] {
+        border-color: var(--fs-color-accent-fill);
+        box-shadow: inset 0 -2px 0 var(--fs-color-accent-fill);
+      }
+
+      .scene {
+        inline-size: 100%;
+        min-inline-size: 0;
+      }
+      .scene__panel {
+        display: grid;
+        gap: var(--fs-spacing-3);
+        justify-items: start;
+        min-inline-size: 0;
+      }
+
+      /* The example, run. The server writes into the list and the frames, so both are :global. */
+      .run {
+        inline-size: 100%;
+        min-inline-size: 0;
+        display: grid;
+        gap: var(--fs-spacing-3);
+      }
+      .run__row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--fs-spacing-4);
+      }
+      .run__heads {
+        margin: 0;
+        color: var(--fs-color-neutral-text-subtle);
+      }
+      .run__heads code,
+      .run__label code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        text-transform: none;
+        letter-spacing: 0;
+      }
+      .run__count {
+        margin-inline-start: var(--fs-spacing-1);
+        font-weight: var(--fs-font-weight-bold);
+        font-variant-numeric: tabular-nums;
+        color: var(--fs-color-accent-fill);
+      }
+      .run__feed {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: var(--fs-spacing-1);
+      }
+      .run__feed :global(li) {
+        padding: var(--fs-spacing-1) var(--fs-spacing-3);
+        border-inline-start: 2px solid var(--fs-color-accent-fill);
+        font-size: var(--fs-font-size-s);
+      }
+      .run__feed :global(.feed__verdict) {
+        border-inline-start-color: var(--fs-color-warning-text);
+        color: var(--fs-color-neutral-text-subtle);
+      }
+      .run__label {
+        margin: 0;
+        font-size: var(--fs-font-size-xxs);
+        font-weight: var(--fs-font-weight-semibold);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--fs-color-neutral-text-subtle);
+      }
+      .run__wire {
+        display: grid;
+        gap: var(--fs-spacing-2);
+        /* A frame is one long line until it wraps, and a wide one must not widen the page. */
+        min-inline-size: 0;
+        overflow-wrap: anywhere;
+      }
+      .run__frames,
+      .assert__frames {
+        inline-size: 100%;
+        min-inline-size: 0;
+        display: grid;
+        gap: var(--fs-spacing-2);
+      }
+      .run__empty {
+        margin: 0;
+        color: var(--fs-color-neutral-text-subtle);
+      }
+      /* The frames, as the live page shows them. The server writes the SDK panel's, so those
+         are :global; the test panel's are written here from the generated transcript. */
+      .run__frames :global(.wire__frame),
+      .assert__frames .wire__frame {
+        margin: 0;
+        padding: var(--fs-spacing-3);
+        overflow-x: auto;
+        background: var(--fs-color-neutral-surface);
+        border-radius: var(--fs-spacing-1);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: var(--fs-font-size-xs);
+        line-height: var(--fs-line-height-compact);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+
+      /* The test: the frames, the two lines, two buttons, then the reader's verdict. */
+      .assert__row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--fs-spacing-3);
+      }
+      .assert__box {
+        inline-size: 100%;
+        max-inline-size: 48rem;
+        min-block-size: 3rem;
+        display: grid;
+        gap: var(--fs-spacing-2);
+        overflow-wrap: anywhere;
+      }
+      .assert__box > p {
+        margin: 0;
+        color: var(--fs-color-neutral-text-subtle);
+      }
+      /* The reader's failure, as it prints it: the message, a blank line, and the stream event by event. */
+      .assert__box :global(.assertion__said) {
+        margin: 0;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: var(--fs-font-size-xs);
+        line-height: var(--fs-line-height-compact);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .assert__box :global(.assertion__why) {
+        margin: 0;
+        color: var(--fs-color-neutral-text-subtle);
+      }
+
+      .judge__source {
+        inline-size: 100%;
+        max-inline-size: 48rem;
+        box-sizing: border-box;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: var(--fs-font-size-s);
+      }
+      .judge__tries {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--fs-spacing-2);
+      }
+      .judge__tries code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: var(--fs-font-size-s);
+      }
+      .judge__or {
+        font-size: var(--fs-font-size-s);
+        color: var(--fs-color-neutral-text-subtle);
+      }
+      /* The verdict is written by the server in Fristil's classes, so what is left to style is ours. */
+      .judge__box {
+        inline-size: 100%;
+        max-inline-size: 48rem;
+        min-block-size: 3rem;
+        display: grid;
+        gap: var(--fs-spacing-2);
+        overflow-wrap: anywhere;
+      }
+      .judge__box :global(.judge__how) {
+        margin: 0;
+        color: var(--fs-color-neutral-text-subtle);
+      }
+      .judge__box :global(.judge__findings) {
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: var(--fs-spacing-2);
+      }
+      .judge__box :global(.judge__finding) {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--fs-spacing-1) var(--fs-spacing-2);
+      }
+      .judge__box :global(.judge__severity) {
+        font-size: var(--fs-font-size-xxs);
+        font-weight: var(--fs-font-weight-semibold);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .judge__box :global(.judge__code) {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: var(--fs-font-size-xs);
+        color: var(--fs-color-neutral-text-subtle);
+      }
+
+      /*
+       * The editor window. Drawn, not screenshotted, so the diagnostic in it is the text the
+       * analysis writes today and the hover works at every width. The colours are an editor's
+       * dark theme, not the site's tokens, because the frame is a picture of another program.
+       */
+      .ed {
+        inline-size: 100%;
+        max-inline-size: 48rem;
+        box-sizing: border-box;
+        border: 1px solid rgba(0, 177, 250, 0.2);
+        border-radius: var(--fs-spacing-1);
+        background: #1e1e1e;
+        color: #d4d4d4;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: clamp(0.75rem, 2.9vw, var(--fs-font-size-s));
+      }
+      .ed__bar {
+        display: flex;
+        align-items: center;
+        gap: var(--fs-spacing-2);
+        padding: var(--fs-spacing-2) var(--fs-spacing-3);
+        border-block-end: 1px solid #333;
+        font-size: var(--fs-font-size-xs);
+        color: #9d9d9d;
+      }
+      .ed__dot {
+        inline-size: 10px;
+        block-size: 10px;
+        border-radius: 50%;
+        background: #3c3c3c;
+      }
+      .ed__file {
+        margin-inline-start: var(--fs-spacing-2);
+      }
+      .ed__code {
+        margin: 0;
+        padding: var(--fs-spacing-3) var(--fs-spacing-3) var(--fs-spacing-4);
+        line-height: 1.7;
+        /* The tooltip is positioned against the line it hangs under, so the lines are blocks. */
+        white-space: pre;
+      }
+      .ed__line {
+        display: block;
+        position: relative;
+      }
+      .ed__n {
+        display: inline-block;
+        inline-size: 2.5ch;
+        margin-inline-end: 1.5ch;
+        text-align: end;
+        color: #6e7681;
+        user-select: none;
+      }
+      .ed__str {
+        color: #ce9178;
+      }
+      /* The trap, as the editor marks it: a red wave under the string, and the eye goes there first. */
+      .ed__trap {
+        text-decoration: underline wavy #f14c4c;
+        text-decoration-skip-ink: none;
+        text-underline-offset: 3px;
+        cursor: help;
+        border-radius: 2px;
+      }
+      .ed__trap:focus-visible {
+        outline: 1px solid #0078d4;
+        outline-offset: 1px;
+      }
+      /* The hover. Hidden until the string is hovered or focused, and it stays while the pointer is on it. */
+      .ed__tip {
+        visibility: hidden;
+        position: absolute;
+        z-index: 1;
+        inset-inline: 0;
+        top: 100%;
+        margin-block-start: 2px;
+        display: grid;
+        gap: var(--fs-spacing-2);
+        padding: var(--fs-spacing-3);
+        border: 1px solid #454545;
+        border-radius: 3px;
+        background: #252526;
+        color: #d4d4d4;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+        white-space: normal;
+        line-height: var(--fs-line-height-compact);
+        overflow-wrap: anywhere;
+      }
+      .ed__trap:hover ~ .ed__tip,
+      .ed__trap:focus-visible ~ .ed__tip,
+      .ed__tip:hover {
+        visibility: visible;
+      }
+      .ed__msg {
+        display: block;
+      }
+      .ed__source {
+        color: #9d9d9d;
+      }
+      .ed__link {
+        color: #3794ff;
+        text-decoration: underline;
+      }
+      .ed__fixes-title {
+        display: block;
+        padding-block-start: var(--fs-spacing-2);
+        border-block-start: 1px solid #454545;
+        font-size: var(--fs-font-size-xs);
+        color: #9d9d9d;
+      }
+      .ed__fixes {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: var(--fs-spacing-1);
+        color: #3794ff;
+      }
+      .ed__where {
+        margin: 0;
+        font-size: var(--fs-font-size-s);
+        color: var(--fs-color-neutral-text-subtle);
       }
 
       /*
@@ -309,10 +1063,25 @@ const SAMPLE = `get("/feed") {
        * so a one-page section beside a six-page one leaves no hole. `columns: 13rem 3` is
        * "at most three, none narrower than 13rem", which collapses to one on a phone.
        */
-      .page {
+      /* The root, not the body: the body keeps the canvas for the stage, and what lies beyond
+         the content, below the foot in a tall window or past the end of a rubber-band scroll,
+         is painted by the root and must be the foot's own dark. */
+      :global(html) {
+        background: #0c0d14;
+      }
+      .foot {
+        /* The hero's ground and its edge, mirrored, so the stage is framed above and below. */
+        background: #0c0d14;
+        border-block-start: 1px solid rgba(0, 177, 250, 0.25);
+        margin-block-start: var(--fs-spacing-16);
+        /* Padding and not a margin on the colophon: a margin would collapse out of the band
+           and leave a strip of the lighter canvas under the mark. */
+        padding-block-end: var(--fs-spacing-10);
+      }
+      .map {
         max-width: 60rem;
         margin: 0 auto;
-        padding: var(--fs-spacing-10) var(--fs-spacing-5) var(--fs-spacing-16);
+        padding: var(--fs-spacing-12) var(--fs-spacing-5) 0;
         columns: 13rem 3;
         column-gap: var(--fs-spacing-8);
       }
@@ -332,6 +1101,9 @@ const SAMPLE = `get("/feed") {
         list-style: none;
         display: grid;
         gap: var(--fs-spacing-1);
+      }
+      .map__dot {
+        color: var(--fs-color-neutral-text-subtle);
       }
     </style>
   </body>

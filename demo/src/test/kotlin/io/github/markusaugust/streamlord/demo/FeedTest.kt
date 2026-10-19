@@ -49,6 +49,24 @@ class FeedTest {
         }
 
     @Test
+    fun `reset empties the list and the frames and puts the count back at 13`() =
+        testApplication {
+            application { live() }
+
+            val body = client.get("/feed/reset").bodyAsText()
+            val events = body.split("\n\n").filter { it.startsWith("event:") }
+
+            assertEquals(3, events.size, body)
+            assertTrue(events[0].contains("data: selector #feed"), events[0])
+            assertTrue(events[0].contains("data: mode inner"), events[0])
+            assertFalse(events[0].contains("<"), events[0])
+            assertTrue(events[1].contains("data: selector #wire"), events[1])
+            assertTrue(events[1].contains("data: mode inner"), events[1])
+            assertFalse(events[1].contains("<"), events[1])
+            assertTrue(events[2].contains("""data: signals {"heads": 13}"""), events[2])
+        }
+
+    @Test
     fun `a count the wall cannot hold is a verdict in the feed, not a new count`() {
         for (heads in listOf(-1, HEADS_MAX + 1)) {
             val events = feedEvents(FeedSignals(heads = heads))

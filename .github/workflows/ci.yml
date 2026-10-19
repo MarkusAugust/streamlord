@@ -85,6 +85,8 @@ jobs:
               # The corpus both editors' checks are held to: CorpusTest in the SDK reads it too.
               # And the SSE corpus both inspectors read, SseCorpusTest in streamlord-analysis too.
               editors/vscode/test/fixtures/corpus/*|editors/vscode/test/fixtures/sse/*) vscode=true; kotlin=true; intellij=true ;;
+              # The corpus is counted on the front page, so it is site content too.
+              editors/vscode/test/fixtures/corpus/*) vscode=true; docs=true ;;
               editors/vscode/*)   vscode=true ;;
               editors/intellij/*) intellij=true ;;
               # The catalog feeds the analysis, and VS Code's generated custom data.
@@ -92,13 +94,19 @@ jobs:
               # The pages are compiled by docs-samples and indexed into the image, so
               # they are Kotlin sources and image content as much as they are prose.
               docs/src/content/docs/*) docs=true; kotlin=true; image=true ;;
+              # The transcripts the pages import are goldens the Kotlin build checks.
+              docs/src/generated/*) docs=true; kotlin=true ;;
               docs/*)             docs=true ;;
               # Netlify's build of the site, which deploys from master with no other check.
               netlify.toml)       docs=true ;;
               demo/*)             kotlin=true; image=true ;;
               # The IntelliJ plugin builds streamlord-analysis, and core beneath it, from source.
+              # The differential fixture is counted on the front page, so it is site content too.
+              streamlord-core/src/test/resources/*) kotlin=true; image=true; intellij=true; docs=true ;;
               streamlord-core/*)  kotlin=true; image=true; intellij=true ;;
-              streamlord-analysis/*) kotlin=true; intellij=true ;;
+              # The image runs the analysis in /judge and streamlord-test in /assert.
+              streamlord-analysis/*) kotlin=true; image=true; intellij=true ;;
+              streamlord-test/*)  kotlin=true; image=true ;;
               streamlord-html/*|streamlord-ktor/*|streamlord-json-kotlinx/*)
                 kotlin=true; image=true ;;
               streamlord-*/*|docs-samples/*)
@@ -106,6 +114,8 @@ jobs:
               # The README carries coordinates checkDocSamples verifies, and LICENSE goes into every jar.
               README.md|LICENSE)  kotlin=true ;;
               # The version catalog and the settings scripts are the plugin's build too.
+              # The site reads the catalog for the versions on the front page.
+              gradle/libs.versions.toml) kotlin=true; image=true; intellij=true; docs=true ;;
               gradle/*|gradlew*|*.gradle.kts|gradle.properties)
                 kotlin=true; image=true; intellij=true ;;
             esac
@@ -495,6 +505,30 @@ jobs:
           echo "$feed" | grep -q '"heads": 14' \
             || { echo "::error::/feed did not count 13 to 14"; echo "$feed" | head -8; exit 1; }
           echo "  the feed counted a head"
+
+          # The test panel: a fresh feed from 13 read back by streamlord-test's reader and held
+          # to two assertions. The test as written proves the reader is in the image; the broken
+          # one proves the failure comes back as the reader's own message, with the stream in it.
+          passed=$(curl -s --max-time 5 -X POST \
+            -H 'Content-Type: application/json' \
+            -H "Origin: $ORIGIN" \
+            -d '{"broken":false}' \
+            http://localhost:8080/assert)
+
+          echo "$passed" | grep -q 'Both assertions passed' \
+            || { echo "::error::/assert did not pass. Is streamlord-test in the image?"; echo "$passed" | head -8; exit 1; }
+
+          failed=$(curl -s --max-time 5 -X POST \
+            -H 'Content-Type: application/json' \
+            -H "Origin: $ORIGIN" \
+            -d '{"broken":true}' \
+            http://localhost:8080/assert)
+
+          echo "$failed" | grep -q 'is 14, expected 99' \
+            || { echo "::error::/assert did not fail on broken with the reader's message"; echo "$failed" | head -8; exit 1; }
+          echo "$failed" | grep -q 'The stream carried 2 events' \
+            || { echo "::error::/assert failed without printing the stream"; exit 1; }
+          echo "  the assertions passed as written and failed when broken, stream and all"
 
           # The judge reads the analysis's catalog as a resource by name, which is exactly the
           # kind of file a native image leaves out. A verdict with the editors' own message in

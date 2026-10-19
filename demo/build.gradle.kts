@@ -16,6 +16,9 @@ dependencies {
     // The judge: the editors' analysis behind a route. Its catalog is a resource read by name;
     // resource-config.json names it for the native image.
     implementation(project(":streamlord-analysis"))
+    // The test reader, behind a route: the front page's test panel runs two of its assertions
+    // against the feed. It reads no resources and reflects over nothing, so the image needs no entry for it.
+    implementation(project(":streamlord-test"))
 
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.cio)

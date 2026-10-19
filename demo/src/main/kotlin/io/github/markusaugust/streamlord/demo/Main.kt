@@ -109,6 +109,7 @@ internal val SIGNALS: KotlinxSignalsCodec =
                 typeOf<ModeSignals>() to ModeSignals.serializer(),
                 typeOf<FeedSignals>() to FeedSignals.serializer(),
                 typeOf<JudgeSignals>() to JudgeSignals.serializer(),
+                typeOf<AssertSignals>() to AssertSignals.serializer(),
             ),
         requireNamedSerializers = true,
     )
@@ -259,6 +260,17 @@ public fun Application.live() {
         get("/feed") {
             val signals = call.readSignalsOr(FeedSignals())
             call.respondDatastar(feedEvents(signals).asFlow())
+        }
+
+        // The panel as it arrived: the list and the frames emptied, the count back at 13.
+        get("/feed/reset") {
+            call.respondDatastar(resetEvents().asFlow())
+        }
+
+        // A fresh feed from 13, read back by streamlord-test and held to the two assertions the
+        // test panel shows. `broken` makes the second expect 99, so the reader sees a failure.
+        post("/assert") {
+            call.respondDatastar(assertEvents(call.readSignalsOr(AssertSignals())).asFlow())
         }
 
         /*
