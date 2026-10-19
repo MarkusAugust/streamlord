@@ -17,6 +17,10 @@ dependencies {
     implementation(project(":streamlord-json-kotlinx"))
     implementation(project(":streamlord-json-jackson"))
 
+    // The front page shows the stream its test panel asserts. The transcript is made by the
+    // service's own handler, so the frames on the page are what `/feed` sends and nothing else.
+    implementation(project(":demo"))
+
     // The testing page shows tests, so its samples need what a test needs. They compile here
     // as ordinary main sources, which is enough to catch a renamed assertion or a changed
     // signature; nothing on the page is executed.
@@ -61,6 +65,13 @@ abstract class ExtractDocSamples : DefaultTask() {
     @get:InputFiles
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val extraPages: ConfigurableFileCollection
+
+    /**
+     * Transcripts whose events come from a function in this module's own sources rather than
+     * from a `kotlin wire=` block: the name to generate, and the function that builds the events.
+     */
+    @get:Input
+    abstract val sourced: MapProperty<String, String>
 
     @get:OutputDirectory
     abstract val target: DirectoryProperty
@@ -145,13 +156,26 @@ abstract class ExtractDocSamples : DefaultTask() {
                     "class $name {\n$body\n}\n"
             "html" -> "$imports\n\nfun kotlinx.html.FlowContent.$name() {\n$body\n}\n"
             "statements" -> "$imports\n\nsuspend fun $name() {\n$body\n}\n"
+            /* Bare assertions over a response already read, as the front page shows them. */
+            "assertions" -> "$imports\n\nfun $name(events: DatastarEvents) {\n$body\n}\n"
             "stream" -> "$imports\n\nsuspend fun DatastarStream.$name() {\n$body\n}\n"
             "declarations" -> "$imports\n\n$body\n"
             else -> null
         }
 
     private val known =
-        listOf("declarations", "html", "ktor-application", "ktor-routing", "spring", "spring-controller", "statements", "stream", "test")
+        listOf(
+            "assertions",
+            "declarations",
+            "html",
+            "ktor-application",
+            "ktor-routing",
+            "spring",
+            "spring-controller",
+            "statements",
+            "stream",
+            "test",
+        )
 
     /**
      * A handler method that takes the Streamlord bean as a parameter. It compiles, and Spring
@@ -169,7 +193,7 @@ abstract class ExtractDocSamples : DefaultTask() {
         out.mkdirs()
 
         val problems = mutableListOf<Problem>()
-        val transcripts = mutableListOf<Pair<String, String>>()
+        val transcripts = sourced.get().toList().toMutableList()
         val htmlSamples = mutableListOf<Pair<String, String>>()
         var written = 0
 
@@ -319,6 +343,9 @@ val generateDocSamples =
         group = "verification"
         pages.set(rootProject.layout.projectDirectory.dir("docs/src/content/docs"))
         extraPages.from(rootProject.layout.projectDirectory.file("README.md"))
+        // The front page's Kotlin, kept outside the published pages; see the file's own comment.
+        extraPages.from(rootProject.layout.projectDirectory.file("docs/src/samples/front-page.md"))
+        sourced.put("feed-13", "feedFrom13")
         target.set(layout.buildDirectory.dir("generated/samples"))
     }
 
@@ -516,6 +543,18 @@ abstract class ApplyWireTranscripts : DefaultTask() {
     @get:Internal
     abstract val pages: DirectoryProperty
 
+    /**
+     * Where the transcripts a page cannot carry in a fence go, one `.sse` file each: the front
+     * page is an Astro component, and it imports its file as raw text. Edited in place, and for
+     * the same reason as the pages.
+     */
+    @get:Internal
+    abstract val exported: DirectoryProperty
+
+    /** The transcripts written to [exported], by name. */
+    @get:Input
+    abstract val exportedNames: ListProperty<String>
+
     @TaskAction
     fun apply() {
         val bytes =
@@ -525,6 +564,15 @@ abstract class ApplyWireTranscripts : DefaultTask() {
 
         var changed = 0
         val stale = ArrayList<String>()
+
+        for (name in exportedNames.get()) {
+            val wanted = bytes[name] ?: throw GradleException("No transcript named '$name' was generated.")
+            val file = exported.get().asFile.resolve("$name.sse")
+            if (!file.exists() || file.readText() != wanted) {
+                if (failOnChange.get()) stale += file.name else file.apply { parentFile.mkdirs() }.writeText(wanted)
+                changed++
+            }
+        }
 
         for (page in pages.get().asFile.walkTopDown().filter { it.extension == "md" }) {
             val lines = page.readLines().toMutableList()
@@ -586,6 +634,8 @@ val applyWireTranscripts =
         dependsOn(generateWireTranscripts)
         transcripts.set(layout.buildDirectory.dir("wire"))
         pages.set(rootProject.layout.projectDirectory.dir("docs/src/content/docs"))
+        exported.set(rootProject.layout.projectDirectory.dir("docs/src/generated"))
+        exportedNames.set(listOf("feed-13"))
         failOnChange.set(providers.environmentVariable("CI").map { it.isNotBlank() }.orElse(false))
         outputs.upToDateWhen { false }
     }

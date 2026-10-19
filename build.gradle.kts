@@ -71,8 +71,11 @@ subprojects {
              * built by this Kotlin at its own level would refuse to compile in a project on the
              * Kotlin Spring Boot 4.0 manages. Built to that level instead, and with that standard
              * library in the POM; docs-samples' checkKotlinFloor compiles against them with it.
+             *
+             * The demo is never published, but that floor compile reads it too: the front page's
+             * transcript is made by the service's own handler. So it is built to the same level.
              */
-            if (!internal) {
+            if (!internal || name == "demo") {
                 val floor = KotlinVersion.fromVersion(kotlinFloor.substringBeforeLast('.'))
                 languageVersion.set(floor)
                 apiVersion.set(floor)
