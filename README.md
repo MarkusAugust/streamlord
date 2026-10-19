@@ -1,33 +1,44 @@
 # Streamlord
 
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.markusaugust.streamlord/streamlord-core?label=Maven%20Central)](https://central.sonatype.com/namespace/io.github.markusaugust.streamlord)
+[![VS Code](https://vsmarketplacebadges.dev/version-short/MarkusAugust.streamlord.svg?label=VS%20Code)](https://marketplace.visualstudio.com/items?itemName=MarkusAugust.streamlord)
+[![IntelliJ IDEA](https://img.shields.io/jetbrains/plugin/v/34587?label=IntelliJ%20IDEA)](https://plugins.jetbrains.com/plugin/34587-streamlord)
+[![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue)](LICENSE)
+
+**A Datastar toolchain for Kotlin.**
+
+[Datastar](https://data-star.dev) lives in strings your compiler never reads. Streamlord checks
+them anyway: in your editor as you type, when the event is built, and before a byte reaches
+the browser. It is four tools, designed together: an SDK for Ktor and Spring, assertions
+for your tests, an analysis for your CI, and two editor extensions. Adopt one, or all of them.
+
 > *The elders of Bonereach asked Gorvek what a warrior wants of a stream.*
+>
 > *"That it flows when I say flow. That it stops when I say stop. That it carries my will to
 > the far shore, and nothing else."*
+>
 > *"And the JavaScript?"*
+>
 > *"I do not know the word."*
 >
 > Gorvek of Bonereach, who walked out of the Ashfall with iron in his hand
 
-**Streamlord** is a Datastar toolchain for Kotlin. Datastar lives in strings your compiler never
-reads, and Streamlord checks them anyway: in your editor as you type, when the event is built,
-and before a byte reaches the browser.
+The official [Datastar Kotlin SDK](https://github.com/starfederation/datastar-kotlin) writes the
+protocol's events and leaves the framework, the markup, the tests and the editor to you.
+Streamlord writes the same events and brings the rest with it.
 
-![VS Code with dataText("$count") underlined in red, and the hover: Kotlin interpolates $count here; the browser will never see a signal. Write signal("count").](docs/src/assets/editor-dollar-trap.png)
+Streamlord is Kotlin only. For Java, use
+[the official Java SDK](https://github.com/starfederation/datastar-java).
 
-`dataText("$count")` compiles when `count` is in scope, and sends the browser a number instead of
-the signal. The editor marks it before you build, and the same check runs
-[in CI](https://streamlord-docs.netlify.app/testing/) as a test you add.
+Streamlord is still 0.x: the API can change between minor versions, and
+[the changelog](CHANGELOG.md) says what changed and how to move.
 
-It comes in two halves. The **SDK** speaks the [Datastar](https://data-star.dev) 1.0.4
-Server-Sent Events protocol exactly, reads the signals the browser sends back, and serves two
-realms without favour: **Ktor** (the Sword) and **Spring** (the Shield). It is built on ports and
-adapters, carries almost no dependencies, and treats every byte from the browser as the untrusted
-thing it is. The **editors** read Datastar as a language wherever you write it, and need no part
-of the SDK to do it.
+## The SDK
 
-## The same endpoint, twice
-
-One route that adds a line to a list and updates a counter. By hand, against the protocol:
+Adapters for Ktor and Spring, both [Spring MVC](https://streamlord-docs.netlify.app/spring-webmvc/)
+and [WebFlux](https://streamlord-docs.netlify.app/spring-webflux/), over one core that imports
+no framework. Here is a route that adds a line to a list and updates a counter, first written
+by hand against the protocol:
 
 ```kotlin sample=ktor-routing
 get("/feed") {
@@ -60,33 +71,80 @@ get("/feed") {
 }
 ```
 
-Both send the same bytes, and the same headers to a request that keeps the connection open. To
-one whose `Connection` header asks to close it, the first still sends `keep-alive` on CIO, Netty
-and Tomcat, where Tomcat puts its own `close` beside it, and `respondDatastar` does not; Jetty
-drops the `keep-alive` itself, so there the two match. The first leaves the flushing, the line
-splitting, the selector rules, the JSON and the headers to you;
-[the introduction](https://streamlord-docs.netlify.app/introduction/) lists what each of those
+Both send the same events. By hand, the flushing, the line splitting, the selector rules, the
+JSON and the headers are yours to get right, and
+[the introduction](https://streamlord-docs.netlify.app/introduction/) shows what each of them
 costs.
+
+## Assertions for your tests
+
+`streamlord-test` reads a response back into events, so a test says what the endpoint meant
+instead of comparing bytes. Here `events` is `datastarEvents(response.bodyAsText())`:
+
+```kotlin sample=assertions
+events.assertPatchElements(selector = "#feed", mode = ElementPatchMode.APPEND, containing = "A new head")
+events.assertSignal("heads", 13)
+```
+
+[Testing](https://streamlord-docs.netlify.app/testing/) has the whole test.
+
+## An analysis for your CI
+
+`streamlord-analysis` is the editors' check as a library. One test walks your sources and fails
+the build wherever Kotlin interpolates a signal into a Datastar expression, as in
+`dataText("$count")`, even in files no editor ever opened:
+
+```kotlin sample=test
+private val analyzer = Analyzer()
+
+@Test
+fun `no source file interpolates a signal into Datastar`() {
+    val offenders =
+        java.io.File("src/main/kotlin")
+            .walkTopDown()
+            .filter { it.extension == "kt" }
+            .flatMap { file ->
+                val source = file.readText()
+                analyzer
+                    .analyzeKotlin(source)
+                    .filter { it.severity == Severity.ERROR }
+                    .map { it.format(file.path, source) }
+            }.toList()
+
+    assertTrue(offenders.isEmpty(), offenders.joinToString("\n"))
+}
+```
+
+## The editors
+
+A [VS Code extension](https://marketplace.visualstudio.com/items?itemName=MarkusAugust.streamlord)
+and an [IntelliJ IDEA plugin](https://plugins.jetbrains.com/plugin/34587-streamlord) read
+Datastar as a language in HTML, Kotlin strings and template files: diagnostics with quick
+fixes, completion, hover, highlighting that colours only the Datastar tokens, and a Stream
+Inspector that shows the events a response sent.
+
+![VS Code with dataText("$count") underlined in red, and the hover: Kotlin interpolates $count here; the browser will never see a signal. Write signal("count").](docs/src/assets/editor-dollar-trap.png)
+
+`dataText("$count")` compiles when `count` is in scope, and sends the browser a number instead
+of the signal. The editor marks it before you build.
+
+The editors need no part of the Streamlord SDK, so they work just as well in a project on the
+official SDK. VS Code checks a template file once an extension for that engine is installed, since that
+is what tells VS Code the file's language.
+[The editors page](https://streamlord-docs.netlify.app/editors/) has the rest.
 
 ## Three ways to write markup
 
-The kotlinx.html DSL above, HTML in a Kotlin string, or the output of a template engine (Pebble,
-Thymeleaf, JTE, FreeMarker, Velocity, Mustache). Every entry point that takes HTML takes a
-`String`, so all three are equals, and both editors check Datastar in all three. VS Code checks a
-template file once an extension for that engine is installed, since that is what tells VS Code the
-file's language.
-
-## 📖 [Documentation](https://streamlord-docs.netlify.app)
-
-Everything lives there: the protocol, both adapters, the three ways to write markup, the
-security model, the editors, and the architecture. Go straight to
-[your first stream](https://streamlord-docs.netlify.app/first-stream/) if you would rather
-start by writing one.
+Write HTML with the kotlinx.html DSL above, as a Kotlin string, or with a template engine
+(Pebble, Thymeleaf, JTE, kte, FreeMarker, Velocity, Mustache).
+Every entry point that takes HTML takes a
+`String`, so all three are equals, and both editors check Datastar in all three.
+[Choosing a style](https://streamlord-docs.netlify.app/choosing-a-style/) helps you pick.
 
 ## Install
 
 Most projects take two artifacts: the adapter for your framework, plus `streamlord-html` for the
-kotlinx.html DSL.
+kotlinx.html DSL. For Ktor:
 
 ```kotlin sample=none
 dependencies {
@@ -95,91 +153,38 @@ dependencies {
 }
 ```
 
-There are ten modules and you will never want all of them.
-[Install and modules](https://streamlord-docs.netlify.app/install/) explains which and why.
+For Spring Boot 4:
 
-## The editors
-
-A VS Code extension (`MarkusAugust.streamlord`) and an IntelliJ IDEA plugin
-(`io.github.markusaugust.streamlord`) read Datastar as a language: diagnostics with quick fixes
-inside Kotlin strings and template files, completion, hover, highlighting of the Datastar tokens
-only, and a Stream Inspector. See [The editors](https://streamlord-docs.netlify.app/editors/).
-
-## Repository layout
-
-| Path | What it is |
-|---|---|
-| `streamlord-*` | the ten published modules |
-| `editors/vscode`, `editors/intellij` | the two editor extensions |
-| `catalog/` | `datastar-1.0.4.json`, the shared source of truth for both editors |
-| `docs/` | this project's documentation site (Astro, Fristil, Datastar) |
-| `docs-samples/` | compiles every Kotlin example in the documentation, and generates the wire transcripts |
-
-## Building and releasing
-
-```
-./gradlew build
+```kotlin sample=none
+dependencies {
+    implementation("io.github.markusaugust.streamlord:streamlord-spring:0.13.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-html:0.13.0")
+}
 ```
 
-JDK 21 builds it; the artifacts target JDK 17. `build` also holds the documentation to what
-this build actually does. Every Kotlin example is compiled against the modules, and the
-dependency trees the pages print are compared with what the build resolves; a page that has gone
-stale on either turns the build red. The coordinates and the wire transcripts are rewritten in
-place from the project's own version and encoder, and the build says which page it changed so you
-can commit it.
+The assertions and the analysis are `streamlord-test` and `streamlord-analysis`, both in
+`testImplementation`. There are ten modules and you will never want all of them.
+[Install and modules](https://streamlord-docs.netlify.app/install/) explains which and why, with
+Maven as well as Gradle.
 
-Every published module's public surface is written down in `api/<module>.api`, and `build`
-fails when the code no longer matches it. That catches a change that compiles and still breaks
-code built against the previous release. After a change you meant, run
-`./gradlew updateKotlinAbi` and commit the dump with it.
+## Documentation
 
-Releases go to Maven Central from CI only, from a tag `v<version>` on the release branch. The
-`publish-maven-central` job checks that the tag matches, then signs and publishes every module
-under `io.github.markusaugust.streamlord` through the Central Portal with automatic release.
-The VS Code extension has its own tag, `vscode-v<version>`, and the IntelliJ plugin
-`intellij-v<version>`. [RELEASING.md](RELEASING.md) has the branch model and every step.
+[The documentation](https://streamlord-docs.netlify.app) has the protocol, both adapters, the
+security model, the editors and the architecture, as well as
+[live views](https://streamlord-docs.netlify.app/live-views/),
+[GraalVM native image](https://streamlord-docs.netlify.app/native-image/) and
+[Datastar Pro](https://streamlord-docs.netlify.app/datastar-pro/), whose attributes Streamlord
+writes without shipping any Pro code. To begin,
+[write your first stream](https://streamlord-docs.netlify.app/first-stream/).
 
-## Running the documentation site locally
+What is coming is on [the roadmap](https://streamlord-docs.netlify.app/roadmap/).
 
-Two processes, in two terminals. The site alone is not enough: its search and the wire panel at
-the foot of every page are answered by the demo service, and in development they look for it on
-`localhost:8080`.
+## Licence
 
-```
-./gradlew :demo:run
-```
-
-```
-cd docs && bun install && bun run dev
-```
-
-The site is then on `http://localhost:4321`. Skip the first command and the pages still render,
-but searching does nothing and the wire panel stays empty, which looks like a bug and is not one.
-`docs/src/config.ts` is where that address is decided: `localhost:8080` in development, the
-deployed service in production, and `PUBLIC_SERVICE_URL` overrides both.
-
-Before pushing, `bun run lint`, `bun run typecheck` and `bun run check:links` in `docs/`, and
-`./gradlew :docs-samples:checkDocSamples` from the root, which compiles every Kotlin example the
-pages show.
-
-## Changelog
-
-[CHANGELOG.md](CHANGELOG.md), and the entries that change how you write code are summarised on
-[the changelog page](https://streamlord-docs.netlify.app/changelog/).
-
-## Licence and name
-
-MIT. Take it, wield it, and may your streams never buffer. It costs nothing, and every released
-version stays MIT: that permission cannot be withdrawn, not even by us. Use it commercially,
-change it, ship it inside something closed. The one condition is that the copyright notice and
-the licence text travel with it, and every jar carries both as `META-INF/LICENSE`.
-
-The name Streamlord and the mark are not part of that grant. Fork the code freely; do not call
-the result Streamlord.
-
-Contributions: issues are always welcome. Pull requests are taken after a conversation, and
-whoever contributes signs [CLA.md](CLA.md). The whole picture is on
-[the documentation site](https://streamlord-docs.netlify.app/licence/).
+MIT. Take it, wield it, and may your streams never buffer. Every released version stays MIT, but
+the name Streamlord and the mark are not part of the grant: fork freely, under another name.
+Issues are always welcome and pull requests start with a conversation; see
+[CONTRIBUTING.md](CONTRIBUTING.md) and [the licence page](https://streamlord-docs.netlify.app/licence/).
 
 *Gorvek, Sarn, Gallowmark and every other name in this grimoire are our own
 invention. Any resemblance to legends told at other tables is the mead's doing.*
