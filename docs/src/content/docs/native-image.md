@@ -134,6 +134,24 @@ a string and nothing in the bytecode mentions it. Name it:
 Put that in `src/main/resources/META-INF/native-image/resource-config.json` and the plugin picks it
 up. Skip it and the image ships without the file, starts cleanly, and finds nothing.
 
+`streamlord-analysis` is such a case when it is on the image's classpath: it reads its catalog,
+`datastar-1.0.4.json` at the root of the jar, by name. The service behind this site runs the
+analysis in its `/judge` route, so its configuration names both files:
+
+```json
+{
+  "resources": {
+    "includes": [
+      { "pattern": "\\Qindex.json\\E" },
+      { "pattern": "datastar-[0-9]+\\.[0-9]+\\.[0-9]+\\.json" }
+    ]
+  }
+}
+```
+
+The second pattern is a regular expression rather than a quoted name, so the file follows the
+Datastar version the SDK speaks without this file being edited at each release.
+
 ## 4. The container
 
 A native image links glibc and zlib dynamically by default. `gcr.io/distroless/base-debian12`
