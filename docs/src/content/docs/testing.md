@@ -341,6 +341,84 @@ dependencies {
 }
 ```
 
+### The same check, behind a route
+
+The analysis takes a string, so it judges what a reader pastes as readily as what CI reads from
+disk. The service behind this site does exactly that at `/judge`: the paste arrives as the
+`source` signal, is read as a template when it starts with `<` and as Kotlin otherwise, and the
+verdict is patched into the page with each fix as a button. The analysis is a lexer and a parser
+over the paste, so it runs on `Dispatchers.Default` and leaves the server's threads to the
+connections:
+
+```kotlin sample=ktor-routing
+post("/judge") {
+    val source = call.readSignals().string("source") ?: ""
+    if (source.encodeToByteArray().size > 1024) {
+        call.respondDatastar {
+            patchElements("<p>The judge reads at most 1 KiB of UTF-8.</p>", selector = "#verdict", mode = ElementPatchMode.INNER)
+        }
+        return@post
+    }
+
+    val issues =
+        withContext(Dispatchers.Default) {
+            if (source.trimStart().startsWith("<")) Analyzer().analyzeHtml(source) else Analyzer().analyzeKotlin(source)
+        }
+
+    call.respondDatastar {
+        patchElements(selector = "#verdict", mode = ElementPatchMode.INNER) {
+            if (issues.isEmpty()) p { +"The browser will see exactly this." }
+            ul {
+                // Every button carries the whole paste again, so the first eight findings are
+                // the answer, with two fixes each and eight buttons in all; the rest is a count.
+                var buttons = 8
+                issues.take(8).forEach { issue ->
+                    li {
+                        +"${issue.severity.name.lowercase()}: ${issue.message}"
+                        issue.fixes.take(minOf(2, buttons)).forEach { fix ->
+                            buttons--
+                            // The whole text with the fix applied, as a JavaScript literal; set() escapes it.
+                            button { dataOnClick(set("source", fix.apply(source))); +fix.title }
+                        }
+                    }
+                }
+                if (issues.size > 8) li { +"and ${issues.size - 8} more" }
+            }
+        }
+    }
+}
+```
+
+A `Fix` is a range replacement, so `fix.apply(source)` is the text the field should hold next, not
+`fix.text`, which is the helper call without the line it belongs to. The limit counts bytes of
+UTF-8, as the plugin's does, so the two limits are in the same unit.
+
+The page binds the field and asks again whenever `source` changes, so the keyboard and the fix
+buttons reach the judge the same way. `data-on-signal-patch` with a filter is what does that, and
+the debounce is what keeps a paste from being judged one keystroke at a time:
+
+```html
+<section
+  data-signals="{source: ''}"
+  data-on-signal-patch__debounce.300ms="@post('/judge')"
+  data-on-signal-patch-filter="{include: /^source$/}"
+>
+  <textarea data-bind:source></textarea>
+  <div id="verdict"></div>
+</section>
+```
+
+`data-signals` has to stand before `data-on-signal-patch` on the same element: in the other order
+the client sees `source` arrive and posts once on load.
+
+Hold the limit on the server, as above, and set the plugin's `maxSignalsSize` a little above it, so
+a body that could never be a legitimate paste is never read into memory: a declared length above
+the limit is refused on the headers, and a body that declares none is read up to the limit and no
+further. The connection still drains the rest, since the engine keeps it for the next request;
+what the limit bounds is the memory, not the bytes on the wire. Read the paste, judge it and
+answer; do not log it and do not keep it, in an error message least of all. The `StatusPages`
+handlers on [Security](/security/#bounded-input) keep Ktor's own messages out of the body as well.
+
 ## Signals the pages never declare
 
 A handler reads signals into a type. The pages declare them in markup. Nothing holds the two

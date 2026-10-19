@@ -1,5 +1,8 @@
 package io.github.markusaugust.streamlord.demo
 
+import io.github.markusaugust.streamlord.core.JsonParseException
+import io.github.markusaugust.streamlord.core.SignalsDecodeException
+import io.github.markusaugust.streamlord.core.SignalsMediaTypeException
 import io.github.markusaugust.streamlord.core.SignalsTooLargeException
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
@@ -16,7 +19,9 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
+import io.ktor.server.application.log
 import io.ktor.server.cio.CIO
+import io.ktor.server.engine.defaultExceptionStatusCode
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.plugins.statuspages.StatusPages
@@ -25,8 +30,10 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.serialization.Serializable
+import java.io.IOException
 import kotlin.reflect.typeOf
 
 /**
@@ -100,6 +107,8 @@ internal val SIGNALS: KotlinxSignalsCodec =
                 typeOf<CounterSignals>() to CounterSignals.serializer(),
                 typeOf<MusterSignals>() to MusterSignals.serializer(),
                 typeOf<ModeSignals>() to ModeSignals.serializer(),
+                typeOf<FeedSignals>() to FeedSignals.serializer(),
+                typeOf<JudgeSignals>() to JudgeSignals.serializer(),
             ),
         requireNamedSerializers = true,
     )
@@ -118,6 +127,9 @@ public fun Application.live() {
      */
     install(StreamlordPlugin) {
         codec = SIGNALS
+        // The largest store any page here sends is the judge's, a 1 KiB paste and a few flags.
+        // Four times that, and a body above it is never read into memory.
+        maxSignalsSize = 4096
     }
 
     /*
@@ -151,9 +163,54 @@ public fun Application.live() {
         maxAgeInSeconds = 86_400
     }
 
+    /*
+     * The four handlers the security page prescribes, and the catch-all under them. Without
+     * them Ktor answers an unhandled exception with its message as the body, and a decode
+     * message names the type it could not read into; a message from this service's own code
+     * could quote a paste. Every body here is a fixed text.
+     *
+     * The catch-all answers Ktor's own exceptions with Ktor's own status, so a request with
+     * `%ZZ` in its path or its query is the 400 it would be without StatusPages, and not a 500.
+     * A reader who leaves a stream is an IOException from the write; there is nobody to answer,
+     * and nothing of this service's went wrong. Cancellation is the engine's and is thrown on.
+     *
+     * What is left is logged by the class of what was caught, and nothing from the request,
+     * which the reader shaped. The service has no logging backend, so none of it is written
+     * until one is added; the calls are here for that day.
+     */
     install(StatusPages) {
         exception<SignalsTooLargeException> { call, _ ->
             call.respondText("Signals too large", status = HttpStatusCode.PayloadTooLarge)
+        }
+        exception<JsonParseException> { call, _ ->
+            call.respondText("Signals are not JSON", status = HttpStatusCode.BadRequest)
+        }
+        exception<SignalsDecodeException> { call, _ ->
+            call.respondText("Signals could not be read", status = HttpStatusCode.BadRequest)
+        }
+        exception<SignalsMediaTypeException> { call, _ ->
+            call.respondText("Signals must be sent as application/json", status = HttpStatusCode.UnsupportedMediaType)
+        }
+        exception<Throwable> { call, cause ->
+            when (cause) {
+                is CancellationException -> {
+                    throw cause
+                }
+
+                is IOException -> {
+                    call.application.log.debug("A reader left: {}", cause::class.simpleName)
+                }
+
+                else -> {
+                    val status = defaultExceptionStatusCode(cause)
+                    if (status != null) {
+                        call.respondText(status.description, status = status)
+                    } else {
+                        call.application.log.error("Unhandled: {}", cause::class.simpleName)
+                        call.respondText("Something went wrong", status = HttpStatusCode.InternalServerError)
+                    }
+                }
+            }
         }
     }
 
@@ -196,6 +253,29 @@ public fun Application.live() {
         // adapter drains it whole, which is the API this demo exists to show.
         get("/counter") {
             call.respondDatastar(counterEvents(call.readSignalsOr(CounterSignals())))
+        }
+
+        // The front page's code example, run: one li onto #feed and the count patched back.
+        get("/feed") {
+            val signals = call.readSignalsOr(FeedSignals())
+            call.respondDatastar(feedEvents(signals).asFlow())
+        }
+
+        /*
+         * The editors' check, as a route. The paste is read, judged and answered, and that is
+         * all: it is not logged and not kept. A body past the plugin's limit is caught here so
+         * that the reader gets a verdict rather than the 413 the page would never show. The
+         * page that calls this declares `data-signals` before `data-on-signal-patch` on the
+         * same element; the other order posts once on load.
+         */
+        post("/judge") {
+            val events =
+                try {
+                    judgeEvents(call.readSignalsOr(JudgeSignals()), call.application.log)
+                } catch (_: SignalsTooLargeException) {
+                    tooLargeEvents()
+                }
+            call.respondDatastar(events.asFlow())
         }
 
         get("/search") {

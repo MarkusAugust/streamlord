@@ -47,4 +47,20 @@ class SignalsTest {
             SIGNALS.decode("""{"mode":"remove","lastMode":"inner"}"""),
         )
     }
+
+    @Test
+    fun `the feed reads its signals`() {
+        assertEquals(
+            FeedSignals(heads = 13, wire = true),
+            SIGNALS.decode("""{"heads":13,"wire":true,"query":""}"""),
+        )
+    }
+
+    @Test
+    fun `the judge reads its signals`() {
+        assertEquals(
+            JudgeSignals(source = "<div></div>"),
+            SIGNALS.decode("""{"source":"<div></div>","heads":13}"""),
+        )
+    }
 }
