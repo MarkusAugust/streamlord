@@ -47,7 +47,7 @@ export const CORPUS_CASES: number = Object.values(
     eager: true,
     import: "default",
   }),
-).reduce((total, file) => total + corpusCases(file), 0)
+).reduce<number>((total, file) => total + corpusCases(file), 0)
 
 function corpusCases(file: unknown): number {
   const cases = (file as { cases?: unknown[] }).cases
