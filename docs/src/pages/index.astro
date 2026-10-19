@@ -496,8 +496,13 @@ events.assertSignal(<span class="asserts__str">"heads"</span>, <span class="asse
       </section>
     </main>
 
-    <!-- The whole site, a section a column, so the foot of the poster is also its map. -->
-    <nav class="map" aria-label="All pages">
+    <!--
+      The foot of the poster on the same ground as its head: the map and the mark sit on the
+      hero's deep colour, so the page opens and closes dark around the lit stage in the middle.
+    -->
+    <div class="foot">
+      <!-- The whole site, a section a column, so the foot of the poster is also its map. -->
+      <nav class="map" aria-label="All pages">
       {
         NAVIGATION.map((section) => (
           <section class="section" data-featured={section.title === FEATURED ? "" : undefined}>
@@ -514,11 +519,12 @@ events.assertSignal(<span class="asserts__str">"heads"</span>, <span class="asse
           </section>
         ))
       }
-    </nav>
+      </nav>
 
-    <footer class="colophon">
-      <a class="sobernetics" href="https://sobernetics.no"><Fragment set:html={sobernetics} /></a>
-    </footer>
+      <footer class="colophon">
+        <a class="sobernetics" href="https://sobernetics.no"><Fragment set:html={sobernetics} /></a>
+      </footer>
+    </div>
 
     <CodeBlock />
 
@@ -527,7 +533,7 @@ events.assertSignal(<span class="asserts__str">"heads"</span>, <span class="asse
          under the content rather than as another line of it. */
       .colophon {
         max-width: 60rem;
-        margin: var(--fs-spacing-16) auto var(--fs-spacing-10);
+        margin: var(--fs-spacing-16) auto 0;
         padding: var(--fs-spacing-5) var(--fs-spacing-6) 0;
         border-top: 1px solid var(--fs-color-neutral-border-subtle);
       }
@@ -1083,10 +1089,25 @@ events.assertSignal(<span class="asserts__str">"heads"</span>, <span class="asse
        * so a one-page section beside a six-page one leaves no hole. `columns: 13rem 3` is
        * "at most three, none narrower than 13rem", which collapses to one on a phone.
        */
+      /* The root, not the body: the body keeps the canvas for the stage, and what lies beyond
+         the content, below the foot in a tall window or past the end of a rubber-band scroll,
+         is painted by the root and must be the foot's own dark. */
+      :global(html) {
+        background: #0c0d14;
+      }
+      .foot {
+        /* The hero's ground and its edge, mirrored, so the stage is framed above and below. */
+        background: #0c0d14;
+        border-block-start: 1px solid rgba(0, 177, 250, 0.25);
+        margin-block-start: var(--fs-spacing-16);
+        /* Padding and not a margin on the colophon: a margin would collapse out of the band
+           and leave a strip of the lighter canvas under the mark. */
+        padding-block-end: var(--fs-spacing-10);
+      }
       .map {
         max-width: 60rem;
         margin: 0 auto;
-        padding: var(--fs-spacing-16) var(--fs-spacing-5) 0;
+        padding: var(--fs-spacing-12) var(--fs-spacing-5) 0;
         columns: 13rem 3;
         column-gap: var(--fs-spacing-8);
       }
