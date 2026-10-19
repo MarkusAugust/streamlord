@@ -156,13 +156,26 @@ abstract class ExtractDocSamples : DefaultTask() {
                     "class $name {\n$body\n}\n"
             "html" -> "$imports\n\nfun kotlinx.html.FlowContent.$name() {\n$body\n}\n"
             "statements" -> "$imports\n\nsuspend fun $name() {\n$body\n}\n"
+            /* Bare assertions over a response already read, as the front page shows them. */
+            "assertions" -> "$imports\n\nfun $name(events: DatastarEvents) {\n$body\n}\n"
             "stream" -> "$imports\n\nsuspend fun DatastarStream.$name() {\n$body\n}\n"
             "declarations" -> "$imports\n\n$body\n"
             else -> null
         }
 
     private val known =
-        listOf("declarations", "html", "ktor-application", "ktor-routing", "spring", "spring-controller", "statements", "stream", "test")
+        listOf(
+            "assertions",
+            "declarations",
+            "html",
+            "ktor-application",
+            "ktor-routing",
+            "spring",
+            "spring-controller",
+            "statements",
+            "stream",
+            "test",
+        )
 
     /**
      * A handler method that takes the Streamlord bean as a parameter. It compiles, and Spring
@@ -330,6 +343,8 @@ val generateDocSamples =
         group = "verification"
         pages.set(rootProject.layout.projectDirectory.dir("docs/src/content/docs"))
         extraPages.from(rootProject.layout.projectDirectory.file("README.md"))
+        // The front page's Kotlin, kept outside the published pages; see the file's own comment.
+        extraPages.from(rootProject.layout.projectDirectory.file("docs/src/samples/front-page.md"))
         sourced.put("feed-13", "feedFrom13")
         target.set(layout.buildDirectory.dir("generated/samples"))
     }

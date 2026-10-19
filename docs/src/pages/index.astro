@@ -5,6 +5,7 @@ import CodeBlock from "../components/CodeBlock.astro"
 import Logo from "../components/Logo.astro"
 import VersionBadge from "../components/VersionBadge.astro"
 import { SERVICE } from "../config"
+import { fence } from "../fences"
 import feed13 from "../generated/feed-13.sse?raw"
 import { FAVICON } from "../icon"
 import { NAVIGATION } from "../navigation"
@@ -17,6 +18,7 @@ import {
   TAGLINE,
   VERSION,
 } from "../project"
+import samples from "../samples/front-page.md?raw"
 import { datastarLangs, hangingIndent, shikiThemes } from "../shiki"
 import "../styles/global.css"
 
@@ -32,21 +34,16 @@ const FEATURED = "The tooling"
 // Written the way it would be written, not the way a phone would like it. A narrow screen
 // wraps the long line with a hanging indent (see hangingIndent in src/shiki.ts), and this
 // block is a poster on every screen wide enough to hold it, which is most of them.
-const SAMPLE = `get("/feed") {
-    call.respondDatastar {
-        patchElements(selector = "#feed", mode = ElementPatchMode.APPEND) {
-            li { +"A new head hangs on the wall" }
-        }
-        patchSignals("heads" to 13)
-    }
-}`
+//
+// The three pieces of Kotlin on this page come from samples/front-page.md, which docs-samples
+// compiles with the pages' own fences, so none of them can outlive the API it shows.
+const SAMPLE = fence(samples, "feed")
 
 // The handler above is what streamlord-live runs at /feed, with one difference: the count
 // comes from the page's signals and goes back one higher, so a press from 13 is 14. These two
 // lines are what a test says about that response; both names are streamlord-test's own. The
 // test panel runs exactly these against a fresh stream from 13, whatever the page counts.
-const ASSERTED = `events.assertPatchElements(selector = "#feed", mode = ElementPatchMode.APPEND, containing = "A new head")
-events.assertSignal("heads", 14)`
+const ASSERTED = fence(samples, "asserted")
 
 // What the judge's field holds on arrival: the one mistake every Kotlin project makes first.
 const PREFILL = `dataOnClick("$count++")`
@@ -84,24 +81,7 @@ const VSCODE =
 const INTELLIJ = "https://plugins.jetbrains.com/plugin/34587-streamlord"
 
 // The test from the testing page that reads a project's own sources, as it stands there.
-const CI_TEST = `private val analyzer = Analyzer()
-
-@Test
-fun \`no source file interpolates a signal into Datastar\`() {
-    val offenders =
-        java.io.File("src/main/kotlin")
-            .walkTopDown()
-            .filter { it.extension == "kt" }
-            .flatMap { file ->
-                val source = file.readText()
-                analyzer
-                    .analyzeKotlin(source)
-                    .filter { it.severity == Severity.ERROR }
-                    .map { it.format(file.path, source) }
-            }.toList()
-
-    assertTrue(offenders.isEmpty(), offenders.joinToString("\\n"))
-}`
+const CI_TEST = fence(samples, "ci-test")
 
 const DEPENDENCY = `testImplementation("${MAVEN_GROUP}:streamlord-analysis:${VERSION}")`
 
@@ -254,7 +234,7 @@ const TOOLS = [
                 data-attr:aria-selected={`$tool === '${tool.id}' ? 'true' : 'false'`}
               >
                 <span class="fs-card__title">{tool.title}</span>
-                <p class="fs-paragraph" data-size="small">{tool.line}</p>
+                <span class="fs-paragraph tool__line" data-size="small">{tool.line}</span>
                 <span class="tool__fact">{tool.fact}</span>
               </button>
             ))
@@ -360,8 +340,15 @@ const TOOLS = [
             <div class="assert__frames">{FEED_FRAMES.map((frame) => <pre class="wire__frame">{frame}</pre>)}</div>
 
             <p class="run__label">The test:</p>
-            <pre class="asserts"><code>events.assertPatchElements(selector = <span class="asserts__str">"#feed"</span>, mode = ElementPatchMode.APPEND, containing = <span class="asserts__str">"A new head"</span>)
-events.assertSignal(<span class="asserts__str">"heads"</span>, <span class="asserts__num">14</span>)</code></pre>
+            <div class="sample sample--wrap">
+              <Code
+                code={ASSERTED}
+                lang="kotlin"
+                themes={shikiThemes}
+                langs={datastarLangs}
+                transformers={[hangingIndent]}
+              />
+            </div>
 
             <div class="assert__row">
               <button class="fs-button" type="button" data-on:click={`$broken = false; @post('${SERVICE}/assert')`}>
@@ -680,8 +667,7 @@ events.assertSignal(<span class="asserts__str">"heads"</span>, <span class="asse
         inline-size: 100%;
         min-inline-size: 0;
       }
-      .sample :global(pre),
-      .asserts {
+      .sample :global(pre) {
         margin: 0;
         padding: var(--fs-spacing-4);
         border-radius: var(--fs-spacing-1);
@@ -694,8 +680,7 @@ events.assertSignal(<span class="asserts__str">"heads"</span>, <span class="asse
          */
         font-size: clamp(0.7rem, 2.9vw, var(--fs-font-size-s));
       }
-      .sample :global(code),
-      .asserts {
+      .sample :global(code) {
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       }
       /* The same hanging indent the articles use, for a screen narrower than this sample. */
@@ -741,6 +726,10 @@ events.assertSignal(<span class="asserts__str">"heads"</span>, <span class="asse
       }
       .tool p {
         color: var(--fs-color-neutral-text-subtle);
+      }
+      /* A span, because a button holds phrasing content only; it lays out as the paragraph it replaces. */
+      .tool__line {
+        display: block;
       }
       .tool__fact {
         margin-block-start: auto;
@@ -859,21 +848,6 @@ events.assertSignal(<span class="asserts__str">"heads"</span>, <span class="asse
         flex-wrap: wrap;
         align-items: center;
         gap: var(--fs-spacing-3);
-      }
-      .asserts {
-        inline-size: 100%;
-        box-sizing: border-box;
-        line-height: var(--fs-line-height-compact);
-        color: var(--fs-color-neutral-text-strong);
-        white-space: pre-wrap;
-        overflow-wrap: break-word;
-      }
-      .asserts__str {
-        color: var(--fs-color-neutral-text-subtle);
-      }
-      .asserts__num {
-        font-weight: var(--fs-font-weight-bold);
-        color: var(--fs-color-accent-fill);
       }
       .assert__box {
         inline-size: 100%;
