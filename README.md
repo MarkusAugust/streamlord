@@ -170,7 +170,7 @@ pages show.
 ## Licence and name
 
 MIT. Take it, wield it, and may your streams never buffer. It costs nothing, and every released
-version stays MIT: that permission cannot be withdrawn, not even by me. Use it commercially,
+version stays MIT: that permission cannot be withdrawn, not even by us. Use it commercially,
 change it, ship it inside something closed. The one condition is that the copyright notice and
 the licence text travel with it, and every jar carries both as `META-INF/LICENSE`.
 
