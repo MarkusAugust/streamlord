@@ -131,9 +131,11 @@ is occupancy.
 Browsers allow roughly six connections per origin on HTTP/1.1, and an open stream occupies one. A
 few streams plus normal traffic and the page begins stalling on its own requests, so the browser is
 already enforcing a limit well below anything an SDK would set. Over HTTP/2 and HTTP/3 that largely
-vanishes, since streams multiplex over one connection. So the default will be low, two or three per
-reader, and documented as low on purpose, or someone on HTTP/2 will hit it and conclude it is
-arbitrary.
+vanishes, since streams multiplex over one connection. So the limit is off until you turn it on,
+like everything else on this page, and it cannot be otherwise: Streamlord does not know what a
+reader is until you tell it which identity to count. The value the documentation will tell you to
+start with is low, two or three per reader, and documented as low on purpose, or someone on HTTP/2
+will hit it and conclude it is arbitrary.
 
 Whether it belongs in Streamlord at all is the open part. Continuous authorisation is at least
 SSE-specific, and this is general
