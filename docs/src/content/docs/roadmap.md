@@ -10,11 +10,11 @@ description: "What is planned but not shipped, in the order it will land, and wh
 Nothing on this page has shipped yet; an item leaves it in the release that delivers it. It is
 written down so you can see what is coming, decide whether to wait for it, and know what to do
 today instead. Everything that touches your code is opt-in when it lands, the way
-[`guardElements`](/strings/) is, with one exception that is marked as such.
+[`guardElements`](/strings/) is, and nothing here changes an API you already call.
 
 | Order | Planned | What it changes | What you do today |
 |---|---|---|---|
-| 1 | [Untrusted values in the DSL](#untrusted-values-in-the-dsl) | what reaches an expression built by the DSL; **breaks the API** | keep request data out of expression attributes |
+| 1 | [Values from outside, in the DSL and in templates](#values-from-outside-in-the-dsl-and-in-templates) | what the editors and CI say about a request value in an expression | keep request data out of expression attributes |
 | 2 | [Replay in the Stream Inspector](#replay-in-the-stream-inspector) | what you can see of a stream after it ran | watch it arrive live |
 | 3 | [Delimiters the analysis has not met](#delimiters-the-analysis-has-not-met) | a false warning on a correct template file | nothing, for `data-bind` and its kind |
 | 4 | [Concurrent stream limits](#concurrent-stream-limits) | how much one reader may hold open | your framework's rate limiting |
@@ -23,28 +23,39 @@ today instead. Everything that touches your code is opt-in when it lands, the wa
 The order is the order of the work, not a schedule. The last one waits for 1.0 on purpose: a
 template that lags the API it demonstrates teaches the wrong thing, and the API is still moving.
 
-## Untrusted values in the DSL
+## Values from outside, in the DSL and in templates
 
 [`interpolate`](/strings/) asks where a value landed, which it can only do because the holes are
 still standing in the format string. The DSL has no holes: `dataText(expression)` takes a `String`
 and the call itself is the position, so `dataText(userName)` is the original hazard with nothing
-in the way. Markup written as a string or rendered by a template is covered; markup built by the
-DSL is not, and it is the style the documentation leads with.
+in the way. A template has the same gap in another shape. `data-text="'{{ name }}'"` looks like
+the fix and is code injection, as [Templates](/templates/#do-not-render-a-value-into-an-expression)
+measures, and the editors say nothing about it: the analysis declines to judge a value that holds
+template syntax, since it cannot know what the engine will put there. So markup written as a
+string is covered twice, by `interpolate` at run time and by `kotlin-interpolation` in the
+editors, while the DSL and templates are covered by a paragraph of advice.
 
-Planned: expression-valued attributes stop taking a bare `String`. They take a type that only the
-expression helpers build, `signal()`, `set()`, `toggle()`, `js()` and the rest, with one explicit
-constructor for an expression you wrote yourself. The guard becomes the compiler: a value from a
-request cannot reach `dataText` without someone writing the word that says they meant it, which
-is the same bargain `Trusted` makes on the string side.
+Planned: one diagnostic in `streamlord-analysis`, so it lands in both editors and in the
+[check you run from a test](/testing/), beside `kotlin-interpolation`. It has two shapes:
 
-It is the one item here that breaks an API. Every `dataText("$count * 2")` written as a raw string
-has to become the explicit form. That is a day of mechanical edits with the compiler pointing at
-each one, and the editors can offer the fix.
+- In Kotlin, an expression-valued DSL attribute whose argument is not a literal:
+  `dataText(userName)`. A warning, not an error, because a constant looks the same from outside
+  and nothing short of the compiler can tell `userName` from `COUNT_TWICE`.
+- In a template, a template tag inside an attribute the catalog marks as taking an expression:
+  `data-text="'{{ name }}'"`, with the delimiters the analysis already knows. Silence where the
+  tag is the whole value of an ordinary attribute, `data-value="{{ name }}"`, which is the form
+  the templates page recommends.
+
+Each carries the fix the templates page shows: the value in an attribute of its own, read with
+`el.dataset`, or patched into a signal from the server. That puts the three ways of writing
+markup on the same footing, the one Streamlord already stands on: the compiler never sees a
+Datastar expression, so the editors and CI read it instead. Nothing in the SDK changes.
 
 ### Until then
 
-Keep request data out of expression attributes in the DSL, and put it in element text or an
-ordinary attribute, where kotlinx.html escapes it for you. When a value really has to reach an
+Keep request data out of expression attributes, in the DSL and in templates alike. Put it in
+element text or an ordinary attribute, where kotlinx.html or your engine escapes it for you, and
+read it with `el.dataset` when an expression needs it. When a value really has to reach an
 expression, patch it into a signal from the server rather than writing it into the markup, which
 is what signals are for.
 
@@ -120,9 +131,11 @@ is occupancy.
 Browsers allow roughly six connections per origin on HTTP/1.1, and an open stream occupies one. A
 few streams plus normal traffic and the page begins stalling on its own requests, so the browser is
 already enforcing a limit well below anything an SDK would set. Over HTTP/2 and HTTP/3 that largely
-vanishes, since streams multiplex over one connection. So the default will be low, two or three per
-reader, and documented as low on purpose, or someone on HTTP/2 will hit it and conclude it is
-arbitrary.
+vanishes, since streams multiplex over one connection. So the limit is off until you turn it on,
+like everything else on this page, and it cannot be otherwise: Streamlord does not know what a
+reader is until you tell it which identity to count. The value the documentation will tell you to
+start with is low, two or three per reader, and documented as low on purpose, or someone on HTTP/2
+will hit it and conclude it is arbitrary.
 
 Whether it belongs in Streamlord at all is the open part. Continuous authorisation is at least
 SSE-specific, and this is general
@@ -185,9 +198,18 @@ Weighed and set aside for now, with the reason, so the same ground is not covere
   keep in step. Worse, it would make the engines we wrote adapters for first-class and everything
   else a thing you glue together yourself, when today any engine works, including one you wrote
   yesterday, because Streamlord only ever wanted a `String`.
+- **A typed expression in the DSL.** An earlier version of this page planned that
+  expression-valued attributes would stop taking a bare `String` and take a type only the
+  expression helpers build, so that `dataText(userName)` would not compile. Set aside: it would
+  have rewritten every `dataText("$count * 2")` in every project to guard against a mistake few
+  make, broken the one API the documentation leads with, and done nothing for templates, where
+  the compiler never sees the markup. The escape hatch for an expression written by hand would
+  have had to exist, and the hazard would have lived on inside it. The
+  [diagnostic above](#values-from-outside-in-the-dsl-and-in-templates) covers all three styles
+  without a change to the SDK.
 - **Escaping on the way out of the DSL.** kotlinx.html escapes text and attribute values already.
   What it cannot do is refuse a value in an expression position, which is
-  [its own entry](#untrusted-values-in-the-dsl) rather than a second escaping layer.
+  [its own entry](#values-from-outside-in-the-dsl-and-in-templates) rather than a second escaping layer.
 
 ## Open questions
 
