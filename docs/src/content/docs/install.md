@@ -302,6 +302,8 @@ runs on that too. To hold Gradle to your own standard library:
 
 ```kotlin sample=none
 dependencies {
-    implementation("org.jetbrains.kotlin:kotlin-stdlib") { version { strictly("2.2.21") } }
+    implementation("org.jetbrains.kotlin:kotlin-stdlib") {
+        version { strictly("2.2.21") }
+    }
 }
 ```

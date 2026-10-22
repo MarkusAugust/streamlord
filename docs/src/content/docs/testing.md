@@ -26,7 +26,11 @@ fun `the feed appends one item and sets the count`() =
         routing {
             get("/feed") {
                 call.respondDatastar {
-                    patchElements("<li>A new head</li>", selector = "#feed", mode = ElementPatchMode.APPEND)
+                    patchElements(
+                        "<li>A new head</li>",
+                        selector = "#feed",
+                        mode = ElementPatchMode.APPEND,
+                    )
                     patchSignals("heads" to 13)
                 }
             }
@@ -34,7 +38,11 @@ fun `the feed appends one item and sets the count`() =
 
         val events = datastarEvents(client.get("/feed").bodyAsText())
 
-        events.assertPatchElements(selector = "#feed", mode = ElementPatchMode.APPEND, containing = "A new head")
+        events.assertPatchElements(
+            selector = "#feed",
+            mode = ElementPatchMode.APPEND,
+            containing = "A new head",
+        )
         events.assertSignal("heads", 13)
     }
 ```
@@ -97,7 +105,11 @@ When the whole stream genuinely is the point, say so:
 val events = datastarEvents(wire)
 
 events.assertExactly(
-    PatchElements("<li>A new head</li>", selector = "#feed", mode = ElementPatchMode.APPEND),
+    PatchElements(
+        "<li>A new head</li>",
+        selector = "#feed",
+        mode = ElementPatchMode.APPEND,
+    ),
     PatchSignals("""{"heads":13}"""),
 )
 ```
@@ -171,7 +183,11 @@ fun `the panel patches inner html`() {
 
     val body =
         response.datastarStream {
-            patchElements("<p>Ready</p>", selector = "#panel", mode = ElementPatchMode.INNER)
+            patchElements(
+                "<p>Ready</p>",
+                selector = "#panel",
+                mode = ElementPatchMode.INNER,
+            )
         }
     body.writeTo(response.outputStream)
 
@@ -201,7 +217,8 @@ function from an event to text, and it is the same one both adapters use.
 fun `a remove carries a selector and no elements`() {
     assertEquals(
         "event: datastar-patch-elements\ndata: selector #row-7\ndata: mode remove\n\n",
-        io.github.markusaugust.streamlord.core.protocol.SseEncoder.encode(PatchElements.remove("#row-7")),
+        io.github.markusaugust.streamlord.core.protocol.SseEncoder
+            .encode(PatchElements.remove("#row-7")),
     )
 }
 ```
@@ -224,7 +241,11 @@ ended:
 private val http = HttpClient.newHttpClient()
 
 private fun post(url: String) {
-    val request = HttpRequest.newBuilder(URI(url)).POST(HttpRequest.BodyPublishers.noBody()).build()
+    val request =
+        HttpRequest
+            .newBuilder(URI(url))
+            .POST(HttpRequest.BodyPublishers.noBody())
+            .build()
     http.send(request, HttpResponse.BodyHandlers.discarding())
 }
 
@@ -235,7 +256,11 @@ fun `a click reaches the page that is already open`() =
         val server =
             embeddedServer(CIO, port = 0, host = "127.0.0.1") {
                 routing {
-                    get("/count") { call.respondDatastar { count.collect { patchSignals("count" to it) } } }
+                    get("/count") {
+                        call.respondDatastar {
+                            count.collect { patchSignals("count" to it) }
+                        }
+                    }
                     post("/increment") {
                         count.value++
                         call.respond(HttpStatusCode.NoContent)

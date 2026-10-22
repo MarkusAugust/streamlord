@@ -130,8 +130,10 @@ says which value, where it landed, and what to do instead.
 ```kotlin sample=statements
 val name = "Gorvek"
 
-interpolate("""<li data-text="%s"></li>""", name)        // throws
-interpolate("""<li data-signals="{n: %s}"></li>""", 3)   // passes: a number carries no expression
+interpolate("""<li data-text="%s"></li>""", name)    // throws
+
+// Passes: a number carries no expression.
+interpolate("""<li data-signals="{n: %s}"></li>""", 3)
 ```
 
 A number or a boolean is let into a Datastar attribute because its text is digits, a dot, a sign

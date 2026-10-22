@@ -37,7 +37,9 @@ One route that adds a line to a list and updates a counter. First by hand, again
 get("/feed") {
     call.response.header("Cache-Control", "no-cache")
     call.response.header("X-Accel-Buffering", "no")
-    if (call.request.local.version == "HTTP/1.1") call.response.header("Connection", "keep-alive")
+    if (call.request.local.version == "HTTP/1.1") {
+        call.response.header("Connection", "keep-alive")
+    }
     call.respondBytesWriter(ContentType.Text.EventStream) {
         writeStringUtf8("event: datastar-patch-elements\n")
         writeStringUtf8("data: selector #feed\n")
@@ -151,8 +153,9 @@ their own. You reach for a codec module only when you want data classes as signa
 ```kotlin sample=none
 dependencies {
     implementation("io.github.markusaugust.streamlord:streamlord-ktor:0.13.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-html:0.13.0")          // optional
-    implementation("io.github.markusaugust.streamlord:streamlord-json-kotlinx:0.13.0")  // optional
+    // Optional: the kotlinx.html DSL, and data classes as signals.
+    implementation("io.github.markusaugust.streamlord:streamlord-html:0.13.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-json-kotlinx:0.13.0")
 }
 ```
 

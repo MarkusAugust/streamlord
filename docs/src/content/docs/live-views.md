@@ -20,14 +20,24 @@ whichever tab caused it.
 val tally = kotlinx.coroutines.flow.MutableStateFlow(0)
 
 fun tallyView(count: Int): List<DatastarEvent> =
-    listOf(PatchElements("""<p id="tally">$count</p>""", selector = "#view", mode = ElementPatchMode.INNER))
+    listOf(
+        PatchElements(
+            """<p id="tally">$count</p>""",
+            selector = "#view",
+            mode = ElementPatchMode.INNER,
+        ),
+    )
 ```
 
 ```kotlin sample=ktor-routing
 get("/tally/view") {
     call.respondDatastar {
         val resumeFrom = call.request.headers["last-event-id"]
-        sendLatest(tally, minInterval = 50.milliseconds, resumeFrom = resumeFrom) { tallyView(it) }
+        sendLatest(
+            tally,
+            minInterval = 50.milliseconds,
+            resumeFrom = resumeFrom,
+        ) { tallyView(it) }
     }
 }
 post("/tally/increment") {
@@ -39,7 +49,11 @@ post("/tally/increment") {
 ```kotlin sample=html
 div {
     id = "view"
-    dataInit(get("/tally/view") { requestCancellation = FetchOptions.RequestCancellation.CLEANUP })
+    dataInit(
+        get("/tally/view") {
+            requestCancellation = FetchOptions.RequestCancellation.CLEANUP
+        },
+    )
 }
 button {
     dataOnClick(post("/tally/increment"))
@@ -88,12 +102,14 @@ answers both ways: a plain request, from a bookmark or a reload, gets the whole 
 Datastar request gets the patch and the URL.
 
 ```kotlin sample=declarations
-fun searchUrl(query: String): String = "/search?q=" + java.net.URLEncoder.encode(query, Charsets.UTF_8)
+fun searchUrl(query: String): String =
+    "/search?q=" + java.net.URLEncoder.encode(query, Charsets.UTF_8)
 
 fun searchResults(query: String): String =
     interpolate("""<ul id="results"><li>Results for %s</li></ul>""", query)
 
-fun searchPage(results: String): String = "<!doctype html><html><body>$results</body></html>"
+fun searchPage(results: String): String =
+    "<!doctype html><html><body>$results</body></html>"
 ```
 
 ```kotlin sample=ktor-routing
@@ -119,7 +135,9 @@ route reads it one way for both:
 input {
     id = "q"
     dataBind("q")
-    dataOnInput($$"@get('/search?q=' + encodeURIComponent($q))") { debounce = 300.milliseconds }
+    dataOnInput($$"@get('/search?q=' + encodeURIComponent($q))") {
+        debounce = 300.milliseconds
+    }
 }
 ```
 
