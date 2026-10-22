@@ -10,6 +10,7 @@ import feed13 from "../generated/feed-13.sse?raw"
 import { FAVICON } from "../icon"
 import { NAVIGATION } from "../navigation"
 import {
+  CLAIM,
   CORPUS_CASES,
   DESCRIPTION,
   KTOR_VERSION,
@@ -35,18 +36,65 @@ const FEATURED = "The tooling"
 // wraps the long line with a hanging indent (see hangingIndent in src/shiki.ts), and this
 // block is a poster on every screen wide enough to hold it, which is most of them.
 //
-// The three pieces of Kotlin on this page come from samples/front-page.md, which docs-samples
-// compiles with the pages' own fences, so none of them can outlive the API it shows.
+// The Kotlin on this page comes from samples/front-page.md, which docs-samples compiles with the
+// pages' own fences, so none of it can outlive the API it shows. The page tells one story with
+// it: the feed built, tested, broken by accident, and caught.
 const SAMPLE = fence(samples, "feed")
 
-// The handler above is what streamlord-live runs at /feed, with one difference: the count
-// comes from the page's signals and goes back one higher, so a press from 13 is 14. These two
-// lines are what a test says about that response; both names are streamlord-test's own. The
-// test panel runs exactly these against a fresh stream from 13, whatever the page counts.
+// The problem section: four mistakes that compile, ship and do nothing in the browser, each with
+// what happens and what stops it. Two are the analysis's, two the SDK's. The verdicts are the
+// analysis's own: both of the first two are errors, so the CI test fails on them, not only the
+// editor. The markup one is HTML and not Kotlin, so it is written here and highlighted as HTML.
+const MISTAKES = [
+  {
+    title: "Kotlin takes the dollar",
+    code: fence(samples, "mistake-dollar"),
+    lang: "kotlin",
+    what: "Kotlin puts 13 where `$heads` stood. The browser gets `13++`, and the button does nothing.",
+    caught: "Your editor, and CI",
+    href: "/dollar-trap/",
+  },
+  {
+    title: "A modifier with a dot",
+    code: `<form data-on:submit.prevent="@post('/heads')">`,
+    lang: "html",
+    what: "Datastar waits for an event named `submit.prevent`, which never comes. The form posts the old way and the page reloads.",
+    caught: "Your editor, and CI",
+    href: "/editors/",
+  },
+  {
+    title: "A patch with nowhere to go",
+    code: fence(samples, "mistake-selector"),
+    lang: "kotlin",
+    what: "Append needs a selector, and the browser rejects the event without one. Streamlord throws where you build it instead.",
+    caught: "The SDK, before a byte is sent",
+    href: "/protocol/#the-eight-patch-modes",
+  },
+  {
+    title: "An event that never leaves",
+    code: fence(samples, "mistake-flush"),
+    lang: "kotlin",
+    what: "Written by hand without a flush, the event waits in a buffer, on an open stream for minutes. Streamlord flushes every event.",
+    caught: "The SDK, on every event",
+    href: "/introduction/",
+  },
+]
+
+// The handler above is what streamlord-live runs at /feed: the count comes from the page's
+// signals and goes back one higher, so a press from 13 is 14. These two lines are what a test
+// says about that response; both names are streamlord-test's own. The test panel runs exactly
+// these against a fresh stream from 13, whatever the page counts.
 const ASSERTED = fence(samples, "asserted")
 
-// What the judge's field holds on arrival: the one mistake every Kotlin project makes first.
-const PREFILL = `dataOnClick("$count++")`
+// The page the feed lives on, with the button every Kotlin project first writes. The editor
+// panel draws it, and the CI panel's field holds its one wrong line.
+const BROKEN = fence(samples, "broken").split("\n")
+const TRAP = "$heads"
+const TRAP_LINE = BROKEN.findIndex((line) => line.includes(TRAP))
+if (TRAP_LINE < 0) throw new Error(`the broken page has no ${TRAP}`)
+
+// What the judge's field holds on arrival: the broken feed's wrong line.
+const PREFILL = BROKEN[TRAP_LINE].trim()
 
 // Three more, each a different verdict: a near-miss attribute, a modifier with the wrong
 // separator, and a hyphen the browser reads as part of a signal's name. The third is Kotlin,
@@ -67,14 +115,31 @@ const js = (text: string) =>
 // frame below shows where it is said in an editor.
 // Kotlin's idiom for a literal dollar, in two halves so the linter does not read it as a placeholder.
 const IDIOM = "$" + "{'$'}"
-const DIAGNOSTIC = `Kotlin interpolates $count here; the browser will never see a signal. Write signal("count"), make the literal $$"..." (Kotlin 2.2+), or escape as ${IDIOM}count.`
+const DIAGNOSTIC = `Kotlin interpolates $heads here; the browser will never see a signal. Write signal("heads"), make the literal $$"..." (Kotlin 2.2+), or escape as ${IDIOM}heads.`
 const DIAGNOSTIC_CODE = "kotlin-interpolation"
 const QUICK_FIXES = [
-  `Use increment("count")`,
-  "Make it a $$ literal, where $count is a signal",
-  `Escape as ${IDIOM}count`,
-  "Escape as \\$count",
+  `Use increment("heads")`,
+  "Make it a $$ literal, where $heads is a signal",
+  `Escape as ${IDIOM}heads`,
+  "Escape as \\$heads",
 ]
+
+// The broken page, split around its strings so the editor frame can colour them, and around
+// the trap so the frame can underline it, as the analysis does, and hang the hover under it.
+const STRING = /("(?:[^"\\]|\\.)*")/
+const BROKEN_LINES = BROKEN.map((text, index) => {
+  if (index !== TRAP_LINE) return { trap: false, parts: text.split(STRING) }
+  const at = text.indexOf(TRAP)
+  const open = text.lastIndexOf('"', at)
+  const close = text.indexOf('"', at)
+  return {
+    trap: true,
+    before: text.slice(0, open),
+    rest: text.slice(at + TRAP.length, close),
+    after: text.slice(close + 1),
+    parts: [],
+  }
+})
 
 const VSCODE =
   "https://marketplace.visualstudio.com/items?itemName=MarkusAugust.streamlord"
@@ -85,7 +150,8 @@ const CI_TEST = fence(samples, "ci-test")
 
 const DEPENDENCY = `testImplementation("${MAVEN_GROUP}:streamlord-analysis:${VERSION}")`
 
-// The four cards are tabs, and each carries one number the build reads from the repository,
+// The four cards are tabs, in the order of the story: build, test, break and see it in the
+// editor, and the CI check for the day the editor is ignored. Each carries one number the build reads from the repository,
 // so none of them can go stale on its own. The version catalog names Ktor; it names the
 // Spring Framework rather than Boot, and Boot 4 is what manages that Framework, so Boot's
 // major is written here beside the Ktor the catalog gives.
@@ -103,16 +169,16 @@ const TOOLS = [
     fact: `${MERGE_SCENARIOS} scenarios held to the client's own mergePatch`,
   },
   {
-    id: "analysis",
-    title: "The analysis",
-    line: "One test walks src/main/kotlin and fails on a swallowed signal.",
-    fact: "Runs in CI. No editor needed.",
-  },
-  {
     id: "editors",
     title: "The editors",
     line: "VS Code and IntelliJ, with the fix a click away.",
     fact: `${CORPUS_CASES} cases both editors judge alike`,
+  },
+  {
+    id: "analysis",
+    title: "The CI check",
+    line: "One test walks src/main/kotlin and fails on a swallowed signal.",
+    fact: "Runs in CI. No editor needed.",
   },
 ]
 ---
@@ -160,32 +226,38 @@ const TOOLS = [
     -->
     <header class="hero">
       <div class="hero__inner">
-        <Logo size={72} />
-        <h1 class="hero__word">Streamlord</h1>
-        <VersionBadge />
-        <p class="hero__line">{TAGLINE}</p>
-        <p class="hero__sub">
-          An SDK for Ktor and Spring, assertions for your tests, an analysis for your CI, and
-          two editor extensions.
-        </p>
+        <div class="hero__brand">
+          <Logo size={72} />
+          <h1 class="hero__word">Streamlord</h1>
+          <VersionBadge />
+        </div>
+        <div class="hero__main">
+          <p class="hero__line">{CLAIM}</p>
+          <p class="hero__sub">
+            {TAGLINE} An SDK for Ktor and Spring, assertions for your tests, an analysis for your
+            CI, and two editor extensions.
+          </p>
 
-        <!--
-          The reader here has chosen Datastar and is choosing a library for it, so the row
-          reads as the journey they are actually on: proof that this one works, then the
-          reason to take it over the official SDK, then the way in. Install is a need you
-          have after deciding, and it is one screen down in the list below.
-        -->
-        <div class="hero__actions">
-          <!-- Linked only now that the service it talks to exists outside this machine. -->
-          <a class="fs-button" href="/live/">See it run</a>
-          <a class="fs-button" data-variant="secondary" href="/editors/">The editors</a>
-          <a class="fs-button" data-variant="ghost" href="/first-stream/">Your first stream</a>
+          <!--
+            The reader here has chosen Datastar and is choosing a library for it, so the row
+            reads as the journey they are actually on: proof that this one works, then the
+            reason to take it over the official SDK, then the way in. Install is a need you
+            have after deciding, and it is one screen down in the list below.
+          -->
+          <div class="hero__actions">
+            <!-- Linked only now that the service it talks to exists outside this machine. -->
+            <a class="fs-button" href="/live/">See it run</a>
+            <a class="fs-button" data-variant="secondary" href="/editors/">The editors</a>
+            <a class="fs-button" data-variant="ghost" href="/first-stream/">Your first stream</a>
+          </div>
         </div>
 
         <!--
-          The creed the README opens with, which the site itself had nowhere to put. It belongs
-          on the poster and not on a reference page: the last two lines are the whole argument
-          for Datastar, and they make it faster than the paragraph above ever could.
+          The creed beside the promise, not before it: the name runs across the top, the eye
+          reads the line and the buttons down the left, and the manifesto stands in the room
+          the hero had to spare. On
+          a phone there is no beside, so it follows the buttons, after everything a reader came
+          for. The last two lines are the whole argument for Datastar.
         -->
         <figure class="creed">
           <blockquote class="creed__words">
@@ -206,6 +278,51 @@ const TOOLS = [
 
     <main class="page" id="content">
       <!--
+        The problem, said once and before the tools: Datastar is written in strings, and every
+        mistake in a string compiles. Four of them, each with what the browser does and what
+        stops it, so a reader knows what the tabs below are for before they open one.
+      -->
+      <section class="block">
+        <h2 class="fs-heading" data-size="m">Datastar lives in strings your compiler never reads.</h2>
+        <p class="block__lead">
+          Each of these compiles, and without Streamlord you find out in the browser. Streamlord
+          stops all four: the first two in your editor and in CI, the last two in the SDK itself.
+        </p>
+
+        <div class="problems">
+          {
+            MISTAKES.map((mistake) => (
+              <article class="fs-card problem">
+                <h3 class="fs-card__title">{mistake.title}</h3>
+                <div class="sample sample--wrap">
+                  <Code
+                    code={mistake.code}
+                    lang={mistake.lang}
+                    themes={shikiThemes}
+                    langs={datastarLangs}
+                    transformers={[hangingIndent]}
+                  />
+                </div>
+                <p class="fs-paragraph problem__what" data-size="small">
+                  {mistake.what.split("`").map((part, at) => (at % 2 === 1 ? <code>{part}</code> : part))}
+                </p>
+                <p class="problem__caught">
+                  Caught by: {mistake.caught}
+                  <span class="map__dot" aria-hidden="true"> · </span>
+                  <a class="fs-link" href={mistake.href}>More</a>
+                </p>
+              </article>
+            ))
+          }
+        </div>
+
+        <p class="block__lead">
+          The tabs below follow the first one, <code>dataOnClick("$heads++")</code>, through all
+          four tools.
+        </p>
+      </section>
+
+      <!--
         One stage, four tools. Every signal the stage uses stands on this element, and so
         before any `data-on-signal-patch` below it: in the other order the client sees `source`
         arrive and posts once on load. `tool` picks the panel; `heads` and `wire` are the feed's,
@@ -216,7 +333,10 @@ const TOOLS = [
         data-signals={`{tool: 'sdk', heads: 13, wire: true, broken: false, source: ${js(PREFILL)}}`}
       >
         <h2 class="fs-heading" data-size="m">Four tools, designed together.</h2>
-        <p class="block__lead">One mistake, one stream, four ways to see it. Adopt one, or all of them.</p>
+        <p class="block__lead">
+          One feed, from start to finish: built, tested, broken by accident, and caught. Adopt
+          one tool, or all four.
+        </p>
 
         <!-- The cards are the tabs: a button each, selected by the signal, so Tab and Enter work as they do anywhere. -->
         <div class="tools" role="tablist" aria-label="The four tools">
@@ -254,6 +374,10 @@ const TOOLS = [
             aria-labelledby="tab-sdk"
             data-show="$tool === 'sdk'"
           >
+            <p class="block__lead">
+              Build the feed. The handler reads the count from the page and sends back one more.
+            </p>
+
             <div class="sample">
               <Code
                 code={SAMPLE}
@@ -334,7 +458,9 @@ const TOOLS = [
             data-show="$tool === 'test'"
             style="display: none"
           >
-            <p class="block__lead">The stream, read back by the test reader and held to two lines.</p>
+            <p class="block__lead">
+              Test the feed. The stream, read back by the test reader and held to two lines.
+            </p>
 
             <p class="run__label">What <code>/feed</code> sends, counting from 13:</p>
             <div class="assert__frames">{FEED_FRAMES.map((frame) => <pre class="wire__frame">{frame}</pre>)}</div>
@@ -373,9 +499,49 @@ const TOOLS = [
           </div>
 
           <!--
-            3. The analysis: the editors' check behind a route. The field binds `source`, the
+            3. The editors: the feed broken by accident, where the editor shows it. The frame is
+            markup and CSS drawn from the broken fence; the diagnostic is the analysis's own
+            text, and the hover is :hover and :focus-visible, so the keyboard reaches it too.
+          -->
+          <div
+            class="scene__panel"
+            role="tabpanel"
+            id="panel-editors"
+            aria-labelledby="tab-editors"
+            data-show="$tool === 'editors'"
+            style="display: none"
+          >
+            <p class="block__lead">
+              Break it by accident. The page that holds the feed gets a button, and Kotlin
+              takes <code>{TRAP}</code> for itself. Hover the string.
+            </p>
+
+            <div class="ed" aria-label="An editor window">
+              <div class="ed__bar" aria-hidden="true">
+                <span class="ed__dot"></span><span class="ed__dot"></span><span class="ed__dot"></span>
+                <span class="ed__file">Wall.kt</span>
+              </div>
+              {/* The lines are blocks, so no newline stands between them: in a pre it would be a line of its own. */}
+              <pre class="ed__code"><code>{BROKEN_LINES.map((line, index) => (
+                <span class="ed__line" style={`--indent: ${BROKEN[index].search(/\S|$/)}`}><span class="ed__n" aria-hidden="true">{index + 1}</span>{line.trap ? (
+                  <Fragment>{line.before}<span class="ed__str">"<span class="ed__trap" tabindex="0" aria-describedby="ed-tip">{TRAP}</span><span class="ed__tip" role="tooltip" id="ed-tip"><span class="ed__msg">{DIAGNOSTIC} <span class="ed__source">streamlord(<span class="ed__link">{DIAGNOSTIC_CODE}</span>)</span></span><span class="ed__fixes-title">Quick fixes</span><ul class="ed__fixes">{QUICK_FIXES.map((fix) => <li>{fix}</li>)}</ul></span>{line.rest}"</span>{line.after}</Fragment>
+                ) : line.parts.map((part, at) => (at % 2 === 1 ? <span class="ed__str">{part}</span> : part))}</span>
+              ))}</code></pre>
+            </div>
+
+            <p class="ed__where">
+              Both editors say this.
+              <a class="fs-link" href={VSCODE}>VS Code Marketplace</a>
+              <span class="map__dot" aria-hidden="true"> · </span>
+              <a class="fs-link" href={INTELLIJ}>JetBrains Marketplace</a>
+            </p>
+          </div>
+
+          <!--
+            4. The CI check: the editors' analysis behind a route. The field binds `source`, the
             three buttons set it, and the panel watches that one signal and posts, debounced,
-            so every way of changing the text reaches the judge the same way.
+            so every way of changing the text reaches the judge the same way. It arrives
+            holding the broken feed's wrong line.
           -->
           <div
             class="scene__panel judge"
@@ -387,7 +553,10 @@ const TOOLS = [
             data-on-signal-patch__debounce.300ms={`@post('${SERVICE}/judge')`}
             data-on-signal-patch-filter="{include: /^source$/}"
           >
-            <p class="block__lead">The same analysis your editor and your CI run. Type, and it judges.</p>
+            <p class="block__lead">
+              Ignore the editor, and CI stops it anyway. The test below runs the same analysis
+              over <code>src/main/kotlin</code>. Type, and it judges.
+            </p>
 
             <label class="fs-label" for="source">Markup or Kotlin</label>
             <textarea
@@ -420,38 +589,6 @@ const TOOLS = [
                 Change a character, or press one of the three, and the verdict lands here.
               </p>
             </div>
-          </div>
-
-          <!--
-            4. The editors: the same mistake where the editor shows it. The frame is markup and
-            CSS; the diagnostic is the analysis's own text, and the hover is :hover and
-            :focus-visible, so the keyboard reaches it too.
-          -->
-          <div
-            class="scene__panel"
-            role="tabpanel"
-            id="panel-editors"
-            aria-labelledby="tab-editors"
-            data-show="$tool === 'editors'"
-            style="display: none"
-          >
-            <p class="block__lead">The same mistake, where the editor shows it. Hover the string.</p>
-
-            <div class="ed" aria-label="An editor window">
-              <div class="ed__bar" aria-hidden="true">
-                <span class="ed__dot"></span><span class="ed__dot"></span><span class="ed__dot"></span>
-                <span class="ed__file">Wall.kt</span>
-              </div>
-              {/* The lines are blocks, so no newline stands between them: in a pre it would be a line of its own. */}
-              <pre class="ed__code"><code><span class="ed__line"><span class="ed__n" aria-hidden="true">1</span>button {"{"}</span><span class="ed__line"><span class="ed__n" aria-hidden="true">2</span>    dataOnClick(<span class="ed__str">"<span class="ed__trap" tabindex="0" aria-describedby="ed-tip">$count++</span><span class="ed__tip" role="tooltip" id="ed-tip"><span class="ed__msg">{DIAGNOSTIC} <span class="ed__source">streamlord(<span class="ed__link">{DIAGNOSTIC_CODE}</span>)</span></span><span class="ed__fixes-title">Quick fixes</span><ul class="ed__fixes">{QUICK_FIXES.map((fix) => <li>{fix}</li>)}</ul></span>"</span>)</span><span class="ed__line"><span class="ed__n" aria-hidden="true">3</span>    +<span class="ed__str">"Hang a head"</span></span><span class="ed__line"><span class="ed__n" aria-hidden="true">4</span>{"}"}</span></code></pre>
-            </div>
-
-            <p class="ed__where">
-              Both editors say this.
-              <a class="fs-link" href={VSCODE}>VS Code Marketplace</a>
-              <span class="map__dot" aria-hidden="true"> · </span>
-              <a class="fs-link" href={INTELLIJ}>JetBrains Marketplace</a>
-            </p>
           </div>
         </div>
       </section>
@@ -566,12 +703,31 @@ const TOOLS = [
         color: var(--fs-color-neutral-text-strong);
         border-block-end: 1px solid rgba(0, 177, 250, 0.25);
       }
+      /* The name across the top. Under it, where there is room, two columns: the promise down
+         the left and the creed beside it, both from the same line. One column on anything narrower, the
+         creed after the buttons. */
       .hero__inner {
         max-width: 60rem;
         margin: 0 auto;
         padding: var(--fs-spacing-12) var(--fs-spacing-5) var(--fs-spacing-10);
         display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--fs-spacing-4) var(--fs-spacing-10);
+      }
+      @media (min-width: 56rem) {
+        .hero__inner {
+          grid-template-columns: minmax(0, 1fr) minmax(0, 24rem);
+          align-items: start;
+        }
+        .hero__brand {
+          grid-column: 1 / -1;
+        }
+      }
+      .hero__brand,
+      .hero__main {
+        display: grid;
         justify-items: start;
+        align-content: start;
         gap: var(--fs-spacing-4);
       }
       .hero__word {
@@ -584,9 +740,12 @@ const TOOLS = [
         /* Flat, so the logo beside it is the only gradient on the screen. */
         color: var(--fs-color-accent-fill);
       }
+      /* The promise, second only to the name: the first sentence a reader takes in. */
       .hero__line {
         margin: 0;
-        font-size: var(--fs-font-size-l);
+        font-size: var(--fs-font-size-xl);
+        font-weight: var(--fs-font-weight-semibold);
+        line-height: var(--fs-line-height-compact);
         color: var(--fs-color-neutral-text-strong);
       }
       .hero__sub {
@@ -602,9 +761,9 @@ const TOOLS = [
         margin-block-start: var(--fs-spacing-2);
       }
 
-      /* Quiet, and set off by the same neon the border above uses, at a quarter strength. */
+      /* The creed: one size and one weight, set off by the same neon as the hero's border. */
       .creed {
-        margin: var(--fs-spacing-6) 0 0;
+        margin: 0;
         max-width: 46ch;
         padding-inline-start: var(--fs-spacing-4);
         border-inline-start: 2px solid rgba(0, 177, 250, 0.35);
@@ -707,6 +866,38 @@ const TOOLS = [
         overflow-wrap: break-word;
         padding-inline-start: calc(var(--indent, 0) * 1ch + 2ch);
         text-indent: calc((var(--indent, 0) * 1ch + 2ch) * -1);
+      }
+
+      /* The four mistakes: two across, one on a phone. Each card is the code, what the browser
+         does with it, and what stops it, with the last line pushed to the foot so they align. */
+      .problems {
+        inline-size: 100%;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(24rem, 100%), 1fr));
+        gap: var(--fs-spacing-3);
+      }
+      .problem {
+        display: grid;
+        grid-template-rows: auto auto 1fr auto;
+        gap: var(--fs-spacing-3);
+        min-inline-size: 0;
+      }
+      .problem .fs-card__title {
+        margin: 0;
+        color: var(--fs-color-accent-fill);
+      }
+      .problem__what {
+        margin: 0;
+        color: var(--fs-color-neutral-text-subtle);
+      }
+      .problem__what code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      .problem__caught {
+        margin: 0;
+        font-size: var(--fs-font-size-xs);
+        font-weight: var(--fs-font-weight-semibold);
+        color: var(--fs-color-neutral-text-strong);
       }
 
       /* The four cards, as tabs: four across at full width, two on a tablet, one on a phone. */
@@ -974,15 +1165,25 @@ const TOOLS = [
         /* The tooltip is positioned against the line it hangs under, so the lines are blocks. */
         white-space: pre;
       }
+      /* A line too long for the frame wraps as an editor with soft wrap shows it: past the
+         number, and two columns in from the line's own indent. */
       .ed__line {
         display: block;
         position: relative;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        padding-inline-start: calc(4ch + var(--indent, 0) * 1ch + 2ch);
+        text-indent: calc((4ch + var(--indent, 0) * 1ch + 2ch) * -1);
+      }
+      .ed__tip {
+        text-indent: 0;
       }
       .ed__n {
         display: inline-block;
         inline-size: 2.5ch;
         margin-inline-end: 1.5ch;
         text-align: end;
+        text-indent: 0;
         color: #6e7681;
         user-select: none;
       }

@@ -3,12 +3,6 @@ title: "Introduction"
 description: "A Datastar toolchain for Kotlin: an SDK for Ktor and Spring, and editors that read Datastar as a language."
 ---
 
-> *Every soul in Gallowmark knows my name, and not one knows my face. I took three rubies from
-> the Iron Crown of Kell and the land fell apart in my hands. Now I will take one thing from you:
-> the belief that the browser must be bought with JavaScript.*
->
-> Sarn the Faceless, whom the river-priests of Thurn call the Lord of Streams
-
 Streamlord is a [Datastar](https://data-star.dev) toolchain for Kotlin, and it comes in two
 halves. The SDK speaks the Datastar 1.0.4 Server-Sent Events protocol: your server sends HTML and
 signal patches down one connection, and the browser applies them. There is no client bundle of
@@ -153,5 +147,11 @@ will; the Pro helpers emit the documented attribute names and nothing more, and 
 the licence are yours to bring.
 
 And it does not guess. Where the protocol is ambiguous, Streamlord refuses rather than picks.
+
+> *Every soul in Gallowmark knows my name, and not one knows my face. I took three rubies from
+> the Iron Crown of Kell and the land fell apart in my hands. Now I will take one thing from you:
+> the belief that the browser must be bought with JavaScript.*
+>
+> Sarn the Faceless, whom the river-priests of Thurn call the Lord of Streams
 
 > *The stream was always yours to bend. Sit. Read.*

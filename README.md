@@ -12,17 +12,6 @@ them anyway: in your editor as you type, when the event is built, and before a b
 the browser. It is four tools, designed together: an SDK for Ktor and Spring, assertions
 for your tests, an analysis for your CI, and two editor extensions. Adopt one, or all of them.
 
-> *The elders of Bonereach asked Gorvek what a warrior wants of a stream.*
->
-> *"That it flows when I say flow. That it stops when I say stop. That it carries my will to
-> the far shore, and nothing else."*
->
-> *"And the JavaScript?"*
->
-> *"I do not know the word."*
->
-> Gorvek of Bonereach, who walked out of the Ashfall with iron in his hand
-
 The official [Datastar Kotlin SDK](https://github.com/starfederation/datastar-kotlin) writes the
 protocol's events and leaves the framework, the markup, the tests and the editor to you.
 Streamlord writes the same events and brings the rest with it.
@@ -185,6 +174,17 @@ MIT. Take it, wield it, and may your streams never buffer. Every released versio
 the name Streamlord and the mark are not part of the grant: fork freely, under another name.
 Issues are always welcome and pull requests start with a conversation; see
 [CONTRIBUTING.md](CONTRIBUTING.md) and [the licence page](https://streamlord-docs.netlify.app/licence/).
+
+> *The elders of Bonereach asked Gorvek what a warrior wants of a stream.*
+>
+> *"That it flows when I say flow. That it stops when I say stop. That it carries my will to
+> the far shore, and nothing else."*
+>
+> *"And the JavaScript?"*
+>
+> *"I do not know the word."*
+>
+> Gorvek of Bonereach, who walked out of the Ashfall with iron in his hand
 
 *Gorvek, Sarn, Gallowmark and every other name in this grimoire are our own
 invention. Any resemblance to legends told at other tables is the mead's doing.*
