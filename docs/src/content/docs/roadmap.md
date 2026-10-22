@@ -36,7 +36,7 @@ string is covered twice, by `interpolate` at run time and by `kotlin-interpolati
 editors, while the DSL and templates are covered by a paragraph of advice.
 
 Planned: one diagnostic in `streamlord-analysis`, so it lands in both editors and in the
-[check you run from a test](/testing/), beside `kotlin-interpolation`. It has two shapes:
+[check you run from a test](/analysis/), beside `kotlin-interpolation`. It has two shapes:
 
 - In Kotlin, an expression-valued DSL attribute whose argument is not a literal:
   `dataText(userName)`. A warning, not an error, because a constant looks the same from outside
@@ -184,7 +184,7 @@ so copying it means copying a directory and its build file, but nothing in it is
 Weighed and set aside for now, with the reason, so the same ground is not covered twice:
 
 - **A runtime mode that refuses unknown signals.** It would catch the same drift that
-  [`signalDrift`](/testing/) catches without a request in flight, and it fails every handler the
+  [`signalDrift`](/analysis/#signals-the-pages-never-declare) catches without a request in flight, and it fails every handler the
   moment any page gains a signal. If you want it anyway it is your codec's setting, not ours:
   `KotlinxSignalsCodec(json = Json { ignoreUnknownKeys = false })`.
 - **Simulating latency or a dropped connection in the Stream Inspector.** The inspector is a

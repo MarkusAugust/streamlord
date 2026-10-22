@@ -230,7 +230,7 @@ as a `testImplementation` and nowhere else. It is on [Testing](/testing/).
 `streamlord-analysis` is the analysis behind the editor tooling: the Kotlin string reader, the
 expression and markup rules, the signal and selector collectors. The editors are its first
 consumers, and you never need it to write a stream. Take it when you want to run the same checks
-yourself, for example over your own markup functions in a test. See [The editors](/editors/).
+yourself, for example over your own sources in CI. See [The analysis](/analysis/).
 
 ## What you still have to bring
 

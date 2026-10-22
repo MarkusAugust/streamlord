@@ -28,7 +28,7 @@ the start, `- 1`, which is what `$a - 1` leaves: write `-$x` and `-1` without th
 
 It cannot catch the other case. When the variable held `3`, the text is `3++`, and nothing in
 that string says a signal was meant. Only something that reads your source can see it, which is
-what [the editors](#in-the-editors) and the same analysis [run in CI](/testing/) are for.
+what [the editors](#in-the-editors) and the same analysis [run in CI](/analysis/) are for.
 
 A stack trace is not a fix, but it is an enormous improvement on a page that quietly does
 nothing.

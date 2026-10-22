@@ -15,8 +15,8 @@ Streamlord is four tools, designed together. Adopt one, or all four:
 - **Assertions for your tests.** `streamlord-test` reads a response back into the events it
   carried, so a [test](/testing/) says what the endpoint meant instead of comparing bytes.
 - **The analysis.** Datastar lives inside attribute values and Kotlin strings, where no compiler
-  looks. `streamlord-analysis` reads them, and one test fails the build on a mistake
-  [in CI](/testing/).
+  looks. [`streamlord-analysis`](/analysis/) reads them, and one test fails the build on a
+  mistake in CI.
 - **The editors.** A [VS Code extension and an IntelliJ plugin](/editors/) run the same analysis
   as you type, with the fix a click away.
 
@@ -27,7 +27,7 @@ The last two are the ones no other Datastar library on the JVM has.
 That is `dataText("$count")` in VS Code. It compiles, because `count` is a parameter, and it would
 send the browser whatever number `count` held instead of the signal `$count`. The editor marks it as an error before you
 build, and the quick fix rewrites it to `signal("count")`. The same check runs in IntelliJ, and
-[in CI](/testing/) as a test you add, with no editor at all.
+[in CI](/analysis/) as a test you add, with no editor at all.
 
 ## The same endpoint, twice
 
