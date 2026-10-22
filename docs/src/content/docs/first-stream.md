@@ -3,6 +3,10 @@ title: "Your first stream"
 description: "From an empty route to a patched element, and the bytes in between."
 ---
 
+> *Sit. Read. The stream was always yours to bend.*
+>
+> Sarn the Faceless
+
 The smallest useful thing Streamlord does: a request arrives, the server sends HTML for part of
 the page, and the browser puts it where you said.
 
