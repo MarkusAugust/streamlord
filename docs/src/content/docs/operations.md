@@ -499,7 +499,9 @@ get("/feed") {
     call.respondDatastar(
         authorisation =
             StreamAuthorisation(
-                onRefused = { patchElements("""<p id="notice">Your session expired</p>""") },
+                onRefused = {
+                    patchElements("""<p id="notice">Your session expired</p>""")
+                },
             ) { false },
     ) {
         ticks.collect { tick -> patchSignals("tick" to tick) }

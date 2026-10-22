@@ -84,7 +84,8 @@ the expression from compiling, and `x' + (window.__pwn = 1) + '` runs. Put the v
 attribute of its own, which the browser hands over as text, and read it with `el.dataset`:
 
 ```html
-<!-- Before: the value is JavaScript. O'Brien breaks it, and x' + (window.__pwn = 1) + ' runs. -->
+<!-- Before: the value is JavaScript. O'Brien breaks it,
+     and x' + (window.__pwn = 1) + ' runs. -->
 <span data-text="'{$name}'"></span>
 
 <!-- After: the value is text, whatever it holds. -->

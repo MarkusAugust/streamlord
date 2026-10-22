@@ -196,7 +196,7 @@ too:
 @RestController
 class TickerController(private val streamlord: Streamlord) {
     @GetMapping("/ticker")
-    fun ticker(): org.springframework.http.ResponseEntity<kotlinx.coroutines.flow.Flow<org.springframework.http.codec.ServerSentEvent<String>>> =
+    fun ticker(): ResponseEntity<Flow<ServerSentEvent<String>>> =
         ticks
             .map { n -> PatchElements("""<span id="counter">$n</span>""") }
             .asDatastarResponse(streamlord)

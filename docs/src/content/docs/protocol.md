@@ -1,13 +1,13 @@
 ---
 title: "The protocol"
-description: "Datastar 1.0 knows two SSE events. Everything else is built on those two."
+description: "Since 1.0, Datastar knows two SSE events. Everything else is built on those two."
 ---
 
 > *You were told there were five rites. Whoever told you that read a grimoire from before the
 > Ashfall.*
 
 Older documentation speaks of `merge-fragments`, `remove-fragments`, `merge-signals` and
-`remove-signals`. Those spells died with 0.x. Datastar 1.0 has **two** events.
+`remove-signals`. Those spells died with 0.x. Since 1.0, Datastar has **two** events.
 
 | Event | What it does | In Streamlord |
 |---|---|---|

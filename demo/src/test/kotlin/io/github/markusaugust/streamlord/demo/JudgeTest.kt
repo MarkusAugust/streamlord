@@ -83,9 +83,49 @@ class JudgeTest {
 
             val body = judge("""<button data-on:click="@get('/feed')">Hang one</button>""").bodyAsText()
 
-            assertTrue(body.contains("The browser will see exactly this."), body)
+            assertTrue(body.contains("Nothing to fix."), body)
             assertFalse(body.contains("judge__finding"), body)
         }
+
+    @Test
+    fun `markup under a line of Kotlin is read as markup, not passed over`() =
+        testApplication {
+            application { live() }
+
+            val body =
+                judge(
+                    """
+                    dataText("${'$'}{'${'$'}'}a - b")
+                    <button data-onn:click="1">
+                    <div data-on:click.prevent="${'$'}go()">
+                    """.trimIndent(),
+                ).bodyAsText()
+
+            assertTrue(body.contains("2 things to fix"), body)
+            assertTrue(body.contains("Unknown Datastar attribute data-onn"), body)
+            assertTrue(body.contains("data-on:click__prevent"), body)
+            assertTrue(body.contains("Read line by line"), body)
+        }
+
+    @Test
+    fun `a fix to a markup line puts back the whole paste, the Kotlin above it included`() =
+        runBlocking {
+            val source = "dataText(\"x\")\n<div data-on:click.prevent=\"\$go()\">"
+            val finding = judge(source).findings.single()
+            val fixed = finding.fixed.first().source
+
+            assertTrue(fixed.startsWith("dataText(\"x\")\n<div data-on:click__prevent"), fixed)
+        }
+
+    @Test
+    fun `markup inside a raw string stays Kotlin, and a tag over two lines stays one tag`() {
+        val raw = "patchElements(\"\"\"\n<li data-text=\"\$x\"></li>\n\"\"\")"
+        assertEquals(listOf(false), parts(raw).map { it.html })
+
+        val split = "val x = 1\n<button\n  data-on:click=\"1\">\nval y = 2"
+        assertEquals(listOf(false, true, false), parts(split).map { it.html })
+        assertEquals("<button\n  data-on:click=\"1\">\n", parts(split)[1].text)
+    }
 
     @Test
     fun `the verdict shows eight findings, eight fixes in all, and counts the rest`() =
@@ -95,7 +135,7 @@ class JudgeTest {
             // Twelve interpolated signals: twelve findings, four fixes to each.
             val body = judge("dataOnClick(\"" + "\$a".repeat(12) + "\")").bodyAsText()
 
-            assertTrue(body.contains("12 things the browser would not do"), body)
+            assertTrue(body.contains("12 things to fix"), body)
             assertEquals(8, Regex("class=\"judge__finding\"").findAll(body).count(), body)
             assertTrue(body.contains("and 4 more"), body)
 

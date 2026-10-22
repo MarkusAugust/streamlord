@@ -188,7 +188,8 @@ and deploys green, and then fails at startup or on the first request. So start i
 docker build -t my-service .
 docker run -d --name check -p 8080:8080 my-service
 curl -fsS localhost:8080/health
-curl -fsS -H 'Accept: text/event-stream' 'localhost:8080/search?datastar=%7B%22query%22%3A%22x%22%7D'
+curl -fsS -H 'Accept: text/event-stream' \
+  'localhost:8080/search?datastar=%7B%22query%22%3A%22x%22%7D'
 docker rm -f check
 ```
 

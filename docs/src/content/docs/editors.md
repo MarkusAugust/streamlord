@@ -129,7 +129,8 @@ Each returns a list of `Issue`, and an issue carries the range it covers, a `cod
 severity, its quick fixes, and a link into the Datastar reference where the reference has a page
 for it; an unclosed tag, for one, has none. `analyzeHtml` judges a template, so it
 checks attributes and expressions and leaves the id and completeness rules alone; those belong to
-markup handed to a patch, and `validateMarkup` is where they live.
+markup handed to a patch, and `validateMarkup` is where they live. [The analysis](/analysis/)
+shows the test that runs it over a whole project in CI.
 
 ## In IntelliJ specifically
 

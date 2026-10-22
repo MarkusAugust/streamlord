@@ -1,16 +1,18 @@
 ---
 title: "Testing"
-description: "Assert the events your endpoint sent, and run the $ check in CI where no editor is watching."
+description: "Assert the events your endpoint sent, in Ktor, in Spring, without a framework, and on a stream that stays open."
 ---
 
 > *A blade is not sharp because the smith says so. It is sharp because it has cut.*
 >
 > Gorvek of Bonereach
 
-Two questions this page answers. How do I assert that my endpoint sent the events I meant, and
-how do I catch a Datastar mistake in CI, where nobody has my editor open.
+One question this page answers: how do I assert that my endpoint sent the events I meant? It
+needs no browser.
 
-Neither needs a browser.
+Catching a Datastar mistake in CI, where nobody has your editor open, is the other half of
+testing, and it reads your sources rather than your responses. That is
+[the analysis](/analysis/).
 
 ## Assert what the endpoint sent, in Ktor
 
@@ -24,7 +26,11 @@ fun `the feed appends one item and sets the count`() =
         routing {
             get("/feed") {
                 call.respondDatastar {
-                    patchElements("<li>A new head</li>", selector = "#feed", mode = ElementPatchMode.APPEND)
+                    patchElements(
+                        "<li>A new head</li>",
+                        selector = "#feed",
+                        mode = ElementPatchMode.APPEND,
+                    )
                     patchSignals("heads" to 13)
                 }
             }
@@ -32,7 +38,11 @@ fun `the feed appends one item and sets the count`() =
 
         val events = datastarEvents(client.get("/feed").bodyAsText())
 
-        events.assertPatchElements(selector = "#feed", mode = ElementPatchMode.APPEND, containing = "A new head")
+        events.assertPatchElements(
+            selector = "#feed",
+            mode = ElementPatchMode.APPEND,
+            containing = "A new head",
+        )
         events.assertSignal("heads", 13)
     }
 ```
@@ -95,7 +105,11 @@ When the whole stream genuinely is the point, say so:
 val events = datastarEvents(wire)
 
 events.assertExactly(
-    PatchElements("<li>A new head</li>", selector = "#feed", mode = ElementPatchMode.APPEND),
+    PatchElements(
+        "<li>A new head</li>",
+        selector = "#feed",
+        mode = ElementPatchMode.APPEND,
+    ),
     PatchSignals("""{"heads":13}"""),
 )
 ```
@@ -169,7 +183,11 @@ fun `the panel patches inner html`() {
 
     val body =
         response.datastarStream {
-            patchElements("<p>Ready</p>", selector = "#panel", mode = ElementPatchMode.INNER)
+            patchElements(
+                "<p>Ready</p>",
+                selector = "#panel",
+                mode = ElementPatchMode.INNER,
+            )
         }
     body.writeTo(response.outputStream)
 
@@ -199,7 +217,8 @@ function from an event to text, and it is the same one both adapters use.
 fun `a remove carries a selector and no elements`() {
     assertEquals(
         "event: datastar-patch-elements\ndata: selector #row-7\ndata: mode remove\n\n",
-        io.github.markusaugust.streamlord.core.protocol.SseEncoder.encode(PatchElements.remove("#row-7")),
+        io.github.markusaugust.streamlord.core.protocol.SseEncoder
+            .encode(PatchElements.remove("#row-7")),
     )
 }
 ```
@@ -222,7 +241,11 @@ ended:
 private val http = HttpClient.newHttpClient()
 
 private fun post(url: String) {
-    val request = HttpRequest.newBuilder(URI(url)).POST(HttpRequest.BodyPublishers.noBody()).build()
+    val request =
+        HttpRequest
+            .newBuilder(URI(url))
+            .POST(HttpRequest.BodyPublishers.noBody())
+            .build()
     http.send(request, HttpResponse.BodyHandlers.discarding())
 }
 
@@ -233,7 +256,11 @@ fun `a click reaches the page that is already open`() =
         val server =
             embeddedServer(CIO, port = 0, host = "127.0.0.1") {
                 routing {
-                    get("/count") { call.respondDatastar { count.collect { patchSignals("count" to it) } } }
+                    get("/count") {
+                        call.respondDatastar {
+                            count.collect { patchSignals("count" to it) }
+                        }
+                    }
                     post("/increment") {
                         count.value++
                         call.respond(HttpStatusCode.NoContent)
@@ -282,193 +309,9 @@ JDK's own HTTP client, so it binds no HTTP library either. `LiveDatastarStream.o
 reads from the `Reader` any other client hands you; pass the underlying stream as `onClose`, since
 an `InputStreamReader` waits for a read in progress before it closes.
 
-## The `$` check, in CI, with no editor open
-
-The editors catch an interpolated signal as you type. CI does not have your editor. The same
-analysis is a library, `streamlord-analysis`, and it takes a string:
-
-```kotlin sample=test
-@Test
-fun `an interpolated signal is an error rather than a surprise in the browser`() {
-    val source = """dataOnClick("${'$'}count++")"""
-
-    val issue = Analyzer().analyzeKotlin(source).single { it.code == "kotlin-interpolation" }
-
-    assertEquals(Severity.ERROR, issue.severity)
-    assertTrue(issue.fixes.isNotEmpty(), "the analysis offers a fix")
-}
-```
-
-Point it at your own sources and it becomes a test that no markup in the project ships a
-swallowed expression:
-
-```kotlin sample=test
-private val analyzer = Analyzer()
-
-@Test
-fun `no source file interpolates a signal into Datastar`() {
-    val offenders =
-        java.io.File("src/main/kotlin")
-            .walkTopDown()
-            .filter { it.extension == "kt" }
-            .flatMap { file ->
-                val source = file.readText()
-                analyzer
-                    .analyzeKotlin(source)
-                    .filter { it.severity == Severity.ERROR }
-                    .map { it.format(file.path, source) }
-            }.toList()
-
-    assertTrue(offenders.isEmpty(), offenders.joinToString("\n"))
-}
-```
-
-`format` writes each finding as `src/main/kotlin/Page.kt:12:5: error: ... [kotlin-interpolation]`,
-the form IDEs and CI logs turn into a link to the line. `position(source)` gives the line and
-column alone.
-
-`analyzeHtml(source)` does for template and HTML files what `analyzeKotlin` does for Kotlin,
-checking attributes and expressions; the id and completeness rules belong to `validateMarkup`. Both
-return a list of `Issue`, each carrying the range it covers as `start` and `end`, a `severity`, a
-`code`, a `message`, its quick fixes and, where the Datastar reference has a page for it, a `link`,
-which is exactly what the two editors render.
-
-Add the artifact where your tests can see it:
-
-```kotlin sample=none
-dependencies {
-    testImplementation("io.github.markusaugust.streamlord:streamlord-analysis:0.13.0")
-}
-```
-
-### The same check, behind a route
-
-The analysis takes a string, so it judges what a reader pastes as readily as what CI reads from
-disk. The service behind this site does exactly that at `/judge`: the paste arrives as the
-`source` signal, is read as a template when it starts with `<` and as Kotlin otherwise, and the
-verdict is patched into the page with each fix as a button. The analysis is a lexer and a parser
-over the paste, so it runs on `Dispatchers.Default` and leaves the server's threads to the
-connections:
-
-```kotlin sample=ktor-routing
-post("/judge") {
-    val source = call.readSignals().string("source") ?: ""
-    if (source.encodeToByteArray().size > 1024) {
-        call.respondDatastar {
-            patchElements("<p>The judge reads at most 1 KiB of UTF-8.</p>", selector = "#verdict", mode = ElementPatchMode.INNER)
-        }
-        return@post
-    }
-
-    val issues =
-        withContext(Dispatchers.Default) {
-            if (source.trimStart().startsWith("<")) Analyzer().analyzeHtml(source) else Analyzer().analyzeKotlin(source)
-        }
-
-    call.respondDatastar {
-        patchElements(selector = "#verdict", mode = ElementPatchMode.INNER) {
-            if (issues.isEmpty()) p { +"The browser will see exactly this." }
-            ul {
-                // Every button carries the whole paste again, so the first eight findings are
-                // the answer, with two fixes each and eight buttons in all; the rest is a count.
-                var buttons = 8
-                issues.take(8).forEach { issue ->
-                    li {
-                        +"${issue.severity.name.lowercase()}: ${issue.message}"
-                        issue.fixes.take(minOf(2, buttons)).forEach { fix ->
-                            buttons--
-                            // The whole text with the fix applied, as a JavaScript literal; set() escapes it.
-                            button { dataOnClick(set("source", fix.apply(source))); +fix.title }
-                        }
-                    }
-                }
-                if (issues.size > 8) li { +"and ${issues.size - 8} more" }
-            }
-        }
-    }
-}
-```
-
-A `Fix` is a range replacement, so `fix.apply(source)` is the text the field should hold next, not
-`fix.text`, which is the helper call without the line it belongs to. The limit counts bytes of
-UTF-8, as the plugin's does, so the two limits are in the same unit.
-
-The page binds the field and asks again whenever `source` changes, so the keyboard and the fix
-buttons reach the judge the same way. `data-on-signal-patch` with a filter is what does that, and
-the debounce is what keeps a paste from being judged one keystroke at a time:
-
-```html
-<section
-  data-signals="{source: ''}"
-  data-on-signal-patch__debounce.300ms="@post('/judge')"
-  data-on-signal-patch-filter="{include: /^source$/}"
->
-  <textarea data-bind:source></textarea>
-  <div id="verdict"></div>
-</section>
-```
-
-`data-signals` has to stand before `data-on-signal-patch` on the same element: in the other order
-the client sees `source` arrive and posts once on load.
-
-Hold the limit on the server, as above, and set the plugin's `maxSignalsSize` a little above it, so
-a body that could never be a legitimate paste is never read into memory: a declared length above
-the limit is refused on the headers, and a body that declares none is read up to the limit and no
-further. The connection still drains the rest, since the engine keeps it for the next request;
-what the limit bounds is the memory, not the bytes on the wire. Read the paste, judge it and
-answer; do not log it and do not keep it, in an error message least of all. The `StatusPages`
-handlers on [Security](/security/#bounded-input) keep Ktor's own messages out of the body as well.
-
-## Signals the pages never declare
-
-A handler reads signals into a type. The pages declare them in markup. Nothing holds the two
-together, so a rename that reaches one and not the other compiles, deploys, and hands the handler
-a default on every request without a word.
-
-`signalDrift` compares them. It wants the whole project, because the page that declares a signal
-is almost never the file that reads it:
-
-```kotlin sample=test
-@Test
-fun `every signal a handler reads is declared by a page`() {
-    val facts = buildMap {
-        java.io.File("src/main/kotlin").walkTopDown().filter { it.extension == "kt" }.forEach {
-            put(it.path, collectSignalFacts(it.readText(), SourceLanguage.KOTLIN))
-        }
-        java.io.File("src/main/resources/templates").walkTopDown().filter { it.extension == "html" }.forEach {
-            put(it.path, collectSignalFacts(it.readText(), SourceLanguage.HTML))
-        }
-    }
-
-    val report = signalDrift(facts)
-
-    // An empty result means nothing if the check recognised no reads at all.
-    assertTrue(report.read.isNotEmpty(), "no signal reads were found; are the paths right?")
-    assertEquals(emptyMap(), report.issues)
-}
-```
-
-Assert on both. `report.issues` being empty is the good answer only when `report.read` is not, because
-a check that matched nothing reports exactly the same empty map as a project in perfect order. That
-is not hypothetical: the first version of this check called a 45-file corpus clean because its
-pattern for a signals class did not allow a modifier before `class`, so every `@Serializable public
-data class` in it was invisible.
-
-Give it every file that declares markup, whatever the markup is written in: Kotlin strings, the
-DSL, a template, an Astro page. A file it never sees is a file whose declarations cannot count,
-and a missing declaration is what the check reports.
-
-It reports one direction only. A signal the pages declare and nobody reads is harmless by
-construction, since it sits in the browser's store and comes back untouched. A signal a handler
-reads that nothing declares is always a mistake, and that is the `signal-never-declared` warning,
-pointing at the property or the lookup that will never see a value.
-
-Only classes something actually reads signals into are examined, so the rest of your
-`@Serializable` classes are left alone.
-
 ## The guard, at runtime
 
-`streamlord-analysis` reads source text. `ElementsGuard` reads the HTML an event is actually
+[The analysis](/analysis/) reads source text. `ElementsGuard` reads the HTML an event is actually
 carrying, and it runs wherever your tests exercise the endpoint, without you calling it:
 
 ```kotlin sample=statements
@@ -488,7 +331,7 @@ fun `the row markup survives the dollar trap`() {
 
 ## What this project does
 
-The same three layers, if you want a working example larger than a page. `SseEncoder` is held to
-the official Datastar SDK golden files, the Ktor adapter runs the conformance server in process,
-and the catalog the editors read is bound by test to the attributes the DSL emits, so neither can
+The same layers, the analysis included, if you want a working example larger than a page.
+`SseEncoder` is held to the official Datastar SDK golden files, the Ktor adapter runs the
+conformance server in process, and the catalog the editors read is bound by test to the attributes the DSL emits, so neither can
 drift from the other without a build going red.

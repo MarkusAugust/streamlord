@@ -9,7 +9,7 @@ between: turning Streamlord's `DatastarEvent` into Spring's `ServerSentEvent`.
 
 ```kotlin sample=spring
 @GetMapping("/counter")
-fun counter(): org.springframework.http.ResponseEntity<kotlinx.coroutines.flow.Flow<org.springframework.http.codec.ServerSentEvent<String>>> =
+fun counter(): ResponseEntity<Flow<ServerSentEvent<String>>> =
     ticks
         .map { n -> PatchElements("""<span id="counter">$n</span>""") }
         .asDatastarResponse()
@@ -39,7 +39,7 @@ controller's constructor:
 @RestController
 class CounterController(private val streamlord: Streamlord) {
     @GetMapping("/counter")
-    fun guarded(): org.springframework.http.ResponseEntity<kotlinx.coroutines.flow.Flow<org.springframework.http.codec.ServerSentEvent<String>>> =
+    fun guarded(): ResponseEntity<Flow<ServerSentEvent<String>>> =
         ticks
             .map { n -> PatchElements("""<span id="counter">$n</span>""") }
             .asDatastarResponse(streamlord)

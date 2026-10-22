@@ -124,6 +124,8 @@ abstract class ExtractDocSamples : DefaultTask() {
                     "fun io.ktor.server.application.Application.$name() {\n$body\n}\n"
             "spring" ->
                 "import org.springframework.web.bind.annotation.*\n" +
+                    "import org.springframework.http.ResponseEntity\n" +
+                    "import org.springframework.http.codec.ServerSentEvent\n" +
                     "import org.springframework.context.annotation.*\n" +
                     "import jakarta.servlet.http.HttpServletRequest\n" +
                     "import jakarta.servlet.http.HttpServletResponse\n$imports\n\n" +
@@ -135,6 +137,8 @@ abstract class ExtractDocSamples : DefaultTask() {
              */
             "spring-controller" ->
                 "import org.springframework.web.bind.annotation.*\n" +
+                    "import org.springframework.http.ResponseEntity\n" +
+                    "import org.springframework.http.codec.ServerSentEvent\n" +
                     "import jakarta.servlet.http.HttpServletRequest\n" +
                     "import jakarta.servlet.http.HttpServletResponse\n$imports\n\n$body\n"
             /*

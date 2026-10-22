@@ -243,7 +243,10 @@ know what your page loads:
 
 ```kotlin sample=ktor-application
 install(CspNoncePlugin) {
-    policy = { nonce -> "default-src 'self'; script-src 'self' 'nonce-$nonce'; img-src https://cdn.example.com" }
+    policy = { nonce ->
+        "default-src 'self'; script-src 'self' 'nonce-$nonce'; " +
+            "img-src https://cdn.example.com"
+    }
     reportOnly = true
 }
 ```

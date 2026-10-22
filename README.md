@@ -5,23 +5,11 @@
 [![IntelliJ IDEA](https://img.shields.io/jetbrains/plugin/v/34587?label=IntelliJ%20IDEA)](https://plugins.jetbrains.com/plugin/34587-streamlord)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue)](LICENSE)
 
-**A Datastar toolchain for Kotlin.**
+**Write Datastar safely in Kotlin.**
 
-[Datastar](https://data-star.dev) lives in strings your compiler never reads. Streamlord checks
-them anyway: in your editor as you type, when the event is built, and before a byte reaches
-the browser. It is four tools, designed together: an SDK for Ktor and Spring, assertions
-for your tests, an analysis for your CI, and two editor extensions. Adopt one, or all of them.
-
-> *The elders of Bonereach asked Gorvek what a warrior wants of a stream.*
->
-> *"That it flows when I say flow. That it stops when I say stop. That it carries my will to
-> the far shore, and nothing else."*
->
-> *"And the JavaScript?"*
->
-> *"I do not know the word."*
->
-> Gorvek of Bonereach, who walked out of the Ashfall with iron in his hand
+Streamlord is a [Datastar](https://data-star.dev) toolchain for Kotlin: four tools, designed
+together. An SDK for Ktor and Spring, assertions for your tests, an analysis for your CI, and two
+editor extensions. Adopt one, or all four.
 
 The official [Datastar Kotlin SDK](https://github.com/starfederation/datastar-kotlin) writes the
 protocol's events and leaves the framework, the markup, the tests and the editor to you.
@@ -33,7 +21,21 @@ Streamlord is Kotlin only. For Java, use
 Streamlord is still 0.x: the API can change between minor versions, and
 [the changelog](CHANGELOG.md) says what changed and how to move.
 
-## The SDK
+## Datastar lives in strings your compiler never reads
+
+Each of these compiles, and without Streamlord you find out in the browser:
+
+| The mistake | What happens | What stops it |
+|---|---|---|
+| `dataOnClick("$heads++")` with a variable `heads` in scope | Kotlin puts its value in: the browser gets `13++`, and the button does nothing | Your editor, and CI |
+| `data-on:submit.prevent="@post('/heads')"` | Datastar waits for an event named `submit.prevent`, which never comes | Your editor, and CI |
+| `patchElements(html, mode = ElementPatchMode.APPEND)` with no selector | The browser rejects the event | The SDK, before a byte is sent |
+| An event written by hand without `flush()` | It waits in a buffer, on an open stream for minutes | The SDK, on every event |
+
+The first is [the $ trap](https://streamlord-docs.netlify.app/dollar-trap/), and the sections
+below follow it through all four tools, on one feed.
+
+## The SDK: build the feed
 
 Adapters for Ktor and Spring, both [Spring MVC](https://streamlord-docs.netlify.app/spring-webmvc/)
 and [WebFlux](https://streamlord-docs.netlify.app/spring-webflux/), over one core that imports
@@ -44,7 +46,9 @@ by hand against the protocol:
 get("/feed") {
     call.response.header("Cache-Control", "no-cache")
     call.response.header("X-Accel-Buffering", "no")
-    if (call.request.local.version == "HTTP/1.1") call.response.header("Connection", "keep-alive")
+    if (call.request.local.version == "HTTP/1.1") {
+        call.response.header("Connection", "keep-alive")
+    }
     call.respondBytesWriter(ContentType.Text.EventStream) {
         writeStringUtf8("event: datastar-patch-elements\n")
         writeStringUtf8("data: selector #feed\n")
@@ -76,23 +80,54 @@ JSON and the headers are yours to get right, and
 [the introduction](https://streamlord-docs.netlify.app/introduction/) shows what each of them
 costs.
 
-## Assertions for your tests
+## Assertions: test the feed
 
 `streamlord-test` reads a response back into events, so a test says what the endpoint meant
-instead of comparing bytes. Here `events` is `datastarEvents(response.bodyAsText())`:
+instead of comparing bytes. Here `events` is `datastarEvents(response.bodyAsText())` for the
+feed above:
 
 ```kotlin sample=assertions
-events.assertPatchElements(selector = "#feed", mode = ElementPatchMode.APPEND, containing = "A new head")
+events.assertPatchElements(
+    selector = "#feed",
+    mode = ElementPatchMode.APPEND,
+    containing = "A new head",
+)
 events.assertSignal("heads", 13)
 ```
 
 [Testing](https://streamlord-docs.netlify.app/testing/) has the whole test.
 
-## An analysis for your CI
+## The editors: break it by accident
 
-`streamlord-analysis` is the editors' check as a library. One test walks your sources and fails
-the build wherever Kotlin interpolates a signal into a Datastar expression, as in
-`dataText("$count")`, even in files no editor ever opened:
+The page that holds the feed gets a button, and Kotlin takes `$heads` for itself:
+
+```kotlin sample=none
+fun FlowContent.wall(heads: Int) {
+    ul { id = "feed" }
+    button {
+        dataOnClick("$heads++")
+        +"Hang a head"
+    }
+}
+```
+
+A [VS Code extension](https://marketplace.visualstudio.com/items?itemName=MarkusAugust.streamlord)
+and an [IntelliJ IDEA plugin](https://plugins.jetbrains.com/plugin/34587-streamlord) mark it as
+you type, with `increment("heads")` one quick fix away. Here is the same trap in VS Code:
+
+![VS Code with dataText("$count") underlined in red, and the hover: Kotlin interpolates $count here; the browser will never see a signal. Write signal("count").](docs/src/assets/editor-dollar-trap.png)
+
+They read Datastar as a language in HTML, Kotlin strings and template files: diagnostics with
+quick fixes, completion, hover, highlighting that colours only the Datastar tokens, and a Stream
+Inspector that shows the events a response sent. They need no part of the Streamlord SDK, so
+they work just as well in a project on the official SDK. VS Code checks a template file once an
+extension for that engine is installed, since that is what tells VS Code the file's language.
+[The editors page](https://streamlord-docs.netlify.app/editors/) has the rest.
+
+## The analysis: CI stops it anyway
+
+`streamlord-analysis` is the editors' check as a library. Ignore the editor, or never open the
+file, and one test over your sources still fails the build on `dataOnClick("$heads++")`:
 
 ```kotlin sample=test
 private val analyzer = Analyzer()
@@ -115,23 +150,8 @@ fun `no source file interpolates a signal into Datastar`() {
 }
 ```
 
-## The editors
-
-A [VS Code extension](https://marketplace.visualstudio.com/items?itemName=MarkusAugust.streamlord)
-and an [IntelliJ IDEA plugin](https://plugins.jetbrains.com/plugin/34587-streamlord) read
-Datastar as a language in HTML, Kotlin strings and template files: diagnostics with quick
-fixes, completion, hover, highlighting that colours only the Datastar tokens, and a Stream
-Inspector that shows the events a response sent.
-
-![VS Code with dataText("$count") underlined in red, and the hover: Kotlin interpolates $count here; the browser will never see a signal. Write signal("count").](docs/src/assets/editor-dollar-trap.png)
-
-`dataText("$count")` compiles when `count` is in scope, and sends the browser a number instead
-of the signal. The editor marks it before you build.
-
-The editors need no part of the Streamlord SDK, so they work just as well in a project on the
-official SDK. VS Code checks a template file once an extension for that engine is installed, since that
-is what tells VS Code the file's language.
-[The editors page](https://streamlord-docs.netlify.app/editors/) has the rest.
+[The analysis](https://streamlord-docs.netlify.app/analysis/) has the rest, including a check
+for signals a handler reads that no page declares.
 
 ## Three ways to write markup
 
@@ -185,6 +205,17 @@ MIT. Take it, wield it, and may your streams never buffer. Every released versio
 the name Streamlord and the mark are not part of the grant: fork freely, under another name.
 Issues are always welcome and pull requests start with a conversation; see
 [CONTRIBUTING.md](CONTRIBUTING.md) and [the licence page](https://streamlord-docs.netlify.app/licence/).
+
+> *The elders of Bonereach asked Gorvek what a warrior wants of a stream.*
+>
+> *"That it flows when I say flow. That it stops when I say stop. That it carries my will to
+> the far shore, and nothing else."*
+>
+> *"And the JavaScript?"*
+>
+> *"I do not know the word."*
+>
+> Gorvek of Bonereach, who walked out of the Ashfall with iron in his hand
 
 *Gorvek, Sarn, Gallowmark and every other name in this grimoire are our own
 invention. Any resemblance to legends told at other tables is the mead's doing.*

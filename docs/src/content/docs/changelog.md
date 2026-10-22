@@ -222,7 +222,7 @@ and the check is ordinary Kotlin that never reaches the browser. See [Operations
 
 **`signalDrift` now reports what it saw.** It returns a `SignalDriftReport`; assert that
 `report.read` is not empty as well as that `report.issues` is, because a check that matched
-nothing looks exactly like a project in order. See [Testing](/testing/).
+nothing looks exactly like a project in order. See [The analysis](/analysis/).
 
 **`KotlinxSignalsCodec(strict = ...)` is now `requireNamedSerializers`.** Same behaviour, a name
 that says what it does. Refusing unknown signals was never this flag; that is `ignoreUnknownKeys`
@@ -237,7 +237,7 @@ it. The KDoc used to suggest otherwise. See [Security](/security/).
 **A signal your handler reads that no page declares is now findable.** `signalDrift` in
 `streamlord-analysis` takes your whole project, compares the signals handlers read against the
 signals markup declares, and reports the ones that will always be a default. It is a test you
-write once; see [Testing](/testing/). Signal classes written `public data class` also contribute
+write once; see [The analysis](/analysis/). Signal classes written `public data class` also contribute
 to completion again, which an over-strict pattern had excluded.
 
 ## 0.5.0

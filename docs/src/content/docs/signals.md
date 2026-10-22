@@ -92,7 +92,7 @@ then trusted, which is why the type is worth keeping small.
 The failure that is not harmless is the opposite one: a signal a handler reads that no page ever
 declares. That compiles, deploys, and hands the handler a default on every request. `signalDrift`
 in `streamlord-analysis` compares the two sets across your whole project and reports it, which is
-on [Testing](/testing/).
+on [The analysis](/analysis/#signals-the-pages-never-declare).
 
 If you also want it to fail at request time, that is your codec's own setting rather than
 something Streamlord adds: `KotlinxSignalsCodec(json = Json { ignoreUnknownKeys = false })`
