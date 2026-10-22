@@ -38,10 +38,11 @@
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
   /*
-   * On a phone, code wraps instead of scrolling sideways.
+   * Code wraps instead of scrolling sideways, at every width.
    *
    * Horizontal scrolling inside an article is a gesture nobody makes: the page scrolls
-   * vertically under the thumb, and a block that hides its right half hides it for good. But
+   * vertically under the thumb or the wheel, and a block that hides its right half hides it for
+   * good. A laptop with the table of contents open has room for under seventy characters. But
    * wrapping a line back to column zero is worse than scrolling, because indentation is how
    * Kotlin says what belongs to what, and a continuation that starts where a statement starts
    * reads as a statement.
@@ -62,17 +63,12 @@
   }
   .prose pre .line {
     display: block;
-    white-space: pre;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    padding-inline-start: calc(var(--indent, 0) * 1ch + 2ch);
+    text-indent: calc((var(--indent, 0) * 1ch + 2ch) * -1);
     /* A blank line in the source is an empty block, and an empty block has no height. */
     min-block-size: 1lh;
-  }
-  @media (max-width: 40rem) {
-    .prose pre .line {
-      white-space: pre-wrap;
-      overflow-wrap: break-word;
-      padding-inline-start: calc(var(--indent, 0) * 1ch + 2ch);
-      text-indent: calc((var(--indent, 0) * 1ch + 2ch) * -1);
-    }
   }
   /* Shiki writes the light colour inline and the dark one as a custom
      property, so switching themes is a CSS job. The selector shape is Fristil's:

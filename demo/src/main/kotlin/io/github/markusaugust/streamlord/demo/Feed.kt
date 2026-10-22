@@ -24,9 +24,9 @@ public data class FeedSignals(
 /**
  * The front page's code example, run.
  *
- * The hero shows a handler that appends one `li` to `#feed` and patches `heads`. This is that
- * handler, with the count read from the request instead of written as 13, so the server counts
- * on from whatever the page holds: two presses are 14 and then 15, not 14 twice. No state here:
+ * The front page shows a handler that reads `heads`, appends one `li` to `#feed` and patches
+ * `heads` one higher. This is that handler, so the server counts on from whatever the page
+ * holds: two presses are 14 and then 15, not 14 twice. No state here:
  * the store carries the count, the server adds one, and the page is the only place the number
  * lives.
  *

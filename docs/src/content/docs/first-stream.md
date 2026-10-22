@@ -3,6 +3,10 @@ title: "Your first stream"
 description: "From an empty route to a patched element, and the bytes in between."
 ---
 
+> *Sit. Read. The stream was always yours to bend.*
+>
+> Sarn the Faceless
+
 The smallest useful thing Streamlord does: a request arrives, the server sends HTML for part of
 the page, and the browser puts it where you said.
 
@@ -80,7 +84,15 @@ learned what the page looks like.
 
 ## Where to go next
 
-The stream above closes immediately. It does not have to: hand `respondDatastar` a `Flow` and it
-stays open for as long as the flow produces, which is how you build a counter, a progress bar or
-a live log. That, the plugin, and reading signals back are on the [Ktor](/ktor/) page, or
-[Spring WebMVC](/spring-webmvc/) if that is your realm.
+The same feed, three ways further:
+
+- **Keep it open.** The stream above closes immediately. It does not have to: hand
+  `respondDatastar` a `Flow` and it stays open for as long as the flow produces, which is how you
+  build a counter, a progress bar or a live log. That, the plugin, and reading signals back are
+  on the [Ktor](/ktor/) page, or [Spring WebMVC](/spring-webmvc/) if that is your realm.
+- **Test it.** [Testing](/testing/) opens with a test of this very route: it reads the response
+  back and asserts the `<li>` and `heads` without a browser.
+- **Catch the mistakes before they ship.** Write `"$heads"` in a Kotlin string and Kotlin
+  takes it for itself. [The editors](/editors/) mark that as you type, and
+  [the analysis](/analysis/) fails the build on it in CI. [The $ trap](/dollar-trap/) explains
+  why it compiles at all.

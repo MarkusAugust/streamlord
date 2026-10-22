@@ -1,29 +1,33 @@
 ---
 title: "Introduction"
-description: "A Datastar toolchain for Kotlin: an SDK for Ktor and Spring, and editors that read Datastar as a language."
+description: "A Datastar toolchain for Kotlin: an SDK for Ktor and Spring, assertions for your tests, an analysis for your CI, and two editor extensions."
 ---
 
-> *Every soul in Gallowmark knows my name, and not one knows my face. I took three rubies from
-> the Iron Crown of Kell and the land fell apart in my hands. Now I will take one thing from you:
-> the belief that the browser must be bought with JavaScript.*
->
-> Sarn the Faceless, whom the river-priests of Thurn call the Lord of Streams
+Streamlord is a [Datastar](https://data-star.dev) toolchain for Kotlin. With Datastar your server
+sends HTML and signal patches down one Server-Sent Events connection, and the browser applies
+them. There is no client bundle of yours to build, no JSON API to design, and no second model of
+your page living in a framework.
 
-Streamlord is a [Datastar](https://data-star.dev) toolchain for Kotlin, and it comes in two
-halves. The SDK speaks the Datastar 1.0.4 Server-Sent Events protocol: your server sends HTML and
-signal patches down one connection, and the browser applies them. There is no client bundle of
-yours to build, no JSON API to design, and no second model of your page living in a framework.
+Streamlord is four tools, designed together. Adopt one, or all four:
 
-The other half is the one no other Datastar library on the JVM has. Datastar lives inside
-attribute values and inside Kotlin strings, where no compiler looks, so Streamlord looks instead:
-in your editor as you type, when the event is built, and before a byte reaches the browser.
+- **The SDK.** Adapters for [Ktor](/ktor/) and [Spring](/spring-webmvc/) over one core that
+  speaks the Datastar 1.0.4 protocol exactly.
+- **Assertions for your tests.** `streamlord-test` reads a response back into the events it
+  carried, so a [test](/testing/) says what the endpoint meant instead of comparing bytes.
+- **The analysis.** Datastar lives inside attribute values and Kotlin strings, where no compiler
+  looks. [`streamlord-analysis`](/analysis/) reads them, and one test fails the build on a
+  mistake in CI.
+- **The editors.** A [VS Code extension and an IntelliJ plugin](/editors/) run the same analysis
+  as you type, with the fix a click away.
+
+The last two are the ones no other Datastar library on the JVM has.
 
 ![VS Code with dataText("$count") underlined in red, and the hover: Kotlin interpolates $count here; the browser will never see a signal. Write signal("count").](../../assets/editor-dollar-trap.png)
 
 That is `dataText("$count")` in VS Code. It compiles, because `count` is a parameter, and it would
 send the browser whatever number `count` held instead of the signal `$count`. The editor marks it as an error before you
 build, and the quick fix rewrites it to `signal("count")`. The same check runs in IntelliJ, and
-[in CI](/testing/) as a test you add, with no editor at all.
+[in CI](/analysis/) as a test you add, with no editor at all.
 
 ## The same endpoint, twice
 
@@ -33,7 +37,9 @@ One route that adds a line to a list and updates a counter. First by hand, again
 get("/feed") {
     call.response.header("Cache-Control", "no-cache")
     call.response.header("X-Accel-Buffering", "no")
-    if (call.request.local.version == "HTTP/1.1") call.response.header("Connection", "keep-alive")
+    if (call.request.local.version == "HTTP/1.1") {
+        call.response.header("Connection", "keep-alive")
+    }
     call.respondBytesWriter(ContentType.Text.EventStream) {
         writeStringUtf8("event: datastar-patch-elements\n")
         writeStringUtf8("data: selector #feed\n")
@@ -125,6 +131,14 @@ put identical bytes on the wire.
 would reject, at the point you construct it, rather than letting you discover it in a browser
 console.
 
+**Tests that say what the endpoint meant.** `events.assertPatchElements(selector = "#feed", ...)`
+checks the event, not the bytes it was written as, and ignores what it did not ask about. It binds
+no test framework, and it reads a Ktor test response, a Spring one, or a stream that stays open.
+
+**An analysis that reads what the compiler does not.** The check your editor runs is a library.
+Point one test at `src/main/kotlin` and the build fails on an interpolated signal in a file no
+editor ever opened.
+
 **Editors that read Datastar as a language.** A VS Code extension and an IntelliJ plugin colour
 signals, actions and modifiers inside your Kotlin and your HTML, and say so when a modifier is
 misspelled. The code on this site is highlighted by the very same grammars.
@@ -139,8 +153,9 @@ their own. You reach for a codec module only when you want data classes as signa
 ```kotlin sample=none
 dependencies {
     implementation("io.github.markusaugust.streamlord:streamlord-ktor:0.13.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-html:0.13.0")          // optional
-    implementation("io.github.markusaugust.streamlord:streamlord-json-kotlinx:0.13.0")  // optional
+    // Optional: the kotlinx.html DSL, and data classes as signals.
+    implementation("io.github.markusaugust.streamlord:streamlord-html:0.13.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-json-kotlinx:0.13.0")
 }
 ```
 
@@ -154,4 +169,8 @@ the licence are yours to bring.
 
 And it does not guess. Where the protocol is ambiguous, Streamlord refuses rather than picks.
 
-> *The stream was always yours to bend. Sit. Read.*
+> *Every soul in Gallowmark knows my name, and not one knows my face. I took three rubies from
+> the Iron Crown of Kell and the land fell apart in my hands. Now I will take one thing from you:
+> the belief that the browser must be bought with JavaScript.*
+>
+> Sarn the Faceless, whom the river-priests of Thurn call the Lord of Streams

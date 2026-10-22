@@ -7,7 +7,10 @@ import versionCatalog from "../../gradle/libs.versions.toml?raw"
 import gradleProperties from "../../gradle.properties?raw"
 import differential from "../../streamlord-core/src/test/resources/client-merge-differential.json"
 
-/** The one line under the name on the landing page. */
+/** The promise under the name on the landing page: what the reader gets, before what it is. */
+export const CLAIM = "Write Datastar safely in Kotlin."
+
+/** What Streamlord is, in one line: it opens the hero's summary and llms.txt. */
 export const TAGLINE = "A Datastar toolchain for Kotlin."
 
 /** What Streamlord is, in two sentences: the landing page's meta description. */
