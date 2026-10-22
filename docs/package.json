@@ -12,9 +12,9 @@
     "check:links": "bun scripts/check-links.ts"
   },
   "dependencies": {
-    "@astrojs/markdown-remark": "7.3.2",
-    "@fristil/designsystem": "0.32.1",
-    "astro": "7.3.8"
+    "@astrojs/markdown-remark": "7.3.3",
+    "@fristil/designsystem": "0.34.0",
+    "astro": "7.4.0"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
