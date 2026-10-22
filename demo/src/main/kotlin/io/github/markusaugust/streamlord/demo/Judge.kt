@@ -55,7 +55,66 @@ public enum class Judged(
 ) {
     HTML("Read as HTML: attributes and expressions."),
     KOTLIN("Read as Kotlin: the strings and the DSL calls in it."),
+    BOTH("Read line by line: the lines that open a tag as HTML, the rest as Kotlin."),
 }
+
+/** One stretch of the paste and the analysis that reads it, at its offset in the whole. */
+internal data class Part(
+    val start: Int,
+    val text: String,
+    val html: Boolean,
+)
+
+private val RAW_QUOTES = Regex("\"\"\"")
+
+/**
+ * The paste cut where it changes between Kotlin and markup.
+ *
+ * A paste that starts with `<` is markup throughout, so a tag broken over lines stays one tag. Any
+ * other paste is Kotlin, except a line that opens a tag outside a raw string, and the lines after
+ * it while that tag is still open. Without this, markup pasted under a line of Kotlin was read as
+ * Kotlin, where it is neither a string nor a call, and the verdict on it was clean having read none
+ * of it.
+ */
+internal fun parts(source: String): List<Part> {
+    if (source.trim().startsWith("<")) return listOf(Part(0, source, html = true))
+
+    val parts = ArrayList<Part>()
+    var start = 0
+    var at = 0
+    var current = false
+    var inRaw = false
+    var tagOpen = false
+    for (line in source.split('\n')) {
+        val html = !inRaw && (tagOpen || line.trimStart().startsWith("<"))
+        if (html != current) {
+            if (at > start) parts += Part(start, source.substring(start, at), current)
+            start = at
+            current = html
+        }
+        if (html) {
+            val open = line.lastIndexOf('<')
+            val close = line.lastIndexOf('>')
+            tagOpen = if (open > close) true else if (close >= 0) false else tagOpen
+        } else if (RAW_QUOTES.findAll(line).count() % 2 == 1) {
+            inRaw = !inRaw
+        }
+        at = minOf(at + line.length + 1, source.length)
+    }
+    if (source.length > start) parts += Part(start, source.substring(start), current)
+    return parts
+}
+
+private fun Issue.shifted(by: Int): Issue =
+    if (by == 0) {
+        this
+    } else {
+        copy(
+            start = start + by,
+            end = end + by,
+            fixes = fixes.map { it.copy(start = it.start + by, end = it.end + by) },
+        )
+    }
 
 /** One fix as its button offers it: the analysis's title for it, and the whole paste with it applied. */
 public data class Fixed(
@@ -97,7 +156,7 @@ private val analyzer = Analyzer()
  * The same analysis the editors run, behind a route.
  *
  * Which analysis is a question of what the text looks like: a paste that starts with `<` is a
- * template, anything else is Kotlin.
+ * template, anything else is Kotlin with the markup lines in it read as markup; see [parts].
  *
  * On [Dispatchers.Default], because the analysis is a lexer and a parser over the paste, which is
  * CPU, and the server's threads are for the connections.
@@ -110,11 +169,17 @@ private val analyzer = Analyzer()
  */
 public suspend fun judge(source: String): Judgement =
     withContext(Dispatchers.Default) {
-        val judged = if (source.trim().startsWith("<")) Judged.HTML else Judged.KOTLIN
+        val parts = parts(source)
+        val judged =
+            when {
+                parts.all { it.html } -> Judged.HTML
+                parts.none { it.html } -> Judged.KOTLIN
+                else -> Judged.BOTH
+            }
         val issues =
-            when (judged) {
-                Judged.HTML -> analyzer.analyzeHtml(source)
-                Judged.KOTLIN -> analyzer.analyzeKotlin(source)
+            parts.flatMap { part ->
+                val found = if (part.html) analyzer.analyzeHtml(part.text) else analyzer.analyzeKotlin(part.text)
+                found.map { it.shifted(part.start) }
             }
         var left = FIXES_TOTAL
         val findings =
@@ -208,7 +273,7 @@ public fun TagConsumer<*>.verdict(judgement: Judgement) {
         div("fs-alert judge__verdict") {
             attributes["data-color"] = "success"
             p("fs-alert__title") { +"Clean" }
-            p { +"The browser will see exactly this." }
+            p { +"Nothing to fix. Your editor and the CI test would let this through." }
         }
         p("fs-paragraph judge__how") {
             attributes["data-size"] = "small"
@@ -221,8 +286,8 @@ public fun TagConsumer<*>.verdict(judgement: Judgement) {
         attributes["data-color"] = if (judgement.errors > 0) "danger" else "warning"
         p("fs-alert__title") {
             +when (judgement.total) {
-                1 -> "One thing the browser would not do"
-                else -> "${judgement.total} things the browser would not do"
+                1 -> "One thing to fix"
+                else -> "${judgement.total} things to fix"
             }
         }
         ul("fs-list judge__findings") {

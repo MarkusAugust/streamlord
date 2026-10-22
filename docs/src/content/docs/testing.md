@@ -367,7 +367,7 @@ post("/judge") {
 
     call.respondDatastar {
         patchElements(selector = "#verdict", mode = ElementPatchMode.INNER) {
-            if (issues.isEmpty()) p { +"The browser will see exactly this." }
+            if (issues.isEmpty()) p { +"Nothing to fix. Your editor and the CI test would let this through." }
             ul {
                 // Every button carries the whole paste again, so the first eight findings are
                 // the answer, with two fixes each and eight buttons in all; the rest is a count.
