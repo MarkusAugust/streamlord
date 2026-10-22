@@ -95,7 +95,12 @@ internal fun parts(source: String): List<Part> {
         if (html) {
             val open = line.lastIndexOf('<')
             val close = line.lastIndexOf('>')
-            tagOpen = if (open > close) true else if (close >= 0) false else tagOpen
+            tagOpen =
+                when {
+                    open > close -> true
+                    close >= 0 -> false
+                    else -> tagOpen
+                }
         } else if (RAW_QUOTES.findAll(line).count() % 2 == 1) {
             inRaw = !inRaw
         }

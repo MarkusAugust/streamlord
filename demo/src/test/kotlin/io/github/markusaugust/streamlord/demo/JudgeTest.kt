@@ -111,7 +111,8 @@ class JudgeTest {
     fun `a fix to a markup line puts back the whole paste, the Kotlin above it included`() =
         runBlocking {
             val source = "dataText(\"x\")\n<div data-on:click.prevent=\"\$go()\">"
-            val fixed = judge(source).findings.single().fixed.first().source
+            val finding = judge(source).findings.single()
+            val fixed = finding.fixed.first().source
 
             assertTrue(fixed.startsWith("dataText(\"x\")\n<div data-on:click__prevent"), fixed)
         }
