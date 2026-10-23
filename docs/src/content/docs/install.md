@@ -122,15 +122,15 @@ Resolved from the build, not from memory. `kotlin-stdlib` is left out of all thr
 **`streamlord-json-jackson`**: Jackson 3
 
 <!-- deps=streamlord-json-jackson -->
-- `tools.jackson.core:jackson-databind 3.2.3`
-  - `tools.jackson.core:jackson-core 3.2.3`
+- `tools.jackson.core:jackson-databind 3.2.4`
+  - `tools.jackson.core:jackson-core 3.2.4`
   - `com.fasterxml.jackson.core:jackson-annotations 2.22`
 
 **`streamlord-json-jackson2`**: Jackson 2
 
 <!-- deps=streamlord-json-jackson2 -->
-- `com.fasterxml.jackson.core:jackson-databind 2.22.3`
-  - `com.fasterxml.jackson.core:jackson-core 2.22.3`
+- `com.fasterxml.jackson.core:jackson-databind 2.22.4`
+  - `com.fasterxml.jackson.core:jackson-core 2.22.4`
   - `com.fasterxml.jackson.core:jackson-annotations 2.22`
 
 Jackson 3 still takes its annotations from the 2.x artifact; that is Jackson's own arrangement,
@@ -149,7 +149,7 @@ ignored.
 
 **Gradle, with `io.spring.dependency-management`.** The same as Maven, and this is the setup
 start.spring.io generates. That plugin pins every managed version, downwards as well as upwards,
-so the Jackson you get is Boot's. Resolved under Boot 4.0.8, the codec's `jackson-databind 3.2.3`
+so the Jackson you get is Boot's. Resolved under Boot 4.0.8, the codec's `jackson-databind 3.2.4`
 becomes Boot's `3.1.5`.
 
 **Gradle, with `platform(SpringBootPlugin.BOM_COORDINATES)`.** The highest version wins. A
