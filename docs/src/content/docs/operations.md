@@ -333,6 +333,8 @@ with its own `Connection: keep-alive`, and one that asked to close with `Connect
 also closes a connection on its own, on the 100th request on it by default
 (`server.tomcat.max-keep-alive-requests`); a stream that is that request carries both
 `Connection: keep-alive` and `Connection: close`, and Tomcat closes the connection after it.
+So does an error answer from a stream that failed before its first event, when its status is one
+Tomcat closes the connection after: a `400`, `413`, `500` or `503`, among others.
 Jetty never sends `Connection: keep-alive` on a stream, whatever the request asked.
 
 On WebFlux the headers belong to the response and a `Flow` is only its body. Return the bare flow

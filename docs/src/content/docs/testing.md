@@ -114,6 +114,22 @@ events.assertExactly(
 )
 ```
 
+When the order is the point and the content is not, `assertEventTypes` asks for the kinds of event
+alone, and `assertNoPatchElements` takes the arguments of `assertPatchElements` and fails when a
+patch matches them all:
+
+```kotlin sample=statements
+val events = datastarEvents(wire)
+
+events.assertEventTypes(PatchElements::class, PatchSignals::class)
+events.assertNoPatchElements(selector = "#error")
+```
+
+An `ExecuteScript` goes on the wire as the element patch that appends its `<script>` to `body`,
+and comes back as a `PatchElements`. So `assertEventTypes` refuses `ExecuteScript::class` rather
+than never matching it, and `assertNoPatchElements()` with no arguments fails on a stream that ran
+a script.
+
 ### Signals read as what the stream left them
 
 `assertSignal` folds every signal patch the way the Datastar client merges one. So a signal set
@@ -206,6 +222,192 @@ fun `the panel patches inner html`() {
 takes a body or a `datastar` query parameter like the real thing. Give a body
 `contentType = "application/json"` as well, as Datastar's client does; without it, reading the
 signals throws `SignalsMediaTypeException`.
+
+### Through the controller, with MockMvcTester
+
+To test the route rather than the stream, with the status, the headers and the
+`StreamlordExceptionHandler` answers, go through `MockMvcTester`. Spring Boot 4 configures one for
+`@WebMvcTest` and `@AutoConfigureMockMvc`, and `MockMvcTester.of(controller)` builds one without
+Boot. It needs `assertj-core` next to `spring-test`.
+
+A stream runs in an async cycle of its own, and the body is empty until the test has waited for
+it and dispatched the result. `exchange()` does that once, which is enough for an ordinary
+controller. A `suspend` controller runs in one async cycle and its stream in a second, and
+`exchange()` hands back the first, with an empty body. The helper below dispatches until no cycle
+is left, and sends the request the way Datastar's client does. It is yours to copy:
+
+```kotlin sample=spring-test
+@RestController
+class Feed {
+    @GetMapping("/feed")
+    fun feed(
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+    ): StreamingResponseBody {
+        val heads = request.readSignals().int("heads") ?: 0
+        return response.datastarStream(request = request) {
+            patchElements(
+                "<li>A new head</li>",
+                selector = "#feed",
+                mode = ElementPatchMode.APPEND,
+            )
+            patchSignals("heads" to heads + 1)
+        }
+    }
+}
+
+private val mvc =
+    MockMvcTester.of(listOf(Feed())) {
+        it.setControllerAdvice(StreamlordExceptionHandler()).build()
+    }
+
+/** The header, and the signals where the client puts them: the query for GET and DELETE. */
+private fun MockMvcTester.datastar(
+    method: HttpMethod,
+    uri: String,
+    signals: String? = null,
+): MvcTestResult {
+    var result =
+        method(method)
+            .uri(uri)
+            .header("Datastar-Request", "true")
+            .header("Accept", "text/event-stream, text/html, application/json")
+            .apply {
+                when {
+                    signals == null -> Unit
+                    method == HttpMethod.GET || method == HttpMethod.DELETE ->
+                        param("datastar", signals)
+                    else -> contentType(MediaType.APPLICATION_JSON).content(signals)
+                }
+            }.asyncExchange()
+    while (result.unresolvedException == null && result.request.isAsyncStarted) {
+        val started = result.mvcResult
+        started.getAsyncResult(10_000)
+        result = perform(MockMvcRequestBuilders.asyncDispatch(started))
+    }
+    return result
+}
+
+@Test
+fun `the feed appends one head`() {
+    val result = mvc.datastar(HttpMethod.GET, "/feed", """{"heads":13}""")
+
+    assertThat(result).hasStatusOk().hasHeader("X-Accel-Buffering", "no")
+    val events = datastarEvents(result.response.contentAsString)
+    events.assertPatchElements(selector = "#feed", containing = "A new head")
+    events.assertSignal("heads", 14)
+}
+```
+
+The statuses below come from `StreamlordExceptionHandler`, which the tester above is given as
+advice. A Boot test sees it when the application imports it, or with
+`@Import(StreamlordExceptionHandler::class)` on the test class; without it a bad request is an
+unresolved exception, not a status.
+
+Where the controller reads the signals decides when a bad request fails, and so where the test
+sees it:
+
+- **Read before `datastarStream`**, as above, signals over the limit or not JSON fail on the
+  request itself, and the helper hands back the `413`, `400` or `415` at once.
+- **Read inside the stream's block**, they fail on the stream's thread, before its first event.
+  The request has started async with a `200` by then; the status comes with the dispatch, and
+  the helper hands it back all the same.
+- **A failure after the first event** has no status to give: the stream has started, and
+  `StreamlordExceptionHandler` throws the exception on, so that a real server cuts the
+  connection. `assertThat(result).hasFailed()` passes, and `result.response` throws, events and
+  all.
+
+MockMvc never ends a stream on its timeout; that takes a real server, as below. A stream that does
+not end on its own fails the helper's wait after ten seconds, so give a test a stream that ends.
+
+#### A header set while the stream runs
+
+Spring Boot prints every MockMvc result as the test runs, even when it shows the print only on a
+failure, and it prints the first result of a stream while the stream is still running. A header
+added to the response by the stream's thread meanwhile can fail the test with
+`ConcurrentModificationException`, in some runs and not others, with nothing wrong in the code
+under test. It happens in tests alone: a real server reads no headers while the stream runs.
+
+Every header Streamlord sets is set before the controller returns, with one exception, and there
+are two other sources of them. How often each failed, in 2000 requests through `MockMvcTester`
+under Spring Boot 4.0.8:
+
+- **`Content-Encoding: gzip`**, set with the stream's first write when the application has
+  `Streamlord(compress = true)` and the test's request sends `Accept-Encoding: gzip`, so that a
+  failure before it can still be answered with a status. This one failed **600 to 900 times**:
+  a test that sends `Accept-Encoding: gzip` to a compressing stream fails about every third run.
+  Leave `Accept-Encoding` out of the test's request; MockMvc sends none unless asked to.
+- **A filter that adds headers when the response commits** does so on the stream's thread, with
+  its first event. Spring Security's `HeaderWriterFilter` does by default, and failed 21 times.
+  Tell it to write them as the request arrives, which changes nothing a browser sees:
+
+  ```kotlin sample=none
+  // org.springframework.security.config.ObjectPostProcessor
+  // org.springframework.security.web.header.HeaderWriterFilter
+  http.headers {
+      it.withObjectPostProcessor(
+          object : ObjectPostProcessor<HeaderWriterFilter> {
+              override fun <O : HeaderWriterFilter> postProcess(filter: O): O =
+                  filter.apply { setShouldWriteHeadersEagerly(true) }
+          },
+      )
+  }
+  ```
+
+  Anything else that writes on commit through Spring Security's `OnCommittedResponseWrapper` is
+  the same case.
+- **A `suspend` controller that suspends before it calls `datastarStream`** calls it on the thread
+  it resumes on, while the test may be printing the result of the first cycle. Every header the
+  stream sets races then. It failed once in four runs of 2000.
+- **Streamlord 0.13 and earlier** set `Connection: keep-alive` with the first write as well,
+  which failed about 400 times in 2000 on a plain stream opened through MockMvc.
+
+Where none of these can be helped, turn the printing off with
+`@AutoConfigureMockMvc(print = MockMvcPrint.NONE)`. Nothing is printed then, so a failing test
+no longer shows the response it got; `datastarEvents` still prints the stream in its own
+failures.
+
+### On WebFlux, with WebTestClient
+
+WebTestClient waits for the flow to complete, and the body it hands back is the wire, frames and
+all:
+
+```kotlin sample=spring-test
+@RestController
+class Feed {
+    @GetMapping("/feed")
+    fun feed(): ResponseEntity<Flow<ServerSentEvent<String>>> =
+        flowOf<DatastarEvent>(
+            PatchElements(
+                "<li>A new head</li>",
+                selector = "#feed",
+                mode = ElementPatchMode.APPEND,
+            ),
+            PatchSignals("""{"heads":14}"""),
+        ).asDatastarResponse()
+}
+
+@Test
+fun `the feed sends a head and the count`() {
+    val body =
+        WebTestClient
+            .bindToController(Feed())
+            .build()
+            .get()
+            .uri("/feed")
+            .header("Datastar-Request", "true")
+            .exchange()
+            .expectStatus().isOk
+            .expectHeader().valueEquals("X-Accel-Buffering", "no")
+            .expectBody(String::class.java)
+            .returnResult()
+            .responseBody!!
+
+    val events = datastarEvents(body)
+    events.assertPatchElements(selector = "#feed", containing = "A new head")
+    events.assertSignal("heads", 14)
+}
+```
 
 ## Without a framework at all
 
@@ -304,10 +506,13 @@ Three things it does:
 - **`close()` lets go of the connection**, and the server finds the reader gone on its next
   write. `received` keeps everything it read, comments included, for the assertions above.
 
-`open` sends `Datastar-Request: true` and takes `headers` for a cookie or a token. It uses the
-JDK's own HTTP client, so it binds no HTTP library either. `LiveDatastarStream.of(reader, onClose)`
-reads from the `Reader` any other client hands you; pass the underlying stream as `onClose`, since
-an `InputStreamReader` waits for a read in progress before it closes.
+`open` sends `Datastar-Request: true` and takes `headers` for a cookie or a token. The headers the
+server answered with are in `responseHeaders`, for `X-Accel-Buffering` or a header of your own;
+`open` returns only on a `200 text/event-stream`, and fails on anything else with the answer's
+headers and the start of its body. It uses the JDK's own HTTP client, so it binds no HTTP library
+either. `LiveDatastarStream.of(reader, onClose)` reads from the `Reader` any other client hands
+you; pass the underlying stream as `onClose`, since an `InputStreamReader` waits for a read in
+progress before it closes.
 
 ## The guard, at runtime
 

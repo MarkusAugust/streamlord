@@ -8,6 +8,22 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Added
 
+- `assertNoPatchElements` on `DatastarEvents`: that no element patch matches every argument
+  given, the arguments being those of `assertPatchElements`, and with none, that the stream
+  patched no elements. The counterpart to `assertNoSignal`.
+- `assertEventTypes` on `DatastarEvents`: that the stream was exactly these kinds of event, in
+  this order, whatever each carried, for a test where `assertExactly` would spell out every event.
+  `ExecuteScript::class` and `DatastarEvent::class` throw `IllegalArgumentException`, since no
+  event comes back from the wire as either.
+- `responseHeaders` on `LiveDatastarStream`: the headers the server answered `open` with, matched
+  without regard to case, and empty for a stream read through `of`. `open` still returns only on
+  a `200 text/event-stream`; on anything else its failure now prints the answer's headers, a
+  cookie's value held back, and the first KiB of its body, waiting at most a second for it.
+- The testing page shows a Spring WebMVC route tested through `MockMvcTester`, with a helper that
+  sends a request as Datastar's client does and dispatches a `suspend` controller's stream, which
+  `exchange()` alone leaves empty, where each kind of failure shows up, and the race below; and a
+  WebFlux route through `WebTestClient`. Both are compiled with the documentation and mirrored by
+  tests in `streamlord-spring`.
 - Two routes on streamlord-live, the service behind the documentation site, for the front page
   to run. `GET /feed` is the hero's code example as a handler: it reads `heads` from the signals,
   appends one `li` to `#feed` and patches `heads` back one higher, with the frames for a page
@@ -47,6 +63,21 @@ All notable changes to Streamlord are recorded here. The format follows
   answers Ktor's own exceptions with Ktor's own status, so a request Ktor cannot parse is the
   `400` it would be without `StatusPages`; a reader who leaves a stream is not answered and not
   an error.
+
+### Fixed
+
+- `datastarStream` on WebMVC sets `Connection: keep-alive` before it returns, where it was set by
+  the stream's own thread with its first write. Spring Boot prints the first MockMvc result of a
+  stream while the stream runs, and a header added meanwhile failed the test with
+  `ConcurrentModificationException`: about 400 times in 2000 requests under Spring Boot 4.0.8, and
+  none since. It never happened outside tests. `Content-Encoding: gzip` still waits for the first
+  write, so that a failure before it can be answered with a status, and so still races a test
+  that sends `Accept-Encoding: gzip` to a compressing stream, in about every third run; so do the
+  headers Spring Security writes when the response commits, unless it is told to write them
+  eagerly, and, rarely, every header of a `suspend` controller that suspends before it calls
+  `datastarStream`. The testing page says what to do about each. An answer to such a failure that Tomcat closes the connection after, a `400`,
+  `413`, `500` or `503` among others, now carries `Connection: keep-alive` beside Tomcat's
+  `Connection: close`, and Tomcat closes it.
 
 ## [0.13.0] - 2026-10-18
 

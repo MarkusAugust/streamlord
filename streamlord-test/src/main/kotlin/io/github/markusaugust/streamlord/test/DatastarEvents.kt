@@ -17,6 +17,7 @@ import io.github.markusaugust.streamlord.core.json.mergePatchAsClient
 import io.github.markusaugust.streamlord.core.protocol.SseDecoder
 import io.github.markusaugust.streamlord.core.protocol.SseEncoder
 import io.github.markusaugust.streamlord.core.protocol.SseMessage
+import kotlin.reflect.KClass
 
 /**
  * What a Datastar response said, ready to be asserted on.
@@ -99,20 +100,54 @@ public class DatastarEvents(
         elements: String? = null,
         containing: String? = null,
     ): PatchElements {
-        val wanted =
-            listOfNotNull(
-                selector?.let { "selector $it" },
-                mode?.let { "mode ${it.wire}" },
-                elements?.let { "elements exactly $it" },
-                containing?.let { "elements containing $it" },
-            )
-        return events.filterIsInstance<PatchElements>().firstOrNull { patch ->
-            (selector == null || patch.selector == selector) &&
-                (mode == null || patch.mode == mode) &&
-                (elements == null || patch.elements == onWire(elements)) &&
-                (containing == null || patch.elements?.contains(containing) == true)
-        } ?: fail("No element patch with ${wanted.ifEmpty { listOf("any shape") }.joinToString(", ")}")
+        val wanted = elementsWanted(selector, mode, elements, containing)
+        return events.filterIsInstance<PatchElements>().firstOrNull { it.matches(selector, mode, elements, containing) }
+            ?: fail("No element patch with $wanted")
     }
+
+    /**
+     * That no element patch matches every argument given, the arguments being those of
+     * [assertPatchElements]. With none, that the stream patched no elements at all.
+     *
+     * An [io.github.markusaugust.streamlord.core.domain.ExecuteScript] goes on the wire as the
+     * element patch that appends its `<script>` to `body`, and comes back as one, so a stream that
+     * ran a script fails a call with no arguments.
+     */
+    public fun assertNoPatchElements(
+        selector: String? = null,
+        mode: ElementPatchMode? = null,
+        elements: String? = null,
+        containing: String? = null,
+    ) {
+        val found = events.filterIsInstance<PatchElements>().firstOrNull { it.matches(selector, mode, elements, containing) }
+        if (found != null) {
+            fail("Expected no element patch with ${elementsWanted(selector, mode, elements, containing)}, found ${describe(found)}")
+        }
+    }
+
+    private fun PatchElements.matches(
+        selector: String?,
+        mode: ElementPatchMode?,
+        elements: String?,
+        containing: String?,
+    ): Boolean =
+        (selector == null || this.selector == selector) &&
+            (mode == null || this.mode == mode) &&
+            (elements == null || this.elements == onWire(elements)) &&
+            (containing == null || this.elements?.contains(containing) == true)
+
+    private fun elementsWanted(
+        selector: String?,
+        mode: ElementPatchMode?,
+        elements: String?,
+        containing: String?,
+    ): String =
+        listOfNotNull(
+            selector?.let { "selector $it" },
+            mode?.let { "mode ${it.wire}" },
+            elements?.let { "elements exactly $it" },
+            containing?.let { "elements containing $it" },
+        ).ifEmpty { listOf("any shape") }.joinToString(", ")
 
     /**
      * One signal patch matching every argument given.
@@ -189,6 +224,30 @@ public class DatastarEvents(
             fail(
                 "Expected exactly ${expected.size} ${if (expected.size == 1) "event" else "events"}:\n" +
                     expected.joinToString("\n") { "  " + describe(it) },
+            )
+        }
+    }
+
+    /**
+     * That the stream was exactly these kinds of event, in this order and no others, whatever
+     * each one carried: `assertEventTypes(PatchElements::class, PatchSignals::class)`.
+     *
+     * For a test about the shape of a stream, where [assertExactly] would have to spell out every
+     * event in full. An [io.github.markusaugust.streamlord.core.domain.ExecuteScript] comes back
+     * from the wire as the [PatchElements] it is sent as, so asking for one, or for the sealed
+     * [DatastarEvent] itself, which no event is exactly, throws [IllegalArgumentException].
+     */
+    public fun assertEventTypes(vararg types: KClass<out DatastarEvent>) {
+        for (type in types) {
+            require(type == PatchElements::class || type == PatchSignals::class) {
+                "${type.simpleName} never comes back from the wire; ask for PatchElements or PatchSignals"
+            }
+        }
+        if (events.map { it::class } != types.toList()) {
+            if (types.isEmpty()) fail("Expected no Datastar events")
+            fail(
+                "Expected exactly these event types: ${types.joinToString(", ") { it.simpleName.orEmpty() }}; " +
+                    "found ${events.joinToString(", ") { it::class.simpleName.orEmpty() }.ifEmpty { "none" }}",
             )
         }
     }
