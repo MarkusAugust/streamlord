@@ -75,7 +75,7 @@ class LiveDatastarStreamTest {
         server.createContext("/rejected") { exchange ->
             val body = "signals over the limit".toByteArray()
             exchange.responseHeaders.add("Content-Type", "text/plain")
-            exchange.responseHeaders.add("Vis-Avvist", "for stor")
+            exchange.responseHeaders.add("X-Rejected", "too large")
             exchange.responseHeaders.add("Set-Cookie", "session=secret")
             exchange.sendResponseHeaders(413, body.size.toLong())
             exchange.responseBody.write(body)
@@ -251,7 +251,7 @@ class LiveDatastarStreamTest {
         val message = failure.message!!
 
         assertTrue("got 413 'text/plain'" in message, message)
-        assertTrue("vis-avvist: for stor" in message.lowercase(), message)
+        assertTrue("x-rejected: too large" in message.lowercase(), message)
         assertTrue("(held back)" in message, message)
         assertTrue("secret" !in message, message)
         assertTrue("The body began:\n  signals over the limit" in message, message)
