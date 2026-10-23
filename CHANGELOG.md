@@ -6,6 +6,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-23
+
 ### Added
 
 - `assertNoPatchElements` on `DatastarEvents`: that no element patch matches every argument
@@ -55,6 +57,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Changed
 
+- `streamlord-json-jackson` depends on `jackson-databind` 3.2.4 and `streamlord-json-jackson2` on
+  2.22.4, both patch releases up from 3.2.3 and 2.22.3.
 - streamlord-live's `maxSignalsSize` is 4 KiB, down from the SDK's 1 MiB: the largest store any
   of its pages sends is the judge's paste and a few flags.
 - streamlord-live maps the four exceptions the security page names in `StatusPages`, with a
