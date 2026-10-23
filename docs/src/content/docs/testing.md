@@ -324,16 +324,22 @@ not end on its own fails the helper's wait after ten seconds, so give a test a s
 
 Spring Boot prints every MockMvc result as the test runs, even when it shows the print only on a
 failure, and it prints the first result of a stream while the stream is still running. A header
-added to the response by the stream's thread meanwhile fails the test, now and then, with
-`ConcurrentModificationException`. Every header Streamlord sets is set before the controller
-returns, with one exception, and two other sources of them are common:
+added to the response by the stream's thread meanwhile can fail the test with
+`ConcurrentModificationException`, in some runs and not others, with nothing wrong in the code
+under test. It happens in tests alone: a real server reads no headers while the stream runs.
 
-- **`Content-Encoding: gzip`**, with `Streamlord(compress = true)` and a request that sends
-  `Accept-Encoding: gzip`, is set with the stream's first write, so that a failure before it can
-  still be answered with a status. Leave `Accept-Encoding` out of the test's request.
+Every header Streamlord sets is set before the controller returns, with one exception, and there
+are two other sources of them. How often each failed, in 2000 requests through `MockMvcTester`
+under Spring Boot 4.0.8:
+
+- **`Content-Encoding: gzip`**, set with the stream's first write when the application has
+  `Streamlord(compress = true)` and the test's request sends `Accept-Encoding: gzip`, so that a
+  failure before it can still be answered with a status. This one failed **600 to 900 times**:
+  a test that sends `Accept-Encoding: gzip` to a compressing stream fails about every third run.
+  Leave `Accept-Encoding` out of the test's request; MockMvc sends none unless asked to.
 - **A filter that adds headers when the response commits** does so on the stream's thread, with
-  its first event. Spring Security's `HeaderWriterFilter` does by default; tell it to write them
-  as the request arrives:
+  its first event. Spring Security's `HeaderWriterFilter` does by default, and failed 21 times.
+  Tell it to write them as the request arrives, which changes nothing a browser sees:
 
   ```kotlin sample=none
   // org.springframework.security.config.ObjectPostProcessor
@@ -352,11 +358,14 @@ returns, with one exception, and two other sources of them are common:
   the same case.
 - **A `suspend` controller that suspends before it calls `datastarStream`** calls it on the thread
   it resumes on, while the test may be printing the result of the first cycle. Every header the
-  stream sets races then, though the window is small.
-- **Streamlord 0.13 and earlier** set `Connection: keep-alive` with the first write as well.
+  stream sets races then. It failed once in four runs of 2000.
+- **Streamlord 0.13 and earlier** set `Connection: keep-alive` with the first write as well,
+  which failed about 400 times in 2000 on a plain stream opened through MockMvc.
 
 Where none of these can be helped, turn the printing off with
-`@AutoConfigureMockMvc(print = MockMvcPrint.NONE)`.
+`@AutoConfigureMockMvc(print = MockMvcPrint.NONE)`. Nothing is printed then, so a failing test
+no longer shows the response it got; `datastarEvents` still prints the stream in its own
+failures.
 
 ### On WebFlux, with WebTestClient
 
