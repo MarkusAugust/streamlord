@@ -19,6 +19,11 @@ All notable changes to Streamlord are recorded here. The format follows
   without regard to case, and empty for a stream read through `of`. `open` still returns only on
   a `200 text/event-stream`; on anything else its failure now prints the answer's headers, a
   cookie's value held back, and the first KiB of its body, waiting at most a second for it.
+- The testing page shows a Spring WebMVC route tested through `MockMvcTester`, with a helper that
+  sends a request as Datastar's client does and dispatches a `suspend` controller's stream, which
+  `exchange()` alone leaves empty, where each kind of failure shows up, and the race below; and a
+  WebFlux route through `WebTestClient`. Both are compiled with the documentation and mirrored by
+  tests in `streamlord-spring`.
 - Two routes on streamlord-live, the service behind the documentation site, for the front page
   to run. `GET /feed` is the hero's code example as a handler: it reads `heads` from the signals,
   appends one `li` to `#feed` and patches `heads` back one higher, with the frames for a page

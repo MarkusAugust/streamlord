@@ -30,6 +30,9 @@ dependencies {
     implementation(kotlin("test-junit5"))
     implementation(libs.ktor.server.test.host)
     implementation(libs.spring.test)
+    // MockMvcTester asserts with AssertJ, and WebTestClient needs WebFlux to compile against.
+    implementation(libs.assertj.core)
+    implementation(libs.spring.webflux)
     implementation(libs.kotlinx.coroutines.test)
 
     // The adapters keep their frameworks compileOnly. The samples need them for real.
@@ -158,6 +161,26 @@ abstract class ExtractDocSamples : DefaultTask() {
                     "import org.springframework.mock.web.*\n" +
                     "import io.github.markusaugust.streamlord.analysis.*\n$imports\n\n" +
                     "class $name {\n$body\n}\n"
+            /*
+             * A Spring test class: a controller of its own and MockMvcTester or WebTestClient. Not
+             * `test`, whose Ktor client imports bring a `get` and a `post` of their own.
+             */
+            "spring-test" ->
+                "import kotlin.test.*\n" +
+                    "import org.assertj.core.api.Assertions.assertThat\n" +
+                    "import org.springframework.web.bind.annotation.*\n" +
+                    "import org.springframework.http.HttpMethod\n" +
+                    "import org.springframework.http.MediaType\n" +
+                    "import org.springframework.http.ResponseEntity\n" +
+                    "import org.springframework.http.codec.ServerSentEvent\n" +
+                    "import org.springframework.test.web.reactive.server.WebTestClient\n" +
+                    "import org.springframework.test.web.servlet.assertj.MockMvcTester\n" +
+                    "import org.springframework.test.web.servlet.request.MockMvcRequestBuilders\n" +
+                    "import org.springframework.test.web.servlet.assertj.MvcTestResult\n" +
+                    "import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody\n" +
+                    "import jakarta.servlet.http.HttpServletRequest\n" +
+                    "import jakarta.servlet.http.HttpServletResponse\n$imports\n\n" +
+                    "class $name {\n$body\n}\n"
             "html" -> "$imports\n\nfun kotlinx.html.FlowContent.$name() {\n$body\n}\n"
             "statements" -> "$imports\n\nsuspend fun $name() {\n$body\n}\n"
             /* Bare assertions over a response already read, as the front page shows them. */
@@ -176,6 +199,7 @@ abstract class ExtractDocSamples : DefaultTask() {
             "ktor-routing",
             "spring",
             "spring-controller",
+            "spring-test",
             "statements",
             "stream",
             "test",
