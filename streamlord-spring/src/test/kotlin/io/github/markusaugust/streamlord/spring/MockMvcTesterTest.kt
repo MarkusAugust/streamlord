@@ -132,7 +132,14 @@ class MockMvcTesterTest {
 
         assertThat(result).hasStatusOk().hasHeader("Connection", "keep-alive")
         datastarEvents(result.response.contentAsString).assertSignal("heads", 14)
-        assertEquals("", mvc.get().uri("/suspended").exchange().response.contentAsString)
+        assertEquals(
+            "",
+            mvc
+                .get()
+                .uri("/suspended")
+                .exchange()
+                .response.contentAsString,
+        )
     }
 
     @Test
