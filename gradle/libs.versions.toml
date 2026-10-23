@@ -24,12 +24,12 @@ servlet = "6.1.0"
 # Spring Boot 4.0.8 pins 11.0.24, which has three advisories fixed in 11.0.25; the tests run the current 11.0 line.
 tomcat = "11.0.27"
 reactor = "3.8.7"
-jackson = "3.2.3"
-jackson2 = "2.22.3"
+jackson = "3.2.4"
+jackson2 = "2.22.4"
 # Floors for libraries the build's own tools carry (Dokka, the IntelliJ Platform plugin), raised
 # past the advisories those tools' pins have; gradle/build-tool-floors.settings.gradle.kts
 # applies them. Nothing published depends on them.
-buildToolsJackson = "2.22.3"
+buildToolsJackson = "2.22.4"
 buildToolsJsoup = "1.23.2"
 buildToolsFreemarker = "2.3.35"
 
@@ -63,7 +63,11 @@ netty-bom-oldestKtor = { module = "io.netty:netty-bom", version.ref = "nettyOlde
 spring-web = { module = "org.springframework:spring-web", version.ref = "spring" }
 spring-webmvc = { module = "org.springframework:spring-webmvc", version.ref = "spring" }
 spring-test = { module = "org.springframework:spring-test", version.ref = "spring" }
+# Test-only, for :streamlord-spring and :docs-samples: MockMvcTester asserts with AssertJ, and the
+# testing page shows it. Spring Boot 4.0 manages the 3.27 line.
+assertj-core = { module = "org.assertj:assertj-core", version = "3.27.7" }
 # Test-only, for :streamlord-spring: WebTestClient bound to a controller, for the WebFlux side.
+# :docs-samples compiles the testing page's WebTestClient example against it.
 spring-webflux = { module = "org.springframework:spring-webflux", version.ref = "spring" }
 jakarta-servlet = { module = "jakarta.servlet:jakarta.servlet-api", version.ref = "servlet" }
 # Test-only, for :streamlord-spring. The WebFlux mocks in spring-test touch Publisher, so a

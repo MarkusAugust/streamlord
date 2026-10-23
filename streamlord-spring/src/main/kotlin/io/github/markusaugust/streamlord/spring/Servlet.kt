@@ -60,6 +60,11 @@ import kotlin.time.Duration
  * The JVM name stays plain through `@JvmName`: a `Duration` parameter would otherwise add a
  * hash of the signature to it, which changes with every parameter added.
  *
+ * Every header is set before this returns but `Content-Encoding`, which waits for the stream's
+ * first write so that a failure before it can still be answered with a status. One such answer
+ * that Tomcat closes the connection after, a `400`, `413`, `500` or `503` among others, carries
+ * both the stream's `Connection: keep-alive` and Tomcat's `Connection: close`; Tomcat closes it.
+ *
  * @param streamlord The configured instance, typically a Spring bean. Defaults to [Streamlord.Default].
  * @param request The request being answered, when you have it: `Connection: keep-alive` is an
  *   HTTP/1.1 header that HTTP/2 forbids, and it is set only for a request known to be HTTP/1.1.
@@ -122,9 +127,11 @@ public fun HttpServletResponse.datastarStream(
     if (varies && getHeaders("Vary").none { it.contains("Accept-Encoding", ignoreCase = true) }) {
         addHeader("Vary", "Accept-Encoding")
     }
-    val keepAlive = wantsKeepAlive(answered)
+    // Here, on the controller's thread, not with the first write: the body runs on another thread,
+    // and a test reading the headers of the response MockMvc hands back would race it.
+    if (wantsKeepAlive(answered)) setHeader("Connection", "keep-alive")
     return StreamingResponseBody { output ->
-        val sink = StreamSink(output, this@datastarStream, gzip, keepAlive, untouched)
+        val sink = StreamSink(output, this@datastarStream, gzip, untouched)
         try {
             streamlord.streamBlocking(sink, authorisation, heartbeat, block)
             sink.finish()
@@ -135,15 +142,16 @@ public fun HttpServletResponse.datastarStream(
 }
 
 /**
- * The stream's sink, which starts the response with its first write: the headers that belong to
- * the stream alone, `Content-Encoding` and `Connection`, and the gzip member. A failure before it
- * leaves the response as an error answer can use it, since a header once set cannot be taken off.
+ * The stream's sink, which starts the response with its first write: `Content-Encoding` and the
+ * gzip member. A failure before it leaves the response as an error answer can use it, since a
+ * header once set cannot be taken off, and an error answer's plain body under `gzip` would be
+ * noise. So that one header is set on the stream's own thread, where a MockMvc test that reads
+ * the headers of the first result races it; see the testing page.
  */
 private class StreamSink(
     private val output: OutputStream,
     response: HttpServletResponse,
     private val gzip: Boolean,
-    private val keepAlive: Boolean,
     private val untouched: Boolean,
 ) : SseSink {
     private val response = flushable(response)
@@ -153,7 +161,6 @@ private class StreamSink(
     private fun start(): Writer {
         writer?.let { return it }
         if (gzip) response.setHeader("Content-Encoding", "gzip")
-        if (keepAlive) response.setHeader("Connection", "keep-alive")
         // Bytes something wrote before the stream may end in the middle of a line, which would
         // swallow the first event's first field; a blank line closes whatever was open.
         if (!untouched) output.write("\n\n".toByteArray())

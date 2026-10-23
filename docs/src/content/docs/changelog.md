@@ -7,6 +7,16 @@ description: "What each release changed, and what it asks of your code."
 repository is authoritative and complete. This page carries only what changes how you write code,
 with a sentence about what to do.
 
+## 0.14.0
+
+Nothing to change. **A MockMvc test of a stream may drop `MockMvcPrint.NONE`.** If you turned
+Spring Boot's printing off because a stream test failed now and then with
+`ConcurrentModificationException`, the header that caused it is now set before the controller
+returns. Two causes remain, and keep the setting needed where they apply: a test that sends
+`Accept-Encoding: gzip` to a stream with `compress = true`, and Spring Security writing its
+headers when the response commits. [Testing](/testing/#a-header-set-while-the-stream-runs) says
+what to do about each.
+
 ## 0.13.0
 
 **Drop `status` from the response helpers.** `respondDatastar`, `respondElements`,

@@ -40,6 +40,7 @@ class LiveDatastarStreamTest {
         server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         server.createContext("/feed") { exchange ->
             exchange.responseHeaders.add("Content-Type", "text/event-stream")
+            exchange.responseHeaders.add("X-Accel-Buffering", "no")
             exchange.sendResponseHeaders(200, 0)
             val body: OutputStream = exchange.responseBody
             try {
@@ -69,6 +70,37 @@ class LiveDatastarStreamTest {
             exchange.responseHeaders.add("Content-Type", "text/event-stream")
             exchange.responseHeaders.add("Content-Encoding", "gzip")
             exchange.sendResponseHeaders(200, -1)
+            exchange.close()
+        }
+        server.createContext("/rejected") { exchange ->
+            val body = "signals over the limit".toByteArray()
+            exchange.responseHeaders.add("Content-Type", "text/plain")
+            exchange.responseHeaders.add("X-Rejected", "too large")
+            exchange.responseHeaders.add("Set-Cookie", "session=secret")
+            exchange.sendResponseHeaders(413, body.size.toLong())
+            exchange.responseBody.write(body)
+            exchange.close()
+        }
+        // A page that starts and never ends, as a misrouted request to a stream of HTML might.
+        server.createContext("/endless") { exchange ->
+            exchange.responseHeaders.add("Content-Type", "text/html")
+            exchange.sendResponseHeaders(200, 0)
+            try {
+                exchange.responseBody.write("<p>still going".toByteArray())
+                exchange.responseBody.flush()
+                outbox.poll(5, TimeUnit.SECONDS)
+            } catch (_: java.io.IOException) {
+            } finally {
+                exchange.close()
+            }
+        }
+        // Promises a body and closes the connection before a byte of it. Not at once: a close that
+        // arrives with the headers fails the open itself, on Linux, before the body is read.
+        server.createContext("/broken") { exchange ->
+            exchange.responseHeaders.add("Content-Type", "text/plain")
+            exchange.sendResponseHeaders(500, 100)
+            exchange.responseBody.flush()
+            Thread.sleep(300)
             exchange.close()
         }
         server.createContext("/page") { exchange ->
@@ -199,6 +231,48 @@ class LiveDatastarStreamTest {
             assertFailsWith<AssertionError> { LiveDatastarStream.open(URI("http://127.0.0.1:${server.address.port}/page")) }
 
         assertTrue("text/event-stream" in failure.message!!, failure.message)
+        assertTrue("The body was empty." in failure.message!!, failure.message)
+    }
+
+    @Test
+    fun `the headers the server answered with are kept, whatever their case`() =
+        runTest {
+            feed().use { stream ->
+                assertEquals(listOf("no"), stream.responseHeaders["x-accel-buffering"])
+                assertEquals(listOf("text/event-stream"), stream.responseHeaders["Content-Type"])
+            }
+            assertEquals(emptyMap(), LiveDatastarStream.of("".reader()).responseHeaders)
+        }
+
+    @Test
+    fun `an answer that is not a stream prints its headers and body, a cookie held back`() {
+        val failure =
+            assertFailsWith<AssertionError> { LiveDatastarStream.open(URI("http://127.0.0.1:${server.address.port}/rejected")) }
+        val message = failure.message!!
+
+        assertTrue("got 413 'text/plain'" in message, message)
+        assertTrue("x-rejected: too large" in message.lowercase(), message)
+        assertTrue("(held back)" in message, message)
+        assertTrue("secret" !in message, message)
+        assertTrue("The body began:\n  signals over the limit" in message, message)
+    }
+
+    @Test
+    fun `an answer whose connection fails before its body says so`() {
+        val failure =
+            assertFailsWith<AssertionError> { LiveDatastarStream.open(URI("http://127.0.0.1:${server.address.port}/broken")) }
+
+        assertTrue("The connection failed before the body started." in failure.message!!, failure.message)
+    }
+
+    @Test
+    fun `an answer that never ends shows what came and does not wait for the rest`() {
+        val started = System.nanoTime()
+        val failure =
+            assertFailsWith<AssertionError> { LiveDatastarStream.open(URI("http://127.0.0.1:${server.address.port}/endless")) }
+
+        assertTrue("<p>still going" in failure.message!!, failure.message)
+        assertTrue(System.nanoTime() - started < 4_000_000_000L, "the open waited for a body that never ends")
     }
 
     // History said 1, the stream has since said 2: the answer is what the stream says now.

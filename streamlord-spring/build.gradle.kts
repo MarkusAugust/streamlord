@@ -11,6 +11,8 @@ dependencies {
     testImplementation(libs.spring.web)
     testImplementation(libs.spring.webmvc)
     testImplementation(libs.spring.test)
+    testImplementation(libs.assertj.core)
+    testImplementation(project(":streamlord-test"))
     testImplementation(libs.spring.webflux)
     testImplementation(libs.jakarta.servlet)
     testImplementation(libs.reactor.core)

@@ -13,9 +13,9 @@ know why.
 
 ```kotlin tab="Gradle" group=install label="Build tool" sample=none
 dependencies {
-    implementation("io.github.markusaugust.streamlord:streamlord-ktor:0.13.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-html:0.13.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-json-kotlinx:0.13.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-ktor:0.14.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-html:0.14.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-json-kotlinx:0.14.0")
 }
 ```
 
@@ -23,17 +23,17 @@ dependencies {
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-ktor</artifactId>
-  <version>0.13.0</version>
+  <version>0.14.0</version>
 </dependency>
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-html</artifactId>
-  <version>0.13.0</version>
+  <version>0.14.0</version>
 </dependency>
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-json-kotlinx</artifactId>
-  <version>0.13.0</version>
+  <version>0.14.0</version>
 </dependency>
 ```
 
@@ -41,9 +41,9 @@ dependencies {
 
 ```kotlin tab="Gradle" group=install label="Build tool" sample=none
 dependencies {
-    implementation("io.github.markusaugust.streamlord:streamlord-spring:0.13.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-html:0.13.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-json-jackson:0.13.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-spring:0.14.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-html:0.14.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-json-jackson:0.14.0")
 }
 ```
 
@@ -51,17 +51,17 @@ dependencies {
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-spring</artifactId>
-  <version>0.13.0</version>
+  <version>0.14.0</version>
 </dependency>
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-html</artifactId>
-  <version>0.13.0</version>
+  <version>0.14.0</version>
 </dependency>
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-json-jackson</artifactId>
-  <version>0.13.0</version>
+  <version>0.14.0</version>
 </dependency>
 ```
 
@@ -122,15 +122,15 @@ Resolved from the build, not from memory. `kotlin-stdlib` is left out of all thr
 **`streamlord-json-jackson`**: Jackson 3
 
 <!-- deps=streamlord-json-jackson -->
-- `tools.jackson.core:jackson-databind 3.2.3`
-  - `tools.jackson.core:jackson-core 3.2.3`
+- `tools.jackson.core:jackson-databind 3.2.4`
+  - `tools.jackson.core:jackson-core 3.2.4`
   - `com.fasterxml.jackson.core:jackson-annotations 2.22`
 
 **`streamlord-json-jackson2`**: Jackson 2
 
 <!-- deps=streamlord-json-jackson2 -->
-- `com.fasterxml.jackson.core:jackson-databind 2.22.3`
-  - `com.fasterxml.jackson.core:jackson-core 2.22.3`
+- `com.fasterxml.jackson.core:jackson-databind 2.22.4`
+  - `com.fasterxml.jackson.core:jackson-core 2.22.4`
   - `com.fasterxml.jackson.core:jackson-annotations 2.22`
 
 Jackson 3 still takes its annotations from the 2.x artifact; that is Jackson's own arrangement,
@@ -149,7 +149,7 @@ ignored.
 
 **Gradle, with `io.spring.dependency-management`.** The same as Maven, and this is the setup
 start.spring.io generates. That plugin pins every managed version, downwards as well as upwards,
-so the Jackson you get is Boot's. Resolved under Boot 4.0.8, the codec's `jackson-databind 3.2.3`
+so the Jackson you get is Boot's. Resolved under Boot 4.0.8, the codec's `jackson-databind 3.2.4`
 becomes Boot's `3.1.5`.
 
 **Gradle, with `platform(SpringBootPlugin.BOM_COORDINATES)`.** The highest version wins. A
@@ -162,7 +162,7 @@ Both were resolved rather than reasoned about, and neither is a surprise you can
 ```kotlin sample=none
 dependencies {
     // Take Boot's Jackson, whatever it is.
-    implementation("io.github.markusaugust.streamlord:streamlord-json-jackson:0.13.0") {
+    implementation("io.github.markusaugust.streamlord:streamlord-json-jackson:0.14.0") {
         exclude(group = "tools.jackson.core")
     }
 }
