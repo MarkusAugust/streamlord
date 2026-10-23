@@ -133,13 +133,14 @@ class StreamEdgesTest {
         headers: String = "",
     ): String = rawGet(tomcat.port, path, headers)
 
+    // Connection is set before the body runs, so the answer keeps it, and Tomcat adds its close.
     @Test
-    fun `an error answer carries none of the stream's own headers`() {
+    fun `an error answer carries no Content-Encoding, and Tomcat still closes the connection`() {
         val response = raw("/fail-before", "Accept-Encoding: gzip\r\n")
 
         assertTrue(response.startsWith("HTTP/1.1 500"), response)
         assertFalse("content-encoding" in response.lowercase(), response)
-        assertFalse("connection: keep-alive" in response.lowercase(), response)
+        assertTrue("connection: close" in response.lowercase(), response)
     }
 
     @Test
@@ -153,7 +154,11 @@ class StreamEdgesTest {
 
     @Test
     fun `a failure before the stream starts still answers with its status`() {
-        assertTrue(raw("/too-large-before").startsWith("HTTP/1.1 413"))
+        val response = raw("/too-large-before", "Accept-Encoding: gzip\r\n")
+
+        assertTrue(response.startsWith("HTTP/1.1 413"), response)
+        assertFalse("content-encoding" in response.lowercase(), response)
+        assertTrue("connection: close" in response.lowercase(), response)
     }
 
     // An answer would end the chunked body with its last chunk, which Datastar's client takes for

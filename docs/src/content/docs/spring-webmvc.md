@@ -64,9 +64,11 @@ whatever was left open; one written through `getWriter()`, or already committed,
 `datastarStream` throw `IllegalStateException`, since the stream needs the output stream and a
 committed response has sent its headers, the content type with them.
 
-The stream sets `Content-Encoding` and `Connection` with its first write. A block that fails
-before it writes anything leaves the response to an error answer as it was, so a `500` or a
-mapped `413` does not claim to be gzipped.
+Every header the stream needs is set before `datastarStream` returns, but `Content-Encoding`,
+which waits for the stream's first write. A block that fails before it writes anything leaves
+the response to an error answer without it, so a `500` or a mapped `413` does not claim to be
+gzipped. Such an answer does keep `Connection: keep-alive`, beside the `Connection: close` Tomcat
+adds to it; see [Operations](/operations/).
 
 A filter that caches the response, as Spring's `ShallowEtagHeaderFilter` does to compute an ETag,
 would hold the events back until the stream ends; the stream writes past its

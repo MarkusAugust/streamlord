@@ -364,6 +364,34 @@ class SpringAdapterTest {
         assertEquals("keep-alive", http11.getHeader("Connection"))
     }
 
+    // The body runs on another thread; a test reading the headers MockMvc hands back would race it.
+    @Test
+    fun `keep-alive is set before the body runs, gzip only with its first write`() {
+        val request =
+            MockHttpServletRequest("GET", "/x").apply {
+                protocol = "HTTP/1.1"
+                addHeader("Accept-Encoding", "gzip")
+            }
+        val response = MockHttpServletResponse()
+
+        val body = response.datastarStream(Streamlord(compress = true), request) { comment() }
+
+        assertEquals("keep-alive", response.getHeader("Connection"))
+        assertNull(response.getHeader("Content-Encoding"))
+        body.writeTo(response.outputStream)
+        assertEquals("gzip", response.getHeader("Content-Encoding"))
+    }
+
+    @Test
+    fun `a stream that fails before its first write leaves no Content-Encoding`() {
+        val request = MockHttpServletRequest("GET", "/x").apply { addHeader("Accept-Encoding", "gzip") }
+        val response = MockHttpServletResponse()
+        val body = response.datastarStream(Streamlord(compress = true), request) { error("before anything was written") }
+
+        assertFailsWith<IllegalStateException> { body.writeTo(response.outputStream) }
+        assertNull(response.getHeader("Content-Encoding"))
+    }
+
     // A bare Flow<ServerSentEvent> gets its content type from Spring and no other header.
     @Test
     fun `the reactive response carries the stream headers`() =

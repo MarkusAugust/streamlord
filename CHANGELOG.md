@@ -48,6 +48,20 @@ All notable changes to Streamlord are recorded here. The format follows
   `400` it would be without `StatusPages`; a reader who leaves a stream is not answered and not
   an error.
 
+### Fixed
+
+- `datastarStream` on WebMVC sets `Connection: keep-alive` before it returns, where it was set by
+  the stream's own thread with its first write. Spring Boot prints the first MockMvc result of a
+  stream while the stream runs, and a header added meanwhile failed the test with
+  `ConcurrentModificationException`, now and then. `Content-Encoding: gzip` still waits for the
+  first write, so that a failure before it can be answered with a status, and so still races a
+  test that sends `Accept-Encoding: gzip`; so do the headers Spring Security writes when the
+  response commits, unless it is told to write them eagerly, and every header of a `suspend`
+  controller that suspends before it calls `datastarStream`. The testing page says what to do
+  about each. An answer to such a failure that Tomcat closes the connection after, a `400`,
+  `413`, `500` or `503` among others, now carries `Connection: keep-alive` beside Tomcat's
+  `Connection: close`, and Tomcat closes it.
+
 ## [0.13.0] - 2026-10-18
 
 ### Added
