@@ -15,6 +15,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.InputStreamReader
@@ -64,6 +65,13 @@ import kotlin.time.toJavaDuration
 public class LiveDatastarStream private constructor(
     private val read: () -> String?,
     private val onClose: () -> Unit,
+    /**
+     * The headers the server answered with, for a test that checks `X-Accel-Buffering` or a header
+     * of its own on a real server. Names are matched without regard to case. Empty for a stream
+     * read through [of], whose client is yours. No status beside them: [open] returns only on a
+     * `200`.
+     */
+    public val responseHeaders: Map<String, List<String>>,
 ) : AutoCloseable {
     private val reader = SseReader()
     private val lock = Mutex()
@@ -335,9 +343,13 @@ public class LiveDatastarStream private constructor(
          * first comment at five seconds being no margin. Send the current state on open, as a live
          * view does anyway.
          *
+         * The headers the server answered with are in [responseHeaders].
+         *
          * @param headers Added to the request, for a session cookie or an authorisation header.
          * @throws AssertionError when the connection fails, no answer starts within [timeout], or
-         *   the answer is not a 200 `text/event-stream`.
+         *   the answer is not a 200 `text/event-stream`. That last one prints the answer's headers,
+         *   a cookie's value held back, and the first KiB of its body, or as much as came within a
+         *   second.
          */
         public fun open(
             uri: URI,
@@ -365,20 +377,91 @@ public class LiveDatastarStream private constructor(
             val body: InputStream = response.body()
             val contentType = response.headers().firstValue("Content-Type").orElse("")
             val isStream = contentType.substringBefore(';').trim().equals("text/event-stream", ignoreCase = true)
-            if (response.statusCode() != 200 || !isStream) {
-                body.close()
-                throw AssertionError("Expected a 200 text/event-stream from $uri, got ${response.statusCode()} '$contentType'")
-            }
             // The JDK's client hands over the body as sent; a gzipped one would read as noise.
             val encoding = response.headers().firstValue("Content-Encoding").orElse("identity")
-            if (!encoding.trim().equals("identity", ignoreCase = true)) {
+            val plain = encoding.trim().equals("identity", ignoreCase = true)
+            if (response.statusCode() != 200 || !isStream) {
+                val start =
+                    if (plain) {
+                        startOf(body)
+                    } else {
+                        body.close()
+                        "The body is not shown: Content-Encoding '$encoding'."
+                    }
+                throw AssertionError(
+                    "Expected a 200 text/event-stream from $uri, got ${response.statusCode()} '$contentType'" +
+                        describe(response.headers().map(), start),
+                )
+            }
+            if (!plain) {
                 body.close()
                 throw AssertionError(
                     "$uri answered with Content-Encoding '$encoding', which this reader does not decode; leave Accept-Encoding out of the headers",
                 )
             }
             // The stream itself is what close() closes: a read in progress holds the reader's lock.
-            return of(InputStreamReader(body, Charsets.UTF_8), onClose = body)
+            return LiveDatastarStream(chunksOf(InputStreamReader(body, Charsets.UTF_8)), { body.close() }, response.headers().map())
+        }
+
+        /** How long an answer that is not a stream may take to show the start of its body. */
+        private val BODY_WAIT: Duration = 1.seconds
+
+        private const val BODY_SHOWN = 1024
+
+        /**
+         * What [body] began with, as much of it as came within [BODY_WAIT]: the client's own
+         * timeout ends with the headers, and a body that never ends would hold a plain read for good.
+         */
+        private fun startOf(body: InputStream): String {
+            val seen = ByteArrayOutputStream()
+            var failed = false
+            val reader =
+                thread(isDaemon = true, name = "streamlord-open-body") {
+                    try {
+                        val buffer = ByteArray(BODY_SHOWN + 1)
+                        while (seen.size() <= BODY_SHOWN) {
+                            val count = body.read(buffer, 0, BODY_SHOWN + 1 - seen.size())
+                            if (count < 0) break
+                            seen.write(buffer, 0, count)
+                        }
+                    } catch (_: IOException) {
+                        failed = true
+                    }
+                }
+            reader.join(BODY_WAIT.inWholeMilliseconds)
+            // Read before close(), which ends a read still waiting with an IOException of its own.
+            val ended = !reader.isAlive
+            body.close()
+            val bytes = seen.toByteArray()
+            val text = String(bytes, 0, minOf(bytes.size, BODY_SHOWN), Charsets.UTF_8)
+            return when {
+                bytes.isNotEmpty() -> "The body began:\n" + text.prependIndent("  ") + if (bytes.size > BODY_SHOWN) "…" else ""
+                !ended -> "The body did not start within $BODY_WAIT."
+                failed -> "The connection failed before the body started."
+                else -> "The body was empty."
+            }
+        }
+
+        /** The headers, a cookie's value held back, and what is known of the body. */
+        private fun describe(
+            headers: Map<String, List<String>>,
+            body: String,
+        ): String =
+            buildString {
+                append("\n\nHeaders:")
+                for ((name, values) in headers) {
+                    val secret = name.equals("Set-Cookie", ignoreCase = true)
+                    for (value in values) append("\n  ").append(name).append(": ").append(if (secret) "(held back)" else value)
+                }
+                append("\n\n").append(body)
+            }
+
+        private fun chunksOf(text: Reader): () -> String? {
+            val buffer = CharArray(8192)
+            return {
+                val count = text.read(buffer)
+                if (count < 0) null else String(buffer, 0, count)
+            }
         }
 
         /**
@@ -391,15 +474,6 @@ public class LiveDatastarStream private constructor(
         public fun of(
             text: Reader,
             onClose: AutoCloseable = text,
-        ): LiveDatastarStream {
-            val buffer = CharArray(8192)
-            return LiveDatastarStream(
-                read = {
-                    val count = text.read(buffer)
-                    if (count < 0) null else String(buffer, 0, count)
-                },
-                onClose = { onClose.close() },
-            )
-        }
+        ): LiveDatastarStream = LiveDatastarStream(chunksOf(text), { onClose.close() }, emptyMap())
     }
 }

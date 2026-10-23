@@ -6,8 +6,11 @@ public final class io/github/markusaugust/streamlord/test/DatastarEvents : java/
 	public synthetic fun add (Ljava/lang/Object;)Z
 	public fun addAll (ILjava/util/Collection;)Z
 	public fun addAll (Ljava/util/Collection;)Z
+	public final fun assertEventTypes ([Lkotlin/reflect/KClass;)V
 	public final fun assertExactly ([Lio/github/markusaugust/streamlord/core/domain/DatastarEvent;)V
 	public final fun assertNoEvents ()V
+	public final fun assertNoPatchElements (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Ljava/lang/String;Ljava/lang/String;)V
+	public static synthetic fun assertNoPatchElements$default (Lio/github/markusaugust/streamlord/test/DatastarEvents;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)V
 	public final fun assertNoSignal (Ljava/lang/String;)V
 	public final fun assertPatchElements (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Ljava/lang/String;Ljava/lang/String;)Lio/github/markusaugust/streamlord/core/domain/PatchElements;
 	public static synthetic fun assertPatchElements$default (Lio/github/markusaugust/streamlord/test/DatastarEvents;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/domain/PatchElements;
@@ -59,6 +62,7 @@ public final class io/github/markusaugust/streamlord/test/LiveDatastarStream : j
 	public static synthetic fun awaitSignal-exY8QGI$default (Lio/github/markusaugust/streamlord/test/LiveDatastarStream;Ljava/lang/String;Ljava/lang/Object;JLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public fun close ()V
 	public final fun getReceived ()Lio/github/markusaugust/streamlord/test/DatastarEvents;
+	public final fun getResponseHeaders ()Ljava/util/Map;
 	public final fun next-VtjQ1oo (JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun next-VtjQ1oo$default (Lio/github/markusaugust/streamlord/test/LiveDatastarStream;JLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 }

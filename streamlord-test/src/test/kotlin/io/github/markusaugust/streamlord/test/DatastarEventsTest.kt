@@ -1,6 +1,8 @@
 package io.github.markusaugust.streamlord.test
 
+import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
+import io.github.markusaugust.streamlord.core.domain.ExecuteScript
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.core.protocol.SseEncoder
@@ -87,6 +89,47 @@ class DatastarEventsTest {
 
         datastarEvents(one).assertExactly(PatchSignals("""{"a":1}"""))
         assertFailsWith<AssertionError> { events.assertExactly(PatchSignals("""{"a":1}""")) }
+    }
+
+    @Test
+    fun `assertNoPatchElements fails on a patch matching every argument given`() {
+        events.assertNoPatchElements(selector = "#missing")
+        events.assertNoPatchElements(selector = "#feed", mode = ElementPatchMode.INNER)
+        events.assertNoPatchElements(containing = "An old head")
+        datastarEvents(SseEncoder.encode(PatchSignals("""{"a":1}"""))).assertNoPatchElements()
+
+        val failure = assertFailsWith<AssertionError> { events.assertNoPatchElements(selector = "#feed", containing = "head") }
+        val message = failure.message!!
+        assertTrue(message.contains("Expected no element patch with selector #feed, elements containing head"), message)
+        assertTrue(message.contains("The stream carried 3 events"), message)
+    }
+
+    @Test
+    fun `a script comes back as the element patch it is sent as`() {
+        val script = datastarEvents(SseEncoder.encode(ExecuteScript("console.log(1)")))
+
+        assertFailsWith<AssertionError> { script.assertNoPatchElements() }
+        script.assertEventTypes(PatchElements::class)
+        assertFailsWith<IllegalArgumentException> { script.assertEventTypes(ExecuteScript::class) }
+        assertFailsWith<IllegalArgumentException> { script.assertEventTypes(DatastarEvent::class) }
+    }
+
+    @Test
+    fun `assertEventTypes pins the kinds of event and their order`() {
+        events.assertEventTypes(PatchElements::class, PatchSignals::class, PatchSignals::class)
+        datastarEvents(SseEncoder.comment("alone")).assertEventTypes()
+
+        val failure = assertFailsWith<AssertionError> { events.assertEventTypes(PatchSignals::class, PatchElements::class) }
+        val message = failure.message!!
+        assertTrue(
+            message.contains(
+                "Expected exactly these event types: PatchSignals, PatchElements; found PatchElements, PatchSignals, PatchSignals",
+            ),
+            message,
+        )
+        assertTrue(message.contains("The stream carried 3 events"), message)
+        assertFailsWith<AssertionError> { events.assertEventTypes(PatchElements::class, PatchSignals::class) }
+        assertFailsWith<AssertionError> { events.assertEventTypes() }
     }
 
     @Test

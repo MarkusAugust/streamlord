@@ -8,6 +8,17 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Added
 
+- `assertNoPatchElements` on `DatastarEvents`: that no element patch matches every argument
+  given, the arguments being those of `assertPatchElements`, and with none, that the stream
+  patched no elements. The counterpart to `assertNoSignal`.
+- `assertEventTypes` on `DatastarEvents`: that the stream was exactly these kinds of event, in
+  this order, whatever each carried, for a test where `assertExactly` would spell out every event.
+  `ExecuteScript::class` and `DatastarEvent::class` throw `IllegalArgumentException`, since no
+  event comes back from the wire as either.
+- `responseHeaders` on `LiveDatastarStream`: the headers the server answered `open` with, matched
+  without regard to case, and empty for a stream read through `of`. `open` still returns only on
+  a `200 text/event-stream`; on anything else its failure now prints the answer's headers, a
+  cookie's value held back, and the first KiB of its body, waiting at most a second for it.
 - Two routes on streamlord-live, the service behind the documentation site, for the front page
   to run. `GET /feed` is the hero's code example as a handler: it reads `heads` from the signals,
   appends one `li` to `#feed` and patches `heads` back one higher, with the frames for a page
