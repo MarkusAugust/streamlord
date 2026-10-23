@@ -94,11 +94,13 @@ class LiveDatastarStreamTest {
                 exchange.close()
             }
         }
-        // Promises a body and closes the connection before a byte of it.
+        // Promises a body and closes the connection before a byte of it. Not at once: a close that
+        // arrives with the headers fails the open itself, on Linux, before the body is read.
         server.createContext("/broken") { exchange ->
             exchange.responseHeaders.add("Content-Type", "text/plain")
             exchange.sendResponseHeaders(500, 100)
             exchange.responseBody.flush()
+            Thread.sleep(300)
             exchange.close()
         }
         server.createContext("/page") { exchange ->
