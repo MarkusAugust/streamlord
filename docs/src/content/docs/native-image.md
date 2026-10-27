@@ -154,7 +154,7 @@ Datastar version the SDK speaks without this file being edited at each release.
 
 ## 4. The container
 
-A native image links glibc and zlib dynamically by default. `gcr.io/distroless/base-debian12`
+A native image links glibc and zlib dynamically by default. `gcr.io/distroless/base-debian13`
 carries glibc and not zlib, so link zlib in:
 
 ```kotlin sample=none
@@ -168,7 +168,7 @@ buildArgs.add("--static-nolibc")
 Everything the image needs is then linked in except glibc, which the base image provides.
 
 ```dockerfile
-FROM gcr.io/distroless/base-debian12:nonroot
+FROM gcr.io/distroless/base-debian13:nonroot
 WORKDIR /app
 COPY build/native/nativeCompile/my-service /app/my-service
 USER nonroot
