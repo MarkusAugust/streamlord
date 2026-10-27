@@ -18,6 +18,10 @@ describe("signal collection", () => {
     assert.deepEqual(kotlin(`dataSignals("foo-bar" to 7); patchSignals("foo-bar" to 1)`), ["foo-bar", "fooBar"]);
   });
 
+  it("a key inside a pair's value declares nothing on its own", () => {
+    assert.deepEqual(kotlin(`dataSignals("user" to mapOf("first-name" to "", "age" to 1))`), ["user"]);
+  });
+
   it("a property goes by its serial name, and a parenthesis does not end the class", () => {
     const src = `@Serializable
 data class PageSignals(

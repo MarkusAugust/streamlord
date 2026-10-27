@@ -541,7 +541,7 @@ class AnalyzerTest {
                 "      mapOf(\"notASignal\" to 1); removeSignals(\"gone\", \"away\")\n" +
                 "      @Serializable data class Search(val query: String = \"\", val page: Int = 1)"
         assertEquals(
-            listOf("away", "count", "gone", "name", "open", "page", "query", "search", "user"),
+            listOf("away", "count", "gone", "open", "page", "query", "search", "user"),
             collectSignals(kt, SourceLanguage.KOTLIN).sorted(),
         )
         val h = "<div data-signals=\"{count: 1, open: false}\" data-bind:first-name data-text=\"\$other.x\"></div>"

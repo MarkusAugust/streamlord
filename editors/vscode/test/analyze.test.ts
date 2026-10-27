@@ -388,7 +388,7 @@ describe("signals", () => {
     const kt = `dataSignals("count" to 0, "user" to mapOf("name" to "")); dataBind("search"); signal("open"); patchSignals(Search(q = "x"))
       mapOf("notASignal" to 1); removeSignals("gone", "away")
       @Serializable data class Search(val query: String = "", val page: Int = 1)`;
-    expect([...collectSignals(kt, "kotlin")].sort()).toEqual(["away", "count", "gone", "name", "open", "page", "query", "search", "user"]);
+    expect([...collectSignals(kt, "kotlin")].sort()).toEqual(["away", "count", "gone", "open", "page", "query", "search", "user"]);
     const html = `<div data-signals="{count: 1, open: false}" data-bind:first-name data-text="$other.x"></div>`;
     expect([...collectSignals(html, "html")].sort()).toEqual(["count", "firstName", "open", "other.x"]);
     const raw = `fun side() = """<div data-signals="{draft: '', __step: 1, label: 'a__b', count: 0}" data-bind:search data-indicator="busy" data-text="$kotlinTemplate" data-signals:foo-bar__ifmissing="1" data-computed:total__case.camel="1"></div>"""`;

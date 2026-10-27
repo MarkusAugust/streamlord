@@ -33,25 +33,26 @@ div {
 ```
 
 `signal("foo-bar")` gives you `$fooBar`, the signal `data-signals:foo-bar` declares. The pairs
-form reads its keys the same way, nested maps included, so all three name one signal:
+form reads the key of each pair the same way, and a dotted key nests, as the keyed form does:
 
 ```kotlin sample=html
 div {
-    dataSignals("foo-bar" to 7, "user" to mapOf("first-name" to ""))
+    dataSignals("foo-bar" to 7, "user.first-name" to "")
     // data-signals="{"fooBar":7,"user":{"firstName":""}}"
     span { dataText(signal("foo-bar")) }          // $fooBar
     span { dataText(signal("user.first-name")) }  // $user.firstName
 }
 ```
 
-A dotted name in the pairs nests, as the keyed form does: `"user.first-name" to ""` declares the
-same `$user.firstName`. A dotted key inside a map is refused, because the client would store
-`{"a.b": 1}` as one key that `$a.b` does not reach.
+A dotted key inside a map is refused, because the client would store `{"a.b": 1}` as one key
+that `$a.b` does not reach.
 
-A key the DSL does not write keeps its hyphen: the object form, `dataSignals("{'foo-bar': 1}")`,
-and a signal patched from the server. In an expression Datastar reads `$foo-bar` as the signal
-`foo-bar`, which `signal("foo-bar")` cannot write, so reach such a key by indexing the store:
-`signal("['foo-bar']")` gives `$['foo-bar']`.
+A key the DSL does not write keeps its hyphen: a key inside a value, which the client merges as
+it stands, the object form, `dataSignals("{'foo-bar': 1}")`, and a signal patched from the
+server. So `"user" to mapOf("first-name" to "")` declares `user['first-name']`. In an expression
+Datastar reads `$foo-bar` as the signal `foo-bar`, which `signal("foo-bar")` cannot write, so
+reach such a key by indexing: `signal("['foo-bar']")` gives `$['foo-bar']`, and
+`signal("user['first-name']")` gives `$user['first-name']`.
 
 An explicit `case =` is kept, but the key is still written in kebab-case, because the browser
 lowercases it either way.

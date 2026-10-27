@@ -25,6 +25,12 @@ class SignalsTest {
         assertEquals(listOf("foo-bar", "fooBar"), kotlin("dataSignals(\"foo-bar\" to 7); patchSignals(\"foo-bar\" to 1)"))
     }
 
+    // The client merges the value as it is, so a key inside it is no signal of its own.
+    @Test
+    fun `a key inside a pair's value declares nothing on its own`() {
+        assertEquals(listOf("user"), kotlin("dataSignals(\"user\" to mapOf(\"first-name\" to \"\", \"age\" to 1))"))
+    }
+
     @Test
     fun `a property goes by its serial name, and a parenthesis does not end the class`() {
         val src =

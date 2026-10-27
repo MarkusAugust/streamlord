@@ -83,57 +83,51 @@ public fun HTMLTag.dataSignals(
  * div { dataSignals("count" to 0, "user" to mapOf("first-name" to "")) }
  * ```
  *
- * The keys of the pairs and of every map inside them are read the way the keyed form reads its
- * name: `first-name` declares `$user.firstName`, the signal `signal("user.first-name")` refers to,
- * and a dotted name nests, so `"user.first-name" to ""` declares the same signal. A key inside a
+ * The key of each pair is read the way the keyed form reads its name: `foo-bar` declares
+ * `$fooBar`, the signal `signal("foo-bar")` refers to, and a dotted name nests, so
+ * `"user.first-name" to ""` declares `$user.firstName`. The keys inside a value are kept as
+ * written, since the client merges the object as it is: `"user" to mapOf("first-name" to "")`
+ * declares `$user['first-name']`, which `signal("user['first-name']")` reaches. A key inside a
  * map holding `.` is refused, since the client would store it as one key that `$a.b` does not
- * reach, and so is one it cannot hold with what is under it ([SignalNames]). A
- * [io.github.markusaugust.streamlord.core.json.JsonObject] is a map, and its keys are read the
- * same way.
+ * reach, and so is one it cannot hold with what is under it ([SignalNames]).
  */
 public fun HTMLTag.dataSignals(
     vararg signals: Pair<String, Any?>,
     ifMissing: Boolean = false,
 ) {
     signals.forEach { Casing.signalName(it.first) }
-    val keyed = signals.map { (name, value) -> Casing.camel(name) to camelKeys(value, name) }
+    val keyed = signals.map { (name, value) -> Casing.camel(name) to checkKeys(value, name) }
     keyed.groupBy { it.first }.values.firstOrNull { it.size > 1 }?.let {
-        throw InvalidSignalNameException(it.first().first, "is given twice once the keys are read in camelCase")
+        throw InvalidSignalNameException(it.first().first, "is given twice once the names are read in camelCase")
     }
     val nested = SignalNames.nest(keyed) { name, reason -> throw InvalidSignalNameException(name, reason) }
     attributes[ds("signals${signalMods(null, ifMissing)}")] = JsonWriter.writeExpression(nested)
 }
 
-/** [value] with the keys of every map in it camel-cased, as Datastar reads a key in `data-signals:`. */
-private fun camelKeys(
+/** [value] itself, once every key in a map in it is one the client can hold. */
+private fun checkKeys(
     value: Any?,
     path: String,
-): Any? =
+): Any? {
     when (value) {
         is Map<*, *> -> {
-            val out = LinkedHashMap<Any?, Any?>(value.size)
             for ((k, v) in value) {
-                val key = if (k is String) Casing.camel(k) else k
-                val problem = SignalNames.keyProblem(key.toString(), v is Map<*, *>)
+                val problem = SignalNames.keyProblem(k.toString(), v is Map<*, *>)
                 if (problem != null) throw InvalidSignalNameException("$path.$k", "is a key the client cannot hold: $problem")
-                if (key in out) throw InvalidSignalNameException("$path.$k", "is given twice once the keys are read in camelCase")
-                out[key] = camelKeys(v, "$path.$k")
+                checkKeys(v, "$path.$k")
             }
-            out
         }
 
         is Iterable<*> -> {
-            value.mapIndexed { i, v -> camelKeys(v, "$path.$i") }
+            value.forEachIndexed { i, v -> checkKeys(v, "$path.$i") }
         }
 
         is Array<*> -> {
-            value.mapIndexed { i, v -> camelKeys(v, "$path.$i") }
-        }
-
-        else -> {
-            value
+            value.forEachIndexed { i, v -> checkKeys(v, "$path.$i") }
         }
     }
+    return value
+}
 
 /** `data-computed="{name: () => expression}"`: the values are callables. The keys are used as written; see [dataSignals]. */
 public fun HTMLTag.dataComputed(expression: String) {

@@ -37,6 +37,12 @@ All notable changes to Streamlord are recorded here. The format follows
   the client evaluates those, and so are `data-bind`, `data-ref` and `data-indicator`, whose value
   is a signal path the client follows without a guard: `__proto__.x` there writes into every
   object of the page.
+- `dataSignals` in its pairs form writes the keys inside a value as they stand, as the client
+  merges them: `"user" to mapOf("first-name" to "")` declares `user['first-name']`, where 0.13.0
+  camel-cased it to `user.firstName`. The key of each pair is still read as the keyed form reads
+  it, so `"user.first-name" to ""` declares `$user.firstName`. Code that reached a nested key
+  with `signal("user.first-name")` reaches it with `signal("user['first-name']")`, or declares it
+  with a dotted pair. Two keys of one map that camel-case to the same name are no longer refused.
 - `intl(...)` writes an options object for `RELATIVE_TIME` and `DISPLAY_NAMES` even when empty,
   because the client reads a field of it and throws without one.
 

@@ -167,19 +167,23 @@ class AsTheClientReadsItTest {
         assertFailsWith<InvalidSignalNameException> { elements { div { dataClass("w-1/2", "true") } } }
     }
 
-    // data-signals:foo-bar declares $fooBar, and signal("foo-bar") is $fooBar, so the pairs form follows.
+    // data-signals:foo-bar declares $fooBar, and signal("foo-bar") is $fooBar, so the pair's key
+    // follows; the client merges the value as it is, so the keys inside it keep their hyphens.
     @Test
     fun `the pairs form names the signal the keyed form and signal() name`() {
         assertEquals(
-            """<div data-signals="{&quot;fooBar&quot;:7,&quot;user&quot;:{&quot;firstName&quot;:&quot;&quot;},""" +
-                """&quot;rows&quot;:[{&quot;subTotal&quot;:1}]}"></div>""",
+            """<div data-signals="{&quot;fooBar&quot;:7,&quot;user&quot;:{&quot;first-name&quot;:&quot;&quot;},""" +
+                """&quot;rows&quot;:[{&quot;sub-total&quot;:1}]}"></div>""",
             elements {
                 div { dataSignals("foo-bar" to 7, "user" to mapOf("first-name" to ""), "rows" to listOf(mapOf("sub-total" to 1))) }
             },
         )
-        assertEquals("\$user.firstName", signal("user.first-name"))
+        assertEquals("\$user['first-name']", signal("user['first-name']"))
+        assertEquals(
+            """<div data-signals="{&quot;a&quot;:{&quot;x-y&quot;:1,&quot;xY&quot;:2}}"></div>""",
+            elements { div { dataSignals("a" to mapOf("x-y" to 1, "xY" to 2)) } },
+        )
         assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("foo-bar" to 1, "fooBar" to 2) } } }
-        assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("a" to mapOf("x-y" to 1, "xY" to 2)) } } }
         assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("a" to mapOf("__proto__" to 1)) } } }
     }
 
@@ -215,8 +219,11 @@ class AsTheClientReadsItTest {
         }
         val prototypeUnder = "a" to mapOf("constructor" to mapOf("prototype" to 1))
         assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals(prototypeUnder) } } }
-        val camelUnder = "a" to mapOf("to-string" to mapOf("name" to 1))
-        assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals(camelUnder) } } }
+        // A key inside a value is not camel-cased, so to-string is not toString.
+        assertEquals(
+            """<div data-signals="{&quot;a&quot;:{&quot;to-string&quot;:{&quot;name&quot;:1}}}"></div>""",
+            elements { div { dataSignals("a" to mapOf("to-string" to mapOf("name" to 1))) } },
+        )
         // With a plain value under it, the client holds such a key.
         assertEquals(
             """<div data-signals="{&quot;team&quot;:{&quot;constructor&quot;:&quot;Ferrari&quot;}}"></div>""",
