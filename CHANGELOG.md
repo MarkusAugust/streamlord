@@ -6,6 +6,53 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `dataAnimate` takes the object form, `dataAnimate("{width: $w + 'px'}")`, and the modifiers the Pro
+  plugin reads: `duration`, `delay`, `ease` (an `Easing` enum of the plugin's names), `loop` and
+  `pingpong`. `RafModifiers` gains `delay`, `debounce` and `viewTransition`, `ResizeModifiers`
+  `delay` and `viewTransition`, as the two plugins read them. The catalog lists the same. The
+  key form's JVM signature gained the modifier argument; Kotlin source compiles as before.
+- `ElementsGuard.evaluatedAttributes`: the attributes whose value Datastar runs as JavaScript,
+  the expression attributes and the four signal filters.
+
+### Changed
+
+- `LiveDatastarStream.open` sends the page's signals as the `datastar` query parameter, `{}` unless
+  its new `signals` argument says otherwise, as the browser's `@get` does. A handler under test
+  that reads signals now gets an object, where it got none; a test that relied on none fails, and
+  says so. The function's JVM signature changed with the argument.
+- `interpolate` admits a value into a `data-*` attribute the client reads as it stands:
+  `data-nonce`, `data-preserve-attr`, `data-ignore`, `data-ignore-morph`. A page written as a
+  string can take its CSP nonce through a hole. The expression attributes and the signal filters (`data-json-signals`,
+  `data-on-signal-patch-filter`, `data-persist`, `data-query-string`) are refused as before, since
+  the client evaluates those, and so are `data-bind`, `data-ref` and `data-indicator`, whose value
+  is a signal path the client follows without a guard: `__proto__.x` there writes into every
+  object of the page.
+- `intl(...)` writes an options object for `RELATIVE_TIME` and `DISPLAY_NAMES` even when empty,
+  because the client reads a field of it and throws without one.
+
+### Fixed
+
+- `ExecuteScript` lowercased the `</script` it escaped: `'</SCRIPT>'` in a script reached the
+  browser as `'<\/script>'`, whose value is `</script>`, and `<SCRIPT` after a `<!--` as
+  `<sCRIPT`. The escape now keeps the letters as written. `</BODY>`, `</HEAD>` and
+  `</HTML>` are left alone, since the client's test for a whole document reads lower case only.
+- The analysis named the wrong signal for a hyphenated reference: for `$a-b-1` it said the key
+  `a-b-1` declares `$aB1` and offered that as the fix, where the client camel-cases only a hyphen
+  before a lowercase letter and declares `aB-1`. The message and the fix follow the client. The
+  IntelliJ highlighter and the VS Code grammar mark `$123` and `$foo-bar` as one signal each, as
+  the client reads them.
+- `SseDecoder` turned an `outer` or `replace` patch without a selector whose elements were a
+  comment alone, or text holding a `<`, into an event; the client patches nothing for either.
+- Documentation held to the client: a 400 from an over-long query is retried under
+  `retry: 'error'` or `'always'`; a form sent with `@get` or `@delete` reads as no signals rather
+  than being refused; `application/json` responses carry no charset; `dataPersist` writes its key
+  in kebab case; and the examples in `ElementsGuard` and `Casing` show what the code does.
+- The analysis and the VS Code extension say when a signal object under `constructor` or another
+  name every object has goes wrong: the client holds it, and the next request writes it into the
+  built-in one and sends the page's signals without it.
+
 ### Security
 
 - The VS Code extension no longer hangs on a line such as `<a != != … '`. Finding the attribute
