@@ -218,7 +218,7 @@ describe("markup", () => {
     // `$total-el.offsetWidth` is `$['total-el']['offsetWidth']` to Datastar: the subtraction the author meant needs spaces.
     const scope = validateExpression("($total-el.offsetWidth) + 'px'; $count-evt.detail.delta; $n-fn(1); $m-arr[0]");
     expect(scope.length).toBe(4);
-    expect(scope[0]!.fixes!.map((f) => f.text)).toEqual(["$totalEl.offsetWidth", "$total - el.offsetWidth"]);
+    expect(scope[0]!.fixes!.map((f) => f.text)).toEqual(["$totalEl.offsetwidth", "$total - el.offsetWidth"]);
     expect(validateExpression("@get('/item/$id-preview') && $x")).toEqual([]);
     expect(codes(analyzeKotlin(`dataText("\${'$'}foo-bar")`, opts))).toEqual(["signal-kebab"]);
   });

@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -23,6 +24,13 @@ class MarkupTest {
         src: String,
         requireIds: Boolean = false,
     ) = analyzer.validateMarkup(src, MarkupOptions(requireIds, "data-", true))
+
+    @Test
+    fun `tells when an object under a name every object has goes wrong`() {
+        val issue = html("<div data-signals=\"{constructor: {a: 1}}\"></div>").single()
+        assertEquals("signal-name" to Severity.ERROR, issue.code to issue.severity)
+        assertContains(issue.message, "The client holds the signal, but the next request writes the object under it into the built-in one")
+    }
 
     @Test
     fun `applies an expression fix inside the attribute value`() {

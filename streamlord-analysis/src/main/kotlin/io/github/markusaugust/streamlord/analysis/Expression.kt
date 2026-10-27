@@ -7,7 +7,6 @@ package io.github.markusaugust.streamlord.analysis
  * pattern does differently from JavaScript, it is told about.
  */
 
-private val HYPHEN_WORD = Regex("""-([A-Za-z0-9_])""")
 private val SPACED_ACTION = Regex("""@([A-Za-z_$][A-Za-z0-9_$]*)(\s+)\(""")
 private val SIGNAL_PREFIX = Regex("""\$([A-Za-z_][A-Za-z0-9_.]*)?$""")
 private val ACTION_PREFIX = Regex("""@([A-Za-z_][A-Za-z0-9_]*)?$""")
@@ -1029,22 +1028,35 @@ public class ExpressionValidator(
         val rest = written.substringAfter('-')
         // `-1`, `-2px`: nobody names a signal that; the author subtracts. `-bar`: a kebab-case key, or a subtraction of a variable.
         val subtraction = rest.first().isDigit()
-        val camel = written.replace(HYPHEN_WORD) { it.groupValues[1].uppercase() }
-        val spaced = written.replace(HYPHEN_WORD) { " - " + it.groupValues[1] }
+        // The browser lowercases the key, dots and all, and the client raises only a lowercase letter
+        // after a hyphen (caseFns.camel in text.ts): a key a-b-1 is the signal aB-1, a-b.c-d is aB.cD,
+        // and foo-_bar keeps its name.
+        val key = written.substring(1).asciiLowercase()
+        val signal = toCamel(key)
+        val camel = "$" + signal
+        val spaced = written.replace("-", " - ")
         val fixes = ArrayList<Fix>()
-        if (!subtraction) fixes += Fix("Change to $camel", start, end, camel)
+        if (!subtraction && signal != key) fixes += Fix("Change to $camel", start, end, camel)
         fixes += Fix("Write $spaced", start, end, spaced)
+        val reads = "Datastar reads $written as one signal named ${r.name}"
+        val subtract = "For a subtraction write $spaced, with spaces."
         return Issue(
             start = start,
             end = end,
             message =
-                if (subtraction) {
-                    "Datastar reads $written as one signal named ${r.name}, not as $head minus $rest. For a subtraction write $spaced, with spaces."
-                } else {
-                    "Datastar reads $written as one signal named ${r.name}, and nothing here declares it: " +
-                        "a key ${head.substring(
-                            1,
-                        )}-${rest.substringBefore('.')} is the signal $camel. For a subtraction write $spaced, with spaces."
+                when {
+                    subtraction -> {
+                        "$reads, not as $head minus $rest. $subtract"
+                    }
+
+                    signal == key -> {
+                        "$reads, and nothing here declares it: a key $key keeps that name, " +
+                            "since Datastar camel-cases only a lowercase letter after a hyphen. $subtract"
+                    }
+
+                    else -> {
+                        "$reads, and nothing here declares it: a key $key is the signal \$$signal. $subtract"
+                    }
                 },
             severity = Severity.WARNING,
             code = "signal-kebab",

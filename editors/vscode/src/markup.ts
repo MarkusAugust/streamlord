@@ -759,7 +759,7 @@ function validateSignalNames(attr: Attribute, parsed: { key: string | null }, sp
       } else if (k.object && PROTOTYPE_NAMES.has(k.key)) {
         out.push({
           ...at,
-          message: `Every object already has ${k.key}, so the client writes the object under it into the built-in one and drops the signal.`,
+          message: `Every object already has ${k.key}. The client holds the signal, but the next request writes the object under it into the built-in one and sends the page's signals without it.`,
           severity: "error",
           code: "signal-name",
           link: attributeDoc(spec.name),

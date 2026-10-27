@@ -166,9 +166,11 @@ internal val PROTOTYPE_NAMES =
  * or null when it can. The client follows the path without a guard, so a part every object already
  * has, with more of the path under it, writes into the built-in one: `__proto__.x` and
  * `constructor.prototype.x` set `x` on every object of the page. The last part is held as a key of
- * its own (`data-signals:constructor="1"` is `$constructor`) unless [objectUnder] says an
- * object goes under it; `__proto__` is never held. `SignalNames.pathProblem` in streamlord-core is
- * stricter, since a name written in code may carry an object under it at any part.
+ * its own (`data-signals:constructor="1"` is `$constructor`), and so is an object under it when
+ * [objectUnder] says one goes there, but the next request's `filtered()` writes that object into
+ * the built-in one and sends the page's signals without it; `__proto__` is never held.
+ * `SignalNames.pathProblem` in streamlord-core is stricter, since a name written in code may carry
+ * an object under it at any part.
  */
 internal fun signalPathProblem(
     path: String,
@@ -179,8 +181,13 @@ internal fun signalPathProblem(
     return parts
         .withIndex()
         .firstOrNull { (i, p) -> p == "__proto__" || (p in PROTOTYPE_NAMES && (i < parts.lastIndex || objectUnder)) }
-        ?.let {
-            "has the part ${it.value}, which every object already has, so the client writes into the built-in one instead of holding a signal"
+        ?.let { (i, p) ->
+            if (p != "__proto__" && i == parts.lastIndex) {
+                "has the part $p, which every object already has: the client holds the signal, but the next request " +
+                    "writes the object under it into the built-in one and sends the page's signals without it"
+            } else {
+                "has the part $p, which every object already has, so the client writes into the built-in one instead of holding a signal"
+            }
         }
 }
 

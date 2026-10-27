@@ -156,15 +156,21 @@ export const PROTOTYPE_NAMES: ReadonlySet<string> = new Set([
  * or null when it can. The client follows the path without a guard, so a part every object already
  * has, with more of the path under it, writes into the built-in one: `__proto__.x` and
  * `constructor.prototype.x` set `x` on every object of the page. The last part is held as a key of
- * its own (`data-signals:constructor="1"` is `$constructor`) unless `objectUnder` says an object
- * goes under it; `__proto__` is never held. `SignalNames.pathProblem` in streamlord-core is
- * stricter, since a name written in code may carry an object under it at any part.
+ * its own (`data-signals:constructor="1"` is `$constructor`), and so is an object under it when
+ * `objectUnder` says one goes there, but the next request's `filtered()` writes that object into
+ * the built-in one and sends the page's signals without it; `__proto__` is never held.
+ * `SignalNames.pathProblem` in streamlord-core is stricter, since a name written in code may carry
+ * an object under it at any part.
  */
 export function signalPathProblem(path: string, objectUnder = false): string | null {
   const parts = path.split(".");
   if (parts.some((p) => p.length === 0)) return "has an empty part, which no $ reference reaches";
-  const part = parts.find((p, i) => p === "__proto__" || (PROTOTYPE_NAMES.has(p) && (i < parts.length - 1 || objectUnder)));
-  return part ? `has the part ${part}, which every object already has, so the client writes into the built-in one instead of holding a signal` : null;
+  const at = parts.findIndex((p, i) => p === "__proto__" || (PROTOTYPE_NAMES.has(p) && (i < parts.length - 1 || objectUnder)));
+  if (at < 0) return null;
+  const part = parts[at]!;
+  return part !== "__proto__" && at === parts.length - 1
+    ? `has the part ${part}, which every object already has: the client holds the signal, but the next request writes the object under it into the built-in one and sends the page's signals without it`
+    : `has the part ${part}, which every object already has, so the client writes into the built-in one instead of holding a signal`;
 }
 
 /** What the client reads after a `$`: ASCII letters, digits and `_`, in parts joined by `.` or `-` (engine.ts:449 in 1.0.4). */

@@ -127,12 +127,7 @@ public fun tokenizeExpression(text: String): List<Token> {
                 out += Token(i, i + KOTLIN_DOLLAR.length, TokenKind.KOTLIN_DOLLAR_ESCAPE)
                 // `${'$'}count` is the signal `$count`: the name that follows is a signal.
                 var j = i + KOTLIN_DOLLAR.length
-                if (j < text.length && text[j].isIdentStart()) {
-                    val nameStart = j
-                    while (j < text.length && text[j].isIdentPart()) j++
-                    out += Token(nameStart, j, TokenKind.SIGNAL)
-                    j = signalPath(text, j, out)
-                }
+                if (j < text.length && text[j].isIdentPart()) j = signalTokens(text, j, j, out)
                 lastSignificant = 'a'
                 i = j
             }
@@ -178,13 +173,9 @@ public fun tokenizeExpression(text: String): List<Token> {
                 }
             }
 
-            c == '$' && i + 1 < text.length && text[i + 1].isIdentStart() -> {
-                var j = i + 1
-                while (j < text.length && text[j].isIdentPart()) j++
-                out += Token(i, j, TokenKind.SIGNAL)
-                j = signalPath(text, j, out)
+            c == '$' && i + 1 < text.length && text[i + 1].isIdentPart() -> {
+                i = signalTokens(text, i, i + 1, out)
                 lastSignificant = 'a'
-                i = j
             }
 
             c == '@' && i + 1 < text.length && text[i + 1].isIdentStart() -> {
@@ -249,17 +240,27 @@ public fun tokenizeExpression(text: String): List<Token> {
     return out
 }
 
-private fun signalPath(
+/**
+ * The signal the client's pattern `\$(\w+(?:[.-]\w+)*)` (engine.ts:449 in 1.0.4) reads at [nameStart]:
+ * the name up to its first dot as a SIGNAL token from [start], the rest as its path. Returns the
+ * offset after the match, which a trailing dot or hyphen is outside of.
+ */
+private fun signalTokens(
     text: String,
-    from: Int,
+    start: Int,
+    nameStart: Int,
     out: MutableList<Token>,
 ): Int {
-    var j = from
-    val pathStart = j
-    while (j + 1 < text.length && text[j] == '.' && text[j + 1].isIdentStart()) {
-        j++
+    fun wordEnd(from: Int): Int {
+        var j = from
         while (j < text.length && text[j].isIdentPart()) j++
+        return j
     }
+    var j = wordEnd(nameStart)
+    while (j + 1 < text.length && text[j] == '-' && text[j + 1].isIdentPart()) j = wordEnd(j + 1)
+    out += Token(start, j, TokenKind.SIGNAL)
+    val pathStart = j
+    while (j + 1 < text.length && (text[j] == '.' || text[j] == '-') && text[j + 1].isIdentPart()) j = wordEnd(j + 1)
     if (j > pathStart) out += Token(pathStart, j, TokenKind.SIGNAL_PATH)
     return j
 }

@@ -1419,7 +1419,8 @@ public class MarkupValidator(
                             Issue(
                                 start,
                                 end,
-                                "Every object already has ${k.key}, so the client writes the object under it into the built-in one and drops the signal.",
+                                "Every object already has ${k.key}. The client holds the signal, but the next request writes " +
+                                    "the object under it into the built-in one and sends the page's signals without it.",
                                 Severity.ERROR,
                                 "signal-name",
                                 link,

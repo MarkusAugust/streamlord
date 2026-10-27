@@ -63,6 +63,15 @@ async function tokenLines(scope: string, lines: string[]): Promise<{ text: strin
 }
 
 describe("kotlin injection grammar", () => {
+  // The client reads a signal as \$(\w+(?:[.-]\w+)*) (engine.ts): digits and hyphens are part of the name.
+  it("reads a signal as far as the client does", async () => {
+    const t = await tokens("source.kotlin", `dataText("$123 + $foo-bar + $items.0.name")`);
+    assert.match(scopeOf(t, "123"), /variable\.other\.constant\.signal\.datastar/);
+    assert.match(scopeOf(t, "foo-bar"), /variable\.other\.constant\.signal\.datastar/);
+    assert.match(scopeOf(t, "items"), /variable\.other\.constant\.signal\.datastar/);
+    assert.match(scopeOf(t, ".0.name"), /variable\.other\.property\.signal-path\.datastar/);
+  });
+
   it("highlights datastar tokens inside dsl strings", async () => {
     const t = await tokens("source.kotlin", `dataOnClick("$count++; @post('/x', {contentType: 'form', retry: 'never'})")`);
     assert.match(scopeOf(t, "count"), /variable\.other\.constant\.signal\.datastar/);

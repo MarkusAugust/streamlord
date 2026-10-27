@@ -690,17 +690,26 @@ export function validateExpression(text: string, returnsValue?: boolean, hyphena
       const rest = written.slice(written.indexOf("-") + 1);
       // `-1`, `-2px`: nobody names a signal that; the author subtracts. `-bar`: a kebab-case key, or a subtraction of a variable.
       const subtraction = /^[0-9]/.test(rest);
-      const camel = written.replace(/-([A-Za-z0-9_])/g, (_, c: string) => c.toUpperCase());
-      const spacedOut = written.replace(/-([A-Za-z0-9_])/g, (_, c: string) => ` - ${c}`);
+      // The browser lowercases the key, dots and all, and the client raises only a lowercase letter
+      // after a hyphen (caseFns.camel in text.ts): a key a-b-1 is the signal aB-1, a-b.c-d is aB.cD,
+      // and foo-_bar keeps its name.
+      const key = written.slice(1).toLowerCase();
+      const signal = key.replace(/-[a-z]/g, (x) => x[1]!.toUpperCase());
+      const camel = `$${signal}`;
+      const spacedOut = written.replaceAll("-", " - ");
       const fixes: Fix[] = [];
-      if (!subtraction) fixes.push({ title: `Change to ${camel}`, start, end, text: camel });
+      if (!subtraction && signal !== key) fixes.push({ title: `Change to ${camel}`, start, end, text: camel });
       fixes.push({ title: `Write ${spacedOut}`, start, end, text: spacedOut });
+      const reads = `Datastar reads ${written} as one signal named ${r.name}`;
+      const subtract = `For a subtraction write ${spacedOut}, with spaces.`;
       issues.push({
         start,
         end,
         message: subtraction
-          ? `Datastar reads ${written} as one signal named ${r.name}, not as ${head} minus ${rest}. For a subtraction write ${spacedOut}, with spaces.`
-          : `Datastar reads ${written} as one signal named ${r.name}, and nothing here declares it: a key ${head.slice(1)}-${rest.split(".")[0]} is the signal ${camel}. For a subtraction write ${spacedOut}, with spaces.`,
+          ? `${reads}, not as ${head} minus ${rest}. ${subtract}`
+          : signal === key
+            ? `${reads}, and nothing here declares it: a key ${key} keeps that name, since Datastar camel-cases only a lowercase letter after a hyphen. ${subtract}`
+            : `${reads}, and nothing here declares it: a key ${key} is the signal $${signal}. ${subtract}`,
         severity: "warning",
         code: "signal-kebab",
         link: DOCS.signals,
