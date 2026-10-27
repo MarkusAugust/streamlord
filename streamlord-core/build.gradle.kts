@@ -45,3 +45,9 @@ val testNewestCoroutines =
     }
 
 tasks.check { dependsOn(testNewestCoroutines) }
+
+// The tests read these by path, so a change there must rerun them and not be served from the cache.
+tasks.withType<Test>().configureEach {
+    inputs.dir(rootProject.layout.projectDirectory.dir("conformance/client"))
+    inputs.dir(rootProject.layout.projectDirectory.dir("conformance/dom"))
+}

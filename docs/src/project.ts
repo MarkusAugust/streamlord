@@ -3,9 +3,9 @@
  * landing page and llms.txt cannot drift from the project or from each other.
  */
 
+import differential from "../../conformance/dom/merge-differential.json"
 import versionCatalog from "../../gradle/libs.versions.toml?raw"
 import gradleProperties from "../../gradle.properties?raw"
-import differential from "../../streamlord-core/src/test/resources/client-merge-differential.json"
 
 /** The promise under the name on the landing page: what the reader gets, before what it is. */
 export const CLAIM = "Write Datastar safely in Kotlin."

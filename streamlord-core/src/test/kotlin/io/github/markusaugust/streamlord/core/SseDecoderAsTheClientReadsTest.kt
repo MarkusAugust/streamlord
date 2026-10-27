@@ -8,6 +8,7 @@ import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.mergePatchAsClient
 import io.github.markusaugust.streamlord.core.protocol.SseDecoder
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -169,9 +170,10 @@ class SseDecoderAsTheClientReadsTest {
     }
 
     /**
-     * Each frame in `client-decoder-cases.json` was run through Datastar 1.0.4 built from source in
-     * happy-dom, on a page holding `<div id="wrap"><div id="target">old</div></div>` and the
-     * signal `keep: 1`, with `startViewTransition` counting its calls. None made the client throw,
+     * Each frame in `conformance/dom/decoder-cases.json` is run through the free Datastar 1.0.4
+     * bundle in happy-dom by `conformance/generate/dom.mjs`, through the client's own fetch path,
+     * on a page holding `<div id="wrap"><div id="target">old</div></div>` and the signal
+     * `keep: 1`, with `startViewTransition` counting its calls. None made the client throw,
      * so none may make the decoder throw, and each must decode to what the client did: no event
      * where the page did not change, a removal where the target went and nothing took its place,
      * the elements as sent where the client put them in, a no-break space or U+001C among them,
@@ -181,7 +183,7 @@ class SseDecoderAsTheClientReadsTest {
      */
     @Test
     fun `decodes each frame to what the client did with it`() {
-        val cases = JsonParser.parse(javaClass.getResource("/client-decoder-cases.json")!!.readText()) as JsonArray
+        val cases = JsonParser.parse(File("../conformance/dom/decoder-cases.json").readText()) as JsonArray
         assertEquals(83, cases.size)
 
         // White space as HTML counts it, which the page shows as nothing between elements.
