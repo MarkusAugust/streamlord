@@ -447,6 +447,7 @@ public final class io/github/markusaugust/streamlord/analysis/MarkupKt {
 	public static final fun rawKeyNote (Lio/github/markusaugust/streamlord/analysis/AttributeSpec;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
 	public static final fun tokenize (Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/Tokens;
 	public static final fun wireKey (Ljava/lang/String;Lio/github/markusaugust/streamlord/analysis/KeyCase;Ljava/lang/String;)Ljava/lang/String;
+	public static final fun wireKeyReads (Ljava/lang/String;)Ljava/lang/String;
 }
 
 public final class io/github/markusaugust/streamlord/analysis/MarkupOptions {

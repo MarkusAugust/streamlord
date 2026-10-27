@@ -184,8 +184,11 @@ class AnalyzerTest {
                 opts,
             )
         assertEquals(listOf("key-case", "key-case"), codes(explicit))
-        assertEquals(listOf("foo-bar", "widget-loaded"), explicit.map { it.fixes[0].text })
-        assertContains(explicit[0].message, "foo-bar__case.kebab")
+        // With __case.kebab no key gives fooBar back, since the browser lowercases it and kebab recases nothing.
+        assertEquals(emptyList(), explicit[0].fixes)
+        assertContains(explicit[0].message, "No key with __case.kebab gives fooBar back")
+        assertContains(explicit[0].message, "from foo-bar__case.kebab Datastar reads foo-bar.")
+        assertEquals(listOf("widget-loaded"), explicit[1].fixes.map { it.text })
         val custom = analyzer.analyzeHtml("<div data-style:--myColor=\"\$c\"></div>", opts)
         assertContains(
             custom.single().message,
@@ -196,6 +199,23 @@ class AnalyzerTest {
             listOf("key-case"),
             codes(analyzer.analyzeHtml("<div data-star-signals:fooBar=\"1\"></div>", AnalyzeOptions("data-star-", true))),
         )
+    }
+
+    /** The hint names what the client reads from the key, which for a signal is camelCase, and says when no key gives the name back. */
+    @Test
+    fun `hints the name the client reads from a key mixing capitals and a hyphen`() {
+        val src =
+            """
+            div {
+              dataSignals("fooBar-baz", "1")
+              dataOn("fooBar-baz", "x()")
+            }
+            """.trimIndent()
+        val hints = analyzer.analyzeKotlin(src, opts).filter { it.code == "key-case-wire" }
+        assertEquals(2, hints.size)
+        assertContains(hints[0].message, "as data-signals:foo-bar-baz, which Datastar reads back as the signal \$fooBarBaz")
+        assertContains(hints[1].message, "No key gives fooBar-baz back")
+        assertContains(hints[1].message, "reads fooBarBaz. Write it in one case.")
     }
 
     @Test

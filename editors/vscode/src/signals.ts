@@ -325,6 +325,6 @@ export function objectKeys(body: string, spread: { any: boolean } = { any: false
 }
 
 /** Datastar exposes kebab-case keys as camelCase signals by default. */
-function toCamel(name: string): string {
+export function toCamel(name: string): string {
   return name.includes("-") ? name.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase()) : name;
 }

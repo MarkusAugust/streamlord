@@ -1,9 +1,9 @@
 import { catalog, parseAttributeName, type CallSiteSpec } from "./catalog.ts";
 import { attributeDoc, DOCS, quoteAt, validateExpression, type Fix, type Issue } from "./expression.ts";
 import { PLACEHOLDER, toSource, type Interpolation, type KotlinString } from "./kotlinStrings.ts";
-import { asciiLowercase, indexOfAsciiIgnoreCase, keyReading, rawKeyNote, tokenize, validateAttributes, validateMarkup, wireKey, type Attribute, type Tag } from "./markup.ts";
+import { asciiLowercase, indexOfAsciiIgnoreCase, keyReading, rawKeyNote, tokenize, validateAttributes, validateMarkup, wireKey, wireKeyReads, type Attribute, type Tag } from "./markup.ts";
 import { findCallSites, isHtmlString, lexKotlin, namedArgText, selectStringArg, stringAt, type CallSite } from "./scanner.ts";
-import { collectSignalDefinitions } from "./signals.ts";
+import { clientKeyName, collectSignalDefinitions } from "./signals.ts";
 
 /**
  * Editor-independent analysis: Kotlin source in, issues with source offsets out.
@@ -413,7 +413,17 @@ function checkKeyCaseSite(site: CallSite, src: string): Issue[] {
   const explicitCase = explicit?.[1]?.toLowerCase() ?? null;
   if (valueUnlessCased && !explicitCase) return [];
   const wire = wireKey(name, spec.keyCase, explicitCase);
-  const what = explicitCase ? `a ${explicitCase}-cased name` : keyReading(spec, name, wire);
+  if (wire === null) {
+    return [{
+      start: key.start,
+      end: key.end,
+      message: `No key gives ${name} back: the browser lowercases attribute names, and with __case.camel or __case.pascal Datastar turns every hyphen before a lower-case letter into a capital and reads ${wireKeyReads(name)}. Write it in one case.`,
+      severity: "hint",
+      code: "key-case-wire",
+      link: attributeDoc(spec.name),
+    }];
+  }
+  const what = explicitCase ? `a ${explicitCase}-cased name` : keyReading(spec, clientKeyName(wire), wire);
   return [{
     start: key.start,
     end: key.end,

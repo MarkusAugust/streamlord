@@ -645,7 +645,22 @@ public class Analyzer(
         val explicitCase = explicit?.groupValues?.get(1)?.lowercase()
         if (valueUnlessCased && explicitCase == null) return emptyList()
         val wire = wireKey(name, spec.keyCase, explicitCase)
-        val what = if (explicitCase != null) "a $explicitCase-cased name" else keyReading(spec, name, wire)
+        if (wire == null) {
+            return listOf(
+                Issue(
+                    start = key.start,
+                    end = key.end,
+                    message =
+                        "No key gives $name back: the browser lowercases attribute names, and with __case.camel or __case.pascal " +
+                            "Datastar turns every hyphen before a lower-case letter into a capital and reads ${wireKeyReads(name)}. " +
+                            "Write it in one case.",
+                    severity = Severity.HINT,
+                    code = "key-case-wire",
+                    link = Docs.attribute(spec.name),
+                ),
+            )
+        }
+        val what = if (explicitCase != null) "a $explicitCase-cased name" else keyReading(spec, clientKeyName(wire), wire)
         return listOf(
             Issue(
                 start = key.start,

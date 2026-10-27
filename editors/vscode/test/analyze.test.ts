@@ -136,13 +136,29 @@ describe("markup", () => {
     // An explicit __case does not save a capital in the key: the browser lowercases it first.
     const explicit = analyzeHtml(`<div data-signals:fooBar__case.kebab="1" data-on:widgetLoaded__case.camel="x()"></div>`, opts);
     expect(codes(explicit)).toEqual(["key-case", "key-case"]);
-    expect(explicit.map((i) => i.fixes![0]!.text)).toEqual(["foo-bar", "widget-loaded"]);
-    expect(explicit[0]!.message).toContain("foo-bar__case.kebab");
+    // With __case.kebab no key gives fooBar back, since the browser lowercases it and kebab recases nothing.
+    expect(explicit[0]!.fixes).toEqual(undefined);
+    expect(explicit[0]!.message).toContain("No key with __case.kebab gives fooBar back");
+    expect(explicit[0]!.message).toContain("from foo-bar__case.kebab Datastar reads foo-bar.");
+    expect(explicit[1]!.fixes!.map((f) => f.text)).toEqual(["widget-loaded"]);
     const custom = analyzeHtml(`<div data-style:--myColor="$c"></div>`, opts);
     expect(custom[0]!.message).toContain("sets --mycolor, not --myColor. No form keeps a capital in a custom property: name it in kebab-case, here and in the CSS, as --my-color.");
     expect(custom[0]!.fixes).toEqual([]);
     // The aliased prefix gets the same treatment when configured.
     expect(codes(analyzeHtml(`<div data-star-signals:fooBar="1"></div>`, { prefix: "data-star-", checkHtmlAttributes: true }))).toEqual(["key-case"]);
+  });
+
+  // The hint names what the client reads from the key, which for a signal is camelCase, and says when no key gives the name back.
+  it("hints the name the client reads from a key mixing capitals and a hyphen", () => {
+    const src = `div {
+      dataSignals("fooBar-baz", "1")
+      dataOn("fooBar-baz", "x()")
+    }`;
+    const hints = analyzeKotlin(src, opts).filter((i) => i.code === "key-case-wire");
+    expect(hints.length).toBe(2);
+    expect(hints[0]!.message).toContain("as data-signals:foo-bar-baz, which Datastar reads back as the signal $fooBarBaz");
+    expect(hints[1]!.message).toContain("No key gives fooBar-baz back");
+    expect(hints[1]!.message).toContain("reads fooBarBaz. Write it in one case.");
   });
 
   it("hints what the dsl writes on the wire for a camelCase key", () => {
