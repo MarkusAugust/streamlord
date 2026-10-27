@@ -2,9 +2,12 @@
 
 package io.github.markusaugust.streamlord.html
 
+import io.github.markusaugust.streamlord.core.SignalsCodecException
 import io.github.markusaugust.streamlord.core.domain.CspNonce
 import io.github.markusaugust.streamlord.core.domain.ExpressionGuard
 import io.github.markusaugust.streamlord.core.domain.SignalNames
+import io.github.markusaugust.streamlord.core.json.JsonObject
+import io.github.markusaugust.streamlord.core.json.JsonValue
 import io.github.markusaugust.streamlord.core.json.JsonWriter
 import kotlinx.html.HTMLTag
 import io.github.markusaugust.streamlord.core.protocol.DatastarAttributes as CoreDatastarAttributes
@@ -59,6 +62,34 @@ public fun HTMLTag.dataSignals(
     ifMissing: Boolean = false,
 ) {
     attributes[ds("signals${signalMods(null, ifMissing)}")] = ExpressionGuard.check(expression)
+}
+
+/**
+ * `data-signals="{...}"` from a JSON object, such as a class encoded by your codec with
+ * [toJson][io.github.markusaugust.streamlord.core.port.driven.toJson]:
+ *
+ * ```kotlin
+ * div { dataSignals(call.streamlord.codec.toJson(Form(email = "", firstName = ""))) }
+ * ```
+ *
+ * Each field is a signal named by its key as written, `$email` and `$firstName`, the names
+ * `readSignals<Form>()` reads. A key the client cannot hold is refused ([SignalNames]), as in
+ * the pairs form.
+ */
+public fun HTMLTag.dataSignals(
+    signals: JsonValue,
+    ifMissing: Boolean = false,
+) {
+    if (signals !is JsonObject) throw SignalsCodecException("data-signals takes a JSON object, not ${signals.toJson()}")
+    for ((key, value) in signals) {
+        SignalNames
+            .keyProblem(
+                key,
+                value is Map<*, *>,
+            )?.let { throw InvalidSignalNameException(key, "is a key the client cannot hold: $it") }
+        checkKeys(value, key)
+    }
+    attributes[ds("signals${signalMods(null, ifMissing)}")] = JsonWriter.writeExpression(signals)
 }
 
 /**

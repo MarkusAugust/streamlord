@@ -13,6 +13,14 @@ All notable changes to Streamlord are recorded here. The format follows
   `pingpong`. `RafModifiers` gains `delay`, `debounce` and `viewTransition`, `ResizeModifiers`
   `delay` and `viewTransition`, as the two plugins read them. The catalog lists the same. The
   key form's JVM signature gained the modifier argument; Kotlin source compiles as before.
+- `SignalsCodec.toJson(value)` encodes a value with the codec and returns it as a `JsonValue`, and
+  `dataSignals(JsonValue)` writes a JSON object as `data-signals` with its keys as they stand. A
+  page declares its signals from the class its handler reads:
+  `dataSignals(call.streamlord.codec.toJson(SearchSignals()))` gives the names
+  `readSignals<SearchSignals>()` reads, `@SerialName` and `@JsonProperty` included. The drift check
+  counts the fields of a class named there as declared, and a value of no named class as any
+  signal. `JsLiteral` writes a `JsonNumber` with its digits as they are, where it rounded through
+  `Long` or `Double`.
 - `ElementsGuard.evaluatedAttributes`: the attributes whose value Datastar runs as JavaScript,
   the expression attributes and the four signal filters.
 - `conformance/`: what Datastar's client and the servers actually do, as fixtures the tests hold

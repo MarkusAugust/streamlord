@@ -71,6 +71,28 @@ class SignalDriftTest {
         assertTrue(drift("page.html" to html(page), "Routes.kt" to kotlin(handler)).isEmpty())
     }
 
+    // dataSignals(codec.toJson(SearchSignals())) declares what the codec writes, which is what readSignals reads.
+    @Test
+    fun `a page that declares its signals from the class declares the class's properties`() {
+        val fromClass = "fun page() = div { dataSignals(call.streamlord.codec.toJson(SearchSignals())) }"
+        assertEquals(emptyMap(), drift("Page.kt" to kotlin(fromClass), "Routes.kt" to kotlin(handler)))
+        val typed = "fun page() = div { dataSignals(codec.toJson<SearchSignals>(signals)) }"
+        assertEquals(emptyMap(), drift("Page.kt" to kotlin(typed), "Routes.kt" to kotlin(handler)))
+        // Another class declares other names, and nested under a pair the fields are no top-level signals.
+        val other = "fun page() = div { dataSignals(codec.toJson(Other())) }\n@Serializable data class Other(val x: Int = 0)"
+        assertTrue(drift("Page.kt" to kotlin(other), "Routes.kt" to kotlin(handler)).isNotEmpty())
+        val nested = "fun page() = div { dataSignals(\"form\" to codec.toJson(SearchSignals())) }"
+        assertTrue(drift("Page.kt" to kotlin(nested), "Routes.kt" to kotlin(handler)).isNotEmpty())
+    }
+
+    // A variable or a Jackson class: only the codec knows the names, so the page may declare any.
+    @Test
+    fun `a value whose class the check cannot read may declare any signal`() {
+        for (page in listOf("dataSignals(codec.toJson(signals))", "dataSignals(codec.toJson(JacksonForm()))")) {
+            assertEquals(emptyMap(), drift("Page.kt" to kotlin("fun page() = div { $page }"), "Routes.kt" to kotlin(handler)), page)
+        }
+    }
+
     @Test
     fun `a serializable class nobody reads signals into is left alone`() {
         val dto =

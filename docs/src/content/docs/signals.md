@@ -75,6 +75,28 @@ saves you the elvis. Defaults on the data class matter more than usual here, bec
 sends only the signals it has: a page that never set `page` sends no `page`, and the default is
 what the handler gets.
 
+## Declaring them from the class
+
+The page that sends those signals can declare them from the same class, so the names cannot drift
+apart. `toJson` encodes a value with the codec and hands the DSL a JSON object, whose keys become
+the page's signals as written:
+
+```kotlin sample=ktor-routing
+get("/search") {
+    call.respondElements(elements {
+        div { dataSignals(call.streamlord.codec.toJson(SearchSignals())) }
+    })
+}
+```
+
+That writes `data-signals="{"query":"","page":1}"`, the names `readSignalsOr(SearchSignals())`
+reads. The codec chooses them, so a `@SerialName` or a Jackson `@JsonProperty` reaches the page
+too. Pass the value as a pair, `"search" to codec.toJson(...)`, and the fields land under
+`$search` instead, where a read into `SearchSignals` will not find them.
+
+The built-in codec cannot encode a data class either, so `toJson` needs the codec from step one.
+In Spring, take it from the `Streamlord` bean.
+
 ## The type is the input surface
 
 A page carries every signal it has ever set, and the browser sends the whole store back on every

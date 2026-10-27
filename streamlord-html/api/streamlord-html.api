@@ -65,9 +65,11 @@ public final class io/github/markusaugust/streamlord/html/AttributesKt {
 	public static final fun dataRef (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;)V
 	public static synthetic fun dataRef$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;ILjava/lang/Object;)V
 	public static final fun dataShow (Lkotlinx/html/HTMLTag;Ljava/lang/String;)V
+	public static final fun dataSignals (Lkotlinx/html/HTMLTag;Lio/github/markusaugust/streamlord/core/json/JsonValue;Z)V
 	public static final fun dataSignals (Lkotlinx/html/HTMLTag;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;Z)V
 	public static final fun dataSignals (Lkotlinx/html/HTMLTag;Ljava/lang/String;Z)V
 	public static final fun dataSignals (Lkotlinx/html/HTMLTag;[Lkotlin/Pair;Z)V
+	public static synthetic fun dataSignals$default (Lkotlinx/html/HTMLTag;Lio/github/markusaugust/streamlord/core/json/JsonValue;ZILjava/lang/Object;)V
 	public static synthetic fun dataSignals$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;ZILjava/lang/Object;)V
 	public static synthetic fun dataSignals$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;ZILjava/lang/Object;)V
 	public static synthetic fun dataSignals$default (Lkotlinx/html/HTMLTag;[Lkotlin/Pair;ZILjava/lang/Object;)V

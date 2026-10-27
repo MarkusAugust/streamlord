@@ -59,6 +59,27 @@ private val PAIR_CALLS = setOf("dataSignals", "patchSignals", "removeSignals", "
 private val JSON_CALLS = setOf("patchSignals", "respondSignals", "datastarSignals")
 private val JSON_OBJECT = Regex("""^\s*\{""")
 
+/**
+ * `toJson(...)` handed to `dataSignals`: the page declares what the codec makes of the value. The
+ * class is named by `toJson<Form>(...)` or by a constructor call, `toJson(Form(...))`.
+ */
+private val TO_JSON = Regex("""\btoJson\s*(?:<\s*([A-Za-z_][A-Za-z0-9_.]*)\s*>)?\s*\(\s*(?:([A-Z][A-Za-z0-9_]*)\s*\()?""")
+
+/**
+ * The classes whose encoded fields `dataSignals(codec.toJson(...))` declares in [src], by simple
+ * name, and [ANY_SIGNAL] for a value whose class the call does not name, such as `toJson(form)`.
+ */
+internal fun encodedSignalTypes(src: String): Set<String> {
+    val out = LinkedHashSet<String>()
+    for (site in findCallSites(src, setOf("dataSignals"))) {
+        val a = site.positional.firstOrNull() ?: site.named("signals") ?: continue
+        if (a.string != null || PAIR.containsMatchIn(a.text)) continue
+        val m = TO_JSON.find(a.text) ?: continue
+        out += m.groups[1]?.value?.substringAfterLast('.') ?: m.groups[2]?.value ?: ANY_SIGNAL
+    }
+    return out
+}
+
 /** The argument as one pair; a `"k" to` further in is a key inside the value, which declares nothing on its own. */
 private val PAIR = Regex("""^\s*"([A-Za-z_][A-Za-z0-9_.-]*)"\s+to\b""")
 private val NAME = Regex("""^"([A-Za-z_][A-Za-z0-9_.-]*)"$""")
@@ -103,6 +124,9 @@ public fun collectSignalDefinitions(
         for (properties in serializableProperties(src).values) for (property in properties) out += property.name
     }
     for (m in ASSIGNED_SIGNAL.findAll(src)) out += m.groupValues[1]
+    // A class named in toJson is a @Serializable one whose properties are defined above, or one
+    // whose names only the codec knows; a value of no named class may hold any signal.
+    if (language == SourceLanguage.KOTLIN && ANY_SIGNAL in encodedSignalTypes(src)) out += ANY_SIGNAL
     out.removeAll { PLACEHOLDER in it }
     return out
 }

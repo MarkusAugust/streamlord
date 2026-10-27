@@ -37,12 +37,15 @@ public data class SignalProperty(
  * @property signalTypes Types the file reads signals into, by their simple name.
  * @property classes The `@Serializable` classes the file declares, by simple name.
  * @property lookups Names read by a `Signals` accessor, such as `signals.string("query")`.
+ * @property encodedTypes Classes a page declares its signals from, `dataSignals(codec.toJson(Form()))`,
+ *   by simple name, with `*` for a value whose class the call does not name.
  */
 public data class SignalFacts(
     val declared: Set<String>,
     val signalTypes: Set<String>,
     val classes: Map<String, List<SignalProperty>>,
     val lookups: List<SignalRead>,
+    val encodedTypes: Set<String> = emptySet(),
 )
 
 private val SIGNAL_TYPE_PARAMETER = Regex("""\breadSignals\s*<\s*([A-Za-z_][A-Za-z0-9_]*)\s*>""")
@@ -108,7 +111,7 @@ public fun collectSignalFacts(
         lookups += SignalRead(first.text, first.contentStart, first.contentEnd)
     }
 
-    return SignalFacts(collectDeclaredSignals(src, language), types, serializableProperties(src), lookups)
+    return SignalFacts(collectDeclaredSignals(src, language), types, serializableProperties(src), lookups, encodedSignalTypes(src))
 }
 
 /** Whether the accessor whose name starts at [nameStart] is called on something that holds signals. */
@@ -215,6 +218,13 @@ public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
     val signalTypes = facts.values.flatMapTo(LinkedHashSet()) { it.signalTypes }
     val read = LinkedHashSet<String>()
 
+    // A page that declares its signals from an encoded class declares that class's properties. A
+    // class this check cannot read, a Jackson one or none named, may declare any name.
+    val classes = facts.values.flatMap { it.classes.entries }.associate { it.key to it.value }
+    val encoded = facts.values.flatMapTo(LinkedHashSet()) { it.encodedTypes }
+    for (type in encoded) classes[type]?.forEach { declared += it.name }
+    val anyDeclared = encoded.any { it !in classes }
+
     val out = LinkedHashMap<String, List<Issue>>()
     for ((file, one) in facts) {
         val issues = ArrayList<Issue>()
@@ -223,7 +233,7 @@ public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
             if (type !in signalTypes) continue
             for (property in properties) {
                 read += property.name
-                if (property.name in declared) continue
+                if (property.name in declared || anyDeclared) continue
                 issues +=
                     Issue(
                         start = property.start,
@@ -240,7 +250,7 @@ public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
 
         for (lookup in one.lookups) {
             read += lookup.name
-            if (lookup.name in declared) continue
+            if (lookup.name in declared || anyDeclared) continue
             issues +=
                 Issue(
                     start = lookup.start,

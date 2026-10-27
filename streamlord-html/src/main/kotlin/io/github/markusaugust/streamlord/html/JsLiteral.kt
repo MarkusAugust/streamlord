@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.html
 
 import io.github.markusaugust.streamlord.core.SignalsCodecException
+import io.github.markusaugust.streamlord.core.json.JsonNumber
 import io.github.markusaugust.streamlord.core.json.JsonValue
 import io.github.markusaugust.streamlord.core.json.JsonWriter
 
@@ -70,8 +71,10 @@ public object JsLiteral {
 
             is Enum<*> -> sb.append(string(value.name))
 
-            is JsonValue -> appendValue(sb, value.toKotlin())
+            // As written, since a Long or Double would round 12345678901234567890 or 0.1000000000000000055.
+            is JsonNumber -> sb.append(value.text)
 
+            // A JsonObject or JsonArray is a Map or a List, so the numbers in it come here one by one.
             is Map<*, *> -> appendMap(sb, value)
 
             is Iterable<*> -> appendAll(sb, value)
@@ -87,6 +90,8 @@ public object JsLiteral {
             is DoubleArray -> appendAll(sb, value.asIterable())
 
             is BooleanArray -> appendAll(sb, value.asIterable())
+
+            is JsonValue -> appendValue(sb, value.toKotlin())
 
             null, is Boolean, is Number -> sb.append(JsonWriter.write(value))
 

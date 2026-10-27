@@ -1,7 +1,9 @@
 package io.github.markusaugust.streamlord.html
 
+import io.github.markusaugust.streamlord.core.SignalsCodecException
 import io.github.markusaugust.streamlord.core.domain.ExpressionGuard
 import io.github.markusaugust.streamlord.core.domain.InterpolatedExpressionException
+import io.github.markusaugust.streamlord.core.json.JsonParser
 import kotlinx.html.DIV
 import kotlinx.html.button
 import kotlinx.html.div
@@ -185,6 +187,24 @@ class AsTheClientReadsItTest {
         )
         assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("foo-bar" to 1, "fooBar" to 2) } } }
         assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("a" to mapOf("__proto__" to 1)) } } }
+    }
+
+    // The client merges the object as it is, so a codec's names reach the page as the handler reads them.
+    @Test
+    fun `a JSON object declares its keys as written`() {
+        val json = JsonParser.parse("""{"email":"","first-name":"","big":12345678901234567890,"tags":[0.10000000000000000555]}""")
+        assertEquals(
+            """<div data-signals="{&quot;email&quot;:&quot;&quot;,&quot;first-name&quot;:&quot;&quot;,""" +
+                """&quot;big&quot;:12345678901234567890,&quot;tags&quot;:[0.10000000000000000555]}"></div>""",
+            elements { div { dataSignals(json) } },
+        )
+        assertEquals(
+            "\$o = {big: 12345678901234567890, tags: [0.10000000000000000555]}",
+            set("o", JsonParser.parse("""{"big":12345678901234567890,"tags":[0.10000000000000000555]}""")),
+        )
+        assertFailsWith<SignalsCodecException> { elements { div { dataSignals(JsonParser.parse("[1]")) } } }
+        assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals(JsonParser.parse("""{"a.b":1}""")) } } }
+        assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals(JsonParser.parse("""{"a":{"__proto__":1}}""")) } } }
     }
 
     // data-signals:a.b nests, and the pairs form now does too; a dotted key inside a map the client

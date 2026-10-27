@@ -54,6 +54,28 @@ const PROPERTY = /(?:@SerialName\(\s*(?:value\s*=\s*)?"([^"]*)"\s*\)\s*(?:@\w+(?
 
 const PAIR_CALLS: ReadonlySet<string> = new Set(["dataSignals", "patchSignals", "removeSignals", "respondSignals", "datastarSignals"]);
 const JSON_CALLS: ReadonlySet<string> = new Set(["patchSignals", "respondSignals", "datastarSignals"]);
+/**
+ * `toJson(...)` handed to `dataSignals`: the page declares what the codec makes of the value. The
+ * class is named by `toJson<Form>(...)` or by a constructor call, `toJson(Form(...))`.
+ */
+const TO_JSON = /\btoJson\s*(?:<\s*([A-Za-z_][A-Za-z0-9_.]*)\s*>)?\s*\(\s*(?:([A-Z][A-Za-z0-9_]*)\s*\()?/;
+
+/**
+ * The classes whose encoded fields `dataSignals(codec.toJson(...))` declares in `src`, by simple
+ * name, and `ANY_SIGNAL` for a value whose class the call does not name, such as `toJson(form)`.
+ */
+export function encodedSignalTypes(src: string): Set<string> {
+  const out = new Set<string>();
+  for (const site of findCallSites(src, new Set(["dataSignals"]))) {
+    const a = site.args.find((x) => x.named === null) ?? site.args.find((x) => x.named === "signals");
+    if (!a || a.string || PAIR.test(a.text)) continue;
+    const m = TO_JSON.exec(a.text);
+    if (!m) continue;
+    out.add(m[1]?.split(".").pop() ?? m[2] ?? ANY_SIGNAL);
+  }
+  return out;
+}
+
 /** The argument as one pair; a `"k" to` further in is a key inside the value, which declares nothing on its own. */
 const PAIR = /^\s*"([A-Za-z_][A-Za-z0-9_.-]*)"\s+to\b/;
 const NAME = /^"([A-Za-z_][A-Za-z0-9_.-]*)"$/;
@@ -70,6 +92,9 @@ export function collectSignals(src: string, language: "kotlin" | "html"): Set<st
 export function collectSignalDefinitions(src: string, language: "kotlin" | "html"): Set<string> {
   const out = collect(src, language, false);
   for (const m of src.matchAll(ASSIGNED_SIGNAL)) if (m[1] && !m[1].includes(PLACEHOLDER)) out.add(m[1]);
+  // A class named in toJson is a @Serializable one whose properties are defined above, or one
+  // whose names only the codec knows; a value of no named class may hold any signal.
+  if (language === "kotlin" && encodedSignalTypes(src).has(ANY_SIGNAL)) out.add(ANY_SIGNAL);
   return out;
 }
 

@@ -18,7 +18,10 @@ import kotlin.reflect.typeOf
  * Implementations must be thread-safe: one codec serves every request.
  */
 public interface SignalsCodec {
-    /** Encode [value] (whose static type is [type]) as a JSON object text. */
+    /**
+     * Encode [value] (whose static type is [type]) as JSON text: an object for a page's signals,
+     * any JSON value for one of them.
+     */
     public fun encode(
         value: Any?,
         type: KType,
@@ -36,6 +39,26 @@ public inline fun <reified T> SignalsCodec.encode(value: T): String = encode(val
 
 /** Decode with the target type inferred at the call site. */
 public inline fun <reified T : Any> SignalsCodec.decode(json: String): T = decode(json, typeOf<T>())
+
+/**
+ * [value] encoded by this codec, as a [JsonValue] the HTML DSL writes as it stands: the same
+ * names and shapes a handler's `readSignals` decodes and its `patchSignals` sends, so a page can
+ * declare its signals from the class that reads them.
+ *
+ * ```kotlin
+ * div { dataSignals(call.streamlord.codec.toJson(Form(email = ""))) }
+ * ```
+ *
+ * The codec decides the names: `@SerialName` with kotlinx.serialization, `@JsonProperty` with
+ * Jackson. The built-in codec encodes maps, lists and primitives, and throws for a data class.
+ */
+public fun SignalsCodec.toJson(
+    value: Any?,
+    type: KType,
+): JsonValue = JsonParser.parse(encode(value, type))
+
+/** [toJson] with the static type inferred at the call site. */
+public inline fun <reified T> SignalsCodec.toJson(value: T): JsonValue = toJson(value, typeOf<T>())
 
 /**
  * The codec that ships inside the core: dependency-free, honest about its limits.

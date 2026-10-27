@@ -609,6 +609,10 @@ public abstract interface class io/github/markusaugust/streamlord/core/port/driv
 	public abstract fun encode (Ljava/lang/Object;Lkotlin/reflect/KType;)Ljava/lang/String;
 }
 
+public final class io/github/markusaugust/streamlord/core/port/driven/SignalsCodecKt {
+	public static final fun toJson (Lio/github/markusaugust/streamlord/core/port/driven/SignalsCodec;Ljava/lang/Object;Lkotlin/reflect/KType;)Lio/github/markusaugust/streamlord/core/json/JsonValue;
+}
+
 public abstract interface class io/github/markusaugust/streamlord/core/port/driven/SseSink {
 	public abstract fun flush (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun write (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;

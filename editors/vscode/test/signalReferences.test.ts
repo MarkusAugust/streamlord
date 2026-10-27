@@ -42,6 +42,14 @@ describe("signal references", () => {
     assert.ok(collectSignals(src, "kotlin").has("cuont"));
   });
 
+  it("a page declared from toJson defines its class's fields, or any name", () => {
+    const named = `@Serializable data class Form(val email: String = "")
+fun page() = div { dataSignals(codec.toJson(Form())); dataText(signal("emial")) }`;
+    assert.deepEqual(unknown(named).map((i) => named.slice(i.start, i.end)), ["emial"]);
+    const variable = `fun page(form: Form) = div { dataSignals(codec.toJson(form)); dataText(signal("emial")) }`;
+    assert.deepEqual(unknown(variable), []);
+  });
+
   it("a near name is offered as the fix, and the dollar is kept as written", () => {
     const src = `fun f() = """<div data-signals:count="0" data-text="\${'$'}coutn"></div>"""`;
     const [issue] = unknown(src);

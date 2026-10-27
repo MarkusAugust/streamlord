@@ -97,6 +97,20 @@ class SignalReferencesTest {
         assertTrue("cuont" in collectSignals(src, SourceLanguage.KOTLIN))
     }
 
+    // The codec names the fields; for a named @Serializable class the analysis reads them, for a
+    // value of no named class it cannot, so any name is defined.
+    @Test
+    fun `a page declared from toJson defines its class's fields, or any name`() {
+        val named =
+            """
+            @Serializable data class Form(val email: String = "")
+            fun page() = div { dataSignals(codec.toJson(Form())); dataText(signal("emial")) }
+            """.trimIndent()
+        assertEquals(listOf("emial"), unknown(named).map { named.substring(it.start, it.end) })
+        val variable = "fun page(form: Form) = div { dataSignals(codec.toJson(form)); dataText(signal(\"emial\")) }"
+        assertEquals(emptyList(), unknown(variable))
+    }
+
     @Test
     fun `markup files read bare signals without defining them`() {
         val html = "<div data-signals:count=\"0\"><span data-text=\"\$cuont\"></span><span data-text=\"\$count\"></span></div>"
