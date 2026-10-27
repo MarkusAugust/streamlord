@@ -46,4 +46,11 @@ gradle.allprojects {
     configurations.matching { it.name.startsWith("dokka") }.configureEach {
         resolutionStrategy.eachDependency(raise)
     }
+    // The IntelliJ Platform test framework pins Jackson 2.19.0. Only test configurations, so what
+    // the plugin bundles is left as it is.
+    pluginManager.withPlugin("org.jetbrains.intellij.platform") {
+        configurations.matching { it.name.contains("test", ignoreCase = true) }.configureEach {
+            resolutionStrategy.eachDependency(raise)
+        }
+    }
 }

@@ -44,13 +44,22 @@ val oldestKtorTest: SourceSet = sourceSets.create("oldestKtorTest") {
 
 configurations.named("oldestKtorTestImplementation") { extendsFrom(configurations.testImplementation.get()) }
 dependencies {
-    // Ktor 3.0's Netty raised past its advisories, the way install.md tells a user on Ktor 3.0 to.
+    // Ktor 3.0's Netty, Jetty and Tomcat raised past their advisories, the way install.md tells a
+    // user on Ktor 3.0 to.
     "oldestKtorTestImplementation"(platform(libs.netty.bom.oldestKtor))
+    "oldestKtorTestImplementation"(platform(libs.jetty.bom.oldestKtor))
 }
 configurations.named("oldestKtorTestRuntimeOnly") { extendsFrom(configurations.testRuntimeOnly.get()) }
+val tomcatOldestKtorVersion = libs.versions.tomcatOldestKtor.get()
 listOf("oldestKtorTestCompileClasspath", "oldestKtorTestRuntimeClasspath").forEach { name ->
     configurations.named(name) {
-        resolutionStrategy.eachDependency { if (requested.group == "io.ktor") useVersion(ktorOldestVersion) }
+        resolutionStrategy.eachDependency {
+            if (requested.group == "io.ktor") useVersion(ktorOldestVersion)
+            // Tomcat has no BOM.
+            if (requested.group.startsWith("org.apache.tomcat") && requested.version?.startsWith("10.1.") == true) {
+                useVersion(tomcatOldestKtorVersion)
+            }
+        }
     }
 }
 

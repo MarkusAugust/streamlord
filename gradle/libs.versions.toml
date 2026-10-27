@@ -19,6 +19,10 @@ ktorOldest = "3.0.0"
 # it to, so the promise is tested on what users are told to run. It stays on 4.1, the line
 # Ktor 3.0 was built against.
 nettyOldestKtor = "4.1.139.Final"
+# The same for Ktor 3.0's Tomcat and Jetty engines, which bring Tomcat 10.1.30 and Jetty 11.0.24.
+# 11.0.26 is the last Jetty 11 on Maven Central, and it still has advisories install.md names.
+tomcatOldestKtor = "10.1.61"
+jettyOldestKtor = "11.0.26"
 spring = "7.0.9"
 servlet = "6.1.0"
 # Spring Boot 4.0.8 pins 11.0.24, which has three advisories fixed in 11.0.25; the tests run the current 11.0 line.
@@ -60,6 +64,7 @@ ktor-server-cors = { module = "io.ktor:ktor-server-cors", version.ref = "ktor" }
 ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
 # Test-only, for :streamlord-ktor's testOldestKtor; see nettyOldestKtor.
 netty-bom-oldestKtor = { module = "io.netty:netty-bom", version.ref = "nettyOldestKtor" }
+jetty-bom-oldestKtor = { module = "org.eclipse.jetty:jetty-bom", version.ref = "jettyOldestKtor" }
 spring-web = { module = "org.springframework:spring-web", version.ref = "spring" }
 spring-webmvc = { module = "org.springframework:spring-webmvc", version.ref = "spring" }
 spring-test = { module = "org.springframework:spring-test", version.ref = "spring" }
