@@ -132,6 +132,26 @@ describe("completion provider", () => {
     assert.ok(elsewhere.includes("evt") && !elsewhere.includes("patch"), elsewhere.join());
   });
 
+  it("finds the attribute name after other attributes, in time on any line", () => {
+    const pdoc = (src: string) => new MockDocument(src, "pebble");
+    for (const tag of [
+      `<div id=x title="a b" data-x='c' hidden data-`,
+      `<input {% if user.admin == true %}checked{% endif %} data-`,
+      `<div {{ a == b ? 'x' : 'y' }} data-`,
+      "<a href=/x?a=b data-attr:title=`x` id= data-",
+    ]) {
+      assert.ok(complete(pdoc(tag), 0, tag.length, index).some((i) => i.label === "data-on"), tag);
+    }
+    const escaped = `val html = "<div class=\\"card\\" data-`;
+    assert.ok(complete(new MockDocument(escaped, "kotlin"), 0, escaped.length, index).some((i) => i.label === "data-on"), escaped);
+    // CodeQL's input, as long as the 400 characters the provider reads, ending in a quote no value
+    // regex takes; it never finished before.
+    const hostile = "<A " + "!= ".repeat(132) + "'";
+    const started = performance.now();
+    complete(pdoc(hostile), 0, hostile.length, index);
+    assert.ok(performance.now() - started < 1000, `${Math.round(performance.now() - started)} ms`);
+  });
+
   it("offers signals inside html attribute values", () => {
     const hdoc = new MockDocument(`<div data-text="$`, "html");
     const items = complete(hdoc, 0, 17, index);
