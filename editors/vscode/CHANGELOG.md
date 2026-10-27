@@ -2,6 +2,13 @@
 
 All notable changes to the Streamlord extension are recorded here.
 
+## 0.9.1
+
+- Security: the extension no longer hangs on a line such as `<a != != … '`. Finding the attribute
+  name being typed took time exponential in the line's length (CodeQL `js/redos`), so 400
+  characters before the cursor could keep the extension host busy for minutes. The tag is now
+  read in one pass; completion offers the same names it did.
+
 ## 0.9.0
 
 - Expressions are judged as Datastar's client compiles them. Every `$name.path` is rewritten
