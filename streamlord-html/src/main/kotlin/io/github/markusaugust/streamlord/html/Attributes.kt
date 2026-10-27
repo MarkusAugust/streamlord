@@ -36,8 +36,9 @@ private fun ds(suffix: String): String = DatastarAttributes.name(suffix)
 /*
  * The `data-*` attributes of Datastar 1.0.4 as kotlinx.html extension functions.
  *
- * Every function writes exactly one attribute with the exact key Datastar parses, modifiers
- * included. kotlinx.html escapes the values for the attribute context.
+ * Every function writes one attribute with the exact key Datastar parses, modifiers included,
+ * but [dataOnSignalPatch], whose filter is a second one. kotlinx.html escapes the values for the
+ * attribute context.
  *
  * Every expression passes [ExpressionGuard] first. `$` starts a template in Kotlin strings, so
  * `"$count++"` reaches the DSL as `"++"`; the guard throws [InterpolatedExpressionException]

@@ -21,8 +21,9 @@ public data class SignalReference(
 /**
  * The signals an expression reads, with offsets relative to [text]: what the client rewrites as a
  * signal where JavaScript runs it (see [clientSignalReads]), shared with `signalReferences.ts`. A
- * `$foo-bar` is left to the `signal-kebab` check, and a name opening with a digit is no name a
- * page declares.
+ * `$foo-bar` is left to the `signal-kebab` check. A name opening with a digit, which the client
+ * reads and `data-signals:123` declares, is left out too: no check of this module is written
+ * for one.
  */
 internal fun expressionSignalReferences(text: String): List<SignalReference> =
     clientSignalReads(text)

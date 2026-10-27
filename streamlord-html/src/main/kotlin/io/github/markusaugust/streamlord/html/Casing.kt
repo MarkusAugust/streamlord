@@ -163,8 +163,8 @@ public object Casing {
      * [written], the key and modifiers of an attribute that declares the signal [name], once the
      * name Datastar's client reads from it is one it can hold. The browser lowercases the key, the
      * client cuts it at the first `__` and applies each `__case` it is given, so `constructor_`
-     * with `__ifmissing` is read as `constructor`, and `_-proto-_` with `__case.snake` as
-     * `__proto__` (`parseAttributeKey` in engine.ts, `modifyCasing` in text.ts).
+     * with `__ifmissing` is read as `constructor`, and `to-string` with `__case.camel` as
+     * `toString` (`parseAttributeKey` in engine.ts, `modifyCasing` in text.ts).
      */
     public fun heldKey(
         name: String,
