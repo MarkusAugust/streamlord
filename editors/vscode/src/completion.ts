@@ -100,7 +100,10 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
       return [];
     }
     // On an attribute name inside a tag: <div data-on:cl|
-    const inName = /<([A-Za-z][A-Za-z0-9:-]*)(?:\s+[^\s<>]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'>]*))?)*\s+([^\s<>="']*)$/.exec(before);
+    // What comes before is whitespace-separated runs of plain characters and quoted strings, each
+    // character read one way only. Telling names from values instead made `<a != != …` backtrack
+    // exponentially, and anything stricter than this loses template code and Kotlin's \" quotes.
+    const inName = /<([A-Za-z][A-Za-z0-9:-]*)(?:\s+(?:[^\s<>"']|"[^"]*"|'[^']*')+)*\s+([^\s<>="']*)$/.exec(before);
     if (!inName) return [];
     const partial = inName[2] ?? "";
     const tagName = (inName[1] ?? "").toLowerCase();

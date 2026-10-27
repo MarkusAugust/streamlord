@@ -371,7 +371,7 @@ jobs:
             esac
           done
           if [ -n "$missing" ]; then
-            echo "::error::the binary needs$missing, which gcr.io/distroless/base-debian12 does not carry"
+            echo "::error::the binary needs$missing, which gcr.io/distroless/base-debian13 does not carry"
             exit 1
           fi
           echo "  glibc only, as --static-nolibc promises"
