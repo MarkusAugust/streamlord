@@ -6,6 +6,19 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- The install page says why a scanner on a Spring Boot application reports an older
+  `jackson-databind` than Streamlord asks for, and how to raise it. Boot's dependency management
+  wins over the codec's version, and every released Boot pins one with a published advisory:
+  3.1.7 and 2.21.7 on Boot 4.1.2 and 2.21.4 on Boot 3.5.16, which have CVE-2026-110879, fixed in
+  3.1.8 and 2.21.8. The page gives Boot 4's and Boot 3's properties, whose names differ, for Maven
+  and for Gradle with `io.spring.dependency-management`, where a `platform(...)` line for Jackson
+  has no effect. Streamlord 0.13.0 and older ask for 3.2.3 and
+  2.22.3, which have it too.
+- streamlord-live, the service behind the documentation site, runs on distroless Debian 13.
+  Debian 12's distroless image had not taken Debian's `libssl3` fixes, among them one rated high.
+
 ## [0.14.0] - 2026-10-23
 
 ### Added
