@@ -45,46 +45,137 @@ private fun requireDuration(
 
 private fun ds(suffix: String): String = DatastarAttributes.name(suffix)
 
-/** Modifiers for `data-on-resize`. */
+// The timing wrapper the Pro listeners share with the free ones, in the free builders' order.
+private fun StringBuilder.appendTiming(
+    delay: Duration?,
+    debounce: Duration?,
+    debounceLeading: Boolean,
+    debounceNoTrailing: Boolean,
+    throttle: Duration?,
+    throttleNoLeading: Boolean,
+    throttleTrailing: Boolean,
+) {
+    requireDuration(debounce, "debounceLeading" to debounceLeading, "debounceNoTrailing" to debounceNoTrailing, name = "debounce")
+    requireDuration(throttle, "throttleNoLeading" to throttleNoLeading, "throttleTrailing" to throttleTrailing, name = "throttle")
+    delay?.let { append("__delay.").append(it.ms()) }
+    debounce?.let {
+        append("__debounce.").append(it.ms())
+        if (debounceLeading) append(".leading")
+        if (debounceNoTrailing) append(".notrailing")
+    }
+    throttle?.let {
+        append("__throttle.").append(it.ms())
+        if (throttleNoLeading) append(".noleading")
+        if (throttleTrailing) append(".trailing")
+    }
+}
+
+/** Modifiers for `data-on-resize`: the timing of `data-on` and `__viewtransition`. */
 public class ResizeModifiers {
+    public var delay: Duration? = null
     public var debounce: Duration? = null
     public var debounceLeading: Boolean = false
     public var debounceNoTrailing: Boolean = false
     public var throttle: Duration? = null
     public var throttleNoLeading: Boolean = false
     public var throttleTrailing: Boolean = false
+    public var viewTransition: Boolean = false
 
     internal fun build(): String =
         buildString {
-            requireDuration(debounce, "debounceLeading" to debounceLeading, "debounceNoTrailing" to debounceNoTrailing, name = "debounce")
-            requireDuration(throttle, "throttleNoLeading" to throttleNoLeading, "throttleTrailing" to throttleTrailing, name = "throttle")
-            debounce?.let {
-                append("__debounce.").append(it.ms())
-                if (debounceLeading) append(".leading")
-                if (debounceNoTrailing) append(".notrailing")
-            }
-            throttle?.let {
-                append("__throttle.").append(it.ms())
-                if (throttleNoLeading) append(".noleading")
-                if (throttleTrailing) append(".trailing")
-            }
+            appendTiming(delay, debounce, debounceLeading, debounceNoTrailing, throttle, throttleNoLeading, throttleTrailing)
+            if (viewTransition) append("__viewtransition")
         }
 }
 
-/** Modifiers for `data-on-raf`. */
+/** Modifiers for `data-on-raf`: the timing of `data-on` and `__viewtransition`. */
 public class RafModifiers {
+    public var delay: Duration? = null
+    public var debounce: Duration? = null
+    public var debounceLeading: Boolean = false
+    public var debounceNoTrailing: Boolean = false
     public var throttle: Duration? = null
     public var throttleNoLeading: Boolean = false
     public var throttleTrailing: Boolean = false
+    public var viewTransition: Boolean = false
 
     internal fun build(): String =
         buildString {
-            requireDuration(throttle, "throttleNoLeading" to throttleNoLeading, "throttleTrailing" to throttleTrailing, name = "throttle")
-            throttle?.let {
-                append("__throttle.").append(it.ms())
-                if (throttleNoLeading) append(".noleading")
-                if (throttleTrailing) append(".trailing")
-            }
+            appendTiming(delay, debounce, debounceLeading, debounceNoTrailing, throttle, throttleNoLeading, throttleTrailing)
+            if (viewTransition) append("__viewtransition")
+        }
+}
+
+/**
+ * The easing curves `data-animate__ease.<name>` can name. The names are Datastar Pro's; the Pro
+ * bundle you license and load is what gives them meaning, and nothing but the names is here.
+ */
+public enum class Easing(
+    public val wire: String,
+) {
+    LINEAR("linear"),
+    QUADRATIC("quadratic"),
+    CUBIC("cubic"),
+    ELASTIC("elastic"),
+    IN_QUAD("inquad"),
+    OUT_QUAD("outquad"),
+    IN_OUT_QUAD("inoutquad"),
+    IN_CUBIC("incubic"),
+    OUT_CUBIC("outcubic"),
+    IN_OUT_CUBIC("inoutcubic"),
+    IN_QUART("inquart"),
+    OUT_QUART("outquart"),
+    IN_OUT_QUART("inoutquart"),
+    IN_QUINT("inquint"),
+    OUT_QUINT("outquint"),
+    IN_OUT_QUINT("inoutquint"),
+    IN_SINE("insine"),
+    OUT_SINE("outsine"),
+    IN_OUT_SINE("inoutsine"),
+    IN_EXPO("inexpo"),
+    OUT_EXPO("outexpo"),
+    IN_OUT_EXPO("inoutexpo"),
+    IN_CIRC("incirc"),
+    OUT_CIRC("outcirc"),
+    IN_OUT_CIRC("inoutcirc"),
+    IN_ELASTIC("inelastic"),
+    OUT_ELASTIC("outelastic"),
+    IN_OUT_ELASTIC("inoutelastic"),
+    IN_BACK("inback"),
+    OUT_BACK("outback"),
+    IN_OUT_BACK("inoutback"),
+    IN_BOUNCE("inbounce"),
+    OUT_BOUNCE("outbounce"),
+    IN_OUT_BOUNCE("inoutbounce"),
+    IN_GOLDEN("ingolden"),
+    OUT_GOLDEN("outgolden"),
+    IN_OUT_GOLDEN("inoutgolden"),
+}
+
+/** Modifiers for `data-animate`. */
+public class AnimateModifiers {
+    /** How long the animation runs; Datastar Pro's default is one second. */
+    public var duration: Duration? = null
+
+    /** How long to wait before it starts. */
+    public var delay: Duration? = null
+
+    /** The curve it follows; Datastar Pro's default is [Easing.LINEAR]. */
+    public var ease: Easing? = null
+
+    /** Start over from the start value when the animation ends. */
+    public var loop: Boolean = false
+
+    /** Run back to the start value when the animation ends, and so on. */
+    public var pingpong: Boolean = false
+
+    internal fun build(): String =
+        buildString {
+            duration?.let { append("__duration.").append(it.ms()) }
+            delay?.let { append("__delay.").append(it.ms()) }
+            ease?.let { append("__ease.").append(it.wire) }
+            if (loop) append("__loop")
+            if (pingpong) append("__pingpong")
         }
 }
 
@@ -117,12 +208,32 @@ public enum class VerticalAlign(
     NEAREST("__vnearest"),
 }
 
-/** `data-animate:attribute="expression"` (Pro): animate an attribute whenever its signals change. */
+/**
+ * `data-animate="{attribute: expression}"` (Pro): the object form, each attribute in it animated
+ * whenever its expression's signals change. The [modifiers] apply to all of them. Each value must
+ * be a string, `'12px'` or `String($r)`: the plugin reads the number and unit out of a string, and
+ * throws on a number, where the key form writes its value as a string first.
+ */
+public fun HTMLTag.dataAnimate(
+    expression: String,
+    modifiers: AnimateModifiers.() -> Unit = {},
+) {
+    attributes[ds("animate${AnimateModifiers().apply(modifiers).build()}")] = ExpressionGuard.check(expression)
+}
+
+/**
+ * `data-animate:attribute="expression"` (Pro): animate an attribute whenever its signals change.
+ * A camelCase [attribute] such as `strokeWidth` is written as `stroke-width`; one that really
+ * is camelCase (SVG's `viewBox`) cannot travel in a key, since the browser lowercases it; use
+ * the object form, `dataAnimate("{viewBox: ...}")`.
+ */
 public fun HTMLTag.dataAnimate(
     attribute: String,
     expression: String,
+    modifiers: AnimateModifiers.() -> Unit = {},
 ) {
-    attributes[ds("animate:${Casing.plainKey(attribute)}")] = ExpressionGuard.check(expression)
+    val mods = AnimateModifiers().apply(modifiers).build()
+    attributes[ds("animate:" + Casing.withModifiers(attribute, Casing.plainKey(attribute), mods))] = ExpressionGuard.check(expression)
 }
 
 /** `data-custom-validity="expression"` (Pro): an expression yielding `''` when valid, a message otherwise. */
@@ -160,7 +271,10 @@ public fun HTMLTag.dataOnResize(
 /**
  * `data-persist` (Pro): keep signals in local storage (or session storage) across page loads.
  *
- * @param key Storage key; Datastar's default is `datastar`.
+ * @param key The storage key. It is written kebab-case like the other keys Datastar uses as the
+ * browser hands them (`attr`, `style`, `animate`): the browser lowercases an attribute name, so
+ * `myKey` could never reach the client, and `my-key` is what the signals are stored under.
+ * Datastar's default is `datastar`.
  * @param filter Which signals to persist.
  * @param session Use `sessionStorage` instead of `localStorage`.
  */

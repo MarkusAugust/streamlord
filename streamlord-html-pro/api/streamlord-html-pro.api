@@ -1,3 +1,61 @@
+public final class io/github/markusaugust/streamlord/html/pro/AnimateModifiers {
+	public fun <init> ()V
+	public final fun getDelay-FghU774 ()Lkotlin/time/Duration;
+	public final fun getDuration-FghU774 ()Lkotlin/time/Duration;
+	public final fun getEase ()Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public final fun getLoop ()Z
+	public final fun getPingpong ()Z
+	public final fun setDelay-BwNAW2A (Lkotlin/time/Duration;)V
+	public final fun setDuration-BwNAW2A (Lkotlin/time/Duration;)V
+	public final fun setEase (Lio/github/markusaugust/streamlord/html/pro/Easing;)V
+	public final fun setLoop (Z)V
+	public final fun setPingpong (Z)V
+}
+
+public final class io/github/markusaugust/streamlord/html/pro/Easing : java/lang/Enum {
+	public static final field CUBIC Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field ELASTIC Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field IN_BACK Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field IN_BOUNCE Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field IN_CIRC Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field IN_CUBIC Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field IN_ELASTIC Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field IN_EXPO Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field IN_GOLDEN Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field IN_OUT_BACK Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field IN_OUT_BOUNCE Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field IN_OUT_CIRC Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field IN_OUT_CUBIC Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field IN_OUT_ELASTIC Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field IN_OUT_EXPO Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field IN_OUT_GOLDEN Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field IN_OUT_QUAD Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field IN_OUT_QUART Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field IN_OUT_QUINT Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field IN_OUT_SINE Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field IN_QUAD Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field IN_QUART Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field IN_QUINT Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field IN_SINE Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field LINEAR Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field OUT_BACK Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field OUT_BOUNCE Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field OUT_CIRC Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field OUT_CUBIC Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field OUT_ELASTIC Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field OUT_EXPO Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field OUT_GOLDEN Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field OUT_QUAD Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field OUT_QUART Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field OUT_QUINT Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field OUT_SINE Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static final field QUADRATIC Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getWire ()Ljava/lang/String;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/markusaugust/streamlord/html/pro/Easing;
+	public static fun values ()[Lio/github/markusaugust/streamlord/html/pro/Easing;
+}
+
 public final class io/github/markusaugust/streamlord/html/pro/HorizontalAlign : java/lang/Enum {
 	public static final field CENTER Lio/github/markusaugust/streamlord/html/pro/HorizontalAlign;
 	public static final field END Lio/github/markusaugust/streamlord/html/pro/HorizontalAlign;
@@ -33,7 +91,10 @@ public final class io/github/markusaugust/streamlord/html/pro/ProActionsKt {
 }
 
 public final class io/github/markusaugust/streamlord/html/pro/ProAttributesKt {
-	public static final fun dataAnimate (Lkotlinx/html/HTMLTag;Ljava/lang/String;Ljava/lang/String;)V
+	public static final fun dataAnimate (Lkotlinx/html/HTMLTag;Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
+	public static final fun dataAnimate (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
+	public static synthetic fun dataAnimate$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
+	public static synthetic fun dataAnimate$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
 	public static final fun dataCustomValidity (Lkotlinx/html/HTMLTag;Ljava/lang/String;)V
 	public static final fun dataMatchMedia (Lkotlinx/html/HTMLTag;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;)V
 	public static synthetic fun dataMatchMedia$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;ILjava/lang/Object;)V
@@ -53,12 +114,22 @@ public final class io/github/markusaugust/streamlord/html/pro/ProAttributesKt {
 
 public final class io/github/markusaugust/streamlord/html/pro/RafModifiers {
 	public fun <init> ()V
+	public final fun getDebounce-FghU774 ()Lkotlin/time/Duration;
+	public final fun getDebounceLeading ()Z
+	public final fun getDebounceNoTrailing ()Z
+	public final fun getDelay-FghU774 ()Lkotlin/time/Duration;
 	public final fun getThrottle-FghU774 ()Lkotlin/time/Duration;
 	public final fun getThrottleNoLeading ()Z
 	public final fun getThrottleTrailing ()Z
+	public final fun getViewTransition ()Z
+	public final fun setDebounce-BwNAW2A (Lkotlin/time/Duration;)V
+	public final fun setDebounceLeading (Z)V
+	public final fun setDebounceNoTrailing (Z)V
+	public final fun setDelay-BwNAW2A (Lkotlin/time/Duration;)V
 	public final fun setThrottle-BwNAW2A (Lkotlin/time/Duration;)V
 	public final fun setThrottleNoLeading (Z)V
 	public final fun setThrottleTrailing (Z)V
+	public final fun setViewTransition (Z)V
 }
 
 public final class io/github/markusaugust/streamlord/html/pro/ResizeModifiers {
@@ -66,15 +137,19 @@ public final class io/github/markusaugust/streamlord/html/pro/ResizeModifiers {
 	public final fun getDebounce-FghU774 ()Lkotlin/time/Duration;
 	public final fun getDebounceLeading ()Z
 	public final fun getDebounceNoTrailing ()Z
+	public final fun getDelay-FghU774 ()Lkotlin/time/Duration;
 	public final fun getThrottle-FghU774 ()Lkotlin/time/Duration;
 	public final fun getThrottleNoLeading ()Z
 	public final fun getThrottleTrailing ()Z
+	public final fun getViewTransition ()Z
 	public final fun setDebounce-BwNAW2A (Lkotlin/time/Duration;)V
 	public final fun setDebounceLeading (Z)V
 	public final fun setDebounceNoTrailing (Z)V
+	public final fun setDelay-BwNAW2A (Lkotlin/time/Duration;)V
 	public final fun setThrottle-BwNAW2A (Lkotlin/time/Duration;)V
 	public final fun setThrottleNoLeading (Z)V
 	public final fun setThrottleTrailing (Z)V
+	public final fun setViewTransition (Z)V
 }
 
 public final class io/github/markusaugust/streamlord/html/pro/ScrollBehavior : java/lang/Enum {

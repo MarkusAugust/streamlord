@@ -70,28 +70,48 @@ class CatalogTest {
         }
     }
 
+    private val attributes: Map<String, JsonObject> = catalog.array("attributes")!!.objects().associateBy { it.string("name")!! }
+
+    /** The modifier names of [attribute], `$ref` groups expanded. */
+    private fun modifierNames(attribute: String): List<String> {
+        val groups = catalog.obj("modifierGroups")!!
+        return attributes.getValue(attribute).array("modifiers")!!.objects().flatMap { m ->
+            m.string("\$ref")?.let { ref -> groups.array(ref)!!.objects().map { it.string("name")!! } } ?: listOf(m.string("name")!!)
+        }
+    }
+
     @Test
-    fun `on and intersect modifiers are all settable on their builders`() {
+    fun `modifiers are all settable on their builders`() {
         fun properties(klass: Class<*>) =
             klass.methods
                 .filter { it.name.startsWith("set") }
                 .map { jvmName(it.name).removePrefix("set").lowercase() }
                 .toSet()
-        val onProps = properties(OnModifiers::class.java)
-        val intersectProps = properties(IntersectModifiers::class.java)
-        val groups = catalog.obj("modifierGroups")!!
-
-        fun expand(mods: List<JsonObject>): List<String> =
-            mods.flatMap { m ->
-                m.string("\$ref")?.let { ref -> groups.array(ref)!!.objects().map { it.string("name")!! } } ?: listOf(m.string("name")!!)
+        val builders =
+            mapOf(
+                "on" to OnModifiers::class.java,
+                "on-intersect" to IntersectModifiers::class.java,
+                "animate" to AnimateModifiers::class.java,
+                "on-raf" to RafModifiers::class.java,
+                "on-resize" to ResizeModifiers::class.java,
+            )
+        for ((attribute, builder) in builders) {
+            val props = properties(builder)
+            for (name in modifierNames(attribute)) {
+                assertTrue(name in props, "${builder.simpleName} lacks a property for __$name")
             }
-        val attrs = catalog.array("attributes")!!.objects().associateBy { it.string("name")!! }
-        for (name in expand(attrs.getValue("on").array("modifiers")!!.objects())) {
-            assertTrue(name in onProps, "OnModifiers lacks a property for __$name")
         }
-        for (name in expand(attrs.getValue("on-intersect").array("modifiers")!!.objects())) {
-            assertTrue(name in intersectProps, "IntersectModifiers lacks a property for __$name")
-        }
+    }
+
+    @Test
+    fun `the easing names are exactly the catalog's`() {
+        val ease =
+            attributes
+                .getValue("animate")
+                .array("modifiers")!!
+                .objects()
+                .first { it.string("name") == "ease" }
+        assertEquals(ease.array("values")!!.strings(), Easing.entries.map { it.wire })
     }
 
     @Test
