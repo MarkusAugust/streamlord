@@ -118,11 +118,13 @@ class ScriptAndSignalsContextTest {
     @Test
     fun `a script body neither ends early nor runs past its end`() {
         assertEquals("a = '<\\/script>'", Wire.escapeScriptBody("a = '</script>'"))
-        for (tag in listOf("body", "head", "html", "BODY")) {
+        assertEquals("a = '<\\/SCRIPT>'", Wire.escapeScriptBody("a = '</SCRIPT>'"))
+        for (tag in listOf("body", "head", "html")) {
             assertFalse("</$tag" in Wire.escapeScriptBody("a = '</$tag>'"), tag)
         }
         val commented = Wire.escapeScriptBody("a = '<!--<script>'; b = '</script>'")
         assertFalse(Regex("<script[\\s/>]", RegexOption.IGNORE_CASE).containsMatchIn(commented.substringAfter("<!--")), commented)
+        assertEquals("a = '<!--<\\x53CRIPT>'", Wire.escapeScriptBody("a = '<!--<SCRIPT>'"))
         // Without <!--, a <script inside a string is harmless and stays as written.
         assertEquals("a = '<script>'", Wire.escapeScriptBody("a = '<script>'"))
         assertTrue(
@@ -132,5 +134,28 @@ class ScriptAndSignalsContextTest {
                         .encode(it)
                 },
         )
+    }
+
+    /**
+     * Each escape is one JavaScript reads back as the text that was written: `'<\/SCRIPT>'` is
+     * `</SCRIPT>`, `'<\x53CRIPT>'` is `<SCRIPT>`. The client's test for a whole document is
+     * `/<\/body>/` without the `i` flag (patchElements.ts), so `</BODY>` needs no escape and
+     * keeps its letters.
+     */
+    @Test
+    fun `an escape keeps the letters the script was written with`() {
+        fun readBack(escaped: String) =
+            escaped
+                .replace("\\/", "/")
+                .replace(Regex("\\\\x([0-9a-fA-F]{2})")) {
+                    it.groupValues[1]
+                        .toInt(16)
+                        .toChar()
+                        .toString()
+                }
+        for (literal in listOf("</SCRIPT>", "</Script>", "<!--<SCRIPT>", "<!--<Script>", "</BODY>", "</Head>")) {
+            assertEquals(literal, readBack(Wire.escapeScriptBody(literal)), literal)
+        }
+        assertEquals("x = '</BODY>'", Wire.escapeScriptBody("x = '</BODY>'"))
     }
 }

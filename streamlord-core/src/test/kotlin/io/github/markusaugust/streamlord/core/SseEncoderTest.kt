@@ -107,7 +107,7 @@ class SseEncoderTest {
     @Test
     fun `execute script cannot break out of its own tag`() {
         val tag = ExecuteScript("x = '</SCRIPT><img src=x onerror=alert(1)>'").scriptTag
-        assertEquals("<script data-effect=\"el.remove()\">x = '<\\/script><img src=x onerror=alert(1)>'</script>", tag)
+        assertEquals("<script data-effect=\"el.remove()\">x = '<\\/SCRIPT><img src=x onerror=alert(1)>'</script>", tag)
     }
 
     @Test
