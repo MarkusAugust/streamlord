@@ -209,7 +209,7 @@ Spring WebMVC is the same thing as a filter bean:
 @Bean
 fun cspNonceFilter(): CspNonceFilter = CspNonceFilter()
 
-@GetMapping("/dashboard", produces = [org.springframework.http.MediaType.TEXT_HTML_VALUE])
+@GetMapping("/dashboard", produces = ["text/html;charset=UTF-8"])
 fun dashboard(request: HttpServletRequest): String =
     kotlinx.html.stream.createHTML().html {
         dataNonce(request.cspNonce)

@@ -22,7 +22,7 @@ import org.springframework.web.server.ServerWebExchange
  * Then read it where the page is built:
  *
  * ```kotlin
- * @GetMapping("/", produces = [MediaType.TEXT_HTML_VALUE])
+ * @GetMapping("/", produces = ["text/html;charset=UTF-8"])
  * fun page(request: HttpServletRequest): String = createHTML().html {
  *     dataNonce(request.cspNonce)
  *     body { ... }
