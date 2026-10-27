@@ -190,29 +190,47 @@ CVE-2026-110879, where the type parameters of a generic type id get past the
 is fixed in 3.1.8 and 2.21.8. Streamlord 0.14.0 asks for 3.2.4 and 2.22.4, which have both fixes,
 but under Boot's management that request is ignored.
 
-Raise Boot's own version property, on the minor line Boot is built against. In Maven:
+Raise Boot's own version property, on the minor line Boot is built against. The names differ
+between Boot 4 and Boot 3, so take the block for yours.
+
+**Boot 4.** `jackson-bom.version` is Jackson 3 and `jackson-2-bom.version` is Jackson 2; set the
+second only if Jackson 2 is on your classpath too. In Maven:
 
 ```xml
 <properties>
-  <!-- Jackson 3, on Boot 4 -->
   <jackson-bom.version>3.1.8</jackson-bom.version>
-  <!-- Jackson 2: jackson-2-bom.version on Boot 4, jackson-bom.version on Boot 3 -->
   <jackson-2-bom.version>2.21.8</jackson-2-bom.version>
 </properties>
 ```
 
-In Gradle with `io.spring.dependency-management`, the same properties:
+In Gradle with `io.spring.dependency-management`:
 
 ```kotlin sample=none
 extra["jackson-bom.version"] = "3.1.8"
 extra["jackson-2-bom.version"] = "2.21.8"
 ```
 
+**Boot 3.** There is only Jackson 2, and its property is `jackson-bom.version`. Boot 3 has no
+`jackson-2-bom.version`, so setting it changes nothing, and the Boot 4 block above names a Jackson 2
+BOM 3.1.8 that does not exist, which fails the build. In Maven:
+
+```xml
+<properties>
+  <jackson-bom.version>2.21.8</jackson-bom.version>
+</properties>
+```
+
+In Gradle with `io.spring.dependency-management`:
+
+```kotlin sample=none
+extra["jackson-bom.version"] = "2.21.8"
+```
+
 Not `implementation(platform("tools.jackson:jackson-bom:3.1.8"))`: under that plugin the line
 resolves to Boot's 3.1.7 and says nothing. With `platform(SpringBootPlugin.BOM_COORDINATES)` you
-need neither, because the codec's 3.2.4 already wins. Each of these was resolved and run, the codec
-decoding through Boot's own mapper, on Boot 4.1.2 and 3.5.16. Drop the property once Boot pins a
-fixed Jackson itself.
+need none of this on Boot 4, because the codec's 3.2.4 already wins. Each block was resolved and
+run, the codec decoding through Boot's own mapper, on Boot 4.1.2 and 3.5.16. Drop the property once
+Boot pins a fixed Jackson itself.
 
 Outside Boot's management you run the Jackson Streamlord asks for. Streamlord 0.13.0 and older ask
 for 3.2.3 and 2.22.3, which have CVE-2026-110879, so move to 0.14.0.
