@@ -304,10 +304,11 @@ one classpath.
 
 `ktor-server-jetty-jakarta` 3.0.0 brings Jetty 11.0.24. Raising it to 11.0.26 with
 `platform("org.eclipse.jetty:jetty-bom:11.0.26")` helps, but Jetty 11 is no longer maintained in
-the open, and 11.0.26 is the last release on Maven Central. It still has HTTP request smuggling
-([CVE-2026-2332](https://github.com/advisories/GHSA-355h-qmc2-wpwf)) and an authority and `Host`
-mismatch ([CVE-2026-6790](https://github.com/advisories/GHSA-7p3p-8qv8-m2vh)). If you run the Jetty
-engine in production, move to Ktor 3.5 or newer, whose Jetty 12 has both fixed. The adapter's tests
+the open, and 11.0.26 is the last release on Maven Central. It still has four advisories, among
+them HTTP request smuggling ([CVE-2026-2332](https://github.com/advisories/GHSA-355h-qmc2-wpwf))
+and an authority and `Host` mismatch
+([CVE-2026-6790](https://github.com/advisories/GHSA-7p3p-8qv8-m2vh)). If you run the Jetty engine
+in production, move to Ktor 3.5 or newer, whose Jetty 12 has all four fixed. The adapter's tests
 on Ktor 3.0 run on Tomcat 10.1.61 and Jetty 11.0.26.
 
 `streamlord-json-kotlinx` is the one module that can raise your Kotlin standard library. It takes

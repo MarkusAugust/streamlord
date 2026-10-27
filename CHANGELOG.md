@@ -15,7 +15,7 @@ All notable changes to Streamlord are recorded here. The format follows
 - streamlord-live, the service behind the documentation site, runs on distroless Debian 13.
   Debian 12's distroless image had not taken Debian's `libssl3` fixes, among them one rated high.
 - The install page tells a user on Ktor 3.0's Tomcat or Jetty engine to raise them as it already
-  did for Netty: Tomcat to 10.1.61, and Jetty to 11.0.26, whose remaining advisories are fixed
+  did for Netty: Tomcat to 10.1.61, and Jetty to 11.0.26, whose four remaining advisories are fixed
   only from Ktor 3.5. The adapter's tests on Ktor 3.0 run on those versions.
 
 ## [0.14.0] - 2026-10-23
