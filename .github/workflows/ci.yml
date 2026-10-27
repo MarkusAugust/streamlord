@@ -100,9 +100,9 @@ jobs:
               # Netlify's build of the site, which deploys from master with no other check.
               netlify.toml)       docs=true ;;
               demo/*)             kotlin=true; image=true ;;
+              # The fixtures are read by the Kotlin tests, the editors' tests and the front page.
+              conformance/*)      kotlin=true; image=true; intellij=true; vscode=true; docs=true ;;
               # The IntelliJ plugin builds streamlord-analysis, and core beneath it, from source.
-              # The differential fixture is counted on the front page, so it is site content too.
-              streamlord-core/src/test/resources/*) kotlin=true; image=true; intellij=true; docs=true ;;
               streamlord-core/*)  kotlin=true; image=true; intellij=true ;;
               # The image runs the analysis in /judge and streamlord-test in /assert.
               streamlord-analysis/*) kotlin=true; image=true; intellij=true ;;

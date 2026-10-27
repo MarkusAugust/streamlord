@@ -15,6 +15,14 @@ All notable changes to Streamlord are recorded here. The format follows
   key form's JVM signature gained the modifier argument; Kotlin source compiles as before.
 - `ElementsGuard.evaluatedAttributes`: the attributes whose value Datastar runs as JavaScript,
   the expression attributes and the four signal filters.
+- `conformance/`: what Datastar's client and the servers actually do, as fixtures the tests hold
+  Streamlord to. `conformance/client/` is the client's own functions run over fixed inputs
+  (casing, attribute keys, expression rewriting, modifier tags, the signal store),
+  `conformance/dom/` the client run in a DOM (what each frame did to a page and its store, what
+  the parser does with a script body), both generated from `datastar-reference/` by scripts in
+  `conformance/generate/`. `conformance/wire/` is the exact HTTP answer of each adapter, per
+  server, for a fixed set of requests, rewritten with `updateTranscripts` when it is meant to
+  change. CONTRIBUTING.md says how a new Datastar version goes in.
 
 ### Changed
 
@@ -43,6 +51,16 @@ All notable changes to Streamlord are recorded here. The format follows
   before a lowercase letter and declares `aB-1`. The message and the fix follow the client. The
   IntelliJ highlighter and the VS Code grammar mark `$123` and `$foo-bar` as one signal each, as
   the client reads them.
+- The key-case hint and warning in the analysis and the VS Code extension named a signal the
+  client never makes: for `dataSignals("fooBar-baz", …)` they said the wire key `foo-bar-baz` reads
+  back as `$fooBar-baz`, where the client reads `$fooBarBaz`, the name `signal("fooBar-baz")` reads
+  too; and for an event or class such as `data-on:fooBar-baz` they offered a key no case gives back.
+  The hint now names what the client reads, and the warning says when no key gives the name back.
+  Found by the client oracle.
+- The Spring MVC recipe for a page with a CSP nonce produced `text/html;charset=ISO-8859-1`:
+  `produces = [MediaType.TEXT_HTML_VALUE]` lets Spring MVC pick Latin-1. The recipe on the Security
+  page and in `CspNonceFilter` says `produces = ["text/html;charset=UTF-8"]`. Found by the wire
+  transcripts.
 - `SseDecoder` turned an `outer` or `replace` patch without a selector whose elements were a
   comment alone, or text holding a `<`, into an event; the client patches nothing for either.
 - Documentation held to the client: a 400 from an over-long query is retried under
