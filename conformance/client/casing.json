@@ -1,0 +1,1303 @@
+{
+  "$comment": "kebab, camel, snake, pascal and modifyCasing(key, mods, defaultCase) from utils/text.ts of the Datastar 1.0.4 client, run on each key. modifyCasing is run with no __case for the camel and kebab defaults, and with each __case value; an {error} is what the client threw.",
+  "cases": [
+    {
+      "key": "foo-bar",
+      "kebab": "foo-bar",
+      "camel": "fooBar",
+      "snake": "foo_bar",
+      "pascal": "FooBar",
+      "modifyCasing": {
+        "default camel": "fooBar",
+        "default kebab": "foo-bar",
+        "case.camel": "fooBar",
+        "case.kebab": "foo-bar",
+        "case.snake": "foo_bar",
+        "case.pascal": "FooBar",
+        "case.title": "foo-bar",
+        "case.snake.pascal": "Foo_bar",
+        "case.pascal.snake": "FooBar",
+        "case.camel.snake": "fooBar"
+      }
+    },
+    {
+      "key": "fooBar",
+      "kebab": "foo-bar",
+      "camel": "fooBar",
+      "snake": "foo_bar",
+      "pascal": "FooBar",
+      "modifyCasing": {
+        "default camel": "fooBar",
+        "default kebab": "fooBar",
+        "case.camel": "fooBar",
+        "case.kebab": "fooBar",
+        "case.snake": "fooBar",
+        "case.pascal": "FooBar",
+        "case.title": "fooBar",
+        "case.snake.pascal": "FooBar",
+        "case.pascal.snake": "FooBar",
+        "case.camel.snake": "fooBar"
+      }
+    },
+    {
+      "key": "FooBar",
+      "kebab": "foo-bar",
+      "camel": "fooBar",
+      "snake": "foo_bar",
+      "pascal": "FooBar",
+      "modifyCasing": {
+        "default camel": "FooBar",
+        "default kebab": "FooBar",
+        "case.camel": "FooBar",
+        "case.kebab": "FooBar",
+        "case.snake": "FooBar",
+        "case.pascal": "FooBar",
+        "case.title": "FooBar",
+        "case.snake.pascal": "FooBar",
+        "case.pascal.snake": "FooBar",
+        "case.camel.snake": "FooBar"
+      }
+    },
+    {
+      "key": "a-b-1",
+      "kebab": "a-b-1",
+      "camel": "aB1",
+      "snake": "a_b_1",
+      "pascal": "AB1",
+      "modifyCasing": {
+        "default camel": "aB-1",
+        "default kebab": "a-b-1",
+        "case.camel": "aB-1",
+        "case.kebab": "a-b-1",
+        "case.snake": "a_b_1",
+        "case.pascal": "AB-1",
+        "case.title": "a-b-1",
+        "case.snake.pascal": "A_b_1",
+        "case.pascal.snake": "AB_1",
+        "case.camel.snake": "aB_1"
+      }
+    },
+    {
+      "key": "grid-col-2",
+      "kebab": "grid-col-2",
+      "camel": "gridCol2",
+      "snake": "grid_col_2",
+      "pascal": "GridCol2",
+      "modifyCasing": {
+        "default camel": "gridCol-2",
+        "default kebab": "grid-col-2",
+        "case.camel": "gridCol-2",
+        "case.kebab": "grid-col-2",
+        "case.snake": "grid_col_2",
+        "case.pascal": "GridCol-2",
+        "case.title": "grid-col-2",
+        "case.snake.pascal": "Grid_col_2",
+        "case.pascal.snake": "GridCol_2",
+        "case.camel.snake": "gridCol_2"
+      }
+    },
+    {
+      "key": "foo-_bar",
+      "kebab": "foo--bar",
+      "camel": "foo-bar",
+      "snake": "foo__bar",
+      "pascal": "Foo-bar",
+      "modifyCasing": {
+        "default camel": "foo-_bar",
+        "default kebab": "foo-_bar",
+        "case.camel": "foo-_bar",
+        "case.kebab": "foo-_bar",
+        "case.snake": "foo__bar",
+        "case.pascal": "Foo-_bar",
+        "case.title": "foo-_bar",
+        "case.snake.pascal": "Foo__bar",
+        "case.pascal.snake": "Foo__bar",
+        "case.camel.snake": "foo__bar"
+      }
+    },
+    {
+      "key": "foo--bar",
+      "kebab": "foo--bar",
+      "camel": "foo-bar",
+      "snake": "foo__bar",
+      "pascal": "Foo-bar",
+      "modifyCasing": {
+        "default camel": "foo-Bar",
+        "default kebab": "foo--bar",
+        "case.camel": "foo-Bar",
+        "case.kebab": "foo--bar",
+        "case.snake": "foo__bar",
+        "case.pascal": "Foo-Bar",
+        "case.title": "foo--bar",
+        "case.snake.pascal": "Foo__bar",
+        "case.pascal.snake": "Foo_Bar",
+        "case.camel.snake": "foo_Bar"
+      }
+    },
+    {
+      "key": "-foo",
+      "kebab": "-foo",
+      "camel": "Foo",
+      "snake": "_foo",
+      "pascal": "Foo",
+      "modifyCasing": {
+        "default camel": "Foo",
+        "default kebab": "-foo",
+        "case.camel": "Foo",
+        "case.kebab": "-foo",
+        "case.snake": "_foo",
+        "case.pascal": "-foo",
+        "case.title": "-foo",
+        "case.snake.pascal": "_foo",
+        "case.pascal.snake": "_foo",
+        "case.camel.snake": "Foo"
+      }
+    },
+    {
+      "key": "foo-",
+      "kebab": "foo-",
+      "camel": "foo-",
+      "snake": "foo_",
+      "pascal": "Foo-",
+      "modifyCasing": {
+        "default camel": "foo-",
+        "default kebab": "foo-",
+        "case.camel": "foo-",
+        "case.kebab": "foo-",
+        "case.snake": "foo_",
+        "case.pascal": "Foo-",
+        "case.title": "foo-",
+        "case.snake.pascal": "Foo_",
+        "case.pascal.snake": "Foo_",
+        "case.camel.snake": "foo_"
+      }
+    },
+    {
+      "key": "URLBase",
+      "kebab": "url-base",
+      "camel": "urlBase",
+      "snake": "url_base",
+      "pascal": "UrlBase",
+      "modifyCasing": {
+        "default camel": "URLBase",
+        "default kebab": "URLBase",
+        "case.camel": "URLBase",
+        "case.kebab": "URLBase",
+        "case.snake": "URLBase",
+        "case.pascal": "URLBase",
+        "case.title": "URLBase",
+        "case.snake.pascal": "URLBase",
+        "case.pascal.snake": "URLBase",
+        "case.camel.snake": "URLBase"
+      }
+    },
+    {
+      "key": "u-r-l-base",
+      "kebab": "u-r-l-base",
+      "camel": "uRLBase",
+      "snake": "u_r_l_base",
+      "pascal": "URLBase",
+      "modifyCasing": {
+        "default camel": "uRLBase",
+        "default kebab": "u-r-l-base",
+        "case.camel": "uRLBase",
+        "case.kebab": "u-r-l-base",
+        "case.snake": "u_r_l_base",
+        "case.pascal": "URLBase",
+        "case.title": "u-r-l-base",
+        "case.snake.pascal": "U_r_l_base",
+        "case.pascal.snake": "URLBase",
+        "case.camel.snake": "uRLBase"
+      }
+    },
+    {
+      "key": "DOMContentLoaded",
+      "kebab": "dom-content-loaded",
+      "camel": "domContentLoaded",
+      "snake": "dom_content_loaded",
+      "pascal": "DomContentLoaded",
+      "modifyCasing": {
+        "default camel": "DOMContentLoaded",
+        "default kebab": "DOMContentLoaded",
+        "case.camel": "DOMContentLoaded",
+        "case.kebab": "DOMContentLoaded",
+        "case.snake": "DOMContentLoaded",
+        "case.pascal": "DOMContentLoaded",
+        "case.title": "DOMContentLoaded",
+        "case.snake.pascal": "DOMContentLoaded",
+        "case.pascal.snake": "DOMContentLoaded",
+        "case.camel.snake": "DOMContentLoaded"
+      }
+    },
+    {
+      "key": "d-o-m-content-loaded",
+      "kebab": "d-o-m-content-loaded",
+      "camel": "dOMContentLoaded",
+      "snake": "d_o_m_content_loaded",
+      "pascal": "DOMContentLoaded",
+      "modifyCasing": {
+        "default camel": "dOMContentLoaded",
+        "default kebab": "d-o-m-content-loaded",
+        "case.camel": "dOMContentLoaded",
+        "case.kebab": "d-o-m-content-loaded",
+        "case.snake": "d_o_m_content_loaded",
+        "case.pascal": "DOMContentLoaded",
+        "case.title": "d-o-m-content-loaded",
+        "case.snake.pascal": "D_o_m_content_loaded",
+        "case.pascal.snake": "DOMContentLoaded",
+        "case.camel.snake": "dOMContentLoaded"
+      }
+    },
+    {
+      "key": "x2y",
+      "kebab": "x-2-y",
+      "camel": "x2Y",
+      "snake": "x_2_y",
+      "pascal": "X2Y",
+      "modifyCasing": {
+        "default camel": "x2y",
+        "default kebab": "x2y",
+        "case.camel": "x2y",
+        "case.kebab": "x2y",
+        "case.snake": "x2y",
+        "case.pascal": "X2y",
+        "case.title": "x2y",
+        "case.snake.pascal": "X2y",
+        "case.pascal.snake": "X2y",
+        "case.camel.snake": "x2y"
+      }
+    },
+    {
+      "key": "x-2-y",
+      "kebab": "x-2-y",
+      "camel": "x2Y",
+      "snake": "x_2_y",
+      "pascal": "X2Y",
+      "modifyCasing": {
+        "default camel": "x-2Y",
+        "default kebab": "x-2-y",
+        "case.camel": "x-2Y",
+        "case.kebab": "x-2-y",
+        "case.snake": "x_2_y",
+        "case.pascal": "X-2Y",
+        "case.title": "x-2-y",
+        "case.snake.pascal": "X_2_y",
+        "case.pascal.snake": "X_2Y",
+        "case.camel.snake": "x_2Y"
+      }
+    },
+    {
+      "key": "x2-y",
+      "kebab": "x-2-y",
+      "camel": "x2Y",
+      "snake": "x_2_y",
+      "pascal": "X2Y",
+      "modifyCasing": {
+        "default camel": "x2Y",
+        "default kebab": "x2-y",
+        "case.camel": "x2Y",
+        "case.kebab": "x2-y",
+        "case.snake": "x2_y",
+        "case.pascal": "X2Y",
+        "case.title": "x2-y",
+        "case.snake.pascal": "X2_y",
+        "case.pascal.snake": "X2Y",
+        "case.camel.snake": "x2Y"
+      }
+    },
+    {
+      "key": "_value",
+      "kebab": "-value",
+      "camel": "Value",
+      "snake": "_value",
+      "pascal": "Value",
+      "modifyCasing": {
+        "default camel": "_value",
+        "default kebab": "_value",
+        "case.camel": "_value",
+        "case.kebab": "_value",
+        "case.snake": "_value",
+        "case.pascal": "_value",
+        "case.title": "_value",
+        "case.snake.pascal": "_value",
+        "case.pascal.snake": "_value",
+        "case.camel.snake": "_value"
+      }
+    },
+    {
+      "key": "to-string",
+      "kebab": "to-string",
+      "camel": "toString",
+      "snake": "to_string",
+      "pascal": "ToString",
+      "modifyCasing": {
+        "default camel": "toString",
+        "default kebab": "to-string",
+        "case.camel": "toString",
+        "case.kebab": "to-string",
+        "case.snake": "to_string",
+        "case.pascal": "ToString",
+        "case.title": "to-string",
+        "case.snake.pascal": "To_string",
+        "case.pascal.snake": "ToString",
+        "case.camel.snake": "toString"
+      }
+    },
+    {
+      "key": "a-b.c-d",
+      "kebab": "a-b.c-d",
+      "camel": "aB.cD",
+      "snake": "a_b.c_d",
+      "pascal": "AB.CD",
+      "modifyCasing": {
+        "default camel": "aB.cD",
+        "default kebab": "a-b.c-d",
+        "case.camel": "aB.cD",
+        "case.kebab": "a-b.c-d",
+        "case.snake": "a_b.c_d",
+        "case.pascal": "AB.cD",
+        "case.title": "a-b.c-d",
+        "case.snake.pascal": "A_b.c_d",
+        "case.pascal.snake": "AB.cD",
+        "case.camel.snake": "aB.cD"
+      }
+    },
+    {
+      "key": "A-b",
+      "kebab": "a-b",
+      "camel": "aB",
+      "snake": "a_b",
+      "pascal": "AB",
+      "modifyCasing": {
+        "default camel": "AB",
+        "default kebab": "A-b",
+        "case.camel": "AB",
+        "case.kebab": "A-b",
+        "case.snake": "A_b",
+        "case.pascal": "AB",
+        "case.title": "A-b",
+        "case.snake.pascal": "A_b",
+        "case.pascal.snake": "AB",
+        "case.camel.snake": "AB"
+      }
+    },
+    {
+      "key": "a-B",
+      "kebab": "a-b",
+      "camel": "aB",
+      "snake": "a_b",
+      "pascal": "AB",
+      "modifyCasing": {
+        "default camel": "a-B",
+        "default kebab": "a-B",
+        "case.camel": "a-B",
+        "case.kebab": "a-B",
+        "case.snake": "a_B",
+        "case.pascal": "A-B",
+        "case.title": "a-B",
+        "case.snake.pascal": "A_B",
+        "case.pascal.snake": "A_B",
+        "case.camel.snake": "a_B"
+      }
+    },
+    {
+      "key": "__proto__",
+      "kebab": "-proto-",
+      "camel": "Proto-",
+      "snake": "_proto_",
+      "pascal": "Proto-",
+      "modifyCasing": {
+        "default camel": "__proto__",
+        "default kebab": "__proto__",
+        "case.camel": "__proto__",
+        "case.kebab": "__proto__",
+        "case.snake": "__proto__",
+        "case.pascal": "__proto__",
+        "case.title": "__proto__",
+        "case.snake.pascal": "__proto__",
+        "case.pascal.snake": "__proto__",
+        "case.camel.snake": "__proto__"
+      }
+    },
+    {
+      "key": "foo.bar",
+      "kebab": "foo.bar",
+      "camel": "foo.bar",
+      "snake": "foo.bar",
+      "pascal": "Foo.Bar",
+      "modifyCasing": {
+        "default camel": "foo.bar",
+        "default kebab": "foo.bar",
+        "case.camel": "foo.bar",
+        "case.kebab": "foo.bar",
+        "case.snake": "foo.bar",
+        "case.pascal": "Foo.bar",
+        "case.title": "foo.bar",
+        "case.snake.pascal": "Foo.bar",
+        "case.pascal.snake": "Foo.bar",
+        "case.camel.snake": "foo.bar"
+      }
+    },
+    {
+      "key": "foo.bar-baz",
+      "kebab": "foo.bar-baz",
+      "camel": "foo.barBaz",
+      "snake": "foo.bar_baz",
+      "pascal": "Foo.BarBaz",
+      "modifyCasing": {
+        "default camel": "foo.barBaz",
+        "default kebab": "foo.bar-baz",
+        "case.camel": "foo.barBaz",
+        "case.kebab": "foo.bar-baz",
+        "case.snake": "foo.bar_baz",
+        "case.pascal": "Foo.barBaz",
+        "case.title": "foo.bar-baz",
+        "case.snake.pascal": "Foo.bar_baz",
+        "case.pascal.snake": "Foo.barBaz",
+        "case.camel.snake": "foo.barBaz"
+      }
+    },
+    {
+      "key": "foo-bar.baz",
+      "kebab": "foo-bar.baz",
+      "camel": "fooBar.baz",
+      "snake": "foo_bar.baz",
+      "pascal": "FooBar.Baz",
+      "modifyCasing": {
+        "default camel": "fooBar.baz",
+        "default kebab": "foo-bar.baz",
+        "case.camel": "fooBar.baz",
+        "case.kebab": "foo-bar.baz",
+        "case.snake": "foo_bar.baz",
+        "case.pascal": "FooBar.baz",
+        "case.title": "foo-bar.baz",
+        "case.snake.pascal": "Foo_bar.baz",
+        "case.pascal.snake": "FooBar.baz",
+        "case.camel.snake": "fooBar.baz"
+      }
+    },
+    {
+      "key": "user.first-name",
+      "kebab": "user.first-name",
+      "camel": "user.firstName",
+      "snake": "user.first_name",
+      "pascal": "User.FirstName",
+      "modifyCasing": {
+        "default camel": "user.firstName",
+        "default kebab": "user.first-name",
+        "case.camel": "user.firstName",
+        "case.kebab": "user.first-name",
+        "case.snake": "user.first_name",
+        "case.pascal": "User.firstName",
+        "case.title": "user.first-name",
+        "case.snake.pascal": "User.first_name",
+        "case.pascal.snake": "User.firstName",
+        "case.camel.snake": "user.firstName"
+      }
+    },
+    {
+      "key": "a.b.c",
+      "kebab": "a.b.c",
+      "camel": "a.b.c",
+      "snake": "a.b.c",
+      "pascal": "A.B.C",
+      "modifyCasing": {
+        "default camel": "a.b.c",
+        "default kebab": "a.b.c",
+        "case.camel": "a.b.c",
+        "case.kebab": "a.b.c",
+        "case.snake": "a.b.c",
+        "case.pascal": "A.b.c",
+        "case.title": "a.b.c",
+        "case.snake.pascal": "A.b.c",
+        "case.pascal.snake": "A.b.c",
+        "case.camel.snake": "a.b.c"
+      }
+    },
+    {
+      "key": "item-1",
+      "kebab": "item-1",
+      "camel": "item1",
+      "snake": "item_1",
+      "pascal": "Item1",
+      "modifyCasing": {
+        "default camel": "item-1",
+        "default kebab": "item-1",
+        "case.camel": "item-1",
+        "case.kebab": "item-1",
+        "case.snake": "item_1",
+        "case.pascal": "Item-1",
+        "case.title": "item-1",
+        "case.snake.pascal": "Item_1",
+        "case.pascal.snake": "Item_1",
+        "case.camel.snake": "item_1"
+      }
+    },
+    {
+      "key": "item1",
+      "kebab": "item-1",
+      "camel": "item1",
+      "snake": "item_1",
+      "pascal": "Item1",
+      "modifyCasing": {
+        "default camel": "item1",
+        "default kebab": "item1",
+        "case.camel": "item1",
+        "case.kebab": "item1",
+        "case.snake": "item1",
+        "case.pascal": "Item1",
+        "case.title": "item1",
+        "case.snake.pascal": "Item1",
+        "case.pascal.snake": "Item1",
+        "case.camel.snake": "item1"
+      }
+    },
+    {
+      "key": "1item",
+      "kebab": "1-item",
+      "camel": "1Item",
+      "snake": "1_item",
+      "pascal": "1Item",
+      "modifyCasing": {
+        "default camel": "1item",
+        "default kebab": "1item",
+        "case.camel": "1item",
+        "case.kebab": "1item",
+        "case.snake": "1item",
+        "case.pascal": "1item",
+        "case.title": "1item",
+        "case.snake.pascal": "1item",
+        "case.pascal.snake": "1item",
+        "case.camel.snake": "1item"
+      }
+    },
+    {
+      "key": "a1b2",
+      "kebab": "a-1-b-2",
+      "camel": "a1B2",
+      "snake": "a_1_b_2",
+      "pascal": "A1B2",
+      "modifyCasing": {
+        "default camel": "a1b2",
+        "default kebab": "a1b2",
+        "case.camel": "a1b2",
+        "case.kebab": "a1b2",
+        "case.snake": "a1b2",
+        "case.pascal": "A1b2",
+        "case.title": "a1b2",
+        "case.snake.pascal": "A1b2",
+        "case.pascal.snake": "A1b2",
+        "case.camel.snake": "a1b2"
+      }
+    },
+    {
+      "key": "2fa",
+      "kebab": "2-fa",
+      "camel": "2Fa",
+      "snake": "2_fa",
+      "pascal": "2Fa",
+      "modifyCasing": {
+        "default camel": "2fa",
+        "default kebab": "2fa",
+        "case.camel": "2fa",
+        "case.kebab": "2fa",
+        "case.snake": "2fa",
+        "case.pascal": "2fa",
+        "case.title": "2fa",
+        "case.snake.pascal": "2fa",
+        "case.pascal.snake": "2fa",
+        "case.camel.snake": "2fa"
+      }
+    },
+    {
+      "key": "snake_case",
+      "kebab": "snake-case",
+      "camel": "snakeCase",
+      "snake": "snake_case",
+      "pascal": "SnakeCase",
+      "modifyCasing": {
+        "default camel": "snake_case",
+        "default kebab": "snake_case",
+        "case.camel": "snake_case",
+        "case.kebab": "snake_case",
+        "case.snake": "snake_case",
+        "case.pascal": "Snake_case",
+        "case.title": "snake_case",
+        "case.snake.pascal": "Snake_case",
+        "case.pascal.snake": "Snake_case",
+        "case.camel.snake": "snake_case"
+      }
+    },
+    {
+      "key": "mixed_kebab-case",
+      "kebab": "mixed-kebab-case",
+      "camel": "mixedKebabCase",
+      "snake": "mixed_kebab_case",
+      "pascal": "MixedKebabCase",
+      "modifyCasing": {
+        "default camel": "mixed_kebabCase",
+        "default kebab": "mixed_kebab-case",
+        "case.camel": "mixed_kebabCase",
+        "case.kebab": "mixed_kebab-case",
+        "case.snake": "mixed_kebab_case",
+        "case.pascal": "Mixed_kebabCase",
+        "case.title": "mixed_kebab-case",
+        "case.snake.pascal": "Mixed_kebab_case",
+        "case.pascal.snake": "Mixed_kebabCase",
+        "case.camel.snake": "mixed_kebabCase"
+      }
+    },
+    {
+      "key": "foo_bar-baz",
+      "kebab": "foo-bar-baz",
+      "camel": "fooBarBaz",
+      "snake": "foo_bar_baz",
+      "pascal": "FooBarBaz",
+      "modifyCasing": {
+        "default camel": "foo_barBaz",
+        "default kebab": "foo_bar-baz",
+        "case.camel": "foo_barBaz",
+        "case.kebab": "foo_bar-baz",
+        "case.snake": "foo_bar_baz",
+        "case.pascal": "Foo_barBaz",
+        "case.title": "foo_bar-baz",
+        "case.snake.pascal": "Foo_bar_baz",
+        "case.pascal.snake": "Foo_barBaz",
+        "case.camel.snake": "foo_barBaz"
+      }
+    },
+    {
+      "key": "Foo-Bar",
+      "kebab": "foo-bar",
+      "camel": "fooBar",
+      "snake": "foo_bar",
+      "pascal": "FooBar",
+      "modifyCasing": {
+        "default camel": "Foo-Bar",
+        "default kebab": "Foo-Bar",
+        "case.camel": "Foo-Bar",
+        "case.kebab": "Foo-Bar",
+        "case.snake": "Foo_Bar",
+        "case.pascal": "Foo-Bar",
+        "case.title": "Foo-Bar",
+        "case.snake.pascal": "Foo_Bar",
+        "case.pascal.snake": "Foo_Bar",
+        "case.camel.snake": "Foo_Bar"
+      }
+    },
+    {
+      "key": "FOO",
+      "kebab": "foo",
+      "camel": "foo",
+      "snake": "foo",
+      "pascal": "Foo",
+      "modifyCasing": {
+        "default camel": "FOO",
+        "default kebab": "FOO",
+        "case.camel": "FOO",
+        "case.kebab": "FOO",
+        "case.snake": "FOO",
+        "case.pascal": "FOO",
+        "case.title": "FOO",
+        "case.snake.pascal": "FOO",
+        "case.pascal.snake": "FOO",
+        "case.camel.snake": "FOO"
+      }
+    },
+    {
+      "key": "foo",
+      "kebab": "foo",
+      "camel": "foo",
+      "snake": "foo",
+      "pascal": "Foo",
+      "modifyCasing": {
+        "default camel": "foo",
+        "default kebab": "foo",
+        "case.camel": "foo",
+        "case.kebab": "foo",
+        "case.snake": "foo",
+        "case.pascal": "Foo",
+        "case.title": "foo",
+        "case.snake.pascal": "Foo",
+        "case.pascal.snake": "Foo",
+        "case.camel.snake": "foo"
+      }
+    },
+    {
+      "key": "f",
+      "kebab": "f",
+      "camel": "f",
+      "snake": "f",
+      "pascal": "F",
+      "modifyCasing": {
+        "default camel": "f",
+        "default kebab": "f",
+        "case.camel": "f",
+        "case.kebab": "f",
+        "case.snake": "f",
+        "case.pascal": "F",
+        "case.title": "f",
+        "case.snake.pascal": "F",
+        "case.pascal.snake": "F",
+        "case.camel.snake": "f"
+      }
+    },
+    {
+      "key": "F",
+      "kebab": "f",
+      "camel": "f",
+      "snake": "f",
+      "pascal": "F",
+      "modifyCasing": {
+        "default camel": "F",
+        "default kebab": "F",
+        "case.camel": "F",
+        "case.kebab": "F",
+        "case.snake": "F",
+        "case.pascal": "F",
+        "case.title": "F",
+        "case.snake.pascal": "F",
+        "case.pascal.snake": "F",
+        "case.camel.snake": "F"
+      }
+    },
+    {
+      "key": "",
+      "kebab": "",
+      "camel": "",
+      "snake": "",
+      "pascal": "",
+      "modifyCasing": {
+        "default camel": "",
+        "default kebab": "",
+        "case.camel": "",
+        "case.kebab": "",
+        "case.snake": "",
+        "case.pascal": {
+          "error": "TypeError"
+        },
+        "case.title": "",
+        "case.snake.pascal": {
+          "error": "TypeError"
+        },
+        "case.pascal.snake": {
+          "error": "TypeError"
+        },
+        "case.camel.snake": ""
+      }
+    },
+    {
+      "key": "foo bar",
+      "kebab": "foo-bar",
+      "camel": "fooBar",
+      "snake": "foo_bar",
+      "pascal": "FooBar",
+      "modifyCasing": {
+        "default camel": "foo bar",
+        "default kebab": "foo bar",
+        "case.camel": "foo bar",
+        "case.kebab": "foo bar",
+        "case.snake": "foo bar",
+        "case.pascal": "Foo bar",
+        "case.title": "foo bar",
+        "case.snake.pascal": "Foo bar",
+        "case.pascal.snake": "Foo bar",
+        "case.camel.snake": "foo bar"
+      }
+    },
+    {
+      "key": "foo\tbar",
+      "kebab": "foo-bar",
+      "camel": "fooBar",
+      "snake": "foo_bar",
+      "pascal": "FooBar",
+      "modifyCasing": {
+        "default camel": "foo\tbar",
+        "default kebab": "foo\tbar",
+        "case.camel": "foo\tbar",
+        "case.kebab": "foo\tbar",
+        "case.snake": "foo\tbar",
+        "case.pascal": "Foo\tbar",
+        "case.title": "foo\tbar",
+        "case.snake.pascal": "Foo\tbar",
+        "case.pascal.snake": "Foo\tbar",
+        "case.camel.snake": "foo\tbar"
+      }
+    },
+    {
+      "key": "is-open",
+      "kebab": "is-open",
+      "camel": "isOpen",
+      "snake": "is_open",
+      "pascal": "IsOpen",
+      "modifyCasing": {
+        "default camel": "isOpen",
+        "default kebab": "is-open",
+        "case.camel": "isOpen",
+        "case.kebab": "is-open",
+        "case.snake": "is_open",
+        "case.pascal": "IsOpen",
+        "case.title": "is-open",
+        "case.snake.pascal": "Is_open",
+        "case.pascal.snake": "IsOpen",
+        "case.camel.snake": "isOpen"
+      }
+    },
+    {
+      "key": "widget-loaded",
+      "kebab": "widget-loaded",
+      "camel": "widgetLoaded",
+      "snake": "widget_loaded",
+      "pascal": "WidgetLoaded",
+      "modifyCasing": {
+        "default camel": "widgetLoaded",
+        "default kebab": "widget-loaded",
+        "case.camel": "widgetLoaded",
+        "case.kebab": "widget-loaded",
+        "case.snake": "widget_loaded",
+        "case.pascal": "WidgetLoaded",
+        "case.title": "widget-loaded",
+        "case.snake.pascal": "Widget_loaded",
+        "case.pascal.snake": "WidgetLoaded",
+        "case.camel.snake": "widgetLoaded"
+      }
+    },
+    {
+      "key": "aria-label",
+      "kebab": "aria-label",
+      "camel": "ariaLabel",
+      "snake": "aria_label",
+      "pascal": "AriaLabel",
+      "modifyCasing": {
+        "default camel": "ariaLabel",
+        "default kebab": "aria-label",
+        "case.camel": "ariaLabel",
+        "case.kebab": "aria-label",
+        "case.snake": "aria_label",
+        "case.pascal": "AriaLabel",
+        "case.title": "aria-label",
+        "case.snake.pascal": "Aria_label",
+        "case.pascal.snake": "AriaLabel",
+        "case.camel.snake": "ariaLabel"
+      }
+    },
+    {
+      "key": "data-x",
+      "kebab": "data-x",
+      "camel": "dataX",
+      "snake": "data_x",
+      "pascal": "DataX",
+      "modifyCasing": {
+        "default camel": "dataX",
+        "default kebab": "data-x",
+        "case.camel": "dataX",
+        "case.kebab": "data-x",
+        "case.snake": "data_x",
+        "case.pascal": "DataX",
+        "case.title": "data-x",
+        "case.snake.pascal": "Data_x",
+        "case.pascal.snake": "DataX",
+        "case.camel.snake": "dataX"
+      }
+    },
+    {
+      "key": "my-u-r-l",
+      "kebab": "my-u-r-l",
+      "camel": "myURL",
+      "snake": "my_u_r_l",
+      "pascal": "MyURL",
+      "modifyCasing": {
+        "default camel": "myURL",
+        "default kebab": "my-u-r-l",
+        "case.camel": "myURL",
+        "case.kebab": "my-u-r-l",
+        "case.snake": "my_u_r_l",
+        "case.pascal": "MyURL",
+        "case.title": "my-u-r-l",
+        "case.snake.pascal": "My_u_r_l",
+        "case.pascal.snake": "MyURL",
+        "case.camel.snake": "myURL"
+      }
+    },
+    {
+      "key": "fooBAR",
+      "kebab": "foo-bar",
+      "camel": "fooBar",
+      "snake": "foo_bar",
+      "pascal": "FooBar",
+      "modifyCasing": {
+        "default camel": "fooBAR",
+        "default kebab": "fooBAR",
+        "case.camel": "fooBAR",
+        "case.kebab": "fooBAR",
+        "case.snake": "fooBAR",
+        "case.pascal": "FooBAR",
+        "case.title": "fooBAR",
+        "case.snake.pascal": "FooBAR",
+        "case.pascal.snake": "FooBAR",
+        "case.camel.snake": "fooBAR"
+      }
+    },
+    {
+      "key": "foo-b-a-r",
+      "kebab": "foo-b-a-r",
+      "camel": "fooBAR",
+      "snake": "foo_b_a_r",
+      "pascal": "FooBAR",
+      "modifyCasing": {
+        "default camel": "fooBAR",
+        "default kebab": "foo-b-a-r",
+        "case.camel": "fooBAR",
+        "case.kebab": "foo-b-a-r",
+        "case.snake": "foo_b_a_r",
+        "case.pascal": "FooBAR",
+        "case.title": "foo-b-a-r",
+        "case.snake.pascal": "Foo_b_a_r",
+        "case.pascal.snake": "FooBAR",
+        "case.camel.snake": "fooBAR"
+      }
+    },
+    {
+      "key": "fooBarBaz",
+      "kebab": "foo-bar-baz",
+      "camel": "fooBarBaz",
+      "snake": "foo_bar_baz",
+      "pascal": "FooBarBaz",
+      "modifyCasing": {
+        "default camel": "fooBarBaz",
+        "default kebab": "fooBarBaz",
+        "case.camel": "fooBarBaz",
+        "case.kebab": "fooBarBaz",
+        "case.snake": "fooBarBaz",
+        "case.pascal": "FooBarBaz",
+        "case.title": "fooBarBaz",
+        "case.snake.pascal": "FooBarBaz",
+        "case.pascal.snake": "FooBarBaz",
+        "case.camel.snake": "fooBarBaz"
+      }
+    },
+    {
+      "key": "foo-bar-baz",
+      "kebab": "foo-bar-baz",
+      "camel": "fooBarBaz",
+      "snake": "foo_bar_baz",
+      "pascal": "FooBarBaz",
+      "modifyCasing": {
+        "default camel": "fooBarBaz",
+        "default kebab": "foo-bar-baz",
+        "case.camel": "fooBarBaz",
+        "case.kebab": "foo-bar-baz",
+        "case.snake": "foo_bar_baz",
+        "case.pascal": "FooBarBaz",
+        "case.title": "foo-bar-baz",
+        "case.snake.pascal": "Foo_bar_baz",
+        "case.pascal.snake": "FooBarBaz",
+        "case.camel.snake": "fooBarBaz"
+      }
+    },
+    {
+      "key": "fooBar-baz",
+      "kebab": "foo-bar-baz",
+      "camel": "fooBarBaz",
+      "snake": "foo_bar_baz",
+      "pascal": "FooBarBaz",
+      "modifyCasing": {
+        "default camel": "fooBarBaz",
+        "default kebab": "fooBar-baz",
+        "case.camel": "fooBarBaz",
+        "case.kebab": "fooBar-baz",
+        "case.snake": "fooBar_baz",
+        "case.pascal": "FooBarBaz",
+        "case.title": "fooBar-baz",
+        "case.snake.pascal": "FooBar_baz",
+        "case.pascal.snake": "FooBarBaz",
+        "case.camel.snake": "fooBarBaz"
+      }
+    },
+    {
+      "key": "f-o-o",
+      "kebab": "f-o-o",
+      "camel": "fOO",
+      "snake": "f_o_o",
+      "pascal": "FOO",
+      "modifyCasing": {
+        "default camel": "fOO",
+        "default kebab": "f-o-o",
+        "case.camel": "fOO",
+        "case.kebab": "f-o-o",
+        "case.snake": "f_o_o",
+        "case.pascal": "FOO",
+        "case.title": "f-o-o",
+        "case.snake.pascal": "F_o_o",
+        "case.pascal.snake": "FOO",
+        "case.camel.snake": "fOO"
+      }
+    },
+    {
+      "key": "constructor",
+      "kebab": "constructor",
+      "camel": "constructor",
+      "snake": "constructor",
+      "pascal": "Constructor",
+      "modifyCasing": {
+        "default camel": "constructor",
+        "default kebab": "constructor",
+        "case.camel": "constructor",
+        "case.kebab": "constructor",
+        "case.snake": "constructor",
+        "case.pascal": "Constructor",
+        "case.title": "constructor",
+        "case.snake.pascal": "Constructor",
+        "case.pascal.snake": "Constructor",
+        "case.camel.snake": "constructor"
+      }
+    },
+    {
+      "key": "has-own-property",
+      "kebab": "has-own-property",
+      "camel": "hasOwnProperty",
+      "snake": "has_own_property",
+      "pascal": "HasOwnProperty",
+      "modifyCasing": {
+        "default camel": "hasOwnProperty",
+        "default kebab": "has-own-property",
+        "case.camel": "hasOwnProperty",
+        "case.kebab": "has-own-property",
+        "case.snake": "has_own_property",
+        "case.pascal": "HasOwnProperty",
+        "case.title": "has-own-property",
+        "case.snake.pascal": "Has_own_property",
+        "case.pascal.snake": "HasOwnProperty",
+        "case.camel.snake": "hasOwnProperty"
+      }
+    },
+    {
+      "key": "a-b",
+      "kebab": "a-b",
+      "camel": "aB",
+      "snake": "a_b",
+      "pascal": "AB",
+      "modifyCasing": {
+        "default camel": "aB",
+        "default kebab": "a-b",
+        "case.camel": "aB",
+        "case.kebab": "a-b",
+        "case.snake": "a_b",
+        "case.pascal": "AB",
+        "case.title": "a-b",
+        "case.snake.pascal": "A_b",
+        "case.pascal.snake": "AB",
+        "case.camel.snake": "aB"
+      }
+    },
+    {
+      "key": "a--b",
+      "kebab": "a--b",
+      "camel": "a-b",
+      "snake": "a__b",
+      "pascal": "A-b",
+      "modifyCasing": {
+        "default camel": "a-B",
+        "default kebab": "a--b",
+        "case.camel": "a-B",
+        "case.kebab": "a--b",
+        "case.snake": "a__b",
+        "case.pascal": "A-B",
+        "case.title": "a--b",
+        "case.snake.pascal": "A__b",
+        "case.pascal.snake": "A_B",
+        "case.camel.snake": "a_B"
+      }
+    },
+    {
+      "key": "a-b-",
+      "kebab": "a-b-",
+      "camel": "aB-",
+      "snake": "a_b_",
+      "pascal": "AB-",
+      "modifyCasing": {
+        "default camel": "aB-",
+        "default kebab": "a-b-",
+        "case.camel": "aB-",
+        "case.kebab": "a-b-",
+        "case.snake": "a_b_",
+        "case.pascal": "AB-",
+        "case.title": "a-b-",
+        "case.snake.pascal": "A_b_",
+        "case.pascal.snake": "AB_",
+        "case.camel.snake": "aB_"
+      }
+    },
+    {
+      "key": "-a-b",
+      "kebab": "-a-b",
+      "camel": "AB",
+      "snake": "_a_b",
+      "pascal": "AB",
+      "modifyCasing": {
+        "default camel": "AB",
+        "default kebab": "-a-b",
+        "case.camel": "AB",
+        "case.kebab": "-a-b",
+        "case.snake": "_a_b",
+        "case.pascal": "-aB",
+        "case.title": "-a-b",
+        "case.snake.pascal": "_a_b",
+        "case.pascal.snake": "_aB",
+        "case.camel.snake": "AB"
+      }
+    },
+    {
+      "key": "a.-b",
+      "kebab": "a.-b",
+      "camel": "a.B",
+      "snake": "a._b",
+      "pascal": "A.B",
+      "modifyCasing": {
+        "default camel": "a.B",
+        "default kebab": "a.-b",
+        "case.camel": "a.B",
+        "case.kebab": "a.-b",
+        "case.snake": "a._b",
+        "case.pascal": "A.B",
+        "case.title": "a.-b",
+        "case.snake.pascal": "A._b",
+        "case.pascal.snake": "A.B",
+        "case.camel.snake": "a.B"
+      }
+    },
+    {
+      "key": "a-.b",
+      "kebab": "a-.b",
+      "camel": "a.b",
+      "snake": "a_.b",
+      "pascal": "A.B",
+      "modifyCasing": {
+        "default camel": "a-.b",
+        "default kebab": "a-.b",
+        "case.camel": "a-.b",
+        "case.kebab": "a-.b",
+        "case.snake": "a_.b",
+        "case.pascal": "A-.b",
+        "case.title": "a-.b",
+        "case.snake.pascal": "A_.b",
+        "case.pascal.snake": "A_.b",
+        "case.camel.snake": "a_.b"
+      }
+    },
+    {
+      "key": "é-b",
+      "kebab": "é-b",
+      "camel": "éB",
+      "snake": "é_b",
+      "pascal": "ÉB",
+      "modifyCasing": {
+        "default camel": "éB",
+        "default kebab": "é-b",
+        "case.camel": "éB",
+        "case.kebab": "é-b",
+        "case.snake": "é_b",
+        "case.pascal": "ÉB",
+        "case.title": "é-b",
+        "case.snake.pascal": "É_b",
+        "case.pascal.snake": "ÉB",
+        "case.camel.snake": "éB"
+      }
+    },
+    {
+      "key": "foo-é",
+      "kebab": "foo-é",
+      "camel": "fooÉ",
+      "snake": "foo_é",
+      "pascal": "FooÉ",
+      "modifyCasing": {
+        "default camel": "foo-é",
+        "default kebab": "foo-é",
+        "case.camel": "foo-é",
+        "case.kebab": "foo-é",
+        "case.snake": "foo_é",
+        "case.pascal": "Foo-é",
+        "case.title": "foo-é",
+        "case.snake.pascal": "Foo_é",
+        "case.pascal.snake": "Foo_é",
+        "case.camel.snake": "foo_é"
+      }
+    },
+    {
+      "key": "b_",
+      "kebab": "b-",
+      "camel": "b-",
+      "snake": "b_",
+      "pascal": "B-",
+      "modifyCasing": {
+        "default camel": "b_",
+        "default kebab": "b_",
+        "case.camel": "b_",
+        "case.kebab": "b_",
+        "case.snake": "b_",
+        "case.pascal": "B_",
+        "case.title": "b_",
+        "case.snake.pascal": "B_",
+        "case.pascal.snake": "B_",
+        "case.camel.snake": "b_"
+      }
+    },
+    {
+      "key": "x-1-y",
+      "kebab": "x-1-y",
+      "camel": "x1Y",
+      "snake": "x_1_y",
+      "pascal": "X1Y",
+      "modifyCasing": {
+        "default camel": "x-1Y",
+        "default kebab": "x-1-y",
+        "case.camel": "x-1Y",
+        "case.kebab": "x-1-y",
+        "case.snake": "x_1_y",
+        "case.pascal": "X-1Y",
+        "case.title": "x-1-y",
+        "case.snake.pascal": "X_1_y",
+        "case.pascal.snake": "X_1Y",
+        "case.camel.snake": "x_1Y"
+      }
+    },
+    {
+      "key": "v2-api",
+      "kebab": "v-2-api",
+      "camel": "v2Api",
+      "snake": "v_2_api",
+      "pascal": "V2Api",
+      "modifyCasing": {
+        "default camel": "v2Api",
+        "default kebab": "v2-api",
+        "case.camel": "v2Api",
+        "case.kebab": "v2-api",
+        "case.snake": "v2_api",
+        "case.pascal": "V2Api",
+        "case.title": "v2-api",
+        "case.snake.pascal": "V2_api",
+        "case.pascal.snake": "V2Api",
+        "case.camel.snake": "v2Api"
+      }
+    },
+    {
+      "key": "api-v2",
+      "kebab": "api-v-2",
+      "camel": "apiV2",
+      "snake": "api_v_2",
+      "pascal": "ApiV2",
+      "modifyCasing": {
+        "default camel": "apiV2",
+        "default kebab": "api-v2",
+        "case.camel": "apiV2",
+        "case.kebab": "api-v2",
+        "case.snake": "api_v2",
+        "case.pascal": "ApiV2",
+        "case.title": "api-v2",
+        "case.snake.pascal": "Api_v2",
+        "case.pascal.snake": "ApiV2",
+        "case.camel.snake": "apiV2"
+      }
+    }
+  ]
+}

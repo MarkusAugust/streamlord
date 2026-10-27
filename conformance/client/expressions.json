@@ -1,0 +1,1663 @@
+{
+  "$comment": "The function body genRx (engine/engine.ts of the Datastar 1.0.4 client) hands to compileExpression for each expression, with returnsValue false and true: Function was replaced to record its last argument. compiles says whether the real Function took that body.",
+  "cases": {
+    "rewrites": [
+      {
+        "expression": "$count",
+        "returnsValue": false,
+        "js": "$['count']",
+        "compiles": true
+      },
+      {
+        "expression": "$count",
+        "returnsValue": true,
+        "js": "return ($['count']);",
+        "compiles": true
+      },
+      {
+        "expression": "$count++",
+        "returnsValue": false,
+        "js": "$['count']++",
+        "compiles": true
+      },
+      {
+        "expression": "$count++",
+        "returnsValue": true,
+        "js": "return ($['count']++);",
+        "compiles": true
+      },
+      {
+        "expression": "$count--",
+        "returnsValue": false,
+        "js": "$['count']--",
+        "compiles": true
+      },
+      {
+        "expression": "$count--",
+        "returnsValue": true,
+        "js": "return ($['count']--);",
+        "compiles": true
+      },
+      {
+        "expression": "$foo.bar",
+        "returnsValue": false,
+        "js": "$['foo']['bar']",
+        "compiles": true
+      },
+      {
+        "expression": "$foo.bar",
+        "returnsValue": true,
+        "js": "return ($['foo']['bar']);",
+        "compiles": true
+      },
+      {
+        "expression": "$foo-bar",
+        "returnsValue": false,
+        "js": "$['foo-bar']",
+        "compiles": true
+      },
+      {
+        "expression": "$foo-bar",
+        "returnsValue": true,
+        "js": "return ($['foo-bar']);",
+        "compiles": true
+      },
+      {
+        "expression": "$foo.bar-baz",
+        "returnsValue": false,
+        "js": "$['foo']['bar-baz']",
+        "compiles": true
+      },
+      {
+        "expression": "$foo.bar-baz",
+        "returnsValue": true,
+        "js": "return ($['foo']['bar-baz']);",
+        "compiles": true
+      },
+      {
+        "expression": "$foo-$bar",
+        "returnsValue": false,
+        "js": "$['foo']-$['bar']",
+        "compiles": true
+      },
+      {
+        "expression": "$foo-$bar",
+        "returnsValue": true,
+        "js": "return ($['foo']-$['bar']);",
+        "compiles": true
+      },
+      {
+        "expression": "$arr[$index]",
+        "returnsValue": false,
+        "js": "$['arr'][$['index']]",
+        "compiles": true
+      },
+      {
+        "expression": "$arr[$index]",
+        "returnsValue": true,
+        "js": "return ($['arr'][$['index']]);",
+        "compiles": true
+      },
+      {
+        "expression": "$['foo']",
+        "returnsValue": false,
+        "js": "$['foo']",
+        "compiles": true
+      },
+      {
+        "expression": "$['foo']",
+        "returnsValue": true,
+        "js": "return ($['foo']);",
+        "compiles": true
+      },
+      {
+        "expression": "$foo[obj.bar]",
+        "returnsValue": false,
+        "js": "$['foo'][obj.bar]",
+        "compiles": true
+      },
+      {
+        "expression": "$foo[obj.bar]",
+        "returnsValue": true,
+        "js": "return ($['foo'][obj.bar]);",
+        "compiles": true
+      },
+      {
+        "expression": "$foo['bar.baz']",
+        "returnsValue": false,
+        "js": "$['foo']['bar.baz']",
+        "compiles": true
+      },
+      {
+        "expression": "$foo['bar.baz']",
+        "returnsValue": true,
+        "js": "return ($['foo']['bar.baz']);",
+        "compiles": true
+      },
+      {
+        "expression": "$123",
+        "returnsValue": false,
+        "js": "$['123']",
+        "compiles": true
+      },
+      {
+        "expression": "$123",
+        "returnsValue": true,
+        "js": "return ($['123']);",
+        "compiles": true
+      },
+      {
+        "expression": "$foo.0.name",
+        "returnsValue": false,
+        "js": "$['foo']['0']['name']",
+        "compiles": true
+      },
+      {
+        "expression": "$foo.0.name",
+        "returnsValue": true,
+        "js": "return ($['foo']['0']['name']);",
+        "compiles": true
+      },
+      {
+        "expression": "$a-b.c-d",
+        "returnsValue": false,
+        "js": "$['a-b']['c-d']",
+        "compiles": true
+      },
+      {
+        "expression": "$a-b.c-d",
+        "returnsValue": true,
+        "js": "return ($['a-b']['c-d']);",
+        "compiles": true
+      },
+      {
+        "expression": "$foo.",
+        "returnsValue": false,
+        "js": "$['foo'].",
+        "compiles": false
+      },
+      {
+        "expression": "$foo.",
+        "returnsValue": true,
+        "js": "return ($['foo'].);",
+        "compiles": false
+      },
+      {
+        "expression": "$-a",
+        "returnsValue": false,
+        "js": "$-a",
+        "compiles": true
+      },
+      {
+        "expression": "$-a",
+        "returnsValue": true,
+        "js": "return ($-a);",
+        "compiles": true
+      },
+      {
+        "expression": "$a-",
+        "returnsValue": false,
+        "js": "$['a']-",
+        "compiles": false
+      },
+      {
+        "expression": "$a-",
+        "returnsValue": true,
+        "js": "return ($['a']-);",
+        "compiles": false
+      },
+      {
+        "expression": "$a--b",
+        "returnsValue": false,
+        "js": "$['a']--b",
+        "compiles": false
+      },
+      {
+        "expression": "$a--b",
+        "returnsValue": true,
+        "js": "return ($['a']--b);",
+        "compiles": false
+      },
+      {
+        "expression": "$a..b",
+        "returnsValue": false,
+        "js": "$['a']..b",
+        "compiles": false
+      },
+      {
+        "expression": "$a..b",
+        "returnsValue": true,
+        "js": "return ($['a']..b);",
+        "compiles": false
+      },
+      {
+        "expression": "$a.-b",
+        "returnsValue": false,
+        "js": "$['a'].-b",
+        "compiles": false
+      },
+      {
+        "expression": "$a.-b",
+        "returnsValue": true,
+        "js": "return ($['a'].-b);",
+        "compiles": false
+      },
+      {
+        "expression": "$_private",
+        "returnsValue": false,
+        "js": "$['_private']",
+        "compiles": true
+      },
+      {
+        "expression": "$_private",
+        "returnsValue": true,
+        "js": "return ($['_private']);",
+        "compiles": true
+      },
+      {
+        "expression": "$a_b",
+        "returnsValue": false,
+        "js": "$['a_b']",
+        "compiles": true
+      },
+      {
+        "expression": "$a_b",
+        "returnsValue": true,
+        "js": "return ($['a_b']);",
+        "compiles": true
+      },
+      {
+        "expression": "$é",
+        "returnsValue": false,
+        "js": "$é",
+        "compiles": true
+      },
+      {
+        "expression": "$é",
+        "returnsValue": true,
+        "js": "return ($é);",
+        "compiles": true
+      },
+      {
+        "expression": "$fooé",
+        "returnsValue": false,
+        "js": "$['foo']é",
+        "compiles": false
+      },
+      {
+        "expression": "$fooé",
+        "returnsValue": true,
+        "js": "return ($['foo']é);",
+        "compiles": false
+      },
+      {
+        "expression": "$$a",
+        "returnsValue": false,
+        "js": "$$['a']",
+        "compiles": true
+      },
+      {
+        "expression": "$$a",
+        "returnsValue": true,
+        "js": "return ($$['a']);",
+        "compiles": true
+      },
+      {
+        "expression": "$ a",
+        "returnsValue": false,
+        "js": "$ a",
+        "compiles": false
+      },
+      {
+        "expression": "$ a",
+        "returnsValue": true,
+        "js": "return ($ a);",
+        "compiles": false
+      },
+      {
+        "expression": "foo$bar",
+        "returnsValue": false,
+        "js": "foo$['bar']",
+        "compiles": true
+      },
+      {
+        "expression": "foo$bar",
+        "returnsValue": true,
+        "js": "return (foo$['bar']);",
+        "compiles": true
+      },
+      {
+        "expression": "$foo$bar",
+        "returnsValue": false,
+        "js": "$['foo']$['bar']",
+        "compiles": false
+      },
+      {
+        "expression": "$foo$bar",
+        "returnsValue": true,
+        "js": "return ($['foo']$['bar']);",
+        "compiles": false
+      },
+      {
+        "expression": "$a.b.c.d",
+        "returnsValue": false,
+        "js": "$['a']['b']['c']['d']",
+        "compiles": true
+      },
+      {
+        "expression": "$a.b.c.d",
+        "returnsValue": true,
+        "js": "return ($['a']['b']['c']['d']);",
+        "compiles": true
+      },
+      {
+        "expression": "$a-b-c",
+        "returnsValue": false,
+        "js": "$['a-b-c']",
+        "compiles": true
+      },
+      {
+        "expression": "$a-b-c",
+        "returnsValue": true,
+        "js": "return ($['a-b-c']);",
+        "compiles": true
+      },
+      {
+        "expression": "$a.1.2",
+        "returnsValue": false,
+        "js": "$['a']['1']['2']",
+        "compiles": true
+      },
+      {
+        "expression": "$a.1.2",
+        "returnsValue": true,
+        "js": "return ($['a']['1']['2']);",
+        "compiles": true
+      },
+      {
+        "expression": "$9lives",
+        "returnsValue": false,
+        "js": "$['9lives']",
+        "compiles": true
+      },
+      {
+        "expression": "$9lives",
+        "returnsValue": true,
+        "js": "return ($['9lives']);",
+        "compiles": true
+      },
+      {
+        "expression": "$",
+        "returnsValue": false,
+        "js": "$",
+        "compiles": true
+      },
+      {
+        "expression": "$",
+        "returnsValue": true,
+        "js": "return ($);",
+        "compiles": true
+      },
+      {
+        "expression": "@get('/x')",
+        "returnsValue": false,
+        "js": "__action(\"get\",evt,'/x')",
+        "compiles": true
+      },
+      {
+        "expression": "@get('/x')",
+        "returnsValue": true,
+        "js": "return (__action(\"get\",evt,'/x'));",
+        "compiles": true
+      },
+      {
+        "expression": "@post('/x', {contentType: 'form'})",
+        "returnsValue": false,
+        "js": "__action(\"post\",evt,'/x', {contentType: 'form'})",
+        "compiles": true
+      },
+      {
+        "expression": "@post('/x', {contentType: 'form'})",
+        "returnsValue": true,
+        "js": "return (__action(\"post\",evt,'/x', {contentType: 'form'}));",
+        "compiles": true
+      },
+      {
+        "expression": "@peek(() => $a)",
+        "returnsValue": false,
+        "js": "__action(\"peek\",evt,() => $['a'])",
+        "compiles": true
+      },
+      {
+        "expression": "@peek(() => $a)",
+        "returnsValue": true,
+        "js": "return (__action(\"peek\",evt,() => $['a']));",
+        "compiles": true
+      },
+      {
+        "expression": "@get ('/x')",
+        "returnsValue": false,
+        "js": "@get ('/x')",
+        "compiles": false
+      },
+      {
+        "expression": "@get ('/x')",
+        "returnsValue": true,
+        "js": "return (@get ('/x'));",
+        "compiles": false
+      },
+      {
+        "expression": "@Get('/x')",
+        "returnsValue": false,
+        "js": "__action(\"Get\",evt,'/x')",
+        "compiles": true
+      },
+      {
+        "expression": "@Get('/x')",
+        "returnsValue": true,
+        "js": "return (__action(\"Get\",evt,'/x'));",
+        "compiles": true
+      },
+      {
+        "expression": "@$a('/x')",
+        "returnsValue": false,
+        "js": "__action(\"$a\",evt,'/x')",
+        "compiles": true
+      },
+      {
+        "expression": "@$a('/x')",
+        "returnsValue": true,
+        "js": "return (__action(\"$a\",evt,'/x'));",
+        "compiles": true
+      },
+      {
+        "expression": "@_a(1)",
+        "returnsValue": false,
+        "js": "__action(\"_a\",evt,1)",
+        "compiles": true
+      },
+      {
+        "expression": "@_a(1)",
+        "returnsValue": true,
+        "js": "return (__action(\"_a\",evt,1));",
+        "compiles": true
+      },
+      {
+        "expression": "@a1(1)",
+        "returnsValue": false,
+        "js": "__action(\"a1\",evt,1)",
+        "compiles": true
+      },
+      {
+        "expression": "@a1(1)",
+        "returnsValue": true,
+        "js": "return (__action(\"a1\",evt,1));",
+        "compiles": true
+      },
+      {
+        "expression": "@1a(1)",
+        "returnsValue": false,
+        "js": "@1a(1)",
+        "compiles": false
+      },
+      {
+        "expression": "@1a(1)",
+        "returnsValue": true,
+        "js": "return (@1a(1));",
+        "compiles": false
+      },
+      {
+        "expression": "@a-b(1)",
+        "returnsValue": false,
+        "js": "@a-b(1)",
+        "compiles": false
+      },
+      {
+        "expression": "@a-b(1)",
+        "returnsValue": true,
+        "js": "return (@a-b(1));",
+        "compiles": false
+      },
+      {
+        "expression": "@get",
+        "returnsValue": false,
+        "js": "@get",
+        "compiles": false
+      },
+      {
+        "expression": "@get",
+        "returnsValue": true,
+        "js": "return (@get);",
+        "compiles": false
+      },
+      {
+        "expression": "'$x'",
+        "returnsValue": false,
+        "js": "'$x'",
+        "compiles": true
+      },
+      {
+        "expression": "'$x'",
+        "returnsValue": true,
+        "js": "return ('$x');",
+        "compiles": true
+      },
+      {
+        "expression": "\"$x\"",
+        "returnsValue": false,
+        "js": "\"$x\"",
+        "compiles": true
+      },
+      {
+        "expression": "\"$x\"",
+        "returnsValue": true,
+        "js": "return (\"$x\");",
+        "compiles": true
+      },
+      {
+        "expression": "`$x`",
+        "returnsValue": false,
+        "js": "`$x`",
+        "compiles": true
+      },
+      {
+        "expression": "`$x`",
+        "returnsValue": true,
+        "js": "return (`$x`);",
+        "compiles": true
+      },
+      {
+        "expression": "'@x(1)'",
+        "returnsValue": false,
+        "js": "'@x(1)'",
+        "compiles": true
+      },
+      {
+        "expression": "'@x(1)'",
+        "returnsValue": true,
+        "js": "return ('@x(1)');",
+        "compiles": true
+      },
+      {
+        "expression": "`@x(1)`",
+        "returnsValue": false,
+        "js": "`@x(1)`",
+        "compiles": true
+      },
+      {
+        "expression": "`@x(1)`",
+        "returnsValue": true,
+        "js": "return (`@x(1)`);",
+        "compiles": true
+      },
+      {
+        "expression": "`${$x}`",
+        "returnsValue": false,
+        "js": "`${$['x']}`",
+        "compiles": true
+      },
+      {
+        "expression": "`${$x}`",
+        "returnsValue": true,
+        "js": "return (`${$['x']}`);",
+        "compiles": true
+      },
+      {
+        "expression": "`a ${$x} b`",
+        "returnsValue": false,
+        "js": "`a ${$['x']} b`",
+        "compiles": true
+      },
+      {
+        "expression": "`a ${$x} b`",
+        "returnsValue": true,
+        "js": "return (`a ${$['x']} b`);",
+        "compiles": true
+      },
+      {
+        "expression": "`${$x} ${$y}`",
+        "returnsValue": false,
+        "js": "`${$['x']} ${$['y']}`",
+        "compiles": true
+      },
+      {
+        "expression": "`${$x} ${$y}`",
+        "returnsValue": true,
+        "js": "return (`${$['x']} ${$['y']}`);",
+        "compiles": true
+      },
+      {
+        "expression": "`${ {a:1}.a }`",
+        "returnsValue": false,
+        "js": "`${ {a:1}.a }`",
+        "compiles": true
+      },
+      {
+        "expression": "`${ {a:1}.a }`",
+        "returnsValue": true,
+        "js": "return (`${ {a:1}.a }`);",
+        "compiles": true
+      },
+      {
+        "expression": "`${$x} and $y`",
+        "returnsValue": false,
+        "js": "`${$['x']} and $['y']`",
+        "compiles": true
+      },
+      {
+        "expression": "`${$x} and $y`",
+        "returnsValue": true,
+        "js": "return (`${$['x']} and $['y']`);",
+        "compiles": true
+      },
+      {
+        "expression": "`${@get('/x')}`",
+        "returnsValue": false,
+        "js": "`${__action(\"get\",evt,'/x')}`",
+        "compiles": true
+      },
+      {
+        "expression": "`${@get('/x')}`",
+        "returnsValue": true,
+        "js": "return (`${__action(\"get\",evt,'/x')}`);",
+        "compiles": true
+      },
+      {
+        "expression": "`${'$a'}`",
+        "returnsValue": false,
+        "js": "`${'$['a']'}`",
+        "compiles": false
+      },
+      {
+        "expression": "`${'$a'}`",
+        "returnsValue": true,
+        "js": "return (`${'$['a']'}`);",
+        "compiles": false
+      },
+      {
+        "expression": "`${\"@a(\"}`",
+        "returnsValue": false,
+        "js": "`${\"__action(\"a\",evt,\"}`",
+        "compiles": false
+      },
+      {
+        "expression": "`${\"@a(\"}`",
+        "returnsValue": true,
+        "js": "return (`${\"__action(\"a\",evt,\"}`);",
+        "compiles": false
+      },
+      {
+        "expression": "`\\${$x}`",
+        "returnsValue": false,
+        "js": "`\\${$x}`",
+        "compiles": true
+      },
+      {
+        "expression": "`\\${$x}`",
+        "returnsValue": true,
+        "js": "return (`\\${$x}`);",
+        "compiles": true
+      },
+      {
+        "expression": "'it\\'s $x' + $y",
+        "returnsValue": false,
+        "js": "'it\\'s $x' + $['y']",
+        "compiles": true
+      },
+      {
+        "expression": "'it\\'s $x' + $y",
+        "returnsValue": true,
+        "js": "return ('it\\'s $x' + $['y']);",
+        "compiles": true
+      },
+      {
+        "expression": "\"say \\\"$x\\\"\" + $y",
+        "returnsValue": false,
+        "js": "\"say \\\"$x\\\"\" + $['y']",
+        "compiles": true
+      },
+      {
+        "expression": "\"say \\\"$x\\\"\" + $y",
+        "returnsValue": true,
+        "js": "return (\"say \\\"$x\\\"\" + $['y']);",
+        "compiles": true
+      },
+      {
+        "expression": "'\\\\' + $x",
+        "returnsValue": false,
+        "js": "'\\\\' + $['x']",
+        "compiles": true
+      },
+      {
+        "expression": "'\\\\' + $x",
+        "returnsValue": true,
+        "js": "return ('\\\\' + $['x']);",
+        "compiles": true
+      },
+      {
+        "expression": "'a\\'; $b = 'c'",
+        "returnsValue": false,
+        "js": "'a\\'; $b = 'c'",
+        "compiles": false
+      },
+      {
+        "expression": "'a\\'; $b = 'c'",
+        "returnsValue": true,
+        "js": "return ('a\\'; $b = 'c');",
+        "compiles": false
+      },
+      {
+        "expression": "'a\\x5c'; $b = 'c'",
+        "returnsValue": false,
+        "js": "'a\\x5c'; $['b'] = 'c'",
+        "compiles": true
+      },
+      {
+        "expression": "'a\\x5c'; $b = 'c'",
+        "returnsValue": true,
+        "js": "'a\\x5c';\nreturn ($['b'] = 'c');",
+        "compiles": true
+      },
+      {
+        "expression": "'$a' + $b; 'c'",
+        "returnsValue": false,
+        "js": "'$a' + $['b']; 'c'",
+        "compiles": true
+      },
+      {
+        "expression": "'$a' + $b; 'c'",
+        "returnsValue": true,
+        "js": "'$a' + $['b'];\nreturn ('c');",
+        "compiles": true
+      },
+      {
+        "expression": "'unclosed $x",
+        "returnsValue": false,
+        "js": "'unclosed $['x']",
+        "compiles": false
+      },
+      {
+        "expression": "'unclosed $x",
+        "returnsValue": true,
+        "js": "return ('unclosed $['x']);",
+        "compiles": false
+      },
+      {
+        "expression": "`unclosed ${$x}",
+        "returnsValue": false,
+        "js": "`unclosed ${$['x']}",
+        "compiles": false
+      },
+      {
+        "expression": "`unclosed ${$x}",
+        "returnsValue": true,
+        "js": "return (`unclosed ${$['x']});",
+        "compiles": false
+      },
+      {
+        "expression": "'$a\n$b'",
+        "returnsValue": false,
+        "js": "'$a\n$b'",
+        "compiles": false
+      },
+      {
+        "expression": "'$a\n$b'",
+        "returnsValue": true,
+        "js": "return ('$a\n$b');",
+        "compiles": false
+      },
+      {
+        "expression": "`$x\n${$y}`",
+        "returnsValue": false,
+        "js": "`$['x']\n${$['y']}`",
+        "compiles": true
+      },
+      {
+        "expression": "`$x\n${$y}`",
+        "returnsValue": true,
+        "js": "return (`$['x']\n${$['y']}`);",
+        "compiles": true
+      },
+      {
+        "expression": "$a / 2; $b / 3",
+        "returnsValue": false,
+        "js": "$['a'] / 2; $['b'] / 3",
+        "compiles": true
+      },
+      {
+        "expression": "$a / 2; $b / 3",
+        "returnsValue": true,
+        "js": "return ($['a'] / 2; $['b'] / 3);",
+        "compiles": false
+      },
+      {
+        "expression": "/;/.test($x)",
+        "returnsValue": false,
+        "js": "/;/.test($['x'])",
+        "compiles": true
+      },
+      {
+        "expression": "/;/.test($x)",
+        "returnsValue": true,
+        "js": "return (/;/.test($['x']));",
+        "compiles": true
+      },
+      {
+        "expression": "$a = /[;]/; $b",
+        "returnsValue": false,
+        "js": "$['a'] = /[;]/; $['b']",
+        "compiles": true
+      },
+      {
+        "expression": "$a = /[;]/; $b",
+        "returnsValue": true,
+        "js": "$['a'] = /[;]/;\nreturn ($['b']);",
+        "compiles": true
+      },
+      {
+        "expression": "/\\//.test($x); $y",
+        "returnsValue": false,
+        "js": "/\\//.test($['x']); $['y']",
+        "compiles": true
+      },
+      {
+        "expression": "/\\//.test($x); $y",
+        "returnsValue": true,
+        "js": "/\\//.test($['x']);\nreturn ($['y']);",
+        "compiles": true
+      },
+      {
+        "expression": "$x.replace(/a/g, 'b'); $y",
+        "returnsValue": false,
+        "js": "$['x']['replace'](/a/g, 'b'); $['y']",
+        "compiles": true
+      },
+      {
+        "expression": "$x.replace(/a/g, 'b'); $y",
+        "returnsValue": true,
+        "js": "$['x']['replace'](/a/g, 'b');\nreturn ($['y']);",
+        "compiles": true
+      },
+      {
+        "expression": "$a; $b",
+        "returnsValue": false,
+        "js": "$['a']; $['b']",
+        "compiles": true
+      },
+      {
+        "expression": "$a; $b",
+        "returnsValue": true,
+        "js": "$['a'];\nreturn ($['b']);",
+        "compiles": true
+      },
+      {
+        "expression": "$a; $b;",
+        "returnsValue": false,
+        "js": "$['a']; $['b'];",
+        "compiles": true
+      },
+      {
+        "expression": "$a; $b;",
+        "returnsValue": true,
+        "js": "$['a'];\nreturn ($['b']);",
+        "compiles": true
+      },
+      {
+        "expression": "$a;; $b",
+        "returnsValue": false,
+        "js": "$['a'];; $['b']",
+        "compiles": true
+      },
+      {
+        "expression": "$a;; $b",
+        "returnsValue": true,
+        "js": "$['a'];\nreturn ($['b']);",
+        "compiles": true
+      },
+      {
+        "expression": ";$a",
+        "returnsValue": false,
+        "js": ";$['a']",
+        "compiles": true
+      },
+      {
+        "expression": ";$a",
+        "returnsValue": true,
+        "js": "return ($['a']);",
+        "compiles": true
+      },
+      {
+        "expression": "$a;",
+        "returnsValue": false,
+        "js": "$['a'];",
+        "compiles": true
+      },
+      {
+        "expression": "$a;",
+        "returnsValue": true,
+        "js": "return ($['a']);",
+        "compiles": true
+      },
+      {
+        "expression": "$a = 1; return $a",
+        "returnsValue": false,
+        "js": "$['a'] = 1; return $['a']",
+        "compiles": true
+      },
+      {
+        "expression": "$a = 1; return $a",
+        "returnsValue": true,
+        "js": "$['a'] = 1;\n return $['a']",
+        "compiles": true
+      },
+      {
+        "expression": "$a = 1; return($a)",
+        "returnsValue": false,
+        "js": "$['a'] = 1; return($['a'])",
+        "compiles": true
+      },
+      {
+        "expression": "$a = 1; return($a)",
+        "returnsValue": true,
+        "js": "$['a'] = 1;\n return($['a'])",
+        "compiles": true
+      },
+      {
+        "expression": "$a = 1; returnValue",
+        "returnsValue": false,
+        "js": "$['a'] = 1; returnValue",
+        "compiles": true
+      },
+      {
+        "expression": "$a = 1; returnValue",
+        "returnsValue": true,
+        "js": "$['a'] = 1;\n returnValue",
+        "compiles": true
+      },
+      {
+        "expression": "return $a",
+        "returnsValue": false,
+        "js": "return $['a']",
+        "compiles": true
+      },
+      {
+        "expression": "return $a",
+        "returnsValue": true,
+        "js": "return $['a']",
+        "compiles": true
+      },
+      {
+        "expression": "  $a  ",
+        "returnsValue": false,
+        "js": "$['a']",
+        "compiles": true
+      },
+      {
+        "expression": "  $a  ",
+        "returnsValue": true,
+        "js": "return ($['a']);",
+        "compiles": true
+      },
+      {
+        "expression": "\n$a\n",
+        "returnsValue": false,
+        "js": "$['a']",
+        "compiles": true
+      },
+      {
+        "expression": "\n$a\n",
+        "returnsValue": true,
+        "js": "return ($['a']);",
+        "compiles": true
+      },
+      {
+        "expression": " $a ",
+        "returnsValue": false,
+        "js": "$['a']",
+        "compiles": true
+      },
+      {
+        "expression": " $a ",
+        "returnsValue": true,
+        "js": "return ($['a']);",
+        "compiles": true
+      },
+      {
+        "expression": "﻿$a",
+        "returnsValue": false,
+        "js": "$['a']",
+        "compiles": true
+      },
+      {
+        "expression": "﻿$a",
+        "returnsValue": true,
+        "js": "return ($['a']);",
+        "compiles": true
+      },
+      {
+        "expression": "",
+        "returnsValue": false,
+        "js": "",
+        "compiles": true
+      },
+      {
+        "expression": "",
+        "returnsValue": true,
+        "js": "",
+        "compiles": true
+      },
+      {
+        "expression": "   ",
+        "returnsValue": false,
+        "js": "",
+        "compiles": true
+      },
+      {
+        "expression": "   ",
+        "returnsValue": true,
+        "js": "",
+        "compiles": true
+      },
+      {
+        "expression": ";",
+        "returnsValue": false,
+        "js": ";",
+        "compiles": true
+      },
+      {
+        "expression": ";",
+        "returnsValue": true,
+        "js": "",
+        "compiles": true
+      },
+      {
+        "expression": "(() => 1)()",
+        "returnsValue": false,
+        "js": "(() => 1)()",
+        "compiles": true
+      },
+      {
+        "expression": "(() => 1)()",
+        "returnsValue": true,
+        "js": "return ((() => 1)());",
+        "compiles": true
+      },
+      {
+        "expression": "(() => { $a = 1; $b = 2 })(); $c",
+        "returnsValue": false,
+        "js": "(() => { $['a'] = 1; $['b'] = 2 })(); $['c']",
+        "compiles": true
+      },
+      {
+        "expression": "(() => { $a = 1; $b = 2 })(); $c",
+        "returnsValue": true,
+        "js": "(() => { $['a'] = 1; $['b'] = 2 })();\nreturn ($['c']);",
+        "compiles": true
+      },
+      {
+        "expression": "(function() { return $a; })()",
+        "returnsValue": false,
+        "js": "(function() { return $['a']; })()",
+        "compiles": true
+      },
+      {
+        "expression": "(function() { return $a; })()",
+        "returnsValue": true,
+        "js": "return ((function() { return $['a']; })());",
+        "compiles": true
+      },
+      {
+        "expression": "(function(x) { return x })(1)",
+        "returnsValue": false,
+        "js": "(function(x) { return x })(1)",
+        "compiles": true
+      },
+      {
+        "expression": "(function(x) { return x })(1)",
+        "returnsValue": true,
+        "js": "return ((function(x) { return x })(1));",
+        "compiles": true
+      },
+      {
+        "expression": "(() => $a; $b)()",
+        "returnsValue": false,
+        "js": "(() => $['a']; $['b'])()",
+        "compiles": false
+      },
+      {
+        "expression": "(() => $a; $b)()",
+        "returnsValue": true,
+        "js": "(() => $['a'];\nreturn ($['b'])());",
+        "compiles": false
+      },
+      {
+        "expression": "(async () => 1)()",
+        "returnsValue": false,
+        "js": "(async () => 1)()",
+        "compiles": true
+      },
+      {
+        "expression": "(async () => 1)()",
+        "returnsValue": true,
+        "js": "return ((async () => 1)());",
+        "compiles": true
+      },
+      {
+        "expression": "await $x",
+        "returnsValue": false,
+        "js": "await $['x']",
+        "compiles": false
+      },
+      {
+        "expression": "await $x",
+        "returnsValue": true,
+        "js": "return (await $['x']);",
+        "compiles": false
+      },
+      {
+        "expression": "await @get('/x')",
+        "returnsValue": false,
+        "js": "await __action(\"get\",evt,'/x')",
+        "compiles": false
+      },
+      {
+        "expression": "await @get('/x')",
+        "returnsValue": true,
+        "js": "return (await __action(\"get\",evt,'/x'));",
+        "compiles": false
+      },
+      {
+        "expression": "evt.target.value",
+        "returnsValue": false,
+        "js": "evt.target.value",
+        "compiles": true
+      },
+      {
+        "expression": "evt.target.value",
+        "returnsValue": true,
+        "js": "return (evt.target.value);",
+        "compiles": true
+      },
+      {
+        "expression": "el.value",
+        "returnsValue": false,
+        "js": "el.value",
+        "compiles": true
+      },
+      {
+        "expression": "el.value",
+        "returnsValue": true,
+        "js": "return (el.value);",
+        "compiles": true
+      },
+      {
+        "expression": "el.dataset.x",
+        "returnsValue": false,
+        "js": "el.dataset.x",
+        "compiles": true
+      },
+      {
+        "expression": "el.dataset.x",
+        "returnsValue": true,
+        "js": "return (el.dataset.x);",
+        "compiles": true
+      },
+      {
+        "expression": "$x = evt.target.value",
+        "returnsValue": false,
+        "js": "$['x'] = evt.target.value",
+        "compiles": true
+      },
+      {
+        "expression": "$x = evt.target.value",
+        "returnsValue": true,
+        "js": "return ($['x'] = evt.target.value);",
+        "compiles": true
+      },
+      {
+        "expression": "$count > 0 ? 'many' : 'none'",
+        "returnsValue": false,
+        "js": "$['count'] > 0 ? 'many' : 'none'",
+        "compiles": true
+      },
+      {
+        "expression": "$count > 0 ? 'many' : 'none'",
+        "returnsValue": true,
+        "js": "return ($['count'] > 0 ? 'many' : 'none');",
+        "compiles": true
+      },
+      {
+        "expression": "$items.map($i => $i.name)",
+        "returnsValue": false,
+        "js": "$['items']['map']($['i'] => $['i']['name'])",
+        "compiles": false
+      },
+      {
+        "expression": "$items.map($i => $i.name)",
+        "returnsValue": true,
+        "js": "return ($['items']['map']($['i'] => $['i']['name']));",
+        "compiles": false
+      },
+      {
+        "expression": "{a: $a, b: $b}",
+        "returnsValue": false,
+        "js": "{a: $['a'], b: $['b']}",
+        "compiles": false
+      },
+      {
+        "expression": "{a: $a, b: $b}",
+        "returnsValue": true,
+        "js": "return ({a: $['a'], b: $['b']});",
+        "compiles": true
+      },
+      {
+        "expression": "x = {$a: 1}",
+        "returnsValue": false,
+        "js": "x = {$['a']: 1}",
+        "compiles": false
+      },
+      {
+        "expression": "x = {$a: 1}",
+        "returnsValue": true,
+        "js": "return (x = {$['a']: 1});",
+        "compiles": false
+      },
+      {
+        "expression": "$a = $b = 1",
+        "returnsValue": false,
+        "js": "$['a'] = $['b'] = 1",
+        "compiles": true
+      },
+      {
+        "expression": "$a = $b = 1",
+        "returnsValue": true,
+        "js": "return ($['a'] = $['b'] = 1);",
+        "compiles": true
+      },
+      {
+        "expression": "$a == $b",
+        "returnsValue": false,
+        "js": "$['a'] == $['b']",
+        "compiles": true
+      },
+      {
+        "expression": "$a == $b",
+        "returnsValue": true,
+        "js": "return ($['a'] == $['b']);",
+        "compiles": true
+      },
+      {
+        "expression": "$a === 'x'",
+        "returnsValue": false,
+        "js": "$['a'] === 'x'",
+        "compiles": true
+      },
+      {
+        "expression": "$a === 'x'",
+        "returnsValue": true,
+        "js": "return ($['a'] === 'x');",
+        "compiles": true
+      },
+      {
+        "expression": "!$open",
+        "returnsValue": false,
+        "js": "!$['open']",
+        "compiles": true
+      },
+      {
+        "expression": "!$open",
+        "returnsValue": true,
+        "js": "return (!$['open']);",
+        "compiles": true
+      },
+      {
+        "expression": "$open = !$open",
+        "returnsValue": false,
+        "js": "$['open'] = !$['open']",
+        "compiles": true
+      },
+      {
+        "expression": "$open = !$open",
+        "returnsValue": true,
+        "js": "return ($['open'] = !$['open']);",
+        "compiles": true
+      },
+      {
+        "expression": "$a += 1",
+        "returnsValue": false,
+        "js": "$['a'] += 1",
+        "compiles": true
+      },
+      {
+        "expression": "$a += 1",
+        "returnsValue": true,
+        "js": "return ($['a'] += 1);",
+        "compiles": true
+      },
+      {
+        "expression": "$count++ // $z",
+        "returnsValue": false,
+        "js": "$['count']++ // $['z']",
+        "compiles": true
+      },
+      {
+        "expression": "$count++ // $z",
+        "returnsValue": true,
+        "js": "return ($['count']++ // $['z']);",
+        "compiles": false
+      },
+      {
+        "expression": "$a = 1 // don't\n$b = 'x'",
+        "returnsValue": false,
+        "js": "$['a'] = 1 // don't\n$b = 'x'",
+        "compiles": true
+      },
+      {
+        "expression": "$a = 1 // don't\n$b = 'x'",
+        "returnsValue": true,
+        "js": "return ($['a'] = 1 // don't\n$b = 'x');",
+        "compiles": false
+      },
+      {
+        "expression": "/* $a */ $b",
+        "returnsValue": false,
+        "js": "/* $['a'] */ $['b']",
+        "compiles": true
+      },
+      {
+        "expression": "/* $a */ $b",
+        "returnsValue": true,
+        "js": "return (/* $['a'] */ $['b']);",
+        "compiles": true
+      },
+      {
+        "expression": "$a /* ; */ ; $b",
+        "returnsValue": false,
+        "js": "$['a'] /* ; */ ; $['b']",
+        "compiles": true
+      },
+      {
+        "expression": "$a /* ; */ ; $b",
+        "returnsValue": true,
+        "js": "$['a'] /* ; */ ;\nreturn ($['b']);",
+        "compiles": true
+      },
+      {
+        "expression": "$items[$items.length - 1]",
+        "returnsValue": false,
+        "js": "$['items'][$['items']['length'] - 1]",
+        "compiles": true
+      },
+      {
+        "expression": "$items[$items.length - 1]",
+        "returnsValue": true,
+        "js": "return ($['items'][$['items']['length'] - 1]);",
+        "compiles": true
+      },
+      {
+        "expression": "$user.name.first",
+        "returnsValue": false,
+        "js": "$['user']['name']['first']",
+        "compiles": true
+      },
+      {
+        "expression": "$user.name.first",
+        "returnsValue": true,
+        "js": "return ($['user']['name']['first']);",
+        "compiles": true
+      },
+      {
+        "expression": "$user['name'].first",
+        "returnsValue": false,
+        "js": "$['user']['name'].first",
+        "compiles": true
+      },
+      {
+        "expression": "$user['name'].first",
+        "returnsValue": true,
+        "js": "return ($['user']['name'].first);",
+        "compiles": true
+      },
+      {
+        "expression": "$a.b[$c.d]",
+        "returnsValue": false,
+        "js": "$['a']['b'][$['c']['d']]",
+        "compiles": true
+      },
+      {
+        "expression": "$a.b[$c.d]",
+        "returnsValue": true,
+        "js": "return ($['a']['b'][$['c']['d']]);",
+        "compiles": true
+      },
+      {
+        "expression": "@get(`/x/${$id}`)",
+        "returnsValue": false,
+        "js": "__action(\"get\",evt,`/x/${$['id']}`)",
+        "compiles": true
+      },
+      {
+        "expression": "@get(`/x/${$id}`)",
+        "returnsValue": true,
+        "js": "return (__action(\"get\",evt,`/x/${$['id']}`));",
+        "compiles": true
+      },
+      {
+        "expression": "@get(`/x/${$id}/${$y}`)",
+        "returnsValue": false,
+        "js": "__action(\"get\",evt,`/x/${$['id']}/${$['y']}`)",
+        "compiles": true
+      },
+      {
+        "expression": "@get(`/x/${$id}/${$y}`)",
+        "returnsValue": true,
+        "js": "return (__action(\"get\",evt,`/x/${$['id']}/${$['y']}`));",
+        "compiles": true
+      },
+      {
+        "expression": "@get('/x', {headers: {'X-Y': $z}})",
+        "returnsValue": false,
+        "js": "__action(\"get\",evt,'/x', {headers: {'X-Y': $['z']}})",
+        "compiles": true
+      },
+      {
+        "expression": "@get('/x', {headers: {'X-Y': $z}})",
+        "returnsValue": true,
+        "js": "return (__action(\"get\",evt,'/x', {headers: {'X-Y': $['z']}}));",
+        "compiles": true
+      },
+      {
+        "expression": "new Date($ts)",
+        "returnsValue": false,
+        "js": "new Date($['ts'])",
+        "compiles": true
+      },
+      {
+        "expression": "new Date($ts)",
+        "returnsValue": true,
+        "js": "return (new Date($['ts']));",
+        "compiles": true
+      },
+      {
+        "expression": "typeof $a",
+        "returnsValue": false,
+        "js": "typeof $['a']",
+        "compiles": true
+      },
+      {
+        "expression": "typeof $a",
+        "returnsValue": true,
+        "js": "return (typeof $['a']);",
+        "compiles": true
+      },
+      {
+        "expression": "$a instanceof Foo",
+        "returnsValue": false,
+        "js": "$['a'] instanceof Foo",
+        "compiles": true
+      },
+      {
+        "expression": "$a instanceof Foo",
+        "returnsValue": true,
+        "js": "return ($['a'] instanceof Foo);",
+        "compiles": true
+      },
+      {
+        "expression": "$a ?? 'x'",
+        "returnsValue": false,
+        "js": "$['a'] ?? 'x'",
+        "compiles": true
+      },
+      {
+        "expression": "$a ?? 'x'",
+        "returnsValue": true,
+        "js": "return ($['a'] ?? 'x');",
+        "compiles": true
+      },
+      {
+        "expression": "$a?.b",
+        "returnsValue": false,
+        "js": "$['a']?.b",
+        "compiles": true
+      },
+      {
+        "expression": "$a?.b",
+        "returnsValue": true,
+        "js": "return ($['a']?.b);",
+        "compiles": true
+      },
+      {
+        "expression": "$a?.['b']",
+        "returnsValue": false,
+        "js": "$['a']?.['b']",
+        "compiles": true
+      },
+      {
+        "expression": "$a?.['b']",
+        "returnsValue": true,
+        "js": "return ($['a']?.['b']);",
+        "compiles": true
+      },
+      {
+        "expression": "$a.toString()",
+        "returnsValue": false,
+        "js": "$['a']['toString']()",
+        "compiles": true
+      },
+      {
+        "expression": "$a.toString()",
+        "returnsValue": true,
+        "js": "return ($['a']['toString']());",
+        "compiles": true
+      },
+      {
+        "expression": "$a.constructor",
+        "returnsValue": false,
+        "js": "$['a']['constructor']",
+        "compiles": true
+      },
+      {
+        "expression": "$a.constructor",
+        "returnsValue": true,
+        "js": "return ($['a']['constructor']);",
+        "compiles": true
+      },
+      {
+        "expression": "$__proto__.x",
+        "returnsValue": false,
+        "js": "$['__proto__']['x']",
+        "compiles": true
+      },
+      {
+        "expression": "$__proto__.x",
+        "returnsValue": true,
+        "js": "return ($['__proto__']['x']);",
+        "compiles": true
+      },
+      {
+        "expression": "$a.__proto__",
+        "returnsValue": false,
+        "js": "$['a']['__proto__']",
+        "compiles": true
+      },
+      {
+        "expression": "$a.__proto__",
+        "returnsValue": true,
+        "js": "return ($['a']['__proto__']);",
+        "compiles": true
+      },
+      {
+        "expression": "$constructor",
+        "returnsValue": false,
+        "js": "$['constructor']",
+        "compiles": true
+      },
+      {
+        "expression": "$constructor",
+        "returnsValue": true,
+        "js": "return ($['constructor']);",
+        "compiles": true
+      },
+      {
+        "expression": "$hasOwnProperty",
+        "returnsValue": false,
+        "js": "$['hasOwnProperty']",
+        "compiles": true
+      },
+      {
+        "expression": "$hasOwnProperty",
+        "returnsValue": true,
+        "js": "return ($['hasOwnProperty']);",
+        "compiles": true
+      },
+      {
+        "expression": "console.log($a)",
+        "returnsValue": false,
+        "js": "console.log($['a'])",
+        "compiles": true
+      },
+      {
+        "expression": "console.log($a)",
+        "returnsValue": true,
+        "js": "return (console.log($['a']));",
+        "compiles": true
+      },
+      {
+        "expression": "window.$x",
+        "returnsValue": false,
+        "js": "window.$['x']",
+        "compiles": true
+      },
+      {
+        "expression": "window.$x",
+        "returnsValue": true,
+        "js": "return (window.$['x']);",
+        "compiles": true
+      },
+      {
+        "expression": "this.$x",
+        "returnsValue": false,
+        "js": "this.$['x']",
+        "compiles": true
+      },
+      {
+        "expression": "this.$x",
+        "returnsValue": true,
+        "js": "return (this.$['x']);",
+        "compiles": true
+      },
+      {
+        "expression": "$x; $x.y; $x-y; $x['z']",
+        "returnsValue": false,
+        "js": "$['x']; $['x']['y']; $['x-y']; $['x']['z']",
+        "compiles": true
+      },
+      {
+        "expression": "$x; $x.y; $x-y; $x['z']",
+        "returnsValue": true,
+        "js": "$['x'];\n $['x']['y'];\n $['x-y'];\nreturn ($['x']['z']);",
+        "compiles": true
+      }
+    ]
+  }
+}

@@ -95,8 +95,10 @@ public object Casing {
      * Where the default keeps the key as written (`on`, `class`), a name that mixes capitals with
      * a hyphen before a lower-case letter, such as `fooBar-baz`, is refused: the capitals need
      * `__case.camel` or `__case.pascal`, which turns every such hyphen into a capital too, and the
-     * browser has lowercased the key, so no key and case give the name back. An explicit `case`
-     * is applied as asked.
+     * browser has lowercased the key, so no key and case give the name back. Where the default is
+     * camel (`signals`, `bind`), that hyphen is read as camel, `fooBarBaz`, which is what
+     * [reference] reads from the same name, so the two agree (`modifyCasing` in text.ts, held to
+     * by the client oracle). An explicit `case` is applied as asked.
      */
     public fun key(
         name: String,
@@ -170,15 +172,23 @@ public object Casing {
         name: String,
         written: String,
     ): String {
+        val held = readKey(written)
+        SignalNames.pathProblem(held)?.let { throw InvalidSignalNameException(name, "is read by Datastar's client as $held, which $it") }
+        return written
+    }
+
+    /**
+     * The signal the client reads from a key [written] with its modifiers, once the browser has
+     * lowercased it: cut at the first `__`, and each `__case` applied in turn, camel when none is
+     * (`parseAttributeKey` in engine.ts, `modifyCasing` in text.ts).
+     */
+    internal fun readKey(written: String): String {
         val parts = written.lowercase().split("__")
         val modifiers = parts.drop(1).map { it.split('.') }
         val cases = modifiers.lastOrNull { it.first() == "case" }?.drop(1) ?: listOf("camel")
-        val held =
-            cases.fold(parts.first()) { key, case ->
-                Case.entries.firstOrNull { it.wire == case }?.let { clientCase(key, it) } ?: key
-            }
-        SignalNames.pathProblem(held)?.let { throw InvalidSignalNameException(name, "is read by Datastar's client as $held, which $it") }
-        return written
+        return cases.fold(parts.first()) { key, case ->
+            Case.entries.firstOrNull { it.wire == case }?.let { clientCase(key, it) } ?: key
+        }
     }
 
     /**
@@ -222,7 +232,7 @@ public object Casing {
     private val CLIENT_SPACE = Regex("[\\s_]+")
     private val CLIENT_HYPHEN = Regex("-.")
 
-    private fun clientCamel(name: String): String =
+    internal fun clientCamel(name: String): String =
         CLIENT_KEBAB
             .fold(name) { s, re -> re.replace(s, "$1-$2") }
             .replace(CLIENT_SPACE, "-")
