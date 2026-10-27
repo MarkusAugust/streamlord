@@ -80,6 +80,8 @@ class SignalReferencesTest {
     fun `a helper that reads a signal by name reads it, and one that assigns defines it`() {
         val src =
             """
+            import io.github.markusaugust.streamlord.html.*
+
             fun f() = div {
                 dataSignals("count", "0")
                 dataText(signal("cuont"))
@@ -97,18 +99,50 @@ class SignalReferencesTest {
         assertTrue("cuont" in collectSignals(src, SourceLanguage.KOTLIN))
     }
 
-    // The codec names the fields; for a named @Serializable class the analysis reads them, for a
-    // value of no named class it cannot, so any name is defined.
+    // A helper of the same name elsewhere, Hamcrest's not or a Redis increment, is somebody else's.
     @Test
-    fun `a page declared from toJson defines its class's fields, or any name`() {
-        val named =
-            """
-            @Serializable data class Form(val email: String = "")
-            fun page() = div { dataSignals(codec.toJson(Form())); dataText(signal("emial")) }
-            """.trimIndent()
-        assertEquals(listOf("emial"), unknown(named).map { named.substring(it.start, it.end) })
-        val variable = "fun page(form: Form) = div { dataSignals(codec.toJson(form)); dataText(signal(\"emial\")) }"
-        assertEquals(emptyList(), unknown(variable))
+    fun `a helper is read only in a file that uses the DSL, and only without a receiver`() {
+        val dsl = "import io.github.markusaugust.streamlord.html.*\n"
+        assertEquals(emptyList(), unknown("fun t() { assertThat(x, not(\"error\")) }"))
+        assertEquals(emptyList(), unknown(dsl + "fun t() { redis.opsForValue().increment(\"visits\"); filter.not(\"x\") }"))
+        val hamcrest = "import io.github.markusaugust.streamlord.html.dataText\nimport org.hamcrest.Matchers.not\n"
+        assertEquals(emptyList(), unknown(hamcrest + "fun t() { assertThat(status, not(\"error\")) }"))
+        assertEquals(emptyList(), unknown(dsl + "import org.hamcrest.Matchers.*\nfun t() { assertThat(status, not(\"error\")) }"))
+        assertEquals(emptyList(), unknown(dsl + "val m = Matchers.\n" + " ".repeat(60) + "not(\"zzz\")"))
+        val named = dsl + "fun t() = signal(name = \"nope\")"
+        assertEquals(listOf("nope"), unknown(named).map { named.substring(it.start, it.end) })
+    }
+
+    // signal("foo-bar") is $fooBar, so a fix that wrote foo-bar into it would reach the wrong signal.
+    @Test
+    fun `a helper's fix offers only a name it writes as it stands`() {
+        val src =
+            "import io.github.markusaugust.streamlord.html.*\n" +
+                "val p = \"\"\"<div data-signals=\"{'foo-bar': 1}\"></div>\"\"\"\nval t = signal(\"fooBar\")"
+        val issues = unknown(src)
+        assertEquals(listOf("fooBar"), issues.map { src.substring(it.start, it.end) })
+        assertEquals(emptyList(), issues.single().fixes)
+    }
+
+    // The codec names the fields. For a @Serializable class the analysis reads them; for a class it
+    // cannot read, or a value of no named class, any name is defined.
+    @Test
+    fun `a page declared from toJsonValue defines what the codec can write`() {
+        val form = "@Serializable data class Form(val email: String = \"\")\n"
+        val reads = "; dataText(signal(\"emial\")) }"
+        val cases =
+            mapOf(
+                "fun page() = div { dataSignals(codec.toJsonValue(Form()))" to listOf("emial"),
+                "fun page(form: Form) = div { dataSignals(codec.toJsonValue(form))" to listOf("emial"),
+                "val j = codec.toJsonValue(Form())\nfun page() = div { dataSignals(j)" to listOf("emial"),
+                "fun page() = div { dataSignals(codec.toJsonValue(JacksonForm()))" to emptyList(),
+                "fun page(form: JsonObject) = div { dataSignals(form)" to emptyList(),
+                "fun page() = div { dataSignals(codec.toJsonValue(load()))" to emptyList(),
+            )
+        for ((page, expected) in cases) {
+            val src = "import io.github.markusaugust.streamlord.html.*\n" + form + page + reads
+            assertEquals(expected, unknown(src).map { src.substring(it.start, it.end) }, page)
+        }
     }
 
     @Test

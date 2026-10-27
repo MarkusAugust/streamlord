@@ -47,7 +47,7 @@ const HTML_PATTERNS: RegExp[] = [...HTML_ATTRIBUTE_PATTERNS, /\$([A-Za-z_][A-Za-
 
 // Any modifier may stand between the annotation and `class`: an explicit-API module writes
 // `@Serializable public data class`.
-const SERIALIZABLE_CLASS = /@Serializable\s*(?:\([^)]*\))?\s*(?:(?:public|internal|private|protected|open|final|abstract|sealed|value|inline|data)\s+)*class\s+[A-Za-z_][A-Za-z0-9_]*\s*\(/g;
+const SERIALIZABLE_CLASS = /@Serializable\s*(?:\([^)]*\))?\s*(?:(?:public|internal|private|protected|open|final|abstract|sealed|value|inline|data)\s+)*class\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/g;
 // `@SerialName` renames the signal, so it is read with whatever annotations and modifiers stand
 // between it and the property.
 const PROPERTY = /(?:@SerialName\(\s*(?:value\s*=\s*)?"([^"]*)"\s*\)\s*(?:@\w+(?:\([^)]*\))?\s*)*(?:\w+\s+)*?)?\b(?:val|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:/g;
@@ -55,30 +55,115 @@ const PROPERTY = /(?:@SerialName\(\s*(?:value\s*=\s*)?"([^"]*)"\s*\)\s*(?:@\w+(?
 const PAIR_CALLS: ReadonlySet<string> = new Set(["dataSignals", "patchSignals", "removeSignals", "respondSignals", "datastarSignals"]);
 const JSON_CALLS: ReadonlySet<string> = new Set(["patchSignals", "respondSignals", "datastarSignals"]);
 /**
- * `toJson(...)` handed to `dataSignals`: the page declares what the codec makes of the value. The
- * class is named by `toJson<Form>(...)` or by a constructor call, `toJson(Form(...))`.
+ * `toJsonValue(...)` handed to `dataSignals`: the page declares what the codec makes of the value.
+ * The class is named by `toJsonValue<Form>(...)`, by a constructor call, `toJsonValue(Form(...))`,
+ * or by a variable whose type the file writes down, `toJsonValue(form)` with `form: Form`.
  */
-const TO_JSON = /\btoJson\s*(?:<\s*([A-Za-z_][A-Za-z0-9_.]*)\s*>)?\s*\(\s*(?:([A-Z][A-Za-z0-9_]*)\s*\()?/;
+const TO_JSON = /\btoJsonValue\s*(?:<\s*([A-Za-z_][A-Za-z0-9_.]*)\s*>)?\s*\(\s*(?:(?:[a-z_][A-Za-z0-9_]*\.)*([A-Z][A-Za-z0-9_]*)\s*(?:<[^()]*>)?\s*\(|([a-z_][A-Za-z0-9_]*)\s*\))?/;
+
+/** A pair whose key is not a literal, `key to value`: the fields under it are no top-level signals. */
+const ANY_PAIR = /^[^(]*?\bto\s/;
+const IDENTIFIER_ARG = /^\s*([a-z_][A-Za-z0-9_]*)\s*$/;
+const BOOLEAN_ARG = /^\s*(?:true|false)\s*$/;
+
+/** Types that say nothing about the names in them. */
+const UNNAMED_TYPES: ReadonlySet<string> = new Set(["JsonValue", "JsonObject", "Any", "Map", "MutableMap", "HashMap", "LinkedHashMap"]);
+
+/** Types that encode to no object, so a page declares nothing from them. */
+const VALUE_TYPES: ReadonlySet<string> = new Set([
+  "String", "Int", "Long", "Short", "Byte", "Double", "Float", "Boolean", "Char", "List", "MutableList", "Set", "Array", "Pair",
+]);
 
 /**
- * The classes whose encoded fields `dataSignals(codec.toJson(...))` declares in `src`, by simple
- * name, and `ANY_SIGNAL` for a value whose class the call does not name, such as `toJson(form)`.
+ * The classes whose encoded fields `dataSignals(codec.toJsonValue(...))` declares in `src`, by
+ * simple name, and `ANY_SIGNAL` for a value whose class the file does not name: `toJsonValue`
+ * of something else, or a variable typed `JsonValue` or `JsonObject`. Any other argument, a string
+ * or a pair held in a variable, declares nothing here.
  */
 export function encodedSignalTypes(src: string): Set<string> {
   const out = new Set<string>();
   for (const site of findCallSites(src, new Set(["dataSignals"]))) {
-    const a = site.args.find((x) => x.named === null) ?? site.args.find((x) => x.named === "signals");
-    if (!a || a.string || PAIR.test(a.text)) continue;
-    const m = TO_JSON.exec(a.text);
-    if (!m) continue;
-    out.add(m[1]?.split(".").pop() ?? m[2] ?? ANY_SIGNAL);
+    const positional = site.args.filter((x) => x.named === null);
+    // dataSignals(value) or dataSignals(value, true), the second being ifMissing.
+    const first = positional.length === 1 || (positional.length === 2 && BOOLEAN_ARG.test(positional[1]?.text ?? "")) ? positional[0] : undefined;
+    const a = first ?? site.args.find((x) => x.named === "signals");
+    if (!a || a.string || PAIR.test(a.text) || ANY_PAIR.test(a.text)) continue;
+    const type = encodedType(a.text, src.slice(0, site.nameStart), 0);
+    if (type) out.add(type);
   }
   return out;
 }
 
-/** The argument as one pair; a `"k" to` further in is a key inside the value, which declares nothing on its own. */
-const PAIR = /^\s*"([A-Za-z_][A-Za-z0-9_.-]*)"\s+to\b/;
+/** What `text` declares, read with the source `before` it, or null when it is no JSON value. */
+function encodedType(text: string, before: string, depth: number): string | null {
+  const m = TO_JSON.exec(text);
+  if (m) {
+    if (m[1]) return named(m[1].split(".").pop() ?? m[1]);
+    if (m[2]) return m[2];
+    if (m[3]) {
+      const type = variableType(m[3], before);
+      if (!type) return ANY_SIGNAL;
+      return VALUE_TYPES.has(type) ? null : named(type);
+    }
+    return ANY_SIGNAL;
+  }
+  // dataSignals(signals), with `val signals = codec.toJsonValue(Form())` or `signals: JsonObject` before it.
+  const id = IDENTIFIER_ARG.exec(text)?.[1];
+  if (!id || depth > 0) return null;
+  const name = escapeRegExp(id);
+  const inits = [...before.matchAll(new RegExp(`\\b(?:val|var)\\s+${name}\\s*(?::[^=\\n]*)?=\\s*([^\\n;]+)`, "g"))];
+  const init = inits[inits.length - 1]?.[1];
+  if (init && TO_JSON.test(init)) return encodedType(init, before, depth + 1);
+  const type = variableType(id, before);
+  return type === "JsonValue" || type === "JsonObject" ? ANY_SIGNAL : null;
+}
+
+/** The class a variable is last declared with in `before`, `form: Form` or `val form = Form(...)`. */
+function variableType(id: string, before: string): string | null {
+  const name = escapeRegExp(id);
+  const last = (re: RegExp) => {
+    const all = [...before.matchAll(re)];
+    return all[all.length - 1];
+  };
+  const typed = last(new RegExp(`\\b${name}\\s*:\\s*([A-Z][A-Za-z0-9_]*)`, "g"));
+  const built = last(new RegExp(`\\b(?:val|var)\\s+${name}\\s*=\\s*(?:[a-z_][A-Za-z0-9_]*\\.)*([A-Z][A-Za-z0-9_]*)\\s*\\(`, "g"));
+  const found = [typed, built].filter((x) => x !== undefined).sort((x, y) => (y.index ?? 0) - (x.index ?? 0))[0];
+  return found?.[1] ?? null;
+}
+
+function named(type: string): string {
+  return UNNAMED_TYPES.has(type) ? ANY_SIGNAL : type;
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * What the definitions say about a class, written with a `:`, which no signal name holds: a class
+ * a page is declared from, and a `@Serializable` class whose properties are defined. A class in the
+ * first and not the second is one only its codec can name (see `isKnownSignal`).
+ */
+export const ENCODED_CLASS = "toJsonValue:";
+export const READABLE_CLASS = "class:";
+
+/** The argument as one pair, in parentheses or not; a `"k" to` further in is a key inside the value. */
+const PAIR = /^[\s(]*"([A-Za-z_][A-Za-z0-9_.-]*)"\s+to\b/;
 const NAME = /^"([A-Za-z_][A-Za-z0-9_.-]*)"$/;
+
+/** A map handed over as the signals, `patchSignals(mapOf("count" to 0))`: its own pairs are the keys. */
+const MAP_CALLS: ReadonlySet<string> = new Set(["mapOf", "mutableMapOf", "hashMapOf", "linkedMapOf"]);
+const MAP_CALL = /^\s*(?:mutable|hash|linked)?[mM]apOf\s*\(/;
+
+/** The literal keys of an argument that is a pair, or a map of pairs; nothing inside a value. */
+function argumentKeys(text: string): string[] {
+  const pair = PAIR.exec(text);
+  if (pair?.[1]) return [pair[1]];
+  if (!MAP_CALL.test(text)) return [];
+  const map = findCallSites(text, MAP_CALLS)[0];
+  if (!map) return [];
+  return map.args.filter((a) => a.named === null).flatMap((a) => PAIR.exec(a.text)?.[1] ?? []);
+}
 
 export function collectSignals(src: string, language: "kotlin" | "html"): Set<string> {
   return collect(src, language, true);
@@ -92,9 +177,13 @@ export function collectSignals(src: string, language: "kotlin" | "html"): Set<st
 export function collectSignalDefinitions(src: string, language: "kotlin" | "html"): Set<string> {
   const out = collect(src, language, false);
   for (const m of src.matchAll(ASSIGNED_SIGNAL)) if (m[1] && !m[1].includes(PLACEHOLDER)) out.add(m[1]);
-  // A class named in toJson is a @Serializable one whose properties are defined above, or one
-  // whose names only the codec knows; a value of no named class may hold any signal.
-  if (language === "kotlin" && encodedSignalTypes(src).has(ANY_SIGNAL)) out.add(ANY_SIGNAL);
+  if (language === "kotlin") {
+    SERIALIZABLE_CLASS.lastIndex = 0;
+    for (const m of src.matchAll(SERIALIZABLE_CLASS)) if (m[1]) out.add(READABLE_CLASS + m[1]);
+    // A page declared from a class defines what its codec writes: the properties for a
+    // @Serializable one, any name for one the analysis cannot read, or for a value of no named class.
+    for (const type of encodedSignalTypes(src)) out.add(type === ANY_SIGNAL ? ANY_SIGNAL : ENCODED_CLASS + type);
+  }
   return out;
 }
 
@@ -105,8 +194,7 @@ function collect(src: string, language: "kotlin" | "html", reads: boolean): Set<
       const positional = site.args.filter((a) => a.named === null);
       positional.forEach((a, idx) => {
         // dataSignals("foo-bar" to 1) declares $fooBar, as the keyed form does; a patch keeps the key.
-        const pair = PAIR.exec(a.text);
-        if (pair?.[1]) out.add(site.name === "dataSignals" ? toCamel(pair[1]) : pair[1]);
+        for (const key of argumentKeys(a.text)) out.add(site.name === "dataSignals" ? toCamel(key) : key);
         // patchSignals("""{"count": 1}"""): the signals as JSON text.
         if (JSON_CALLS.has(site.name) && a.string && /^\s*\{/.test(a.string.text)) {
           const json = a.string.text;

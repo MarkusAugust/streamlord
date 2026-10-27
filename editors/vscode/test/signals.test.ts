@@ -18,6 +18,32 @@ describe("signal collection", () => {
     assert.deepEqual(kotlin(`dataSignals("foo-bar" to 7); patchSignals("foo-bar" to 1)`), ["foo-bar", "fooBar"]);
   });
 
+  it("a page declared from a variable is read by what the file says about it", () => {
+    const encoded = (src: string) => [...collectSignalDefinitions(src, "kotlin")].filter((d) => d === "*" || d.includes(":"));
+    const cases: [string, string[]][] = [
+      [`val init = "{count: 0}"\nfun p() = div { dataSignals(init) }`, []],
+      ["fun p(pairs: Array<Pair<String, Any?>>) = div { dataSignals(*pairs) }", []],
+      [`val p = "count" to 0\nfun f() = div { dataSignals(p) }`, []],
+      ["fun p(s: JsonObject) = div { dataSignals(s) }", ["*"]],
+      ["class X(val form: String)\nfun p() { val form = Form(); div { dataSignals(codec.toJsonValue(form)) } }", ["toJsonValue:Form"]],
+      ["fun p() = div { dataSignals(codec.toJsonValue(forms.Form())) }", ["toJsonValue:Form"]],
+      ["fun p() = div { dataSignals(codec.toJsonValue(Form()), true) }", ["toJsonValue:Form"]],
+      ["fun p(text: String) = div { dataSignals(codec.toJsonValue(text)) }", []],
+      [`const val INIT = "{count: 0}"\nfun p() = div { dataSignals(INIT); dataSignals(initial(0)) }`, []],
+      ["fun p() = div { dataSignals(codec.toJsonValue(Page<String>())) }", ["toJsonValue:Page"]],
+      [
+        "fun a(form: LoginForm) = div { dataSignals(codec.toJsonValue(form)) }\nfun b(form: SearchSignals) = div { dataSignals(codec.toJsonValue(form)) }",
+        ["toJsonValue:LoginForm", "toJsonValue:SearchSignals"],
+      ],
+    ];
+    for (const [src, expected] of cases) assert.deepEqual(encoded(src), expected, src);
+  });
+
+  it("the keys of a map handed over as the signals are signals", () => {
+    assert.deepEqual(kotlin(`stream.patchSignals(mapOf("count" to 1, "user" to mapOf("name" to ""))); respondSignals(hashMapOf("open" to true))`), ["count", "open", "user"]);
+    assert.deepEqual(kotlin(`dataSignals(("count" to 0))`), ["count"]);
+  });
+
   it("a key inside a pair's value declares nothing on its own", () => {
     assert.deepEqual(kotlin(`dataSignals("user" to mapOf("first-name" to "", "age" to 1))`), ["user"]);
   });

@@ -24,10 +24,11 @@ div {
 }
 ```
 
-`dataSignals` takes its signals in three forms. Pairs, as above, where the key of each pair is a
-signal name as `data-signals:name` reads it. An object expression as a string,
+`dataSignals` takes its signals in four forms. One name and its expression,
+`dataSignals("count", "0")`, which writes `data-signals:count`. Pairs, as above, where the key of
+each pair is a signal name as `data-signals:name` reads it. An object expression as a string,
 `dataSignals("{count: 0}")`. And a JSON object, such as a class your codec encoded with
-`toJson`, whose keys are written as they stand; [Signals](/signals/#declaring-them-from-the-class)
+`toJsonValue`, whose keys are written as they stand; [Signals](/signals/#declaring-them-from-the-class)
 shows it with the class a handler reads.
 
 ## Modifiers are a block, not a string

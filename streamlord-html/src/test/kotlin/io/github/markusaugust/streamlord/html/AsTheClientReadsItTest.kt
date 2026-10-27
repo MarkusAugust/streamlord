@@ -202,8 +202,10 @@ class AsTheClientReadsItTest {
             "\$o = {big: 12345678901234567890, tags: [0.10000000000000000555]}",
             set("o", JsonParser.parse("""{"big":12345678901234567890,"tags":[0.10000000000000000555]}""")),
         )
-        assertFailsWith<SignalsCodecException> { elements { div { dataSignals(JsonParser.parse("[1]")) } } }
-        assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals(JsonParser.parse("""{"a.b":1}""")) } } }
+        assertFailsWith<IllegalArgumentException> { elements { div { dataSignals(JsonParser.parse("[1]")) } } }
+        for (key in listOf("a.b", "", "toString", "constructor")) {
+            assertFailsWith<InvalidSignalNameException>(key) { elements { div { dataSignals(JsonParser.parse("""{"$key":1}""")) } } }
+        }
         assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals(JsonParser.parse("""{"a":{"__proto__":1}}""")) } } }
     }
 

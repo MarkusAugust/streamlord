@@ -610,7 +610,7 @@ public abstract interface class io/github/markusaugust/streamlord/core/port/driv
 }
 
 public final class io/github/markusaugust/streamlord/core/port/driven/SignalsCodecKt {
-	public static final fun toJson (Lio/github/markusaugust/streamlord/core/port/driven/SignalsCodec;Ljava/lang/Object;Lkotlin/reflect/KType;)Lio/github/markusaugust/streamlord/core/json/JsonValue;
+	public static final fun toJsonValue (Lio/github/markusaugust/streamlord/core/port/driven/SignalsCodec;Ljava/lang/Object;Lkotlin/reflect/KType;)Lio/github/markusaugust/streamlord/core/json/JsonValue;
 }
 
 public abstract interface class io/github/markusaugust/streamlord/core/port/driven/SseSink {

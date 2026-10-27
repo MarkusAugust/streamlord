@@ -37,8 +37,8 @@ public data class SignalProperty(
  * @property signalTypes Types the file reads signals into, by their simple name.
  * @property classes The `@Serializable` classes the file declares, by simple name.
  * @property lookups Names read by a `Signals` accessor, such as `signals.string("query")`.
- * @property encodedTypes Classes a page declares its signals from, `dataSignals(codec.toJson(Form()))`,
- *   by simple name, with `*` for a value whose class the call does not name.
+ * @property encodedTypes Classes a page declares its signals from, `dataSignals(codec.toJsonValue(Form()))`,
+ *   by simple name, with `*` for a value whose class the file does not name.
  */
 public data class SignalFacts(
     val declared: Set<String>,
@@ -195,11 +195,15 @@ private fun matchingParen(
  * @property issues Findings by file, empty when nothing drifted.
  * @property declared Every signal name the files declare, from markup and from the DSL.
  * @property read Every signal name the files read, through a signals class or a lookup.
+ * @property declaredByCodec What a page is declared from, `dataSignals(codec.toJsonValue(...))`,
+ *   whose names only the codec knows: a class that is not `@Serializable`, or `*` for a value of no
+ *   named class. While it is not empty every read counts as declared, and [issues] stays empty.
  */
 public data class SignalDriftReport(
     val issues: Map<String, List<Issue>>,
     val declared: Set<String>,
     val read: Set<String>,
+    val declaredByCodec: Set<String> = emptySet(),
 )
 
 /**
@@ -223,7 +227,8 @@ public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
     val classes = facts.values.flatMap { it.classes.entries }.associate { it.key to it.value }
     val encoded = facts.values.flatMapTo(LinkedHashSet()) { it.encodedTypes }
     for (type in encoded) classes[type]?.forEach { declared += it.name }
-    val anyDeclared = encoded.any { it !in classes }
+    val byCodec = encoded.filterTo(LinkedHashSet()) { it !in classes }
+    val anyDeclared = byCodec.isNotEmpty()
 
     val out = LinkedHashMap<String, List<Issue>>()
     for ((file, one) in facts) {
@@ -266,5 +271,5 @@ public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
 
         if (issues.isNotEmpty()) out[file] = issues
     }
-    return SignalDriftReport(out, declared, read)
+    return SignalDriftReport(out, declared, read, byCodec)
 }

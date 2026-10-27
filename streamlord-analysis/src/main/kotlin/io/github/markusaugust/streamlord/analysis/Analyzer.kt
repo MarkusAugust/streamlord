@@ -281,12 +281,12 @@ public class Analyzer(
                 add(s, markupSignalReferences(s.text, catalog, opts.prefix), site)
             }
         }
-        for (site in findCallSites(src, HELPER_READ_CALLS, lex)) {
-            val s =
-                site.positional
-                    .firstOrNull()
-                    ?.string
-                    ?.takeUnless { it.unterminated } ?: continue
+        val helpers = dslHelpers(src).takeIf { it.isNotEmpty() }?.let { findCallSites(src, it, lex) } ?: emptyList()
+        for (site in helpers) {
+            // A call on a receiver, `filter.not("x")`, is not the top-level helper.
+            if (src.lastNonSpaceBefore(site.nameStart) == '.') continue
+            val arg = site.positional.firstOrNull() ?: site.named("name")
+            val s = arg?.string?.takeUnless { it.unterminated } ?: continue
             add(s, listOfNotNull(helperSignalReference(s.text)), site)
         }
         for (m in ATTRIBUTES_INDEX.findAll(src)) {
@@ -744,3 +744,9 @@ public data class SiteIssues(
     val string: KotlinString?,
     val issues: List<Issue>,
 )
+
+private fun String.lastNonSpaceBefore(index: Int): Char? {
+    var i = index - 1
+    while (i >= 0 && this[i].isWhitespace()) i--
+    return getOrNull(i)
+}

@@ -2,7 +2,6 @@
 
 package io.github.markusaugust.streamlord.html
 
-import io.github.markusaugust.streamlord.core.SignalsCodecException
 import io.github.markusaugust.streamlord.core.domain.CspNonce
 import io.github.markusaugust.streamlord.core.domain.ExpressionGuard
 import io.github.markusaugust.streamlord.core.domain.SignalNames
@@ -66,27 +65,29 @@ public fun HTMLTag.dataSignals(
 
 /**
  * `data-signals="{...}"` from a JSON object, such as a class encoded by your codec with
- * [toJson][io.github.markusaugust.streamlord.core.port.driven.toJson]:
+ * [toJsonValue][io.github.markusaugust.streamlord.core.port.driven.toJsonValue]:
  *
  * ```kotlin
- * div { dataSignals(call.streamlord.codec.toJson(Form(email = "", firstName = ""))) }
+ * div { dataSignals(call.streamlord.codec.toJsonValue(Form(email = "", firstName = ""))) }
  * ```
  *
  * Each field is a signal named by its key as written, `$email` and `$firstName`, the names
- * `readSignals<Form>()` reads. A key the client cannot hold is refused ([SignalNames]), as in
- * the pairs form.
+ * `readSignals<Form>()` reads. A field that is `null` declares nothing, because the client
+ * removes a signal patched to `null`. Every key is held to what the client can store
+ * ([SignalNames]), and a top-level key also to a name it can hold a signal under, so `toString`
+ * is refused. A key no `$name` reaches, such as `first-name` or `a b`, is written as it stands,
+ * and an expression reaches it as `$['first-name']`.
  */
 public fun HTMLTag.dataSignals(
     signals: JsonValue,
     ifMissing: Boolean = false,
 ) {
-    if (signals !is JsonObject) throw SignalsCodecException("data-signals takes a JSON object, not ${signals.toJson()}")
+    require(signals is JsonObject) { "data-signals takes a JSON object, not ${signals.toJson()}" }
     for ((key, value) in signals) {
-        SignalNames
-            .keyProblem(
-                key,
-                value is Map<*, *>,
-            )?.let { throw InvalidSignalNameException(key, "is a key the client cannot hold: $it") }
+        if (key.isEmpty()) throw InvalidSignalNameException(key, "is blank")
+        (SignalNames.keyProblem(key, value is Map<*, *>) ?: SignalNames.pathProblem(key))?.let {
+            throw InvalidSignalNameException(key, "is a key the client cannot hold: $it")
+        }
         checkKeys(value, key)
     }
     attributes[ds("signals${signalMods(null, ifMissing)}")] = JsonWriter.writeExpression(signals)
@@ -111,7 +112,7 @@ public fun HTMLTag.dataSignals(
  * `data-signals` from Kotlin values, serialised with the built-in JSON writer.
  *
  * ```kotlin
- * div { dataSignals("count" to 0, "user" to mapOf("first-name" to "")) }
+ * div { dataSignals("count" to 0, "user" to mapOf("name" to "")) }
  * ```
  *
  * The key of each pair is read the way the keyed form reads its name: `foo-bar` declares

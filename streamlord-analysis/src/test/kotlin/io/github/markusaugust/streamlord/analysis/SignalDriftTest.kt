@@ -71,25 +71,42 @@ class SignalDriftTest {
         assertTrue(drift("page.html" to html(page), "Routes.kt" to kotlin(handler)).isEmpty())
     }
 
-    // dataSignals(codec.toJson(SearchSignals())) declares what the codec writes, which is what readSignals reads.
+    // dataSignals(codec.toJsonValue(SearchSignals())) declares what the codec writes, which is what readSignals reads.
     @Test
     fun `a page that declares its signals from the class declares the class's properties`() {
-        val fromClass = "fun page() = div { dataSignals(call.streamlord.codec.toJson(SearchSignals())) }"
+        val fromClass = "fun page() = div { dataSignals(call.streamlord.codec.toJsonValue(SearchSignals())) }"
         assertEquals(emptyMap(), drift("Page.kt" to kotlin(fromClass), "Routes.kt" to kotlin(handler)))
-        val typed = "fun page() = div { dataSignals(codec.toJson<SearchSignals>(signals)) }"
+        val typed = "fun page() = div { dataSignals(codec.toJsonValue<SearchSignals>(signals)) }"
         assertEquals(emptyMap(), drift("Page.kt" to kotlin(typed), "Routes.kt" to kotlin(handler)))
         // Another class declares other names, and nested under a pair the fields are no top-level signals.
-        val other = "fun page() = div { dataSignals(codec.toJson(Other())) }\n@Serializable data class Other(val x: Int = 0)"
+        val other = "fun page() = div { dataSignals(codec.toJsonValue(Other())) }\n@Serializable data class Other(val x: Int = 0)"
         assertTrue(drift("Page.kt" to kotlin(other), "Routes.kt" to kotlin(handler)).isNotEmpty())
-        val nested = "fun page() = div { dataSignals(\"form\" to codec.toJson(SearchSignals())) }"
+        val nested = "fun page() = div { dataSignals(\"form\" to codec.toJsonValue(SearchSignals())) }"
         assertTrue(drift("Page.kt" to kotlin(nested), "Routes.kt" to kotlin(handler)).isNotEmpty())
     }
 
-    // A variable or a Jackson class: only the codec knows the names, so the page may declare any.
+    // A variable whose class the file names, or one bound to toJsonValue, is that class.
     @Test
-    fun `a value whose class the check cannot read may declare any signal`() {
-        for (page in listOf("dataSignals(codec.toJson(signals))", "dataSignals(codec.toJson(JacksonForm()))")) {
-            assertEquals(emptyMap(), drift("Page.kt" to kotlin("fun page() = div { $page }"), "Routes.kt" to kotlin(handler)), page)
+    fun `a variable the file types declares its class's properties`() {
+        for (page in listOf(
+            "fun page(form: SearchSignals) = div { dataSignals(codec.toJsonValue(form)) }",
+            "val s = codec.toJsonValue(SearchSignals())\nfun page() = div { dataSignals(s) }",
+        )) {
+            val report = signalDrift(mapOf("Page.kt" to kotlin(page), "Routes.kt" to kotlin(handler)))
+            assertEquals(emptyMap(), report.issues, page)
+            assertEquals(emptySet(), report.declaredByCodec, page)
+        }
+    }
+
+    // A Jackson class or a value of no named class: only the codec knows the names, so the page may
+    // declare any, and the report says so.
+    @Test
+    fun `a value whose class the check cannot read may declare any signal, and the report says so`() {
+        val cases = mapOf("dataSignals(codec.toJsonValue(load()))" to "*", "dataSignals(codec.toJsonValue(JacksonForm()))" to "JacksonForm")
+        for ((page, byCodec) in cases) {
+            val report = signalDrift(mapOf("Page.kt" to kotlin("fun page() = div { $page }"), "Routes.kt" to kotlin(handler)))
+            assertEquals(emptyMap(), report.issues, page)
+            assertEquals(setOf(byCodec), report.declaredByCodec, page)
         }
     }
 

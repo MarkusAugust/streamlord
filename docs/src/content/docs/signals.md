@@ -78,24 +78,47 @@ what the handler gets.
 ## Declaring them from the class
 
 The page that sends those signals can declare them from the same class, so the names cannot drift
-apart. `toJson` encodes a value with the codec and hands the DSL a JSON object, whose keys become
-the page's signals as written:
+apart. `toJsonValue` encodes a value with the codec and hands the DSL a JSON object, whose keys
+become the page's signals as written:
 
 ```kotlin sample=ktor-routing
 get("/search") {
     call.respondElements(elements {
-        div { dataSignals(call.streamlord.codec.toJson(SearchSignals())) }
+        div { dataSignals(call.streamlord.codec.toJsonValue(SearchSignals())) }
     })
 }
 ```
 
 That writes `data-signals="{"query":"","page":1}"`, the names `readSignalsOr(SearchSignals())`
 reads. The codec chooses them, so a `@SerialName` or a Jackson `@JsonProperty` reaches the page
-too. Pass the value as a pair, `"search" to codec.toJson(...)`, and the fields land under
+too. Pass the value as a pair, `"search" to codec.toJsonValue(...)`, and the fields land under
 `$search` instead, where a read into `SearchSignals` will not find them.
 
-The built-in codec cannot encode a data class either, so `toJson` needs the codec from step one.
-In Spring, take it from the `Streamlord` bean.
+What the codec leaves out, the page does not declare. A field that is `null` declares nothing,
+because the client removes a signal patched to `null`; give it a value, `""` or `0`, if the page
+must hold it. A codec set to skip defaults, kotlinx's `encodeDefaults = false` or Jackson's
+`NON_DEFAULT`, writes no field at its default, so `SearchSignals()` declares none.
+
+A key keeps the codec's spelling, hyphens included. `@SerialName("first-name")` declares the
+signal `first-name`, which an expression reaches as `$['first-name']`, written
+`signal("['first-name']")`; `signal("first-name")` is `$firstName`, another signal. Keep the
+names in camelCase and the question never comes up.
+
+The built-in codec cannot encode a data class either, so `toJsonValue` needs the codec from step
+one. In Spring it is on the `Streamlord` bean:
+
+```kotlin sample=spring-controller
+@RestController
+class SearchPageController(private val streamlord: Streamlord) {
+    @GetMapping("/search", produces = ["text/html;charset=UTF-8"])
+    fun page(): String =
+        elements {
+            div { dataSignals(streamlord.codec.toJsonValue(SearchSignals())) }
+        }
+}
+```
+
+`toJsonValue` lives with the codec, in `io.github.markusaugust.streamlord.core.port.driven`.
 
 ## The type is the input surface
 

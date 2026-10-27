@@ -106,6 +106,8 @@ fun `every signal a handler reads is declared by a page`() {
 
     // An empty result means nothing if the check recognised no reads at all.
     assertTrue(report.read.isNotEmpty(), "no reads found; are the paths right?")
+    // A page declared from a value whose names only its codec knows counts every read as declared.
+    assertEquals(emptySet(), report.declaredByCodec)
     assertEquals(emptyMap(), report.issues)
 }
 ```
@@ -119,6 +121,16 @@ data class` in it was invisible.
 Give it every file that declares markup, whatever the markup is written in: Kotlin strings, the
 DSL, a template, an Astro page. A file it never sees is a file whose declarations cannot count,
 and a missing declaration is what the check reports.
+
+A page declared from a class, `dataSignals(codec.toJsonValue(SearchSignals()))`, declares that
+class's properties when it is `@Serializable`, and the check reads them; it names the class from
+the constructor, a type argument, or the type of a variable the file declares. When the class is
+not `@Serializable`, as with Jackson, or the file does not say which class it is, as with
+`toJsonValue(load())` or a parameter typed `JsonObject`, only the codec knows the names, so every
+read counts as declared and the check reports nothing anywhere. `report.declaredByCodec` names
+what did that, which is why the test above asserts it is empty. A property counts as declared
+even when the page writes it as `null`, which the client does not store, so give a signal the
+page must hold a value.
 
 It reports one direction only. A signal the pages declare and nobody reads is harmless by
 construction, since it sits in the browser's store and comes back untouched. A signal a handler

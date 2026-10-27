@@ -13,14 +13,20 @@ All notable changes to Streamlord are recorded here. The format follows
   `pingpong`. `RafModifiers` gains `delay`, `debounce` and `viewTransition`, `ResizeModifiers`
   `delay` and `viewTransition`, as the two plugins read them. The catalog lists the same. The
   key form's JVM signature gained the modifier argument; Kotlin source compiles as before.
-- `SignalsCodec.toJson(value)` encodes a value with the codec and returns it as a `JsonValue`, and
-  `dataSignals(JsonValue)` writes a JSON object as `data-signals` with its keys as they stand. A
-  page declares its signals from the class its handler reads:
-  `dataSignals(call.streamlord.codec.toJson(SearchSignals()))` gives the names
-  `readSignals<SearchSignals>()` reads, `@SerialName` and `@JsonProperty` included. The drift check
-  counts the fields of a class named there as declared, and a value of no named class as any
-  signal. `JsLiteral` writes a `JsonNumber` with its digits as they are, where it rounded through
-  `Long` or `Double`.
+- `SignalsCodec.toJsonValue(value)` encodes a value with the codec and returns it as a
+  `JsonValue`, and `dataSignals(JsonValue)` writes a JSON object as `data-signals` with its keys
+  as they stand. A page declares its signals from the class its handler reads:
+  `dataSignals(call.streamlord.codec.toJsonValue(SearchSignals()))` gives the names
+  `readSignals<SearchSignals>()` reads, `@SerialName` and `@JsonProperty` included. A field that
+  is `null` declares nothing, since the client removes a signal patched to `null`.
+- The analysis reads `dataSignals(codec.toJsonValue(...))`. The drift check and the unknown-signal
+  check count the properties of a `@Serializable` class named there, by a constructor call, a type
+  argument or the type of a variable the file declares, as declared. For a class they cannot read,
+  such as a Jackson one, or a value whose class the file does not say, every name counts as
+  declared, in the whole project; `SignalDriftReport.declaredByCodec` says when that happened.
+  `SignalFacts` gained `encodedTypes` and `SignalDriftReport` `declaredByCodec`, which changes their
+  JVM constructors, and `collectSignalDefinitions` returns two kinds of entry that are no signal
+  names, `class:Form` and `toJsonValue:Form`, which `isKnownSignal` reads.
 - `ElementsGuard.evaluatedAttributes`: the attributes whose value Datastar runs as JavaScript,
   the expression attributes and the four signal filters.
 - `conformance/`: what Datastar's client and the servers actually do, as fixtures the tests hold
@@ -47,10 +53,11 @@ All notable changes to Streamlord are recorded here. The format follows
   object of the page.
 - `dataSignals` in its pairs form writes the keys inside a value as they stand, as the client
   merges them: `"user" to mapOf("first-name" to "")` declares `user['first-name']`, where 0.13.0
-  camel-cased it to `user.firstName`. The key of each pair is still read as the keyed form reads
+  and 0.14.0 camel-cased it to `user.firstName`. The key of each pair is still read as the keyed form reads
   it, so `"user.first-name" to ""` declares `$user.firstName`. Code that reached a nested key
   with `signal("user.first-name")` reaches it with `signal("user['first-name']")`, or declares it
   with a dotted pair. Two keys of one map that camel-case to the same name are no longer refused.
+  The analysis does not see a `signal("user.first-name")` left behind, since `user` is declared.
 - `intl(...)` writes an options object for `RELATIVE_TIME` and `DISPLAY_NAMES` even when empty,
   because the client reads a field of it and throws without one.
 
@@ -75,12 +82,18 @@ All notable changes to Streamlord are recorded here. The format follows
   `produces = [MediaType.TEXT_HTML_VALUE]` lets Spring MVC pick Latin-1. The recipe on the Security
   page and in `CspNonceFilter` says `produces = ["text/html;charset=UTF-8"]`. Found by the wire
   transcripts.
+- `JsLiteral` rounded a `JsonNumber` through `Long` or `Double`, so `set("id", json)` changed a
+  number past `Long` or with more digits than a `Double` holds. It writes the digits as they are.
 - The analysis took `signal("cuont")` for a declaration of `cuont`, so a misspelt name in
   `signal`, `increment`, `decrement` or `not` was never reported. These helpers now read the
-  signal they name, and an unknown one gets the same warning and fix as `$cuont` in an
-  expression; `set`, `setExpr` and `toggle` still declare theirs, since they assign it. A kebab
-  or bracketed name, `signal("foo-bar")`, is not checked. The IntelliJ plugin and the VS Code
-  extension both report it.
+  signal they name, in a file that imports the DSL, when the call has no receiver and no import
+  from elsewhere, such as Hamcrest's `not`, takes the name; an unknown one gets the same warning and fix as `$cuont` in an expression; `set`, `setExpr` and
+  `toggle` still declare theirs, since they assign it. A kebab or bracketed name,
+  `signal("foo-bar")`, is not checked, and the fix offers only a name the helper writes as it
+  stands. The IntelliJ plugin also leaves out a call that resolves outside Streamlord.
+- The analysis counted the keys inside a pair's value, `"user" to mapOf("name" to "")`, as
+  top-level signals. Only the pair's own key counts, and the keys of a map handed over as the
+  signals, `patchSignals(mapOf("count" to 0))`.
 - `SseDecoder` turned an `outer` or `replace` patch without a selector whose elements were a
   comment alone, or text holding a `<`, into an event; the client patches nothing for either.
 - Documentation held to the client: a 400 from an over-long query is retried under

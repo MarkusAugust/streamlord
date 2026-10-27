@@ -47,9 +47,9 @@ div {
 A dotted key inside a map is refused, because the client would store `{"a.b": 1}` as one key
 that `$a.b` does not reach.
 
-A key the DSL does not write keeps its hyphen: a key inside a value, which the client merges as
-it stands, the object form, `dataSignals("{'foo-bar': 1}")`, and a signal patched from the
-server. So `"user" to mapOf("first-name" to "")` declares `user['first-name']`. In an expression
+A key the DSL does not camel-case keeps its hyphen: a key inside a value, which the client merges
+as it stands, the object form, `dataSignals("{'foo-bar': 1}")`, a JSON object from your codec,
+`dataSignals(codec.toJsonValue(form))`, and a signal patched from the server. So `"user" to mapOf("first-name" to "")` declares `user['first-name']`. In an expression
 Datastar reads `$foo-bar` as the signal `foo-bar`, which `signal("foo-bar")` cannot write, so
 reach such a key by indexing: `signal("['foo-bar']")` gives `$['foo-bar']`, and
 `signal("user['first-name']")` gives `$user['first-name']`.

@@ -40,6 +40,31 @@ internal val HELPER_READ_CALLS: Set<String> = setOf("signal", "increment", "decr
  */
 private val PLAIN_HELPER_NAME = Regex("""[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*""")
 
+/**
+ * A file that uses the DSL: a helper call elsewhere, `redis.increment("visits")` or Hamcrest's
+ * `not("error")`, is somebody else's.
+ */
+internal val USES_HTML_DSL =
+    Regex("""(?m)^\s*(?:import\s+io\.github\.markusaugust\.streamlord\.html\.|package\s+io\.github\.markusaugust\.streamlord\.html\b)""")
+
+/** An import of a name from outside the DSL: `import org.hamcrest.Matchers.not`, or `.*` of Hamcrest's matchers. */
+private val FOREIGN_IMPORT = Regex("""(?m)^\s*import\s+(?!io\.github\.markusaugust\.streamlord\.html\.)([A-Za-z_][\w.]*)\.(\w+|\*)""")
+
+/** The helpers [src] reads as the DSL's: those no import from elsewhere puts in their place. */
+internal fun dslHelpers(src: String): Set<String> {
+    if (!USES_HTML_DSL.containsMatchIn(src)) return emptySet()
+    val out = HELPER_READ_CALLS.toMutableSet()
+    for (m in FOREIGN_IMPORT.findAll(src)) {
+        val (from, name) = m.destructured
+        if (name == "*") {
+            if (from.startsWith("org.hamcrest")) out -= "not"
+        } else {
+            out -= name
+        }
+    }
+    return out
+}
+
 /** The signal the literal first argument of a helper in [HELPER_READ_CALLS] reads, with offsets relative to its text. */
 internal fun helperSignalReference(text: String): SignalReference? =
     if (PLAIN_HELPER_NAME.matches(text) && PLACEHOLDER !in text) SignalReference(0, text.length, text) else null
@@ -70,13 +95,15 @@ internal fun markupSignalReferences(
  * Does the project define the signal [path] reads? It does when it defines the path itself, a
  * signal the path reaches into (`$user.name.length` with `user` defined), or a signal inside the
  * path (`$form` with `form.email` defined). A spread of a variable into the object form,
- * `{...init}`, may declare any signal, written `*`.
+ * `{...init}`, may declare any signal, written `*`, and so may a page declared from a class only
+ * its codec can name.
  */
 public fun isKnownSignal(
     path: String,
     defined: Set<String>,
 ): Boolean {
     if (path in defined || ANY_SIGNAL in defined) return true
+    if (defined.any { it.startsWith(ENCODED_CLASS) && READABLE_CLASS + it.removePrefix(ENCODED_CLASS) !in defined }) return true
     var p = path
     while ('.' in p) {
         p = p.substringBeforeLast('.')
@@ -94,7 +121,7 @@ public fun nearestSignal(
     val limit = if (name.length <= 4) 1 else 2
     return defined
         .asSequence()
-        .filter { it != name && it != ANY_SIGNAL }
+        .filter { it != name && it != ANY_SIGNAL && ':' !in it }
         .map { it to distance(name.lowercase(), it.lowercase()) }
         .filter { it.second <= limit }
         .minByOrNull { it.second }
@@ -110,8 +137,10 @@ public fun unknownSignalIssue(
     val head = ref.name.substringBefore('.')
     // `$telefon.length`: the misspelling is the signal, not the property read on it.
     val misspelt = if (head != ref.name && !isKnownSignal(head, defined)) head else ref.name
-    val near = nearestSignal(misspelt, defined)
+    val nearest = nearestSignal(misspelt, defined)
     // The fix rewrites the name and leaves the dollar as written, which in Kotlin may be `${'$'}`.
+    // A helper reads its name the way Casing.reference does, so only a plain name goes back into it.
+    val near = nearest?.takeIf { ref.site?.name !in HELPER_READ_CALLS || PLAIN_HELPER_NAME.matches(it) }
     val nameStart = ref.end - ref.name.length
     return Issue(
         start = ref.start,

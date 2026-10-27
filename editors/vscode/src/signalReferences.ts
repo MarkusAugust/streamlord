@@ -2,7 +2,7 @@ import { ALL_SITE_NAMES, ATTRIBUTES_INDEX, attributesIndexValue, lexCached, mark
 import { catalog, distance, parseAttributeName } from "./catalog.ts";
 import { clientSignalReads, DOCS, type Issue } from "./expression.ts";
 import { PLACEHOLDER, toSource, type KotlinString } from "./kotlinStrings.ts";
-import { ANY_SIGNAL } from "./signals.ts";
+import { ANY_SIGNAL, ENCODED_CLASS, READABLE_CLASS } from "./signals.ts";
 import { asciiLowercase, decodeEntities, hasTemplateSyntax, tokenize } from "./markup.ts";
 import { findCallSites, isHtmlString, selectStringArg } from "./scanner.ts";
 
@@ -18,6 +18,8 @@ export interface SignalReference {
   start: number;
   end: number;
   name: string;
+  /** Read by a helper, `signal("count")`, where only a plain name can be written back. */
+  helper?: boolean;
 }
 
 /**
@@ -45,9 +47,33 @@ const HELPER_READ_CALLS: ReadonlySet<string> = new Set(["signal", "increment", "
  */
 const PLAIN_HELPER_NAME = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/;
 
+/**
+ * A file that uses the DSL: a helper call elsewhere, `redis.increment("visits")` or Hamcrest's
+ * `not("error")`, is somebody else's.
+ */
+const USES_HTML_DSL = /^\s*(?:import\s+io\.github\.markusaugust\.streamlord\.html\.|package\s+io\.github\.markusaugust\.streamlord\.html\b)/m;
+
+/** An import of a name from outside the DSL: `import org.hamcrest.Matchers.not`, or `.*` of Hamcrest's matchers. */
+const FOREIGN_IMPORT = /^\s*import\s+(?!io\.github\.markusaugust\.streamlord\.html\.)([A-Za-z_][\w.]*)\.(\w+|\*)/gm;
+
+/** The helpers `src` reads as the DSL's: those no import from elsewhere puts in their place. */
+function dslHelpers(src: string): Set<string> {
+  if (!USES_HTML_DSL.test(src)) return new Set();
+  const out = new Set(HELPER_READ_CALLS);
+  for (const m of src.matchAll(FOREIGN_IMPORT)) {
+    const [, from = "", name = ""] = m;
+    if (name === "*") {
+      if (from.startsWith("org.hamcrest")) out.delete("not");
+    } else {
+      out.delete(name);
+    }
+  }
+  return out;
+}
+
 /** The signal the literal first argument of a helper reads, with offsets relative to its text. */
 export function helperSignalReference(text: string): SignalReference | null {
-  return PLAIN_HELPER_NAME.test(text) && !text.includes(PLACEHOLDER) ? { start: 0, end: text.length, name: text } : null;
+  return PLAIN_HELPER_NAME.test(text) && !text.includes(PLACEHOLDER) ? { start: 0, end: text.length, name: text, helper: true } : null;
 }
 
 /** The signals the expressions of an HTML fragment or document read, with offsets relative to `html`. */
@@ -94,8 +120,14 @@ export function signalReferencesInKotlin(src: string, prefix: string): SignalRef
       if (s && !s.unterminated) add(s, signalReferencesInHtml(s.text, prefix));
     }
   }
-  for (const site of findCallSites(src, HELPER_READ_CALLS, lex.mask)) {
-    const s = site.args.find((a) => a.named === null)?.string;
+  const names = dslHelpers(src);
+  const helpers = names.size > 0 ? findCallSites(src, names, lex.mask) : [];
+  for (const site of helpers) {
+    // A call on a receiver, `filter.not("x")`, is not the top-level helper.
+    let i = site.nameStart - 1;
+    while (i >= 0 && /\s/.test(src[i] ?? "")) i--;
+    if (src[i] === ".") continue;
+    const s = (site.args.find((a) => a.named === null) ?? site.args.find((a) => a.named === "name"))?.string;
     if (!s || s.unterminated) continue;
     const ref = helperSignalReference(s.text);
     if (ref) add(s, [ref]);
@@ -122,6 +154,7 @@ export function signalReferencesInKotlin(src: string, prefix: string): SignalRef
  */
 export function isKnownSignal(path: string, defined: ReadonlySet<string>): boolean {
   if (defined.has(path) || defined.has(ANY_SIGNAL)) return true;
+  for (const d of defined) if (d.startsWith(ENCODED_CLASS) && !defined.has(READABLE_CLASS + d.slice(ENCODED_CLASS.length))) return true;
   let p = path;
   while (p.includes(".")) {
     p = p.slice(0, p.lastIndexOf("."));
@@ -138,7 +171,7 @@ export function nearestSignal(name: string, defined: ReadonlySet<string>): strin
   let best: string | null = null;
   let bestDistance = Infinity;
   for (const d of defined) {
-    if (d === name || d === ANY_SIGNAL) continue;
+    if (d === name || d === ANY_SIGNAL || d.includes(":")) continue;
     const far = distance(name.toLowerCase(), d.toLowerCase());
     if (far <= limit && far < bestDistance) {
       best = d;
@@ -154,7 +187,9 @@ export function unknownSignalIssue(ref: SignalReference, defined: ReadonlySet<st
   const head = ref.name.split(".")[0] ?? ref.name;
   // `$telefon.length`: the misspelling is the signal, not the property read on it.
   const misspelt = head !== ref.name && !isKnownSignal(head, defined) ? head : ref.name;
-  const near = nearestSignal(misspelt, defined);
+  // A helper reads its name the way Casing.reference does, so only a plain name goes back into it.
+  const nearest = nearestSignal(misspelt, defined);
+  const near = nearest && (!ref.helper || PLAIN_HELPER_NAME.test(nearest)) ? nearest : null;
   // The fix rewrites the name and leaves the dollar as written, which in Kotlin may be `${'$'}`.
   const nameStart = ref.end - ref.name.length;
   return {

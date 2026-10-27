@@ -46,19 +46,19 @@ public inline fun <reified T : Any> SignalsCodec.decode(json: String): T = decod
  * declare its signals from the class that reads them.
  *
  * ```kotlin
- * div { dataSignals(call.streamlord.codec.toJson(Form(email = ""))) }
+ * div { dataSignals(call.streamlord.codec.toJsonValue(Form(email = ""))) }
  * ```
  *
  * The codec decides the names: `@SerialName` with kotlinx.serialization, `@JsonProperty` with
  * Jackson. The built-in codec encodes maps, lists and primitives, and throws for a data class.
  */
-public fun SignalsCodec.toJson(
+public fun SignalsCodec.toJsonValue(
     value: Any?,
     type: KType,
 ): JsonValue = JsonParser.parse(encode(value, type))
 
-/** [toJson] with the static type inferred at the call site. */
-public inline fun <reified T> SignalsCodec.toJson(value: T): JsonValue = toJson(value, typeOf<T>())
+/** [toJsonValue] with the static type inferred at the call site. */
+public inline fun <reified T> SignalsCodec.toJsonValue(value: T): JsonValue = toJsonValue(value, typeOf<T>())
 
 /**
  * The codec that ships inside the core: dependency-free, honest about its limits.

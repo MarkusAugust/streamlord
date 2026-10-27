@@ -4,7 +4,7 @@ import io.github.markusaugust.streamlord.core.SignalsCodecException
 import io.github.markusaugust.streamlord.core.SignalsDecodeException
 import io.github.markusaugust.streamlord.core.port.driven.decode
 import io.github.markusaugust.streamlord.core.port.driven.encode
-import io.github.markusaugust.streamlord.core.port.driven.toJson
+import io.github.markusaugust.streamlord.core.port.driven.toJsonValue
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -48,8 +48,8 @@ class KotlinxSignalsCodecTest {
 
     // A page declares the names the handler's readSignals<Form>() reads.
     @Test
-    fun `toJson names the fields as decode reads them`() {
-        val json = codec.toJson(Form(email = "a@b"))
+    fun `toJsonValue names the fields as decode reads them`() {
+        val json = codec.toJsonValue(Form(email = "a@b"))
         assertEquals("""{"email":"a@b","first-name":""}""", json.toJson())
         assertEquals(Form(email = "a@b"), codec.decode<Form>(json.toJson()))
     }

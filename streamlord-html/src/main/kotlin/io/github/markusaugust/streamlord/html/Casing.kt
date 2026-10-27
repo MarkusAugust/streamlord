@@ -244,9 +244,11 @@ public object Casing {
 
     /**
      * The name as an expression refers to it: `foo-bar` -> `fooBar`, `form.first-name` -> `form.firstName`,
-     * `items[0]` and `items['sub-total']` untouched, and `['sub-total']` reaches a top-level key
-     * with a hyphen. A reference is JavaScript, so only blank names, whitespace and a first
-     * character Datastar does not read after a `$` are refused.
+     * the signal `data-signals:form.first-name` declares, `items[0]` and `items['sub-total']`
+     * untouched, and `['sub-total']` reaches a top-level key with a hyphen. A hyphenated key inside
+     * a signal's value keeps its hyphen, so `form['first-name']` reaches it. A reference is
+     * JavaScript, so only blank names, whitespace and a first character Datastar does not read
+     * after a `$` are refused.
      */
     public fun reference(name: String): String {
         if (name.isBlank()) throw InvalidSignalNameException(name, "is blank")
