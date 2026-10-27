@@ -282,6 +282,34 @@ In Maven, import the same BOM:
 `./gradlew dependencyInsight --dependency netty-codec-http --configuration runtimeClasspath` or
 `mvn dependency:tree` shows which Netty you run.
 
+The servlet engines on Ktor 3.0 have the same problem. `ktor-server-tomcat-jakarta` 3.0.0 brings
+Tomcat 10.1.30, which has known vulnerabilities, among them an authentication bypass in the DIGEST
+authenticator ([CVE-2026-65905](https://github.com/advisories/GHSA-9xv2-5v5q-p794)). Raise it to
+the newest 10.1 release, 10.1.61 at the time of writing. Tomcat has no BOM, so in Gradle:
+
+```kotlin sample=none
+configurations.configureEach {
+    resolutionStrategy.eachDependency {
+        if (requested.group.startsWith("org.apache.tomcat") && requested.version?.startsWith("10.1.") == true) {
+            useVersion("10.1.61")
+        }
+    }
+}
+```
+
+In Maven, list every `org.apache.tomcat` and `org.apache.tomcat.embed` artifact in
+`mvn dependency:tree` at that version under `<dependencyManagement>`. Maven raises only what you
+name, and `tomcat-catalina` alone brings eleven more, so a partial list mixes two Tomcat versions on
+one classpath.
+
+`ktor-server-jetty-jakarta` 3.0.0 brings Jetty 11.0.24. Raising it to 11.0.26 with
+`platform("org.eclipse.jetty:jetty-bom:11.0.26")` helps, but Jetty 11 is no longer maintained in
+the open, and 11.0.26 is the last release on Maven Central. It still has HTTP request smuggling
+([CVE-2026-2332](https://github.com/advisories/GHSA-355h-qmc2-wpwf)) and an authority and `Host`
+mismatch ([CVE-2026-6790](https://github.com/advisories/GHSA-7p3p-8qv8-m2vh)). If you run the Jetty
+engine in production, move to Ktor 3.5 or newer, whose Jetty 12 has both fixed. The adapter's tests
+on Ktor 3.0 run on Tomcat 10.1.61 and Jetty 11.0.26.
+
 `streamlord-json-kotlinx` is the one module that can raise your Kotlin standard library. It takes
 kotlinx.serialization 1.11.0, which asks for `kotlin-stdlib` 2.3.20, so in a Gradle project on
 Kotlin 2.2 the newer one wins:
