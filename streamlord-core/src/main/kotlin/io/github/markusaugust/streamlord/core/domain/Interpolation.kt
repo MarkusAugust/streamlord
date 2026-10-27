@@ -36,7 +36,13 @@ public enum class Position {
     /** A `style` attribute. Escaped CSS is still CSS, so only a number is let in. */
     STYLE,
 
-    /** A `data-*` attribute Datastar reads. The value would be part of a Datastar expression. */
+    /**
+     * A `data-*` attribute whose value Datastar evaluates, an expression or a signal filter
+     * ([ElementsGuard.evaluatedAttributes]), or follows as a signal path: `data-bind`, `data-ref`
+     * and `data-indicator`, where `__proto__.x` writes into every object of the page. An attribute
+     * the client reads as it stands, `data-nonce` or `data-preserve-attr` among them, is an
+     * ordinary one.
+     */
     DATASTAR,
 
     /** A tag name, an attribute name, or an unquoted value: the shape of the markup itself. */
@@ -70,7 +76,7 @@ public class UnsafeInterpolationException(
             val where =
                 when (position) {
                     Position.DATASTAR -> {
-                        "inside $attribute, which Datastar reads as an expression"
+                        "inside $attribute, which Datastar reads as an expression or follows as a signal path"
                     }
 
                     Position.STRUCTURE -> {
@@ -100,8 +106,8 @@ public class UnsafeInterpolationException(
             val fix =
                 when (position) {
                     Position.DATASTAR -> {
-                        "Put the value in a signal and reference it from the expression, or pass a Number or Boolean, " +
-                            "which cannot carry an expression."
+                        "Put the value in a signal and reference it from the expression, write a signal name in the " +
+                            "markup yourself, or pass a Number or Boolean, which can carry neither an expression nor a path."
                     }
 
                     Position.URL -> {
@@ -463,10 +469,14 @@ private class Landscape(
 
     fun attributeAt(hole: Int): String? = indexOfSpan(hole, attributeStarts, attributeEnds).takeIf { it >= 0 }?.let { attributeNames[it] }
 
+    // Their value is a signal path the client follows without a guard (bind.ts, ref.ts, indicator.ts).
+    private val signalPaths = setOf("bind", "ref", "indicator")
+
     private fun datastar(lower: String): Boolean {
         val prefix = prefixes.firstOrNull { lower.startsWith(it) } ?: return false
         val rest = lower.substring(prefix.length)
-        return rest.substringBefore(':').substringBefore("__") in ElementsGuard.attributes
+        val name = rest.substringBefore(':').substringBefore("__")
+        return name in ElementsGuard.evaluatedAttributes || name in signalPaths
     }
 
     private fun indexOfSpan(

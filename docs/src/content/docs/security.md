@@ -233,6 +233,15 @@ class CspNonceWebFilter : WebFilter {
 
 `exchange.cspNonce` then reads it back in the handler, exactly as `call.cspNonce` does.
 
+A page written as a string takes the nonce through `interpolate`, which escapes it: the client
+reads `data-nonce` as it stands, never as an expression, so the hole is an ordinary one.
+
+```kotlin sample=statements
+val nonce = CspNonce.generate()
+
+interpolate("""<html data-nonce="%s"><body></body></html>""", nonce)
+```
+
 ### The policy is yours
 
 The default policy is `CspNonce.starterPolicy`, which is deliberately strict and deliberately

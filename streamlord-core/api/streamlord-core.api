@@ -152,6 +152,7 @@ public final class io/github/markusaugust/streamlord/core/domain/ElementsGuard {
 	public static synthetic fun check$default (Lio/github/markusaugust/streamlord/core/domain/ElementsGuard;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Ljava/lang/String;
 	public final fun getAttributes ()Ljava/util/Set;
 	public final fun getDefaultPrefixes ()Ljava/util/List;
+	public final fun getEvaluatedAttributes ()Ljava/util/Set;
 	public final fun getExpressionAttributes ()Ljava/util/Set;
 }
 

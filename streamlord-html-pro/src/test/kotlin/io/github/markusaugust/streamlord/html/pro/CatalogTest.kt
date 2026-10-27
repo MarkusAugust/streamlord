@@ -129,6 +129,14 @@ class CatalogTest {
                 .map { it.string("name")!! }
                 .toSet()
         assertEquals(expression, ElementsGuard.expressionAttributes)
+        val filter =
+            catalog
+                .array("attributes")!!
+                .objects()
+                .filter { it.string("valueKind") == "filter" }
+                .map { it.string("name")!! }
+                .toSet()
+        assertEquals(expression + filter, ElementsGuard.evaluatedAttributes)
         assertEquals(
             catalog
                 .array("attributes")!!

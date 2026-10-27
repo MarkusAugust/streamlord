@@ -46,13 +46,35 @@ class InterpolationTest {
                 """<li data-on:click="@get('/x/%s')"></li>""",
                 """<li data-signals="{name: '%s'}"></li>""",
                 """<li data-star-text="%s"></li>""",
-                """<li data-bind="%s"></li>""",
                 """<li DATA-TEXT="%s"></li>""",
+                """<li data-json-signals="%s"></li>""",
+                """<li data-persist="%s"></li>""",
+                // A signal path, which the client follows without a guard: `__proto__.x` would reach every object.
+                """<li data-bind="%s"></li>""",
+                """<li data-ref="%s"></li>""",
+                """<li data-indicator="%s"></li>""",
             )
 
         for (markup in attributes) {
             val failure = assertFailsWith<UnsafeInterpolationException>(markup) { interpolate(markup, "x") }
             assertEquals(Position.DATASTAR, failure.position, markup)
+            assertTrue("reads as an expression or follows as a signal path" in failure.message!!, failure.message!!)
+        }
+    }
+
+    // The client reads these as they stand (csp.ts, patchElements.ts, engine.ts), so escaping holds.
+    @Test
+    fun `a value in a Datastar attribute the client does not evaluate is escaped and admitted`() {
+        val attributes =
+            listOf(
+                """<html data-nonce="%s"></html>""",
+                """<html data-star-nonce="%s"></html>""",
+                """<li data-preserve-attr="%s"></li>""",
+                """<li data-ignore="%s"></li>""",
+                """<li data-ignore-morph="%s"></li>""",
+            )
+        for (markup in attributes) {
+            assertEquals(markup.replace("%s", "a&quot;b"), interpolate(markup, "a\"b"), markup)
         }
     }
 
