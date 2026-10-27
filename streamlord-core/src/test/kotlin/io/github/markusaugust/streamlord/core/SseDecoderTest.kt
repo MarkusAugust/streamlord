@@ -48,6 +48,27 @@ class SseDecoderTest {
             }
         }
 
+    /**
+     * Without a selector, `outer` and `replace` take the elements of what was sent
+     * (`newContent.children` in patchElements.ts), so a comment or text alone patches nothing and
+     * is no event; the first start tag makes it one.
+     */
+    @Test
+    fun `an outer patch without a selector is an event only when it holds an element`() {
+        fun decoded(elements: String) = SseDecoder.decode("event: datastar-patch-elements\ndata: elements $elements\n\n")
+        assertEquals(emptyList(), decoded("<!-- c -->"))
+        assertEquals(emptyList(), decoded("<!-- <p> -->"))
+        assertEquals(emptyList(), decoded("<!-- <p id=\"x\">"))
+        assertEquals(emptyList(), decoded("<!-- <svg></body></svg> -->"))
+        assertEquals(emptyList(), decoded("a < b"))
+        assertEquals(emptyList(), decoded("hello"))
+        assertEquals(listOf(PatchElements("<p id=\"x\">x</p>")), decoded("<p id=\"x\">x</p>"))
+        assertEquals(listOf(PatchElements("<!-- c --><p id=\"x\">x</p>")), decoded("<!-- c --><p id=\"x\">x</p>"))
+        // A document end tag has the client read the whole text as a document and patch the page's body.
+        assertEquals(listOf(PatchElements("text</body>")), decoded("text</body>"))
+        assertEquals(listOf(PatchElements("<!-- </body> -->")), decoded("<!-- </body> -->"))
+    }
+
     @Test
     fun `an element patch comes back whole`() {
         val sent =

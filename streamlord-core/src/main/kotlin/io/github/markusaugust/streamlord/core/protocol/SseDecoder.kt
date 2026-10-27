@@ -44,9 +44,9 @@ public object SseDecoder {
      * text node, so it comes back as a [ElementPatchMode.REMOVE]; `inner` puts the white space in
      * place of the target's children and comes back as itself. `append`, `prepend`, `before` and
      * `after` insert the white space as a text node and change no element, and are no event. So
-     * is an `outer` or `replace` without a selector whose elements hold no tag, since the client
-     * takes only the elements from it. Any other character, a no-break space among them, is text
-     * the client inserts, and the patch comes back with it.
+     * is an `outer` or `replace` without a selector whose elements hold no element, text or a
+     * comment alone, since the client takes only the elements from it. Any other character, a
+     * no-break space among them, is text the client inserts, and the patch comes back with it.
      *
      * Such a frame that also asks for `useViewTransition` still has the client start a view
      * transition, around a patch that changes no element; it is no event all the same, and only the
@@ -138,11 +138,11 @@ public object SseDecoder {
                 val viewTransitionSelector = args[DataLines.VIEW_TRANSITION_SELECTOR]?.takeIf { it.isNotEmpty() }
                 // The client patches in nothing where the elements are missing or only white space:
                 // that empties the target of an inner patch, and removes that of an outer or replace one.
-                // Without a selector, those two take only elements, so text without a tag is nothing too.
+                // Without a selector, those two take only elements, so text or a comment alone is nothing too.
                 val nothing =
                     mode != ElementPatchMode.REMOVE &&
                         mode != ElementPatchMode.INNER &&
-                        (Wire.htmlBlank(elements) || (selector == null && '<' !in elements!!)) &&
+                        (Wire.htmlBlank(elements) || (selector == null && !holdsElement(elements!!))) &&
                         !(mode.requiresSelector && selector == null)
                 when {
                     nothing && selector != null && (mode == ElementPatchMode.OUTER || mode == ElementPatchMode.REPLACE) -> {
@@ -191,6 +191,18 @@ public object SseDecoder {
             }
         }
     }
+
+    // What opens an element to the HTML parser, outside a comment, which runs to the end when it is
+    // not closed; text and comments the client never patches in. A `</body>`, `</head>` or `</html>`
+    // anywhere outside an `<svg>` has the client read the text as a whole document and patch that
+    // element of the page (patchElements.ts).
+    private val START_TAG = Regex("<[A-Za-z]")
+    private val COMMENT = Regex("<!--.*?(?:-->|$)", RegexOption.DOT_MATCHES_ALL)
+    private val SVG = Regex("<svg(?:\\s[^>]*>|>).*?</svg>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+    private val DOCUMENT_END = Regex("</(?:body|head|html)>")
+
+    private fun holdsElement(elements: String): Boolean =
+        DOCUMENT_END.containsMatchIn(elements.replace(SVG, "")) || START_TAG.containsMatchIn(elements.replace(COMMENT, ""))
 
     // isStringTrue in the client's utils/text.ts, with JavaScript's trim().
     private fun isTrue(value: String?): Boolean = value != null && JsText.trim(value) == "true"
