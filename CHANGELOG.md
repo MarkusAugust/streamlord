@@ -67,6 +67,12 @@ All notable changes to Streamlord are recorded here. The format follows
   `produces = [MediaType.TEXT_HTML_VALUE]` lets Spring MVC pick Latin-1. The recipe on the Security
   page and in `CspNonceFilter` says `produces = ["text/html;charset=UTF-8"]`. Found by the wire
   transcripts.
+- The analysis took `signal("cuont")` for a declaration of `cuont`, so a misspelt name in
+  `signal`, `increment`, `decrement` or `not` was never reported. These helpers now read the
+  signal they name, and an unknown one gets the same warning and fix as `$cuont` in an
+  expression; `set`, `setExpr` and `toggle` still declare theirs, since they assign it. A kebab
+  or bracketed name, `signal("foo-bar")`, is not checked. The IntelliJ plugin and the VS Code
+  extension both report it.
 - `SseDecoder` turned an `outer` or `replace` patch without a selector whose elements were a
   comment alone, or text holding a `<`, into an event; the client patches nothing for either.
 - Documentation held to the client: a 400 from an over-long query is retried under

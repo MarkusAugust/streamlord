@@ -74,6 +74,29 @@ class SignalReferencesTest {
         assertEquals(listOf("\$shown"), unknown(html, SourceLanguage.HTML).map { html.substring(it.start, it.end) })
     }
 
+    // signal("count") is $count: the helpers that read a signal by name read it, and set, setExpr
+    // and toggle assign it, which defines it.
+    @Test
+    fun `a helper that reads a signal by name reads it, and one that assigns defines it`() {
+        val src =
+            """
+            fun f() = div {
+                dataSignals("count", "0")
+                dataText(signal("cuont"))
+                dataOn("click", increment("count"))
+                dataShow(not("opn"))
+                dataOn("click", toggle("open"))
+                dataOn("click", set("total", 1))
+                dataText(signal("total") + signal("foo-bar") + signal("items[0]") + signal("user.name"))
+            }
+            """.trimIndent()
+        val issues = unknown(src)
+        assertEquals(listOf("cuont", "opn", "user.name"), issues.map { src.substring(it.start, it.end) })
+        assertEquals("count", issues[0].fixes.single().text)
+        assertEquals("open", issues[1].fixes.single().text)
+        assertTrue("cuont" in collectSignals(src, SourceLanguage.KOTLIN))
+    }
+
     @Test
     fun `markup files read bare signals without defining them`() {
         val html = "<div data-signals:count=\"0\"><span data-text=\"\$cuont\"></span><span data-text=\"\$count\"></span></div>"

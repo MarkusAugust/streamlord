@@ -6,14 +6,20 @@ import { findCallSites } from "./scanner.ts";
  * generous: better to offer a name twice than to miss it.
  */
 
-// A kebab-case name is written as a kebab-case key, which Datastar reads as camelCase: signal("foo-bar") is $fooBar.
+// A kebab-case name is written as a kebab-case key, which Datastar reads as camelCase: set("foo-bar", 1) is $fooBar.
+// set, setExpr and toggle assign the signal, which creates it.
 const KOTLIN_PATTERNS: RegExp[] = [
-  /\b(?:signal|set|setExpr|increment|decrement|toggle|not|dataBind|dataIndicator|dataRef|dataComputed|dataMatchMedia)\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"/g,
+  /\b(?:set|setExpr|toggle|dataBind|dataIndicator|dataRef|dataComputed|dataMatchMedia)\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"/g,
   /\bdataSignals\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"\s*,/g,
 ];
 
 /** A dollar escaped in a Kotlin string: a signal read, which completion offers and a definition is not. */
-const KOTLIN_READS: RegExp[] = [/\$\{'\$'\}([A-Za-z_][A-Za-z0-9_.]*)/g, /\\\$([A-Za-z_][A-Za-z0-9_.]*)/g];
+const KOTLIN_READS: RegExp[] = [
+  /\$\{'\$'\}([A-Za-z_][A-Za-z0-9_.]*)/g,
+  /\\\$([A-Za-z_][A-Za-z0-9_.]*)/g,
+  // A helper that reads a signal by name: signal("count") is $count.
+  /\b(?:signal|increment|decrement|not)\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"/g,
+];
 
 /** `$name = ...` in an expression: Datastar creates a signal it is assigned to, so the assignment defines it. */
 const ASSIGNED_SIGNAL = /(?:\$|\$\{'\$'\})([A-Za-z_][A-Za-z0-9_.]*)\s*=(?![=>])/g;

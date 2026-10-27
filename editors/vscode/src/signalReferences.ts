@@ -35,6 +35,21 @@ export function expressionSignalReferences(text: string): SignalReference[] {
   return out;
 }
 
+/** The DSL helpers whose first argument names a signal they read: `signal("count")` is `$count`. */
+const HELPER_READ_CALLS: ReadonlySet<string> = new Set(["signal", "increment", "decrement", "not"]);
+
+/**
+ * A name a helper writes as it stands. A kebab or bracketed name reaches the client rewritten
+ * (`foo-bar` is `$fooBar`), so a fix that wrote the defined name back would change how it is
+ * written; those are left out, as `$foo-bar` is in an expression.
+ */
+const PLAIN_HELPER_NAME = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/;
+
+/** The signal the literal first argument of a helper reads, with offsets relative to its text. */
+export function helperSignalReference(text: string): SignalReference | null {
+  return PLAIN_HELPER_NAME.test(text) && !text.includes(PLACEHOLDER) ? { start: 0, end: text.length, name: text } : null;
+}
+
 /** The signals the expressions of an HTML fragment or document read, with offsets relative to `html`. */
 export function signalReferencesInHtml(html: string, prefix: string): SignalReference[] {
   const out: SignalReference[] = [];
@@ -55,9 +70,9 @@ export function signalReferencesInHtml(html: string, prefix: string): SignalRefe
 
 /**
  * Every signal the Datastar expressions of a Kotlin file read: in the expression handed to a DSL
- * call, and in the attributes of HTML strings, handed to a call or free-standing. A Kotlin
- * template (`$count` in a plain literal) is not a signal and is left out; the interpolation check
- * speaks for it.
+ * call, in the name handed to a helper such as `signal("count")`, and in the attributes of HTML
+ * strings, handed to a call or free-standing. A Kotlin template (`$count` in a plain literal) is
+ * not a signal and is left out; the interpolation check speaks for it.
  */
 export function signalReferencesInKotlin(src: string, prefix: string): SignalReference[] {
   const out: SignalReference[] = [];
@@ -78,6 +93,12 @@ export function signalReferencesInKotlin(src: string, prefix: string): SignalRef
       const s = markupString(site, html);
       if (s && !s.unterminated) add(s, signalReferencesInHtml(s.text, prefix));
     }
+  }
+  for (const site of findCallSites(src, HELPER_READ_CALLS, lex.mask)) {
+    const s = site.args.find((a) => a.named === null)?.string;
+    if (!s || s.unterminated) continue;
+    const ref = helperSignalReference(s.text);
+    if (ref) add(s, [ref]);
   }
   for (const m of src.matchAll(ATTRIBUTES_INDEX)) {
     if (lex.mask[m.index ?? 0] === 0) continue;

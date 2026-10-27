@@ -25,6 +25,23 @@ describe("signal references", () => {
     assert.equal(issues[0]?.code, "unknown-signal");
   });
 
+  it("a helper that reads a signal by name reads it, and one that assigns defines it", () => {
+    const src = `fun f() = div {
+    dataSignals("count", "0")
+    dataText(signal("cuont"))
+    dataOn("click", increment("count"))
+    dataShow(not("opn"))
+    dataOn("click", toggle("open"))
+    dataOn("click", set("total", 1))
+    dataText(signal("total") + signal("foo-bar") + signal("items[0]") + signal("user.name"))
+}`;
+    const issues = unknown(src);
+    assert.deepEqual(issues.map((i) => src.slice(i.start, i.end)), ["cuont", "opn", "user.name"]);
+    assert.equal(issues[0]?.fixes?.[0]?.text, "count");
+    assert.equal(issues[1]?.fixes?.[0]?.text, "open");
+    assert.ok(collectSignals(src, "kotlin").has("cuont"));
+  });
+
   it("a near name is offered as the fix, and the dollar is kept as written", () => {
     const src = `fun f() = """<div data-signals:count="0" data-text="\${'$'}coutn"></div>"""`;
     const [issue] = unknown(src);

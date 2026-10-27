@@ -30,6 +30,20 @@ internal fun expressionSignalReferences(text: String): List<SignalReference> =
         .filter { r -> '-' !in r.name && r.name.first().let { it == '_' || it in 'A'..'Z' || it in 'a'..'z' } && PLACEHOLDER !in r.name }
         .map { SignalReference(it.start, it.end, it.name) }
 
+/** The DSL helpers whose first argument names a signal they read: `signal("count")` is `$count`. */
+internal val HELPER_READ_CALLS: Set<String> = setOf("signal", "increment", "decrement", "not")
+
+/**
+ * A name a helper writes as it stands. A kebab or bracketed name reaches the client rewritten
+ * (`foo-bar` is `$fooBar`), so a fix that wrote the defined name back would change how it is
+ * written; those are left out, as `$foo-bar` is in an expression.
+ */
+private val PLAIN_HELPER_NAME = Regex("""[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*""")
+
+/** The signal the literal first argument of a helper in [HELPER_READ_CALLS] reads, with offsets relative to its text. */
+internal fun helperSignalReference(text: String): SignalReference? =
+    if (PLAIN_HELPER_NAME.matches(text) && PLACEHOLDER !in text) SignalReference(0, text.length, text) else null
+
 /** The signals the expressions of an HTML fragment or document read, with offsets relative to [html]. */
 internal fun markupSignalReferences(
     html: String,

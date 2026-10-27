@@ -7,11 +7,12 @@ package io.github.markusaugust.streamlord.analysis
 
 public enum class SourceLanguage { KOTLIN, HTML }
 
-// A kebab-case name is written as a kebab-case key, which Datastar reads as camelCase: signal("foo-bar") is $fooBar.
+// A kebab-case name is written as a kebab-case key, which Datastar reads as camelCase: set("foo-bar", 1) is $fooBar.
+// set, setExpr and toggle assign the signal, which creates it.
 private val KOTLIN_PATTERNS =
     listOf(
         Regex(
-            """\b(?:signal|set|setExpr|increment|decrement|toggle|not|dataBind|dataIndicator|dataRef|dataComputed|dataMatchMedia)\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"""",
+            """\b(?:set|setExpr|toggle|dataBind|dataIndicator|dataRef|dataComputed|dataMatchMedia)\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"""",
         ),
         Regex("""\bdataSignals\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"\s*,"""),
     )
@@ -22,6 +23,9 @@ private val KOTLIN_READS =
         Regex("""\$\{'\$'\}([A-Za-z_][A-Za-z0-9_.]*)"""),
         Regex("""\\\$([A-Za-z_][A-Za-z0-9_.]*)"""),
     )
+
+/** A helper that reads a signal by name: `signal("count")` is `$count`, which completion offers and a definition is not. */
+private val HELPER_READS = Regex("""\b(?:${HELPER_READ_CALLS.joinToString("|")})\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"""")
 
 /*
  * Declarations in markup, read as the client stores them. These also run over Kotlin, where they
@@ -129,6 +133,7 @@ private fun collect(
         }
         for (re in KOTLIN_PATTERNS) for (m in re.findAll(src)) out += toCamel(m.groupValues[1])
         if (reads) for (re in KOTLIN_READS) for (m in re.findAll(src)) out += m.groupValues[1]
+        if (reads) for (m in HELPER_READS.findAll(src)) out += toCamel(m.groupValues[1])
     }
     // A keyed attribute may carry modifiers after the key: data-signals:foo-bar__ifmissing, and
     // `__case` names the signal: data-signals:my-value__case.snake is `$my_value`.

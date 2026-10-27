@@ -247,9 +247,9 @@ public class Analyzer(
 
     /**
      * Every signal the Datastar expressions of a Kotlin file read: in the expression handed to a DSL
-     * call, and in the attributes of HTML strings, handed to a call or free-standing. A Kotlin
-     * template (`$count` in a plain literal) is not a signal and is left out; the interpolation
-     * check speaks for it.
+     * call, in the name handed to a helper such as `signal("count")`, and in the attributes of HTML
+     * strings, handed to a call or free-standing. A Kotlin template (`$count` in a plain literal)
+     * is not a signal and is left out; the interpolation check speaks for it.
      */
     public fun signalReferencesInKotlin(
         src: String,
@@ -280,6 +280,14 @@ public class Analyzer(
                 val s = markupString(site, spec)?.takeUnless { it.unterminated } ?: return@let
                 add(s, markupSignalReferences(s.text, catalog, opts.prefix), site)
             }
+        }
+        for (site in findCallSites(src, HELPER_READ_CALLS, lex)) {
+            val s =
+                site.positional
+                    .firstOrNull()
+                    ?.string
+                    ?.takeUnless { it.unterminated } ?: continue
+            add(s, listOfNotNull(helperSignalReference(s.text)), site)
         }
         for (m in ATTRIBUTES_INDEX.findAll(src)) {
             if (!lex.mask[m.range.first]) continue
