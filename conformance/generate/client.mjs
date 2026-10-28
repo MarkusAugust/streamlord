@@ -1,4 +1,4 @@
-// Generates conformance/client/*.json by running the functions of the local Datastar client checkout:
+// Generates conformance/client/*.json by running the functions of the local copy of the Datastar client:
 // the casing, attribute key, expression, modifier tag and signal store rules Streamlord's analysis
 // and editor mirror. Every output is what the client's own code returns, not a port of it.
 //

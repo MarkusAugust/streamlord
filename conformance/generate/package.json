@@ -2,8 +2,9 @@
   "name": "streamlord-conformance-generate",
   "private": true,
   "type": "module",
-  "description": "Generates the conformance fixtures from the local Datastar client checkout. Never from Datastar Pro.",
+  "description": "Fetches the free Datastar client and generates the conformance fixtures from it. Never from Datastar Pro.",
   "scripts": {
+    "reference": "node reference.mjs",
     "client": "node client.mjs",
     "dom": "node dom.mjs"
   },

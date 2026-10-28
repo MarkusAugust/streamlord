@@ -10,13 +10,14 @@ text. The tests that read them live in the module they hold: `streamlord-core`,
 `editors/vscode`, each reading the file by a relative path, as the catalog tests do.
 
 The generators under `generate/` read only the free client under
-`datastar-reference/datastar-<version>/`, a local, git-ignored checkout of the Datastar release
-with its bundles built: `client.mjs` the sources under `library/src`, `dom.mjs` the built
+`datastar-reference/datastar-<version>/`, a local, git-ignored copy of the Datastar release tag
+that `npm run reference` fetches from GitHub and checks against the sha256 in `reference.mjs`:
+`client.mjs` the sources under `library/src`, `dom.mjs` the built
 `bundles/datastar.js`. Nothing from Datastar Pro goes in here, and a generator refuses to read a
 file outside that directory.
 
 ```sh
-cd conformance/generate && npm install && npm run client
+cd conformance/generate && npm install && npm run reference && npm run client
 ```
 
 ## client

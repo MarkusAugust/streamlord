@@ -13,7 +13,7 @@ A security flaw goes through [SECURITY.md](SECURITY.md), never a public issue.
 | `streamlord-*` | the ten published modules |
 | `editors/vscode`, `editors/intellij` | the two editor extensions |
 | `catalog/` | `datastar-1.0.4.json`, the shared source of truth for both editors |
-| `datastar-reference/` | a local, git-ignored checkout of [starfederation/datastar](https://github.com/starfederation/datastar) at the version Streamlord speaks, bundles built: `datastar-reference/datastar-1.0.4/`; the authority for every claim about the client, and what the generators below read |
+| `datastar-reference/` | a local, git-ignored copy of [starfederation/datastar](https://github.com/starfederation/datastar) at the release tag Streamlord speaks, `datastar-reference/datastar-1.0.4/`, fetched by `npm run reference` in `conformance/generate`; the authority for every claim about the client, and what the generators below read |
 | `conformance/` | what the client and the servers actually do, as fixtures the tests hold Streamlord to; see below |
 | `docs/` | this project's documentation site (Astro, Fristil, Datastar) |
 | `demo/` | `streamlord-live`, the service behind the site's live examples and search |
@@ -80,14 +80,15 @@ the client itself does, recorded in `conformance/`:
 
 The generators read the free client in `datastar-reference/datastar-<version>/` and nothing
 else: `client.mjs` the sources under `library/src`, `dom.mjs` the built `bundles/datastar.js`. The
-directory is a local checkout of the Datastar release, git-ignored, so a contributor who wants to
-run a generator puts it there first; the fixtures themselves are committed, and the tests need
-only them. Datastar Pro is licensed and is never read, copied or generated from; the catalog
+directory is git-ignored, and `npm run reference` fills it: `conformance/generate/reference.mjs`
+downloads the release tag's archive from GitHub, refuses it unless its sha256 is the one written in
+the script, and unpacks it there. The repository holds no Datastar code, only that tag and checksum;
+the fixtures themselves are committed, and the tests need only them. Datastar Pro is licensed and is never read, copied or generated from; the catalog
 carries only its public names.
 
 The tests run in `./gradlew build` and in the VS Code suite, and cost seconds. The generators
 run by hand, when the reference changes, with `cd conformance/generate && npm install && npm run
-client && npm run dom`. A transcript that is meant to change is rewritten with the
+reference && npm run client && npm run dom`. A transcript that is meant to change is rewritten with the
 `updateTranscripts` tasks and shows up as a diff in the pull request, as `updateKotlinAbi` does
 for the public API.
 
@@ -98,8 +99,11 @@ requests runs the same suite on the newest release.
 
 ### Moving to a new Datastar version
 
-1. Put a checkout of the new release, bundles built, at `datastar-reference/datastar-<version>/`
-   and remove the old directory: the generators take the version from the one directory they find.
+1. Set `VERSION` and `SHA256` in `conformance/generate/reference.mjs` to the new release tag and
+   the sha256 of its archive (`curl -sL <archive> | shasum -a 256`), remove the old
+   `datastar-reference/datastar-<version>/`, and run `npm run reference` in
+   `conformance/generate`: the generators take the version from the one directory they find, and
+   the script refuses to add a second.
 2. Run the generators: `cd conformance/generate && npm install && npm run client && npm run dom`.
    The diff of `conformance/client/` and `conformance/dom/` is the list of rules the client changed.
 3. Make the tests green against the new fixtures, changing Streamlord where the client changed and
