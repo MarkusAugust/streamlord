@@ -6,6 +6,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-28
+
 ### Added
 
 - `dataAnimate` takes the object form, `dataAnimate("{width: $w + 'px'}")`, and the modifiers the

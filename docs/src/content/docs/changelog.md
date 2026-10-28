@@ -7,6 +7,33 @@ description: "What each release changed, and what it asks of your code."
 repository is authoritative and complete. This page carries only what changes how you write code,
 with a sentence about what to do.
 
+## 0.15.0
+
+**Write each signal name in camelCase, without a hyphen.** A name with a hyphen now throws
+`InvalidSignalNameException` where you write it, with the name to write instead:
+`dataSignals("foo-bar", "1")`, `dataBind("form.first-name")`, `patchSignals("foo-bar" to 1)` and
+every other helper that names a signal. Rename it, `fooBar`, in Kotlin and in the expressions of
+the page alike. In 0.14.0 the keyed form declared `$fooBar` while `patchSignals` patched `foo-bar`,
+so in most pages the camelCase name is the one the browser already read. In `signal`, `set` and the
+other expression helpers a hyphen in a key you quote is fine, `signal("form['first-name']")`. One
+the client reads as a minus or as part of a signal, `signal("items[\$i-1]")`, throws, and the
+exception says to write the subtraction in the expression: `"\$items[\$i - 1]"`. The editors flag
+each such call before it runs, and [Casing](/casing/) has the rule.
+
+**A key with a hyphen inside a value is written as it stands.** `"user" to mapOf("first-name" to
+"")` declares `$user['first-name']`, where 0.14.0 declared `$user.firstName`. Read it with
+brackets, or rename the key.
+
+**Drop `case` from `dataSignals`, `dataComputed`, `dataRef`, `dataIndicator`, `dataMatchMedia` and
+`BindModifiers`.** The DSL writes the key that gives back the name you wrote, so a `case` could
+only change it. Source that passes one no longer compiles; delete the argument. `dataOn` and
+`dataClass` keep theirs.
+
+**`LiveDatastarStream.open` sends `{}` as the signals of the page.** A handler under test that
+reads signals gets an empty object, as it would from a browser, where it got none. Pass `signals =
+"""{"count":3}"""` to send others. Its JVM signature changed, and so did that of the key form of
+`dataAnimate`, so recompile code built against 0.14.
+
 ## 0.14.0
 
 Nothing to change. **A MockMvc test of a stream may drop `MockMvcPrint.NONE`.** If you turned

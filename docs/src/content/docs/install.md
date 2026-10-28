@@ -13,9 +13,9 @@ know why.
 
 ```kotlin tab="Gradle" group=install label="Build tool" sample=none
 dependencies {
-    implementation("io.github.markusaugust.streamlord:streamlord-ktor:0.14.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-html:0.14.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-json-kotlinx:0.14.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-ktor:0.15.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-html:0.15.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-json-kotlinx:0.15.0")
 }
 ```
 
@@ -23,17 +23,17 @@ dependencies {
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-ktor</artifactId>
-  <version>0.14.0</version>
+  <version>0.15.0</version>
 </dependency>
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-html</artifactId>
-  <version>0.14.0</version>
+  <version>0.15.0</version>
 </dependency>
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-json-kotlinx</artifactId>
-  <version>0.14.0</version>
+  <version>0.15.0</version>
 </dependency>
 ```
 
@@ -41,9 +41,9 @@ dependencies {
 
 ```kotlin tab="Gradle" group=install label="Build tool" sample=none
 dependencies {
-    implementation("io.github.markusaugust.streamlord:streamlord-spring:0.14.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-html:0.14.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-json-jackson:0.14.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-spring:0.15.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-html:0.15.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-json-jackson:0.15.0")
 }
 ```
 
@@ -51,17 +51,17 @@ dependencies {
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-spring</artifactId>
-  <version>0.14.0</version>
+  <version>0.15.0</version>
 </dependency>
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-html</artifactId>
-  <version>0.14.0</version>
+  <version>0.15.0</version>
 </dependency>
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-json-jackson</artifactId>
-  <version>0.14.0</version>
+  <version>0.15.0</version>
 </dependency>
 ```
 
@@ -162,7 +162,7 @@ Both were resolved rather than reasoned about, and neither is a surprise you can
 ```kotlin sample=none
 dependencies {
     // Take Boot's Jackson, whatever it is.
-    implementation("io.github.markusaugust.streamlord:streamlord-json-jackson:0.14.0") {
+    implementation("io.github.markusaugust.streamlord:streamlord-json-jackson:0.15.0") {
         exclude(group = "tools.jackson.core")
     }
 }
