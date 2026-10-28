@@ -15,7 +15,7 @@ All notable changes to the Streamlord extension are recorded here.
 - A misspelt name in `signal`, `increment`, `decrement` or `not` gets the same warning and fix as
   `$cuont` in an expression. These calls used to count as declarations.
 - `dataSignals(codec.toJsonValue(Form()))` declares the properties of a `@Serializable` class named
-  there, for the drift and unknown-signal checks. For a class the analysis cannot read, every name
+  there, for the unknown-signal check. For a class the analysis cannot read, every name
   counts as declared.
 - The keys inside a pair's value, `"user" to mapOf("name" to "")`, are no longer counted as
   top-level signals.
@@ -25,6 +25,11 @@ All notable changes to the Streamlord extension are recorded here.
 - A signal object under `constructor` or another name every object has is flagged: the client holds
   it, and the next request writes it into the built-in one.
 - The grammar marks `$123` and `$foo-bar` as one signal each, as the client reads them.
+- Completion, hover and the checks know the object form of Pro's `data-animate`,
+  `data-animate="{width: $w + 'px'}"`, and its modifiers `duration`, `delay`, `ease`, `loop` and
+  `pingpong`, and the `delay`, `debounce` and `viewtransition` modifiers of `data-on-raf` and
+  `data-on-resize`. A `data-animate` without a key is no longer flagged, and its snippet inserts
+  the object form; type `data-animate:` for the keyed one.
 
 ## 0.9.1
 
