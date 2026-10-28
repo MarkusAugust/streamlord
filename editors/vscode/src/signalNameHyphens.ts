@@ -73,31 +73,12 @@ export function withoutHyphens(name: string): string {
  * `name`, a reference an expression writes after `$`, with its hyphens taken out, or null when it
  * has none that matter: one in a signal the client reads, as in `items[$i-1]`, and one outside
  * brackets and strings that no reference holds, as in `a['x'].b-c`, which JavaScript reads as a
- * minus. A quoted key is text. The same rule as `SignalNames.withoutReferenceHyphens` in streamlord-core.
+ * minus. A quoted key and the text of a template literal are text. The same rule as
+ * `SignalNames.withoutReferenceHyphens` in streamlord-core.
  */
 export function withoutReferenceHyphens(name: string): string | null {
   const text = `$${name}`;
-  const read = clientRewrite(text);
-  const references = read.rewrites.filter((r) => r.kind === "signal");
-  const wrong = new Set<number>();
-  for (const r of references) {
-    for (let i = r.start; i < r.end; i++) if (text[i] === "-") wrong.add(i);
-  }
-  let depth = 0;
-  let i = 0;
-  while (i < text.length) {
-    const at = i;
-    const skip = read.runs.find((r) => at >= r.start && at < r.end) ?? references.find((r) => at >= r.start && at < r.end);
-    if (skip) {
-      i = skip.end;
-      continue;
-    }
-    const c = text[i];
-    if (c === "[") depth++;
-    else if (c === "]") depth = Math.max(0, depth - 1);
-    else if (c === "-" && depth === 0) wrong.add(i);
-    i++;
-  }
+  const wrong = wrongHyphens(text);
   if (wrong.size === 0) return null;
   let out = "";
   let raise = false;
@@ -112,6 +93,79 @@ export function withoutReferenceHyphens(name: string): string | null {
     raise = false;
   }
   return out.slice(1);
+}
+
+/**
+ * The expression `name` would be with each hyphen that goes wrong before a digit or a `$` written as
+ * a subtraction, `$items[$i - 1]` for `items[$i-1]`, or null when no such hyphen goes wrong. The same
+ * as `SignalNames.referenceAsSubtraction` in streamlord-core.
+ */
+export function referenceAsSubtraction(name: string): string | null {
+  const text = `$${name}`;
+  const wrong = wrongHyphens(text);
+  const minus = new Set([...wrong].filter((k) => /[0-9$]/.test(text.charAt(k + 1))));
+  if (minus.size === 0) return null;
+  let out = "";
+  let raise = false;
+  for (let k = 0; k < text.length; k++) {
+    const c = text.charAt(k);
+    if (minus.has(k)) out += " - ";
+    else if (wrong.has(k)) raise = true;
+    else {
+      out += raise ? c.toUpperCase() : c;
+      raise = false;
+    }
+  }
+  return out;
+}
+
+// The offsets in text of the hyphens that go wrong. The client skips a quoted string, and a
+// template literal without `${`, so their text is in runs; the text of one with `${` it reads as
+// code, which JavaScript does not, so the scan steps over that text itself.
+function wrongHyphens(text: string): Set<number> {
+  const read = clientRewrite(text);
+  const references = read.rewrites.filter((r) => r.kind === "signal");
+  const wrong = new Set<number>();
+  for (const r of references) {
+    for (let i = r.start; i < r.end; i++) if (text[i] === "-") wrong.add(i);
+  }
+  // -1 for the text of a template literal, n for the code of a `${`, n braces deep.
+  const nesting: number[] = [];
+  let depth = 0;
+  let i = 0;
+  while (i < text.length) {
+    const c = text.charAt(i);
+    if (nesting.at(-1) === -1) {
+      if (c === "\\") i++;
+      else if (c === "`") nesting.pop();
+      else if (c === "$" && text.charAt(i + 1) === "{") {
+        nesting.push(0);
+        i++;
+      }
+      i++;
+      continue;
+    }
+    const at = i;
+    const skip = read.runs.find((r) => at >= r.start && at < r.end) ?? references.find((r) => at >= r.start && at < r.end);
+    if (skip) {
+      i = skip.end;
+      continue;
+    }
+    const top = nesting.length - 1;
+    if (c === "`") nesting.push(-1);
+    else if (c === "{") {
+      if (top >= 0) nesting[top] = (nesting[top] ?? 0) + 1;
+    } else if (c === "}") {
+      if (top >= 0) {
+        if (nesting[top] === 0) nesting.pop();
+        else nesting[top] = (nesting[top] ?? 1) - 1;
+      }
+    } else if (c === "[") depth++;
+    else if (c === "]") depth = Math.max(0, depth - 1);
+    else if (c === "-" && depth === 0) wrong.add(i);
+    i++;
+  }
+  return wrong;
 }
 
 /**
@@ -187,7 +241,7 @@ export function signalNameHyphenIssues(site: CallSite, src: string, strings: Kot
     const s = (first ?? named("name"))?.string;
     if (!s) return out;
     const fixed = withoutReferenceHyphens(s.text);
-    if (fixed !== null) out.push(hyphenIssue(s, src, fixed, bracketed(s.text)));
+    if (fixed !== null) out.push(hyphenIssue(s, src, fixed, bracketed(s.text), referenceAsSubtraction(s.text)));
     return out;
   }
 
@@ -227,15 +281,17 @@ export function signalNameHyphenIssues(site: CallSite, src: string, strings: Kot
   return out;
 }
 
-function hyphenIssue(s: KotlinString, src: string, fixed: string, bracketedName: string | null): Issue {
+function hyphenIssue(s: KotlinString, src: string, fixed: string, bracketedName: string | null, subtraction: string | null = null): Issue {
   const written = src.slice(s.contentStart, s.contentEnd);
   // A name with escapes in its source is reported and left for the author to rewrite, and so is
   // one with a template in it, whose hyphen is in the text around the template. An escaped `$`,
-  // as in "items[\$i-1]", is the one escape the fix writes back.
+  // as in "items[\$i-1]", is the one escape the fix writes back. A subtraction gets no fix, since
+  // it belongs in the expression around the call, which the author writes; its `$` is shown escaped,
+  // as a Kotlin string needs it.
   const dollars = written !== s.text && written === s.text.replaceAll("$", "\\$");
-  const plain = s.interpolations.length === 0 && (written === s.text || dollars);
+  const plain = subtraction === null && s.interpolations.length === 0 && (written === s.text || dollars);
   const text = dollars ? fixed.replaceAll("$", "\\$") : fixed;
-  const advice = plain ? `Write ${text}${bracketedName ? `, or ${bracketedName} for a key with a hyphen in it` : ""}` : "Write it in camelCase";
+  const advice = subtraction !== null ? `It looks like a subtraction, which belongs in the expression: ${subtraction.replaceAll("$", "\\$")}` : plain ? `Write ${text}${bracketedName ? `, or ${bracketedName} for a key with a hyphen in it` : ""}` : "Write it in camelCase";
   return {
     start: s.start,
     end: s.end,

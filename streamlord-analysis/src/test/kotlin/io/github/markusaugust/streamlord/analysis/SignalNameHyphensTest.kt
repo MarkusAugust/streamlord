@@ -143,11 +143,14 @@ class SignalNameHyphensTest {
                   dataText(signal("a['['].b-c"))
                 }
                 """.trimIndent()
-        assertEquals(listOf("items[\\${'$'}i1]", "a['['].bC"), hyphens(src).map { it.fixes.single().text })
-        assertTrue(hyphens(src).first().message.endsWith("Write items[\\${'$'}i1]."), hyphens(src).first().message)
+        // A hyphen before a digit or a `$` looks like a subtraction, which gets no fix: a name holds
+        // no spaces, so it belongs in the expression around the call.
+        assertEquals(listOf(emptyList(), listOf("a['['].bC")), hyphens(src).map { issue -> issue.fixes.map { it.text } })
+        val subtraction = "It looks like a subtraction, which belongs in the expression: \\${'$'}items[\\${'$'}i - 1]."
+        assertTrue(hyphens(src).first().message.endsWith(subtraction), hyphens(src).first().message)
         assertEquals(
             dsl +
-                "fun p() = div {\n  dataText(signal(\"a['x]y-z']\"))\n  dataText(signal(\"items[\\${'$'}i1]\"))\n  dataText(signal(\"a['['].bC\"))\n}",
+                "fun p() = div {\n  dataText(signal(\"a['x]y-z']\"))\n  dataText(signal(\"items[\\${'$'}i-1]\"))\n  dataText(signal(\"a['['].bC\"))\n}",
             fixed(src),
         )
     }

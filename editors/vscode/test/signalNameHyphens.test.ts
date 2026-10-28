@@ -108,8 +108,14 @@ fun q() = div { dataSignals("user" to buildMap { set("first-name", "") }) }`;
 
   it("a name is read as the client reads it", () => {
     const src = `${dsl}fun p() = div {\n  dataText(signal("a['x]y-z']"))\n  dataText(signal("items[\\$i-1]"))\n  dataText(signal("a['['].b-c"))\n}`;
-    assert.deepEqual(hyphens(src).map((i) => i.fixes![0]!.text), ["items[\\$i1]", "a['['].bC"]);
-    assert.ok(hyphens(src)[0]!.message.endsWith("Write items[\\$i1]."), hyphens(src)[0]!.message);
+    // A hyphen before a digit or a `$` looks like a subtraction, which gets no fix: a name holds
+    // no spaces, so it belongs in the expression around the call.
+    assert.deepEqual(
+      hyphens(src).map((i) => (i.fixes ?? []).map((f) => f.text)),
+      [[], ["a['['].bC"]],
+    );
+    const subtraction = "It looks like a subtraction, which belongs in the expression: \\$items[\\$i - 1].";
+    assert.ok(hyphens(src)[0]!.message.endsWith(subtraction), hyphens(src)[0]!.message);
   });
 
   // The demo writes dataText("${signal("running")} ? ..."), so a call inside a template is the DSL's too.

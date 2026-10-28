@@ -248,7 +248,9 @@ public object Casing {
      * `['sub-total']` or `form['first-name']` for a key with a hyphen. A reference is JavaScript,
      * so only blank names, whitespace, a first character Datastar does not read after a `$`, and a
      * hyphen the client reads in a signal name or as a minus are refused: `$foo-bar` would read a
-     * signal no name declares, and `items[$i-1]` the signal `i-1` ([SignalNames.withoutReferenceHyphens]).
+     * signal no name declares, and `items[$i-1]` the signal `i-1` ([SignalNames.withoutReferenceHyphens]). A
+     * hyphen before a digit or a `$` looks like a subtraction, and the advice says to write one in
+     * the expression ([SignalNames.referenceAsSubtraction]).
      */
     public fun reference(name: String): String {
         if (name.isBlank()) throw InvalidSignalNameException(name, "is blank")
@@ -256,6 +258,12 @@ public object Casing {
         val first = name.first()
         if (first != '[' && first != '_' && first !in 'A'..'Z' && first !in 'a'..'z' && first !in '0'..'9') {
             throw InvalidSignalNameException(name, "starts with a character Datastar does not read after \$")
+        }
+        SignalNames.referenceAsSubtraction(name)?.let { expression ->
+            throw InvalidSignalNameException(
+                name,
+                "has a hyphen that looks like a subtraction, which a signal name may not hold; write it in the expression: $expression",
+            )
         }
         SignalNames.withoutReferenceHyphens(name)?.let { fixed ->
             throw InvalidSignalNameException(

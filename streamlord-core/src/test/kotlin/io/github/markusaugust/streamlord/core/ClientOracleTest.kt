@@ -151,7 +151,7 @@ class ClientOracleTest {
     @Test
     fun `finds the references genRx rewrites`() {
         val cases = rewrites.filter { it.boolean("returnsValue") == false }
-        assertEquals(157, cases.size)
+        assertEquals(161, cases.size)
         for (case in cases) {
             val expression = case.string("expression")!!
             assertEquals(case.string("js"), clientRewritten(jsTrim(expression)).js, expression)
@@ -159,37 +159,26 @@ class ClientOracleTest {
     }
 
     /**
-     * What [SignalNames.withoutReferenceHyphens] says of a name, each against the body the client
-     * compiles for `$` and that name: the part of it that shows the hyphen is read as a key, as a
-     * signal of its own, or as a minus. Every name here is a case of the fixture.
+     * What [SignalNames.withoutReferenceHyphens] and [SignalNames.referenceAsSubtraction] say of a
+     * name, each against the body the client compiles for `$` and that name: the part of it that
+     * shows the hyphen is read as a key, as a signal of its own, or as a minus, or is template text.
+     * The table is shared with the editor's clientOracle.test.ts.
      */
     @Test
     fun `reads a reference's hyphens as genRx does`() {
-        // name, what the SDK asks for instead (null: nothing wrong), what the client's body shows
         val names =
-            listOf(
-                Triple("form['first-name']", null, "\$['form']['first-name']"),
-                Triple("a['x]y-z']", null, "\$['a']['x]y-z']"),
-                Triple("a[\"x]y-z\"]", null, "\$['a'][\"x]y-z\"]"),
-                Triple("a[`x]y-z`]", null, "\$['a'][`x]y-z`]"),
-                Triple("a['it\\'s-x']", null, "\$['a']['it\\'s-x']"),
-                Triple("a[1-2]", null, "\$['a'][1-2]"),
-                Triple("a[`\${'x-y'}`]", null, "\$['a'][`\${'x-y'}`]"),
-                Triple("items[\$i-1]", "items[\$i1]", "[\$['i-1']]"),
-                Triple("a[\$b-c['d']]", "a[\$bC['d']]", "[\$['b-c']['d']]"),
-                Triple("a[`\${\$b-c}`]", "a[`\${\$bC}`]", "\$['b-c']"),
-                Triple("a-b[0]", "aB[0]", "\$['a-b'][0]"),
-                Triple("a['b'].c-d", "a['b'].cD", "\$['a']['b'].c-d"),
-                Triple("a[0].b-c", "a[0].bC", "\$['a'][0].b-c"),
-                Triple("a['['].b-c", "a['['].bC", "\$['a']['['].b-c"),
-                Triple("a.b-c['d-e']", "a.bC['d-e']", "\$['a']['b-c']['d-e']"),
-                Triple("a[\$b][\$c-d]", "a[\$b][\$cD]", "[\$['c-d']]"),
-            )
-        for ((name, fixed, shows) in names) {
+            JsonParser
+                .parseObject(File("../editors/vscode/test/fixtures/reference-hyphens.json").readText())
+                .array("cases")!!
+                .objects()
+        assertEquals(20, names.size)
+        for (row in names) {
+            val name = row.string("name")!!
             val case = rewrites.single { it.string("expression") == "\$$name" && it.boolean("returnsValue") == false }
             assertEquals(true, case.boolean("compiles"), name)
-            assertTrue(shows in case.string("js")!!, "$name: ${case.string("js")}")
-            assertEquals(fixed, SignalNames.withoutReferenceHyphens(name), name)
+            assertTrue(row.string("shows")!! in case.string("js")!!, "$name: ${case.string("js")}")
+            assertEquals(row.string("fixed"), SignalNames.withoutReferenceHyphens(name), name)
+            assertEquals(row.string("subtraction"), SignalNames.referenceAsSubtraction(name), name)
         }
     }
 }

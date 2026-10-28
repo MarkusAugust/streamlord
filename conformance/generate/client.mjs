@@ -203,6 +203,7 @@ const expressions = [
   "$form['first-name']", "$a['x]y-z']", "$a[\"x]y-z\"]", "$a[`x]y-z`]", "$a['it\\'s-x']", "$a['b'].c-d",
   "$items[$i-1]", "$items[$i - 1]", "$a[$b['c-d']]", "$a[$b-c['d']]", "$a[`${$b-c}`]", "$a[`${'x-y'}`]",
   "$a[1-2]", "$a-b[0]", "$a[0].b-c", "$a.b-c['d-e']", "$a[$b][$c-d]", "$a['['].b-c", "$a[']'].b",
+  "$a[`x]-${$b}`]", "$a[`${']'}-x`]", "$items.length-1", "$a-$b",
 ];
 
 /** The text of the function body `genRx` compiles from [value]: `Function` is replaced to record it. */

@@ -120,20 +120,23 @@ lowercases the key, and the object form turns each capital into a hyphen, so
 refused. Name the property in lowercase. The object form also puts a hyphen before a digit, so
 `{'--brand2': ...}` sets `--brand-2`; the keyed form, `dataStyle("--brand2", ...)`, keeps it.
 
-References may index: `signal("items[0].name")` and `signal("items['sub-total']")`. A reference
-is JavaScript, so `signal`, `set` and the other expression helpers refuse only a blank name, one
-with whitespace, one that starts with a character Datastar does not read after `$`, and a hyphen
-the client would read as part of a signal name or as a minus. They read the name as the client
-reads `$` and the name: a quoted key in brackets is text, whatever it holds, so
-`signal("a['x]y-z']")` is fine, while `signal("items[\$i-1]")` reads the signal `i-1` and
-`signal("a['x'].b-c")` subtracts `c`, and both are refused. A name that becomes a key or an attribute value, as in `dataClass`, also refuses
+References may index: `signal("items[0].name")` and `signal("items['sub-total']")`. A reference is
+JavaScript, so `signal`, `set` and the other expression helpers refuse only a blank name, one with
+whitespace, one that starts with a character Datastar does not read after `$`, and a hyphen the
+client would read as part of a signal name or as a minus. They read the name as the client reads
+`$` and the name: a quoted key in brackets is text, whatever it holds, so `signal("a['x]y-z']")` is
+fine, while `signal("items[\$i-1]")` reads the signal `i-1` and `signal("a['x'].b-c")` subtracts
+`c`, and both are refused. A hyphen before a digit or a `$` looks like a subtraction, so the
+exception for `items[\$i-1]` says to write the subtraction in the expression, `"\$items[\$i - 1]"`,
+and the editors offer no fix that would turn it into another signal. The text of a template literal
+is text too. A name that becomes a key or an attribute value, as in `dataClass`, also refuses
 quotes, `/`, NUL, the characters that end an attribute, and white space as either Java or
 JavaScript counts it, so a no-break space too: the client splits a class list on it. A name that
 declares a signal, as in `dataSignals`, `dataBind` and `dataComputed`, must be ASCII letters,
 digits and `_`, in parts joined by `.`, because that is all Datastar reads after a `$`: a signal
 named `über` exists, and `$über` never reaches it. All of these throw `InvalidSignalNameException`
-at render time. None of it makes a name from a request safe to pass in: a reference is written
-into an expression as it stands.
+at render time. None of it makes a name from a request safe to pass in: a reference is written into
+an expression as it stands.
 
 ## The hyphen after a signal
 

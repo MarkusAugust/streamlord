@@ -50,4 +50,5 @@ tasks.check { dependsOn(testNewestCoroutines) }
 tasks.withType<Test>().configureEach {
     inputs.dir(rootProject.layout.projectDirectory.dir("conformance/client"))
     inputs.dir(rootProject.layout.projectDirectory.dir("conformance/dom"))
+    inputs.file(rootProject.layout.projectDirectory.file("editors/vscode/test/fixtures/reference-hyphens.json"))
 }

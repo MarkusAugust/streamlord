@@ -92,34 +92,14 @@ public object SignalNames {
      * when it has none that matter. The client reads `$` and [name] as it reads any expression, and
      * two kinds of hyphen go wrong there: one in a signal the client reads, as in `items[${'$'}i-1]`,
      * which reads the signal `i-1`, and one outside brackets and strings that no reference holds, as
-     * in `a['x'].b-c`, which JavaScript reads as a minus. A quoted key is text, so `form['first-name']`
-     * and `a['x]y-z']` are fine. Each hyphen that goes wrong is dropped and the character after it
-     * raised: `items[${'$'}i1]`, `a['x'].bC`.
+     * in `a['x'].b-c`, which JavaScript reads as a minus. A quoted key and the text of a template
+     * literal are text, so `form['first-name']` and `a['x]y-z']` are fine. Each hyphen that goes
+     * wrong is dropped and the character after it raised: `items[${'$'}i1]`, `a['x'].bC`. Where
+     * [referenceAsSubtraction] gives an answer, that is the likelier meaning.
      */
     public fun withoutReferenceHyphens(name: String): String? {
         val text = "$" + name
-        val read = clientRewritten(text)
-        val wrong = HashSet<Int>()
-        for (r in read.references) {
-            for (i in r.start until r.end) if (text[i] == '-') wrong += i
-        }
-        var depth = 0
-        var i = 0
-        while (i < text.length) {
-            val skip =
-                read.strings.firstOrNull { i in it }
-                    ?: read.references.firstOrNull { i >= it.start && i < it.end }?.let { it.start until it.end }
-            if (skip != null) {
-                i = skip.last + 1
-                continue
-            }
-            when (text[i]) {
-                '[' -> depth++
-                ']' -> depth = maxOf(0, depth - 1)
-                '-' -> if (depth == 0) wrong += i
-            }
-            i++
-        }
+        val wrong = wrongHyphens(text)
         if (wrong.isEmpty()) return null
         val out = StringBuilder()
         var raise = false
@@ -132,6 +112,110 @@ public object SignalNames {
             raise = false
         }
         return out.substring(1)
+    }
+
+    /**
+     * The expression [name] would be with each hyphen that goes wrong before a digit or a `$`
+     * written as a subtraction, `${'$'}items[${'$'}i - 1]` for `items[${'$'}i-1]`, or `null` when no such
+     * hyphen goes wrong. A name holds no spaces, so the subtraction belongs in the expression. Any
+     * other hyphen that goes wrong is taken out as [withoutReferenceHyphens] does.
+     */
+    public fun referenceAsSubtraction(name: String): String? {
+        val text = "$" + name
+        val wrong = wrongHyphens(text)
+        val minus = wrong.filter { text.getOrNull(it + 1)?.let { c -> c in '0'..'9' || c == '$' } == true }.toSet()
+        if (minus.isEmpty()) return null
+        val out = StringBuilder()
+        var raise = false
+        for ((k, c) in text.withIndex()) {
+            when {
+                k in minus -> {
+                    out.append(" - ")
+                }
+
+                k in wrong -> {
+                    raise = true
+                }
+
+                else -> {
+                    out.append(if (raise) c.toString().uppercase() else c.toString())
+                    raise = false
+                }
+            }
+        }
+        return out.toString()
+    }
+
+    // The offsets in text of the hyphens that go wrong. The client skips a quoted string, and a
+    // template literal without `${`, so their text is in strings; the text of one with `${` it reads
+    // as code, which JavaScript does not, so the scan steps over that text itself.
+    private fun wrongHyphens(text: String): Set<Int> {
+        val read = clientRewritten(text)
+        val wrong = HashSet<Int>()
+        for (r in read.references) {
+            for (i in r.start until r.end) if (text[i] == '-') wrong += i
+        }
+        // -1 for the text of a template literal, n for the code of a `${`, n braces deep.
+        val nesting = ArrayList<Int>()
+        var depth = 0
+        var i = 0
+        while (i < text.length) {
+            val c = text[i]
+            if (nesting.lastOrNull() == -1) {
+                when {
+                    c == '\\' -> {
+                        i++
+                    }
+
+                    c == '`' -> {
+                        nesting.removeAt(nesting.lastIndex)
+                    }
+
+                    c == '$' && text.getOrNull(i + 1) == '{' -> {
+                        nesting += 0
+                        i++
+                    }
+                }
+                i++
+                continue
+            }
+            val skip =
+                read.strings.firstOrNull { i in it }
+                    ?: read.references.firstOrNull { i >= it.start && i < it.end }?.let { it.start until it.end }
+            if (skip != null) {
+                i = skip.last + 1
+                continue
+            }
+            when (c) {
+                '`' -> {
+                    nesting += -1
+                }
+
+                '{' -> {
+                    if (nesting.isNotEmpty()) nesting[nesting.lastIndex]++
+                }
+
+                '}' -> {
+                    if (nesting.isNotEmpty()) {
+                        if (nesting.last() == 0) nesting.removeAt(nesting.lastIndex) else nesting[nesting.lastIndex]--
+                    }
+                }
+
+                '[' -> {
+                    depth++
+                }
+
+                ']' -> {
+                    depth = maxOf(0, depth - 1)
+                }
+
+                '-' -> {
+                    if (depth == 0) wrong += i
+                }
+            }
+            i++
+        }
+        return wrong
     }
 
     /** Why the client cannot hold [path], written with dots as `data-signals:a.b` writes it, or `null` when it can. */

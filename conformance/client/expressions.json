@@ -1885,6 +1885,54 @@
         "returnsValue": true,
         "js": "return ($['a'][']'].b);",
         "compiles": true
+      },
+      {
+        "expression": "$a[`x]-${$b}`]",
+        "returnsValue": false,
+        "js": "$['a'][`x]-${$['b']}`]",
+        "compiles": true
+      },
+      {
+        "expression": "$a[`x]-${$b}`]",
+        "returnsValue": true,
+        "js": "return ($['a'][`x]-${$['b']}`]);",
+        "compiles": true
+      },
+      {
+        "expression": "$a[`${']'}-x`]",
+        "returnsValue": false,
+        "js": "$['a'][`${']'}-x`]",
+        "compiles": true
+      },
+      {
+        "expression": "$a[`${']'}-x`]",
+        "returnsValue": true,
+        "js": "return ($['a'][`${']'}-x`]);",
+        "compiles": true
+      },
+      {
+        "expression": "$items.length-1",
+        "returnsValue": false,
+        "js": "$['items']['length-1']",
+        "compiles": true
+      },
+      {
+        "expression": "$items.length-1",
+        "returnsValue": true,
+        "js": "return ($['items']['length-1']);",
+        "compiles": true
+      },
+      {
+        "expression": "$a-$b",
+        "returnsValue": false,
+        "js": "$['a']-$['b']",
+        "compiles": true
+      },
+      {
+        "expression": "$a-$b",
+        "returnsValue": true,
+        "js": "return ($['a']-$['b']);",
+        "compiles": true
       }
     ]
   }

@@ -39,9 +39,6 @@ internal val SIGNAL_NAMING_CALLS: Set<String> = NAMING_HELPERS + EXPRESSION_HELP
 private val PAIR_KEY = Regex("""^[\s(]*"""")
 private val OBJECT_START = Regex("""^\s*[{\[]""")
 
-/** [name] with each hyphen dropped and the character after it raised: `first-name` is `firstName`. */
-internal fun withoutHyphens(name: String): String = Regex("-+.?").replace(name) { it.value.trimStart('-').uppercase() }
-
 /**
  * [name] with its one hyphenated part in brackets, `form.first-name` as `form['first-name']`, or
  * null when that is no simple rewrite: a name with brackets already, or more than one such part.
@@ -71,7 +68,9 @@ internal fun signalNameHyphenIssues(
         if (site.name !in helpers || src.lastNonSpaceBefore(site.nameStart) == '.') return out
         if (site.name in SHARED_NAME_HELPERS && !insideDslCall(site.nameStart)) return out
         val s = (first ?: site.named("name"))?.string ?: return out
-        SignalNames.withoutReferenceHyphens(s.text)?.let { out += hyphenIssue(s, src, it, bracketed(s.text)) }
+        SignalNames.withoutReferenceHyphens(s.text)?.let {
+            out += hyphenIssue(s, src, it, bracketed(s.text), SignalNames.referenceAsSubtraction(s.text))
+        }
         return out
     }
 
@@ -96,13 +95,13 @@ internal fun signalNameHyphenIssues(
                 }
             }
         val s = (site.named("name") ?: site.named("signal"))?.string ?: keyed
-        if (s != null && '-' in s.text) out += hyphenIssue(s, src, withoutHyphens(s.text), null)
+        if (s != null && '-' in s.text) out += hyphenIssue(s, src, SignalNames.withoutHyphens(s.text), null)
     }
 
     if (site.name == "removeSignals") {
         for (a in positional) {
             val s = a.string ?: continue
-            if ('-' in s.text) out += hyphenIssue(s, src, withoutHyphens(s.text), null)
+            if ('-' in s.text) out += hyphenIssue(s, src, SignalNames.withoutHyphens(s.text), null)
         }
     }
 
@@ -112,7 +111,7 @@ internal fun signalNameHyphenIssues(
             val quote = PAIR_KEY.find(a.text)?.range?.last ?: continue
             val s = lex.stringAt(a.start + quote + 1)?.takeIf { it.start == a.start + quote } ?: continue
             if (!PAIR_AFTER.matchesAt(src, s.end)) continue
-            if ('-' in s.text) out += hyphenIssue(s, src, withoutHyphens(s.text), null)
+            if ('-' in s.text) out += hyphenIssue(s, src, SignalNames.withoutHyphens(s.text), null)
         }
     }
     return out
@@ -183,16 +182,21 @@ private fun hyphenIssue(
     src: String,
     fixed: String,
     bracketed: String?,
+    subtraction: String? = null,
 ): Issue {
     val written = src.substring(s.contentStart, s.contentEnd)
     // A name with escapes in its source is reported and left for the author to rewrite, and so is
     // one with a template in it, whose hyphen is in the text around the template. An escaped `$`,
-    // as in "items[\$i-1]", is the one escape the fix writes back.
+    // as in "items[\$i-1]", is the one escape the fix writes back. A subtraction gets no fix, since
+    // it belongs in the expression around the call, which the author writes; its `$` is shown escaped,
+    // as a Kotlin string needs it.
     val dollars = written != s.text && written == s.text.replace("$", "\\$")
-    val plain = s.interpolations.isEmpty() && (written == s.text || dollars)
+    val plain = subtraction == null && s.interpolations.isEmpty() && (written == s.text || dollars)
     val text = if (dollars) fixed.replace("$", "\\$") else fixed
     val advice =
-        if (plain) {
+        if (subtraction != null) {
+            "It looks like a subtraction, which belongs in the expression: ${subtraction.replace("$", "\\$")}"
+        } else if (plain) {
             "Write $text" + (
                 bracketed?.let {
                     ", or $it for a key with a hyphen in it"

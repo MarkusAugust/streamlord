@@ -35,7 +35,7 @@ private fun signalPath(name: String): String = "$" + name.split('.').joinToStrin
 private fun actionCall(name: String): String = "__action(\"$name\",evt,"
 
 /** What `.` in the client's pattern does not match. */
-private fun Char.isLineTerminator(): Boolean = this == '\n' || this == '\r' || this == ' ' || this == ' '
+private fun Char.isLineTerminator(): Boolean = this == '\n' || this == '\r' || this == '\u2028' || this == '\u2029'
 
 /** The end of a quoted string as the client's pattern matches one, or null when it would not match one here. */
 private fun quotedEnd(

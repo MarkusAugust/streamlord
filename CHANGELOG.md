@@ -8,11 +8,11 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Added
 
-- `dataAnimate` takes the object form, `dataAnimate("{width: $w + 'px'}")`, and the modifiers the Pro
-  plugin reads: `duration`, `delay`, `ease` (an `Easing` enum of the plugin's names), `loop` and
-  `pingpong`. `RafModifiers` gains `delay`, `debounce` and `viewTransition`, `ResizeModifiers`
-  `delay` and `viewTransition`, as the two plugins read them. The catalog lists the same. The
-  key form's JVM signature gained the modifier argument; Kotlin source compiles as before.
+- `dataAnimate` takes the object form, `dataAnimate("{width: $w + 'px'}")`, and the modifiers the
+  Pro plugin reads: `duration`, `delay`, `ease` (an `Easing` enum of the plugin's names), `loop`
+  and `pingpong`. `RafModifiers` gains `delay`, `debounce` and `viewTransition`, `ResizeModifiers`
+  `delay` and `viewTransition`, as the two plugins read them. The catalog lists the same. The key
+  form's JVM signature gained the modifier argument; Kotlin source compiles as before.
 - `SignalsCodec.toJsonValue(value)` encodes a value with the codec and returns it as a
   `JsonValue`, and `dataSignals(JsonValue)` writes a JSON object as `data-signals` with its keys
   as they stand. A page declares its signals from the class its handler reads:
@@ -27,20 +27,22 @@ All notable changes to Streamlord are recorded here. The format follows
   `SignalFacts` gained `encodedTypes` and `SignalDriftReport` `declaredByCodec`, which changes their
   JVM constructors, and `collectSignalDefinitions` returns two kinds of entry that are no signal
   names, `class:Form` and `toJsonValue:Form`, which `isKnownSignal` reads.
-- The analysis and both editors flag a hyphen in a signal name written in a DSL call, which the
-  SDK refuses at runtime, as the error `signal-name-hyphen`, with the camelCase fix:
+- The analysis and both editors flag a hyphen in a signal name written in a DSL call, which the SDK
+  refuses at runtime, as the error `signal-name-hyphen`, with the camelCase fix:
   `dataSignals("foo-bar", …)`, `dataBind("form.first-name")`, a pair's key, `removeSignals("a-b")`,
-  and a hyphen in `signal`, `set` and the other expression helpers that the client reads as part
-  of a signal name or as a minus, with the bracket form, `form['first-name']`, where it applies. A call inside a string template counts too,
-  `"${signal("is-running")} ? …"`, and a name with a template in it, `"item-$id"`, is reported
-  without a fix. `set` and `toggle`, whose names a map or Ktor's `headers { }` share, count only
-  inside the arguments of a DSL call. The analysis collects a helper's name as written,
-  where it read `dataSignals("foo-bar" to 1)` as `fooBar`. In IntelliJ the check is part of
-  Datastar key casing.
+  and a hyphen in `signal`, `set` and the other expression helpers that the client reads as part of
+  a signal name or as a minus, with the bracket form, `form['first-name']`, where it applies. A
+  call inside a string template counts too, `"${signal("is-running")} ? …"`, and a name with a
+  template in it, `"item-$id"`, is reported without a fix. `set` and `toggle`, whose names a map or
+  Ktor's `headers { }` share, count only inside the arguments of a DSL call. The analysis collects
+  a helper's name as written, where it read `dataSignals("foo-bar" to 1)` as `fooBar`. In IntelliJ
+  the check is part of Datastar key casing.
 - `SignalNames.hyphenProblem` says why a name with a hyphen is refused as a signal name, and
   `SignalNames.withoutHyphens` gives the camelCase name to write instead.
   `SignalNames.withoutReferenceHyphens` does the same for a reference written after `$`, read as
   the client reads it, and is what the expression helpers and the analysis hold a name to.
+  `SignalNames.referenceAsSubtraction` gives the expression to write where such a hyphen comes
+  before a digit or a `$` and looks like a subtraction: `$items[$i - 1]` for `items[$i-1]`.
 - `ElementsGuard.evaluatedAttributes`: the attributes whose value Datastar runs as JavaScript,
   the expression attributes and the four signal filters.
 - `conformance/`: what Datastar's client and the servers actually do, as fixtures the tests hold
@@ -60,24 +62,26 @@ All notable changes to Streamlord are recorded here. The format follows
   says so. The function's JVM signature changed with the argument.
 - `interpolate` admits a value into a `data-*` attribute the client reads as it stands:
   `data-nonce`, `data-preserve-attr`, `data-ignore`, `data-ignore-morph`. A page written as a
-  string can take its CSP nonce through a hole. The expression attributes and the signal filters (`data-json-signals`,
-  `data-on-signal-patch-filter`, `data-persist`, `data-query-string`) are refused as before, since
-  the client evaluates those, and so are `data-bind`, `data-ref` and `data-indicator`, whose value
-  is a signal path the client follows without a guard: `__proto__.x` there writes into every
-  object of the page.
-- A signal has one name, the one you write, in Kotlin and in the browser. A name may no longer
-  hold a hyphen, since the client reads one as a capital in an attribute key and as a hyphen in an
+  string can take its CSP nonce through a hole. The expression attributes and the signal filters
+  (`data-json-signals`, `data-on-signal-patch-filter`, `data-persist`, `data-query-string`) are
+  refused as before, since the client evaluates those, and so are `data-bind`, `data-ref` and
+  `data-indicator`, whose value is a signal path the client follows without a guard: `__proto__.x`
+  there writes into every object of the page.
+- A signal has one name, the one you write, in Kotlin and in the browser. A name may no longer hold
+  a hyphen, since the client reads one as a capital in an attribute key and as a hyphen in an
   expression or a patch: in 0.14.0 `dataSignals("foo-bar" to 1)` declared `$fooBar`, and
   `patchSignals("foo-bar" to 1)` patched `foo-bar`. `dataSignals`, `dataComputed`, `dataBind`,
   `dataRef`, `dataIndicator`, `dataMatchMedia`, `patchSignals` and `removeSignals` refuse such a
   name, and `signal`, `set` and the other expression helpers refuse a hyphen that the client reads
   as part of a signal name or as a minus. They read the name as the client reads `$` and the name,
   so a quoted key in brackets is text whatever it holds, `a['x]y-z']`, while `items[$i-1]` reads
-  the signal `i-1` and `a['x'].b-c` subtracts `c`. The exception names what to write, `fooBar`, or `form['first-name']` for a key with a hyphen.
-  The expression helpers write the name as they get it, where `signal("foo-bar")` gave
-  `$fooBar`. A key with a hyphen inside a value is data and is written as it stands:
-  `"user" to mapOf("first-name" to "")` declares `user['first-name']`, where 0.13.0 and 0.14.0
-  camel-cased it to `user.firstName`.
+  the signal `i-1` and `a['x'].b-c` subtracts `c`. The text of a template literal is text too. The
+  exception names what to write, `fooBar`, or `form['first-name']` for a key with a hyphen, and for
+  a hyphen before a digit or a `$`, which looks like a subtraction, the expression with the
+  subtraction in it, `$items[$i - 1]`; the editors offer no fix for that one. The expression
+  helpers write the name as they get it, where `signal("foo-bar")` gave `$fooBar`. A key with a
+  hyphen inside a value is data and is written as it stands: `"user" to mapOf("first-name" to "")`
+  declares `user['first-name']`, where 0.13.0 and 0.14.0 camel-cased it to `user.firstName`.
 - `dataSignals`, `dataComputed`, `dataRef`, `dataIndicator` and `dataMatchMedia` lose their `case`
   argument, and `BindModifiers` its `case`: the DSL writes the key that comes back as the name,
   so a `case` could only give the signal another name. `dataBind`, `dataRef` and `dataIndicator`
@@ -105,18 +109,20 @@ All notable changes to Streamlord are recorded here. The format follows
   transcripts.
 - `JsLiteral` rounded a `JsonNumber` through `Long` or `Double`, so `set("id", json)` changed a
   number past `Long` or with more digits than a `Double` holds. It writes the digits as they are.
-- The analysis took `signal("cuont")` for a declaration of `cuont`, so a misspelt name in
-  `signal`, `increment`, `decrement` or `not` was never reported. These helpers now read the
-  signal they name, in a file that imports the DSL, when the call has no receiver and no import
-  from elsewhere, such as Hamcrest's `not`, takes the name; an unknown one gets the same warning and fix as `$cuont` in an expression; `set`, `setExpr` and
-  `toggle` still declare theirs, since they assign it. A bracketed name, `signal("form['x']")`,
-  is not checked, and the fix offers only a plain dotted name. The IntelliJ plugin also leaves out
-  a call that resolves outside Streamlord.
+- The analysis took `signal("cuont")` for a declaration of `cuont`, so a misspelt name in `signal`,
+  `increment`, `decrement` or `not` was never reported. These helpers now read the signal they
+  name, in a file that imports the DSL, when the call has no receiver and no import from elsewhere,
+  such as Hamcrest's `not`, takes the name; an unknown one gets the same warning and fix as
+  `$cuont` in an expression; `set`, `setExpr` and `toggle` still declare theirs, since they assign
+  it. A bracketed name, `signal("form['x']")`, is not checked, and the fix offers only a plain
+  dotted name. The IntelliJ plugin also leaves out a call that resolves outside Streamlord.
 - The analysis counted the keys inside a pair's value, `"user" to mapOf("name" to "")`, as
   top-level signals. Only the pair's own key counts, and the keys of a map handed over as the
   signals, `patchSignals(mapOf("count" to 0))`.
 - `SseDecoder` turned an `outer` or `replace` patch without a selector whose elements were a
-  comment alone, or text holding a `<`, into an event; the client patches nothing for either.
+  comment alone, or text holding a `<`, into an event; the client patches nothing for either. A
+  comment ends where the HTML parser ends it, at `-->`, at `--!>`, and at once after `<!-->` or
+  `<!--->`, so the elements after one of those are an event.
 - Documentation held to the client: a 400 from an over-long query is retried under
   `retry: 'error'` or `'always'`; a form sent with `@get` or `@delete` reads as no signals rather
   than being refused; `application/json` responses carry no charset; `dataPersist` writes its key

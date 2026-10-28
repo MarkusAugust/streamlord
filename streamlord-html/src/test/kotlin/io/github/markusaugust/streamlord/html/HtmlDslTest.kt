@@ -318,7 +318,11 @@ class HtmlDslTest {
         // while a reference in brackets is a signal of its own and a bare hyphen after a key a minus.
         assertEquals("${'$'}a['x]y-z']", signal("a['x]y-z']"))
         val inner = assertFailsWith<InvalidSignalNameException> { signal("items[${'$'}i-1]") }
-        assertTrue(inner.message!!.endsWith("write items[${'$'}i1]."), inner.message)
+        assertTrue(inner.message!!.endsWith("write it in the expression: ${'$'}items[${'$'}i - 1]."), inner.message)
+        val index = assertFailsWith<InvalidSignalNameException> { signal("items[${'$'}i-x]") }
+        assertTrue(index.message!!.endsWith("write items[${'$'}iX]."), index.message)
+        // The text of a template literal is text, though the client reads one with `${'$'}{` as code.
+        assertEquals("${'$'}a[`x]-${'$'}{${'$'}b}`]", signal("a[`x]-${'$'}{${'$'}b}`]"))
         val minus = assertFailsWith<InvalidSignalNameException> { signal("a['['].b-c") }
         assertTrue(minus.message!!.endsWith("write a['['].bC."), minus.message)
         assertFailsWith<InvalidSignalNameException> { signal("") }
