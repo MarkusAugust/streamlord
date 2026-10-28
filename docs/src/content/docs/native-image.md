@@ -81,6 +81,11 @@ One entry per class you read signals into. `SearchSignals.serializer()` is gener
 kotlinx.serialization compiler plugin and resolved where you write it, so the image can see it in
 the bytecode.
 
+The same table serves the other direction. A page that declares its signals from the class,
+`dataSignals(codec.toJsonValue(SearchSignals()))` (see [Signals](/signals/#declaring-them-from-the-class)), encodes through the
+serializer named here, so it needs no entry of its own. The service behind this site renders its
+CSP page that way, and the image is called for that page before it ships.
+
 Add `requireNamedSerializers = true` beside them, and a type you forgot fails on the JVM (in a test, with the name
 of the class) instead of in the image on the first request that carries it:
 
