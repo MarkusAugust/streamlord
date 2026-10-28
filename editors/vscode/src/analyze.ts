@@ -28,6 +28,10 @@ const HTML_SITE_NAMES: ReadonlySet<string> = new Set(Object.keys(catalog.callSit
 const KEY_ONLY_HELPERS: ReadonlySet<string> = new Set(["dataMatchMedia", "dataPersist"]);
 for (const name of KEY_ONLY_HELPERS) (ALL_SITE_NAMES as Set<string>).add(name);
 
+/** Helpers that write the signal name in the value, which the catalog's call sites do not list. */
+const VALUE_NAME_HELPERS: ReadonlySet<string> = new Set(["dataBind", "dataRef", "dataIndicator"]);
+for (const name of VALUE_NAME_HELPERS) (ALL_SITE_NAMES as Set<string>).add(name);
+
 /**
  * The last source lexed, so a hover or completion right after a diagnostics pass does not lex
  * the file again. Bounded: a file past the cap is lexed each time rather than kept resident.
@@ -70,7 +74,9 @@ export function analyzeKotlin(src: string, opts: AnalyzeOptions): Issue[] {
     for (const a of site.args) if (a.string) claimed.add(a.string.start);
   }
   const helpers = dslHelpers(src, EXPRESSION_HELPERS);
-  for (const site of findCallSites(src, SIGNAL_NAMING_CALLS, lex.mask)) issues.push(...signalNameHyphenIssues(site, src, lex.strings, helpers));
+  const dslCalls = findCallSites(src, new Set([...ALL_SITE_NAMES, "statements"]), lex.mask);
+  const insideDslCall = (at: number) => dslCalls.some((c) => c.openParen <= at && at <= c.closeParen);
+  for (const site of findCallSites(src, SIGNAL_NAMING_CALLS, lex.mask)) issues.push(...signalNameHyphenIssues(site, src, lex.strings, helpers, insideDslCall));
   for (const m of src.matchAll(ATTRIBUTES_INDEX)) {
     if (lex.mask[m.index ?? 0] === 0) continue;
     const value = attributesIndexValue(src, m, lex.strings);

@@ -97,8 +97,8 @@ public object Casing {
      * a hyphen before a lower-case letter, such as `fooBar-baz`, is refused: the capitals need
      * `__case.camel` or `__case.pascal`, which turns every such hyphen into a capital too, and the
      * browser has lowercased the key, so no key and case give the name back. Where the default is
-     * camel (`signals`, `bind`), that hyphen is read as camel, `fooBarBaz`, which is what
-     * [reference] reads from the same name, so the two agree (`modifyCasing` in text.ts, held to
+     * camel (`signals`, `bind`), the name holds no hyphen, since [signalName] refuses one before
+     * it gets here, and every such name comes back as written (`modifyCasing` in text.ts, held to
      * by the client oracle). An explicit `case` is applied as asked.
      */
     public fun key(
@@ -257,20 +257,58 @@ public object Casing {
         if (first != '[' && first != '_' && first !in 'A'..'Z' && first !in 'a'..'z' && first !in '0'..'9') {
             throw InvalidSignalNameException(name, "starts with a character Datastar does not read after \$")
         }
-        HYPHEN_OUTSIDE_BRACKETS.find(name)?.let {
-            // form.first-name: the part with the hyphen, which brackets reach as a key, `form['first-name']`.
-            val from = name.lastIndexOf('.', it.range.first) + 1
-            val to = name.indexOfAny(charArrayOf('.', '['), it.range.first).let { end -> if (end < 0) name.length else end }
-            val bracketed = name.substring(0, maxOf(0, from - 1)) + "['" + name.substring(from, to) + "']" + name.substring(to)
+        if (hyphenOutsideBrackets(name)) {
             throw InvalidSignalNameException(
                 name,
-                "has a hyphen outside brackets, which a signal name may not hold; write ${SignalNames.withoutHyphens(name)}, " +
-                    "or $bracketed for a key with a hyphen in it",
+                "has a hyphen outside brackets, which a signal name may not hold; write ${withoutHyphensOutsideBrackets(name)}" +
+                    (bracketed(name)?.let { ", or $it for a key with a hyphen in it" } ?: ""),
             )
         }
         return name
     }
 
-    /** `-` outside `[...]`: inside brackets a quoted key such as `['sub-total']` is text. */
-    private val HYPHEN_OUTSIDE_BRACKETS = Regex("-(?![^\\[]*\\])")
+    /** Whether [name] has a `-` outside `[...]`, where a quoted key such as `['sub-total']` is text. */
+    private fun hyphenOutsideBrackets(name: String): Boolean {
+        var depth = 0
+        for (c in name) {
+            when (c) {
+                '[' -> depth++
+                ']' -> depth = maxOf(0, depth - 1)
+                '-' -> if (depth == 0) return true
+            }
+        }
+        return false
+    }
+
+    /** [SignalNames.withoutHyphens] outside `[...]`: `form.first-name['sub-total']` is `form.firstName['sub-total']`. */
+    private fun withoutHyphensOutsideBrackets(name: String): String {
+        val out = StringBuilder()
+        var depth = 0
+        var raise = false
+        for (c in name) {
+            when (c) {
+                '[' -> depth++
+                ']' -> depth = maxOf(0, depth - 1)
+            }
+            if (depth == 0 && c == '-') {
+                raise = true
+                continue
+            }
+            out.append(if (raise) c.toString().uppercase() else c.toString())
+            raise = false
+        }
+        return out.toString()
+    }
+
+    /**
+     * [name] with its one hyphenated part in brackets, `form.first-name` as `form['first-name']`,
+     * or null when that is no simple rewrite: a name with brackets already, or more than one such part.
+     */
+    private fun bracketed(name: String): String? {
+        if ('[' in name || ']' in name) return null
+        val parts = name.split('.')
+        val i = parts.indexOfFirst { '-' in it }
+        if (i < 0 || parts.count { '-' in it } > 1) return null
+        return parts.take(i).joinToString(".") + "['" + parts[i] + "']" + parts.drop(i + 1).joinToString("") { ".$it" }
+    }
 }

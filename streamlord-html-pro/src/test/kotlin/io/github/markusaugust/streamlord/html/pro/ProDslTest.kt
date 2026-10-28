@@ -1,6 +1,5 @@
 package io.github.markusaugust.streamlord.html.pro
 
-import io.github.markusaugust.streamlord.html.Case
 import io.github.markusaugust.streamlord.html.DatastarAttributes
 import io.github.markusaugust.streamlord.html.InvalidSignalNameException
 import io.github.markusaugust.streamlord.html.SignalFilter

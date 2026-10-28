@@ -62,7 +62,7 @@ describe("the client's rules", () => {
         const explicit = wire.split("__case.")[1];
         const column = explicit ? `case.${explicit}` : `default ${keyCase}`;
         const read = table[column];
-        // A signal key is read as camelCase, the name toCamel gives the DSL's signal() too; an event or class comes back as typed.
+        // A signal key in markup is read as camelCase, as toCamel reads it; an event or class comes back as typed.
         const expected = keyCase === "camel" ? toCamel(name) : name;
         if (read !== expected) misread.push(`${name} written as ${wire} for ${keyCase} keys, which the client reads as ${JSON.stringify(read)}, not ${expected}`);
       }

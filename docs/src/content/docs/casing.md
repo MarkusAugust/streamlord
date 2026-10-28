@@ -21,7 +21,8 @@ exactly as it comes.
 ## The DSL applies the rule for you
 
 You write the name you mean; the DSL writes the key that comes back as that name, adding
-`__case` where Datastar's default is not camel.
+`__case` where the attribute's default casing would not give it back: `.camel` for a camelCase
+event or class, `.pascal` for a name that starts with a capital, such as `URL`.
 
 ```kotlin sample=html
 div {
@@ -70,7 +71,9 @@ stands, a key of the object form, `dataSignals("{'foo-bar': 1}")`, and a key fro
 `dataSignals(codec.toJsonValue(form))`. `"user" to mapOf("first-name" to "")` declares
 `user['first-name']`, and an expression reaches it with brackets, as in JavaScript:
 `signal("user['first-name']")` gives `$user['first-name']`. To patch or remove such a key from the
-server, put it inside a value, `patchSignals("user" to mapOf("first-name" to null))`.
+server, put it inside a value, `patchSignals("user" to mapOf("first-name" to null))`. A top-level
+key with a hyphen, such as the one the object form above declares, takes the JSON form:
+`patchSignals("""{"foo-bar": null}""")`.
 
 A dotted key inside a map is refused, because the client would store `{"a.b": 1}` as one key
 that `$a.b` does not reach.

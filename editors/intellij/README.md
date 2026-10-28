@@ -29,7 +29,9 @@ function that returns HTML, a `val` holding a fragment), and in HTML and templat
   signal becomes `$foobar`, and a hyphen after a signal in an expression (`$foo-bar`,
   `$count-1`), which Datastar swallows into one signal name. Both come with the fix. In the DSL
   the SDK writes a camelCase key correctly on its own, and a weak warning on the call shows what
-  goes on the wire.
+  goes on the wire. A hyphen in a signal name written in a DSL call, `dataSignals("foo-bar", …)`
+  or `signal("form.first-name")`, is an error, since the SDK refuses it at runtime, with the
+  camelCase fix.
 - What Datastar's own rewrite of an expression does that JavaScript would not: a `$name` or
   `@name(` in the text of a template literal that also holds a `${...}`, or inside a regular
   expression, is rewritten there too; a `'` in a comment, a regular expression or a template

@@ -50,7 +50,10 @@ public class Analyzer(
     /** Keyed helpers that take a key but no expression, so the catalog's expression sites do not list them. */
     private val keyOnlyHelpers = setOf("dataMatchMedia", "dataPersist")
 
-    private val allSiteNames: Set<String> = catalog.allCallSiteNames + keyOnlyHelpers
+    /** Helpers that write the signal name in the value, which the catalog's call sites do not list. */
+    private val valueNameHelpers = setOf("dataBind", "dataRef", "dataIndicator")
+
+    private val allSiteNames: Set<String> = catalog.allCallSiteNames + keyOnlyHelpers + valueNameHelpers
     private val htmlSiteNames: Set<String> = catalog.htmlCallSites.keys
 
     /** Names of all DSL functions the analysis recognises in Kotlin source. */
@@ -96,8 +99,9 @@ public class Analyzer(
             if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
         }
         val helpers = dslHelpers(src, EXPRESSION_HELPERS)
+        val dslCalls = findCallSites(src, allSiteNames + "statements", lex).map { it.openParen..it.closeParen }
         for (site in findCallSites(src, SIGNAL_NAMING_CALLS, lex)) {
-            val issues = signalNameHyphenIssues(site, src, lex, helpers)
+            val issues = signalNameHyphenIssues(site, src, lex, helpers) { at -> dslCalls.any { at in it } }
             if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
         }
         for (m in ATTRIBUTES_INDEX.findAll(src)) {

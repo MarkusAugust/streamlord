@@ -72,6 +72,26 @@ suspend fun send(stream: DatastarStream) {
     assert.deepEqual(names(src), ["a-b", "c-d", "e-f"]);
   });
 
+  // A header's set, a map's set, a codec's respondSignals and a Boolean ifMissing in a variable.
+  it("a name that may not be a signal's is left alone", () => {
+    const src = `${dsl}fun t() = testApplication { client.get("/") { headers { set("datastar-request", "true") } } }
+fun m(map: MutableMap<String, Int>) = with(map) { set("user-id", 1) }
+suspend fun r(call: ApplicationCall) = call.respondSignals("a-b" to 1)
+fun p(flag: Boolean) = div { dataSignals("a-b", flag); dataSignals("x-\${flag}", "1") }`;
+    assert.deepEqual(hyphens(src), []);
+  });
+
+  it("the fix and the bracket form leave a key inside brackets as it is", () => {
+    const src = `${dsl}fun p() = div { dataText(signal("form.first-name['x-y']")); dataText(signal("items[0]-x")); dataText(signal("a-b.c-d")) }`;
+    const issues = hyphens(src);
+    assert.deepEqual(issues.map((i) => i.fixes![0]!.text), ["form.firstName['x-y']", "items[0]X", "aB.cD"]);
+    assert.ok(issues.every((i) => !i.message.includes("for a key with a hyphen")));
+    const [one] = hyphens(`${dsl}fun p() = div { dataText(signal("form.first-name.x")) }`);
+    assert.ok(one!.message.includes("or form['first-name'].x for a key"), one!.message);
+    const named = `${dsl}fun p() = div { dataComputed(name = "a-b", expression = "1"); dataMatchMedia(signal = "c-d", mediaQuery = "x") }`;
+    assert.deepEqual(names(named), ["a-b", "c-d"]);
+  });
+
   it("a name written with escapes is reported without a fix", () => {
     const [issue, ...rest] = hyphens(`${dsl}fun p() = div { dataBind("a\\u002db") }`);
     assert.deepEqual(rest, []);

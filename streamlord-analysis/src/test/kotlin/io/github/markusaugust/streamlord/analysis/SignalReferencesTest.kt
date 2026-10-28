@@ -113,7 +113,7 @@ class SignalReferencesTest {
         assertEquals(listOf("nope"), unknown(named).map { named.substring(it.start, it.end) })
     }
 
-    // signal("foo-bar") is $fooBar, so a fix that wrote foo-bar into it would reach the wrong signal.
+    // signal("foo-bar") is refused at runtime, so a fix never writes a hyphen into a helper.
     @Test
     fun `a helper's fix offers only a name it writes as it stands`() {
         val src =

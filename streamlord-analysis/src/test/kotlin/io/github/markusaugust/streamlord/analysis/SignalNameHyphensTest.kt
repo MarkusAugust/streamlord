@@ -102,6 +102,35 @@ class SignalNameHyphensTest {
         assertEquals(listOf("a-b", "c-d", "e-f"), hyphens(src).map { src.substring(it.start + 1, it.end - 1) })
     }
 
+    // A header's set, a map's set, a codec's respondSignals and a Boolean ifMissing in a variable.
+    @Test
+    fun `a name that may not be a signal's is left alone`() {
+        val src =
+            dsl +
+                """
+                fun t() = testApplication { client.get("/") { headers { set("datastar-request", "true") } } }
+                fun m(map: MutableMap<String, Int>) = with(map) { set("user-id", 1) }
+                suspend fun r(call: ApplicationCall) = call.respondSignals("a-b" to 1)
+                fun p(flag: Boolean) = div { dataSignals("a-b", flag); dataSignals("x-${'$'}{flag}", "1") }
+                """.trimIndent()
+        assertEquals(emptyList(), hyphens(src))
+    }
+
+    @Test
+    fun `the fix and the bracket form leave a key inside brackets as it is`() {
+        val src =
+            dsl +
+                "fun p() = div { dataText(signal(\"form.first-name['x-y']\")); dataText(signal(\"items[0]-x\")); dataText(signal(\"a-b.c-d\")) }"
+        val issues = hyphens(src)
+        assertEquals(listOf("form.firstName['x-y']", "items[0]X", "aB.cD"), issues.map { it.fixes.single().text })
+        assertTrue(issues.none { "for a key with a hyphen" in it.message }, issues.joinToString { it.message })
+        val one = hyphens(dsl + "fun p() = div { dataText(signal(\"form.first-name.x\")) }").single()
+        assertTrue("or form['first-name'].x for a key" in one.message, one.message)
+        val named =
+            dsl + "fun p() = div { dataComputed(name = \"a-b\", expression = \"1\"); dataMatchMedia(signal = \"c-d\", mediaQuery = \"x\") }"
+        assertEquals(listOf("a-b", "c-d"), hyphens(named).map { named.substring(it.start + 1, it.end - 1) })
+    }
+
     @Test
     fun `a name written with escapes is reported without a fix`() {
         val issue = hyphens(dsl + "fun p() = div { dataBind(\"a\\u002db\") }").single()

@@ -81,7 +81,7 @@ class ClientOracleTest {
                 }
                 val column = if ("__case." in wire) "case." + wire.substringAfter("__case.") else "default ${keyCase.name.lowercase()}"
                 val read = table.string(column)
-                // A signal key is read as camelCase, the name toCamel gives the DSL's signal() too; an event or class comes back as typed.
+                // A signal key in markup is read as camelCase, as toCamel reads it; an event or class comes back as typed.
                 val expected = if (keyCase == KeyCase.CAMEL) toCamel(name) else name
                 if (read !=
                     expected

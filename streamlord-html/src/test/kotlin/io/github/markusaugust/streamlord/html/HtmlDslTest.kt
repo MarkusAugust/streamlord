@@ -311,6 +311,9 @@ class HtmlDslTest {
         assertEquals("${'$'}form.firstName++", increment("form.firstName"))
         val kebab = assertFailsWith<InvalidSignalNameException> { signal("form.first-name") }
         assertTrue("write form.firstName, or form['first-name']" in kebab.message!!, kebab.message)
+        val bracketed = assertFailsWith<InvalidSignalNameException> { signal("form.first-name['x-y']") }
+        assertTrue(bracketed.message!!.endsWith("write form.firstName['x-y']."), bracketed.message)
+        assertEquals("${'$'}a[i-1]", signal("a[i-1]"))
         assertFailsWith<InvalidSignalNameException> { signal("") }
         assertFailsWith<InvalidSignalNameException> { signal("my signal") }
         assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("a b", "1") } } }

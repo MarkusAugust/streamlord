@@ -18,8 +18,14 @@ const KEYED_OR_OBJECT: ReadonlySet<string> = new Set(["dataSignals", "dataComput
 /** The expression helpers, whose name is JavaScript: a hyphen inside brackets is a key. */
 export const EXPRESSION_HELPERS: ReadonlySet<string> = new Set(["signal", "set", "setExpr", "increment", "decrement", "toggle", "not"]);
 
+/**
+ * The expression helpers whose names other APIs share in the same scope: `set` on a map, or on
+ * Ktor's headers inside `headers { }`. One counts only inside the arguments of a DSL call.
+ */
+const SHARED_NAME_HELPERS: ReadonlySet<string> = new Set(["set", "setExpr", "toggle"]);
+
 /** The calls whose pairs name signals: on the page, `dataSignals("count" to 0)`, and from the server. */
-const PAIR_NAMING: ReadonlySet<string> = new Set(["dataSignals", "patchSignals", "respondSignals", "datastarSignals"]);
+const PAIR_NAMING: ReadonlySet<string> = new Set(["dataSignals", "patchSignals"]);
 
 /** Every call this check reads. */
 export const SIGNAL_NAMING_CALLS: ReadonlySet<string> = new Set([...NAMING_HELPERS, ...EXPRESSION_HELPERS, ...PAIR_NAMING, "removeSignals"]);
@@ -86,58 +92,58 @@ function hyphenOutsideBrackets(name: string): number {
   return -1;
 }
 
-/** `name` with the part holding the hyphen at `at` put in brackets: `form.first-name` is `form['first-name']`. */
-function bracketed(name: string, at: number): string {
-  const from = name.lastIndexOf(".", at) + 1;
-  const dot = name.indexOf(".", at);
-  const open = name.indexOf("[", at);
-  const ends = [dot, open].filter((i) => i >= 0);
-  const to = ends.length > 0 ? Math.min(...ends) : name.length;
-  return `${name.slice(0, Math.max(0, from - 1))}['${name.slice(from, to)}']${name.slice(to)}`;
+/**
+ * `name` with its one hyphenated part in brackets, `form.first-name` as `form['first-name']`, or
+ * null when that is no simple rewrite: a name with brackets already, or more than one such part.
+ */
+export function bracketed(name: string): string | null {
+  if (name.includes("[") || name.includes("]")) return null;
+  const parts = name.split(".");
+  const i = parts.findIndex((p) => p.includes("-"));
+  if (i < 0 || parts.filter((p) => p.includes("-")).length > 1) return null;
+  return `${parts.slice(0, i).join(".")}['${parts[i]}']${parts.slice(i + 1).map((p) => `.${p}`).join("")}`;
 }
 
 const PAIR_KEY = /^[\s(]*"/;
 const PAIR_AFTER = /\s+to\b/y;
 const OBJECT_START = /^\s*[{[]/;
-const BOOLEAN = /^\s*(?:true|false)\s*$/;
-
 function secondIsExpression(positional: Arg[]): boolean {
   const second = positional[1];
-  return second !== undefined && !BOOLEAN.test(second.text);
+  return second !== undefined && (second.string !== null || second.text.includes('"'));
 }
 
 /** The issues of `site`, a call in `SIGNAL_NAMING_CALLS`, for each signal name in it that holds a hyphen. */
-export function signalNameHyphenIssues(site: CallSite, src: string, strings: KotlinString[], helpers: ReadonlySet<string>): Issue[] {
+export function signalNameHyphenIssues(site: CallSite, src: string, strings: KotlinString[], helpers: ReadonlySet<string>, insideDslCall: (at: number) => boolean): Issue[] {
   const out: Issue[] = [];
   const positional = site.args.filter((a) => a.named === null);
   const first = positional[0];
   const named = (n: string) => site.args.find((a) => a.named === n);
 
   if (EXPRESSION_HELPERS.has(site.name)) {
-    // set("user-id", x) on a cache or Hamcrest's not("x") is somebody else's.
+    // cache.set("user-id", x), Hamcrest's not("x") and a header's set("datastar-request", ...) are somebody else's.
     let i = site.nameStart - 1;
     while (i >= 0 && /\s/.test(src[i] ?? "")) i--;
     if (!helpers.has(site.name) || src[i] === ".") return out;
+    if (SHARED_NAME_HELPERS.has(site.name) && !insideDslCall(site.nameStart)) return out;
     const s = (first ?? named("name"))?.string;
     if (!s) return out;
-    const at = hyphenOutsideBrackets(s.text);
-    if (at >= 0) out.push(hyphenIssue(s, src, withoutHyphensOutsideBrackets(s.text), bracketed(s.text, at)));
+    if (s.interpolations.length === 0 && hyphenOutsideBrackets(s.text) >= 0) out.push(hyphenIssue(s, src, withoutHyphensOutsideBrackets(s.text), bracketed(s.text)));
     return out;
   }
 
   if (NAMING_HELPERS.has(site.name)) {
-    // dataSignals("{...}") and dataSignals("{...}", true) are the object form: a second argument
-    // that is not ifMissing makes the first a name.
+    // dataSignals("{...}") and dataSignals("{...}", flag) are the object form: a second argument
+    // that is a string makes the first a name. One held in a variable may be either, and is left alone.
     const f = first?.string;
     const keyed =
       f && (!KEYED_OR_OBJECT.has(site.name) || (!OBJECT_START.test(f.text) && (named("expression") !== undefined || secondIsExpression(positional)))) ? f : null;
     const s = (named("name") ?? named("signal"))?.string ?? keyed;
-    if (s && s.text.includes("-")) out.push(hyphenIssue(s, src, withoutHyphens(s.text), null));
+    if (s && s.interpolations.length === 0 && s.text.includes("-")) out.push(hyphenIssue(s, src, withoutHyphens(s.text), null));
   }
 
   if (site.name === "removeSignals") {
     for (const a of positional) {
-      if (a.string && a.string.text.includes("-")) out.push(hyphenIssue(a.string, src, withoutHyphens(a.string.text), null));
+      if (a.string && a.string.interpolations.length === 0 && a.string.text.includes("-")) out.push(hyphenIssue(a.string, src, withoutHyphens(a.string.text), null));
     }
   }
 
@@ -151,7 +157,7 @@ export function signalNameHyphenIssues(site: CallSite, src: string, strings: Kot
       if (!s || s.start !== quote) continue;
       PAIR_AFTER.lastIndex = s.end;
       if (!PAIR_AFTER.test(src)) continue;
-      if (s.text.includes("-")) out.push(hyphenIssue(s, src, withoutHyphens(s.text), null));
+      if (s.interpolations.length === 0 && s.text.includes("-")) out.push(hyphenIssue(s, src, withoutHyphens(s.text), null));
     }
   }
   return out;
@@ -159,8 +165,9 @@ export function signalNameHyphenIssues(site: CallSite, src: string, strings: Kot
 
 function hyphenIssue(s: KotlinString, src: string, fixed: string, bracketedName: string | null): Issue {
   const name = s.text;
-  // A name with escapes in its source is reported and left for the author to rewrite.
-  const plain = s.interpolations.length === 0 && src.slice(s.contentStart, s.contentEnd) === name;
+  // A name with escapes in its source is reported and left for the author to rewrite. One with a
+  // template in it is not read at all: what the client gets depends on the value.
+  const plain = src.slice(s.contentStart, s.contentEnd) === name;
   return {
     start: s.start,
     end: s.end,

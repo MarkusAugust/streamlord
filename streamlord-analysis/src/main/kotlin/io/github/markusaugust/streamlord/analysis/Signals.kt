@@ -256,7 +256,7 @@ private fun collect(
     for (m in VALUE_ATTRIBUTE.findAll(src)) out += m.groups[1]?.value ?: m.groupValues[2]
     for (m in OBJECT_ATTRIBUTE.findAll(src)) out += objectKeyPaths(m.groups[1]?.value ?: m.groupValues[2])
     if (reads && language == SourceLanguage.HTML) {
-        for (m in BARE_SIGNAL.findAll(src)) out += toCamel(m.groupValues[1])
+        for (m in BARE_SIGNAL.findAll(src)) out += m.groupValues[1]
     }
     // The placeholder the analysis writes for a Kotlin template is never a signal, whatever file it turns up in.
     out.removeAll { PLACEHOLDER in it }

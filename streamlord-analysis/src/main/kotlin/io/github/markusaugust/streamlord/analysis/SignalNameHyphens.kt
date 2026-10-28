@@ -16,15 +16,20 @@ private val KEYED_OR_OBJECT = setOf("dataSignals", "dataComputed")
 /** The expression helpers, whose name is JavaScript: a hyphen inside brackets is a key. */
 internal val EXPRESSION_HELPERS: Set<String> = setOf("signal", "set", "setExpr", "increment", "decrement", "toggle", "not")
 
+/**
+ * The expression helpers whose names other APIs share in the same scope: `set` on a map, or on
+ * Ktor's headers inside `headers { }`. One counts only inside the arguments of a DSL call.
+ */
+internal val SHARED_NAME_HELPERS: Set<String> = setOf("set", "setExpr", "toggle")
+
 /** The calls whose pairs name signals: on the page, `dataSignals("count" to 0)`, and from the server. */
-private val PAIR_NAMING = setOf("dataSignals", "patchSignals", "respondSignals", "datastarSignals")
+private val PAIR_NAMING = setOf("dataSignals", "patchSignals")
 
 /** Every call this check reads. */
 internal val SIGNAL_NAMING_CALLS: Set<String> = NAMING_HELPERS + EXPRESSION_HELPERS + PAIR_NAMING + "removeSignals"
 
 private val PAIR_KEY = Regex("""^[\s(]*"""")
 private val OBJECT_START = Regex("""^\s*[{\[]""")
-private val BOOLEAN = Regex("""^\s*(?:true|false)\s*$""")
 
 /** [name] with each hyphen dropped and the character after it raised: `first-name` is `firstName`. */
 internal fun withoutHyphens(name: String): String = Regex("-+.?").replace(name) { it.value.trimStart('-').uppercase() }
@@ -43,7 +48,7 @@ internal fun withoutHyphensOutsideBrackets(name: String): String {
             raise = true
             continue
         }
-        out.append(if (raise) c.uppercaseChar() else c)
+        out.append(if (raise) c.toString().uppercase() else c.toString())
         raise = false
     }
     return out.toString()
@@ -62,14 +67,16 @@ private fun hyphenOutsideBrackets(name: String): Int {
     return -1
 }
 
-/** [name] with the part holding the hyphen at [at] put in brackets: `form.first-name` is `form['first-name']`. */
-private fun bracketed(
-    name: String,
-    at: Int,
-): String {
-    val from = name.lastIndexOf('.', at) + 1
-    val to = name.indexOfAny(charArrayOf('.', '['), at).let { if (it < 0) name.length else it }
-    return name.substring(0, maxOf(0, from - 1)) + "['" + name.substring(from, to) + "']" + name.substring(to)
+/**
+ * [name] with its one hyphenated part in brackets, `form.first-name` as `form['first-name']`, or
+ * null when that is no simple rewrite: a name with brackets already, or more than one such part.
+ */
+internal fun bracketed(name: String): String? {
+    if ('[' in name || ']' in name) return null
+    val parts = name.split('.')
+    val i = parts.indexOfFirst { '-' in it }
+    if (i < 0 || parts.count { '-' in it } > 1) return null
+    return parts.take(i).joinToString(".") + "['" + parts[i] + "']" + parts.drop(i + 1).joinToString("") { ".$it" }
 }
 
 /** The issues of [site], a call in [SIGNAL_NAMING_CALLS], for each signal name in it that holds a hyphen. */
@@ -78,36 +85,41 @@ internal fun signalNameHyphenIssues(
     src: String,
     lex: KotlinLex,
     helpers: Set<String>,
+    insideDslCall: (Int) -> Boolean,
 ): List<Issue> {
     val out = ArrayList<Issue>()
     val positional = site.positional
     val first = positional.firstOrNull()
 
     if (site.name in EXPRESSION_HELPERS) {
-        // set("user-id", x) on a cache or Hamcrest's not("x") is somebody else's.
+        // cache.set("user-id", x), Hamcrest's not("x") and a header's set("datastar-request", ...) are somebody else's.
         if (site.name !in helpers || src.lastNonSpaceBefore(site.nameStart) == '.') return out
+        if (site.name in SHARED_NAME_HELPERS && !insideDslCall(site.nameStart)) return out
         val s = (first ?: site.named("name"))?.string ?: return out
-        val at = hyphenOutsideBrackets(s.text)
-        if (at >= 0) out += hyphenIssue(s, src, withoutHyphensOutsideBrackets(s.text), bracketed(s.text, at))
+        if (s.interpolations.isEmpty() &&
+            hyphenOutsideBrackets(s.text) >= 0
+        ) {
+            out += hyphenIssue(s, src, withoutHyphensOutsideBrackets(s.text), bracketed(s.text))
+        }
         return out
     }
 
     if (site.name in NAMING_HELPERS) {
-        // dataSignals("{...}") and dataSignals("{...}", true) are the object form: a second argument
-        // that is not ifMissing makes the first a name.
+        // dataSignals("{...}") and dataSignals("{...}", flag) are the object form: a second argument
+        // that is a string makes the first a name. One held in a variable may be either, and is left alone.
         val keyed =
             first?.string?.takeIf {
                 site.name !in KEYED_OR_OBJECT ||
                     (!OBJECT_START.containsMatchIn(it.text) && (site.named("expression") != null || secondIsExpression(positional)))
             }
         val s = (site.named("name") ?: site.named("signal"))?.string ?: keyed
-        if (s != null && '-' in s.text) out += hyphenIssue(s, src, withoutHyphens(s.text), null)
+        if (s != null && s.interpolations.isEmpty() && '-' in s.text) out += hyphenIssue(s, src, withoutHyphens(s.text), null)
     }
 
     if (site.name == "removeSignals") {
         for (a in positional) {
             val s = a.string ?: continue
-            if ('-' in s.text) out += hyphenIssue(s, src, withoutHyphens(s.text), null)
+            if (s.interpolations.isEmpty() && '-' in s.text) out += hyphenIssue(s, src, withoutHyphens(s.text), null)
         }
     }
 
@@ -117,7 +129,7 @@ internal fun signalNameHyphenIssues(
             val quote = PAIR_KEY.find(a.text)?.range?.last ?: continue
             val s = lex.stringAt(a.start + quote + 1)?.takeIf { it.start == a.start + quote } ?: continue
             if (!PAIR_AFTER.matchesAt(src, s.end)) continue
-            if ('-' in s.text) out += hyphenIssue(s, src, withoutHyphens(s.text), null)
+            if (s.interpolations.isEmpty() && '-' in s.text) out += hyphenIssue(s, src, withoutHyphens(s.text), null)
         }
     }
     return out
@@ -125,7 +137,8 @@ internal fun signalNameHyphenIssues(
 
 private val PAIR_AFTER = Regex("""\s+to\b""")
 
-private fun secondIsExpression(positional: List<Arg>): Boolean = positional.getOrNull(1)?.let { !BOOLEAN.matches(it.text) } == true
+private fun secondIsExpression(positional: List<Arg>): Boolean =
+    positional.getOrNull(1)?.let { it.string != null || '"' in it.text } == true
 
 private fun hyphenIssue(
     s: KotlinString,
@@ -134,8 +147,9 @@ private fun hyphenIssue(
     bracketed: String?,
 ): Issue {
     val name = s.text
-    // A name with escapes in its source is reported and left for the author to rewrite.
-    val plain = s.interpolations.isEmpty() && src.substring(s.contentStart, s.contentEnd) == name
+    // A name with escapes in its source is reported and left for the author to rewrite. One with a
+    // template in it is not read at all: what the client gets depends on the value.
+    val plain = src.substring(s.contentStart, s.contentEnd) == name
     return Issue(
         start = s.start,
         end = s.end,

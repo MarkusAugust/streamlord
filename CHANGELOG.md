@@ -34,6 +34,8 @@ All notable changes to Streamlord are recorded here. The format follows
   name the bracket form, `form['first-name']`. The analysis collects a helper's name as written,
   where it read `dataSignals("foo-bar" to 1)` as `fooBar`. In IntelliJ the check is part of
   Datastar key casing.
+- `SignalNames.hyphenProblem` says why a name with a hyphen is refused as a signal name, and
+  `SignalNames.withoutHyphens` gives the camelCase name to write instead.
 - `ElementsGuard.evaluatedAttributes`: the attributes whose value Datastar runs as JavaScript,
   the expression attributes and the four signal filters.
 - `conformance/`: what Datastar's client and the servers actually do, as fixtures the tests hold
@@ -68,8 +70,7 @@ All notable changes to Streamlord are recorded here. The format follows
   The expression helpers write the name as they get it, where `signal("foo-bar")` gave
   `$fooBar`. A key with a hyphen inside a value is data and is written as it stands:
   `"user" to mapOf("first-name" to "")` declares `user['first-name']`, where 0.13.0 and 0.14.0
-  camel-cased it to `user.firstName`. `SignalNames.hyphenProblem` and `withoutHyphens` say what
-  the rule refuses and what to write instead.
+  camel-cased it to `user.firstName`.
 - `dataSignals`, `dataComputed`, `dataRef`, `dataIndicator` and `dataMatchMedia` lose their `case`
   argument, and `BindModifiers` its `case`: the DSL writes the key that comes back as the name,
   so a `case` could only give the signal another name. `dataBind`, `dataRef` and `dataIndicator`
