@@ -1,0 +1,527 @@
+{
+  "$comment": "parseAttributeKey(rawKey) from engine/engine.ts of the Datastar 1.0.4 client, with the key the browser hands over after data-; signalCamel and signalKebab are modifyCasing(key, mods, defaultCase) from utils/text.ts on the parsed key.",
+  "cases": [
+    {
+      "raw": "signals",
+      "pluginName": "signals",
+      "key": null,
+      "modifiers": {}
+    },
+    {
+      "raw": "signals:count",
+      "pluginName": "signals",
+      "key": "count",
+      "modifiers": {},
+      "signalCamel": "count",
+      "signalKebab": "count"
+    },
+    {
+      "raw": "signals:a.b",
+      "pluginName": "signals",
+      "key": "a.b",
+      "modifiers": {},
+      "signalCamel": "a.b",
+      "signalKebab": "a.b"
+    },
+    {
+      "raw": "signals:a.b__ifmissing",
+      "pluginName": "signals",
+      "key": "a.b",
+      "modifiers": {
+        "ifmissing": []
+      },
+      "signalCamel": "a.b",
+      "signalKebab": "a.b"
+    },
+    {
+      "raw": "signals__ifmissing",
+      "pluginName": "signals",
+      "key": null,
+      "modifiers": {
+        "ifmissing": []
+      }
+    },
+    {
+      "raw": "on:click",
+      "pluginName": "on",
+      "key": "click",
+      "modifiers": {},
+      "signalCamel": "click",
+      "signalKebab": "click"
+    },
+    {
+      "raw": "on:click__debounce.500ms.leading__case.camel",
+      "pluginName": "on",
+      "key": "click",
+      "modifiers": {
+        "debounce": [
+          "500ms",
+          "leading"
+        ],
+        "case": [
+          "camel"
+        ]
+      },
+      "signalCamel": "click",
+      "signalKebab": "click"
+    },
+    {
+      "raw": "on:click__debounce.500ms.leading__case.camel__once",
+      "pluginName": "on",
+      "key": "click",
+      "modifiers": {
+        "debounce": [
+          "500ms",
+          "leading"
+        ],
+        "case": [
+          "camel"
+        ],
+        "once": []
+      },
+      "signalCamel": "click",
+      "signalKebab": "click"
+    },
+    {
+      "raw": "on:click__debounce.500ms__debounce.1s",
+      "pluginName": "on",
+      "key": "click",
+      "modifiers": {
+        "debounce": [
+          "1s"
+        ]
+      },
+      "signalCamel": "click",
+      "signalKebab": "click"
+    },
+    {
+      "raw": "on:click__case.camel__case.snake",
+      "pluginName": "on",
+      "key": "click",
+      "modifiers": {
+        "case": [
+          "snake"
+        ]
+      },
+      "signalCamel": "click",
+      "signalKebab": "click"
+    },
+    {
+      "raw": "on:click__case.snake.pascal",
+      "pluginName": "on",
+      "key": "click",
+      "modifiers": {
+        "case": [
+          "snake",
+          "pascal"
+        ]
+      },
+      "signalCamel": "Click",
+      "signalKebab": "Click"
+    },
+    {
+      "raw": "on:click__case.snake.snake",
+      "pluginName": "on",
+      "key": "click",
+      "modifiers": {
+        "case": [
+          "snake"
+        ]
+      },
+      "signalCamel": "click",
+      "signalKebab": "click"
+    },
+    {
+      "raw": "on:click__case",
+      "pluginName": "on",
+      "key": "click",
+      "modifiers": {
+        "case": []
+      },
+      "signalCamel": "click",
+      "signalKebab": "click"
+    },
+    {
+      "raw": "on:click__",
+      "pluginName": "on",
+      "key": "click",
+      "modifiers": {
+        "": []
+      },
+      "signalCamel": "click",
+      "signalKebab": "click"
+    },
+    {
+      "raw": "on:click____once",
+      "pluginName": "on",
+      "key": "click",
+      "modifiers": {
+        "": [],
+        "once": []
+      },
+      "signalCamel": "click",
+      "signalKebab": "click"
+    },
+    {
+      "raw": "on:click__once__",
+      "pluginName": "on",
+      "key": "click",
+      "modifiers": {
+        "once": [],
+        "": []
+      },
+      "signalCamel": "click",
+      "signalKebab": "click"
+    },
+    {
+      "raw": "on-signal-patch:filter",
+      "pluginName": "on-signal-patch",
+      "key": "filter",
+      "modifiers": {},
+      "signalCamel": "filter",
+      "signalKebab": "filter"
+    },
+    {
+      "raw": "on-signal-patch__debounce.100ms",
+      "pluginName": "on-signal-patch",
+      "key": null,
+      "modifiers": {
+        "debounce": [
+          "100ms"
+        ]
+      }
+    },
+    {
+      "raw": "on:keydown__window__prevent",
+      "pluginName": "on",
+      "key": "keydown",
+      "modifiers": {
+        "window": [],
+        "prevent": []
+      },
+      "signalCamel": "keydown",
+      "signalKebab": "keydown"
+    },
+    {
+      "raw": "on:a:b:c",
+      "pluginName": "on",
+      "key": "a:b:c",
+      "modifiers": {},
+      "signalCamel": "a:b:c",
+      "signalKebab": "a:b:c"
+    },
+    {
+      "raw": "bind:value",
+      "pluginName": "bind",
+      "key": "value",
+      "modifiers": {},
+      "signalCamel": "value",
+      "signalKebab": "value"
+    },
+    {
+      "raw": "bind:form.user.name",
+      "pluginName": "bind",
+      "key": "form.user.name",
+      "modifiers": {},
+      "signalCamel": "form.user.name",
+      "signalKebab": "form.user.name"
+    },
+    {
+      "raw": "attr:aria-label",
+      "pluginName": "attr",
+      "key": "aria-label",
+      "modifiers": {},
+      "signalCamel": "ariaLabel",
+      "signalKebab": "aria-label"
+    },
+    {
+      "raw": "class:is-open",
+      "pluginName": "class",
+      "key": "is-open",
+      "modifiers": {},
+      "signalCamel": "isOpen",
+      "signalKebab": "is-open"
+    },
+    {
+      "raw": "class:is-open__case.camel",
+      "pluginName": "class",
+      "key": "is-open",
+      "modifiers": {
+        "case": [
+          "camel"
+        ]
+      },
+      "signalCamel": "isOpen",
+      "signalKebab": "isOpen"
+    },
+    {
+      "raw": "signals:my__key",
+      "pluginName": "signals",
+      "key": "my",
+      "modifiers": {
+        "key": []
+      },
+      "signalCamel": "my",
+      "signalKebab": "my"
+    },
+    {
+      "raw": "signals:my__key__ifmissing",
+      "pluginName": "signals",
+      "key": "my",
+      "modifiers": {
+        "key": [],
+        "ifmissing": []
+      },
+      "signalCamel": "my",
+      "signalKebab": "my"
+    },
+    {
+      "raw": "_-proto-___case.snake",
+      "pluginName": "_-proto-",
+      "key": null,
+      "modifiers": {
+        "_case": [
+          "snake"
+        ]
+      }
+    },
+    {
+      "raw": "signals:constructor",
+      "pluginName": "signals",
+      "key": "constructor",
+      "modifiers": {},
+      "signalCamel": "constructor",
+      "signalKebab": "constructor"
+    },
+    {
+      "raw": "signals:to-string__case.camel",
+      "pluginName": "signals",
+      "key": "to-string",
+      "modifiers": {
+        "case": [
+          "camel"
+        ]
+      },
+      "signalCamel": "toString",
+      "signalKebab": "toString"
+    },
+    {
+      "raw": "signals:foo-bar",
+      "pluginName": "signals",
+      "key": "foo-bar",
+      "modifiers": {},
+      "signalCamel": "fooBar",
+      "signalKebab": "foo-bar"
+    },
+    {
+      "raw": "signals:foo-bar__case.kebab",
+      "pluginName": "signals",
+      "key": "foo-bar",
+      "modifiers": {
+        "case": [
+          "kebab"
+        ]
+      },
+      "signalCamel": "foo-bar",
+      "signalKebab": "foo-bar"
+    },
+    {
+      "raw": "signals:fooBar",
+      "pluginName": "signals",
+      "key": "fooBar",
+      "modifiers": {},
+      "signalCamel": "fooBar",
+      "signalKebab": "fooBar"
+    },
+    {
+      "raw": "indicator:loading",
+      "pluginName": "indicator",
+      "key": "loading",
+      "modifiers": {},
+      "signalCamel": "loading",
+      "signalKebab": "loading"
+    },
+    {
+      "raw": "ref:my-element",
+      "pluginName": "ref",
+      "key": "my-element",
+      "modifiers": {},
+      "signalCamel": "myElement",
+      "signalKebab": "my-element"
+    },
+    {
+      "raw": "computed:total",
+      "pluginName": "computed",
+      "key": "total",
+      "modifiers": {},
+      "signalCamel": "total",
+      "signalKebab": "total"
+    },
+    {
+      "raw": "match-media:is-mobile",
+      "pluginName": "match-media",
+      "key": "is-mobile",
+      "modifiers": {},
+      "signalCamel": "isMobile",
+      "signalKebab": "is-mobile"
+    },
+    {
+      "raw": "json-signals__terse",
+      "pluginName": "json-signals",
+      "key": null,
+      "modifiers": {
+        "terse": []
+      }
+    },
+    {
+      "raw": "init",
+      "pluginName": "init",
+      "key": null,
+      "modifiers": {}
+    },
+    {
+      "raw": "effect",
+      "pluginName": "effect",
+      "key": null,
+      "modifiers": {}
+    },
+    {
+      "raw": "show",
+      "pluginName": "show",
+      "key": null,
+      "modifiers": {}
+    },
+    {
+      "raw": "text",
+      "pluginName": "text",
+      "key": null,
+      "modifiers": {}
+    },
+    {
+      "raw": "on:click__delay.200ms",
+      "pluginName": "on",
+      "key": "click",
+      "modifiers": {
+        "delay": [
+          "200ms"
+        ]
+      },
+      "signalCamel": "click",
+      "signalKebab": "click"
+    },
+    {
+      "raw": "on:click__throttle.1s.noleading.trailing",
+      "pluginName": "on",
+      "key": "click",
+      "modifiers": {
+        "throttle": [
+          "1s",
+          "noleading",
+          "trailing"
+        ]
+      },
+      "signalCamel": "click",
+      "signalKebab": "click"
+    },
+    {
+      "raw": "on:click__debounce.1.5s",
+      "pluginName": "on",
+      "key": "click",
+      "modifiers": {
+        "debounce": [
+          "1",
+          "5s"
+        ]
+      },
+      "signalCamel": "click",
+      "signalKebab": "click"
+    },
+    {
+      "raw": "on:click__debounce.leading.500ms",
+      "pluginName": "on",
+      "key": "click",
+      "modifiers": {
+        "debounce": [
+          "leading",
+          "500ms"
+        ]
+      },
+      "signalCamel": "click",
+      "signalKebab": "click"
+    },
+    {
+      "raw": "on:click__debounce.500",
+      "pluginName": "on",
+      "key": "click",
+      "modifiers": {
+        "debounce": [
+          "500"
+        ]
+      },
+      "signalCamel": "click",
+      "signalKebab": "click"
+    },
+    {
+      "raw": "on:click__viewtransition",
+      "pluginName": "on",
+      "key": "click",
+      "modifiers": {
+        "viewtransition": []
+      },
+      "signalCamel": "click",
+      "signalKebab": "click"
+    },
+    {
+      "raw": "signals:",
+      "pluginName": "signals:",
+      "key": null,
+      "modifiers": {}
+    },
+    {
+      "raw": ":key",
+      "pluginName": "",
+      "key": "key",
+      "modifiers": {},
+      "signalCamel": "key",
+      "signalKebab": "key"
+    },
+    {
+      "raw": "__ifmissing",
+      "pluginName": "",
+      "key": null,
+      "modifiers": {
+        "ifmissing": []
+      }
+    },
+    {
+      "raw": "",
+      "pluginName": "",
+      "key": null,
+      "modifiers": {}
+    },
+    {
+      "raw": "on:click__once.",
+      "pluginName": "on",
+      "key": "click",
+      "modifiers": {
+        "once": [
+          ""
+        ]
+      },
+      "signalCamel": "click",
+      "signalKebab": "click"
+    },
+    {
+      "raw": "on:click__once..",
+      "pluginName": "on",
+      "key": "click",
+      "modifiers": {
+        "once": [
+          ""
+        ]
+      },
+      "signalCamel": "click",
+      "signalKebab": "click"
+    }
+  ]
+}

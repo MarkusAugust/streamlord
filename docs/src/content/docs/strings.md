@@ -102,7 +102,8 @@ What happens to a value is decided by where it landed, not by where it came from
 | A quoted attribute that is not Datastar's | Escaped |
 | A URL attribute: `href`, `src`, `action`, and `values`, `to` or `from` on an SVG animation | Escaped, and **refused** unless the whole value, every hole filled, is relative, `http`, `https`, `mailto` or `tel` |
 | A `style` attribute | **Refused**, unless it is a number |
-| A `data-*` attribute Datastar reads | **Refused**, unless it is a number or a boolean |
+| A `data-*` attribute Datastar evaluates, an expression or a signal filter, or follows as a signal path: `data-bind`, `data-ref`, `data-indicator` | **Refused**, unless it is a number or a boolean |
+| A `data-*` attribute Datastar reads as it stands: `data-nonce`, `data-preserve-attr`, `data-ignore`, `data-ignore-morph` | Escaped |
 | An event handler such as `onclick`, or `srcdoc` | **Refused** |
 | A tag name, an attribute name, an unquoted value | **Refused** |
 | Inside `<script>` or `<style>` | **Refused** |
@@ -120,10 +121,12 @@ carries no `<svg>` of its own. So a `title` or a `textarea` that shows markup as
 take a hole inside a `data-*` attribute of that sample; put the whole sample in one hole instead,
 where it is text either way.
 
-The refusals are the point. Escaping cannot save these: a value in a `data-*` attribute
-becomes part of a Datastar expression, and your own server signed the page it arrived on; a value
-in an attribute name or an unquoted value can add attributes beside itself, because escaping does
-not escape a space; HTML escaping inside a `<script>` is meaningless; and an escaped value in
+The refusals are the point. Escaping cannot save these: a value in a `data-*` attribute Datastar
+evaluates becomes part of a Datastar expression, and your own server signed the page it arrived
+on; a value in `data-bind`, `data-ref` or `data-indicator` is a signal path the client follows
+without a guard, so `__proto__.x` there writes into every object of the page; a value in an
+attribute name or an unquoted value can add attributes beside itself, because escaping does not
+escape a space; HTML escaping inside a `<script>` is meaningless; and an escaped value in
 `onclick` or at the head of an `href` is still something the browser runs. `UnsafeInterpolationException`
 says which value, where it landed, and what to do instead.
 

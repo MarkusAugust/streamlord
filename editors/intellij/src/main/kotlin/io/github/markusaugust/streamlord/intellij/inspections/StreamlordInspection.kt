@@ -178,8 +178,8 @@ class UnknownSignalInspection : StreamlordInspection(setOf("unknown-signal")) {
     }
 }
 
-/** Capitals in keys, which the browser lowercases, and what the DSL writes on the wire. */
-class DatastarKeyCaseInspection : StreamlordInspection(setOf("key-case", "key-case-wire"))
+/** Capitals in keys, which the browser lowercases, what the DSL writes on the wire, and a hyphen in a signal name. */
+class DatastarKeyCaseInspection : StreamlordInspection(setOf("key-case", "key-case-wire", "signal-name-hyphen"))
 
 /** The markup of a patch: complete elements, ids, selectors and modes, scripts. */
 class StreamlordMarkupInspection :
@@ -231,7 +231,7 @@ object InspectionCodes {
                 "computed-value",
                 "filter-pattern",
             ) +
-            setOf("key-case", "key-case-wire") +
+            setOf("key-case", "key-case-wire", "signal-name-hyphen") +
             setOf(
                 "missing-id",
                 "mode-needs-selector",

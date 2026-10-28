@@ -35,6 +35,8 @@ class LiveDatastarStreamTest {
 
     @Volatile private var accepted: String? = null
 
+    @Volatile private var acceptedQuery: String? = null
+
     @BeforeTest
     fun start() {
         server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
@@ -58,6 +60,7 @@ class LiveDatastarStreamTest {
         }
         server.createContext("/accept") { exchange ->
             accepted = exchange.requestHeaders.getFirst("Accept")
+            acceptedQuery = exchange.requestURI.rawQuery
             exchange.responseHeaders.add("Content-Type", "text/event-stream")
             exchange.sendResponseHeaders(200, 0)
             exchange.close()
@@ -440,5 +443,21 @@ class LiveDatastarStreamTest {
             LiveDatastarStream.open(URI("http://127.0.0.1:${server.address.port}/accept")).use { }
 
             assertEquals("text/event-stream, text/html, application/json", accepted)
+        }
+
+    /** The client sets `datastar` on the query through URLSearchParams, `{}` for a page with no signals. */
+    @Test
+    fun `it sends the signals as the client does`() =
+        runTest {
+            val accept = "http://127.0.0.1:${server.address.port}/accept"
+            LiveDatastarStream.open(URI(accept)).use { }
+            assertEquals("datastar=%7B%7D", acceptedQuery)
+
+            LiveDatastarStream.open(URI("$accept?page=2"), signals = """{"q":"a b"}""").use { }
+            assertEquals("page=2&datastar=%7B%22q%22%3A%22a+b%22%7D", acceptedQuery)
+
+            // One the URI carries is replaced, as URLSearchParams.set replaces.
+            LiveDatastarStream.open(URI("$accept?datastar=%7B%22old%22%3A1%7D&page=3"), signals = "{}").use { }
+            assertEquals("page=3&datastar=%7B%7D", acceptedQuery)
         }
 }

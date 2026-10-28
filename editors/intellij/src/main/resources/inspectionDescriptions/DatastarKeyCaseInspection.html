@@ -6,6 +6,12 @@ where Datastar's default is not camel.
 <p>
 In the DSL the SDK writes a camelCase key correctly on its own; a hint on the call says what goes on the wire, so nothing is hidden.
 </p>
+<p>
+A signal name in a DSL call holds no hyphen: Datastar's client reads one as a capital in an attribute key and as a hyphen in an
+expression or a patch, so <code>dataSignals("foo-bar", ...)</code> and <code>signal("foo-bar")</code> would name two signals, and
+the SDK refuses the name at runtime. The quick fix writes it in camelCase, <code>fooBar</code>. A key with a hyphen inside a value is
+data, and an expression reaches it with brackets: <code>signal("form['first-name']")</code>.
+</p>
 <!-- tooltip end -->
 </body>
 </html>

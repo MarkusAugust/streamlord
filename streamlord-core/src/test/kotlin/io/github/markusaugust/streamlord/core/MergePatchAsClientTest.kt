@@ -7,6 +7,7 @@ import io.github.markusaugust.streamlord.core.json.PROTO_REFUSED
 import io.github.markusaugust.streamlord.core.json.STORE_PROTO_REFUSED
 import io.github.markusaugust.streamlord.core.json.SignalPatchException
 import io.github.markusaugust.streamlord.core.json.mergePatchAsClient
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -16,14 +17,15 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /**
- * Each case in `client-store-cases.json` was run through the real Datastar 1.0.4 `mergePatch`
- * (engine/signals.ts), and `client` is `JSON.stringify` of its root afterwards. The fold here has
- * to arrive at the same text.
+ * Each case in `conformance/dom/store-cases.json` is run through the real Datastar 1.0.4
+ * `mergePatch` (engine/signals.ts, the free bundle in happy-dom, by `conformance/generate/dom.mjs`),
+ * and `client` is `JSON.stringify` of its root afterwards. The fold here has to arrive at the same
+ * text.
  */
 class MergePatchAsClientTest {
     @Test
     fun `holds what the client holds`() {
-        val cases = JsonParser.parse(javaClass.getResource("/client-store-cases.json")!!.readText()) as JsonArray
+        val cases = JsonParser.parse(File("../conformance/dom/store-cases.json").readText()) as JsonArray
         assertEquals(27, cases.size)
         for (case in cases.filterIsInstance<JsonObject>()) {
             var store = JsonObject.EMPTY
@@ -35,10 +37,10 @@ class MergePatchAsClientTest {
     }
 
     /**
-     * Each scenario in `client-merge-differential.json` was run through `mergePatch` imported from
-     * the 1.0.4 source (engine/signals.ts) under Bun and happy-dom, a fresh store per scenario, and
-     * `client` is `JSON.stringify` of the root after each step, or `THROWS` and the root once the
-     * step threw. The audit's 317 scenarios (17 by hand, 300 at random with seed 7) plus the cases
+     * Each scenario in `conformance/dom/merge-differential.json` is run through the 1.0.4 client's
+     * `mergePatch` (engine/signals.ts) in happy-dom by `conformance/generate/dom.mjs`, a fresh store
+     * per scenario, and `client` is `JSON.stringify` of the root after each step, or `THROWS` and
+     * the root once the step threw. The audit's 317 scenarios (17 by hand, 300 at random with seed 7) plus the cases
      * around `length`, a throw partway through a patch and key order, a string patch of surrogate
      * pairs, and keys named `__proto__` or after what `Object.prototype` holds. A scenario with a `store`
      * starts from that text as parsed here, out of JavaScript's key order, where the client starts
@@ -51,7 +53,7 @@ class MergePatchAsClientTest {
      */
     @Test
     fun `folds each step as the client's own mergePatch does`() {
-        val scenarios = JsonParser.parse(javaClass.getResource("/client-merge-differential.json")!!.readText()) as JsonArray
+        val scenarios = JsonParser.parse(File("../conformance/dom/merge-differential.json").readText()) as JsonArray
         assertEquals(366, scenarios.size)
         for (scenario in scenarios.objects()) {
             var store = scenario.string("store")?.let(JsonParser::parseObject) ?: JsonObject.EMPTY

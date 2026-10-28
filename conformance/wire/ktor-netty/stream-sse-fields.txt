@@ -1,0 +1,27 @@
+# Wire transcript: ktor-netty, stream-sse-fields.
+# Written by KtorWireTranscriptTest under ./gradlew :streamlord-ktor:updateTranscripts, compared with the live answer on every test run.
+# Normalised: CRLF written as LF; the port as {port}; the values of Date, Server and Keep-Alive as {date}, {server} and {keep-alive};
+# a CSP nonce as {nonce}; a line feed after a body that ends without one. Every other byte is as the client got it.
+# Body: chunked on the wire, shown without the chunk framing.
+GET /stream/sse-fields HTTP/1.1
+Host: 127.0.0.1:{port}
+Accept: text/event-stream, text/html, application/json
+Datastar-Request: true
+
+HTTP/1.1 200 OK
+Cache-Control: no-cache
+X-Accel-Buffering: no
+Connection: keep-alive
+Content-Type: text/event-stream
+transfer-encoding: chunked
+
+event: datastar-patch-signals
+id: 42
+data: signals {"hp":99}
+
+: the gate holds
+
+event: datastar-patch-signals
+retry: 1001
+data: signals {"hp":98}
+

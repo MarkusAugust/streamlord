@@ -14,3 +14,7 @@ ktlint_code_style = ktlint_official
 
 [*.{yml,yaml,toml,md}]
 indent_size = 2
+
+# Approved wire transcripts: a status line Tomcat sends ends in a space, and the bytes are the test.
+[conformance/wire/**]
+trim_trailing_whitespace = false

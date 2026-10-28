@@ -49,9 +49,18 @@ public object ElementsGuard {
         )
 
     /**
+     * The attributes whose value Datastar evaluates as JavaScript: [expressionAttributes], and the
+     * four whose value is a signal filter, which the client parses as JSON and, when that fails,
+     * runs as code (`jsStrToObject` in text.ts). The value of every other attribute is read as it
+     * stands: a signal name, a nonce, a list of attribute names.
+     */
+    public val evaluatedAttributes: Set<String> =
+        expressionAttributes + setOf("json-signals", "on-signal-patch-filter", "persist", "query-string")
+
+    /**
      * Every Datastar attribute name, free and Pro, as the catalog lists them. A `data-*` name
      * that is one letter away from one of these, and is not itself one of them, is a typo the
-     * browser would ignore without a word: `data-onn:click`, `data-signal:x`, `data-txt`.
+     * browser would ignore without a word: `data-onn:click`, `data-signal:x`, `data-effekt`.
      * Anything further away is taken to be your own attribute and left alone.
      */
     public val attributes: Set<String> =

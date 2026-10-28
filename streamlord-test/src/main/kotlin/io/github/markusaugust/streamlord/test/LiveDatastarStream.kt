@@ -21,6 +21,7 @@ import java.io.InputStream
 import java.io.InputStreamReader
 import java.io.Reader
 import java.net.URI
+import java.net.URLEncoder
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
@@ -330,12 +331,31 @@ public class LiveDatastarStream private constructor(
         /** Long enough for a slow CI machine, short enough that a broken test says so. */
         public val DEFAULT_TIMEOUT: Duration = 5.seconds
 
+        // `datastar` set on the query as the client's URLSearchParams.set does (fetch.ts): one the URI
+        // already carries is replaced, the rest kept. The client re-serialises the rest and this keeps
+        // them as written, which a server reads the same.
+        private fun withSignals(
+            uri: URI,
+            signals: String,
+        ): URI {
+            val datastar = "datastar=" + URLEncoder.encode(signals, Charsets.UTF_8)
+            val kept =
+                uri.rawQuery
+                    .orEmpty()
+                    .split('&')
+                    .filter { it.isNotEmpty() && it.substringBefore('=') != "datastar" }
+            val query = (kept + datastar).joinToString("&")
+            val fragment = uri.rawFragment?.let { "#$it" } ?: ""
+            return URI(uri.toString().substringBefore('#').substringBefore('?') + "?" + query + fragment)
+        }
+
         /** HTTP/1.1, as a browser speaks to a stream on a plain `http://` origin. */
         private val client: HttpClient by lazy { HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build() }
 
         /**
-         * Open [uri] with a `GET` the way the browser's Datastar does, with `Datastar-Request: true`
-         * and the client's `Accept`, and read it as it arrives.
+         * Open [uri] with a `GET` the way the browser's Datastar does, with `Datastar-Request: true`,
+         * the client's `Accept` and the page's [signals] as the `datastar` query parameter, and read
+         * it as it arrives.
          *
          * The answer has to start within [timeout]. Ktor's CIO sends the headers as soon as the
          * response opens; Netty holds them until the first byte of the body, so on Netty a handler
@@ -346,6 +366,9 @@ public class LiveDatastarStream private constructor(
          * The headers the server answered with are in [responseHeaders].
          *
          * @param headers Added to the request, for a session cookie or an authorisation header.
+         * @param signals The signals the page sends, one JSON object as text. `{}` unless given, which
+         *   is what a page with no signals sends: the client always sends the parameter, so a handler
+         *   that reads signals sees an object, never none.
          * @throws AssertionError when the connection fails, no answer starts within [timeout], or
          *   the answer is not a 200 `text/event-stream`. That last one prints the answer's headers,
          *   a cookie's value held back, and the first KiB of its body, or as much as came within a
@@ -355,10 +378,11 @@ public class LiveDatastarStream private constructor(
             uri: URI,
             headers: Map<String, String> = emptyMap(),
             timeout: Duration = DEFAULT_TIMEOUT,
+            signals: String = "{}",
         ): LiveDatastarStream {
             val request =
                 HttpRequest
-                    .newBuilder(uri)
+                    .newBuilder(withSignals(uri, signals))
                     // An infinite wait is no timeout at all; the JDK cannot hold one that long.
                     .apply { if (timeout.isFinite()) timeout(timeout.toJavaDuration()) }
                     .header("Datastar-Request", "true")

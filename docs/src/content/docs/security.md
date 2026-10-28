@@ -209,7 +209,7 @@ Spring WebMVC is the same thing as a filter bean:
 @Bean
 fun cspNonceFilter(): CspNonceFilter = CspNonceFilter()
 
-@GetMapping("/dashboard", produces = [org.springframework.http.MediaType.TEXT_HTML_VALUE])
+@GetMapping("/dashboard", produces = ["text/html;charset=UTF-8"])
 fun dashboard(request: HttpServletRequest): String =
     kotlinx.html.stream.createHTML().html {
         dataNonce(request.cspNonce)
@@ -232,6 +232,15 @@ class CspNonceWebFilter : WebFilter {
 ```
 
 `exchange.cspNonce` then reads it back in the handler, exactly as `call.cspNonce` does.
+
+A page written as a string takes the nonce through `interpolate`, which escapes it: the client
+reads `data-nonce` as it stands, never as an expression, so the hole is an ordinary one.
+
+```kotlin sample=statements
+val nonce = CspNonce.generate()
+
+interpolate("""<html data-nonce="%s"><body></body></html>""", nonce)
+```
 
 ### The policy is yours
 
@@ -411,7 +420,9 @@ before any codec reads it. `StreamlordExceptionHandler` answers it with `415`, a
 `StatusPages` block above. A declared type is checked before the body is read. Signals in the
 query string, which `@get` and `@delete` send, are not affected, nor is a request with neither a
 body nor a `Content-Type`. A request your own page sends with `contentType: 'form'` carries a
-form rather than signals, and reading signals from it is refused the same way.
+form rather than signals: from `@post`, `@put`, `@patch` or `@query` it is refused the same way,
+while from `@get` or `@delete` the fields travel in the query string, where no `datastar` parameter
+is found, so reading signals from it gives none.
 
 A client of your own that cannot set the header can be let through, at the cost of the check:
 

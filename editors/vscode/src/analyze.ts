@@ -1,9 +1,10 @@
 import { catalog, parseAttributeName, type CallSiteSpec } from "./catalog.ts";
 import { attributeDoc, DOCS, quoteAt, validateExpression, type Fix, type Issue } from "./expression.ts";
 import { PLACEHOLDER, toSource, type Interpolation, type KotlinString } from "./kotlinStrings.ts";
-import { asciiLowercase, indexOfAsciiIgnoreCase, keyReading, rawKeyNote, tokenize, validateAttributes, validateMarkup, wireKey, type Attribute, type Tag } from "./markup.ts";
+import { asciiLowercase, indexOfAsciiIgnoreCase, keyReading, rawKeyNote, tokenize, validateAttributes, validateMarkup, wireKey, wireKeyReads, type Attribute, type Tag } from "./markup.ts";
 import { findCallSites, isHtmlString, lexKotlin, namedArgText, selectStringArg, stringAt, type CallSite } from "./scanner.ts";
-import { collectSignalDefinitions } from "./signals.ts";
+import { dslHelpers, EXPRESSION_HELPERS, signalNameHyphenSites } from "./signalNameHyphens.ts";
+import { clientKeyName, collectSignalDefinitions } from "./signals.ts";
 
 /**
  * Editor-independent analysis: Kotlin source in, issues with source offsets out.
@@ -27,12 +28,9 @@ const HTML_SITE_NAMES: ReadonlySet<string> = new Set(Object.keys(catalog.callSit
 const KEY_ONLY_HELPERS: ReadonlySet<string> = new Set(["dataMatchMedia", "dataPersist"]);
 for (const name of KEY_ONLY_HELPERS) (ALL_SITE_NAMES as Set<string>).add(name);
 
-/**
- * Helpers that write the signal name in the value, which keeps its case, unless a `case` is
- * given: Datastar applies `__case` to a key only, so then the name moves into the key.
- */
-const VALUE_UNLESS_CASED_HELPERS: ReadonlySet<string> = new Set(["dataBind", "dataRef", "dataIndicator"]);
-for (const name of VALUE_UNLESS_CASED_HELPERS) (ALL_SITE_NAMES as Set<string>).add(name);
+/** Helpers that write the signal name in the value, which the catalog's call sites do not list. */
+const VALUE_NAME_HELPERS: ReadonlySet<string> = new Set(["dataBind", "dataRef", "dataIndicator"]);
+for (const name of VALUE_NAME_HELPERS) (ALL_SITE_NAMES as Set<string>).add(name);
 
 /**
  * The last source lexed, so a hover or completion right after a diagnostics pass does not lex
@@ -75,6 +73,7 @@ export function analyzeKotlin(src: string, opts: AnalyzeOptions): Issue[] {
     issues.push(...checkKeyCaseSite(site, src));
     for (const a of site.args) if (a.string) claimed.add(a.string.start);
   }
+  issues.push(...signalNameHyphenSites(src, lex, dslHelpers(src, EXPRESSION_HELPERS), new Set([...ALL_SITE_NAMES, "statements"])));
   for (const m of src.matchAll(ATTRIBUTES_INDEX)) {
     if (lex.mask[m.index ?? 0] === 0) continue;
     const value = attributesIndexValue(src, m, lex.strings);
@@ -394,12 +393,11 @@ function checkKeyCaseSite(site: CallSite, src: string): Issue[] {
   const spec = catalog.attributesByKotlin.get(site.name);
   if (!spec?.keyed || !spec.keyCase) return [];
   // Only helpers whose first parameter is a key: those whose expression is a later argument
-  // (dataOn, dataSignals, dataClass, ...), the two Pro helpers that take a key and no
-  // expression, and dataBind, dataRef and dataIndicator once a case moves their name into the
-  // key. dataOnClick("expr") passes an expression, never a key.
+  // (dataOn, dataSignals, dataClass, ...) and the two Pro helpers that take a key and no
+  // expression. dataOnClick("expr") passes an expression, never a key, and dataBind, dataRef
+  // and dataIndicator write their name in the value.
   const expr = catalog.callSites.expression[site.name];
-  const valueUnlessCased = VALUE_UNLESS_CASED_HELPERS.has(site.name);
-  if (expr ? expr.arg === 0 : !(KEY_ONLY_HELPERS.has(site.name) || valueUnlessCased)) return [];
+  if (expr ? expr.arg === 0 : !KEY_ONLY_HELPERS.has(site.name)) return [];
   const positional = site.args.filter((a) => a.named === null);
   const key = positional[0]?.string;
   // With an expression helper, one positional string is the object form (dataClass("{...}")); the key form has two.
@@ -407,13 +405,24 @@ function checkKeyCaseSite(site: CallSite, src: string): Issue[] {
   const name = key.text;
   // dataSignals("{fooBar: 1}", ...) is the object form: an expression, not a key.
   if (!/[A-Z]/.test(name) || /^\s*[{\[]/.test(name)) return [];
-  // `case = Case.X`, a positional `Case.X` (dataRef("name", Case.CAMEL)) or `case = Case.X` in the trailing lambda.
+  // A signal name with a hyphen is refused, which signalNameHyphenIssues says.
+  if (spec.keyCase === "camel" && name.includes("-")) return [];
+  // `case = Case.X`, a positional `Case.X` (dataClass("name", "x", Case.CAMEL)) or `case = Case.X` in the trailing lambda.
   const named = site.args.find((a) => a.named === "case" || (a.named === null && /^\s*Case\.[A-Z]+\s*$/.test(a.text)))?.text;
   const explicit = named ? /Case\.([A-Z]+)/.exec(named) : /\bcase\s*=\s*Case\.([A-Z]+)/.exec(trailingLambdaText(site, src));
   const explicitCase = explicit?.[1]?.toLowerCase() ?? null;
-  if (valueUnlessCased && !explicitCase) return [];
   const wire = wireKey(name, spec.keyCase, explicitCase);
-  const what = explicitCase ? `a ${explicitCase}-cased name` : keyReading(spec, name, wire);
+  if (wire === null) {
+    return [{
+      start: key.start,
+      end: key.end,
+      message: `No key gives ${name} back: the browser lowercases attribute names, and with __case.camel or __case.pascal Datastar turns every hyphen before a lower-case letter into a capital and reads ${wireKeyReads(name)}. Write it in one case.`,
+      severity: "hint",
+      code: "key-case-wire",
+      link: attributeDoc(spec.name),
+    }];
+  }
+  const what = explicitCase ? `a ${explicitCase}-cased name` : keyReading(spec, clientKeyName(wire), wire);
   return [{
     start: key.start,
     end: key.end,

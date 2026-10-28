@@ -49,6 +49,22 @@ describe("attributes", () => {
     assert.deepEqual(marked(src, analyzeHtml(src, opts)), ["data-onn:click"]);
   });
 
+  // A signal key is read as camelCase, so `fooBar-baz` gets the key `foo-bar-baz`; an event or class name like it gets no key at all.
+  it("says when no key gives a name mixing capitals and a hyphen back", () => {
+    const [signal] = analyzeHtml('<div data-signals:fooBar-baz="1"></div>', opts);
+    assert.equal(signal?.code, "key-case");
+    assert.deepEqual(signal?.fixes?.map((f) => f.text), ["foo-bar-baz"]);
+    const [event] = analyzeHtml('<div data-on:fooBar-baz="x()"></div>', opts);
+    assert.equal(event?.code, "key-case");
+    assert.equal(event?.fixes, undefined);
+    assert.match(event?.message ?? "", /No key gives fooBar-baz back/);
+    assert.match(event?.message ?? "", /reads fooBarBaz\. Write it in one case\./);
+    // An explicit __case that does not give the name back either.
+    const [cased] = analyzeHtml('<div data-on:fooBar-baz__case.camel="x()"></div>', opts);
+    assert.equal(cased?.fixes, undefined);
+    assert.match(cased?.message ?? "", /reads fooBarBaz\. Write it in one case\./);
+  });
+
   it("does not read an attribute written in capitals as a camelCase key", () => {
     assert.deepEqual(analyzeHtml('<BUTTON DATA-ON:CLICK="$a = 1" data-on:CLICK="$a = 1">', opts), []);
     assert.deepEqual(codes(analyzeHtml('<button data-on:widgetLoaded="$a = 1">', opts)), ["key-case"]);

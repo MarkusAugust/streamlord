@@ -59,7 +59,9 @@ public enum class IntlType(
  * `@intl(type, value, options, locale)` (Pro): locale-aware formatting.
  *
  * @param value A raw JavaScript expression, e.g. `signal("price")` or `new Date()`.
- * @param options Passed to the `Intl` constructor as an object literal.
+ * @param options Passed to the `Intl` constructor as an object literal. For [IntlType.RELATIVE_TIME]
+ * and [IntlType.DISPLAY_NAMES] it is always written, empty or not: the client reads a field of it
+ * (`unit`, `type`) and throws without one.
  * @param locales One or more BCP 47 locales; omitted means the browser's.
  */
 public fun intl(
@@ -70,7 +72,8 @@ public fun intl(
 ): String =
     buildString {
         append("@intl(").append(js(type.wire)).append(", ").append(value)
-        if (options.isNotEmpty() || locales.isNotEmpty()) append(", ").append(JsLiteral.write(options))
+        val readsOptions = type == IntlType.RELATIVE_TIME || type == IntlType.DISPLAY_NAMES
+        if (readsOptions || options.isNotEmpty() || locales.isNotEmpty()) append(", ").append(JsLiteral.write(options))
         when (locales.size) {
             0 -> Unit
             1 -> append(", ").append(js(locales[0]))

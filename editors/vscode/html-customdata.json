@@ -291,7 +291,7 @@
       "name": "data-animate",
       "description": {
         "kind": "markdown",
-        "value": "Pro. Animates an attribute whenever the expression's signals change.\n\n`data-animate:<attribute>=\"expr\"`\n\n_Datastar Pro. Requires the Pro bundle, which you license and load yourself._"
+        "value": "Pro. Animates an attribute, or each attribute of the object form, whenever the expression's signals change.\n\n`data-animate:<attribute>=\"expr\"`\n`data-animate=\"{attribute: expr}\"`\n\n**Modifiers:** `__duration.500ms`, `__delay.500ms`, `__ease.linear|quadratic|cubic|elastic|inquad|outquad|inoutquad|incubic|outcubic|inoutcubic|inquart|outquart|inoutquart|inquint|outquint|inoutquint|insine|outsine|inoutsine|inexpo|outexpo|inoutexpo|incirc|outcirc|inoutcirc|inelastic|outelastic|inoutelastic|inback|outback|inoutback|inbounce|outbounce|inoutbounce|ingolden|outgolden|inoutgolden`, `__loop`, `__pingpong`\n\n_Datastar Pro. Requires the Pro bundle, which you license and load yourself._"
       },
       "references": [
         {
@@ -330,7 +330,7 @@
       "name": "data-on-raf",
       "description": {
         "kind": "markdown",
-        "value": "Pro. Runs on every animation frame.\n\n`data-on-raf=\"expr\"`\n\n**Modifiers:** `__throttle.500ms (.noleading, .trailing)`\n\n_Datastar Pro. Requires the Pro bundle, which you license and load yourself._"
+        "value": "Pro. Runs on every animation frame.\n\n`data-on-raf=\"expr\"`\n\n**Modifiers:** `__delay.500ms`, `__debounce.500ms (.leading, .notrailing)`, `__throttle.500ms (.noleading, .trailing)`, `__viewtransition`\n\n_Datastar Pro. Requires the Pro bundle, which you license and load yourself._"
       },
       "references": [
         {
@@ -343,7 +343,7 @@
       "name": "data-on-resize",
       "description": {
         "kind": "markdown",
-        "value": "Pro. Runs when the element's size changes.\n\n`data-on-resize=\"expr\"`\n\n**Modifiers:** `__debounce.500ms (.leading, .notrailing)`, `__throttle.500ms (.noleading, .trailing)`\n\n_Datastar Pro. Requires the Pro bundle, which you license and load yourself._"
+        "value": "Pro. Runs when the element's size changes.\n\n`data-on-resize=\"expr\"`\n\n**Modifiers:** `__delay.500ms`, `__debounce.500ms (.leading, .notrailing)`, `__throttle.500ms (.noleading, .trailing)`, `__viewtransition`\n\n_Datastar Pro. Requires the Pro bundle, which you license and load yourself._"
       },
       "references": [
         {

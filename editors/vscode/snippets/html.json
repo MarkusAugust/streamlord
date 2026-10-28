@@ -111,8 +111,8 @@
   },
   "data-animate": {
     "prefix": "data-animate",
-    "body": "data-animate:${1:name}=\"${2:expression}\"",
-    "description": "Pro: Pro. Animates an attribute whenever the expression's signals change."
+    "body": "data-animate=\"${2:expression}\"",
+    "description": "Pro: Pro. Animates an attribute, or each attribute of the object form, whenever the expression's signals change."
   },
   "data-custom-validity": {
     "prefix": "data-custom-validity",

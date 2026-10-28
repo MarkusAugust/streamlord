@@ -1,0 +1,17 @@
+# Wire transcript: spring-mvc-tomcat, response-signals.
+# Written by SpringMvcWireTranscriptTest under ./gradlew :streamlord-spring:updateTranscripts, compared with the live answer on every test run.
+# Normalised: CRLF written as LF; the port as {port}; the values of Date, Server and Keep-Alive as {date}, {server} and {keep-alive};
+# a CSP nonce as {nonce}; a line feed after a body that ends without one. Every other byte is as the client got it.
+# Body: as sent.
+GET /response/signals HTTP/1.1
+Host: 127.0.0.1:{port}
+Accept: text/event-stream, text/html, application/json
+Datastar-Request: true
+
+HTTP/1.1 200 
+datastar-only-if-missing: true
+Content-Type: application/json
+Content-Length: 10
+Date: {date}
+
+{"hp":100}

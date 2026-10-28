@@ -613,15 +613,26 @@ export function kebab(name: string): string {
  * back as that name: `foo-bar` for a signal (Datastar reads it as camelCase), `widget-loaded__case.camel`
  * for an event or class (kebab by default), `aria-label` where the key is used as it is. An
  * explicit `__case` is kept: the key is still kebab-cased, because the browser lowercases it
- * either way. Shared by the HTML warning and the Kotlin wire hint.
+ * either way. A signal key is read as camelCase, so `fooBar-baz` comes back as `fooBarBaz`, the
+ * name the DSL's `signal()` reads from it too; [clientKeyName] says what. Null for an event or
+ * class name that mixes capitals with a hyphen before a lower-case letter, `fooBar-baz` or `A-b`,
+ * since the client's camel and pascal turn that hyphen into a capital too (`modifyCasing` in
+ * text.ts) and no key gives it back; [wireKeyReads] says what it would read. Shared by the HTML
+ * warning and the Kotlin wire hint.
  */
-export function wireKey(key: string, keyCase: AttributeSpec["keyCase"], explicitCase: string | null): string {
+export function wireKey(key: string, keyCase: AttributeSpec["keyCase"], explicitCase: string | null): string | null {
   const base = kebab(key);
   if (explicitCase) return `${base}__case.${explicitCase}`;
   const wanted = /^[A-Z]/.test(key) ? "pascal" : "camel";
   if (keyCase === "raw") return base;
+  if (keyCase === "kebab" && CASE_FNS.get(wanted)!(base) !== key) return null;
   const defaultCase = keyCase === "camel" ? "camel" : "kebab";
   return wanted === defaultCase ? base : `${base}__case.${wanted}`;
+}
+
+/** What the client reads from the kebab-case key of `key` under the case its capitals ask for. */
+export function wireKeyReads(key: string): string {
+  return CASE_FNS.get(/^[A-Z]/.test(key) ? "pascal" : "camel")!(kebab(key));
 }
 
 /**
@@ -759,7 +770,7 @@ function validateSignalNames(attr: Attribute, parsed: { key: string | null }, sp
       } else if (k.object && PROTOTYPE_NAMES.has(k.key)) {
         out.push({
           ...at,
-          message: `Every object already has ${k.key}, so the client writes the object under it into the built-in one and drops the signal.`,
+          message: `Every object already has ${k.key}. The client holds the signal, but the next request writes the object under it into the built-in one and sends the page's signals without it.`,
           severity: "error",
           code: "signal-name",
           link: attributeDoc(spec.name),
@@ -1048,9 +1059,22 @@ function validateKeyCase(attr: Attribute, parsed: { key: string | null; base: st
   const keyStart = attr.nameStart + colon + 1;
   const name = prefix + spec.name;
   const existing = parsed.modifiers.find((m) => m.name === "case");
-  // With an explicit __case already there, only the key itself changes.
-  const fixed = existing ? kebab(key) : wireKey(key, spec.keyCase, null);
+  // With an explicit __case already there, only the key itself changes, when that case gives the name back.
+  const fixed = existing ? (clientCase(kebab(key), [existing], "camel") === key ? kebab(key) : null) : wireKey(key, spec.keyCase, null);
   const reaches = keyReading(spec, key.toLowerCase(), key.toLowerCase());
+  if (fixed === null) {
+    const noKey = existing
+      ? `No key with __case.${existing.args.join(".")} gives ${key} back: the browser lowercases the key, and from ${kebab(key)}__case.${existing.args.join(".")} Datastar reads ${clientCase(kebab(key), [existing], "camel")}.`
+      : `No key gives ${key} back: with __case.camel or __case.pascal Datastar turns every hyphen before a lower-case letter into a capital and reads ${wireKeyReads(key)}.`;
+    return [{
+      start: keyStart,
+      end: keyStart + key.length,
+      message: `The browser lowercases attribute names, so this reaches Datastar as ${reaches}, not ${key}. ${noKey} Write it in one case.`,
+      severity: "warning",
+      code: "key-case",
+      link: attributeDoc(spec.name),
+    }];
+  }
   if (keyKind(spec) === "raw") {
     // A kebab-case key would set view-box, not viewBox: for an attribute the object form keeps the
     // name, for a style property no form does, since the object form writes it kebab-case.

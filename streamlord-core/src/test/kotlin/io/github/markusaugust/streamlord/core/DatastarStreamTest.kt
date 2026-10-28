@@ -4,6 +4,7 @@ import io.github.markusaugust.streamlord.core.application.Streamlord
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
+import io.github.markusaugust.streamlord.core.domain.SignalNames
 import io.github.markusaugust.streamlord.core.port.driven.BufferedSseSink
 import io.github.markusaugust.streamlord.core.port.driven.SseSink
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
@@ -99,6 +100,24 @@ class DatastarStreamTest {
             }
             val clash = assertFailsWith<DatastarEventValidationException> { stream.patchSignals("n" to 1, "a" to 1, "a.b" to 2) }
             assertEquals("signal a is given a value and also names signals under it", clash.message)
+        }
+
+    // dataSignals("foo-bar" to 1) would be $fooBar on the page and this the signal foo-bar, so neither takes a hyphen.
+    @Test
+    fun `a name with a hyphen is refused, and a key with one inside a value is data`() =
+        runTest {
+            val sink = BufferedSseSink()
+            val stream = Streamlord.Default.stream(sink)
+            val patch = assertFailsWith<DatastarEventValidationException> { stream.patchSignals("form.first-name" to "") }
+            assertEquals(
+                "signal form.first-name has a hyphen, which Datastar's client reads as a capital in an attribute key and as a " +
+                    "hyphen in an expression or a patch, so it would name two signals; write form.firstName",
+                patch.message,
+            )
+            assertFailsWith<DatastarEventValidationException> { stream.removeSignals("foo-bar") }
+            stream.patchSignals("form" to mapOf("first-name" to ""))
+            assertEquals("event: datastar-patch-signals\ndata: signals {\"form\":{\"first-name\":\"\"}}\n\n", sink.text())
+            assertEquals("aB1C", SignalNames.withoutHyphens("a-b-1--c"))
         }
 
     @Test

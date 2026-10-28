@@ -184,8 +184,11 @@ class AnalyzerTest {
                 opts,
             )
         assertEquals(listOf("key-case", "key-case"), codes(explicit))
-        assertEquals(listOf("foo-bar", "widget-loaded"), explicit.map { it.fixes[0].text })
-        assertContains(explicit[0].message, "foo-bar__case.kebab")
+        // With __case.kebab no key gives fooBar back, since the browser lowercases it and kebab recases nothing.
+        assertEquals(emptyList(), explicit[0].fixes)
+        assertContains(explicit[0].message, "No key with __case.kebab gives fooBar back")
+        assertContains(explicit[0].message, "from foo-bar__case.kebab Datastar reads foo-bar.")
+        assertEquals(listOf("widget-loaded"), explicit[1].fixes.map { it.text })
         val custom = analyzer.analyzeHtml("<div data-style:--myColor=\"\$c\"></div>", opts)
         assertContains(
             custom.single().message,
@@ -198,6 +201,24 @@ class AnalyzerTest {
         )
     }
 
+    /** A signal name with a hyphen is the hyphen check's, and an event that mixes capitals and a hyphen has no key. */
+    @Test
+    fun `hints the name the client reads from a key mixing capitals and a hyphen`() {
+        val src =
+            """
+            div {
+              dataSignals("fooBar-baz", "1")
+              dataOn("fooBar-baz", "x()")
+            }
+            """.trimIndent()
+        val issues = analyzer.analyzeKotlin(src, opts)
+        val hints = issues.filter { it.code == "key-case-wire" }
+        assertEquals(1, hints.size)
+        assertContains(hints[0].message, "No key gives fooBar-baz back")
+        assertContains(hints[0].message, "reads fooBarBaz. Write it in one case.")
+        assertEquals(listOf("signal-name-hyphen"), issues.filter { it.start < src.indexOf("dataOn") }.map { it.code })
+    }
+
     @Test
     fun `hints what the dsl writes on the wire for a camelCase key`() {
         val src =
@@ -208,17 +229,15 @@ class AnalyzerTest {
               dataClass("isOpen", "$" + "open")
               dataAttr("ariaLabel", "'x'")
               dataSignals("MySignal", "1")
-              dataSignals("fooBar", "1", case = Case.KEBAB)
               dataOn("customEvent", "x()") { case = Case.KEBAB }
-              dataSignals("foo-bar", "1")
               dataSignals("{fooBar: 1}")
               dataBind("fooBar")
               dataOnClick("@post('/Add')", { once = true })
               dataOnFetch("evt.detail.type === 'Started'") { window = true }
               dataAttr("viewBox", "${'$'}box")
-              dataRef("myRef", Case.CAMEL)
-              dataIndicator("isLoading", Case.CAMEL)
-              dataSignals("{fooBar: 1}", Case.CAMEL)
+              dataRef("myRef")
+              dataIndicator("isLoading")
+              dataSignals("{fooBar: 1}", true)
               dataPersist("myKey")
               dataMatchMedia("isMobile", mediaQuery = "(max-width: 600px)")
             }
@@ -232,11 +251,8 @@ class AnalyzerTest {
                 "\"isOpen\"",
                 "\"ariaLabel\"",
                 "\"MySignal\"",
-                "\"fooBar\"",
                 "\"customEvent\"",
                 "\"viewBox\"",
-                "\"myRef\"",
-                "\"isLoading\"",
                 "\"myKey\"",
                 "\"isMobile\"",
             ),
@@ -249,18 +265,15 @@ class AnalyzerTest {
                 "data-class:is-open__case.camel",
                 "data-attr:aria-label",
                 "data-signals:my-signal__case.pascal",
-                "data-signals:foo-bar__case.kebab",
                 "data-on:custom-event__case.kebab",
                 "data-attr:view-box",
-                "data-ref:my-ref__case.camel",
-                "data-indicator:is-loading__case.camel",
                 "data-persist:my-key",
                 "data-match-media:is-mobile",
             ),
             hints.map { Regex("""as (data-[a-z-]+:[^,]+),""").find(it.message)!!.groupValues[1] },
         )
         assertContains(hints[0].message, "\$fooBar")
-        assertContains(hints[7].message, "data-attr=\"{viewBox: ...}\"")
+        assertContains(hints[6].message, "data-attr=\"{viewBox: ...}\"")
     }
 
     @Test
@@ -306,7 +319,7 @@ class AnalyzerTest {
         // `$total-el.offsetWidth` is `$['total-el']['offsetWidth']` to Datastar: the subtraction the author meant needs spaces.
         val scope = expr("(\$total-el.offsetWidth) + 'px'; \$count-evt.detail.delta; \$n-fn(1); \$m-arr[0]")
         assertEquals(4, scope.size)
-        assertEquals(listOf("\$totalEl.offsetWidth", "\$total - el.offsetWidth"), scope[0].fixes.map { it.text })
+        assertEquals(listOf("\$totalEl.offsetwidth", "\$total - el.offsetWidth"), scope[0].fixes.map { it.text })
         assertEquals(emptyList(), expr("@get('/item/\$id-preview') && \$x"))
         assertEquals(listOf("signal-kebab"), codes(analyzer.analyzeKotlin("dataText(\"\${'\$'}foo-bar\")", opts)))
     }
@@ -521,7 +534,7 @@ class AnalyzerTest {
                 "      mapOf(\"notASignal\" to 1); removeSignals(\"gone\", \"away\")\n" +
                 "      @Serializable data class Search(val query: String = \"\", val page: Int = 1)"
         assertEquals(
-            listOf("away", "count", "gone", "name", "open", "page", "query", "search", "user"),
+            listOf("away", "count", "gone", "open", "page", "query", "search", "user"),
             collectSignals(kt, SourceLanguage.KOTLIN).sorted(),
         )
         val h = "<div data-signals=\"{count: 1, open: false}\" data-bind:first-name data-text=\"\$other.x\"></div>"
@@ -603,6 +616,28 @@ class TokensTest {
             },
         )
         assertEquals(listOf(TokenKind.NUMBER, TokenKind.KEYWORD), tokenizeExpression("x = a ? 1 : typeof b").map { it.kind })
+    }
+
+    @Test
+    fun `reads a signal as far as the client's pattern does`() {
+        fun tokens(text: String) = tokenizeExpression(text).map { text.substring(it.start, it.end) to it.kind }
+        assertEquals(listOf("\$123" to TokenKind.SIGNAL), tokens("\$123"))
+        assertEquals(listOf("\$foo-bar" to TokenKind.SIGNAL), tokens("\$foo-bar"))
+        assertEquals(listOf("\$foo" to TokenKind.SIGNAL, ".0.name" to TokenKind.SIGNAL_PATH), tokens("\$foo.0.name"))
+        assertEquals(listOf("\$foo-bar" to TokenKind.SIGNAL, ".baz" to TokenKind.SIGNAL_PATH), tokens("\$foo-bar.baz"))
+        assertEquals(listOf("\$a-b-1" to TokenKind.SIGNAL), tokens("\$a-b-1"))
+        // The trailing dot is outside the client's match, so outside the token.
+        assertEquals(listOf("\$foo" to TokenKind.SIGNAL), tokens("\$foo."))
+        assertEquals(listOf("\${'\$'}" to TokenKind.KOTLIN_DOLLAR_ESCAPE, "123" to TokenKind.SIGNAL), tokens("\${'\$'}123"))
+        // The signal and its path together cover what the client rewrites.
+        for (text in listOf("\$123 + \$foo-bar.baz-qux.0 - \$a-b-1; \$foo. + \$x-", "\$a.b-c.d + \$_1-2_")) {
+            val covered =
+                tokenizeExpression(text).fold(ArrayList<IntRange>()) { acc, t ->
+                    if (t.kind == TokenKind.SIGNAL_PATH) acc[acc.lastIndex] = acc.last().first until t.end else acc += t.start until t.end
+                    acc
+                }
+            assertEquals(clientRewrite(text).rewrites.map { it.start until it.end }, covered, text)
+        }
     }
 
     @Test

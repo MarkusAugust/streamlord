@@ -152,6 +152,7 @@ public final class io/github/markusaugust/streamlord/core/domain/ElementsGuard {
 	public static synthetic fun check$default (Lio/github/markusaugust/streamlord/core/domain/ElementsGuard;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Ljava/lang/String;
 	public final fun getAttributes ()Ljava/util/Set;
 	public final fun getDefaultPrefixes ()Ljava/util/List;
+	public final fun getEvaluatedAttributes ()Ljava/util/Set;
 	public final fun getExpressionAttributes ()Ljava/util/Set;
 }
 
@@ -308,10 +309,14 @@ public final class io/github/markusaugust/streamlord/core/domain/ScriptResponse 
 
 public final class io/github/markusaugust/streamlord/core/domain/SignalNames {
 	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/domain/SignalNames;
+	public final fun hyphenProblem (Ljava/lang/String;)Ljava/lang/String;
 	public final fun keyProblem (Ljava/lang/String;Z)Ljava/lang/String;
 	public final fun nest (Ljava/lang/Iterable;Lkotlin/jvm/functions/Function2;)Ljava/util/Map;
 	public static synthetic fun nest$default (Lio/github/markusaugust/streamlord/core/domain/SignalNames;Ljava/lang/Iterable;Lkotlin/jvm/functions/Function2;ILjava/lang/Object;)Ljava/util/Map;
 	public final fun pathProblem (Ljava/lang/String;)Ljava/lang/String;
+	public final fun referenceAsSubtraction (Ljava/lang/String;)Ljava/lang/String;
+	public final fun withoutHyphens (Ljava/lang/String;)Ljava/lang/String;
+	public final fun withoutReferenceHyphens (Ljava/lang/String;)Ljava/lang/String;
 }
 
 public final class io/github/markusaugust/streamlord/core/domain/SignalsResponse : io/github/markusaugust/streamlord/core/domain/DatastarResponse {
@@ -606,6 +611,10 @@ public final class io/github/markusaugust/streamlord/core/port/driven/IncomingRe
 public abstract interface class io/github/markusaugust/streamlord/core/port/driven/SignalsCodec {
 	public abstract fun decode (Ljava/lang/String;Lkotlin/reflect/KType;)Ljava/lang/Object;
 	public abstract fun encode (Ljava/lang/Object;Lkotlin/reflect/KType;)Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/port/driven/SignalsCodecKt {
+	public static final fun toJsonValue (Lio/github/markusaugust/streamlord/core/port/driven/SignalsCodec;Ljava/lang/Object;Lkotlin/reflect/KType;)Lio/github/markusaugust/streamlord/core/json/JsonValue;
 }
 
 public abstract interface class io/github/markusaugust/streamlord/core/port/driven/SseSink {

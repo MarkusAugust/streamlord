@@ -7,11 +7,13 @@ package io.github.markusaugust.streamlord.analysis
 
 public enum class SourceLanguage { KOTLIN, HTML }
 
-// A kebab-case name is written as a kebab-case key, which Datastar reads as camelCase: signal("foo-bar") is $fooBar.
+// A helper names a signal as it is written: set("fooBar", 1) is $fooBar. A name with a hyphen is
+// refused at runtime (signalNameHyphenIssues) and collected as written. set, setExpr and toggle
+// assign the signal, which creates it.
 private val KOTLIN_PATTERNS =
     listOf(
         Regex(
-            """\b(?:signal|set|setExpr|increment|decrement|toggle|not|dataBind|dataIndicator|dataRef|dataComputed|dataMatchMedia)\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"""",
+            """\b(?:set|setExpr|toggle|dataBind|dataIndicator|dataRef|dataComputed|dataMatchMedia)\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"""",
         ),
         Regex("""\bdataSignals\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"\s*,"""),
     )
@@ -22,6 +24,9 @@ private val KOTLIN_READS =
         Regex("""\$\{'\$'\}([A-Za-z_][A-Za-z0-9_.]*)"""),
         Regex("""\\\$([A-Za-z_][A-Za-z0-9_.]*)"""),
     )
+
+/** A helper that reads a signal by name: `signal("count")` is `$count`, which completion offers and a definition is not. */
+private val HELPER_READS = Regex("""\b(?:${HELPER_READ_CALLS.joinToString("|")})\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"""")
 
 /*
  * Declarations in markup, read as the client stores them. These also run over Kotlin, where they
@@ -55,8 +60,114 @@ private val PAIR_CALLS = setOf("dataSignals", "patchSignals", "removeSignals", "
 private val JSON_CALLS = setOf("patchSignals", "respondSignals", "datastarSignals")
 private val JSON_OBJECT = Regex("""^\s*\{""")
 
-private val PAIR = Regex(""""([A-Za-z_][A-Za-z0-9_.-]*)"\s+to\b""")
+/**
+ * `toJsonValue(...)` handed to `dataSignals`: the page declares what the codec makes of the value.
+ * The class is named by `toJsonValue<Form>(...)`, by a constructor call, `toJsonValue(Form(...))`,
+ * or by a variable whose type the file writes down, `toJsonValue(form)` with `form: Form`.
+ */
+private val TO_JSON =
+    Regex(
+        """\btoJsonValue\s*(?:<\s*([A-Za-z_][A-Za-z0-9_.]*)\s*>)?\s*\(\s*(?:(?:[a-z_][A-Za-z0-9_]*\.)*([A-Z][A-Za-z0-9_]*)\s*(?:<[^()]*>)?\s*\(|([a-z_][A-Za-z0-9_]*)\s*\))?""",
+    )
+
+/** A pair whose key is not a literal, `key to value`: the fields under it are no top-level signals. */
+private val ANY_PAIR = Regex("""^[^(]*?\bto\s""")
+private val IDENTIFIER_ARG = Regex("""^\s*([a-z_][A-Za-z0-9_]*)\s*$""")
+private val BOOLEAN_ARG = Regex("""^\s*(?:true|false)\s*$""")
+
+/** Types that say nothing about the names in them. */
+private val UNNAMED_TYPES = setOf("JsonValue", "JsonObject", "Any", "Map", "MutableMap", "HashMap", "LinkedHashMap")
+
+/** Types that encode to no object, so a page declares nothing from them. */
+private val VALUE_TYPES =
+    setOf("String", "Int", "Long", "Short", "Byte", "Double", "Float", "Boolean", "Char", "List", "MutableList", "Set", "Array", "Pair")
+
+/**
+ * The classes whose encoded fields `dataSignals(codec.toJsonValue(...))` declares in [src], by
+ * simple name, and [ANY_SIGNAL] for a value whose class the file does not name: `toJsonValue`
+ * of something else, or a variable typed `JsonValue` or `JsonObject`. Any other argument, a string
+ * or a pair held in a variable, declares nothing here.
+ */
+internal fun encodedSignalTypes(src: String): Set<String> {
+    val out = LinkedHashSet<String>()
+    for (site in findCallSites(src, setOf("dataSignals"))) {
+        val positional = site.positional
+        // dataSignals(value) or dataSignals(value, true), the second being ifMissing.
+        val a =
+            positional.firstOrNull()?.takeIf { positional.size == 1 || (positional.size == 2 && BOOLEAN_ARG.matches(positional[1].text)) }
+                ?: site.named("signals")
+                ?: continue
+        if (a.string != null || PAIR.containsMatchIn(a.text) || ANY_PAIR.containsMatchIn(a.text)) continue
+        encodedType(a.text, src.substring(0, site.nameStart), depth = 0)?.let { out += it }
+    }
+    return out
+}
+
+/** What [text] declares, read with the source [before] it, or null when it is no JSON value. */
+private fun encodedType(
+    text: String,
+    before: String,
+    depth: Int,
+): String? {
+    TO_JSON.find(text)?.let { m ->
+        m.groups[1]?.let { return named(it.value.substringAfterLast('.')) }
+        m.groups[2]?.let { return it.value }
+        m.groups[3]?.let { id ->
+            val type = variableType(id.value, before) ?: return ANY_SIGNAL
+            return if (type in VALUE_TYPES) null else named(type)
+        }
+        return ANY_SIGNAL
+    }
+    // dataSignals(signals), with `val signals = codec.toJsonValue(Form())` or `signals: JsonObject` before it.
+    val id = IDENTIFIER_ARG.find(text)?.groupValues?.get(1) ?: return null
+    if (depth > 0) return null
+    val name = Regex.escape(id)
+    val init =
+        Regex("""\b(?:val|var)\s+$name\s*(?::[^=\n]*)?=\s*([^\n;]+)""")
+            .findAll(before)
+            .lastOrNull()
+            ?.groupValues
+            ?.get(1)
+    if (init != null && TO_JSON.containsMatchIn(init)) return encodedType(init, before, depth + 1)
+    return variableType(id, before)?.takeIf { it in setOf("JsonValue", "JsonObject") }?.let { ANY_SIGNAL }
+}
+
+/** The class a variable is last declared with in [before], `form: Form` or `val form = Form(...)`. */
+private fun variableType(
+    id: String,
+    before: String,
+): String? {
+    val name = Regex.escape(id)
+    val typed = Regex("""\b$name\s*:\s*([A-Z][A-Za-z0-9_]*)""").findAll(before).lastOrNull()
+    val built = Regex("""\b(?:val|var)\s+$name\s*=\s*(?:[a-z_][A-Za-z0-9_]*\.)*([A-Z][A-Za-z0-9_]*)\s*\(""").findAll(before).lastOrNull()
+    return listOfNotNull(typed, built).maxByOrNull { it.range.first }?.groupValues?.get(1)
+}
+
+private fun named(type: String): String = if (type in UNNAMED_TYPES) ANY_SIGNAL else type
+
+/**
+ * What the definitions say about a class, written with a `:`, which no signal name holds: a class
+ * a page is declared from, and a `@Serializable` class whose properties are defined. A class in the
+ * first and not the second is one only its codec can name (see [isKnownSignal]).
+ */
+internal const val ENCODED_CLASS: String = "toJsonValue:"
+internal const val READABLE_CLASS: String = "class:"
+
+/** The argument as one pair, in parentheses or not; a `"k" to` further in is a key inside the value. */
+private val PAIR = Regex("""^[\s(]*"([A-Za-z_][A-Za-z0-9_.-]*)"\s+to\b""")
 private val NAME = Regex("""^"([A-Za-z_][A-Za-z0-9_.-]*)"$""")
+
+/** A map handed over as the signals, `patchSignals(mapOf("count" to 0))`: its own pairs are the keys. */
+private val MAP_CALLS = setOf("mapOf", "mutableMapOf", "hashMapOf", "linkedMapOf")
+private val MAP_CALL = Regex("""^\s*(?:mutable|hash|linked)?[mM]apOf\s*\(""")
+
+/** The literal keys of an argument that is a pair, or a map of pairs; nothing inside a value. */
+private fun argumentKeys(text: String): List<String> {
+    PAIR.find(text)?.let { return listOf(it.groupValues[1]) }
+    if (!MAP_CALL.containsMatchIn(text)) return emptyList()
+    val map = findCallSites(text, MAP_CALLS).firstOrNull() ?: return emptyList()
+    return map.positional.mapNotNull { PAIR.find(it.text)?.groupValues?.get(1) }
+}
 
 public fun collectSignals(
     src: String,
@@ -88,6 +199,10 @@ public fun collectDeclaredSignals(
  * [collectDeclaredSignals] finds without the reads (a bare `$name` in markup, a `${'$'}name` in
  * Kotlin), plus the properties of `@Serializable` classes, which a handler patches as well as
  * reads, and every signal an expression assigns to.
+ *
+ * Two kinds of entry are no signal names, and hold a `:` so that none is mistaken for one:
+ * `class:Form` for a `@Serializable` class whose properties are here, and `toJsonValue:Form` for a
+ * class a page is declared from. [isKnownSignal] reads them together.
  */
 public fun collectSignalDefinitions(
     src: String,
@@ -95,7 +210,13 @@ public fun collectSignalDefinitions(
 ): Set<String> {
     val out = LinkedHashSet(collect(src, language, reads = false))
     if (language == SourceLanguage.KOTLIN) {
-        for (properties in serializableProperties(src).values) for (property in properties) out += property.name
+        for ((type, properties) in serializableProperties(src)) {
+            out += READABLE_CLASS + type
+            for (property in properties) out += property.name
+        }
+        // A page declared from a class defines what its codec writes: the properties above for a
+        // @Serializable one, any name for one the analysis cannot read, or for a value of no named class.
+        for (type in encodedSignalTypes(src)) out += if (type == ANY_SIGNAL) ANY_SIGNAL else ENCODED_CLASS + type
     }
     for (m in ASSIGNED_SIGNAL.findAll(src)) out += m.groupValues[1]
     out.removeAll { PLACEHOLDER in it }
@@ -112,8 +233,7 @@ private fun collect(
         for (site in findCallSites(src, PAIR_CALLS)) {
             val positional = site.positional
             positional.forEachIndexed { idx, a ->
-                // dataSignals("foo-bar" to 1) declares $fooBar, as the keyed form does; a patch keeps the key.
-                for (pair in PAIR.findAll(a.text)) out += pair.groupValues[1].let { if (site.name == "dataSignals") toCamel(it) else it }
+                for (key in argumentKeys(a.text)) out += key
                 // patchSignals("""{"count": 1}"""): the signals as JSON text.
                 if (site.name in JSON_CALLS) {
                     a.string?.text?.takeIf { JSON_OBJECT.containsMatchIn(it) }?.let { json ->
@@ -121,13 +241,14 @@ private fun collect(
                     }
                 }
                 val name = NAME.find(a.text)?.groupValues?.get(1) ?: return@forEachIndexed
-                // removeSignals("a", "b") names keys as they are; dataSignals("name", "expression") writes a key Datastar camel-cases.
+                // removeSignals("a", "b"), and dataSignals("name", "expression"), whose key the client reads back as the name.
                 if (site.name == "removeSignals") out += name
-                if (site.name == "dataSignals" && idx == 0 && positional.getOrNull(1)?.string != null) out += toCamel(name)
+                if (site.name == "dataSignals" && idx == 0 && positional.getOrNull(1)?.string != null) out += name
             }
         }
-        for (re in KOTLIN_PATTERNS) for (m in re.findAll(src)) out += toCamel(m.groupValues[1])
+        for (re in KOTLIN_PATTERNS) for (m in re.findAll(src)) out += m.groupValues[1]
         if (reads) for (re in KOTLIN_READS) for (m in re.findAll(src)) out += m.groupValues[1]
+        if (reads) for (m in HELPER_READS.findAll(src)) out += m.groupValues[1]
     }
     // A keyed attribute may carry modifiers after the key: data-signals:foo-bar__ifmissing, and
     // `__case` names the signal: data-signals:my-value__case.snake is `$my_value`.
@@ -135,7 +256,7 @@ private fun collect(
     for (m in VALUE_ATTRIBUTE.findAll(src)) out += m.groups[1]?.value ?: m.groupValues[2]
     for (m in OBJECT_ATTRIBUTE.findAll(src)) out += objectKeyPaths(m.groups[1]?.value ?: m.groupValues[2])
     if (reads && language == SourceLanguage.HTML) {
-        for (m in BARE_SIGNAL.findAll(src)) out += toCamel(m.groupValues[1])
+        for (m in BARE_SIGNAL.findAll(src)) out += m.groupValues[1]
     }
     // The placeholder the analysis writes for a Kotlin template is never a signal, whatever file it turns up in.
     out.removeAll { PLACEHOLDER in it }
@@ -166,9 +287,11 @@ internal val PROTOTYPE_NAMES =
  * or null when it can. The client follows the path without a guard, so a part every object already
  * has, with more of the path under it, writes into the built-in one: `__proto__.x` and
  * `constructor.prototype.x` set `x` on every object of the page. The last part is held as a key of
- * its own (`data-signals:constructor="1"` is `$constructor`) unless [objectUnder] says an
- * object goes under it; `__proto__` is never held. `SignalNames.pathProblem` in streamlord-core is
- * stricter, since a name written in code may carry an object under it at any part.
+ * its own (`data-signals:constructor="1"` is `$constructor`), and so is an object under it when
+ * [objectUnder] says one goes there, but the next request's `filtered()` writes that object into
+ * the built-in one and sends the page's signals without it; `__proto__` is never held.
+ * `SignalNames.pathProblem` in streamlord-core is stricter, since a name written in code may carry
+ * an object under it at any part.
  */
 internal fun signalPathProblem(
     path: String,
@@ -179,8 +302,13 @@ internal fun signalPathProblem(
     return parts
         .withIndex()
         .firstOrNull { (i, p) -> p == "__proto__" || (p in PROTOTYPE_NAMES && (i < parts.lastIndex || objectUnder)) }
-        ?.let {
-            "has the part ${it.value}, which every object already has, so the client writes into the built-in one instead of holding a signal"
+        ?.let { (i, p) ->
+            if (p != "__proto__" && i == parts.lastIndex) {
+                "has the part $p, which every object already has: the client holds the signal, but the next request " +
+                    "writes the object under it into the built-in one and sends the page's signals without it"
+            } else {
+                "has the part $p, which every object already has, so the client writes into the built-in one instead of holding a signal"
+            }
         }
 }
 

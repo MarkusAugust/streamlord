@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.json.jackson2
 
+import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.annotation.JsonSetter
 import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
@@ -13,6 +14,7 @@ import io.github.markusaugust.streamlord.core.SignalsCodecException
 import io.github.markusaugust.streamlord.core.SignalsDecodeException
 import io.github.markusaugust.streamlord.core.port.driven.decode
 import io.github.markusaugust.streamlord.core.port.driven.encode
+import io.github.markusaugust.streamlord.core.port.driven.toJsonValue
 import java.io.File
 import java.net.URLClassLoader
 import kotlin.reflect.KType
@@ -29,6 +31,19 @@ class Jackson2SignalsCodecTest {
     )
 
     private val codec = Jackson2SignalsCodec.default()
+
+    data class Form(
+        val email: String = "",
+        @param:JsonProperty("first-name") @get:JsonProperty("first-name") val firstName: String = "",
+    )
+
+    // A page declares the names the handler's readSignals<Form>() reads.
+    @Test
+    fun `toJsonValue names the fields as decode reads them`() {
+        val json = codec.toJsonValue(Form(email = "a@b"))
+        assertEquals("""{"email":"a@b","first-name":""}""", json.toJson())
+        assertEquals(Form(email = "a@b"), codec.decode<Form>(json.toJson()))
+    }
 
     @Test
     fun `encodes with nulls`() {

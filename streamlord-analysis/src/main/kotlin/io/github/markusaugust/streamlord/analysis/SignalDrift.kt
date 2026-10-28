@@ -37,12 +37,15 @@ public data class SignalProperty(
  * @property signalTypes Types the file reads signals into, by their simple name.
  * @property classes The `@Serializable` classes the file declares, by simple name.
  * @property lookups Names read by a `Signals` accessor, such as `signals.string("query")`.
+ * @property encodedTypes Classes a page declares its signals from, `dataSignals(codec.toJsonValue(Form()))`,
+ *   by simple name, with `*` for a value whose class the file does not name.
  */
 public data class SignalFacts(
     val declared: Set<String>,
     val signalTypes: Set<String>,
     val classes: Map<String, List<SignalProperty>>,
     val lookups: List<SignalRead>,
+    val encodedTypes: Set<String> = emptySet(),
 )
 
 private val SIGNAL_TYPE_PARAMETER = Regex("""\breadSignals\s*<\s*([A-Za-z_][A-Za-z0-9_]*)\s*>""")
@@ -108,7 +111,7 @@ public fun collectSignalFacts(
         lookups += SignalRead(first.text, first.contentStart, first.contentEnd)
     }
 
-    return SignalFacts(collectDeclaredSignals(src, language), types, serializableProperties(src), lookups)
+    return SignalFacts(collectDeclaredSignals(src, language), types, serializableProperties(src), lookups, encodedSignalTypes(src))
 }
 
 /** Whether the accessor whose name starts at [nameStart] is called on something that holds signals. */
@@ -192,11 +195,15 @@ private fun matchingParen(
  * @property issues Findings by file, empty when nothing drifted.
  * @property declared Every signal name the files declare, from markup and from the DSL.
  * @property read Every signal name the files read, through a signals class or a lookup.
+ * @property declaredByCodec What a page is declared from, `dataSignals(codec.toJsonValue(...))`,
+ *   whose names only the codec knows: a class that is not `@Serializable`, or `*` for a value of no
+ *   named class. While it is not empty every read counts as declared, and [issues] stays empty.
  */
 public data class SignalDriftReport(
     val issues: Map<String, List<Issue>>,
     val declared: Set<String>,
     val read: Set<String>,
+    val declaredByCodec: Set<String> = emptySet(),
 )
 
 /**
@@ -215,6 +222,14 @@ public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
     val signalTypes = facts.values.flatMapTo(LinkedHashSet()) { it.signalTypes }
     val read = LinkedHashSet<String>()
 
+    // A page that declares its signals from an encoded class declares that class's properties. A
+    // class this check cannot read, a Jackson one or none named, may declare any name.
+    val classes = facts.values.flatMap { it.classes.entries }.associate { it.key to it.value }
+    val encoded = facts.values.flatMapTo(LinkedHashSet()) { it.encodedTypes }
+    for (type in encoded) classes[type]?.forEach { declared += it.name }
+    val byCodec = encoded.filterTo(LinkedHashSet()) { it !in classes }
+    val anyDeclared = byCodec.isNotEmpty()
+
     val out = LinkedHashMap<String, List<Issue>>()
     for ((file, one) in facts) {
         val issues = ArrayList<Issue>()
@@ -223,7 +238,7 @@ public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
             if (type !in signalTypes) continue
             for (property in properties) {
                 read += property.name
-                if (property.name in declared) continue
+                if (property.name in declared || anyDeclared) continue
                 issues +=
                     Issue(
                         start = property.start,
@@ -240,7 +255,7 @@ public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
 
         for (lookup in one.lookups) {
             read += lookup.name
-            if (lookup.name in declared) continue
+            if (lookup.name in declared || anyDeclared) continue
             issues +=
                 Issue(
                     start = lookup.start,
@@ -256,5 +271,5 @@ public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
 
         if (issues.isNotEmpty()) out[file] = issues
     }
-    return SignalDriftReport(out, declared, read)
+    return SignalDriftReport(out, declared, read, byCodec)
 }

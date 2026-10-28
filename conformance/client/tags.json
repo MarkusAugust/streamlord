@@ -1,0 +1,866 @@
+{
+  "$comment": "tagToMs, tagHas and tagFirst from utils/tags.ts of the Datastar 1.0.4 client over each tag set, and modifyTiming from utils/timing.ts over the modifiers of data-on:click as parseAttributeKey reads them: the wrapped callback is called with a and b, then each timer the client set is fired in order, with setTimeout and clearTimeout replaced to record. A NaN, which JSON cannot hold, is written as null in tagToMs and as NaNms in a trace.",
+  "cases": {
+    "tags": [
+      {
+        "tags": [
+          "500ms"
+        ],
+        "tagToMs": 500,
+        "tagHas": {
+          "leading": false,
+          "Leading": false,
+          "LEADING": false,
+          "noleading": false,
+          "trailing": false,
+          "notrailing": false,
+          "500ms": true
+        },
+        "tagFirst": "500ms",
+        "tagFirstDefault": "500ms"
+      },
+      {
+        "tags": [
+          "1s"
+        ],
+        "tagToMs": 1000,
+        "tagHas": {
+          "leading": false,
+          "Leading": false,
+          "LEADING": false,
+          "noleading": false,
+          "trailing": false,
+          "notrailing": false,
+          "500ms": false
+        },
+        "tagFirst": "1s",
+        "tagFirstDefault": "1s"
+      },
+      {
+        "tags": [
+          "1.5s"
+        ],
+        "tagToMs": 1500,
+        "tagHas": {
+          "leading": false,
+          "Leading": false,
+          "LEADING": false,
+          "noleading": false,
+          "trailing": false,
+          "notrailing": false,
+          "500ms": false
+        },
+        "tagFirst": "1.5s",
+        "tagFirstDefault": "1.5s"
+      },
+      {
+        "tags": [
+          "1.5ms"
+        ],
+        "tagToMs": 1.5,
+        "tagHas": {
+          "leading": false,
+          "Leading": false,
+          "LEADING": false,
+          "noleading": false,
+          "trailing": false,
+          "notrailing": false,
+          "500ms": false
+        },
+        "tagFirst": "1.5ms",
+        "tagFirstDefault": "1.5ms"
+      },
+      {
+        "tags": [
+          "leading",
+          "500ms"
+        ],
+        "tagToMs": null,
+        "tagHas": {
+          "leading": true,
+          "Leading": true,
+          "LEADING": true,
+          "noleading": false,
+          "trailing": false,
+          "notrailing": false,
+          "500ms": true
+        },
+        "tagFirst": "leading",
+        "tagFirstDefault": "leading"
+      },
+      {
+        "tags": [
+          "500ms",
+          "leading"
+        ],
+        "tagToMs": 500,
+        "tagHas": {
+          "leading": true,
+          "Leading": true,
+          "LEADING": true,
+          "noleading": false,
+          "trailing": false,
+          "notrailing": false,
+          "500ms": true
+        },
+        "tagFirst": "500ms",
+        "tagFirstDefault": "500ms"
+      },
+      {
+        "tags": [
+          "500"
+        ],
+        "tagToMs": 500,
+        "tagHas": {
+          "leading": false,
+          "Leading": false,
+          "LEADING": false,
+          "noleading": false,
+          "trailing": false,
+          "notrailing": false,
+          "500ms": false
+        },
+        "tagFirst": "500",
+        "tagFirstDefault": "500"
+      },
+      {
+        "tags": [],
+        "tagToMs": 0,
+        "tagHas": {
+          "leading": false,
+          "Leading": false,
+          "LEADING": false,
+          "noleading": false,
+          "trailing": false,
+          "notrailing": false,
+          "500ms": false
+        },
+        "tagFirst": "",
+        "tagFirstDefault": "x"
+      },
+      {
+        "tags": [
+          "0ms"
+        ],
+        "tagToMs": 0,
+        "tagHas": {
+          "leading": false,
+          "Leading": false,
+          "LEADING": false,
+          "noleading": false,
+          "trailing": false,
+          "notrailing": false,
+          "500ms": false
+        },
+        "tagFirst": "0ms",
+        "tagFirstDefault": "0ms"
+      },
+      {
+        "tags": [
+          "0"
+        ],
+        "tagToMs": 0,
+        "tagHas": {
+          "leading": false,
+          "Leading": false,
+          "LEADING": false,
+          "noleading": false,
+          "trailing": false,
+          "notrailing": false,
+          "500ms": false
+        },
+        "tagFirst": "0",
+        "tagFirstDefault": "0"
+      },
+      {
+        "tags": [
+          "ms"
+        ],
+        "tagToMs": 0,
+        "tagHas": {
+          "leading": false,
+          "Leading": false,
+          "LEADING": false,
+          "noleading": false,
+          "trailing": false,
+          "notrailing": false,
+          "500ms": false
+        },
+        "tagFirst": "ms",
+        "tagFirstDefault": "ms"
+      },
+      {
+        "tags": [
+          "s"
+        ],
+        "tagToMs": 0,
+        "tagHas": {
+          "leading": false,
+          "Leading": false,
+          "LEADING": false,
+          "noleading": false,
+          "trailing": false,
+          "notrailing": false,
+          "500ms": false
+        },
+        "tagFirst": "s",
+        "tagFirstDefault": "s"
+      },
+      {
+        "tags": [
+          "1S"
+        ],
+        "tagToMs": 1,
+        "tagHas": {
+          "leading": false,
+          "Leading": false,
+          "LEADING": false,
+          "noleading": false,
+          "trailing": false,
+          "notrailing": false,
+          "500ms": false
+        },
+        "tagFirst": "1S",
+        "tagFirstDefault": "1S"
+      },
+      {
+        "tags": [
+          "1MS"
+        ],
+        "tagToMs": 1,
+        "tagHas": {
+          "leading": false,
+          "Leading": false,
+          "LEADING": false,
+          "noleading": false,
+          "trailing": false,
+          "notrailing": false,
+          "500ms": false
+        },
+        "tagFirst": "1MS",
+        "tagFirstDefault": "1MS"
+      },
+      {
+        "tags": [
+          "-1s"
+        ],
+        "tagToMs": -1000,
+        "tagHas": {
+          "leading": false,
+          "Leading": false,
+          "LEADING": false,
+          "noleading": false,
+          "trailing": false,
+          "notrailing": false,
+          "500ms": false
+        },
+        "tagFirst": "-1s",
+        "tagFirstDefault": "-1s"
+      },
+      {
+        "tags": [
+          "1e3ms"
+        ],
+        "tagToMs": 1000,
+        "tagHas": {
+          "leading": false,
+          "Leading": false,
+          "LEADING": false,
+          "noleading": false,
+          "trailing": false,
+          "notrailing": false,
+          "500ms": false
+        },
+        "tagFirst": "1e3ms",
+        "tagFirstDefault": "1e3ms"
+      },
+      {
+        "tags": [
+          "0x10"
+        ],
+        "tagToMs": 0,
+        "tagHas": {
+          "leading": false,
+          "Leading": false,
+          "LEADING": false,
+          "noleading": false,
+          "trailing": false,
+          "notrailing": false,
+          "500ms": false
+        },
+        "tagFirst": "0x10",
+        "tagFirstDefault": "0x10"
+      },
+      {
+        "tags": [
+          "1",
+          "5s"
+        ],
+        "tagToMs": 1,
+        "tagHas": {
+          "leading": false,
+          "Leading": false,
+          "LEADING": false,
+          "noleading": false,
+          "trailing": false,
+          "notrailing": false,
+          "500ms": false
+        },
+        "tagFirst": "1",
+        "tagFirstDefault": "1"
+      },
+      {
+        "tags": [
+          "abc"
+        ],
+        "tagToMs": null,
+        "tagHas": {
+          "leading": false,
+          "Leading": false,
+          "LEADING": false,
+          "noleading": false,
+          "trailing": false,
+          "notrailing": false,
+          "500ms": false
+        },
+        "tagFirst": "abc",
+        "tagFirstDefault": "abc"
+      },
+      {
+        "tags": [
+          "Leading"
+        ],
+        "tagToMs": null,
+        "tagHas": {
+          "leading": false,
+          "Leading": false,
+          "LEADING": false,
+          "noleading": false,
+          "trailing": false,
+          "notrailing": false,
+          "500ms": false
+        },
+        "tagFirst": "Leading",
+        "tagFirstDefault": "Leading"
+      },
+      {
+        "tags": [
+          "noleading"
+        ],
+        "tagToMs": null,
+        "tagHas": {
+          "leading": false,
+          "Leading": false,
+          "LEADING": false,
+          "noleading": true,
+          "trailing": false,
+          "notrailing": false,
+          "500ms": false
+        },
+        "tagFirst": "noleading",
+        "tagFirstDefault": "noleading"
+      },
+      {
+        "tags": [
+          "notrailing",
+          "1s"
+        ],
+        "tagToMs": null,
+        "tagHas": {
+          "leading": false,
+          "Leading": false,
+          "LEADING": false,
+          "noleading": false,
+          "trailing": false,
+          "notrailing": true,
+          "500ms": false
+        },
+        "tagFirst": "notrailing",
+        "tagFirstDefault": "notrailing"
+      },
+      {
+        "tags": [
+          "1.5"
+        ],
+        "tagToMs": 1.5,
+        "tagHas": {
+          "leading": false,
+          "Leading": false,
+          "LEADING": false,
+          "noleading": false,
+          "trailing": false,
+          "notrailing": false,
+          "500ms": false
+        },
+        "tagFirst": "1.5",
+        "tagFirstDefault": "1.5"
+      },
+      {
+        "tags": [
+          ".5s"
+        ],
+        "tagToMs": 500,
+        "tagHas": {
+          "leading": false,
+          "Leading": false,
+          "LEADING": false,
+          "noleading": false,
+          "trailing": false,
+          "notrailing": false,
+          "500ms": false
+        },
+        "tagFirst": ".5s",
+        "tagFirstDefault": ".5s"
+      },
+      {
+        "tags": [
+          "5.s"
+        ],
+        "tagToMs": 5000,
+        "tagHas": {
+          "leading": false,
+          "Leading": false,
+          "LEADING": false,
+          "noleading": false,
+          "trailing": false,
+          "notrailing": false,
+          "500ms": false
+        },
+        "tagFirst": "5.s",
+        "tagFirstDefault": "5.s"
+      },
+      {
+        "tags": [
+          "1_000ms"
+        ],
+        "tagToMs": null,
+        "tagHas": {
+          "leading": false,
+          "Leading": false,
+          "LEADING": false,
+          "noleading": false,
+          "trailing": false,
+          "notrailing": false,
+          "500ms": false
+        },
+        "tagFirst": "1_000ms",
+        "tagFirstDefault": "1_000ms"
+      },
+      {
+        "tags": [
+          "Infinity"
+        ],
+        "tagToMs": null,
+        "tagHas": {
+          "leading": false,
+          "Leading": false,
+          "LEADING": false,
+          "noleading": false,
+          "trailing": false,
+          "notrailing": false,
+          "500ms": false
+        },
+        "tagFirst": "Infinity",
+        "tagFirstDefault": "Infinity"
+      },
+      {
+        "tags": [
+          "1 s"
+        ],
+        "tagToMs": 1000,
+        "tagHas": {
+          "leading": false,
+          "Leading": false,
+          "LEADING": false,
+          "noleading": false,
+          "trailing": false,
+          "notrailing": false,
+          "500ms": false
+        },
+        "tagFirst": "1 s",
+        "tagFirstDefault": "1 s"
+      },
+      {
+        "tags": [
+          "1ms "
+        ],
+        "tagToMs": 1,
+        "tagHas": {
+          "leading": false,
+          "Leading": false,
+          "LEADING": false,
+          "noleading": false,
+          "trailing": false,
+          "notrailing": false,
+          "500ms": false
+        },
+        "tagFirst": "1ms ",
+        "tagFirstDefault": "1ms "
+      },
+      {
+        "tags": [
+          " 1ms"
+        ],
+        "tagToMs": 1,
+        "tagHas": {
+          "leading": false,
+          "Leading": false,
+          "LEADING": false,
+          "noleading": false,
+          "trailing": false,
+          "notrailing": false,
+          "500ms": false
+        },
+        "tagFirst": " 1ms",
+        "tagFirstDefault": " 1ms"
+      }
+    ],
+    "timing": [
+      {
+        "modifiers": "debounce.500ms",
+        "wrappers": [
+          "debounce"
+        ],
+        "trace": [
+          "call a",
+          "timer 1 set 500ms",
+          "call b",
+          "timer 1 cleared",
+          "timer 2 set 500ms",
+          "fire 2",
+          "callback b"
+        ]
+      },
+      {
+        "modifiers": "debounce.500ms.leading",
+        "wrappers": [
+          "debounce"
+        ],
+        "trace": [
+          "call a",
+          "callback a",
+          "timer 1 set 500ms",
+          "call b",
+          "timer 1 cleared",
+          "timer 2 set 500ms",
+          "fire 2",
+          "callback b"
+        ]
+      },
+      {
+        "modifiers": "debounce.500ms.notrailing",
+        "wrappers": [
+          "debounce"
+        ],
+        "trace": [
+          "call a",
+          "timer 1 set 500ms",
+          "call b",
+          "timer 1 cleared",
+          "timer 2 set 500ms",
+          "fire 2"
+        ]
+      },
+      {
+        "modifiers": "debounce.500ms.leading.notrailing",
+        "wrappers": [
+          "debounce"
+        ],
+        "trace": [
+          "call a",
+          "callback a",
+          "timer 1 set 500ms",
+          "call b",
+          "timer 1 cleared",
+          "timer 2 set 500ms",
+          "fire 2"
+        ]
+      },
+      {
+        "modifiers": "throttle.1s",
+        "wrappers": [
+          "throttle"
+        ],
+        "trace": [
+          "call a",
+          "callback a",
+          "timer 1 set 1000ms",
+          "call b",
+          "fire 1"
+        ]
+      },
+      {
+        "modifiers": "throttle.1s.noleading",
+        "wrappers": [
+          "throttle"
+        ],
+        "trace": [
+          "call a",
+          "timer 1 set 1000ms",
+          "call b",
+          "fire 1"
+        ]
+      },
+      {
+        "modifiers": "throttle.1s.trailing",
+        "wrappers": [
+          "throttle"
+        ],
+        "trace": [
+          "call a",
+          "callback a",
+          "timer 1 set 1000ms",
+          "call b",
+          "fire 1",
+          "callback b"
+        ]
+      },
+      {
+        "modifiers": "throttle.1s.noleading.trailing",
+        "wrappers": [
+          "throttle"
+        ],
+        "trace": [
+          "call a",
+          "timer 1 set 1000ms",
+          "call b",
+          "fire 1",
+          "callback b"
+        ]
+      },
+      {
+        "modifiers": "delay.200ms",
+        "wrappers": [
+          "delay"
+        ],
+        "trace": [
+          "call a",
+          "timer 1 set 200ms",
+          "call b",
+          "timer 2 set 200ms",
+          "fire 1",
+          "callback a",
+          "fire 2",
+          "callback b"
+        ]
+      },
+      {
+        "modifiers": "delay.200ms__debounce.500ms",
+        "wrappers": [
+          "delay",
+          "debounce"
+        ],
+        "trace": [
+          "call a",
+          "timer 1 set 500ms",
+          "call b",
+          "timer 1 cleared",
+          "timer 2 set 500ms",
+          "fire 2",
+          "timer 3 set 200ms",
+          "fire 3",
+          "callback b"
+        ]
+      },
+      {
+        "modifiers": "debounce.500ms__throttle.1s",
+        "wrappers": [
+          "debounce",
+          "throttle"
+        ],
+        "trace": [
+          "call a",
+          "timer 1 set 500ms",
+          "timer 2 set 1000ms",
+          "call b",
+          "fire 1",
+          "callback a",
+          "fire 2"
+        ]
+      },
+      {
+        "modifiers": "delay.200ms__debounce.500ms__throttle.1s",
+        "wrappers": [
+          "delay",
+          "debounce",
+          "throttle"
+        ],
+        "trace": [
+          "call a",
+          "timer 1 set 500ms",
+          "timer 2 set 1000ms",
+          "call b",
+          "fire 1",
+          "timer 3 set 200ms",
+          "fire 2",
+          "fire 3",
+          "callback a"
+        ]
+      },
+      {
+        "modifiers": "debounce.1.5s",
+        "wrappers": [
+          "debounce"
+        ],
+        "trace": [
+          "call a",
+          "timer 1 set 1ms",
+          "call b",
+          "timer 1 cleared",
+          "timer 2 set 1ms",
+          "fire 2",
+          "callback b"
+        ]
+      },
+      {
+        "modifiers": "debounce.leading.500ms",
+        "wrappers": [
+          "debounce"
+        ],
+        "trace": [
+          "call a",
+          "callback a",
+          "timer 1 set NaNms",
+          "call b",
+          "timer 1 cleared",
+          "timer 2 set NaNms",
+          "fire 2",
+          "callback b"
+        ]
+      },
+      {
+        "modifiers": "debounce.500",
+        "wrappers": [
+          "debounce"
+        ],
+        "trace": [
+          "call a",
+          "timer 1 set 500ms",
+          "call b",
+          "timer 1 cleared",
+          "timer 2 set 500ms",
+          "fire 2",
+          "callback b"
+        ]
+      },
+      {
+        "modifiers": "debounce",
+        "wrappers": [
+          "debounce"
+        ],
+        "trace": [
+          "call a",
+          "timer 1 set 0ms",
+          "call b",
+          "timer 1 cleared",
+          "timer 2 set 0ms",
+          "fire 2",
+          "callback b"
+        ]
+      },
+      {
+        "modifiers": "throttle",
+        "wrappers": [
+          "throttle"
+        ],
+        "trace": [
+          "call a",
+          "callback a",
+          "timer 1 set 0ms",
+          "call b",
+          "fire 1"
+        ]
+      },
+      {
+        "modifiers": "delay",
+        "wrappers": [
+          "delay"
+        ],
+        "trace": [
+          "call a",
+          "timer 1 set 0ms",
+          "call b",
+          "timer 2 set 0ms",
+          "fire 1",
+          "callback a",
+          "fire 2",
+          "callback b"
+        ]
+      },
+      {
+        "modifiers": "debounce.0ms",
+        "wrappers": [
+          "debounce"
+        ],
+        "trace": [
+          "call a",
+          "timer 1 set 0ms",
+          "call b",
+          "timer 1 cleared",
+          "timer 2 set 0ms",
+          "fire 2",
+          "callback b"
+        ]
+      },
+      {
+        "modifiers": "debounce.500ms__debounce.1s",
+        "wrappers": [
+          "debounce"
+        ],
+        "trace": [
+          "call a",
+          "timer 1 set 1000ms",
+          "call b",
+          "timer 1 cleared",
+          "timer 2 set 1000ms",
+          "fire 2",
+          "callback b"
+        ]
+      },
+      {
+        "modifiers": "debounce.500ms.LEADING",
+        "wrappers": [
+          "debounce"
+        ],
+        "trace": [
+          "call a",
+          "timer 1 set 500ms",
+          "call b",
+          "timer 1 cleared",
+          "timer 2 set 500ms",
+          "fire 2",
+          "callback b"
+        ]
+      },
+      {
+        "modifiers": "throttle.1s.NoLeading",
+        "wrappers": [
+          "throttle"
+        ],
+        "trace": [
+          "call a",
+          "callback a",
+          "timer 1 set 1000ms",
+          "call b",
+          "fire 1"
+        ]
+      },
+      {
+        "modifiers": "debounce.500ms.leading.leading",
+        "wrappers": [
+          "debounce"
+        ],
+        "trace": [
+          "call a",
+          "callback a",
+          "timer 1 set 500ms",
+          "call b",
+          "timer 1 cleared",
+          "timer 2 set 500ms",
+          "fire 2",
+          "callback b"
+        ]
+      }
+    ]
+  }
+}

@@ -25,6 +25,61 @@ describe("signal references", () => {
     assert.equal(issues[0]?.code, "unknown-signal");
   });
 
+  it("a helper that reads a signal by name reads it, and one that assigns defines it", () => {
+    const src = `import io.github.markusaugust.streamlord.html.*
+
+fun f() = div {
+    dataSignals("count", "0")
+    dataText(signal("cuont"))
+    dataOn("click", increment("count"))
+    dataShow(not("opn"))
+    dataOn("click", toggle("open"))
+    dataOn("click", set("total", 1))
+    dataText(signal("total") + signal("foo-bar") + signal("items[0]") + signal("user.name"))
+}`;
+    const issues = unknown(src);
+    assert.deepEqual(issues.map((i) => src.slice(i.start, i.end)), ["cuont", "opn", "user.name"]);
+    assert.equal(issues[0]?.fixes?.[0]?.text, "count");
+    assert.equal(issues[1]?.fixes?.[0]?.text, "open");
+    assert.ok(collectSignals(src, "kotlin").has("cuont"));
+  });
+
+  it("a helper is read only in a file that uses the DSL, and only without a receiver", () => {
+    const dsl = "import io.github.markusaugust.streamlord.html.*\n";
+    assert.deepEqual(unknown(`fun t() { assertThat(x, not("error")) }`), []);
+    assert.deepEqual(unknown(`${dsl}fun t() { redis.opsForValue().increment("visits"); filter.not("x") }`), []);
+    const hamcrest = "import io.github.markusaugust.streamlord.html.dataText\nimport org.hamcrest.Matchers.not\n";
+    assert.deepEqual(unknown(`${hamcrest}fun t() { assertThat(status, not("error")) }`), []);
+    assert.deepEqual(unknown(`${dsl}import org.hamcrest.Matchers.*\nfun t() { assertThat(status, not("error")) }`), []);
+    assert.deepEqual(unknown(`${dsl}val m = Matchers.\n${" ".repeat(60)}not("zzz")`), []);
+    const named = `${dsl}fun t() = signal(name = "nope")`;
+    assert.deepEqual(unknown(named).map((i) => named.slice(i.start, i.end)), ["nope"]);
+  });
+
+  it("a helper's fix offers only a name it writes as it stands", () => {
+    const src = `import io.github.markusaugust.streamlord.html.*\nval p = """<div data-signals="{'foo-bar': 1}"></div>"""\nval t = signal("fooBar")`;
+    const issues = unknown(src);
+    assert.deepEqual(issues.map((i) => src.slice(i.start, i.end)), ["fooBar"]);
+    assert.equal(issues[0]?.fixes, undefined);
+  });
+
+  it("a page declared from toJsonValue defines what the codec can write", () => {
+    const form = `@Serializable data class Form(val email: String = "")\n`;
+    const reads = `; dataText(signal("emial")) }`;
+    const cases: [string, string[]][] = [
+      ["fun page() = div { dataSignals(codec.toJsonValue(Form()))", ["emial"]],
+      ["fun page(form: Form) = div { dataSignals(codec.toJsonValue(form))", ["emial"]],
+      ["val j = codec.toJsonValue(Form())\nfun page() = div { dataSignals(j)", ["emial"]],
+      ["fun page() = div { dataSignals(codec.toJsonValue(JacksonForm()))", []],
+      ["fun page(form: JsonObject) = div { dataSignals(form)", []],
+      ["fun page() = div { dataSignals(codec.toJsonValue(load()))", []],
+    ];
+    for (const [page, expected] of cases) {
+      const src = `import io.github.markusaugust.streamlord.html.*\n${form}${page}${reads}`;
+      assert.deepEqual(unknown(src).map((i) => src.slice(i.start, i.end)), expected, page);
+    }
+  });
+
   it("a near name is offered as the fix, and the dollar is kept as written", () => {
     const src = `fun f() = """<div data-signals:count="0" data-text="\${'$'}coutn"></div>"""`;
     const [issue] = unknown(src);

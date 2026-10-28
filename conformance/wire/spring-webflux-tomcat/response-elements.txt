@@ -1,0 +1,20 @@
+# Wire transcript: spring-webflux-tomcat, response-elements.
+# Written by SpringWebFluxWireTranscriptTest under ./gradlew :streamlord-spring:updateTranscripts, compared with the live answer on every test run.
+# Normalised: CRLF written as LF; the port as {port}; the values of Date, Server and Keep-Alive as {date}, {server} and {keep-alive};
+# a CSP nonce as {nonce}; a line feed after a body that ends without one. Every other byte is as the client got it.
+# Body: as sent.
+GET /response/elements HTTP/1.1
+Host: 127.0.0.1:{port}
+Accept: text/event-stream, text/html, application/json
+Datastar-Request: true
+
+HTTP/1.1 200 
+datastar-selector: #sky
+datastar-mode: append
+datastar-namespace: svg
+datastar-use-view-transition: true
+Content-Type: text/html;charset=utf-8
+Content-Length: 25
+Date: {date}
+
+<circle id="moon" r="4"/>

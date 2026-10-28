@@ -1,0 +1,18 @@
+[
+{"input":"<!--><b>y</b>","nodes":["#comment","b"],"element":true},
+{"input":"<!---><b>y</b>","nodes":["#comment","b"],"element":true},
+{"input":"<!-- x --!><b>y</b>","nodes":["#comment","b"],"element":true},
+{"input":"<!-- x --><b>y</b>","nodes":["#comment","b"],"element":true},
+{"input":"<!----><b>y</b>","nodes":["#comment","b"],"element":true},
+{"input":"<!-- x ---><b>y</b>","nodes":["#comment","b"],"element":true},
+{"input":"<!-- x -- y --><b>y</b>","nodes":["#comment","b"],"element":true},
+{"input":"<!-- x --!> y","nodes":["#comment","#text"],"element":false},
+{"input":"<!-- <b>y</b> -->","nodes":["#comment"],"element":false},
+{"input":"<!-- <b>y</b>","nodes":["#comment"],"element":false},
+{"input":"<!-->","nodes":["#comment"],"element":false},
+{"input":"<!--","nodes":["#comment"],"element":false},
+{"input":"<!--><!-- <b>y</b>","nodes":["#comment","#comment"],"element":false},
+{"input":"<!-- x --!><!-- <b>y</b> -->","nodes":["#comment","#comment"],"element":false},
+{"input":"a <!-- <b> --> c","nodes":["#text","#comment","#text"],"element":false},
+{"input":"a < b","nodes":["#text"],"element":false}
+]

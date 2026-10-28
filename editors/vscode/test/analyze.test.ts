@@ -136,13 +136,30 @@ describe("markup", () => {
     // An explicit __case does not save a capital in the key: the browser lowercases it first.
     const explicit = analyzeHtml(`<div data-signals:fooBar__case.kebab="1" data-on:widgetLoaded__case.camel="x()"></div>`, opts);
     expect(codes(explicit)).toEqual(["key-case", "key-case"]);
-    expect(explicit.map((i) => i.fixes![0]!.text)).toEqual(["foo-bar", "widget-loaded"]);
-    expect(explicit[0]!.message).toContain("foo-bar__case.kebab");
+    // With __case.kebab no key gives fooBar back, since the browser lowercases it and kebab recases nothing.
+    expect(explicit[0]!.fixes).toEqual(undefined);
+    expect(explicit[0]!.message).toContain("No key with __case.kebab gives fooBar back");
+    expect(explicit[0]!.message).toContain("from foo-bar__case.kebab Datastar reads foo-bar.");
+    expect(explicit[1]!.fixes!.map((f) => f.text)).toEqual(["widget-loaded"]);
     const custom = analyzeHtml(`<div data-style:--myColor="$c"></div>`, opts);
     expect(custom[0]!.message).toContain("sets --mycolor, not --myColor. No form keeps a capital in a custom property: name it in kebab-case, here and in the CSS, as --my-color.");
     expect(custom[0]!.fixes).toEqual([]);
     // The aliased prefix gets the same treatment when configured.
     expect(codes(analyzeHtml(`<div data-star-signals:fooBar="1"></div>`, { prefix: "data-star-", checkHtmlAttributes: true }))).toEqual(["key-case"]);
+  });
+
+  // A signal name with a hyphen is the hyphen check's, and an event that mixes capitals and a hyphen has no key.
+  it("hints the name the client reads from a key mixing capitals and a hyphen", () => {
+    const src = `div {
+      dataSignals("fooBar-baz", "1")
+      dataOn("fooBar-baz", "x()")
+    }`;
+    const issues = analyzeKotlin(src, opts);
+    const hints = issues.filter((i) => i.code === "key-case-wire");
+    expect(hints.length).toBe(1);
+    expect(hints[0]!.message).toContain("No key gives fooBar-baz back");
+    expect(hints[0]!.message).toContain("reads fooBarBaz. Write it in one case.");
+    expect(issues.filter((i) => i.start < src.indexOf("dataOn")).map((i) => i.code)).toEqual(["signal-name-hyphen"]);
   });
 
   it("hints what the dsl writes on the wire for a camelCase key", () => {
@@ -152,39 +169,34 @@ describe("markup", () => {
       dataClass("isOpen", "$" + "open")
       dataAttr("ariaLabel", "'x'")
       dataSignals("MySignal", "1")
-      dataSignals("fooBar", "1", case = Case.KEBAB)
       dataOn("customEvent", "x()") { case = Case.KEBAB }
-      dataSignals("foo-bar", "1")
       dataSignals("{fooBar: 1}")
       dataBind("fooBar")
       dataOnClick("@post('/Add')", { once = true })
       dataOnFetch("evt.detail.type === 'Started'") { window = true }
       dataAttr("viewBox", "$box")
-      dataRef("myRef", Case.CAMEL)
-      dataIndicator("isLoading", Case.CAMEL)
-      dataSignals("{fooBar: 1}", Case.CAMEL)
+      dataRef("myRef")
+      dataIndicator("isLoading")
+      dataSignals("{fooBar: 1}", true)
       dataPersist("myKey")
       dataMatchMedia("isMobile", mediaQuery = "(max-width: 600px)")
     }`;
     const hints = analyzeKotlin(src, opts).filter((i) => i.code === "key-case-wire");
     expect(hints.every((i) => i.severity === "hint")).toBe(true);
-    expect(hints.map((i) => src.slice(i.start, i.end))).toEqual(['"fooBar"', '"widgetLoaded"', '"isOpen"', '"ariaLabel"', '"MySignal"', '"fooBar"', '"customEvent"', '"viewBox"', '"myRef"', '"isLoading"', '"myKey"', '"isMobile"']);
+    expect(hints.map((i) => src.slice(i.start, i.end))).toEqual(['"fooBar"', '"widgetLoaded"', '"isOpen"', '"ariaLabel"', '"MySignal"', '"customEvent"', '"viewBox"', '"myKey"', '"isMobile"']);
     expect(hints.map((i) => /as (data-[a-z-]+:[^,]+),/.exec(i.message)![1])).toEqual([
       "data-signals:foo-bar",
       "data-on:widget-loaded__case.camel",
       "data-class:is-open__case.camel",
       "data-attr:aria-label",
       "data-signals:my-signal__case.pascal",
-      "data-signals:foo-bar__case.kebab",
       "data-on:custom-event__case.kebab",
       "data-attr:view-box",
-      "data-ref:my-ref__case.camel",
-      "data-indicator:is-loading__case.camel",
       "data-persist:my-key",
       "data-match-media:is-mobile",
     ]);
     expect(hints[0]!.message).toContain("$fooBar");
-    expect(hints[7]!.message).toContain('data-attr="{viewBox: ...}"');
+    expect(hints[6]!.message).toContain('data-attr="{viewBox: ...}"');
   });
 
   it("warns, not errors, when the template is only part of an expression", () => {
@@ -218,7 +230,7 @@ describe("markup", () => {
     // `$total-el.offsetWidth` is `$['total-el']['offsetWidth']` to Datastar: the subtraction the author meant needs spaces.
     const scope = validateExpression("($total-el.offsetWidth) + 'px'; $count-evt.detail.delta; $n-fn(1); $m-arr[0]");
     expect(scope.length).toBe(4);
-    expect(scope[0]!.fixes!.map((f) => f.text)).toEqual(["$totalEl.offsetWidth", "$total - el.offsetWidth"]);
+    expect(scope[0]!.fixes!.map((f) => f.text)).toEqual(["$totalEl.offsetwidth", "$total - el.offsetWidth"]);
     expect(validateExpression("@get('/item/$id-preview') && $x")).toEqual([]);
     expect(codes(analyzeKotlin(`dataText("\${'$'}foo-bar")`, opts))).toEqual(["signal-kebab"]);
   });
@@ -372,7 +384,7 @@ describe("signals", () => {
     const kt = `dataSignals("count" to 0, "user" to mapOf("name" to "")); dataBind("search"); signal("open"); patchSignals(Search(q = "x"))
       mapOf("notASignal" to 1); removeSignals("gone", "away")
       @Serializable data class Search(val query: String = "", val page: Int = 1)`;
-    expect([...collectSignals(kt, "kotlin")].sort()).toEqual(["away", "count", "gone", "name", "open", "page", "query", "search", "user"]);
+    expect([...collectSignals(kt, "kotlin")].sort()).toEqual(["away", "count", "gone", "open", "page", "query", "search", "user"]);
     const html = `<div data-signals="{count: 1, open: false}" data-bind:first-name data-text="$other.x"></div>`;
     expect([...collectSignals(html, "html")].sort()).toEqual(["count", "firstName", "open", "other.x"]);
     const raw = `fun side() = """<div data-signals="{draft: '', __step: 1, label: 'a__b', count: 0}" data-bind:search data-indicator="busy" data-text="$kotlinTemplate" data-signals:foo-bar__ifmissing="1" data-computed:total__case.camel="1"></div>"""`;

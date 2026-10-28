@@ -288,14 +288,61 @@
     {
       "name": "animate",
       "pro": true,
-      "forms": ["data-animate:<attribute>=\"expr\""],
+      "forms": ["data-animate:<attribute>=\"expr\"", "data-animate=\"{attribute: expr}\""],
       "keyed": true,
       "keyCase": "raw",
-      "keyRequired": true,
       "valueKind": "expression",
       "kotlin": ["dataAnimate"],
-      "modifiers": [],
-      "doc": "Pro. Animates an attribute whenever the expression's signals change."
+      "modifiers": [
+        { "name": "duration", "type": "duration" },
+        { "name": "delay", "type": "duration" },
+        {
+          "name": "ease",
+          "type": "enum",
+          "values": [
+            "linear",
+            "quadratic",
+            "cubic",
+            "elastic",
+            "inquad",
+            "outquad",
+            "inoutquad",
+            "incubic",
+            "outcubic",
+            "inoutcubic",
+            "inquart",
+            "outquart",
+            "inoutquart",
+            "inquint",
+            "outquint",
+            "inoutquint",
+            "insine",
+            "outsine",
+            "inoutsine",
+            "inexpo",
+            "outexpo",
+            "inoutexpo",
+            "incirc",
+            "outcirc",
+            "inoutcirc",
+            "inelastic",
+            "outelastic",
+            "inoutelastic",
+            "inback",
+            "outback",
+            "inoutback",
+            "inbounce",
+            "outbounce",
+            "inoutbounce",
+            "ingolden",
+            "outgolden",
+            "inoutgolden"
+          ]
+        },
+        { "name": "loop", "type": "flag" },
+        { "name": "pingpong", "type": "flag" }
+      ],
+      "doc": "Pro. Animates an attribute, or each attribute of the object form, whenever the expression's signals change."
     },
     {
       "name": "custom-validity",
@@ -326,7 +373,7 @@
       "keyed": false,
       "valueKind": "expression",
       "kotlin": ["dataOnRaf"],
-      "modifiers": [{ "name": "throttle", "type": "duration", "flags": ["noleading", "trailing"] }],
+      "modifiers": [{ "$ref": "timing" }, { "$ref": "viewtransition" }],
       "doc": "Pro. Runs on every animation frame."
     },
     {
@@ -336,10 +383,7 @@
       "keyed": false,
       "valueKind": "expression",
       "kotlin": ["dataOnResize"],
-      "modifiers": [
-        { "name": "debounce", "type": "duration", "flags": ["leading", "notrailing"] },
-        { "name": "throttle", "type": "duration", "flags": ["noleading", "trailing"] }
-      ],
+      "modifiers": [{ "$ref": "timing" }, { "$ref": "viewtransition" }],
       "doc": "Pro. Runs when the element's size changes."
     },
     {

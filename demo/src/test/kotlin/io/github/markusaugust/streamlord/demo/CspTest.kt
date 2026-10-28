@@ -50,6 +50,11 @@ class CspTest {
 
             assertTrue(body.contains("""src="$DATASTAR_URL" nonce="$nonce""""), "the client script is not nonced")
             assertTrue(body.contains("""<style nonce="$nonce""""), "the style element is not nonced")
+            // The page declares what /counter reads, encoded by the codec the service reads it with.
+            assertTrue(
+                body.contains("""data-signals="{&quot;running&quot;:false,&quot;count&quot;:0,&quot;wire&quot;:false}""""),
+                "the signals are not those of CounterSignals",
+            )
 
             // Without this the page proves nothing: the expressions would compile either way.
             val header = response.headers[CspNonce.HEADER]!!

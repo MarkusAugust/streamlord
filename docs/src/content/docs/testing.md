@@ -506,8 +506,10 @@ Three things it does:
 - **`close()` lets go of the connection**, and the server finds the reader gone on its next
   write. `received` keeps everything it read, comments included, for the assertions above.
 
-`open` sends `Datastar-Request: true` and takes `headers` for a cookie or a token. The headers the
-server answered with are in `responseHeaders`, for `X-Accel-Buffering` or a header of your own;
+`open` sends what the browser's `@get` sends: `Datastar-Request: true`, the client's `Accept`, and
+the page's signals as the `datastar` query parameter, `{}` unless you pass `signals`, so a handler
+that reads signals sees an object, never none. It takes `headers` for a cookie or a token. The
+headers the server answered with are in `responseHeaders`, for `X-Accel-Buffering` or a header of your own;
 `open` returns only on a `200 text/event-stream`, and fails on anything else with the answer's
 headers and the start of its body. It uses the JDK's own HTTP client, so it binds no HTTP library
 either. `LiveDatastarStream.of(reader, onClose)` reads from the `Reader` any other client hands

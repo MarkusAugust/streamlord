@@ -4,7 +4,9 @@ import io.github.markusaugust.streamlord.core.SignalsCodecException
 import io.github.markusaugust.streamlord.core.SignalsDecodeException
 import io.github.markusaugust.streamlord.core.port.driven.decode
 import io.github.markusaugust.streamlord.core.port.driven.encode
+import io.github.markusaugust.streamlord.core.port.driven.toJsonValue
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -36,6 +38,20 @@ class KotlinxSignalsCodecTest {
     @Test
     fun `encodes defaults and explicit nulls`() {
         assertEquals("""{"search":"ash","count":0,"gone":null}""", codec.encode(Signals(search = "ash")))
+    }
+
+    @Serializable
+    data class Form(
+        val email: String = "",
+        @SerialName("first-name") val firstName: String = "",
+    )
+
+    // A page declares the names the handler's readSignals<Form>() reads.
+    @Test
+    fun `toJsonValue names the fields as decode reads them`() {
+        val json = codec.toJsonValue(Form(email = "a@b"))
+        assertEquals("""{"email":"a@b","first-name":""}""", json.toJson())
+        assertEquals(Form(email = "a@b"), codec.decode<Form>(json.toJson()))
     }
 
     @Test

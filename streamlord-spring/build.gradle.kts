@@ -54,3 +54,30 @@ val testNewestCoroutines = tasks.register<Test>("testNewestCoroutines") {
 }
 
 tasks.check { dependsOn(testNewestCoroutines) }
+
+/*
+ * The approved wire transcripts under conformance/wire: what the adapter answers a fixed set of
+ * requests on WebMVC and WebFlux, both on an embedded Tomcat, committed as text. Every test task
+ * compares; updateTranscripts rewrites.
+ */
+val wireDir = rootProject.layout.projectDirectory.dir("conformance/wire")
+
+tasks.withType<Test>().configureEach { systemProperty("streamlord.wireDir", wireDir.asFile.path) }
+tasks.withType<Test>().matching { it.name != "updateTranscripts" }.configureEach { inputs.dir(wireDir) }
+
+tasks.register<Test>("updateTranscripts") {
+    description = "Rewrites the approved wire transcripts under conformance/wire from what the Spring adapter answers now."
+    group = "verification"
+    testClassesDirs =
+        sourceSets.test
+            .get()
+            .output.classesDirs
+    classpath =
+        sourceSets.test
+            .get()
+            .runtimeClasspath
+    useJUnitPlatform()
+    filter { includeTestsMatching("*WireTranscriptTest") }
+    systemProperty("streamlord.updateTranscripts", "true")
+    outputs.upToDateWhen { false }
+}
