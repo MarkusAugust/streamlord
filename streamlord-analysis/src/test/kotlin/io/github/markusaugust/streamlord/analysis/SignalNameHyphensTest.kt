@@ -144,6 +144,7 @@ class SignalNameHyphensTest {
                 }
                 """.trimIndent()
         assertEquals(listOf("items[\\${'$'}i1]", "a['['].bC"), hyphens(src).map { it.fixes.single().text })
+        assertTrue(hyphens(src).first().message.endsWith("Write items[\\${'$'}i1]."), hyphens(src).first().message)
         assertEquals(
             dsl +
                 "fun p() = div {\n  dataText(signal(\"a['x]y-z']\"))\n  dataText(signal(\"items[\\${'$'}i1]\"))\n  dataText(signal(\"a['['].bC\"))\n}",

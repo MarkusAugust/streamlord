@@ -235,7 +235,7 @@ function hyphenIssue(s: KotlinString, src: string, fixed: string, bracketedName:
   const dollars = written !== s.text && written === s.text.replaceAll("$", "\\$");
   const plain = s.interpolations.length === 0 && (written === s.text || dollars);
   const text = dollars ? fixed.replaceAll("$", "\\$") : fixed;
-  const advice = plain ? `Write ${fixed}${bracketedName ? `, or ${bracketedName} for a key with a hyphen in it` : ""}` : "Write it in camelCase";
+  const advice = plain ? `Write ${text}${bracketedName ? `, or ${bracketedName} for a key with a hyphen in it` : ""}` : "Write it in camelCase";
   return {
     start: s.start,
     end: s.end,
@@ -243,7 +243,7 @@ function hyphenIssue(s: KotlinString, src: string, fixed: string, bracketedName:
     severity: "error",
     code: "signal-name-hyphen",
     link: DOCS.casing,
-    fixes: plain ? [{ title: `Change to ${fixed}`, start: s.contentStart, end: s.contentEnd, text }] : [],
+    fixes: plain ? [{ title: `Change to ${text}`, start: s.contentStart, end: s.contentEnd, text }] : [],
   };
 }
 

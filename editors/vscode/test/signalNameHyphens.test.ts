@@ -109,6 +109,7 @@ fun q() = div { dataSignals("user" to buildMap { set("first-name", "") }) }`;
   it("a name is read as the client reads it", () => {
     const src = `${dsl}fun p() = div {\n  dataText(signal("a['x]y-z']"))\n  dataText(signal("items[\\$i-1]"))\n  dataText(signal("a['['].b-c"))\n}`;
     assert.deepEqual(hyphens(src).map((i) => i.fixes![0]!.text), ["items[\\$i1]", "a['['].bC"]);
+    assert.ok(hyphens(src)[0]!.message.endsWith("Write items[\\$i1]."), hyphens(src)[0]!.message);
   });
 
   // The demo writes dataText("${signal("running")} ? ..."), so a call inside a template is the DSL's too.

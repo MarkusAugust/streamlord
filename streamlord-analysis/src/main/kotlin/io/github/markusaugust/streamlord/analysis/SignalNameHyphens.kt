@@ -193,7 +193,7 @@ private fun hyphenIssue(
     val text = if (dollars) fixed.replace("$", "\\$") else fixed
     val advice =
         if (plain) {
-            "Write $fixed" + (
+            "Write $text" + (
                 bracketed?.let {
                     ", or $it for a key with a hyphen in it"
                 } ?: ""
@@ -210,7 +210,7 @@ private fun hyphenIssue(
         severity = Severity.ERROR,
         code = "signal-name-hyphen",
         link = Docs.CASING,
-        fixes = if (plain) listOf(Fix("Change to $fixed", s.contentStart, s.contentEnd, text)) else emptyList(),
+        fixes = if (plain) listOf(Fix("Change to $text", s.contentStart, s.contentEnd, text)) else emptyList(),
     )
 }
 
