@@ -2,6 +2,31 @@
 
 All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here.
 
+## 0.8.0
+
+- A hyphen in a signal name written in a DSL call is the error `signal-name-hyphen`, with the
+  camelCase fix, since Streamlord 0.15 refuses such a name at runtime: `dataSignals("foo-bar", …)`,
+  `dataBind("form.first-name")`, a pair's key, `removeSignals("a-b")`. In `signal`, `set` and the
+  other expression helpers a name is read as Datastar's client reads it: a quoted key is text,
+  `signal("form['first-name']")`, while `signal("items[\$i-1]")` reads the signal `i-1` and gets
+  the advice to write the subtraction in the expression, without a fix. The second argument of
+  `dataSignals` is read as the compiler reads it, so the object form, `dataSignals("{...}", true)`,
+  is left alone. In IntelliJ the check is part of Datastar key casing.
+- A misspelt name in `signal`, `increment`, `decrement` or `not` gets the same warning and fix as
+  `$cuont` in an expression. These calls used to count as declarations.
+- `dataSignals(codec.toJsonValue(Form()))` declares the properties of a `@Serializable` class named
+  there, for the drift and unknown-signal checks. For a class the analysis cannot read, every name
+  counts as declared.
+- The keys inside a pair's value, `"user" to mapOf("name" to "")`, are no longer counted as
+  top-level signals.
+- The fix for a hyphenated reference follows the client: for `$a-b-1` the key `a-b-1` declares
+  `aB-1`, not `aB1`. The key-case hint for an event or class such as `dataOn("fooBar-baz", …)` says
+  that no key gives the name back, where it offered one that did not.
+- A signal object under `constructor` or another name every object has is flagged: the client holds
+  it, and the next request writes it into the built-in one.
+- The highlighter marks `$123` and `$foo-bar` as one signal each, as the client reads them, and a
+  `signal()` call that resolves outside Streamlord is left out of the misspelling check.
+
 ## 0.7.0
 
 - Expressions are judged as Datastar's client compiles them. Every `$name.path` is rewritten
