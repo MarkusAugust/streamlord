@@ -62,7 +62,10 @@ class MockMvcTesterTest {
         ): StreamingResponseBody {
             delay(1)
             val heads = request.readSignals(streamlord).int("heads") ?: 0
-            return response.datastarStream(streamlord, request) { patchSignals("heads" to heads + 1) }
+            return response.datastarStream(streamlord, request) {
+                gate.get(10, TimeUnit.SECONDS)
+                patchSignals("heads" to heads + 1)
+            }
         }
 
         @GetMapping("/inside")
@@ -125,13 +128,10 @@ class MockMvcTesterTest {
     }
 
     // A suspend controller runs in one async cycle and its stream in a second; exchange() waits
-    // for the first alone, and hands back an empty body.
+    // for the first alone, and returns while the stream may still be writing. The gate holds the
+    // stream until exchange() has returned.
     @Test
     fun `a suspend controller's stream is dispatched too`() {
-        val result = mvc.datastar(HttpMethod.GET, "/suspended", """{"heads":13}""")
-
-        assertThat(result).hasStatusOk().hasHeader("Connection", "keep-alive")
-        datastarEvents(result.response.contentAsString).assertSignal("heads", 14)
         assertEquals(
             "",
             mvc
@@ -140,6 +140,12 @@ class MockMvcTesterTest {
                 .exchange()
                 .response.contentAsString,
         )
+        gate.complete(Unit)
+
+        val result = mvc.datastar(HttpMethod.GET, "/suspended", """{"heads":13}""")
+
+        assertThat(result).hasStatusOk().hasHeader("Connection", "keep-alive")
+        datastarEvents(result.response.contentAsString).assertSignal("heads", 14)
     }
 
     @Test
