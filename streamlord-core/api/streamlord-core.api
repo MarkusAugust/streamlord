@@ -309,10 +309,12 @@ public final class io/github/markusaugust/streamlord/core/domain/ScriptResponse 
 
 public final class io/github/markusaugust/streamlord/core/domain/SignalNames {
 	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/domain/SignalNames;
+	public final fun hyphenProblem (Ljava/lang/String;)Ljava/lang/String;
 	public final fun keyProblem (Ljava/lang/String;Z)Ljava/lang/String;
 	public final fun nest (Ljava/lang/Iterable;Lkotlin/jvm/functions/Function2;)Ljava/util/Map;
 	public static synthetic fun nest$default (Lio/github/markusaugust/streamlord/core/domain/SignalNames;Ljava/lang/Iterable;Lkotlin/jvm/functions/Function2;ILjava/lang/Object;)Ljava/util/Map;
 	public final fun pathProblem (Ljava/lang/String;)Ljava/lang/String;
+	public final fun withoutHyphens (Ljava/lang/String;)Ljava/lang/String;
 }
 
 public final class io/github/markusaugust/streamlord/core/domain/SignalsResponse : io/github/markusaugust/streamlord/core/domain/DatastarResponse {

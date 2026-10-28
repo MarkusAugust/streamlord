@@ -51,13 +51,22 @@ All notable changes to Streamlord are recorded here. The format follows
   the client evaluates those, and so are `data-bind`, `data-ref` and `data-indicator`, whose value
   is a signal path the client follows without a guard: `__proto__.x` there writes into every
   object of the page.
-- `dataSignals` in its pairs form writes the keys inside a value as they stand, as the client
-  merges them: `"user" to mapOf("first-name" to "")` declares `user['first-name']`, where 0.13.0
-  and 0.14.0 camel-cased it to `user.firstName`. The key of each pair is still read as the keyed form reads
-  it, so `"user.first-name" to ""` declares `$user.firstName`. Code that reached a nested key
-  with `signal("user.first-name")` reaches it with `signal("user['first-name']")`, or declares it
-  with a dotted pair. Two keys of one map that camel-case to the same name are no longer refused.
-  The analysis does not see a `signal("user.first-name")` left behind, since `user` is declared.
+- A signal has one name, the one you write, in Kotlin and in the browser. A name may no longer
+  hold a hyphen, since the client reads one as a capital in an attribute key and as a hyphen in an
+  expression or a patch: in 0.14.0 `dataSignals("foo-bar" to 1)` declared `$fooBar`, and
+  `patchSignals("foo-bar" to 1)` patched `foo-bar`. `dataSignals`, `dataComputed`, `dataBind`,
+  `dataRef`, `dataIndicator`, `dataMatchMedia`, `patchSignals` and `removeSignals` refuse such a
+  name, and `signal`, `set` and the other expression helpers refuse a hyphen outside brackets;
+  the exception names what to write, `fooBar`, or `form['first-name']` for a key with a hyphen.
+  The expression helpers write the name as they get it, where `signal("foo-bar")` gave
+  `$fooBar`. A key with a hyphen inside a value is data and is written as it stands:
+  `"user" to mapOf("first-name" to "")` declares `user['first-name']`, where 0.13.0 and 0.14.0
+  camel-cased it to `user.firstName`. `SignalNames.hyphenProblem` and `withoutHyphens` say what
+  the rule refuses and what to write instead.
+- `dataSignals`, `dataComputed`, `dataRef`, `dataIndicator` and `dataMatchMedia` lose their `case`
+  argument, and `BindModifiers` its `case`: the DSL writes the key that comes back as the name,
+  so a `case` could only give the signal another name. `dataBind`, `dataRef` and `dataIndicator`
+  always write the name in the value. `dataOn` and `dataClass` keep `case`.
 - `intl(...)` writes an options object for `RELATIVE_TIME` and `DISPLAY_NAMES` even when empty,
   because the client reads a field of it and throws without one.
 

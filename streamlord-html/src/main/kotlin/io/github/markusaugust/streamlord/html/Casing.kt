@@ -13,27 +13,27 @@ public class InvalidSignalNameException(
 ) : StreamlordException("Name \"$name\" $reason.")
 
 /**
- * The casing rules of Datastar, applied so that the name you write is the name you get.
+ * The casing rules of Datastar, applied so that a signal goes by the name you write.
  *
  * The browser lowercases every attribute name, so `data-signals:fooBar` reaches Datastar as
  * `foobar`. Datastar then reads keys of the signal attributes (`signals`, `computed`, `bind`,
  * `ref`, `indicator`, `match-media`) in camel case, turning `foo-bar` into `fooBar`; keys of
  * `on` and `class` stay kebab unless `__case` says otherwise; keys of `attr`, `style` and
- * `animate` are used as they are. Hence the rule: keys are written in kebab-case, signals are
- * read in camelCase, and `__case` is the escape hatch. The catalog records the default per
- * attribute as `keyCase`, and the catalog test holds this object to it.
+ * `animate` are used as they are. The catalog records the default per attribute as `keyCase`,
+ * and the catalog test holds this object to it.
  *
- * The DSL applies the rule for you. A camelCase key becomes kebab-case on the wire, plus
- * `__case.camel` where the default is kebab, so that `dataSignals("fooBar", "1")` declares
- * `$fooBar`, `dataOn("widgetLoaded", ...)` listens to `widgetLoaded`, and `dataClass("isOpen", ...)`
- * toggles `isOpen`. An explicit `case =` is kept, but the key is still written in kebab-case,
- * because the browser lowercases it either way. The expression helpers go the other way:
- * `signal("foo-bar")` is `$fooBar`, the signal `data-signals:foo-bar` declares. The pairs form,
- * `dataSignals("foo-bar" to 1)`, camel-cases its keys the same way, so all three name one signal.
+ * A signal has one name, in Kotlin and in the browser: `dataSignals("fooBar", "1")` is written
+ * `data-signals:foo-bar`, which the client reads back as `fooBar`, and `signal("fooBar")` is
+ * `$fooBar`. A signal name may not hold a hyphen ([SignalNames.hyphenProblem]): it is the one
+ * character the client reads as a capital in an attribute key and as itself in an expression or
+ * a patch, so `foo-bar` would name two signals. Every name without one comes back as written.
  *
- * A key the DSL does not write keeps its hyphen: the object form, `dataSignals("{'foo-bar': 1}")`,
- * and a signal patched from the server. Datastar reads `$foo-bar` in an expression as the signal
- * `foo-bar`, which `signal` cannot write, so reach such a key with `signal("['foo-bar']")`.
+ * An event or class name is not a signal and keeps its `case`: `dataOn("widgetLoaded", ...)` is
+ * `widget-loaded__case.camel`, and `dataClass("isOpen", ...)` toggles `isOpen`.
+ *
+ * A key with a hyphen is still data: inside a value, `"user" to mapOf("first-name" to "")`, in the
+ * object form, `dataSignals("{'foo-bar': 1}")`, or from a codec. An expression reaches it with
+ * brackets, `signal("user['first-name']")`.
  */
 public object Casing {
     private val UPPER = Regex("[A-Z]")
@@ -43,8 +43,9 @@ public object Casing {
     // the HTML parser turns into U+FFFD, and the characters that end an attribute or its name.
     private val FORBIDDEN = Regex("[\\s\\x00\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff\"'<>=/]")
 
-    // What Datastar's client finds behind a `$`: ASCII word characters, in parts joined by `.` or `-`.
-    private val SIGNAL_NAME = Regex("[A-Za-z0-9_]+(?:[.-][A-Za-z0-9_]+)*")
+    // What Datastar's client finds behind a `$`, less the hyphen a signal name may not hold: ASCII
+    // word characters, in parts joined by `.`.
+    private val SIGNAL_NAME = Regex("[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)*")
 
     /** `fooBar` -> `foo-bar`, `myURL` -> `my-u-r-l`: one hyphen per capital, so Datastar's camel conversion gives the name back. */
     public fun kebab(name: String): String {
@@ -71,18 +72,18 @@ public object Casing {
     }
 
     /**
-     * A name that declares a signal: what [validate] admits, and only ASCII letters, digits and
-     * `_`, in parts joined by `.` or `-`. Datastar's client reads nothing else after a `$`, so
-     * `$über` or `$a:b` would reach no signal. No part, as written or as Datastar camel-cases it,
-     * may be a property every object has, such as `constructor` or `toString` ([SignalNames]).
+     * A name that declares a signal: what [validate] admits, without a hyphen
+     * ([SignalNames.hyphenProblem]), and only ASCII letters, digits and `_`, in parts joined by `.`.
+     * Datastar's client reads nothing else after a `$`, so `$über` or `$a:b` would reach no signal.
+     * No part may be a property every object has, such as `constructor` or `toString` ([SignalNames]).
      */
     public fun signalName(name: String): String {
         validate(name)
-        (SignalNames.pathProblem(name) ?: SignalNames.pathProblem(camel(name)))?.let { throw InvalidSignalNameException(name, it) }
+        (SignalNames.hyphenProblem(name) ?: SignalNames.pathProblem(name))?.let { throw InvalidSignalNameException(name, it) }
         if (!SIGNAL_NAME.matches(name)) {
             throw InvalidSignalNameException(
                 name,
-                "is not a name a \$ reference reaches: Datastar reads ASCII letters, digits and _, in parts joined by . or -",
+                "is not a name a \$ reference reaches: Datastar reads ASCII letters, digits and _, in parts joined by .",
             )
         }
         return name
@@ -243,12 +244,11 @@ public object Casing {
     public fun plainKey(name: String): String = kebab(validate(name))
 
     /**
-     * The name as an expression refers to it: `foo-bar` -> `fooBar`, `form.first-name` -> `form.firstName`,
-     * the signal `data-signals:form.first-name` declares, `items[0]` and `items['sub-total']`
-     * untouched, and `['sub-total']` reaches a top-level key with a hyphen. A hyphenated key inside
-     * a signal's value keeps its hyphen, so `form['first-name']` reaches it. A reference is
-     * JavaScript, so only blank names, whitespace and a first character Datastar does not read
-     * after a `$` are refused.
+     * [name] as an expression refers to it, which is as written: `form.firstName`, `items[0]`, and
+     * `['sub-total']` or `form['first-name']` for a key with a hyphen. A reference is JavaScript,
+     * so only blank names, whitespace, a first character Datastar does not read after a `$`, and a
+     * hyphen outside brackets are refused: `$foo-bar` would read a signal no name declares
+     * ([SignalNames.hyphenProblem]).
      */
     public fun reference(name: String): String {
         if (name.isBlank()) throw InvalidSignalNameException(name, "is blank")
@@ -257,9 +257,20 @@ public object Casing {
         if (first != '[' && first != '_' && first !in 'A'..'Z' && first !in 'a'..'z' && first !in '0'..'9') {
             throw InvalidSignalNameException(name, "starts with a character Datastar does not read after \$")
         }
-        return name.replace(KEBAB_OUTSIDE_BRACKETS) { it.groupValues[1].uppercase() }
+        HYPHEN_OUTSIDE_BRACKETS.find(name)?.let {
+            // form.first-name: the part with the hyphen, which brackets reach as a key, `form['first-name']`.
+            val from = name.lastIndexOf('.', it.range.first) + 1
+            val to = name.indexOfAny(charArrayOf('.', '['), it.range.first).let { end -> if (end < 0) name.length else end }
+            val bracketed = name.substring(0, maxOf(0, from - 1)) + "['" + name.substring(from, to) + "']" + name.substring(to)
+            throw InvalidSignalNameException(
+                name,
+                "has a hyphen outside brackets, which a signal name may not hold; write ${SignalNames.withoutHyphens(name)}, " +
+                    "or $bracketed for a key with a hyphen in it",
+            )
+        }
+        return name
     }
 
-    /** `-x` outside `[...]`: inside brackets a quoted key such as `['sub-total']` is text. */
-    private val KEBAB_OUTSIDE_BRACKETS = Regex("-([a-z])(?![^\\[]*\\])")
+    /** `-` outside `[...]`: inside brackets a quoted key such as `['sub-total']` is text. */
+    private val HYPHEN_OUTSIDE_BRACKETS = Regex("-(?![^\\[]*\\])")
 }

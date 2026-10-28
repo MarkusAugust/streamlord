@@ -1,16 +1,16 @@
 ---
 title: "Casing"
-description: "Keys in kebab-case, signals in camelCase, and the hyphen that is part of a name."
+description: "One name for a signal, in Kotlin and in the browser, and the keys the DSL writes for it."
 ---
 
 The browser lowercases every attribute name. `data-signals:fooBar` therefore reaches Datastar as
 `foobar`, and the signal you meant is gone. Datastar's answer is to read the keys of certain
 attributes as camelCase: `foo-bar` becomes the signal `$fooBar`.
 
-One rule covers all of it:
+Streamlord turns that into one rule:
 
-> **Write keys in kebab-case, read signals in camelCase, and reach for `__case` only when the
-> name really has capitals.**
+> **A signal has one name, the one you write. Write it in camelCase, without a hyphen, and the
+> DSL writes the key that comes back as that name.**
 
 ## Which attributes read keys as camelCase
 
@@ -32,30 +32,52 @@ div {
 }
 ```
 
-`signal("foo-bar")` gives you `$fooBar`, the signal `data-signals:foo-bar` declares. The pairs
-form reads the key of each pair the same way, and a dotted key nests, as the keyed form does:
+The same name works everywhere else a signal is named. `signal("fooBar")` is `$fooBar`, the pairs
+form takes the key of each pair as the name, and a dotted name nests, as the keyed form does:
 
 ```kotlin sample=html
 div {
-    dataSignals("foo-bar" to 7, "user.first-name" to "")
+    dataSignals("fooBar" to 7, "user.firstName" to "")
     // data-signals="{"fooBar":7,"user":{"firstName":""}}"
-    span { dataText(signal("foo-bar")) }          // $fooBar
-    span { dataText(signal("user.first-name")) }  // $user.firstName
+    span { dataText(signal("fooBar")) }          // $fooBar
+    span { dataText(signal("user.firstName")) }  // $user.firstName
 }
 ```
+
+`patchSignals("fooBar" to 1)` on the server, `removeSignals("fooBar")`, `dataBind("fooBar")` and
+`readSignals<Form>().fooBar` all mean that signal too.
+
+## Why a signal name has no hyphen
+
+The hyphen is the one character the client reads two ways. In an attribute key it is a capital:
+`data-signals:foo-bar` is `$fooBar`. In an expression and in a patch it is itself: `$foo-bar` is
+the signal `foo-bar`, and so is `{"foo-bar": 1}` from the server. A name with a hyphen would
+therefore mean two signals, depending on where you wrote it. Every name without one comes back
+exactly as written, `URL`, `x2Y` and `_value` included.
+
+So the helpers that name a signal refuse a hyphen: `dataSignals`, `dataComputed`, `dataBind`,
+`dataRef`, `dataIndicator`, `dataMatchMedia`, `signal` and the other expression helpers,
+`patchSignals` and `removeSignals`. They throw at render or send time with the name to write
+instead, and the editors flag the call before you run it, with a fix:
+
+```text
+Name "form.first-name" has a hyphen outside brackets, which a signal name may not hold;
+write form.firstName, or form['first-name'] for a key with a hyphen in it.
+```
+
+A key with a hyphen is still allowed as data: a key inside a value, which the client merges as it
+stands, a key of the object form, `dataSignals("{'foo-bar': 1}")`, and a key from your codec,
+`dataSignals(codec.toJsonValue(form))`. `"user" to mapOf("first-name" to "")` declares
+`user['first-name']`, and an expression reaches it with brackets, as in JavaScript:
+`signal("user['first-name']")` gives `$user['first-name']`. To patch or remove such a key from the
+server, put it inside a value, `patchSignals("user" to mapOf("first-name" to null))`.
 
 A dotted key inside a map is refused, because the client would store `{"a.b": 1}` as one key
 that `$a.b` does not reach.
 
-A key the DSL does not camel-case keeps its hyphen: a key inside a value, which the client merges
-as it stands, the object form, `dataSignals("{'foo-bar': 1}")`, a JSON object from your codec,
-`dataSignals(codec.toJsonValue(form))`, and a signal patched from the server. So `"user" to mapOf("first-name" to "")` declares `user['first-name']`. In an expression
-Datastar reads `$foo-bar` as the signal `foo-bar`, which `signal("foo-bar")` cannot write, so
-reach such a key by indexing: `signal("['foo-bar']")` gives `$['foo-bar']`, and
-`signal("user['first-name']")` gives `$user['first-name']`.
-
-An explicit `case =` is kept, but the key is still written in kebab-case, because the browser
-lowercases it either way.
+The helpers that name a signal take no `case`: the DSL picks the key, so a `case` could only give
+the signal a name other than the one you wrote. `dataOn` and `dataClass` keep theirs, because an
+event or a class is not a signal.
 
 An event or class name that mixes capitals with a hyphen before a lower-case letter, such as
 `fooBar-baz`, cannot travel in a key: the capitals need `__case.camel`, and that turns the hyphen
@@ -65,12 +87,11 @@ cannot rename, such as `MuiButton-root` from a component library, goes in the ob
 `dataClass("{'MuiButton-root': \$active}")`, whose keys the client uses as written. In `dataBind`,
 the `events` are used as the browser hands them over, so one with a capital (which arrives in
 lowercase) or a `.` (which splits it in two) is refused, and a `prop` is refused when Datastar's
-own camel-casing would not give it back: `x2y` comes back as `x2Y`, `_value` as `Value`. `dataBind`, `dataRef` and `dataIndicator` write the name in the
-*value*, which keeps its case, unless you ask for a `case`, since Datastar applies `__case` to a
-key only.
+own camel-casing would not give it back: `x2y` comes back as `x2Y`, `_value` as `Value`.
+`dataBind`, `dataRef` and `dataIndicator` write the name in the *value*, which keeps its case.
 
 The object forms (`dataSignals("{...}")`, `dataComputed("{...}")`, `dataClass("{...}")`) use the
-keys of the object as written and take no `case`.
+keys of the object as written.
 
 A name that ends in `_` is written as it is, `data-class:b_`, until a modifier follows it. The
 client cuts the attribute name at the first `__`, so `b_` with `__case.pascal` would be
@@ -97,35 +118,35 @@ refused. Name the property in lowercase. The object form also puts a hyphen befo
 
 References may index: `signal("items[0].name")` and `signal("items['sub-total']")`. A reference
 is JavaScript, so `signal`, `set` and the other expression helpers refuse only a blank name, one
-with whitespace, and one that starts with a character Datastar does not read after `$`. A name
-that becomes a key or an attribute value, as in `dataClass`, also refuses quotes, `/`, NUL,
-the characters that end an attribute, and white space as either Java or JavaScript counts it, so
-a no-break space too: the client splits a class list on it. A name that declares a signal, as in `dataSignals`, `dataBind`
-and `dataComputed`, must be ASCII letters, digits and `_`, in parts joined by `.` or `-`, because
-that is all Datastar reads after a `$`: a signal named `über` exists, and `$über` never reaches
-it. All of these throw `InvalidSignalNameException` at render time. None of it makes a name from
-a request safe to pass in: a reference is written into an expression as it stands.
+with whitespace, one that starts with a character Datastar does not read after `$`, and a hyphen
+outside brackets. A name that becomes a key or an attribute value, as in `dataClass`, also refuses
+quotes, `/`, NUL, the characters that end an attribute, and white space as either Java or
+JavaScript counts it, so a no-break space too: the client splits a class list on it. A name that
+declares a signal, as in `dataSignals`, `dataBind` and `dataComputed`, must be ASCII letters,
+digits and `_`, in parts joined by `.`, because that is all Datastar reads after a `$`: a signal
+named `über` exists, and `$über` never reaches it. All of these throw `InvalidSignalNameException`
+at render time. None of it makes a name from a request safe to pass in: a reference is written
+into an expression as it stands.
 
 ## The hyphen after a signal
 
-In an *expression*, `$foo-bar` is not `$foo` minus `bar`. Datastar reads the hyphen as part of
-the signal name, so `$count-1` is the signal `count-1` and not "count minus one". Write
-`$count - 1` with spaces, or use camelCase names and avoid the question.
+In an expression you write yourself, `$foo-bar` is not `$foo` minus `bar`. Datastar reads the
+hyphen as part of the signal name, so `$count-1` is the signal `count-1` and not "count minus
+one". Write `$count - 1` with spaces.
 
-Sometimes `$foo-bar` is what you mean, because the page stores a signal with that hyphen: a key
-of the object form, `data-signals="{'foo-bar': 1}"`, a name in the value of `data-bind`,
-`data-ref` or `data-indicator`, `data-bind="foo-bar"`, a key with `__case.kebab`, or a key whose
-hyphen comes before a digit, `data-signals:item-2`, which camel casing leaves alone. The editors
-read the declarations of the file as the client stores them and say nothing about `$foo-bar`
-when it is declared there.
+Sometimes `$foo-bar` is what you mean, because the page stores a signal with that hyphen: a key of
+the object form, `data-signals="{'foo-bar': 1}"`, a name in the value of `data-bind`, `data-ref`
+or `data-indicator` in plain HTML, a key with `__case.kebab`, or a key whose hyphen comes before a
+digit, `data-signals:item-2`, which camel casing leaves alone. The editors read the declarations
+of the file as the client stores them and say nothing about `$foo-bar` when it is declared there.
 
 ## Handled is not hidden
 
-The DSL corrects your casing silently, which would be a bad trade if you never learned the rule.
-So the VS Code extension puts a hint on every such call saying what actually goes on the wire.
-For strings and templates it flags a capital letter in a key (with the kebab-case fix) and a
-hyphen after a signal that nothing in the file declares with its hyphen (with the camelCase or
-spaced-subtraction fix).
+The DSL writes the key for you, which would be a bad trade if you never learned the rule. So the
+editors put a hint on every such call saying what actually goes on the wire, and flag a hyphen in
+a signal name with the camelCase fix. For strings and templates they flag a capital letter in a
+key (with the kebab-case fix) and a hyphen after a signal that nothing in the file declares with
+its hyphen (with the camelCase or spaced-subtraction fix).
 
 The default per attribute lives in `catalog/datastar-1.0.4.json` as `keyCase`, and both the SDK's
 tests and the extensions read it from there.

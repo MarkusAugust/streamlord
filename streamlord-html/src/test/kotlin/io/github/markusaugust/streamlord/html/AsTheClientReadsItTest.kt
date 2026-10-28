@@ -169,15 +169,15 @@ class AsTheClientReadsItTest {
         assertFailsWith<InvalidSignalNameException> { elements { div { dataClass("w-1/2", "true") } } }
     }
 
-    // data-signals:foo-bar declares $fooBar, and signal("foo-bar") is $fooBar, so the pair's key
-    // follows; the client merges the value as it is, so the keys inside it keep their hyphens.
+    // A pair's key is the signal's name, so it holds no hyphen; the client merges the value as it
+    // is, so the keys inside it keep theirs.
     @Test
     fun `the pairs form names the signal the keyed form and signal() name`() {
         assertEquals(
             """<div data-signals="{&quot;fooBar&quot;:7,&quot;user&quot;:{&quot;first-name&quot;:&quot;&quot;},""" +
                 """&quot;rows&quot;:[{&quot;sub-total&quot;:1}]}"></div>""",
             elements {
-                div { dataSignals("foo-bar" to 7, "user" to mapOf("first-name" to ""), "rows" to listOf(mapOf("sub-total" to 1))) }
+                div { dataSignals("fooBar" to 7, "user" to mapOf("first-name" to ""), "rows" to listOf(mapOf("sub-total" to 1))) }
             },
         )
         assertEquals("\$user['first-name']", signal("user['first-name']"))
@@ -185,7 +185,8 @@ class AsTheClientReadsItTest {
             """<div data-signals="{&quot;a&quot;:{&quot;x-y&quot;:1,&quot;xY&quot;:2}}"></div>""",
             elements { div { dataSignals("a" to mapOf("x-y" to 1, "xY" to 2)) } },
         )
-        assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("foo-bar" to 1, "fooBar" to 2) } } }
+        assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("foo-bar" to 1) } } }
+        assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("fooBar" to 1, "fooBar" to 2) } } }
         assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("a" to mapOf("__proto__" to 1)) } } }
     }
 
@@ -216,7 +217,7 @@ class AsTheClientReadsItTest {
         assertEquals(
             """<div data-signals="{&quot;form&quot;:{&quot;email&quot;:&quot;&quot;,&quot;firstName&quot;:&quot;&quot;},""" +
                 """&quot;n&quot;:1}"></div>""",
-            elements { div { dataSignals("form.email" to "", "form.first-name" to "", "n" to 1) } },
+            elements { div { dataSignals("form.email" to "", "form.firstName" to "", "n" to 1) } },
         )
         assertEquals(
             """<div data-signals="{&quot;a&quot;:{&quot;b&quot;:1,&quot;c&quot;:2}}"></div>""",
@@ -256,18 +257,14 @@ class AsTheClientReadsItTest {
         assertEquals("a", clash.name)
     }
 
-    // The browser lowercases the key, and the client cuts it at the first `__` and applies the
-    // `__case` it is given, so the name it holds is not always the name written.
+    // The browser lowercases the key, and the client cuts it at the first `__`, so the name it
+    // holds is not always the name written.
     @Test
     fun `a name is checked as the client reads it from the key`() {
         val refused =
             listOf(
-                { d: DIV -> d.dataSignals("Constructor", "{prototype: {y: 1}}", Case.KEBAB) },
-                { d: DIV -> d.dataSignals("ToString", "{name: 1}", Case.CAMEL) },
-                { d: DIV -> d.dataSignals("_-proto-_.polluted", "'yes'", Case.SNAKE) },
                 { d: DIV -> d.dataSignals("constructor_", "{prototype: {w: 1}}", ifMissing = true) },
-                { d: DIV -> d.dataComputed("ValueOf", "({x: 1})", Case.CAMEL) },
-                { d: DIV -> d.dataBind("Constructor.prototype.bound") { case = Case.SNAKE } },
+                { d: DIV -> d.dataBind("constructor.prototype.bound") },
             )
         for ((i, write) in refused.withIndex()) {
             assertFailsWith<InvalidSignalNameException>("case $i") { elements { div { write(this) } } }
@@ -395,8 +392,8 @@ class AsTheClientReadsItTest {
                 }
             },
         )
-        // A signal name with a hyphen is camel-cased on purpose, as signal() reads it.
-        assertEquals("""<div data-signals:foo-bar-baz="1"></div>""", elements { div { dataSignals("fooBar-baz", "1") } })
+        // A signal name holds no hyphen at all.
+        assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("fooBar-baz", "1") } } }
     }
 
     // bind.ts listens to each __event value as the browser hands it over, lowercased, after
@@ -517,8 +514,7 @@ class AsTheClientReadsItTest {
                 { dataClass("b_", "true", Case.CAMEL) },
                 { dataOn("my-event_", "x()") { debounce = 1.milliseconds } },
                 { dataSignals("b_", "1", ifMissing = true) },
-                { dataComputed("b_", "1", Case.SNAKE) },
-                { dataRef("b_", Case.CAMEL) },
+                { dataComputed("B_", "1") },
             )
         for (attribute in refused) {
             assertFailsWith<InvalidSignalNameException> { elements { div { attribute(this) } } }

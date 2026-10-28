@@ -46,7 +46,8 @@ class ClientOracleTest {
         val misread = ArrayList<String>()
         for (name in casing.keys) {
             if (name.none { it.isUpperCase() } || runCatching { Casing.validate(name) }.isFailure) continue
-            for (default in listOf(Case.CAMEL, Case.KEBAB)) {
+            // A signal name holds no hyphen, so only an event or class name, kebab by default, may.
+            for (default in if ('-' in name) listOf(Case.KEBAB) else listOf(Case.CAMEL, Case.KEBAB)) {
                 val result = runCatching { Casing.key(name, null, default) }
                 val wire = (result.getOrNull()?.first ?: Casing.kebab(name)).lowercase()
                 val table = casing[wire]?.obj("modifyCasing") ?: fail("$wire, the key written for $name, is not in casing.json: add it")
@@ -54,11 +55,9 @@ class ClientOracleTest {
                     .onSuccess { (_, case) ->
                         val column = if (case == null) "default ${default.wire}" else "case.${case.wire}"
                         val read = table.string(column)
-                        // Under a camel default a hyphen is read as camel, as reference() reads it; under kebab the name comes back as typed.
-                        val expected = if (default == Case.CAMEL) Casing.reference(name) else name
-                        if (read != expected) {
+                        if (read != name) {
                             misread +=
-                                "$name written as $wire with $column for a ${default.wire} default, which the client reads as $read, not $expected"
+                                "$name written as $wire with $column for a ${default.wire} default, which the client reads as $read"
                         }
                     }.onFailure { e ->
                         val read = Regex("""would read (\S+)\.""").find(e.message!!)?.groupValues?.get(1) ?: throw e

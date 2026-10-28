@@ -67,6 +67,26 @@ public object SignalNames {
             }
         }
 
+    /**
+     * Why [name] cannot name a signal in code, or `null` when it can: it has a hyphen.
+     *
+     * A signal goes by the name the code writes, in a patch, in an expression and in an attribute
+     * key alike. The hyphen is the one character the client reads differently between them: in an
+     * attribute key it camel-cases `foo-bar` to `fooBar`, in `$foo-bar` and in a patch it keeps it.
+     * Without one, every name comes back as written, so a name with one is refused rather than
+     * meaning two signals. A key with a hyphen is still data inside a value or in JSON text.
+     */
+    public fun hyphenProblem(name: String): String? {
+        if ('-' !in name) return null
+        return "has a hyphen, which Datastar's client reads as a capital in an attribute key and as a hyphen in an " +
+            "expression or a patch, so it would name two signals; write ${withoutHyphens(name)}"
+    }
+
+    /** [name] with each hyphen dropped and the letter after it raised: `first-name` is `firstName`. */
+    public fun withoutHyphens(name: String): String = HYPHEN.replace(name) { it.value.trimStart('-').uppercase() }
+
+    private val HYPHEN = Regex("-+.?")
+
     /** Why the client cannot hold [path], written with dots as `data-signals:a.b` writes it, or `null` when it can. */
     public fun pathProblem(path: String): String? {
         val parts = path.split('.')

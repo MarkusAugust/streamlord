@@ -28,14 +28,12 @@ public final class io/github/markusaugust/streamlord/html/AttributesKt {
 	public static final fun dataClass (Lkotlinx/html/HTMLTag;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;)V
 	public static synthetic fun dataClass$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;ILjava/lang/Object;)V
 	public static final fun dataComputed (Lkotlinx/html/HTMLTag;Ljava/lang/String;)V
-	public static final fun dataComputed (Lkotlinx/html/HTMLTag;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;)V
-	public static synthetic fun dataComputed$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;ILjava/lang/Object;)V
+	public static final fun dataComputed (Lkotlinx/html/HTMLTag;Ljava/lang/String;Ljava/lang/String;)V
 	public static final fun dataEffect (Lkotlinx/html/HTMLTag;Ljava/lang/String;)V
 	public static final fun dataIgnore (Lkotlinx/html/HTMLTag;Z)V
 	public static synthetic fun dataIgnore$default (Lkotlinx/html/HTMLTag;ZILjava/lang/Object;)V
 	public static final fun dataIgnoreMorph (Lkotlinx/html/HTMLTag;)V
-	public static final fun dataIndicator (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;)V
-	public static synthetic fun dataIndicator$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;ILjava/lang/Object;)V
+	public static final fun dataIndicator (Lkotlinx/html/HTMLTag;Ljava/lang/String;)V
 	public static final fun dataInit (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
 	public static synthetic fun dataInit$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
 	public static final fun dataJsonSignals (Lkotlinx/html/HTMLTag;Lio/github/markusaugust/streamlord/html/SignalFilter;Z)V
@@ -62,15 +60,14 @@ public final class io/github/markusaugust/streamlord/html/AttributesKt {
 	public static final fun dataOnSubmit (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
 	public static synthetic fun dataOnSubmit$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
 	public static final fun dataPreserveAttr (Lkotlinx/html/HTMLTag;[Ljava/lang/String;)V
-	public static final fun dataRef (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;)V
-	public static synthetic fun dataRef$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;ILjava/lang/Object;)V
+	public static final fun dataRef (Lkotlinx/html/HTMLTag;Ljava/lang/String;)V
 	public static final fun dataShow (Lkotlinx/html/HTMLTag;Ljava/lang/String;)V
 	public static final fun dataSignals (Lkotlinx/html/HTMLTag;Lio/github/markusaugust/streamlord/core/json/JsonValue;Z)V
-	public static final fun dataSignals (Lkotlinx/html/HTMLTag;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;Z)V
+	public static final fun dataSignals (Lkotlinx/html/HTMLTag;Ljava/lang/String;Ljava/lang/String;Z)V
 	public static final fun dataSignals (Lkotlinx/html/HTMLTag;Ljava/lang/String;Z)V
 	public static final fun dataSignals (Lkotlinx/html/HTMLTag;[Lkotlin/Pair;Z)V
 	public static synthetic fun dataSignals$default (Lkotlinx/html/HTMLTag;Lio/github/markusaugust/streamlord/core/json/JsonValue;ZILjava/lang/Object;)V
-	public static synthetic fun dataSignals$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;ZILjava/lang/Object;)V
+	public static synthetic fun dataSignals$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Ljava/lang/String;ZILjava/lang/Object;)V
 	public static synthetic fun dataSignals$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;ZILjava/lang/Object;)V
 	public static synthetic fun dataSignals$default (Lkotlinx/html/HTMLTag;[Lkotlin/Pair;ZILjava/lang/Object;)V
 	public static final fun dataStyle (Lkotlinx/html/HTMLTag;Ljava/lang/String;)V
@@ -80,10 +77,8 @@ public final class io/github/markusaugust/streamlord/html/AttributesKt {
 
 public final class io/github/markusaugust/streamlord/html/BindModifiers {
 	public fun <init> ()V
-	public final fun getCase ()Lio/github/markusaugust/streamlord/html/Case;
 	public final fun getEvents ()Ljava/util/List;
 	public final fun getProp ()Ljava/lang/String;
-	public final fun setCase (Lio/github/markusaugust/streamlord/html/Case;)V
 	public final fun setEvents (Ljava/util/List;)V
 	public final fun setProp (Ljava/lang/String;)V
 }

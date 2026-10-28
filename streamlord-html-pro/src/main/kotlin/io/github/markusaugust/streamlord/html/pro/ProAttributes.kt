@@ -241,13 +241,15 @@ public fun HTMLTag.dataCustomValidity(expression: String) {
     attributes[ds("custom-validity")] = ExpressionGuard.check(expression)
 }
 
-/** `data-match-media:signal="'(query)'"` (Pro): a boolean signal that follows a media query. */
+/**
+ * `data-match-media:signal="'(query)'"` (Pro): a boolean signal that follows a media query, with
+ * [signal] written as `dataSignals` writes a name.
+ */
 public fun HTMLTag.dataMatchMedia(
     signal: String,
     mediaQuery: String,
-    case: Case? = null,
 ) {
-    val (key, mod) = Casing.key(Casing.signalName(signal), case, Case.CAMEL)
+    val (key, mod) = Casing.key(Casing.signalName(signal), null, Case.CAMEL)
     val mods = mod?.let { "__case.${it.wire}" } ?: ""
     attributes[ds("match-media:" + Casing.heldKey(signal, Casing.withModifiers(signal, key, mods)))] = js(mediaQuery)
 }

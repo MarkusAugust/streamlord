@@ -101,8 +101,8 @@ must hold it. A codec set to skip defaults, kotlinx's `encodeDefaults = false` o
 
 A key keeps the codec's spelling, hyphens included. `@SerialName("first-name")` declares the
 signal `first-name`, which an expression reaches as `$['first-name']`, written
-`signal("['first-name']")`; `signal("first-name")` is `$firstName`, another signal. Keep the
-names in camelCase and the question never comes up.
+`signal("['first-name']")`; `signal("first-name")` throws, since a signal name holds no hyphen
+(see [Casing](/casing/)). Keep the names in camelCase and the question never comes up.
 
 The built-in codec cannot encode a data class either, so `toJsonValue` needs the codec from step
 one. In Spring it is on the `Streamlord` bean:

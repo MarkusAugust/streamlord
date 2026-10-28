@@ -599,12 +599,6 @@ public class IntervalModifiers {
 /** Modifiers for `data-bind`. */
 public class BindModifiers {
     /**
-     * Casing of the signal name. Datastar applies `__case` only to a name written in the key,
-     * so setting this switches the helper to `data-bind:name__case.x`; see [Casing].
-     */
-    public var case: Case? = null
-
-    /**
      * Bind to a specific element property instead of the default. The browser lowercases the
      * modifier and Datastar's client camel-cases it back with its own rules, so a name it cannot
      * give back, such as `x2y` (read as `x2Y`) or `_value` (read as `Value`), is refused.
@@ -619,7 +613,6 @@ public class BindModifiers {
 
     internal fun build(): String =
         buildString {
-            case?.let { append("__case.").append(it.wire) }
             prop?.let { append("__prop.").append(Casing.bindProp(it)) }
             if (events.isNotEmpty()) {
                 append("__event")

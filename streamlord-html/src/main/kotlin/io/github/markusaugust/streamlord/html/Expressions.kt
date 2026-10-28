@@ -7,7 +7,11 @@ package io.github.markusaugust.streamlord.html
  * same text without a single escaped dollar sign.
  */
 
-/** `$name`: a reference to a signal. Dotted names reach nested signals. */
+/**
+ * `$name`: a reference to a signal, by the name it was declared with. Dotted names reach nested
+ * signals, and brackets a key no name reaches: `signal("form['first-name']")`. A hyphen outside
+ * brackets is refused; see [Casing.reference].
+ */
 public fun signal(name: String): String = "$" + Casing.reference(name)
 
 /** `$name = value`, with [value] written as a JavaScript literal by [JsLiteral]: `set("name", "Gorvek")` is `$name = 'Gorvek'`. */

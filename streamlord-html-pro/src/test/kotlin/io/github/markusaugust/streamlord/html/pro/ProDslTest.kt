@@ -23,7 +23,7 @@ class ProDslTest {
             elements {
                 div {
                     dataAnimate("r", "${'$'}size * 2")
-                    dataMatchMedia("is-dark", "prefers-color-scheme: dark", case = Case.CAMEL)
+                    dataMatchMedia("isDark", "prefers-color-scheme: dark")
                     dataOnRaf("${'$'}t++") {
                         throttle = 16.milliseconds
                         throttleTrailing = true
@@ -42,7 +42,7 @@ class ProDslTest {
                 input { dataCustomValidity("${'$'}a === ${'$'}b ? '' : 'Values must match.'") }
             }
         assertEquals(
-            """<div data-animate:r="${'$'}size * 2" data-match-media:is-dark__case.camel="'prefers-color-scheme: dark'" """ +
+            """<div data-animate:r="${'$'}size * 2" data-match-media:is-dark="'prefers-color-scheme: dark'" """ +
                 """data-on-raf__throttle.16ms.trailing="${'$'}t++" data-on-resize__debounce.100ms.leading="${'$'}w = el.clientWidth" """ +
                 """data-persist="" data-persist:draft__session="{include: /^form/}" """ +
                 """data-query-string__filter__history="{exclude: /^_/}" data-replace-url="`/page${'$'}{${'$'}page}`" """ +

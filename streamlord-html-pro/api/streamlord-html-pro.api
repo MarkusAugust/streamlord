@@ -96,8 +96,7 @@ public final class io/github/markusaugust/streamlord/html/pro/ProAttributesKt {
 	public static synthetic fun dataAnimate$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
 	public static synthetic fun dataAnimate$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
 	public static final fun dataCustomValidity (Lkotlinx/html/HTMLTag;Ljava/lang/String;)V
-	public static final fun dataMatchMedia (Lkotlinx/html/HTMLTag;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;)V
-	public static synthetic fun dataMatchMedia$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/html/Case;ILjava/lang/Object;)V
+	public static final fun dataMatchMedia (Lkotlinx/html/HTMLTag;Ljava/lang/String;Ljava/lang/String;)V
 	public static final fun dataOnRaf (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
 	public static synthetic fun dataOnRaf$default (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
 	public static final fun dataOnResize (Lkotlinx/html/HTMLTag;Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V

@@ -95,15 +95,15 @@ public fun HTMLTag.dataSignals(
 
 /**
  * `data-signals:name="expression"`. Dotted names create nested signals. A camelCase [name] is
- * written in kebab-case, which Datastar reads back as the same camelCase signal; see [Casing].
+ * written in kebab-case, which Datastar reads back as the same camelCase signal, and a name with
+ * a hyphen is refused, since it would not come back as written; see [Casing].
  */
 public fun HTMLTag.dataSignals(
     name: String,
     expression: String,
-    case: Case? = null,
     ifMissing: Boolean = false,
 ) {
-    val (key, mod) = Casing.key(Casing.signalName(name), case, Case.CAMEL)
+    val (key, mod) = Casing.key(Casing.signalName(name), null, Case.CAMEL)
     attributes[ds("signals:" + Casing.heldKey(name, Casing.withModifiers(name, key, signalMods(mod, ifMissing))))] =
         ExpressionGuard.check(expression)
 }
@@ -115,24 +115,20 @@ public fun HTMLTag.dataSignals(
  * div { dataSignals("count" to 0, "user" to mapOf("name" to "")) }
  * ```
  *
- * The key of each pair is read the way the keyed form reads its name: `foo-bar` declares
- * `$fooBar`, the signal `signal("foo-bar")` refers to, and a dotted name nests, so
- * `"user.first-name" to ""` declares `$user.firstName`. The keys inside a value are kept as
- * written, since the client merges the object as it is: `"user" to mapOf("first-name" to "")`
- * declares `$user['first-name']`, which `signal("user['first-name']")` reaches. A key inside a
- * map holding `.` is refused, since the client would store it as one key that `$a.b` does not
- * reach, and so is one it cannot hold with what is under it ([SignalNames]).
+ * The key of each pair is the signal's name, held to the rules of the keyed form, so a hyphen is
+ * refused, and a dotted name nests: `"user.firstName" to ""` declares `$user.firstName`. The keys
+ * inside a value are kept as written, since they are data the client merges as it is:
+ * `"user" to mapOf("first-name" to "")` declares `$user['first-name']`, which
+ * `signal("user['first-name']")` reaches. A key inside a map holding `.` is refused, since the
+ * client would store it as one key that `$a.b` does not reach, and so is one it cannot hold with
+ * what is under it ([SignalNames]).
  */
 public fun HTMLTag.dataSignals(
     vararg signals: Pair<String, Any?>,
     ifMissing: Boolean = false,
 ) {
-    signals.forEach { Casing.signalName(it.first) }
-    val keyed = signals.map { (name, value) -> Casing.camel(name) to checkKeys(value, name) }
-    keyed.groupBy { it.first }.values.firstOrNull { it.size > 1 }?.let {
-        throw InvalidSignalNameException(it.first().first, "is given twice once the names are read in camelCase")
-    }
-    val nested = SignalNames.nest(keyed) { name, reason -> throw InvalidSignalNameException(name, reason) }
+    val named = signals.map { (name, value) -> Casing.signalName(name) to checkKeys(value, name) }
+    val nested = SignalNames.nest(named) { name, reason -> throw InvalidSignalNameException(name, reason) }
     attributes[ds("signals${signalMods(null, ifMissing)}")] = JsonWriter.writeExpression(nested)
 }
 
@@ -166,13 +162,12 @@ public fun HTMLTag.dataComputed(expression: String) {
     attributes[ds("computed")] = ExpressionGuard.check(expression)
 }
 
-/** `data-computed:name="expression"`. */
+/** `data-computed:name="expression"`, with [name] written as [dataSignals] writes it. */
 public fun HTMLTag.dataComputed(
     name: String,
     expression: String,
-    case: Case? = null,
 ) {
-    val (key, mod) = Casing.key(Casing.signalName(name), case, Case.CAMEL)
+    val (key, mod) = Casing.key(Casing.signalName(name), null, Case.CAMEL)
     attributes[ds("computed:" + Casing.heldKey(name, Casing.withModifiers(name, key, caseMod(mod))))] = ExpressionGuard.check(expression)
 }
 
@@ -288,61 +283,26 @@ public fun HTMLTag.dataOnIntersect(
 
 // ---- Binding and references -------------------------------------------------------------------
 
-/**
- * `data-bind="signal"`: two-way binding between an input and a signal. Written as
- * `data-bind:signal__case.x` when a `case` is set, because Datastar applies `__case` to a key
- * only; see [signalNameAttribute].
- */
+/** `data-bind="signal"`: two-way binding between an input and a signal. The value keeps its case, so the name is written as it is. */
 public fun HTMLTag.dataBind(
     signal: String,
     modifiers: BindModifiers.() -> Unit = {},
 ) {
-    val mods = BindModifiers().apply(modifiers)
-    signalNameAttribute("bind", signal, mods.case) {
-        mods.case = it
-        mods.build()
-    }
+    attributes[ds("bind${BindModifiers().apply(modifiers).build()}")] = Casing.signalName(signal)
 }
 
-/** `data-ref="name"`: expose the element as a signal. Written as `data-ref:name__case.x` when [case] is set; see [signalNameAttribute]. */
-public fun HTMLTag.dataRef(
-    name: String,
-    case: Case? = null,
-) {
-    signalNameAttribute("ref", name, case) { caseMod(it) }
+/** `data-ref="name"`: expose the element as a signal. */
+public fun HTMLTag.dataRef(name: String) {
+    attributes[ds("ref")] = Casing.signalName(name)
 }
 
 /**
  * `data-indicator="signal"`: a boolean signal that is `true` while a fetch started by this same
  * element is in flight; Datastar's client counts no other, not even one from an element inside
- * it, so put it on the element whose action fetches. Written as `data-indicator:signal__case.x`
- * when [case] is set; see [signalNameAttribute].
+ * it, so put it on the element whose action fetches.
  */
-public fun HTMLTag.dataIndicator(
-    signal: String,
-    case: Case? = null,
-) {
-    signalNameAttribute("indicator", signal, case) { caseMod(it) }
-}
-
-/**
- * The attributes that take a signal name either in the key or in the value. The value keeps its
- * case and is used as written, so without a `case` the name goes there, read the way Datastar
- * names a signal (`foo-bar` is `$fooBar`, as with [signal]). Datastar applies `__case` to a key
- * only, so with a `case` the name goes into the key, through [Casing.key].
- */
-private fun HTMLTag.signalNameAttribute(
-    attribute: String,
-    name: String,
-    case: Case?,
-    modifiers: (Case?) -> String,
-) {
-    if (case == null) {
-        attributes[ds("$attribute${modifiers(null)}")] = Casing.camel(Casing.signalName(name))
-    } else {
-        val (key, mod) = Casing.key(Casing.signalName(name), case, Case.CAMEL)
-        attributes[ds("$attribute:" + Casing.heldKey(name, Casing.withModifiers(name, key, modifiers(mod))))] = ""
-    }
+public fun HTMLTag.dataIndicator(signal: String) {
+    attributes[ds("indicator")] = Casing.signalName(signal)
 }
 
 // ---- Display ----------------------------------------------------------------------------------
