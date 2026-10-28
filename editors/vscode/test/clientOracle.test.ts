@@ -5,6 +5,7 @@ import { analyzeHtml } from "../src/analyze.ts";
 import { parseAttributeName } from "../src/catalog.ts";
 import { clientRewrite, clientScript } from "../src/expression.ts";
 import { kebab, wireKey, wireKeyReads } from "../src/markup.ts";
+import { withoutReferenceHyphens } from "../src/signalNameHyphens.ts";
 import { clientKeyName, toCamel } from "../src/signals.ts";
 
 /**
@@ -98,9 +99,42 @@ describe("the client's rules", () => {
 
   it("writes the function body genRx compiles", () => {
     const cases = read<{ rewrites: ExpressionCase[] }>("expressions.json").rewrites;
-    assert.equal(cases.length, 276);
+    assert.equal(cases.length, 314);
     for (const { expression, returnsValue, js } of cases) {
       assert.equal(clientRewrite(clientScript(expression, returnsValue).js).js, js, `${JSON.stringify(expression)} with returnsValue ${returnsValue}`);
+    }
+  });
+
+  // What withoutReferenceHyphens says of a name, each against the body the client compiles for `$`
+  // and that name: the part that shows the hyphen read as a key, as a signal of its own, or as a
+  // minus. The same table as the core's ClientOracleTest; every name here is a case of the fixture.
+  it("reads a reference's hyphens as genRx does", () => {
+    const cases = read<{ rewrites: ExpressionCase[] }>("expressions.json").rewrites;
+    const names: [string, string | null, string][] = [
+      ["form['first-name']", null, "$['form']['first-name']"],
+      ["a['x]y-z']", null, "$['a']['x]y-z']"],
+      ['a["x]y-z"]', null, `$['a']["x]y-z"]`],
+      ["a[`x]y-z`]", null, "$['a'][`x]y-z`]"],
+      ["a['it\\'s-x']", null, "$['a']['it\\'s-x']"],
+      ["a[1-2]", null, "$['a'][1-2]"],
+      ["a[`${'x-y'}`]", null, "$['a'][`${'x-y'}`]"],
+      ["items[$i-1]", "items[$i1]", "[$['i-1']]"],
+      ["a[$b-c['d']]", "a[$bC['d']]", "[$['b-c']['d']]"],
+      ["a[`${$b-c}`]", "a[`${$bC}`]", "$['b-c']"],
+      ["a-b[0]", "aB[0]", "$['a-b'][0]"],
+      ["a['b'].c-d", "a['b'].cD", "$['a']['b'].c-d"],
+      ["a[0].b-c", "a[0].bC", "$['a'][0].b-c"],
+      ["a['['].b-c", "a['['].bC", "$['a']['['].b-c"],
+      ["a.b-c['d-e']", "a.bC['d-e']", "$['a']['b-c']['d-e']"],
+      ["a[$b][$c-d]", "a[$b][$cD]", "[$['c-d']]"],
+    ];
+    for (const [name, fixed, shows] of names) {
+      const found = cases.filter((c) => c.expression === `$${name}` && !c.returnsValue);
+      assert.equal(found.length, 1, name);
+      const [one] = found as [ExpressionCase];
+      assert.equal(one.compiles, true, name);
+      assert.ok(one.js.includes(shows), `${name}: ${one.js}`);
+      assert.equal(withoutReferenceHyphens(name), fixed, name);
     }
   });
 

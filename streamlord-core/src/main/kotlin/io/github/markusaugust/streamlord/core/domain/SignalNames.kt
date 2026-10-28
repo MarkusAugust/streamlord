@@ -87,6 +87,53 @@ public object SignalNames {
 
     private val HYPHEN = Regex("-+.?")
 
+    /**
+     * [name], a reference an expression writes after `$`, with its hyphens taken out, or `null`
+     * when it has none that matter. The client reads `$` and [name] as it reads any expression, and
+     * two kinds of hyphen go wrong there: one in a signal the client reads, as in `items[${'$'}i-1]`,
+     * which reads the signal `i-1`, and one outside brackets and strings that no reference holds, as
+     * in `a['x'].b-c`, which JavaScript reads as a minus. A quoted key is text, so `form['first-name']`
+     * and `a['x]y-z']` are fine. Each hyphen that goes wrong is dropped and the character after it
+     * raised: `items[${'$'}i1]`, `a['x'].bC`.
+     */
+    public fun withoutReferenceHyphens(name: String): String? {
+        val text = "$" + name
+        val read = clientRewritten(text)
+        val wrong = HashSet<Int>()
+        for (r in read.references) {
+            for (i in r.start until r.end) if (text[i] == '-') wrong += i
+        }
+        var depth = 0
+        var i = 0
+        while (i < text.length) {
+            val skip =
+                read.strings.firstOrNull { i in it }
+                    ?: read.references.firstOrNull { i >= it.start && i < it.end }?.let { it.start until it.end }
+            if (skip != null) {
+                i = skip.last + 1
+                continue
+            }
+            when (text[i]) {
+                '[' -> depth++
+                ']' -> depth = maxOf(0, depth - 1)
+                '-' -> if (depth == 0) wrong += i
+            }
+            i++
+        }
+        if (wrong.isEmpty()) return null
+        val out = StringBuilder()
+        var raise = false
+        for ((k, c) in text.withIndex()) {
+            if (k in wrong) {
+                raise = true
+                continue
+            }
+            out.append(if (raise) c.toString().uppercase() else c.toString())
+            raise = false
+        }
+        return out.substring(1)
+    }
+
     /** Why the client cannot hold [path], written with dots as `data-signals:a.b` writes it, or `null` when it can. */
     public fun pathProblem(path: String): String? {
         val parts = path.split('.')

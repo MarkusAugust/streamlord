@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.domain.SignalNames
+
 /*
  * A hyphen in a signal name written in a DSL call. The client reads one as a capital in an
  * attribute key and as a hyphen in an expression or a patch, so the SDK refuses such a name at
@@ -19,7 +21,7 @@ private const val KEYED_OR_OBJECT = "dataSignals"
 /** The helper with an object form of one argument and a keyed form of two. */
 private const val COMPUTED = "dataComputed"
 
-/** The expression helpers, whose name is JavaScript: a hyphen inside brackets is a key. */
+/** The expression helpers, whose name is JavaScript: a quoted key in brackets may hold a hyphen. */
 internal val EXPRESSION_HELPERS: Set<String> = setOf("signal", "set", "setExpr", "increment", "decrement", "toggle", "not")
 
 /**
@@ -39,39 +41,6 @@ private val OBJECT_START = Regex("""^\s*[{\[]""")
 
 /** [name] with each hyphen dropped and the character after it raised: `first-name` is `firstName`. */
 internal fun withoutHyphens(name: String): String = Regex("-+.?").replace(name) { it.value.trimStart('-').uppercase() }
-
-/** [withoutHyphens] outside `[...]`, where a quoted key such as `['sub-total']` is text. */
-internal fun withoutHyphensOutsideBrackets(name: String): String {
-    val out = StringBuilder()
-    var depth = 0
-    var raise = false
-    for (c in name) {
-        when {
-            c == '[' -> depth++
-            c == ']' -> depth = maxOf(0, depth - 1)
-        }
-        if (depth == 0 && c == '-') {
-            raise = true
-            continue
-        }
-        out.append(if (raise) c.toString().uppercase() else c.toString())
-        raise = false
-    }
-    return out.toString()
-}
-
-/** The first hyphen outside `[...]`, or -1. */
-private fun hyphenOutsideBrackets(name: String): Int {
-    var depth = 0
-    for ((i, c) in name.withIndex()) {
-        when (c) {
-            '[' -> depth++
-            ']' -> depth = maxOf(0, depth - 1)
-            '-' -> if (depth == 0) return i
-        }
-    }
-    return -1
-}
 
 /**
  * [name] with its one hyphenated part in brackets, `form.first-name` as `form['first-name']`, or
@@ -102,19 +71,19 @@ internal fun signalNameHyphenIssues(
         if (site.name !in helpers || src.lastNonSpaceBefore(site.nameStart) == '.') return out
         if (site.name in SHARED_NAME_HELPERS && !insideDslCall(site.nameStart)) return out
         val s = (first ?: site.named("name"))?.string ?: return out
-        if (hyphenOutsideBrackets(s.text) >= 0) out += hyphenIssue(s, src, withoutHyphensOutsideBrackets(s.text), bracketed(s.text))
+        SignalNames.withoutReferenceHyphens(s.text)?.let { out += hyphenIssue(s, src, it, bracketed(s.text)) }
         return out
     }
 
     if (site.name in NAMING_HELPERS) {
         // dataSignals("{...}") and dataSignals("{...}", flag) are the object form: a second argument
-        // that is a string makes the first a name. One held in a variable may be either, and is left alone.
+        // that is a String makes the first a name, and one that may be either is left alone.
         val keyed =
             first?.string?.takeIf {
                 when (site.name) {
                     KEYED_OR_OBJECT -> {
                         !OBJECT_START.containsMatchIn(it.text) &&
-                            (site.named("expression") != null || secondIsExpression(positional))
+                            (site.named("expression") != null || secondArgument(positional.getOrNull(1), lex) == SecondArgument.EXPRESSION)
                     }
 
                     COMPUTED -> {
@@ -151,8 +120,63 @@ internal fun signalNameHyphenIssues(
 
 private val PAIR_AFTER = Regex("""\s+to\b""")
 
-private fun secondIsExpression(positional: List<Arg>): Boolean =
-    positional.getOrNull(1)?.let { it.string != null || '"' in it.text } == true
+/** What the second argument of `dataSignals(first, second)` is, as far as its text shows: the overload Kotlin picks. */
+internal enum class SecondArgument { EXPRESSION, IF_MISSING, UNKNOWN }
+
+/** An operator whose result is a Boolean, outside strings. ktlint spaces `<` and `>` when they compare, and not in a type argument. */
+private val BOOLEAN_OPERATOR = Regex("""==|!=|&&|\|\||\s[<>]=?\s|\s!?(?:in|is)\s""")
+
+/** A call of a helper that writes an expression, which is a String. */
+private val EXPRESSION_CALL = Regex("""^(?:signal|not|set|setExpr|increment|decrement|toggle)\s*\(""")
+
+/**
+ * Whether [arg], the second argument of `dataSignals`, is the expression of the keyed form, a
+ * String, or `ifMissing` of the object form, a Boolean. A string literal, a concatenation that
+ * starts with one, and a call of an expression helper are Strings; `true`, `false`, a negation and
+ * a comparison or a logical operator are Booleans. Anything else, a variable or a call, may be
+ * either, and only the compiler knows.
+ */
+internal fun secondArgument(
+    arg: Arg?,
+    lex: KotlinLex,
+): SecondArgument {
+    if (arg == null) return SecondArgument.UNKNOWN
+    if (arg.string != null) return SecondArgument.EXPRESSION
+    val strings = lex.strings.filter { it.start >= arg.start && it.end <= arg.end }
+    val code =
+        arg.text
+            .mapIndexed {
+                i,
+                c,
+                ->
+                if (strings.any { arg.start + i >= it.start && arg.start + i < it.end }) ' ' else c
+            }.joinToString("")
+    val text = arg.text.trim()
+    if (text == "true" || text == "false" || code.trim().startsWith('!') || BOOLEAN_OPERATOR.containsMatchIn(" $code ")) {
+        return SecondArgument.IF_MISSING
+    }
+    val leading = strings.firstOrNull { it.start == arg.start + arg.text.indexOfFirst { c -> !c.isWhitespace() } }
+    if (leading != null &&
+        arg.text
+            .substring(leading.end - arg.start)
+            .trim()
+            .let { it.isEmpty() || it.startsWith('+') }
+    ) {
+        return SecondArgument.EXPRESSION
+    }
+    // A call of an expression helper, alone or with more joined to it by `+`.
+    val call = EXPRESSION_CALL.find(code.trimStart()) ?: return SecondArgument.UNKNOWN
+    val open = code.length - code.trimStart().length + call.range.last
+    var depth = 0
+    for (i in open until code.length) {
+        if (code[i] == '(') depth++
+        if (code[i] == ')' && --depth == 0) {
+            val after = code.substring(i + 1).trim()
+            return if (after.isEmpty() || after.startsWith('+')) SecondArgument.EXPRESSION else SecondArgument.UNKNOWN
+        }
+    }
+    return SecondArgument.UNKNOWN
+}
 
 private fun hyphenIssue(
     s: KotlinString,
@@ -162,8 +186,11 @@ private fun hyphenIssue(
 ): Issue {
     val written = src.substring(s.contentStart, s.contentEnd)
     // A name with escapes in its source is reported and left for the author to rewrite, and so is
-    // one with a template in it, whose hyphen is in the text around the template.
-    val plain = s.interpolations.isEmpty() && written == s.text
+    // one with a template in it, whose hyphen is in the text around the template. An escaped `$`,
+    // as in "items[\$i-1]", is the one escape the fix writes back.
+    val dollars = written != s.text && written == s.text.replace("$", "\\$")
+    val plain = s.interpolations.isEmpty() && (written == s.text || dollars)
+    val text = if (dollars) fixed.replace("$", "\\$") else fixed
     val advice =
         if (plain) {
             "Write $fixed" + (
@@ -183,7 +210,7 @@ private fun hyphenIssue(
         severity = Severity.ERROR,
         code = "signal-name-hyphen",
         link = Docs.CASING,
-        fixes = if (plain) listOf(Fix("Change to $fixed", s.contentStart, s.contentEnd, fixed)) else emptyList(),
+        fixes = if (plain) listOf(Fix("Change to $fixed", s.contentStart, s.contentEnd, text)) else emptyList(),
     )
 }
 

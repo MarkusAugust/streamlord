@@ -30,8 +30,8 @@ All notable changes to Streamlord are recorded here. The format follows
 - The analysis and both editors flag a hyphen in a signal name written in a DSL call, which the
   SDK refuses at runtime, as the error `signal-name-hyphen`, with the camelCase fix:
   `dataSignals("foo-bar", …)`, `dataBind("form.first-name")`, a pair's key, `removeSignals("a-b")`,
-  and a hyphen outside brackets in `signal`, `set` and the other expression helpers, which also
-  name the bracket form, `form['first-name']`. A call inside a string template counts too,
+  and a hyphen in `signal`, `set` and the other expression helpers that the client reads as part
+  of a signal name or as a minus, with the bracket form, `form['first-name']`, where it applies. A call inside a string template counts too,
   `"${signal("is-running")} ? …"`, and a name with a template in it, `"item-$id"`, is reported
   without a fix. `set` and `toggle`, whose names a map or Ktor's `headers { }` share, count only
   inside the arguments of a DSL call. The analysis collects a helper's name as written,
@@ -39,6 +39,8 @@ All notable changes to Streamlord are recorded here. The format follows
   Datastar key casing.
 - `SignalNames.hyphenProblem` says why a name with a hyphen is refused as a signal name, and
   `SignalNames.withoutHyphens` gives the camelCase name to write instead.
+  `SignalNames.withoutReferenceHyphens` does the same for a reference written after `$`, read as
+  the client reads it, and is what the expression helpers and the analysis hold a name to.
 - `ElementsGuard.evaluatedAttributes`: the attributes whose value Datastar runs as JavaScript,
   the expression attributes and the four signal filters.
 - `conformance/`: what Datastar's client and the servers actually do, as fixtures the tests hold
@@ -68,8 +70,10 @@ All notable changes to Streamlord are recorded here. The format follows
   expression or a patch: in 0.14.0 `dataSignals("foo-bar" to 1)` declared `$fooBar`, and
   `patchSignals("foo-bar" to 1)` patched `foo-bar`. `dataSignals`, `dataComputed`, `dataBind`,
   `dataRef`, `dataIndicator`, `dataMatchMedia`, `patchSignals` and `removeSignals` refuse such a
-  name, and `signal`, `set` and the other expression helpers refuse a hyphen outside brackets;
-  the exception names what to write, `fooBar`, or `form['first-name']` for a key with a hyphen.
+  name, and `signal`, `set` and the other expression helpers refuse a hyphen that the client reads
+  as part of a signal name or as a minus. They read the name as the client reads `$` and the name,
+  so a quoted key in brackets is text whatever it holds, `a['x]y-z']`, while `items[$i-1]` reads
+  the signal `i-1` and `a['x'].b-c` subtracts `c`. The exception names what to write, `fooBar`, or `form['first-name']` for a key with a hyphen.
   The expression helpers write the name as they get it, where `signal("foo-bar")` gave
   `$fooBar`. A key with a hyphen inside a value is data and is written as it stands:
   `"user" to mapOf("first-name" to "")` declares `user['first-name']`, where 0.13.0 and 0.14.0

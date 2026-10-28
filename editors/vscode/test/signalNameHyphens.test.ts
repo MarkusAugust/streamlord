@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { analyzeKotlin } from "../src/analyze.ts";
 import type { Issue } from "../src/expression.ts";
 
@@ -91,6 +92,23 @@ fun q() = div { dataSignals("user" to buildMap { set("first-name", "") }) }`;
     assert.ok(one!.message.includes("or form['first-name'].x for a key"), one!.message);
     const named = `${dsl}fun p() = div { dataComputed(name = "a-b", expression = "1"); dataMatchMedia(signal = "c-d", mediaQuery = "x") }`;
     assert.deepEqual(names(named), ["a-b", "c-d"]);
+  });
+
+  // The table DataSignalsSecondArgumentTest in streamlord-analysis compiles: `kotlin` is the overload the compiler picked.
+  it("reads the second argument of dataSignals as the compiler does", () => {
+    type Case = { argument: string; kotlin: string; analysis: string };
+    const table = JSON.parse(readFileSync(new URL("./fixtures/data-signals-second-argument.json", import.meta.url), "utf8")) as { cases: Case[] };
+    assert.equal(table.cases.length, 32);
+    for (const { argument, kotlin, analysis } of table.cases) {
+      assert.ok(analysis === "unknown" || analysis === kotlin, argument);
+      const src = `${dsl}fun p(mode: String, flag: Boolean, expr: String, n: Int) = div { dataSignals("a-b", ${argument}) }`;
+      assert.equal(hyphens(src).length > 0, analysis === "expression", argument);
+    }
+  });
+
+  it("a name is read as the client reads it", () => {
+    const src = `${dsl}fun p() = div {\n  dataText(signal("a['x]y-z']"))\n  dataText(signal("items[\\$i-1]"))\n  dataText(signal("a['['].b-c"))\n}`;
+    assert.deepEqual(hyphens(src).map((i) => i.fixes![0]!.text), ["items[\\$i1]", "a['['].bC"]);
   });
 
   // The demo writes dataText("${signal("running")} ? ..."), so a call inside a template is the DSL's too.

@@ -306,7 +306,7 @@ class HtmlDslTest {
         )
         assertEquals("myURL", Casing.camel(Casing.kebab("myURL")))
         assertEquals("item2Name", Casing.camel(Casing.kebab("item2Name")))
-        // A helper writes the name as it stands, and refuses a hyphen outside brackets.
+        // A helper writes the name as it stands, and refuses a hyphen the client reads in a name or as a minus.
         assertEquals("${'$'}fooBar", signal("fooBar"))
         assertEquals("${'$'}form.firstName++", increment("form.firstName"))
         val kebab = assertFailsWith<InvalidSignalNameException> { signal("form.first-name") }
@@ -314,6 +314,13 @@ class HtmlDslTest {
         val bracketed = assertFailsWith<InvalidSignalNameException> { signal("form.first-name['x-y']") }
         assertTrue(bracketed.message!!.endsWith("write form.firstName['x-y']."), bracketed.message)
         assertEquals("${'$'}a[i-1]", signal("a[i-1]"))
+        // The name is read as the client reads it: a quoted key is text, even with a bracket in it,
+        // while a reference in brackets is a signal of its own and a bare hyphen after a key a minus.
+        assertEquals("${'$'}a['x]y-z']", signal("a['x]y-z']"))
+        val inner = assertFailsWith<InvalidSignalNameException> { signal("items[${'$'}i-1]") }
+        assertTrue(inner.message!!.endsWith("write items[${'$'}i1]."), inner.message)
+        val minus = assertFailsWith<InvalidSignalNameException> { signal("a['['].b-c") }
+        assertTrue(minus.message!!.endsWith("write a['['].bC."), minus.message)
         assertFailsWith<InvalidSignalNameException> { signal("") }
         assertFailsWith<InvalidSignalNameException> { signal("my signal") }
         assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("a b", "1") } } }

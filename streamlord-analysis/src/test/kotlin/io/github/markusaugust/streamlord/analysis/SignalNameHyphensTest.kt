@@ -132,6 +132,25 @@ class SignalNameHyphensTest {
         assertEquals(listOf("a-b", "c-d"), hyphens(named).map { named.substring(it.start + 1, it.end - 1) })
     }
 
+    @Test
+    fun `a name is read as the client reads it`() {
+        val src =
+            dsl +
+                """
+                fun p() = div {
+                  dataText(signal("a['x]y-z']"))
+                  dataText(signal("items[\${'$'}i-1]"))
+                  dataText(signal("a['['].b-c"))
+                }
+                """.trimIndent()
+        assertEquals(listOf("items[\\${'$'}i1]", "a['['].bC"), hyphens(src).map { it.fixes.single().text })
+        assertEquals(
+            dsl +
+                "fun p() = div {\n  dataText(signal(\"a['x]y-z']\"))\n  dataText(signal(\"items[\\${'$'}i1]\"))\n  dataText(signal(\"a['['].bC\"))\n}",
+            fixed(src),
+        )
+    }
+
     // The demo writes dataText("${'$'}{signal("running")} ? ..."), so a call inside a template is the DSL's too.
     @Test
     fun `a call inside a string template is read, and a templated name is reported without a fix`() {

@@ -1,4 +1,4 @@
-import { DOCS, type Issue } from "./expression.ts";
+import { clientRewrite, DOCS, type Issue } from "./expression.ts";
 import type { KotlinString } from "./kotlinStrings.ts";
 import { findCallSites, lexKotlin, stringAt, type Arg, type CallSite } from "./scanner.ts";
 
@@ -69,34 +69,49 @@ export function withoutHyphens(name: string): string {
   return name.replace(/-+.?/g, (m) => m.replace(/^-+/, "").toUpperCase());
 }
 
-/** `withoutHyphens` outside `[...]`, where a quoted key such as `['sub-total']` is text. */
-export function withoutHyphensOutsideBrackets(name: string): string {
-  let out = "";
+/**
+ * `name`, a reference an expression writes after `$`, with its hyphens taken out, or null when it
+ * has none that matter: one in a signal the client reads, as in `items[$i-1]`, and one outside
+ * brackets and strings that no reference holds, as in `a['x'].b-c`, which JavaScript reads as a
+ * minus. A quoted key is text. The same rule as `SignalNames.withoutReferenceHyphens` in streamlord-core.
+ */
+export function withoutReferenceHyphens(name: string): string | null {
+  const text = `$${name}`;
+  const read = clientRewrite(text);
+  const references = read.rewrites.filter((r) => r.kind === "signal");
+  const wrong = new Set<number>();
+  for (const r of references) {
+    for (let i = r.start; i < r.end; i++) if (text[i] === "-") wrong.add(i);
+  }
   let depth = 0;
-  let raise = false;
-  for (const c of name) {
+  let i = 0;
+  while (i < text.length) {
+    const at = i;
+    const skip = read.runs.find((r) => at >= r.start && at < r.end) ?? references.find((r) => at >= r.start && at < r.end);
+    if (skip) {
+      i = skip.end;
+      continue;
+    }
+    const c = text[i];
     if (c === "[") depth++;
     else if (c === "]") depth = Math.max(0, depth - 1);
-    if (depth === 0 && c === "-") {
+    else if (c === "-" && depth === 0) wrong.add(i);
+    i++;
+  }
+  if (wrong.size === 0) return null;
+  let out = "";
+  let raise = false;
+  // By UTF-16 unit, as the offsets in wrong count.
+  for (let k = 0; k < text.length; k++) {
+    const c = text.charAt(k);
+    if (wrong.has(k)) {
       raise = true;
       continue;
     }
     out += raise ? c.toUpperCase() : c;
     raise = false;
   }
-  return out;
-}
-
-/** The first hyphen outside `[...]`, or -1. */
-function hyphenOutsideBrackets(name: string): number {
-  let depth = 0;
-  for (let i = 0; i < name.length; i++) {
-    const c = name[i];
-    if (c === "[") depth++;
-    else if (c === "]") depth = Math.max(0, depth - 1);
-    else if (c === "-" && depth === 0) return i;
-  }
-  return -1;
+  return out.slice(1);
 }
 
 /**
@@ -114,9 +129,46 @@ export function bracketed(name: string): string | null {
 const PAIR_KEY = /^[\s(]*"/;
 const PAIR_AFTER = /\s+to\b/y;
 const OBJECT_START = /^\s*[{[]/;
-function secondIsExpression(positional: Arg[]): boolean {
-  const second = positional[1];
-  return second !== undefined && (second.string !== null || second.text.includes('"'));
+/** What the second argument of `dataSignals(first, second)` is, as far as its text shows: the overload Kotlin picks. */
+export type SecondArgument = "expression" | "ifMissing" | "unknown";
+
+/** An operator whose result is a Boolean, outside strings. ktlint spaces `<` and `>` when they compare, and not in a type argument. */
+const BOOLEAN_OPERATOR = /==|!=|&&|\|\||\s[<>]=?\s|\s!?(?:in|is)\s/;
+
+/** A call of a helper that writes an expression, which is a String. */
+const EXPRESSION_CALL = /^(?:signal|not|set|setExpr|increment|decrement|toggle)\s*\(/;
+
+/**
+ * Whether `arg`, the second argument of `dataSignals`, is the expression of the keyed form, a
+ * String, or `ifMissing` of the object form, a Boolean. The same rule as `secondArgument` in
+ * streamlord-analysis; anything its text does not settle may be either, and only the compiler knows.
+ */
+export function secondArgument(arg: Arg | undefined, strings: KotlinString[]): SecondArgument {
+  if (arg === undefined) return "unknown";
+  if (arg.string !== null) return "expression";
+  const inside = strings.filter((s) => s.start >= arg.start && s.end <= arg.end);
+  const code = [...arg.text].map((c, i) => (inside.some((s) => arg.start + i >= s.start && arg.start + i < s.end) ? " " : c)).join("");
+  const text = arg.text.trim();
+  if (text === "true" || text === "false" || code.trim().startsWith("!") || BOOLEAN_OPERATOR.test(` ${code} `)) return "ifMissing";
+  const first = arg.text.search(/\S/);
+  const leading = inside.find((s) => s.start === arg.start + first);
+  if (leading) {
+    const after = arg.text.slice(leading.end - arg.start).trim();
+    if (after === "" || after.startsWith("+")) return "expression";
+  }
+  // A call of an expression helper, alone or with more joined to it by `+`.
+  const trimmed = code.trimStart();
+  const call = EXPRESSION_CALL.exec(trimmed);
+  if (!call) return "unknown";
+  let depth = 0;
+  for (let i = code.length - trimmed.length + call[0].length - 1; i < code.length; i++) {
+    if (code[i] === "(") depth++;
+    if (code[i] === ")" && --depth === 0) {
+      const after = code.slice(i + 1).trim();
+      return after === "" || after.startsWith("+") ? "expression" : "unknown";
+    }
+  }
+  return "unknown";
 }
 
 /** The issues of `site`, a call in `SIGNAL_NAMING_CALLS`, for each signal name in it that holds a hyphen. */
@@ -134,16 +186,17 @@ export function signalNameHyphenIssues(site: CallSite, src: string, strings: Kot
     if (SHARED_NAME_HELPERS.has(site.name) && !insideDslCall(site.nameStart)) return out;
     const s = (first ?? named("name"))?.string;
     if (!s) return out;
-    if (hyphenOutsideBrackets(s.text) >= 0) out.push(hyphenIssue(s, src, withoutHyphensOutsideBrackets(s.text), bracketed(s.text)));
+    const fixed = withoutReferenceHyphens(s.text);
+    if (fixed !== null) out.push(hyphenIssue(s, src, fixed, bracketed(s.text)));
     return out;
   }
 
   if (NAMING_HELPERS.has(site.name)) {
     // dataSignals("{...}") and dataSignals("{...}", flag) are the object form: a second argument
-    // that is a string makes the first a name. One held in a variable may be either, and is left alone.
+    // that is a String makes the first a name, and one that may be either is left alone.
     const f = first?.string;
     const isKeyed = (text: string): boolean => {
-      if (site.name === KEYED_OR_OBJECT) return !OBJECT_START.test(text) && (named("expression") !== undefined || secondIsExpression(positional));
+      if (site.name === KEYED_OR_OBJECT) return !OBJECT_START.test(text) && (named("expression") !== undefined || secondArgument(positional[1], strings) === "expression");
       if (site.name === COMPUTED) return named("expression") !== undefined || positional.length > 1;
       return true;
     };
@@ -177,8 +230,11 @@ export function signalNameHyphenIssues(site: CallSite, src: string, strings: Kot
 function hyphenIssue(s: KotlinString, src: string, fixed: string, bracketedName: string | null): Issue {
   const written = src.slice(s.contentStart, s.contentEnd);
   // A name with escapes in its source is reported and left for the author to rewrite, and so is
-  // one with a template in it, whose hyphen is in the text around the template.
-  const plain = s.interpolations.length === 0 && written === s.text;
+  // one with a template in it, whose hyphen is in the text around the template. An escaped `$`,
+  // as in "items[\$i-1]", is the one escape the fix writes back.
+  const dollars = written !== s.text && written === s.text.replaceAll("$", "\\$");
+  const plain = s.interpolations.length === 0 && (written === s.text || dollars);
+  const text = dollars ? fixed.replaceAll("$", "\\$") : fixed;
   const advice = plain ? `Write ${fixed}${bracketedName ? `, or ${bracketedName} for a key with a hyphen in it` : ""}` : "Write it in camelCase";
   return {
     start: s.start,
@@ -187,7 +243,7 @@ function hyphenIssue(s: KotlinString, src: string, fixed: string, bracketedName:
     severity: "error",
     code: "signal-name-hyphen",
     link: DOCS.casing,
-    fixes: plain ? [{ title: `Change to ${fixed}`, start: s.contentStart, end: s.contentEnd, text: fixed }] : [],
+    fixes: plain ? [{ title: `Change to ${fixed}`, start: s.contentStart, end: s.contentEnd, text }] : [],
   };
 }
 

@@ -62,8 +62,9 @@ So the helpers that name a signal refuse a hyphen: `dataSignals`, `dataComputed`
 instead, and the editors flag the call before you run it, with a fix:
 
 ```text
-Name "form.first-name" has a hyphen outside brackets, which a signal name may not hold;
-write form.firstName, or form['first-name'] for a key with a hyphen in it.
+Name "form.first-name" has a hyphen the client reads as part of a signal name or as a minus,
+which a signal name may not hold; write form.firstName, or form['first-name'] for a key with a
+hyphen in it.
 ```
 
 A key with a hyphen is still allowed as data: a key inside a value, which the client merges as it
@@ -122,7 +123,10 @@ refused. Name the property in lowercase. The object form also puts a hyphen befo
 References may index: `signal("items[0].name")` and `signal("items['sub-total']")`. A reference
 is JavaScript, so `signal`, `set` and the other expression helpers refuse only a blank name, one
 with whitespace, one that starts with a character Datastar does not read after `$`, and a hyphen
-outside brackets. A name that becomes a key or an attribute value, as in `dataClass`, also refuses
+the client would read as part of a signal name or as a minus. They read the name as the client
+reads `$` and the name: a quoted key in brackets is text, whatever it holds, so
+`signal("a['x]y-z']")` is fine, while `signal("items[\$i-1]")` reads the signal `i-1` and
+`signal("a['x'].b-c")` subtracts `c`, and both are refused. A name that becomes a key or an attribute value, as in `dataClass`, also refuses
 quotes, `/`, NUL, the characters that end an attribute, and white space as either Java or
 JavaScript counts it, so a no-break space too: the client splits a class list on it. A name that
 declares a signal, as in `dataSignals`, `dataBind` and `dataComputed`, must be ASCII letters,

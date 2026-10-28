@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.core
 
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.core.domain.SignalNames
+import io.github.markusaugust.streamlord.core.domain.clientRewritten
 import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
@@ -20,7 +21,8 @@ import kotlin.test.assertTrue
 /**
  * Holds the core to `conformance/client/signal-store.json`, the output of the Datastar 1.0.4
  * client's `mergePatch` and `filtered` (engine/signals.ts), `pathToObj` (utils/paths.ts) and
- * `isStringTrue` (utils/text.ts) run by `conformance/generate/client.mjs`.
+ * `isStringTrue` (utils/text.ts) run by `conformance/generate/client.mjs`, and to
+ * `conformance/client/expressions.json`, the body `genRx` (engine/engine.ts) compiles.
  */
 class ClientOracleTest {
     private fun group(name: String): List<JsonObject> =
@@ -129,5 +131,65 @@ class ClientOracleTest {
             onTheWire++
         }
         assertEquals(21, onTheWire)
+    }
+
+    private val rewrites: List<JsonObject> =
+        JsonParser
+            .parseObject(File("../conformance/client/expressions.json").readText())
+            .obj("cases")!!
+            .array("rewrites")!!
+            .objects()
+
+    /** What JavaScript's `String.prototype.trim` takes off: its white space and line terminators. */
+    private fun jsTrim(text: String): String {
+        val space =
+            "\t\n\u000B\u000C\r \u00A0\u1680\u2028\u2029\u202F\u205F\u3000\uFEFF" + (0x2000..0x200A).map { it.toChar() }.joinToString("")
+        return text.trim { it in space }
+    }
+
+    /** With `returnsValue` false the client compiles the trimmed text as its one pattern rewrote it, which is what the scan writes. */
+    @Test
+    fun `finds the references genRx rewrites`() {
+        val cases = rewrites.filter { it.boolean("returnsValue") == false }
+        assertEquals(157, cases.size)
+        for (case in cases) {
+            val expression = case.string("expression")!!
+            assertEquals(case.string("js"), clientRewritten(jsTrim(expression)).js, expression)
+        }
+    }
+
+    /**
+     * What [SignalNames.withoutReferenceHyphens] says of a name, each against the body the client
+     * compiles for `$` and that name: the part of it that shows the hyphen is read as a key, as a
+     * signal of its own, or as a minus. Every name here is a case of the fixture.
+     */
+    @Test
+    fun `reads a reference's hyphens as genRx does`() {
+        // name, what the SDK asks for instead (null: nothing wrong), what the client's body shows
+        val names =
+            listOf(
+                Triple("form['first-name']", null, "\$['form']['first-name']"),
+                Triple("a['x]y-z']", null, "\$['a']['x]y-z']"),
+                Triple("a[\"x]y-z\"]", null, "\$['a'][\"x]y-z\"]"),
+                Triple("a[`x]y-z`]", null, "\$['a'][`x]y-z`]"),
+                Triple("a['it\\'s-x']", null, "\$['a']['it\\'s-x']"),
+                Triple("a[1-2]", null, "\$['a'][1-2]"),
+                Triple("a[`\${'x-y'}`]", null, "\$['a'][`\${'x-y'}`]"),
+                Triple("items[\$i-1]", "items[\$i1]", "[\$['i-1']]"),
+                Triple("a[\$b-c['d']]", "a[\$bC['d']]", "[\$['b-c']['d']]"),
+                Triple("a[`\${\$b-c}`]", "a[`\${\$bC}`]", "\$['b-c']"),
+                Triple("a-b[0]", "aB[0]", "\$['a-b'][0]"),
+                Triple("a['b'].c-d", "a['b'].cD", "\$['a']['b'].c-d"),
+                Triple("a[0].b-c", "a[0].bC", "\$['a'][0].b-c"),
+                Triple("a['['].b-c", "a['['].bC", "\$['a']['['].b-c"),
+                Triple("a.b-c['d-e']", "a.bC['d-e']", "\$['a']['b-c']['d-e']"),
+                Triple("a[\$b][\$c-d]", "a[\$b][\$cD]", "[\$['c-d']]"),
+            )
+        for ((name, fixed, shows) in names) {
+            val case = rewrites.single { it.string("expression") == "\$$name" && it.boolean("returnsValue") == false }
+            assertEquals(true, case.boolean("compiles"), name)
+            assertTrue(shows in case.string("js")!!, "$name: ${case.string("js")}")
+            assertEquals(fixed, SignalNames.withoutReferenceHyphens(name), name)
+        }
     }
 }

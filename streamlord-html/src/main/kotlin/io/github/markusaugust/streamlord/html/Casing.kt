@@ -247,8 +247,8 @@ public object Casing {
      * [name] as an expression refers to it, which is as written: `form.firstName`, `items[0]`, and
      * `['sub-total']` or `form['first-name']` for a key with a hyphen. A reference is JavaScript,
      * so only blank names, whitespace, a first character Datastar does not read after a `$`, and a
-     * hyphen outside brackets are refused: `$foo-bar` would read a signal no name declares
-     * ([SignalNames.hyphenProblem]).
+     * hyphen the client reads in a signal name or as a minus are refused: `$foo-bar` would read a
+     * signal no name declares, and `items[$i-1]` the signal `i-1` ([SignalNames.withoutReferenceHyphens]).
      */
     public fun reference(name: String): String {
         if (name.isBlank()) throw InvalidSignalNameException(name, "is blank")
@@ -257,47 +257,14 @@ public object Casing {
         if (first != '[' && first != '_' && first !in 'A'..'Z' && first !in 'a'..'z' && first !in '0'..'9') {
             throw InvalidSignalNameException(name, "starts with a character Datastar does not read after \$")
         }
-        if (hyphenOutsideBrackets(name)) {
+        SignalNames.withoutReferenceHyphens(name)?.let { fixed ->
             throw InvalidSignalNameException(
                 name,
-                "has a hyphen outside brackets, which a signal name may not hold; write ${withoutHyphensOutsideBrackets(name)}" +
+                "has a hyphen the client reads as part of a signal name or as a minus, which a signal name may not hold; write $fixed" +
                     (bracketed(name)?.let { ", or $it for a key with a hyphen in it" } ?: ""),
             )
         }
         return name
-    }
-
-    /** Whether [name] has a `-` outside `[...]`, where a quoted key such as `['sub-total']` is text. */
-    private fun hyphenOutsideBrackets(name: String): Boolean {
-        var depth = 0
-        for (c in name) {
-            when (c) {
-                '[' -> depth++
-                ']' -> depth = maxOf(0, depth - 1)
-                '-' -> if (depth == 0) return true
-            }
-        }
-        return false
-    }
-
-    /** [SignalNames.withoutHyphens] outside `[...]`: `form.first-name['sub-total']` is `form.firstName['sub-total']`. */
-    private fun withoutHyphensOutsideBrackets(name: String): String {
-        val out = StringBuilder()
-        var depth = 0
-        var raise = false
-        for (c in name) {
-            when (c) {
-                '[' -> depth++
-                ']' -> depth = maxOf(0, depth - 1)
-            }
-            if (depth == 0 && c == '-') {
-                raise = true
-                continue
-            }
-            out.append(if (raise) c.toString().uppercase() else c.toString())
-            raise = false
-        }
-        return out.toString()
     }
 
     /**

@@ -1657,6 +1657,234 @@
         "returnsValue": true,
         "js": "$['x'];\n $['x']['y'];\n $['x-y'];\nreturn ($['x']['z']);",
         "compiles": true
+      },
+      {
+        "expression": "$form['first-name']",
+        "returnsValue": false,
+        "js": "$['form']['first-name']",
+        "compiles": true
+      },
+      {
+        "expression": "$form['first-name']",
+        "returnsValue": true,
+        "js": "return ($['form']['first-name']);",
+        "compiles": true
+      },
+      {
+        "expression": "$a['x]y-z']",
+        "returnsValue": false,
+        "js": "$['a']['x]y-z']",
+        "compiles": true
+      },
+      {
+        "expression": "$a['x]y-z']",
+        "returnsValue": true,
+        "js": "return ($['a']['x]y-z']);",
+        "compiles": true
+      },
+      {
+        "expression": "$a[\"x]y-z\"]",
+        "returnsValue": false,
+        "js": "$['a'][\"x]y-z\"]",
+        "compiles": true
+      },
+      {
+        "expression": "$a[\"x]y-z\"]",
+        "returnsValue": true,
+        "js": "return ($['a'][\"x]y-z\"]);",
+        "compiles": true
+      },
+      {
+        "expression": "$a[`x]y-z`]",
+        "returnsValue": false,
+        "js": "$['a'][`x]y-z`]",
+        "compiles": true
+      },
+      {
+        "expression": "$a[`x]y-z`]",
+        "returnsValue": true,
+        "js": "return ($['a'][`x]y-z`]);",
+        "compiles": true
+      },
+      {
+        "expression": "$a['it\\'s-x']",
+        "returnsValue": false,
+        "js": "$['a']['it\\'s-x']",
+        "compiles": true
+      },
+      {
+        "expression": "$a['it\\'s-x']",
+        "returnsValue": true,
+        "js": "return ($['a']['it\\'s-x']);",
+        "compiles": true
+      },
+      {
+        "expression": "$a['b'].c-d",
+        "returnsValue": false,
+        "js": "$['a']['b'].c-d",
+        "compiles": true
+      },
+      {
+        "expression": "$a['b'].c-d",
+        "returnsValue": true,
+        "js": "return ($['a']['b'].c-d);",
+        "compiles": true
+      },
+      {
+        "expression": "$items[$i-1]",
+        "returnsValue": false,
+        "js": "$['items'][$['i-1']]",
+        "compiles": true
+      },
+      {
+        "expression": "$items[$i-1]",
+        "returnsValue": true,
+        "js": "return ($['items'][$['i-1']]);",
+        "compiles": true
+      },
+      {
+        "expression": "$items[$i - 1]",
+        "returnsValue": false,
+        "js": "$['items'][$['i'] - 1]",
+        "compiles": true
+      },
+      {
+        "expression": "$items[$i - 1]",
+        "returnsValue": true,
+        "js": "return ($['items'][$['i'] - 1]);",
+        "compiles": true
+      },
+      {
+        "expression": "$a[$b['c-d']]",
+        "returnsValue": false,
+        "js": "$['a'][$['b']['c-d']]",
+        "compiles": true
+      },
+      {
+        "expression": "$a[$b['c-d']]",
+        "returnsValue": true,
+        "js": "return ($['a'][$['b']['c-d']]);",
+        "compiles": true
+      },
+      {
+        "expression": "$a[$b-c['d']]",
+        "returnsValue": false,
+        "js": "$['a'][$['b-c']['d']]",
+        "compiles": true
+      },
+      {
+        "expression": "$a[$b-c['d']]",
+        "returnsValue": true,
+        "js": "return ($['a'][$['b-c']['d']]);",
+        "compiles": true
+      },
+      {
+        "expression": "$a[`${$b-c}`]",
+        "returnsValue": false,
+        "js": "$['a'][`${$['b-c']}`]",
+        "compiles": true
+      },
+      {
+        "expression": "$a[`${$b-c}`]",
+        "returnsValue": true,
+        "js": "return ($['a'][`${$['b-c']}`]);",
+        "compiles": true
+      },
+      {
+        "expression": "$a[`${'x-y'}`]",
+        "returnsValue": false,
+        "js": "$['a'][`${'x-y'}`]",
+        "compiles": true
+      },
+      {
+        "expression": "$a[`${'x-y'}`]",
+        "returnsValue": true,
+        "js": "return ($['a'][`${'x-y'}`]);",
+        "compiles": true
+      },
+      {
+        "expression": "$a[1-2]",
+        "returnsValue": false,
+        "js": "$['a'][1-2]",
+        "compiles": true
+      },
+      {
+        "expression": "$a[1-2]",
+        "returnsValue": true,
+        "js": "return ($['a'][1-2]);",
+        "compiles": true
+      },
+      {
+        "expression": "$a-b[0]",
+        "returnsValue": false,
+        "js": "$['a-b'][0]",
+        "compiles": true
+      },
+      {
+        "expression": "$a-b[0]",
+        "returnsValue": true,
+        "js": "return ($['a-b'][0]);",
+        "compiles": true
+      },
+      {
+        "expression": "$a[0].b-c",
+        "returnsValue": false,
+        "js": "$['a'][0].b-c",
+        "compiles": true
+      },
+      {
+        "expression": "$a[0].b-c",
+        "returnsValue": true,
+        "js": "return ($['a'][0].b-c);",
+        "compiles": true
+      },
+      {
+        "expression": "$a.b-c['d-e']",
+        "returnsValue": false,
+        "js": "$['a']['b-c']['d-e']",
+        "compiles": true
+      },
+      {
+        "expression": "$a.b-c['d-e']",
+        "returnsValue": true,
+        "js": "return ($['a']['b-c']['d-e']);",
+        "compiles": true
+      },
+      {
+        "expression": "$a[$b][$c-d]",
+        "returnsValue": false,
+        "js": "$['a'][$['b']][$['c-d']]",
+        "compiles": true
+      },
+      {
+        "expression": "$a[$b][$c-d]",
+        "returnsValue": true,
+        "js": "return ($['a'][$['b']][$['c-d']]);",
+        "compiles": true
+      },
+      {
+        "expression": "$a['['].b-c",
+        "returnsValue": false,
+        "js": "$['a']['['].b-c",
+        "compiles": true
+      },
+      {
+        "expression": "$a['['].b-c",
+        "returnsValue": true,
+        "js": "return ($['a']['['].b-c);",
+        "compiles": true
+      },
+      {
+        "expression": "$a[']'].b",
+        "returnsValue": false,
+        "js": "$['a'][']'].b",
+        "compiles": true
+      },
+      {
+        "expression": "$a[']'].b",
+        "returnsValue": true,
+        "js": "return ($['a'][']'].b);",
+        "compiles": true
       }
     ]
   }
