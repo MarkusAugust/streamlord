@@ -21,8 +21,10 @@ class SignalsTest {
     }
 
     @Test
-    fun `the pairs form camel-cases its keys as the keyed form does, and a patch keeps them`() {
-        assertEquals(listOf("foo-bar", "fooBar"), kotlin("dataSignals(\"foo-bar\" to 7); patchSignals(\"foo-bar\" to 1)"))
+    fun `a name is collected as written, wherever it is written`() {
+        assertEquals(listOf("fooBar", "x"), kotlin("dataSignals(\"fooBar\" to 7); patchSignals(\"fooBar\" to 1); dataBind(\"x\")"))
+        // A name with a hyphen is refused at runtime, and collected as it stands until it is fixed.
+        assertEquals(listOf("foo-bar"), kotlin("dataSignals(\"foo-bar\" to 7); signal(\"foo-bar\")"))
     }
 
     // Only a value the codec made, or one typed as JSON, may declare any name; a string or a pair

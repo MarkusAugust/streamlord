@@ -78,6 +78,7 @@ public object Docs {
     public const val SSE: String = "https://data-star.dev/reference/sse_events"
     public const val EXPRESSIONS: String = "https://data-star.dev/guide/datastar_expressions"
     public const val SIGNALS: String = "https://data-star.dev/guide/reactive_signals"
+    public const val CASING: String = "https://data-star.dev/reference/attributes#attribute-casing"
 
     /** The anchor of one attribute in the reference. */
     public fun attribute(name: String): String = "$ATTRIBUTES#" + if (name.startsWith("data-")) name else "data-$name"

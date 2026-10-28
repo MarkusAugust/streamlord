@@ -50,13 +50,7 @@ public class Analyzer(
     /** Keyed helpers that take a key but no expression, so the catalog's expression sites do not list them. */
     private val keyOnlyHelpers = setOf("dataMatchMedia", "dataPersist")
 
-    /**
-     * Helpers that write the signal name in the value, which keeps its case, unless a `case` is
-     * given: Datastar applies `__case` to a key only, so then the name moves into the key.
-     */
-    private val valueUnlessCasedHelpers = setOf("dataBind", "dataRef", "dataIndicator")
-
-    private val allSiteNames: Set<String> = catalog.allCallSiteNames + keyOnlyHelpers + valueUnlessCasedHelpers
+    private val allSiteNames: Set<String> = catalog.allCallSiteNames + keyOnlyHelpers
     private val htmlSiteNames: Set<String> = catalog.htmlCallSites.keys
 
     /** Names of all DSL functions the analysis recognises in Kotlin source. */
@@ -99,6 +93,11 @@ public class Analyzer(
             catalog.selectorCallSites[site.name]?.let { issues += checkSelectorSite(site, it) }
             issues += checkKeyCaseSite(site, src)
             for (a in site.args) a.string?.let { claimed += it.start }
+            if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
+        }
+        val helpers = dslHelpers(src, EXPRESSION_HELPERS)
+        for (site in findCallSites(src, SIGNAL_NAMING_CALLS, lex)) {
+            val issues = signalNameHyphenIssues(site, src, lex, helpers)
             if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
         }
         for (m in ATTRIBUTES_INDEX.findAll(src)) {
@@ -634,12 +633,11 @@ public class Analyzer(
         val spec = catalog.attributesByKotlin[site.name] ?: return emptyList()
         if (!spec.keyed || spec.keyCase == null) return emptyList()
         // Only helpers whose first parameter is a key: those whose expression is a later argument
-        // (dataOn, dataSignals, dataClass, ...), the two Pro helpers that take a key and no
-        // expression, and dataBind, dataRef and dataIndicator once a case moves their name into the
-        // key. dataOnClick("expr") passes an expression, never a key.
+        // (dataOn, dataSignals, dataClass, ...) and the two Pro helpers that take a key and no
+        // expression. dataOnClick("expr") passes an expression, never a key, and dataBind, dataRef
+        // and dataIndicator write their name in the value.
         val expr = catalog.expressionCallSites[site.name]
-        val valueUnlessCased = site.name in valueUnlessCasedHelpers
-        if (if (expr != null) expr.arg == 0 else !(site.name in keyOnlyHelpers || valueUnlessCased)) return emptyList()
+        if (if (expr != null) expr.arg == 0 else site.name !in keyOnlyHelpers) return emptyList()
         val positional = site.positional
         val key = positional.firstOrNull()?.string ?: return emptyList()
         // With an expression helper, one positional string is the object form (dataClass("{...}")); the key form has two.
@@ -647,11 +645,12 @@ public class Analyzer(
         val name = key.text
         // dataSignals("{fooBar: 1}", ...) is the object form: an expression, not a key.
         if (!HAS_CAPITAL.containsMatchIn(name) || OBJECT_FORM.containsMatchIn(name)) return emptyList()
-        // `case = Case.X`, a positional `Case.X` (dataRef("name", Case.CAMEL)) or `case = Case.X` in the trailing lambda.
+        // A signal name with a hyphen is refused, which signalNameHyphenIssues says.
+        if (spec.keyCase == KeyCase.CAMEL && '-' in name) return emptyList()
+        // `case = Case.X`, a positional `Case.X` (dataClass("name", "x", Case.CAMEL)) or `case = Case.X` in the trailing lambda.
         val named = site.args.firstOrNull { it.named == "case" || (it.named == null && CASE_ARG.matches(it.text)) }?.text
         val explicit = if (named != null) CASE_VALUE.find(named) else CASE_IN_LAMBDA.find(trailingLambdaText(site, src))
         val explicitCase = explicit?.groupValues?.get(1)?.lowercase()
-        if (valueUnlessCased && explicitCase == null) return emptyList()
         val wire = wireKey(name, spec.keyCase, explicitCase)
         if (wire == null) {
             return listOf(
@@ -745,7 +744,7 @@ public data class SiteIssues(
     val issues: List<Issue>,
 )
 
-private fun String.lastNonSpaceBefore(index: Int): Char? {
+internal fun String.lastNonSpaceBefore(index: Int): Char? {
     var i = index - 1
     while (i >= 0 && this[i].isWhitespace()) i--
     return getOrNull(i)

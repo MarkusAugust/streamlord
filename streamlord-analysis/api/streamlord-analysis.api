@@ -235,6 +235,7 @@ public final class io/github/markusaugust/streamlord/analysis/DatastarFrame {
 public final class io/github/markusaugust/streamlord/analysis/Docs {
 	public static final field ACTIONS Ljava/lang/String;
 	public static final field ATTRIBUTES Ljava/lang/String;
+	public static final field CASING Ljava/lang/String;
 	public static final field EXPRESSIONS Ljava/lang/String;
 	public static final field INSTANCE Lio/github/markusaugust/streamlord/analysis/Docs;
 	public static final field SIGNALS Ljava/lang/String;

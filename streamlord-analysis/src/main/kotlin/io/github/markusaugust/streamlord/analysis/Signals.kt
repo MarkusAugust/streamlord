@@ -7,8 +7,9 @@ package io.github.markusaugust.streamlord.analysis
 
 public enum class SourceLanguage { KOTLIN, HTML }
 
-// A kebab-case name is written as a kebab-case key, which Datastar reads as camelCase: set("foo-bar", 1) is $fooBar.
-// set, setExpr and toggle assign the signal, which creates it.
+// A helper names a signal as it is written: set("fooBar", 1) is $fooBar. A name with a hyphen is
+// refused at runtime (signalNameHyphenIssues) and collected as written. set, setExpr and toggle
+// assign the signal, which creates it.
 private val KOTLIN_PATTERNS =
     listOf(
         Regex(
@@ -232,8 +233,7 @@ private fun collect(
         for (site in findCallSites(src, PAIR_CALLS)) {
             val positional = site.positional
             positional.forEachIndexed { idx, a ->
-                // dataSignals("foo-bar" to 1) declares $fooBar, as the keyed form does; a patch keeps the key.
-                for (key in argumentKeys(a.text)) out += if (site.name == "dataSignals") toCamel(key) else key
+                for (key in argumentKeys(a.text)) out += key
                 // patchSignals("""{"count": 1}"""): the signals as JSON text.
                 if (site.name in JSON_CALLS) {
                     a.string?.text?.takeIf { JSON_OBJECT.containsMatchIn(it) }?.let { json ->
@@ -241,14 +241,14 @@ private fun collect(
                     }
                 }
                 val name = NAME.find(a.text)?.groupValues?.get(1) ?: return@forEachIndexed
-                // removeSignals("a", "b") names keys as they are; dataSignals("name", "expression") writes a key Datastar camel-cases.
+                // removeSignals("a", "b"), and dataSignals("name", "expression"), whose key the client reads back as the name.
                 if (site.name == "removeSignals") out += name
-                if (site.name == "dataSignals" && idx == 0 && positional.getOrNull(1)?.string != null) out += toCamel(name)
+                if (site.name == "dataSignals" && idx == 0 && positional.getOrNull(1)?.string != null) out += name
             }
         }
-        for (re in KOTLIN_PATTERNS) for (m in re.findAll(src)) out += toCamel(m.groupValues[1])
+        for (re in KOTLIN_PATTERNS) for (m in re.findAll(src)) out += m.groupValues[1]
         if (reads) for (re in KOTLIN_READS) for (m in re.findAll(src)) out += m.groupValues[1]
-        if (reads) for (m in HELPER_READS.findAll(src)) out += toCamel(m.groupValues[1])
+        if (reads) for (m in HELPER_READS.findAll(src)) out += m.groupValues[1]
     }
     // A keyed attribute may carry modifiers after the key: data-signals:foo-bar__ifmissing, and
     // `__case` names the signal: data-signals:my-value__case.snake is `$my_value`.

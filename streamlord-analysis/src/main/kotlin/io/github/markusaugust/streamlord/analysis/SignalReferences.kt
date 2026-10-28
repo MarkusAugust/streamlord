@@ -34,9 +34,9 @@ internal fun expressionSignalReferences(text: String): List<SignalReference> =
 internal val HELPER_READ_CALLS: Set<String> = setOf("signal", "increment", "decrement", "not")
 
 /**
- * A name a helper writes as it stands. A kebab or bracketed name reaches the client rewritten
- * (`foo-bar` is `$fooBar`), so a fix that wrote the defined name back would change how it is
- * written; those are left out, as `$foo-bar` is in an expression.
+ * A name a fix can write back into a helper: dotted parts, without a hyphen, which the helper
+ * refuses (see [signalNameHyphenIssues]), or brackets, whose key a plain name would not replace
+ * as written.
  */
 private val PLAIN_HELPER_NAME = Regex("""[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*""")
 
@@ -50,10 +50,13 @@ internal val USES_HTML_DSL =
 /** An import of a name from outside the DSL: `import org.hamcrest.Matchers.not`, or `.*` of Hamcrest's matchers. */
 private val FOREIGN_IMPORT = Regex("""(?m)^\s*import\s+(?!io\.github\.markusaugust\.streamlord\.html\.)([A-Za-z_][\w.]*)\.(\w+|\*)""")
 
-/** The helpers [src] reads as the DSL's: those no import from elsewhere puts in their place. */
-internal fun dslHelpers(src: String): Set<String> {
+/** The helpers of [names] that [src] reads as the DSL's: those no import from elsewhere puts in their place. */
+internal fun dslHelpers(
+    src: String,
+    names: Set<String> = HELPER_READ_CALLS,
+): Set<String> {
     if (!USES_HTML_DSL.containsMatchIn(src)) return emptySet()
-    val out = HELPER_READ_CALLS.toMutableSet()
+    val out = names.toMutableSet()
     for (m in FOREIGN_IMPORT.findAll(src)) {
         val (from, name) = m.destructured
         if (name == "*") {
@@ -139,7 +142,7 @@ public fun unknownSignalIssue(
     val misspelt = if (head != ref.name && !isKnownSignal(head, defined)) head else ref.name
     val nearest = nearestSignal(misspelt, defined)
     // The fix rewrites the name and leaves the dollar as written, which in Kotlin may be `${'$'}`.
-    // A helper reads its name the way Casing.reference does, so only a plain name goes back into it.
+    // A helper writes its name as it stands, and only a plain name goes back into one.
     val near = nearest?.takeIf { ref.site?.name !in HELPER_READ_CALLS || PLAIN_HELPER_NAME.matches(it) }
     val nameStart = ref.end - ref.name.length
     return Issue(

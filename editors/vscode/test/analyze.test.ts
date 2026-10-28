@@ -148,17 +148,18 @@ describe("markup", () => {
     expect(codes(analyzeHtml(`<div data-star-signals:fooBar="1"></div>`, { prefix: "data-star-", checkHtmlAttributes: true }))).toEqual(["key-case"]);
   });
 
-  // The hint names what the client reads from the key, which for a signal is camelCase, and says when no key gives the name back.
+  // A signal name with a hyphen is the hyphen check's, and an event that mixes capitals and a hyphen has no key.
   it("hints the name the client reads from a key mixing capitals and a hyphen", () => {
     const src = `div {
       dataSignals("fooBar-baz", "1")
       dataOn("fooBar-baz", "x()")
     }`;
-    const hints = analyzeKotlin(src, opts).filter((i) => i.code === "key-case-wire");
-    expect(hints.length).toBe(2);
-    expect(hints[0]!.message).toContain("as data-signals:foo-bar-baz, which Datastar reads back as the signal $fooBarBaz");
-    expect(hints[1]!.message).toContain("No key gives fooBar-baz back");
-    expect(hints[1]!.message).toContain("reads fooBarBaz. Write it in one case.");
+    const issues = analyzeKotlin(src, opts);
+    const hints = issues.filter((i) => i.code === "key-case-wire");
+    expect(hints.length).toBe(1);
+    expect(hints[0]!.message).toContain("No key gives fooBar-baz back");
+    expect(hints[0]!.message).toContain("reads fooBarBaz. Write it in one case.");
+    expect(issues.filter((i) => i.start < src.indexOf("dataOn")).map((i) => i.code)).toEqual(["signal-name-hyphen"]);
   });
 
   it("hints what the dsl writes on the wire for a camelCase key", () => {
@@ -168,39 +169,34 @@ describe("markup", () => {
       dataClass("isOpen", "$" + "open")
       dataAttr("ariaLabel", "'x'")
       dataSignals("MySignal", "1")
-      dataSignals("fooBar", "1", case = Case.KEBAB)
       dataOn("customEvent", "x()") { case = Case.KEBAB }
-      dataSignals("foo-bar", "1")
       dataSignals("{fooBar: 1}")
       dataBind("fooBar")
       dataOnClick("@post('/Add')", { once = true })
       dataOnFetch("evt.detail.type === 'Started'") { window = true }
       dataAttr("viewBox", "$box")
-      dataRef("myRef", Case.CAMEL)
-      dataIndicator("isLoading", Case.CAMEL)
-      dataSignals("{fooBar: 1}", Case.CAMEL)
+      dataRef("myRef")
+      dataIndicator("isLoading")
+      dataSignals("{fooBar: 1}", true)
       dataPersist("myKey")
       dataMatchMedia("isMobile", mediaQuery = "(max-width: 600px)")
     }`;
     const hints = analyzeKotlin(src, opts).filter((i) => i.code === "key-case-wire");
     expect(hints.every((i) => i.severity === "hint")).toBe(true);
-    expect(hints.map((i) => src.slice(i.start, i.end))).toEqual(['"fooBar"', '"widgetLoaded"', '"isOpen"', '"ariaLabel"', '"MySignal"', '"fooBar"', '"customEvent"', '"viewBox"', '"myRef"', '"isLoading"', '"myKey"', '"isMobile"']);
+    expect(hints.map((i) => src.slice(i.start, i.end))).toEqual(['"fooBar"', '"widgetLoaded"', '"isOpen"', '"ariaLabel"', '"MySignal"', '"customEvent"', '"viewBox"', '"myKey"', '"isMobile"']);
     expect(hints.map((i) => /as (data-[a-z-]+:[^,]+),/.exec(i.message)![1])).toEqual([
       "data-signals:foo-bar",
       "data-on:widget-loaded__case.camel",
       "data-class:is-open__case.camel",
       "data-attr:aria-label",
       "data-signals:my-signal__case.pascal",
-      "data-signals:foo-bar__case.kebab",
       "data-on:custom-event__case.kebab",
       "data-attr:view-box",
-      "data-ref:my-ref__case.camel",
-      "data-indicator:is-loading__case.camel",
       "data-persist:my-key",
       "data-match-media:is-mobile",
     ]);
     expect(hints[0]!.message).toContain("$fooBar");
-    expect(hints[7]!.message).toContain('data-attr="{viewBox: ...}"');
+    expect(hints[6]!.message).toContain('data-attr="{viewBox: ...}"');
   });
 
   it("warns, not errors, when the template is only part of an expression", () => {

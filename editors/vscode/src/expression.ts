@@ -33,6 +33,7 @@ export const DOCS = {
   sse: "https://data-star.dev/reference/sse_events",
   expressions: "https://data-star.dev/guide/datastar_expressions",
   signals: "https://data-star.dev/guide/reactive_signals",
+  casing: "https://data-star.dev/reference/attributes#attribute-casing",
 };
 
 /** The quote of the single-, double- or backtick-quoted JavaScript string literal the offset is inside, or null. */

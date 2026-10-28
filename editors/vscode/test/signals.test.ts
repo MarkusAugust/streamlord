@@ -14,8 +14,10 @@ describe("signal collection", () => {
     assert.deepEqual(kotlin(src), ["count", "inner", "name", "wrapped"]);
   });
 
-  it("the pairs form camel-cases its keys as the keyed form does, and a patch keeps them", () => {
-    assert.deepEqual(kotlin(`dataSignals("foo-bar" to 7); patchSignals("foo-bar" to 1)`), ["foo-bar", "fooBar"]);
+  it("a name is collected as written, wherever it is written", () => {
+    assert.deepEqual(kotlin(`dataSignals("fooBar" to 7); patchSignals("fooBar" to 1); dataBind("x")`), ["fooBar", "x"]);
+    // A name with a hyphen is refused at runtime, and collected as it stands until it is fixed.
+    assert.deepEqual(kotlin(`dataSignals("foo-bar" to 7); signal("foo-bar")`), ["foo-bar"]);
   });
 
   it("a page declared from a variable is read by what the file says about it", () => {

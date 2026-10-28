@@ -27,6 +27,13 @@ All notable changes to Streamlord are recorded here. The format follows
   `SignalFacts` gained `encodedTypes` and `SignalDriftReport` `declaredByCodec`, which changes their
   JVM constructors, and `collectSignalDefinitions` returns two kinds of entry that are no signal
   names, `class:Form` and `toJsonValue:Form`, which `isKnownSignal` reads.
+- The analysis and both editors flag a hyphen in a signal name written in a DSL call, which the
+  SDK refuses at runtime, as the error `signal-name-hyphen`, with the camelCase fix:
+  `dataSignals("foo-bar", …)`, `dataBind("form.first-name")`, a pair's key, `removeSignals("a-b")`,
+  and a hyphen outside brackets in `signal`, `set` and the other expression helpers, which also
+  name the bracket form, `form['first-name']`. The analysis collects a helper's name as written,
+  where it read `dataSignals("foo-bar" to 1)` as `fooBar`. In IntelliJ the check is part of
+  Datastar key casing.
 - `ElementsGuard.evaluatedAttributes`: the attributes whose value Datastar runs as JavaScript,
   the expression attributes and the four signal filters.
 - `conformance/`: what Datastar's client and the servers actually do, as fixtures the tests hold
@@ -81,12 +88,9 @@ All notable changes to Streamlord are recorded here. The format follows
   before a lowercase letter and declares `aB-1`. The message and the fix follow the client. The
   IntelliJ highlighter and the VS Code grammar mark `$123` and `$foo-bar` as one signal each, as
   the client reads them.
-- The key-case hint and warning in the analysis and the VS Code extension named a signal the
-  client never makes: for `dataSignals("fooBar-baz", …)` they said the wire key `foo-bar-baz` reads
-  back as `$fooBar-baz`, where the client reads `$fooBarBaz`, the name `signal("fooBar-baz")` reads
-  too; and for an event or class such as `data-on:fooBar-baz` they offered a key no case gives back.
-  The hint now names what the client reads, and the warning says when no key gives the name back.
-  Found by the client oracle.
+- The key-case hint in the analysis and the VS Code extension offered a key no case gives back
+  for an event or class such as `dataOn("fooBar-baz", …)`. It now says that no key gives the name
+  back, and names what the client would read. Found by the client oracle.
 - The Spring MVC recipe for a page with a CSP nonce produced `text/html;charset=ISO-8859-1`:
   `produces = [MediaType.TEXT_HTML_VALUE]` lets Spring MVC pick Latin-1. The recipe on the Security
   page and in `CspNonceFilter` says `produces = ["text/html;charset=UTF-8"]`. Found by the wire
@@ -97,9 +101,9 @@ All notable changes to Streamlord are recorded here. The format follows
   `signal`, `increment`, `decrement` or `not` was never reported. These helpers now read the
   signal they name, in a file that imports the DSL, when the call has no receiver and no import
   from elsewhere, such as Hamcrest's `not`, takes the name; an unknown one gets the same warning and fix as `$cuont` in an expression; `set`, `setExpr` and
-  `toggle` still declare theirs, since they assign it. A kebab or bracketed name,
-  `signal("foo-bar")`, is not checked, and the fix offers only a name the helper writes as it
-  stands. The IntelliJ plugin also leaves out a call that resolves outside Streamlord.
+  `toggle` still declare theirs, since they assign it. A bracketed name, `signal("form['x']")`,
+  is not checked, and the fix offers only a plain dotted name. The IntelliJ plugin also leaves out
+  a call that resolves outside Streamlord.
 - The analysis counted the keys inside a pair's value, `"user" to mapOf("name" to "")`, as
   top-level signals. Only the pair's own key counts, and the keys of a map handed over as the
   signals, `patchSignals(mapOf("count" to 0))`.

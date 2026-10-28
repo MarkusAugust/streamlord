@@ -201,7 +201,7 @@ class AnalyzerTest {
         )
     }
 
-    /** The hint names what the client reads from the key, which for a signal is camelCase, and says when no key gives the name back. */
+    /** A signal name with a hyphen is the hyphen check's, and an event that mixes capitals and a hyphen has no key. */
     @Test
     fun `hints the name the client reads from a key mixing capitals and a hyphen`() {
         val src =
@@ -211,11 +211,12 @@ class AnalyzerTest {
               dataOn("fooBar-baz", "x()")
             }
             """.trimIndent()
-        val hints = analyzer.analyzeKotlin(src, opts).filter { it.code == "key-case-wire" }
-        assertEquals(2, hints.size)
-        assertContains(hints[0].message, "as data-signals:foo-bar-baz, which Datastar reads back as the signal \$fooBarBaz")
-        assertContains(hints[1].message, "No key gives fooBar-baz back")
-        assertContains(hints[1].message, "reads fooBarBaz. Write it in one case.")
+        val issues = analyzer.analyzeKotlin(src, opts)
+        val hints = issues.filter { it.code == "key-case-wire" }
+        assertEquals(1, hints.size)
+        assertContains(hints[0].message, "No key gives fooBar-baz back")
+        assertContains(hints[0].message, "reads fooBarBaz. Write it in one case.")
+        assertEquals(listOf("signal-name-hyphen"), issues.filter { it.start < src.indexOf("dataOn") }.map { it.code })
     }
 
     @Test
@@ -228,17 +229,15 @@ class AnalyzerTest {
               dataClass("isOpen", "$" + "open")
               dataAttr("ariaLabel", "'x'")
               dataSignals("MySignal", "1")
-              dataSignals("fooBar", "1", case = Case.KEBAB)
               dataOn("customEvent", "x()") { case = Case.KEBAB }
-              dataSignals("foo-bar", "1")
               dataSignals("{fooBar: 1}")
               dataBind("fooBar")
               dataOnClick("@post('/Add')", { once = true })
               dataOnFetch("evt.detail.type === 'Started'") { window = true }
               dataAttr("viewBox", "${'$'}box")
-              dataRef("myRef", Case.CAMEL)
-              dataIndicator("isLoading", Case.CAMEL)
-              dataSignals("{fooBar: 1}", Case.CAMEL)
+              dataRef("myRef")
+              dataIndicator("isLoading")
+              dataSignals("{fooBar: 1}", true)
               dataPersist("myKey")
               dataMatchMedia("isMobile", mediaQuery = "(max-width: 600px)")
             }
@@ -252,11 +251,8 @@ class AnalyzerTest {
                 "\"isOpen\"",
                 "\"ariaLabel\"",
                 "\"MySignal\"",
-                "\"fooBar\"",
                 "\"customEvent\"",
                 "\"viewBox\"",
-                "\"myRef\"",
-                "\"isLoading\"",
                 "\"myKey\"",
                 "\"isMobile\"",
             ),
@@ -269,18 +265,15 @@ class AnalyzerTest {
                 "data-class:is-open__case.camel",
                 "data-attr:aria-label",
                 "data-signals:my-signal__case.pascal",
-                "data-signals:foo-bar__case.kebab",
                 "data-on:custom-event__case.kebab",
                 "data-attr:view-box",
-                "data-ref:my-ref__case.camel",
-                "data-indicator:is-loading__case.camel",
                 "data-persist:my-key",
                 "data-match-media:is-mobile",
             ),
             hints.map { Regex("""as (data-[a-z-]+:[^,]+),""").find(it.message)!!.groupValues[1] },
         )
         assertContains(hints[0].message, "\$fooBar")
-        assertContains(hints[7].message, "data-attr=\"{viewBox: ...}\"")
+        assertContains(hints[6].message, "data-attr=\"{viewBox: ...}\"")
     }
 
     @Test

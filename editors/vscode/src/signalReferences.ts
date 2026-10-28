@@ -1,4 +1,5 @@
 import { ALL_SITE_NAMES, ATTRIBUTES_INDEX, attributesIndexValue, lexCached, markupString } from "./analyze.ts";
+import { dslHelpers } from "./signalNameHyphens.ts";
 import { catalog, distance, parseAttributeName } from "./catalog.ts";
 import { clientSignalReads, DOCS, type Issue } from "./expression.ts";
 import { PLACEHOLDER, toSource, type KotlinString } from "./kotlinStrings.ts";
@@ -37,39 +38,12 @@ export function expressionSignalReferences(text: string): SignalReference[] {
   return out;
 }
 
-/** The DSL helpers whose first argument names a signal they read: `signal("count")` is `$count`. */
-const HELPER_READ_CALLS: ReadonlySet<string> = new Set(["signal", "increment", "decrement", "not"]);
-
 /**
- * A name a helper writes as it stands. A kebab or bracketed name reaches the client rewritten
- * (`foo-bar` is `$fooBar`), so a fix that wrote the defined name back would change how it is
- * written; those are left out, as `$foo-bar` is in an expression.
+ * A name a fix can write back into a helper: dotted parts, without a hyphen, which the helper
+ * refuses (see `signalNameHyphenIssues`), or brackets, whose key a plain name would not replace
+ * as written.
  */
 const PLAIN_HELPER_NAME = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/;
-
-/**
- * A file that uses the DSL: a helper call elsewhere, `redis.increment("visits")` or Hamcrest's
- * `not("error")`, is somebody else's.
- */
-const USES_HTML_DSL = /^\s*(?:import\s+io\.github\.markusaugust\.streamlord\.html\.|package\s+io\.github\.markusaugust\.streamlord\.html\b)/m;
-
-/** An import of a name from outside the DSL: `import org.hamcrest.Matchers.not`, or `.*` of Hamcrest's matchers. */
-const FOREIGN_IMPORT = /^\s*import\s+(?!io\.github\.markusaugust\.streamlord\.html\.)([A-Za-z_][\w.]*)\.(\w+|\*)/gm;
-
-/** The helpers `src` reads as the DSL's: those no import from elsewhere puts in their place. */
-function dslHelpers(src: string): Set<string> {
-  if (!USES_HTML_DSL.test(src)) return new Set();
-  const out = new Set(HELPER_READ_CALLS);
-  for (const m of src.matchAll(FOREIGN_IMPORT)) {
-    const [, from = "", name = ""] = m;
-    if (name === "*") {
-      if (from.startsWith("org.hamcrest")) out.delete("not");
-    } else {
-      out.delete(name);
-    }
-  }
-  return out;
-}
 
 /** The signal the literal first argument of a helper reads, with offsets relative to its text. */
 export function helperSignalReference(text: string): SignalReference | null {

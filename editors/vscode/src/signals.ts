@@ -6,8 +6,9 @@ import { findCallSites } from "./scanner.ts";
  * generous: better to offer a name twice than to miss it.
  */
 
-// A kebab-case name is written as a kebab-case key, which Datastar reads as camelCase: set("foo-bar", 1) is $fooBar.
-// set, setExpr and toggle assign the signal, which creates it.
+// A helper names a signal as it is written: set("fooBar", 1) is $fooBar. A name with a hyphen is
+// refused at runtime (signalNameHyphenIssues) and collected as written. set, setExpr and toggle
+// assign the signal, which creates it.
 const KOTLIN_PATTERNS: RegExp[] = [
   /\b(?:set|setExpr|toggle|dataBind|dataIndicator|dataRef|dataComputed|dataMatchMedia)\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"/g,
   /\bdataSignals\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"\s*,/g,
@@ -193,8 +194,7 @@ function collect(src: string, language: "kotlin" | "html", reads: boolean): Set<
     for (const site of findCallSites(src, PAIR_CALLS)) {
       const positional = site.args.filter((a) => a.named === null);
       positional.forEach((a, idx) => {
-        // dataSignals("foo-bar" to 1) declares $fooBar, as the keyed form does; a patch keeps the key.
-        for (const key of argumentKeys(a.text)) out.add(site.name === "dataSignals" ? toCamel(key) : key);
+        for (const key of argumentKeys(a.text)) out.add(key);
         // patchSignals("""{"count": 1}"""): the signals as JSON text.
         if (JSON_CALLS.has(site.name) && a.string && /^\s*\{/.test(a.string.text)) {
           const json = a.string.text;
@@ -202,9 +202,9 @@ function collect(src: string, language: "kotlin" | "html", reads: boolean): Set<
         }
         const name = NAME.exec(a.text);
         if (!name?.[1]) return;
-        // removeSignals("a", "b") names keys as they are; dataSignals("name", "expression") writes a key Datastar camel-cases.
+        // removeSignals("a", "b"), and dataSignals("name", "expression"), whose key the client reads back as the name.
         if (site.name === "removeSignals") out.add(name[1]);
-        if (site.name === "dataSignals" && idx === 0 && positional[1]?.string) out.add(toCamel(name[1]));
+        if (site.name === "dataSignals" && idx === 0 && positional[1]?.string) out.add(name[1]);
       });
     }
   }
@@ -225,7 +225,7 @@ function collect(src: string, language: "kotlin" | "html", reads: boolean): Set<
       } else if (re === HTML_ATTRIBUTE_PATTERNS[1]) {
         out.add(captured);
       } else if (captured) {
-        out.add(toCamel(captured));
+        out.add(captured);
       }
     }
   }
