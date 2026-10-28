@@ -247,6 +247,34 @@ const scriptBodies = [
   "a = '<!--<\\/script>'",
 ]
 
+// Whether a patch of elements without a selector holds an element, as the HTML tokenizer reads its
+// comments inside the client's wrapper. happy-dom runs a comment opened by `<!-->` or `<!--->` on
+// to the next `-->`, where the standard ends it at once, so these come from parse5.
+const holdsElement = (input) => {
+  const wrapped = parse5.parse(`<body><template>${input}</template></body>`)
+  const nodes = find(wrapped, 'template').content.childNodes
+  return { input, nodes: nodes.map((node) => node.nodeName), element: nodes.some((node) => !node.nodeName.startsWith('#')) }
+}
+
+const commentBodies = [
+  '<!--><b>y</b>',
+  '<!---><b>y</b>',
+  '<!-- x --!><b>y</b>',
+  '<!-- x --><b>y</b>',
+  '<!----><b>y</b>',
+  '<!-- x ---><b>y</b>',
+  '<!-- x -- y --><b>y</b>',
+  '<!-- x --!> y',
+  '<!-- <b>y</b> -->',
+  '<!-- <b>y</b>',
+  '<!-->',
+  '<!--',
+  '<!--><!-- <b>y</b>',
+  '<!-- x --!><!-- <b>y</b> -->',
+  'a <!-- <b> --> c',
+  'a < b',
+]
+
 const fixture = (name) => resolve(fixtures, name)
 const read = (name) => JSON.parse(readFileSync(fixture(name), 'utf8'))
 // ASCII only, so a byte order mark or a line separator in a case shows in a diff.
@@ -272,3 +300,4 @@ for (const { name, steps } of read('store-cases.json')) {
 write('store-cases.json', ascii(JSON.stringify(store, null, 1)))
 
 write('script-escapes.json', onePerLine(scriptBodies.map(readScriptBody)))
+write('comment-ends.json', onePerLine(commentBodies.map(holdsElement)))

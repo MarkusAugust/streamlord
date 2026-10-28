@@ -170,6 +170,23 @@ class SseDecoderAsTheClientReadsTest {
     }
 
     /**
+     * Each case in `conformance/dom/comment-ends.json` is the elements of a patch without a selector,
+     * parsed by parse5 inside the client's wrapper, as the HTML standard reads its comments: a
+     * comment ends at `-->`, at `--!>`, and at once after `<!-->` or `<!--->`. The decoder gives an
+     * event exactly when an element is left, since the client patches nothing else.
+     */
+    @Test
+    fun `a comment ends where the HTML parser ends it`() {
+        val cases = JsonParser.parse(File("../conformance/dom/comment-ends.json").readText()) as JsonArray
+        assertEquals(16, cases.size)
+        for (case in cases.objects()) {
+            val input = case.string("input")!!
+            val events = SseDecoder.decode("event: datastar-patch-elements\ndata: elements $input\n\n")
+            assertEquals(case.boolean("element") == true, events.isNotEmpty(), input)
+        }
+    }
+
+    /**
      * Each frame in `conformance/dom/decoder-cases.json` is run through the free Datastar 1.0.4
      * bundle in happy-dom by `conformance/generate/dom.mjs`, through the client's own fetch path,
      * on a page holding `<div id="wrap"><div id="target">old</div></div>` and the signal
@@ -184,7 +201,7 @@ class SseDecoderAsTheClientReadsTest {
     @Test
     fun `decodes each frame to what the client did with it`() {
         val cases = JsonParser.parse(File("../conformance/dom/decoder-cases.json").readText()) as JsonArray
-        assertEquals(83, cases.size)
+        assertEquals(85, cases.size)
 
         // White space as HTML counts it, which the page shows as nothing between elements.
         fun shown(html: String) = html.filterNot { it in " \t\n\u000C\r" }

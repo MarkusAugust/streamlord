@@ -193,11 +193,12 @@ public object SseDecoder {
     }
 
     // What opens an element to the HTML parser, outside a comment, which runs to the end when it is
-    // not closed; text and comments the client never patches in. A `</body>`, `</head>` or `</html>`
+    // not closed; text and comments the client never patches in. The parser also ends a comment at
+    // `<!-->`, `<!--->` and `--!>`. A `</body>`, `</head>` or `</html>`
     // anywhere outside an `<svg>` has the client read the text as a whole document and patch that
     // element of the page (patchElements.ts).
     private val START_TAG = Regex("<[A-Za-z]")
-    private val COMMENT = Regex("<!--.*?(?:-->|$)", RegexOption.DOT_MATCHES_ALL)
+    private val COMMENT = Regex("<!--(?:-?>|.*?(?:--!?>|$))", RegexOption.DOT_MATCHES_ALL)
     private val SVG = Regex("<svg(?:\\s[^>]*>|>).*?</svg>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
     private val DOCUMENT_END = Regex("</(?:body|head|html)>")
 
