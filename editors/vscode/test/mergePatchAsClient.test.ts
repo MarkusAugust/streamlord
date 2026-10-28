@@ -4,21 +4,21 @@ import { readFileSync } from "node:fs";
 import { mergePatchAsClient, PROTO_REFUSED, SignalPatchError, STORE_PROTO_REFUSED } from "../src/sse.ts";
 
 /**
- * The scenarios of streamlord-core's `MergePatchAsClientTest`, read from its resources so both
+ * The scenarios of streamlord-core's `MergePatchAsClientTest`, read from `conformance/dom/` so both
  * folds answer to the same cases. Each was run through `mergePatch` from the Datastar 1.0.4 source
  * (engine/signals.ts), and `client` is `JSON.stringify` of its root after each step, or `THROWS`
  * and the root once the step threw. A step with `refused` is one the fold refuses on purpose, a key
  * `__proto__` anywhere in the patch; its `kept` is the client's root after the patch cut before the
  * key that holds the `__proto__`, and the client takes the rest of the scenario from there.
  */
-const resources = new URL("../../../streamlord-core/src/test/resources/", import.meta.url);
+const resources = new URL("../../../conformance/dom/", import.meta.url);
 const read = <T>(file: string): T => JSON.parse(readFileSync(new URL(file, resources), "utf8")) as T;
 
 type Step = { signals: string; onlyIfMissing: boolean; client: string; refused?: boolean; kept?: string };
 
 describe("mergePatchAsClient", () => {
   it("holds what the client holds", () => {
-    const cases = read<{ name: string; steps: Step[]; client: string }[]>("client-store-cases.json");
+    const cases = read<{ name: string; steps: Step[]; client: string }[]>("store-cases.json");
     assert.equal(cases.length, 27);
     for (const c of cases) {
       let store: Record<string, unknown> = {};
@@ -28,7 +28,7 @@ describe("mergePatchAsClient", () => {
   });
 
   it("folds each step as the client's own mergePatch does", () => {
-    const scenarios = read<{ name: string; store?: string; steps: Step[] }[]>("client-merge-differential.json");
+    const scenarios = read<{ name: string; store?: string; steps: Step[] }[]>("merge-differential.json");
     assert.equal(scenarios.length, 366);
     for (const s of scenarios) {
       let store = (s.store ? JSON.parse(s.store) : {}) as Record<string, unknown>;

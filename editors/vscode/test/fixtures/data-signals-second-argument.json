@@ -1,0 +1,165 @@
+{
+  "$comment": "dataSignals(\"a-b\", <argument>) in a function with mode: String, flag: Boolean, expr: String and n: Int. kotlin is the overload the Kotlin compiler picks, which DataSignalsSecondArgumentTest in streamlord-analysis compiles and renders; analysis is what secondArgument reads from the text, in Kotlin and in the editor. Where the analysis reads unknown it says nothing.",
+  "cases": [
+    {
+      "argument": "\"1\"",
+      "kotlin": "expression",
+      "analysis": "expression"
+    },
+    {
+      "argument": "\"\"\"1\"\"\"",
+      "kotlin": "expression",
+      "analysis": "expression"
+    },
+    {
+      "argument": "\"n$n\"",
+      "kotlin": "expression",
+      "analysis": "expression"
+    },
+    {
+      "argument": "\"1\" + expr",
+      "kotlin": "expression",
+      "analysis": "expression"
+    },
+    {
+      "argument": "signal(\"count\")",
+      "kotlin": "expression",
+      "analysis": "expression"
+    },
+    {
+      "argument": "not(\"open\")",
+      "kotlin": "expression",
+      "analysis": "expression"
+    },
+    {
+      "argument": "signal(\"a\") + \" + 1\"",
+      "kotlin": "expression",
+      "analysis": "expression"
+    },
+    {
+      "argument": "true",
+      "kotlin": "ifMissing",
+      "analysis": "ifMissing"
+    },
+    {
+      "argument": "false",
+      "kotlin": "ifMissing",
+      "analysis": "ifMissing"
+    },
+    {
+      "argument": "mode == \"x\"",
+      "kotlin": "ifMissing",
+      "analysis": "ifMissing"
+    },
+    {
+      "argument": "\"x\" == mode",
+      "kotlin": "ifMissing",
+      "analysis": "ifMissing"
+    },
+    {
+      "argument": "mode != \"x\"",
+      "kotlin": "ifMissing",
+      "analysis": "ifMissing"
+    },
+    {
+      "argument": "!flag",
+      "kotlin": "ifMissing",
+      "analysis": "ifMissing"
+    },
+    {
+      "argument": "flag && mode == \"x\"",
+      "kotlin": "ifMissing",
+      "analysis": "ifMissing"
+    },
+    {
+      "argument": "flag || n > 1",
+      "kotlin": "ifMissing",
+      "analysis": "ifMissing"
+    },
+    {
+      "argument": "n > 1",
+      "kotlin": "ifMissing",
+      "analysis": "ifMissing"
+    },
+    {
+      "argument": "n >= 1",
+      "kotlin": "ifMissing",
+      "analysis": "ifMissing"
+    },
+    {
+      "argument": "(n < 1)",
+      "kotlin": "ifMissing",
+      "analysis": "ifMissing"
+    },
+    {
+      "argument": "\"x\" in mode",
+      "kotlin": "ifMissing",
+      "analysis": "ifMissing"
+    },
+    {
+      "argument": "mode !in listOf(\"x\")",
+      "kotlin": "ifMissing",
+      "analysis": "ifMissing"
+    },
+    {
+      "argument": "expr is String",
+      "kotlin": "ifMissing",
+      "analysis": "ifMissing"
+    },
+    {
+      "argument": "signal(\"a\") == \"x\"",
+      "kotlin": "ifMissing",
+      "analysis": "ifMissing"
+    },
+    {
+      "argument": "flag",
+      "kotlin": "ifMissing",
+      "analysis": "unknown"
+    },
+    {
+      "argument": "expr",
+      "kotlin": "expression",
+      "analysis": "unknown"
+    },
+    {
+      "argument": "mode.isEmpty()",
+      "kotlin": "ifMissing",
+      "analysis": "unknown"
+    },
+    {
+      "argument": "mode.startsWith(\"x\")",
+      "kotlin": "ifMissing",
+      "analysis": "unknown"
+    },
+    {
+      "argument": "\"x\".isEmpty()",
+      "kotlin": "ifMissing",
+      "analysis": "unknown"
+    },
+    {
+      "argument": "expr.trim()",
+      "kotlin": "expression",
+      "analysis": "unknown"
+    },
+    {
+      "argument": "\"x\".repeat(n)",
+      "kotlin": "expression",
+      "analysis": "unknown"
+    },
+    {
+      "argument": "emptyList<String>().joinToString()",
+      "kotlin": "expression",
+      "analysis": "unknown"
+    },
+    {
+      "argument": "listOf<String>().isEmpty()",
+      "kotlin": "ifMissing",
+      "analysis": "unknown"
+    },
+    {
+      "argument": "if (flag) \"1\" else \"2\"",
+      "kotlin": "expression",
+      "analysis": "unknown"
+    }
+  ]
+}

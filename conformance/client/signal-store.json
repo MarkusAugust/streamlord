@@ -1,0 +1,710 @@
+{
+  "$comment": "pathToObj from utils/paths.ts, filtered and mergePatch from engine/signals.ts, and isStringTrue from utils/text.ts of the Datastar 1.0.4 client. held is JSON.stringify of the root after mergePatch of store; filtered is JSON.stringify of filtered({include, exclude}) with the fetch default exclude /(^|\\.)_/ unless given; pollutes lists what Object.prototype or a function on it gained, removed again afterwards.",
+  "cases": {
+    "pathToObj": [
+      {
+        "paths": [
+          [
+            "a",
+            1
+          ]
+        ],
+        "result": "{\"a\":1}",
+        "pollutes": []
+      },
+      {
+        "paths": [
+          [
+            "a.b",
+            1
+          ]
+        ],
+        "result": "{\"a\":{\"b\":1}}",
+        "pollutes": []
+      },
+      {
+        "paths": [
+          [
+            "a.b",
+            1
+          ],
+          [
+            "a.c",
+            2
+          ]
+        ],
+        "result": "{\"a\":{\"b\":1,\"c\":2}}",
+        "pollutes": []
+      },
+      {
+        "paths": [
+          [
+            "a",
+            1
+          ],
+          [
+            "a.b",
+            2
+          ]
+        ],
+        "error": "TypeError",
+        "pollutes": []
+      },
+      {
+        "paths": [
+          [
+            "a.b",
+            1
+          ],
+          [
+            "a",
+            2
+          ]
+        ],
+        "result": "{\"a\":2}",
+        "pollutes": []
+      },
+      {
+        "paths": [
+          [
+            "a.b.c",
+            true
+          ]
+        ],
+        "result": "{\"a\":{\"b\":{\"c\":true}}}",
+        "pollutes": []
+      },
+      {
+        "paths": [
+          [
+            "a.0",
+            "x"
+          ]
+        ],
+        "result": "{\"a\":{\"0\":\"x\"}}",
+        "pollutes": []
+      },
+      {
+        "paths": [
+          [
+            "0.a",
+            "x"
+          ]
+        ],
+        "result": "{\"0\":{\"a\":\"x\"}}",
+        "pollutes": []
+      },
+      {
+        "paths": [
+          [
+            "",
+            1
+          ]
+        ],
+        "result": "{\"\":1}",
+        "pollutes": []
+      },
+      {
+        "paths": [
+          [
+            "a.",
+            1
+          ]
+        ],
+        "result": "{\"a\":{\"\":1}}",
+        "pollutes": []
+      },
+      {
+        "paths": [
+          [
+            ".a",
+            1
+          ]
+        ],
+        "result": "{\"\":{\"a\":1}}",
+        "pollutes": []
+      },
+      {
+        "paths": [
+          [
+            "a..b",
+            1
+          ]
+        ],
+        "result": "{\"a\":{\"\":{\"b\":1}}}",
+        "pollutes": []
+      },
+      {
+        "paths": [
+          [
+            "__proto__",
+            1
+          ]
+        ],
+        "result": "{}",
+        "pollutes": []
+      },
+      {
+        "paths": [
+          [
+            "__proto__.x",
+            1
+          ]
+        ],
+        "result": "{}",
+        "pollutes": [
+          "Object.prototype.x"
+        ]
+      },
+      {
+        "paths": [
+          [
+            "a.__proto__.x",
+            1
+          ]
+        ],
+        "result": "{\"a\":{}}",
+        "pollutes": [
+          "Object.prototype.x"
+        ]
+      },
+      {
+        "paths": [
+          [
+            "constructor",
+            1
+          ]
+        ],
+        "result": "{\"constructor\":1}",
+        "pollutes": []
+      },
+      {
+        "paths": [
+          [
+            "constructor.x",
+            1
+          ]
+        ],
+        "result": "{}",
+        "pollutes": [
+          "Object.prototype.constructor.x"
+        ]
+      },
+      {
+        "paths": [
+          [
+            "constructor.prototype.x",
+            1
+          ]
+        ],
+        "result": "{}",
+        "pollutes": [
+          "Object.prototype.x"
+        ]
+      },
+      {
+        "paths": [
+          [
+            "toString",
+            1
+          ]
+        ],
+        "result": "{\"toString\":1}",
+        "pollutes": []
+      },
+      {
+        "paths": [
+          [
+            "toString.name",
+            1
+          ]
+        ],
+        "error": "TypeError",
+        "pollutes": []
+      },
+      {
+        "paths": [
+          [
+            "toString.x",
+            1
+          ]
+        ],
+        "result": "{}",
+        "pollutes": [
+          "Object.prototype.toString.x"
+        ]
+      },
+      {
+        "paths": [
+          [
+            "hasOwnProperty",
+            1
+          ]
+        ],
+        "result": "{\"hasOwnProperty\":1}",
+        "pollutes": []
+      },
+      {
+        "paths": [
+          [
+            "hasOwnProperty.x",
+            1
+          ]
+        ],
+        "result": "{}",
+        "pollutes": [
+          "Object.prototype.hasOwnProperty.x"
+        ]
+      },
+      {
+        "paths": [
+          [
+            "valueOf.x",
+            1
+          ]
+        ],
+        "result": "{}",
+        "pollutes": [
+          "Object.prototype.valueOf.x"
+        ]
+      },
+      {
+        "paths": [
+          [
+            "a.constructor",
+            1
+          ]
+        ],
+        "result": "{\"a\":{\"constructor\":1}}",
+        "pollutes": []
+      },
+      {
+        "paths": [
+          [
+            "a.constructor.prototype.x",
+            1
+          ]
+        ],
+        "result": "{\"a\":{}}",
+        "pollutes": [
+          "Object.prototype.x"
+        ]
+      },
+      {
+        "paths": [
+          [
+            "a.toString",
+            1
+          ]
+        ],
+        "result": "{\"a\":{\"toString\":1}}",
+        "pollutes": []
+      },
+      {
+        "paths": [
+          [
+            "a-b",
+            1
+          ]
+        ],
+        "result": "{\"a-b\":1}",
+        "pollutes": []
+      },
+      {
+        "paths": [
+          [
+            "a-b.c-d",
+            1
+          ]
+        ],
+        "result": "{\"a-b\":{\"c-d\":1}}",
+        "pollutes": []
+      },
+      {
+        "paths": [
+          [
+            "a b",
+            1
+          ]
+        ],
+        "result": "{\"a b\":1}",
+        "pollutes": []
+      },
+      {
+        "paths": [
+          [
+            "a",
+            null
+          ]
+        ],
+        "result": "{\"a\":null}",
+        "pollutes": []
+      },
+      {
+        "paths": [
+          [
+            "a",
+            {
+              "b": 1
+            }
+          ]
+        ],
+        "result": "{\"a\":{\"b\":1}}",
+        "pollutes": []
+      },
+      {
+        "paths": [
+          [
+            "a",
+            [
+              1,
+              2
+            ]
+          ]
+        ],
+        "result": "{\"a\":[1,2]}",
+        "pollutes": []
+      },
+      {
+        "paths": [
+          [
+            "a.b",
+            1
+          ],
+          [
+            "a",
+            {
+              "c": 2
+            }
+          ]
+        ],
+        "result": "{\"a\":{\"c\":2}}",
+        "pollutes": []
+      }
+    ],
+    "filtered": [
+      {
+        "store": "{\"a\":1,\"_private\":2}",
+        "held": "{\"a\":1,\"_private\":2}",
+        "include": null,
+        "exclude": "(^|\\.)_",
+        "filtered": "{\"a\":1}",
+        "pollutes": []
+      },
+      {
+        "store": "{\"a\":{\"_b\":1,\"c\":2},\"_d\":{\"e\":3}}",
+        "held": "{\"a\":{\"_b\":1,\"c\":2},\"_d\":{\"e\":3}}",
+        "include": null,
+        "exclude": "(^|\\.)_",
+        "filtered": "{\"a\":{\"c\":2}}",
+        "pollutes": []
+      },
+      {
+        "store": "{\"user\":{\"name\":\"x\",\"address\":{\"city\":\"y\",\"_geo\":1}},\"_tmp\":\"z\"}",
+        "held": "{\"user\":{\"name\":\"x\",\"address\":{\"city\":\"y\",\"_geo\":1}},\"_tmp\":\"z\"}",
+        "include": null,
+        "exclude": "(^|\\.)_",
+        "filtered": "{\"user\":{\"name\":\"x\",\"address\":{\"city\":\"y\"}}}",
+        "pollutes": []
+      },
+      {
+        "store": "{\"arr\":[1,{\"_y\":2}],\"_arr\":[3]}",
+        "held": "{\"arr\":[1,{\"_y\":2}],\"_arr\":[3]}",
+        "include": null,
+        "exclude": "(^|\\.)_",
+        "filtered": "{\"arr\":[1,{\"_y\":2}]}",
+        "pollutes": []
+      },
+      {
+        "store": "{\"a\":{\"b\":{\"c\":{\"d\":1}}}}",
+        "held": "{\"a\":{\"b\":{\"c\":{\"d\":1}}}}",
+        "include": null,
+        "exclude": "(^|\\.)_",
+        "filtered": "{\"a\":{\"b\":{\"c\":{\"d\":1}}}}",
+        "pollutes": []
+      },
+      {
+        "store": "{\"constructor\":{\"prototype\":{\"polluted\":1}}}",
+        "held": "{\"constructor\":{\"prototype\":{\"polluted\":1}}}",
+        "include": null,
+        "exclude": "(^|\\.)_",
+        "filtered": "{}",
+        "pollutes": [
+          "Object.prototype.polluted"
+        ]
+      },
+      {
+        "store": "{\"constructor\":{\"x\":1}}",
+        "held": "{\"constructor\":{\"x\":1}}",
+        "include": null,
+        "exclude": "(^|\\.)_",
+        "filtered": "{}",
+        "pollutes": [
+          "Object.prototype.constructor.x"
+        ]
+      },
+      {
+        "store": "{\"constructor\":1}",
+        "held": "{\"constructor\":1}",
+        "include": null,
+        "exclude": "(^|\\.)_",
+        "filtered": "{\"constructor\":1}",
+        "pollutes": []
+      },
+      {
+        "store": "{\"toString\":\"x\"}",
+        "held": "{\"toString\":\"x\"}",
+        "include": null,
+        "exclude": "(^|\\.)_",
+        "filtered": "{\"toString\":\"x\"}",
+        "pollutes": []
+      },
+      {
+        "store": "{\"toString\":{\"name\":1}}",
+        "held": "{\"toString\":{\"name\":1}}",
+        "include": null,
+        "exclude": "(^|\\.)_",
+        "error": "TypeError",
+        "pollutes": []
+      },
+      {
+        "store": "{\"hasOwnProperty\":{\"x\":1}}",
+        "held": "{\"hasOwnProperty\":{\"x\":1}}",
+        "include": null,
+        "exclude": "(^|\\.)_",
+        "filtered": "{}",
+        "pollutes": [
+          "Object.prototype.hasOwnProperty.x"
+        ]
+      },
+      {
+        "store": "{\"valueOf\":1,\"a\":2}",
+        "held": "{\"valueOf\":1,\"a\":2}",
+        "include": null,
+        "exclude": "(^|\\.)_",
+        "filtered": "{\"valueOf\":1,\"a\":2}",
+        "pollutes": []
+      },
+      {
+        "store": "{\"a.b\":1,\"a\":{\"b\":2}}",
+        "held": "{\"a.b\":1,\"a\":{\"b\":2}}",
+        "include": null,
+        "exclude": "(^|\\.)_",
+        "filtered": "{\"a\":{\"b\":2}}",
+        "pollutes": []
+      },
+      {
+        "store": "{\"a-b\":1,\"a\":{\"b-c\":2}}",
+        "held": "{\"a-b\":1,\"a\":{\"b-c\":2}}",
+        "include": null,
+        "exclude": "(^|\\.)_",
+        "filtered": "{\"a-b\":1,\"a\":{\"b-c\":2}}",
+        "pollutes": []
+      },
+      {
+        "store": "{\"a\":\"\",\"b\":null,\"c\":false,\"d\":0}",
+        "held": "{\"a\":\"\",\"c\":false,\"d\":0}",
+        "include": null,
+        "exclude": "(^|\\.)_",
+        "filtered": "{\"a\":\"\",\"c\":false,\"d\":0}",
+        "pollutes": []
+      },
+      {
+        "store": "{\"a\":1,\"b\":{\"_x\":1}}",
+        "held": "{\"a\":1,\"b\":{\"_x\":1}}",
+        "include": null,
+        "exclude": "(^|\\.)_",
+        "filtered": "{\"a\":1}",
+        "pollutes": []
+      },
+      {
+        "store": "{\"_\":1,\"__\":2,\"a_\":3,\"a_b\":4,\"a._b\":5}",
+        "held": "{\"_\":1,\"__\":2,\"a_\":3,\"a_b\":4,\"a._b\":5}",
+        "include": null,
+        "exclude": "(^|\\.)_",
+        "filtered": "{\"a_\":3,\"a_b\":4}",
+        "pollutes": []
+      },
+      {
+        "store": "{\"a\":[{\"b\":1},{\"_c\":2}],\"_z\":[1]}",
+        "held": "{\"a\":[{\"b\":1},{\"_c\":2}],\"_z\":[1]}",
+        "include": null,
+        "exclude": "(^|\\.)_",
+        "filtered": "{\"a\":[{\"b\":1},{\"_c\":2}]}",
+        "pollutes": []
+      },
+      {
+        "store": "{\"a\":{\"b\":1}}",
+        "held": "{\"a\":{\"b\":1}}",
+        "include": "^a\\.b$",
+        "exclude": "(^|\\.)_",
+        "filtered": "{\"a\":{\"b\":1}}",
+        "pollutes": []
+      },
+      {
+        "store": "{\"a\":{\"b\":1,\"c\":2},\"d\":3}",
+        "held": "{\"a\":{\"b\":1,\"c\":2},\"d\":3}",
+        "include": "^a",
+        "exclude": "(^|\\.)_",
+        "filtered": "{\"a\":{\"b\":1,\"c\":2}}",
+        "pollutes": []
+      },
+      {
+        "store": "{\"a\":{\"b\":1,\"c\":2},\"d\":3}",
+        "held": "{\"a\":{\"b\":1,\"c\":2},\"d\":3}",
+        "include": "/^a/",
+        "exclude": "(^|\\.)_",
+        "filtered": "{\"a\":{\"b\":1,\"c\":2}}",
+        "pollutes": []
+      },
+      {
+        "store": "{\"a\":{\"b\":1,\"c\":2},\"d\":3}",
+        "held": "{\"a\":{\"b\":1,\"c\":2},\"d\":3}",
+        "include": null,
+        "exclude": "c$",
+        "filtered": "{\"a\":{\"b\":1},\"d\":3}",
+        "pollutes": []
+      },
+      {
+        "store": "{\"a\":{\"b\":1,\"c\":2},\"d\":3}",
+        "held": "{\"a\":{\"b\":1,\"c\":2},\"d\":3}",
+        "include": "a",
+        "exclude": "b",
+        "filtered": "{\"a\":{\"c\":2}}",
+        "pollutes": []
+      },
+      {
+        "store": "{\"_a\":1}",
+        "held": "{\"_a\":1}",
+        "include": null,
+        "exclude": "",
+        "filtered": "{}",
+        "pollutes": []
+      },
+      {
+        "store": "{\"foo\":1,\"foobar\":2,\"bar\":{\"foo\":3}}",
+        "held": "{\"foo\":1,\"foobar\":2,\"bar\":{\"foo\":3}}",
+        "include": "foo",
+        "exclude": "(^|\\.)_",
+        "filtered": "{\"foo\":1,\"foobar\":2,\"bar\":{\"foo\":3}}",
+        "pollutes": []
+      },
+      {
+        "store": "{\"foo\":1}",
+        "held": "{\"foo\":1}",
+        "include": "FOO",
+        "exclude": "(^|\\.)_",
+        "filtered": "{}",
+        "pollutes": []
+      }
+    ],
+    "isStringTrue": [
+      {
+        "value": "true",
+        "isStringTrue": true
+      },
+      {
+        "value": " true ",
+        "isStringTrue": true
+      },
+      {
+        "value": "True",
+        "isStringTrue": false
+      },
+      {
+        "value": "TRUE",
+        "isStringTrue": false
+      },
+      {
+        "value": "1",
+        "isStringTrue": false
+      },
+      {
+        "value": "",
+        "isStringTrue": false
+      },
+      {
+        "value": "false",
+        "isStringTrue": false
+      },
+      {
+        "value": "true\n",
+        "isStringTrue": true
+      },
+      {
+        "value": "\ttrue",
+        "isStringTrue": true
+      },
+      {
+        "value": " true",
+        "isStringTrue": true
+      },
+      {
+        "value": "﻿true",
+        "isStringTrue": true
+      },
+      {
+        "value": "　true",
+        "isStringTrue": true
+      },
+      {
+        "value": " true",
+        "isStringTrue": true
+      },
+      {
+        "value": " true",
+        "isStringTrue": true
+      },
+      {
+        "value": "\u001ctrue",
+        "isStringTrue": false
+      },
+      {
+        "value": "true",
+        "isStringTrue": false
+      },
+      {
+        "value": "​true",
+        "isStringTrue": false
+      },
+      {
+        "value": "true ",
+        "isStringTrue": true
+      },
+      {
+        "value": "truee",
+        "isStringTrue": false
+      },
+      {
+        "value": "tru",
+        "isStringTrue": false
+      },
+      {
+        "value": "t rue",
+        "isStringTrue": false
+      },
+      {
+        "value": "\"true\"",
+        "isStringTrue": false
+      },
+      {
+        "value": true,
+        "isStringTrue": false
+      },
+      {
+        "value": 1,
+        "isStringTrue": false
+      },
+      {
+        "value": null,
+        "isStringTrue": false
+      },
+      {
+        "value": [
+          "true"
+        ],
+        "isStringTrue": false
+      }
+    ]
+  }
+}

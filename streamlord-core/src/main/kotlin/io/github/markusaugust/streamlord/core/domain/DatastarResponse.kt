@@ -16,7 +16,7 @@ import org.intellij.lang.annotations.Language
  * Adapters translate a [DatastarResponse] into the framework's response type.
  */
 public sealed interface DatastarResponse {
-    /** Full `Content-Type` value, charset included. */
+    /** Full `Content-Type` value: `text/html` and `text/javascript` with `charset=utf-8`, `application/json` without. */
     public val contentType: String
 
     /** The response body. */

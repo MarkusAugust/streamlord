@@ -15,6 +15,7 @@ import kotlinx.html.span
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.microseconds
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -53,14 +54,14 @@ class HtmlDslTest {
             elements {
                 div {
                     dataSignals("count" to 0, "user" to mapOf("name" to "Gorvek"), ifMissing = true)
-                    dataSignals("open", "false", case = Case.KEBAB)
+                    dataSignals("open", "false")
                     dataComputed("double", "${'$'}count * 2")
                     dataJsonSignals(SignalFilter.include("^user"), terse = true)
                 }
             }
         assertEquals(
             """<div data-signals__ifmissing="{&quot;count&quot;:0,&quot;user&quot;:{&quot;name&quot;:&quot;Gorvek&quot;}}" """ +
-                """data-signals:open__case.kebab="false" data-computed:double="${'$'}count * 2" """ +
+                """data-signals:open="false" data-computed:double="${'$'}count * 2" """ +
                 """data-json-signals__terse="{include: /^user/}"></div>""",
             html,
         )
@@ -110,7 +111,6 @@ class HtmlDslTest {
             elements {
                 input {
                     dataBind("search") {
-                        case = Case.CAMEL
                         events = listOf("input", "blur")
                     }
                     dataRef("box")
@@ -127,7 +127,7 @@ class HtmlDslTest {
                 }
             }
         assertEquals(
-            """<input data-bind:search__case.camel__event.input.blur="" data-ref="box" data-text="${'$'}search" """ +
+            """<input data-bind__event.input.blur="search" data-ref="box" data-text="${'$'}search" """ +
                 """data-show="!${'$'}hidden" data-class:active="${'$'}on" data-style:color="'red'" data-attr:disabled="${'$'}busy" """ +
                 """data-ignore__self="" data-ignore-morph="" data-preserve-attr="open class" """ +
                 """data-init__delay.500ms="${'$'}count = 1" data-effect="${'$'}count++">""",
@@ -272,18 +272,18 @@ class HtmlDslTest {
                 """data-style:background-color="'red'" data-attr:aria-label="'x'"></div>""",
             html,
         )
-        // Already kebab, snake or lower-case: written as given. An explicit case is never second-guessed.
+        // Snake or lower-case: written as given. A hyphen is refused, since it would not come back as written.
         assertEquals(
-            """<div data-signals:foo-bar="1" data-signals:foo_bar="2" data-on:my-event="x()" data-signals:foo-bar__case.kebab="3"></div>""",
+            """<div data-signals:foo_bar="2" data-on:my-event="x()"></div>""",
             elements {
                 div {
-                    dataSignals("foo-bar", "1")
                     dataSignals("foo_bar", "2")
                     dataOn("my-event", "x()")
-                    dataSignals("fooBar", "3", case = Case.KEBAB)
                 }
             },
         )
+        val hyphen = assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("foo-bar", "1") } } }
+        assertTrue("write fooBar" in hyphen.message!!, hyphen.message)
         // A leading capital needs __case.pascal to come back as written.
         assertEquals(
             """<div data-signals:my-signal__case.pascal="1" data-on:my-event__case.pascal="x()"></div>""",
@@ -306,10 +306,25 @@ class HtmlDslTest {
         )
         assertEquals("myURL", Casing.camel(Casing.kebab("myURL")))
         assertEquals("item2Name", Casing.camel(Casing.kebab("item2Name")))
-        // Helpers read a kebab key the way Datastar names the signal.
-        assertEquals("${'$'}fooBar", signal("foo-bar"))
-        assertEquals("${'$'}form.firstName++", increment("form.first-name"))
+        // A helper writes the name as it stands, and refuses a hyphen the client reads in a name or as a minus.
         assertEquals("${'$'}fooBar", signal("fooBar"))
+        assertEquals("${'$'}form.firstName++", increment("form.firstName"))
+        val kebab = assertFailsWith<InvalidSignalNameException> { signal("form.first-name") }
+        assertTrue("write form.firstName, or form['first-name']" in kebab.message!!, kebab.message)
+        val bracketed = assertFailsWith<InvalidSignalNameException> { signal("form.first-name['x-y']") }
+        assertTrue(bracketed.message!!.endsWith("write form.firstName['x-y']."), bracketed.message)
+        assertEquals("${'$'}a[i-1]", signal("a[i-1]"))
+        // The name is read as the client reads it: a quoted key is text, even with a bracket in it,
+        // while a reference in brackets is a signal of its own and a bare hyphen after a key a minus.
+        assertEquals("${'$'}a['x]y-z']", signal("a['x]y-z']"))
+        val inner = assertFailsWith<InvalidSignalNameException> { signal("items[${'$'}i-1]") }
+        assertTrue(inner.message!!.endsWith("write it in the expression: ${'$'}items[${'$'}i - 1]."), inner.message)
+        val index = assertFailsWith<InvalidSignalNameException> { signal("items[${'$'}i-x]") }
+        assertTrue(index.message!!.endsWith("write items[${'$'}iX]."), index.message)
+        // The text of a template literal is text, though the client reads one with `${'$'}{` as code.
+        assertEquals("${'$'}a[`x]-${'$'}{${'$'}b}`]", signal("a[`x]-${'$'}{${'$'}b}`]"))
+        val minus = assertFailsWith<InvalidSignalNameException> { signal("a['['].b-c") }
+        assertTrue(minus.message!!.endsWith("write a['['].bC."), minus.message)
         assertFailsWith<InvalidSignalNameException> { signal("") }
         assertFailsWith<InvalidSignalNameException> { signal("my signal") }
         assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("a b", "1") } } }
@@ -317,7 +332,7 @@ class HtmlDslTest {
         assertEquals("${'$'}items[0].name", signal("items[0].name"))
         assertEquals("${'$'}items['sub-total']", signal("items['sub-total']"))
         assertEquals("${'$'}prefs['dark-mode'] = true", set("prefs['dark-mode']", true))
-        assertEquals("${'$'}form.firstName['x-y']", signal("form.first-name['x-y']"))
+        assertEquals("${'$'}form.firstName['x-y']", signal("form.firstName['x-y']"))
         assertEquals("${'$'}counts[1]++", increment("counts[1]"))
         assertEquals(
             """<div data-class:hover:bg-red-500="${'$'}danger" data-attr:xlink:href="${'$'}href" data-style:--brand="'red'"></div>""",
@@ -331,19 +346,15 @@ class HtmlDslTest {
         )
     }
 
-    /**
-     * `data-bind`, `data-ref` and `data-indicator` take the signal name in the value, which keeps
-     * its case, or in the key, which is the only place Datastar applies `__case`. The helpers
-     * write the value unless a case is asked for, and read a kebab-case name as Datastar does.
-     */
+    /** `data-bind`, `data-ref` and `data-indicator` take the signal name in the value, which keeps its case. */
     @Test
-    fun `bind, ref and indicator write the value unless a case is asked for`() {
+    fun `bind, ref and indicator write the name in the value`() {
         assertEquals(
-            """<input data-bind="fooBar" data-ref="box" data-indicator="isBusy" data-bind__prop.checked__event.change="fooBar">""",
+            """<input data-bind="fooBar" data-ref="MyRef" data-indicator="isBusy" data-bind__prop.checked__event.change="fooBar">""",
             elements {
                 input {
-                    dataBind("foo-bar")
-                    dataRef("box")
+                    dataBind("fooBar")
+                    dataRef("MyRef")
                     dataIndicator("isBusy")
                     dataBind("fooBar") {
                         prop = "checked"
@@ -352,20 +363,10 @@ class HtmlDslTest {
                 }
             },
         )
-        assertEquals(
-            """<input data-bind:foo-bar__case.kebab__event.input="" data-ref:my-ref__case.pascal="" data-indicator:busy__case.snake="">""",
-            elements {
-                input {
-                    dataBind("fooBar") {
-                        case = Case.KEBAB
-                        events = listOf("input")
-                    }
-                    dataRef("MyRef", case = Case.PASCAL)
-                    dataIndicator("busy", case = Case.SNAKE)
-                }
-            },
-        )
         assertFailsWith<InvalidSignalNameException> { elements { input { dataBind("a b") } } }
+        assertFailsWith<InvalidSignalNameException> { elements { input { dataBind("foo-bar") } } }
+        assertFailsWith<InvalidSignalNameException> { elements { input { dataRef("my-ref") } } }
+        assertFailsWith<InvalidSignalNameException> { elements { input { dataIndicator("is-busy") } } }
     }
 
     @Test

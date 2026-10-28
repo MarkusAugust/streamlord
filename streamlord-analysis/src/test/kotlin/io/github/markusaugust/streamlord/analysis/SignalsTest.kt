@@ -21,8 +21,53 @@ class SignalsTest {
     }
 
     @Test
-    fun `the pairs form camel-cases its keys as the keyed form does, and a patch keeps them`() {
-        assertEquals(listOf("foo-bar", "fooBar"), kotlin("dataSignals(\"foo-bar\" to 7); patchSignals(\"foo-bar\" to 1)"))
+    fun `a name is collected as written, wherever it is written`() {
+        assertEquals(listOf("fooBar", "x"), kotlin("dataSignals(\"fooBar\" to 7); patchSignals(\"fooBar\" to 1); dataBind(\"x\")"))
+        // A name with a hyphen is refused at runtime, and collected as it stands until it is fixed.
+        assertEquals(listOf("foo-bar"), kotlin("dataSignals(\"foo-bar\" to 7); signal(\"foo-bar\")"))
+    }
+
+    // Only a value the codec made, or one typed as JSON, may declare any name; a string or a pair
+    // held in a variable is no such value, and the nearest declaration names the variable's class.
+    @Test
+    fun `a page declared from a variable is read by what the file says about it`() {
+        fun encoded(src: String) = collectSignalDefinitions(src, SourceLanguage.KOTLIN).filter { it == "*" || ':' in it }
+        val cases =
+            mapOf(
+                "val init = \"{count: 0}\"\nfun p() = div { dataSignals(init) }" to emptyList(),
+                "fun p(pairs: Array<Pair<String, Any?>>) = div { dataSignals(*pairs) }" to emptyList(),
+                "val p = \"count\" to 0\nfun f() = div { dataSignals(p) }" to emptyList(),
+                "fun p(s: JsonObject) = div { dataSignals(s) }" to listOf("*"),
+                "class X(val form: String)\nfun p() { val form = Form(); div { dataSignals(codec.toJsonValue(form)) } }" to
+                    listOf("toJsonValue:Form"),
+                "fun p() = div { dataSignals(codec.toJsonValue(forms.Form())) }" to listOf("toJsonValue:Form"),
+                "fun p() = div { dataSignals(codec.toJsonValue(Form()), true) }" to listOf("toJsonValue:Form"),
+                "fun p(text: String) = div { dataSignals(codec.toJsonValue(text)) }" to emptyList(),
+                "const val INIT = \"{count: 0}\"\nfun p() = div { dataSignals(INIT); dataSignals(initial(0)) }" to emptyList(),
+                "fun p() = div { dataSignals(codec.toJsonValue(Page<String>())) }" to listOf("toJsonValue:Page"),
+                "fun a(form: LoginForm) = div { dataSignals(codec.toJsonValue(form)) }\n" +
+                    "fun b(form: SearchSignals) = div { dataSignals(codec.toJsonValue(form)) }" to
+                    listOf("toJsonValue:LoginForm", "toJsonValue:SearchSignals"),
+            )
+        for ((src, expected) in cases) assertEquals(expected, encoded(src), src)
+    }
+
+    // patchSignals(mapOf(...)) hands a map over as the signals, so its own keys are signals.
+    @Test
+    fun `the keys of a map handed over as the signals are signals`() {
+        assertEquals(
+            listOf("count", "open", "user"),
+            kotlin(
+                "stream.patchSignals(mapOf(\"count\" to 1, \"user\" to mapOf(\"name\" to \"\"))); respondSignals(hashMapOf(\"open\" to true))",
+            ),
+        )
+        assertEquals(listOf("count"), kotlin("dataSignals((\"count\" to 0))"))
+    }
+
+    // The client merges the value as it is, so a key inside it is no signal of its own.
+    @Test
+    fun `a key inside a pair's value declares nothing on its own`() {
+        assertEquals(listOf("user"), kotlin("dataSignals(\"user\" to mapOf(\"first-name\" to \"\", \"age\" to 1))"))
     }
 
     @Test

@@ -16,13 +16,14 @@ public object Wire {
     private val LINE_BREAKS = Regex("\r\n|\r|\n")
     private val ATTRIBUTE_NAME = Regex("[A-Za-z_:][A-Za-z0-9_:.-]*")
 
-    // The end tags that close the element early, and the three Datastar's client takes for a whole
-    // document, which drops the script or appends a second html element.
-    private val END_TAGS = Regex("</(script|body|head|html)", RegexOption.IGNORE_CASE)
+    // The end tag that closes the element early, in any case, and the three Datastar's client takes
+    // for a whole document, which drops the script or appends a second html element: those it
+    // tests in lower case only (patchElements.ts), so `</BODY>` is left as written.
+    private val END_TAGS = Regex("</(?:[sS][cC][rR][iI][pP][tT]|body|head|html)")
 
     // After <!--, a <script that a name boundary follows sends the tokenizer into a state where
     // </script> no longer ends the element.
-    private val OPEN_SCRIPT = Regex("<(script)(?=[\\t\\n\\u000C\\r />])", RegexOption.IGNORE_CASE)
+    private val OPEN_SCRIPT = Regex("<([sS])(?=[cC][rR][iI][pP][tT][\\t\\n\\u000C\\r />])")
 
     /**
      * [json] with each surrogate that lacks its other half written as a `\uXXXX` escape, which is
@@ -194,16 +195,18 @@ public object Wire {
     /**
      * Make a script body safe to embed in a `<script>` element and to patch as one.
      *
-     * `</script` ends the element early, and `</body>`, `</head>` and `</html>` make Datastar's
-     * client read the patch as a whole document; each becomes `<\/…`. After a `<!--`, a
-     * `<script` keeps the element open past its `</script>`, so it becomes `<\x73cript`. Inside a
-     * JavaScript string, regex or template literal both mean what they meant, and outside of one
-     * neither was valid JavaScript anyway.
+     * `</script`, in any case, ends the element early, and `</body>`, `</head>` and `</html>`, in
+     * lower case, make Datastar's client read the patch as a whole document; each becomes `<\/…`
+     * with its letters as they were. After a `<!--`, a `<script` keeps the element open past its
+     * `</script>`, so its `s` becomes `\x73`, or `\x53` for an `S`. Inside a JavaScript string,
+     * regex or template literal every one of these means what it meant, and outside of one none
+     * was valid JavaScript anyway.
      */
     public fun escapeScriptBody(script: String): String {
-        val ended = script.replace(END_TAGS) { "<\\/${it.groupValues[1].lowercase()}" }
+        val ended = script.replace(END_TAGS) { "<\\/${it.value.substring(2)}" }
         val comment = ended.indexOf("<!--")
         if (comment < 0) return ended
-        return ended.substring(0, comment) + ended.substring(comment).replace(OPEN_SCRIPT) { "<\\x73${it.groupValues[1].drop(1)}" }
+        return ended.substring(0, comment) +
+            ended.substring(comment).replace(OPEN_SCRIPT) { "<\\x%02x".format(it.groupValues[1][0].code) }
     }
 }

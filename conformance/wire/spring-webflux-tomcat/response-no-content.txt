@@ -1,0 +1,13 @@
+# Wire transcript: spring-webflux-tomcat, response-no-content.
+# Written by SpringWebFluxWireTranscriptTest under ./gradlew :streamlord-spring:updateTranscripts, compared with the live answer on every test run.
+# Normalised: CRLF written as LF; the port as {port}; the values of Date, Server and Keep-Alive as {date}, {server} and {keep-alive};
+# a CSP nonce as {nonce}; a line feed after a body that ends without one. Every other byte is as the client got it.
+# Body: none.
+GET /response/no-content HTTP/1.1
+Host: 127.0.0.1:{port}
+Accept: text/event-stream, text/html, application/json
+Datastar-Request: true
+
+HTTP/1.1 204 
+Date: {date}
+

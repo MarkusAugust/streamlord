@@ -1,6 +1,5 @@
 package io.github.markusaugust.streamlord.html.pro
 
-import io.github.markusaugust.streamlord.html.Case
 import io.github.markusaugust.streamlord.html.DatastarAttributes
 import io.github.markusaugust.streamlord.html.InvalidSignalNameException
 import io.github.markusaugust.streamlord.html.SignalFilter
@@ -14,6 +13,7 @@ import kotlin.test.assertFailsWith
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.microseconds
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 class ProDslTest {
     @Test
@@ -22,7 +22,7 @@ class ProDslTest {
             elements {
                 div {
                     dataAnimate("r", "${'$'}size * 2")
-                    dataMatchMedia("is-dark", "prefers-color-scheme: dark", case = Case.CAMEL)
+                    dataMatchMedia("isDark", "prefers-color-scheme: dark")
                     dataOnRaf("${'$'}t++") {
                         throttle = 16.milliseconds
                         throttleTrailing = true
@@ -41,13 +41,64 @@ class ProDslTest {
                 input { dataCustomValidity("${'$'}a === ${'$'}b ? '' : 'Values must match.'") }
             }
         assertEquals(
-            """<div data-animate:r="${'$'}size * 2" data-match-media:is-dark__case.camel="'prefers-color-scheme: dark'" """ +
+            """<div data-animate:r="${'$'}size * 2" data-match-media:is-dark="'prefers-color-scheme: dark'" """ +
                 """data-on-raf__throttle.16ms.trailing="${'$'}t++" data-on-resize__debounce.100ms.leading="${'$'}w = el.clientWidth" """ +
                 """data-persist="" data-persist:draft__session="{include: /^form/}" """ +
                 """data-query-string__filter__history="{exclude: /^_/}" data-replace-url="`/page${'$'}{${'$'}page}`" """ +
                 """data-scroll-into-view__smooth__hcenter__vstart__focus="" data-view-transition="${'$'}name"></div>""" +
                 """<input data-custom-validity="${'$'}a === ${'$'}b ? '' : 'Values must match.'">""",
             html,
+        )
+    }
+
+    @Test
+    fun `animate takes the object form and its modifiers`() {
+        assertEquals(
+            """<div data-animate="{r: String(${'$'}size * 2), cx: String(${'$'}x)}" """ +
+                """data-animate:stroke-width__duration.250ms__delay.50ms__ease.inoutcubic__loop__pingpong="${'$'}w"></div>""",
+            elements {
+                div {
+                    dataAnimate("{r: String(${'$'}size * 2), cx: String(${'$'}x)}")
+                    dataAnimate("strokeWidth", signal("w")) {
+                        duration = 250.milliseconds
+                        delay = 50.milliseconds
+                        ease = Easing.IN_OUT_CUBIC
+                        loop = true
+                        pingpong = true
+                    }
+                }
+            },
+        )
+        assertEquals(
+            """<div data-animate__ease.outbounce="{r: '1'}"></div>""",
+            elements { div { dataAnimate("{r: '1'}") { ease = Easing.OUT_BOUNCE } } },
+        )
+    }
+
+    @Test
+    fun `raf and resize take the timing and view transition of on`() {
+        assertEquals(
+            """<div data-on-raf__delay.1000ms__debounce.20ms.leading.notrailing__throttle.16ms__viewtransition="${'$'}t++" """ +
+                """data-on-resize__delay.5ms__throttle.100ms.noleading.trailing__viewtransition="${'$'}w = el.clientWidth"></div>""",
+            elements {
+                div {
+                    dataOnRaf("${'$'}t++") {
+                        delay = 1.seconds
+                        debounce = 20.milliseconds
+                        debounceLeading = true
+                        debounceNoTrailing = true
+                        throttle = 16.milliseconds
+                        viewTransition = true
+                    }
+                    dataOnResize("${'$'}w = el.clientWidth") {
+                        delay = 5.milliseconds
+                        throttle = 100.milliseconds
+                        throttleNoLeading = true
+                        throttleTrailing = true
+                        viewTransition = true
+                    }
+                }
+            },
         )
     }
 
@@ -101,6 +152,14 @@ class ProDslTest {
             ),
         )
         assertEquals("""@intl('datetime', new Date(), {}, 'de-AT')""", intl(IntlType.DATETIME, "new Date()", locales = arrayOf("de-AT")))
+        assertEquals("""@intl('number', ${'$'}n)""", intl(IntlType.NUMBER, signal("n")))
+        // The client reads options.unit and options.type without a guard, so these always get an object.
+        assertEquals("""@intl('relativeTime', -3, {})""", intl(IntlType.RELATIVE_TIME, "-3"))
+        assertEquals("""@intl('displayNames', 'nb', {}, 'en')""", intl(IntlType.DISPLAY_NAMES, "'nb'", locales = arrayOf("en")))
+        assertEquals(
+            """@intl('displayNames', 'nb', {type: 'language'})""",
+            intl(IntlType.DISPLAY_NAMES, "'nb'", mapOf("type" to "language")),
+        )
         assertEquals(
             """@intl('list', ${'$'}items, {type: 'conjunction'}, ['nb', 'en'])""",
             intl(
@@ -120,8 +179,13 @@ class ProDslTest {
             assertFailsWith<IllegalArgumentException>("$wait") { elements { div { dataOnResize("x()") { debounce = wait } } } }
             assertFailsWith<IllegalArgumentException>("$wait") { elements { div { dataOnRaf("x()") { throttle = wait } } } }
         }
+        for (wait in listOf(500.microseconds, (-1).milliseconds, 30.days)) {
+            assertFailsWith<IllegalArgumentException>("$wait") { elements { div { dataAnimate("r", "1") { duration = wait } } } }
+            assertFailsWith<IllegalArgumentException>("$wait") { elements { div { dataAnimate("{r: '1'}") { delay = wait } } } }
+        }
         assertFailsWith<IllegalArgumentException> { elements { div { dataOnResize("x()") { debounceLeading = true } } } }
         assertFailsWith<IllegalArgumentException> { elements { div { dataOnRaf("x()") { throttleTrailing = true } } } }
+        assertFailsWith<IllegalArgumentException> { elements { div { dataOnRaf("x()") { debounceNoTrailing = true } } } }
     }
 
     @Test

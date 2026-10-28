@@ -1,0 +1,17 @@
+# Wire transcript: spring-webflux-tomcat, csp-page.
+# Written by SpringWebFluxWireTranscriptTest under ./gradlew :streamlord-spring:updateTranscripts, compared with the live answer on every test run.
+# Normalised: CRLF written as LF; the port as {port}; the values of Date, Server and Keep-Alive as {date}, {server} and {keep-alive};
+# a CSP nonce as {nonce}; a line feed after a body that ends without one. Every other byte is as the client got it.
+# Body: as sent.
+GET /csp/page HTTP/1.1
+Host: 127.0.0.1:{port}
+Accept: text/event-stream, text/html, application/json
+Datastar-Request: true
+
+HTTP/1.1 200 
+Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{nonce}'; object-src 'none'; base-uri 'self'
+Content-Type: text/html;charset=UTF-8
+Content-Length: 128
+Date: {date}
+
+<!DOCTYPE html><html data-nonce="{nonce}"><head><title>Gate</title></head><body><h1>The gate</h1></body></html>

@@ -1,0 +1,79 @@
+# Wire transcript: ktor-cio, stream-elements.
+# Written by KtorWireTranscriptTest under ./gradlew :streamlord-ktor:updateTranscripts, compared with the live answer on every test run.
+# Normalised: CRLF written as LF; the port as {port}; the values of Date, Server and Keep-Alive as {date}, {server} and {keep-alive};
+# a CSP nonce as {nonce}; a line feed after a body that ends without one. Every other byte is as the client got it.
+# Body: chunked on the wire, shown without the chunk framing.
+GET /stream/elements HTTP/1.1
+Host: 127.0.0.1:{port}
+Accept: text/event-stream, text/html, application/json
+Datastar-Request: true
+
+HTTP/1.1 200 OK
+Cache-Control: no-cache
+X-Accel-Buffering: no
+Connection: keep-alive
+Transfer-Encoding: chunked
+Content-Type: text/event-stream
+
+event: datastar-patch-elements
+data: elements <div id="hall">The hall</div>
+
+event: datastar-patch-elements
+data: selector #hall
+data: elements <div id="hall">The hall, morphed</div>
+
+event: datastar-patch-elements
+data: selector #hall
+data: mode inner
+data: elements <p>Inside</p>
+
+event: datastar-patch-elements
+data: selector #hall
+data: mode replace
+data: elements <div id="hall">Replaced</div>
+
+event: datastar-patch-elements
+data: selector #list
+data: mode prepend
+data: elements <li>First</li>
+
+event: datastar-patch-elements
+data: selector #list
+data: mode append
+data: elements <li>Last</li>
+
+event: datastar-patch-elements
+data: selector #hall
+data: mode before
+data: elements <hr>
+
+event: datastar-patch-elements
+data: selector #hall
+data: mode after
+data: elements <hr>
+
+event: datastar-patch-elements
+data: selector #gone
+data: mode remove
+
+event: datastar-patch-elements
+data: selector #sky
+data: mode append
+data: namespace svg
+data: elements <circle id="moon" r="4"/>
+
+event: datastar-patch-elements
+data: useViewTransition true
+data: elements <div id="hall">In transition</div>
+
+event: datastar-patch-elements
+data: useViewTransition true
+data: viewTransitionSelector #hall
+data: elements <div id="hall">In transition</div>
+
+event: datastar-patch-elements
+data: elements <ul id="list">
+data: elements   <li>One</li>
+data: elements   <li>Two</li>
+data: elements </ul>
+

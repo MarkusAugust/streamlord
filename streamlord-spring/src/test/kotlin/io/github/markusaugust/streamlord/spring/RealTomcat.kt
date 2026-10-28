@@ -21,6 +21,7 @@ class RealTomcat(
     config: Class<*>,
     http2: Boolean = false,
     filters: List<Filter> = emptyList(),
+    filterPattern: String = "/*",
 ) : AutoCloseable {
     private val baseDir = Files.createTempDirectory("tomcat")
     private val tomcat = Tomcat()
@@ -51,7 +52,7 @@ class RealTomcat(
             context.addFilterMap(
                 FilterMap().apply {
                     filterName = name
-                    addURLPattern("/*")
+                    addURLPattern(filterPattern)
                     setDispatcher("REQUEST")
                     setDispatcher("ASYNC")
                 },

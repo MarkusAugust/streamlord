@@ -44,13 +44,22 @@ val oldestKtorTest: SourceSet = sourceSets.create("oldestKtorTest") {
 
 configurations.named("oldestKtorTestImplementation") { extendsFrom(configurations.testImplementation.get()) }
 dependencies {
-    // Ktor 3.0's Netty raised past its advisories, the way install.md tells a user on Ktor 3.0 to.
+    // Ktor 3.0's Netty, Jetty and Tomcat raised past their advisories, the way install.md tells a
+    // user on Ktor 3.0 to.
     "oldestKtorTestImplementation"(platform(libs.netty.bom.oldestKtor))
+    "oldestKtorTestImplementation"(platform(libs.jetty.bom.oldestKtor))
 }
 configurations.named("oldestKtorTestRuntimeOnly") { extendsFrom(configurations.testRuntimeOnly.get()) }
+val tomcatOldestKtorVersion = libs.versions.tomcatOldestKtor.get()
 listOf("oldestKtorTestCompileClasspath", "oldestKtorTestRuntimeClasspath").forEach { name ->
     configurations.named(name) {
-        resolutionStrategy.eachDependency { if (requested.group == "io.ktor") useVersion(ktorOldestVersion) }
+        resolutionStrategy.eachDependency {
+            if (requested.group == "io.ktor") useVersion(ktorOldestVersion)
+            // Tomcat has no BOM.
+            if (requested.group.startsWith("org.apache.tomcat") && requested.version?.startsWith("10.1.") == true) {
+                useVersion(tomcatOldestKtorVersion)
+            }
+        }
     }
 }
 
@@ -94,3 +103,29 @@ val testJavaxTomcat = tasks.register<Test>("testJavaxTomcat") {
 }
 
 tasks.check { dependsOn(testJavaxTomcat) }
+
+/*
+ * The approved wire transcripts under conformance/wire: what the adapter answers a fixed set of
+ * requests on each engine, committed as text. Every test task compares; updateTranscripts rewrites.
+ */
+val wireDir = rootProject.layout.projectDirectory.dir("conformance/wire")
+
+tasks.withType<Test>().configureEach { systemProperty("streamlord.wireDir", wireDir.asFile.path) }
+tasks.withType<Test>().matching { it.name != "updateTranscripts" }.configureEach { inputs.dir(wireDir) }
+
+tasks.register<Test>("updateTranscripts") {
+    description = "Rewrites the approved wire transcripts under conformance/wire from what the Ktor adapter answers now."
+    group = "verification"
+    testClassesDirs =
+        sourceSets.test
+            .get()
+            .output.classesDirs
+    classpath =
+        sourceSets.test
+            .get()
+            .runtimeClasspath
+    useJUnitPlatform()
+    filter { includeTestsMatching("*WireTranscriptTest") }
+    systemProperty("streamlord.updateTranscripts", "true")
+    outputs.upToDateWhen { false }
+}

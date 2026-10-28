@@ -6,6 +6,8 @@ dependencies {
     api(project(":streamlord-core"))
 
     testImplementation(kotlin("test"))
+    // DataSignalsSecondArgumentTest compiles DSL calls, so the Kotlin compiler is its oracle.
+    testImplementation(project(":streamlord-html"))
 }
 
 // The catalog is the single source of truth and lives once, at the repository root.
@@ -24,4 +26,13 @@ tasks.test {
         .dir(rootProject.layout.projectDirectory.dir("editors/vscode/test/fixtures/sse"))
         .withPropertyName("sseCorpus")
         .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs
+        .file(rootProject.layout.projectDirectory.file("editors/vscode/test/fixtures/data-signals-second-argument.json"))
+        .withPropertyName("secondArgument")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+}
+
+// The tests read these by path, so a change there must rerun them and not be served from the cache.
+tasks.withType<Test>().configureEach {
+    inputs.dir(rootProject.layout.projectDirectory.dir("conformance/client"))
 }

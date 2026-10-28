@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 
 /** The cases of the VS Code extension's `expression.test.ts`. */
@@ -39,8 +40,30 @@ class ExpressionTest {
 
     @Test
     fun `camel-cases a capital after the hyphen in the signal fix`() {
+        // The browser lowercases the key, so a-B reaches the client as a-b, which is the signal aB.
         val src = $$"$a-B"
-        assertEquals($$"$aB", expr(src).single().fixes[0].apply(src))
+        val issue = expr(src).single()
+        assertEquals($$"$aB", issue.fixes[0].apply(src))
+        assertContains(issue.message, $$"a key a-b is the signal $aB")
+    }
+
+    @Test
+    fun `names the signal a kebab-case key gives as the client cases it`() {
+        // `caseFns.camel` in text.ts (1.0.4): only a lowercase letter after a hyphen is raised.
+        fun clientCamel(key: String) = Regex("-[a-z]").replace(key) { it.value[1].uppercase() }
+        for (key in listOf("a-b-1", "grid-col-2", "foo-bar")) {
+            val src = "$" + key
+            val issue = expr(src).single()
+            val signal = clientCamel(key)
+            assertContains(issue.message, "a key $key is the signal \$$signal", message = src)
+            assertEquals(listOf("$" + signal, "$" + key.replace("-", " - ")), issue.fixes.map { it.apply(src) }, src)
+        }
+        // A key the client leaves as written is reached by the $ reference as written, so there is nothing to change it to.
+        assertEquals("foo-_bar", clientCamel("foo-_bar"))
+        val same = expr($$"$foo-_bar").single()
+        assertEquals("signal-kebab", same.code)
+        assertContains(same.message, "a key foo-_bar keeps that name")
+        assertEquals(listOf($$"$foo - _bar"), same.fixes.map { it.text })
     }
 
     @Test

@@ -6,18 +6,151 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-28
+
+### Added
+
+- `dataAnimate` takes the object form, `dataAnimate("{width: $w + 'px'}")`, and the modifiers the
+  Pro plugin reads: `duration`, `delay`, `ease` (an `Easing` enum of the plugin's names), `loop`
+  and `pingpong`. `RafModifiers` gains `delay`, `debounce` and `viewTransition`, `ResizeModifiers`
+  `delay` and `viewTransition`, as the two plugins read them. The catalog lists the same. The key
+  form's JVM signature gained the modifier argument; Kotlin source compiles as before.
+- `SignalsCodec.toJsonValue(value)` encodes a value with the codec and returns it as a
+  `JsonValue`, and `dataSignals(JsonValue)` writes a JSON object as `data-signals` with its keys
+  as they stand. A page declares its signals from the class its handler reads:
+  `dataSignals(call.streamlord.codec.toJsonValue(SearchSignals()))` gives the names
+  `readSignals<SearchSignals>()` reads, `@SerialName` and `@JsonProperty` included. A field that
+  is `null` declares nothing, since the client removes a signal patched to `null`.
+- The analysis reads `dataSignals(codec.toJsonValue(...))`. The drift check and the unknown-signal
+  check count the properties of a `@Serializable` class named there, by a constructor call, a type
+  argument or the type of a variable the file declares, as declared. For a class they cannot read,
+  such as a Jackson one, or a value whose class the file does not say, every name counts as
+  declared, in the whole project; `SignalDriftReport.declaredByCodec` says when that happened.
+  `SignalFacts` gained `encodedTypes` and `SignalDriftReport` `declaredByCodec`, which changes their
+  JVM constructors, and `collectSignalDefinitions` returns two kinds of entry that are no signal
+  names, `class:Form` and `toJsonValue:Form`, which `isKnownSignal` reads.
+- The analysis and both editors flag a hyphen in a signal name written in a DSL call, which the SDK
+  refuses at runtime, as the error `signal-name-hyphen`, with the camelCase fix:
+  `dataSignals("foo-bar", …)`, `dataBind("form.first-name")`, a pair's key, `removeSignals("a-b")`,
+  and a hyphen in `signal`, `set` and the other expression helpers that the client reads as part of
+  a signal name or as a minus, with the bracket form, `form['first-name']`, where it applies. A
+  call inside a string template counts too, `"${signal("is-running")} ? …"`, and a name with a
+  template in it, `"item-$id"`, is reported without a fix. `set` and `toggle`, whose names a map or
+  Ktor's `headers { }` share, count only inside the arguments of a DSL call. The analysis collects
+  a helper's name as written, where it read `dataSignals("foo-bar" to 1)` as `fooBar`. In IntelliJ
+  the check is part of Datastar key casing.
+- `SignalNames.hyphenProblem` says why a name with a hyphen is refused as a signal name, and
+  `SignalNames.withoutHyphens` gives the camelCase name to write instead.
+  `SignalNames.withoutReferenceHyphens` does the same for a reference written after `$`, read as
+  the client reads it, and is what the expression helpers and the analysis hold a name to.
+  `SignalNames.referenceAsSubtraction` gives the expression to write where such a hyphen comes
+  before a digit or a `$` and looks like a subtraction: `$items[$i - 1]` for `items[$i-1]`.
+- `ElementsGuard.evaluatedAttributes`: the attributes whose value Datastar runs as JavaScript,
+  the expression attributes and the four signal filters.
+- `conformance/`: what Datastar's client and the servers actually do, as fixtures the tests hold
+  Streamlord to. `conformance/client/` is the client's own functions run over fixed inputs
+  (casing, attribute keys, expression rewriting, modifier tags, the signal store),
+  `conformance/dom/` the client run in a DOM (what each frame did to a page and its store, what
+  the parser does with a script body), both generated from `datastar-reference/` by scripts in
+  `conformance/generate/`. `conformance/wire/` is the exact HTTP answer of each adapter, per
+  server, for a fixed set of requests, rewritten with `updateTranscripts` when it is meant to
+  change. CONTRIBUTING.md says how a new Datastar version goes in.
+
+### Changed
+
+- `LiveDatastarStream.open` sends the page's signals as the `datastar` query parameter, `{}` unless
+  its new `signals` argument says otherwise, as the browser's `@get` does. A handler under test
+  that reads signals now gets an object, where it got none; a test that relied on none fails, and
+  says so. The function's JVM signature changed with the argument.
+- `interpolate` admits a value into a `data-*` attribute the client reads as it stands:
+  `data-nonce`, `data-preserve-attr`, `data-ignore`, `data-ignore-morph`. A page written as a
+  string can take its CSP nonce through a hole. The expression attributes and the signal filters
+  (`data-json-signals`, `data-on-signal-patch-filter`, `data-persist`, `data-query-string`) are
+  refused as before, since the client evaluates those, and so are `data-bind`, `data-ref` and
+  `data-indicator`, whose value is a signal path the client follows without a guard: `__proto__.x`
+  there writes into every object of the page.
+- A signal has one name, the one you write, in Kotlin and in the browser. A name may no longer hold
+  a hyphen, since the client reads one as a capital in an attribute key and as a hyphen in an
+  expression or a patch: in 0.14.0 `dataSignals("foo-bar" to 1)` declared `$fooBar`, and
+  `patchSignals("foo-bar" to 1)` patched `foo-bar`. `dataSignals`, `dataComputed`, `dataBind`,
+  `dataRef`, `dataIndicator`, `dataMatchMedia`, `patchSignals` and `removeSignals` refuse such a
+  name, and `signal`, `set` and the other expression helpers refuse a hyphen that the client reads
+  as part of a signal name or as a minus. They read the name as the client reads `$` and the name,
+  so a quoted key in brackets is text whatever it holds, `a['x]y-z']`, while `items[$i-1]` reads
+  the signal `i-1` and `a['x'].b-c` subtracts `c`. The text of a template literal is text too. The
+  exception names what to write, `fooBar`, or `form['first-name']` for a key with a hyphen, and for
+  a hyphen before a digit or a `$`, which looks like a subtraction, the expression with the
+  subtraction in it, `$items[$i - 1]`; the editors offer no fix for that one. The expression
+  helpers write the name as they get it, where `signal("foo-bar")` gave `$fooBar`. A key with a
+  hyphen inside a value is data and is written as it stands: `"user" to mapOf("first-name" to "")`
+  declares `user['first-name']`, where 0.13.0 and 0.14.0 camel-cased it to `user.firstName`.
+- `dataSignals`, `dataComputed`, `dataRef`, `dataIndicator` and `dataMatchMedia` lose their `case`
+  argument, and `BindModifiers` its `case`: the DSL writes the key that comes back as the name,
+  so a `case` could only give the signal another name. `dataBind`, `dataRef` and `dataIndicator`
+  always write the name in the value. `dataOn` and `dataClass` keep `case`.
+- `intl(...)` writes an options object for `RELATIVE_TIME` and `DISPLAY_NAMES` even when empty,
+  because the client reads a field of it and throws without one.
+
+### Fixed
+
+- `ExecuteScript` lowercased the `</script` it escaped: `'</SCRIPT>'` in a script reached the
+  browser as `'<\/script>'`, whose value is `</script>`, and `<SCRIPT` after a `<!--` as
+  `<sCRIPT`. The escape now keeps the letters as written. `</BODY>`, `</HEAD>` and
+  `</HTML>` are left alone, since the client's test for a whole document reads lower case only.
+- The analysis named the wrong signal for a hyphenated reference: for `$a-b-1` it said the key
+  `a-b-1` declares `$aB1` and offered that as the fix, where the client camel-cases only a hyphen
+  before a lowercase letter and declares `aB-1`. The message and the fix follow the client. The
+  IntelliJ highlighter and the VS Code grammar mark `$123` and `$foo-bar` as one signal each, as
+  the client reads them.
+- The key-case hint in the analysis and the VS Code extension offered a key no case gives back
+  for an event or class such as `dataOn("fooBar-baz", …)`. It now says that no key gives the name
+  back, and names what the client would read. Found by the client oracle.
+- The Spring MVC recipe for a page with a CSP nonce produced `text/html;charset=ISO-8859-1`:
+  `produces = [MediaType.TEXT_HTML_VALUE]` lets Spring MVC pick Latin-1. The recipe on the Security
+  page and in `CspNonceFilter` says `produces = ["text/html;charset=UTF-8"]`. Found by the wire
+  transcripts.
+- `JsLiteral` rounded a `JsonNumber` through `Long` or `Double`, so `set("id", json)` changed a
+  number past `Long` or with more digits than a `Double` holds. It writes the digits as they are.
+- The analysis took `signal("cuont")` for a declaration of `cuont`, so a misspelt name in `signal`,
+  `increment`, `decrement` or `not` was never reported. These helpers now read the signal they
+  name, in a file that imports the DSL, when the call has no receiver and no import from elsewhere,
+  such as Hamcrest's `not`, takes the name; an unknown one gets the same warning and fix as
+  `$cuont` in an expression; `set`, `setExpr` and `toggle` still declare theirs, since they assign
+  it. A bracketed name, `signal("form['x']")`, is not checked, and the fix offers only a plain
+  dotted name. The IntelliJ plugin also leaves out a call that resolves outside Streamlord.
+- The analysis counted the keys inside a pair's value, `"user" to mapOf("name" to "")`, as
+  top-level signals. Only the pair's own key counts, and the keys of a map handed over as the
+  signals, `patchSignals(mapOf("count" to 0))`.
+- `SseDecoder` turned an `outer` or `replace` patch without a selector whose elements were a
+  comment alone, or text holding a `<`, into an event; the client patches nothing for either. A
+  comment ends where the HTML parser ends it, at `-->`, at `--!>`, and at once after `<!-->` or
+  `<!--->`, so the elements after one of those are an event.
+- Documentation held to the client: a 400 from an over-long query is retried under
+  `retry: 'error'` or `'always'`; a form sent with `@get` or `@delete` reads as no signals rather
+  than being refused; `application/json` responses carry no charset; `dataPersist` writes its key
+  in kebab case; and the examples in `ElementsGuard` and `Casing` show what the code does.
+- The analysis and the VS Code extension say when a signal object under `constructor` or another
+  name every object has goes wrong: the client holds it, and the next request writes it into the
+  built-in one and sends the page's signals without it.
+
 ### Security
 
+- The VS Code extension no longer hangs on a line such as `<a != != … '`. Finding the attribute
+  name being typed took time exponential in the line's length (CodeQL `js/redos`), so 400
+  characters before the cursor could keep the extension host busy for minutes. The tag is now
+  read in one pass; completion offers the same names it did.
 - The install page says why a scanner on a Spring Boot application reports an older
   `jackson-databind` than Streamlord asks for, and how to raise it. Boot's dependency management
   wins over the codec's version, and every released Boot pins one with a published advisory:
   3.1.7 and 2.21.7 on Boot 4.1.2 and 2.21.4 on Boot 3.5.16, which have CVE-2026-110879, fixed in
   3.1.8 and 2.21.8. The page gives Boot 4's and Boot 3's properties, whose names differ, for Maven
   and for Gradle with `io.spring.dependency-management`, where a `platform(...)` line for Jackson
-  has no effect. Streamlord 0.13.0 and older ask for 3.2.3 and
-  2.22.3, which have it too.
+  has no effect. Streamlord 0.13.0 and older ask for 3.2.3 and 2.22.3, which have it too.
 - streamlord-live, the service behind the documentation site, runs on distroless Debian 13.
   Debian 12's distroless image had not taken Debian's `libssl3` fixes, among them one rated high.
+- The install page tells a user on Ktor 3.0's Tomcat or Jetty engine to raise them as it already
+  did for Netty: Tomcat to 10.1.61, and Jetty to 11.0.26, whose four remaining advisories are fixed
+  only from Ktor 3.5. The adapter's tests on Ktor 3.0 run on those versions.
 
 ## [0.14.0] - 2026-10-23
 

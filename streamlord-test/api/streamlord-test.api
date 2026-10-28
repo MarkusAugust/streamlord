@@ -71,7 +71,7 @@ public final class io/github/markusaugust/streamlord/test/LiveDatastarStream$Com
 	public final fun getDEFAULT_TIMEOUT-UwyO8pc ()J
 	public final fun of (Ljava/io/Reader;Ljava/lang/AutoCloseable;)Lio/github/markusaugust/streamlord/test/LiveDatastarStream;
 	public static synthetic fun of$default (Lio/github/markusaugust/streamlord/test/LiveDatastarStream$Companion;Ljava/io/Reader;Ljava/lang/AutoCloseable;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/test/LiveDatastarStream;
-	public final fun open-SxA4cEA (Ljava/net/URI;Ljava/util/Map;J)Lio/github/markusaugust/streamlord/test/LiveDatastarStream;
-	public static synthetic fun open-SxA4cEA$default (Lio/github/markusaugust/streamlord/test/LiveDatastarStream$Companion;Ljava/net/URI;Ljava/util/Map;JILjava/lang/Object;)Lio/github/markusaugust/streamlord/test/LiveDatastarStream;
+	public final fun open-exY8QGI (Ljava/net/URI;Ljava/util/Map;JLjava/lang/String;)Lio/github/markusaugust/streamlord/test/LiveDatastarStream;
+	public static synthetic fun open-exY8QGI$default (Lio/github/markusaugust/streamlord/test/LiveDatastarStream$Companion;Ljava/net/URI;Ljava/util/Map;JLjava/lang/String;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/test/LiveDatastarStream;
 }
 

@@ -1,0 +1,19 @@
+# Wire transcript: ktor-cio, signals-post.
+# Written by KtorWireTranscriptTest under ./gradlew :streamlord-ktor:updateTranscripts, compared with the live answer on every test run.
+# Normalised: CRLF written as LF; the port as {port}; the values of Date, Server and Keep-Alive as {date}, {server} and {keep-alive};
+# a CSP nonce as {nonce}; a line feed after a body that ends without one. Every other byte is as the client got it.
+# Body: as sent.
+POST /signals HTTP/1.1
+Host: 127.0.0.1:{port}
+Accept: text/event-stream, text/html, application/json
+Datastar-Request: true
+Content-Type: application/json
+Content-Length: 10
+
+{"hp":100}
+
+HTTP/1.1 200 OK
+Content-Length: 35
+Content-Type: application/json
+
+{"method":"POST","read":{"hp":100}}

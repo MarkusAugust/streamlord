@@ -1,8 +1,9 @@
 import { ALL_SITE_NAMES, ATTRIBUTES_INDEX, attributesIndexValue, lexCached, markupString } from "./analyze.ts";
+import { dslHelpers } from "./signalNameHyphens.ts";
 import { catalog, distance, parseAttributeName } from "./catalog.ts";
 import { clientSignalReads, DOCS, type Issue } from "./expression.ts";
 import { PLACEHOLDER, toSource, type KotlinString } from "./kotlinStrings.ts";
-import { ANY_SIGNAL } from "./signals.ts";
+import { ANY_SIGNAL, ENCODED_CLASS, READABLE_CLASS } from "./signals.ts";
 import { asciiLowercase, decodeEntities, hasTemplateSyntax, tokenize } from "./markup.ts";
 import { findCallSites, isHtmlString, selectStringArg } from "./scanner.ts";
 
@@ -18,6 +19,8 @@ export interface SignalReference {
   start: number;
   end: number;
   name: string;
+  /** Read by a helper, `signal("count")`, where only a plain name can be written back. */
+  helper?: boolean;
 }
 
 /**
@@ -33,6 +36,18 @@ export function expressionSignalReferences(text: string): SignalReference[] {
     out.push({ start: r.start, end: r.end, name: r.name });
   }
   return out;
+}
+
+/**
+ * A name a fix can write back into a helper: dotted parts, without a hyphen, which the helper
+ * refuses (see `signalNameHyphenIssues`), or brackets, whose key a plain name would not replace
+ * as written.
+ */
+const PLAIN_HELPER_NAME = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/;
+
+/** The signal the literal first argument of a helper reads, with offsets relative to its text. */
+export function helperSignalReference(text: string): SignalReference | null {
+  return PLAIN_HELPER_NAME.test(text) && !text.includes(PLACEHOLDER) ? { start: 0, end: text.length, name: text, helper: true } : null;
 }
 
 /** The signals the expressions of an HTML fragment or document read, with offsets relative to `html`. */
@@ -55,9 +70,9 @@ export function signalReferencesInHtml(html: string, prefix: string): SignalRefe
 
 /**
  * Every signal the Datastar expressions of a Kotlin file read: in the expression handed to a DSL
- * call, and in the attributes of HTML strings, handed to a call or free-standing. A Kotlin
- * template (`$count` in a plain literal) is not a signal and is left out; the interpolation check
- * speaks for it.
+ * call, in the name handed to a helper such as `signal("count")`, and in the attributes of HTML
+ * strings, handed to a call or free-standing. A Kotlin template (`$count` in a plain literal) is
+ * not a signal and is left out; the interpolation check speaks for it.
  */
 export function signalReferencesInKotlin(src: string, prefix: string): SignalReference[] {
   const out: SignalReference[] = [];
@@ -78,6 +93,18 @@ export function signalReferencesInKotlin(src: string, prefix: string): SignalRef
       const s = markupString(site, html);
       if (s && !s.unterminated) add(s, signalReferencesInHtml(s.text, prefix));
     }
+  }
+  const names = dslHelpers(src);
+  const helpers = names.size > 0 ? findCallSites(src, names, lex.mask) : [];
+  for (const site of helpers) {
+    // A call on a receiver, `filter.not("x")`, is not the top-level helper.
+    let i = site.nameStart - 1;
+    while (i >= 0 && /\s/.test(src[i] ?? "")) i--;
+    if (src[i] === ".") continue;
+    const s = (site.args.find((a) => a.named === null) ?? site.args.find((a) => a.named === "name"))?.string;
+    if (!s || s.unterminated) continue;
+    const ref = helperSignalReference(s.text);
+    if (ref) add(s, [ref]);
   }
   for (const m of src.matchAll(ATTRIBUTES_INDEX)) {
     if (lex.mask[m.index ?? 0] === 0) continue;
@@ -101,6 +128,7 @@ export function signalReferencesInKotlin(src: string, prefix: string): SignalRef
  */
 export function isKnownSignal(path: string, defined: ReadonlySet<string>): boolean {
   if (defined.has(path) || defined.has(ANY_SIGNAL)) return true;
+  for (const d of defined) if (d.startsWith(ENCODED_CLASS) && !defined.has(READABLE_CLASS + d.slice(ENCODED_CLASS.length))) return true;
   let p = path;
   while (p.includes(".")) {
     p = p.slice(0, p.lastIndexOf("."));
@@ -117,7 +145,7 @@ export function nearestSignal(name: string, defined: ReadonlySet<string>): strin
   let best: string | null = null;
   let bestDistance = Infinity;
   for (const d of defined) {
-    if (d === name || d === ANY_SIGNAL) continue;
+    if (d === name || d === ANY_SIGNAL || d.includes(":")) continue;
     const far = distance(name.toLowerCase(), d.toLowerCase());
     if (far <= limit && far < bestDistance) {
       best = d;
@@ -133,7 +161,9 @@ export function unknownSignalIssue(ref: SignalReference, defined: ReadonlySet<st
   const head = ref.name.split(".")[0] ?? ref.name;
   // `$telefon.length`: the misspelling is the signal, not the property read on it.
   const misspelt = head !== ref.name && !isKnownSignal(head, defined) ? head : ref.name;
-  const near = nearestSignal(misspelt, defined);
+  // A helper reads its name the way Casing.reference does, so only a plain name goes back into it.
+  const nearest = nearestSignal(misspelt, defined);
+  const near = nearest && (!ref.helper || PLAIN_HELPER_NAME.test(nearest)) ? nearest : null;
   // The fix rewrites the name and leaves the dollar as written, which in Kotlin may be `${'$'}`.
   const nameStart = ref.end - ref.name.length;
   return {

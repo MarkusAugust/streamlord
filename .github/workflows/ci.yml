@@ -100,9 +100,9 @@ jobs:
               # Netlify's build of the site, which deploys from master with no other check.
               netlify.toml)       docs=true ;;
               demo/*)             kotlin=true; image=true ;;
+              # The fixtures are read by the Kotlin tests, the editors' tests and the front page.
+              conformance/*)      kotlin=true; image=true; intellij=true; vscode=true; docs=true ;;
               # The IntelliJ plugin builds streamlord-analysis, and core beneath it, from source.
-              # The differential fixture is counted on the front page, so it is site content too.
-              streamlord-core/src/test/resources/*) kotlin=true; image=true; intellij=true; docs=true ;;
               streamlord-core/*)  kotlin=true; image=true; intellij=true ;;
               # The image runs the analysis in /judge and streamlord-test in /assert.
               streamlord-analysis/*) kotlin=true; image=true; intellij=true ;;
@@ -467,6 +467,13 @@ jobs:
               || { echo "::error::the counter never reached $n"; echo "$counter" | head -8; exit 1; }
           done
           echo "  the counter streamed over time"
+
+          # A page declared from a class through the codec: toJsonValue encodes with the same
+          # named serializer readSignals decodes with, so an image that cannot find it fails here.
+          csp=$(curl -s --max-time 5 http://localhost:8080/csp)
+          echo "$csp" | grep -q 'data-signals="{&quot;running&quot;:false,&quot;count&quot;:0' \
+            || { echo "::error::the CSP page did not declare CounterSignals"; echo "$csp" | head -5; exit 1; }
+          echo "  a page declared its signals from a class"
 
           # A POST, which reads the signals from the body rather than the query, and a form
           # that fails on purpose. The reply is two events: the faults as signals, and the

@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -23,6 +24,13 @@ class MarkupTest {
         src: String,
         requireIds: Boolean = false,
     ) = analyzer.validateMarkup(src, MarkupOptions(requireIds, "data-", true))
+
+    @Test
+    fun `tells when an object under a name every object has goes wrong`() {
+        val issue = html("<div data-signals=\"{constructor: {a: 1}}\"></div>").single()
+        assertEquals("signal-name" to Severity.ERROR, issue.code to issue.severity)
+        assertContains(issue.message, "The client holds the signal, but the next request writes the object under it into the built-in one")
+    }
 
     @Test
     fun `applies an expression fix inside the attribute value`() {
@@ -73,6 +81,24 @@ class MarkupTest {
     fun `does not shift offsets after a character whose lowercase form is longer`() {
         val src = "<script>${"İ".repeat(12)}</script><div data-onn:click=\"1\"></div>"
         assertEquals(listOf("data-onn:click"), marked(src, html(src)))
+    }
+
+    /** A signal key is read as camelCase, so `fooBar-baz` gets the key `foo-bar-baz`; an event or class name like it gets no key at all. */
+    @Test
+    fun `says when no key gives a name mixing capitals and a hyphen back`() {
+        val signal = html("<div data-signals:fooBar-baz=\"1\"></div>").single()
+        assertEquals("key-case", signal.code)
+        assertEquals(listOf("foo-bar-baz"), signal.fixes.map { it.text })
+        val event = html("<div data-on:fooBar-baz=\"x()\"></div>").single()
+        assertEquals("key-case", event.code)
+        assertEquals(emptyList(), event.fixes)
+        assertContains(event.message, "No key gives fooBar-baz back")
+        assertContains(event.message, "reads fooBarBaz. Write it in one case.")
+        // An explicit __case that does not give the name back either.
+        val cased = html("<div data-on:fooBar-baz__case.camel=\"x()\"></div>").single()
+        assertEquals(emptyList(), cased.fixes)
+        assertContains(cased.message, "No key with __case.camel gives fooBar-baz back")
+        assertContains(cased.message, "reads fooBarBaz. Write it in one case.")
     }
 
     @Test

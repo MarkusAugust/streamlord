@@ -1,0 +1,27 @@
+# Wire transcript: ktor-cio, stream-scripts.
+# Written by KtorWireTranscriptTest under ./gradlew :streamlord-ktor:updateTranscripts, compared with the live answer on every test run.
+# Normalised: CRLF written as LF; the port as {port}; the values of Date, Server and Keep-Alive as {date}, {server} and {keep-alive};
+# a CSP nonce as {nonce}; a line feed after a body that ends without one. Every other byte is as the client got it.
+# Body: chunked on the wire, shown without the chunk framing.
+GET /stream/scripts HTTP/1.1
+Host: 127.0.0.1:{port}
+Accept: text/event-stream, text/html, application/json
+Datastar-Request: true
+
+HTTP/1.1 200 OK
+Cache-Control: no-cache
+X-Accel-Buffering: no
+Connection: keep-alive
+Transfer-Encoding: chunked
+Content-Type: text/event-stream
+
+event: datastar-patch-elements
+data: selector body
+data: mode append
+data: elements <script data-effect="el.remove()">console.log('Gorvek enters')</script>
+
+event: datastar-patch-elements
+data: selector body
+data: mode append
+data: elements <script type="module" id="entry">console.log('attributed')</script>
+

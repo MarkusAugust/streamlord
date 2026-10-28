@@ -74,6 +74,77 @@ class SignalReferencesTest {
         assertEquals(listOf("\$shown"), unknown(html, SourceLanguage.HTML).map { html.substring(it.start, it.end) })
     }
 
+    // signal("count") is $count: the helpers that read a signal by name read it, and set, setExpr
+    // and toggle assign it, which defines it.
+    @Test
+    fun `a helper that reads a signal by name reads it, and one that assigns defines it`() {
+        val src =
+            """
+            import io.github.markusaugust.streamlord.html.*
+
+            fun f() = div {
+                dataSignals("count", "0")
+                dataText(signal("cuont"))
+                dataOn("click", increment("count"))
+                dataShow(not("opn"))
+                dataOn("click", toggle("open"))
+                dataOn("click", set("total", 1))
+                dataText(signal("total") + signal("foo-bar") + signal("items[0]") + signal("user.name"))
+            }
+            """.trimIndent()
+        val issues = unknown(src)
+        assertEquals(listOf("cuont", "opn", "user.name"), issues.map { src.substring(it.start, it.end) })
+        assertEquals("count", issues[0].fixes.single().text)
+        assertEquals("open", issues[1].fixes.single().text)
+        assertTrue("cuont" in collectSignals(src, SourceLanguage.KOTLIN))
+    }
+
+    // A helper of the same name elsewhere, Hamcrest's not or a Redis increment, is somebody else's.
+    @Test
+    fun `a helper is read only in a file that uses the DSL, and only without a receiver`() {
+        val dsl = "import io.github.markusaugust.streamlord.html.*\n"
+        assertEquals(emptyList(), unknown("fun t() { assertThat(x, not(\"error\")) }"))
+        assertEquals(emptyList(), unknown(dsl + "fun t() { redis.opsForValue().increment(\"visits\"); filter.not(\"x\") }"))
+        val hamcrest = "import io.github.markusaugust.streamlord.html.dataText\nimport org.hamcrest.Matchers.not\n"
+        assertEquals(emptyList(), unknown(hamcrest + "fun t() { assertThat(status, not(\"error\")) }"))
+        assertEquals(emptyList(), unknown(dsl + "import org.hamcrest.Matchers.*\nfun t() { assertThat(status, not(\"error\")) }"))
+        assertEquals(emptyList(), unknown(dsl + "val m = Matchers.\n" + " ".repeat(60) + "not(\"zzz\")"))
+        val named = dsl + "fun t() = signal(name = \"nope\")"
+        assertEquals(listOf("nope"), unknown(named).map { named.substring(it.start, it.end) })
+    }
+
+    // signal("foo-bar") is refused at runtime, so a fix never writes a hyphen into a helper.
+    @Test
+    fun `a helper's fix offers only a name it writes as it stands`() {
+        val src =
+            "import io.github.markusaugust.streamlord.html.*\n" +
+                "val p = \"\"\"<div data-signals=\"{'foo-bar': 1}\"></div>\"\"\"\nval t = signal(\"fooBar\")"
+        val issues = unknown(src)
+        assertEquals(listOf("fooBar"), issues.map { src.substring(it.start, it.end) })
+        assertEquals(emptyList(), issues.single().fixes)
+    }
+
+    // The codec names the fields. For a @Serializable class the analysis reads them; for a class it
+    // cannot read, or a value of no named class, any name is defined.
+    @Test
+    fun `a page declared from toJsonValue defines what the codec can write`() {
+        val form = "@Serializable data class Form(val email: String = \"\")\n"
+        val reads = "; dataText(signal(\"emial\")) }"
+        val cases =
+            mapOf(
+                "fun page() = div { dataSignals(codec.toJsonValue(Form()))" to listOf("emial"),
+                "fun page(form: Form) = div { dataSignals(codec.toJsonValue(form))" to listOf("emial"),
+                "val j = codec.toJsonValue(Form())\nfun page() = div { dataSignals(j)" to listOf("emial"),
+                "fun page() = div { dataSignals(codec.toJsonValue(JacksonForm()))" to emptyList(),
+                "fun page(form: JsonObject) = div { dataSignals(form)" to emptyList(),
+                "fun page() = div { dataSignals(codec.toJsonValue(load()))" to emptyList(),
+            )
+        for ((page, expected) in cases) {
+            val src = "import io.github.markusaugust.streamlord.html.*\n" + form + page + reads
+            assertEquals(expected, unknown(src).map { src.substring(it.start, it.end) }, page)
+        }
+    }
+
     @Test
     fun `markup files read bare signals without defining them`() {
         val html = "<div data-signals:count=\"0\"><span data-text=\"\$cuont\"></span><span data-text=\"\$count\"></span></div>"

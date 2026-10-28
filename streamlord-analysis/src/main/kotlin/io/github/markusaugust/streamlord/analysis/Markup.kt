@@ -708,20 +708,30 @@ public fun kebab(name: String): String {
  * back as that name: `foo-bar` for a signal (Datastar reads it as camelCase), `widget-loaded__case.camel`
  * for an event or class (kebab by default), `aria-label` where the key is used as it is. An
  * explicit `__case` is kept: the key is still kebab-cased, because the browser lowercases it
- * either way. Shared by the HTML warning and the Kotlin wire hint.
+ * either way. A signal key is read as camelCase, so `fooBar-baz` comes back as `fooBarBaz`, the
+ * name the DSL's `signal()` reads from it too; [clientKeyName] says what. Null for an event or
+ * class name that mixes capitals with a hyphen before a lower-case letter, `fooBar-baz` or `A-b`,
+ * since the client's camel and pascal turn that hyphen into a capital too (`modifyCasing` in
+ * text.ts) and no key gives it back; [wireKeyReads] says what it would read. Shared by the HTML
+ * warning and the Kotlin wire hint.
  */
 public fun wireKey(
     key: String,
     keyCase: KeyCase?,
     explicitCase: String?,
-): String {
+): String? {
     val base = kebab(key)
     if (explicitCase != null) return "${base}__case.$explicitCase"
     val wanted = if (LEADING_CAPITAL.containsMatchIn(key)) "pascal" else "camel"
     if (keyCase == KeyCase.RAW) return base
+    if (keyCase == KeyCase.KEBAB && CASE_FNS.getValue(wanted)(base) != key) return null
     val defaultCase = if (keyCase == KeyCase.CAMEL) "camel" else "kebab"
     return if (wanted == defaultCase) base else "${base}__case.$wanted"
 }
+
+/** What the client reads from the kebab-case key of [key] under the case its capitals ask for. */
+public fun wireKeyReads(key: String): String =
+    CASE_FNS.getValue(if (LEADING_CAPITAL.containsMatchIn(key)) "pascal" else "camel")(kebab(key))
 
 /**
  * What `data-x:` with an empty key lacks besides the colon dropped: null when the attribute runs
@@ -1419,7 +1429,8 @@ public class MarkupValidator(
                             Issue(
                                 start,
                                 end,
-                                "Every object already has ${k.key}, so the client writes the object under it into the built-in one and drops the signal.",
+                                "Every object already has ${k.key}. The client holds the signal, but the next request writes " +
+                                    "the object under it into the built-in one and sends the page's signals without it.",
                                 Severity.ERROR,
                                 "signal-name",
                                 link,
@@ -1583,9 +1594,37 @@ public class MarkupValidator(
         val keyStart = attr.nameStart + colon + 1
         val name = prefix + spec.name
         val existing = parsed.modifiers.firstOrNull { it.name == "case" }
-        // With an explicit __case already there, only the key itself changes.
-        val fixed = if (existing != null) kebab(key) else wireKey(key, spec.keyCase, null)
+        // With an explicit __case already there, only the key itself changes, when that case gives the name back.
+        val fixed =
+            if (existing != null) {
+                kebab(key).takeIf { clientCase(it, listOf(existing), "camel") == key }
+            } else {
+                wireKey(key, spec.keyCase, null)
+            }
         val reaches = keyReading(spec, key.lowercase(), key.lowercase())
+        if (fixed == null) {
+            val noKey =
+                if (existing != null) {
+                    val written = "__case." + existing.args.joinToString(".")
+                    "No key with $written gives $key back: the browser lowercases the key, and from ${kebab(key)}$written " +
+                        "Datastar reads ${clientCase(kebab(key), listOf(existing), "camel")}."
+                } else {
+                    "No key gives $key back: with __case.camel or __case.pascal Datastar turns every hyphen before a " +
+                        "lower-case letter into a capital and reads ${wireKeyReads(key)}."
+                }
+            return listOf(
+                Issue(
+                    start = keyStart,
+                    end = keyStart + key.length,
+                    message =
+                        "The browser lowercases attribute names, so this reaches Datastar as $reaches, not $key. " +
+                            "$noKey Write it in one case.",
+                    severity = Severity.WARNING,
+                    code = "key-case",
+                    link = Docs.attribute(spec.name),
+                ),
+            )
+        }
         val keep =
             if (existing !=
                 null

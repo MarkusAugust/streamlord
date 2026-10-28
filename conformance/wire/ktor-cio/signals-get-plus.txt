@@ -1,0 +1,15 @@
+# Wire transcript: ktor-cio, signals-get-plus.
+# Written by KtorWireTranscriptTest under ./gradlew :streamlord-ktor:updateTranscripts, compared with the live answer on every test run.
+# Normalised: CRLF written as LF; the port as {port}; the values of Date, Server and Keep-Alive as {date}, {server} and {keep-alive};
+# a CSP nonce as {nonce}; a line feed after a body that ends without one. Every other byte is as the client got it.
+# Body: as sent.
+GET /signals?datastar=%7B%22name%22%3A%22Gorvek+the+Grim%22%2C%22sum%22%3A%221%2B1%22%7D HTTP/1.1
+Host: 127.0.0.1:{port}
+Accept: text/event-stream, text/html, application/json
+Datastar-Request: true
+
+HTTP/1.1 200 OK
+Content-Length: 62
+Content-Type: application/json
+
+{"method":"GET","read":{"name":"Gorvek the Grim","sum":"1+1"}}

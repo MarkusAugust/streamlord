@@ -1,0 +1,32 @@
+# Wire transcript: spring-mvc-tomcat, stream-signals.
+# Written by SpringMvcWireTranscriptTest under ./gradlew :streamlord-spring:updateTranscripts, compared with the live answer on every test run.
+# Normalised: CRLF written as LF; the port as {port}; the values of Date, Server and Keep-Alive as {date}, {server} and {keep-alive};
+# a CSP nonce as {nonce}; a line feed after a body that ends without one. Every other byte is as the client got it.
+# Body: chunked on the wire, shown without the chunk framing.
+GET /stream/signals HTTP/1.1
+Host: 127.0.0.1:{port}
+Accept: text/event-stream, text/html, application/json
+Datastar-Request: true
+
+HTTP/1.1 200 
+Cache-Control: no-cache
+X-Accel-Buffering: no
+Connection: keep-alive
+Content-Type: text/event-stream;charset=UTF-8
+Transfer-Encoding: chunked
+Date: {date}
+
+event: datastar-patch-signals
+data: signals {"hp":100,"name":"Gorvek"}
+
+event: datastar-patch-signals
+data: onlyIfMissing true
+data: signals {"hp":100}
+
+event: datastar-patch-signals
+data: signals {
+data: signals   "quest": {
+data: signals     "stage": 2
+data: signals   }
+data: signals }
+

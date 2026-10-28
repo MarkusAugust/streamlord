@@ -188,6 +188,9 @@ public interface DatastarStream {
     /**
      * Patch signals from key/value pairs. Values may be primitives, maps, lists or `null`
      * (which removes the signal). A dotted name reaches a nested signal, as `$user.name` does.
+     * A name is the one the page's expressions read, so it may not hold a hyphen
+     * ([SignalNames.hyphenProblem]); a key with one is data, and goes inside a value:
+     * `"form" to mapOf("first-name" to "")`.
      *
      * ```kotlin
      * patchSignals("count" to 42, "user.name" to "Gorvek", "draft" to null)
@@ -206,6 +209,8 @@ public interface DatastarStream {
      * Remove signals by name. Sugar for patching them to `null`. A dotted name removes a nested
      * signal; where its parent is missing or holds a plain value, the client makes the parent an
      * empty object, as a merge patch says. A name under another one being removed is left out.
+     * A name with a hyphen is refused as [patchSignals] refuses it; remove such a key with the
+     * JSON form, `patchSignals("""{"form": {"first-name": null}}""")`.
      */
     public suspend fun removeSignals(
         vararg names: String,
@@ -218,7 +223,9 @@ public interface DatastarStream {
 
     private fun nested(pairs: List<Pair<String, Any?>>): Map<String, Any?> {
         for ((name, _) in pairs) {
-            SignalNames.pathProblem(name)?.let { throw DatastarEventValidationException("signal $name $it") }
+            (SignalNames.hyphenProblem(name) ?: SignalNames.pathProblem(name))?.let {
+                throw DatastarEventValidationException("signal $name $it")
+            }
         }
         return SignalNames.nest(pairs)
     }

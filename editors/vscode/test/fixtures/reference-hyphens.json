@@ -1,0 +1,125 @@
+{
+  "$comment": "Names an expression helper writes after $, and what SignalNames.withoutReferenceHyphens and referenceAsSubtraction say of each, in streamlord-core and in the editor: fixed is the name to write (null: nothing wrong), subtraction the expression to write instead where the hyphen looks like one, and shows the part of the body the client compiles for $ and the name in conformance/client/expressions.json that bears it out. Every name is a case of that fixture. Read by ClientOracleTest in streamlord-core and clientOracle.test.ts.",
+  "cases": [
+    {
+      "name": "form['first-name']",
+      "fixed": null,
+      "subtraction": null,
+      "shows": "$['form']['first-name']"
+    },
+    {
+      "name": "a['x]y-z']",
+      "fixed": null,
+      "subtraction": null,
+      "shows": "$['a']['x]y-z']"
+    },
+    {
+      "name": "a[\"x]y-z\"]",
+      "fixed": null,
+      "subtraction": null,
+      "shows": "$['a'][\"x]y-z\"]"
+    },
+    {
+      "name": "a[`x]y-z`]",
+      "fixed": null,
+      "subtraction": null,
+      "shows": "$['a'][`x]y-z`]"
+    },
+    {
+      "name": "a['it\\'s-x']",
+      "fixed": null,
+      "subtraction": null,
+      "shows": "$['a']['it\\'s-x']"
+    },
+    {
+      "name": "a[1-2]",
+      "fixed": null,
+      "subtraction": null,
+      "shows": "$['a'][1-2]"
+    },
+    {
+      "name": "a[`${'x-y'}`]",
+      "fixed": null,
+      "subtraction": null,
+      "shows": "$['a'][`${'x-y'}`]"
+    },
+    {
+      "name": "a[`x]-${$b}`]",
+      "fixed": null,
+      "subtraction": null,
+      "shows": "$['a'][`x]-${$['b']}`]"
+    },
+    {
+      "name": "a[`${']'}-x`]",
+      "fixed": null,
+      "subtraction": null,
+      "shows": "$['a'][`${']'}-x`]"
+    },
+    {
+      "name": "items[$i-1]",
+      "fixed": "items[$i1]",
+      "subtraction": "$items[$i - 1]",
+      "shows": "[$['i-1']]"
+    },
+    {
+      "name": "items.length-1",
+      "fixed": "items.length1",
+      "subtraction": "$items.length - 1",
+      "shows": "$['items']['length-1']"
+    },
+    {
+      "name": "a-$b",
+      "fixed": "a$b",
+      "subtraction": "$a - $b",
+      "shows": "$['a']-$['b']"
+    },
+    {
+      "name": "a[$b-c['d']]",
+      "fixed": "a[$bC['d']]",
+      "subtraction": null,
+      "shows": "[$['b-c']['d']]"
+    },
+    {
+      "name": "a[`${$b-c}`]",
+      "fixed": "a[`${$bC}`]",
+      "subtraction": null,
+      "shows": "$['b-c']"
+    },
+    {
+      "name": "a-b[0]",
+      "fixed": "aB[0]",
+      "subtraction": null,
+      "shows": "$['a-b'][0]"
+    },
+    {
+      "name": "a['b'].c-d",
+      "fixed": "a['b'].cD",
+      "subtraction": null,
+      "shows": "$['a']['b'].c-d"
+    },
+    {
+      "name": "a[0].b-c",
+      "fixed": "a[0].bC",
+      "subtraction": null,
+      "shows": "$['a'][0].b-c"
+    },
+    {
+      "name": "a['['].b-c",
+      "fixed": "a['['].bC",
+      "subtraction": null,
+      "shows": "$['a']['['].b-c"
+    },
+    {
+      "name": "a.b-c['d-e']",
+      "fixed": "a.bC['d-e']",
+      "subtraction": null,
+      "shows": "$['a']['b-c']['d-e']"
+    },
+    {
+      "name": "a[$b][$c-d]",
+      "fixed": "a[$b][$cD]",
+      "subtraction": null,
+      "shows": "[$['c-d']]"
+    }
+  ]
+}

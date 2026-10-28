@@ -1,0 +1,16 @@
+# Wire transcript: spring-webflux-tomcat, signals-delete.
+# Written by SpringWebFluxWireTranscriptTest under ./gradlew :streamlord-spring:updateTranscripts, compared with the live answer on every test run.
+# Normalised: CRLF written as LF; the port as {port}; the values of Date, Server and Keep-Alive as {date}, {server} and {keep-alive};
+# a CSP nonce as {nonce}; a line feed after a body that ends without one. Every other byte is as the client got it.
+# Body: as sent.
+DELETE /signals?datastar=%7B%22hp%22%3A100%7D HTTP/1.1
+Host: 127.0.0.1:{port}
+Accept: text/event-stream, text/html, application/json
+Datastar-Request: true
+
+HTTP/1.1 200 
+Content-Type: application/json
+Content-Length: 37
+Date: {date}
+
+{"method":"DELETE","read":{"hp":100}}

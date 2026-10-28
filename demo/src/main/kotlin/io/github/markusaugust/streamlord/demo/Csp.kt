@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.demo
 
+import io.github.markusaugust.streamlord.core.port.driven.toJsonValue
 import io.github.markusaugust.streamlord.html.dataNonce
 import io.github.markusaugust.streamlord.html.dataOnClick
 import io.github.markusaugust.streamlord.html.dataSignals
@@ -118,7 +119,9 @@ internal fun cspPage(nonce: String): String =
 
             body {
                 main {
-                    dataSignals("running" to false, "count" to 0)
+                    // Declared from the class /counter reads, through the same named serializer,
+                    // so the native image renders this page with no reflection either.
+                    dataSignals(SIGNALS.toJsonValue(CounterSignals()))
 
                     h1 { +"Datastar in CSP mode" }
 
