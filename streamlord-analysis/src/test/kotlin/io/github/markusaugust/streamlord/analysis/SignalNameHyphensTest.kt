@@ -111,7 +111,8 @@ class SignalNameHyphensTest {
                 fun t() = testApplication { client.get("/") { headers { set("datastar-request", "true") } } }
                 fun m(map: MutableMap<String, Int>) = with(map) { set("user-id", 1) }
                 suspend fun r(call: ApplicationCall) = call.respondSignals("a-b" to 1)
-                fun p(flag: Boolean) = div { dataSignals("a-b", flag); dataSignals("x-${'$'}{flag}", "1") }
+                fun p(flag: Boolean) = div { dataSignals("a-b", flag) }
+                fun q() = div { dataSignals("user" to buildMap { set("first-name", "") }) }
                 """.trimIndent()
         assertEquals(emptyList(), hyphens(src))
     }
@@ -129,6 +130,32 @@ class SignalNameHyphensTest {
         val named =
             dsl + "fun p() = div { dataComputed(name = \"a-b\", expression = \"1\"); dataMatchMedia(signal = \"c-d\", mediaQuery = \"x\") }"
         assertEquals(listOf("a-b", "c-d"), hyphens(named).map { named.substring(it.start + 1, it.end - 1) })
+    }
+
+    // The demo writes dataText("${'$'}{signal("running")} ? ..."), so a call inside a template is the DSL's too.
+    @Test
+    fun `a call inside a string template is read, and a templated name is reported without a fix`() {
+        val src =
+            dsl +
+                "import kotlin.collections.set\n" +
+                "fun p(id: Int, expr: String) = div {\n" +
+                "  dataText(\"${'$'}{signal(\"is-running\")} ? 'Stop' : 'Go'\")\n" +
+                "  dataOnClick(\"${'$'}{set(\"click-count\", 1)}; @post('/x')\")\n" +
+                "  dataSignals(\"item-${'$'}id\" to false)\n" +
+                "  dataComputed(\"full-name\", expr)\n" +
+                "  dataOnClick(setExpr(\"draft-text\", \"''\"))\n" +
+                "}\n"
+        val issues = hyphens(src)
+        assertEquals(
+            listOf("is-running", "click-count", "item-${'$'}id", "full-name", "draft-text"),
+            issues.map {
+                src.substring(it.start + 1, it.end - 1)
+            },
+        )
+        assertEquals("isRunning", issues[0].fixes.single().text)
+        assertEquals(emptyList(), issues[2].fixes)
+        assertTrue("Write it in camelCase." in issues[2].message, issues[2].message)
+        assertEquals("is-running", src.substring(issues[0].fixes.single().start, issues[0].fixes.single().end))
     }
 
     @Test

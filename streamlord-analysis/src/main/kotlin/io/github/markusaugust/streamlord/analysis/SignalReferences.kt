@@ -61,7 +61,8 @@ internal fun dslHelpers(
         val (from, name) = m.destructured
         if (name == "*") {
             if (from.startsWith("org.hamcrest")) out -= "not"
-        } else {
+        } else if (from != "kotlin.collections") {
+            // IntelliJ imports kotlin.collections.set for `map[k] = v`: an extension that needs a receiver.
             out -= name
         }
     }

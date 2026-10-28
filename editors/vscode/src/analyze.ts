@@ -3,7 +3,7 @@ import { attributeDoc, DOCS, quoteAt, validateExpression, type Fix, type Issue }
 import { PLACEHOLDER, toSource, type Interpolation, type KotlinString } from "./kotlinStrings.ts";
 import { asciiLowercase, indexOfAsciiIgnoreCase, keyReading, rawKeyNote, tokenize, validateAttributes, validateMarkup, wireKey, wireKeyReads, type Attribute, type Tag } from "./markup.ts";
 import { findCallSites, isHtmlString, lexKotlin, namedArgText, selectStringArg, stringAt, type CallSite } from "./scanner.ts";
-import { dslHelpers, EXPRESSION_HELPERS, SIGNAL_NAMING_CALLS, signalNameHyphenIssues } from "./signalNameHyphens.ts";
+import { dslHelpers, EXPRESSION_HELPERS, signalNameHyphenSites } from "./signalNameHyphens.ts";
 import { clientKeyName, collectSignalDefinitions } from "./signals.ts";
 
 /**
@@ -73,10 +73,7 @@ export function analyzeKotlin(src: string, opts: AnalyzeOptions): Issue[] {
     issues.push(...checkKeyCaseSite(site, src));
     for (const a of site.args) if (a.string) claimed.add(a.string.start);
   }
-  const helpers = dslHelpers(src, EXPRESSION_HELPERS);
-  const dslCalls = findCallSites(src, new Set([...ALL_SITE_NAMES, "statements"]), lex.mask);
-  const insideDslCall = (at: number) => dslCalls.some((c) => c.openParen <= at && at <= c.closeParen);
-  for (const site of findCallSites(src, SIGNAL_NAMING_CALLS, lex.mask)) issues.push(...signalNameHyphenIssues(site, src, lex.strings, helpers, insideDslCall));
+  issues.push(...signalNameHyphenSites(src, lex, dslHelpers(src, EXPRESSION_HELPERS), new Set([...ALL_SITE_NAMES, "statements"])));
   for (const m of src.matchAll(ATTRIBUTES_INDEX)) {
     if (lex.mask[m.index ?? 0] === 0) continue;
     const value = attributesIndexValue(src, m, lex.strings);

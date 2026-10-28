@@ -77,7 +77,8 @@ suspend fun send(stream: DatastarStream) {
     const src = `${dsl}fun t() = testApplication { client.get("/") { headers { set("datastar-request", "true") } } }
 fun m(map: MutableMap<String, Int>) = with(map) { set("user-id", 1) }
 suspend fun r(call: ApplicationCall) = call.respondSignals("a-b" to 1)
-fun p(flag: Boolean) = div { dataSignals("a-b", flag); dataSignals("x-\${flag}", "1") }`;
+fun p(flag: Boolean) = div { dataSignals("a-b", flag) }
+fun q() = div { dataSignals("user" to buildMap { set("first-name", "") }) }`;
     assert.deepEqual(hyphens(src), []);
   });
 
@@ -90,6 +91,25 @@ fun p(flag: Boolean) = div { dataSignals("a-b", flag); dataSignals("x-\${flag}",
     assert.ok(one!.message.includes("or form['first-name'].x for a key"), one!.message);
     const named = `${dsl}fun p() = div { dataComputed(name = "a-b", expression = "1"); dataMatchMedia(signal = "c-d", mediaQuery = "x") }`;
     assert.deepEqual(names(named), ["a-b", "c-d"]);
+  });
+
+  // The demo writes dataText("${signal("running")} ? ..."), so a call inside a template is the DSL's too.
+  it("a call inside a string template is read, and a templated name is reported without a fix", () => {
+    const src =
+      `${dsl}import kotlin.collections.set\n` +
+      "fun p(id: Int, expr: String) = div {\n" +
+      `  dataText("\${signal("is-running")} ? 'Stop' : 'Go'")\n` +
+      `  dataOnClick("\${set("click-count", 1)}; @post('/x')")\n` +
+      `  dataSignals("item-$id" to false)\n` +
+      `  dataComputed("full-name", expr)\n` +
+      `  dataOnClick(setExpr("draft-text", "''"))\n` +
+      "}\n";
+    const issues = hyphens(src);
+    assert.deepEqual(names(src), ["is-running", "click-count", "item-$id", "full-name", "draft-text"]);
+    assert.equal(issues[0]!.fixes![0]!.text, "isRunning");
+    assert.deepEqual(issues[2]!.fixes, []);
+    assert.ok(issues[2]!.message.includes("Write it in camelCase."), issues[2]!.message);
+    assert.equal(src.slice(issues[0]!.fixes![0]!.start, issues[0]!.fixes![0]!.end), "is-running");
   });
 
   it("a name written with escapes is reported without a fix", () => {

@@ -98,11 +98,8 @@ public class Analyzer(
             for (a in site.args) a.string?.let { claimed += it.start }
             if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
         }
-        val helpers = dslHelpers(src, EXPRESSION_HELPERS)
-        val dslCalls = findCallSites(src, allSiteNames + "statements", lex).map { it.openParen..it.closeParen }
-        for (site in findCallSites(src, SIGNAL_NAMING_CALLS, lex)) {
-            val issues = signalNameHyphenIssues(site, src, lex, helpers) { at -> dslCalls.any { at in it } }
-            if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
+        for ((site, issues) in signalNameHyphenSites(src, lex, dslHelpers(src, EXPRESSION_HELPERS), allSiteNames + "statements")) {
+            out += SiteIssues(site, null, issues)
         }
         for (m in ATTRIBUTES_INDEX.findAll(src)) {
             if (!lex.mask[m.range.first]) continue

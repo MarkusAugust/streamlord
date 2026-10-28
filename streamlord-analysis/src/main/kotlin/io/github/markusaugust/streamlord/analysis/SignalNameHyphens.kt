@@ -10,8 +10,14 @@ package io.github.markusaugust.streamlord.analysis
 /** The helpers whose first argument is the name of a signal the page declares. */
 internal val NAMING_HELPERS: Set<String> = setOf("dataSignals", "dataComputed", "dataBind", "dataRef", "dataIndicator", "dataMatchMedia")
 
-/** The helpers that take an object form as well as a name: one string argument alone is the object form. */
-private val KEYED_OR_OBJECT = setOf("dataSignals", "dataComputed")
+/**
+ * The helper whose second argument may be `ifMissing` of the object form, `dataSignals("{...}", true)`,
+ * as well as the expression of the keyed form. `dataComputed` takes an expression second or nothing.
+ */
+private const val KEYED_OR_OBJECT = "dataSignals"
+
+/** The helper with an object form of one argument and a keyed form of two. */
+private const val COMPUTED = "dataComputed"
 
 /** The expression helpers, whose name is JavaScript: a hyphen inside brackets is a key. */
 internal val EXPRESSION_HELPERS: Set<String> = setOf("signal", "set", "setExpr", "increment", "decrement", "toggle", "not")
@@ -20,7 +26,7 @@ internal val EXPRESSION_HELPERS: Set<String> = setOf("signal", "set", "setExpr",
  * The expression helpers whose names other APIs share in the same scope: `set` on a map, or on
  * Ktor's headers inside `headers { }`. One counts only inside the arguments of a DSL call.
  */
-internal val SHARED_NAME_HELPERS: Set<String> = setOf("set", "setExpr", "toggle")
+internal val SHARED_NAME_HELPERS: Set<String> = setOf("set", "toggle")
 
 /** The calls whose pairs name signals: on the page, `dataSignals("count" to 0)`, and from the server. */
 private val PAIR_NAMING = setOf("dataSignals", "patchSignals")
@@ -96,11 +102,7 @@ internal fun signalNameHyphenIssues(
         if (site.name !in helpers || src.lastNonSpaceBefore(site.nameStart) == '.') return out
         if (site.name in SHARED_NAME_HELPERS && !insideDslCall(site.nameStart)) return out
         val s = (first ?: site.named("name"))?.string ?: return out
-        if (s.interpolations.isEmpty() &&
-            hyphenOutsideBrackets(s.text) >= 0
-        ) {
-            out += hyphenIssue(s, src, withoutHyphensOutsideBrackets(s.text), bracketed(s.text))
-        }
+        if (hyphenOutsideBrackets(s.text) >= 0) out += hyphenIssue(s, src, withoutHyphensOutsideBrackets(s.text), bracketed(s.text))
         return out
     }
 
@@ -109,17 +111,29 @@ internal fun signalNameHyphenIssues(
         // that is a string makes the first a name. One held in a variable may be either, and is left alone.
         val keyed =
             first?.string?.takeIf {
-                site.name !in KEYED_OR_OBJECT ||
-                    (!OBJECT_START.containsMatchIn(it.text) && (site.named("expression") != null || secondIsExpression(positional)))
+                when (site.name) {
+                    KEYED_OR_OBJECT -> {
+                        !OBJECT_START.containsMatchIn(it.text) &&
+                            (site.named("expression") != null || secondIsExpression(positional))
+                    }
+
+                    COMPUTED -> {
+                        site.named("expression") != null || positional.size > 1
+                    }
+
+                    else -> {
+                        true
+                    }
+                }
             }
         val s = (site.named("name") ?: site.named("signal"))?.string ?: keyed
-        if (s != null && s.interpolations.isEmpty() && '-' in s.text) out += hyphenIssue(s, src, withoutHyphens(s.text), null)
+        if (s != null && '-' in s.text) out += hyphenIssue(s, src, withoutHyphens(s.text), null)
     }
 
     if (site.name == "removeSignals") {
         for (a in positional) {
             val s = a.string ?: continue
-            if (s.interpolations.isEmpty() && '-' in s.text) out += hyphenIssue(s, src, withoutHyphens(s.text), null)
+            if ('-' in s.text) out += hyphenIssue(s, src, withoutHyphens(s.text), null)
         }
     }
 
@@ -129,7 +143,7 @@ internal fun signalNameHyphenIssues(
             val quote = PAIR_KEY.find(a.text)?.range?.last ?: continue
             val s = lex.stringAt(a.start + quote + 1)?.takeIf { it.start == a.start + quote } ?: continue
             if (!PAIR_AFTER.matchesAt(src, s.end)) continue
-            if (s.interpolations.isEmpty() && '-' in s.text) out += hyphenIssue(s, src, withoutHyphens(s.text), null)
+            if ('-' in s.text) out += hyphenIssue(s, src, withoutHyphens(s.text), null)
         }
     }
     return out
@@ -146,20 +160,111 @@ private fun hyphenIssue(
     fixed: String,
     bracketed: String?,
 ): Issue {
-    val name = s.text
-    // A name with escapes in its source is reported and left for the author to rewrite. One with a
-    // template in it is not read at all: what the client gets depends on the value.
-    val plain = src.substring(s.contentStart, s.contentEnd) == name
+    val written = src.substring(s.contentStart, s.contentEnd)
+    // A name with escapes in its source is reported and left for the author to rewrite, and so is
+    // one with a template in it, whose hyphen is in the text around the template.
+    val plain = s.interpolations.isEmpty() && written == s.text
+    val advice =
+        if (plain) {
+            "Write $fixed" + (
+                bracketed?.let {
+                    ", or $it for a key with a hyphen in it"
+                } ?: ""
+            )
+        } else {
+            "Write it in camelCase"
+        }
     return Issue(
         start = s.start,
         end = s.end,
         message =
             "A signal name holds no hyphen: Datastar's client reads one as a capital in an attribute key and as a hyphen " +
-                "in an expression or a patch, so Streamlord refuses \"$name\" at runtime. Write $fixed" +
-                (bracketed?.let { ", or $it for a key with a hyphen in it" } ?: "") + ".",
+                "in an expression or a patch, so Streamlord refuses \"$written\" at runtime. $advice.",
         severity = Severity.ERROR,
         code = "signal-name-hyphen",
         link = Docs.CASING,
         fixes = if (plain) listOf(Fix("Change to $fixed", s.contentStart, s.contentEnd, fixed)) else emptyList(),
     )
 }
+
+/**
+ * The calls of [src] whose signal names hold a hyphen, with their issues, including the calls inside
+ * a string template, `"${signal("is-running")} ? 'Stop' : 'Go'"`, which the scanner reads as code
+ * of their own. [dslCalls] names the calls whose arguments a shared-name helper counts inside.
+ */
+internal fun signalNameHyphenSites(
+    src: String,
+    lex: KotlinLex,
+    helpers: Set<String>,
+    dslCalls: Set<String>,
+): List<Pair<CallSite, List<Issue>>> {
+    val out = ArrayList<Pair<CallSite, List<Issue>>>()
+    collectHyphenSites(src, lex, helpers, dslCalls, enclosed = false, shift = 0, depth = 0, out = out)
+    return out.sortedBy { it.first.nameStart }
+}
+
+private fun collectHyphenSites(
+    text: String,
+    lex: KotlinLex,
+    helpers: Set<String>,
+    dslCalls: Set<String>,
+    enclosed: Boolean,
+    shift: Int,
+    depth: Int,
+    out: MutableList<Pair<CallSite, List<Issue>>>,
+) {
+    val calls = findCallSites(text, dslCalls, lex)
+    // Inside the arguments of a DSL call, and not in a lambda there: `buildMap { set("first-name", "") }` is a map's.
+    val inside = { at: Int ->
+        calls.any { at > it.openParen && at < it.closeParen && !openBraceBetween(text, lex, it.openParen, at) } ||
+            (enclosed && !openBraceBetween(text, lex, 0, at))
+    }
+    for (site in findCallSites(text, SIGNAL_NAMING_CALLS, lex)) {
+        val issues = signalNameHyphenIssues(site, text, lex, helpers, inside)
+        if (issues.isNotEmpty()) out += site.shifted(shift) to issues.map { it.shifted(shift) }
+    }
+    if (depth >= 4) return
+    for (s in lex.strings) {
+        for (t in s.interpolations) {
+            if (t.kind != InterpolationKind.BRACED) continue
+            val open = text.indexOf('{', t.start)
+            if (open < 0 || open + 1 > t.end - 1 || text.substring(open + 1, t.end - 1) != t.text) continue
+            collectHyphenSites(t.text, lexKotlin(t.text), helpers, dslCalls, inside(t.start), shift + open + 1, depth + 1, out)
+        }
+    }
+}
+
+/** Whether a `{` of code between [from] and [to] is still open at [to]. */
+private fun openBraceBetween(
+    text: String,
+    lex: KotlinLex,
+    from: Int,
+    to: Int,
+): Boolean {
+    var depth = 0
+    for (i in from until minOf(to, text.length)) {
+        if (!lex.mask[i]) continue
+        if (text[i] == '{') {
+            depth++
+        } else if (text[i] == '}') {
+            depth = maxOf(0, depth - 1)
+        }
+    }
+    return depth > 0
+}
+
+private fun Issue.shifted(by: Int): Issue =
+    if (by == 0) this else copy(start = start + by, end = end + by, fixes = fixes.map { it.copy(start = it.start + by, end = it.end + by) })
+
+/** [this] at its place in the file, for a call read inside a template: its arguments keep their offsets, not their literals. */
+private fun CallSite.shifted(by: Int): CallSite =
+    if (by == 0) {
+        this
+    } else {
+        copy(
+            nameStart = nameStart + by,
+            openParen = openParen + by,
+            closeParen = closeParen + by,
+            args = args.map { it.copy(start = it.start + by, end = it.end + by, string = null) },
+        )
+    }

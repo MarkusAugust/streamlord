@@ -31,7 +31,10 @@ All notable changes to Streamlord are recorded here. The format follows
   SDK refuses at runtime, as the error `signal-name-hyphen`, with the camelCase fix:
   `dataSignals("foo-bar", …)`, `dataBind("form.first-name")`, a pair's key, `removeSignals("a-b")`,
   and a hyphen outside brackets in `signal`, `set` and the other expression helpers, which also
-  name the bracket form, `form['first-name']`. The analysis collects a helper's name as written,
+  name the bracket form, `form['first-name']`. A call inside a string template counts too,
+  `"${signal("is-running")} ? …"`, and a name with a template in it, `"item-$id"`, is reported
+  without a fix. `set` and `toggle`, whose names a map or Ktor's `headers { }` share, count only
+  inside the arguments of a DSL call. The analysis collects a helper's name as written,
   where it read `dataSignals("foo-bar" to 1)` as `fooBar`. In IntelliJ the check is part of
   Datastar key casing.
 - `SignalNames.hyphenProblem` says why a name with a hyphen is refused as a signal name, and
