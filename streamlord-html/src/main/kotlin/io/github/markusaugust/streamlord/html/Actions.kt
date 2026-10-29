@@ -29,7 +29,11 @@ public class FetchOptions {
     /** Keep the connection open while the tab is hidden. Default: false for GET, true otherwise. */
     public var openWhenHidden: Boolean? = null
 
-    /** Retry policy: `'auto'` (default), `'error'`, `'always'`, `'never'`. */
+    /**
+     * Retry policy: `'auto'` (default), `'error'`, `'always'`, `'never'`. Datastar 1.0.4's client
+     * retries a request that never reaches the server whatever this says, so `'never'` acts as
+     * `'auto'` does: neither retries an answer, both retry a failed request, up to [retryMaxCount].
+     */
     public var retry: Retry? = null
 
     /** Written in whole milliseconds, a fraction rounded down, as a modifier's duration is. */

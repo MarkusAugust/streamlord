@@ -213,7 +213,8 @@ class DslAsTheClientReadsItTest {
             ) { button { dataOnClick("probe(evt)") { outside = true } } },
             dslCase("on view transition", "dataOnClick", expect = {
                 listens("button", "click")
-                heard("button", "click", 1, 1)
+                // The browser runs the update after startViewTransition returns.
+                heard("button", "click", 1, 1, sync = listOf(0, 0))
                 viewTransitions = 2
             }) { button { dataOnClick("probe(evt)") { viewTransition = true } } },
             dslCase("on passive and prevent", "dataOnClick", expect = {
@@ -230,7 +231,7 @@ class DslAsTheClientReadsItTest {
             },
             dslCase("on every flag", "dataOn", key = "widgetLoaded", expect = {
                 listens("window", "widgetLoaded", capture = true, passive = true, once = true)
-                heard("window", "widgetLoaded", 1, 0)
+                heard("window", "widgetLoaded", 1, 0, sync = listOf(0, 0))
                 viewTransitions = 1
             }) {
                 div {
@@ -392,10 +393,33 @@ class DslAsTheClientReadsItTest {
             }) { div { dataOnIntersect("probe(1)") { exit = true } } },
             dslCase("on intersect once", "dataOnIntersect", expect = {
                 observes(mapOf("threshold" to 0), "div")
-                intersects(1, 0)
+                // Once it has run, the client disconnects the observer.
+                intersects(1, 0, again = 0)
             }) { div { dataOnIntersect("probe(1)") { once = true } } },
+            // Two entries before the wait is out: the leading one runs, and no trailing one follows.
+            dslCase(
+                "on intersect debounce leading without trailing",
+                "dataOnIntersect",
+                probe =
+                    mapOf("intersect" to listOf(listOf(true, true))),
+                expect = {
+                    observes(mapOf("threshold" to 0), "div")
+                    timer("setTimeout", 20)
+                    timer("setTimeout", 20)
+                    fired += mapOf("at" to "intersection", "type" to "enter enter", "total" to 1)
+                },
+            ) {
+                div {
+                    dataOnIntersect("probe(1)") {
+                        debounce = 20.milliseconds
+                        debounceLeading = true
+                        debounceNoTrailing = true
+                    }
+                }
+            },
             dslCase("on intersect debounce", "dataOnIntersect", expect = {
                 observes(mapOf("threshold" to 0), "div")
+                timer("setTimeout", 200)
                 timer("setTimeout", 200)
                 intersects(1, 0)
             }) { div { dataOnIntersect("probe(1)") { debounce = 200.milliseconds } } },
@@ -403,9 +427,11 @@ class DslAsTheClientReadsItTest {
                 observes(mapOf("threshold" to 0), "div")
                 // The throttle holds the entry for its trailing run, which passes the debounce at
                 // once as its leading run and then waits out the delay.
-                timer("setTimeout", 30)
-                timer("setTimeout", 10)
-                timer("setTimeout", 20)
+                repeat(2) {
+                    timer("setTimeout", 30)
+                    timer("setTimeout", 10)
+                    timer("setTimeout", 20)
+                }
                 intersects(1, 0)
             }) {
                 div {
@@ -423,7 +449,7 @@ class DslAsTheClientReadsItTest {
             dslCase("on intersect view transition", "dataOnIntersect", expect = {
                 observes(mapOf("threshold" to 0), "div")
                 intersects(1, 0)
-                viewTransitions = 1
+                viewTransitions = 2
             }) { div { dataOnIntersect("probe(1)") { viewTransition = true } } },
             dslCase("on interval", "dataOnInterval", expect = {
                 timer("setInterval", 1000)
@@ -510,6 +536,29 @@ class DslAsTheClientReadsItTest {
                         throttle = 30.milliseconds
                         throttleNoLeading = true
                         throttleTrailing = true
+                    }
+                }
+            },
+            dslCase(
+                "on signal patch debounce leading without trailing",
+                "dataOnSignalPatch",
+                probe =
+                    mapOf("eval" to "Datastar.mergePatch({a: 2}); Datastar.mergePatch({a: 3})"),
+                expect = {
+                    listensPlain("document", "datastar-signal-patch")
+                    timer("setTimeout", 20)
+                    timer("setTimeout", 20)
+                    store = """{"a":1}"""
+                    storeAfter = """{"a":3}"""
+                    probes = listOf(listOf(mapOf("a" to 2)))
+                },
+            ) {
+                div {
+                    dataSignals("a", "1")
+                    dataOnSignalPatch("probe(patch)") {
+                        debounce = 20.milliseconds
+                        debounceLeading = true
+                        debounceNoTrailing = true
                     }
                 }
             },
@@ -634,6 +683,7 @@ class DslAsTheClientReadsItTest {
                 // The indicator is set before the signals are read for the request.
                 request("GET", "http://localhost/x?datastar=%7B%22loading%22%3Atrue%7D", headers = ACCEPT)
                 heard("button", "click", 0)
+                listensPlain("AbortSignal", "abort")
             }) {
                 button {
                     dataIndicator("loading")
@@ -751,6 +801,18 @@ class DslAsTheClientReadsItTest {
                     +"hi"
                 }
             },
+            dslCase(
+                "bind a checkbox to its value",
+                "dataBind",
+                key = "c",
+                expect = {
+                    listensPlain("input", "input")
+                    listensPlain("input", "datastar-prop-change")
+                    // Without prop the signal would hold checked, false.
+                    store = """{"c":"on"}"""
+                    heard("input", "input", 0, 0)
+                },
+            ) { input(type = InputType.checkBox) { dataBind("c") { prop = "value" } } },
             dslCase(
                 "bind a number to a property",
                 "dataBind",
@@ -941,6 +1003,7 @@ class DslAsTheClientReadsItTest {
                 store = """{"a":1}"""
                 request("GET", "http://localhost/x?datastar=%7B%22a%22%3A1%7D", headers = ACCEPT)
                 heard("button", "click", 0)
+                listensPlain("AbortSignal", "abort")
             }) {
                 button {
                     dataSignals("a", "1")
@@ -952,6 +1015,7 @@ class DslAsTheClientReadsItTest {
                 store = """{"a":1}"""
                 request("POST", "http://localhost/x", """{"a":1}""", JSON_BODY)
                 heard("button", "click", 0)
+                listensPlain("AbortSignal", "abort")
             }) {
                 button {
                     dataSignals("a", "1")
@@ -962,21 +1026,25 @@ class DslAsTheClientReadsItTest {
                 listens("button", "click")
                 request("PUT", "http://localhost/x", "{}", JSON_BODY)
                 heard("button", "click", 0)
+                listensPlain("AbortSignal", "abort")
             }) { button { dataOnClick(put("/x")) } },
             dslCase("patch", "patch", probe = mapOf("rounds" to 1), expect = {
                 listens("button", "click")
                 request("PATCH", "http://localhost/x", "{}", JSON_BODY)
                 heard("button", "click", 0)
+                listensPlain("AbortSignal", "abort")
             }) { button { dataOnClick(patch("/x")) } },
             dslCase("delete", "delete", probe = mapOf("rounds" to 1), expect = {
                 listens("button", "click")
                 request("DELETE", "http://localhost/x?datastar=%7B%7D", headers = ACCEPT)
                 heard("button", "click", 0)
+                listensPlain("AbortSignal", "abort")
             }) { button { dataOnClick(delete("/x")) } },
             dslCase("query", "query", probe = mapOf("rounds" to 1), expect = {
                 listens("button", "click")
                 request("QUERY", "http://localhost/x", "{}", JSON_BODY)
                 heard("button", "click", 0)
+                listensPlain("AbortSignal", "abort")
             }) { button { dataOnClick(query("/x")) } },
             dslCase("get a uri with a query and quotes", "get", probe = mapOf("rounds" to 1), expect = {
                 listens("button", "click")
@@ -984,12 +1052,14 @@ class DslAsTheClientReadsItTest {
                 // The client rebuilds the query with URLSearchParams, which encodes a space as +.
                 request("GET", "http://localhost/x?q=it%27s+%22a%22&datastar=%7B%7D", headers = ACCEPT)
                 heard("button", "click", 0)
+                listensPlain("AbortSignal", "abort")
             }) { button { dataOnClick(get("/x?q=it's \"a\"")) } },
             dslCase("post as a form", "post", probe = mapOf("rounds" to 1, "dispatch" to listOf(listOf("button", "click"))), expect = {
                 listens("button", "click")
                 listensPlain("form", "submit")
                 request("POST", "http://localhost/x", "q=z", ACCEPT + ("Content-Type" to "application/x-www-form-urlencoded"))
                 heard("button", "click", 0)
+                listensPlain("AbortSignal", "abort")
             }) {
                 form {
                     input {
@@ -1011,6 +1081,7 @@ class DslAsTheClientReadsItTest {
                 listensPlain("f", "submit")
                 request("POST", "http://localhost/x", "q=y", ACCEPT + ("Content-Type" to "application/x-www-form-urlencoded"))
                 heard("button", "click", 0)
+                listensPlain("AbortSignal", "abort")
             }) {
                 form {
                     id = "f"
@@ -1033,6 +1104,7 @@ class DslAsTheClientReadsItTest {
                 store = """{"a":1,"b":2,"_c":3}"""
                 request("POST", "http://localhost/x", """{"b":2}""", JSON_BODY)
                 heard("button", "click", 0)
+                listensPlain("AbortSignal", "abort")
             }) {
                 button {
                     dataSignals("a" to 1, "b" to 2, "_c" to 3)
@@ -1049,6 +1121,7 @@ class DslAsTheClientReadsItTest {
                 store = """{"a/b":1,"c":2}"""
                 request("POST", "http://localhost/x", """{"c":2}""", JSON_BODY)
                 heard("button", "click", 0)
+                listensPlain("AbortSignal", "abort")
             }) {
                 button {
                     dataSignals("{'a/b': 1, c: 2}")
@@ -1059,17 +1132,20 @@ class DslAsTheClientReadsItTest {
                 listens("button", "click")
                 request("POST", "http://localhost/x", "{}", JSON_BODY + ("X-Csrf" to "t'k\"n"))
                 heard("button", "click", 0)
+                listensPlain("AbortSignal", "abort")
             }) { button { dataOnClick(post("/x") { headers = mapOf("X-Csrf" to "t'k\"n") }) } },
             dslCase("post with a payload", "post", probe = mapOf("rounds" to 1), expect = {
                 listens("button", "click")
                 request("POST", "http://localhost/x", """{"id":7,"tags":["a"],"s":"it's"}""", JSON_BODY)
                 heard("button", "click", 0)
+                listensPlain("AbortSignal", "abort")
             }) { button { dataOnClick(post("/x") { payload = mapOf("id" to 7, "tags" to listOf("a"), "s" to "it's") }) } },
             dslCase("post with a payload expression", "post", probe = mapOf("rounds" to 1), expect = {
                 listens("button", "click")
                 store = """{"sel":3}"""
                 request("POST", "http://localhost/x", """{"id":3}""", JSON_BODY)
                 heard("button", "click", 0)
+                listensPlain("AbortSignal", "abort")
             }) {
                 button {
                     dataSignals("sel", "3")
@@ -1080,30 +1156,36 @@ class DslAsTheClientReadsItTest {
                 listens("button", "click")
                 request("GET", "http://localhost/x?datastar=%7B%7D", headers = ACCEPT)
                 heard("button", "click", 0)
+                listensPlain("AbortSignal", "abort")
             }) { button { dataOnClick(get("/x") { openWhenHidden = true }) } },
             dslCase("post closed when hidden", "post", probe = mapOf("rounds" to 1), expect = {
                 listens("button", "click")
                 listensPlain("document", "visibilitychange")
                 request("POST", "http://localhost/x", "{}", JSON_BODY)
                 heard("button", "click", 0)
+                listensPlain("AbortSignal", "abort")
             }) { button { dataOnClick(post("/x") { openWhenHidden = false }) } },
             dslCase("get retried on error", "get", probe = mapOf("rounds" to 1, "respond" to mapOf("status" to 500)), expect = {
                 listens("button", "click")
                 listensPlain("document", "visibilitychange")
+                // Each wait is the one before times the scaler, up to the longest.
                 timer("setTimeout", 100)
-                timer("setTimeout", 200)
                 timer("setTimeout", 300)
-                repeat(4) { request("GET", "http://localhost/x?datastar=%7B%7D", headers = ACCEPT) }
+                timer("setTimeout", 500)
+                // Each retry is a request of its own; only the last is cancelled, once the client gives up.
+                repeat(3) { request("GET", "http://localhost/x?datastar=%7B%7D", headers = ACCEPT, aborted = false) }
+                request("GET", "http://localhost/x?datastar=%7B%7D", headers = ACCEPT)
                 errors += "FetchFailed"
                 heard("button", "click", 0)
+                listensPlain("AbortSignal", "abort")
             }) {
                 button {
                     dataOnClick(
                         get("/x") {
                             retry = FetchOptions.Retry.ERROR
                             retryInterval = 100.milliseconds
-                            retryScaler = 2.0
-                            retryMaxWait = 300.milliseconds
+                            retryScaler = 3.0
+                            retryMaxWait = 500.milliseconds
                             retryMaxCount = 3
                         },
                     )
@@ -1114,14 +1196,47 @@ class DslAsTheClientReadsItTest {
                 listensPlain("document", "visibilitychange")
                 request("GET", "http://localhost/x?datastar=%7B%7D", headers = ACCEPT)
                 heard("button", "click", 0)
+                listensPlain("AbortSignal", "abort")
             }) { button { dataOnClick(get("/x") { retry = FetchOptions.Retry.NEVER }) } },
+            dslCase(
+                "get never retried still retries a request that fails",
+                "get",
+                probe =
+                    mapOf(
+                        "rounds" to 1,
+                        "respond" to mapOf("fail" to true),
+                    ),
+                expect = {
+                    listens("button", "click")
+                    listensPlain("document", "visibilitychange")
+                    // fetch.ts in 1.0.4 retries a request that never reached the server whatever retry says,
+                    // so never acts as auto does: neither retries an answer, both retry a failure.
+                    timer("setTimeout", 1000)
+                    request("GET", "http://localhost/x?datastar=%7B%7D", headers = ACCEPT, aborted = false)
+                    request("GET", "http://localhost/x?datastar=%7B%7D", headers = ACCEPT)
+                    errors += "FetchFailed"
+                    heard("button", "click", 0)
+                    listensPlain("AbortSignal", "abort")
+                },
+            ) {
+                button {
+                    dataOnClick(
+                        get("/x") {
+                            retry = FetchOptions.Retry.NEVER
+                            retryMaxCount = 1
+                        },
+                    )
+                }
+            },
             dslCase("get retried always", "get", probe = mapOf("rounds" to 1, "respond" to mapOf("status" to 500)), expect = {
                 listens("button", "click")
                 listensPlain("document", "visibilitychange")
                 timer("setTimeout", 1000)
-                repeat(2) { request("GET", "http://localhost/x?datastar=%7B%7D", headers = ACCEPT) }
+                request("GET", "http://localhost/x?datastar=%7B%7D", headers = ACCEPT, aborted = false)
+                request("GET", "http://localhost/x?datastar=%7B%7D", headers = ACCEPT)
                 errors += "FetchFailed"
                 heard("button", "click", 0)
+                listensPlain("AbortSignal", "abort")
             }) {
                 button {
                     dataOnClick(
@@ -1148,6 +1263,7 @@ class DslAsTheClientReadsItTest {
                     // Datastar 1.0.4's fetch never takes responseOverrides from the options, so the
                     // element is morphed by its id, as the headers alone say.
                     text("t", "new")
+                    listensPlain("AbortSignal", "abort")
                 },
             ) {
                 div {
@@ -1170,12 +1286,46 @@ class DslAsTheClientReadsItTest {
                     )
                 }
             },
-            dslCase("get with request cancellation disabled", "get", probe = mapOf("rounds" to 1), expect = {
-                listens("button", "click")
-                listensPlain("document", "visibilitychange")
-                request("GET", "http://localhost/x?datastar=%7B%7D", headers = ACCEPT)
-                heard("button", "click", 0)
-            }) { button { dataOnClick(get("/x") { requestCancellation = FetchOptions.RequestCancellation.DISABLED }) } },
+            // Two clicks on requests that are never answered: by default the second cancels the first.
+            dslCase(
+                "get cancels the request before it",
+                "get",
+                probe =
+                    mapOf(
+                        "rounds" to 1,
+                        "burst" to 2,
+                        "respond" to mapOf("hang" to true),
+                    ),
+                expect = {
+                    listens("button", "click")
+                    listensPlain("document", "visibilitychange")
+                    listensPlain("AbortSignal", "abort")
+                    listensPlain("document", "visibilitychange")
+                    listensPlain("AbortSignal", "abort")
+                    request("GET", "http://localhost/x?datastar=%7B%7D", headers = ACCEPT)
+                    request("GET", "http://localhost/x?datastar=%7B%7D", headers = ACCEPT, aborted = false)
+                    heard("button", "click", 0)
+                },
+            ) { button { dataOnClick(get("/x")) } },
+            dslCase(
+                "get with request cancellation disabled",
+                "get",
+                probe =
+                    mapOf(
+                        "rounds" to 1,
+                        "burst" to 2,
+                        "respond" to mapOf("hang" to true),
+                    ),
+                expect = {
+                    listens("button", "click")
+                    listensPlain("document", "visibilitychange")
+                    listensPlain("AbortSignal", "abort")
+                    listensPlain("document", "visibilitychange")
+                    listensPlain("AbortSignal", "abort")
+                    repeat(2) { request("GET", "http://localhost/x?datastar=%7B%7D", headers = ACCEPT, aborted = false) }
+                    heard("button", "click", 0)
+                },
+            ) { button { dataOnClick(get("/x") { requestCancellation = FetchOptions.RequestCancellation.DISABLED }) } },
             dslCase("set all", "setAll", probe = mapOf("rounds" to 1), expect = {
                 listens("button", "click")
                 store = """{"a":1,"b":2,"c":3}"""

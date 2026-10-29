@@ -21,6 +21,9 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- `FetchOptions.retry` says what Datastar 1.0.4 does with `never`: a request that never reaches
+  the server is retried all the same, as with `auto`, up to `retryMaxCount`. The DSL fixture holds
+  it.
 - The editors warn, as `scope-name`, on `patch` in an expression whose attribute does not hand it
   over, such as `data-text="patch.a"`: only `data-on-signal-patch` declares `patch`, so elsewhere
   it throws a ReferenceError. (`evt` is declared in every expression, and is undefined outside

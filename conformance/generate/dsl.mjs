@@ -70,15 +70,19 @@ const harness = `
         : labels.get(target) ?? twin(target) ?? target?.constructor?.name ?? String(target)
   const record = { listeners: [], timers: [], observers: [], requests: [], probes: [], errors: [], viewTransitions: 0 }
   let recording = false
+  // A virtual clock: a timer falls due its wait after the moment it is set, and the clock jumps
+  // to each in turn. An interval runs once, which is all a case asks of one.
   const pending = []
+  let now = 0
   let nextTimer = 1
   const schedule = (kind) => (fn, ms, ...args) => {
     const id = nextTimer++
     // happy-dom times its own work, such as reading a response body, with the window's timers:
     // those run on the clock too, but only the client's are recorded.
     const caller = new Error().stack.split('\\n')[2] ?? ''
-    if (recording && !caller.includes('node_modules/happy-dom')) record.timers.push([kind, ms ?? null])
-    pending.push({ id, kind, ms: ms ?? 0, fn: () => fn(...args) })
+    const client = !caller.includes('node_modules/happy-dom')
+    if (recording && client) record.timers.push([kind, ms ?? null])
+    pending.push({ id, kind, due: now + Math.max(0, Number(ms) || 0), client, fn: () => fn(...args) })
     return id
   }
   window.setTimeout = schedule('setTimeout')
@@ -104,24 +108,36 @@ const harness = `
     observe(target) {
       record.observers[this.index].targets.push(label(target))
       this.target = target
+      this.watching = true
     }
-    unobserve() {}
-    disconnect() {}
+    unobserve() {
+      this.watching = false
+    }
+    disconnect() {
+      this.watching = false
+    }
   }
   const observers = []
+  // A browser runs the update of a view transition after the call returns, not inside it.
   document.startViewTransition = (update) => {
     record.viewTransitions++
-    update()
+    Promise.resolve().then(update)
   }
   window.probe = (...args) => {
     record.probes.push(args.map((a) => (a instanceof Event ? a.type : a)))
   }
+  // The answer every request gets: a status, headers and a body; or fail, a request that never
+  // reaches the server; or hang, one that is never answered, so a later one can cancel it.
   let respond = { status: 204 }
+  const signals = []
   window.fetch = async (url, init = {}) => {
     const headers = init.headers instanceof Headers ? Object.fromEntries(init.headers) : { ...(init.headers ?? {}) }
     const body =
       init.body == null ? null : init.body instanceof FormData ? [...init.body] : typeof init.body === 'string' ? init.body : String(init.body)
     record.requests.push({ url: String(url), method: init.method ?? 'GET', headers, body })
+    signals.push(init.signal ?? null)
+    if (respond.fail) throw new TypeError('Failed to fetch')
+    if (respond.hang) return new Promise(() => {})
     return new Response(respond.body ?? '', { status: respond.status, headers: respond.headers ?? {} })
   }
   globalThis.harness = {
@@ -129,16 +145,24 @@ const harness = `
     labels,
     observers,
     onListener,
-    respondWith: (answer) => (respond = answer),
+    respondWith: (answer) => {
+      const was = respond
+      respond = answer
+      return was
+    },
     pending: () => pending.length,
+    pendingOfClient: () => pending.filter((t) => t.client).length,
+    // Whether each request was cancelled by the time it is read.
+    aborted: () => signals.map((s) => s?.aborted ?? false),
     start: () => (recording = true),
     stop: () => (recording = false),
-    // Runs every timer due, earliest wait first, until none is left or a bound is reached.
+    // Runs every timer, the one that falls due first first, until none is left or a bound is reached.
     turn: (limit = 50) => {
       let runs = 0
       while (pending.length && runs++ < limit) {
-        pending.sort((a, b) => a.ms - b.ms || a.id - b.id)
+        pending.sort((a, b) => a.due - b.due || a.id - b.id)
         const timer = pending.shift()
+        now = Math.max(now, timer.due)
         try {
           timer.fn()
         } catch (e) {
@@ -311,18 +335,28 @@ const runCase = async (c, pro) => {
     await drain(h)
   }
   if (c.probe?.patch !== undefined) {
-    h.respondWith({ status: 200, headers: { 'Content-Type': 'text/event-stream' }, body: patchEvent(c.probe.patch) })
+    const was = h.respondWith({ status: 200, headers: { 'Content-Type': 'text/event-stream' }, body: patchEvent(c.probe.patch) })
     // The request the patch comes by is the harness's, not the case's, so nothing is recorded meanwhile.
     h.stop()
     const trigger = document.createElement('div')
     trigger.setAttribute(`${c.prefix ?? 'data-'}init`, "@get('/patch')")
     document.head.append(trigger)
     await drain(h)
-    h.record.requests.pop()
+    const index = h.record.requests.findLastIndex((r) => new URL(r.url).pathname === '/patch')
+    if (index >= 0) h.record.requests.splice(index, 1)
     trigger.remove()
+    h.respondWith(was)
     h.start()
-    elements = elementsOf(document.body)
-    for (const element of elements) if (!h.labels.has(element)) h.labels.set(element, element.id || element.localName)
+    elements = [...(fragmentHtml === null ? [document.documentElement] : []), ...elementsOf(document.body)]
+    const used = new Set(h.labels.values())
+    for (const element of elements) {
+      if (h.labels.has(element)) continue
+      const base = element.id || element.localName
+      let name = base
+      for (let n = 2; used.has(name); n++) name = `${base}${n}`
+      used.add(name)
+      h.labels.set(element, name)
+    }
   }
   for (const [at, prop, value] of c.probe?.set ?? []) {
     const element = elements.find((e) => h.labels.get(e) === at)
@@ -365,12 +399,16 @@ const runCase = async (c, pro) => {
       fired.push({ at, type, round, sync, total: h.record.probes.length - before, defaultPrevented: event.defaultPrevented, bubbled: reached.length > 0 })
     }
   }
+  // Each observer sees its element enter, leave and enter again, as long as it still watches; a
+  // case's intersect lists groups of entries in its place, each group sent before any timer runs.
   for (const observer of h.observers) {
-    for (const isIntersecting of [true, false]) {
+    for (const group of c.probe?.intersect ?? [[true], [false], [true]]) {
       const before = h.record.probes.length
-      observer.callback([{ isIntersecting, intersectionRatio: isIntersecting ? 1 : 0, target: observer.target }], observer)
+      for (const isIntersecting of group) {
+        if (observer.watching) observer.callback([{ isIntersecting, intersectionRatio: isIntersecting ? 1 : 0, target: observer.target }], observer)
+      }
       await drain(h)
-      fired.push({ at: 'intersection', type: isIntersecting ? 'enter' : 'exit', total: h.record.probes.length - before })
+      fired.push({ at: 'intersection', type: group.map((entering) => (entering ? 'enter' : 'exit')).join(' '), total: h.record.probes.length - before })
     }
   }
 
@@ -380,13 +418,15 @@ const runCase = async (c, pro) => {
     listeners: h.record.listeners,
     timers: h.record.timers,
     observers: h.record.observers,
-    requests: h.record.requests,
+    requests: h.record.requests.map((r, i) => ({ ...r, aborted: h.aborted()[i] ?? false })),
     probes: h.record.probes,
     fired,
     storeBefore,
     store: h.store(),
     after: elements.map((e) => [h.labels.get(e), attributesOf(e), e === document.documentElement ? null : e.textContent]),
     viewTransitions: h.record.viewTransitions,
+    // The client's timers the clock never reached: none, or the case stopped too early.
+    leftTimers: h.pendingOfClient(),
   }
   listening = null
   await window.happyDOM.close()
@@ -411,6 +451,8 @@ for (const name of files) {
     $comment: fixture.$comment,
     version,
     bundles: Object.fromEntries(used.map((b) => [b, bundle(b).sha256])),
+    // The script that read the cases: a reading taken by another one is stale.
+    generator: createHash('sha256').update(readFileSync(fileURLToPath(import.meta.url))).digest('hex'),
   }
   if (fixture.proAttributes) header.proAttributes = fixture.proAttributes
   if (fixture.proActions) header.proActions = fixture.proActions

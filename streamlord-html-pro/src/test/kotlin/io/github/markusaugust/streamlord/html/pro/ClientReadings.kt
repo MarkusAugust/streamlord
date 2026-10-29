@@ -120,12 +120,15 @@ internal class Expect {
         }
     }
 
+    /** How many expressions ran as the element entered the viewport, left it, and entered again. */
     fun intersects(
         enter: Int,
         exit: Int,
+        again: Int = enter,
     ) {
         fired += mapOf("at" to "intersection", "type" to "enter", "total" to enter)
         fired += mapOf("at" to "intersection", "type" to "exit", "total" to exit)
+        fired += mapOf("at" to "intersection", "type" to "enter", "total" to again)
     }
 
     fun observes(
@@ -135,13 +138,19 @@ internal class Expect {
         observers += mapOf("options" to options, "targets" to targets.toList())
     }
 
+    /**
+     * A request the client's fetch sent, and whether its signal was cancelled by the end: the
+     * client cancels it once it is done with the request (dispose in fetch.ts), so only one still
+     * waiting for its answer is not.
+     */
     fun request(
         method: String,
         url: String,
         body: Any? = null,
         headers: Map<String, Any?> = emptyMap(),
+        aborted: Boolean = true,
     ) {
-        requests += mapOf("url" to url, "method" to method, "headers" to headers, "body" to body)
+        requests += mapOf("url" to url, "method" to method, "headers" to headers, "body" to body, "aborted" to aborted)
     }
 
     /** An attribute the element holds at the end; a null [value] says it holds none of that name. */
@@ -178,6 +187,7 @@ internal class ClientReadings(
     private val proActions: List<String>? = null,
 ) {
     private val path = File(System.getProperty("streamlord.dslDir") ?: "../conformance/dsl", file)
+    private val generator = File(path.parentFile.parentFile, "generate/dsl.mjs")
     private val updating = System.getProperty("streamlord.updateClientReadings") == "true"
 
     fun check(cases: List<DslCase>) {
@@ -199,12 +209,18 @@ internal class ClientReadings(
             "$file holds other cases than the test: run ./gradlew :streamlord-html-pro:updateClientReadings, then npm run dsl",
         )
         val failures = mutableListOf<String>()
+        if (written.string("generator") != sha256(generator.readBytes())) {
+            failures += "$file was read by another dsl.mjs: run npm run dsl in conformance/generate"
+        }
+        if (canon(written["proAttributes"]) != canon(proAttributes) || canon(written["proActions"]) != canon(proActions)) {
+            failures += "$file names other Pro attributes or actions than the test: run updateClientReadings, then npm run dsl"
+        }
         for (case in cases) {
             val stored = reads.getValue(case.name)
             if (stored.string("html") != case.html || stored.string("prefix") != case.prefix ||
-                canon(stored["probe"]) != canon(case.probe)
+                canon(stored["probe"]) != canon(case.probe) || canon(stored["call"]) != canon(case.call)
             ) {
-                failures += "${case.name}: the DSL writes ${case.html} now, $file holds ${stored.string("html")}: " +
+                failures += "${case.name}: the case is not the one $file holds, whose html is ${stored.string("html")}: " +
                     "run ./gradlew :streamlord-html-pro:updateClientReadings, then npm run dsl"
                 continue
             }
@@ -268,7 +284,7 @@ internal class ClientReadings(
                 "    " + JsonWriter.write(entry)
             }
         val header = linkedMapOf<String, Any?>("\$comment" to comment)
-        written?.let { w -> listOf("version", "bundles").forEach { k -> w[k]?.let { header[k] = it.toKotlin() } } }
+        written?.let { w -> listOf("version", "bundles", "generator").forEach { k -> w[k]?.let { header[k] = it.toKotlin() } } }
         proAttributes?.let { header["proAttributes"] = it }
         proActions?.let { header["proActions"] = it }
         val head = header.entries.joinToString(",\n") { (k, v) -> "  ${JsonWriter.writeString(k)}: ${JsonWriter.write(v)}" }
@@ -294,9 +310,8 @@ internal class ClientReadings(
                 out += "${case.name}: $what\n  expected ${canon(expected)}\n  but the client did ${canon(actual)}"
             }
         }
-        val known = read.array("after")!!.map { (it as JsonArray)[0].toKotlin() as String }.toSet() + setOf("window", "document")
         same("errors", e.errors, read["errors"]?.toKotlin())
-        same("listeners", e.listeners, read.array("listeners")!!.map { it.toKotlin() as List<*> }.filter { it[0] in known })
+        same("listeners", e.listeners, read["listeners"]?.toKotlin())
         same("timers", e.timers, read["timers"]?.toKotlin())
         same("observers", e.observers, read["observers"]?.toKotlin())
         same("requests", e.requests, read["requests"]?.toKotlin())
@@ -304,6 +319,7 @@ internal class ClientReadings(
         same("store", JsonParser.parse(e.store).toKotlin(), JsonParser.parse(read.string("storeBefore")!!).toKotlin())
         same("store at the end", JsonParser.parse(e.storeAfter ?: e.store).toKotlin(), JsonParser.parse(read.string("store")!!).toKotlin())
         same("view transitions", e.viewTransitions, read["viewTransitions"]?.toKotlin())
+        same("timers the clock never reached", 0, read["leftTimers"]?.toKotlin())
         e.probes?.let { same("probes", it, read["probes"]?.toKotlin()) }
         val after = read.array("after")!!.associate { el -> (el as JsonArray).let { it[0].toKotlin() as String to it } }
         for ((at, name, value) in e.attrs) {
@@ -319,6 +335,12 @@ internal class ClientReadings(
         return out
     }
 }
+
+private fun sha256(bytes: ByteArray): String =
+    java.security.MessageDigest
+        .getInstance("SHA-256")
+        .digest(bytes)
+        .joinToString("") { "%02x".format(it) }
 
 /** [value] as JSON with the keys of every object sorted, so two values compare by content. */
 internal fun canon(value: Any?): String =

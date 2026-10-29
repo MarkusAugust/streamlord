@@ -84,26 +84,36 @@ It runs each case in a fresh happy-dom window with the built `bundles/datastar.j
 `datastar-aliased.js` for the prefix `data-star-`. The case's elements are built from parse5's
 tree, attribute by attribute, since happy-dom's own parser leaves most character references in an
 attribute value undecoded, and they are in the document before the client starts. The clock is
-the script's: a timer is recorded with the wait the client passed and run when the script turns
-the clock. The `read` holds the attributes as parse5 parsed them, the client's errors, every
-listener it added with its target and options, its timers, its `IntersectionObserver` options,
-the requests its fetch sent, each `probe()` an expression ran, the store before and after the
-probe's events, every element's attributes and text at the end, and the view transitions.
+the script's: a timer is recorded with the wait the client passed, falls due that long after it
+was set, and runs when the clock reaches it; an interval runs once. A view transition runs its
+update after `startViewTransition` returns, as a browser does. The `read` holds the attributes as
+parse5 parsed them, the client's errors, every listener it added with its target and options
+(an `AbortSignal` included), its timers and how many of them the clock never reached, its
+`IntersectionObserver` options, the requests its fetch sent and whether each was cancelled by the
+end, each `probe()` an expression ran, the store before and after the probe's events, every
+element's attributes and text at the end, and the view transitions. The header holds the sha256
+of the bundles and of `dsl.mjs` itself, and the test refuses a reading another script took.
 
 A `probe` may `set` a property on an element before its events, `dispatch` a list of events in
-place of one per listener, send each in a `burst`, in `rounds`, `respond` to the fetch, `eval` a
-script in the page, such as a signal patch, or `patch` new elements in through the client's own
-`datastar-patch-elements`, as the server sends them. A Pro attribute has no plugin in the free
+place of one per listener, send each in a `burst`, in `rounds`, `respond` to the fetch (with an
+answer, or `fail` for a request that never reaches the server, or `hang` for one never answered),
+`eval` a script in the page, such as a signal patch, list the `intersect` entries an observer
+sees in place of enter, leave and enter again, or `patch` new elements in through the client's
+own `datastar-patch-elements`, as the server sends them. A Pro attribute has no plugin in the free
 client: for each name in `proAttributes` the script registers one that records the key, modifiers
 and value the engine hands it, and for each name in `proActions` an action that records its
-arguments. What Pro then does with them is not read; nothing from Datastar Pro is.
+arguments. What Pro then does with them is not read; nothing from Datastar Pro is. A Pro value is
+not compiled either, since the client compiles an expression only to run it, so a Pro case holds
+how the value is carried, not that it is valid JavaScript.
 
 `DslAsTheClientReadsItTest` and `ProDslAsTheClientReadsItTest` in `streamlord-html-pro` render
 each case again and fail when the HTML differs from the fixture, which says to run the two
 commands above. Then they hold the `read` to what the case means, written by hand in the client's
 terms and never computed with the DSL's own code: the event the client must listen to, the signal
 it must store, the class it must set, the wait it must take, the request it must send. Listeners,
-timers, requests, errors and the store compare whole, so an extra listener fails too. Each test
+timers, requests, errors and the store compare whole, so an extra listener fails too, and so does
+a timer the clock never reached. A case that writes an option the client ignores, such as
+`responseOverrides`, holds the reading that it changed nothing. Each test
 also holds the cases to the catalog: every attribute in each of its forms, every modifier, every
 tag of a duration modifier, every value of an enum one, every action, every fetch option and every
 Kotlin function must be reached by a case, counted from the attributes the client parsed, with an
