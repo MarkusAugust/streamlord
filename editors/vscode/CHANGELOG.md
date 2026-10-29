@@ -6,10 +6,12 @@ All notable changes to the Streamlord extension are recorded here.
 
 - The markup checks read HTML as the browser does: the content of `xmp`, `iframe`, `noembed`,
   `noframes`, `noscript` and `plaintext` is text, a raw-text element written `<iframe/>` is still
-  open, and only its whole end tag closes it; a numeric reference is read whatever its number of
-  digits, and one to NUL or past U+10FFFF is U+FFFD.
-- An empty modifier argument is read as a missing one: `__debounce.` needs a duration, and the fix
-  takes the place of the dot; `__case.` has no value; `__threshold` takes ASCII digits only.
+  open, and only its whole end tag closes it, outside svg and math; a numeric reference is read
+  whatever its number of digits, one to NUL or past U+10FFFF is U+FFFD, and one from 128 to 159 is
+  the windows-1252 character the browser reads.
+- An empty modifier argument is nothing, as the client reads it: `__debounce.` needs a duration, and
+  the fix takes the place of the dot; `__case.` has no value; `__threshold.50.` and `__once.` are
+  fine; `__threshold` takes ASCII digits only.
 - The request inspector replaces a `datastar` parameter written without a value, and sends and
   copies as curl a method written in lower case as the client does.
 - A key the DSL refuses at runtime, one holding `__` or one ending in `_` before any modifier the call
