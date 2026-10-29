@@ -34,4 +34,32 @@ dependencies {
 // The tests read these by path, so a change there must rerun them and not be served from the cache.
 tasks.withType<Test>().configureEach {
     inputs.dir(rootProject.layout.projectDirectory.dir("catalog"))
+    inputs.dir(rootProject.layout.projectDirectory.dir("conformance/client"))
+}
+
+/*
+ * What the client does with the HTML the DSL writes, under conformance/dsl: the tests write each
+ * case's input under updateClientReadings, `npm run dsl` in conformance/generate fills in the
+ * client's reading, and every other test run compares the two with what the case means.
+ */
+val dslDir = rootProject.layout.projectDirectory.dir("conformance/dsl")
+
+tasks.withType<Test>().configureEach { systemProperty("streamlord.dslDir", dslDir.asFile.path) }
+tasks.withType<Test>().matching { it.name != "updateClientReadings" }.configureEach { inputs.dir(dslDir) }
+
+tasks.register<Test>("updateClientReadings") {
+    description = "Rewrites the inputs of the fixtures under conformance/dsl from what the DSL writes now."
+    group = "verification"
+    testClassesDirs =
+        sourceSets.test
+            .get()
+            .output.classesDirs
+    classpath =
+        sourceSets.test
+            .get()
+            .runtimeClasspath
+    useJUnitPlatform()
+    filter { includeTestsMatching("*AsTheClientReadsItTest") }
+    systemProperty("streamlord.updateClientReadings", "true")
+    outputs.upToDateWhen { false }
 }
