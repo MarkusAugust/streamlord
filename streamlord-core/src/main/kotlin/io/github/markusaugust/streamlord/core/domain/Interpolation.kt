@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.core.domain
 
 import io.github.markusaugust.streamlord.core.StreamlordException
+import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 
 /**
  * Markup the caller vouches for, written into the output as it stands.
@@ -470,7 +471,7 @@ private class Landscape(
     fun attributeAt(hole: Int): String? = indexOfSpan(hole, attributeStarts, attributeEnds).takeIf { it >= 0 }?.let { attributeNames[it] }
 
     // Their value is a signal path the client follows without a guard (bind.ts, ref.ts, indicator.ts).
-    private val signalPaths = setOf("bind", "ref", "indicator")
+    private val signalPaths = CatalogNames.signalAttributes
 
     private fun datastar(lower: String): Boolean {
         val prefix = prefixes.firstOrNull { lower.startsWith(it) } ?: return false

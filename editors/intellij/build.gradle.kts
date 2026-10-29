@@ -193,12 +193,18 @@ fun markdownToHtml(md: String): String {
 val generatedResources = layout.buildDirectory.dir("generated/liveTemplates")
 
 val generateHtmlLiveTemplates by tasks.registering {
-    val catalogFile = layout.projectDirectory.file("../../catalog/datastar-1.0.4.json")
+    // The one catalog there is, as core and the analysis find it.
+    val catalogFile =
+        layout.projectDirectory
+            .dir("../../catalog")
+            .asFileTree
+            .matching { include("datastar-*.json") }
+            .singleFile
     val out = generatedResources.map { it.file("liveTemplates/StreamlordHtml.xml") }
     inputs.file(catalogFile)
     outputs.file(out)
     doLast {
-        val json = groovy.json.JsonSlurper().parse(catalogFile.asFile) as Map<*, *>
+        val json = groovy.json.JsonSlurper().parse(catalogFile) as Map<*, *>
         val attributes = json["attributes"] as List<*>
 
         fun esc(s: String) =

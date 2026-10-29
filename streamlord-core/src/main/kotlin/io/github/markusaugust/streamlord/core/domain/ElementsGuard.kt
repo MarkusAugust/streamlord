@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.core.domain
 
+import io.github.markusaugust.streamlord.core.catalog.CatalogNames
+
 /**
  * The `$` trap, hunted in HTML written as a string.
  *
@@ -21,32 +23,10 @@ package io.github.markusaugust.streamlord.core.domain
 public object ElementsGuard {
     /**
      * The Datastar attributes (plugin names without prefix, key or modifiers) whose value is an
-     * expression. Mirrors `valueKind: "expression"` in the catalog, and the catalog test holds
-     * the two to the same list. Pro attributes are included because their names are public.
+     * expression: `valueKind: "expression"` in the catalog. Pro attributes are included because
+     * their names are public.
      */
-    public val expressionAttributes: Set<String> =
-        setOf(
-            "attr",
-            "class",
-            "computed",
-            "effect",
-            "init",
-            "on",
-            "on-intersect",
-            "on-interval",
-            "on-signal-patch",
-            "show",
-            "signals",
-            "style",
-            "text",
-            "animate",
-            "custom-validity",
-            "match-media",
-            "on-raf",
-            "on-resize",
-            "replace-url",
-            "view-transition",
-        )
+    public val expressionAttributes: Set<String> = CatalogNames.expressionAttributes
 
     /**
      * The attributes whose value Datastar evaluates as JavaScript: [expressionAttributes], and the
@@ -54,8 +34,7 @@ public object ElementsGuard {
      * runs as code (`jsStrToObject` in text.ts). The value of every other attribute is read as it
      * stands: a signal name, a nonce, a list of attribute names.
      */
-    public val evaluatedAttributes: Set<String> =
-        expressionAttributes + setOf("json-signals", "on-signal-patch-filter", "persist", "query-string")
+    public val evaluatedAttributes: Set<String> = expressionAttributes + CatalogNames.filterAttributes
 
     /**
      * Every Datastar attribute name, free and Pro, as the catalog lists them. A `data-*` name
@@ -63,29 +42,14 @@ public object ElementsGuard {
      * browser would ignore without a word: `data-onn:click`, `data-signal:x`, `data-effekt`.
      * Anything further away is taken to be your own attribute and left alone.
      */
-    public val attributes: Set<String> =
-        expressionAttributes +
-            setOf(
-                "bind",
-                "ignore",
-                "ignore-morph",
-                "indicator",
-                "json-signals",
-                "on-signal-patch-filter",
-                "preserve-attr",
-                "ref",
-                "nonce",
-                "persist",
-                "query-string",
-                "scroll-into-view",
-            )
+    public val attributes: Set<String> = CatalogNames.attributes
 
     /**
      * The attribute prefixes recognised unless told otherwise, longest first: `data-` for the
      * standard bundle and `data-star-` for the aliased one. A bundle built with another alias
      * passes its own list to [check], or sets `attributePrefixes` on `Streamlord`.
      */
-    public val defaultPrefixes: List<String> = listOf("data-star-", "data-")
+    public val defaultPrefixes: List<String> = listOf(CatalogNames.PREFIX, CatalogNames.ALIASED_PREFIX).sortedByDescending { it.length }
 
     // A numeric reference decodes with or without its semicolon. A named one needs it, except the
     // legacy few the standard lets go without, which in an attribute decode unless a letter, a

@@ -89,6 +89,17 @@ public final class io/github/markusaugust/streamlord/core/application/Streamlord
 	public final fun getDefault ()Lio/github/markusaugust/streamlord/core/application/Streamlord;
 }
 
+public final class io/github/markusaugust/streamlord/core/catalog/CatalogNames {
+	public static final field ALIASED_PREFIX Ljava/lang/String;
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/catalog/CatalogNames;
+	public static final field PREFIX Ljava/lang/String;
+	public static final field VERSION Ljava/lang/String;
+	public final fun getAttributes ()Ljava/util/Set;
+	public final fun getExpressionAttributes ()Ljava/util/Set;
+	public final fun getFilterAttributes ()Ljava/util/Set;
+	public final fun getSignalAttributes ()Ljava/util/Set;
+}
+
 public final class io/github/markusaugust/streamlord/core/domain/AttributeKeys {
 	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/domain/AttributeKeys;
 	public final fun capitalIn (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;

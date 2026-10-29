@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.core.domain.AttributeKeys
 import io.github.markusaugust.streamlord.core.json.JsonParser
 
@@ -1112,7 +1113,7 @@ public class MarkupValidator(
         val issues = ArrayList<Issue>()
         for (attr in tag.attributes) {
             val lower = attr.name.asciiLowercase()
-            if (prefix == "data-" && lower.startsWith("data-star-")) {
+            if (prefix == CatalogNames.PREFIX && lower.startsWith(CatalogNames.ALIASED_PREFIX)) {
                 issues +=
                     Issue(
                         attr.nameStart,

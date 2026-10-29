@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.core.domain.AttributeKeys
 
 /*
@@ -7,7 +8,7 @@ import io.github.markusaugust.streamlord.core.domain.AttributeKeys
  */
 
 public data class AnalyzeOptions(
-    val prefix: String = "data-",
+    val prefix: String = CatalogNames.PREFIX,
     val checkHtmlAttributes: Boolean = true,
 )
 
@@ -715,9 +716,10 @@ public class Analyzer(
                 start = key.start,
                 end = key.end,
                 message =
-                    "Written on the wire as data-${spec.name}:$wire, which Datastar reads back as $what: the browser lowercases " +
-                        "attribute names, so a key is kebab-case. In HTML or a template you write it that way yourself." +
-                        rawKeyNote(spec, "data-", name),
+                    "Written on the wire as ${CatalogNames.PREFIX}${spec.name}:$wire, which Datastar reads back as $what: " +
+                        "the browser lowercases attribute names, so a key is kebab-case. " +
+                        "In HTML or a template you write it that way yourself." +
+                        rawKeyNote(spec, CatalogNames.PREFIX, name),
                 severity = Severity.HINT,
                 code = "key-case-wire",
                 link = Docs.attribute(spec.name),

@@ -5,6 +5,7 @@ import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonValue
 import io.github.markusaugust.streamlord.core.json.JsonWriter
+import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
 import io.github.markusaugust.streamlord.html.DatastarAttributes
 import io.github.markusaugust.streamlord.html.elements
 import kotlinx.html.TagConsumer
@@ -392,7 +393,7 @@ private fun sorted(value: Any?): Any? =
 internal class CatalogCoverage(
     private val pro: Boolean,
 ) {
-    private val catalog = JsonParser.parseObject(File("../catalog/datastar-1.0.4.json").readText())
+    private val catalog = JsonParser.parseObject(File("../catalog/datastar-${DatastarProtocol.VERSION}.json").readText())
     private val groups = catalog.obj("modifierGroups")!!
     private val attributes = catalog.array("attributes")!!.objects().filter { (it.boolean("pro") ?: false) == pro }
     private val actions = catalog.array("actions")!!.objects().filter { (it.boolean("pro") ?: false) == pro }

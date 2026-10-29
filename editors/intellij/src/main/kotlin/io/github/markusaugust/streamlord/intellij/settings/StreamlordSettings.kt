@@ -9,6 +9,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.SimpleModificationTracker
 import com.intellij.util.xmlb.XmlSerializerUtil
 import io.github.markusaugust.streamlord.analysis.Requests
+import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 
 /**
  * The plugin's settings, per project and shared through `.idea/streamlord.xml`, so a team that
@@ -19,7 +20,7 @@ import io.github.markusaugust.streamlord.analysis.Requests
 class StreamlordSettings : PersistentStateComponent<StreamlordSettings.State> {
     class State {
         /** The attribute prefix of the Datastar bundle you load: `data-`, or `data-star-` for the aliased bundle. */
-        var attributePrefix: String = "data-"
+        var attributePrefix: String = CatalogNames.PREFIX
 
         /** The value of `{{baseUrl}}` in inspector requests when `.streamlord/env.json` does not set baseUrl. */
         var inspectorDefaultUrl: String = "http://localhost:8080/"
@@ -60,7 +61,7 @@ class StreamlordSettings : PersistentStateComponent<StreamlordSettings.State> {
         tracker.incModificationCount()
     }
 
-    val attributePrefix: String get() = state.attributePrefix.ifBlank { "data-" }
+    val attributePrefix: String get() = state.attributePrefix.ifBlank { CatalogNames.PREFIX }
 
     /** The extensions, lowercased and without dots, as written in the settings. */
     val templateExtensions: Set<String>

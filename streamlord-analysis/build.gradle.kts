@@ -10,9 +10,84 @@ dependencies {
     testImplementation(project(":streamlord-html"))
 }
 
-// The catalog is the single source of truth and lives once, at the repository root.
-sourceSets.main {
-    resources.srcDir(rootProject.file("catalog"))
+/*
+ * The catalog is the single source of truth and lives once, at the repository root. It is
+ * compiled in as the text of a Kotlin string when the module builds, so reading it needs no
+ * resource: nothing to name in a native image's configuration, and nothing to go missing from a
+ * classpath. A constant holds at most 64 KB, so the text is cut into pieces and joined once.
+ */
+@CacheableTask
+abstract class GenerateCatalogText : DefaultTask() {
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val catalog: RegularFileProperty
+
+    @get:OutputDirectory
+    abstract val output: DirectoryProperty
+
+    @TaskAction
+    fun generate() {
+        val file = catalog.get().asFile
+        val version = file.name.removePrefix("datastar-").removeSuffix(".json")
+        val declared = (groovy.json.JsonSlurper().parse(file) as Map<*, *>)["version"]
+        check(declared == version) { "${file.name} says it is Datastar $declared" }
+
+        fun literal(piece: String): String =
+            buildString {
+                append('"')
+                for (c in piece) {
+                    when (c) {
+                        '\\' -> append("\\\\")
+                        '"' -> append("\\\"")
+                        '$' -> append("\\$")
+                        '\n' -> append("\\n")
+                        '\r' -> append("\\r")
+                        '\t' -> append("\\t")
+                        else -> if (c < ' ') append("\\u%04x".format(c.code)) else append(c)
+                    }
+                }
+                append('"')
+            }
+        // Cut at most every 8192 characters, never between the two halves of a surrogate pair.
+        val json = file.readText()
+        val cuts = generateSequence(0) { at -> if (at >= json.length) null else minOf(json.length, at + 8192).let { if (it < json.length && json[it - 1].isHighSurrogate()) it - 1 else it } }
+        val pieces = cuts.zipWithNext { from, to -> json.substring(from, to) }.joinToString(",\n") { "            ${literal(it)}" }
+        val text =
+            """
+            |// Generated from catalog/${file.name} by :streamlord-analysis:generateCatalogText. Do not edit.
+            |package io.github.markusaugust.streamlord.analysis
+            |
+            |/** catalog/${file.name} as it stands, for [Catalog.default]. */
+            |internal object CatalogText {
+            |    const val VERSION: String = "$version"
+            |
+            |    val JSON: String =
+            |        listOf(
+            |$pieces,
+            |        ).joinToString("")
+            |}
+            |
+            """.trimMargin()
+        val out = output.get().asFile.resolve("io/github/markusaugust/streamlord/analysis/CatalogText.kt")
+        out.parentFile.mkdirs()
+        out.writeText(text)
+    }
+}
+
+val generateCatalogText =
+    tasks.register<GenerateCatalogText>("generateCatalogText") {
+        catalog.set(
+            rootProject.layout.projectDirectory
+                .dir("catalog")
+                .asFileTree
+                .matching { include("datastar-*.json") }
+                .singleFile,
+        )
+        output.set(layout.buildDirectory.dir("generated/catalogText"))
+    }
+
+kotlin.sourceSets.main {
+    kotlin.srcDir(generateCatalogText)
 }
 
 // The tests read the cases the VS Code extension shares with them: the corpus, the SSE corpus, the

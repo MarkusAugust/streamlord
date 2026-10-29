@@ -12,7 +12,7 @@ A security flaw goes through [SECURITY.md](SECURITY.md), never a public issue.
 |---|---|
 | `streamlord-*` | the ten published modules |
 | `editors/vscode`, `editors/intellij` | the two editor extensions |
-| `catalog/` | `datastar-1.0.4.json`, the shared source of truth for both editors |
+| `catalog/` | `datastar-1.0.4.json`, the source of truth for the names core, the analysis and both editors read |
 | `datastar-reference/` | a local, git-ignored copy of [starfederation/datastar](https://github.com/starfederation/datastar) at the release tag Streamlord speaks, `datastar-reference/datastar-1.0.4/`, fetched by `npm run reference` in `conformance/generate`; the authority for every claim about the client, and what the generators below read |
 | `conformance/` | what the client and the servers actually do, as fixtures the tests hold Streamlord to; see below |
 | `docs/` | this project's documentation site (Astro, Fristil, Datastar) |

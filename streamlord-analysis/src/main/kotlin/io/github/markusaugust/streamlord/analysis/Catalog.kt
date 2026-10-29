@@ -108,9 +108,6 @@ public data class ParsedModifier(
 public class Catalog private constructor(
     raw: JsonObject,
 ) {
-    public val version: String = raw.string("version") ?: DatastarProtocol.VERSION
-    public val prefix: String = raw.string("prefix") ?: "data-"
-    public val aliasedPrefix: String = raw.string("aliasedPrefix") ?: "data-star-"
     public val attributes: List<AttributeSpec>
     public val actions: List<ActionSpec>
     public val fetchOptions: List<FetchOption>
@@ -246,13 +243,10 @@ public class Catalog private constructor(
         /** The catalog bundled with this build, for the protocol version the SDK speaks. */
         public val default: Catalog by lazy { load(DatastarProtocol.VERSION) }
 
-        /** Load the bundled catalog for a Datastar [version]. */
+        /** The bundled catalog for a Datastar [version]; this build carries one, for [DatastarProtocol.VERSION]. */
         public fun load(version: String): Catalog {
-            val name = "/datastar-$version.json"
-            val text =
-                Catalog::class.java.getResourceAsStream(name)?.use { it.readBytes().toString(Charsets.UTF_8) }
-                    ?: throw IllegalStateException("Catalog resource $name is missing from the classpath")
-            return parse(text)
+            check(version == CatalogText.VERSION) { "This build carries the catalog for Datastar ${CatalogText.VERSION}, not $version" }
+            return parse(CatalogText.JSON)
         }
 
         /** Read a catalog from its JSON text. */

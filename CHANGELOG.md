@@ -25,6 +25,11 @@ All notable changes to Streamlord are recorded here. The format follows
   the client's rules that the DSL, the adapters and the analysis each read from one place. Code
   outside Streamlord that calls them compiles only with `@OptIn(InternalStreamlordApi::class)`,
   and they may change in any release.
+- The catalog reaches core and the analysis as code, generated from `catalog/datastar-1.0.4.json`
+  when they build. `ElementsGuard`'s attribute sets, its default prefixes, the attributes
+  `interpolate` refuses a hole in and `DatastarAttributes.prefix` come from it, where core listed
+  them by hand and a test compared the two. The analysis no longer reads the catalog as a resource,
+  so a native image that runs it needs no resource configuration for it.
 
 ### Fixed
 

@@ -186,7 +186,6 @@ public final class io/github/markusaugust/streamlord/analysis/Catalog {
 	public static final field Companion Lio/github/markusaugust/streamlord/analysis/Catalog$Companion;
 	public final fun getActions ()Ljava/util/List;
 	public final fun getActionsByName ()Ljava/util/Map;
-	public final fun getAliasedPrefix ()Ljava/lang/String;
 	public final fun getAllCallSiteNames ()Ljava/util/Set;
 	public final fun getAttributes ()Ljava/util/List;
 	public final fun getAttributesByKotlin ()Ljava/util/Map;
@@ -196,10 +195,8 @@ public final class io/github/markusaugust/streamlord/analysis/Catalog {
 	public final fun getFetchOptions ()Ljava/util/List;
 	public final fun getHtmlCallSites ()Ljava/util/Map;
 	public final fun getPatchModes ()Ljava/util/List;
-	public final fun getPrefix ()Ljava/lang/String;
 	public final fun getScriptCallSites ()Ljava/util/Map;
 	public final fun getSelectorCallSites ()Ljava/util/Map;
-	public final fun getVersion ()Ljava/lang/String;
 	public final fun parseAttributeName (Ljava/lang/String;Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/ParsedAttribute;
 }
 
