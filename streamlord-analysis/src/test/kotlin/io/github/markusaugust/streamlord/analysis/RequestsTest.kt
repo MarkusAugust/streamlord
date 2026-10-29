@@ -12,6 +12,25 @@ import kotlin.test.assertTrue
 
 /** The cases of the VS Code extension's `requests.test.ts` and the SSE tests. */
 class RequestsTest {
+    // editors/vscode/test/fixtures/request-urls.json, which requests.test.ts reads too.
+    @Test
+    fun `opens the url the client opens`() {
+        val cases =
+            JsonParser
+                .parseObject(
+                    java.io.File("../editors/vscode/test/fixtures/request-urls.json").readText(),
+                ).array("cases")!!
+                .objects()
+        for (c in cases) {
+            assertEquals(
+                c.string("expected"),
+                Requests.requestUrl(c.string("url")!!, c.string("method")!!, c.string("signals")!!),
+                c.toJson(),
+            )
+        }
+        assertEquals(7, cases.size)
+    }
+
     private fun req(
         name: String = "counter",
         url: String = "{{baseUrl}}/api/counter-stream",

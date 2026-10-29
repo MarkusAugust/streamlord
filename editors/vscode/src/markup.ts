@@ -9,8 +9,8 @@ import { clientKeyName, objectKeys, signalNameProblem, signalPathProblem, PROTOT
 
 const VOID = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"]);
 
-/** Elements whose content is text, whatever it looks like: a `<div>` in a `<textarea>` or a `<title>` is not a tag. */
-const RAW_TEXT = new Set(["script", "style", "textarea", "title"]);
+/** Elements whose content is text, whatever it looks like: a `<div>` in a `<textarea>` or a `<title>` is not a tag. The list of MarkupScan in streamlord-core. */
+const RAW_TEXT = new Set(["script", "style", "textarea", "title", "xmp", "iframe", "noembed", "noframes", "noscript", "plaintext"]);
 
 /**
  * The elements whose end tag HTML lets the author leave out, each with the start tags that close
@@ -67,7 +67,7 @@ export function indexOfAsciiIgnoreCase(s: string, needle: string, from: number):
  * without it (unless `=` or a letter or digit follows, as in a URL's `&copy=1`), or a numeric
  * one, which the browser reads with or without its semicolon.
  */
-const ENTITY = /&(?:([A-Za-z][A-Za-z0-9]*);|(amp|AMP|lt|LT|gt|GT|quot|QUOT|nbsp)(?![=A-Za-z0-9])|#(\d{1,7});?|#[xX]([0-9A-Fa-f]{1,6});?)/y;
+const ENTITY = /&(?:([A-Za-z][A-Za-z0-9]*);|(amp|AMP|lt|LT|gt|GT|quot|QUOT|nbsp)(?![=A-Za-z0-9])|#(\d+);?|#[xX]([0-9A-Fa-f]+);?)/y;
 
 /** The named references that spell a character an expression may hold: the ASCII punctuation, and the whitespace. */
 const NAMED_ENTITIES: Record<string, string> = {

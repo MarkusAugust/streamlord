@@ -15,8 +15,8 @@ private val MODIFIER_WORD = Regex("""[a-z][a-z0-9]*(?:_[A-Za-z0-9]+)+""")
 
 private val VOID = setOf("area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr")
 
-/** Elements whose content is text, whatever it looks like: a `<div>` in a `<textarea>` or a `<title>` is not a tag. */
-private val RAW_TEXT = setOf("script", "style", "textarea", "title")
+/** Elements whose content is text, whatever it looks like: a `<div>` in a `<textarea>` or a `<title>` is not a tag. The list of MarkupScan in streamlord-core. */
+private val RAW_TEXT = setOf("script", "style", "textarea", "title", "xmp", "iframe", "noembed", "noframes", "noscript", "plaintext")
 
 /**
  * The elements whose end tag HTML lets the author leave out, each with the start tags that close
@@ -327,7 +327,7 @@ private fun valueEnd(
  * one, which the browser reads with or without its semicolon.
  */
 private val ENTITY =
-    Regex("""&(?:([A-Za-z][A-Za-z0-9]*);|(amp|AMP|lt|LT|gt|GT|quot|QUOT|nbsp)(?![=A-Za-z0-9])|#(\d{1,7});?|#[xX]([0-9A-Fa-f]{1,6});?)""")
+    Regex("""&(?:([A-Za-z][A-Za-z0-9]*);|(amp|AMP|lt|LT|gt|GT|quot|QUOT|nbsp)(?![=A-Za-z0-9])|#(\d+);?|#[xX]([0-9A-Fa-f]+);?)""")
 
 /** The named references that spell a character an expression may hold: the ASCII punctuation, and the whitespace. */
 private val NAMED_ENTITIES =

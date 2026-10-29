@@ -27,6 +27,8 @@ export const REQUESTS_FILE = ".streamlord/inspector.json";
 export const ENV_FILE = ".streamlord/env.json";
 export const RECENT_LIMIT = 10;
 export const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "QUERY"];
+// The methods the client sends the signals with in the query, not the body (DatastarProtocol.BODYLESS_METHODS).
+const BODYLESS: ReadonlySet<string> = new Set(["GET", "DELETE"]);
 
 export function emptyRequestsFile(): RequestsFile {
   return { version: 1, requests: [] };
@@ -606,14 +608,15 @@ export function compactSignals(signals: string): string {
 
 /** The URL the Datastar client would open: GET and DELETE carry the signals in the query string. */
 export function requestUrl(url: string, method: string, signalsJson: string): string {
-  if (method !== "GET" && method !== "DELETE") return url;
+  if (!BODYLESS.has(method.toUpperCase())) return url;
   // Taken apart as text: a relative URL, or one that still holds an unresolved variable, is one
   // `new URL` refuses, and the rest of it is passed on exactly as it was written.
   const hash = url.indexOf("#");
   const fragment = hash < 0 ? "" : url.slice(hash);
   const beforeFragment = hash < 0 ? url : url.slice(0, hash);
   const mark = beforeFragment.indexOf("?");
-  const kept = (mark < 0 ? "" : beforeFragment.slice(mark + 1)).split("&").filter((p) => p.length > 0 && !p.startsWith("datastar="));
+  // The client sets the parameter, which replaces one written without a value too (fetch.ts:149 in 1.0.4).
+  const kept = (mark < 0 ? "" : beforeFragment.slice(mark + 1)).split("&").filter((p) => p.length > 0 && p !== "datastar" && !p.startsWith("datastar="));
   // URLSearchParams is the form encoding, and unlike encodeURIComponent it never throws.
   const query = [...kept, new URLSearchParams({ datastar: signalsJson }).toString()].join("&");
   return `${mark < 0 ? beforeFragment : beforeFragment.slice(0, mark)}?${query}${fragment}`;
@@ -673,7 +676,7 @@ export function requestHeaders(method: string, userHeaders: Record<string, strin
   const out = new Map<string, string>();
   out.set("Accept", ACCEPT);
   out.set("Datastar-Request", "true");
-  if (!(method === "GET" || method === "DELETE")) out.set("Content-Type", "application/json");
+  if (!BODYLESS.has(method.toUpperCase())) out.set("Content-Type", "application/json");
   for (const [k, v] of Object.entries(userHeaders)) {
     for (const existing of out.keys()) if (existing.toLowerCase() === k.toLowerCase()) out.delete(existing);
     out.set(k, v);
@@ -686,7 +689,7 @@ export function requestHeaders(method: string, userHeaders: Record<string, strin
  * The body goes as `--data-raw`: with `--data`, curl reads signals that start with `@` from the file they name.
  */
 export function toCurl(r: SavedRequest): string {
-  const bodyless = r.method === "GET" || r.method === "DELETE";
+  const bodyless = BODYLESS.has(r.method.toUpperCase());
   const signalsJson = compactSignals(r.signals);
   const parts = ["curl", "-N", "-X", r.method];
   parts.push(shellQuote(requestUrl(r.url, r.method, signalsJson)));

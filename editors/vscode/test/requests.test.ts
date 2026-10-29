@@ -1,9 +1,20 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { ACCEPT, baseUrlSuggestion, requestHeaders, requestsPathProblem, describeVariables, emptyBodyHint, lineAndColumn, withBaseUrl, mergeVariables, newRequestLabel, parseEnv, parseRequestsFile, pushRecent, readsAsStream, remove, resolveRequest, routeHeaders, routeOptional, routeUrl, sendableUrl, serializeRequestsFile, substitute, toCurl, unreachableHint, upsert, variableCompletions, withEnvVariables, type SavedRequest } from "../src/requests.ts";
+import { ACCEPT, baseUrlSuggestion, requestHeaders, requestsPathProblem, describeVariables, emptyBodyHint, lineAndColumn, withBaseUrl, mergeVariables, newRequestLabel, parseEnv, parseRequestsFile, pushRecent, readsAsStream, remove, requestUrl, resolveRequest, routeHeaders, routeOptional, routeUrl, sendableUrl, serializeRequestsFile, substitute, toCurl, unreachableHint, upsert, variableCompletions, withEnvVariables, type SavedRequest } from "../src/requests.ts";
 import { findRoutes } from "../src/routes.ts";
+import { readFileSync } from "node:fs";
 
 const req = (over: Partial<SavedRequest> = {}): SavedRequest => ({ name: "counter", url: "{{baseUrl}}/api/counter-stream", method: "GET", signals: "", headers: "", ...over });
+
+// fixtures/request-urls.json, which RequestsTest.kt in streamlord-analysis reads too.
+describe("the url the client opens", () => {
+  it("opens the url the client opens", () => {
+    type Case = { url: string; method: string; signals: string; expected: string };
+    const cases = (JSON.parse(readFileSync(new URL("./fixtures/request-urls.json", import.meta.url), "utf8")) as { cases: Case[] }).cases;
+    for (const c of cases) assert.equal(requestUrl(c.url, c.method, c.signals), c.expected, JSON.stringify(c));
+    assert.equal(cases.length, 7);
+  });
+});
 
 describe("saved requests", () => {
   it("round-trips the file and tolerates loose input", () => {

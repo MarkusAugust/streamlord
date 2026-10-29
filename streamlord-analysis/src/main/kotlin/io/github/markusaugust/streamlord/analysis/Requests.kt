@@ -755,13 +755,15 @@ public object Requests {
         method: String,
         signalsJson: String,
     ): String {
-        if (method != "GET" && method != "DELETE") return url
+        if (method.uppercase() !in DatastarProtocol.BODYLESS_METHODS) return url
         // Taken apart as text: a URL that still holds a `{id}`, a space or an unresolved variable is
         // one java.net.URI refuses, and the rest of it is passed on exactly as it was written.
         val hash = url.indexOf('#')
         val fragment = if (hash < 0) "" else url.substring(hash)
         val beforeFragment = if (hash < 0) url else url.substring(0, hash)
-        val kept = beforeFragment.substringAfter('?', "").split('&').filter { it.isNotEmpty() && !it.startsWith("datastar=") }
+        // The client sets the parameter, which replaces one written without a value too (fetch.ts:149 in 1.0.4).
+        val kept =
+            beforeFragment.substringAfter('?', "").split('&').filter { it.isNotEmpty() && it != "datastar" && !it.startsWith("datastar=") }
         val query = (kept + ("datastar=" + URLEncoder.encode(wellFormed(signalsJson), Charsets.UTF_8))).joinToString("&")
         return "${beforeFragment.substringBefore('?')}?$query$fragment"
     }
@@ -913,7 +915,7 @@ public object Requests {
         val out = LinkedHashMap<String, String>()
         out["Accept"] = ACCEPT
         out["Datastar-Request"] = "true"
-        if (!(method == "GET" || method == "DELETE")) out["Content-Type"] = "application/json"
+        if (method.uppercase() !in DatastarProtocol.BODYLESS_METHODS) out["Content-Type"] = "application/json"
         for ((k, v) in userHeaders) {
             out.keys.firstOrNull { it.equals(k, ignoreCase = true) }?.let { out.remove(it) }
             out[k] = v
@@ -926,7 +928,7 @@ public object Requests {
      * The body goes as `--data-raw`: with `--data`, curl reads signals that start with `@` from the file they name.
      */
     public fun toCurl(r: SavedRequest): String {
-        val bodyless = r.method == "GET" || r.method == "DELETE"
+        val bodyless = r.method.uppercase() in DatastarProtocol.BODYLESS_METHODS
         val signalsJson = compactSignals(r.signals)
         val parts = mutableListOf("curl", "-N", "-X", r.method)
         parts += shellQuote(requestUrl(r.url, r.method, signalsJson))
