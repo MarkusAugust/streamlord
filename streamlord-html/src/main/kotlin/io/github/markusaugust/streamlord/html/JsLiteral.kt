@@ -58,12 +58,18 @@ public object JsLiteral {
         }
 
     /** [value] as a JavaScript literal: `{id: 7, tags: ['a', 'b'], 'x-y': null}`. */
-    public fun write(value: Any?): String = buildString { appendValue(this, value) }
+    public fun write(value: Any?): String = buildString { appendValue(this, value, 0) }
 
+    // JsonWriter's guards, so that a value either writes refuses the other refuses as well.
     private fun appendValue(
         sb: StringBuilder,
         value: Any?,
+        depth: Int,
     ) {
+        val container = value is Map<*, *> || value is Iterable<*> || value is Sequence<*> || value is Array<*> || value is JsonValue
+        if (depth >= JsonWriter.DEFAULT_MAX_DEPTH && container) {
+            throw SignalsCodecException("JavaScript literal nesting deeper than ${JsonWriter.DEFAULT_MAX_DEPTH} levels (cyclic structure?)")
+        }
         when (value) {
             is String -> sb.append(string(value))
 
@@ -75,23 +81,23 @@ public object JsLiteral {
             is JsonNumber -> sb.append(value.text)
 
             // A JsonObject or JsonArray is a Map or a List, so the numbers in it come here one by one.
-            is Map<*, *> -> appendMap(sb, value)
+            is Map<*, *> -> appendMap(sb, value, depth)
 
-            is Iterable<*> -> appendAll(sb, value)
+            is Iterable<*> -> appendAll(sb, value, depth)
 
-            is Sequence<*> -> appendAll(sb, value.asIterable())
+            is Sequence<*> -> appendAll(sb, value.asIterable(), depth)
 
-            is Array<*> -> appendAll(sb, value.asIterable())
+            is Array<*> -> appendAll(sb, value.asIterable(), depth)
 
-            is IntArray -> appendAll(sb, value.asIterable())
+            is IntArray -> appendAll(sb, value.asIterable(), depth)
 
-            is LongArray -> appendAll(sb, value.asIterable())
+            is LongArray -> appendAll(sb, value.asIterable(), depth)
 
-            is DoubleArray -> appendAll(sb, value.asIterable())
+            is DoubleArray -> appendAll(sb, value.asIterable(), depth)
 
-            is BooleanArray -> appendAll(sb, value.asIterable())
+            is BooleanArray -> appendAll(sb, value.asIterable(), depth)
 
-            is JsonValue -> appendValue(sb, value.toKotlin())
+            is JsonValue -> appendValue(sb, value.toKotlin(), depth)
 
             null, is Boolean, is Number -> sb.append(JsonWriter.write(value))
 
@@ -104,13 +110,17 @@ public object JsLiteral {
     private fun appendMap(
         sb: StringBuilder,
         map: Map<*, *>,
+        depth: Int,
     ) {
         sb.append('{')
         var first = true
+        // Only a map with keys that are not strings can repeat one once they are written as text.
+        val written = if (map.keys.all { it is String }) null else HashSet<String>()
         for ((key, v) in map) {
             if (!first) sb.append(", ")
             first = false
             val name = key.toString()
+            if (written != null && !written.add(name)) throw SignalsCodecException("Two keys of the map are written as \"$name\"")
             // __proto__ sets the object literal's prototype, quoted or not; only a computed key is a key.
             sb
                 .append(
@@ -120,7 +130,7 @@ public object JsLiteral {
                         else -> string(name)
                     },
                 ).append(": ")
-            appendValue(sb, v)
+            appendValue(sb, v, depth + 1)
         }
         sb.append('}')
     }
@@ -128,13 +138,14 @@ public object JsLiteral {
     private fun appendAll(
         sb: StringBuilder,
         items: Iterable<*>,
+        depth: Int,
     ) {
         sb.append('[')
         var first = true
         for (item in items) {
             if (!first) sb.append(", ")
             first = false
-            appendValue(sb, item)
+            appendValue(sb, item, depth + 1)
         }
         sb.append(']')
     }
