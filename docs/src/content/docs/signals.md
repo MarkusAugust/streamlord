@@ -95,8 +95,12 @@ too. Pass the value as a pair, `"search" to codec.toJsonValue(...)`, and the fie
 `$search` instead, where a read into `SearchSignals` will not find them.
 
 What the codec leaves out, the page does not declare. A field that is `null` declares nothing,
-because the client removes a signal patched to `null`; give it a value, `""` or `0`, if the page
-must hold it. A codec set to skip defaults, kotlinx's `encodeDefaults = false` or Jackson's
+because the client holds no null: it removes a signal patched to `null`, and an expression that
+reads it, or a `data-bind` on it, gets `""`. A `null` in a list is held as `""` too. So a form
+with `age: Int? = null` can come back from the browser as `"age": ""`, which a read into `Int?`
+refuses. Give such a field the value the page starts it with, `""` or `0`, or make the type take
+what the browser sends. The editors warn on a pair written `"selected" to null` in `dataSignals`.
+A codec set to skip defaults, kotlinx's `encodeDefaults = false` or Jackson's
 `NON_DEFAULT`, writes no field at its default, so `SearchSignals()` declares none.
 
 A key keeps the codec's spelling, hyphens included. `@SerialName("first-name")` declares the

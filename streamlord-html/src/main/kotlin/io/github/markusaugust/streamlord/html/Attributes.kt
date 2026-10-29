@@ -84,7 +84,8 @@ public fun HTMLTag.dataSignals(
  *
  * Each field is a signal named by its key as written, `$email` and `$firstName`, the names
  * `readSignals<Form>()` reads. A field that is `null` declares nothing, because the client
- * removes a signal patched to `null`. Every key is held to what the client can store
+ * removes a signal patched to `null`, and an expression or a `data-bind` that reads it gets `""`,
+ * which may come back to the server in place of the null. Every key is held to what the client can store
  * ([SignalNames]), and a top-level key also to a name it can hold a signal under, so `toString`
  * is refused. A key no `$name` reaches, such as `first-name` or `a b`, is written as it stands,
  * and an expression reaches it as `$['first-name']`.
@@ -133,6 +134,9 @@ public fun HTMLTag.dataSignals(
  * `signal("user['first-name']")` reaches. A key inside a map holding `.` is refused, since the
  * client would store it as one key that `$a.b` does not reach, and so is one it cannot hold with
  * what is under it ([SignalNames]).
+ *
+ * The client holds no null: `"selected" to null` declares nothing, since a null removes the key,
+ * and an expression that reads the signal gets `""`, as it does for a null in a list.
  */
 public fun HTMLTag.dataSignals(
     vararg signals: Pair<String, Any?>,

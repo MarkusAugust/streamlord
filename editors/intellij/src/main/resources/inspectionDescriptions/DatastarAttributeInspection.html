@@ -7,6 +7,11 @@ says <code>data-</code>, and a <code>data-indicator</code> on an element that se
 the client cannot hold or no <code>$name</code> reaches (<code>__proto__</code>, another property of every object with more of the
 name or an object under it, a <code>$</code> or a letter beyond ASCII), a filter pattern written as a string with flags after its
 last slash, which the client matches as text, and <code>data-computed</code> without a key whose value is sure to be no function.
+<p>
+Datastar's client holds no null: in <code>data-signals</code> a null removes the key, and an expression that reads the signal gets
+<code>""</code>. So <code>dataSignals("selected" to null)</code> declares nothing and is flagged; declare the signal with the value it
+starts as.
+</p>
 <!-- tooltip end -->
 </body>
 </html>

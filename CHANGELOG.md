@@ -21,6 +21,10 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- `dataSignals("selected" to null)` declared nothing, without a word: Datastar's client holds no
+  null, so the null removes the key, and an expression that reads the signal gets `""`, as it does
+  for a null in a list. The editors warn on such a pair as `signal-null`, and the signals page says
+  what it means for a form whose field is `null`.
 - A `\` followed by `&` in an expression lost its backslash: kotlinx.html writes that pair as a
   bare `&`, so `dataText("'\\&amp;'")` showed `&` where it meant `&amp;`, and `'\\\\&'` lost
   one of its backslashes. Every expression the DSL writes now reaches the browser as written.

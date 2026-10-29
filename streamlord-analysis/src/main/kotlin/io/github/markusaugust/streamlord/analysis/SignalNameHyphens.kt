@@ -112,12 +112,34 @@ internal fun signalNameHyphenIssues(
             val s = lex.stringAt(a.start + quote + 1)?.takeIf { it.start == a.start + quote } ?: continue
             if (!PAIR_AFTER.matchesAt(src, s.end)) continue
             if ('-' in s.text) out += hyphenIssue(s, src, SignalNames.withoutHyphens(s.text), null)
+            if (site.name == "dataSignals") PAIR_TO_NULL.matchAt(src, s.end)?.let { out += nullSignalIssue(s.text, it.range.last + 1) }
         }
     }
     return out
 }
 
 private val PAIR_AFTER = Regex("""\s+to\b""")
+private val PAIR_TO_NULL = Regex("""\s+to\s+null\b""")
+
+/**
+ * `"name" to null` in `dataSignals`, which declares nothing: Datastar's client holds no null, so
+ * the null removes the key, and an expression that reads the signal gets `""`, which the client
+ * makes of every null it reads. A warning, since a pair from a codec may hold a null on purpose.
+ */
+private fun nullSignalIssue(
+    name: String,
+    end: Int,
+): Issue =
+    Issue(
+        start = end - 4,
+        end = end,
+        message =
+            "Datastar's client holds no null: in data-signals a null removes the key, so \"$name\" is not declared, and an " +
+                "expression that reads it gets \"\". Declare it with the value it starts as, such as \"\".",
+        severity = Severity.WARNING,
+        code = "signal-null",
+        link = Docs.SIGNALS,
+    )
 
 /** What the second argument of `dataSignals(first, second)` is, as far as its text shows: the overload Kotlin picks. */
 internal enum class SecondArgument { EXPRESSION, IF_MISSING, UNKNOWN }

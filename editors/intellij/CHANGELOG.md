@@ -4,6 +4,10 @@ All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here
 
 ## Unreleased
 
+- A pair written `"selected" to null` in `dataSignals` is the warning `signal-null`: Datastar's
+  client holds no null, so the pair declares nothing, and an expression that reads the signal
+  gets `""`. In IntelliJ
+  the check is part of Datastar attributes.
 - A capital in the key of `dataAttr` or `dataAnimate` is the error `attribute-name-case`, with the
   kebab-case fix, since Streamlord 0.16 refuses it at runtime: the browser lowercases an
   attribute name, so `dataAttr("viewBox", …)` could only set `view-box`. The message names the

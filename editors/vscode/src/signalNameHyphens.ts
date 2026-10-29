@@ -182,6 +182,23 @@ export function bracketed(name: string): string | null {
 
 const PAIR_KEY = /^[\s(]*"/;
 const PAIR_AFTER = /\s+to\b/y;
+const PAIR_TO_NULL = /\s+to\s+null\b/y;
+
+/**
+ * `"name" to null` in `dataSignals`, which declares nothing: Datastar's client holds no null, so
+ * the null removes the key, and an expression that reads the signal gets `""`, which the client
+ * makes of every null it reads. A warning, since a pair from a codec may hold a null on purpose.
+ */
+function nullSignalIssue(name: string, end: number): Issue {
+  return {
+    start: end - 4,
+    end,
+    message: `Datastar's client holds no null: in data-signals a null removes the key, so "${name}" is not declared, and an expression that reads it gets "". Declare it with the value it starts as, such as "".`,
+    severity: "warning",
+    code: "signal-null",
+    link: DOCS.signals,
+  };
+}
 const OBJECT_START = /^\s*[{[]/;
 /** What the second argument of `dataSignals(first, second)` is, as far as its text shows: the overload Kotlin picks. */
 export type SecondArgument = "expression" | "ifMissing" | "unknown";
@@ -276,6 +293,9 @@ export function signalNameHyphenIssues(site: CallSite, src: string, strings: Kot
       PAIR_AFTER.lastIndex = s.end;
       if (!PAIR_AFTER.test(src)) continue;
       if (s.text.includes("-")) out.push(hyphenIssue(s, src, withoutHyphens(s.text), null));
+      PAIR_TO_NULL.lastIndex = s.end;
+      const toNull = site.name === "dataSignals" ? PAIR_TO_NULL.exec(src) : null;
+      if (toNull) out.push(nullSignalIssue(s.text, s.end + toNull[0].length));
     }
   }
   return out;

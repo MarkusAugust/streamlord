@@ -155,6 +155,7 @@ class DatastarAttributeInspection :
             "signal-name",
             "computed-value",
             "filter-pattern",
+            "signal-null",
         ),
     )
 
@@ -233,6 +234,7 @@ object InspectionCodes {
                 "signal-name",
                 "computed-value",
                 "filter-pattern",
+                "signal-null",
             ) +
             setOf("key-case", "key-case-wire", "signal-name-hyphen", "attribute-name-case") +
             setOf(
