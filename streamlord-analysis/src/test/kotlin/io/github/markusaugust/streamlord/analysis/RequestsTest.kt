@@ -108,7 +108,7 @@ class RequestsTest {
         assertEquals("curl -N -X GET 'http://x/{id}?datastar=%7B%7D'$tail", get("http://x/{id}"))
         assertEquals("curl -N -X GET 'http://h/a b?datastar=%7B%7D'$tail", get("http://h/a b"))
         assertEquals("curl -N -X GET '{{base}}/x?datastar=%7B%7D'$tail", get("{{base}}/x"))
-        assertEquals("curl -N -X GET 'http://h/x?y=1&z=a b&datastar=%7B%7D#frag'$tail", get("http://h/x?y=1&datastar=old&z=a b#frag"))
+        assertEquals("curl -N -X GET 'http://h/x?y=1&datastar=%7B%7D&z=a b#frag'$tail", get("http://h/x?y=1&datastar=old&z=a b#frag"))
         assertEquals(
             "curl -N -X POST 'http://localhost:8080'$tail -H 'Content-Type: application/json' --data-raw '{}'",
             Requests.toCurl(req(url = "http://localhost:8080", method = "POST")),

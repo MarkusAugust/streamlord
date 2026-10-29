@@ -19,8 +19,9 @@ All notable changes to the Streamlord extension are recorded here.
   `__threshold` is read as the client's `Number` reads it, so `1e1` is 10, no value is 0 with a
   warning, and a value outside 0 to 100 is a warning that the client clamps it. With `__half` or
   `__full` it is a warning that the client never reads it.
-- The request inspector replaces a `datastar` parameter written without a value, and sends and
-  copies as curl a method written in lower case as the client does.
+- The request inspector puts the `datastar` parameter where the first one stands, also one written
+  without a value or percent-encoded, as the client's `URLSearchParams.set` does, and sends and copies as curl a method
+  written in lower case as the client does.
 - A key the DSL refuses at runtime, one holding `__` or one ending in `_` before any modifier the call
   adds (its `__case`, `ifMissing`, `session` or the modifiers of its lambda), is the error
   `key-refused`, where the hint used to say what it writes on the wire: `dataClass("isOpen_", …)`,

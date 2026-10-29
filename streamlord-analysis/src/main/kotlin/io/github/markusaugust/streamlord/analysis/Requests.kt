@@ -764,12 +764,31 @@ public object Requests {
         val hash = url.indexOf('#')
         val fragment = if (hash < 0) "" else url.substring(hash)
         val beforeFragment = if (hash < 0) url else url.substring(0, hash)
-        // The client sets the parameter, which replaces one written without a value too (fetch.ts:149 in 1.0.4).
-        val kept =
-            beforeFragment.substringAfter('?', "").split('&').filter { it.isNotEmpty() && it != "datastar" && !it.startsWith("datastar=") }
-        val query = (kept + ("datastar=" + URLEncoder.encode(wellFormed(signalsJson), Charsets.UTF_8))).joinToString("&")
+
+        // The client sets the parameter (fetch.ts:149 in 1.0.4): URLSearchParams.set puts it where the
+        // first one stands, written with a value or without, drops the others, and appends it if there is none.
+        // It reads a name as a form does, `+` as a space and %XX as a byte, so data%73tar is the parameter too;
+        // a byte past ASCII stays one character, which is enough to tell it from datastar.
+        fun ours(p: String) =
+            PERCENT_BYTE.replace(p.substringBefore('=').replace('+', ' ')) {
+                it.groupValues[1]
+                    .toInt(16)
+                    .toChar()
+                    .toString()
+            } == "datastar"
+        val pairs = beforeFragment.substringAfter('?', "").split('&').filter { it.isNotEmpty() }
+        val param = "datastar=" + URLEncoder.encode(wellFormed(signalsJson), Charsets.UTF_8)
+        val first = pairs.indexOfFirst(::ours)
+        val query =
+            if (first < 0) {
+                pairs + param
+            } else {
+                pairs.filterIndexed { k, p -> k == first || !ours(p) }.map { if (ours(it)) param else it }
+            }.joinToString("&")
         return "${beforeFragment.substringBefore('?')}?$query$fragment"
     }
+
+    private val PERCENT_BYTE = Regex("%([0-9A-Fa-f]{2})")
 
     /** A surrogate without its partner becomes U+FFFD, which is what a browser encodes in its place. */
     private fun wellFormed(s: String): String {

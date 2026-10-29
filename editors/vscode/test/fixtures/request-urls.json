@@ -1,10 +1,12 @@
 {
-  "$comment": "The URL the request inspector opens, by requestUrl in streamlord-analysis Requests.kt and in editors/vscode/src/requests.ts, both of which read these cases. GET and DELETE carry the signals in the datastar parameter, in any case of the method, and the client's queryParams.set (fetch.ts:149 in 1.0.4) replaces one already there, with a value or without; the parameter is written last, which a server reads the same. Every other method leaves the URL as written.",
+  "$comment": "The URL the request inspector opens, by requestUrl in streamlord-analysis Requests.kt and in editors/vscode/src/requests.ts, both of which read these cases. GET and DELETE carry the signals in the datastar parameter, in any case of the method, and the client's queryParams.set (fetch.ts:149 in 1.0.4) replaces one already there, with a value or without, its name read as a form reads it, so data%73tar too; URLSearchParams.set puts it where the first one stands, drops any others, and appends it when there is none. Every other method leaves the URL as written.",
   "cases": [
     {"url": "/x", "method": "GET", "signals": "{\"a\":1}", "expected": "/x?datastar=%7B%22a%22%3A1%7D"},
     {"url": "/x?q=a b&datastar=old", "method": "GET", "signals": "{}", "expected": "/x?q=a b&datastar=%7B%7D"},
-    {"url": "/x?datastar&a=1", "method": "GET", "signals": "{}", "expected": "/x?a=1&datastar=%7B%7D"},
-    {"url": "/x?datastar=old&b=2#top", "method": "get", "signals": "{}", "expected": "/x?b=2&datastar=%7B%7D#top"},
+    {"url": "/x?datastar&a=1", "method": "GET", "signals": "{}", "expected": "/x?datastar=%7B%7D&a=1"},
+    {"url": "/x?datastar=old&b=2#top", "method": "get", "signals": "{}", "expected": "/x?datastar=%7B%7D&b=2#top"},
+    {"url": "/x?a=1&datastar=1&b=2&datastar&c=3", "method": "GET", "signals": "{}", "expected": "/x?a=1&datastar=%7B%7D&b=2&c=3"},
+    {"url": "/x?data%73tar=old&b=2&datast%61r=1", "method": "GET", "signals": "{}", "expected": "/x?datastar=%7B%7D&b=2"},
     {"url": "/x", "method": "delete", "signals": "{\"s\":\"a b\"}", "expected": "/x?datastar=%7B%22s%22%3A%22a+b%22%7D"},
     {"url": "/x?datastar", "method": "POST", "signals": "{\"a\":1}", "expected": "/x?datastar"},
     {"url": "/x", "method": "query", "signals": "{}", "expected": "/x"},

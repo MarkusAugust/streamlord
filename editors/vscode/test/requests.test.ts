@@ -72,7 +72,7 @@ describe("saved requests", () => {
     assert.equal(get("http://x/{id}"), `curl -N -X GET 'http://x/{id}?datastar=%7B%7D'${tail}`);
     assert.equal(get("http://h/a b"), `curl -N -X GET 'http://h/a b?datastar=%7B%7D'${tail}`);
     assert.equal(get("{{base}}/x"), `curl -N -X GET '{{base}}/x?datastar=%7B%7D'${tail}`);
-    assert.equal(get("http://h/x?y=1&datastar=old&z=a b#frag"), `curl -N -X GET 'http://h/x?y=1&z=a b&datastar=%7B%7D#frag'${tail}`);
+    assert.equal(get("http://h/x?y=1&datastar=old&z=a b#frag"), `curl -N -X GET 'http://h/x?y=1&datastar=%7B%7D&z=a b#frag'${tail}`);
     assert.equal(toCurl(req({ url: "http://localhost:8080", method: "POST" })), `curl -N -X POST 'http://localhost:8080'${tail} -H 'Content-Type: application/json' --data-raw '{}'`);
   });
 

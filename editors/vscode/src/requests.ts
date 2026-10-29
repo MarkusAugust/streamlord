@@ -620,10 +620,16 @@ export function requestUrl(url: string, method: string, signalsJson: string): st
   const fragment = hash < 0 ? "" : url.slice(hash);
   const beforeFragment = hash < 0 ? url : url.slice(0, hash);
   const mark = beforeFragment.indexOf("?");
-  // The client sets the parameter, which replaces one written without a value too (fetch.ts:149 in 1.0.4).
-  const kept = (mark < 0 ? "" : beforeFragment.slice(mark + 1)).split("&").filter((p) => p.length > 0 && p !== "datastar" && !p.startsWith("datastar="));
+  // The client sets the parameter (fetch.ts:149 in 1.0.4): URLSearchParams.set puts it where the
+  // first one stands, written with a value or without, drops the others, and appends it if there is none.
+  // It reads a name as a form does, `+` as a space and %XX as a byte, so data%73tar is the parameter too;
+  // a byte past ASCII stays one character, which is enough to tell it from datastar.
+  const ours = (p: string) => p.split("=", 1)[0]!.replace(/\+/g, " ").replace(/%([0-9A-Fa-f]{2})/g, (_, h: string) => String.fromCharCode(parseInt(h, 16))) === "datastar";
+  const pairs = (mark < 0 ? "" : beforeFragment.slice(mark + 1)).split("&").filter((p) => p.length > 0);
   // URLSearchParams is the form encoding, and unlike encodeURIComponent it never throws.
-  const query = [...kept, new URLSearchParams({ datastar: signalsJson }).toString()].join("&");
+  const param = new URLSearchParams({ datastar: signalsJson }).toString();
+  const first = pairs.findIndex(ours);
+  const query = (first < 0 ? [...pairs, param] : pairs.filter((p, k) => k === first || !ours(p)).map((p) => (ours(p) ? param : p))).join("&");
   return `${mark < 0 ? beforeFragment : beforeFragment.slice(0, mark)}?${query}${fragment}`;
 }
 
