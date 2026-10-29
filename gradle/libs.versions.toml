@@ -22,7 +22,7 @@ nettyOldestKtor = "4.1.139.Final"
 # The same for Ktor 3.0's Tomcat and Jetty engines, which bring Tomcat 10.1.30 and Jetty 11.0.24.
 # 11.0.26 is the last Jetty 11 on Maven Central, and it still has advisories install.md names.
 tomcatOldestKtor = "10.1.61"
-jettyOldestKtor = "11.0.26"
+jettyOldestKtor = "12.1.14"
 spring = "7.0.9"
 servlet = "6.1.0"
 # Spring Boot 4.0.8 pins 11.0.24, which has three advisories fixed in 11.0.25; the tests run the current 11.0 line.
