@@ -11,6 +11,14 @@ All notable changes to Streamlord are recorded here. The format follows
 - `DatastarAttributes.value(value)`: a value as kotlinx.html must be handed it for the browser to
   read it back exactly, for an attribute you write yourself (see Fixed).
 
+### Changed
+
+- `dataAttr` and Pro's `dataAnimate` take an attribute's name as HTML has it and refuse a capital
+  in it: the browser lowercases the key, so `dataAttr("viewBox", …)` set `view-box`, and
+  `dataAttr("ariaLabel", …)` relied on a guess that it meant `aria-label`. Write
+  `dataAttr("aria-label", …)`, and the object form, `dataAttr("{viewBox: …}")`, for an attribute
+  that really has capitals. The editors flag the call with the kebab-case fix.
+
 ### Fixed
 
 - A `\` followed by `&` in an expression lost its backslash: kotlinx.html writes that pair as a

@@ -378,15 +378,15 @@ public fun HTMLTag.dataAttr(expression: String) {
 }
 
 /**
- * `data-attr:name="expression"`. A camelCase [name] such as `ariaLabel` is written as
- * `aria-label`. An attribute that really is camelCase (SVG's `viewBox`) cannot travel in a key,
- * since the browser lowercases it; use the object form, `dataAttr("{viewBox: ...}")`.
+ * `data-attr:name="expression"`, with [name] as HTML has it: `dataAttr("aria-label", ...)`. The
+ * browser lowercases an attribute name, so a capital is refused: an attribute that really has
+ * capitals, such as SVG's `viewBox`, takes the object form, `dataAttr("{viewBox: ...}")`.
  */
 public fun HTMLTag.dataAttr(
     name: String,
     expression: String,
 ) {
-    attributes[ds("attr:${Casing.plainKey(name)}")] = expr(expression)
+    attributes[ds("attr:${Casing.attributeKey(name, "dataAttr")}")] = expr(expression)
 }
 
 // ---- Morphing and walker control --------------------------------------------------------------

@@ -167,14 +167,13 @@ describe("markup", () => {
       dataSignals("fooBar", "1")
       dataOn("widgetLoaded", "x()") { once = true }
       dataClass("isOpen", "$" + "open")
-      dataAttr("ariaLabel", "'x'")
+      dataStyle("backgroundColor", "'red'")
       dataSignals("MySignal", "1")
       dataOn("customEvent", "x()") { case = Case.KEBAB }
       dataSignals("{fooBar: 1}")
       dataBind("fooBar")
       dataOnClick("@post('/Add')", { once = true })
       dataOnFetch("evt.detail.type === 'Started'") { window = true }
-      dataAttr("viewBox", "$box")
       dataRef("myRef")
       dataIndicator("isLoading")
       dataSignals("{fooBar: 1}", true)
@@ -183,20 +182,37 @@ describe("markup", () => {
     }`;
     const hints = analyzeKotlin(src, opts).filter((i) => i.code === "key-case-wire");
     expect(hints.every((i) => i.severity === "hint")).toBe(true);
-    expect(hints.map((i) => src.slice(i.start, i.end))).toEqual(['"fooBar"', '"widgetLoaded"', '"isOpen"', '"ariaLabel"', '"MySignal"', '"customEvent"', '"viewBox"', '"myKey"', '"isMobile"']);
+    expect(hints.map((i) => src.slice(i.start, i.end))).toEqual(['"fooBar"', '"widgetLoaded"', '"isOpen"', '"backgroundColor"', '"MySignal"', '"customEvent"', '"myKey"', '"isMobile"']);
     expect(hints.map((i) => /as (data-[a-z-]+:[^,]+),/.exec(i.message)![1])).toEqual([
       "data-signals:foo-bar",
       "data-on:widget-loaded__case.camel",
       "data-class:is-open__case.camel",
-      "data-attr:aria-label",
+      "data-style:background-color",
       "data-signals:my-signal__case.pascal",
       "data-on:custom-event__case.kebab",
-      "data-attr:view-box",
       "data-persist:my-key",
       "data-match-media:is-mobile",
     ]);
     expect(hints[0]!.message).toContain("$fooBar");
-    expect(hints[6]!.message).toContain('data-attr="{viewBox: ...}"');
+    expect(hints[3]!.message).toContain("A CSS property is written in kebab-case");
+  });
+
+  it("refuses a capital in the name of an attribute as the dsl does", () => {
+    const src = `div {
+      dataAttr("viewBox", "'0 0 1 1'")
+      dataAttr("ariaLabel", "'x'")
+      dataAnimate("strokeWidth", "$w")
+      dataAttr("aria-label", "'x'")
+      dataAttr("{viewBox: '0 0 1 1'}")
+    }`;
+    const issues = analyzeKotlin(src, opts).filter((i) => i.code === "attribute-name-case" || i.code === "key-case-wire");
+    expect([...new Set(issues.map((i) => i.code))]).toEqual(["attribute-name-case"]);
+    expect(issues.every((i) => i.severity === "error")).toBe(true);
+    expect(issues.map((i) => src.slice(i.start, i.end))).toEqual(['"viewBox"', '"ariaLabel"', '"strokeWidth"']);
+    expect(issues[0]!.message).toContain('or the object form dataAttr("{viewBox: ...}")');
+    expect(issues[2]!.message).toContain('dataAnimate("{strokeWidth: ...}")');
+    expect(issues[1]!.fixes!.map((f) => f.text)).toEqual(["aria-label"]);
+    expect(issues[0]!.fixes!.map((f) => f.text)).toEqual(["view-box"]);
   });
 
   it("warns, not errors, when the template is only part of an expression", () => {

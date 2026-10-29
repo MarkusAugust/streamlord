@@ -240,8 +240,28 @@ public object Casing {
             .lowercase()
             .replace(CLIENT_HYPHEN) { it.value.substring(1).uppercase() }
 
-    /** The key for an attribute whose key is used as written (`attr`, `style`, `animate`): `ariaLabel` -> `aria-label`. */
+    /** The key for an attribute whose key is used as written (`style`, `persist`): `backgroundColor` -> `background-color`. */
     public fun plainKey(name: String): String = kebab(validate(name))
+
+    /**
+     * The key of `data-attr` and `data-animate`, the name of an HTML attribute as HTML has it. The
+     * browser lowercases an attribute name, so a capital could only reach another attribute, such
+     * as `view-box` for SVG's `viewBox`, and is refused with the two forms that work. [helper] is
+     * the DSL function the message names.
+     */
+    public fun attributeKey(
+        name: String,
+        helper: String,
+    ): String {
+        if (UPPER.containsMatchIn(name)) {
+            throw InvalidSignalNameException(
+                name,
+                "has a capital, which the browser lowercases in an attribute name; write ${kebab(name)} for an attribute " +
+                    "that is kebab-case, or the object form $helper(\"{$name: ...}\") for one that has capitals, such as SVG's viewBox",
+            )
+        }
+        return validate(name)
+    }
 
     /**
      * [name] as an expression refers to it, which is as written: `form.firstName`, `items[0]`, and

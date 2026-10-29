@@ -12,6 +12,7 @@ import kotlinx.html.id
 import kotlinx.html.input
 import kotlinx.html.li
 import kotlinx.html.span
+import kotlinx.html.svg
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -190,6 +191,24 @@ class HtmlDslTest {
         )
     }
 
+    // The browser lowercases an attribute name, so dataAttr("viewBox") could only set view-box.
+    @Test
+    fun `an attribute key with a capital is refused with the forms that work`() {
+        val e = assertFailsWith<InvalidSignalNameException> { elements { div { dataAttr("viewBox", "'0 0 1 1'") } } }
+        assertTrue("write view-box for an attribute that is kebab-case" in e.message!!, e.message)
+        assertTrue("""the object form dataAttr("{viewBox: ...}")""" in e.message!!, e.message)
+        assertFailsWith<InvalidSignalNameException> { elements { div { dataAttr("ariaLabel", "'x'") } } }
+        assertEquals(
+            """<svg xmlns="http://www.w3.org/2000/svg" data-attr="{viewBox: '0 0 1 1'}" data-attr:aria-label="'x'"></svg>""",
+            elements {
+                svg {
+                    dataAttr("{viewBox: '0 0 1 1'}")
+                    dataAttr("aria-label", "'x'")
+                }
+            },
+        )
+    }
+
     // kotlinx.html writes a backslash before & as a bare &; conformance/dsl holds what the client makes of each.
     @Test
     fun `a backslash before an ampersand reaches the browser as written`() {
@@ -279,7 +298,7 @@ class HtmlDslTest {
                     dataOn("widgetLoaded", "x()") { once = true }
                     dataClass("isOpen", "${'$'}open")
                     dataStyle("backgroundColor", "'red'")
-                    dataAttr("ariaLabel", "'x'")
+                    dataAttr("aria-label", "'x'")
                 }
             }
         assertEquals(

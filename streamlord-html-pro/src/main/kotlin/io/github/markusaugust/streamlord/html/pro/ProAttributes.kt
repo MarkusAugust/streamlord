@@ -225,10 +225,10 @@ public fun HTMLTag.dataAnimate(
 }
 
 /**
- * `data-animate:attribute="expression"` (Pro): animate an attribute whenever its signals change.
- * A camelCase [attribute] such as `strokeWidth` is written as `stroke-width`; one that really
- * is camelCase (SVG's `viewBox`) cannot travel in a key, since the browser lowercases it; use
- * the object form, `dataAnimate("{viewBox: ...}")`.
+ * `data-animate:attribute="expression"` (Pro): animate an attribute whenever its signals change,
+ * with [attribute] as HTML has it: `dataAnimate("stroke-width", ...)`. The browser lowercases an
+ * attribute name, so a capital is refused: one that really has capitals, such as SVG's `viewBox`,
+ * takes the object form, `dataAnimate("{viewBox: ...}")`.
  */
 public fun HTMLTag.dataAnimate(
     attribute: String,
@@ -236,7 +236,7 @@ public fun HTMLTag.dataAnimate(
     modifiers: AnimateModifiers.() -> Unit = {},
 ) {
     val mods = AnimateModifiers().apply(modifiers).build()
-    attributes[ds("animate:" + Casing.withModifiers(attribute, Casing.plainKey(attribute), mods))] = expr(expression)
+    attributes[ds("animate:" + Casing.withModifiers(attribute, Casing.attributeKey(attribute, "dataAnimate"), mods))] = expr(expression)
 }
 
 /** `data-custom-validity="expression"` (Pro): an expression yielding `''` when valid, a message otherwise. */

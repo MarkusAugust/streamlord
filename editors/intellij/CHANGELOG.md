@@ -2,6 +2,14 @@
 
 All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here.
 
+## Unreleased
+
+- A capital in the key of `dataAttr` or `dataAnimate` is the error `attribute-name-case`, with the
+  kebab-case fix, since Streamlord 0.16 refuses it at runtime: the browser lowercases an
+  attribute name, so `dataAttr("viewBox", …)` could only set `view-box`. The message names the
+  object form, `dataAttr("{viewBox: …}")`, for an attribute that really has capitals. In IntelliJ
+  the check is part of Datastar key casing.
+
 ## 0.8.0
 
 - A hyphen in a signal name written in a DSL call is the error `signal-name-hyphen`, with the

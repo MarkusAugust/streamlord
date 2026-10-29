@@ -12,6 +12,12 @@ expression or a patch, so <code>dataSignals("foo-bar", ...)</code> and <code>sig
 the SDK refuses the name at runtime. The quick fix writes it in camelCase, <code>fooBar</code>. A key with a hyphen inside a value is
 data, and an expression reaches it with brackets: <code>signal("form['first-name']")</code>.
 </p>
+<p>
+The key of <code>dataAttr</code> and <code>dataAnimate</code> is an attribute's name as HTML has it, and the SDK refuses a capital in it
+at runtime: <code>dataAttr("viewBox", ...)</code> could only set <code>view-box</code>. The quick fix writes the kebab-case name,
+<code>aria-label</code> for <code>ariaLabel</code>; an attribute that really has capitals, such as SVG's <code>viewBox</code>, takes the
+object form, <code>dataAttr("{viewBox: ...}")</code>.
+</p>
 <!-- tooltip end -->
 </body>
 </html>

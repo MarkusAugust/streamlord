@@ -1,7 +1,7 @@
 import { catalog, parseAttributeName, type CallSiteSpec } from "./catalog.ts";
 import { attributeDoc, DOCS, quoteAt, validateExpression, type Fix, type Issue } from "./expression.ts";
 import { PLACEHOLDER, toSource, type Interpolation, type KotlinString } from "./kotlinStrings.ts";
-import { asciiLowercase, indexOfAsciiIgnoreCase, keyReading, rawKeyNote, tokenize, validateAttributes, validateMarkup, wireKey, wireKeyReads, type Attribute, type Tag } from "./markup.ts";
+import { asciiLowercase, indexOfAsciiIgnoreCase, kebab, keyReading, rawKeyNote, tokenize, validateAttributes, validateMarkup, wireKey, wireKeyReads, type Attribute, type Tag } from "./markup.ts";
 import { findCallSites, isHtmlString, lexKotlin, namedArgText, selectStringArg, stringAt, type CallSite } from "./scanner.ts";
 import { dslHelpers, EXPRESSION_HELPERS, signalNameHyphenSites } from "./signalNameHyphens.ts";
 import { clientKeyName, collectSignalDefinitions } from "./signals.ts";
@@ -27,6 +27,8 @@ const HTML_SITE_NAMES: ReadonlySet<string> = new Set(Object.keys(catalog.callSit
 /** Keyed helpers that take a key but no expression, so the catalog's expression sites do not list them. */
 const KEY_ONLY_HELPERS: ReadonlySet<string> = new Set(["dataMatchMedia", "dataPersist"]);
 for (const name of KEY_ONLY_HELPERS) (ALL_SITE_NAMES as Set<string>).add(name);
+// The helpers whose key is an HTML attribute's name, in which the DSL refuses a capital.
+const ATTRIBUTE_NAME_HELPERS: ReadonlySet<string> = new Set(["dataAttr", "dataAnimate"]);
 
 /** Helpers that write the signal name in the value, which the catalog's call sites do not list. */
 const VALUE_NAME_HELPERS: ReadonlySet<string> = new Set(["dataBind", "dataRef", "dataIndicator"]);
@@ -407,6 +409,7 @@ function checkKeyCaseSite(site: CallSite, src: string): Issue[] {
   if (!/[A-Z]/.test(name) || /^\s*[{\[]/.test(name)) return [];
   // A signal name with a hyphen is refused, which signalNameHyphenIssues says.
   if (spec.keyCase === "camel" && name.includes("-")) return [];
+  if (ATTRIBUTE_NAME_HELPERS.has(site.name)) return [attributeNameIssue(site.name, spec.name, key, src)];
   // `case = Case.X`, a positional `Case.X` (dataClass("name", "x", Case.CAMEL)) or `case = Case.X` in the trailing lambda.
   const named = site.args.find((a) => a.named === "case" || (a.named === null && /^\s*Case\.[A-Z]+\s*$/.test(a.text)))?.text;
   const explicit = named ? /Case\.([A-Z]+)/.exec(named) : /\bcase\s*=\s*Case\.([A-Z]+)/.exec(trailingLambdaText(site, src));
@@ -431,6 +434,27 @@ function checkKeyCaseSite(site: CallSite, src: string): Issue[] {
     code: "key-case-wire",
     link: attributeDoc(spec.name),
   }];
+}
+
+/**
+ * A capital in the key of `dataAttr` or `dataAnimate`, which the DSL refuses at runtime: the
+ * browser lowercases an attribute name, so `viewBox` could only reach `view-box`. The fix is
+ * the kebab-case name, right for `aria-label` and wrong for SVG's `viewBox`, which the message
+ * sends to the object form.
+ */
+function attributeNameIssue(helper: string, attribute: string, key: KotlinString, src: string): Issue {
+  const name = key.text;
+  const fixed = kebab(name);
+  const plain = src.slice(key.contentStart, key.contentEnd) === name;
+  return {
+    start: key.start,
+    end: key.end,
+    message: `An attribute name in a key holds no capital: the browser lowercases it, so Streamlord refuses "${name}" at runtime. Write ${fixed} for an attribute that is kebab-case, or the object form ${helper}("{${name}: ...}") for one that has capitals, such as SVG's viewBox.`,
+    severity: "error",
+    code: "attribute-name-case",
+    link: attributeDoc(attribute),
+    fixes: plain ? [{ title: `Change to ${fixed}`, start: key.contentStart, end: key.contentEnd, text: fixed }] : [],
+  };
 }
 
 /** The text of the trailing lambda `{ ... }` after a call, braces balanced; empty when there is none. */

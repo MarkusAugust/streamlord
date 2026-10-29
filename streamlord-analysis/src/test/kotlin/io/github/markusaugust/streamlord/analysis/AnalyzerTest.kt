@@ -227,14 +227,13 @@ class AnalyzerTest {
               dataSignals("fooBar", "1")
               dataOn("widgetLoaded", "x()") { once = true }
               dataClass("isOpen", "$" + "open")
-              dataAttr("ariaLabel", "'x'")
+              dataStyle("backgroundColor", "'red'")
               dataSignals("MySignal", "1")
               dataOn("customEvent", "x()") { case = Case.KEBAB }
               dataSignals("{fooBar: 1}")
               dataBind("fooBar")
               dataOnClick("@post('/Add')", { once = true })
               dataOnFetch("evt.detail.type === 'Started'") { window = true }
-              dataAttr("viewBox", "${'$'}box")
               dataRef("myRef")
               dataIndicator("isLoading")
               dataSignals("{fooBar: 1}", true)
@@ -249,10 +248,9 @@ class AnalyzerTest {
                 "\"fooBar\"",
                 "\"widgetLoaded\"",
                 "\"isOpen\"",
-                "\"ariaLabel\"",
+                "\"backgroundColor\"",
                 "\"MySignal\"",
                 "\"customEvent\"",
-                "\"viewBox\"",
                 "\"myKey\"",
                 "\"isMobile\"",
             ),
@@ -263,17 +261,38 @@ class AnalyzerTest {
                 "data-signals:foo-bar",
                 "data-on:widget-loaded__case.camel",
                 "data-class:is-open__case.camel",
-                "data-attr:aria-label",
+                "data-style:background-color",
                 "data-signals:my-signal__case.pascal",
                 "data-on:custom-event__case.kebab",
-                "data-attr:view-box",
                 "data-persist:my-key",
                 "data-match-media:is-mobile",
             ),
             hints.map { Regex("""as (data-[a-z-]+:[^,]+),""").find(it.message)!!.groupValues[1] },
         )
         assertContains(hints[0].message, "\$fooBar")
-        assertContains(hints[6].message, "data-attr=\"{viewBox: ...}\"")
+        assertContains(hints[3].message, "A CSS property is written in kebab-case")
+    }
+
+    @Test
+    fun `refuses a capital in the name of an attribute as the dsl does`() {
+        val src =
+            """
+            div {
+              dataAttr("viewBox", "'0 0 1 1'")
+              dataAttr("ariaLabel", "'x'")
+              dataAnimate("strokeWidth", "${'$'}w")
+              dataAttr("aria-label", "'x'")
+              dataAttr("{viewBox: '0 0 1 1'}")
+            }
+            """.trimIndent()
+        val issues = analyzer.analyzeKotlin(src, opts).filter { it.code == "attribute-name-case" || it.code == "key-case-wire" }
+        assertEquals(listOf("attribute-name-case"), issues.map { it.code }.distinct())
+        assertTrue(issues.all { it.severity == Severity.ERROR })
+        assertEquals(listOf("\"viewBox\"", "\"ariaLabel\"", "\"strokeWidth\""), issues.map { src.substring(it.start, it.end) })
+        assertContains(issues[0].message, "or the object form dataAttr(\"{viewBox: ...}\")")
+        assertContains(issues[2].message, "dataAnimate(\"{strokeWidth: ...}\")")
+        assertEquals(listOf("aria-label"), issues[1].fixes.map { it.text })
+        assertEquals("view-box", issues[0].fixes.single().text)
     }
 
     @Test
