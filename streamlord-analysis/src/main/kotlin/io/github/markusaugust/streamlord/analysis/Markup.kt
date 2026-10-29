@@ -16,9 +16,9 @@ private val MODIFIER_WORD = Regex("""[a-z][a-z0-9]*(?:_[A-Za-z0-9]+)+""")
 
 private val VOID = setOf("area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr")
 
-/** Elements whose content is text, whatever it looks like: a `<div>` in a `<textarea>` or a `<title>` is not a tag. The list of MarkupScan in streamlord-core. */
 private val ASCII_INTEGER = Regex("[+-]?[0-9]+")
 
+/** Elements whose content is text, whatever it looks like: a `<div>` in a `<textarea>` or a `<title>` is not a tag. The list of MarkupScan in streamlord-core. */
 private val RAW_TEXT = setOf("script", "style", "textarea", "title", "xmp", "iframe", "noembed", "noframes", "noscript", "plaintext")
 
 /**
@@ -488,7 +488,40 @@ internal fun decodeEntities(value: String): DecodedValue {
 }
 
 /** The character a numeric reference names, as the browser reads it: NUL, a surrogate and past U+10FFFF are U+FFFD. */
-private fun codePoint(cp: Int): String = if (cp == 0 || cp > 0x10FFFF || cp in 0xD800..0xDFFF) "\uFFFD" else String(Character.toChars(cp))
+private fun codePoint(cp: Int): String =
+    if (cp == 0 || cp > 0x10FFFF || cp in 0xD800..0xDFFF) "\uFFFD" else String(Character.toChars(WINDOWS_1252[cp] ?: cp))
+
+// The numeric references the HTML standard reads as windows-1252 rather than as C1 controls: `&#128;` is the euro sign.
+private val WINDOWS_1252 =
+    mapOf(
+        0x80 to 0x20AC,
+        0x82 to 0x201A,
+        0x83 to 0x0192,
+        0x84 to 0x201E,
+        0x85 to 0x2026,
+        0x86 to 0x2020,
+        0x87 to 0x2021,
+        0x88 to 0x02C6,
+        0x89 to 0x2030,
+        0x8A to 0x0160,
+        0x8B to 0x2039,
+        0x8C to 0x0152,
+        0x8E to 0x017D,
+        0x91 to 0x2018,
+        0x92 to 0x2019,
+        0x93 to 0x201C,
+        0x94 to 0x201D,
+        0x95 to 0x2022,
+        0x96 to 0x2013,
+        0x97 to 0x2014,
+        0x98 to 0x02DC,
+        0x99 to 0x2122,
+        0x9A to 0x0161,
+        0x9B to 0x203A,
+        0x9C to 0x0153,
+        0x9E to 0x017E,
+        0x9F to 0x0178,
+    )
 
 /**
  * Does the value hold template syntax, so that it cannot be judged before rendering? A `${`
@@ -602,6 +635,8 @@ public fun tokenize(html: String): Tokens {
     var i = 0
     var depth = 0
     var textStart = -1
+    // Inside an svg or a math element, where a style or a script is no raw text and `/>` closes it.
+    var foreign = 0
 
     fun flushText(end: Int) {
         if (textStart >= 0 && depth == 0) {
@@ -712,7 +747,14 @@ public fun tokenize(html: String): Tokens {
             tags += Tag(name, i, end, closing, selfClosing || name in VOID, attributes)
             // As the browser reads it, and MarkupScan in core: a `/>` closes no raw-text element,
             // plaintext runs to the end, and only `</name` as a whole name ends the others.
-            if (!closing && name in RAW_TEXT) {
+            if (name == "svg" || name == "math") {
+                if (closing) {
+                    foreign = maxOf(0, foreign - 1)
+                } else if (!selfClosing) {
+                    foreign++
+                }
+            }
+            if (!closing && name in RAW_TEXT && foreign == 0) {
                 val closeIdx = if (name == "plaintext") -1 else rawTextEnd(html, name, end)
                 i = if (closeIdx < 0) html.length else closeIdx
                 depth++
@@ -1740,7 +1782,7 @@ public class MarkupValidator(
 
     private fun validateModifierArgs(
         spec: Modifier,
-        args: List<String>,
+        written: List<String>,
         start: Int,
         end: Int,
         attribute: AttributeSpec,
@@ -1748,6 +1790,8 @@ public class MarkupValidator(
         listensFor: String = "",
     ): List<Issue> {
         val issues = ArrayList<Issue>()
+        // An empty tag, the second of __threshold.50. or the one of __once., is nothing the client reads.
+        val args = written.filter { it.isNotEmpty() }
 
         fun fail(
             message: String,
@@ -1764,9 +1808,7 @@ public class MarkupValidator(
             issues += Issue(start, end, message, Severity.WARNING, "modifier-args", fixes = fixes)
         }
 
-        // An empty one, __debounce.500ms., is nothing the client reads: its tags are a set of the names.
         fun unknownFlag(f: String) {
-            if (f.isEmpty()) return
             ignored(
                 "Unknown flag .$f for __${spec.name}, which Datastar ignores. " +
                     "Allowed: ${spec.flags.joinToString(", ") { ".$it" }.ifEmpty { "none" }}.",

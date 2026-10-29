@@ -18,8 +18,13 @@ private val CASE_IN_LAMBDA = Regex("""\bcase\s*=\s*Case\.([A-Z]+)""")
 private val OBJECT_FORM = Regex("""^\s*[{\[]""")
 private val HAS_CAPITAL = Regex("""[A-Z]""")
 
-// A property set in a trailing lambda of modifiers, `{ once = true }`; `==` is a comparison.
-private val LAMBDA_ASSIGNMENT = Regex("""\b([A-Za-z]+)\s*=(?!=)""")
+// A property set in a lambda of modifiers, `{ once = true }`, and its value; `==` is a comparison and
+// `val once = 1` a variable of the lambda's own.
+private val LAMBDA_ASSIGNMENT = Regex("""(?<!\b(?:val|var)\s)\b([A-Za-z]+)\s*=(?!=)\s*([^;\n}]*)""")
+private val KOTLIN_STRING = Regex(""""(?:[^"\\]|\\.)*"""")
+
+// The parameter a DSL helper takes its key by, when it is passed by name.
+private val KEY_PARAMETERS = listOf("name", "event", "key", "property", "attribute", "signal")
 private val DOLLAR_RUNS = Regex("""\$+""")
 private val ASSIGN_BEFORE = Regex("""\s*=\s*$""")
 private val BRACED_TEMPLATE = Regex("""\$\{""")
@@ -650,16 +655,18 @@ public class Analyzer(
         if (site.name in attributeNameHelpers) return attributeNameIssues(site, spec, src)
         if (if (expr != null) expr.arg == 0 else site.name !in keyOnlyHelpers) return emptyList()
         val positional = site.positional
-        val key = positional.firstOrNull()?.string ?: return emptyList()
+        val namedKey = KEY_PARAMETERS.firstNotNullOfOrNull { site.named(it) }?.string
+        val key = namedKey ?: positional.firstOrNull()?.string ?: return emptyList()
         // With an expression helper, one positional string is the object form (dataClass("{...}")); the key form has two.
-        if (key.interpolations.isNotEmpty() || (expr != null && positional.size < 2)) return emptyList()
+        val objectForm = namedKey == null && expr != null && positional.size < 2 && site.named("expression") == null
+        if (key.interpolations.isNotEmpty() || objectForm) return emptyList()
         val name = key.text
         // dataSignals("{fooBar: 1}", ...) is the object form: an expression, not a key.
         if (OBJECT_FORM.containsMatchIn(name)) return emptyList()
         AttributeKeys.modifierStartIn(name)?.let { return listOf(refusedKey(spec, key, name, it)) }
         // `case = Case.X`, a positional `Case.X` (dataClass("name", "x", Case.CAMEL)) or `case = Case.X` in the trailing lambda.
         val named = site.args.firstOrNull { it.named == "case" || (it.named == null && CASE_ARG.matches(it.text)) }?.text
-        val explicit = if (named != null) CASE_VALUE.find(named) else CASE_IN_LAMBDA.find(trailingLambdaText(site, src))
+        val explicit = if (named != null) CASE_VALUE.find(named) else CASE_IN_LAMBDA.find(modifiersLambda(site, src))
         val explicitCase = explicit?.groupValues?.get(1)?.lowercase()
         val capital = HAS_CAPITAL.containsMatchIn(name)
         val wire = if (capital) wireKey(name, spec.keyCase, explicitCase) else name + (explicitCase?.let { "__case.$it" } ?: "")
@@ -667,7 +674,7 @@ public class Analyzer(
         if (wire != null) {
             // The key itself, not what comes before the first __: in b___case.pascal that is b.
             val keyPart = if (capital) kebab(name) else name
-            val modifiers = wire.removePrefix(keyPart) + otherModifiers(site, src)
+            val modifiers = wire.removePrefix(keyPart) + if (addsModifiers(site, spec, src)) "__" else ""
             AttributeKeys.runsIntoModifiers(keyPart, modifiers)?.let { return listOf(refusedKey(spec, key, name, it)) }
         }
         if (!capital) return emptyList()
@@ -705,26 +712,34 @@ public class Analyzer(
     }
 
     /**
-     * The modifiers besides `__case` the DSL writes after the key of [site], as far as its text
-     * shows: `ifMissing = true`, `session = true`, and a trailing lambda that sets a modifier, whose
-     * first one stands for the rest. Only whether there is any, and the key's last character, decide
-     * whether the key runs into them.
+     * Whether the DSL writes a modifier besides `__case` after the key of [site], as far as its text
+     * shows: `ifMissing` of `dataSignals` and `session` of `dataPersist` set to true, or a modifier of
+     * the attribute set in the lambda of modifiers, to anything but false or null. What it writes
+     * does not matter, only that the key would run into it.
      */
-    private fun otherModifiers(
+    private fun addsModifiers(
+        site: CallSite,
+        spec: AttributeSpec,
+        src: String,
+    ): Boolean {
+        fun on(parameter: String) = (site.named(parameter) ?: site.positional.getOrNull(2))?.text?.trim() == "true"
+        if (site.name == "dataSignals" && on("ifMissing")) return true
+        if (site.name == "dataPersist" && on("session")) return true
+        val names = spec.modifiers.map { it.name.lowercase() }.filter { it != "case" }
+        return LAMBDA_ASSIGNMENT.findAll(modifiersLambda(site, src).replace(KOTLIN_STRING, "\"\"")).any { m ->
+            val property = m.groupValues[1].lowercase()
+            val value = m.groupValues[2].trim()
+            value != "false" && value != "null" && names.any { property.startsWith(it) }
+        }
+    }
+
+    /** The lambda of modifiers of [site]: the trailing one, or one passed as an argument, by name or not. */
+    private fun modifiersLambda(
         site: CallSite,
         src: String,
     ): String =
-        buildString {
-            if (site.named("ifMissing")?.text?.trim() == "true" ||
-                site.positional
-                    .getOrNull(2)
-                    ?.text
-                    ?.trim() == "true"
-            ) {
-                append("__ifmissing")
-            }
-            if (site.named("session")?.text?.trim() == "true") append("__session")
-            LAMBDA_ASSIGNMENT.find(trailingLambdaText(site, src))?.let { append("__").append(it.groupValues[1].lowercase()) }
+        trailingLambdaText(site, src).ifEmpty {
+            (site.named("modifiers") ?: site.positional.firstOrNull { it.text.trimStart().startsWith("{") })?.text ?: ""
         }
 
     /** A key the DSL refuses at runtime, as `Casing` refuses it, where a hint would say what it writes. */
@@ -767,7 +782,8 @@ public class Analyzer(
         if (key.interpolations.isNotEmpty() || OBJECT_FORM.containsMatchIn(name)) return emptyList()
         AttributeKeys.modifierStartIn(name)?.let { return listOf(refusedKey(spec, key, name, it)) }
         if (!HAS_CAPITAL.containsMatchIn(name)) {
-            return listOfNotNull(AttributeKeys.runsIntoModifiers(name, otherModifiers(site, src))?.let { refusedKey(spec, key, name, it) })
+            val modifiers = if (addsModifiers(site, spec, src)) "__" else ""
+            return listOfNotNull(AttributeKeys.runsIntoModifiers(name, modifiers)?.let { refusedKey(spec, key, name, it) })
         }
         val reason = AttributeKeys.capitalIn(name, site.name) ?: return emptyList()
         val plain = src.substring(key.contentStart, key.contentEnd) == name

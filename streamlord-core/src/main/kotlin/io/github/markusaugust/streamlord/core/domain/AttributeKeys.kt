@@ -24,15 +24,15 @@ public object AttributeKeys {
     /**
      * Why [key] cannot stand before [modifiers], or null: a key that ends in `_` runs into the `__`
      * of the modifiers after it, so `b_` with `__case.pascal` is `b___case.pascal`, read as the key
-     * `b` and a modifier `_case`.
+     * `b` and a modifier `_case`. The reason names no modifier, so that it reads the same wherever
+     * the modifiers are known.
      */
     public fun runsIntoModifiers(
         key: String,
         modifiers: String,
     ): String? =
         if (modifiers.isNotEmpty() && key.endsWith('_')) {
-            "ends in _, which runs into the __ of the modifiers after it ($key$modifiers), so Datastar's client " +
-                "would read the key as ${key.dropLast(1)}"
+            "ends in _, which runs into the __ of the modifiers after it, so Datastar's client would read the key as ${key.dropLast(1)}"
         } else {
             null
         }

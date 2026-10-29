@@ -1,6 +1,7 @@
 import { PLACEHOLDER, type KotlinString } from "./kotlinStrings.ts";
 import { findCallSites, stringAt, type CallSite } from "./scanner.ts";
-import { DOCS, type Issue } from "./expression.ts";
+import { modifierStartIn } from "./attributeKeys.ts";
+import { attributeDoc, DOCS, type Issue } from "./expression.ts";
 
 /**
  * Collects signal names declared anywhere in a source file, for completion. Heuristic and
@@ -472,16 +473,19 @@ export function pairKeys(site: CallSite, src: string, strings: KotlinString[]): 
 }
 
 /**
- * Each `"name" to null` among the pairs of `site`, a `dataSignals` call, which declares nothing:
- * Datastar's client holds no null, so the null removes the key, and an expression that reads the
- * signal gets `""`, which the client makes of every null it reads. A warning, since a pair from a
- * codec may hold a null on purpose. `patchSignals` is left alone, since a null there removes the
- * signal, as it is meant to. The same rule as `nullPairIssues` in streamlord-analysis.
+ * What is wrong with the pairs of `site`, a `dataSignals` call: a key holding `__`, which the DSL
+ * refuses as it refuses it in any key, and each `"name" to null`, which declares nothing, since
+ * Datastar's client holds no null. The same rule as `dataSignalsPairIssues` in streamlord-analysis.
  */
-export function nullPairIssues(site: CallSite, src: string, strings: KotlinString[]): Issue[] {
+export function dataSignalsPairIssues(site: CallSite, src: string, strings: KotlinString[]): Issue[] {
   if (site.name !== "dataSignals") return [];
   const out: Issue[] = [];
   for (const key of pairKeys(site, src, strings)) {
+    const split = modifierStartIn(key.text);
+    if (split) {
+      out.push({ start: key.start, end: key.end, message: `Streamlord refuses "${key.text}" at runtime: it ${split}.`, severity: "error", code: "key-refused", link: attributeDoc("signals") });
+      continue;
+    }
     TO_NULL.lastIndex = key.end;
     const toNull = TO_NULL.exec(src);
     if (!toNull) continue;

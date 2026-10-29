@@ -1,4 +1,4 @@
-import { catalog, parseAttributeName, type CallSiteSpec } from "./catalog.ts";
+import { catalog, parseAttributeName, type AttributeSpec, type CallSiteSpec } from "./catalog.ts";
 import { attributeDoc, DOCS, quoteAt, validateExpression, type Fix, type Issue } from "./expression.ts";
 import { PLACEHOLDER, toSource, type Interpolation, type KotlinString } from "./kotlinStrings.ts";
 import { capitalIn, kebab, modifierStartIn, runsIntoModifiers, spellings } from "./attributeKeys.ts";
@@ -404,9 +404,11 @@ function checkKeyCaseSite(site: CallSite, src: string): Issue[] {
   if (ATTRIBUTE_NAME_HELPERS.has(site.name)) return attributeNameIssues(site, spec.name, src);
   if (expr ? expr.arg === 0 : !KEY_ONLY_HELPERS.has(site.name)) return [];
   const positional = site.args.filter((a) => a.named === null);
-  const key = positional[0]?.string;
+  const namedKey = KEY_PARAMETERS.map((p) => site.args.find((a) => a.named === p)?.string).find((k) => k) ?? null;
+  const key = namedKey ?? positional[0]?.string;
   // With an expression helper, one positional string is the object form (dataClass("{...}")); the key form has two.
-  if (!key || key.interpolations.length > 0 || (expr && positional.length < 2)) return [];
+  const objectForm = !namedKey && expr && positional.length < 2 && !site.args.some((a) => a.named === "expression");
+  if (!key || key.interpolations.length > 0 || objectForm) return [];
   const name = key.text;
   // dataSignals("{fooBar: 1}", ...) is the object form: an expression, not a key.
   if (/^\s*[{\[]/.test(name)) return [];
@@ -414,7 +416,7 @@ function checkKeyCaseSite(site: CallSite, src: string): Issue[] {
   if (split) return [refusedKey(spec.name, key, name, split)];
   // `case = Case.X`, a positional `Case.X` (dataClass("name", "x", Case.CAMEL)) or `case = Case.X` in the trailing lambda.
   const named = site.args.find((a) => a.named === "case" || (a.named === null && /^\s*Case\.[A-Z]+\s*$/.test(a.text)))?.text;
-  const explicit = named ? /Case\.([A-Z]+)/.exec(named) : /\bcase\s*=\s*Case\.([A-Z]+)/.exec(trailingLambdaText(site, src));
+  const explicit = named ? /Case\.([A-Z]+)/.exec(named) : /\bcase\s*=\s*Case\.([A-Z]+)/.exec(modifiersLambda(site, src));
   const explicitCase = explicit?.[1]?.toLowerCase() ?? null;
   const capital = /[A-Z]/.test(name);
   const wire = capital ? wireKey(name, spec.keyCase, explicitCase) : name + (explicitCase ? `__case.${explicitCase}` : "");
@@ -422,7 +424,7 @@ function checkKeyCaseSite(site: CallSite, src: string): Issue[] {
   if (wire !== null) {
     // The key itself, not what comes before the first __: in b___case.pascal that is b.
     const keyPart = capital ? kebab(name) : name;
-    const runs = runsIntoModifiers(keyPart, wire.slice(keyPart.length) + otherModifiers(site, src));
+    const runs = runsIntoModifiers(keyPart, wire.slice(keyPart.length) + (addsModifiers(site, spec, src) ? "__" : ""));
     if (runs) return [refusedKey(spec.name, key, name, runs)];
   }
   if (!capital) return [];
@@ -471,7 +473,7 @@ function attributeNameIssues(site: CallSite, attribute: string, src: string): Is
   const split = modifierStartIn(name);
   if (split) return [refusedKey(attribute, key, name, split)];
   if (!/[A-Z]/.test(name)) {
-    const runs = runsIntoModifiers(name, otherModifiers(site, src));
+    const runs = runsIntoModifiers(name, addsModifiers(site, catalog.attributesByKotlin.get(site.name)!, src) ? "__" : "");
     return runs ? [refusedKey(attribute, key, name, runs)] : [];
   }
   const reason = capitalIn(name, site.name)!;
@@ -483,22 +485,39 @@ function attributeNameIssues(site: CallSite, attribute: string, src: string): Is
   }];
 }
 
-// A property set in a trailing lambda of modifiers, `{ once = true }`; `==` is a comparison.
-const LAMBDA_ASSIGNMENT = /\b([A-Za-z]+)\s*=(?!=)/;
+// A property set in a lambda of modifiers, `{ once = true }`, and its value; `==` is a comparison and
+// `val once = 1` a variable of the lambda's own.
+const LAMBDA_ASSIGNMENT = /(?<!\b(?:val|var)\s)\b([A-Za-z]+)\s*=(?!=)\s*([^;\n}]*)/g;
+const KOTLIN_STRING = /"(?:[^"\\]|\\.)*"/g;
+
+// The parameter a DSL helper takes its key by, when it is passed by name.
+const KEY_PARAMETERS = ["name", "event", "key", "property", "attribute", "signal"];
 
 /**
- * The modifiers besides `__case` the DSL writes after the key of `site`, as far as its text
- * shows: `ifMissing = true`, `session = true`, and a trailing lambda that sets a modifier, whose
- * first one stands for the rest. The same rule as `otherModifiers` in streamlord-analysis.
+ * Whether the DSL writes a modifier besides `__case` after the key of `site`, as far as its text
+ * shows: `ifMissing` of `dataSignals` and `session` of `dataPersist` set to true, or a modifier of
+ * the attribute set in the lambda of modifiers, to anything but false or null. The same rule as
+ * `addsModifiers` in streamlord-analysis.
  */
-function otherModifiers(site: CallSite, src: string): string {
+function addsModifiers(site: CallSite, spec: AttributeSpec, src: string): boolean {
   const positional = site.args.filter((a) => a.named === null);
-  let out = "";
-  if (site.args.find((a) => a.named === "ifMissing")?.text.trim() === "true" || positional[2]?.text.trim() === "true") out += "__ifmissing";
-  if (site.args.find((a) => a.named === "session")?.text.trim() === "true") out += "__session";
-  const set = LAMBDA_ASSIGNMENT.exec(trailingLambdaText(site, src));
-  if (set) out += "__" + set[1]!.toLowerCase();
-  return out;
+  const on = (parameter: string) => (site.args.find((a) => a.named === parameter) ?? positional[2])?.text.trim() === "true";
+  if (site.name === "dataSignals" && on("ifMissing")) return true;
+  if (site.name === "dataPersist" && on("session")) return true;
+  const names = spec.modifiers.map((m) => m.name.toLowerCase()).filter((n) => n !== "case");
+  for (const m of modifiersLambda(site, src).replace(KOTLIN_STRING, '""').matchAll(LAMBDA_ASSIGNMENT)) {
+    const property = m[1]!.toLowerCase();
+    const value = m[2]!.trim();
+    if (value !== "false" && value !== "null" && names.some((n) => property.startsWith(n))) return true;
+  }
+  return false;
+}
+
+/** The lambda of modifiers of `site`: the trailing one, or one passed as an argument, by name or not. */
+function modifiersLambda(site: CallSite, src: string): string {
+  const trailing = trailingLambdaText(site, src);
+  if (trailing) return trailing;
+  return (site.args.find((a) => a.named === "modifiers") ?? site.args.find((a) => a.named === null && a.text.trimStart().startsWith("{")))?.text ?? "";
 }
 
 /** The text of the trailing lambda `{ ... }` after a call, braces balanced; empty when there is none. */

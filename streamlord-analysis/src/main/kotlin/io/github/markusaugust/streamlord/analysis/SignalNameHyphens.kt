@@ -245,7 +245,7 @@ private fun collectHyphenSites(
     }
     for (site in findCallSites(text, SIGNAL_NAMING_CALLS, lex)) {
         // A string template holds DSL calls too, so the pairs of one are read here as well.
-        val issues = signalNameHyphenIssues(site, text, lex, helpers, inside) + nullPairIssues(site, text, lex)
+        val issues = signalNameHyphenIssues(site, text, lex, helpers, inside) + dataSignalsPairIssues(site, text, lex)
         if (issues.isNotEmpty()) out += site.shifted(shift) to issues.map { it.shifted(shift) }
     }
     if (depth >= 4) return

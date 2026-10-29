@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.domain.AttributeKeys
+
 /*
  * Collects signal names declared anywhere in a source file, for completion. Heuristic and
  * generous: better to offer a name twice than to miss it.
@@ -518,19 +520,30 @@ internal fun pairKeys(
     }
 
 /**
- * Each `"name" to null` among the pairs of [site], a `dataSignals` call, which declares nothing:
- * Datastar's client holds no null, so the null removes the key, and an expression that reads the
- * signal gets `""`, which the client makes of every null it reads. A warning, since a pair from a
- * codec may hold a null on purpose. `patchSignals` is left alone, since a null there removes the
- * signal, as it is meant to.
+ * What is wrong with the pairs of [site], a `dataSignals` call. A key holding `__`, which the DSL
+ * refuses as it refuses it in any key ([AttributeKeys.modifierStartIn]). And each `"name" to null`,
+ * which declares nothing: Datastar's client holds no null, so the null removes the key, and an
+ * expression that reads the signal gets `""`, which the client makes of every null it reads. A
+ * warning, since a pair from a codec may hold a null on purpose. `patchSignals` is left alone,
+ * since a null there removes the signal, as it is meant to.
  */
-internal fun nullPairIssues(
+internal fun dataSignalsPairIssues(
     site: CallSite,
     src: String,
     lex: KotlinLex,
 ): List<Issue> {
     if (site.name != "dataSignals") return emptyList()
     return pairKeys(site, src, lex).mapNotNull { key ->
+        AttributeKeys.modifierStartIn(key.text)?.let { reason ->
+            return@mapNotNull Issue(
+                start = key.start,
+                end = key.end,
+                message = "Streamlord refuses \"${key.text}\" at runtime: it $reason.",
+                severity = Severity.ERROR,
+                code = "key-refused",
+                link = Docs.attribute("signals"),
+            )
+        }
         val end =
             TO_NULL
                 .matchAt(src, key.end)

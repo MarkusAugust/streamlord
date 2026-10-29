@@ -20,7 +20,7 @@ class AttributeKeysTest {
         assertEquals("contains __, where Datastar starts reading modifiers", AttributeKeys.modifierStartIn("a__b"))
         assertNull(AttributeKeys.modifierStartIn("a_b"))
         assertEquals(
-            "ends in _, which runs into the __ of the modifiers after it (b___case.pascal), so Datastar's client would read the key as b",
+            "ends in _, which runs into the __ of the modifiers after it, so Datastar's client would read the key as b",
             AttributeKeys.runsIntoModifiers("b_", "__case.pascal"),
         )
         assertNull(AttributeKeys.runsIntoModifiers("b_", ""))

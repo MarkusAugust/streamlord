@@ -1,5 +1,5 @@
 import { clientRewrite, DOCS, type Issue } from "./expression.ts";
-import { nullPairIssues, pairKeys } from "./signals.ts";
+import { dataSignalsPairIssues, pairKeys } from "./signals.ts";
 import type { KotlinString } from "./kotlinStrings.ts";
 import { findCallSites, lexKotlin, stringAt, type Arg, type CallSite } from "./scanner.ts";
 
@@ -322,7 +322,7 @@ function collectHyphenSites(
     calls.some((c) => at > c.openParen && at < c.closeParen && !openBraceBetween(text, lex.mask, c.openParen, at)) || (enclosed && !openBraceBetween(text, lex.mask, 0, at));
   for (const site of findCallSites(text, SIGNAL_NAMING_CALLS, lex.mask)) {
     // A string template holds DSL calls too, so the pairs of one are read here as well.
-    const issues = [...signalNameHyphenIssues(site, text, lex.strings, helpers, inside), ...nullPairIssues(site, text, lex.strings)];
+    const issues = [...signalNameHyphenIssues(site, text, lex.strings, helpers, inside), ...dataSignalsPairIssues(site, text, lex.strings)];
     if (issues.length > 0) out.push({ at: site.nameStart + shift, issues: issues.map((i) => shifted(i, shift)) });
   }
   if (depth >= 4) return;
