@@ -76,10 +76,11 @@ the client itself does, recorded in `conformance/`:
 |---|---|---|
 | `conformance/client/` | the client's own functions run over fixed inputs: casing, attribute keys, expression rewriting, modifier tags, the signal store | `conformance/generate/client.mjs`, from `datastar-reference/` |
 | `conformance/dom/` | the client run in a browser-like DOM: what each SSE frame did to a page and its store, what the HTML parser does with a script body | `conformance/generate/dom.mjs`, from `datastar-reference/` |
+| `conformance/dsl/` | what the client did with the HTML each DSL call writes: the listeners, timers, store, requests and DOM afterwards, held to what the call means | the HTML by `./gradlew :streamlord-html-pro:updateClientReadings`, the reading by `conformance/generate/dsl.mjs`, from `datastar-reference/` |
 | `conformance/wire/` | the exact HTTP answer each adapter gives, per server, for a fixed set of requests | the adapter tests, with `./gradlew :streamlord-ktor:updateTranscripts :streamlord-spring:updateTranscripts` |
 
 The generators read the free client in `datastar-reference/datastar-<version>/` and nothing
-else: `client.mjs` the sources under `library/src`, `dom.mjs` the built `bundles/datastar.js`. The
+else: `client.mjs` the sources under `library/src`, `dom.mjs` and `dsl.mjs` the built bundles. The
 directory is git-ignored, and `npm run reference` fills it: `conformance/generate/reference.mjs`
 downloads the release tag's archive from GitHub, refuses it unless its sha256 is the one written in
 the script, and unpacks it there. The repository holds no Datastar code, only that tag and checksum;
@@ -88,7 +89,9 @@ carries only its public names.
 
 The tests run in `./gradlew build` and in the VS Code suite, and cost seconds. The generators
 run by hand, when the reference changes, with `cd conformance/generate && npm install && npm run
-reference && npm run client && npm run dom`. A transcript that is meant to change is rewritten with the
+reference && npm run client && npm run dom && npm run dsl`. A change to the DSL that changes what
+it writes needs `./gradlew :streamlord-html-pro:updateClientReadings` and then `npm run dsl`; the
+test says so. A transcript that is meant to change is rewritten with the
 `updateTranscripts` tasks and shows up as a diff in the pull request, as `updateKotlinAbi` does
 for the public API.
 
@@ -104,8 +107,12 @@ requests runs the same suite on the newest release.
    `datastar-reference/datastar-<version>/`, and run `npm run reference` in
    `conformance/generate`: the generators take the version from the one directory they find, and
    the script refuses to add a second.
-2. Run the generators: `cd conformance/generate && npm install && npm run client && npm run dom`.
-   The diff of `conformance/client/` and `conformance/dom/` is the list of rules the client changed.
+2. Run the generators: `cd conformance/generate && npm install && npm run client && npm run dom &&
+   npm run dsl`. The diff of `conformance/client/`, `conformance/dom/` and the `read` of each case
+   in `conformance/dsl/` is the list of rules the client changed. A new attribute, modifier or
+   option fails the coverage tests of `DslAsTheClientReadsItTest` and `ProDslAsTheClientReadsItTest`
+   until a case reaches it; add the case, then run `./gradlew :streamlord-html-pro:updateClientReadings`
+   and `npm run dsl` again.
 3. Make the tests green against the new fixtures, changing Streamlord where the client changed and
    the fixtures' inputs where a case no longer applies. Never edit a generated output by hand.
 4. Rename `catalog/datastar-<version>.json` and bring its attributes, modifiers, actions and fetch

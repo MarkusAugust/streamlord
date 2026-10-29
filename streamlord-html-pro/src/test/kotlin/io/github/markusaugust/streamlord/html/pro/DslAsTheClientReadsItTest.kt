@@ -60,6 +60,7 @@ import kotlinx.html.html
 import kotlinx.html.id
 import kotlinx.html.input
 import kotlinx.html.option
+import kotlinx.html.p
 import kotlinx.html.pre
 import kotlinx.html.select
 import kotlinx.html.span
@@ -1323,7 +1324,11 @@ class DslAsTheClientReadsItTest {
                     dataOnClick("probe(evt)")
                 }
             },
-            dslCase("aliased ignore", "dataIgnore", prefix = "data-star-", expect = { text("span", "old") }) {
+            dslCase("aliased ignore", "dataIgnore", prefix = "data-star-", expect = {
+                text("span", "old")
+                // The bundle reads the prefix: an element outside the ignored one is applied.
+                text("p", "on")
+            }) {
                 div {
                     dataIgnore()
                     span {
@@ -1331,6 +1336,7 @@ class DslAsTheClientReadsItTest {
                         +"old"
                     }
                 }
+                p { dataText("'on'") }
             },
             dslCase("aliased preserve attr", "dataPreserveAttr", prefix = "data-star-", patch = {
                 details {
