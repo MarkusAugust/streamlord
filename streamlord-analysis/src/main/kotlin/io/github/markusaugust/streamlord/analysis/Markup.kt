@@ -1805,11 +1805,12 @@ public class MarkupValidator(
                     }
                     return issues
                 }
-                if (d == null || !DURATION.matches(d)) {
+                if (d.isNullOrEmpty() || !DURATION.matches(d)) {
                     val at = start + spec.name.length
+                    // A dot with nothing after it, __debounce., is no duration either, and the fix takes its place.
                     fail(
                         "__${spec.name} needs a duration such as __${spec.name}.500ms or __${spec.name}.1s.",
-                        if (d == null) listOf(Fix("Add .500ms", at, at, ".500ms")) else emptyList(),
+                        if (d.isNullOrEmpty() && args.size <= 1) listOf(Fix("Add .500ms", at, end, ".500ms")) else emptyList(),
                     )
                 }
                 for (f in args.drop(1)) {
@@ -1827,7 +1828,7 @@ public class MarkupValidator(
                     if (spec.name == "case" && attribute.keyCase == KeyCase.KEBAB) {
                         val also = rest.filter { it !in CASE_FNS }.joinToString("") { ".$it" }
                         val head =
-                            if (v != null) {
+                            if (!v.isNullOrEmpty()) {
                                 "Unknown value .$v for __case, which Datastar ignores" + if (also.isEmpty()) "" else ", as it does $also"
                             } else {
                                 "Datastar ignores __case without a value"

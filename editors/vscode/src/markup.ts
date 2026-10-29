@@ -1225,7 +1225,8 @@ function validateModifierArgs(spec: AttributeSpec["modifiers"][number], args: st
       }
       if (!d || !DURATION.test(d)) {
         fail(`__${spec.name} needs a duration such as __${spec.name}.500ms or __${spec.name}.1s.`);
-        if (!d) issues[issues.length - 1]!.fixes = [{ title: `Add .500ms`, start: start + spec.name.length, end: start + spec.name.length, text: ".500ms" }];
+        // A dot with nothing after it, __debounce., is no duration either, and the fix takes its place.
+        if (!d && args.length <= 1) issues[issues.length - 1]!.fixes = [{ title: `Add .500ms`, start: start + spec.name.length, end, text: ".500ms" }];
       }
       for (const f of flags) if (!known(f)) unknownFlag(f);
       break;
@@ -1252,7 +1253,8 @@ function validateModifierArgs(spec: AttributeSpec["modifiers"][number], args: st
     }
     case "int": {
       const [v, ...rest] = args;
-      const n = v !== undefined ? Number(v) : NaN;
+      // Written in digits, as Kotlin's toIntOrNull reads it: Number would take "" as 0 and 1e1 as 10.
+      const n = v !== undefined && /^[+-]?\d+$/.test(v) ? Number(v) : NaN;
       if (!Number.isInteger(n) || (spec.min !== undefined && n < spec.min) || (spec.max !== undefined && n > spec.max)) {
         fail(`__${spec.name} needs an integer${spec.min !== undefined ? ` between ${spec.min} and ${spec.max}` : ""}, e.g. __${spec.name}.50.`);
       }
