@@ -98,6 +98,15 @@ describe("the client's rules", () => {
     }
   });
 
+  it("knows the names an expression is compiled with", () => {
+    const fixture = JSON.parse(readFileSync(new URL("expressions.json", dir), "utf8")) as {
+      parameters: string[];
+      parametersWithArgNames: { argNames: string[]; parameters: string[] };
+    };
+    assert.deepEqual(catalog.compiledParameters, fixture.parameters);
+    assert.deepEqual([...catalog.compiledParameters, ...fixture.parametersWithArgNames.argNames], fixture.parametersWithArgNames.parameters);
+  });
+
   it("writes the function body genRx compiles", () => {
     const cases = read<{ rewrites: ExpressionCase[] }>("expressions.json").rewrites;
     assert.equal(cases.length, 322);

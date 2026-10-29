@@ -124,6 +124,41 @@ public final class io/github/markusaugust/streamlord/core/client/ClientCasing$Ke
 	public final fun getKey ()Ljava/lang/String;
 }
 
+public final class io/github/markusaugust/streamlord/core/client/ClientExpressionsKt {
+	public static final fun clientRewrite (Ljava/lang/String;)Lio/github/markusaugust/streamlord/core/client/ClientRewrite;
+	public static final fun getCLIENT_SIGNAL ()Lkotlin/text/Regex;
+}
+
+public final class io/github/markusaugust/streamlord/core/client/ClientRewrite : io/github/markusaugust/streamlord/core/client/ClientScript {
+	public fun <init> (Ljava/lang/String;[ILjava/util/List;Ljava/util/List;)V
+	public final fun getRewrites ()Ljava/util/List;
+	public final fun getRuns ()Ljava/util/List;
+}
+
+public class io/github/markusaugust/streamlord/core/client/ClientScript {
+	public fun <init> (Ljava/lang/String;[I)V
+	public final fun getJs ()Ljava/lang/String;
+	public final fun toExpression (I)I
+}
+
+public final class io/github/markusaugust/streamlord/core/client/Rewrite {
+	public fun <init> (ZIILjava/lang/String;)V
+	public final fun component1 ()Z
+	public final fun component2 ()I
+	public final fun component3 ()I
+	public final fun component4 ()Ljava/lang/String;
+	public final fun copy (ZIILjava/lang/String;)Lio/github/markusaugust/streamlord/core/client/Rewrite;
+	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/core/client/Rewrite;ZIILjava/lang/String;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/client/Rewrite;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEnd ()I
+	public final fun getName ()Ljava/lang/String;
+	public final fun getSignal ()Z
+	public final fun getStart ()I
+	public final fun getWritten ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class io/github/markusaugust/streamlord/core/domain/AttributeKeys {
 	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/domain/AttributeKeys;
 	public final fun capitalIn (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;

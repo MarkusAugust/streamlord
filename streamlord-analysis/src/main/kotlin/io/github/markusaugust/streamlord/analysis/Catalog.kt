@@ -112,6 +112,9 @@ public class Catalog private constructor(
     public val actions: List<ActionSpec>
     public val fetchOptions: List<FetchOption>
     public val fetchEvents: List<String>
+
+    /** The names `genRx` compiles every expression with, before a plugin's own `argNames` (engine.ts:467). */
+    public val compiledParameters: List<String>
     public val patchModes: List<String>
     public val expressionCallSites: Map<String, CallSiteSpec>
     public val htmlCallSites: Map<String, CallSiteSpec>
@@ -160,6 +163,7 @@ public class Catalog private constructor(
                 FetchOption(it.string("name") ?: "", it.string("type") ?: "", it.string("default") ?: "")
             }
         fetchEvents = raw.array("fetchEvents")?.strings() ?: emptyList()
+        compiledParameters = raw.array("compiledParameters")!!.strings()
         patchModes = raw.obj("sse")?.array("patchModes")?.strings() ?: emptyList()
         val sites = raw.obj("kotlinCallSites") ?: JsonObject.EMPTY
         expressionCallSites = callSites(sites.obj("expression"))
@@ -182,6 +186,13 @@ public class Catalog private constructor(
             }
         }
     public val actionsByName: Map<String, ActionSpec> = actions.associateBy { it.name }
+
+    /**
+     * The words an expression may read without declaring them: the parameters it is compiled with
+     * and every plugin's `argNames`, without `$` and `__action`, which are the client's own.
+     */
+    public val scopeNames: Set<String> =
+        (compiledParameters + attributes.flatMap { it.argNames }).filter { it.first().isLetter() && !it.startsWith("__") }.toSet()
 
     /** Every DSL function the analysis looks at, of every kind. */
     public val allCallSiteNames: Set<String> =

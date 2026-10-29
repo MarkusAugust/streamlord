@@ -75,6 +75,8 @@ export interface Catalog {
   actionsByName: Map<string, ActionSpec>;
   fetchOptions: { name: string; type: string; default: string }[];
   fetchEvents: string[];
+  /** The names `genRx` compiles every expression with, before a plugin's own `argNames` (engine.ts:467). */
+  compiledParameters: string[];
   patchModes: string[];
   callSites: {
     expression: Record<string, CallSiteSpec>;
@@ -153,6 +155,7 @@ function build(): Catalog {
     actionsByName: new Map(actions.map((a) => [a.name, a])),
     fetchOptions: raw.fetchOptions,
     fetchEvents: raw.fetchEvents,
+    compiledParameters: raw.compiledParameters,
     patchModes: raw.sse.patchModes,
     callSites: {
       expression: sites.expression ?? {},

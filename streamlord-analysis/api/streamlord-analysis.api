@@ -190,11 +190,13 @@ public final class io/github/markusaugust/streamlord/analysis/Catalog {
 	public final fun getAttributes ()Ljava/util/List;
 	public final fun getAttributesByKotlin ()Ljava/util/Map;
 	public final fun getAttributesByName ()Ljava/util/Map;
+	public final fun getCompiledParameters ()Ljava/util/List;
 	public final fun getExpressionCallSites ()Ljava/util/Map;
 	public final fun getFetchEvents ()Ljava/util/List;
 	public final fun getFetchOptions ()Ljava/util/List;
 	public final fun getHtmlCallSites ()Ljava/util/Map;
 	public final fun getPatchModes ()Ljava/util/List;
+	public final fun getScopeNames ()Ljava/util/Set;
 	public final fun getScriptCallSites ()Ljava/util/Map;
 	public final fun getSelectorCallSites ()Ljava/util/Map;
 	public final fun parseAttributeName (Ljava/lang/String;Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/ParsedAttribute;

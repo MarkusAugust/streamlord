@@ -384,7 +384,8 @@ class StreamlordCompletionContributor : CompletionContributor() {
             if (scope != null && scope.groupValues[1].isNotEmpty()) {
                 val matcher = result.withPrefixMatcher(PlainPrefixMatcher(scope.groupValues[1]))
                 // `patch` is a name only in `data-on-signal-patch`, the one attribute the client hands it to.
-                for (v in listOfNotNull("el", "evt", "patch".takeIf { patchInScope })) {
+                val compiled = catalog.compiledParameters.filter { it.first() in 'a'..'z' }
+                for (v in compiled + listOfNotNull("patch".takeIf { patchInScope })) {
                     matcher.addFixed(LookupElementBuilder.create(v).withTypeText("Datastar scope").withIcon(AllIcons.Nodes.Variable))
                 }
             }

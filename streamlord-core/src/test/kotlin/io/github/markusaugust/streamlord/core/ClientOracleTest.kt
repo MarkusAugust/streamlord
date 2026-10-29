@@ -1,8 +1,8 @@
 package io.github.markusaugust.streamlord.core
 
+import io.github.markusaugust.streamlord.core.client.clientRewrite
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.core.domain.SignalNames
-import io.github.markusaugust.streamlord.core.domain.clientRewritten
 import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
@@ -154,7 +154,7 @@ class ClientOracleTest {
         assertEquals(161, cases.size)
         for (case in cases) {
             val expression = case.string("expression")!!
-            assertEquals(case.string("js"), clientRewritten(jsTrim(expression)).js, expression)
+            assertEquals(case.string("js"), clientRewrite(jsTrim(expression)).js, expression)
         }
     }
 

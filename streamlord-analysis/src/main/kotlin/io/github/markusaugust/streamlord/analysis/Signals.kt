@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.client.CLIENT_SIGNAL
 import io.github.markusaugust.streamlord.core.client.ClientCasing
 import io.github.markusaugust.streamlord.core.domain.SignalNames
 
@@ -315,9 +316,6 @@ internal fun signalPathProblem(
         }
 }
 
-/** What the client reads after a `$`: ASCII letters, digits and `_`, in parts joined by `.` or `-` (engine.ts:449 in 1.0.4). */
-private val REACHABLE_NAME = Regex("""[A-Za-z0-9_]+(?:[.-][A-Za-z0-9_]+)*""")
-
 /** `$['my key']`, the read that reaches a signal at [parts] whatever its name: the client leaves a `$[` as written. */
 internal fun bracketRead(parts: List<String>): String =
     "$" + parts.joinToString("") { p -> "['" + p.replace("\\", "\\\\").replace("'", "\\'") + "']" }
@@ -330,7 +328,8 @@ internal fun signalNameProblem(
     name: String,
     parts: List<String> = name.split('.'),
 ): String? {
-    if (REACHABLE_NAME.matches(name)) return null
+    // What the client reads after a `$`: ASCII letters, digits and `_`, in parts joined by `.` or `-`.
+    if (CLIENT_SIGNAL.matches("$" + name)) return null
     if (name.startsWith("$")) return "holds the \$ itself, so \$${name.drop(1)} does not reach it: that reads the signal ${name.drop(1)}"
     val bracket = "only the bracket form ${bracketRead(parts)} reads it"
     return if (name.any { it > '\u007F' }) {

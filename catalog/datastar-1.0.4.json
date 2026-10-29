@@ -475,7 +475,7 @@
     { "name": "retryMaxCount", "type": "number", "default": "10" }
   ],
   "fetchEvents": ["started", "finished", "error", "retrying", "retries-failed"],
-  "expressionScope": ["el", "evt", "patch", "$", "@"],
+  "compiledParameters": ["el", "$", "__action", "evt"],
   "sse": {
     "events": ["datastar-patch-elements", "datastar-patch-signals"],
     "patchModes": ["outer", "inner", "replace", "prepend", "append", "before", "after", "remove"],

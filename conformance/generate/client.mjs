@@ -211,12 +211,14 @@ const expressions = [
 ];
 
 /** The text of the function body `genRx` compiles from [value]: `Function` is replaced to record it. */
-const compiledSource = (value, returnsValue) => {
+const compiledSource = (value, returnsValue, argNames) => {
   const original = globalThis.Function;
   let source = null;
+  let parameters = null;
   let compiles = null;
   globalThis.Function = (...args) => {
     source = args[args.length - 1];
+    parameters = args.slice(0, -1);
     try {
       original(...args);
       compiles = true;
@@ -226,18 +228,23 @@ const compiledSource = (value, returnsValue) => {
     return () => undefined;
   };
   try {
-    client.genRx(value, { returnsValue_: returnsValue });
+    client.genRx(value, { returnsValue_: returnsValue, argNames_: argNames });
   } finally {
     globalThis.Function = original;
   }
   if (source === null) throw new Error(`genRx never compiled ${JSON.stringify(value)}`);
-  return { source, compiles };
+  return { source, parameters, compiles };
 };
+
+// The names every expression is compiled with, and where a plugin's argNames go.
+const parameters = compiledSource("1", false).parameters;
+const parametersWithArgNames = { argNames: ["patch"], parameters: compiledSource("1", false, ["patch"]).parameters };
 
 const expressionCases = [];
 for (const expression of expressions) {
   for (const returnsValue of [false, true]) {
-    const { source, compiles } = compiledSource(expression, returnsValue);
+    const { source, parameters: compiledWith, compiles } = compiledSource(expression, returnsValue);
+    if (JSON.stringify(compiledWith) !== JSON.stringify(parameters)) throw new Error(`genRx compiled ${JSON.stringify(expression)} with other parameters`);
     expressionCases.push({ expression, returnsValue, js: source, compiles });
   }
 }
@@ -499,7 +506,10 @@ const files = {
     $comment:
       "The function body genRx (engine/engine.ts of the Datastar " + version + " client) hands to compileExpression for each expression, " +
       "with returnsValue false and true: Function was replaced to record its last argument. compiles says whether the real " +
-      "Function took that body.",
+      "Function took that body. parameters are the names before the body, the same for every expression; " +
+      "parametersWithArgNames those for a plugin that declares argNames.",
+    parameters,
+    parametersWithArgNames,
     cases: { rewrites: expressionCases },
   },
   "tags.json": {

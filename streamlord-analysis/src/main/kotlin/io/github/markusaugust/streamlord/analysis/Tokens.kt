@@ -51,7 +51,6 @@ public data class Token(
 )
 
 private val BACKEND_ACTIONS = setOf("get", "post", "put", "patch", "delete", "query")
-private val SCOPE_VARS = setOf("el", "evt", "patch")
 private val OPTION_KEYS =
     setOf(
         "contentType",
@@ -202,7 +201,7 @@ public fun tokenizeExpression(text: String): List<Token> {
                 when {
                     afterDot -> {}
 
-                    word in SCOPE_VARS -> {
+                    word in Catalog.default.scopeNames -> {
                         out += Token(i, j, TokenKind.SCOPE_VARIABLE)
                     }
 

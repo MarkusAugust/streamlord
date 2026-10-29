@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.core.domain
 
 import io.github.markusaugust.streamlord.core.DatastarEventValidationException
 import io.github.markusaugust.streamlord.core.InternalStreamlordApi
+import io.github.markusaugust.streamlord.core.client.clientRewrite
 
 /**
  * The signal names Datastar's client cannot hold, measured against its 1.0.4 store.
@@ -173,9 +174,10 @@ public object SignalNames {
     // template literal without `${`, so their text is in strings; the text of one with `${` it reads
     // as code, which JavaScript does not, so the scan steps over that text itself.
     private fun wrongHyphens(text: String): Set<Int> {
-        val read = clientRewritten(text)
+        val read = clientRewrite(text)
+        val references = read.rewrites.filter { it.signal }
         val wrong = HashSet<Int>()
-        for (r in read.references) {
+        for (r in references) {
             for (i in r.start until r.end) if (text[i] == '-') wrong += i
         }
         // -1 for the text of a template literal, n for the code of a `${`, n braces deep.
@@ -203,8 +205,8 @@ public object SignalNames {
                 continue
             }
             val skip =
-                read.strings.firstOrNull { i in it }
-                    ?: read.references.firstOrNull { i >= it.start && i < it.end }?.let { it.start until it.end }
+                read.runs.firstOrNull { i in it }
+                    ?: references.firstOrNull { i >= it.start && i < it.end }?.let { it.start until it.end }
             if (skip != null) {
                 i = skip.last + 1
                 continue

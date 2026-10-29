@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.client.ClientCasing
+import io.github.markusaugust.streamlord.core.client.clientRewrite
 import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonNumber
 import io.github.markusaugust.streamlord.core.json.JsonObject
@@ -101,6 +102,16 @@ class ClientOracleTest {
             // The fixture holds the function's answer for the text as given; the browser lowercases it first.
             if (raw == raw.lowercase()) assertEquals(held, ClientCasing.readKey(raw.substringAfter(':')), raw)
         }
+    }
+
+    /** `expressions.json`: the names `genRx` compiles every expression with, and a plugin's `argNames` after them. */
+    @Test
+    fun `knows the names an expression is compiled with`() {
+        val fixture = fixture("expressions.json")
+        assertEquals(fixture.array("parameters")!!.strings(), Catalog.default.compiledParameters)
+        val with = fixture.obj("parametersWithArgNames")!!
+        assertEquals(with.array("parameters")!!.strings(), Catalog.default.compiledParameters + with.array("argNames")!!.strings())
+        assertEquals(setOf("el", "evt", "patch"), Catalog.default.scopeNames)
     }
 
     /** `expressions.json`: the body `genRx` compiles, against [clientScript] and then [clientRewrite], in the client's order. */

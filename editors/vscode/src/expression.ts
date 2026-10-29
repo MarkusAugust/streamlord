@@ -100,9 +100,9 @@ function regexEnds(text: string): Int32Array {
 const NAME_EDGE = "A-Za-z0-9_$\\u0080-\\uffff";
 const BINDS_NAMES = /=>|\bfunction\b|\b(?:let|const|var)\b/;
 
-// genRx compiles every expression with these parameters (engine.ts in 1.0.4), so they are always
-// declared: evt is undefined outside data-on, and never a ReferenceError.
-const ALWAYS_DECLARED: ReadonlySet<string> = new Set(["el", "$", "__action", "evt"]);
+// genRx compiles every expression with these parameters, so they are always declared: evt is
+// undefined outside data-on, and never a ReferenceError.
+const ALWAYS_DECLARED: ReadonlySet<string> = new Set(catalog.compiledParameters);
 
 interface HandedIn {
   readonly attributes: ReadonlyMap<string, string[]>;
