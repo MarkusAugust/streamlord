@@ -117,39 +117,52 @@ private val ALWAYS_DECLARED = setOf("el", "$", "__action", "evt")
 
 /**
  * For each name a free attribute's expression is handed and the others are not, the attributes
- * that hand it over: `patch` in `data-on-signal-patch`.
+ * that hand it over: `patch` in `data-on-signal-patch`. [pattern] finds the names, null for none.
  */
-private fun handedIn(catalog: Catalog): Map<String, List<String>> =
-    catalog.attributes
-        .filter { !it.pro }
-        .flatMap { a -> a.argNames.filter { it !in ALWAYS_DECLARED }.map { it to a.name } }
-        .groupBy({ it.first }, { it.second })
+private class HandedIn(
+    catalog: Catalog,
+) {
+    val attributes: Map<String, List<String>> =
+        catalog.attributes
+            .filter { !it.pro }
+            .flatMap { a -> a.argNames.filter { it !in ALWAYS_DECLARED }.map { it to a.name } }
+            .groupBy({ it.first }, { it.second })
+
+    val pattern: Regex? =
+        attributes.keys.takeIf { it.isNotEmpty() }?.let { names ->
+            Regex("(?<![$NAME_EDGE.@])(" + names.joinToString("|") { Regex.escape(it) } + ")(?![$NAME_EDGE])")
+        }
+}
 
 /**
  * `patch` in the expression of an attribute [spec] whose plugin does not hand it over: Datastar
  * compiles each expression with the names its plugin declares, so `patch` in `data-text` throws a
- * ReferenceError. [handedIn] names the attributes that hand each such name over. An expression
+ * ReferenceError. [handed] names the attributes that hand each such name over. An expression
  * that declares a function or a variable may bind the name itself and is left alone, and so is a
  * Pro attribute, whose plugin is not read here.
  */
 private fun scopeNameIssues(
     text: String,
     spec: AttributeSpec,
-    handedIn: Map<String, List<String>>,
+    handed: HandedIn,
 ): List<Issue> {
-    if (spec.pro || spec.valueKind != ValueKind.EXPRESSION || handedIn.isEmpty() || BINDS_NAMES.containsMatchIn(text)) return emptyList()
+    val names = handed.pattern ?: return emptyList()
+    if (spec.pro || spec.valueKind != ValueKind.EXPRESSION || BINDS_NAMES.containsMatchIn(text)) return emptyList()
     val regions = jsRegions(text)
-    val names = Regex("(?<![$NAME_EDGE.@])(" + handedIn.keys.joinToString("|") { Regex.escape(it) } + ")(?![$NAME_EDGE])")
     return names
         .findAll(text)
         .filter { m ->
             val name = m.value
-            val before = text.substring(0, m.range.first).trimEnd(::isJsSpace).lastOrNull()
-            val after = text.substring(m.range.last + 1).trimStart(::isJsSpace).firstOrNull()
+            var b = m.range.first - 1
+            while (b >= 0 && isJsSpace(text[b])) b--
+            var a = m.range.last + 1
+            while (a < text.length && isJsSpace(text[a])) a++
+            val before = text.getOrNull(b)
+            val after = text.getOrNull(a)
             // A key of an object literal, `{patch: 1}`, names nothing.
             name !in spec.argNames && regions[m.range.first] == Region.CODE && !(after == ':' && (before == '{' || before == ','))
         }.map { m ->
-            val where = handedIn[m.value].orEmpty().joinToString(" and ") { "data-$it" }
+            val where = handed.attributes[m.value].orEmpty().joinToString(" and ") { "data-$it" }
             Issue(
                 start = m.range.first,
                 end = m.range.last + 1,
@@ -886,7 +899,7 @@ internal fun expressionError(js: String): JsSyntaxError? {
 public class ExpressionValidator(
     private val catalog: Catalog = Catalog.default,
 ) {
-    private val handed = handedIn(catalog)
+    private val handed = HandedIn(catalog)
 
     /**
      * The issues of [text]. With [returnsValue] known, the syntax is judged on the script Datastar

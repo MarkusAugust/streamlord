@@ -104,38 +104,46 @@ const BINDS_NAMES = /=>|\bfunction\b|\b(?:let|const|var)\b/;
 // declared: evt is undefined outside data-on, and never a ReferenceError.
 const ALWAYS_DECLARED: ReadonlySet<string> = new Set(["el", "$", "__action", "evt"]);
 
+interface HandedIn {
+  readonly attributes: ReadonlyMap<string, string[]>;
+  readonly pattern: RegExp | null;
+}
+
 /**
  * For each name a free attribute's expression is handed and the others are not, the attributes
- * that hand it over: `patch` in `data-on-signal-patch`.
+ * that hand it over: `patch` in `data-on-signal-patch`. `pattern` finds the names, null for none.
  */
-function handedIn(attributes: readonly AttributeSpec[]): Map<string, string[]> {
+function handedIn(attributes: readonly AttributeSpec[]): HandedIn {
   const out = new Map<string, string[]>();
   for (const a of attributes) if (!a.pro) for (const n of a.argNames) if (!ALWAYS_DECLARED.has(n)) out.set(n, [...(out.get(n) ?? []), a.name]);
-  return out;
+  const escaped = [...out.keys()].map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  return { attributes: out, pattern: escaped.length === 0 ? null : new RegExp(`(?<![${NAME_EDGE}.@])(${escaped.join("|")})(?![${NAME_EDGE}])`, "g") };
 }
 
 /**
  * `patch` in the expression of an attribute whose plugin does not hand it over: Datastar compiles
  * each expression with the names its plugin declares, so `patch` in `data-text` throws a
- * ReferenceError. `handedIn` names the attributes that hand each such name over. An expression
+ * ReferenceError. `handed` names the attributes that hand each such name over. An expression
  * that declares a function or a variable may bind the name itself and is left alone, and so is a
  * Pro attribute, whose plugin is not read here. The same rule as `scopeNameIssues` in streamlord-analysis.
  */
-function scopeNameIssues(text: string, spec: AttributeSpec, handedIn: ReadonlyMap<string, string[]>): Issue[] {
-  if (spec.pro || spec.valueKind !== "expression" || handedIn.size === 0 || BINDS_NAMES.test(text)) return [];
+function scopeNameIssues(text: string, spec: AttributeSpec, handed: HandedIn): Issue[] {
+  if (!handed.pattern || spec.pro || spec.valueKind !== "expression" || BINDS_NAMES.test(text)) return [];
   const regions = jsRegions(text);
   const out: Issue[] = [];
-  const escaped = [...handedIn.keys()].map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-  const names = new RegExp(`(?<![${NAME_EDGE}.@])(${escaped.join("|")})(?![${NAME_EDGE}])`, "g");
-  for (const m of text.matchAll(names)) {
+  for (const m of text.matchAll(handed.pattern)) {
     const name = m[0];
     const start = m.index;
     const end = start + name.length;
-    const before = text.slice(0, start).trimEnd().at(-1);
-    const after = text.slice(end).trimStart()[0];
+    let b = start - 1;
+    while (b >= 0 && /\s/.test(text[b]!)) b--;
+    let a = end;
+    while (a < text.length && /\s/.test(text[a]!)) a++;
+    const before = text[b];
+    const after = text[a];
     // A key of an object literal, `{patch: 1}`, names nothing.
     if (spec.argNames.includes(name) || regions[start] !== Region.CODE || (after === ":" && (before === "{" || before === ","))) continue;
-    const where = (handedIn.get(name) ?? []).map((a) => `data-${a}`).join(" and ");
+    const where = (handed.attributes.get(name) ?? []).map((a) => `data-${a}`).join(" and ");
     out.push({
       start,
       end,
