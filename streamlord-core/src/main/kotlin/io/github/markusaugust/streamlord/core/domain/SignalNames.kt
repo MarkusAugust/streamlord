@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.core.domain
 
 import io.github.markusaugust.streamlord.core.DatastarEventValidationException
+import io.github.markusaugust.streamlord.core.InternalStreamlordApi
 
 /**
  * The signal names Datastar's client cannot hold, measured against its 1.0.4 store.
@@ -22,6 +23,7 @@ import io.github.markusaugust.streamlord.core.DatastarEventValidationException
  * is the page's own doing. A name written in code, a path such as `data-signals:a.b` takes, may
  * carry an object under it at any part, so none of its parts may be one of these.
  */
+@InternalStreamlordApi
 public object SignalNames {
     /** The properties of `Object.prototype` in a browser: every object already has them. */
     internal val PROTOTYPE_NAMES =

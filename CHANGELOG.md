@@ -20,6 +20,11 @@ All notable changes to Streamlord are recorded here. The format follows
   `dataAttr("ariaLabel", …)` relied on a guess that it meant `aria-label`. Write
   `dataAttr("aria-label", …)`, and the object form, `dataAttr("{viewBox: …}")`, for an attribute
   that really has capitals. The editors flag the call with the kebab-case fix.
+- `AttributeKeys`, `SignalNames` and `rejectDeclaredLengthAbove` in streamlord-core are marked
+  `@InternalStreamlordApi`, a new opt-in for the API Streamlord's modules share among themselves:
+  the client's rules that the DSL, the adapters and the analysis each read from one place. Code
+  outside Streamlord that calls them compiles only with `@OptIn(InternalStreamlordApi::class)`,
+  and they may change in any release.
 
 ### Fixed
 

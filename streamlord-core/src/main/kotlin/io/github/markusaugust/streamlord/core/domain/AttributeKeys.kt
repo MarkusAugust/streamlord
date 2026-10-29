@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.core.domain
 
+import io.github.markusaugust.streamlord.core.InternalStreamlordApi
+
 /**
  * What a key of a Datastar attribute may be, for the DSL that writes one and the analysis that
  * reads a call before it runs: how a name with capitals is written in kebab-case, which keys the
@@ -7,6 +9,7 @@ package io.github.markusaugust.streamlord.core.domain
  * throws with these reasons and the analysis reports them, so the two say the same thing; the VS
  * Code extension's twin is held to them by the shared corpus.
  */
+@InternalStreamlordApi
 public object AttributeKeys {
     private val UPPER = Regex("[A-Z]")
     private val JS_NAME = Regex("[A-Za-z_$][A-Za-z0-9_$]*")

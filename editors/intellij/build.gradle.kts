@@ -47,6 +47,8 @@ kotlin {
         allWarningsAsErrors.set(true)
         // No bridge methods for the platform's interface defaults: the Plugin Verifier reads them as overrides of deprecated API.
         freeCompilerArgs.addAll("-Xjsr305=strict", "-jvm-default=no-compatibility")
+        // The analysis and core share API among Streamlord's own modules, and the plugin is one of them.
+        optIn.add("io.github.markusaugust.streamlord.core.InternalStreamlordApi")
     }
 }
 

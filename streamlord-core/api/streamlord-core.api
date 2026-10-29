@@ -2,6 +2,9 @@ public final class io/github/markusaugust/streamlord/core/DatastarEventValidatio
 	public fun <init> (Ljava/lang/String;)V
 }
 
+public abstract interface annotation class io/github/markusaugust/streamlord/core/InternalStreamlordApi : java/lang/annotation/Annotation {
+}
+
 public final class io/github/markusaugust/streamlord/core/JsonParseException : io/github/markusaugust/streamlord/core/StreamlordException {
 	public fun <init> (Ljava/lang/String;I)V
 	public final fun getPosition ()I

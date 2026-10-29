@@ -36,6 +36,19 @@ subprojects {
     apply(plugin = "java-library")
     if (!internal) apply(plugin = "com.vanniktech.maven.publish")
     if (!internal) apply(plugin = "org.jetbrains.dokka")
+    // The API the modules share among themselves is opt-in and no application's to call, so it stays
+    // out of the published reference. AttributeKeys and SignalNames carry the opt-in too, in a package
+    // that also holds public API, and appear there marked with it.
+    if (!internal) {
+        extensions.configure<org.jetbrains.dokka.gradle.DokkaExtension> {
+            dokkaSourceSets.configureEach {
+                perPackageOption {
+                    matchingRegex.set("""io\.github\.markusaugust\.streamlord\.core\.(client|catalog)""")
+                    suppress.set(true)
+                }
+            }
+        }
+    }
 
     group = rootProject.group
 
@@ -66,6 +79,9 @@ subprojects {
             jvmTarget.set(JvmTarget.JVM_17)
             allWarningsAsErrors.set(!internal)
             freeCompilerArgs.addAll("-Xjdk-release=17", "-Xjsr305=strict")
+            // The API the modules share among themselves. The samples and the demo stand for an
+            // application's code, so they compile without it, as an application would.
+            if (name !in setOf("docs-samples", "demo")) optIn.add("io.github.markusaugust.streamlord.core.InternalStreamlordApi")
             /*
              * A Kotlin compiler reads metadata at most one version ahead of its own, so modules
              * built by this Kotlin at its own level would refuse to compile in a project on the
