@@ -105,38 +105,47 @@ private fun regexEnds(text: String): IntArray {
     return out
 }
 
-// A name some attribute's expression is handed (plugins.json in conformance/client), standing on its own.
-private val HANDED_NAME = Regex("""(?<![\p{L}\p{N}_$.])(evt|patch)(?![\p{L}\p{N}_$])""")
-private val BINDS_NAMES = Regex("""=>|\bfunction\b""")
+// A name standing on its own: no `.` or `@` before it (a property, an action), and no name character
+// on either side, any character beyond ASCII counted as one, as the editor's twin counts it.
+private val NAME_EDGE = "A-Za-z0-9_$\\u0080-\\uffff"
+private val BINDS_NAMES = Regex("""=>|\bfunction\b|\b(?:let|const|var)\b""")
 
-/** For each name a free attribute's expression is handed, the attributes that hand it over. */
+// genRx compiles every expression with these parameters (engine.ts in 1.0.4), so they are always
+// declared: evt is undefined outside data-on, and never a ReferenceError.
+private val ALWAYS_DECLARED = setOf("el", "$", "__action", "evt")
+
+/**
+ * For each name a free attribute's expression is handed and the others are not, the attributes
+ * that hand it over: `patch` in `data-on-signal-patch`.
+ */
 internal fun handedIn(catalog: Catalog): Map<String, List<String>> =
     catalog.attributes
         .filter { !it.pro }
-        .flatMap { a -> a.argNames.map { it to a.name } }
+        .flatMap { a -> a.argNames.filter { it !in ALWAYS_DECLARED }.map { it to a.name } }
         .groupBy({ it.first }, { it.second })
 
 /**
- * `evt` or `patch` in the expression of an attribute [spec] whose plugin does not hand it over:
- * Datastar compiles each expression with the names its plugin declares, so `evt` in `data-text`
- * throws a ReferenceError. [handedIn] names the attributes that hand each over. An expression with
- * a function in it may bind either name itself and is left alone, and so is a Pro attribute, whose
- * plugin is not read here.
+ * `patch` in the expression of an attribute [spec] whose plugin does not hand it over: Datastar
+ * compiles each expression with the names its plugin declares, so `patch` in `data-text` throws a
+ * ReferenceError. [handedIn] names the attributes that hand each such name over. An expression
+ * that declares a function or a variable may bind the name itself and is left alone, and so is a
+ * Pro attribute, whose plugin is not read here.
  */
 internal fun scopeNameIssues(
     text: String,
     spec: AttributeSpec,
     handedIn: Map<String, List<String>>,
 ): List<Issue> {
-    if (spec.pro || spec.valueKind != ValueKind.EXPRESSION || BINDS_NAMES.containsMatchIn(text)) return emptyList()
+    if (spec.pro || spec.valueKind != ValueKind.EXPRESSION || handedIn.isEmpty() || BINDS_NAMES.containsMatchIn(text)) return emptyList()
     val regions = jsRegions(text)
-    return HANDED_NAME
+    val names = Regex("(?<![$NAME_EDGE.@])(" + handedIn.keys.joinToString("|") { Regex.escape(it) } + ")(?![$NAME_EDGE])")
+    return names
         .findAll(text)
         .filter { m ->
             val name = m.value
             val before = text.substring(0, m.range.first).trimEnd().lastOrNull()
             val after = text.substring(m.range.last + 1).trimStart().firstOrNull()
-            // A key of an object literal, `{evt: 1}`, names nothing.
+            // A key of an object literal, `{patch: 1}`, names nothing.
             name !in spec.argNames && regions[m.range.first] == Region.CODE && !(after == ':' && (before == '{' || before == ','))
         }.map { m ->
             val where = handedIn[m.value].orEmpty().joinToString(" and ") { "data-$it" }

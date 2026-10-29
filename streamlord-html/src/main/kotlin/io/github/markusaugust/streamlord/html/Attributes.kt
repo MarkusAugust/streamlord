@@ -37,6 +37,10 @@ public object DatastarAttributes {
      * exactly. kotlinx.html writes a `\` followed by `&` as a bare `&`, its way of letting a
      * character reference through, so `'\&amp;'` would reach Datastar as `'&'`. Each such pair is
      * therefore handed over as the two references that pass through and decode to it again.
+     *
+     * That holds for kotlinx.html's stream builders, `appendHTML`, `createHTML` and [elements],
+     * which Streamlord renders with. Its DOM builder, `document.create`, sets an attribute as it
+     * is handed, and would keep the references as text.
      */
     public fun value(value: String): String = if ("\\&" in value) value.replace("\\&", "\\&#92;\\&amp;") else value
 }
@@ -407,7 +411,7 @@ public fun HTMLTag.dataIgnoreMorph() {
 
 /** `data-preserve-attr="open class"`: keep these attributes through a morph. */
 public fun HTMLTag.dataPreserveAttr(vararg names: String) {
-    attributes[ds("preserve-attr")] = names.joinToString(" ")
+    attributes[ds("preserve-attr")] = DatastarAttributes.value(names.joinToString(" "))
 }
 
 /**

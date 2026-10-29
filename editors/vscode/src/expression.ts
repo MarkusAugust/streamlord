@@ -95,35 +95,45 @@ function regexEnds(text: string): Int32Array {
   return out;
 }
 
-// A name some attribute's expression is handed (plugins.json in conformance/client), standing on its own.
-const HANDED_NAME = /(?<![\p{L}\p{N}_$.])(evt|patch)(?![\p{L}\p{N}_$])/gu;
-const BINDS_NAMES = /=>|\bfunction\b/;
+// A name standing on its own: no `.` or `@` before it (a property, an action), and no name character
+// on either side, any character beyond ASCII counted as one, as streamlord-analysis counts it.
+const NAME_EDGE = "A-Za-z0-9_$\\u0080-\\uffff";
+const BINDS_NAMES = /=>|\bfunction\b|\b(?:let|const|var)\b/;
+
+// genRx compiles every expression with these parameters (engine.ts in 1.0.4), so they are always
+// declared: evt is undefined outside data-on, and never a ReferenceError.
+const ALWAYS_DECLARED: ReadonlySet<string> = new Set(["el", "$", "__action", "evt"]);
 
 /**
- * `evt` or `patch` in the expression of an attribute whose plugin does not hand it over: Datastar
- * compiles each expression with the names its plugin declares, so `evt` in `data-text` throws a
- * ReferenceError. `handedIn` names the attributes that hand each over. An expression with a
- * function in it may bind either name itself and is left alone, and so is a Pro attribute, whose
- * plugin is not read here. The same rule as `scopeNameIssues` in streamlord-analysis.
+ * For each name a free attribute's expression is handed and the others are not, the attributes
+ * that hand it over: `patch` in `data-on-signal-patch`.
  */
-/** For each name a free attribute's expression is handed, the attributes that hand it over. */
 export function handedIn(attributes: readonly { name: string; pro: boolean; argNames: string[] }[]): Map<string, string[]> {
   const out = new Map<string, string[]>();
-  for (const a of attributes) if (!a.pro) for (const n of a.argNames) out.set(n, [...(out.get(n) ?? []), a.name]);
+  for (const a of attributes) if (!a.pro) for (const n of a.argNames) if (!ALWAYS_DECLARED.has(n)) out.set(n, [...(out.get(n) ?? []), a.name]);
   return out;
 }
 
+/**
+ * `patch` in the expression of an attribute whose plugin does not hand it over: Datastar compiles
+ * each expression with the names its plugin declares, so `patch` in `data-text` throws a
+ * ReferenceError. `handedIn` names the attributes that hand each such name over. An expression
+ * that declares a function or a variable may bind the name itself and is left alone, and so is a
+ * Pro attribute, whose plugin is not read here. The same rule as `scopeNameIssues` in streamlord-analysis.
+ */
 export function scopeNameIssues(text: string, spec: { name: string; pro: boolean; valueKind: string; argNames: string[] }, handedIn: ReadonlyMap<string, string[]>): Issue[] {
-  if (spec.pro || spec.valueKind !== "expression" || BINDS_NAMES.test(text)) return [];
+  if (spec.pro || spec.valueKind !== "expression" || handedIn.size === 0 || BINDS_NAMES.test(text)) return [];
   const regions = jsRegions(text);
   const out: Issue[] = [];
-  for (const m of text.matchAll(HANDED_NAME)) {
+  const escaped = [...handedIn.keys()].map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const names = new RegExp(`(?<![${NAME_EDGE}.@])(${escaped.join("|")})(?![${NAME_EDGE}])`, "g");
+  for (const m of text.matchAll(names)) {
     const name = m[0];
     const start = m.index;
     const end = start + name.length;
     const before = text.slice(0, start).trimEnd().at(-1);
     const after = text.slice(end).trimStart()[0];
-    // A key of an object literal, `{evt: 1}`, names nothing.
+    // A key of an object literal, `{patch: 1}`, names nothing.
     if (spec.argNames.includes(name) || regions[start] !== Region.CODE || (after === ":" && (before === "{" || before === ","))) continue;
     const where = (handedIn.get(name) ?? []).map((a) => `data-${a}`).join(" and ");
     out.push({

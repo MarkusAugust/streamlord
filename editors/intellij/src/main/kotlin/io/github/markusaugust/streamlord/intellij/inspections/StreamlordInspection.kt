@@ -114,8 +114,8 @@ class KotlinInterpolationInspection : StreamlordInspection(setOf("kotlin-interpo
 
 /**
  * Datastar expression syntax, unknown actions, Pro actions, kebab-case signals, what the client's
- * own rewrite of an expression does that JavaScript would not, and `evt` or `patch` where the
- * attribute does not hand it over.
+ * own rewrite of an expression does that JavaScript would not, and `patch` where the attribute
+ * does not hand it over.
  */
 class DatastarExpressionInspection :
     StreamlordInspection(

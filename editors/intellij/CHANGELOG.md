@@ -4,10 +4,9 @@ All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here
 
 ## Unreleased
 
-- `evt` or `patch` in an expression of an attribute that does not hand it over is the warning
-  `scope-name`: Datastar compiles `data-text="evt.type"` without an `evt`, so it throws a
-  ReferenceError. Only `data-on` hands over `evt`, and only `data-on-signal-patch` hands over `patch`. In IntelliJ
-  the check is part of Datastar expressions.
+- `patch` in an expression of an attribute that does not hand it over is the warning `scope-name`:
+  only `data-on-signal-patch` declares `patch`, so `data-text="patch.a"` throws a ReferenceError.
+  In IntelliJ the check is part of Datastar expressions.
 - A pair written `"selected" to null` in `dataSignals` is the warning `signal-null`: Datastar's
   client holds no null, so the pair declares nothing, and an expression that reads the signal
   gets `""`. In IntelliJ

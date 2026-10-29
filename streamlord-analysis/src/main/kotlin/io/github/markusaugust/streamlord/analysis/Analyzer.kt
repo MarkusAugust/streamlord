@@ -15,6 +15,7 @@ private val CASE_VALUE = Regex("""Case\.([A-Z]+)""")
 private val CASE_IN_LAMBDA = Regex("""\bcase\s*=\s*Case\.([A-Z]+)""")
 private val OBJECT_FORM = Regex("""^\s*[{\[]""")
 private val HAS_CAPITAL = Regex("""[A-Z]""")
+private val JS_NAME = Regex("""[A-Za-z_$][A-Za-z0-9_$]*""")
 private val DOLLAR_RUNS = Regex("""\$+""")
 private val ASSIGN_BEFORE = Regex("""\s*=\s*$""")
 private val BRACED_TEMPLATE = Regex("""\$\{""")
@@ -644,6 +645,7 @@ public class Analyzer(
         // expression. dataOnClick("expr") passes an expression, never a key, and dataBind, dataRef
         // and dataIndicator write their name in the value.
         val expr = catalog.expressionCallSites[site.name]
+        if (site.name in attributeNameHelpers) return attributeNameIssues(site, spec, src)
         if (if (expr != null) expr.arg == 0 else site.name !in keyOnlyHelpers) return emptyList()
         val positional = site.positional
         val key = positional.firstOrNull()?.string ?: return emptyList()
@@ -654,7 +656,6 @@ public class Analyzer(
         if (!HAS_CAPITAL.containsMatchIn(name) || OBJECT_FORM.containsMatchIn(name)) return emptyList()
         // A signal name with a hyphen is refused, which signalNameHyphenIssues says.
         if (spec.keyCase == KeyCase.CAMEL && '-' in name) return emptyList()
-        if (site.name in attributeNameHelpers) return listOf(attributeNameIssue(site.name, spec, key, src))
         // `case = Case.X`, a positional `Case.X` (dataClass("name", "x", Case.CAMEL)) or `case = Case.X` in the trailing lambda.
         val named = site.args.firstOrNull { it.named == "case" || (it.named == null && CASE_ARG.matches(it.text)) }?.text
         val explicit = if (named != null) CASE_VALUE.find(named) else CASE_IN_LAMBDA.find(trailingLambdaText(site, src))
@@ -693,30 +694,42 @@ public class Analyzer(
 
     /**
      * A capital in the key of `dataAttr` or `dataAnimate`, which the DSL refuses at runtime: the
-     * browser lowercases an attribute name, so `viewBox` could only reach `view-box`. The fix is
-     * the kebab-case name, right for `aria-label` and wrong for SVG's `viewBox`, which the message
-     * sends to the object form.
+     * browser lowercases an attribute name, so `viewBox` could only reach `view-box`. The fixes are
+     * the spellings HTML may have, lowercased for a name with a hyphen already (`aria-Label`), else
+     * kebab-case or one word, which only the attribute tells apart (`aria-label`, `tabindex`); one
+     * that really has capitals, such as SVG's `viewBox`, the message sends to the object form.
      */
-    private fun attributeNameIssue(
-        helper: String,
+    private fun attributeNameIssues(
+        site: CallSite,
         spec: AttributeSpec,
-        key: KotlinString,
         src: String,
-    ): Issue {
+    ): List<Issue> {
+        // The key form takes the name and an expression; one positional string is the object form.
+        val key =
+            (site.named("name") ?: site.named("attribute"))?.string
+                ?: site.positional
+                    .takeIf { it.size >= 2 }
+                    ?.first()
+                    ?.string
+                ?: return emptyList()
         val name = key.text
-        val fixed = kebab(name)
+        if (key.interpolations.isNotEmpty() || !HAS_CAPITAL.containsMatchIn(name) || OBJECT_FORM.containsMatchIn(name)) return emptyList()
+        val spellings = if ('-' in name) listOf(name.lowercase()) else listOf(kebab(name), name.lowercase()).distinct()
+        val objectForm = if (JS_NAME.matches(name)) "{$name: ...}" else "{'$name': ...}"
         val plain = src.substring(key.contentStart, key.contentEnd) == name
-        return Issue(
-            start = key.start,
-            end = key.end,
-            message =
-                "An attribute name in a key holds no capital: the browser lowercases it, so Streamlord refuses \"$name\" at " +
-                    "runtime. Write $fixed for an attribute that is kebab-case, or the object form $helper(\"{$name: ...}\") " +
-                    "for one that has capitals, such as SVG's viewBox.",
-            severity = Severity.ERROR,
-            code = "attribute-name-case",
-            link = Docs.attribute(spec.name),
-            fixes = if (plain) listOf(Fix("Change to $fixed", key.contentStart, key.contentEnd, fixed)) else emptyList(),
+        return listOf(
+            Issue(
+                start = key.start,
+                end = key.end,
+                message =
+                    "An attribute name in a key holds no capital: the browser lowercases it, so Streamlord refuses \"$name\" at " +
+                        "runtime. Write it as HTML has it, ${spellings.joinToString(" or ")}, or, for an attribute that has " +
+                        "capitals such as SVG's viewBox, the object form ${site.name}(\"$objectForm\").",
+                severity = Severity.ERROR,
+                code = "attribute-name-case",
+                link = Docs.attribute(spec.name),
+                fixes = if (plain) spellings.map { Fix("Change to $it", key.contentStart, key.contentEnd, it) } else emptyList(),
+            ),
         )
     }
 

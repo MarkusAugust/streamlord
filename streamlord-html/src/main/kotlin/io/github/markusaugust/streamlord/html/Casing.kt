@@ -253,15 +253,29 @@ public object Casing {
         name: String,
         helper: String,
     ): String {
+        validate(name)
         if (UPPER.containsMatchIn(name)) {
             throw InvalidSignalNameException(
                 name,
-                "has a capital, which the browser lowercases in an attribute name; write ${kebab(name)} for an attribute " +
-                    "that is kebab-case, or the object form $helper(\"{$name: ...}\") for one that has capitals, such as SVG's viewBox",
+                "has a capital, which the browser lowercases in an attribute name; write it as HTML has it, " +
+                    "${attributeSpellings(name).joinToString(" or ")}, or, for an attribute that has capitals such as SVG's " +
+                    "viewBox, the object form $helper(\"${attributeObjectForm(name)}\")",
             )
         }
-        return validate(name)
+        return name
     }
+
+    /**
+     * The spellings HTML may have for an attribute name written with capitals: lowercased when it
+     * has a hyphen already (`aria-Label`), else kebab-case or one word, which only the attribute
+     * tells apart (`ariaLabel` is `aria-label`, `tabIndex` is `tabindex`).
+     */
+    internal fun attributeSpellings(name: String): List<String> =
+        if ('-' in name) listOf(name.lowercase()) else listOf(kebab(name), name.lowercase()).distinct()
+
+    /** The object form with [name] as its key, quoted when it is no JavaScript name. */
+    internal fun attributeObjectForm(name: String): String =
+        if (Regex("[A-Za-z_$][A-Za-z0-9_$]*").matches(name)) "{$name: ...}" else "{'$name': ...}"
 
     /**
      * [name] as an expression refers to it, which is as written: `form.firstName`, `items[0]`, and

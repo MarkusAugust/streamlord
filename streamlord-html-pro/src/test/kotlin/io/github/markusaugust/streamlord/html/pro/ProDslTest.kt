@@ -79,7 +79,7 @@ class ProDslTest {
     @Test
     fun `an animated attribute with a capital is refused`() {
         val e = assertFailsWith<InvalidSignalNameException> { elements { div { dataAnimate("strokeWidth", "${'$'}w") } } }
-        assertTrue("""write stroke-width""" in e.message!!, e.message)
+        assertTrue("""write it as HTML has it, stroke-width or strokewidth""" in e.message!!, e.message)
         assertTrue("""dataAnimate("{strokeWidth: ...}")""" in e.message!!, e.message)
     }
 

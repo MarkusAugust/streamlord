@@ -195,9 +195,14 @@ class HtmlDslTest {
     @Test
     fun `an attribute key with a capital is refused with the forms that work`() {
         val e = assertFailsWith<InvalidSignalNameException> { elements { div { dataAttr("viewBox", "'0 0 1 1'") } } }
-        assertTrue("write view-box for an attribute that is kebab-case" in e.message!!, e.message)
+        assertTrue("write it as HTML has it, view-box or viewbox, or" in e.message!!, e.message)
         assertTrue("""the object form dataAttr("{viewBox: ...}")""" in e.message!!, e.message)
         assertFailsWith<InvalidSignalNameException> { elements { div { dataAttr("ariaLabel", "'x'") } } }
+        val hyphen = assertFailsWith<InvalidSignalNameException> { elements { div { dataAttr("aria-Label", "'x'") } } }
+        assertTrue("write it as HTML has it, aria-label, or" in hyphen.message!!, hyphen.message)
+        assertTrue("""dataAttr("{'aria-Label': ...}")""" in hyphen.message!!, hyphen.message)
+        // A name the client cannot hold is refused for that, before its capitals.
+        assertTrue("capital" !in assertFailsWith<InvalidSignalNameException> { elements { div { dataAttr("a Label", "1") } } }.message!!)
         assertEquals(
             """<svg xmlns="http://www.w3.org/2000/svg" data-attr="{viewBox: '0 0 1 1'}" data-attr:aria-label="'x'"></svg>""",
             elements {
