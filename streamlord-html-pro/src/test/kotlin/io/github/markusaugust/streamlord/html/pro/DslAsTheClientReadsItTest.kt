@@ -88,6 +88,22 @@ class DslAsTheClientReadsItTest {
 
     private val burst = mapOf("burst" to 2, "rounds" to 1)
 
+    /** A pattern, a string, and whether the Kotlin regex finds it there, which the JavaScript literal must agree with. */
+    private val filterPatterns =
+        listOf(
+            Triple("x\\\\", "x\\", true),
+            Triple("\\'", "'", true),
+            Triple("it's", "it's", true),
+            Triple("a\"b", "a\"b", true),
+            Triple("back`tick", "back`tick", true),
+            Triple("^[_\$a-z]+\$", "a\$b", true),
+            Triple("^a\$b", "ab", false),
+            Triple("\\\$x", "\$x", true),
+            Triple("a@b(c)?", "a@b", true),
+            Triple("\$\\Qab\\E?", "", false),
+            Triple("a\$\\Q_\\E", "a_", false),
+        )
+
     private val events =
         listOf(
             dslCase("on click", "dataOnClick", expect = {
@@ -821,6 +837,9 @@ class DslAsTheClientReadsItTest {
             ) {
                 div { dataClass("my-class", "true", Case.PASCAL) }
             },
+            dslCase("class keyed ending in an underscore", "dataClass", key = "b_", expect = { attr("div", "class", "b_") }) {
+                div { dataClass("b_", "true") }
+            },
             dslCase("class object form", "dataClass", expect = {
                 attr("div", "class", "MuiButton-root")
             }) { div { dataClass("{'MuiButton-root': true}") } },
@@ -1248,6 +1267,48 @@ class DslAsTheClientReadsItTest {
             dslCase("an expression with a script end in a string", "dataText", expect = {
                 text("div", "</script>")
             }) { div { dataText("'</script>'") } },
+            // The client rewrites a `$` and the name after it as a signal wherever it is outside a string.
+            dslCase("an object key holding a dollar stays a key", "set", probe = mapOf("rounds" to 1), expect = {
+                listens("button", "click")
+                storeAfter = """{"o":{"${'$'}a":1,"_${'$'}x":2}}"""
+                heard("button", "click", 0)
+            }) { button { dataOnClick(set("o", mapOf("${'$'}a" to 1, "_${'$'}x" to 2))) } },
+            // The client cuts an expression into statements at each `;` outside a string, and reads a
+            // quote after a `\` as escaped: a value ending in a backslash must not reach past its string.
+            dslCase("values ending in a backslash stay inside their strings", "dataSignals", expect = {
+                store = """{"a1":"C:\\","a2":";","b1":"a\\'","b2":";","c1":"\\\"","c2":";","d1":"x\\\\","d2":";"}"""
+                text("span", "C:\\;")
+            }) {
+                div { dataSignals("a1" to "C:\\", "a2" to ";") }
+                div { dataSignals("b1" to "a\\'", "b2" to ";") }
+                div { dataSignals("c1" to "\\\"", "c2" to ";") }
+                div { dataSignals("d1" to "x\\\\", "d2" to ";") }
+                span { dataText(js("C:\\") + " + " + js(";")) }
+            },
+            // The client's rewrite of $name and @name( skips strings but knows no regex literal, so a
+            // quote or a `$` in one must not hide what follows it. Each button sets its own signal after
+            // the filter; each text tests the regex and ends in `;/`, which a literal read too far would eat.
+            dslCase("a regex filter hides no signal or action after it", "setAll", probe = mapOf("rounds" to 1), expect = {
+                val patterns = filterPatterns.map { it.first }
+                for (i in patterns.indices) {
+                    listens(if (i == 0) "button" else "button${i + 1}", "click")
+                }
+                store = "{" + patterns.indices.joinToString(",") { "\"m$it\":\"\"" } + "}"
+                storeAfter = "{" + patterns.indices.joinToString(",") { "\"m$it\":\"done\"" } + "}"
+                for (i in patterns.indices) heard(if (i == 0) "button" else "button${i + 1}", "click", 0)
+                filterPatterns.forEachIndexed { i, (_, sample, matches) ->
+                    text(if (i == 0) "span" else "span${i + 1}", "$matches;/")
+                    check(sample.isNotEmpty() || !matches)
+                }
+            }) {
+                div {
+                    dataSignals(*filterPatterns.indices.map { "m$it" to "" }.toTypedArray())
+                    filterPatterns.forEachIndexed { i, (pattern, sample, _) ->
+                        button { dataOnClick(setAll(true, SignalFilter(include = Regex(pattern))) + "; " + set("m$i", "done")) }
+                        span { dataText(SignalFilter.regexLiteral(Regex(pattern)) + ".test(" + js(sample) + ") + ';/'") }
+                    }
+                }
+            },
         )
 
     private val aliased =
