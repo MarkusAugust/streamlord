@@ -462,7 +462,9 @@ function attributeNameIssues(site: CallSite, attribute: string, src: string): Is
   const key = (site.args.find((a) => a.named === "name") ?? site.args.find((a) => a.named === "attribute"))?.string ?? (positional.length >= 2 ? positional[0]?.string : null);
   if (!key) return [];
   const name = key.text;
-  if (key.interpolations.length > 0 || !/[A-Z]/.test(name) || /^\s*[{\[]/.test(name)) return [];
+  if (key.interpolations.length > 0 || /^\s*[{\[]/.test(name)) return [];
+  if (name.includes("__")) return [refusedKey(attribute, key, name, "contains __, where Datastar starts reading modifiers")];
+  if (!/[A-Z]/.test(name)) return [];
   const spellings = name.includes("-") ? [name.toLowerCase()] : [...new Set([kebab(name), name.toLowerCase()])];
   const objectForm = /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) ? `{${name}: ...}` : `{'${name}': ...}`;
   const plain = src.slice(key.contentStart, key.contentEnd) === name;

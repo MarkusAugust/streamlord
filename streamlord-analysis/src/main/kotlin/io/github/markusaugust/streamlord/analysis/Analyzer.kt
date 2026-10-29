@@ -743,7 +743,9 @@ public class Analyzer(
                     ?.string
                 ?: return emptyList()
         val name = key.text
-        if (key.interpolations.isNotEmpty() || !HAS_CAPITAL.containsMatchIn(name) || OBJECT_FORM.containsMatchIn(name)) return emptyList()
+        if (key.interpolations.isNotEmpty() || OBJECT_FORM.containsMatchIn(name)) return emptyList()
+        if ("__" in name) return listOf(refusedKey(spec, key, name, "contains __, where Datastar starts reading modifiers"))
+        if (!HAS_CAPITAL.containsMatchIn(name)) return emptyList()
         val spellings = AttributeNames.spellings(name)
         val objectForm = AttributeNames.objectForm(name)
         val plain = src.substring(key.contentStart, key.contentEnd) == name
