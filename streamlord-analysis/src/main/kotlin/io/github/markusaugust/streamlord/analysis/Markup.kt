@@ -16,7 +16,35 @@ private val MODIFIER_WORD = Regex("""[a-z][a-z0-9]*(?:_[A-Za-z0-9]+)+""")
 
 private val VOID = setOf("area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr")
 
-private val ASCII_INTEGER = Regex("[+-]?[0-9]+")
+private val JS_DECIMAL = Regex("[+-]?[0-9]+(?:e[+-]?[0-9]+)?")
+
+private val JS_RADIX = Regex("0([xob])([0-9a-f]+)")
+
+/** The modifiers whose value the client reads from the first tag, empty or not: `tagFirst` and `tagToMs` in tags.ts. */
+private val FIRST_TAG_READ = setOf(ModifierType.DURATION, ModifierType.INT, ModifierType.IDENT)
+
+/** The white space JavaScript's `Number` trims: its WhiteSpace and LineTerminator. */
+private const val JS_SPACE =
+    "\t\u000B\u000C\uFEFF \u00A0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A" +
+        "\u202F\u205F\u3000\n\r\u2028\u2029"
+
+/**
+ * JavaScript's `Number` of [tag], a modifier argument, which holds no dot and which the browser
+ * has lowercased: none is 0, and `1e1` and `0x32` are numbers too. Null where it gives NaN.
+ */
+private fun jsNumber(tag: String): Double? {
+    val t = tag.trim { it in JS_SPACE }.asciiLowercase()
+    if (t.isEmpty()) return 0.0
+    if (JS_DECIMAL.matches(t)) return t.toDouble()
+    val m = JS_RADIX.matchEntire(t) ?: return null
+    val radix =
+        when (m.groupValues[1]) {
+            "x" -> 16
+            "o" -> 8
+            else -> 2
+        }
+    return m.groupValues[2].toBigIntegerOrNull(radix)?.toDouble()
+}
 
 /** Elements whose content is text, whatever it looks like: a `<div>` in a `<textarea>` or a `<title>` is not a tag. The list of MarkupScan in streamlord-core. */
 private val RAW_TEXT = setOf("script", "style", "textarea", "title", "xmp", "iframe", "noembed", "noframes", "noscript", "plaintext")
@@ -64,8 +92,11 @@ private val TEMPLATE_TAG = Regex("""^</?[#@]""")
 private val TAG_OPEN = Regex("""^<(/?)([A-Za-z][A-Za-z0-9:-]*)""")
 
 /** A name also ends where a template construct starts: `data-x{{/if}}`, `data-x</#if>`. */
-private val ATTR_NAME = Regex("""^[^\s"'<>/={]+""")
-private val UNQUOTED_VALUE = Regex("""^[^\s>]*""")
+private val ATTR_NAME = Regex("""^[^\t\n\f\r "'<>/={]+""")
+private val UNQUOTED_VALUE = Regex("""^[^\t\n\f\r >]*""")
+
+/** The white space of HTML, which alone ends an attribute name or value: a no-break space is part of one. */
+private const val HTML_SPACE = "\t\n\u000C\r "
 
 /** Datastar reads `500ms`, `1s`, and a bare number as milliseconds. */
 private val DURATION = Regex("""^\d+(ms|s)?$""")
@@ -635,8 +666,10 @@ public fun tokenize(html: String): Tokens {
     var i = 0
     var depth = 0
     var textStart = -1
-    // Inside an svg or a math element, where a style or a script is no raw text and `/>` closes it.
-    var foreign = 0
+    // The svg and math elements open, and the HTML integration points open in them: inside an svg
+    // or a math a style or a script is no raw text and `/>` closes it, and inside an integration
+    // point, such as a foreignObject, the content is HTML again.
+    val scopes = ArrayList<String>()
 
     fun flushText(end: Int) {
         if (textStart >= 0 && depth == 0) {
@@ -697,7 +730,7 @@ public fun tokenize(html: String): Tokens {
             var selfClosing = false
             while (j < html.length && html[j] != '>') {
                 val c = html[j]
-                if (c.isWhitespace()) {
+                if (c in HTML_SPACE) {
                     j++
                     continue
                 }
@@ -720,13 +753,13 @@ public fun tokenize(html: String): Tokens {
                 val nameStart = j
                 j += attrName.length
                 var k = j
-                while (k < html.length && html[k].isWhitespace()) k++
+                while (k < html.length && html[k] in HTML_SPACE) k++
                 var value: String? = null
                 var valueStart = -1
                 var quoted = false
                 if (k < html.length && html[k] == '=') {
                     k++
-                    while (k < html.length && html[k].isWhitespace()) k++
+                    while (k < html.length && html[k] in HTML_SPACE) k++
                     val q = html.getOrNull(k)
                     if (q == '"' || q == '\'') {
                         val close = html.indexOf(q, k + 1)
@@ -744,17 +777,19 @@ public fun tokenize(html: String): Tokens {
                 attributes += Attribute(attrName, nameStart, value, valueStart, quoted)
             }
             val end = minOf(j + 1, html.length)
-            tags += Tag(name, i, end, closing, selfClosing || name in VOID, attributes)
             // As the browser reads it, and MarkupScan in core: a `/>` closes no raw-text element,
             // plaintext runs to the end, and only `</name` as a whole name ends the others.
-            if (name == "svg" || name == "math") {
-                if (closing) {
-                    foreign = maxOf(0, foreign - 1)
-                } else if (!selfClosing) {
-                    foreign++
-                }
+            val foreign = scopes.lastOrNull() in FOREIGN_ROOTS
+            val rawText = !closing && name in RAW_TEXT && !foreign
+            tags += Tag(name, i, end, closing, (selfClosing && !rawText) || name in VOID, attributes)
+            if (closing) {
+                // An svg or a math closes what is open inside it; an integration point closes itself only.
+                val at = scopes.lastIndexOf(name)
+                if (at >= 0 && (name in FOREIGN_ROOTS || at == scopes.lastIndex)) scopes.subList(at, scopes.size).clear()
+            } else if (!selfClosing && (name in FOREIGN_ROOTS || (foreign && integrationPoint(scopes.last(), name, attributes)))) {
+                scopes += name
             }
-            if (!closing && name in RAW_TEXT && foreign == 0) {
+            if (rawText) {
                 val closeIdx = if (name == "plaintext") -1 else rawTextEnd(html, name, end)
                 i = if (closeIdx < 0) html.length else closeIdx
                 depth++
@@ -774,6 +809,36 @@ public fun tokenize(html: String): Tokens {
     flushText(html.length)
     return Tokens(tags, topLevelText)
 }
+
+private val FOREIGN_ROOTS = setOf("svg", "math")
+
+/**
+ * Whether [name], opened in the foreign element [root], is an HTML integration point, in which the
+ * browser reads the content as HTML: a foreignObject, desc or title in an svg, and in a math the
+ * text elements and an annotation-xml whose encoding is HTML.
+ */
+private fun integrationPoint(
+    root: String,
+    name: String,
+    attributes: List<Attribute>,
+): Boolean =
+    when (root) {
+        "svg" -> {
+            name == "foreignobject" || name == "desc" || name == "title"
+        }
+
+        else -> {
+            name in MATHML_TEXT ||
+                (
+                    name == "annotation-xml" &&
+                        attributes.any { it.name.asciiLowercase() == "encoding" && it.value?.asciiLowercase() in HTML_ENCODINGS }
+                )
+        }
+    }
+
+private val MATHML_TEXT = setOf("mi", "mo", "mn", "ms", "mtext")
+
+private val HTML_ENCODINGS = setOf("text/html", "application/xhtml+xml")
 
 /** `fooBar` -> `foo-bar`, one hyphen per capital, which Datastar's camel conversion turns back into `fooBar`. */
 public fun kebab(name: String): String = AttributeKeys.kebab(name)
@@ -1790,7 +1855,7 @@ public class MarkupValidator(
         listensFor: String = "",
     ): List<Issue> {
         val issues = ArrayList<Issue>()
-        // An empty tag, the second of __threshold.50. or the one of __once., is nothing the client reads.
+        // An empty tag after the value, as in __threshold.50., or the one of __once., is nothing the client reads.
         val args = written.filter { it.isNotEmpty() }
 
         fun fail(
@@ -1813,6 +1878,23 @@ public class MarkupValidator(
                 "Unknown flag .$f for __${spec.name}, which Datastar ignores. " +
                     "Allowed: ${spec.flags.joinToString(", ") { ".$it" }.ifEmpty { "none" }}.",
             )
+        }
+        spec.ignoredWith.firstOrNull { it in present }?.let {
+            // __half__threshold.50: onIntersect.ts takes __half and never reads __threshold.
+            ignored("Datastar ignores __${spec.name} with __$it.")
+            return issues
+        }
+        if (spec.type in FIRST_TAG_READ && written.firstOrNull() == "" && args.isNotEmpty()) {
+            // __debounce..500ms: the client reads the empty tag as the value and never comes to .500ms.
+            // Without it, the modifier is the fix only if it holds up itself: __debounce..leading has no duration.
+            val fixed = "." + args.joinToString(".")
+            val holds = validateModifierArgs(spec, args, start, end, attribute, present, listensFor).none { it.severity == Severity.ERROR }
+            fail(
+                "Datastar reads the first argument of __${spec.name}, which is empty here, and not .${args.first()}." +
+                    if (holds) " Write __${spec.name}$fixed." else "",
+                if (holds) listOf(Fix("Change to __${spec.name}$fixed", start + spec.name.length, end, fixed)) else emptyList(),
+            )
+            return issues
         }
         when (spec.type) {
             ModifierType.FLAG -> {
@@ -1926,11 +2008,18 @@ public class MarkupValidator(
             }
 
             ModifierType.INT -> {
-                // Written in ASCII digits, as the editor reads it: the client's Number takes no other digits.
-                val n = args.firstOrNull()?.takeIf { ASCII_INTEGER.matches(it) }?.toIntOrNull()
-                if (n == null || (spec.min != null && n < spec.min) || (spec.max != null && n > spec.max)) {
-                    val range = if (spec.min != null) " between ${spec.min} and ${spec.max}" else ""
+                // The client reads Number of the first tag and clamps it (onIntersect.ts); NaN fails in the observer.
+                val v = args.firstOrNull()
+                val n = jsNumber(v ?: "")
+                val min = spec.min
+                val max = spec.max
+                if (n == null) {
+                    val range = if (min != null) " between $min and $max" else ""
                     fail("__${spec.name} needs an integer$range, e.g. __${spec.name}.50.")
+                } else if (v == null) {
+                    ignored("Datastar reads __${spec.name} without a value as 0.")
+                } else if ((min != null && n < min) || (max != null && n > max)) {
+                    ignored("Datastar clamps __${spec.name}.$v to ${if (min != null && n < min) min else max}.")
                 }
                 if (args.size > 1) fail("__${spec.name} takes a single value.")
             }

@@ -9,6 +9,8 @@ export interface Modifier {
   values?: string[];
   min?: number;
   max?: number;
+  /** Modifiers with which the client never reads this one: `__full` and `__half` set the threshold themselves. */
+  ignoredWith?: string[];
 }
 
 export interface AttributeSpec {
@@ -82,7 +84,7 @@ export interface Catalog {
   };
 }
 
-type RawModifier = { $ref?: string; name?: string; type?: ModifierType; flags?: string[]; values?: string[]; min?: number; max?: number };
+type RawModifier = { $ref?: string; name?: string; type?: ModifierType; flags?: string[]; values?: string[]; min?: number; max?: number; ignoredWith?: string[] };
 
 function expandModifiers(mods: RawModifier[], groups: Record<string, RawModifier[]>): Modifier[] {
   const out: Modifier[] = [];
@@ -102,6 +104,7 @@ function toModifier(m: RawModifier): Modifier {
   if (m.values) mod.values = m.values;
   if (m.min !== undefined) mod.min = m.min;
   if (m.max !== undefined) mod.max = m.max;
+  if (m.ignoredWith) mod.ignoredWith = m.ignoredWith;
   return mod;
 }
 

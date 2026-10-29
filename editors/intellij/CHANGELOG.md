@@ -6,12 +6,19 @@ All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here
 
 - The markup checks read HTML as the browser does: the content of `xmp`, `iframe`, `noembed`,
   `noframes`, `noscript` and `plaintext` is text, a raw-text element written `<iframe/>` is still
-  open, and only its whole end tag closes it, outside svg and math; a numeric reference is read
-  whatever its number of digits, one to NUL or past U+10FFFF is U+FFFD, and one from 128 to 159 is
-  the windows-1252 character the browser reads.
-- An empty modifier argument is nothing, as the client reads it: `__debounce.` needs a duration, and
-  the fix takes the place of the dot; `__case.` has no value; `__threshold.50.` and `__once.` are
-  fine; `__threshold` takes ASCII digits only.
+  open, and only its whole end tag closes it, outside svg and math but again inside their HTML
+  integration points, such as a `foreignObject`; only HTML's own white space ends an attribute
+  name, so a no-break space is part of one; a numeric reference is read whatever its number of
+  digits, one to NUL or past U+10FFFF is U+FFFD, and one from 128 to 159 is the windows-1252
+  character the browser reads.
+- An empty modifier argument is read as the client reads it. After the value it is nothing:
+  `__threshold.50.` and `__once.` are fine, and `__case.` has no value. As the first argument it
+  is the value: `__debounce.` needs a duration, and the fix takes the place of the dot, while
+  `__debounce..500ms` and `__threshold..50` are errors with the fix that drops the empty one,
+  offered only when what is left holds up: `__debounce..leading` still lacks a duration.
+  `__threshold` is read as the client's `Number` reads it, so `1e1` is 10, no value is 0 with a
+  warning, and a value outside 0 to 100 is a warning that the client clamps it. With `__half` or
+  `__full` it is a warning that the client never reads it.
 - The request inspector replaces a `datastar` parameter written without a value, and sends and
   copies as curl a method written in lower case as the client does.
 - A key the DSL refuses at runtime, one holding `__` or one ending in `_` before any modifier the call

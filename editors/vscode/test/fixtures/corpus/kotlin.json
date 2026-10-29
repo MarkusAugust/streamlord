@@ -59,6 +59,7 @@
     {"name":"a lambda of modifiers passed as an argument","source":"div { dataOn(\"b_\", \"x()\", modifiers = { once = true }); dataOn(\"c_\", \"x()\", { once = true }) }","issues":[{"code":"key-refused","start":13,"end":17},{"code":"key-refused","start":63,"end":67}]},
     {"name":"session passed by position","source":"div { dataPersist(\"b_\", null, true) }","issues":[{"code":"key-refused","start":18,"end":22,"severity":"error","message":"Streamlord refuses \"b_\" at runtime: it ends in _, which runs into the __ of the modifiers after it, so Datastar's client would read the key as b."}]},
     {"name":"a pair key holding __","source":"div { dataSignals(\"a__b\" to 1) }","issues":[{"code":"key-refused","start":18,"end":24,"severity":"error","message":"Streamlord refuses \"a__b\" at runtime: it contains __, where Datastar starts reading modifiers."}]},
-    {"name":"a key passed by name","source":"div { dataPersist(key = \"b_\", session = true); dataOn(event = \"c_\", expression = \"x()\") { once = true } }","issues":[{"code":"key-refused","start":24,"end":28},{"code":"key-refused","start":62,"end":66}]}
+    {"name":"a key passed by name","source":"div { dataPersist(key = \"b_\", session = true); dataOn(event = \"c_\", expression = \"x()\") { once = true } }","issues":[{"code":"key-refused","start":24,"end":28},{"code":"key-refused","start":62,"end":66}]},
+    {"name":"a self-closing script or textarea still runs to its end tag","source":"patchElements(\"<div id=\\\"a\\\"><script src=\\\"x.js\\\"/></script><textarea/>hi</textarea></div>\")","issues":[]}
   ]
 }

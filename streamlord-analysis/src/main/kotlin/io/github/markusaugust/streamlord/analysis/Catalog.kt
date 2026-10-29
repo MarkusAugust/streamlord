@@ -14,6 +14,8 @@ public data class Modifier(
     val values: List<String> = emptyList(),
     val min: Int? = null,
     val max: Int? = null,
+    /** Modifiers with which the client never reads this one: `__full` and `__half` set the threshold themselves. */
+    val ignoredWith: List<String> = emptyList(),
 )
 
 /**
@@ -219,6 +221,7 @@ public class Catalog private constructor(
             values = m.array("values")?.strings() ?: emptyList(),
             min = m.int("min"),
             max = m.int("max"),
+            ignoredWith = m.array("ignoredWith")?.strings() ?: emptyList(),
         )
 
     private fun callSites(obj: JsonObject?): Map<String, CallSiteSpec> {

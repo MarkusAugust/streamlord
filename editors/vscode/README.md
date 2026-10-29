@@ -25,7 +25,7 @@ function that returns HTML, a `val` holding a fragment), and in `.html` and temp
 - Markup in `patchElements(...)`: unclosed or stray tags, text outside elements, missing `id`
   on top-level elements when no selector is given, a mode that needs a selector.
 - `data-*` attributes: unknown names with "did you mean", unknown modifiers, wrong modifier
-  arguments (`__debounce` without a duration, `__threshold.150`), missing or unexpected keys,
+  arguments (`__debounce` without a duration, `__threshold.abc`), missing or unexpected keys,
   and a `data-indicator` on an element that sends no request.
 - Casing: a capital letter in a key (`data-signals:fooBar`), which the browser lowercases so
   the signal becomes `$foobar`, and a hyphen after a signal in an expression (`$foo-bar`,

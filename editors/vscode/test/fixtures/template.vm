@@ -8,5 +8,5 @@
   <li data-on:click="@post('/sak/$sak.id')">$sak.navn</li>           ## ingen markering
   #end
   <div data-on:click="#if($a) x() #end"></div>                       ## ingen markering (Velocity-kontrollflyt i verdien)
-  <div data-on-intersect__threshold.150="x()"></div>                 ## RØD: threshold 0-100
+  <div data-on-intersect__threshold.abc="x()"></div>                 ## RØD: threshold er ikke et tall
 </div>

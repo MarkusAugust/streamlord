@@ -171,7 +171,7 @@
         { "name": "exit", "type": "flag" },
         { "name": "half", "type": "flag" },
         { "name": "full", "type": "flag" },
-        { "name": "threshold", "type": "int", "min": 0, "max": 100 },
+        { "name": "threshold", "type": "int", "min": 0, "max": 100, "ignoredWith": ["full", "half"] },
         { "$ref": "timing" },
         { "$ref": "viewtransition" }
       ],
