@@ -80,8 +80,20 @@ const NAMED_ENTITIES: Record<string, string> = {
   lcub: "{", lbrace: "{", verbar: "|", vert: "|", VerticalLine: "|", rcub: "}", rbrace: "}",
 };
 
-function codePoint(cp: number): string | null {
-  return cp === 0 || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff) ? null : String.fromCodePoint(cp);
+/** Where `</name` begins after `from` as a whole name, `</titlex>` not ending a `title`; -1 when nowhere. */
+function rawTextEnd(html: string, name: string, from: number): number {
+  for (let at = from; ; ) {
+    const close = indexOfAsciiIgnoreCase(html, `</${name}`, at);
+    if (close < 0) return -1;
+    const next = html[close + 2 + name.length];
+    if (next === undefined || next === "/" || next === ">" || "\t\n\f\r ".includes(next)) return close;
+    at = close + 1;
+  }
+}
+
+/** The character a numeric reference names, as the browser reads it: NUL, a surrogate and past U+10FFFF are U+FFFD. */
+function codePoint(cp: number): string {
+  return cp === 0 || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff) ? "\ufffd" : String.fromCodePoint(cp);
 }
 
 /**
@@ -284,13 +296,15 @@ export function tokenize(html: string): { tags: Tag[]; topLevelText: { start: nu
       }
       const end = Math.min(j + 1, html.length);
       tags.push({ name, start: i, end, closing, selfClosing: selfClosing || VOID.has(name), attributes });
+      // As the browser reads it, and MarkupScan in core: a `/>` closes no raw-text element,
+      // plaintext runs to the end, and only `</name` as a whole name ends the others.
+      if (!closing && RAW_TEXT.has(name)) {
+        const closeIdx = name === "plaintext" ? -1 : rawTextEnd(html, name, end);
+        i = closeIdx < 0 ? html.length : closeIdx;
+        depth++;
+        continue;
+      }
       if (!closing && !selfClosing && !VOID.has(name)) {
-        if (RAW_TEXT.has(name)) {
-          const closeIdx = indexOfAsciiIgnoreCase(html, `</${name}`, end);
-          i = closeIdx < 0 ? html.length : closeIdx;
-          depth++;
-          continue;
-        }
         depth++;
       } else if (closing) {
         depth = Math.max(0, depth - 1);
@@ -1165,7 +1179,10 @@ function validateModifierArgs(spec: AttributeSpec["modifiers"][number], args: st
   const fail = (message: string, fixes?: Issue["fixes"]) => issues.push({ start, end, message, severity: "error", code: "modifier-args", ...(fixes ? { fixes } : {}) });
   // Arguments the client never reads: the modifier still does what it does, so these are warnings.
   const ignored = (message: string, fixes?: Issue["fixes"]) => issues.push({ start, end, message, severity: "warning", code: "modifier-args", ...(fixes ? { fixes } : {}) });
-  const unknownFlag = (f: string) => ignored(`Unknown flag .${f} for __${spec.name}, which Datastar ignores. Allowed: ${(spec.flags ?? []).map((x) => "." + x).join(", ") || "none"}.`);
+  // An empty one, __debounce.500ms., is nothing the client reads: its tags are a set of the names.
+  const unknownFlag = (f: string) => {
+    if (f !== "") ignored(`Unknown flag .${f} for __${spec.name}, which Datastar ignores. Allowed: ${(spec.flags ?? []).map((x) => "." + x).join(", ") || "none"}.`);
+  };
   switch (spec.type) {
     case "flag": {
       // __prevent.stop: a second modifier joined with a dot, read as an argument.

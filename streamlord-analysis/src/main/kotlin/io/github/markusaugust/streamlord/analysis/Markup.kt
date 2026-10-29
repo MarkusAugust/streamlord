@@ -17,6 +17,8 @@ private val MODIFIER_WORD = Regex("""[a-z][a-z0-9]*(?:_[A-Za-z0-9]+)+""")
 private val VOID = setOf("area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr")
 
 /** Elements whose content is text, whatever it looks like: a `<div>` in a `<textarea>` or a `<title>` is not a tag. The list of MarkupScan in streamlord-core. */
+private val ASCII_INTEGER = Regex("[+-]?[0-9]+")
+
 private val RAW_TEXT = setOf("script", "style", "textarea", "title", "xmp", "iframe", "noembed", "noframes", "noscript", "plaintext")
 
 /**
@@ -330,6 +332,22 @@ private fun valueEnd(
 private val ENTITY =
     Regex("""&(?:([A-Za-z][A-Za-z0-9]*);|(amp|AMP|lt|LT|gt|GT|quot|QUOT|nbsp)(?![=A-Za-z0-9])|#(\d+);?|#[xX]([0-9A-Fa-f]+);?)""")
 
+/** Where `</[name]` begins after [from] as a whole name, `</titlex>` not ending a `title`; -1 when nowhere. */
+private fun rawTextEnd(
+    html: String,
+    name: String,
+    from: Int,
+): Int {
+    var at = from
+    while (true) {
+        val close = html.indexOfAsciiIgnoreCase("</$name", at)
+        if (close < 0) return -1
+        val next = html.getOrNull(close + 2 + name.length)
+        if (next == null || next == '/' || next == '>' || next in "\t\n\u000c\r ") return close
+        at = close + 1
+    }
+}
+
 /** The named references that spell a character an expression may hold: the ASCII punctuation, and the whitespace. */
 private val NAMED_ENTITIES =
     mapOf(
@@ -432,10 +450,26 @@ internal fun decodeEntities(value: String): DecodedValue {
         val m = if (value[i] == '&') ENTITY.matchAt(value, i) else null
         val decoded =
             when {
-                m == null -> null
-                m.groupValues[1].isNotEmpty() -> NAMED_ENTITIES[m.groupValues[1]]
-                m.groupValues[2].isNotEmpty() -> NAMED_ENTITIES[m.groupValues[2]]
-                else -> codePoint(m.groupValues[3].toIntOrNull() ?: m.groupValues[4].toIntOrNull(16))
+                m == null -> {
+                    null
+                }
+
+                m.groupValues[1].isNotEmpty() -> {
+                    NAMED_ENTITIES[m.groupValues[1]]
+                }
+
+                m.groupValues[2].isNotEmpty() -> {
+                    NAMED_ENTITIES[m.groupValues[2]]
+                }
+
+                // A number too large for an Int is past U+10FFFF, which the browser reads as U+FFFD.
+                else -> {
+                    codePoint(
+                        m.groupValues[3].takeIf { it.isNotEmpty() }?.let { it.toIntOrNull() ?: Int.MAX_VALUE }
+                            ?: m.groupValues[4].toIntOrNull(16)
+                            ?: Int.MAX_VALUE,
+                    )
+                }
             }
         if (m == null || decoded == null) {
             out.append(value[i])
@@ -453,8 +487,8 @@ internal fun decodeEntities(value: String): DecodedValue {
     return DecodedValue(out.toString(), map.toIntArray())
 }
 
-private fun codePoint(cp: Int?): String? =
-    if (cp == null || cp == 0 || cp > 0x10FFFF || cp in 0xD800..0xDFFF) null else String(Character.toChars(cp))
+/** The character a numeric reference names, as the browser reads it: NUL, a surrogate and past U+10FFFF are U+FFFD. */
+private fun codePoint(cp: Int): String = if (cp == 0 || cp > 0x10FFFF || cp in 0xD800..0xDFFF) "\uFFFD" else String(Character.toChars(cp))
 
 /**
  * Does the value hold template syntax, so that it cannot be judged before rendering? A `${`
@@ -676,13 +710,15 @@ public fun tokenize(html: String): Tokens {
             }
             val end = minOf(j + 1, html.length)
             tags += Tag(name, i, end, closing, selfClosing || name in VOID, attributes)
+            // As the browser reads it, and MarkupScan in core: a `/>` closes no raw-text element,
+            // plaintext runs to the end, and only `</name` as a whole name ends the others.
+            if (!closing && name in RAW_TEXT) {
+                val closeIdx = if (name == "plaintext") -1 else rawTextEnd(html, name, end)
+                i = if (closeIdx < 0) html.length else closeIdx
+                depth++
+                continue
+            }
             if (!closing && !selfClosing && name !in VOID) {
-                if (name in RAW_TEXT) {
-                    val closeIdx = html.indexOfAsciiIgnoreCase("</$name", end)
-                    i = if (closeIdx < 0) html.length else closeIdx
-                    depth++
-                    continue
-                }
                 depth++
             } else if (closing) {
                 depth = maxOf(0, depth - 1)
@@ -1728,11 +1764,14 @@ public class MarkupValidator(
             issues += Issue(start, end, message, Severity.WARNING, "modifier-args", fixes = fixes)
         }
 
-        fun unknownFlag(f: String) =
+        // An empty one, __debounce.500ms., is nothing the client reads: its tags are a set of the names.
+        fun unknownFlag(f: String) {
+            if (f.isEmpty()) return
             ignored(
                 "Unknown flag .$f for __${spec.name}, which Datastar ignores. " +
                     "Allowed: ${spec.flags.joinToString(", ") { ".$it" }.ifEmpty { "none" }}.",
             )
+        }
         when (spec.type) {
             ModifierType.FLAG -> {
                 // __prevent.stop: a second modifier joined with a dot, read as an argument.
@@ -1845,7 +1884,8 @@ public class MarkupValidator(
             }
 
             ModifierType.INT -> {
-                val n = args.firstOrNull()?.toIntOrNull()
+                // Written in ASCII digits, as the editor reads it: the client's Number takes no other digits.
+                val n = args.firstOrNull()?.takeIf { ASCII_INTEGER.matches(it) }?.toIntOrNull()
                 if (n == null || (spec.min != null && n < spec.min) || (spec.max != null && n > spec.max)) {
                     val range = if (spec.min != null) " between ${spec.min} and ${spec.max}" else ""
                     fail("__${spec.name} needs an integer$range, e.g. __${spec.name}.50.")
