@@ -1,7 +1,8 @@
 import { catalog, distance, parseAttributeName, type AttributeSpec } from "./catalog.ts";
 import { kebab } from "./attributeKeys.ts";
 import { attributeDoc, DOCS, expressionError, filterPatternIssues, isIdentPart, jsRegions, quoteAt, Region, validateExpression, type Fix, type Issue } from "./expression.ts";
-import { clientKeyName, objectKeys, signalNameProblem, signalPathProblem, PROTOTYPE_NAMES, type ObjectKey } from "./signals.ts";
+import { clientKeyName, objectKeys, signalNameProblem, signalPathProblem, type ObjectKey } from "./signals.ts";
+import { PROTOTYPE_NAMES } from "./signalNames.ts";
 
 /**
  * Markup checks for the HTML Datastar patches: complete elements, ids where the protocol needs

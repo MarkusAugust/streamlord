@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.domain.AttributeKeys
 import io.github.markusaugust.streamlord.core.domain.SignalNames
 
 /*
@@ -94,7 +95,7 @@ internal fun signalNameHyphenIssues(
                 }
             }
         val s = (site.named("name") ?: site.named("signal"))?.string ?: keyed
-        if (s != null && '-' in s.text) out += hyphenIssue(s, src, SignalNames.withoutHyphens(s.text), null)
+        if (s != null && hyphenIsTheReason(s)) out += hyphenIssue(s, src, SignalNames.withoutHyphens(s.text), null)
     }
 
     if (site.name == "removeSignals") {
@@ -106,11 +107,28 @@ internal fun signalNameHyphenIssues(
 
     if (site.name in PAIR_NAMING) {
         for (s in pairKeys(site, src, lex)) {
-            if ('-' in s.text) out += hyphenIssue(s, src, SignalNames.withoutHyphens(s.text), null)
+            if (if (site.name ==
+                    "dataSignals"
+                ) {
+                    hyphenIsTheReason(s)
+                } else {
+                    '-' in s.text
+                }
+            ) {
+                out += hyphenIssue(s, src, SignalNames.withoutHyphens(s.text), null)
+            }
         }
     }
     return out
 }
+
+/**
+ * Whether the DSL refuses [name], a name it declares a signal by, for its hyphen: a name it refuses
+ * sooner, for a `__` or a quote, is key-refused's to report ([AttributeKeys.nameProblem]). Of a
+ * templated name only the hyphen is known.
+ */
+private fun hyphenIsTheReason(name: KotlinString): Boolean =
+    '-' in name.text && (name.interpolations.isNotEmpty() || AttributeKeys.nameProblem(name.text) == null)
 
 /** What the second argument of `dataSignals(first, second)` is, as far as its text shows: the overload Kotlin picks. */
 internal enum class SecondArgument { EXPRESSION, IF_MISSING, UNKNOWN }

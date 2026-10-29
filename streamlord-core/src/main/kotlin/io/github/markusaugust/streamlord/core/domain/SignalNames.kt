@@ -67,6 +67,27 @@ public object SignalNames {
             }
         }
 
+    // What Datastar's client finds behind a `$`, less the hyphen a signal name may not hold: ASCII
+    // word characters, in parts joined by `.`.
+    private val SIGNAL_NAME = Regex("[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)*")
+
+    /**
+     * Why [name] cannot declare a signal in code, or `null` when it can: what
+     * [AttributeKeys.nameProblem] refuses, a hyphen ([hyphenProblem]), a part the client cannot hold
+     * ([pathProblem]), or anything but ASCII letters, digits and `_` in parts joined by `.`, since
+     * Datastar's client reads nothing else after a `$`: `$über` or `$a:b` would reach no signal.
+     * The DSL throws with this reason and the analysis reports it.
+     */
+    public fun nameProblem(name: String): String? =
+        AttributeKeys.nameProblem(name)
+            ?: hyphenProblem(name)
+            ?: pathProblem(name)
+            ?: if (SIGNAL_NAME.matches(name)) {
+                null
+            } else {
+                "is not a name a \$ reference reaches: Datastar reads ASCII letters, digits and _, in parts joined by dots"
+            }
+
     /**
      * Why [name] cannot name a signal in code, or `null` when it can: it has a hyphen.
      *

@@ -1,6 +1,6 @@
 import { PLACEHOLDER, type KotlinString } from "./kotlinStrings.ts";
 import { findCallSites, stringAt, type CallSite } from "./scanner.ts";
-import { modifierStartIn } from "./attributeKeys.ts";
+import { PROTOTYPE_NAMES, signalNameRefusal } from "./signalNames.ts";
 import { attributeDoc, DOCS, type Issue } from "./expression.ts";
 
 /**
@@ -258,22 +258,6 @@ function matchingParen(src: string, open: number): number {
   return -1;
 }
 
-/** The properties of `Object.prototype` in a browser: every object already has them (`SignalNames` in streamlord-core). */
-export const PROTOTYPE_NAMES: ReadonlySet<string> = new Set([
-  "__proto__",
-  "constructor",
-  "hasOwnProperty",
-  "isPrototypeOf",
-  "propertyIsEnumerable",
-  "toLocaleString",
-  "toString",
-  "valueOf",
-  "__defineGetter__",
-  "__defineSetter__",
-  "__lookupGetter__",
-  "__lookupSetter__",
-]);
-
 /**
  * Why the client cannot hold a signal at `path`, written with dots as `data-signals:a.b` writes it,
  * or null when it can. The client follows the path without a guard, so a part every object already
@@ -473,15 +457,16 @@ export function pairKeys(site: CallSite, src: string, strings: KotlinString[]): 
 }
 
 /**
- * What is wrong with the pairs of `site`, a `dataSignals` call: a key holding `__`, which the DSL
- * refuses as it refuses it in any key, and each `"name" to null`, which declares nothing, since
+ * What is wrong with the pairs of `site`, a `dataSignals` call: a name the DSL refuses
+ * (`signalNameRefusal`), and each `"name" to null`, which declares nothing, since
  * Datastar's client holds no null. The same rule as `dataSignalsPairIssues` in streamlord-analysis.
  */
 export function dataSignalsPairIssues(site: CallSite, src: string, strings: KotlinString[]): Issue[] {
   if (site.name !== "dataSignals") return [];
   const out: Issue[] = [];
   for (const key of pairKeys(site, src, strings)) {
-    const split = modifierStartIn(key.text);
+    // A templated name is known only at runtime.
+    const split = key.interpolations.length === 0 ? signalNameRefusal(key.text) : null;
     if (split) {
       out.push({ start: key.start, end: key.end, message: `Streamlord refuses "${key.text}" at runtime: it ${split}.`, severity: "error", code: "key-refused", link: attributeDoc("signals") });
       continue;

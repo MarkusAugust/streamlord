@@ -63,8 +63,12 @@ public class Analyzer(
     // The helpers whose key is an HTML attribute's name, in which the DSL refuses a capital.
     private val attributeNameHelpers = setOf("dataAttr", "dataAnimate")
 
-    /** Helpers that write the signal name in the value, which the catalog's call sites do not list. */
-    private val valueNameHelpers = setOf("dataBind", "dataRef", "dataIndicator")
+    /** Helpers that write the signal name in the value (the catalog's `valueKind` signal), which its call sites do not list. */
+    private val valueNameHelpers =
+        catalog.attributes
+            .filter { it.valueKind == ValueKind.SIGNAL }
+            .flatMap { it.kotlin }
+            .toSet()
 
     private val allSiteNames: Set<String> = catalog.allCallSiteNames + keyOnlyHelpers + valueNameHelpers
     private val htmlSiteNames: Set<String> = catalog.htmlCallSites.keys
@@ -646,11 +650,11 @@ public class Analyzer(
         src: String,
     ): List<Issue> {
         val spec = catalog.attributesByKotlin[site.name] ?: return emptyList()
+        if (site.name in valueNameHelpers) return valueNameIssues(site, spec)
         if (!spec.keyed || spec.keyCase == null) return emptyList()
         // Only helpers whose first parameter is a key: those whose expression is a later argument
         // (dataOn, dataSignals, dataClass, ...) and the two Pro helpers that take a key and no
-        // expression. dataOnClick("expr") passes an expression, never a key, and dataBind, dataRef
-        // and dataIndicator write their name in the value.
+        // expression. dataOnClick("expr") passes an expression, never a key.
         val expr = catalog.expressionCallSites[site.name]
         if (site.name in attributeNameHelpers) return attributeNameIssues(site, spec, src)
         if (if (expr != null) expr.arg == 0 else site.name !in keyOnlyHelpers) return emptyList()
@@ -663,7 +667,19 @@ public class Analyzer(
         val name = key.text
         // dataSignals("{fooBar: 1}", ...) is the object form: an expression, not a key.
         if (OBJECT_FORM.containsMatchIn(name)) return emptyList()
-        AttributeKeys.modifierStartIn(name)?.let { return listOf(refusedKey(spec, key, name, it)) }
+        // A key that names a signal goes through Casing.signalName, which refuses more than a key.
+        val signalKey = spec.keyCase == KeyCase.CAMEL
+        (
+            if (signalKey) {
+                signalNameRefusal(
+                    name,
+                )
+            } else {
+                AttributeKeys.nameProblem(name)
+            }
+        )?.let { return listOf(refusedKey(spec, key, name, it)) }
+        // A hyphen it refuses before the modifiers are joined on, which signalNameHyphenIssues says.
+        if (signalKey && '-' in name) return emptyList()
         // `case = Case.X`, a positional `Case.X` (dataClass("name", "x", Case.CAMEL)) or `case = Case.X` in the trailing lambda.
         val named = site.args.firstOrNull { it.named == "case" || (it.named == null && CASE_ARG.matches(it.text)) }?.text
         val explicit = if (named != null) CASE_VALUE.find(named) else CASE_IN_LAMBDA.find(modifiersLambda(site, src))
@@ -678,8 +694,6 @@ public class Analyzer(
             AttributeKeys.runsIntoModifiers(keyPart, modifiers)?.let { return listOf(refusedKey(spec, key, name, it)) }
         }
         if (!capital) return emptyList()
-        // A signal name with a hyphen is refused, which signalNameHyphenIssues says.
-        if (spec.keyCase == KeyCase.CAMEL && '-' in name) return emptyList()
         if (wire == null) {
             return listOf(
                 Issue(
@@ -742,6 +756,16 @@ public class Analyzer(
             (site.named("modifiers") ?: site.positional.firstOrNull { it.text.trimStart().startsWith("{") })?.text ?: ""
         }
 
+    /** A name `dataBind`, `dataRef` or `dataIndicator` writes in the value that `Casing.signalName` refuses, as it does in a key ([signalNameRefusal]). */
+    private fun valueNameIssues(
+        site: CallSite,
+        spec: AttributeSpec,
+    ): List<Issue> {
+        val name = (site.named("signal") ?: site.named("name") ?: site.positional.firstOrNull())?.string ?: return emptyList()
+        if (name.interpolations.isNotEmpty()) return emptyList()
+        return listOfNotNull(signalNameRefusal(name.text)?.let { refusedKey(spec, name, name.text, it) })
+    }
+
     /** A key the DSL refuses at runtime, as `Casing` refuses it, where a hint would say what it writes. */
     private fun refusedKey(
         spec: AttributeSpec,
@@ -774,13 +798,13 @@ public class Analyzer(
         val key =
             (site.named("name") ?: site.named("attribute"))?.string
                 ?: site.positional
-                    .takeIf { it.size >= 2 }
+                    .takeIf { it.size >= 2 || site.named("expression") != null }
                     ?.first()
                     ?.string
                 ?: return emptyList()
         val name = key.text
         if (key.interpolations.isNotEmpty() || OBJECT_FORM.containsMatchIn(name)) return emptyList()
-        AttributeKeys.modifierStartIn(name)?.let { return listOf(refusedKey(spec, key, name, it)) }
+        AttributeKeys.nameProblem(name)?.let { return listOf(refusedKey(spec, key, name, it)) }
         if (!HAS_CAPITAL.containsMatchIn(name)) {
             val modifiers = if (addsModifiers(site, spec, src)) "__" else ""
             return listOfNotNull(AttributeKeys.runsIntoModifiers(name, modifiers)?.let { refusedKey(spec, key, name, it) })

@@ -21,10 +21,14 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
-- The editors flag, as `key-refused`, a key the DSL refuses at runtime: one holding `__`, where
-  the client starts reading modifiers, or one ending in `_` before any modifier the call adds, its
-  `__case`, `ifMissing`, `session` or the modifiers of its lambda. The hint used to say what such a
-  key writes. The reasons come from `AttributeKeys` in streamlord-core, which the DSL throws with.
+- The editors flag, as `key-refused`, every key and signal name the DSL refuses at runtime: one
+  holding `__`, where the client starts reading modifiers, whitespace, a quote or a character that
+  ends an attribute; one ending in `_` before any modifier the call adds, its `__case`,
+  `ifMissing`, `session` or the modifiers of its lambda; and a signal name no `$` reaches, such as
+  `a:b`, `über` or `constructor`, in a key, a pair or the name of `dataBind`, `dataRef` or
+  `dataIndicator`. The hint used to say what such a key writes. The reasons come from
+  `AttributeKeys.nameProblem` and `SignalNames.nameProblem` in streamlord-core, which the DSL
+  throws with.
 - `JsLiteral`, which writes the values of `set`, `setAll` and a fetch's `payload` and `headers`,
   refuses what `JsonWriter` refuses: a map that holds itself overflowed the stack, and `1` and
   `"1"` as keys of one map were both written as `'1'`.

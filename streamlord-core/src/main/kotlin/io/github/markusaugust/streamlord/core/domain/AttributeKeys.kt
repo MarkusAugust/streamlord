@@ -11,12 +11,28 @@ public object AttributeKeys {
     private val UPPER = Regex("[A-Z]")
     private val JS_NAME = Regex("[A-Za-z_$][A-Za-z0-9_$]*")
 
+    // Java's \s, the spaces JavaScript's \s adds (class.ts splits a class list on it), NUL, which
+    // the HTML parser turns into U+FFFD, and the characters that end an attribute or its name.
+    private val FORBIDDEN = Regex("[\\s\\x00\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff\"'<>=/]")
+
     /** `fooBar` -> `foo-bar`, `myURL` -> `my-u-r-l`: one hyphen per capital, so Datastar's camel conversion gives the name back. */
     public fun kebab(name: String): String {
         val out = name.replace(UPPER) { "-" + it.value.lowercase() }
         // Only the hyphen a leading capital introduced is dropped; a CSS custom property keeps its `--`.
         return if (name.firstOrNull()?.isUpperCase() == true) out.removePrefix("-") else out
     }
+
+    /**
+     * Why [name] cannot be a key or a signal name, or null: it is blank, or holds whitespace (as
+     * Java or JavaScript counts it, so a no-break space too), NUL, a quote or a character that ends
+     * an attribute or its name, or a `__` ([modifierStartIn]).
+     */
+    public fun nameProblem(name: String): String? =
+        when {
+            name.isBlank() -> "is blank"
+            FORBIDDEN.containsMatchIn(name) -> "contains whitespace, NUL, quotes or a character that ends an attribute or its name"
+            else -> modifierStartIn(name)
+        }
 
     /** Why [name] cannot be a key, or null: the client splits an attribute name at the first `__`. */
     public fun modifierStartIn(name: String): String? = if ("__" in name) "contains __, where Datastar starts reading modifiers" else null

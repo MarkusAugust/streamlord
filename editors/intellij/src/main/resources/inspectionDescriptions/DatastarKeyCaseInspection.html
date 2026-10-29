@@ -7,7 +7,9 @@ where Datastar's default is not camel.
 In the DSL the SDK writes a camelCase key correctly on its own; a hint on the call says what goes on the wire, so nothing is hidden.
 A key the SDK refuses at runtime is an error instead: one holding <code>__</code>, where Datastar starts reading modifiers, or one
 ending in <code>_</code> before a modifier the call adds, such as <code>dataSignals("foo_", "1", ifMissing = true)</code>, which the
-client would read as <code>foo</code>.
+client would read as <code>foo</code>. So is a key with whitespace, a quote or a character that ends an attribute, and a
+signal name no <code>$</code> reaches, such as <code>a:b</code>, <code>über</code> or <code>constructor</code>, in a key, a pair or the
+name <code>dataBind</code>, <code>dataRef</code> or <code>dataIndicator</code> writes in the value.
 </p>
 <p>
 A signal name in a DSL call holds no hyphen: Datastar's client reads one as a capital in an attribute key and as a hyphen in an

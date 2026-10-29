@@ -1,7 +1,8 @@
 import { catalog, parseAttributeName, type AttributeSpec, type CallSiteSpec } from "./catalog.ts";
 import { attributeDoc, DOCS, quoteAt, validateExpression, type Fix, type Issue } from "./expression.ts";
 import { PLACEHOLDER, toSource, type Interpolation, type KotlinString } from "./kotlinStrings.ts";
-import { capitalIn, kebab, modifierStartIn, runsIntoModifiers, spellings } from "./attributeKeys.ts";
+import { capitalIn, kebab, nameProblem, runsIntoModifiers, spellings } from "./attributeKeys.ts";
+import { signalNameRefusal } from "./signalNames.ts";
 import { asciiLowercase, indexOfAsciiIgnoreCase, keyReading, rawKeyNote, tokenize, validateAttributes, validateMarkup, wireKey, wireKeyReads, type Attribute, type Tag } from "./markup.ts";
 import { findCallSites, isHtmlString, lexKotlin, namedArgText, selectStringArg, stringAt, type CallSite } from "./scanner.ts";
 import { dslHelpers, EXPRESSION_HELPERS, signalNameHyphenSites } from "./signalNameHyphens.ts";
@@ -31,8 +32,8 @@ for (const name of KEY_ONLY_HELPERS) (ALL_SITE_NAMES as Set<string>).add(name);
 // The helpers whose key is an HTML attribute's name, in which the DSL refuses a capital.
 const ATTRIBUTE_NAME_HELPERS: ReadonlySet<string> = new Set(["dataAttr", "dataAnimate"]);
 
-/** Helpers that write the signal name in the value, which the catalog's call sites do not list. */
-const VALUE_NAME_HELPERS: ReadonlySet<string> = new Set(["dataBind", "dataRef", "dataIndicator"]);
+/** Helpers that write the signal name in the value (the catalog's `valueKind` signal), which its call sites do not list. */
+const VALUE_NAME_HELPERS: ReadonlySet<string> = new Set(catalog.attributes.filter((a) => a.valueKind === "signal").flatMap((a) => a.kotlin));
 for (const name of VALUE_NAME_HELPERS) (ALL_SITE_NAMES as Set<string>).add(name);
 
 /**
@@ -395,11 +396,11 @@ function checkHtmlSite(site: CallSite, spec: CallSiteSpec, opts: AnalyzeOptions,
  */
 function checkKeyCaseSite(site: CallSite, src: string): Issue[] {
   const spec = catalog.attributesByKotlin.get(site.name);
+  if (spec && VALUE_NAME_HELPERS.has(site.name)) return valueNameIssues(site, spec.name);
   if (!spec?.keyed || !spec.keyCase) return [];
   // Only helpers whose first parameter is a key: those whose expression is a later argument
   // (dataOn, dataSignals, dataClass, ...) and the two Pro helpers that take a key and no
-  // expression. dataOnClick("expr") passes an expression, never a key, and dataBind, dataRef
-  // and dataIndicator write their name in the value.
+  // expression. dataOnClick("expr") passes an expression, never a key.
   const expr = catalog.callSites.expression[site.name];
   if (ATTRIBUTE_NAME_HELPERS.has(site.name)) return attributeNameIssues(site, spec.name, src);
   if (expr ? expr.arg === 0 : !KEY_ONLY_HELPERS.has(site.name)) return [];
@@ -412,8 +413,12 @@ function checkKeyCaseSite(site: CallSite, src: string): Issue[] {
   const name = key.text;
   // dataSignals("{fooBar: 1}", ...) is the object form: an expression, not a key.
   if (/^\s*[{\[]/.test(name)) return [];
-  const split = modifierStartIn(name);
-  if (split) return [refusedKey(spec.name, key, name, split)];
+  // A key that names a signal goes through Casing.signalName, which refuses more than a key.
+  const signalKey = spec.keyCase === "camel";
+  const refused = signalKey ? signalNameRefusal(name) : nameProblem(name);
+  if (refused) return [refusedKey(spec.name, key, name, refused)];
+  // A hyphen it refuses before the modifiers are joined on, which signalNameHyphenIssues says.
+  if (signalKey && name.includes("-")) return [];
   // `case = Case.X`, a positional `Case.X` (dataClass("name", "x", Case.CAMEL)) or `case = Case.X` in the trailing lambda.
   const named = site.args.find((a) => a.named === "case" || (a.named === null && /^\s*Case\.[A-Z]+\s*$/.test(a.text)))?.text;
   const explicit = named ? /Case\.([A-Z]+)/.exec(named) : /\bcase\s*=\s*Case\.([A-Z]+)/.exec(modifiersLambda(site, src));
@@ -428,8 +433,6 @@ function checkKeyCaseSite(site: CallSite, src: string): Issue[] {
     if (runs) return [refusedKey(spec.name, key, name, runs)];
   }
   if (!capital) return [];
-  // A signal name with a hyphen is refused, which signalNameHyphenIssues says.
-  if (spec.keyCase === "camel" && name.includes("-")) return [];
   if (wire === null) {
     return [{
       start: key.start,
@@ -451,6 +454,14 @@ function checkKeyCaseSite(site: CallSite, src: string): Issue[] {
   }];
 }
 
+/** A name `dataBind`, `dataRef` or `dataIndicator` writes in the value that `Casing.signalName` refuses, as it does in a key (`signalNameRefusal`). */
+function valueNameIssues(site: CallSite, attribute: string): Issue[] {
+  const name = (site.args.find((a) => a.named === "signal") ?? site.args.find((a) => a.named === "name") ?? site.args.find((a) => a.named === null))?.string;
+  if (!name || name.interpolations.length > 0) return [];
+  const split = signalNameRefusal(name.text);
+  return split ? [refusedKey(attribute, name, name.text, split)] : [];
+}
+
 /** A key the DSL refuses at runtime, as `Casing` refuses it, where a hint would say what it writes. */
 function refusedKey(attribute: string, key: KotlinString, name: string, reason: string): Issue {
   return { start: key.start, end: key.end, message: `Streamlord refuses "${name}" at runtime: it ${reason}.`, severity: "error", code: "key-refused", link: attributeDoc(attribute) };
@@ -466,11 +477,11 @@ function refusedKey(attribute: string, key: KotlinString, name: string, reason: 
 function attributeNameIssues(site: CallSite, attribute: string, src: string): Issue[] {
   const positional = site.args.filter((a) => a.named === null);
   // The key form takes the name and an expression; one positional string is the object form.
-  const key = (site.args.find((a) => a.named === "name") ?? site.args.find((a) => a.named === "attribute"))?.string ?? (positional.length >= 2 ? positional[0]?.string : null);
+  const key = (site.args.find((a) => a.named === "name") ?? site.args.find((a) => a.named === "attribute"))?.string ?? (positional.length >= 2 || site.args.some((a) => a.named === "expression") ? positional[0]?.string : null);
   if (!key) return [];
   const name = key.text;
   if (key.interpolations.length > 0 || /^\s*[{\[]/.test(name)) return [];
-  const split = modifierStartIn(name);
+  const split = nameProblem(name);
   if (split) return [refusedKey(attribute, key, name, split)];
   if (!/[A-Z]/.test(name)) {
     const runs = runsIntoModifiers(name, addsModifiers(site, catalog.attributesByKotlin.get(site.name)!, src) ? "__" : "");

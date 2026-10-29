@@ -12,6 +12,24 @@ export function kebab(name: string): string {
   return /^[A-Z]/.test(name) ? out.replace(/^-/, "") : out;
 }
 
+/** Blank as Kotlin's `isBlank` reads it: every character a space (Unicode Zs, Zl and Zp), a control space or U+001C to U+001F. */
+const BLANK = /^[\t\n\v\f\r\x1c-\x1f \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]*$/;
+
+// Java's \s, the spaces JavaScript's \s adds (class.ts splits a class list on it), NUL, which
+// the HTML parser turns into U+FFFD, and the characters that end an attribute or its name.
+const FORBIDDEN = /[\t\n\v\f\r \x00\xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"'<>=\/]/;
+
+/**
+ * Why `name` cannot be a key or a signal name, or null: it is blank, or holds whitespace (as Java
+ * or JavaScript counts it, so a no-break space too), NUL, a quote or a character that ends an
+ * attribute or its name, or a `__` (`modifierStartIn`).
+ */
+export function nameProblem(name: string): string | null {
+  if (BLANK.test(name)) return "is blank";
+  if (FORBIDDEN.test(name)) return "contains whitespace, NUL, quotes or a character that ends an attribute or its name";
+  return modifierStartIn(name);
+}
+
 /** Why `name` cannot be a key, or null: the client splits an attribute name at the first `__`. */
 export function modifierStartIn(name: string): string | null {
   return name.includes("__") ? "contains __, where Datastar starts reading modifiers" : null;

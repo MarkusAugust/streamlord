@@ -2,6 +2,8 @@ import { clientRewrite, DOCS, type Issue } from "./expression.ts";
 import { dataSignalsPairIssues, pairKeys } from "./signals.ts";
 import type { KotlinString } from "./kotlinStrings.ts";
 import { findCallSites, lexKotlin, stringAt, type Arg, type CallSite } from "./scanner.ts";
+import { nameProblem } from "./attributeKeys.ts";
+import { withoutHyphens } from "./signalNames.ts";
 
 /*
  * A hyphen in a signal name written in a DSL call. The client reads one as a capital in an
@@ -11,7 +13,7 @@ import { findCallSites, lexKotlin, stringAt, type Arg, type CallSite } from "./s
  */
 
 /** The helpers whose first argument is the name of a signal the page declares. */
-const NAMING_HELPERS: ReadonlySet<string> = new Set(["dataSignals", "dataComputed", "dataBind", "dataRef", "dataIndicator", "dataMatchMedia"]);
+export const NAMING_HELPERS: ReadonlySet<string> = new Set(["dataSignals", "dataComputed", "dataBind", "dataRef", "dataIndicator", "dataMatchMedia"]);
 
 /**
  * The helper whose second argument may be `ifMissing` of the object form, `dataSignals("{...}", true)`,
@@ -63,11 +65,6 @@ export function dslHelpers(src: string, names: ReadonlySet<string> = HELPER_READ
     }
   }
   return out;
-}
-
-/** `name` with each hyphen dropped and the character after it raised: `first-name` is `firstName`. */
-export function withoutHyphens(name: string): string {
-  return name.replace(/-+.?/g, (m) => m.replace(/^-+/, "").toUpperCase());
 }
 
 /**
@@ -182,6 +179,15 @@ export function bracketed(name: string): string | null {
 }
 
 const OBJECT_START = /^\s*[{[]/;
+/**
+ * Whether the DSL refuses `name`, a name it declares a signal by, for its hyphen: a name it refuses
+ * sooner, for a `__` or a quote, is key-refused's to report (`nameProblem` in attributeKeys.ts). Of a
+ * templated name only the hyphen is known.
+ */
+function hyphenIsTheReason(name: KotlinString): boolean {
+  return name.text.includes("-") && (name.interpolations.length > 0 || nameProblem(name.text) === null);
+}
+
 /** What the second argument of `dataSignals(first, second)` is, as far as its text shows: the overload Kotlin picks. */
 export type SecondArgument = "expression" | "ifMissing" | "unknown";
 
@@ -255,7 +261,7 @@ export function signalNameHyphenIssues(site: CallSite, src: string, strings: Kot
     };
     const keyed = f && isKeyed(f.text) ? f : null;
     const s = (named("name") ?? named("signal"))?.string ?? keyed;
-    if (s && s.text.includes("-")) out.push(hyphenIssue(s, src, withoutHyphens(s.text), null));
+    if (s && hyphenIsTheReason(s)) out.push(hyphenIssue(s, src, withoutHyphens(s.text), null));
   }
 
   if (site.name === "removeSignals") {
@@ -266,7 +272,7 @@ export function signalNameHyphenIssues(site: CallSite, src: string, strings: Kot
 
   if (PAIR_NAMING.has(site.name)) {
     for (const s of pairKeys(site, src, strings)) {
-      if (s.text.includes("-")) out.push(hyphenIssue(s, src, withoutHyphens(s.text), null));
+      if (site.name === "dataSignals" ? hyphenIsTheReason(s) : s.text.includes("-")) out.push(hyphenIssue(s, src, withoutHyphens(s.text), null));
     }
   }
 

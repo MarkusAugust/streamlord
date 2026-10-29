@@ -40,48 +40,25 @@ public object Casing {
     private val UPPER = Regex("[A-Z]")
     private val KEBAB = Regex("-([a-z])")
 
-    // Java's \s, the spaces JavaScript's \s adds (class.ts splits a class list on it), NUL, which
-    // the HTML parser turns into U+FFFD, and the characters that end an attribute or its name.
-    private val FORBIDDEN = Regex("[\\s\\x00\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff\"'<>=/]")
-
-    // What Datastar's client finds behind a `$`, less the hyphen a signal name may not hold: ASCII
-    // word characters, in parts joined by `.`.
-    private val SIGNAL_NAME = Regex("[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)*")
-
     /** `fooBar` -> `foo-bar`, `myURL` -> `my-u-r-l`: one hyphen per capital, so Datastar's camel conversion gives the name back. */
     public fun kebab(name: String): String = AttributeKeys.kebab(name)
 
     /** Datastar's own reading of a key: `-x` becomes `X`. */
     public fun camel(name: String): String = name.replace(KEBAB) { it.groupValues[1].uppercase() }
 
-    /**
-     * A key or signal name must be non-blank and free of whitespace (as Java or JavaScript counts
-     * it, so a no-break space too), NUL, quotes and the characters that end an attribute or its name.
-     */
+    /** [name], if it can be a key or a signal name ([AttributeKeys.nameProblem]); else it throws [InvalidSignalNameException]. */
     public fun validate(name: String): String {
-        if (name.isBlank()) throw InvalidSignalNameException(name, "is blank")
-        if (FORBIDDEN.containsMatchIn(name)) {
-            throw InvalidSignalNameException(name, "contains whitespace, NUL, quotes or a character that ends an attribute or its name")
-        }
-        AttributeKeys.modifierStartIn(name)?.let { throw InvalidSignalNameException(name, it) }
+        AttributeKeys.nameProblem(name)?.let { throw InvalidSignalNameException(name, it) }
         return name
     }
 
     /**
-     * A name that declares a signal: what [validate] admits, without a hyphen
-     * ([SignalNames.hyphenProblem]), and only ASCII letters, digits and `_`, in parts joined by `.`.
-     * Datastar's client reads nothing else after a `$`, so `$über` or `$a:b` would reach no signal.
-     * No part may be a property every object has, such as `constructor` or `toString` ([SignalNames]).
+     * [name], if it can declare a signal ([SignalNames.nameProblem]): what [validate] admits,
+     * without a hyphen, and only ASCII letters, digits and `_`, in parts joined by `.`, none of them
+     * a property every object has, such as `constructor`. Else it throws [InvalidSignalNameException].
      */
     public fun signalName(name: String): String {
-        validate(name)
-        (SignalNames.hyphenProblem(name) ?: SignalNames.pathProblem(name))?.let { throw InvalidSignalNameException(name, it) }
-        if (!SIGNAL_NAME.matches(name)) {
-            throw InvalidSignalNameException(
-                name,
-                "is not a name a \$ reference reaches: Datastar reads ASCII letters, digits and _, in parts joined by .",
-            )
-        }
+        SignalNames.nameProblem(name)?.let { throw InvalidSignalNameException(name, it) }
         return name
     }
 
