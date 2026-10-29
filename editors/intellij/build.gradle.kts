@@ -116,9 +116,16 @@ tasks {
         }
     }
 
-    // The tests read the SDK's catalog and the VS Code fixtures relative to the repository root.
+    // The tests read the SDK's catalog and the VS Code fixtures relative to the repository root, so a
+    // change there must run them again rather than find them up to date.
     withType<Test>().configureEach {
-        systemProperty("streamlord.repo", rootProject.projectDir.resolve("../..").canonicalPath)
+        val repo = rootProject.projectDir.resolve("../..")
+        systemProperty("streamlord.repo", repo.canonicalPath)
+        inputs.dir(repo.resolve("catalog")).withPropertyName("catalog").withPathSensitivity(PathSensitivity.RELATIVE)
+        inputs
+            .dir(repo.resolve("editors/vscode/test/fixtures"))
+            .withPropertyName("editorFixtures")
+            .withPathSensitivity(PathSensitivity.RELATIVE)
     }
 }
 

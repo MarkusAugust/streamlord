@@ -82,15 +82,19 @@ jobs:
               # This file decides what runs, so a change to it runs everything.
               .github/workflows/*)
                 kotlin=true; vscode=true; intellij=true; docs=true; image=true; ktlint=true ;;
-              # The corpus both editors' checks are held to: CorpusTest in the SDK reads it too.
-              # And the SSE corpus both inspectors read, SseCorpusTest in streamlord-analysis too.
-              editors/vscode/test/fixtures/corpus/*|editors/vscode/test/fixtures/sse/*) vscode=true; kotlin=true; intellij=true ;;
-              # The corpus is counted on the front page, so it is site content too.
-              editors/vscode/test/fixtures/corpus/*) vscode=true; docs=true ;;
+              # The corpus both editors' checks are held to: CorpusTest in the SDK reads it too,
+              # and the front page counts it, so it is site content as well.
+              editors/vscode/test/fixtures/corpus/*) vscode=true; kotlin=true; intellij=true; docs=true ;;
+              # The other shared fixtures: the SSE corpus, the reference hyphens core reads, the
+              # second argument of dataSignals the analysis reads, the templates IntelliJ reads.
+              editors/vscode/test/fixtures/*) vscode=true; kotlin=true; intellij=true ;;
+              # The site highlights its code with the extension's grammars and palette, and shows its icon.
+              editors/vscode/syntaxes/*|editors/vscode/media/*|editors/vscode/src/palette.ts) vscode=true; docs=true ;;
               editors/vscode/*)   vscode=true ;;
               editors/intellij/*) intellij=true ;;
-              # The catalog feeds the analysis, and VS Code's generated custom data.
-              catalog/*)          kotlin=true; vscode=true; intellij=true ;;
+              # The catalog feeds the analysis, VS Code's generated custom data, and the counts on
+              # the front page.
+              catalog/*)          kotlin=true; vscode=true; intellij=true; docs=true ;;
               # The pages are compiled by docs-samples and indexed into the image, so
               # they are Kotlin sources and image content as much as they are prose.
               docs/src/content/docs/*) docs=true; kotlin=true; image=true ;;
@@ -100,8 +104,9 @@ jobs:
               # Netlify's build of the site, which deploys from master with no other check.
               netlify.toml)       docs=true ;;
               demo/*)             kotlin=true; image=true ;;
-              # The fixtures are read by the Kotlin tests, the editors' tests and the front page.
-              conformance/*)      kotlin=true; image=true; intellij=true; vscode=true; docs=true ;;
+              # The fixtures are read by the Kotlin tests, the VS Code tests and the front page; the
+              # image and the IntelliJ plugin read none of them.
+              conformance/*)      kotlin=true; vscode=true; docs=true ;;
               # The IntelliJ plugin builds streamlord-analysis, and core beneath it, from source.
               streamlord-core/*)  kotlin=true; image=true; intellij=true ;;
               # The image runs the analysis in /judge and streamlord-test in /assert.

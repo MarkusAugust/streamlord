@@ -15,20 +15,13 @@ sourceSets.main {
     resources.srcDir(rootProject.file("catalog"))
 }
 
-// CorpusTest and SseCorpusTest read the cases the VS Code extension shares with them. Declared,
-// so a change to a case alone runs the tests again rather than finding them up to date or cached.
+// The tests read the cases the VS Code extension shares with them: the corpus, the SSE corpus, the
+// second argument of dataSignals and the templates. Declared, so a change to a case alone runs the
+// tests again rather than finding them up to date or cached.
 tasks.test {
     inputs
-        .dir(rootProject.layout.projectDirectory.dir("editors/vscode/test/fixtures/corpus"))
-        .withPropertyName("corpus")
-        .withPathSensitivity(PathSensitivity.RELATIVE)
-    inputs
-        .dir(rootProject.layout.projectDirectory.dir("editors/vscode/test/fixtures/sse"))
-        .withPropertyName("sseCorpus")
-        .withPathSensitivity(PathSensitivity.RELATIVE)
-    inputs
-        .file(rootProject.layout.projectDirectory.file("editors/vscode/test/fixtures/data-signals-second-argument.json"))
-        .withPropertyName("secondArgument")
+        .dir(rootProject.layout.projectDirectory.dir("editors/vscode/test/fixtures"))
+        .withPropertyName("editorFixtures")
         .withPathSensitivity(PathSensitivity.RELATIVE)
 }
 

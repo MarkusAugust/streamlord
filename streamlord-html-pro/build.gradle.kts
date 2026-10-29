@@ -45,7 +45,11 @@ tasks.withType<Test>().configureEach {
 val dslDir = rootProject.layout.projectDirectory.dir("conformance/dsl")
 
 tasks.withType<Test>().configureEach { systemProperty("streamlord.dslDir", dslDir.asFile.path) }
-tasks.withType<Test>().matching { it.name != "updateClientReadings" }.configureEach { inputs.dir(dslDir) }
+tasks.withType<Test>().matching { it.name != "updateClientReadings" }.configureEach {
+    inputs.dir(dslDir)
+    // A reading another dsl.mjs took is refused, so a change to the script alone runs the tests again.
+    inputs.file(rootProject.layout.projectDirectory.file("conformance/generate/dsl.mjs"))
+}
 
 tasks.register<Test>("updateClientReadings") {
     description = "Rewrites the inputs of the fixtures under conformance/dsl from what the DSL writes now."
@@ -61,5 +65,6 @@ tasks.register<Test>("updateClientReadings") {
     useJUnitPlatform()
     filter { includeTestsMatching("*AsTheClientReadsItTest") }
     systemProperty("streamlord.updateClientReadings", "true")
-    outputs.upToDateWhen { false }
+    // It rewrites the fixtures it does not declare as inputs, so it must never be up to date or come from the cache.
+    doNotTrackState("rewrites conformance/dsl")
 }

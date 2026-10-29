@@ -79,5 +79,6 @@ tasks.register<Test>("updateTranscripts") {
     useJUnitPlatform()
     filter { includeTestsMatching("*WireTranscriptTest") }
     systemProperty("streamlord.updateTranscripts", "true")
-    outputs.upToDateWhen { false }
+    // It rewrites the transcripts it does not declare as inputs, so it must never be up to date or come from the cache.
+    doNotTrackState("rewrites conformance/wire")
 }

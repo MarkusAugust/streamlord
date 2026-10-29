@@ -113,6 +113,11 @@ val wireDir = rootProject.layout.projectDirectory.dir("conformance/wire")
 tasks.withType<Test>().configureEach { systemProperty("streamlord.wireDir", wireDir.asFile.path) }
 tasks.withType<Test>().matching { it.name != "updateTranscripts" }.configureEach { inputs.dir(wireDir) }
 
+// GoldenServerTest answers the cases of the SDK's golden files, which live in streamlord-core.
+tasks.withType<Test>().configureEach {
+    inputs.dir(rootProject.layout.projectDirectory.dir("streamlord-core/src/test/resources/golden"))
+}
+
 tasks.register<Test>("updateTranscripts") {
     description = "Rewrites the approved wire transcripts under conformance/wire from what the Ktor adapter answers now."
     group = "verification"
@@ -127,5 +132,6 @@ tasks.register<Test>("updateTranscripts") {
     useJUnitPlatform()
     filter { includeTestsMatching("*WireTranscriptTest") }
     systemProperty("streamlord.updateTranscripts", "true")
-    outputs.upToDateWhen { false }
+    // It rewrites the transcripts it does not declare as inputs, so it must never be up to date or come from the cache.
+    doNotTrackState("rewrites conformance/wire")
 }
