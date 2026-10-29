@@ -52,6 +52,8 @@ public data class AttributeSpec(
     val returnsValue: Boolean = false,
     /** Keys a keyless attribute accepts all the same: `data-on-signal-patch:filter` (onSignalPatch.ts:27 in 1.0.4). */
     val keys: List<String> = emptyList(),
+    /** The names the expression is handed besides `el`: `evt` in `data-on`, `patch` in `data-on-signal-patch`. */
+    val argNames: List<String> = emptyList(),
 )
 
 public data class ActionSpec(
@@ -140,6 +142,7 @@ public class Catalog private constructor(
                     requires = a.string("requires")?.let { Requires.valueOf(it.uppercase()) },
                     returnsValue = a.boolean("returnsValue") ?: false,
                     keys = a.array("keys")?.strings() ?: emptyList(),
+                    argNames = a.array("argNames")?.strings() ?: emptyList(),
                 )
             }
         actions =

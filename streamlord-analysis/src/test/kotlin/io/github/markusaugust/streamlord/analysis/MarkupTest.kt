@@ -32,6 +32,26 @@ class MarkupTest {
         assertContains(issue.message, "The client holds the signal, but the next request writes the object under it into the built-in one")
     }
 
+    // conformance/client/plugins.json: only on hands its expression evt, only on-signal-patch hands it patch.
+    @Test
+    fun `warns on evt or patch where the attribute does not hand it over`() {
+        val src =
+            "<div data-text=\"evt.type\" data-show=\"patch\" data-on:click=\"evt.preventDefault()\" " +
+                "data-on-signal-patch=\"patch.a\"></div>"
+        val issues = html(src).filter { it.code == "scope-name" }
+        assertEquals(listOf("evt", "patch"), marked(src, issues))
+        assertTrue(issues.all { it.severity == Severity.WARNING })
+        assertContains(issues[0].message, "evt is not defined in data-text: Datastar hands an expression evt only in data-on, so")
+        assertContains(issues[1].message, "only in data-on-signal-patch")
+        // A signal, a property, an object key, a string, a function's own parameter and a Pro attribute.
+        val fine =
+            "<div data-text=\"${'$'}evt + x.evt + 'evt'\" data-attr=\"{evt: 1, a: b ? patch2 : 1}\" " +
+                "data-effect=\"[1].map((evt) => evt)\" data-on-raf=\"evt\"></div>"
+        assertEquals(emptyList(), html(fine).filter { it.code == "scope-name" })
+        val kotlin = "import io.github.markusaugust.streamlord.html.*\nfun p() = div { dataText(\"evt.type\"); dataOnClick(\"evt.type\") }"
+        assertEquals(listOf("evt"), marked(kotlin, analyzer.analyzeKotlin(kotlin, opts).filter { it.code == "scope-name" }))
+    }
+
     @Test
     fun `applies an expression fix inside the attribute value`() {
         val src = "<button class=\"btn\" data-on:click=\"@GET('/x')\">go</button>"

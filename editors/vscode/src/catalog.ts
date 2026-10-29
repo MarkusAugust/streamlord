@@ -41,6 +41,8 @@ export interface AttributeSpec {
    * as the body of an event handler.
    */
   returnsValue: boolean;
+  /** The names the expression is handed besides `el`: `evt` in `data-on`, `patch` in `data-on-signal-patch`. */
+  argNames: string[];
 }
 
 export interface ActionSpec {
@@ -120,6 +122,7 @@ function build(): Catalog {
     doc: a.doc as string,
     requires: a.requires as AttributeSpec["requires"],
     returnsValue: (a.returnsValue as boolean | undefined) ?? false,
+    argNames: (a.argNames as string[] | undefined) ?? [],
   }));
   const actions: ActionSpec[] = (raw.actions as unknown as Record<string, unknown>[]).map((a) => ({
     name: a.name as string,

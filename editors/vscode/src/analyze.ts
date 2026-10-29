@@ -1,5 +1,5 @@
 import { catalog, parseAttributeName, type CallSiteSpec } from "./catalog.ts";
-import { attributeDoc, DOCS, quoteAt, validateExpression, type Fix, type Issue } from "./expression.ts";
+import { attributeDoc, DOCS, handedIn, quoteAt, scopeNameIssues, validateExpression, type Fix, type Issue } from "./expression.ts";
 import { PLACEHOLDER, toSource, type Interpolation, type KotlinString } from "./kotlinStrings.ts";
 import { asciiLowercase, indexOfAsciiIgnoreCase, kebab, keyReading, rawKeyNote, tokenize, validateAttributes, validateMarkup, wireKey, wireKeyReads, type Attribute, type Tag } from "./markup.ts";
 import { findCallSites, isHtmlString, lexKotlin, namedArgText, selectStringArg, stringAt, type CallSite } from "./scanner.ts";
@@ -27,6 +27,7 @@ const HTML_SITE_NAMES: ReadonlySet<string> = new Set(Object.keys(catalog.callSit
 /** Keyed helpers that take a key but no expression, so the catalog's expression sites do not list them. */
 const KEY_ONLY_HELPERS: ReadonlySet<string> = new Set(["dataMatchMedia", "dataPersist"]);
 for (const name of KEY_ONLY_HELPERS) (ALL_SITE_NAMES as Set<string>).add(name);
+const HANDED_IN = handedIn(catalog.attributes);
 // The helpers whose key is an HTML attribute's name, in which the DSL refuses a capital.
 const ATTRIBUTE_NAME_HELPERS: ReadonlySet<string> = new Set(["dataAttr", "dataAnimate"]);
 
@@ -329,7 +330,9 @@ function checkExpressionSite(site: CallSite, spec: CallSiteSpec, src: string, hy
   const issues = inStringLiterals(s, interpolationIssues(s, src));
   const text = s.text;
   if (text.includes(PLACEHOLDER) && s.interpolations.some((i) => i.kind === "simple")) return issues;
-  issues.push(...mapIssues(s, src, validateExpression(text, catalog.attributesByKotlin.get(site.name)?.returnsValue, hyphenated)));
+  const attribute = catalog.attributesByKotlin.get(site.name);
+  issues.push(...mapIssues(s, src, validateExpression(text, attribute?.returnsValue, hyphenated)));
+  if (attribute) issues.push(...mapIssues(s, src, scopeNameIssues(text, attribute, HANDED_IN)));
   return issues;
 }
 

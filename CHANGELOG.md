@@ -21,6 +21,10 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- The editors warn, as `scope-name`, on `evt` or `patch` in an expression whose attribute does not
+  hand it over, such as `data-text="evt.type"`, which Datastar runs without an `evt` and which
+  throws. The catalog says per attribute which names its plugin hands an expression, `argNames`,
+  held to the client's plugins.
 - `dataSignals("selected" to null)` declared nothing, without a word: Datastar's client holds no
   null, so the null removes the key, and an expression that reads the signal gets `""`, as it does
   for a null in a list. The editors warn on such a pair as `signal-null`, and the signals page says

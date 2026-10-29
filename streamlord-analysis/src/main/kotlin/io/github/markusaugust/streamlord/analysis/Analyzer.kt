@@ -45,6 +45,7 @@ public class Analyzer(
     public val catalog: Catalog = Catalog.default,
 ) {
     private val expressions = ExpressionValidator(catalog)
+    private val handedIn = handedIn(catalog)
     private val markup = MarkupValidator(catalog)
 
     /** Keyed helpers that take a key but no expression, so the catalog's expression sites do not list them. */
@@ -541,7 +542,9 @@ public class Analyzer(
         val issues = ArrayList(inStringLiterals(s, interpolationIssues(s, src)))
         val text = s.text
         if (PLACEHOLDER in text && s.interpolations.any { it.kind == InterpolationKind.SIMPLE }) return issues
-        issues += mapIssues(s, src, expressions.validate(text, catalog.attributesByKotlin[site.name]?.returnsValue, hyphenated))
+        val attribute = catalog.attributesByKotlin[site.name]
+        issues += mapIssues(s, src, expressions.validate(text, attribute?.returnsValue, hyphenated))
+        attribute?.let { issues += mapIssues(s, src, scopeNameIssues(text, it, handedIn)) }
         return issues
     }
 

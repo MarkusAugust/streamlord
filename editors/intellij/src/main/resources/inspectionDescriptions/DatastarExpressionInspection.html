@@ -8,6 +8,11 @@ template literal that also holds a <code>${...}</code>, or inside a regular expr
 or a regular expression leaves a later <code>$name</code> as a JavaScript variable; and a <code>;</code> inside brackets splits a
 value that is read, which loses it. The filters of <code>data-json-signals</code> and <code>data-on-signal-patch-filter</code>, which
 the client evaluates without signals, are checked here too: one that does not compile, and a <code>$name</code> in one.
+<p>
+Datastar compiles an expression with the names its attribute hands it: <code>evt</code> in <code>data-on</code>, <code>patch</code> in
+<code>data-on-signal-patch</code>. Elsewhere either name throws a ReferenceError, so <code>data-text="evt.type"</code> is flagged. An
+expression that defines a function of its own, which may bind the name, is left alone.
+</p>
 <!-- tooltip end -->
 </body>
 </html>

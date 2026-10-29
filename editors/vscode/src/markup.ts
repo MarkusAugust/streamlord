@@ -1,6 +1,8 @@
 import { catalog, distance, parseAttributeName, type AttributeSpec } from "./catalog.ts";
-import { attributeDoc, DOCS, expressionError, filterPatternIssues, isIdentPart, jsRegions, quoteAt, Region, validateExpression, type Fix, type Issue } from "./expression.ts";
+import { attributeDoc, DOCS, expressionError, filterPatternIssues, handedIn, isIdentPart, jsRegions, quoteAt, Region, scopeNameIssues, validateExpression, type Fix, type Issue } from "./expression.ts";
 import { clientKeyName, objectKeys, signalNameProblem, signalPathProblem, PROTOTYPE_NAMES, type ObjectKey } from "./signals.ts";
+
+const HANDED_IN = handedIn(catalog.attributes);
 
 /**
  * Markup checks for the HTML Datastar patches: complete elements, ids where the protocol needs
@@ -544,7 +546,7 @@ export function validateAttributes(tag: Tag, prefix: string, tagSource?: string,
         const from = at(start);
         return { start: attr.valueStart + from, end: attr.valueStart + (end > start ? Math.max(at(end), from + 1) : from) };
       };
-      for (const issue of validateExpression(decoded.text, spec.returnsValue, hyphenatedSignals)) {
+      for (const issue of [...validateExpression(decoded.text, spec.returnsValue, hyphenatedSignals), ...scopeNameIssues(decoded.text, spec, HANDED_IN)]) {
         const fixes = issue.fixes?.map((f) => ({ ...f, ...source(f.start, f.end) }));
         issues.push({ ...issue, ...source(issue.start, issue.end), ...(fixes ? { fixes } : {}) });
       }
