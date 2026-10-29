@@ -10,6 +10,12 @@ Three things need your attention: the serializers your codec would otherwise loo
 you read by name, and the flags your server framework wants. This documentation's own search
 service is built exactly this way, with no hand-written reflection metadata at all.
 
+One part of the SDK uses reflection, on purpose: on Ktor's Tomcat and Jetty engines, Streamlord
+cuts the connection under a stream whose block threw, by reaching into the engine, since Ktor has
+no API for it ([Ktor](/ktor/)). In a native image without metadata for those engines' fields it
+does nothing, and the stream ends as the engine ends it. CIO and Netty, which a native image
+usually runs on, cut the connection themselves and need none of it.
+
 ## 1. The build file
 
 ```kotlin buildargs=demo sample=none

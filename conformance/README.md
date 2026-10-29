@@ -4,10 +4,12 @@ What the Datastar client and the servers do, recorded by running the client's ow
 adapters on real servers, so that every claim Streamlord makes is held to that rather than to a
 reading of a source. The fixtures under `client/` are JSON objects whose `$comment` names the
 reference file and function that produced them and whose `cases` pair an input with the client's
-output; those under `dom/` are arrays, shaped as their section says; those under `wire/` are
-text. The tests that read them live in the module they hold: `streamlord-core`,
-`streamlord-analysis`, `streamlord-html`, `streamlord-ktor`, `streamlord-spring` and
-`editors/vscode`, each reading the file by a relative path, as the catalog tests do.
+output; those under `dom/` are arrays, shaped as their section says; those under `dsl/` are
+objects whose `cases` each hold a call and its reading; those under `wire/` are text. The tests
+that read them live in the module they hold: `streamlord-core`, `streamlord-analysis`,
+`streamlord-html`, `streamlord-html-pro`, `streamlord-ktor`, `streamlord-spring` and
+`editors/vscode`, each reading the file by a relative path, or by the directory its Gradle build
+passes it, and each declaring what it reads as an input of its test task.
 
 The generators under `generate/` read only the free client under
 `datastar-reference/datastar-<version>/`, a local, git-ignored copy of the Datastar release tag
@@ -50,16 +52,17 @@ client's own action, line parser and watchers run. The fixtures under `dom/`:
 
 | File | What it holds |
 | --- | --- |
-| `decoder-cases.json` | 83 frames: the `argsRaw` the client parsed, the page's body afterwards, the store, and how many view transitions it started |
+| `decoder-cases.json` | frames: the `argsRaw` the client parsed, the page's body afterwards, the store, and how many view transitions it started |
 | `merge-differential.json` | scenarios of signal patches, step by step: the root after each, or `THROWS` and the root once a step threw; a step the Kotlin fold refuses on purpose (`__proto__`) is marked `refused` with what the client kept |
-| `store-cases.json` | 27 short scenarios of signal patches, a merge, a `null` that deletes, `onlyIfMissing`, arrays and their `length`, and patches that are not objects, each with what the store holds afterwards |
-| `script-escapes.json` | 29 script bodies and their escaped forms, as parse5 reads them inside the client's `<body><template>` wrapper and in the whole-document path, and whether the client's `</body>`, `</head>`, `</html>` tests match. parse5 stands in for the browser's `DOMParser`; the three tests are the client's own regular expressions, applied to the text with its svg elements removed as patchElements.ts applies them |
+| `store-cases.json` | short scenarios of signal patches, a merge, a `null` that deletes, `onlyIfMissing`, arrays and their `length`, and patches that are not objects, each with what the store holds afterwards |
+| `script-escapes.json` | script bodies and their escaped forms, as parse5 reads them inside the client's `<body><template>` wrapper and in the whole-document path, and whether the client's `</body>`, `</head>`, `</html>` tests match. parse5 stands in for the browser's `DOMParser`; the three tests are the client's own regular expressions, applied to the text with its svg elements removed as patchElements.ts applies them |
+| `comment-ends.json` | comment openings and endings, and whether what follows them is an element, as parse5 reads them inside the client's wrapper: happy-dom ends `<!-->` and `<!--->` elsewhere than the HTML standard does, so these come from parse5 |
 
 The inputs are read from the fixtures themselves (the `sse` texts and the `steps`) and from a
-list at the end of `dom.mjs` for the script bodies; the generator writes everything else, and a
+list at the end of `dom.mjs` for the script and comment bodies; the generator writes everything else, and a
 run leaves the files byte for byte as they are until the client changes. The tests are
-`SseDecoderAsTheClientReadsTest`, `MergePatchAsClientTest` and `ScriptEscapesAsTheParserReadsTest`
-in `streamlord-core`, and `mergePatchAsClient.test.ts` in the editor.
+`SseDecoderAsTheClientReadsTest`, which reads `comment-ends.json` too, `MergePatchAsClientTest` and
+`ScriptEscapesAsTheParserReadsTest` in `streamlord-core`, and `mergePatchAsClient.test.ts` in the editor.
 
 ```sh
 cd conformance/generate && npm install && npm run dom
@@ -169,7 +172,7 @@ states; a body that ends without a line feed gets one. `Content-Length`, `Transf
 are exact. Tomcat sends no reason phrase, so its status line ends in a space, which the file
 keeps: an editor that strips trailing whitespace must leave these files alone.
 
-The cases, 21 per adapter:
+The cases, the same for every adapter:
 
 - `stream-elements`, `stream-signals`, `stream-scripts`, `stream-sse-fields`: an SSE stream with
   every element patch mode, a selector, the svg namespace, view transitions with and without a

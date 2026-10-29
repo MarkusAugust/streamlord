@@ -267,27 +267,27 @@
         "compiles": true
       },
       {
-        "expression": "$é",
+        "expression": "$\u00e9",
         "returnsValue": false,
-        "js": "$é",
+        "js": "$\u00e9",
         "compiles": true
       },
       {
-        "expression": "$é",
+        "expression": "$\u00e9",
         "returnsValue": true,
-        "js": "return ($é);",
+        "js": "return ($\u00e9);",
         "compiles": true
       },
       {
-        "expression": "$fooé",
+        "expression": "$foo\u00e9",
         "returnsValue": false,
-        "js": "$['foo']é",
+        "js": "$['foo']\u00e9",
         "compiles": false
       },
       {
-        "expression": "$fooé",
+        "expression": "$foo\u00e9",
         "returnsValue": true,
-        "js": "return ($['foo']é);",
+        "js": "return ($['foo']\u00e9);",
         "compiles": false
       },
       {
@@ -1011,25 +1011,25 @@
         "compiles": true
       },
       {
-        "expression": " $a ",
+        "expression": "\u00a0$a\u00a0",
         "returnsValue": false,
         "js": "$['a']",
         "compiles": true
       },
       {
-        "expression": " $a ",
+        "expression": "\u00a0$a\u00a0",
         "returnsValue": true,
         "js": "return ($['a']);",
         "compiles": true
       },
       {
-        "expression": "﻿$a",
+        "expression": "\ufeff$a",
         "returnsValue": false,
         "js": "$['a']",
         "compiles": true
       },
       {
-        "expression": "﻿$a",
+        "expression": "\ufeff$a",
         "returnsValue": true,
         "js": "return ($['a']);",
         "compiles": true

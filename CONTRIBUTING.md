@@ -74,8 +74,8 @@ the client itself does, recorded in `conformance/`:
 
 | Path | What it holds | Made by |
 |---|---|---|
-| `conformance/client/` | the client's own functions run over fixed inputs: casing, attribute keys, expression rewriting, modifier tags, the signal store | `conformance/generate/client.mjs`, from `datastar-reference/` |
-| `conformance/dom/` | the client run in a browser-like DOM: what each SSE frame did to a page and its store, what the HTML parser does with a script body | `conformance/generate/dom.mjs`, from `datastar-reference/` |
+| `conformance/client/` | the client's own functions run over fixed inputs: casing, attribute keys, expression rewriting, modifier tags, the signal store, and what each attribute plugin declares | `conformance/generate/client.mjs`, from `datastar-reference/` |
+| `conformance/dom/` | the client run in a browser-like DOM: what each SSE frame did to a page and its store, what the HTML parser does with a script body and where it ends a comment | `conformance/generate/dom.mjs`, from `datastar-reference/` |
 | `conformance/dsl/` | what the client did with the HTML each DSL call writes: the listeners, timers, store, requests and DOM afterwards, held to what the call means | the HTML by `./gradlew :streamlord-html-pro:updateClientReadings`, the reading by `conformance/generate/dsl.mjs`, from `datastar-reference/` |
 | `conformance/wire/` | the exact HTTP answer each adapter gives, per server, for a fixed set of requests | the adapter tests, with `./gradlew :streamlord-ktor:updateTranscripts :streamlord-spring:updateTranscripts` |
 

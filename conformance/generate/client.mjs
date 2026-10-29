@@ -523,9 +523,12 @@ const files = {
   },
 };
 
+// ASCII only, as dom.mjs and dsl.mjs write theirs, so a byte order mark or a line separator in a case shows in a diff.
+const ascii = (text) => text.replace(/[^\x00-\x7f]/g, (ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, "0")}`);
+
 mkdirSync(out, { recursive: true });
 for (const [name, content] of Object.entries(files)) {
-  writeFileSync(path.join(out, name), `${JSON.stringify(content, null, 2)}\n`);
+  writeFileSync(path.join(out, name), ascii(`${JSON.stringify(content, null, 2)}\n`));
   const count = Array.isArray(content.cases) ? content.cases.length : Object.values(content.cases).map((c) => c.length).join("+");
   console.log(`${name}: ${count} cases`);
 }

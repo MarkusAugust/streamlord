@@ -636,23 +636,23 @@
         "isStringTrue": true
       },
       {
-        "value": " true",
+        "value": "\u00a0true",
         "isStringTrue": true
       },
       {
-        "value": "﻿true",
+        "value": "\ufefftrue",
         "isStringTrue": true
       },
       {
-        "value": "　true",
+        "value": "\u3000true",
         "isStringTrue": true
       },
       {
-        "value": " true",
+        "value": "\u2028true",
         "isStringTrue": true
       },
       {
-        "value": " true",
+        "value": "\u2029true",
         "isStringTrue": true
       },
       {
@@ -660,11 +660,11 @@
         "isStringTrue": false
       },
       {
-        "value": "true",
+        "value": "\u0085true",
         "isStringTrue": false
       },
       {
-        "value": "​true",
+        "value": "\u200btrue",
         "isStringTrue": false
       },
       {
