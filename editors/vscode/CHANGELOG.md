@@ -4,6 +4,9 @@ All notable changes to the Streamlord extension are recorded here.
 
 ## Unreleased
 
+- A key the DSL refuses at runtime, one holding `__` or one ending in `_` before the `__case` the DSL
+  adds, is the error `key-refused`, where the hint used to say what it writes on the wire:
+  `dataClass("isOpen_", …)` and `dataSignals("fooBar__x", …)` throw.
 - `patch` in an expression of an attribute that does not hand it over is the warning `scope-name`:
   only `data-on-signal-patch` declares `patch`, so `data-text="patch.a"` throws a ReferenceError.
 - A pair written `"selected" to null` in `dataSignals` is the warning `signal-null`: Datastar's

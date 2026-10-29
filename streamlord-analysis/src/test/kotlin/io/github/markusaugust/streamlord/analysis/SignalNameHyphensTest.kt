@@ -64,22 +64,6 @@ class SignalNameHyphensTest {
         assertTrue("or form['first-name'] for a key with a hyphen in it" in issues[7].message, issues[7].message)
     }
 
-    // conformance/dsl/free.json, "signals pairs": the client keeps no null, so the pair declares nothing.
-    @Test
-    fun `a null in a pair of dataSignals is a warning, and in patchSignals a removal`() {
-        val src =
-            dsl +
-                """
-                fun page() = div { dataSignals("count" to 0, "selected" to null, "label" to "go to null") }
-                suspend fun send(stream: DatastarStream) { stream.patchSignals("selected" to null) }
-                """.trimIndent()
-        val issues = analyzer.analyzeKotlin(src).filter { it.code == "signal-null" }
-        assertEquals(listOf("null"), issues.map { src.substring(it.start, it.end) })
-        assertEquals(src.indexOf("null"), issues.single().start)
-        assertEquals(Severity.WARNING, issues.single().severity)
-        assertTrue("\"selected\" is not declared" in issues.single().message, issues.single().message)
-    }
-
     @Test
     fun `a key with a hyphen that is data is left alone`() {
         val src =

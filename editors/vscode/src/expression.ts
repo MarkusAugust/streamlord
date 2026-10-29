@@ -108,7 +108,7 @@ const ALWAYS_DECLARED: ReadonlySet<string> = new Set(["el", "$", "__action", "ev
  * For each name a free attribute's expression is handed and the others are not, the attributes
  * that hand it over: `patch` in `data-on-signal-patch`.
  */
-export function handedIn(attributes: readonly { name: string; pro: boolean; argNames: string[] }[]): Map<string, string[]> {
+function handedIn(attributes: readonly { name: string; pro: boolean; argNames: string[] }[]): Map<string, string[]> {
   const out = new Map<string, string[]>();
   for (const a of attributes) if (!a.pro) for (const n of a.argNames) if (!ALWAYS_DECLARED.has(n)) out.set(n, [...(out.get(n) ?? []), a.name]);
   return out;
@@ -121,7 +121,7 @@ export function handedIn(attributes: readonly { name: string; pro: boolean; argN
  * that declares a function or a variable may bind the name itself and is left alone, and so is a
  * Pro attribute, whose plugin is not read here. The same rule as `scopeNameIssues` in streamlord-analysis.
  */
-export function scopeNameIssues(text: string, spec: { name: string; pro: boolean; valueKind: string; argNames: string[] }, handedIn: ReadonlyMap<string, string[]>): Issue[] {
+function scopeNameIssues(text: string, spec: { name: string; pro: boolean; valueKind: string; argNames: string[] }, handedIn: ReadonlyMap<string, string[]>): Issue[] {
   if (spec.pro || spec.valueKind !== "expression" || handedIn.size === 0 || BINDS_NAMES.test(text)) return [];
   const regions = jsRegions(text);
   const out: Issue[] = [];
@@ -653,7 +653,15 @@ function filterSignalsIssues(text: string): Issue[] {
  */
 const NO_SIGNALS: ReadonlySet<string> = new Set();
 
-export function validateExpression(text: string, returnsValue?: boolean, hyphenatedSignals: ReadonlySet<string> = NO_SIGNALS): Issue[] {
+// For each name only some attributes' expressions are handed, those attributes.
+const HANDED_IN = handedIn(catalog.attributes);
+
+/** The issues of `text`, and, with the `attribute` it is the value of, a name only another attribute's expression is handed. */
+export function validateExpression(text: string, returnsValue?: boolean, hyphenatedSignals: ReadonlySet<string> = NO_SIGNALS, attribute?: { name: string; pro: boolean; valueKind: string; argNames: string[] }): Issue[] {
+  return [...validateText(text, returnsValue, hyphenatedSignals), ...(attribute ? scopeNameIssues(text, attribute, HANDED_IN) : [])];
+}
+
+function validateText(text: string, returnsValue: boolean | undefined, hyphenatedSignals: ReadonlySet<string>): Issue[] {
   const issues: Issue[] = [];
   if (text.trim().length === 0) {
     return [{ start: 0, end: Math.max(text.length, 1), message: "Empty Datastar expression.", severity: "warning", code: "empty-expression" }];

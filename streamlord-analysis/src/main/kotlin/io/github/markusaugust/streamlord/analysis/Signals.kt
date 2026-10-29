@@ -503,3 +503,42 @@ private val BARE_KEY = Regex("""[A-Za-z0-9_$]+""")
 
 /** What `\s` matches in JavaScript. */
 private fun Char.isJsSpace(): Boolean = isWhitespace() || this == '\u00A0' || this == '\uFEFF'
+
+private val NULL_PAIR_KEY = Regex("""^[\s(]*"""")
+private val TO_NULL = Regex("""\s+to\s+null\b""")
+
+/**
+ * Each `"name" to null` among the pairs of [site], a `dataSignals` call, which declares nothing:
+ * Datastar's client holds no null, so the null removes the key, and an expression that reads the
+ * signal gets `""`, which the client makes of every null it reads. A warning, since a pair from a
+ * codec may hold a null on purpose. `patchSignals` is left alone, since a null there removes the
+ * signal, as it is meant to.
+ */
+internal fun nullPairIssues(
+    site: CallSite,
+    src: String,
+    lex: KotlinLex,
+): List<Issue> {
+    if (site.name != "dataSignals") return emptyList()
+    return site.positional.mapNotNull { a ->
+        if (a.string != null) return@mapNotNull null
+        val quote = NULL_PAIR_KEY.find(a.text)?.range?.last ?: return@mapNotNull null
+        val key = lex.stringAt(a.start + quote + 1)?.takeIf { it.start == a.start + quote } ?: return@mapNotNull null
+        val end =
+            TO_NULL
+                .matchAt(src, key.end)
+                ?.range
+                ?.last
+                ?.plus(1) ?: return@mapNotNull null
+        Issue(
+            start = end - 4,
+            end = end,
+            message =
+                "Datastar's client holds no null: in data-signals a null removes the key, so \"${key.text}\" is not declared, " +
+                    "and an expression that reads it gets \"\". Declare it with the value it starts as, such as \"\".",
+            severity = Severity.WARNING,
+            code = "signal-null",
+            link = Docs.SIGNALS,
+        )
+    }
+}

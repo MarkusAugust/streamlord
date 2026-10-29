@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.html
 
 import io.github.markusaugust.streamlord.core.StreamlordException
+import io.github.markusaugust.streamlord.core.domain.AttributeNames
 import io.github.markusaugust.streamlord.core.domain.SignalNames
 
 /**
@@ -258,24 +259,12 @@ public object Casing {
             throw InvalidSignalNameException(
                 name,
                 "has a capital, which the browser lowercases in an attribute name; write it as HTML has it, " +
-                    "${attributeSpellings(name).joinToString(" or ")}, or, for an attribute that has capitals such as SVG's " +
-                    "viewBox, the object form $helper(\"${attributeObjectForm(name)}\")",
+                    "${AttributeNames.spellings(name).joinToString(" or ")}, or, for an attribute that has capitals such as SVG's " +
+                    "viewBox, the object form $helper(\"${AttributeNames.objectForm(name)}\")",
             )
         }
         return name
     }
-
-    /**
-     * The spellings HTML may have for an attribute name written with capitals: lowercased when it
-     * has a hyphen already (`aria-Label`), else kebab-case or one word, which only the attribute
-     * tells apart (`ariaLabel` is `aria-label`, `tabIndex` is `tabindex`).
-     */
-    internal fun attributeSpellings(name: String): List<String> =
-        if ('-' in name) listOf(name.lowercase()) else listOf(kebab(name), name.lowercase()).distinct()
-
-    /** The object form with [name] as its key, quoted when it is no JavaScript name. */
-    internal fun attributeObjectForm(name: String): String =
-        if (Regex("[A-Za-z_$][A-Za-z0-9_$]*").matches(name)) "{$name: ...}" else "{'$name': ...}"
 
     /**
      * [name] as an expression refers to it, which is as written: `form.firstName`, `items[0]`, and

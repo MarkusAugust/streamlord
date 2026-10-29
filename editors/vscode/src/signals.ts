@@ -1,5 +1,6 @@
-import { PLACEHOLDER } from "./kotlinStrings.ts";
-import { findCallSites } from "./scanner.ts";
+import { PLACEHOLDER, type KotlinString } from "./kotlinStrings.ts";
+import { findCallSites, stringAt, type CallSite } from "./scanner.ts";
+import { DOCS, type Issue } from "./expression.ts";
 
 /**
  * Collects signal names declared anywhere in a source file, for completion. Heuristic and
@@ -448,4 +449,40 @@ export function objectKeys(body: string, spread: { any: boolean } = { any: false
 /** Datastar exposes kebab-case keys as camelCase signals by default. */
 export function toCamel(name: string): string {
   return name.includes("-") ? name.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase()) : name;
+}
+
+const NULL_PAIR_KEY = /^[\s(]*"/;
+const TO_NULL = /\s+to\s+null\b/y;
+
+/**
+ * Each `"name" to null` among the pairs of `site`, a `dataSignals` call, which declares nothing:
+ * Datastar's client holds no null, so the null removes the key, and an expression that reads the
+ * signal gets `""`, which the client makes of every null it reads. A warning, since a pair from a
+ * codec may hold a null on purpose. `patchSignals` is left alone, since a null there removes the
+ * signal, as it is meant to. The same rule as `nullPairIssues` in streamlord-analysis.
+ */
+export function nullPairIssues(site: CallSite, src: string, strings: KotlinString[]): Issue[] {
+  if (site.name !== "dataSignals") return [];
+  const out: Issue[] = [];
+  for (const a of site.args) {
+    if (a.named !== null || a.string) continue;
+    const m = NULL_PAIR_KEY.exec(a.text);
+    if (!m) continue;
+    const quote = a.start + m[0].length - 1;
+    const key = stringAt(src, quote + 1, strings);
+    if (!key || key.start !== quote) continue;
+    TO_NULL.lastIndex = key.end;
+    const toNull = TO_NULL.exec(src);
+    if (!toNull) continue;
+    const end = key.end + toNull[0].length;
+    out.push({
+      start: end - 4,
+      end,
+      message: `Datastar's client holds no null: in data-signals a null removes the key, so "${key.text}" is not declared, and an expression that reads it gets "". Declare it with the value it starts as, such as "".`,
+      severity: "warning",
+      code: "signal-null",
+      link: DOCS.signals,
+    });
+  }
+  return out;
 }

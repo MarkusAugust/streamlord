@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.domain.AttributeNames
+
 /*
  * Editor-independent analysis: Kotlin or HTML source in, issues with source offsets out.
  */
@@ -15,7 +17,6 @@ private val CASE_VALUE = Regex("""Case\.([A-Z]+)""")
 private val CASE_IN_LAMBDA = Regex("""\bcase\s*=\s*Case\.([A-Z]+)""")
 private val OBJECT_FORM = Regex("""^\s*[{\[]""")
 private val HAS_CAPITAL = Regex("""[A-Z]""")
-private val JS_NAME = Regex("""[A-Za-z_$][A-Za-z0-9_$]*""")
 private val DOLLAR_RUNS = Regex("""\$+""")
 private val ASSIGN_BEFORE = Regex("""\s*=\s*$""")
 private val BRACED_TEMPLATE = Regex("""\$\{""")
@@ -46,7 +47,6 @@ public class Analyzer(
     public val catalog: Catalog = Catalog.default,
 ) {
     private val expressions = ExpressionValidator(catalog)
-    private val handedIn = handedIn(catalog)
     private val markup = MarkupValidator(catalog)
 
     /** Keyed helpers that take a key but no expression, so the catalog's expression sites do not list them. */
@@ -100,6 +100,7 @@ public class Analyzer(
             catalog.scriptCallSites[site.name]?.let { issues += checkScriptSite(site, it) }
             catalog.selectorCallSites[site.name]?.let { issues += checkSelectorSite(site, it) }
             issues += checkKeyCaseSite(site, src)
+            issues += nullPairIssues(site, src, lex)
             for (a in site.args) a.string?.let { claimed += it.start }
             if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
         }
@@ -544,8 +545,7 @@ public class Analyzer(
         val text = s.text
         if (PLACEHOLDER in text && s.interpolations.any { it.kind == InterpolationKind.SIMPLE }) return issues
         val attribute = catalog.attributesByKotlin[site.name]
-        issues += mapIssues(s, src, expressions.validate(text, attribute?.returnsValue, hyphenated))
-        attribute?.let { issues += mapIssues(s, src, scopeNameIssues(text, it, handedIn)) }
+        issues += mapIssues(s, src, expressions.validate(text, attribute?.returnsValue, hyphenated, attribute))
         return issues
     }
 
@@ -653,7 +653,9 @@ public class Analyzer(
         if (key.interpolations.isNotEmpty() || (expr != null && positional.size < 2)) return emptyList()
         val name = key.text
         // dataSignals("{fooBar: 1}", ...) is the object form: an expression, not a key.
-        if (!HAS_CAPITAL.containsMatchIn(name) || OBJECT_FORM.containsMatchIn(name)) return emptyList()
+        if (OBJECT_FORM.containsMatchIn(name)) return emptyList()
+        if ("__" in name) return listOf(refusedKey(spec, key, name, "contains __, where Datastar starts reading modifiers"))
+        if (!HAS_CAPITAL.containsMatchIn(name)) return emptyList()
         // A signal name with a hyphen is refused, which signalNameHyphenIssues says.
         if (spec.keyCase == KeyCase.CAMEL && '-' in name) return emptyList()
         // `case = Case.X`, a positional `Case.X` (dataClass("name", "x", Case.CAMEL)) or `case = Case.X` in the trailing lambda.
@@ -661,6 +663,17 @@ public class Analyzer(
         val explicit = if (named != null) CASE_VALUE.find(named) else CASE_IN_LAMBDA.find(trailingLambdaText(site, src))
         val explicitCase = explicit?.groupValues?.get(1)?.lowercase()
         val wire = wireKey(name, spec.keyCase, explicitCase)
+        if (wire != null && name.endsWith('_') && "__" in wire) {
+            val read = wire.substringBefore("__")
+            return listOf(
+                refusedKey(
+                    spec,
+                    key,
+                    name,
+                    "ends in _, which runs into the __ of the modifiers after it ($wire), so Datastar's client would read the key as $read",
+                ),
+            )
+        }
         if (wire == null) {
             return listOf(
                 Issue(
@@ -692,6 +705,22 @@ public class Analyzer(
         )
     }
 
+    /** A key the DSL refuses at runtime, as `Casing` refuses it, where a hint would say what it writes. */
+    private fun refusedKey(
+        spec: AttributeSpec,
+        key: KotlinString,
+        name: String,
+        reason: String,
+    ): Issue =
+        Issue(
+            start = key.start,
+            end = key.end,
+            message = "Streamlord refuses \"$name\" at runtime: it $reason.",
+            severity = Severity.ERROR,
+            code = "key-refused",
+            link = Docs.attribute(spec.name),
+        )
+
     /**
      * A capital in the key of `dataAttr` or `dataAnimate`, which the DSL refuses at runtime: the
      * browser lowercases an attribute name, so `viewBox` could only reach `view-box`. The fixes are
@@ -699,6 +728,7 @@ public class Analyzer(
      * kebab-case or one word, which only the attribute tells apart (`aria-label`, `tabindex`); one
      * that really has capitals, such as SVG's `viewBox`, the message sends to the object form.
      */
+
     private fun attributeNameIssues(
         site: CallSite,
         spec: AttributeSpec,
@@ -714,8 +744,8 @@ public class Analyzer(
                 ?: return emptyList()
         val name = key.text
         if (key.interpolations.isNotEmpty() || !HAS_CAPITAL.containsMatchIn(name) || OBJECT_FORM.containsMatchIn(name)) return emptyList()
-        val spellings = if ('-' in name) listOf(name.lowercase()) else listOf(kebab(name), name.lowercase()).distinct()
-        val objectForm = if (JS_NAME.matches(name)) "{$name: ...}" else "{'$name': ...}"
+        val spellings = AttributeNames.spellings(name)
+        val objectForm = AttributeNames.objectForm(name)
         val plain = src.substring(key.contentStart, key.contentEnd) == name
         return listOf(
             Issue(

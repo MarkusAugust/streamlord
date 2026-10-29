@@ -265,8 +265,8 @@ public final class io/github/markusaugust/streamlord/analysis/ExpressionValidato
 	public fun <init> ()V
 	public fun <init> (Lio/github/markusaugust/streamlord/analysis/Catalog;)V
 	public synthetic fun <init> (Lio/github/markusaugust/streamlord/analysis/Catalog;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun validate (Ljava/lang/String;Ljava/lang/Boolean;Ljava/util/Set;)Ljava/util/List;
-	public static synthetic fun validate$default (Lio/github/markusaugust/streamlord/analysis/ExpressionValidator;Ljava/lang/String;Ljava/lang/Boolean;Ljava/util/Set;ILjava/lang/Object;)Ljava/util/List;
+	public final fun validate (Ljava/lang/String;Ljava/lang/Boolean;Ljava/util/Set;Lio/github/markusaugust/streamlord/analysis/AttributeSpec;)Ljava/util/List;
+	public static synthetic fun validate$default (Lio/github/markusaugust/streamlord/analysis/ExpressionValidator;Ljava/lang/String;Ljava/lang/Boolean;Ljava/util/Set;Lio/github/markusaugust/streamlord/analysis/AttributeSpec;ILjava/lang/Object;)Ljava/util/List;
 }
 
 public final class io/github/markusaugust/streamlord/analysis/FetchOption {

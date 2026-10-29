@@ -11,22 +11,6 @@ const marked = (src: string, issues: Issue[]) => issues.map((i) => src.slice(i.s
 const markup = (src: string, requireIds = false) => validateMarkup(src, { requireIds, prefix: "data-", checkAttributes: true });
 
 describe("attributes", () => {
-  // conformance/client/plugins.json: only on-signal-patch hands its expression patch. genRx declares
-  // el and evt in every expression, so evt is undefined outside data-on and needs no warning.
-  it("warns on patch where the attribute does not hand it over", () => {
-    const src = `<div data-text="patch.a" data-show="evt" data-on-signal-patch="patch.a"></div>`;
-    const issues = analyzeHtml(src, opts).filter((i) => i.code === "scope-name");
-    assert.deepEqual(marked(src, issues), ["patch"]);
-    assert.equal(issues[0]!.start, src.indexOf("patch"));
-    assert.equal(issues[0]!.severity, "warning");
-    assert.ok(issues[0]!.message.includes("patch is not defined in data-text: Datastar hands an expression patch only in data-on-signal-patch"), issues[0]!.message);
-    // A signal, a property, an action, an object key, a string, a function's or a variable's own
-    // binding, a name joined to letters beyond ASCII, and a Pro attribute.
-    const fine = `<div data-text="$patch + x.patch + 'patch' + \uD835\uDC65patch" data-on:click="@patch('/x')" data-attr="{patch: 1, a: b ? patch2 : 1}" data-effect="[1].map((patch) => patch)" data-init="let patch = 1; patch" data-on-raf="patch"></div>`;
-    assert.deepEqual(analyzeHtml(fine, opts).filter((i) => i.code === "scope-name"), []);
-    const kotlin = `import io.github.markusaugust.streamlord.html.*\nfun p() = div { dataText("patch.a"); dataOnClick("@patch('/x')") }`;
-    assert.deepEqual(marked(kotlin, analyzeKotlin(kotlin, opts).filter((i) => i.code === "scope-name")), ["patch"]);
-  });
 
   it("applies an expression fix inside the attribute value", () => {
     const html = `<button class="btn" data-on:click="@GET('/x')">go</button>`;

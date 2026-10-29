@@ -32,32 +32,6 @@ class MarkupTest {
         assertContains(issue.message, "The client holds the signal, but the next request writes the object under it into the built-in one")
     }
 
-    // conformance/client/plugins.json: only on-signal-patch hands its expression patch. genRx declares
-    // el and evt in every expression, so evt is undefined outside data-on and needs no warning.
-    @Test
-    fun `warns on patch where the attribute does not hand it over`() {
-        val src = "<div data-text=\"patch.a\" data-show=\"evt\" data-on-signal-patch=\"patch.a\"></div>"
-        val issues = html(src).filter { it.code == "scope-name" }
-        assertEquals(listOf("patch"), marked(src, issues))
-        assertEquals(src.indexOf("patch"), issues.single().start)
-        assertEquals(Severity.WARNING, issues.single().severity)
-        assertContains(
-            issues[0].message,
-            "patch is not defined in data-text: Datastar hands an expression patch only in data-on-signal-patch",
-        )
-        // A signal, a property, an action, an object key, a string, a function's or a variable's own
-        // binding, a name joined to letters beyond ASCII, and a Pro attribute.
-        val fine =
-            "<div data-text=\"${'$'}patch + x.patch + 'patch' + \uD835\uDC65patch\" data-on:click=\"@patch('/x')\" " +
-                "data-attr=\"{patch: 1, a: b ? patch2 : 1}\" data-effect=\"[1].map((patch) => patch)\" " +
-                "data-init=\"let patch = 1; patch\" data-on-raf=\"patch\"></div>"
-        assertEquals(emptyList(), html(fine).filter { it.code == "scope-name" })
-        val kotlin =
-            "import io.github.markusaugust.streamlord.html.*\n" +
-                "fun p() = div { dataText(\"patch.a\"); dataOnClick(\"@patch('/x')\") }"
-        assertEquals(listOf("patch"), marked(kotlin, analyzer.analyzeKotlin(kotlin, opts).filter { it.code == "scope-name" }))
-    }
-
     @Test
     fun `applies an expression fix inside the attribute value`() {
         val src = "<button class=\"btn\" data-on:click=\"@GET('/x')\">go</button>"

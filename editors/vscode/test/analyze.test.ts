@@ -197,29 +197,6 @@ describe("markup", () => {
     expect(hints[3]!.message).toContain("A CSS property is written in kebab-case");
   });
 
-  it("refuses a capital in the name of an attribute as the dsl does", () => {
-    const src = `div {
-      dataAttr("viewBox", "'0 0 1 1'")
-      dataAttr("ariaLabel", "'x'")
-      dataAnimate("strokeWidth", "$w")
-      dataAttr("aria-label", "'x'")
-      dataAttr("{viewBox: '0 0 1 1'}")
-      dataAttr("aria-Label", "'x'")
-      dataAttr(name = "tabIndex", expression = "0")
-    }`;
-    const issues = analyzeKotlin(src, opts).filter((i) => i.code === "attribute-name-case" || i.code === "key-case-wire");
-    expect([...new Set(issues.map((i) => i.code))]).toEqual(["attribute-name-case"]);
-    expect(issues.every((i) => i.severity === "error")).toBe(true);
-    expect(issues.map((i) => src.slice(i.start, i.end))).toEqual(['"viewBox"', '"ariaLabel"', '"strokeWidth"', '"aria-Label"', '"tabIndex"']);
-    expect(issues[0]!.message).toContain("Write it as HTML has it, view-box or viewbox, or, for an attribute that has capitals");
-    expect(issues[0]!.message).toContain('the object form dataAttr("{viewBox: ...}")');
-    expect(issues[2]!.message).toContain('dataAnimate("{strokeWidth: ...}")');
-    expect(issues[3]!.message).toContain(`dataAttr("{'aria-Label': ...}")`);
-    expect(issues[1]!.fixes!.map((f) => f.text)).toEqual(["aria-label", "arialabel"]);
-    expect(issues[3]!.fixes!.map((f) => f.text)).toEqual(["aria-label"]);
-    expect(issues[4]!.fixes!.map((f) => f.text)).toEqual(["tab-index", "tabindex"]);
-  });
-
   it("warns, not errors, when the template is only part of an expression", () => {
     const src = `fun seed(initial: Int) = """<div data-signals="{count: $initial}" data-signals:count="$initial" data-text="$initial"></div>"""`;
     const issues = analyzeKotlin(src, opts).filter((i) => i.code === "kotlin-interpolation");

@@ -1,10 +1,10 @@
 import { catalog, parseAttributeName, type CallSiteSpec } from "./catalog.ts";
-import { attributeDoc, DOCS, handedIn, quoteAt, scopeNameIssues, validateExpression, type Fix, type Issue } from "./expression.ts";
+import { attributeDoc, DOCS, quoteAt, validateExpression, type Fix, type Issue } from "./expression.ts";
 import { PLACEHOLDER, toSource, type Interpolation, type KotlinString } from "./kotlinStrings.ts";
 import { asciiLowercase, indexOfAsciiIgnoreCase, kebab, keyReading, rawKeyNote, tokenize, validateAttributes, validateMarkup, wireKey, wireKeyReads, type Attribute, type Tag } from "./markup.ts";
 import { findCallSites, isHtmlString, lexKotlin, namedArgText, selectStringArg, stringAt, type CallSite } from "./scanner.ts";
 import { dslHelpers, EXPRESSION_HELPERS, signalNameHyphenSites } from "./signalNameHyphens.ts";
-import { clientKeyName, collectSignalDefinitions } from "./signals.ts";
+import { clientKeyName, collectSignalDefinitions, nullPairIssues } from "./signals.ts";
 
 /**
  * Editor-independent analysis: Kotlin source in, issues with source offsets out.
@@ -27,7 +27,6 @@ const HTML_SITE_NAMES: ReadonlySet<string> = new Set(Object.keys(catalog.callSit
 /** Keyed helpers that take a key but no expression, so the catalog's expression sites do not list them. */
 const KEY_ONLY_HELPERS: ReadonlySet<string> = new Set(["dataMatchMedia", "dataPersist"]);
 for (const name of KEY_ONLY_HELPERS) (ALL_SITE_NAMES as Set<string>).add(name);
-const HANDED_IN = handedIn(catalog.attributes);
 // The helpers whose key is an HTML attribute's name, in which the DSL refuses a capital.
 const ATTRIBUTE_NAME_HELPERS: ReadonlySet<string> = new Set(["dataAttr", "dataAnimate"]);
 
@@ -74,6 +73,7 @@ export function analyzeKotlin(src: string, opts: AnalyzeOptions): Issue[] {
     const selector = catalog.callSites.selector[site.name];
     if (selector) issues.push(...checkSelectorSite(site, selector));
     issues.push(...checkKeyCaseSite(site, src));
+    issues.push(...nullPairIssues(site, src, lex.strings));
     for (const a of site.args) if (a.string) claimed.add(a.string.start);
   }
   issues.push(...signalNameHyphenSites(src, lex, dslHelpers(src, EXPRESSION_HELPERS), new Set([...ALL_SITE_NAMES, "statements"])));
@@ -331,8 +331,7 @@ function checkExpressionSite(site: CallSite, spec: CallSiteSpec, src: string, hy
   const text = s.text;
   if (text.includes(PLACEHOLDER) && s.interpolations.some((i) => i.kind === "simple")) return issues;
   const attribute = catalog.attributesByKotlin.get(site.name);
-  issues.push(...mapIssues(s, src, validateExpression(text, attribute?.returnsValue, hyphenated)));
-  if (attribute) issues.push(...mapIssues(s, src, scopeNameIssues(text, attribute, HANDED_IN)));
+  issues.push(...mapIssues(s, src, validateExpression(text, attribute?.returnsValue, hyphenated, attribute)));
   return issues;
 }
 
@@ -410,7 +409,9 @@ function checkKeyCaseSite(site: CallSite, src: string): Issue[] {
   if (!key || key.interpolations.length > 0 || (expr && positional.length < 2)) return [];
   const name = key.text;
   // dataSignals("{fooBar: 1}", ...) is the object form: an expression, not a key.
-  if (!/[A-Z]/.test(name) || /^\s*[{\[]/.test(name)) return [];
+  if (/^\s*[{\[]/.test(name)) return [];
+  if (name.includes("__")) return [refusedKey(spec.name, key, name, "contains __, where Datastar starts reading modifiers")];
+  if (!/[A-Z]/.test(name)) return [];
   // A signal name with a hyphen is refused, which signalNameHyphenIssues says.
   if (spec.keyCase === "camel" && name.includes("-")) return [];
   // `case = Case.X`, a positional `Case.X` (dataClass("name", "x", Case.CAMEL)) or `case = Case.X` in the trailing lambda.
@@ -418,6 +419,10 @@ function checkKeyCaseSite(site: CallSite, src: string): Issue[] {
   const explicit = named ? /Case\.([A-Z]+)/.exec(named) : /\bcase\s*=\s*Case\.([A-Z]+)/.exec(trailingLambdaText(site, src));
   const explicitCase = explicit?.[1]?.toLowerCase() ?? null;
   const wire = wireKey(name, spec.keyCase, explicitCase);
+  if (wire !== null && name.endsWith("_") && wire.includes("__")) {
+    const read = wire.slice(0, wire.indexOf("__"));
+    return [refusedKey(spec.name, key, name, `ends in _, which runs into the __ of the modifiers after it (${wire}), so Datastar's client would read the key as ${read}`)];
+  }
   if (wire === null) {
     return [{
       start: key.start,
@@ -437,6 +442,11 @@ function checkKeyCaseSite(site: CallSite, src: string): Issue[] {
     code: "key-case-wire",
     link: attributeDoc(spec.name),
   }];
+}
+
+/** A key the DSL refuses at runtime, as `Casing` refuses it, where a hint would say what it writes. */
+function refusedKey(attribute: string, key: KotlinString, name: string, reason: string): Issue {
+  return { start: key.start, end: key.end, message: `Streamlord refuses "${name}" at runtime: it ${reason}.`, severity: "error", code: "key-refused", link: attributeDoc(attribute) };
 }
 
 /**

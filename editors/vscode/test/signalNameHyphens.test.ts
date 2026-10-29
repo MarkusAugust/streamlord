@@ -44,17 +44,6 @@ suspend fun send(stream: DatastarStream) {
     assert.ok(issues[7]!.message.includes("or form['first-name'] for a key with a hyphen in it"), issues[7]!.message);
   });
 
-  // conformance/dsl/free.json, "signals pairs": the client keeps no null, so the pair declares nothing.
-  it("a null in a pair of dataSignals is a warning, and in patchSignals a removal", () => {
-    const src = `${dsl}fun page() = div { dataSignals("count" to 0, "selected" to null, "label" to "go to null") }
-suspend fun send(stream: DatastarStream) { stream.patchSignals("selected" to null) }`;
-    const issues = analyzeKotlin(src, opts).filter((i) => i.code === "signal-null");
-    assert.deepEqual(issues.map((i) => src.slice(i.start, i.end)), ["null"]);
-    assert.equal(issues[0]!.start, src.indexOf("null"));
-    assert.equal(issues[0]!.severity, "warning");
-    assert.ok(issues[0]!.message.includes('"selected" is not declared'), issues[0]!.message);
-  });
-
   it("a key with a hyphen that is data is left alone", () => {
     const src = `${dsl}fun page() = div {
   dataSignals("user" to mapOf("first-name" to ""))

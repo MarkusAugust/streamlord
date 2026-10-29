@@ -4,6 +4,10 @@ All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here
 
 ## Unreleased
 
+- A key the DSL refuses at runtime, one holding `__` or one ending in `_` before the `__case` the DSL
+  adds, is the error `key-refused`, where the hint used to say what it writes on the wire:
+  `dataClass("isOpen_", …)` and `dataSignals("fooBar__x", …)` throw. In IntelliJ the
+  check is part of Datastar key casing.
 - `patch` in an expression of an attribute that does not hand it over is the warning `scope-name`:
   only `data-on-signal-patch` declares `patch`, so `data-text="patch.a"` throws a ReferenceError.
   In IntelliJ the check is part of Datastar expressions.

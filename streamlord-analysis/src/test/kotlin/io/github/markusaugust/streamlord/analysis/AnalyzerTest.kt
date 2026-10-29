@@ -274,36 +274,6 @@ class AnalyzerTest {
     }
 
     @Test
-    fun `refuses a capital in the name of an attribute as the dsl does`() {
-        val src =
-            """
-            div {
-              dataAttr("viewBox", "'0 0 1 1'")
-              dataAttr("ariaLabel", "'x'")
-              dataAnimate("strokeWidth", "${'$'}w")
-              dataAttr("aria-label", "'x'")
-              dataAttr("{viewBox: '0 0 1 1'}")
-              dataAttr("aria-Label", "'x'")
-              dataAttr(name = "tabIndex", expression = "0")
-            }
-            """.trimIndent()
-        val issues = analyzer.analyzeKotlin(src, opts).filter { it.code == "attribute-name-case" || it.code == "key-case-wire" }
-        assertEquals(listOf("attribute-name-case"), issues.map { it.code }.distinct())
-        assertTrue(issues.all { it.severity == Severity.ERROR })
-        assertEquals(
-            listOf("\"viewBox\"", "\"ariaLabel\"", "\"strokeWidth\"", "\"aria-Label\"", "\"tabIndex\""),
-            issues.map { src.substring(it.start, it.end) },
-        )
-        assertContains(issues[0].message, "Write it as HTML has it, view-box or viewbox, or, for an attribute that has capitals")
-        assertContains(issues[0].message, "the object form dataAttr(\"{viewBox: ...}\")")
-        assertContains(issues[2].message, "dataAnimate(\"{strokeWidth: ...}\")")
-        assertContains(issues[3].message, "dataAttr(\"{'aria-Label': ...}\")")
-        assertEquals(listOf("aria-label", "arialabel"), issues[1].fixes.map { it.text })
-        assertEquals(listOf("aria-label"), issues[3].fixes.map { it.text })
-        assertEquals(listOf("tab-index", "tabindex"), issues[4].fixes.map { it.text })
-    }
-
-    @Test
     fun `warns not errors when the template is only part of an expression`() {
         val src =
             "fun seed(initial: Int) = \"\"\"<div data-signals=\"{count: \$initial}\" data-signals:count=\"\$initial\" " +

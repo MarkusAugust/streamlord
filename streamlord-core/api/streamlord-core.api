@@ -86,6 +86,12 @@ public final class io/github/markusaugust/streamlord/core/application/Streamlord
 	public final fun getDefault ()Lio/github/markusaugust/streamlord/core/application/Streamlord;
 }
 
+public final class io/github/markusaugust/streamlord/core/domain/AttributeNames {
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/domain/AttributeNames;
+	public final fun objectForm (Ljava/lang/String;)Ljava/lang/String;
+	public final fun spellings (Ljava/lang/String;)Ljava/util/List;
+}
+
 public final class io/github/markusaugust/streamlord/core/domain/CspNonce {
 	public static final field ATTRIBUTE Ljava/lang/String;
 	public static final field HEADER Ljava/lang/String;

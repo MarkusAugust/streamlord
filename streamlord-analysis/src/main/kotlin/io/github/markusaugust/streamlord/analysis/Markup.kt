@@ -857,7 +857,6 @@ public class MarkupValidator(
     private val catalog: Catalog = Catalog.default,
 ) {
     private val expressions = ExpressionValidator(catalog)
-    private val handedIn = handedIn(catalog)
 
     /** The actions the catalog lists as sending a request. */
     private val backendActions = catalog.actions.filter { it.kind == "backend" }.map { it.name }
@@ -1212,8 +1211,7 @@ public class MarkupValidator(
                     val from = decoded.toSource(start)
                     return attr.valueStart + from to attr.valueStart + if (end > start) maxOf(decoded.toSource(end), from + 1) else from
                 }
-                for (issue in expressions.validate(decoded.text, spec.returnsValue, hyphenatedSignals) +
-                    scopeNameIssues(decoded.text, spec, handedIn)) {
+                for (issue in expressions.validate(decoded.text, spec.returnsValue, hyphenatedSignals, spec)) {
                     val (start, end) = source(issue.start, issue.end)
                     issues +=
                         issue.copy(
