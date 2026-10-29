@@ -1244,7 +1244,7 @@ public class MarkupValidator(
                     val from = decoded.toSource(start)
                     return attr.valueStart + from to attr.valueStart + if (end > start) maxOf(decoded.toSource(end), from + 1) else from
                 }
-                for (issue in expressions.validate(decoded.text, spec.returnsValue, hyphenatedSignals, spec)) {
+                for (issue in expressions.validate(decoded.text, hyphenatedSignals = hyphenatedSignals, attribute = spec)) {
                     val (start, end) = source(issue.start, issue.end)
                     issues +=
                         issue.copy(

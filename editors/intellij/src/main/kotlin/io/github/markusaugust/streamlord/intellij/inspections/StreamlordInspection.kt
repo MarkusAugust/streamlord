@@ -182,8 +182,8 @@ class UnknownSignalInspection : StreamlordInspection(setOf("unknown-signal")) {
 }
 
 /**
- * Capitals in keys, which the browser lowercases, what the DSL writes on the wire, a hyphen in a
- * signal name, and a capital in the name of an attribute.
+ * Capitals in keys, which the browser lowercases, what the DSL writes on the wire, a key the DSL
+ * refuses, a hyphen in a signal name, and a capital in the name of an attribute.
  */
 class DatastarKeyCaseInspection :
     StreamlordInspection(setOf("key-case", "key-case-wire", "signal-name-hyphen", "attribute-name-case", "key-refused"))

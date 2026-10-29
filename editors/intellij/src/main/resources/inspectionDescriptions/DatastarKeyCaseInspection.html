@@ -5,6 +5,9 @@ The browser lowercases attribute names, so a capital letter in a key never reach
 where Datastar's default is not camel.
 <p>
 In the DSL the SDK writes a camelCase key correctly on its own; a hint on the call says what goes on the wire, so nothing is hidden.
+A key the SDK refuses at runtime is an error instead: one holding <code>__</code>, where Datastar starts reading modifiers, or one
+ending in <code>_</code> before a modifier the call adds, such as <code>dataSignals("foo_", "1", ifMissing = true)</code>, which the
+client would read as <code>foo</code>.
 </p>
 <p>
 A signal name in a DSL call holds no hyphen: Datastar's client reads one as a capital in an attribute key and as a hyphen in an

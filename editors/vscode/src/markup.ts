@@ -559,7 +559,7 @@ export function validateAttributes(tag: Tag, prefix: string, tagSource?: string,
         const from = at(start);
         return { start: attr.valueStart + from, end: attr.valueStart + (end > start ? Math.max(at(end), from + 1) : from) };
       };
-      for (const issue of validateExpression(decoded.text, spec.returnsValue, hyphenatedSignals, spec)) {
+      for (const issue of validateExpression(decoded.text, undefined, hyphenatedSignals, spec)) {
         const fixes = issue.fixes?.map((f) => ({ ...f, ...source(f.start, f.end) }));
         issues.push({ ...issue, ...source(issue.start, issue.end), ...(fixes ? { fixes } : {}) });
       }

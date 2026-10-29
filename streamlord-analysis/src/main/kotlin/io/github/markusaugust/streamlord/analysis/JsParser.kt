@@ -3417,7 +3417,8 @@ private class RegExpValidator(
 
 private fun isNewLine(c: Char): Boolean = c == '\n' || c == '\r' || c == '\u2028' || c == '\u2029'
 
-private fun isJsSpace(c: Char): Boolean =
+/** JavaScript's white space and line terminators: what `\s` matches and `trim` takes, not Kotlin's isWhitespace. */
+internal fun isJsSpace(c: Char): Boolean =
     c == ' ' ||
         c in '\t'..'\r' ||
         c == '\u00a0' ||

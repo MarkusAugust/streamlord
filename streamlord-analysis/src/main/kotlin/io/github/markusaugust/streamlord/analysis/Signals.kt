@@ -422,7 +422,7 @@ internal fun objectKeys(
     var i = 0
 
     fun skipSpace() {
-        while (i < body.length && body[i].isJsSpace()) i++
+        while (i < body.length && isJsSpace(body[i])) i++
     }
     while (i < body.length) {
         val top = frames.last()
@@ -500,9 +500,6 @@ internal fun objectKeys(
 }
 
 private val BARE_KEY = Regex("""[A-Za-z0-9_$]+""")
-
-/** What `\s` matches in JavaScript. */
-private fun Char.isJsSpace(): Boolean = isWhitespace() || this == '\u00A0' || this == '\uFEFF'
 
 private val PAIR_KEY = Regex("""^[\s(]*"""")
 private val PAIR_AFTER = Regex("""\s+to\b""")

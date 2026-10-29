@@ -331,7 +331,7 @@ function checkExpressionSite(site: CallSite, spec: CallSiteSpec, src: string, hy
   const text = s.text;
   if (text.includes(PLACEHOLDER) && s.interpolations.some((i) => i.kind === "simple")) return issues;
   const attribute = catalog.attributesByKotlin.get(site.name);
-  issues.push(...mapIssues(s, src, validateExpression(text, attribute?.returnsValue, hyphenated, attribute)));
+  issues.push(...mapIssues(s, src, validateExpression(text, undefined, hyphenated, attribute)));
   return issues;
 }
 

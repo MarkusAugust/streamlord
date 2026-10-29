@@ -11,7 +11,6 @@ const marked = (src: string, issues: Issue[]) => issues.map((i) => src.slice(i.s
 const markup = (src: string, requireIds = false) => validateMarkup(src, { requireIds, prefix: "data-", checkAttributes: true });
 
 describe("attributes", () => {
-
   it("applies an expression fix inside the attribute value", () => {
     const html = `<button class="btn" data-on:click="@GET('/x')">go</button>`;
     assert.equal(apply(html, analyzeHtml(html, opts)[0]!.fixes![0]!), `<button class="btn" data-on:click="@get('/x')">go</button>`);

@@ -547,7 +547,7 @@ public class Analyzer(
         val text = s.text
         if (PLACEHOLDER in text && s.interpolations.any { it.kind == InterpolationKind.SIMPLE }) return issues
         val attribute = catalog.attributesByKotlin[site.name]
-        issues += mapIssues(s, src, expressions.validate(text, attribute?.returnsValue, hyphenated, attribute))
+        issues += mapIssues(s, src, expressions.validate(text, hyphenatedSignals = hyphenated, attribute = attribute))
         return issues
     }
 
@@ -750,7 +750,6 @@ public class Analyzer(
      * kebab-case or one word, which only the attribute tells apart (`aria-label`, `tabindex`); one
      * that really has capitals, such as SVG's `viewBox`, the message sends to the object form.
      */
-
     private fun attributeNameIssues(
         site: CallSite,
         spec: AttributeSpec,

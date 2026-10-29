@@ -109,10 +109,6 @@ private fun regexEnds(text: String): IntArray {
 // on either side, any character beyond ASCII counted as one, as the editor's twin counts it.
 private val NAME_EDGE = "A-Za-z0-9_$\\x{80}-\\x{10FFFF}"
 
-/** White space as JavaScript's `trim` takes it: its WhiteSpace and LineTerminator, not Java's. */
-private fun Char.isJsSpace(): Boolean =
-    this in "\t\n\u000b\u000c\r \u00a0\u1680\u2028\u2029\u202f\u205f\u3000\ufeff" || this in '\u2000'..'\u200a'
-
 private val BINDS_NAMES = Regex("""=>|\bfunction\b|\b(?:let|const|var)\b""")
 
 // genRx compiles every expression with these parameters (engine.ts in 1.0.4), so they are always
@@ -148,8 +144,8 @@ private fun scopeNameIssues(
         .findAll(text)
         .filter { m ->
             val name = m.value
-            val before = text.substring(0, m.range.first).trimEnd { it.isJsSpace() }.lastOrNull()
-            val after = text.substring(m.range.last + 1).trimStart { it.isJsSpace() }.firstOrNull()
+            val before = text.substring(0, m.range.first).trimEnd(::isJsSpace).lastOrNull()
+            val after = text.substring(m.range.last + 1).trimStart(::isJsSpace).firstOrNull()
             // A key of an object literal, `{patch: 1}`, names nothing.
             name !in spec.argNames && regions[m.range.first] == Region.CODE && !(after == ':' && (before == '{' || before == ','))
         }.map { m ->
@@ -890,12 +886,15 @@ internal fun expressionError(js: String): JsSyntaxError? {
 public class ExpressionValidator(
     private val catalog: Catalog = Catalog.default,
 ) {
+    private val handed = handedIn(catalog)
+
     /**
      * The issues of [text]. With [returnsValue] known, the syntax is judged on the script Datastar
      * compiles, see [clientScript]; without it, on the text as a script, with an object literal
      * allowed to open it. A `$my-value` named in [hyphenatedSignals] is a declared signal, not a
-     * kebab-case slip. With the [attribute] it is the value of, a name only another attribute's
-     * expression is handed is flagged too ([scopeNameIssues]).
+     * kebab-case slip. With the [attribute] it is the value of, whose [AttributeSpec.returnsValue]
+     * stands in for [returnsValue], a name only another attribute's expression is handed is flagged
+     * too ([scopeNameIssues]).
      */
     public fun validate(
         text: String,
@@ -903,9 +902,8 @@ public class ExpressionValidator(
         hyphenatedSignals: Set<String> = emptySet(),
         attribute: AttributeSpec? = null,
     ): List<Issue> =
-        validateText(text, returnsValue, hyphenatedSignals) + (attribute?.let { scopeNameIssues(text, it, handed) } ?: emptyList())
-
-    private val handed = handedIn(catalog)
+        validateText(text, returnsValue ?: attribute?.returnsValue, hyphenatedSignals) +
+            (attribute?.let { scopeNameIssues(text, it, handed) } ?: emptyList())
 
     private fun validateText(
         text: String,
