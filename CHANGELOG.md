@@ -10,6 +10,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 - `DatastarAttributes.value(value)`: a value as kotlinx.html must be handed it for the browser to
   read it back exactly, for an attribute you write yourself (see Fixed).
+  `DatastarAttributes.expression(expression)` does the same for an expression, after the checks
+  every DSL helper makes, which the free and the Pro helpers now share.
 
 ### Changed
 

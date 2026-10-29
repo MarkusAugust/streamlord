@@ -43,12 +43,14 @@ public object DatastarAttributes {
      * is handed, and would keep the references as text.
      */
     public fun value(value: String): String = if ("\\&" in value) value.replace("\\&", "\\&#92;\\&amp;") else value
+
+    /** [expression] once [ExpressionGuard] has passed it, as kotlinx.html must be handed it ([value]): how every expression a DSL helper takes is written. */
+    public fun expression(expression: String): String = value(ExpressionGuard.check(expression))
 }
 
 private fun ds(suffix: String): String = DatastarAttributes.name(suffix)
 
-/** [expression] once [ExpressionGuard] has passed it, as kotlinx.html must be handed it ([DatastarAttributes.value]). */
-private fun expr(expression: String): String = DatastarAttributes.value(ExpressionGuard.check(expression))
+private fun expr(expression: String): String = DatastarAttributes.expression(expression)
 
 /*
  * The `data-*` attributes of Datastar 1.0.4 as kotlinx.html extension functions.

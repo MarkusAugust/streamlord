@@ -2,7 +2,6 @@
 
 package io.github.markusaugust.streamlord.html.pro
 
-import io.github.markusaugust.streamlord.core.domain.ExpressionGuard
 import io.github.markusaugust.streamlord.html.Case
 import io.github.markusaugust.streamlord.html.Casing
 import io.github.markusaugust.streamlord.html.DatastarAttributes
@@ -45,8 +44,7 @@ private fun requireDuration(
 
 private fun ds(suffix: String): String = DatastarAttributes.name(suffix)
 
-/** [expression] once [ExpressionGuard] has passed it, as kotlinx.html must be handed it ([DatastarAttributes.value]). */
-private fun expr(expression: String): String = DatastarAttributes.value(ExpressionGuard.check(expression))
+private fun expr(expression: String): String = DatastarAttributes.expression(expression)
 
 // The timing wrapper the Pro listeners share with the free ones, in the free builders' order.
 private fun StringBuilder.appendTiming(
