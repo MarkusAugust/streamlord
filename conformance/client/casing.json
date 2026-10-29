@@ -1298,6 +1298,44 @@
         "case.pascal.snake": "ApiV2",
         "case.camel.snake": "apiV2"
       }
+    },
+    {
+      "key": "a-\ud801\udc28",
+      "kebab": "a-\ud801\udc28",
+      "camel": "a\ud801\udc28",
+      "snake": "a_\ud801\udc28",
+      "pascal": "A\ud801\udc28",
+      "modifyCasing": {
+        "default camel": "a-\ud801\udc28",
+        "default kebab": "a-\ud801\udc28",
+        "case.camel": "a-\ud801\udc28",
+        "case.kebab": "a-\ud801\udc28",
+        "case.snake": "a_\ud801\udc28",
+        "case.pascal": "A-\ud801\udc28",
+        "case.title": "a-\ud801\udc28",
+        "case.snake.pascal": "A_\ud801\udc28",
+        "case.pascal.snake": "A_\ud801\udc28",
+        "case.camel.snake": "a_\ud801\udc28"
+      }
+    },
+    {
+      "key": "a-\u0085b",
+      "kebab": "a-\u0085b",
+      "camel": "a\u0085b",
+      "snake": "a_\u0085b",
+      "pascal": "A\u0085b",
+      "modifyCasing": {
+        "default camel": "a-\u0085b",
+        "default kebab": "a-\u0085b",
+        "case.camel": "a-\u0085b",
+        "case.kebab": "a-\u0085b",
+        "case.snake": "a_\u0085b",
+        "case.pascal": "A-\u0085b",
+        "case.title": "a-\u0085b",
+        "case.snake.pascal": "A_\u0085b",
+        "case.pascal.snake": "A_\u0085b",
+        "case.camel.snake": "a_\u0085b"
+      }
     }
   ]
 }

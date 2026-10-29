@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.core
 
+import io.github.markusaugust.streamlord.core.client.ClientCasing
 import io.github.markusaugust.streamlord.core.domain.AttributeKeys
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -11,7 +12,7 @@ class AttributeKeysTest {
     fun `kebab writes one hyphen per capital and keeps a custom property's two`() {
         assertEquals(
             listOf("foo-bar", "my-u-r-l", "url-base", "--brand-color"),
-            listOf("fooBar", "myURL", "UrlBase", "--brandColor").map(AttributeKeys::kebab),
+            listOf("fooBar", "myURL", "UrlBase", "--brandColor").map(ClientCasing::kebab),
         )
     }
 

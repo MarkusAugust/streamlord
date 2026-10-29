@@ -113,6 +113,9 @@ const casingKeys = [
   "foo_bar-baz", "Foo-Bar", "FOO", "foo", "f", "F", "", "foo bar", "foo\tbar", "is-open", "widget-loaded",
   "aria-label", "data-x", "my-u-r-l", "fooBAR", "foo-b-a-r", "fooBarBaz", "foo-bar-baz", "fooBar-baz", "f-o-o", "constructor", "has-own-property",
   "a-b", "a--b", "a-b-", "-a-b", "a.-b", "a-.b", "é-b", "foo-é", "b_", "x-1-y", "v2-api", "api-v2",
+  // A character past the BMP, which a Java . takes whole and a JavaScript one half of, and U+0085,
+  // which only a JavaScript . takes.
+  "a-\u{10428}", "a-\u0085b",
 ];
 
 const casingTable = {
@@ -153,6 +156,7 @@ const rawKeys = [
   "bind:value", "bind:form.user.name", "attr:aria-label", "class:is-open", "class:is-open__case.camel",
   "signals:my__key", "signals:my__key__ifmissing", "_-proto-___case.snake", "signals:constructor",
   "signals:to-string__case.camel", "signals:foo-bar", "signals:foo-bar__case.kebab", "signals:fooBar",
+  "signals:my-key__case.snake__case.camel",
   "indicator:loading", "ref:my-element", "computed:total", "match-media:is-mobile", "json-signals__terse",
   "init", "effect", "show", "text", "on:click__delay.200ms", "on:click__throttle.1s.noleading.trailing",
   "on:click__debounce.1.5s", "on:click__debounce.leading.500ms", "on:click__debounce.500",

@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.client.ClientCasing
 import io.github.markusaugust.streamlord.core.domain.SignalNames
 
 /*
@@ -254,7 +255,7 @@ private fun collect(
     }
     // A keyed attribute may carry modifiers after the key: data-signals:foo-bar__ifmissing, and
     // `__case` names the signal: data-signals:my-value__case.snake is `$my_value`.
-    for (m in KEYED_ATTRIBUTE.findAll(src)) out += clientKeyName(m.groupValues[1].asciiLowercase())
+    for (m in KEYED_ATTRIBUTE.findAll(src)) out += ClientCasing.readKey(m.groupValues[1])
     for (m in VALUE_ATTRIBUTE.findAll(src)) out += m.groups[1]?.value ?: m.groupValues[2]
     for (m in OBJECT_ATTRIBUTE.findAll(src)) out += objectKeyPaths(m.groups[1]?.value ?: m.groupValues[2])
     if (reads && language == SourceLanguage.HTML) {
@@ -337,37 +338,6 @@ internal fun signalNameProblem(
     } else {
         "no \$name reaches: Datastar reads ASCII letters, digits and _ after a \$, in parts joined by . or -; $bracket"
     }
-}
-
-private fun caseCamel(s: String): String = KEBAB_LETTER.replace(s) { it.value.substring(1).uppercase() }
-
-private val KEBAB_LETTER = Regex("-[a-z]")
-
-/**
- * The signal the client makes of an attribute key written with its modifiers, as the browser hands
- * it over: `parseAttributeKey` (engine.ts) cuts the modifiers off at the first `__`, and
- * `modifyCasing` (text.ts) applies each `__case` given, in order, camel when none is. A casing it
- * does not know, kebab among them, leaves the key as it is.
- */
-internal fun clientKeyName(written: String): String {
-    val parts = written.split("__")
-    val modifiers = LinkedHashMap<String, List<String>>()
-    for (raw in parts.drop(1)) {
-        val pieces = raw.split('.')
-        modifiers[pieces[0]] = pieces.drop(1).distinct()
-    }
-    var name = parts[0]
-    for (case in modifiers["case"] ?: listOf("camel")) {
-        val cased =
-            when (case) {
-                "camel" -> caseCamel(name)
-                "snake" -> name.replace('-', '_')
-                "pascal" -> name.take(1).uppercase() + caseCamel(name.drop(1))
-                else -> null
-            }
-        name = cased?.ifEmpty { null } ?: name
-    }
-    return name
 }
 
 /**

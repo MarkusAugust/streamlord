@@ -100,10 +100,33 @@ public final class io/github/markusaugust/streamlord/core/catalog/CatalogNames {
 	public final fun getSignalAttributes ()Ljava/util/Set;
 }
 
+public final class io/github/markusaugust/streamlord/core/client/AsciiKt {
+	public static final fun asciiLowercase (Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/client/ClientCasing {
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/client/ClientCasing;
+	public final fun camel (Ljava/lang/String;)Ljava/lang/String;
+	public final fun getCASES ()Ljava/util/List;
+	public final fun kebab (Ljava/lang/String;)Ljava/lang/String;
+	public final fun keyFor (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lio/github/markusaugust/streamlord/core/client/ClientCasing$KeyChoice;
+	public final fun modifyCasing (Ljava/lang/String;Ljava/util/Collection;Ljava/lang/String;)Ljava/lang/String;
+	public static synthetic fun modifyCasing$default (Lio/github/markusaugust/streamlord/core/client/ClientCasing;Ljava/lang/String;Ljava/util/Collection;Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/String;
+	public final fun readKey (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+	public static synthetic fun readKey$default (Lio/github/markusaugust/streamlord/core/client/ClientCasing;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/String;
+	public final fun readsAs (Ljava/lang/String;)Ljava/lang/String;
+	public final fun textCamel (Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/client/ClientCasing$KeyChoice {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun getCase ()Ljava/lang/String;
+	public final fun getKey ()Ljava/lang/String;
+}
+
 public final class io/github/markusaugust/streamlord/core/domain/AttributeKeys {
 	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/domain/AttributeKeys;
 	public final fun capitalIn (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
-	public final fun kebab (Ljava/lang/String;)Ljava/lang/String;
 	public final fun modifierStartIn (Ljava/lang/String;)Ljava/lang/String;
 	public final fun nameProblem (Ljava/lang/String;)Ljava/lang/String;
 	public final fun objectForm (Ljava/lang/String;)Ljava/lang/String;

@@ -1,5 +1,8 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.client.ClientCasing
+import io.github.markusaugust.streamlord.core.client.asciiLowercase
+
 /*
  * Validation of Datastar expressions. A Datastar expression is JavaScript in which `$name` is a
  * signal and `@name(` is an action. The client rewrites both with one pattern before it compiles
@@ -10,7 +13,6 @@ package io.github.markusaugust.streamlord.analysis
 private val SPACED_ACTION = Regex("""@([A-Za-z_$][A-Za-z0-9_$]*)(\s+)\(""")
 private val SIGNAL_PREFIX = Regex("""\$([A-Za-z_][A-Za-z0-9_.]*)?$""")
 private val ACTION_PREFIX = Regex("""@([A-Za-z_][A-Za-z0-9_]*)?$""")
-private val KEBAB_PART = Regex("""-([a-z])""")
 private val WORD_CHAR = Regex("""\w""")
 
 /** The quote of the single-, double- or backtick-quoted JavaScript string literal the offset is inside, or null. */
@@ -341,9 +343,6 @@ internal fun jsRegions(text: String): ByteArray {
     }
     return kind
 }
-
-/** `foo-bar` -> `fooBar`, as Datastar reads a kebab-case key. */
-public fun toCamel(name: String): String = if ('-' in name) KEBAB_PART.replace(name) { it.groupValues[1].uppercase() } else name
 
 /** The characters `String.prototype.trim` removes: WhiteSpace and LineTerminator, which `Char.isWhitespace` is not. */
 private const val JS_WHITESPACE = "\t\n\u000B\u000C\r \u00A0\u1680\u2028\u2029\u202F\u205F\u3000\uFEFF"
@@ -1116,7 +1115,7 @@ public class ExpressionValidator(
         // after a hyphen (caseFns.camel in text.ts): a key a-b-1 is the signal aB-1, a-b.c-d is aB.cD,
         // and foo-_bar keeps its name.
         val key = written.substring(1).asciiLowercase()
-        val signal = toCamel(key)
+        val signal = ClientCasing.camel(key)
         val camel = "$" + signal
         val spaced = written.replace("-", " - ")
         val fixes = ArrayList<Fix>()

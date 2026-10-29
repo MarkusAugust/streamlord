@@ -11,30 +11,16 @@ import kotlin.test.assertFailsWith
 import kotlin.test.fail
 
 /**
- * Holds [Casing] to `conformance/client/casing.json` and `conformance/client/attribute-keys.json`,
- * the output of the Datastar 1.0.4 client's `modifyCasing` (utils/text.ts) and `parseAttributeKey`
- * (engine/engine.ts) run by `conformance/generate/client.mjs`.
+ * Holds what [Casing] writes and refuses to `conformance/client/casing.json` and
+ * `conformance/client/attribute-keys.json`, the output of the Datastar 1.0.4 client's
+ * `modifyCasing` (utils/text.ts) and `parseAttributeKey` (engine/engine.ts) run by
+ * `conformance/generate/client.mjs`. The client's casing itself is core's, held by ClientCasingTest.
  */
 class ClientOracleTest {
     private fun cases(name: String): List<JsonObject> =
         JsonParser.parseObject(File("../conformance/client/$name").readText()).array("cases")!!.objects()
 
     private val casing = cases("casing.json").associateBy { it.string("key")!! }
-
-    /** `casing.json`: [Casing.camel] and [Casing.clientCase] against `modifyCasing` with each `__case`. */
-    @Test
-    fun `recases a key as the client's caseFns do`() {
-        assertEquals(68, casing.size)
-        for ((key, case) in casing) {
-            val table = case.obj("modifyCasing")!!
-            assertEquals(table.string("case.camel"), Casing.camel(key), key)
-            for (c in Case.entries) {
-                // The client throws on `__case.pascal` of an empty key; validate refuses a blank name before clientCase sees one.
-                val expected = table.string("case.${c.wire}") ?: continue
-                assertEquals(expected, Casing.clientCase(key, c), "$key as ${c.wire}")
-            }
-        }
-    }
 
     /**
      * `casing.json`: [Casing.key] writes a key and a `__case` for a name typed with capitals, so
@@ -69,12 +55,6 @@ class ClientOracleTest {
         assertEquals(emptyList(), misread)
     }
 
-    /** `casing.json`: [Casing.clientCamel], which `bindProp` reads a `__prop` back with, is text.ts's `camel`. */
-    @Test
-    fun `camel-cases as the client's camel does`() {
-        for ((key, case) in casing) assertEquals(case.string("camel"), Casing.clientCamel(key), key)
-    }
-
     /**
      * `attribute-keys.json`: [Casing.heldKey] reads the signal a key with modifiers declares as
      * `parseAttributeKey` and `modifyCasing` do, and refuses one the client cannot hold.
@@ -82,14 +62,13 @@ class ClientOracleTest {
     @Test
     fun `reads the signal a written key declares as the client does`() {
         val cases = cases("attribute-keys.json")
-        assertEquals(54, cases.size)
+        assertEquals(55, cases.size)
         for (case in cases) {
             val raw = case.string("raw")!!
             val held = case.string("signalCamel") ?: continue
             // The browser lowercases an attribute name; the fixture holds the function's answer for the text as given.
             if (raw != raw.lowercase()) continue
             val written = raw.substringAfter(':')
-            assertEquals(held, Casing.readKey(written), raw)
             if (SignalNames.pathProblem(held) == null) {
                 assertEquals(written, Casing.heldKey(held, written), raw)
             } else {

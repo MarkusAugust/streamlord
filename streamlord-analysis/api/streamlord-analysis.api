@@ -255,7 +255,6 @@ public final class io/github/markusaugust/streamlord/analysis/DocumentationKt {
 public final class io/github/markusaugust/streamlord/analysis/ExpressionKt {
 	public static final fun actionPrefixAt (Ljava/lang/String;I)Ljava/lang/String;
 	public static final fun signalPrefixAt (Ljava/lang/String;I)Ljava/lang/String;
-	public static final fun toCamel (Ljava/lang/String;)Ljava/lang/String;
 }
 
 public final class io/github/markusaugust/streamlord/analysis/ExpressionValidator {
@@ -441,13 +440,11 @@ public final class io/github/markusaugust/streamlord/analysis/KotlinStringsKt {
 public final class io/github/markusaugust/streamlord/analysis/MarkupKt {
 	public static final fun getTEMPLATE_SYNTAX ()Lkotlin/text/Regex;
 	public static final fun hasTemplateSyntax (Ljava/lang/String;)Z
-	public static final fun kebab (Ljava/lang/String;)Ljava/lang/String;
 	public static final fun keyKind (Lio/github/markusaugust/streamlord/analysis/AttributeSpec;)Lio/github/markusaugust/streamlord/analysis/KeyKind;
 	public static final fun keyReading (Lio/github/markusaugust/streamlord/analysis/AttributeSpec;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
 	public static final fun rawKeyNote (Lio/github/markusaugust/streamlord/analysis/AttributeSpec;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
 	public static final fun tokenize (Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/Tokens;
 	public static final fun wireKey (Ljava/lang/String;Lio/github/markusaugust/streamlord/analysis/KeyCase;Ljava/lang/String;)Ljava/lang/String;
-	public static final fun wireKeyReads (Ljava/lang/String;)Ljava/lang/String;
 }
 
 public final class io/github/markusaugust/streamlord/analysis/MarkupOptions {

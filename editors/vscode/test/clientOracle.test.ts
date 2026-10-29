@@ -29,7 +29,7 @@ const opts = { prefix: "data-", checkHtmlAttributes: true };
 describe("the client's rules", () => {
   it("reads the case of a key as modifyCasing does", () => {
     const cases = read<CasingCase[]>("casing.json");
-    assert.equal(cases.length, 68);
+    assert.equal(cases.length, 70);
     for (const { key, modifyCasing } of cases) {
       // A key holding __ is cut there by parseAttributeKey, so modifyCasing never sees it whole.
       if (key.includes("__")) continue;
@@ -74,7 +74,7 @@ describe("the client's rules", () => {
 
   it("splits an attribute name as parseAttributeKey does", () => {
     const cases = read<AttributeKeyCase[]>("attribute-keys.json");
-    assert.equal(cases.length, 54);
+    assert.equal(cases.length, 55);
     for (const { raw, pluginName, key, modifiers, signalCamel } of cases) {
       const parsed = parseAttributeName(`data-${raw}`, "data-");
       assert.ok(parsed, raw);

@@ -1,6 +1,8 @@
 package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
+import io.github.markusaugust.streamlord.core.client.ClientCasing
+import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.domain.AttributeKeys
 import io.github.markusaugust.streamlord.core.json.JsonParser
 
@@ -112,7 +114,6 @@ private val WORD_CHAR_CLASS = Regex("""\w""")
 private val IDENT = Regex("""^[A-Za-z_][A-Za-z0-9_-]*$""")
 private val SIGNAL_NAME = Regex("""^[A-Za-z_$][A-Za-z0-9_.$-]*$""")
 private val HAS_CAPITAL = Regex("""[A-Z]""")
-private val LEADING_CAPITAL = Regex("""^[A-Z]""")
 private val HAS_LOWERCASE = Regex("""[a-z]""")
 
 /** A JavaScript escape in a key as written: `\\` is a backslash, `\'` a quote. */
@@ -434,17 +435,6 @@ private val TEMPLATE_CALL = Regex("""^[@#][A-Za-z]+\s*\(""")
 
 /** Below this length a Datastar name has too many honest neighbours (test, kind, once) to judge a bare `data-*` at all. */
 private const val LONG_NAME = 6
-
-/**
- * Lowercases A to Z and nothing else, so the result is as long as the input: `lowercase()` turns
- * U+0130 into two characters and moves every offset after it.
- */
-internal fun String.asciiLowercase(): String {
-    if (none { it in 'A'..'Z' }) return this
-    val out = StringBuilder(length)
-    for (c in this) out.append(if (c in 'A'..'Z') c + 32 else c)
-    return out.toString()
-}
 
 /** `indexOf` that ignores the case of A to Z; [needle] is given in lowercase. */
 internal fun String.indexOfAsciiIgnoreCase(
@@ -841,38 +831,26 @@ private val MATHML_TEXT = setOf("mi", "mo", "mn", "ms", "mtext")
 
 private val HTML_ENCODINGS = setOf("text/html", "application/xhtml+xml")
 
-/** `fooBar` -> `foo-bar`, one hyphen per capital, which Datastar's camel conversion turns back into `fooBar`. */
-public fun kebab(name: String): String = AttributeKeys.kebab(name)
-
 /**
  * The key to write, and the `__case` to add, so that a key the author typed with capitals comes
  * back as that name: `foo-bar` for a signal (Datastar reads it as camelCase), `widget-loaded__case.camel`
  * for an event or class (kebab by default), `aria-label` where the key is used as it is. An
  * explicit `__case` is kept: the key is still kebab-cased, because the browser lowercases it
  * either way. A signal key is read as camelCase, so `fooBar-baz` comes back as `fooBarBaz`, the
- * name the DSL's `signal()` reads from it too; [clientKeyName] says what. Null for an event or
+ * name the DSL's `signal()` reads from it too; [ClientCasing.readKey] says what. Null for an event or
  * class name that mixes capitals with a hyphen before a lower-case letter, `fooBar-baz` or `A-b`,
  * since the client's camel and pascal turn that hyphen into a capital too (`modifyCasing` in
- * text.ts) and no key gives it back; [wireKeyReads] says what it would read. Shared by the HTML
+ * text.ts) and no key gives it back; [ClientCasing.readsAs] says what it would read. Shared by the HTML
  * warning and the Kotlin wire hint.
  */
 public fun wireKey(
     key: String,
     keyCase: KeyCase?,
     explicitCase: String?,
-): String? {
-    val base = kebab(key)
-    if (explicitCase != null) return "${base}__case.$explicitCase"
-    val wanted = if (LEADING_CAPITAL.containsMatchIn(key)) "pascal" else "camel"
-    if (keyCase == KeyCase.RAW) return base
-    if (keyCase == KeyCase.KEBAB && CASE_FNS.getValue(wanted)(base) != key) return null
-    val defaultCase = if (keyCase == KeyCase.CAMEL) "camel" else "kebab"
-    return if (wanted == defaultCase) base else "${base}__case.$wanted"
-}
-
-/** What the client reads from the kebab-case key of [key] under the case its capitals ask for. */
-public fun wireKeyReads(key: String): String =
-    CASE_FNS.getValue(if (LEADING_CAPITAL.containsMatchIn(key)) "pascal" else "camel")(kebab(key))
+): String? =
+    ClientCasing.keyFor(key, explicitCase, keyCase?.takeIf { it != KeyCase.RAW }?.name?.lowercase())?.let { choice ->
+        choice.key + (choice.case?.let { "__case.$it" } ?: "")
+    }
 
 /**
  * What `data-x:` with an empty key lacks besides the colon dropped: null when the attribute runs
@@ -913,29 +891,12 @@ private fun emptyKeyAdvice(
     }
 }
 
-/** The cases the 1.0.4 client has a function for (utils/text.ts); any other value leaves the key as it is. */
-private val CASE_FNS: Map<String, (String) -> String> =
-    mapOf(
-        "camel" to ::camelCase,
-        "snake" to { s -> s.replace('-', '_') },
-        "pascal" to { s -> if (s.isEmpty()) s else s.substring(0, 1).uppercase() + camelCase(s.substring(1)) },
-    )
-
-private val HYPHEN_LOWER = Regex("-[a-z]")
-
-private fun camelCase(s: String): String = HYPHEN_LOWER.replace(s) { it.value.substring(1).uppercase() }
-
 /** The key as the client recases it: each value of the last `__case` in turn, or the attribute's default without one. */
 private fun clientCase(
     key: String,
     modifiers: List<ParsedModifier>,
     defaultCase: String,
-): String {
-    val mod = modifiers.lastOrNull { it.name == "case" }
-    var out = key
-    for (c in mod?.args?.distinct() ?: listOf(defaultCase)) out = CASE_FNS[c]?.invoke(out)?.ifEmpty { null } ?: out
-    return out
-}
+): String = ClientCasing.modifyCasing(key, modifiers.lastOrNull { it.name == "case" }?.args?.distinct(), defaultCase)
 
 /** What a key is to Datastar: the noun the messages and the hover use, from `keyCase` in the catalog. */
 public enum class KeyKind { SIGNAL, EVENT, CLASS, RAW }
@@ -981,11 +942,11 @@ public fun rawKeyNote(
 
         // The object form writes a key kebab-case too (style.ts:50 in 1.0.4), so no form keeps a capital.
         spec.name == "style" && key.startsWith("--") -> {
-            " No form keeps a capital in a custom property: name it in kebab-case, here and in the CSS, as ${kebab(key)}."
+            " No form keeps a capital in a custom property: name it in kebab-case, here and in the CSS, as ${ClientCasing.kebab(key)}."
         }
 
         spec.name == "style" -> {
-            " A CSS property is written in kebab-case: $prefix${spec.name}:${kebab(key)}."
+            " A CSS property is written in kebab-case: $prefix${spec.name}:${ClientCasing.kebab(key)}."
         }
 
         else -> {
@@ -1472,7 +1433,7 @@ public class MarkupValidator(
 
     /**
      * The signal an attribute declares, when the client cannot hold it or no `$` reference reaches
-     * it: the key as the client reads it ([clientKeyName]), the name in the value of `data-bind`,
+     * it: the key as the client reads it ([ClientCasing.readKey]), the name in the value of `data-bind`,
      * `data-ref` and `data-indicator`, and the keys of the object form. The DSL holds a name to the
      * same rules (`SignalNames` in streamlord-core, `Casing.signalName` and `Casing.heldKey` in
      * streamlord-html).
@@ -1492,7 +1453,7 @@ public class MarkupValidator(
         // data-signals:__proto__ has no key to the client: the `__` starts the modifiers, and no plugin is named `signals:`.
         if (!parsed.key.isNullOrEmpty() && colon >= 0 && !cut) {
             val written = attr.name.substring(colon + 1)
-            val held = clientKeyName(written.asciiLowercase())
+            val held = ClientCasing.readKey(written)
             val keyStart = attr.nameStart + colon + 1
             val keyEnd = keyStart + written.substringBefore("__").length
             // data-signals:constructor="{a: 1}" puts an object under the last part, which the client then writes into the built-in one.
@@ -1738,7 +1699,7 @@ public class MarkupValidator(
         // With an explicit __case already there, only the key itself changes, when that case gives the name back.
         val fixed =
             if (existing != null) {
-                kebab(key).takeIf { clientCase(it, listOf(existing), "camel") == key }
+                ClientCasing.kebab(key).takeIf { clientCase(it, listOf(existing), "camel") == key }
             } else {
                 wireKey(key, spec.keyCase, null)
             }
@@ -1747,11 +1708,11 @@ public class MarkupValidator(
             val noKey =
                 if (existing != null) {
                     val written = "__case." + existing.args.joinToString(".")
-                    "No key with $written gives $key back: the browser lowercases the key, and from ${kebab(key)}$written " +
-                        "Datastar reads ${clientCase(kebab(key), listOf(existing), "camel")}."
+                    "No key with $written gives $key back: the browser lowercases the key, and from ${ClientCasing.kebab(key)}$written " +
+                        "Datastar reads ${clientCase(ClientCasing.kebab(key), listOf(existing), "camel")}."
                 } else {
                     "No key gives $key back: with __case.camel or __case.pascal Datastar turns every hyphen before a " +
-                        "lower-case letter into a capital and reads ${wireKeyReads(key)}."
+                        "lower-case letter into a capital and reads ${ClientCasing.readsAs(key)}."
                 }
             return listOf(
                 Issue(
@@ -1792,7 +1753,7 @@ public class MarkupValidator(
                     val end = attr.valueEnd + if (attr.quoted) 1 else 0
                     listOf(Fix("Use the object form", attr.nameStart, end, "$name=$quote{$key: $value}$quote"))
                 } else if (spec.name == "style" && !key.startsWith("--")) {
-                    listOf(Fix("Change to ${kebab(key)}", keyStart, keyStart + key.length, kebab(key)))
+                    listOf(Fix("Change to ${ClientCasing.kebab(key)}", keyStart, keyStart + key.length, ClientCasing.kebab(key)))
                 } else {
                     emptyList()
                 }
@@ -1987,7 +1948,7 @@ public class MarkupValidator(
                     // The client leaves the key as it is for a case it has no function for. Where the default
                     // is kebab, which it has none for either, that is the key without the modifier.
                     if (spec.name == "case" && attribute.keyCase == KeyCase.KEBAB) {
-                        val also = rest.filter { it !in CASE_FNS }.joinToString("") { ".$it" }
+                        val also = rest.filter { it !in ClientCasing.CASES }.joinToString("") { ".$it" }
                         val head =
                             if (!v.isNullOrEmpty()) {
                                 "Unknown value .$v for __case, which Datastar ignores" + if (also.isEmpty()) "" else ", as it does $also"
@@ -2000,7 +1961,7 @@ public class MarkupValidator(
                     }
                 }
                 // __case.camel.foo: the client applies each value it has a function for and skips the rest.
-                val applied = if (spec.name == "case") rest.filter { it in CASE_FNS } else rest
+                val applied = if (spec.name == "case") rest.filter { it in ClientCasing.CASES } else rest
                 if (applied.isNotEmpty()) {
                     fail("__${spec.name} takes a single value.")
                 } else if (rest.isNotEmpty() && v != null && v in spec.values) {

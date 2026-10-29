@@ -334,6 +334,18 @@
       "signalKebab": "fooBar"
     },
     {
+      "raw": "signals:my-key__case.snake__case.camel",
+      "pluginName": "signals",
+      "key": "my-key",
+      "modifiers": {
+        "case": [
+          "camel"
+        ]
+      },
+      "signalCamel": "myKey",
+      "signalKebab": "myKey"
+    },
+    {
       "raw": "indicator:loading",
       "pluginName": "indicator",
       "key": "loading",

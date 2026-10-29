@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.html
 
 import io.github.markusaugust.streamlord.core.StreamlordException
+import io.github.markusaugust.streamlord.core.client.ClientCasing
 import io.github.markusaugust.streamlord.core.domain.AttributeKeys
 import io.github.markusaugust.streamlord.core.domain.SignalNames
 
@@ -38,13 +39,12 @@ public class InvalidSignalNameException(
  */
 public object Casing {
     private val UPPER = Regex("[A-Z]")
-    private val KEBAB = Regex("-([a-z])")
 
     /** `fooBar` -> `foo-bar`, `myURL` -> `my-u-r-l`: one hyphen per capital, so Datastar's camel conversion gives the name back. */
-    public fun kebab(name: String): String = AttributeKeys.kebab(name)
+    public fun kebab(name: String): String = ClientCasing.kebab(name)
 
     /** Datastar's own reading of a key: `-x` becomes `X`. */
-    public fun camel(name: String): String = name.replace(KEBAB) { it.groupValues[1].uppercase() }
+    public fun camel(name: String): String = ClientCasing.camel(name)
 
     /** [name], if it can be a key or a signal name ([AttributeKeys.nameProblem]); else it throws [InvalidSignalNameException]. */
     public fun validate(name: String): String {
@@ -88,18 +88,13 @@ public object Casing {
         advice: String,
     ): Pair<String, Case?> {
         validate(name)
-        if (!UPPER.containsMatchIn(name)) return name to case
-        val key = kebab(name)
-        if (case != null) return key to case
-        val wanted = if (name.first().isUpperCase()) Case.PASCAL else Case.CAMEL
-        if (default == Case.KEBAB && clientCase(key, wanted) != name) {
-            throw InvalidSignalNameException(
+        val choice =
+            ClientCasing.keyFor(name, case?.wire, default.wire) ?: throw InvalidSignalNameException(
                 name,
                 "mixes capitals with a hyphen before a lower-case letter; Datastar's client turns that hyphen " +
-                    "into a capital as well, so it would read ${clientCase(key, wanted)}. $advice",
+                    "into a capital as well, so it would read ${ClientCasing.readsAs(name)}. $advice",
             )
-        }
-        return key to (if (wanted == default) null else wanted)
+        return choice.key to Case.entries.firstOrNull { it.wire == choice.case }
     }
 
     /**
@@ -117,18 +112,6 @@ public object Casing {
         return key + modifiers
     }
 
-    /** [key] as Datastar's client reads it with [case] applied (`caseFns` in text.ts); kebab leaves it as it is. */
-    internal fun clientCase(
-        key: String,
-        case: Case,
-    ): String =
-        when (case) {
-            Case.CAMEL -> camel(key)
-            Case.SNAKE -> key.replace('-', '_')
-            Case.PASCAL -> key.take(1).uppercase() + camel(key.drop(1))
-            Case.KEBAB -> key
-        }
-
     /**
      * [written], the key and modifiers of an attribute that declares the signal [name], once the
      * name Datastar's client reads from it is one it can hold. The browser lowercases the key, the
@@ -140,23 +123,9 @@ public object Casing {
         name: String,
         written: String,
     ): String {
-        val held = readKey(written)
+        val held = ClientCasing.readKey(written)
         SignalNames.pathProblem(held)?.let { throw InvalidSignalNameException(name, "is read by Datastar's client as $held, which $it") }
         return written
-    }
-
-    /**
-     * The signal the client reads from a key [written] with its modifiers, once the browser has
-     * lowercased it: cut at the first `__`, and each `__case` applied in turn, camel when none is
-     * (`parseAttributeKey` in engine.ts, `modifyCasing` in text.ts).
-     */
-    internal fun readKey(written: String): String {
-        val parts = written.lowercase().split("__")
-        val modifiers = parts.drop(1).map { it.split('.') }
-        val cases = modifiers.lastOrNull { it.first() == "case" }?.drop(1) ?: listOf("camel")
-        return cases.fold(parts.first()) { key, case ->
-            Case.entries.firstOrNull { it.wire == case }?.let { clientCase(key, it) } ?: key
-        }
     }
 
     /**
@@ -169,7 +138,7 @@ public object Casing {
         validate(prop)
         if ('.' in prop) throw InvalidSignalNameException(prop, "contains ., where Datastar starts reading the next modifier value")
         val wire = prop.replace(UPPER) { "-" + it.value.lowercase() }
-        val read = clientCamel(wire.lowercase())
+        val read = ClientCasing.textCamel(wire.lowercase())
         if (read != prop) {
             throw InvalidSignalNameException(prop, "is read back by Datastar's client from the __prop modifier as $read")
         }
@@ -188,24 +157,6 @@ public object Casing {
         }
         return event
     }
-
-    // `camel` in Datastar's utils/text.ts: its own `kebab`, then a capital for the character after each hyphen.
-    private val CLIENT_KEBAB =
-        listOf(
-            Regex("([A-Z]+)([A-Z][a-z])"),
-            Regex("([a-z0-9])([A-Z])"),
-            Regex("([A-Za-z])([0-9]+)"),
-            Regex("([0-9]+)([A-Za-z])"),
-        )
-    private val CLIENT_SPACE = Regex("[\\s_]+")
-    private val CLIENT_HYPHEN = Regex("-.")
-
-    internal fun clientCamel(name: String): String =
-        CLIENT_KEBAB
-            .fold(name) { s, re -> re.replace(s, "$1-$2") }
-            .replace(CLIENT_SPACE, "-")
-            .lowercase()
-            .replace(CLIENT_HYPHEN) { it.value.substring(1).uppercase() }
 
     /** The key for an attribute whose key is used as written (`style`, `persist`): `backgroundColor` -> `background-color`. */
     public fun plainKey(name: String): String = kebab(validate(name))

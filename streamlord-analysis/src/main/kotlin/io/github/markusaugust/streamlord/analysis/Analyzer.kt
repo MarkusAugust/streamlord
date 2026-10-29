@@ -1,6 +1,8 @@
 package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
+import io.github.markusaugust.streamlord.core.client.ClientCasing
+import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.domain.AttributeKeys
 
 /*
@@ -690,7 +692,7 @@ public class Analyzer(
         // What the DSL writes after the key, as Casing.withModifiers is handed it: the case, then the rest.
         if (wire != null) {
             // The key itself, not what comes before the first __: in b___case.pascal that is b.
-            val keyPart = if (capital) kebab(name) else name
+            val keyPart = if (capital) ClientCasing.kebab(name) else name
             val modifiers = wire.removePrefix(keyPart) + if (addsModifiers(site, spec, src)) "__" else ""
             AttributeKeys.runsIntoModifiers(keyPart, modifiers)?.let { return listOf(refusedKey(spec, key, name, it)) }
         }
@@ -702,7 +704,9 @@ public class Analyzer(
                     end = key.end,
                     message =
                         "No key gives $name back: the browser lowercases attribute names, and with __case.camel or __case.pascal " +
-                            "Datastar turns every hyphen before a lower-case letter into a capital and reads ${wireKeyReads(name)}. " +
+                            "Datastar turns every hyphen before a lower-case letter into a capital and reads ${ClientCasing.readsAs(
+                                name,
+                            )}. " +
                             "Write it in one case.",
                     severity = Severity.HINT,
                     code = "key-case-wire",
@@ -710,7 +714,7 @@ public class Analyzer(
                 ),
             )
         }
-        val what = if (explicitCase != null) "a $explicitCase-cased name" else keyReading(spec, clientKeyName(wire), wire)
+        val what = if (explicitCase != null) "a $explicitCase-cased name" else keyReading(spec, ClientCasing.readKey(wire), wire)
         return listOf(
             Issue(
                 start = key.start,
