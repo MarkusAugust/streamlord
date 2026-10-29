@@ -202,21 +202,9 @@ public object Casing {
             throw InvalidSignalNameException(
                 name,
                 "has a hyphen the client reads as part of a signal name or as a minus, which a signal name may not hold; write $fixed" +
-                    (bracketed(name)?.let { ", or $it for a key with a hyphen in it" } ?: ""),
+                    (SignalNames.bracketed(name)?.let { ", or $it for a key with a hyphen in it" } ?: ""),
             )
         }
         return name
-    }
-
-    /**
-     * [name] with its one hyphenated part in brackets, `form.first-name` as `form['first-name']`,
-     * or null when that is no simple rewrite: a name with brackets already, or more than one such part.
-     */
-    private fun bracketed(name: String): String? {
-        if ('[' in name || ']' in name) return null
-        val parts = name.split('.')
-        val i = parts.indexOfFirst { '-' in it }
-        if (i < 0 || parts.count { '-' in it } > 1) return null
-        return parts.take(i).joinToString(".") + "['" + parts[i] + "']" + parts.drop(i + 1).joinToString("") { ".$it" }
     }
 }

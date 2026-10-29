@@ -269,23 +269,6 @@ private fun collect(
     return out
 }
 
-/** The properties of `Object.prototype` in a browser: every object already has them (`SignalNames` in streamlord-core). */
-internal val PROTOTYPE_NAMES =
-    setOf(
-        "__proto__",
-        "constructor",
-        "hasOwnProperty",
-        "isPrototypeOf",
-        "propertyIsEnumerable",
-        "toLocaleString",
-        "toString",
-        "valueOf",
-        "__defineGetter__",
-        "__defineSetter__",
-        "__lookupGetter__",
-        "__lookupSetter__",
-    )
-
 /**
  * Why the client cannot hold a signal at [path], written with dots as `data-signals:a.b` writes it,
  * or null when it can. The client follows the path without a guard, so a part every object already
@@ -305,7 +288,7 @@ internal fun signalPathProblem(
     if (parts.any { it.isEmpty() }) return "has an empty part, which no \$ reference reaches"
     return parts
         .withIndex()
-        .firstOrNull { (i, p) -> p == "__proto__" || (p in PROTOTYPE_NAMES && (i < parts.lastIndex || objectUnder)) }
+        .firstOrNull { (i, p) -> p == "__proto__" || (p in SignalNames.PROTOTYPE_NAMES && (i < parts.lastIndex || objectUnder)) }
         ?.let { (i, p) ->
             if (p != "__proto__" && i == parts.lastIndex) {
                 "has the part $p, which every object already has: the client holds the signal, but the next request " +

@@ -392,6 +392,8 @@ public final class io/github/markusaugust/streamlord/core/domain/ScriptResponse 
 
 public final class io/github/markusaugust/streamlord/core/domain/SignalNames {
 	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/domain/SignalNames;
+	public final fun bracketed (Ljava/lang/String;)Ljava/lang/String;
+	public final fun getPROTOTYPE_NAMES ()Ljava/util/Set;
 	public final fun hyphenProblem (Ljava/lang/String;)Ljava/lang/String;
 	public final fun keyProblem (Ljava/lang/String;Z)Ljava/lang/String;
 	public final fun nameProblem (Ljava/lang/String;)Ljava/lang/String;

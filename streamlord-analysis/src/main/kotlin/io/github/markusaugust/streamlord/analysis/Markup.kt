@@ -4,6 +4,7 @@ import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.core.client.ClientCasing
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.domain.AttributeKeys
+import io.github.markusaugust.streamlord.core.domain.SignalNames
 import io.github.markusaugust.streamlord.core.json.JsonParser
 
 /*
@@ -1526,7 +1527,7 @@ public class MarkupValidator(
                             )
                     }
 
-                    k.objectUnder && k.key in PROTOTYPE_NAMES -> {
+                    k.objectUnder && k.key in SignalNames.PROTOTYPE_NAMES -> {
                         out +=
                             Issue(
                                 start,

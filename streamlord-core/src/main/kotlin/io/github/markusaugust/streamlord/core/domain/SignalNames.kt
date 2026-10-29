@@ -27,7 +27,7 @@ import io.github.markusaugust.streamlord.core.client.clientRewrite
 @InternalStreamlordApi
 public object SignalNames {
     /** The properties of `Object.prototype` in a browser: every object already has them. */
-    internal val PROTOTYPE_NAMES =
+    public val PROTOTYPE_NAMES: Set<String> =
         setOf(
             "__proto__",
             "constructor",
@@ -308,4 +308,16 @@ public object SignalNames {
 
     private fun copy(map: Map<*, *>): LinkedHashMap<String, Any?> =
         LinkedHashMap<String, Any?>().also { out -> map.forEach { (k, v) -> out[k.toString()] = v } }
+
+    /**
+     * [name] with its one hyphenated part in brackets, `form.first-name` as `form['first-name']`,
+     * or null when that is no simple rewrite: a name with brackets already, or more than one such part.
+     */
+    public fun bracketed(name: String): String? {
+        if ('[' in name || ']' in name) return null
+        val parts = name.split('.')
+        val i = parts.indexOfFirst { '-' in it }
+        if (i < 0 || parts.count { '-' in it } > 1) return null
+        return parts.take(i).joinToString(".") + "['" + parts[i] + "']" + parts.drop(i + 1).joinToString("") { ".$it" }
+    }
 }

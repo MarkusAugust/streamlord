@@ -39,18 +39,6 @@ internal val SIGNAL_NAMING_CALLS: Set<String> = NAMING_HELPERS + EXPRESSION_HELP
 
 private val OBJECT_START = Regex("""^\s*[{\[]""")
 
-/**
- * [name] with its one hyphenated part in brackets, `form.first-name` as `form['first-name']`, or
- * null when that is no simple rewrite: a name with brackets already, or more than one such part.
- */
-internal fun bracketed(name: String): String? {
-    if ('[' in name || ']' in name) return null
-    val parts = name.split('.')
-    val i = parts.indexOfFirst { '-' in it }
-    if (i < 0 || parts.count { '-' in it } > 1) return null
-    return parts.take(i).joinToString(".") + "['" + parts[i] + "']" + parts.drop(i + 1).joinToString("") { ".$it" }
-}
-
 /** The issues of [site], a call in [SIGNAL_NAMING_CALLS], for each signal name in it that holds a hyphen. */
 internal fun signalNameHyphenIssues(
     site: CallSite,
@@ -69,7 +57,7 @@ internal fun signalNameHyphenIssues(
         if (site.name in SHARED_NAME_HELPERS && !insideDslCall(site.nameStart)) return out
         val s = (first ?: site.named("name"))?.string ?: return out
         SignalNames.withoutReferenceHyphens(s.text)?.let {
-            out += hyphenIssue(s, src, it, bracketed(s.text), SignalNames.referenceAsSubtraction(s.text))
+            out += hyphenIssue(s, src, it, SignalNames.bracketed(s.text), SignalNames.referenceAsSubtraction(s.text))
         }
         return out
     }
