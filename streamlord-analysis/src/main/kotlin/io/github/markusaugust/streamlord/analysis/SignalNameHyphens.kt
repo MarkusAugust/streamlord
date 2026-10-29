@@ -36,7 +36,6 @@ private val PAIR_NAMING = setOf("dataSignals", "patchSignals")
 /** Every call this check reads. */
 internal val SIGNAL_NAMING_CALLS: Set<String> = NAMING_HELPERS + EXPRESSION_HELPERS + PAIR_NAMING + "removeSignals"
 
-private val PAIR_KEY = Regex("""^[\s(]*"""")
 private val OBJECT_START = Regex("""^\s*[{\[]""")
 
 /**
@@ -106,18 +105,12 @@ internal fun signalNameHyphenIssues(
     }
 
     if (site.name in PAIR_NAMING) {
-        for (a in positional) {
-            if (a.string != null) continue
-            val quote = PAIR_KEY.find(a.text)?.range?.last ?: continue
-            val s = lex.stringAt(a.start + quote + 1)?.takeIf { it.start == a.start + quote } ?: continue
-            if (!PAIR_AFTER.matchesAt(src, s.end)) continue
+        for (s in pairKeys(site, src, lex)) {
             if ('-' in s.text) out += hyphenIssue(s, src, SignalNames.withoutHyphens(s.text), null)
         }
     }
     return out
 }
-
-private val PAIR_AFTER = Regex("""\s+to\b""")
 
 /** What the second argument of `dataSignals(first, second)` is, as far as its text shows: the overload Kotlin picks. */
 internal enum class SecondArgument { EXPRESSION, IF_MISSING, UNKNOWN }
@@ -251,7 +244,8 @@ private fun collectHyphenSites(
             (enclosed && !openBraceBetween(text, lex, 0, at))
     }
     for (site in findCallSites(text, SIGNAL_NAMING_CALLS, lex)) {
-        val issues = signalNameHyphenIssues(site, text, lex, helpers, inside)
+        // A string template holds DSL calls too, so the pairs of one are read here as well.
+        val issues = signalNameHyphenIssues(site, text, lex, helpers, inside) + nullPairIssues(site, text, lex)
         if (issues.isNotEmpty()) out += site.shifted(shift) to issues.map { it.shifted(shift) }
     }
     if (depth >= 4) return

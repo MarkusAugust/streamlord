@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.domain.AttributeKeys
 import io.github.markusaugust.streamlord.core.json.JsonParser
 
 /*
@@ -697,11 +698,7 @@ public fun tokenize(html: String): Tokens {
 }
 
 /** `fooBar` -> `foo-bar`, one hyphen per capital, which Datastar's camel conversion turns back into `fooBar`. */
-public fun kebab(name: String): String {
-    val out = HAS_CAPITAL.replace(name) { "-" + it.value.lowercase() }
-    // Only the hyphen a leading capital introduced is dropped; a CSS custom property keeps its `--`.
-    return if (LEADING_CAPITAL.containsMatchIn(name)) out.removePrefix("-") else out
-}
+public fun kebab(name: String): String = AttributeKeys.kebab(name)
 
 /**
  * The key to write, and the `__case` to add, so that a key the author typed with capitals comes

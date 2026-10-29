@@ -1,10 +1,11 @@
 import { catalog, parseAttributeName, type CallSiteSpec } from "./catalog.ts";
 import { attributeDoc, DOCS, quoteAt, validateExpression, type Fix, type Issue } from "./expression.ts";
 import { PLACEHOLDER, toSource, type Interpolation, type KotlinString } from "./kotlinStrings.ts";
-import { asciiLowercase, indexOfAsciiIgnoreCase, kebab, keyReading, rawKeyNote, tokenize, validateAttributes, validateMarkup, wireKey, wireKeyReads, type Attribute, type Tag } from "./markup.ts";
+import { capitalIn, kebab, modifierStartIn, runsIntoModifiers, spellings } from "./attributeKeys.ts";
+import { asciiLowercase, indexOfAsciiIgnoreCase, keyReading, rawKeyNote, tokenize, validateAttributes, validateMarkup, wireKey, wireKeyReads, type Attribute, type Tag } from "./markup.ts";
 import { findCallSites, isHtmlString, lexKotlin, namedArgText, selectStringArg, stringAt, type CallSite } from "./scanner.ts";
 import { dslHelpers, EXPRESSION_HELPERS, signalNameHyphenSites } from "./signalNameHyphens.ts";
-import { clientKeyName, collectSignalDefinitions, nullPairIssues } from "./signals.ts";
+import { clientKeyName, collectSignalDefinitions } from "./signals.ts";
 
 /**
  * Editor-independent analysis: Kotlin source in, issues with source offsets out.
@@ -73,7 +74,6 @@ export function analyzeKotlin(src: string, opts: AnalyzeOptions): Issue[] {
     const selector = catalog.callSites.selector[site.name];
     if (selector) issues.push(...checkSelectorSite(site, selector));
     issues.push(...checkKeyCaseSite(site, src));
-    issues.push(...nullPairIssues(site, src, lex.strings));
     for (const a of site.args) if (a.string) claimed.add(a.string.start);
   }
   issues.push(...signalNameHyphenSites(src, lex, dslHelpers(src, EXPRESSION_HELPERS), new Set([...ALL_SITE_NAMES, "statements"])));
@@ -410,19 +410,24 @@ function checkKeyCaseSite(site: CallSite, src: string): Issue[] {
   const name = key.text;
   // dataSignals("{fooBar: 1}", ...) is the object form: an expression, not a key.
   if (/^\s*[{\[]/.test(name)) return [];
-  if (name.includes("__")) return [refusedKey(spec.name, key, name, "contains __, where Datastar starts reading modifiers")];
-  if (!/[A-Z]/.test(name)) return [];
-  // A signal name with a hyphen is refused, which signalNameHyphenIssues says.
-  if (spec.keyCase === "camel" && name.includes("-")) return [];
+  const split = modifierStartIn(name);
+  if (split) return [refusedKey(spec.name, key, name, split)];
   // `case = Case.X`, a positional `Case.X` (dataClass("name", "x", Case.CAMEL)) or `case = Case.X` in the trailing lambda.
   const named = site.args.find((a) => a.named === "case" || (a.named === null && /^\s*Case\.[A-Z]+\s*$/.test(a.text)))?.text;
   const explicit = named ? /Case\.([A-Z]+)/.exec(named) : /\bcase\s*=\s*Case\.([A-Z]+)/.exec(trailingLambdaText(site, src));
   const explicitCase = explicit?.[1]?.toLowerCase() ?? null;
-  const wire = wireKey(name, spec.keyCase, explicitCase);
-  if (wire !== null && name.endsWith("_") && wire.includes("__")) {
-    const read = wire.slice(0, wire.indexOf("__"));
-    return [refusedKey(spec.name, key, name, `ends in _, which runs into the __ of the modifiers after it (${wire}), so Datastar's client would read the key as ${read}`)];
+  const capital = /[A-Z]/.test(name);
+  const wire = capital ? wireKey(name, spec.keyCase, explicitCase) : name + (explicitCase ? `__case.${explicitCase}` : "");
+  // What the DSL writes after the key, as Casing.withModifiers is handed it: the case, then the rest.
+  if (wire !== null) {
+    // The key itself, not what comes before the first __: in b___case.pascal that is b.
+    const keyPart = capital ? kebab(name) : name;
+    const runs = runsIntoModifiers(keyPart, wire.slice(keyPart.length) + otherModifiers(site, src));
+    if (runs) return [refusedKey(spec.name, key, name, runs)];
   }
+  if (!capital) return [];
+  // A signal name with a hyphen is refused, which signalNameHyphenIssues says.
+  if (spec.keyCase === "camel" && name.includes("-")) return [];
   if (wire === null) {
     return [{
       start: key.start,
@@ -463,20 +468,37 @@ function attributeNameIssues(site: CallSite, attribute: string, src: string): Is
   if (!key) return [];
   const name = key.text;
   if (key.interpolations.length > 0 || /^\s*[{\[]/.test(name)) return [];
-  if (name.includes("__")) return [refusedKey(attribute, key, name, "contains __, where Datastar starts reading modifiers")];
-  if (!/[A-Z]/.test(name)) return [];
-  const spellings = name.includes("-") ? [name.toLowerCase()] : [...new Set([kebab(name), name.toLowerCase()])];
-  const objectForm = /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) ? `{${name}: ...}` : `{'${name}': ...}`;
+  const split = modifierStartIn(name);
+  if (split) return [refusedKey(attribute, key, name, split)];
+  if (!/[A-Z]/.test(name)) {
+    const runs = runsIntoModifiers(name, otherModifiers(site, src));
+    return runs ? [refusedKey(attribute, key, name, runs)] : [];
+  }
+  const reason = capitalIn(name, site.name)!;
   const plain = src.slice(key.contentStart, key.contentEnd) === name;
   return [{
-    start: key.start,
-    end: key.end,
-    message: `An attribute name in a key holds no capital: the browser lowercases it, so Streamlord refuses "${name}" at runtime. Write it as HTML has it, ${spellings.join(" or ")}, or, for an attribute that has capitals such as SVG's viewBox, the object form ${site.name}("${objectForm}").`,
-    severity: "error",
+    ...refusedKey(attribute, key, name, reason),
     code: "attribute-name-case",
-    link: attributeDoc(attribute),
-    fixes: plain ? spellings.map((t) => ({ title: `Change to ${t}`, start: key.contentStart, end: key.contentEnd, text: t })) : [],
+    fixes: plain ? spellings(name).map((t) => ({ title: `Change to ${t}`, start: key.contentStart, end: key.contentEnd, text: t })) : [],
   }];
+}
+
+// A property set in a trailing lambda of modifiers, `{ once = true }`; `==` is a comparison.
+const LAMBDA_ASSIGNMENT = /\b([A-Za-z]+)\s*=(?!=)/;
+
+/**
+ * The modifiers besides `__case` the DSL writes after the key of `site`, as far as its text
+ * shows: `ifMissing = true`, `session = true`, and a trailing lambda that sets a modifier, whose
+ * first one stands for the rest. The same rule as `otherModifiers` in streamlord-analysis.
+ */
+function otherModifiers(site: CallSite, src: string): string {
+  const positional = site.args.filter((a) => a.named === null);
+  let out = "";
+  if (site.args.find((a) => a.named === "ifMissing")?.text.trim() === "true" || positional[2]?.text.trim() === "true") out += "__ifmissing";
+  if (site.args.find((a) => a.named === "session")?.text.trim() === "true") out += "__session";
+  const set = LAMBDA_ASSIGNMENT.exec(trailingLambdaText(site, src));
+  if (set) out += "__" + set[1]!.toLowerCase();
+  return out;
 }
 
 /** The text of the trailing lambda `{ ... }` after a call, braces balanced; empty when there is none. */

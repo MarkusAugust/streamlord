@@ -4,7 +4,8 @@ import { readFileSync } from "node:fs";
 import { analyzeHtml } from "../src/analyze.ts";
 import { catalog, parseAttributeName } from "../src/catalog.ts";
 import { clientRewrite, clientScript } from "../src/expression.ts";
-import { kebab, wireKey, wireKeyReads } from "../src/markup.ts";
+import { kebab } from "../src/attributeKeys.ts";
+import { wireKey, wireKeyReads } from "../src/markup.ts";
 import { referenceAsSubtraction, withoutReferenceHyphens } from "../src/signalNameHyphens.ts";
 import { clientKeyName, toCamel } from "../src/signals.ts";
 

@@ -1,4 +1,5 @@
 import { catalog, distance, parseAttributeName, type AttributeSpec } from "./catalog.ts";
+import { kebab } from "./attributeKeys.ts";
 import { attributeDoc, DOCS, expressionError, filterPatternIssues, isIdentPart, jsRegions, quoteAt, Region, validateExpression, type Fix, type Issue } from "./expression.ts";
 import { clientKeyName, objectKeys, signalNameProblem, signalPathProblem, PROTOTYPE_NAMES, type ObjectKey } from "./signals.ts";
 
@@ -602,11 +603,6 @@ function clientCase(key: string, modifiers: { name: string; args: string[] }[], 
 }
 
 /** `fooBar` -> `foo-bar`, one hyphen per capital, which Datastar's camel conversion turns back into `fooBar`. */
-export function kebab(name: string): string {
-  const out = name.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase());
-  // Only the hyphen a leading capital introduced is dropped; a CSS custom property keeps its `--`.
-  return /^[A-Z]/.test(name) ? out.replace(/^-/, "") : out;
-}
 
 /**
  * The key to write, and the `__case` to add, so that a key the author typed with capitals comes

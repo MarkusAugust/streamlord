@@ -451,8 +451,25 @@ export function toCamel(name: string): string {
   return name.includes("-") ? name.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase()) : name;
 }
 
-const NULL_PAIR_KEY = /^[\s(]*"/;
+const PAIR_KEY = /^[\s(]*"/;
+const PAIR_AFTER = /\s+to\b/y;
 const TO_NULL = /\s+to\s+null\b/y;
+
+/** The keys of the pairs among the positional arguments of `site`, `"name" to value`, as string literals. */
+export function pairKeys(site: CallSite, src: string, strings: KotlinString[]): KotlinString[] {
+  const out: KotlinString[] = [];
+  for (const a of site.args) {
+    if (a.named !== null || a.string) continue;
+    const m = PAIR_KEY.exec(a.text);
+    if (!m) continue;
+    const quote = a.start + m[0].length - 1;
+    const key = stringAt(src, quote + 1, strings);
+    if (!key || key.start !== quote) continue;
+    PAIR_AFTER.lastIndex = key.end;
+    if (PAIR_AFTER.test(src)) out.push(key);
+  }
+  return out;
+}
 
 /**
  * Each `"name" to null` among the pairs of `site`, a `dataSignals` call, which declares nothing:
@@ -464,13 +481,7 @@ const TO_NULL = /\s+to\s+null\b/y;
 export function nullPairIssues(site: CallSite, src: string, strings: KotlinString[]): Issue[] {
   if (site.name !== "dataSignals") return [];
   const out: Issue[] = [];
-  for (const a of site.args) {
-    if (a.named !== null || a.string) continue;
-    const m = NULL_PAIR_KEY.exec(a.text);
-    if (!m) continue;
-    const quote = a.start + m[0].length - 1;
-    const key = stringAt(src, quote + 1, strings);
-    if (!key || key.start !== quote) continue;
+  for (const key of pairKeys(site, src, strings)) {
     TO_NULL.lastIndex = key.end;
     const toNull = TO_NULL.exec(src);
     if (!toNull) continue;

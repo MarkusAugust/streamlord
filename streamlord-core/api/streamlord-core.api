@@ -86,9 +86,13 @@ public final class io/github/markusaugust/streamlord/core/application/Streamlord
 	public final fun getDefault ()Lio/github/markusaugust/streamlord/core/application/Streamlord;
 }
 
-public final class io/github/markusaugust/streamlord/core/domain/AttributeNames {
-	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/domain/AttributeNames;
+public final class io/github/markusaugust/streamlord/core/domain/AttributeKeys {
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/domain/AttributeKeys;
+	public final fun capitalIn (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+	public final fun kebab (Ljava/lang/String;)Ljava/lang/String;
+	public final fun modifierStartIn (Ljava/lang/String;)Ljava/lang/String;
 	public final fun objectForm (Ljava/lang/String;)Ljava/lang/String;
+	public final fun runsIntoModifiers (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
 	public final fun spellings (Ljava/lang/String;)Ljava/util/List;
 }
 

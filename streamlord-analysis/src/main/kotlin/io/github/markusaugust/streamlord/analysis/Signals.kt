@@ -504,8 +504,21 @@ private val BARE_KEY = Regex("""[A-Za-z0-9_$]+""")
 /** What `\s` matches in JavaScript. */
 private fun Char.isJsSpace(): Boolean = isWhitespace() || this == '\u00A0' || this == '\uFEFF'
 
-private val NULL_PAIR_KEY = Regex("""^[\s(]*"""")
+private val PAIR_KEY = Regex("""^[\s(]*"""")
+private val PAIR_AFTER = Regex("""\s+to\b""")
 private val TO_NULL = Regex("""\s+to\s+null\b""")
+
+/** The keys of the pairs among the positional arguments of [site], `"name" to value`, as string literals. */
+internal fun pairKeys(
+    site: CallSite,
+    src: String,
+    lex: KotlinLex,
+): List<KotlinString> =
+    site.positional.mapNotNull { a ->
+        if (a.string != null) return@mapNotNull null
+        val quote = PAIR_KEY.find(a.text)?.range?.last ?: return@mapNotNull null
+        lex.stringAt(a.start + quote + 1)?.takeIf { it.start == a.start + quote && PAIR_AFTER.matchesAt(src, it.end) }
+    }
 
 /**
  * Each `"name" to null` among the pairs of [site], a `dataSignals` call, which declares nothing:
@@ -520,10 +533,7 @@ internal fun nullPairIssues(
     lex: KotlinLex,
 ): List<Issue> {
     if (site.name != "dataSignals") return emptyList()
-    return site.positional.mapNotNull { a ->
-        if (a.string != null) return@mapNotNull null
-        val quote = NULL_PAIR_KEY.find(a.text)?.range?.last ?: return@mapNotNull null
-        val key = lex.stringAt(a.start + quote + 1)?.takeIf { it.start == a.start + quote } ?: return@mapNotNull null
+    return pairKeys(site, src, lex).mapNotNull { key ->
         val end =
             TO_NULL
                 .matchAt(src, key.end)

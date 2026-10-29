@@ -1,7 +1,7 @@
 package io.github.markusaugust.streamlord.html
 
 import io.github.markusaugust.streamlord.core.StreamlordException
-import io.github.markusaugust.streamlord.core.domain.AttributeNames
+import io.github.markusaugust.streamlord.core.domain.AttributeKeys
 import io.github.markusaugust.streamlord.core.domain.SignalNames
 
 /**
@@ -49,11 +49,7 @@ public object Casing {
     private val SIGNAL_NAME = Regex("[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)*")
 
     /** `fooBar` -> `foo-bar`, `myURL` -> `my-u-r-l`: one hyphen per capital, so Datastar's camel conversion gives the name back. */
-    public fun kebab(name: String): String {
-        val out = name.replace(UPPER) { "-" + it.value.lowercase() }
-        // Only the hyphen a leading capital introduced is dropped; a CSS custom property keeps its `--`.
-        return if (name.firstOrNull()?.isUpperCase() == true) out.removePrefix("-") else out
-    }
+    public fun kebab(name: String): String = AttributeKeys.kebab(name)
 
     /** Datastar's own reading of a key: `-x` becomes `X`. */
     public fun camel(name: String): String = name.replace(KEBAB) { it.groupValues[1].uppercase() }
@@ -67,8 +63,7 @@ public object Casing {
         if (FORBIDDEN.containsMatchIn(name)) {
             throw InvalidSignalNameException(name, "contains whitespace, NUL, quotes or a character that ends an attribute or its name")
         }
-        // Datastar splits an attribute name at the first `__`: what follows is read as modifiers.
-        if ("__" in name) throw InvalidSignalNameException(name, "contains __, where Datastar starts reading modifiers")
+        AttributeKeys.modifierStartIn(name)?.let { throw InvalidSignalNameException(name, it) }
         return name
     }
 
@@ -141,13 +136,7 @@ public object Casing {
         key: String,
         modifiers: String,
     ): String {
-        if (modifiers.isNotEmpty() && key.endsWith('_')) {
-            throw InvalidSignalNameException(
-                name,
-                "ends in _, which runs into the __ of the modifiers after it ($key$modifiers), so Datastar's client " +
-                    "would read the key as ${key.dropLast(1)}",
-            )
-        }
+        AttributeKeys.runsIntoModifiers(key, modifiers)?.let { throw InvalidSignalNameException(name, it) }
         return key + modifiers
     }
 
@@ -255,14 +244,7 @@ public object Casing {
         helper: String,
     ): String {
         validate(name)
-        if (UPPER.containsMatchIn(name)) {
-            throw InvalidSignalNameException(
-                name,
-                "has a capital, which the browser lowercases in an attribute name; write it as HTML has it, " +
-                    "${AttributeNames.spellings(name).joinToString(" or ")}, or, for an attribute that has capitals such as SVG's " +
-                    "viewBox, the object form $helper(\"${AttributeNames.objectForm(name)}\")",
-            )
-        }
+        AttributeKeys.capitalIn(name, helper)?.let { throw InvalidSignalNameException(name, it) }
         return name
     }
 

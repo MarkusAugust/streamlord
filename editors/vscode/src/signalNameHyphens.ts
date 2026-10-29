@@ -1,4 +1,5 @@
 import { clientRewrite, DOCS, type Issue } from "./expression.ts";
+import { nullPairIssues, pairKeys } from "./signals.ts";
 import type { KotlinString } from "./kotlinStrings.ts";
 import { findCallSites, lexKotlin, stringAt, type Arg, type CallSite } from "./scanner.ts";
 
@@ -180,8 +181,6 @@ export function bracketed(name: string): string | null {
   return `${parts.slice(0, i).join(".")}['${parts[i]}']${parts.slice(i + 1).map((p) => `.${p}`).join("")}`;
 }
 
-const PAIR_KEY = /^[\s(]*"/;
-const PAIR_AFTER = /\s+to\b/y;
 const OBJECT_START = /^\s*[{[]/;
 /** What the second argument of `dataSignals(first, second)` is, as far as its text shows: the overload Kotlin picks. */
 export type SecondArgument = "expression" | "ifMissing" | "unknown";
@@ -266,18 +265,11 @@ export function signalNameHyphenIssues(site: CallSite, src: string, strings: Kot
   }
 
   if (PAIR_NAMING.has(site.name)) {
-    for (const a of positional) {
-      if (a.string) continue;
-      const m = PAIR_KEY.exec(a.text);
-      if (!m) continue;
-      const quote = a.start + m[0].length - 1;
-      const s = stringAt(src, quote + 1, strings);
-      if (!s || s.start !== quote) continue;
-      PAIR_AFTER.lastIndex = s.end;
-      if (!PAIR_AFTER.test(src)) continue;
+    for (const s of pairKeys(site, src, strings)) {
       if (s.text.includes("-")) out.push(hyphenIssue(s, src, withoutHyphens(s.text), null));
     }
   }
+
   return out;
 }
 
@@ -329,7 +321,8 @@ function collectHyphenSites(
   const inside = (at: number): boolean =>
     calls.some((c) => at > c.openParen && at < c.closeParen && !openBraceBetween(text, lex.mask, c.openParen, at)) || (enclosed && !openBraceBetween(text, lex.mask, 0, at));
   for (const site of findCallSites(text, SIGNAL_NAMING_CALLS, lex.mask)) {
-    const issues = signalNameHyphenIssues(site, text, lex.strings, helpers, inside);
+    // A string template holds DSL calls too, so the pairs of one are read here as well.
+    const issues = [...signalNameHyphenIssues(site, text, lex.strings, helpers, inside), ...nullPairIssues(site, text, lex.strings)];
     if (issues.length > 0) out.push({ at: site.nameStart + shift, issues: issues.map((i) => shifted(i, shift)) });
   }
   if (depth >= 4) return;
