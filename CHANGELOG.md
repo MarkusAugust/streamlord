@@ -6,6 +6,17 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `DatastarAttributes.value(value)`: a value as kotlinx.html must be handed it for the browser to
+  read it back exactly, for an attribute you write yourself (see Fixed).
+
+### Fixed
+
+- A `\` followed by `&` in an expression lost its backslash: kotlinx.html writes that pair as a
+  bare `&`, so `dataText("'\\&amp;'")` showed `&` where it meant `&amp;`, and `'\\\\&'` lost
+  one of its backslashes. Every expression the DSL writes now reaches the browser as written.
+
 ## [0.15.0] - 2026-10-28
 
 ### Added

@@ -45,6 +45,9 @@ private fun requireDuration(
 
 private fun ds(suffix: String): String = DatastarAttributes.name(suffix)
 
+/** [expression] once [ExpressionGuard] has passed it, as kotlinx.html must be handed it ([DatastarAttributes.value]). */
+private fun expr(expression: String): String = DatastarAttributes.value(ExpressionGuard.check(expression))
+
 // The timing wrapper the Pro listeners share with the free ones, in the free builders' order.
 private fun StringBuilder.appendTiming(
     delay: Duration?,
@@ -218,7 +221,7 @@ public fun HTMLTag.dataAnimate(
     expression: String,
     modifiers: AnimateModifiers.() -> Unit = {},
 ) {
-    attributes[ds("animate${AnimateModifiers().apply(modifiers).build()}")] = ExpressionGuard.check(expression)
+    attributes[ds("animate${AnimateModifiers().apply(modifiers).build()}")] = expr(expression)
 }
 
 /**
@@ -233,12 +236,12 @@ public fun HTMLTag.dataAnimate(
     modifiers: AnimateModifiers.() -> Unit = {},
 ) {
     val mods = AnimateModifiers().apply(modifiers).build()
-    attributes[ds("animate:" + Casing.withModifiers(attribute, Casing.plainKey(attribute), mods))] = ExpressionGuard.check(expression)
+    attributes[ds("animate:" + Casing.withModifiers(attribute, Casing.plainKey(attribute), mods))] = expr(expression)
 }
 
 /** `data-custom-validity="expression"` (Pro): an expression yielding `''` when valid, a message otherwise. */
 public fun HTMLTag.dataCustomValidity(expression: String) {
-    attributes[ds("custom-validity")] = ExpressionGuard.check(expression)
+    attributes[ds("custom-validity")] = expr(expression)
 }
 
 /**
@@ -259,7 +262,7 @@ public fun HTMLTag.dataOnRaf(
     expression: String,
     modifiers: RafModifiers.() -> Unit = {},
 ) {
-    attributes[ds("on-raf${RafModifiers().apply(modifiers).build()}")] = ExpressionGuard.check(expression)
+    attributes[ds("on-raf${RafModifiers().apply(modifiers).build()}")] = expr(expression)
 }
 
 /** `data-on-resize="expression"` (Pro): run when the element's size changes. */
@@ -267,7 +270,7 @@ public fun HTMLTag.dataOnResize(
     expression: String,
     modifiers: ResizeModifiers.() -> Unit = {},
 ) {
-    attributes[ds("on-resize${ResizeModifiers().apply(modifiers).build()}")] = ExpressionGuard.check(expression)
+    attributes[ds("on-resize${ResizeModifiers().apply(modifiers).build()}")] = expr(expression)
 }
 
 /**
@@ -317,7 +320,7 @@ public fun HTMLTag.dataQueryString(
 
 /** `data-replace-url="expression"` (Pro): replace the browser URL without a reload. */
 public fun HTMLTag.dataReplaceUrl(expression: String) {
-    attributes[ds("replace-url")] = ExpressionGuard.check(expression)
+    attributes[ds("replace-url")] = expr(expression)
 }
 
 /** `data-scroll-into-view` (Pro): scroll the element into the viewport when it appears. */
@@ -340,5 +343,5 @@ public fun HTMLTag.dataScrollIntoView(
 
 /** `data-view-transition="expression"` (Pro): set the element's `view-transition-name`. */
 public fun HTMLTag.dataViewTransition(expression: String) {
-    attributes[ds("view-transition")] = ExpressionGuard.check(expression)
+    attributes[ds("view-transition")] = expr(expression)
 }

@@ -190,6 +190,23 @@ class HtmlDslTest {
         )
     }
 
+    // kotlinx.html writes a backslash before & as a bare &; conformance/dsl holds what the client makes of each.
+    @Test
+    fun `a backslash before an ampersand reaches the browser as written`() {
+        assertEquals("a", DatastarAttributes.value("a"))
+        assertEquals("'\\&#92;\\&amp;amp;'", DatastarAttributes.value("'\\&amp;'"))
+        assertEquals(
+            // A filter's regex needs none of it: & is written as \x26 there.
+            """<div data-text="'&#92;&amp;amp;'" data-json-signals="{include: /^a\x26b${'$'}/}"></div>""",
+            elements {
+                div {
+                    dataText("'\\&amp;'")
+                    dataJsonSignals(SignalFilter(include = Regex("^a\\&b${'$'}")))
+                }
+            },
+        )
+    }
+
     @Test
     fun `aliased bundle prefix applies everywhere`() {
         DatastarAttributes.prefix = "data-star-"

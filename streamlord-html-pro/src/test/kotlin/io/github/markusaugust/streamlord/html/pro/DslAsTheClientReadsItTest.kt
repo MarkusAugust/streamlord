@@ -1228,6 +1228,18 @@ class DslAsTheClientReadsItTest {
             dslCase("an expression with a backslash before an ampersand", "dataText", expect = {
                 text("div", "&amp;")
             }) { div { dataText("'\\&amp;'") } },
+            dslCase("an expression with an escaped backslash before an ampersand", "dataText", expect = {
+                text("div", "\\&")
+            }) { div { dataText("'\\\\&'") } },
+            dslCase("a filter whose regex has a backslash before an ampersand", "dataJsonSignals", expect = {
+                store = """{"a&b":1,"c":2}"""
+                text("pre", "{\"a&b\":1}")
+            }) {
+                div {
+                    dataSignals("{'a&b': 1, c: 2}")
+                    pre { dataJsonSignals(SignalFilter(include = Regex("^a\\&b$")), terse = true) }
+                }
+            },
             dslCase("an expression with a line break", "dataText", expect = { text("div", "a\nb") }) { div { dataText("'a\\nb'\n") } },
             dslCase("an expression with a no-break space", "dataText", expect = { text("div", "a b") }) { div { dataText("'a b'") } },
             dslCase("an expression ending in a backslash in a regex", "dataText", expect = {
