@@ -749,13 +749,16 @@ public object Requests {
         return out.toString()
     }
 
+    /** Whether the client sends the signals of [method] in the query string, not the body: GET and DELETE, in any case. */
+    public fun bodyless(method: String): Boolean = method.uppercase() in DatastarProtocol.BODYLESS_METHODS
+
     /** The URL the Datastar client would open: GET and DELETE carry the signals in the query string. */
     public fun requestUrl(
         url: String,
         method: String,
         signalsJson: String,
     ): String {
-        if (method.uppercase() !in DatastarProtocol.BODYLESS_METHODS) return url
+        if (!bodyless(method)) return url
         // Taken apart as text: a URL that still holds a `{id}`, a space or an unresolved variable is
         // one java.net.URI refuses, and the rest of it is passed on exactly as it was written.
         val hash = url.indexOf('#')
@@ -915,7 +918,7 @@ public object Requests {
         val out = LinkedHashMap<String, String>()
         out["Accept"] = ACCEPT
         out["Datastar-Request"] = "true"
-        if (method.uppercase() !in DatastarProtocol.BODYLESS_METHODS) out["Content-Type"] = "application/json"
+        if (!bodyless(method)) out["Content-Type"] = "application/json"
         for ((k, v) in userHeaders) {
             out.keys.firstOrNull { it.equals(k, ignoreCase = true) }?.let { out.remove(it) }
             out[k] = v
@@ -928,12 +931,12 @@ public object Requests {
      * The body goes as `--data-raw`: with `--data`, curl reads signals that start with `@` from the file they name.
      */
     public fun toCurl(r: SavedRequest): String {
-        val bodyless = r.method.uppercase() in DatastarProtocol.BODYLESS_METHODS
+        val noBody = bodyless(r.method)
         val signalsJson = compactSignals(r.signals)
-        val parts = mutableListOf("curl", "-N", "-X", r.method)
+        val parts = mutableListOf("curl", "-N", "-X", r.method.uppercase())
         parts += shellQuote(requestUrl(r.url, r.method, signalsJson))
         for ((k, v) in requestHeaders(r.method, parseHeaderLines(r.headers))) parts += listOf("-H", shellQuote("$k: $v"))
-        if (!bodyless) parts += listOf("--data-raw", shellQuote(signalsJson))
+        if (!noBody) parts += listOf("--data-raw", shellQuote(signalsJson))
         return parts.joinToString(" ")
     }
 

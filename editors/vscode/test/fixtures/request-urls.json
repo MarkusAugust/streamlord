@@ -7,6 +7,8 @@
     {"url": "/x?datastar=old&b=2#top", "method": "get", "signals": "{}", "expected": "/x?b=2&datastar=%7B%7D#top"},
     {"url": "/x", "method": "delete", "signals": "{\"s\":\"a b\"}", "expected": "/x?datastar=%7B%22s%22%3A%22a+b%22%7D"},
     {"url": "/x?datastar", "method": "POST", "signals": "{\"a\":1}", "expected": "/x?datastar"},
-    {"url": "/x", "method": "query", "signals": "{}", "expected": "/x"}
+    {"url": "/x", "method": "query", "signals": "{}", "expected": "/x"},
+    {"url": "/x?a=1", "method": "PUT", "signals": "{}", "expected": "/x?a=1"},
+    {"url": "/x", "method": "patch", "signals": "{}", "expected": "/x"}
   ]
 }

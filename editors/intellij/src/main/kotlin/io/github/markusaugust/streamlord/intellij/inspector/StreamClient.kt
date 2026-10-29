@@ -205,14 +205,14 @@ class StreamClient(
         signalsJson: String,
         headers: Map<String, String>,
     ): HttpRequest {
-        val bodyless = method == "GET" || method == "DELETE"
+        val bodyless = Requests.bodyless(method)
         val builder = HttpRequest.newBuilder(URI(url))
         // The user's headers replace the client's own, Content-Type included, as they do in the client.
         for ((k, v) in Requests.requestHeaders(method, headers)) builder.setHeader(k, v)
         if (bodyless) {
-            builder.method(method, HttpRequest.BodyPublishers.noBody())
+            builder.method(method.uppercase(), HttpRequest.BodyPublishers.noBody())
         } else {
-            builder.method(method, HttpRequest.BodyPublishers.ofString(signalsJson))
+            builder.method(method.uppercase(), HttpRequest.BodyPublishers.ofString(signalsJson))
         }
         return builder.build()
     }

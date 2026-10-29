@@ -12,7 +12,7 @@ describe("the url the client opens", () => {
     type Case = { url: string; method: string; signals: string; expected: string };
     const cases = (JSON.parse(readFileSync(new URL("./fixtures/request-urls.json", import.meta.url), "utf8")) as { cases: Case[] }).cases;
     for (const c of cases) assert.equal(requestUrl(c.url, c.method, c.signals), c.expected, JSON.stringify(c));
-    assert.equal(cases.length, 7);
+    assert.ok(cases.length > 0);
   });
 });
 

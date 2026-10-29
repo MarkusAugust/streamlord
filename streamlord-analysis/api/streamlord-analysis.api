@@ -588,6 +588,7 @@ public final class io/github/markusaugust/streamlord/analysis/Requests {
 	public static final field RECENT_LIMIT I
 	public static final field REQUESTS_FILE Ljava/lang/String;
 	public final fun baseUrlSuggestion (Ljava/util/List;Lio/github/markusaugust/streamlord/analysis/RunningServer;)Ljava/lang/String;
+	public final fun bodyless (Ljava/lang/String;)Z
 	public final fun compactSignals (Ljava/lang/String;)Ljava/lang/String;
 	public final fun describeVariables (Ljava/util/List;)Ljava/lang/String;
 	public final fun emptyBodyHint (ILjava/lang/String;)Ljava/lang/String;

@@ -30,6 +30,11 @@ export const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "QUERY"];
 // The methods the client sends the signals with in the query, not the body (DatastarProtocol.BODYLESS_METHODS).
 const BODYLESS: ReadonlySet<string> = new Set(["GET", "DELETE"]);
 
+/** Whether the client sends the signals of `method` in the query string, not the body: GET and DELETE, in any case. */
+export function bodyless(method: string): boolean {
+  return BODYLESS.has(method.toUpperCase());
+}
+
 export function emptyRequestsFile(): RequestsFile {
   return { version: 1, requests: [] };
 }
@@ -608,7 +613,7 @@ export function compactSignals(signals: string): string {
 
 /** The URL the Datastar client would open: GET and DELETE carry the signals in the query string. */
 export function requestUrl(url: string, method: string, signalsJson: string): string {
-  if (!BODYLESS.has(method.toUpperCase())) return url;
+  if (!bodyless(method)) return url;
   // Taken apart as text: a relative URL, or one that still holds an unresolved variable, is one
   // `new URL` refuses, and the rest of it is passed on exactly as it was written.
   const hash = url.indexOf("#");
@@ -676,7 +681,7 @@ export function requestHeaders(method: string, userHeaders: Record<string, strin
   const out = new Map<string, string>();
   out.set("Accept", ACCEPT);
   out.set("Datastar-Request", "true");
-  if (!BODYLESS.has(method.toUpperCase())) out.set("Content-Type", "application/json");
+  if (!bodyless(method)) out.set("Content-Type", "application/json");
   for (const [k, v] of Object.entries(userHeaders)) {
     for (const existing of out.keys()) if (existing.toLowerCase() === k.toLowerCase()) out.delete(existing);
     out.set(k, v);
@@ -689,12 +694,12 @@ export function requestHeaders(method: string, userHeaders: Record<string, strin
  * The body goes as `--data-raw`: with `--data`, curl reads signals that start with `@` from the file they name.
  */
 export function toCurl(r: SavedRequest): string {
-  const bodyless = BODYLESS.has(r.method.toUpperCase());
+  const noBody = bodyless(r.method);
   const signalsJson = compactSignals(r.signals);
-  const parts = ["curl", "-N", "-X", r.method];
+  const parts = ["curl", "-N", "-X", r.method.toUpperCase()];
   parts.push(shellQuote(requestUrl(r.url, r.method, signalsJson)));
   for (const [k, v] of Object.entries(requestHeaders(r.method, parseHeaderLines(r.headers)))) parts.push("-H", shellQuote(`${k}: ${v}`));
-  if (!bodyless) parts.push("--data-raw", shellQuote(signalsJson));
+  if (!noBody) parts.push("--data-raw", shellQuote(signalsJson));
   return parts.join(" ");
 }
 
