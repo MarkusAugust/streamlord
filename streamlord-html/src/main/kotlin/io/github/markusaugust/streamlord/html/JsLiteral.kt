@@ -66,7 +66,10 @@ public object JsLiteral {
         value: Any?,
         depth: Int,
     ) {
-        val container = value is Map<*, *> || value is Iterable<*> || value is Sequence<*> || value is Array<*> || value is JsonValue
+        // JsonWriter's isContainer: a JsonObject or a JsonArray is a Map or a List.
+        val container =
+            value is Map<*, *> || value is Iterable<*> || value is Sequence<*> || value is Array<*> ||
+                value is IntArray || value is LongArray || value is DoubleArray || value is BooleanArray
         if (depth >= JsonWriter.DEFAULT_MAX_DEPTH && container) {
             throw SignalsCodecException("JavaScript literal nesting deeper than ${JsonWriter.DEFAULT_MAX_DEPTH} levels (cyclic structure?)")
         }
