@@ -1,5 +1,8 @@
 package io.github.markusaugust.streamlord.core.domain
 
+import io.github.markusaugust.streamlord.core.client.indexOfAsciiIgnoreCase
+import io.github.markusaugust.streamlord.core.client.regionMatchesAsciiIgnoreCase
+
 /**
  * What a walk over HTML reports. Offsets are into the string that was walked, so a caller can
  * ask where something sits as well as what it says.
@@ -61,13 +64,16 @@ private fun Char?.isAsciiLetter(): Boolean = this != null && (this in 'a'..'z' |
  * It reads them as the HTML tokenizer does, comments and bogus comments included.
  *
  * With [foreign], it reads the markup as the inside of an `<svg>` or `<math>`, where `title`,
- * `textarea` and the like hold elements rather than text. Markup can switch between the two, so
- * a caller that has to be right walks it both ways and takes the stricter answer.
+ * `textarea` and the like hold elements rather than text. With [cdata] as well, a `<![CDATA[`
+ * there is a section of text that only `]]>` ends, where HTML, and an integration point such as
+ * an svg's `title`, reads a bogus comment the first `>` ends. Markup can switch between them, so a
+ * caller that has to be right walks it each way and takes the strictest answer.
  */
 internal fun scanMarkup(
     html: String,
     visitor: MarkupVisitor,
     foreign: Boolean = false,
+    cdata: Boolean = false,
 ) {
     val rawText = if (foreign) CODE_TEXT else RAW_TEXT
     var i = 0
@@ -77,6 +83,11 @@ internal fun scanMarkup(
         if (lt < 0) break
         if (html.startsWith("<!--", lt)) {
             i = commentEnd(html, lt)
+            continue
+        }
+        if (cdata && html.startsWith("<![CDATA[", lt)) {
+            val close = html.indexOf("]]>", lt + 9)
+            i = if (close < 0) n else close + 3
             continue
         }
         val first = html.getOrNull(lt + 1)
@@ -97,7 +108,7 @@ internal fun scanMarkup(
 
         rawText
             .firstOrNull {
-                html.regionMatches(lt + 1, it, 0, it.length, ignoreCase = true) && html.getOrNull(lt + 1 + it.length).endsName()
+                html.regionMatchesAsciiIgnoreCase(lt + 1, it) && html.getOrNull(lt + 1 + it.length).endsName()
             }?.let { tag ->
                 val end = if (tag == "plaintext") n else endTag(html, tag, i)
                 if (tag in CODE_TEXT) visitor.code(i, end)
@@ -133,7 +144,7 @@ private fun endTag(
 ): Int {
     var at = from
     while (true) {
-        val close = html.indexOf("</$tag", at, ignoreCase = true)
+        val close = html.indexOfAsciiIgnoreCase("</$tag", at)
         if (close < 0) return html.length
         if (html.getOrNull(close + 2 + tag.length).endsName()) return close
         at = close + 2

@@ -3,6 +3,7 @@ package io.github.markusaugust.streamlord.analysis
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.core.client.ClientCasing
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
+import io.github.markusaugust.streamlord.core.client.indexOfAsciiIgnoreCase
 import io.github.markusaugust.streamlord.core.domain.AttributeKeys
 import io.github.markusaugust.streamlord.core.domain.SignalNames
 import io.github.markusaugust.streamlord.core.json.JsonParser
@@ -436,19 +437,6 @@ private val TEMPLATE_CALL = Regex("""^[@#][A-Za-z]+\s*\(""")
 
 /** Below this length a Datastar name has too many honest neighbours (test, kind, once) to judge a bare `data-*` at all. */
 private const val LONG_NAME = 6
-
-/** `indexOf` that ignores the case of A to Z; [needle] is given in lowercase. */
-internal fun String.indexOfAsciiIgnoreCase(
-    needle: String,
-    from: Int,
-): Int {
-    for (i in maxOf(0, from)..length - needle.length) {
-        var k = 0
-        while (k < needle.length && (this[i + k].let { if (it in 'A'..'Z') it + 32 else it }) == needle[k]) k++
-        if (k == needle.length) return i
-    }
-    return -1
-}
 
 /** Text with its character references decoded, and for every decoded index the offset it came from. Has `text.length + 1` entries. */
 internal class DecodedValue(

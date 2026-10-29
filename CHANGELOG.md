@@ -60,6 +60,22 @@ All notable changes to Streamlord are recorded here. The format follows
   bare `&`, so `dataText("'\\&amp;'")` showed `&` where it meant `&amp;`, and `'\\\\&'` lost
   one of its backslashes. Every expression the DSL writes now reaches the browser as written.
 
+### Security
+
+- `interpolate` read an end tag with Unicode case folding, where the browser folds A to Z alone:
+  in `<script>x</ſcript>%s</script>` (U+017F, a long s) it took the value for text after the
+  script, and the browser ran it as part of the script. It is refused now, as every value inside a
+  script is. `<ſcript>` is no script either, and its content is text. Only a format that holds such
+  a tag itself was affected; a value cannot add one.
+- Inside an `<svg>` or a `<math>`, `interpolate` and `ElementsGuard` read `<![CDATA[` as HTML does,
+  as a bogus comment the first `>` ends, where the browser reads a CDATA section that only `]]>`
+  ends: in `<svg><![CDATA[ > <x a="]]><img onerror='%s'>">` the img is an element of the page,
+  and its handler held the value. Both now read the markup that way as well, and take the
+  strictest of the readings: inside an svg's `title` or `desc`, or after a tag that ends the svg,
+  the browser is back in HTML and reads a bogus comment again, so neither reading is right
+  everywhere. An `</svg>` inside a CDATA section no longer ends the part `ElementsGuard` reads as
+  svg either.
+
 ## [0.15.0] - 2026-10-28
 
 ### Added

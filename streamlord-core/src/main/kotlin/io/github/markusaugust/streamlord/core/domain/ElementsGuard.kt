@@ -1,6 +1,8 @@
 package io.github.markusaugust.streamlord.core.domain
 
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
+import io.github.markusaugust.streamlord.core.client.asciiLowercase
+import io.github.markusaugust.streamlord.core.client.regionMatchesAsciiIgnoreCase
 
 /**
  * The `$` trap, hunted in HTML written as a string.
@@ -174,21 +176,23 @@ public object ElementsGuard {
         )
         // Inside an svg or a math, a title or a textarea holds elements rather than text. Read that
         // way only there, since in HTML the markup they show is text, and often meant so.
-        val spans = if (foreign) listOf(elements) else foreignSpans(elements, roots)
-        for (span in spans) {
-            scanMarkup(
-                span,
-                object : MarkupVisitor {
-                    override fun attribute(
-                        tag: String,
-                        name: String,
-                        valueStart: Int,
-                        valueEnd: Int,
-                        quoted: Boolean,
-                    ) = checkAttribute(name, if (valueStart < 0) null else span.substring(valueStart, valueEnd), ordered)
-                },
-                foreign = true,
-            )
+        for (cdata in listOf(false, true)) {
+            for (span in if (foreign) listOf(elements) else foreignSpans(elements, roots, cdata)) {
+                scanMarkup(
+                    span,
+                    object : MarkupVisitor {
+                        override fun attribute(
+                            tag: String,
+                            name: String,
+                            valueStart: Int,
+                            valueEnd: Int,
+                            quoted: Boolean,
+                        ) = checkAttribute(name, if (valueStart < 0) null else span.substring(valueStart, valueEnd), ordered)
+                    },
+                    foreign = true,
+                    cdata = cdata,
+                )
+            }
         }
         return elements
     }
@@ -198,7 +202,7 @@ public object ElementsGuard {
         value: String?,
         prefixes: List<String>,
     ) {
-        val lower = name.lowercase()
+        val lower = name.asciiLowercase()
         val prefix = prefixes.firstOrNull { lower.startsWith(it) } ?: return
         val rest = lower.substring(prefix.length)
         val plugin = rest.substringBefore(':').substringBefore("__")
@@ -269,18 +273,24 @@ private fun foreignRoot(
     start: Int,
 ): String? =
     listOf("svg", "math").firstOrNull {
-        html.regionMatches(start + 1, it, 0, it.length, ignoreCase = true) &&
+        html.regionMatchesAsciiIgnoreCase(start + 1, it) &&
             html.getOrNull(start + 1 + it.length).let { c -> c == null || c in " \t\n\u000C\r/>" }
     }
 
+/** A CDATA section, to its `]]>` or the end. */
+private val CDATA = Regex("""<!\[CDATA\[[\s\S]*?(?:]]>|$)""")
+
 /**
  * Each svg or math the HTML reading found, from its start tag to its own end tag, nested ones
- * counted, or to the end of the markup when it is never closed.
+ * counted, or to the end of the markup when it is never closed. With [cdata], an end tag inside a
+ * CDATA section is text.
  */
 private fun foreignSpans(
     html: String,
     roots: List<Int>,
+    cdata: Boolean,
 ): List<String> {
+    val sections = if (cdata) CDATA.findAll(html).map { it.range }.toList() else emptyList()
     val spans = ArrayList<String>()
     var covered = 0
     for (start in roots) {
@@ -290,6 +300,7 @@ private fun foreignSpans(
         var depth = 0
         var end = html.length
         for (m in token.findAll(html, start)) {
+            if (sections.any { m.range.first in it }) continue
             depth += if (m.groupValues[1].isEmpty()) 1 else -1
             if (depth == 0) {
                 end = html.indexOf('>', m.range.last).let { if (it < 0) html.length else it + 1 }

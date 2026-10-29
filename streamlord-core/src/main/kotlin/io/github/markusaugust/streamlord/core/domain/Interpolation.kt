@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.core.domain
 
 import io.github.markusaugust.streamlord.core.StreamlordException
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
+import io.github.markusaugust.streamlord.core.client.asciiLowercase
 
 /**
  * Markup the caller vouches for, written into the output as it stands.
@@ -198,7 +199,11 @@ public fun interpolate(
     val shadow = shadow(format, holes)
     // Longest first, so `data-star-` is tried before `data-` whatever order the caller used.
     val ordered = prefixes.sortedByDescending { it.length }
-    val landscapes = listOf(false, true).map { foreign -> Landscape(ordered, shadow).also { scanMarkup(shadow, it, foreign) } }
+    // As HTML, as svg or math, and as svg or math whose CDATA sections are text (see scanMarkup).
+    val landscapes =
+        listOf(false to false, true to false, true to true).map { (foreign, cdata) ->
+            Landscape(ordered, shadow).also { scanMarkup(shadow, it, foreign, cdata) }
+        }
 
     val out = StringBuilder(format.length + values.size * 16)
     var cut = 0
@@ -281,7 +286,7 @@ private val SAFE_SCHEMES = setOf("http", "https", "mailto", "tel")
 internal fun safeUrl(url: String): Boolean {
     val read = url.filterNot { it == '\t' || it == '\n' || it == '\r' }.trimStart { it <= ' ' }
     val scheme = SCHEME.find(read)?.groupValues?.get(1) ?: return true
-    return scheme.lowercase() in SAFE_SCHEMES
+    return scheme.asciiLowercase() in SAFE_SCHEMES
 }
 
 private fun StringBuilder.escaped(value: Any?) {
@@ -395,7 +400,7 @@ private class Landscape(
         // attributes beside it. It is left to the tag spans, which refuse.
         if (!quoted || valueStart < 0) return
         attributeNames += name
-        attributeTags += tag.lowercase()
+        attributeTags += tag.asciiLowercase()
         attributeStarts += valueStart
         attributeEnds += valueEnd
     }
@@ -419,7 +424,7 @@ private class Landscape(
     fun positionOf(hole: Int): Position {
         val attribute = indexOfSpan(hole, attributeStarts, attributeEnds)
         if (attribute >= 0) {
-            val name = attributeNames[attribute].lowercase()
+            val name = attributeNames[attribute].asciiLowercase()
             return when {
                 datastar(name) -> Position.DATASTAR
                 name.startsWith("on") || name == "srcdoc" -> Position.CODE
@@ -434,7 +439,7 @@ private class Landscape(
     }
 
     private fun isUrl(attribute: Int): Boolean {
-        val name = attributeNames[attribute].lowercase()
+        val name = attributeNames[attribute].asciiLowercase()
         return name in URL_ATTRIBUTES || (name in ANIMATION_URL_ATTRIBUTES && attributeTags[attribute] in ANIMATION_TAGS)
     }
 
@@ -463,7 +468,7 @@ private class Landscape(
                 cut = holes[index] + 2
             }
             value.append(decodeReferences(format.substring(cut, end).replace("%%", "%")))
-            val entries = if (attributeNames[attribute].lowercase() == "values") value.split(';') else listOf(value.toString())
+            val entries = if (attributeNames[attribute].asciiLowercase() == "values") value.split(';') else listOf(value.toString())
             if (entries.any { !safeUrl(it) }) throw UnsafeInterpolationException(Position.URL, inside.first(), attributeNames[attribute])
         }
     }

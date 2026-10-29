@@ -4,6 +4,7 @@ import io.github.markusaugust.streamlord.core.application.Streamlord
 import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 import io.github.markusaugust.streamlord.core.domain.InterpolatedExpressionException
+import io.github.markusaugust.streamlord.core.domain.MistypedAttributeException
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.Trusted
 import io.github.markusaugust.streamlord.core.domain.UnsafeInterpolationException
@@ -34,6 +35,28 @@ class MarkupAsTheBrowserReadsTest {
         refused("""<!-- note --!><div data-text="%s"></div>""", script)
         // A real comment still holds text.
         assertEquals("<!-- a&lt;b --><p></p>", interpolate("<!-- %s --><p></p>", "a<b"))
+    }
+
+    @Test
+    fun `a tag name is matched by its ASCII letters only`() {
+        // The browser lowercases A to Z alone: </ſcript> (U+017F, a long s) is text inside the script.
+        refused("<script>x</\u017Fcript>%s</script>", script)
+        refused("<style>a</\u017Ftyle>%s</style>", "x")
+        // And <ſcript> is an element of its own, whose content is text.
+        assertEquals("<\u017Fcript>a&lt;b</\u017Fcript>", interpolate("<\u017Fcript>%s</\u017Fcript>", "a<b"))
+    }
+
+    @Test
+    fun `in svg or math a CDATA section ends at its own end`() {
+        // parse5 and the browser: the img is an element of the page, not the value of a.
+        refused("""<svg><![CDATA[ > <x a="]]><img src=x onerror='%s'>">""", script)
+        refused("""<math><![CDATA[ > <x a="]]><img src=x onerror='%s'>">""", script)
+        // Outside them it is a bogus comment, which the first > ends.
+        refused("""<![CDATA[ x ]]><img src=x onerror="%s">""", script)
+        // So it is inside an HTML integration point of an svg, or after a breakout: there the img is an element.
+        refused("""<svg><title><![CDATA[><img src=x onerror="%s">]]></title></svg>""", script)
+        refused("""<svg><desc><![CDATA[><a href="%s">x</a>]]></desc></svg>""", "javascript:alert(1)")
+        refused("""<math><title><p><![CDATA[><img onerror="%s">""", script)
     }
 
     @Test
@@ -106,6 +129,19 @@ class MarkupAsTheBrowserReadsTest {
         // In HTML, markup a textarea shows is text, and stays allowed.
         val shown = """<textarea><div data-text=""></div></textarea>"""
         assertEquals(shown, ElementsGuard.check(shown))
+        // So is markup after an end tag only Unicode case folding would read as the script's own.
+        val inScript = "<script>x</\u017Fcript><b data-text=\"++\"></b></script>"
+        assertEquals(inScript, ElementsGuard.check(inScript))
+        assertFailsWith<InterpolatedExpressionException> { ElementsGuard.check("""<svg><![CDATA[ > <x a="]]><b data-text='++'></b>">""") }
+        assertFailsWith<MistypedAttributeException> {
+            ElementsGuard.check(
+                """<svg><title><![CDATA[><div data-onn:click="x">]]></title></svg>""",
+            )
+        }
+        // An </svg> inside a CDATA section closes nothing, so the textarea after it is the svg's.
+        assertFailsWith<MistypedAttributeException> {
+            ElementsGuard.check("""<svg><![CDATA[</svg><textarea>]]><div data-onn:click="x"></div>""")
+        }
     }
 
     @Test

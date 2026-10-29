@@ -102,6 +102,8 @@ public final class io/github/markusaugust/streamlord/core/catalog/CatalogNames {
 
 public final class io/github/markusaugust/streamlord/core/client/AsciiKt {
 	public static final fun asciiLowercase (Ljava/lang/String;)Ljava/lang/String;
+	public static final fun indexOfAsciiIgnoreCase (Ljava/lang/String;Ljava/lang/String;I)I
+	public static final fun regionMatchesAsciiIgnoreCase (Ljava/lang/String;ILjava/lang/String;)Z
 }
 
 public final class io/github/markusaugust/streamlord/core/client/ClientCasing {
