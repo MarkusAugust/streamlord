@@ -142,6 +142,7 @@
       "keyRequired": true,
       "valueKind": "expression",
       "requires": "value",
+      "argNames": ["evt"],
       "kotlin": ["dataOn", "dataOnClick", "dataOnSubmit", "dataOnChange", "dataOnInput", "dataOnKeydown", "dataOnFetch"],
       "modifiers": [
         { "name": "once", "type": "flag" },
@@ -197,6 +198,7 @@
       "valueKind": "expression",
       "returnsValue": true,
       "requires": "value",
+      "argNames": ["patch"],
       "kotlin": ["dataOnSignalPatch"],
       "modifiers": [{ "$ref": "timing" }],
       "doc": "Runs an expression whenever signals are patched. `patch` holds the patch."

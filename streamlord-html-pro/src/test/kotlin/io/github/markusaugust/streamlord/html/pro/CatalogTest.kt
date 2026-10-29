@@ -167,6 +167,53 @@ class CatalogTest {
         )
     }
 
+    /**
+     * What each attribute plugin of the free client declares when it registers,
+     * conformance/client/plugins.json, held to what the catalog says of its attribute: whether it
+     * takes a key, must have one, what its value must be, whether its expression returns a value,
+     * and the names its expression is handed. The attributes without a plugin are read by the
+     * engine and the watchers under their fixed names.
+     */
+    @Test
+    fun `the catalog says of each attribute what its plugin declares`() {
+        val plugins =
+            JsonParser
+                .parseObject(File("../conformance/client/plugins.json").readText())
+                .array("cases")!!
+                .objects()
+                .associateBy { it.string("name")!! }
+        val free =
+            catalog
+                .array("attributes")!!
+                .objects()
+                .filter { it.boolean("pro") != true }
+                .associateBy { it.string("name")!! }
+        assertEquals(setOf("ignore", "ignore-morph", "preserve-attr", "on-signal-patch-filter", "nonce"), free.keys - plugins.keys)
+        assertEquals(emptySet(), plugins.keys - free.keys)
+        for ((name, plugin) in plugins) {
+            val attribute = free.getValue(name)
+            val requirement = plugin["requirement"]
+
+            fun part(of: String) = (requirement as? JsonObject)?.string(of) ?: plugin.string("requirement") ?: "allowed"
+            val key = part("key")
+            val value = part("value")
+            // on-signal-patch takes a key and refuses in its apply every one but those the catalog lists as keys.
+            assertEquals(key != "denied", attribute.boolean("keyed") == true || attribute.has("keys"), "$name: keyed")
+            assertEquals(key == "must", attribute.boolean("keyRequired") ?: false, "$name: keyRequired")
+            val requires =
+                if (value == "must") {
+                    "value"
+                } else if ("exclusive" in setOf(key, value)) {
+                    "exclusive"
+                } else {
+                    null
+                }
+            assertEquals(requires, attribute.string("requires"), "$name: requires")
+            assertEquals(plugin.boolean("returnsValue"), attribute.boolean("returnsValue") ?: false, "$name: returnsValue")
+            assertEquals(plugin.array("argNames")!!.strings(), attribute.array("argNames")?.strings().orEmpty(), "$name: argNames")
+        }
+    }
+
     /** `keyCase` in the catalog is what [Casing] assumes per attribute; the DSL output for a camelCase key proves it. */
     @Test
     fun `key casing in the catalog matches what the DSL writes`() {

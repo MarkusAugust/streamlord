@@ -427,6 +427,54 @@ const isStringTrue = [
   { value: ["true"], isStringTrue: client.isStringTrue(["true"]) },
 ];
 
+// -------------------------------------------------------------------- plugins.json
+
+// What each attribute plugin of the free client declares when it registers: the plugins under
+// plugins/attributes, bundled with an `@engine` whose `attribute` records its argument instead of
+// queueing it. Everything else the plugins import is the reference's own.
+const pluginDir = path.join(reference, "plugins", "attributes");
+const recordingEngine = {
+  name: "recording-engine",
+  setup(build) {
+    build.onResolve({ filter: /^@engine$/ }, (args) =>
+      path.dirname(args.importer) === pluginDir ? { path: "recording-engine", namespace: "recording" } : undefined,
+    );
+    build.onLoad({ filter: /.*/, namespace: "recording" }, () => ({
+      contents:
+        `export * from ${JSON.stringify(path.join(reference, aliases["@engine"]))};\n` +
+        "export const attribute = (plugin) => globalThis.registeredPlugins.push(plugin);\n",
+      loader: "ts",
+      resolveDir: reference,
+    }));
+  },
+};
+globalThis.registeredPlugins = [];
+for (const name of ["HTMLSelectElement", "HTMLTextAreaElement", "HTMLElement", "HTMLFormElement", "HTMLButtonElement"]) {
+  globalThis[name] ??= class {};
+}
+const pluginFiles = readdirSync(pluginDir).filter((f) => f.endsWith(".ts")).sort();
+const pluginBundle = await build({
+  stdin: { contents: pluginFiles.map((f) => `import "./plugins/attributes/${f}";`).join("\n"), resolveDir: reference, loader: "ts" },
+  bundle: true,
+  write: false,
+  format: "esm",
+  platform: "neutral",
+  target: "es2022",
+  define: { ALIAS: "null" },
+  plugins: [recordingEngine, referenceOnly],
+  logLevel: "silent",
+});
+await import(`data:text/javascript;base64,${Buffer.from(pluginBundle.outputFiles[0].text).toString("base64")}`);
+const plugins = globalThis.registeredPlugins
+  .map(({ name, requirement, returnsValue, argNames }) => ({
+    name,
+    requirement: requirement ?? null,
+    returnsValue: returnsValue ?? false,
+    argNames: argNames ?? [],
+  }))
+  .sort((a, b) => a.name.localeCompare(b.name));
+if (plugins.length !== pluginFiles.length) throw new Error(`${pluginFiles.length} plugin files registered ${plugins.length} plugins`);
+
 // ------------------------------------------------------------------- writing
 
 const files = {
@@ -465,6 +513,13 @@ const files = {
       "filtered({include, exclude}) with the fetch default exclude /(^|\\.)_/ unless given; pollutes lists what Object.prototype " +
       "or a function on it gained, removed again afterwards.",
     cases: { pathToObj, filtered: signalStore, isStringTrue },
+  },
+  "plugins.json": {
+    $comment:
+      "The argument each attribute plugin under plugins/attributes of the Datastar " + version + " client passes to attribute() " +
+      "from engine/engine.ts, recorded by bundling the plugins with an @engine whose attribute() records it: requirement, " +
+      "returnsValue and argNames as the plugin declares them, null, false and [] where it declares none.",
+    cases: plugins,
   },
 };
 
