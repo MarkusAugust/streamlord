@@ -272,4 +272,39 @@ class ClientOracleTest {
             assertEquals(lost, flagged, store.toJson())
         }
     }
+
+    /**
+     * The fixtures under `conformance/dsl/`: for each DSL call there with a literal key that has a capital, the hint's [wireKey]
+     * is the key and `__case` the DSL wrote, and the name the hint says the client reads back is
+     * the one the call means, which DslAsTheClientReadsItTest holds to what the client did.
+     */
+    @Test
+    fun `the wire hint names the key the dsl writes and the name the client reads`() {
+        var checked = 0
+        for (file in listOf("free.json", "pro.json")) {
+            val cases = JsonParser.parseObject(File("../conformance/dsl/$file").readText()).array("cases")!!.objects()
+            for (case in cases) {
+                val call = case.obj("call")!!
+                // The hint is shown for a key with a capital, the one the DSL rewrites.
+                val key = call.string("key")?.takeIf { k -> k.any { it.isUpperCase() } } ?: continue
+                val spec = Catalog.default.attributesByKotlin[call.string("fn")] ?: continue
+                if (!spec.keyed || spec.keyCase == null) continue
+                val prefix = case.string("prefix")!! + spec.name + ":"
+                val names =
+                    case.obj("read")!!.array("attributes")!!.flatMap { el ->
+                        (el as JsonArray).map { (it as JsonArray)[0].toKotlin() as String }
+                    }
+                val written = names.firstOrNull { it.startsWith(prefix) }?.removePrefix(prefix) ?: continue
+                val parts = written.split("__")
+                val wire = parts[0] + parts.drop(1).filter { it.startsWith("case.") }.joinToString("") { "__$it" }
+                assertEquals(wire, wireKey(key, spec.keyCase, call.string("case")), case.string("name"))
+                if (call.string("case") == null && spec.keyCase != KeyCase.RAW) {
+                    val read = if (spec.keyCase == KeyCase.CAMEL || "__case." in wire) clientKeyName(wire) else wire
+                    assertEquals(key, read, case.string("name"))
+                }
+                checked++
+            }
+        }
+        assertTrue(checked >= 15, "only $checked cases checked")
+    }
 }

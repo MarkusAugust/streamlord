@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { analyzeHtml } from "../src/analyze.ts";
-import { parseAttributeName } from "../src/catalog.ts";
+import { catalog, parseAttributeName } from "../src/catalog.ts";
 import { clientRewrite, clientScript } from "../src/expression.ts";
 import { kebab, wireKey, wireKeyReads } from "../src/markup.ts";
 import { referenceAsSubtraction, withoutReferenceHyphens } from "../src/signalNameHyphens.ts";
@@ -146,5 +146,34 @@ describe("the client's rules", () => {
         assert.ok(Number.isNaN(read) || read <= 0 || /1e3ms$/.test(modifiers), `${modifiers}: the client waits ${wait}ms, which the check does not say`);
       }
     }
+  });
+
+  // conformance/dsl/*.json: for each DSL call there with a literal key that has a capital, the hint's
+  // wireKey is the key and __case the DSL wrote, and the name it says the client reads back is the
+  // one the call means, which DslAsTheClientReadsItTest holds to what the client did.
+  it("the wire hint names the key the dsl writes and the name the client reads", () => {
+    type DslCase = { name: string; prefix: string; call: { fn: string; key: string | null; case: string | null }; read: { attributes: [string, string][][] } };
+    let checked = 0;
+    for (const file of ["free.json", "pro.json"]) {
+      const cases = (JSON.parse(readFileSync(new URL(file, new URL("../../../conformance/dsl/", import.meta.url)), "utf8")) as { cases: DslCase[] }).cases;
+      for (const c of cases) {
+        const key = c.call.key;
+        // The hint is shown for a key with a capital, the one the DSL rewrites.
+        if (key === null || !/[A-Z]/.test(key)) continue;
+        const spec = catalog.attributesByKotlin.get(c.call.fn);
+        if (!spec?.keyed || !spec.keyCase) continue;
+        const prefix = `${c.prefix}${spec.name}:`;
+        const written = c.read.attributes.flat().map(([n]) => n).find((n) => n.startsWith(prefix))?.slice(prefix.length);
+        if (written === undefined) continue;
+        const [base, ...mods] = written.split("__");
+        const wire = base + mods.filter((m) => m.startsWith("case.")).map((m) => `__${m}`).join("");
+        assert.equal(wireKey(key, spec.keyCase, c.call.case), wire, c.name);
+        if (c.call.case === null && spec.keyCase !== "raw") {
+          assert.equal(spec.keyCase === "camel" || wire.includes("__case.") ? clientKeyName(wire) : wire, key, c.name);
+        }
+        checked++;
+      }
+    }
+    assert.ok(checked >= 15, `only ${checked} cases checked`);
   });
 });
