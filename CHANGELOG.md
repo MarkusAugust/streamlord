@@ -44,6 +44,9 @@ All notable changes to Streamlord are recorded here. The format follows
 - `JsLiteral`, which writes the values of `set`, `setAll` and a fetch's `payload` and `headers`,
   refuses what `JsonWriter` refuses: a map that holds itself overflowed the stack, and `1` and
   `"1"` as keys of one map were both written as `'1'`.
+  It now walks a value with `JsonWriter` itself, in a JavaScript style, so the two cannot part.
+  Half of a surrogate pair in a string is written `\uXXXX`, as `JsonWriter` writes it, where it
+  reached the page as U+FFFD.
 - `FetchOptions.retry` says what Datastar 1.0.4 does with `never`: a request that never reaches
   the server is retried all the same, as with `auto`, up to `retryMaxCount`. The DSL fixture holds
   it.

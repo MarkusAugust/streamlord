@@ -681,10 +681,21 @@ public final class io/github/markusaugust/streamlord/core/json/JsonWriter {
 	public static final field DEFAULT_MAX_DEPTH I
 	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/json/JsonWriter;
 	public final fun write (Ljava/lang/Object;I)Ljava/lang/String;
+	public final fun write (Ljava/lang/Object;Lio/github/markusaugust/streamlord/core/json/JsonWriter$Style;I)Ljava/lang/String;
 	public static synthetic fun write$default (Lio/github/markusaugust/streamlord/core/json/JsonWriter;Ljava/lang/Object;IILjava/lang/Object;)Ljava/lang/String;
+	public static synthetic fun write$default (Lio/github/markusaugust/streamlord/core/json/JsonWriter;Ljava/lang/Object;Lio/github/markusaugust/streamlord/core/json/JsonWriter$Style;IILjava/lang/Object;)Ljava/lang/String;
 	public final fun writeExpression (Ljava/lang/Object;I)Ljava/lang/String;
 	public static synthetic fun writeExpression$default (Lio/github/markusaugust/streamlord/core/json/JsonWriter;Ljava/lang/Object;IILjava/lang/Object;)Ljava/lang/String;
 	public final fun writeString (Ljava/lang/String;)Ljava/lang/String;
+}
+
+public abstract interface class io/github/markusaugust/streamlord/core/json/JsonWriter$Style {
+	public abstract fun appendKey (Ljava/lang/StringBuilder;Ljava/lang/String;)V
+	public abstract fun appendString (Ljava/lang/StringBuilder;Ljava/lang/String;)V
+	public abstract fun getColon ()Ljava/lang/String;
+	public abstract fun getComma ()Ljava/lang/String;
+	public abstract fun getInstead ()Ljava/lang/String;
+	public abstract fun getName ()Ljava/lang/String;
 }
 
 public final class io/github/markusaugust/streamlord/core/json/SignalPatchException : java/lang/IllegalArgumentException {
