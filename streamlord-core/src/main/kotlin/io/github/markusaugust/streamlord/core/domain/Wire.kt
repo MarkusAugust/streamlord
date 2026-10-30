@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.core.domain
 
 import io.github.markusaugust.streamlord.core.DatastarEventValidationException
+import io.github.markusaugust.streamlord.core.client.isHtmlSpace
 import io.github.markusaugust.streamlord.core.json.JsonShape
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -68,7 +69,7 @@ public object Wire {
      * character is text it shows, a no-break space, U+3000 and U+001C among them, which Kotlin's
      * `isBlank()` counts as blank, and JavaScript's `trim()` too for the first two.
      */
-    internal fun htmlBlank(html: String?): Boolean = html == null || html.all { it == ' ' || it in "\t\n\u000C\r" }
+    internal fun htmlBlank(html: String?): Boolean = html == null || html.all { it.isHtmlSpace() }
 
     /**
      * Whether [html] gives the client nothing to patch in [mode]: [htmlBlank], or, for an `outer`

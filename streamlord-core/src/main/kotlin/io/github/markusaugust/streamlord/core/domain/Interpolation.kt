@@ -3,6 +3,7 @@ package io.github.markusaugust.streamlord.core.domain
 import io.github.markusaugust.streamlord.core.StreamlordException
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
+import io.github.markusaugust.streamlord.core.client.decodeEntities
 
 /**
  * Markup the caller vouches for, written into the output as it stands.
@@ -358,24 +359,6 @@ private val URL_ATTRIBUTES =
 private val ANIMATION_TAGS = setOf("animate", "set", "animatetransform", "animatemotion")
 private val ANIMATION_URL_ATTRIBUTES = setOf("values", "to", "from")
 
-/**
- * [text] with the character references a browser decodes in an attribute value decoded: the
- * numeric ones and the few named ones that can spell a scheme. Anything else is left as written.
- */
-private fun decodeReferences(text: String): String =
-    REFERENCE.replace(text) { m ->
-        val (hex, dec, name) = m.destructured
-        when {
-            hex.isNotEmpty() -> hex.toIntOrNull(16)?.takeIf(Character::isValidCodePoint)?.let { Character.toString(it) }
-            dec.isNotEmpty() -> dec.toIntOrNull()?.takeIf(Character::isValidCodePoint)?.let { Character.toString(it) }
-            else -> NAMED_REFERENCES[name]
-        } ?: m.value
-    }
-
-private val REFERENCE = Regex("""&(?:#[xX]([0-9a-fA-F]+);?|#([0-9]+);?|([A-Za-z]+);)""")
-private val NAMED_REFERENCES =
-    mapOf("amp" to "&", "colon" to ":", "Tab" to "\t", "NewLine" to "\n", "sol" to "/", "quest" to "?", "num" to "#", "period" to ".")
-
 private class Landscape(
     private val prefixes: List<String>,
     private val markup: String,
@@ -463,11 +446,11 @@ private class Landscape(
             val value = StringBuilder()
             var cut = start
             for (index in inside) {
-                value.append(decodeReferences(format.substring(cut, holes[index]).replace("%%", "%")))
+                value.append(decodeEntities(format.substring(cut, holes[index]).replace("%%", "%")).text)
                 value.append(values[index].let { if (it is Trusted) it.html else it?.toString().orEmpty() })
                 cut = holes[index] + 2
             }
-            value.append(decodeReferences(format.substring(cut, end).replace("%%", "%")))
+            value.append(decodeEntities(format.substring(cut, end).replace("%%", "%")).text)
             val entries = if (attributeNames[attribute].asciiLowercase() == "values") value.split(';') else listOf(value.toString())
             if (entries.any { !safeUrl(it) }) throw UnsafeInterpolationException(Position.URL, inside.first(), attributeNames[attribute])
         }

@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.client.decodeEntities
+
 /*
  * The signals a Datastar expression reads, with their offsets, and the check of each against the
  * signals the project defines. The analysis sees one file; which names the project defines is the

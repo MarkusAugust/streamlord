@@ -131,6 +131,14 @@ public final class io/github/markusaugust/streamlord/core/client/ClientExpressio
 	public static final fun getCLIENT_SIGNAL ()Lkotlin/text/Regex;
 }
 
+public final class io/github/markusaugust/streamlord/core/client/ClientHtmlKt {
+	public static final field HTML_SPACE Ljava/lang/String;
+	public static final fun decodeEntities (Ljava/lang/String;)Lio/github/markusaugust/streamlord/core/client/DecodedValue;
+	public static final fun getRAW_TEXT ()Ljava/util/List;
+	public static final fun isHtmlSpace (C)Z
+	public static final fun rawTextEnd (Ljava/lang/String;Ljava/lang/String;I)I
+}
+
 public final class io/github/markusaugust/streamlord/core/client/ClientRewrite : io/github/markusaugust/streamlord/core/client/ClientScript {
 	public fun <init> (Ljava/lang/String;[ILjava/util/List;Ljava/util/List;)V
 	public final fun getRewrites ()Ljava/util/List;
@@ -141,6 +149,13 @@ public class io/github/markusaugust/streamlord/core/client/ClientScript {
 	public fun <init> (Ljava/lang/String;[I)V
 	public final fun getJs ()Ljava/lang/String;
 	public final fun toExpression (I)I
+}
+
+public final class io/github/markusaugust/streamlord/core/client/DecodedValue {
+	public fun <init> (Ljava/lang/String;[I)V
+	public final fun getMap ()[I
+	public final fun getText ()Ljava/lang/String;
+	public final fun toSource (I)I
 }
 
 public final class io/github/markusaugust/streamlord/core/client/Rewrite {
@@ -239,6 +254,7 @@ public final class io/github/markusaugust/streamlord/core/domain/ElementsGuard {
 	public final fun getDefaultPrefixes ()Ljava/util/List;
 	public final fun getEvaluatedAttributes ()Ljava/util/Set;
 	public final fun getExpressionAttributes ()Ljava/util/Set;
+	public final fun nearAttribute (Ljava/lang/String;Z)Ljava/lang/String;
 }
 
 public final class io/github/markusaugust/streamlord/core/domain/ElementsResponse : io/github/markusaugust/streamlord/core/domain/DatastarResponse {

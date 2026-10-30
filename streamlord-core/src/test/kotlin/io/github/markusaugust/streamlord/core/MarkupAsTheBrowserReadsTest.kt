@@ -12,6 +12,7 @@ import io.github.markusaugust.streamlord.core.domain.interpolate
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 /**
  * The markup scanner under interpolate and ElementsGuard against the way the HTML tokenizer
@@ -57,6 +58,19 @@ class MarkupAsTheBrowserReadsTest {
         refused("""<svg><title><![CDATA[><img src=x onerror="%s">]]></title></svg>""", script)
         refused("""<svg><desc><![CDATA[><a href="%s">x</a>]]></desc></svg>""", "javascript:alert(1)")
         refused("""<math><title><p><![CDATA[><img onerror="%s">""", script)
+    }
+
+    @Test
+    fun `character references decode as the HTML tokenizer decodes them`() {
+        // &nbsp; is a no-break space, as &#160; is, and an expression of white space alone is none.
+        val numeric = runCatching { ElementsGuard.check("""<b data-text="&#160;"></b>""") }.exceptionOrNull()
+        val named = runCatching { ElementsGuard.check("""<b data-text="&nbsp;"></b>""") }.exceptionOrNull()
+        assertEquals(numeric?.javaClass, named?.javaClass)
+        assertTrue(named != null)
+        // &#0; is U+FFFD to the browser, which no scheme starts with, so the link is a relative one.
+        assertEquals("""<a href="&#0;javascript:alert(1)">x</a>""", interpolate("""<a href="&#0;javascript:%s">x</a>""", "alert(1)"))
+        // The legacy names decode without their semicolon.
+        refused("""<a href="javascript&colon;%s">x</a>""", "alert(1)")
     }
 
     @Test

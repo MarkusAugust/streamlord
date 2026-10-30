@@ -1,7 +1,10 @@
 package io.github.markusaugust.streamlord.core.domain
 
+import io.github.markusaugust.streamlord.core.InternalStreamlordApi
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
+import io.github.markusaugust.streamlord.core.client.decodeEntities
+import io.github.markusaugust.streamlord.core.client.isHtmlSpace
 import io.github.markusaugust.streamlord.core.client.regionMatchesAsciiIgnoreCase
 
 /**
@@ -52,85 +55,6 @@ public object ElementsGuard {
      * passes its own list to [check], or sets `attributePrefixes` on `Streamlord`.
      */
     public val defaultPrefixes: List<String> = listOf(CatalogNames.PREFIX, CatalogNames.ALIASED_PREFIX).sortedByDescending { it.length }
-
-    // A numeric reference decodes with or without its semicolon. A named one needs it, except the
-    // legacy few the standard lets go without, which in an attribute decode unless a letter, a
-    // digit or = follows: &lt 1 is < 1 and &amp&amp is &&.
-    private val ENTITY =
-        Regex("&(?:([A-Za-z]+);|(amp|AMP|lt|LT|gt|GT|quot|QUOT)(?![A-Za-z0-9=;])|#(\\d+);?|#[xX]([0-9a-fA-F]+);?)")
-
-    /** The named references for the ASCII a Datastar expression is made of (the HTML standard's table). */
-    private val NAMED_ENTITIES =
-        mapOf(
-            "amp" to "&",
-            "AMP" to "&",
-            "lt" to "<",
-            "LT" to "<",
-            "gt" to ">",
-            "GT" to ">",
-            "quot" to "\"",
-            "QUOT" to "\"",
-            "apos" to "'",
-            "plus" to "+",
-            "equals" to "=",
-            "excl" to "!",
-            "quest" to "?",
-            "colon" to ":",
-            "semi" to ";",
-            "comma" to ",",
-            "period" to ".",
-            "lpar" to "(",
-            "rpar" to ")",
-            "lsqb" to "[",
-            "lbrack" to "[",
-            "rsqb" to "]",
-            "rbrack" to "]",
-            "lcub" to "{",
-            "lbrace" to "{",
-            "rcub" to "}",
-            "rbrace" to "}",
-            "verbar" to "|",
-            "vert" to "|",
-            "VerticalLine" to "|",
-            "grave" to "`",
-            "DiacriticalGrave" to "`",
-            "sol" to "/",
-            "bsol" to "\\",
-            "ast" to "*",
-            "midast" to "*",
-            "percnt" to "%",
-            "Hat" to "^",
-            "dollar" to "$",
-            "num" to "#",
-            "commat" to "@",
-            "lowbar" to "_",
-            "UnderBar" to "_",
-            "Tab" to "\t",
-            "NewLine" to "\n",
-        )
-
-    /**
-     * kotlinx.html and every template engine escape attribute values, some with numeric entities
-     * (`&#x27;`, `&#61;`); the expression is what the browser decodes. One pass, as the browser
-     * does it, so `&amp;lt;` is `&lt;` and not `<`.
-     */
-    private fun decode(value: String): String =
-        if ('&' !in value) {
-            value
-        } else {
-            ENTITY.replace(value) { m ->
-                val (named, legacy, decimal, hex) = m.destructured
-                when {
-                    named.isNotEmpty() -> NAMED_ENTITIES[named] ?: m.value
-                    legacy.isNotEmpty() -> NAMED_ENTITIES.getValue(legacy)
-                    decimal.isNotEmpty() -> codePoint(decimal.toIntOrNull()) ?: m.value
-                    else -> codePoint(hex.toIntOrNull(16)) ?: m.value
-                }
-            }
-        }
-
-    /** The character a numeric reference names, or `null` for a number that names none, which is left as written. */
-    private fun codePoint(value: Int?): String? = value?.takeIf(Character::isValidCodePoint)?.let { Character.toString(it) }
 
     /**
      * Returns [elements] untouched, or throws for the first broken attribute:
@@ -212,17 +136,30 @@ public object ElementsGuard {
             // data-animated and data-effects are honest words a letter away from Datastar's. Only a swapped
             // letter in a long name (data-indicater, data-computer) is judged there; plurals and past tenses,
             // which add a letter, are left alone.
-            val qualified = rest.length > plugin.length
-            attributes
-                .firstOrNull { oneEditAway(plugin, it) && (qualified || (it.length >= LONG_NAME && it.length == plugin.length)) }
+            nearAttribute(plugin, qualified = rest.length > plugin.length)
                 ?.let { near ->
                     throw MistypedAttributeException(name, prefix + near + name.substring(prefix.length + plugin.length))
                 }
             return
         }
         if (plugin !in expressionAttributes) return
-        ExpressionGuard.check(decode(value ?: ""), name)
+        // kotlinx.html and every template engine escape attribute values, some with numeric references
+        // (`&#x27;`, `&#61;`); the expression is what the browser decodes, in one pass.
+        ExpressionGuard.check(decodeEntities(value ?: "").text, name)
     }
+
+    /**
+     * The Datastar attribute [plugin], a name after the prefix that is none, is taken for a typo of,
+     * or null. [qualified] says whether a key or a modifier follows it, which makes a custom
+     * attribute implausible, so any name one letter away counts. A bare name (data-test, data-kind,
+     * data-effects) is an honest word more often than not: only a swapped letter in a long name counts.
+     * The analysis reports the same names.
+     */
+    @InternalStreamlordApi
+    public fun nearAttribute(
+        plugin: String,
+        qualified: Boolean,
+    ): String? = attributes.firstOrNull { oneEditAway(plugin, it) && (qualified || (it.length >= LONG_NAME && it.length == plugin.length)) }
 
     /** Below this length a Datastar name has too many honest neighbours (test, kind, once, unit) to judge a bare `data-*` at all. */
     private const val LONG_NAME = 6
@@ -274,7 +211,7 @@ private fun foreignRoot(
 ): String? =
     listOf("svg", "math").firstOrNull {
         html.regionMatchesAsciiIgnoreCase(start + 1, it) &&
-            html.getOrNull(start + 1 + it.length).let { c -> c == null || c in " \t\n\u000C\r/>" }
+            html.getOrNull(start + 1 + it.length).let { c -> c == null || c == '/' || c == '>' || c.isHtmlSpace() }
     }
 
 /** A CDATA section, to its `]]>` or the end. */

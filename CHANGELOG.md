@@ -59,6 +59,12 @@ All notable changes to Streamlord are recorded here. The format follows
 - A `\` followed by `&` in an expression lost its backslash: kotlinx.html writes that pair as a
   bare `&`, so `dataText("'\\&amp;'")` showed `&` where it meant `&amp;`, and `'\\\\&'` lost
   one of its backslashes. Every expression the DSL writes now reaches the browser as written.
+- `ElementsGuard` and `interpolate` decode character references as the HTML tokenizer does, with the
+  decoder the analysis uses: `&nbsp;` is a no-break space, `&#0;`, a surrogate and a number past
+  U+10FFFF are U+FFFD, `&#128;` to `&#159;` are windows-1252, and `&amp`, `&lt`, `&gt`, `&quot` and
+  `&nbsp` decode without their semicolon. `data-text="&nbsp;"` is refused now, as `&#160;` was.
+  The typo rule for `data-*` names is one function, `ElementsGuard.nearAttribute`, which the
+  analysis calls.
 
 ### Security
 

@@ -1,6 +1,9 @@
 package io.github.markusaugust.streamlord.core.domain
 
-import io.github.markusaugust.streamlord.core.client.indexOfAsciiIgnoreCase
+import io.github.markusaugust.streamlord.core.client.CODE_TEXT
+import io.github.markusaugust.streamlord.core.client.RAW_TEXT
+import io.github.markusaugust.streamlord.core.client.isHtmlSpace
+import io.github.markusaugust.streamlord.core.client.rawTextEnd
 import io.github.markusaugust.streamlord.core.client.regionMatchesAsciiIgnoreCase
 
 /**
@@ -37,18 +40,6 @@ internal interface MarkupVisitor {
         end: Int,
     ) = Unit
 }
-
-/**
- * HTML elements whose body is text to the browser: `<` inside them opens no tag, up to the
- * element's own end tag. `plaintext` has none and runs to the end.
- */
-private val RAW_TEXT = listOf("script", "style", "textarea", "title", "xmp", "iframe", "noembed", "noframes", "noscript", "plaintext")
-
-/** Of those, the ones whose body is a program. */
-private val CODE_TEXT = listOf("script", "style")
-
-/** HTML's own white space, which is narrower than Kotlin's `isWhitespace`. */
-private fun Char.isHtmlSpace(): Boolean = this == ' ' || this == '\t' || this == '\n' || this == '\u000C' || this == '\r'
 
 /** The characters that end a tag name, and so an end tag's name as well. */
 private fun Char?.endsName(): Boolean = this == null || isHtmlSpace() || this == '/' || this == '>'
@@ -110,7 +101,7 @@ internal fun scanMarkup(
             .firstOrNull {
                 html.regionMatchesAsciiIgnoreCase(lt + 1, it) && html.getOrNull(lt + 1 + it.length).endsName()
             }?.let { tag ->
-                val end = if (tag == "plaintext") n else endTag(html, tag, i)
+                val end = if (tag == "plaintext") n else rawTextEnd(html, tag, i).let { if (it < 0) n else it }
                 if (tag in CODE_TEXT) visitor.code(i, end)
                 i = end
             }
@@ -133,21 +124,6 @@ private fun commentEnd(
         dash < 0 && bang < 0 -> html.length
         bang < 0 || (dash in 0 until bang) -> dash + 3
         else -> bang + 4
-    }
-}
-
-/** Where `</tag` begins after [from], as a whole name: `</titlex>` does not end a `title`. */
-private fun endTag(
-    html: String,
-    tag: String,
-    from: Int,
-): Int {
-    var at = from
-    while (true) {
-        val close = html.indexOfAsciiIgnoreCase("</$tag", at)
-        if (close < 0) return html.length
-        if (html.getOrNull(close + 2 + tag.length).endsName()) return close
-        at = close + 2
     }
 }
 
