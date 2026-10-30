@@ -11,7 +11,12 @@ import io.github.markusaugust.streamlord.html.DatastarAttributes
 import io.github.markusaugust.streamlord.html.FetchEventType
 import io.github.markusaugust.streamlord.html.FetchOptions
 import io.github.markusaugust.streamlord.html.IntersectModifiers
+import io.github.markusaugust.streamlord.html.InvalidSignalNameException
 import io.github.markusaugust.streamlord.html.OnModifiers
+import io.github.markusaugust.streamlord.html.dataAttr
+import io.github.markusaugust.streamlord.html.dataStyle
+import io.github.markusaugust.streamlord.html.elements
+import kotlinx.html.div
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -219,10 +224,34 @@ class CatalogTest {
                     "respondScript",
                     "datastarElements",
                     "datastarScript",
+                    // The adapters' own, which this module does not see: Ktor's and Spring's.
+                    "respondSignals",
+                    "datastarSignals",
                 )
-        for (group in listOf("expression", "html", "script", "selector")) {
-            for (fn in sites.obj(group)!!.keys) {
+        for (group in listOf("expression", "html", "script", "selector", "signals", "signalNames")) {
+            for (fn in sites.obj(group)!!.keys.filter { !it.startsWith("$") }) {
                 assertTrue(fn in known, "call site $fn in group $group does not exist in the SDK")
+            }
+        }
+    }
+
+    /** `keyIsAttributeName` is the flag of exactly the raw-key helpers that refuse a capital, as an HTML attribute name has none. */
+    @Test
+    fun `the helpers whose key is an attribute name refuse a capital and the others write it`() {
+        val write: Map<String, (String) -> Unit> =
+            mapOf(
+                "dataAttr" to { key -> elements { div { dataAttr(key, "1") } } },
+                "dataStyle" to { key -> elements { div { dataStyle(key, "1") } } },
+                "dataAnimate" to { key -> elements { div { dataAnimate(key, "1") } } },
+                "dataPersist" to { key -> elements { div { dataPersist(key) } } },
+            )
+        val raw = catalog.array("attributes")!!.objects().filter { it.string("keyCase") == "raw" }
+        assertEquals(write.keys, raw.flatMap { it.array("kotlin")!!.strings() }.toSet())
+        for (attribute in raw) {
+            val refuses = attribute.boolean("keyIsAttributeName") ?: false
+            for (fn in attribute.array("kotlin")!!.strings()) {
+                val thrown = runCatching { write.getValue(fn)("viewBox") }.exceptionOrNull()
+                assertEquals(refuses, thrown is InvalidSignalNameException, "$fn(\"viewBox\") threw $thrown")
             }
         }
     }

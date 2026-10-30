@@ -75,7 +75,9 @@ public object Requests {
     public const val REQUESTS_FILE: String = ".streamlord/inspector.json"
     public const val ENV_FILE: String = ".streamlord/env.json"
     public const val RECENT_LIMIT: Int = 10
-    public val METHODS: List<String> = listOf("GET", "POST", "PUT", "PATCH", "DELETE", "QUERY")
+
+    /** The methods of the backend actions, in the catalog's order. */
+    public val METHODS: List<String> = Catalog.default.backendActions.map { it.uppercase() }
 
     private val VARIABLE = Regex("""\{\{\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\}\}""")
     private val PATH_VARIABLE = Regex("""\{([A-Za-z_][A-Za-z0-9_]*)(?::[^{}]*)?\}""")

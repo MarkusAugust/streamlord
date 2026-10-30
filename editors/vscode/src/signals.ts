@@ -1,3 +1,4 @@
+import { catalog } from "./catalog.ts";
 import { PLACEHOLDER, type KotlinString } from "./kotlinStrings.ts";
 import { findCallSites, stringAt, type CallSite } from "./scanner.ts";
 import { PROTOTYPE_NAMES, signalNameRefusal } from "./signalNames.ts";
@@ -36,9 +37,15 @@ const HTML_ATTRIBUTE_PATTERNS: RegExp[] = [
   // The key with its modifiers, which may name the casing: data-signals:my-value__case.snake. A key
   // the client could hold and nothing else, so that template syntax (data-signals:${key},
   // data-signals:{{ name }}, data-signals:th:text) declares nothing.
-  /data-(?:star-)?(?:signals|bind|indicator|ref|computed|match-media):([\p{L}\p{N}_.-]+)(?=[\s=>"'/\\]|$)/giu,
+  new RegExp(`data-(?:star-)?(?:${catalog.signalKeyAttributes.join("|")}):([\\p{L}\\p{N}_.-]+)(?=[\\s=>"'/\\\\]|$)`, "giu"),
   // The value form names the signal as written: data-bind="user-name" is the signal user-name.
-  /data-(?:star-)?(?:bind|indicator|ref)(?:__[^=\s>]*)?=(?:\\?"([^"\\\s]+)\\?"|'([^'\s]+)')/gi,
+  new RegExp(
+    `data-(?:star-)?(?:${catalog.attributes
+      .filter((a) => a.valueKind === "signal")
+      .map((a) => a.name)
+      .join("|")})(?:__[^=\\s>]*)?=(?:\\\\?"([^"\\\\\\s]+)\\\\?"|'([^'\\s]+)')`,
+    "gi",
+  ),
   // The object form may sit in either kind of quote: JSON written by hand is `data-signals='{"query": ""}'`.
   // data-computed="{total: () => ...}" declares its keys the same way.
   /data-(?:star-)?(?:signals|computed)(?:__[^=\s>]*)?=(?:"\{([^"]*)\}"|'\{([^']*)\}')/gi,
@@ -55,8 +62,8 @@ const SERIALIZABLE_CLASS = /@Serializable\s*(?:\([^)]*\))?\s*(?:(?:public|intern
 // between it and the property.
 const PROPERTY = /(?:@SerialName\(\s*(?:value\s*=\s*)?"([^"]*)"\s*\)\s*(?:@\w+(?:\([^)]*\))?\s*)*(?:\w+\s+)*?)?\b(?:val|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:/g;
 
-const PAIR_CALLS: ReadonlySet<string> = new Set(["dataSignals", "patchSignals", "removeSignals", "respondSignals", "datastarSignals"]);
-const JSON_CALLS: ReadonlySet<string> = new Set(["patchSignals", "respondSignals", "datastarSignals"]);
+const PAIR_CALLS: ReadonlySet<string> = new Set(catalog.signalCalls.keys());
+const JSON_CALLS: ReadonlySet<string> = new Set([...catalog.signalCalls].filter(([, flags]) => flags.has("json")).map(([name]) => name));
 /**
  * `toJsonValue(...)` handed to `dataSignals`: the page declares what the codec makes of the value.
  * The class is named by `toJsonValue<Form>(...)`, by a constructor call, `toJsonValue(Form(...))`,

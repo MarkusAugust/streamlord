@@ -44,10 +44,18 @@ private val HELPER_READS = Regex("""\b(?:${HELPER_READ_CALLS.joinToString("|")})
  * `data-signals:{{ name }}`, `data-signals:th:text`) declares nothing.
  */
 private val KEYED_ATTRIBUTE =
-    Regex("""(?i)data-(?:star-)?(?:signals|bind|indicator|ref|computed|match-media):([\p{L}\p{N}_.-]+)(?=[\s=>"'/\\]|$)""")
+    Regex(
+        """(?i)data-(?:star-)?(?:${Catalog.default.signalKeyAttributes.joinToString("|")}):([\p{L}\p{N}_.-]+)(?=[\s=>"'/\\]|$)""",
+    )
 
 /** The value form names the signal as written: `data-bind="user-name"` is the signal `user-name`. */
-private val VALUE_ATTRIBUTE = Regex("""(?i)data-(?:star-)?(?:bind|indicator|ref)(?:__[^=\s>]*)?=(?:\\?"([^"\\\s]+)\\?"|'([^'\s]+)')""")
+private val VALUE_ATTRIBUTE =
+    Regex(
+        """(?i)data-(?:star-)?(?:${Catalog.default.attributes.filter { it.valueKind == ValueKind.SIGNAL }.joinToString(
+            "|",
+        ) { it.name }})""" +
+            """(?:__[^=\s>]*)?=(?:\\?"([^"\\\s]+)\\?"|'([^'\s]+)')""",
+    )
 
 // The object form may sit in either kind of quote, and its keys may be bare or quoted: JSON written
 // by hand is `data-signals='{"query": ""}'`. Inside a Kotlin string the key's quotes are escaped.
@@ -60,8 +68,11 @@ private val ASSIGNED_SIGNAL = Regex("""(?:\$|\$\{'\$'\})([A-Za-z_][A-Za-z0-9_.]*
 /** A bare `$name` is a signal in markup; in Kotlin it is a template, so it stays out of the Kotlin list. */
 private val BARE_SIGNAL = Regex("""\$([A-Za-z_][A-Za-z0-9_.]*)""")
 
-private val PAIR_CALLS = setOf("dataSignals", "patchSignals", "removeSignals", "respondSignals", "datastarSignals")
-private val JSON_CALLS = setOf("patchSignals", "respondSignals", "datastarSignals")
+private val PAIR_CALLS = Catalog.default.signalCalls.keys
+private val JSON_CALLS =
+    Catalog.default.signalCalls
+        .filterValues { "json" in it }
+        .keys
 private val JSON_OBJECT = Regex("""^\s*\{""")
 
 /**

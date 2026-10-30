@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.json.JsonBoolean
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
@@ -56,6 +57,8 @@ public data class AttributeSpec(
     val keys: List<String> = emptyList(),
     /** The names the expression is handed besides `el`: `evt` in `data-on`, `patch` in `data-on-signal-patch`. */
     val argNames: List<String> = emptyList(),
+    /** Whether the key is an HTML attribute's name, which the DSL takes as HTML has it: `data-attr`, `data-animate`. */
+    val keyIsAttributeName: Boolean = false,
 )
 
 public data class ActionSpec(
@@ -121,6 +124,12 @@ public class Catalog private constructor(
     public val scriptCallSites: Map<String, CallSiteSpec>
     public val selectorCallSites: Map<String, CallSiteSpec>
 
+    /** The calls whose arguments are signals by name, each with the flags the catalog gives it: `names`, `json`. */
+    public val signalCalls: Map<String, Set<String>>
+
+    /** The expression helpers, whose first argument is a signal name, each with its flags: `reads`, `shared`. */
+    public val signalNameHelpers: Map<String, Set<String>>
+
     init {
         val groups = raw.obj("modifierGroups") ?: JsonObject.EMPTY
         attributes =
@@ -145,6 +154,7 @@ public class Catalog private constructor(
                     returnsValue = a.boolean("returnsValue") ?: false,
                     keys = a.array("keys")?.strings() ?: emptyList(),
                     argNames = a.array("argNames")?.strings() ?: emptyList(),
+                    keyIsAttributeName = a.boolean("keyIsAttributeName") ?: false,
                 )
             }
         actions =
@@ -170,6 +180,8 @@ public class Catalog private constructor(
         htmlCallSites = callSites(sites.obj("html"))
         scriptCallSites = callSites(sites.obj("script"))
         selectorCallSites = callSites(sites.obj("selector"))
+        signalCalls = flagged(sites.obj("signals")!!)
+        signalNameHelpers = flagged(sites.obj("signalNames")!!)
     }
 
     public val attributesByName: Map<String, AttributeSpec> = attributes.associateBy { it.name }
@@ -193,6 +205,15 @@ public class Catalog private constructor(
      */
     public val scopeNames: Set<String> =
         (compiledParameters + attributes.flatMap { it.argNames }).filter { it.first().isLetter() && !it.startsWith("__") }.toSet()
+
+    /** The DSL helpers whose first argument is the name of a signal the page declares: those of the attributes whose key is camel-cased. */
+    public val namingHelpers: Set<String> = attributes.filter { it.keyCase == KeyCase.CAMEL }.flatMap { it.kotlin }.toSet()
+
+    /** The attributes whose key is the name of a signal, in which the client camel-cases it. */
+    public val signalKeyAttributes: List<String> = attributes.filter { it.keyCase == KeyCase.CAMEL }.map { it.name }
+
+    /** The backend actions, `@get` and the rest, which send a request. */
+    public val backendActions: List<String> = actions.filter { it.kind == "backend" }.map { it.name }
 
     /** Every DSL function the analysis looks at, of every kind. */
     public val allCallSiteNames: Set<String> =
@@ -231,6 +252,11 @@ public class Catalog private constructor(
             max = m.int("max"),
             ignoredWith = m.array("ignoredWith")?.strings() ?: emptyList(),
         )
+
+    private fun flagged(obj: JsonObject): Map<String, Set<String>> =
+        obj
+            .filterKeys { !it.startsWith("\$") }
+            .mapValues { (_, value) -> (value as JsonObject).filterValues { it == JsonBoolean.TRUE }.keys }
 
     private fun callSites(obj: JsonObject?): Map<String, CallSiteSpec> {
         if (obj == null) return emptyMap()

@@ -46,6 +46,10 @@ describe("signal collection", () => {
     assert.deepEqual(kotlin(`dataSignals(("count" to 0))`), ["count"]);
   });
 
+  it("the keys of the JSON a server call sends are signals", () => {
+    for (const call of ["stream.patchSignals", "call.respondSignals", "datastarSignals"]) assert.deepEqual(kotlin(`${call}("""{"open": true}""")`), ["open"], call);
+  });
+
   it("a key inside a pair's value declares nothing on its own", () => {
     assert.deepEqual(kotlin(`dataSignals("user" to mapOf("first-name" to "", "age" to 1))`), ["user"]);
   });

@@ -61,16 +61,24 @@ public class Analyzer(
     private val expressions = ExpressionValidator(catalog)
     private val markup = MarkupValidator(catalog)
 
-    /** Keyed helpers that take a key but no expression, so the catalog's expression sites do not list them. */
-    private val keyOnlyHelpers = setOf("dataMatchMedia", "dataPersist")
-
-    // The helpers whose key is an HTML attribute's name, in which the DSL refuses a capital.
-    private val attributeNameHelpers = setOf("dataAttr", "dataAnimate")
-
     /** Helpers that write the signal name in the value (the catalog's `valueKind` signal), which its call sites do not list. */
     private val valueNameHelpers =
         catalog.attributes
             .filter { it.valueKind == ValueKind.SIGNAL }
+            .flatMap { it.kotlin }
+            .toSet()
+
+    /** Keyed helpers that take a key but no expression, so the catalog's expression sites do not list them. */
+    private val keyOnlyHelpers =
+        catalog.attributes
+            .filter { it.keyed }
+            .flatMap { it.kotlin }
+            .toSet() - catalog.expressionCallSites.keys - valueNameHelpers
+
+    // The helpers whose key is an HTML attribute's name, in which the DSL refuses a capital.
+    private val attributeNameHelpers =
+        catalog.attributes
+            .filter { it.keyIsAttributeName }
             .flatMap { it.kotlin }
             .toSet()
 

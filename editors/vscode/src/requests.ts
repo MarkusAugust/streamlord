@@ -3,6 +3,7 @@
  * list and the curl export. Editor-independent.
  */
 
+import { catalog } from "./catalog.ts";
 import type { Route } from "./routes.ts";
 import type { RunningServer } from "./serverLog.ts";
 
@@ -26,7 +27,8 @@ export interface RequestsFile {
 export const REQUESTS_FILE = ".streamlord/inspector.json";
 export const ENV_FILE = ".streamlord/env.json";
 export const RECENT_LIMIT = 10;
-export const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "QUERY"];
+/** The methods of the backend actions, in the catalog's order. */
+export const METHODS = catalog.backendActions.map((a) => a.toUpperCase());
 // The methods the client sends the signals with in the query, not the body (DatastarProtocol.BODYLESS_METHODS).
 const BODYLESS: ReadonlySet<string> = new Set(["GET", "DELETE"]);
 

@@ -33,7 +33,10 @@ internal fun expressionSignalReferences(text: String): List<SignalReference> =
         .map { SignalReference(it.start, it.end, it.name) }
 
 /** The DSL helpers whose first argument names a signal they read: `signal("count")` is `$count`. */
-internal val HELPER_READ_CALLS: Set<String> = setOf("signal", "increment", "decrement", "not")
+internal val HELPER_READ_CALLS: Set<String> =
+    Catalog.default.signalNameHelpers
+        .filterValues { "reads" in it }
+        .keys
 
 /**
  * A name a fix can write back into a helper: dotted parts, without a hyphen, which the helper

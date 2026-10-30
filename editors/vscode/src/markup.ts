@@ -1314,7 +1314,7 @@ function validateKeyCase(attr: Attribute, parsed: { key: string | null; base: st
 }
 
 /** The actions the catalog lists as sending a request. */
-const BACKEND_ACTIONS = catalog.actions.filter((a) => a.kind === "backend").map((a) => a.name);
+const BACKEND_ACTIONS = catalog.backendActions;
 
 /** A call to one of them, written as Datastar parses it: no space before the parenthesis. */
 const BACKEND_ACTION = new RegExp("@(?:" + BACKEND_ACTIONS.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")\\(");

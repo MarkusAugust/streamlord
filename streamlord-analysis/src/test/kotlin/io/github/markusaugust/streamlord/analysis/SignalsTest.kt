@@ -64,6 +64,14 @@ class SignalsTest {
         assertEquals(listOf("count"), kotlin("dataSignals((\"count\" to 0))"))
     }
 
+    // The server's calls take the signals as JSON text too, and its keys are signals.
+    @Test
+    fun `the keys of the JSON a server call sends are signals`() {
+        for (call in listOf("stream.patchSignals", "call.respondSignals", "datastarSignals")) {
+            assertEquals(listOf("open"), kotlin("$call(\"\"\"{\"open\": true}\"\"\")"), call)
+        }
+    }
+
     // The client merges the value as it is, so a key inside it is no signal of its own.
     @Test
     fun `a key inside a pair's value declares nothing on its own`() {

@@ -1,3 +1,4 @@
+import { catalog } from "./catalog.ts";
 import { clientRewrite, DOCS, type Issue } from "./expression.ts";
 import { dataSignalsPairIssues, pairKeys } from "./signals.ts";
 import type { KotlinString } from "./kotlinStrings.ts";
@@ -13,7 +14,7 @@ import { withoutHyphens } from "./signalNames.ts";
  */
 
 /** The helpers whose first argument is the name of a signal the page declares. */
-export const NAMING_HELPERS: ReadonlySet<string> = new Set(["dataSignals", "dataComputed", "dataBind", "dataRef", "dataIndicator", "dataMatchMedia"]);
+export const NAMING_HELPERS: ReadonlySet<string> = catalog.namingHelpers;
 
 /**
  * The helper whose second argument may be `ifMissing` of the object form, `dataSignals("{...}", true)`,
@@ -25,22 +26,22 @@ const KEYED_OR_OBJECT = "dataSignals";
 const COMPUTED = "dataComputed";
 
 /** The expression helpers, whose name is JavaScript: a hyphen inside brackets is a key. */
-export const EXPRESSION_HELPERS: ReadonlySet<string> = new Set(["signal", "set", "setExpr", "increment", "decrement", "toggle", "not"]);
+export const EXPRESSION_HELPERS: ReadonlySet<string> = new Set(catalog.signalNameHelpers.keys());
 
 /**
  * The expression helpers whose names other APIs share in the same scope: `set` on a map, or on
  * Ktor's headers inside `headers { }`. One counts only inside the arguments of a DSL call.
  */
-const SHARED_NAME_HELPERS: ReadonlySet<string> = new Set(["set", "toggle"]);
+const SHARED_NAME_HELPERS: ReadonlySet<string> = new Set([...catalog.signalNameHelpers].filter(([, flags]) => flags.has("shared")).map(([name]) => name));
 
 /** The calls whose pairs name signals: on the page, `dataSignals("count" to 0)`, and from the server. */
-const PAIR_NAMING: ReadonlySet<string> = new Set(["dataSignals", "patchSignals"]);
+const PAIR_NAMING: ReadonlySet<string> = new Set([...catalog.signalCalls].filter(([, flags]) => flags.has("names")).map(([name]) => name));
 
 /** Every call this check reads. */
 export const SIGNAL_NAMING_CALLS: ReadonlySet<string> = new Set([...NAMING_HELPERS, ...EXPRESSION_HELPERS, ...PAIR_NAMING, "removeSignals"]);
 
 /** The DSL helpers whose first argument names a signal they read: `signal("count")` is `$count`. */
-export const HELPER_READ_CALLS: ReadonlySet<string> = new Set(["signal", "increment", "decrement", "not"]);
+export const HELPER_READ_CALLS: ReadonlySet<string> = new Set([...catalog.signalNameHelpers].filter(([, flags]) => flags.has("reads")).map(([name]) => name));
 
 /**
  * A file that uses the DSL: a helper call elsewhere, `redis.increment("visits")` or Hamcrest's
@@ -195,7 +196,7 @@ export type SecondArgument = "expression" | "ifMissing" | "unknown";
 const BOOLEAN_OPERATOR = /==|!=|&&|\|\||\s[<>]=?\s|\s!?(?:in|is)\s/;
 
 /** A call of a helper that writes an expression, which is a String. */
-const EXPRESSION_CALL = /^(?:signal|not|set|setExpr|increment|decrement|toggle)\s*\(/;
+const EXPRESSION_CALL = new RegExp(`^(?:${[...EXPRESSION_HELPERS].join("|")})\\s*\\(`);
 
 /**
  * Whether `arg`, the second argument of `dataSignals`, is the expression of the keyed form, a

@@ -26,15 +26,21 @@ export const ALL_SITE_NAMES: ReadonlySet<string> = new Set([
 
 const HTML_SITE_NAMES: ReadonlySet<string> = new Set(Object.keys(catalog.callSites.html));
 
-/** Keyed helpers that take a key but no expression, so the catalog's expression sites do not list them. */
-const KEY_ONLY_HELPERS: ReadonlySet<string> = new Set(["dataMatchMedia", "dataPersist"]);
-for (const name of KEY_ONLY_HELPERS) (ALL_SITE_NAMES as Set<string>).add(name);
 // The helpers whose key is an HTML attribute's name, in which the DSL refuses a capital.
-const ATTRIBUTE_NAME_HELPERS: ReadonlySet<string> = new Set(["dataAttr", "dataAnimate"]);
+const ATTRIBUTE_NAME_HELPERS: ReadonlySet<string> = new Set(catalog.attributes.filter((a) => a.keyIsAttributeName).flatMap((a) => a.kotlin));
 
 /** Helpers that write the signal name in the value (the catalog's `valueKind` signal), which its call sites do not list. */
 const VALUE_NAME_HELPERS: ReadonlySet<string> = new Set(catalog.attributes.filter((a) => a.valueKind === "signal").flatMap((a) => a.kotlin));
 for (const name of VALUE_NAME_HELPERS) (ALL_SITE_NAMES as Set<string>).add(name);
+
+/** Keyed helpers that take a key but no expression, so the catalog's expression sites do not list them. */
+const KEY_ONLY_HELPERS: ReadonlySet<string> = new Set(
+  catalog.attributes
+    .filter((a) => a.keyed)
+    .flatMap((a) => a.kotlin)
+    .filter((k) => !(k in catalog.callSites.expression) && !VALUE_NAME_HELPERS.has(k)),
+);
+for (const name of KEY_ONLY_HELPERS) (ALL_SITE_NAMES as Set<string>).add(name);
 
 /**
  * The last source lexed, so a hover or completion right after a diagnostics pass does not lex

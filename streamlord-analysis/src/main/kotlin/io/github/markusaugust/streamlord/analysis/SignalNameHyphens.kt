@@ -11,7 +11,7 @@ import io.github.markusaugust.streamlord.core.domain.SignalNames
  */
 
 /** The helpers whose first argument is the name of a signal the page declares. */
-internal val NAMING_HELPERS: Set<String> = setOf("dataSignals", "dataComputed", "dataBind", "dataRef", "dataIndicator", "dataMatchMedia")
+internal val NAMING_HELPERS: Set<String> = Catalog.default.namingHelpers
 
 /**
  * The helper whose second argument may be `ifMissing` of the object form, `dataSignals("{...}", true)`,
@@ -23,16 +23,22 @@ private const val KEYED_OR_OBJECT = "dataSignals"
 private const val COMPUTED = "dataComputed"
 
 /** The expression helpers, whose name is JavaScript: a quoted key in brackets may hold a hyphen. */
-internal val EXPRESSION_HELPERS: Set<String> = setOf("signal", "set", "setExpr", "increment", "decrement", "toggle", "not")
+internal val EXPRESSION_HELPERS: Set<String> = Catalog.default.signalNameHelpers.keys
 
 /**
  * The expression helpers whose names other APIs share in the same scope: `set` on a map, or on
  * Ktor's headers inside `headers { }`. One counts only inside the arguments of a DSL call.
  */
-internal val SHARED_NAME_HELPERS: Set<String> = setOf("set", "toggle")
+internal val SHARED_NAME_HELPERS: Set<String> =
+    Catalog.default.signalNameHelpers
+        .filterValues { "shared" in it }
+        .keys
 
 /** The calls whose pairs name signals: on the page, `dataSignals("count" to 0)`, and from the server. */
-private val PAIR_NAMING = setOf("dataSignals", "patchSignals")
+private val PAIR_NAMING =
+    Catalog.default.signalCalls
+        .filterValues { "names" in it }
+        .keys
 
 /** Every call this check reads. */
 internal val SIGNAL_NAMING_CALLS: Set<String> = NAMING_HELPERS + EXPRESSION_HELPERS + PAIR_NAMING + "removeSignals"
@@ -125,7 +131,7 @@ internal enum class SecondArgument { EXPRESSION, IF_MISSING, UNKNOWN }
 private val BOOLEAN_OPERATOR = Regex("""==|!=|&&|\|\||\s[<>]=?\s|\s!?(?:in|is)\s""")
 
 /** A call of a helper that writes an expression, which is a String. */
-private val EXPRESSION_CALL = Regex("""^(?:signal|not|set|setExpr|increment|decrement|toggle)\s*\(""")
+private val EXPRESSION_CALL = Regex("""^(?:${EXPRESSION_HELPERS.joinToString("|")})\s*\(""")
 
 /**
  * Whether [arg], the second argument of `dataSignals`, is the expression of the keyed form, a

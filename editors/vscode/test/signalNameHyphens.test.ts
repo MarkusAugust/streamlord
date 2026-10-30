@@ -73,10 +73,11 @@ suspend fun send(stream: DatastarStream) {
     assert.deepEqual(names(src), ["a-b", "c-d", "e-f"]);
   });
 
-  // A header's set, a map's set, a codec's respondSignals and a Boolean ifMissing in a variable.
+  // A header's set, a map's set, a bit set's toggle, a codec's respondSignals and a Boolean ifMissing in a variable.
   it("a name that may not be a signal's is left alone", () => {
     const src = `${dsl}fun t() = testApplication { client.get("/") { headers { set("datastar-request", "true") } } }
 fun m(map: MutableMap<String, Int>) = with(map) { set("user-id", 1) }
+fun b(bits: BitSet) = with(bits) { toggle("user-id") }
 suspend fun r(call: ApplicationCall) = call.respondSignals("a-b" to 1)
 fun p(flag: Boolean) = div { dataSignals("a-b", flag) }
 fun q() = div { dataSignals("user" to buildMap { set("first-name", "") }) }`;

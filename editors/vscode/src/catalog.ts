@@ -45,6 +45,8 @@ export interface AttributeSpec {
   returnsValue: boolean;
   /** The names the expression is handed besides `el`: `evt` in `data-on`, `patch` in `data-on-signal-patch`. */
   argNames: string[];
+  /** Whether the key is an HTML attribute's name, which the DSL takes as HTML has it: `data-attr`, `data-animate`. */
+  keyIsAttributeName: boolean;
 }
 
 export interface ActionSpec {
@@ -78,6 +80,16 @@ export interface Catalog {
   /** The names `genRx` compiles every expression with, before a plugin's own `argNames` (engine.ts:467). */
   compiledParameters: string[];
   patchModes: string[];
+  /** The calls whose arguments are signals by name, each with the flags the catalog gives it: `names`, `json`. */
+  signalCalls: ReadonlyMap<string, ReadonlySet<string>>;
+  /** The expression helpers, whose first argument is a signal name, each with its flags: `reads`, `shared`. */
+  signalNameHelpers: ReadonlyMap<string, ReadonlySet<string>>;
+  /** The DSL helpers whose first argument is the name of a signal the page declares: those of the attributes whose key is camel-cased. */
+  namingHelpers: ReadonlySet<string>;
+  /** The attributes whose key is the name of a signal, in which the client camel-cases it. */
+  signalKeyAttributes: string[];
+  /** The backend actions, `@get` and the rest, which send a request. */
+  backendActions: string[];
   callSites: {
     expression: Record<string, CallSiteSpec>;
     html: Record<string, CallSiteSpec>;
@@ -128,6 +140,7 @@ function build(): Catalog {
     requires: a.requires as AttributeSpec["requires"],
     returnsValue: (a.returnsValue as boolean | undefined) ?? false,
     argNames: (a.argNames as string[] | undefined) ?? [],
+    keyIsAttributeName: (a.keyIsAttributeName as boolean | undefined) ?? false,
   }));
   const actions: ActionSpec[] = (raw.actions as unknown as Record<string, unknown>[]).map((a) => ({
     name: a.name as string,
@@ -144,6 +157,13 @@ function build(): Catalog {
     for (const k of a.kotlin) if (attributesByKotlin.get(k)?.valueKind !== "expression" || a.valueKind === "expression") attributesByKotlin.set(k, a);
   }
   const sites = raw.kotlinCallSites as unknown as Record<string, Record<string, CallSiteSpec>>;
+  const flagged = (group: Record<string, unknown>): Map<string, Set<string>> =>
+    new Map(
+      Object.entries(group)
+        .filter(([name]) => !name.startsWith("$"))
+        .map(([name, flags]) => [name, new Set(Object.entries(flags as Record<string, unknown>).filter(([, v]) => v === true).map(([k]) => k))]),
+    );
+  const camelKeyed = attributes.filter((a) => a.keyCase === "camel");
   return {
     version: raw.version,
     prefix: raw.prefix,
@@ -157,6 +177,11 @@ function build(): Catalog {
     fetchEvents: raw.fetchEvents,
     compiledParameters: raw.compiledParameters,
     patchModes: raw.sse.patchModes,
+    signalCalls: flagged(raw.kotlinCallSites.signals as Record<string, unknown>),
+    signalNameHelpers: flagged(raw.kotlinCallSites.signalNames as Record<string, unknown>),
+    namingHelpers: new Set(camelKeyed.flatMap((a) => a.kotlin)),
+    signalKeyAttributes: camelKeyed.map((a) => a.name),
+    backendActions: actions.filter((a) => a.kind === "backend").map((a) => a.name),
     callSites: {
       expression: sites.expression ?? {},
       html: sites.html ?? {},

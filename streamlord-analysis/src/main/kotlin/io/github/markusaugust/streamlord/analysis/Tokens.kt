@@ -50,29 +50,15 @@ public data class Token(
     val kind: TokenKind,
 )
 
-private val BACKEND_ACTIONS = setOf("get", "post", "put", "patch", "delete", "query")
+private val BACKEND_ACTIONS = Catalog.default.backendActions.toSet()
+
+// The options of a backend action, and the keys of two of them that hold objects: filterSignals'
+// include and exclude, and responseOverrides' (fetch.ts:268-271 in 1.0.4).
 private val OPTION_KEYS =
-    setOf(
-        "contentType",
-        "filterSignals",
-        "selector",
-        "headers",
-        "openWhenHidden",
-        "payload",
-        "requestCancellation",
-        "responseOverrides",
-        "retry",
-        "retryInterval",
-        "retryScaler",
-        "retryMaxWait",
-        "retryMaxCount",
-        "include",
-        "exclude",
-        "mode",
-        "namespace",
-        "useViewTransition",
-        "onlyIfMissing",
-    )
+    Catalog.default.fetchOptions
+        .map { it.name }
+        .toSet() +
+        setOf("include", "exclude", "mode", "namespace", "useViewTransition", "onlyIfMissing")
 private val JS_KEYWORDS =
     setOf(
         "if",
