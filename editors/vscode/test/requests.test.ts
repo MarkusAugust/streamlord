@@ -14,6 +14,21 @@ describe("the url the client opens", () => {
     for (const c of cases) assert.equal(requestUrl(c.url, c.method, c.signals), c.expected, JSON.stringify(c));
     assert.ok(cases.length > 0);
   });
+
+  it("holds the cases to the browser's own URLSearchParams.set", () => {
+    type Case = { url: string; method: string; signals: string; expected: string };
+    const cases = (JSON.parse(readFileSync(new URL("./fixtures/request-urls.json", import.meta.url), "utf8")) as { cases: Case[] }).cases;
+    for (const c of cases) {
+      if (!["GET", "DELETE"].includes(c.method.toUpperCase())) continue;
+      // The client re-serialises the rest of the query and the inspector keeps it as written, so the
+      // two are compared as the parameters a server reads.
+      const client = new URL(c.url, "http://h/");
+      client.searchParams.set("datastar", c.signals);
+      const ours = new URL(c.expected, "http://h/");
+      assert.deepEqual([...ours.searchParams], [...client.searchParams], JSON.stringify(c));
+      assert.equal(ours.hash, client.hash, JSON.stringify(c));
+    }
+  });
 });
 
 describe("saved requests", () => {

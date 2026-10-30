@@ -1,8 +1,8 @@
 package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.JsonParseException
+import io.github.markusaugust.streamlord.core.client.ClientRequest
 import io.github.markusaugust.streamlord.core.json.JsonArray
-import io.github.markusaugust.streamlord.core.json.JsonNumber
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonString
@@ -37,9 +37,6 @@ public data class RequestsFile(
 }
 
 public object Requests {
-    /** What Datastar's client sends as `Accept`, and so what the inspector sends (fetch.ts:82 in 1.0.4). */
-    public const val ACCEPT: String = DatastarProtocol.ACCEPT
-
     /** How much of a response without a stream the inspector reads and shows. */
     public const val NON_STREAM_LIMIT: Int = 1024 * 1024
 
@@ -55,7 +52,7 @@ public object Requests {
         status: Int,
         contentType: String?,
     ): String? =
-        if (status != 200 && "text/event-stream" in (contentType ?: "")) {
+        if (status != 200 && DatastarProtocol.CONTENT_TYPE_EVENT_STREAM in (contentType ?: "")) {
             "Not read: the client reads no body with a $status, and a stream may never end."
         } else {
             null
@@ -749,63 +746,12 @@ public object Requests {
         return out.toString()
     }
 
-    /** Whether the client sends the signals of [method] in the query string, not the body: GET and DELETE, in any case. */
-    public fun bodyless(method: String): Boolean = method.uppercase() in DatastarProtocol.BODYLESS_METHODS
-
     /** The URL the Datastar client would open: GET and DELETE carry the signals in the query string. */
     public fun requestUrl(
         url: String,
         method: String,
         signalsJson: String,
-    ): String {
-        if (!bodyless(method)) return url
-        // Taken apart as text: a URL that still holds a `{id}`, a space or an unresolved variable is
-        // one java.net.URI refuses, and the rest of it is passed on exactly as it was written.
-        val hash = url.indexOf('#')
-        val fragment = if (hash < 0) "" else url.substring(hash)
-        val beforeFragment = if (hash < 0) url else url.substring(0, hash)
-
-        // The client sets the parameter (fetch.ts:149 in 1.0.4): URLSearchParams.set puts it where the
-        // first one stands, written with a value or without, drops the others, and appends it if there is none.
-        // It reads a name as a form does, `+` as a space and %XX as a byte, so data%73tar is the parameter too;
-        // a byte past ASCII stays one character, which is enough to tell it from datastar.
-        fun ours(p: String) =
-            PERCENT_BYTE.replace(p.substringBefore('=').replace('+', ' ')) {
-                it.groupValues[1]
-                    .toInt(16)
-                    .toChar()
-                    .toString()
-            } == "datastar"
-        val pairs = beforeFragment.substringAfter('?', "").split('&').filter { it.isNotEmpty() }
-        val param = "datastar=" + URLEncoder.encode(wellFormed(signalsJson), Charsets.UTF_8)
-        val first = pairs.indexOfFirst(::ours)
-        val query =
-            if (first < 0) {
-                pairs + param
-            } else {
-                pairs.filterIndexed { k, p -> k == first || !ours(p) }.map { if (ours(it)) param else it }
-            }.joinToString("&")
-        return "${beforeFragment.substringBefore('?')}?$query$fragment"
-    }
-
-    private val PERCENT_BYTE = Regex("%([0-9A-Fa-f]{2})")
-
-    /** A surrogate without its partner becomes U+FFFD, which is what a browser encodes in its place. */
-    private fun wellFormed(s: String): String {
-        if (s.none { it.isSurrogate() }) return s
-        val out = StringBuilder(s.length)
-        var i = 0
-        while (i < s.length) {
-            val c = s[i]
-            if (c.isHighSurrogate() && i + 1 < s.length && s[i + 1].isLowSurrogate()) {
-                out.append(c).append(s[++i])
-            } else {
-                out.append(if (c.isSurrogate()) '\uFFFD' else c)
-            }
-            i++
-        }
-        return out.toString()
-    }
+    ): String = if (ClientRequest.bodyless(method)) ClientRequest.withSignals(url, signalsJson) else url
 
     private fun shellQuote(s: String): String = "'" + s.replace("'", "'\\''") + "'"
 
@@ -934,10 +880,7 @@ public object Requests {
         method: String,
         userHeaders: Map<String, String>,
     ): Map<String, String> {
-        val out = LinkedHashMap<String, String>()
-        out["Accept"] = ACCEPT
-        out["Datastar-Request"] = "true"
-        if (!bodyless(method)) out["Content-Type"] = "application/json"
+        val out = LinkedHashMap(ClientRequest.headers(method))
         for ((k, v) in userHeaders) {
             out.keys.firstOrNull { it.equals(k, ignoreCase = true) }?.let { out.remove(it) }
             out[k] = v
@@ -950,7 +893,7 @@ public object Requests {
      * The body goes as `--data-raw`: with `--data`, curl reads signals that start with `@` from the file they name.
      */
     public fun toCurl(r: SavedRequest): String {
-        val noBody = bodyless(r.method)
+        val noBody = ClientRequest.bodyless(r.method)
         val signalsJson = compactSignals(r.signals)
         val parts = mutableListOf("curl", "-N", "-X", r.method.uppercase())
         parts += shellQuote(requestUrl(r.url, r.method, signalsJson))
@@ -1112,7 +1055,7 @@ public object Requests {
     /** `encodeURIComponent`: percent-encodes everything but the unreserved characters and `!'()*`. */
     private fun encodeSegment(s: String): String =
         URLEncoder
-            .encode(wellFormed(s), Charsets.UTF_8)
+            .encode(ClientRequest.wellFormed(s), Charsets.UTF_8)
             .replace("+", "%20")
             .replace("%21", "!")
             .replace("%27", "'")

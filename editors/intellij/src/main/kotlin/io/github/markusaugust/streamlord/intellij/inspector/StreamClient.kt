@@ -5,6 +5,7 @@ import io.github.markusaugust.streamlord.analysis.Requests
 import io.github.markusaugust.streamlord.analysis.SseMessage
 import io.github.markusaugust.streamlord.analysis.SseParser
 import io.github.markusaugust.streamlord.analysis.decodeDatastar
+import io.github.markusaugust.streamlord.core.client.ClientRequest
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import java.io.InputStream
 import java.io.InputStreamReader
@@ -205,7 +206,7 @@ class StreamClient(
         signalsJson: String,
         headers: Map<String, String>,
     ): HttpRequest {
-        val bodyless = Requests.bodyless(method)
+        val bodyless = ClientRequest.bodyless(method)
         val builder = HttpRequest.newBuilder(URI(url))
         // The user's headers replace the client's own, Content-Type included, as they do in the client.
         for ((k, v) in Requests.requestHeaders(method, headers)) builder.setHeader(k, v)

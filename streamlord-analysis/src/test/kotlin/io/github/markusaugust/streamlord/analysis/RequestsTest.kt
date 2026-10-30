@@ -188,7 +188,7 @@ class RequestsTest {
     // a 200 that is not HTML, JSON or JavaScript, a missing Content-Type included.
     @Test
     fun `a response is read as a stream as the client reads it`() {
-        assertEquals("text/event-stream, text/html, application/json", Requests.ACCEPT)
+        assertEquals("text/event-stream, text/html, application/json", Requests.requestHeaders("GET", emptyMap())["Accept"])
         for (type in listOf("text/event-stream", "text/event-stream; charset=utf-8", "text/plain", "", null, "Text/HTML")) {
             assertEquals(true, Requests.readsAsStream(200, type), "$type")
         }

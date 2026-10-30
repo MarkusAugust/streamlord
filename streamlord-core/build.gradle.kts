@@ -47,10 +47,16 @@ val testNewestCoroutines =
 tasks.check { dependsOn(testNewestCoroutines) }
 
 // The tests read these by path, so a change there must rerun them and not be served from the cache.
+// CatalogNamesTest reads the catalog itself, to hold the generated names to it.
 tasks.withType<Test>().configureEach {
-    inputs.dir(rootProject.layout.projectDirectory.dir("conformance/client"))
-    inputs.dir(rootProject.layout.projectDirectory.dir("conformance/dom"))
-    inputs.file(rootProject.layout.projectDirectory.file("editors/vscode/test/fixtures/reference-hyphens.json"))
+    val root = rootProject.layout.projectDirectory
+    inputs.dir(root.dir("catalog")).withPropertyName("catalog").withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(root.dir("conformance/client")).withPropertyName("clientFixtures").withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(root.dir("conformance/dom")).withPropertyName("domFixtures").withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs
+        .files(root.file("editors/vscode/test/fixtures/reference-hyphens.json"), root.file("editors/vscode/test/fixtures/request-urls.json"))
+        .withPropertyName("editorFixtures")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 /*
@@ -140,9 +146,4 @@ val generateCatalogNames =
 
 kotlin.sourceSets.main {
     kotlin.srcDir(generateCatalogNames)
-}
-
-// CatalogNamesTest reads the catalog itself, to hold the generated names to it.
-tasks.withType<Test>().configureEach {
-    inputs.dir(rootProject.layout.projectDirectory.dir("catalog")).withPathSensitivity(PathSensitivity.RELATIVE)
 }

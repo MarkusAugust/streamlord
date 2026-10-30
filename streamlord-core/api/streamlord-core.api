@@ -140,6 +140,14 @@ public final class io/github/markusaugust/streamlord/core/client/ClientHtmlKt {
 	public static final fun rawTextEnd (Ljava/lang/String;Ljava/lang/String;I)I
 }
 
+public final class io/github/markusaugust/streamlord/core/client/ClientRequest {
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/client/ClientRequest;
+	public final fun bodyless (Ljava/lang/String;)Z
+	public final fun headers (Ljava/lang/String;)Ljava/util/Map;
+	public final fun wellFormed (Ljava/lang/String;)Ljava/lang/String;
+	public final fun withSignals (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+}
+
 public final class io/github/markusaugust/streamlord/core/client/ClientRewrite : io/github/markusaugust/streamlord/core/client/ClientScript {
 	public fun <init> (Ljava/lang/String;[ILjava/util/List;Ljava/util/List;)V
 	public final fun getRewrites ()Ljava/util/List;
