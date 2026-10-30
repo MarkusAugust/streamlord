@@ -176,10 +176,26 @@ reviewer can search for, which is the whole reason it is a type and not a flag.
 
 ### This is the editors' rule, at run time
 
-The editors already refuse a Kotlin `${'$'}{...}` inside a `data-*` expression attribute, because
-they read your source and can see it. At run time the source is gone and only the finished string
-arrives, so the holes have to be left standing for the same question to be asked. That is the
-whole of what `interpolate` wants from you.
+The editors ask the same question of a Kotlin template in an HTML string as you type, with the
+same reading of the markup: core's, which `interpolate` uses and the VS Code analysis is held to.
+Every `$name`, `${'$'}{...}` and value joined with `+` is a hole, and each is judged by where it
+lands:
+
+| Where the hole is | What the editors say |
+|---|---|
+| Element text, a quoted attribute, a URL whose literal start settles the scheme (`#`, `/`, `https://`) | `unescaped-interpolation`: a hint, a warning when the value is a `String`, with a fix that rewrites the literal as `interpolate(...)` |
+| The start of a URL, `style`, a `data-*` expression or signal path, `<script>`, `on*`, a value without quotes | `unsafe-interpolation`: a warning, since escaping cannot help there |
+| A tag name, an attribute name, a list of attributes | `unsafe-interpolation`: a hint, a warning when the value is a `String` |
+| `$name` where a Datastar signal could stand | `kotlin-interpolation`, the [dollar trap](/dollar-trap/) |
+
+A value the editor can see is yours says nothing: a `const val`, a literal, an `if` that picks
+between literals, a number or a boolean, and markup you built, whether an HTML literal inside the
+template, an `interpolate(...)` call or a value declared `Html`. VS Code knows what the file it
+is in declares and every `const val` in the workspace; IntelliJ also knows the types. Nothing here
+is an error, because a value the text cannot see into may well be a number.
+
+At run time the source is gone and only the finished string arrives, so the holes have to be left
+standing for the same question to be asked. That is the whole of what `interpolate` wants from you.
 
 ## On Spring
 

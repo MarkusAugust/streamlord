@@ -13,6 +13,17 @@ All notable changes to Streamlord are recorded here. The format follows
   `DatastarAttributes.expression(expression)` does the same for an expression, after the checks
   every DSL helper makes, which the free and the Pro helpers now share.
 
+- `Html`, the markup `interpolate` returns, and `patchElements`, `respondElements` and
+  `datastarElements` overloads that take it. In another `interpolate` it is written as markup in
+  element text and judged as the text it is anywhere else. Only `interpolate` makes one.
+- Two analysis codes for a Kotlin value in an HTML string, judged by where it lands as
+  `interpolate` judges it at run time, with core's reading of the markup (`holeLandings`, internal
+  API, which `interpolate` itself now calls): `unescaped-interpolation` where escaping saves it, a
+  hint or, for a `String`, a warning, with a fix that rewrites the literal as `interpolate(...)`;
+  `unsafe-interpolation` where it cannot, a warning (a hint for a tag or attribute name that is not
+  known to be a `String`). VS Code indexes the workspace's `const val`s; IntelliJ adds types.
+- `Fix.edits` in the analysis: further replacements a fix makes, such as an import.
+
 ### Changed
 
 - `dataAttr` and Pro's `dataAnimate` take an attribute's name as HTML has it and refuse a capital
@@ -30,6 +41,15 @@ All notable changes to Streamlord are recorded here. The format follows
   `interpolate` refuses a hole in and `DatastarAttributes.prefix` come from it, where core listed
   them by hand and a test compared the two. The analysis no longer reads the catalog as a resource,
   so a native image that runs it needs no resource configuration for it.
+
+- `interpolate` returns `Html` instead of `String`. The JVM signature is the same, so compiled code
+  keeps working, but `val s: String = interpolate(...)` no longer compiles: write `.text`.
+- The editors judge `${...}`, values joined with `+`, literals inside a template and `$$` literals,
+  which they skipped, and no longer give every `$name` in HTML the same hint. A constant, a literal,
+  a declared number or boolean and markup built in the template say nothing. In a Datastar
+  expression, `kotlin-interpolation` no longer calls a `String` fine as a server value: only a
+  number or a boolean is.
+- `Trusted` writes its markup in a Kotlin template, not `Trusted(html=...)`.
 
 ### Fixed
 
@@ -74,8 +94,15 @@ All notable changes to Streamlord are recorded here. The format follows
   The typo rule for `data-*` names is one function, `ElementsGuard.nearAttribute`, which the
   analysis calls.
 
+- The editors no longer report `<p> has no id` inside `<$tag ...>`, whose template is a tag name,
+  nor text fragments in a `trimMargin` literal, whose margin is not text.
+- A template inside a JavaScript string of a Datastar expression, `@post('/x/$id')`, was called
+  safe text. It is code Datastar runs: a warning now.
+
 ### Security
 
+- `interpolate` refused a value in a start tag's name but let one into an end tag's,
+  `</%s>`, where it chose which element to close. It is refused there too.
 - `interpolate` read an end tag with Unicode case folding, where the browser folds A to Z alone:
   in `<script>x</ſcript>%s</script>` (U+017F, a long s) it took the value for text after the
   script, and the browser ran it as part of the script. It is refused now, as every value inside a

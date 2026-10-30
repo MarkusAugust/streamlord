@@ -32,11 +32,12 @@ in the way. A template has the same gap in another shape. `data-text="'{{ name }
 the fix and is code injection, as [Templates](/templates/#do-not-render-a-value-into-an-expression)
 measures, and the editors say nothing about it: the analysis declines to judge a value that holds
 template syntax, since it cannot know what the engine will put there. So markup written as a
-string is covered twice, by `interpolate` at run time and by `kotlin-interpolation` in the
-editors, while the DSL and templates are covered by a paragraph of advice.
+string is covered twice, by `interpolate` at run time and by `unescaped-interpolation` and
+`unsafe-interpolation` in the editors, while the DSL and templates are covered by a paragraph of
+advice.
 
 Planned: one diagnostic in `streamlord-analysis`, so it lands in both editors and in the
-[check you run from a test](/analysis/), beside `kotlin-interpolation`. It has two shapes:
+[check you run from a test](/analysis/), as `unsafe-interpolation`. It has two shapes:
 
 - In Kotlin, an expression-valued DSL attribute whose argument is not a literal:
   `dataText(userName)`. A warning, not an error, because a constant looks the same from outside
