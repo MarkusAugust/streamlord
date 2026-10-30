@@ -225,6 +225,19 @@ const FONT_BREAKOUT: ReadonlySet<string> = new Set(["color", "face", "size"]);
 const BREAKOUT_END: ReadonlySet<string> = new Set(["br", "p"]);
 
 /**
+ * One past the end of the comment that opens at `lt`, as the HTML tokenizer ends it: `<!-->` and
+ * `<!--->` are whole comments, and `-->` and `--!>` both close one. `commentEnd` in core.
+ */
+function htmlCommentEnd(html: string, lt: number): number {
+  if (html.startsWith("<!-->", lt)) return lt + 5;
+  if (html.startsWith("<!--->", lt)) return lt + 6;
+  const dash = html.indexOf("-->", lt + 4);
+  const bang = html.indexOf("--!>", lt + 4);
+  if (dash < 0 && bang < 0) return html.length;
+  return bang < 0 || (dash >= 0 && dash < bang) ? dash + 3 : bang + 4;
+}
+
+/**
  * The HTML elements an end tag cannot close past in HTML content (the "special" category of the
  * HTML standard): `</b>` inside a `div` inside a `b` leaves the `b` open.
  */
@@ -378,7 +391,13 @@ export function tokenize(html: string): { tags: Tag[]; topLevelText: { start: nu
     textStart = -1;
   };
   while (i < html.length) {
-    if (html.startsWith("<!--", i) || html.startsWith("<#--", i)) {
+    if (html.startsWith("<!--", i)) {
+      flushText(i);
+      i = htmlCommentEnd(html, i);
+      continue;
+    }
+    // A FreeMarker comment, which only `-->` ends.
+    if (html.startsWith("<#--", i)) {
       flushText(i);
       const close = html.indexOf("-->", i + 4);
       i = close < 0 ? html.length : close + 3;

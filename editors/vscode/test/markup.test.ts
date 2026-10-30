@@ -2,7 +2,8 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { analyzeHtml, analyzeKotlin } from "../src/analyze.ts";
 import type { Fix, Issue } from "../src/expression.ts";
-import { validateMarkup } from "../src/markup.ts";
+import { tokenize, validateMarkup } from "../src/markup.ts";
+import { readFileSync } from "node:fs";
 
 const opts = { prefix: "data-", checkHtmlAttributes: true };
 const codes = (issues: { code?: string }[]) => issues.map((i) => i.code);
@@ -145,5 +146,13 @@ describe("time", () => {
   it("tells each signal in a string the client pairs otherwise in linear time", () => {
     // 60 KB of rewrites inside one string, each told which quote opens it.
     within(2000, () => analyzeHtml(`<div data-text="/'/.test('x') + '${"$a ".repeat(20000)}'"></div>`, opts));
+  });
+});
+
+describe("comments", () => {
+  it("end where the HTML tokenizer ends them, conformance/dom/comment-ends.json", () => {
+    const cases = JSON.parse(readFileSync(new URL("../../../conformance/dom/comment-ends.json", import.meta.url), "utf8")) as { input: string; element: boolean }[];
+    assert.equal(cases.length, 16);
+    for (const c of cases) assert.equal(tokenize(c.input).tags.some((t) => t.name === "b" && !t.closing), c.element, c.input);
   });
 });

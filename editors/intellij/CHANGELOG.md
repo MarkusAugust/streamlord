@@ -19,6 +19,8 @@ All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here
   integration point does not reach past a `div` open in it; and inside an svg or a math a
   `<![CDATA[` section ends only at `]]>`. A tag name runs on past `_` and `.`, so `<style_x>` is no
   style.
+- A comment ends where the browser ends it: `<!-->` and `<!--->` are whole comments, and `--!>`
+  closes one as `-->` does. The checks used to go quiet until the next `-->`.
 - An empty modifier argument is read as the client reads it. After the value it is nothing:
   `__threshold.50.` and `__once.` are fine, and `__case.` has no value. As the first argument it
   is the value: `__debounce.` needs a duration, and the fix takes the place of the dot, while

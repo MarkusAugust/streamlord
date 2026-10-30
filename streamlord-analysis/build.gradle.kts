@@ -90,18 +90,14 @@ kotlin.sourceSets.main {
     kotlin.srcDir(generateCatalogText)
 }
 
-// The tests read the cases the VS Code extension shares with them: the corpus, the SSE corpus, the
-// second argument of dataSignals and the templates. Declared, so a change to a case alone runs the
-// tests again rather than finding them up to date or cached.
-tasks.test {
-    inputs
-        .dir(rootProject.layout.projectDirectory.dir("editors/vscode/test/fixtures"))
-        .withPropertyName("editorFixtures")
-        .withPathSensitivity(PathSensitivity.RELATIVE)
-}
-
-// The tests read these by path, so a change there must rerun them and not be served from the cache.
+// The tests read these by path: the cases the VS Code extension shares with them (the corpus, the
+// SSE corpus, the second argument of dataSignals, the templates) and the client's fixtures.
+// Declared, so a change to a case alone runs the tests again rather than finding them up to date
+// or cached.
 tasks.withType<Test>().configureEach {
-    inputs.dir(rootProject.layout.projectDirectory.dir("conformance/client"))
-    inputs.dir(rootProject.layout.projectDirectory.dir("conformance/dsl"))
+    val root = rootProject.layout.projectDirectory
+    inputs.dir(root.dir("editors/vscode/test/fixtures")).withPropertyName("editorFixtures").withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(root.dir("conformance/client")).withPropertyName("clientFixtures").withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(root.dir("conformance/dsl")).withPropertyName("dslFixtures").withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(root.dir("conformance/dom")).withPropertyName("domFixtures").withPathSensitivity(PathSensitivity.RELATIVE)
 }

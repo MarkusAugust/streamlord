@@ -45,6 +45,26 @@ public fun rawTextEnd(
     }
 }
 
+/**
+ * One past the end of the comment that opens at [lt]: `<!-->` and `<!--->` are whole comments,
+ * and `-->` and `--!>` both close one.
+ */
+@InternalStreamlordApi
+public fun commentEnd(
+    html: String,
+    lt: Int,
+): Int {
+    if (html.startsWith("<!-->", lt)) return lt + 5
+    if (html.startsWith("<!--->", lt)) return lt + 6
+    val dash = html.indexOf("-->", lt + 4)
+    val bang = html.indexOf("--!>", lt + 4)
+    return when {
+        dash < 0 && bang < 0 -> html.length
+        bang < 0 || (dash in 0 until bang) -> dash + 3
+        else -> bang + 4
+    }
+}
+
 /*
  * A named reference with its semicolon, one of the few legacy names the browser also reads
  * without it (unless `=` or a letter or digit follows, as in a URL's `&copy=1`), or a numeric

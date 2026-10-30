@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.core.domain
 
 import io.github.markusaugust.streamlord.core.client.CODE_TEXT
 import io.github.markusaugust.streamlord.core.client.RAW_TEXT
+import io.github.markusaugust.streamlord.core.client.commentEnd
 import io.github.markusaugust.streamlord.core.client.isHtmlSpace
 import io.github.markusaugust.streamlord.core.client.rawTextEnd
 import io.github.markusaugust.streamlord.core.client.regionMatchesAsciiIgnoreCase
@@ -105,25 +106,6 @@ internal fun scanMarkup(
                 if (tag in CODE_TEXT) visitor.code(i, end)
                 i = end
             }
-    }
-}
-
-/**
- * One past the end of the comment that opens at [lt]: `<!-->` and `<!--->` are whole comments,
- * and `-->` and `--!>` both close one.
- */
-private fun commentEnd(
-    html: String,
-    lt: Int,
-): Int {
-    if (html.startsWith("<!-->", lt)) return lt + 5
-    if (html.startsWith("<!--->", lt)) return lt + 6
-    val dash = html.indexOf("-->", lt + 4)
-    val bang = html.indexOf("--!>", lt + 4)
-    return when {
-        dash < 0 && bang < 0 -> html.length
-        bang < 0 || (dash in 0 until bang) -> dash + 3
-        else -> bang + 4
     }
 }
 

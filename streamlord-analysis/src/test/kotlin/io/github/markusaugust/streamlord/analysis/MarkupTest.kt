@@ -1,5 +1,8 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.json.JsonArray
+import io.github.markusaugust.streamlord.core.json.JsonParser
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -200,5 +203,16 @@ class MarkupTest {
         fun page(n: Int) = "<div data-text=\"/'/.test('x') + '${"\$a ".repeat(n)}'\"></div>"
         html(page(2000))
         within(2000) { html(page(20000)) }
+    }
+
+    /** `conformance/dom/comment-ends.json`: where a comment ends, as the browser's parser reads it. */
+    @Test
+    fun `a comment ends where the HTML tokenizer ends it`() {
+        val cases = (JsonParser.parse(File("../conformance/dom/comment-ends.json").readText()) as JsonArray).objects()
+        assertEquals(16, cases.size)
+        for (case in cases) {
+            val input = case.string("input")!!
+            assertEquals(case.boolean("element"), tokenize(input).tags.any { it.name == "b" && !it.closing }, input)
+        }
     }
 }

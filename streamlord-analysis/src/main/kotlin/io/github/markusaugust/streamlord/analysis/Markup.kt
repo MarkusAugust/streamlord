@@ -5,6 +5,7 @@ import io.github.markusaugust.streamlord.core.client.ClientCasing
 import io.github.markusaugust.streamlord.core.client.HTML_SPACE
 import io.github.markusaugust.streamlord.core.client.RAW_TEXT
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
+import io.github.markusaugust.streamlord.core.client.commentEnd
 import io.github.markusaugust.streamlord.core.client.decodeEntities
 import io.github.markusaugust.streamlord.core.client.rawTextEnd
 import io.github.markusaugust.streamlord.core.domain.AttributeKeys
@@ -484,7 +485,13 @@ public fun tokenize(html: String): Tokens {
         textStart = -1
     }
     while (i < html.length) {
-        if (html.startsWith("<!--", i) || html.startsWith("<#--", i)) {
+        if (html.startsWith("<!--", i)) {
+            flushText(i)
+            i = commentEnd(html, i)
+            continue
+        }
+        // A FreeMarker comment, which only `-->` ends.
+        if (html.startsWith("<#--", i)) {
             flushText(i)
             val close = html.indexOf("-->", i + 4)
             i = if (close < 0) html.length else close + 3
