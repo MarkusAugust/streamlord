@@ -9,6 +9,7 @@ import io.github.markusaugust.streamlord.core.domain.ExecuteScript
 import io.github.markusaugust.streamlord.core.domain.InterpolatedExpressionException
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
+import io.github.markusaugust.streamlord.core.domain.interpolate
 import io.github.markusaugust.streamlord.core.port.driving.DatastarStream
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
 import io.github.markusaugust.streamlord.json.jackson.JacksonSignalsCodec
@@ -290,6 +291,10 @@ class SpringAdapterTest {
         )
         assertEquals("#list", el.headers.getFirst("datastar-selector"))
         assertEquals("append", el.headers.getFirst("datastar-mode"))
+
+        val built = datastarElements(interpolate("<li>%s</li>", "<b>"), selector = "#list")
+        assertEquals("<li>&lt;b&gt;</li>", built.body)
+        assertEquals("#list", built.headers.getFirst("datastar-selector"))
 
         val sig = datastarSignals(Search("q"), streamlord, onlyIfMissing = true)
         assertEquals("""{"query":"q","page":1}""", sig.body)

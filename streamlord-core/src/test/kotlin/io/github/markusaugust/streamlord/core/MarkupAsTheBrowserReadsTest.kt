@@ -26,7 +26,7 @@ class MarkupAsTheBrowserReadsTest {
         format: String,
         vararg values: Any?,
     ) {
-        assertFailsWith<UnsafeInterpolationException>(format) { interpolate(format, *values) }
+        assertFailsWith<UnsafeInterpolationException>(format) { render(format, *values) }
     }
 
     @Test
@@ -35,7 +35,7 @@ class MarkupAsTheBrowserReadsTest {
         refused("""<!---><div data-text="%s"></div>""", script)
         refused("""<!-- note --!><div data-text="%s"></div>""", script)
         // A real comment still holds text.
-        assertEquals("<!-- a&lt;b --><p></p>", interpolate("<!-- %s --><p></p>", "a<b"))
+        assertEquals("<!-- a&lt;b --><p></p>", render("<!-- %s --><p></p>", "a<b"))
     }
 
     @Test
@@ -44,7 +44,7 @@ class MarkupAsTheBrowserReadsTest {
         refused("<script>x</\u017Fcript>%s</script>", script)
         refused("<style>a</\u017Ftyle>%s</style>", "x")
         // And <ſcript> is an element of its own, whose content is text.
-        assertEquals("<\u017Fcript>a&lt;b</\u017Fcript>", interpolate("<\u017Fcript>%s</\u017Fcript>", "a<b"))
+        assertEquals("<\u017Fcript>a&lt;b</\u017Fcript>", render("<\u017Fcript>%s</\u017Fcript>", "a<b"))
     }
 
     @Test
@@ -68,7 +68,7 @@ class MarkupAsTheBrowserReadsTest {
         assertEquals(numeric?.javaClass, named?.javaClass)
         assertTrue(named != null)
         // &#0; is U+FFFD to the browser, which no scheme starts with, so the link is a relative one.
-        assertEquals("""<a href="&#0;javascript:alert(1)">x</a>""", interpolate("""<a href="&#0;javascript:%s">x</a>""", "alert(1)"))
+        assertEquals("""<a href="&#0;javascript:alert(1)">x</a>""", render("""<a href="&#0;javascript:%s">x</a>""", "alert(1)"))
         // The legacy names decode without their semicolon.
         refused("""<a href="javascript&colon;%s">x</a>""", "alert(1)")
     }
@@ -112,8 +112,8 @@ class MarkupAsTheBrowserReadsTest {
         refused("""<a href="%s%s">x</a>""", "javascript", ":alert(1)")
         refused("""<a href="javascript:show(%s)">x</a>""", "1")
         refused("""<a href="&#106;avascript:%s">x</a>""", "alert(1)")
-        assertEquals("""<a href="/heads/x">x</a>""", interpolate("""<a href="/heads/%s">x</a>""", "x"))
-        assertEquals("""<a href="https://e.com/a">x</a>""", interpolate("""<a href="%s%s">x</a>""", "https://e.com", "/a"))
+        assertEquals("""<a href="/heads/x">x</a>""", render("""<a href="/heads/%s">x</a>""", "x"))
+        assertEquals("""<a href="https://e.com/a">x</a>""", render("""<a href="%s%s">x</a>""", "https://e.com", "/a"))
     }
 
     @Test
@@ -121,13 +121,13 @@ class MarkupAsTheBrowserReadsTest {
         refused("""<svg><a><animate attributeName="href" values="%s"/></a></svg>""", "javascript:alert(1)")
         refused("""<svg><a><set attributeName="href" to="%s"/></a></svg>""", "javascript:alert(1)")
         refused("""<svg><a><animate attributeName="href" values="/a;%s"/></a></svg>""", "javascript:alert(1)")
-        assertEquals("""<feColorMatrix values="1 0"/>""", interpolate("""<feColorMatrix values="%s"/>""", "1 0"))
+        assertEquals("""<feColorMatrix values="1 0"/>""", render("""<feColorMatrix values="%s"/>""", "1 0"))
     }
 
     @Test
     fun `custom prefixes are tried longest first`() {
         assertFailsWith<UnsafeInterpolationException> {
-            interpolate("""<div data-star-text="%s"></div>""", listOf(script), listOf("data-", "data-star-"))
+            render("""<div data-star-text="%s"></div>""", listOf(script), listOf("data-", "data-star-"))
         }
     }
 
@@ -176,7 +176,7 @@ class MarkupAsTheBrowserReadsTest {
 
     @Test
     fun `Trusted waives the URL check too`() {
-        assertEquals("""<a href="javascript:void(0)">x</a>""", interpolate("""<a href="%s">x</a>""", Trusted("javascript:void(0)")))
+        assertEquals("""<a href="javascript:void(0)">x</a>""", render("""<a href="%s">x</a>""", Trusted("javascript:void(0)")))
     }
 
     @Test
@@ -187,3 +187,15 @@ class MarkupAsTheBrowserReadsTest {
         }
     }
 }
+
+/** [interpolate]'s markup as text, which is what these tests compare. */
+private fun render(
+    format: String,
+    vararg values: Any?,
+): String = interpolate(format, *values).text
+
+private fun render(
+    format: String,
+    values: List<Any?>,
+    prefixes: List<String> = ElementsGuard.defaultPrefixes,
+): String = interpolate(format, values, prefixes).text

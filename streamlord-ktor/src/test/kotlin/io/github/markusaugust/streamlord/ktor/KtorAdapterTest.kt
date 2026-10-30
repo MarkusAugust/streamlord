@@ -8,6 +8,7 @@ import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.InterpolatedExpressionException
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
+import io.github.markusaugust.streamlord.core.domain.interpolate
 import io.github.markusaugust.streamlord.core.json.JsonWriter
 import io.github.markusaugust.streamlord.core.port.driving.DatastarStream
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
@@ -457,5 +458,16 @@ class KtorAdapterTest {
             val js = client.get("/js")
             assertEquals("text/javascript", js.contentType()?.withoutParameters().toString())
             assertEquals("""{"type":"module"}""", js.headers["datastar-script-attributes"])
+        }
+
+    @Test
+    fun `markup interpolate built is sent as it is`() =
+        testApplication {
+            routing {
+                get("/el") { call.respondElements(interpolate("<li>%s</li>", "<b>"), selector = "#list", mode = ElementPatchMode.APPEND) }
+            }
+            val el = client.get("/el")
+            assertEquals("#list", el.headers["datastar-selector"])
+            assertEquals("<li>&lt;b&gt;</li>", el.bodyAsText())
         }
 }

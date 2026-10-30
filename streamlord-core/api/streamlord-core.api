@@ -324,6 +324,20 @@ public final class io/github/markusaugust/streamlord/core/domain/HoleLanding {
 	public final fun getValueStart ()I
 }
 
+public final class io/github/markusaugust/streamlord/core/domain/Html {
+	public static final synthetic fun box-impl (Ljava/lang/String;)Lio/github/markusaugust/streamlord/core/domain/Html;
+	public static fun constructor-impl (Ljava/lang/String;)Ljava/lang/String;
+	public fun equals (Ljava/lang/Object;)Z
+	public static fun equals-impl (Ljava/lang/String;Ljava/lang/Object;)Z
+	public static final fun equals-impl0 (Ljava/lang/String;Ljava/lang/String;)Z
+	public final fun getText ()Ljava/lang/String;
+	public fun hashCode ()I
+	public static fun hashCode-impl (Ljava/lang/String;)I
+	public fun toString ()Ljava/lang/String;
+	public static fun toString-impl (Ljava/lang/String;)Ljava/lang/String;
+	public final synthetic fun unbox-impl ()Ljava/lang/String;
+}
+
 public final class io/github/markusaugust/streamlord/core/domain/InterpolatedExpressionException : io/github/markusaugust/streamlord/core/StreamlordException {
 	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
@@ -801,6 +815,11 @@ public final class io/github/markusaugust/streamlord/core/port/driving/DatastarS
 	public static fun sendAll (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Lkotlinx/coroutines/flow/Flow;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static fun sendLatest-WPwdCS8 (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Lkotlinx/coroutines/flow/Flow;JLjava/lang/String;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun sendLatest-WPwdCS8$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Lkotlinx/coroutines/flow/Flow;JLjava/lang/String;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+}
+
+public final class io/github/markusaugust/streamlord/core/port/driving/DatastarStreamKt {
+	public static final fun patchElements-TaFYSiA (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun patchElements-TaFYSiA$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 }
 
 public final class io/github/markusaugust/streamlord/core/protocol/DatastarAttributes {

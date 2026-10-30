@@ -21,7 +21,28 @@ import io.github.markusaugust.streamlord.core.client.decodeEntities
 @JvmInline
 public value class Trusted(
     public val html: String,
-)
+) {
+    /** The markup itself, so a Kotlin template that holds one writes the markup and not `Trusted(html=...)`. */
+    override fun toString(): String = html
+}
+
+/**
+ * Markup [interpolate] built: its own literals as written, every value escaped or refused.
+ *
+ * It can be handed on as markup, to `patchElements` or as a value in another [interpolate], where
+ * it is written as it stands in element text and judged as the text it is anywhere else: inside an
+ * attribute, markup is only characters, and they are escaped like any value. Only [interpolate]
+ * makes one, so holding an [Html] says where it came from.
+ */
+@JvmInline
+public value class Html
+    @InternalStreamlordApi
+    constructor(
+        public val text: String,
+    ) {
+        /** The markup itself, so a Kotlin template that holds one writes the markup and not `Html(text=...)`. */
+        override fun toString(): String = text
+    }
 
 /** Where a value landed, which is what decides whether it can be made safe. */
 public enum class Position {
@@ -177,7 +198,7 @@ public class UnsafeInterpolationException(
 public fun interpolate(
     format: String,
     vararg values: Any?,
-): String = interpolate(format, values.asList(), ElementsGuard.defaultPrefixes)
+): Html = interpolate(format, values.asList(), ElementsGuard.defaultPrefixes)
 
 /**
  * [interpolate] with the values as a list, and the `data-*` prefixes to recognise.
@@ -190,13 +211,13 @@ public fun interpolate(
     format: String,
     values: List<Any?>,
     prefixes: List<String> = ElementsGuard.defaultPrefixes,
-): String {
+): Html {
     val holes = holes(format)
     require(holes.size == values.size) {
         "The markup has ${holes.size} %s ${if (holes.size == 1) "hole" else "holes"} and ${values.size} " +
             "${if (values.size == 1) "value" else "values"} were given"
     }
-    if (holes.isEmpty()) return format.replace("%%", "%")
+    if (holes.isEmpty()) return Html(format.replace("%%", "%"))
 
     val landscapes = landscapes(format, holes.map { it until it + 2 }, prefixes)
 
@@ -213,14 +234,19 @@ public fun interpolate(
 
             else -> {
                 val landing = landingOf(landscapes, hole)
-                if (!landing.position.admits(value)) throw UnsafeInterpolationException(landing.position, index, landing.attribute)
-                out.escaped(value)
+                // Markup interpolate built is markup in element text; anywhere else it is characters.
+                if (value is Html && landing.position == Position.TEXT) {
+                    out.append(value.text)
+                } else {
+                    if (!landing.position.admits(value)) throw UnsafeInterpolationException(landing.position, index, landing.attribute)
+                    out.escaped(value)
+                }
             }
         }
     }
     out.literal(format, cut, format.length)
     for (landscape in landscapes) landscape.checkUrls(format, holes, values)
-    return out.toString()
+    return Html(out.toString())
 }
 
 /**
@@ -343,8 +369,17 @@ public fun urlSchemeFixedBy(
     val read = entry.filterNot { it == '\t' || it == '\n' || it == '\r' }.trimStart { it <= ' ' }
     for (c in read) {
         when (c) {
-            '/', '?', '#' -> return true
-            ':' -> return SCHEME.find(read)?.groupValues?.get(1)?.asciiLowercase() in SAFE_SCHEMES
+            '/', '?', '#' -> {
+                return true
+            }
+
+            ':' -> {
+                return SCHEME
+                    .find(read)
+                    ?.groupValues
+                    ?.get(1)
+                    ?.asciiLowercase() in SAFE_SCHEMES
+            }
         }
     }
     return false

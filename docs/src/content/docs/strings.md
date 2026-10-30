@@ -87,7 +87,7 @@ cannot tell you is where a value came from, because by then Kotlin has concatena
 it knows exactly where each value landed.
 
 ```kotlin sample=declarations
-fun hit(title: String, url: String): String =
+fun hit(title: String, url: String): Html =
     interpolate("""<li><a class="lt-link" href="%s">%s</a></li>""", url, title)
 ```
 
@@ -142,6 +142,23 @@ interpolate("""<li data-signals="{n: %s}"></li>""", 3)
 A number or a boolean is let into a Datastar attribute because its text is digits, a dot, a sign
 or `true`/`false`. No string renders that way and also closes a quote, so the common honest case
 of a server-rendered initial signal needs no waiver.
+
+### Markup built from markup
+
+What `interpolate` returns is `Html`: markup whose values have been through it. Hand it to
+`patchElements`, `respondElements` or `datastarElements` as it is, or to another `interpolate`,
+which writes it as it stands in element text. Anywhere else, inside an attribute, it is characters
+like any value, and escaped or refused as one.
+
+```kotlin sample=statements
+val heading = interpolate("""<h2 class="lt-heading">%s</h2>""", "Gorvek")
+
+interpolate("""<section id="hero">%s<p>%s</p></section>""", heading, "<the oath>")
+```
+
+Only `interpolate` makes an `Html`, so holding one says where it came from. A Kotlin template
+writes its markup, so `"<main>$page</main>"` works too, but the editors cannot see that
+`page` is markup unless its type says so.
 
 ### When you mean it to be markup
 

@@ -5,6 +5,7 @@ import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.ExecuteScript
+import io.github.markusaugust.streamlord.core.domain.Html
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.core.domain.SignalNames
@@ -297,4 +298,24 @@ public suspend inline fun <reified T> DatastarStream.patchSignals(
     retry: Duration? = null,
 ) {
     patchSignals(codec.encode(value, typeOf<T>()), onlyIfMissing, eventId, retry)
+}
+
+/**
+ * [DatastarStream.patchElements] for markup [interpolate] built.
+ *
+ * ```kotlin
+ * patchElements(interpolate("""<li id="hit">%s</li>""", query))
+ * ```
+ */
+public suspend fun DatastarStream.patchElements(
+    elements: Html,
+    selector: String? = null,
+    mode: ElementPatchMode = ElementPatchMode.DEFAULT,
+    namespace: ElementNamespace = ElementNamespace.DEFAULT,
+    useViewTransition: Boolean = false,
+    viewTransitionSelector: String? = null,
+    eventId: String? = null,
+    retry: Duration? = null,
+) {
+    patchElements(elements.text, selector, mode, namespace, useViewTransition, viewTransitionSelector, eventId, retry)
 }
