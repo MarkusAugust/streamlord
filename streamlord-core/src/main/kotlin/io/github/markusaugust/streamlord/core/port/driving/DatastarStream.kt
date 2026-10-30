@@ -166,6 +166,28 @@ public interface DatastarStream {
         )
     }
 
+    /**
+     * [patchElements] for markup [interpolate] built. A member rather than an extension, so that
+     * inside `respondDatastar {}` it is found without an import, where the [String] one would
+     * otherwise be chosen and refuse an [Html].
+     *
+     * ```kotlin
+     * patchElements(interpolate("""<li id="hit">%s</li>""", query))
+     * ```
+     */
+    public suspend fun patchElements(
+        elements: Html,
+        selector: String? = null,
+        mode: ElementPatchMode = ElementPatchMode.DEFAULT,
+        namespace: ElementNamespace = ElementNamespace.DEFAULT,
+        useViewTransition: Boolean = false,
+        viewTransitionSelector: String? = null,
+        eventId: String? = null,
+        retry: Duration? = null,
+    ) {
+        patchElements(elements.text, selector, mode, namespace, useViewTransition, viewTransitionSelector, eventId, retry)
+    }
+
     /** Remove every element matching [selector]. */
     public suspend fun removeElements(
         selector: String,
@@ -298,24 +320,4 @@ public suspend inline fun <reified T> DatastarStream.patchSignals(
     retry: Duration? = null,
 ) {
     patchSignals(codec.encode(value, typeOf<T>()), onlyIfMissing, eventId, retry)
-}
-
-/**
- * [DatastarStream.patchElements] for markup [interpolate] built.
- *
- * ```kotlin
- * patchElements(interpolate("""<li id="hit">%s</li>""", query))
- * ```
- */
-public suspend fun DatastarStream.patchElements(
-    elements: Html,
-    selector: String? = null,
-    mode: ElementPatchMode = ElementPatchMode.DEFAULT,
-    namespace: ElementNamespace = ElementNamespace.DEFAULT,
-    useViewTransition: Boolean = false,
-    viewTransitionSelector: String? = null,
-    eventId: String? = null,
-    retry: Duration? = null,
-) {
-    patchElements(elements.text, selector, mode, namespace, useViewTransition, viewTransitionSelector, eventId, retry)
 }
