@@ -12,6 +12,7 @@ import io.github.markusaugust.streamlord.core.domain.AttributeKeys
 import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 import io.github.markusaugust.streamlord.core.domain.SignalNames
 import io.github.markusaugust.streamlord.core.json.JsonParser
+import kotlin.math.abs
 
 /*
  * Markup checks for the HTML Datastar patches: complete elements, ids where the protocol needs
@@ -55,6 +56,26 @@ private fun jsNumber(tag: String): Double? {
         }
     return m.groupValues[2].toBigIntegerOrNull(radix)?.toDouble()
 }
+
+/** What JavaScript's `parseFloat` reads from the start of a tag: digits, and an exponent if one follows. */
+private val JS_FLOAT_PREFIX = Regex("^[+-]?[0-9]+(?:e[+-]?[0-9]+)?")
+
+/**
+ * `tagToMs` in tags.ts for one tag: the milliseconds the client waits, `Number` of what comes
+ * before an `ms` or an `s`, and `parseFloat` of any other tag, which reads `5x` as 5. Null where
+ * it gives NaN.
+ */
+private fun clientMs(tag: String): Double? {
+    val t = tag.asciiLowercase()
+    return when {
+        t.endsWith("ms") -> jsNumber(t.dropLast(2))
+        t.endsWith("s") -> jsNumber(t.dropLast(1))?.times(1000)
+        else -> JS_FLOAT_PREFIX.find(t)?.value?.toDouble()
+    }
+}
+
+/** [ms] as JavaScript writes a number of no more than fifteen digits: `5`, `1.5`. */
+private fun jsFormat(ms: Double): String = if (ms % 1 == 0.0) ms.toLong().toString() else ms.toString()
 
 /**
  * The elements whose end tag HTML lets the author leave out, each with the start tags that close
@@ -1899,7 +1920,16 @@ public class MarkupValidator(
                     }
                     return issues
                 }
-                if (d.isNullOrEmpty() || !DURATION.matches(d)) {
+                val read = d?.takeIf { it.isNotEmpty() && !DURATION.matches(it) }?.let(::clientMs)?.takeIf { abs(it) < 1e15 }
+                if (d != null && read != null) {
+                    // Not written as a duration, but read as one: __debounce.5x waits 5 ms.
+                    val at = start + spec.name.length
+                    val fix = "${jsFormat(read)}ms".takeIf { read >= 0 && read % 1 == 0.0 }
+                    ignored(
+                        "Datastar reads __${spec.name}.$d as ${jsFormat(read)} ms." + (fix?.let { " Write __${spec.name}.$it." } ?: ""),
+                        fix?.let { listOf(Fix("Change to __${spec.name}.$it", at, at + 1 + d.length, ".$it")) } ?: emptyList(),
+                    )
+                } else if (d.isNullOrEmpty() || !DURATION.matches(d)) {
                     val at = start + spec.name.length
                     // A dot with nothing after it, __debounce., is no duration either, and the fix takes its place.
                     fail(

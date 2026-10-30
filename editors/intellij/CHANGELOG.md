@@ -4,6 +4,10 @@ All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here
 
 ## Unreleased
 
+- A duration modifier the client reads by its number is a warning that says what it reads, with
+  the fix to write it out: `__debounce.5x` waits 5 ms, since `tagToMs` falls back to `parseFloat`,
+  and `__delay.0x1fms` 31 ms. It was an error that said a duration was missing. A tag that is no
+  number at all, such as `__debounce.soon`, is still that error.
 - The markup checks read HTML as the browser does: the content of `xmp`, `iframe`, `noembed`,
   `noframes`, `noscript` and `plaintext` is text, a raw-text element written `<iframe/>` is still
   open, and only its whole end tag closes it, outside svg and math but again inside their HTML

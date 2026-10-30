@@ -591,6 +591,15 @@ function closeImplied(stack: Tag[], opening: string): void {
 /** Datastar reads `500ms`, `1s`, and a bare number as milliseconds. */
 const DURATION = /^\d+(ms|s)?$/;
 
+/**
+ * `tagToMs` in tags.ts for one tag: the milliseconds the client waits, `Number` of what comes
+ * before an `ms` or an `s`, and `parseFloat` of any other tag, which reads `5x` as 5.
+ */
+const clientMs = (tag: string): number => {
+  const t = asciiLowercase(tag);
+  return t.endsWith("ms") ? Number(t.slice(0, -2)) : t.endsWith("s") ? Number(t.slice(0, -1)) * 1000 : Number.parseFloat(t);
+};
+
 /** Below this length a Datastar name has too many honest neighbours (test, kind, once) to judge a bare `data-*` at all. */
 const LONG_NAME = 6;
 const IDENT = /^[A-Za-z_][A-Za-z0-9_-]*$/;
@@ -1453,7 +1462,16 @@ function validateModifierArgs(spec: AttributeSpec["modifiers"][number], written:
         for (const f of flags.slice(1)) if (!known(f)) unknownFlag(f);
         break;
       }
-      if (!d || !DURATION.test(d)) {
+      const read = d && !DURATION.test(d) ? clientMs(d) : Number.NaN;
+      if (d && Number.isFinite(read) && Math.abs(read) < 1e15) {
+        // Not written as a duration, but read as one: __debounce.5x waits 5 ms.
+        const at = start + spec.name.length;
+        const fix = read >= 0 && Number.isInteger(read) ? `${read}ms` : null;
+        ignored(
+          `Datastar reads __${spec.name}.${d} as ${read} ms.${fix ? ` Write __${spec.name}.${fix}.` : ""}`,
+          fix ? [{ title: `Change to __${spec.name}.${fix}`, start: at, end: at + 1 + d.length, text: `.${fix}` }] : undefined,
+        );
+      } else if (!d || !DURATION.test(d)) {
         fail(`__${spec.name} needs a duration such as __${spec.name}.500ms or __${spec.name}.1s.`);
         // A dot with nothing after it, __debounce., is no duration either, and the fix takes its place.
         if (!d && args.length <= 1) issues[issues.length - 1]!.fixes = [{ title: `Add .500ms`, start: start + spec.name.length, end, text: ".500ms" }];
