@@ -1,11 +1,17 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.catalog.CatalogNames
+import io.github.markusaugust.streamlord.core.client.ClientCasing
+import io.github.markusaugust.streamlord.core.client.asciiLowercase
+import io.github.markusaugust.streamlord.core.client.indexOfAsciiIgnoreCase
+import io.github.markusaugust.streamlord.core.domain.AttributeKeys
+
 /*
  * Editor-independent analysis: Kotlin or HTML source in, issues with source offsets out.
  */
 
 public data class AnalyzeOptions(
-    val prefix: String = "data-",
+    val prefix: String = CatalogNames.PREFIX,
     val checkHtmlAttributes: Boolean = true,
 )
 
@@ -15,6 +21,14 @@ private val CASE_VALUE = Regex("""Case\.([A-Z]+)""")
 private val CASE_IN_LAMBDA = Regex("""\bcase\s*=\s*Case\.([A-Z]+)""")
 private val OBJECT_FORM = Regex("""^\s*[{\[]""")
 private val HAS_CAPITAL = Regex("""[A-Z]""")
+
+// A property set in a lambda of modifiers, `{ once = true }`, and its value; `==` is a comparison and
+// `val once = 1` a variable of the lambda's own.
+private val LAMBDA_ASSIGNMENT = Regex("""(?<!\b(?:val|var)\s)\b([A-Za-z]+)\s*=(?!=)\s*([^;\n}]*)""")
+private val KOTLIN_STRING = Regex(""""(?:[^"\\]|\\.)*"""")
+
+// The parameter a DSL helper takes its key by, when it is passed by name.
+private val KEY_PARAMETERS = listOf("name", "event", "key", "property", "attribute", "signal")
 private val DOLLAR_RUNS = Regex("""\$+""")
 private val ASSIGN_BEFORE = Regex("""\s*=\s*$""")
 private val BRACED_TEMPLATE = Regex("""\$\{""")
@@ -47,11 +61,26 @@ public class Analyzer(
     private val expressions = ExpressionValidator(catalog)
     private val markup = MarkupValidator(catalog)
 
-    /** Keyed helpers that take a key but no expression, so the catalog's expression sites do not list them. */
-    private val keyOnlyHelpers = setOf("dataMatchMedia", "dataPersist")
+    /** Helpers that write the signal name in the value (the catalog's `valueKind` signal), which its call sites do not list. */
+    private val valueNameHelpers =
+        catalog.attributes
+            .filter { it.valueKind == ValueKind.SIGNAL }
+            .flatMap { it.kotlin }
+            .toSet()
 
-    /** Helpers that write the signal name in the value, which the catalog's call sites do not list. */
-    private val valueNameHelpers = setOf("dataBind", "dataRef", "dataIndicator")
+    /** Keyed helpers that take a key but no expression, so the catalog's expression sites do not list them. */
+    private val keyOnlyHelpers =
+        catalog.attributes
+            .filter { it.keyed }
+            .flatMap { it.kotlin }
+            .toSet() - catalog.expressionCallSites.keys - valueNameHelpers
+
+    // The helpers whose key is an HTML attribute's name, in which the DSL refuses a capital.
+    private val attributeNameHelpers =
+        catalog.attributes
+            .filter { it.keyIsAttributeName }
+            .flatMap { it.kotlin }
+            .toSet()
 
     private val allSiteNames: Set<String> = catalog.allCallSiteNames + keyOnlyHelpers + valueNameHelpers
     private val htmlSiteNames: Set<String> = catalog.htmlCallSites.keys
@@ -538,7 +567,8 @@ public class Analyzer(
         val issues = ArrayList(inStringLiterals(s, interpolationIssues(s, src)))
         val text = s.text
         if (PLACEHOLDER in text && s.interpolations.any { it.kind == InterpolationKind.SIMPLE }) return issues
-        issues += mapIssues(s, src, expressions.validate(text, catalog.attributesByKotlin[site.name]?.returnsValue, hyphenated))
+        val attribute = catalog.attributesByKotlin[site.name]
+        issues += mapIssues(s, src, expressions.validate(text, hyphenatedSignals = hyphenated, attribute = attribute))
         return issues
     }
 
@@ -632,27 +662,50 @@ public class Analyzer(
         src: String,
     ): List<Issue> {
         val spec = catalog.attributesByKotlin[site.name] ?: return emptyList()
+        if (site.name in valueNameHelpers) return valueNameIssues(site, spec)
         if (!spec.keyed || spec.keyCase == null) return emptyList()
         // Only helpers whose first parameter is a key: those whose expression is a later argument
         // (dataOn, dataSignals, dataClass, ...) and the two Pro helpers that take a key and no
-        // expression. dataOnClick("expr") passes an expression, never a key, and dataBind, dataRef
-        // and dataIndicator write their name in the value.
+        // expression. dataOnClick("expr") passes an expression, never a key.
         val expr = catalog.expressionCallSites[site.name]
+        if (site.name in attributeNameHelpers) return attributeNameIssues(site, spec, src)
         if (if (expr != null) expr.arg == 0 else site.name !in keyOnlyHelpers) return emptyList()
         val positional = site.positional
-        val key = positional.firstOrNull()?.string ?: return emptyList()
+        val namedKey = KEY_PARAMETERS.firstNotNullOfOrNull { site.named(it) }?.string
+        val key = namedKey ?: positional.firstOrNull()?.string ?: return emptyList()
         // With an expression helper, one positional string is the object form (dataClass("{...}")); the key form has two.
-        if (key.interpolations.isNotEmpty() || (expr != null && positional.size < 2)) return emptyList()
+        val objectForm = namedKey == null && expr != null && positional.size < 2 && site.named("expression") == null
+        if (key.interpolations.isNotEmpty() || objectForm) return emptyList()
         val name = key.text
         // dataSignals("{fooBar: 1}", ...) is the object form: an expression, not a key.
-        if (!HAS_CAPITAL.containsMatchIn(name) || OBJECT_FORM.containsMatchIn(name)) return emptyList()
-        // A signal name with a hyphen is refused, which signalNameHyphenIssues says.
-        if (spec.keyCase == KeyCase.CAMEL && '-' in name) return emptyList()
+        if (OBJECT_FORM.containsMatchIn(name)) return emptyList()
+        // A key that names a signal goes through Casing.signalName, which refuses more than a key.
+        val signalKey = spec.keyCase == KeyCase.CAMEL
+        (
+            if (signalKey) {
+                signalNameRefusal(
+                    name,
+                )
+            } else {
+                AttributeKeys.nameProblem(name)
+            }
+        )?.let { return listOf(refusedKey(spec, key, name, it)) }
+        // A hyphen it refuses before the modifiers are joined on, which signalNameHyphenIssues says.
+        if (signalKey && '-' in name) return emptyList()
         // `case = Case.X`, a positional `Case.X` (dataClass("name", "x", Case.CAMEL)) or `case = Case.X` in the trailing lambda.
         val named = site.args.firstOrNull { it.named == "case" || (it.named == null && CASE_ARG.matches(it.text)) }?.text
-        val explicit = if (named != null) CASE_VALUE.find(named) else CASE_IN_LAMBDA.find(trailingLambdaText(site, src))
+        val explicit = if (named != null) CASE_VALUE.find(named) else CASE_IN_LAMBDA.find(modifiersLambda(site, src))
         val explicitCase = explicit?.groupValues?.get(1)?.lowercase()
-        val wire = wireKey(name, spec.keyCase, explicitCase)
+        val capital = HAS_CAPITAL.containsMatchIn(name)
+        val wire = if (capital) wireKey(name, spec.keyCase, explicitCase) else name + (explicitCase?.let { "__case.$it" } ?: "")
+        // What the DSL writes after the key, as Casing.withModifiers is handed it: the case, then the rest.
+        if (wire != null) {
+            // The key itself, not what comes before the first __: in b___case.pascal that is b.
+            val keyPart = if (capital) ClientCasing.kebab(name) else name
+            val modifiers = wire.removePrefix(keyPart) + if (addsModifiers(site, spec, src)) "__" else ""
+            AttributeKeys.runsIntoModifiers(keyPart, modifiers)?.let { return listOf(refusedKey(spec, key, name, it)) }
+        }
+        if (!capital) return emptyList()
         if (wire == null) {
             return listOf(
                 Issue(
@@ -660,7 +713,9 @@ public class Analyzer(
                     end = key.end,
                     message =
                         "No key gives $name back: the browser lowercases attribute names, and with __case.camel or __case.pascal " +
-                            "Datastar turns every hyphen before a lower-case letter into a capital and reads ${wireKeyReads(name)}. " +
+                            "Datastar turns every hyphen before a lower-case letter into a capital and reads ${ClientCasing.readsAs(
+                                name,
+                            )}. " +
                             "Write it in one case.",
                     severity = Severity.HINT,
                     code = "key-case-wire",
@@ -668,18 +723,121 @@ public class Analyzer(
                 ),
             )
         }
-        val what = if (explicitCase != null) "a $explicitCase-cased name" else keyReading(spec, clientKeyName(wire), wire)
+        val what = if (explicitCase != null) "a $explicitCase-cased name" else keyReading(spec, ClientCasing.readKey(wire), wire)
         return listOf(
             Issue(
                 start = key.start,
                 end = key.end,
                 message =
-                    "Written on the wire as data-${spec.name}:$wire, which Datastar reads back as $what: the browser lowercases " +
-                        "attribute names, so a key is kebab-case. In HTML or a template you write it that way yourself." +
-                        rawKeyNote(spec, "data-", name),
+                    "Written on the wire as ${CatalogNames.PREFIX}${spec.name}:$wire, which Datastar reads back as $what: " +
+                        "the browser lowercases attribute names, so a key is kebab-case. " +
+                        "In HTML or a template you write it that way yourself." +
+                        rawKeyNote(spec, CatalogNames.PREFIX, name),
                 severity = Severity.HINT,
                 code = "key-case-wire",
                 link = Docs.attribute(spec.name),
+            ),
+        )
+    }
+
+    /**
+     * Whether the DSL writes a modifier besides `__case` after the key of [site], as far as its text
+     * shows: `ifMissing` of `dataSignals` and `session` of `dataPersist` set to true, or a modifier of
+     * the attribute set in the lambda of modifiers, to anything but false or null. What it writes
+     * does not matter, only that the key would run into it.
+     */
+    private fun addsModifiers(
+        site: CallSite,
+        spec: AttributeSpec,
+        src: String,
+    ): Boolean {
+        fun on(parameter: String) = (site.named(parameter) ?: site.positional.getOrNull(2))?.text?.trim() == "true"
+        if (site.name == "dataSignals" && on("ifMissing")) return true
+        if (site.name == "dataPersist" && on("session")) return true
+        val names = spec.modifiers.map { it.name.lowercase() }.filter { it != "case" }
+        return LAMBDA_ASSIGNMENT.findAll(modifiersLambda(site, src).replace(KOTLIN_STRING, "\"\"")).any { m ->
+            val property = m.groupValues[1].lowercase()
+            val value = m.groupValues[2].trim()
+            value != "false" && value != "null" && names.any { property.startsWith(it) }
+        }
+    }
+
+    /** The lambda of modifiers of [site]: the trailing one, or one passed as an argument, by name or not. */
+    private fun modifiersLambda(
+        site: CallSite,
+        src: String,
+    ): String =
+        trailingLambdaText(site, src).ifEmpty {
+            (site.named("modifiers") ?: site.positional.firstOrNull { it.text.trimStart().startsWith("{") })?.text ?: ""
+        }
+
+    /** A name `dataBind`, `dataRef` or `dataIndicator` writes in the value that `Casing.signalName` refuses, as it does in a key ([signalNameRefusal]). */
+    private fun valueNameIssues(
+        site: CallSite,
+        spec: AttributeSpec,
+    ): List<Issue> {
+        val name = (site.named("signal") ?: site.named("name") ?: site.positional.firstOrNull())?.string ?: return emptyList()
+        if (name.interpolations.isNotEmpty()) return emptyList()
+        return listOfNotNull(signalNameRefusal(name.text)?.let { refusedKey(spec, name, name.text, it) })
+    }
+
+    /** A key the DSL refuses at runtime, as `Casing` refuses it, where a hint would say what it writes. */
+    private fun refusedKey(
+        spec: AttributeSpec,
+        key: KotlinString,
+        name: String,
+        reason: String,
+    ): Issue =
+        Issue(
+            start = key.start,
+            end = key.end,
+            message = "Streamlord refuses \"$name\" at runtime: it $reason.",
+            severity = Severity.ERROR,
+            code = "key-refused",
+            link = Docs.attribute(spec.name),
+        )
+
+    /**
+     * A capital in the key of `dataAttr` or `dataAnimate`, which the DSL refuses at runtime: the
+     * browser lowercases an attribute name, so `viewBox` could only reach `view-box`. The fixes are
+     * the spellings HTML may have, lowercased for a name with a hyphen already (`aria-Label`), else
+     * kebab-case or one word, which only the attribute tells apart (`aria-label`, `tabindex`); one
+     * that really has capitals, such as SVG's `viewBox`, the message sends to the object form.
+     */
+    private fun attributeNameIssues(
+        site: CallSite,
+        spec: AttributeSpec,
+        src: String,
+    ): List<Issue> {
+        // The key form takes the name and an expression; one positional string is the object form.
+        val key =
+            (site.named("name") ?: site.named("attribute"))?.string
+                ?: site.positional
+                    .takeIf { it.size >= 2 || site.named("expression") != null }
+                    ?.first()
+                    ?.string
+                ?: return emptyList()
+        val name = key.text
+        if (key.interpolations.isNotEmpty() || OBJECT_FORM.containsMatchIn(name)) return emptyList()
+        AttributeKeys.nameProblem(name)?.let { return listOf(refusedKey(spec, key, name, it)) }
+        if (!HAS_CAPITAL.containsMatchIn(name)) {
+            val modifiers = if (addsModifiers(site, spec, src)) "__" else ""
+            return listOfNotNull(AttributeKeys.runsIntoModifiers(name, modifiers)?.let { refusedKey(spec, key, name, it) })
+        }
+        val reason = AttributeKeys.capitalIn(name, site.name) ?: return emptyList()
+        val plain = src.substring(key.contentStart, key.contentEnd) == name
+        return listOf(
+            refusedKey(spec, key, name, reason).copy(
+                code = "attribute-name-case",
+                fixes =
+                    if (plain) {
+                        AttributeKeys
+                            .spellings(
+                                name,
+                            ).map { Fix("Change to $it", key.contentStart, key.contentEnd, it) }
+                    } else {
+                        emptyList()
+                    },
             ),
         )
     }

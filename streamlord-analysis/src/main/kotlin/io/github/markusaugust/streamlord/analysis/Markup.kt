@@ -1,6 +1,18 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.catalog.CatalogNames
+import io.github.markusaugust.streamlord.core.client.ClientCasing
+import io.github.markusaugust.streamlord.core.client.HTML_SPACE
+import io.github.markusaugust.streamlord.core.client.RAW_TEXT
+import io.github.markusaugust.streamlord.core.client.asciiLowercase
+import io.github.markusaugust.streamlord.core.client.commentEnd
+import io.github.markusaugust.streamlord.core.client.decodeEntities
+import io.github.markusaugust.streamlord.core.client.rawTextEnd
+import io.github.markusaugust.streamlord.core.domain.AttributeKeys
+import io.github.markusaugust.streamlord.core.domain.ElementsGuard
+import io.github.markusaugust.streamlord.core.domain.SignalNames
 import io.github.markusaugust.streamlord.core.json.JsonParser
+import kotlin.math.abs
 
 /*
  * Markup checks for the HTML Datastar patches: complete elements, ids where the protocol needs
@@ -15,8 +27,55 @@ private val MODIFIER_WORD = Regex("""[a-z][a-z0-9]*(?:_[A-Za-z0-9]+)+""")
 
 private val VOID = setOf("area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr")
 
-/** Elements whose content is text, whatever it looks like: a `<div>` in a `<textarea>` or a `<title>` is not a tag. */
-private val RAW_TEXT = setOf("script", "style", "textarea", "title")
+private val JS_DECIMAL = Regex("[+-]?[0-9]+(?:e[+-]?[0-9]+)?")
+
+private val JS_RADIX = Regex("0([xob])([0-9a-f]+)")
+
+/** The modifiers whose value the client reads from the first tag, empty or not: `tagFirst` and `tagToMs` in tags.ts. */
+private val FIRST_TAG_READ = setOf(ModifierType.DURATION, ModifierType.INT, ModifierType.IDENT)
+
+/** The white space JavaScript's `Number` trims: its WhiteSpace and LineTerminator. */
+private const val JS_SPACE =
+    "\t\u000B\u000C\uFEFF \u00A0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A" +
+        "\u202F\u205F\u3000\n\r\u2028\u2029"
+
+/**
+ * JavaScript's `Number` of [tag], a modifier argument, which holds no dot and which the browser
+ * has lowercased: none is 0, and `1e1` and `0x32` are numbers too. Null where it gives NaN.
+ */
+private fun jsNumber(tag: String): Double? {
+    val t = tag.trim { it in JS_SPACE }.asciiLowercase()
+    if (t.isEmpty()) return 0.0
+    if (JS_DECIMAL.matches(t)) return t.toDouble()
+    val m = JS_RADIX.matchEntire(t) ?: return null
+    val radix =
+        when (m.groupValues[1]) {
+            "x" -> 16
+            "o" -> 8
+            else -> 2
+        }
+    return m.groupValues[2].toBigIntegerOrNull(radix)?.toDouble()
+}
+
+/** What JavaScript's `parseFloat` reads from the start of a tag: digits, and an exponent if one follows. */
+private val JS_FLOAT_PREFIX = Regex("^[+-]?[0-9]+(?:e[+-]?[0-9]+)?")
+
+/**
+ * `tagToMs` in tags.ts for one tag: the milliseconds the client waits, `Number` of what comes
+ * before an `ms` or an `s`, and `parseFloat` of any other tag, which reads `5x` as 5. Null where
+ * it gives NaN.
+ */
+private fun clientMs(tag: String): Double? {
+    val t = tag.asciiLowercase()
+    return when {
+        t.endsWith("ms") -> jsNumber(t.dropLast(2))
+        t.endsWith("s") -> jsNumber(t.dropLast(1))?.times(1000)
+        else -> JS_FLOAT_PREFIX.find(t)?.value?.toDouble()
+    }
+}
+
+/** [ms] as JavaScript writes a number of no more than fifteen digits: `5`, `1.5`. */
+private fun jsFormat(ms: Double): String = if (ms % 1 == 0.0) ms.toLong().toString() else ms.toString()
 
 /**
  * The elements whose end tag HTML lets the author leave out, each with the start tags that close
@@ -58,11 +117,11 @@ public val TEMPLATE_SYNTAX: Regex =
  * calls (`<#if>`, `</#if>`, `<@row/>`), and its `<#-- -->` comments. Skipped like `<!DOCTYPE>`.
  */
 private val TEMPLATE_TAG = Regex("""^</?[#@]""")
-private val TAG_OPEN = Regex("""^<(/?)([A-Za-z][A-Za-z0-9:-]*)""")
+private val TAG_OPEN = Regex("""^<(/?)([A-Za-z][A-Za-z0-9:._-]*)""")
 
 /** A name also ends where a template construct starts: `data-x{{/if}}`, `data-x</#if>`. */
-private val ATTR_NAME = Regex("""^[^\s"'<>/={]+""")
-private val UNQUOTED_VALUE = Regex("""^[^\s>]*""")
+private val ATTR_NAME = Regex("""^[^\t\n\f\r "'<>/={]+""")
+private val UNQUOTED_VALUE = Regex("""^[^\t\n\f\r >]*""")
 
 /** Datastar reads `500ms`, `1s`, and a bare number as milliseconds. */
 private val DURATION = Regex("""^\d+(ms|s)?$""")
@@ -77,7 +136,6 @@ private val WORD_CHAR_CLASS = Regex("""\w""")
 private val IDENT = Regex("""^[A-Za-z_][A-Za-z0-9_-]*$""")
 private val SIGNAL_NAME = Regex("""^[A-Za-z_$][A-Za-z0-9_.$-]*$""")
 private val HAS_CAPITAL = Regex("""[A-Z]""")
-private val LEADING_CAPITAL = Regex("""^[A-Z]""")
 private val HAS_LOWERCASE = Regex("""[a-z]""")
 
 /** A JavaScript escape in a key as written: `\\` is a backslash, `\'` a quote. */
@@ -321,139 +379,7 @@ private fun valueEnd(
     return body.length
 }
 
-/*
- * A named reference with its semicolon, one of the few legacy names the browser also reads
- * without it (unless `=` or a letter or digit follows, as in a URL's `&copy=1`), or a numeric
- * one, which the browser reads with or without its semicolon.
- */
-private val ENTITY =
-    Regex("""&(?:([A-Za-z][A-Za-z0-9]*);|(amp|AMP|lt|LT|gt|GT|quot|QUOT|nbsp)(?![=A-Za-z0-9])|#(\d{1,7});?|#[xX]([0-9A-Fa-f]{1,6});?)""")
-
-/** The named references that spell a character an expression may hold: the ASCII punctuation, and the whitespace. */
-private val NAMED_ENTITIES =
-    mapOf(
-        "amp" to "&",
-        "AMP" to "&",
-        "lt" to "<",
-        "LT" to "<",
-        "gt" to ">",
-        "GT" to ">",
-        "quot" to "\"",
-        "QUOT" to "\"",
-        "apos" to "'",
-        "nbsp" to "\u00A0",
-        "Tab" to "\t",
-        "NewLine" to "\n",
-        "excl" to "!",
-        "num" to "#",
-        "dollar" to "$",
-        "percnt" to "%",
-        "lpar" to "(",
-        "rpar" to ")",
-        "ast" to "*",
-        "midast" to "*",
-        "plus" to "+",
-        "comma" to ",",
-        "period" to ".",
-        "sol" to "/",
-        "colon" to ":",
-        "semi" to ";",
-        "equals" to "=",
-        "quest" to "?",
-        "commat" to "@",
-        "lsqb" to "[",
-        "lbrack" to "[",
-        "bsol" to "\\",
-        "rsqb" to "]",
-        "rbrack" to "]",
-        "Hat" to "^",
-        "lowbar" to "_",
-        "UnderBar" to "_",
-        "grave" to "`",
-        "DiacriticalGrave" to "`",
-        "lcub" to "{",
-        "lbrace" to "{",
-        "verbar" to "|",
-        "vert" to "|",
-        "VerticalLine" to "|",
-        "rcub" to "}",
-        "rbrace" to "}",
-    )
 private val TEMPLATE_CALL = Regex("""^[@#][A-Za-z]+\s*\(""")
-
-/** Below this length a Datastar name has too many honest neighbours (test, kind, once) to judge a bare `data-*` at all. */
-private const val LONG_NAME = 6
-
-/**
- * Lowercases A to Z and nothing else, so the result is as long as the input: `lowercase()` turns
- * U+0130 into two characters and moves every offset after it.
- */
-internal fun String.asciiLowercase(): String {
-    if (none { it in 'A'..'Z' }) return this
-    val out = StringBuilder(length)
-    for (c in this) out.append(if (c in 'A'..'Z') c + 32 else c)
-    return out.toString()
-}
-
-/** `indexOf` that ignores the case of A to Z; [needle] is given in lowercase. */
-internal fun String.indexOfAsciiIgnoreCase(
-    needle: String,
-    from: Int,
-): Int {
-    for (i in maxOf(0, from)..length - needle.length) {
-        var k = 0
-        while (k < needle.length && (this[i + k].let { if (it in 'A'..'Z') it + 32 else it }) == needle[k]) k++
-        if (k == needle.length) return i
-    }
-    return -1
-}
-
-/** Text with its character references decoded, and for every decoded index the offset it came from. Has `text.length + 1` entries. */
-internal class DecodedValue(
-    val text: String,
-    val map: IntArray,
-) {
-    fun toSource(decoded: Int): Int = map[decoded.coerceIn(0, map.size - 1)]
-}
-
-/**
- * The attribute value as the browser hands it to Datastar: `&amp;&amp;` is `&&` by then. The
- * named references that spell ASCII punctuation or whitespace, the legacy ones the browser reads
- * without a semicolon, and the numeric ones are decoded; `&copy;` and the rest stay as written,
- * which to the expression they are.
- */
-internal fun decodeEntities(value: String): DecodedValue {
-    if ('&' !in value) return DecodedValue(value, IntArray(value.length + 1) { it })
-    val out = StringBuilder()
-    val map = ArrayList<Int>()
-    var i = 0
-    while (i < value.length) {
-        val m = if (value[i] == '&') ENTITY.matchAt(value, i) else null
-        val decoded =
-            when {
-                m == null -> null
-                m.groupValues[1].isNotEmpty() -> NAMED_ENTITIES[m.groupValues[1]]
-                m.groupValues[2].isNotEmpty() -> NAMED_ENTITIES[m.groupValues[2]]
-                else -> codePoint(m.groupValues[3].toIntOrNull() ?: m.groupValues[4].toIntOrNull(16))
-            }
-        if (m == null || decoded == null) {
-            out.append(value[i])
-            map += i
-            i++
-            continue
-        }
-        for (c in decoded) {
-            out.append(c)
-            map += i
-        }
-        i += m.value.length
-    }
-    map += value.length
-    return DecodedValue(out.toString(), map.toIntArray())
-}
-
-private fun codePoint(cp: Int?): String? =
-    if (cp == null || cp == 0 || cp > 0x10FFFF || cp in 0xD800..0xDFFF) null else String(Character.toChars(cp))
 
 /**
  * Does the value hold template syntax, so that it cannot be judged before rendering? A `${`
@@ -567,6 +493,7 @@ public fun tokenize(html: String): Tokens {
     var i = 0
     var depth = 0
     var textStart = -1
+    val content = ForeignContent()
 
     fun flushText(end: Int) {
         if (textStart >= 0 && depth == 0) {
@@ -579,7 +506,13 @@ public fun tokenize(html: String): Tokens {
         textStart = -1
     }
     while (i < html.length) {
-        if (html.startsWith("<!--", i) || html.startsWith("<#--", i)) {
+        if (html.startsWith("<!--", i)) {
+            flushText(i)
+            i = commentEnd(html, i)
+            continue
+        }
+        // A FreeMarker comment, which only `-->` ends.
+        if (html.startsWith("<#--", i)) {
             flushText(i)
             val close = html.indexOf("-->", i + 4)
             i = if (close < 0) html.length else close + 3
@@ -606,6 +539,14 @@ public fun tokenize(html: String): Tokens {
             i = commentEnd + commentClose.length
             continue
         }
+        // Where the current element is foreign, `<![CDATA[` opens a section of text that only `]]>` ends;
+        // in HTML it is a bogus comment, which the first `>` ends.
+        if (html.startsWith("<![CDATA[", i) && content.foreign) {
+            flushText(i)
+            val close = html.indexOf("]]>", i + 9)
+            i = if (close < 0) html.length else close + 3
+            continue
+        }
         if (html[i] == '<' &&
             (
                 html.startsWith("<!", i) || html.startsWith("<?", i) ||
@@ -627,7 +568,7 @@ public fun tokenize(html: String): Tokens {
             var selfClosing = false
             while (j < html.length && html[j] != '>') {
                 val c = html[j]
-                if (c.isWhitespace()) {
+                if (c in HTML_SPACE) {
                     j++
                     continue
                 }
@@ -650,13 +591,13 @@ public fun tokenize(html: String): Tokens {
                 val nameStart = j
                 j += attrName.length
                 var k = j
-                while (k < html.length && html[k].isWhitespace()) k++
+                while (k < html.length && html[k] in HTML_SPACE) k++
                 var value: String? = null
                 var valueStart = -1
                 var quoted = false
                 if (k < html.length && html[k] == '=') {
                     k++
-                    while (k < html.length && html[k].isWhitespace()) k++
+                    while (k < html.length && html[k] in HTML_SPACE) k++
                     val q = html.getOrNull(k)
                     if (q == '"' || q == '\'') {
                         val close = html.indexOf(q, k + 1)
@@ -674,14 +615,20 @@ public fun tokenize(html: String): Tokens {
                 attributes += Attribute(attrName, nameStart, value, valueStart, quoted)
             }
             val end = minOf(j + 1, html.length)
-            tags += Tag(name, i, end, closing, selfClosing || name in VOID, attributes)
+            // As the browser reads it: a `/>` closes no raw-text element, plaintext runs to the end,
+            // and only `</name` as a whole name ends the others (rawTextEnd, which core's scanner
+            // shares; it reads svg and math by walking the markup each way instead).
+            if (closing) content.end(name)
+            val foreign = !closing && content.start(name, selfClosing, attributes)
+            val rawText = !closing && name in RAW_TEXT && !foreign
+            tags += Tag(name, i, end, closing, (selfClosing && !rawText) || name in VOID, attributes)
+            if (rawText) {
+                val closeIdx = if (name == "plaintext") -1 else rawTextEnd(html, name, end)
+                i = if (closeIdx < 0) html.length else closeIdx
+                depth++
+                continue
+            }
             if (!closing && !selfClosing && name !in VOID) {
-                if (name in RAW_TEXT) {
-                    val closeIdx = html.indexOfAsciiIgnoreCase("</$name", end)
-                    i = if (closeIdx < 0) html.length else closeIdx
-                    depth++
-                    continue
-                }
                 depth++
             } else if (closing) {
                 depth = maxOf(0, depth - 1)
@@ -696,11 +643,189 @@ public fun tokenize(html: String): Tokens {
     return Tokens(tags, topLevelText)
 }
 
-/** `fooBar` -> `foo-bar`, one hyphen per capital, which Datastar's camel conversion turns back into `fooBar`. */
-public fun kebab(name: String): String {
-    val out = HAS_CAPITAL.replace(name) { "-" + it.value.lowercase() }
-    // Only the hyphen a leading capital introduced is dropped; a CSS custom property keeps its `--`.
-    return if (LEADING_CAPITAL.containsMatchIn(name)) out.removePrefix("-") else out
+private val FOREIGN_ROOTS = setOf("svg", "math")
+
+/**
+ * Whether [name], opened in the foreign element [root], is an HTML integration point, in which the
+ * browser reads the content as HTML: a foreignObject, desc or title in an svg, and in a math the
+ * text elements and an annotation-xml whose encoding is HTML.
+ */
+private fun integrationPoint(
+    root: String,
+    name: String,
+    attributes: List<Attribute>,
+): Boolean =
+    when (root) {
+        "svg" -> {
+            name == "foreignobject" || name == "desc" || name == "title"
+        }
+
+        else -> {
+            name in MATHML_TEXT ||
+                (
+                    name == "annotation-xml" &&
+                        attributes.any { it.name.asciiLowercase() == "encoding" && it.value?.asciiLowercase() in HTML_ENCODINGS }
+                )
+        }
+    }
+
+private val MATHML_TEXT = setOf("mi", "mo", "mn", "ms", "mtext")
+
+private val HTML_ENCODINGS = setOf("text/html", "application/xhtml+xml")
+
+/**
+ * The start tags that end foreign content, so that the browser reads them, and what follows, as
+ * HTML: `<svg><p><style>` holds an HTML style. A font does so with a color, face or size.
+ */
+private val BREAKOUT =
+    (
+        "b big blockquote body br center code dd div dl dt em embed h1 h2 h3 h4 h5 h6 head hr i img li listing menu meta nobr ol p pre " +
+            "ruby s small span strong strike sub sup table tt u ul var"
+    ).split(" ").toSet()
+private val FONT_BREAKOUT = setOf("color", "face", "size")
+
+/** The end tags that do the same. */
+private val BREAKOUT_END = setOf("br", "p")
+
+/**
+ * The HTML elements an end tag cannot close past in HTML content (the "special" category of the
+ * HTML standard): `</b>` inside a `div` inside a `b` leaves the `b` open.
+ */
+private val SPECIAL =
+    (
+        "address applet area article aside base basefont bgsound blockquote body br button caption center col colgroup dd " +
+            "details dir div dl dt embed fieldset figcaption figure footer form frame frameset h1 h2 h3 h4 h5 h6 head header " +
+            "hgroup hr html iframe img input keygen li link listing main marquee menu meta nav noembed noframes noscript object " +
+            "ol p param plaintext pre script search section select source style summary table tbody td template textarea tfoot " +
+            "th thead title tr track ul wbr xmp"
+    ).split(" ").toSet()
+
+/**
+ * Where the tokenizer stands in foreign content, as the browser's tree builder reads it: the svg
+ * and math elements open, the HTML integration points open in them, and the elements open inside
+ * each, which decide where an svg begins and what an end tag closes. Inside an svg or a math a
+ * `style` or a `script` is no raw text and `/>` closes an element; inside an integration point,
+ * such as a foreignObject, the content is HTML again.
+ */
+private class ForeignContent {
+    /** An element that changes how its content is read, and the elements open inside it. */
+    private class Scope(
+        val name: String,
+        val foreign: Boolean,
+        val namespace: String,
+    ) {
+        val open = ArrayList<String>()
+    }
+
+    // The document first, whose open elements an end tag can close an svg or a math by.
+    private val scopes = arrayListOf(Scope("", false, "html"))
+
+    /** Whether the current node is an svg or MathML element, in which `<![CDATA[` opens a section of text. */
+    val foreign: Boolean get() = scopes.last().foreign
+
+    /** Reads a start tag; returns whether it stands in foreign content, where no element holds raw text. */
+    fun start(
+        name: String,
+        selfClosing: Boolean,
+        attributes: List<Attribute>,
+    ): Boolean {
+        if (foreign && breaksOut(name, false, attributes)) popForeign()
+        val top = scopes.last()
+        if (top.foreign) {
+            when {
+                // Inside a math an svg is a MathML element, unless it opens right in an annotation-xml.
+                name == "svg" && top.namespace == "math" && top.open.lastOrNull() == "annotation-xml" -> {
+                    if (!selfClosing) scopes += Scope(name, true, "svg")
+                }
+
+                integrationPoint(top.namespace, name, attributes) -> {
+                    if (!selfClosing) scopes += Scope(name, false, top.namespace)
+                }
+
+                !selfClosing -> {
+                    top.open += name
+                }
+            }
+            return true
+        }
+        when {
+            // Right inside a MathML text element, mglyph and malignmark stay MathML.
+            top.open.isEmpty() && top.name in MATHML_TEXT && (name == "mglyph" || name == "malignmark") -> {
+                if (!selfClosing) scopes += Scope(name, true, "math")
+            }
+
+            name in FOREIGN_ROOTS -> {
+                if (!selfClosing) scopes += Scope(name, true, name)
+            }
+
+            name !in VOID && name !in RAW_TEXT -> {
+                top.open += name
+            }
+        }
+        return false
+    }
+
+    /** Reads an end tag. */
+    fun end(name: String) {
+        if (foreign && breaksOut(name, true, emptyList())) return popForeign()
+        val top = scopes.last()
+        if (top.foreign || (top.open.isEmpty() && scopes.size > 1)) {
+            // Foreign content's rule, which an integration point with nothing open inside it follows
+            // too: the nearest open element of the name, until an HTML element is open, whose rule
+            // takes over from there.
+            for (k in scopes.indices.reversed()) {
+                val scope = scopes[k]
+                if (!scope.foreign && scope.open.isNotEmpty() && k != scopes.lastIndex) {
+                    // Every integration point is special, so one open in between stops it.
+                    if (scopes.subList(k + 1, scopes.size).any { !it.foreign }) return
+                    return closeHtml(k, name)
+                }
+                val at = if (scope.foreign) scope.open.lastIndexOf(name) else -1
+                if (at >= 0) {
+                    scopes.subList(k + 1, scopes.size).clear()
+                    return scope.open.subList(at, scope.open.size).clear()
+                }
+                if (k > 0 && scope.name == name) return scopes.subList(k, scopes.size).clear()
+            }
+            return
+        }
+        closeHtml(scopes.lastIndex, name)
+    }
+
+    /**
+     * HTML content's rule for an end tag, from the elements open in the scope at [k]: the nearest
+     * open element of the name, unless a special one stands between, then the integration point
+     * itself, when the end tag spells its name. foreignObject's, which the element has in camel
+     * case, it never does.
+     */
+    private fun closeHtml(
+        k: Int,
+        name: String,
+    ) {
+        val scope = scopes[k]
+        for (e in scope.open.indices.reversed()) {
+            if (scope.open[e] == name) {
+                scopes.subList(k + 1, scopes.size).clear()
+                return scope.open.subList(e, scope.open.size).clear()
+            }
+            if (scope.open[e] in SPECIAL) return
+        }
+        if (k > 0 && k == scopes.lastIndex && name == scope.name && name != "foreignobject") scopes.removeAt(k)
+    }
+
+    private fun popForeign() {
+        while (scopes.last().foreign) scopes.removeAt(scopes.lastIndex)
+    }
+}
+
+/** Whether a tag ends the foreign content it stands in, as the tree builder reads it. */
+private fun breaksOut(
+    name: String,
+    closing: Boolean,
+    attributes: List<Attribute>,
+): Boolean {
+    if (closing) return name in BREAKOUT_END
+    return name in BREAKOUT || (name == "font" && attributes.any { it.name.asciiLowercase() in FONT_BREAKOUT })
 }
 
 /**
@@ -709,29 +834,20 @@ public fun kebab(name: String): String {
  * for an event or class (kebab by default), `aria-label` where the key is used as it is. An
  * explicit `__case` is kept: the key is still kebab-cased, because the browser lowercases it
  * either way. A signal key is read as camelCase, so `fooBar-baz` comes back as `fooBarBaz`, the
- * name the DSL's `signal()` reads from it too; [clientKeyName] says what. Null for an event or
+ * name the DSL's `signal()` reads from it too; [ClientCasing.readKey] says what. Null for an event or
  * class name that mixes capitals with a hyphen before a lower-case letter, `fooBar-baz` or `A-b`,
  * since the client's camel and pascal turn that hyphen into a capital too (`modifyCasing` in
- * text.ts) and no key gives it back; [wireKeyReads] says what it would read. Shared by the HTML
+ * text.ts) and no key gives it back; [ClientCasing.readsAs] says what it would read. Shared by the HTML
  * warning and the Kotlin wire hint.
  */
 public fun wireKey(
     key: String,
     keyCase: KeyCase?,
     explicitCase: String?,
-): String? {
-    val base = kebab(key)
-    if (explicitCase != null) return "${base}__case.$explicitCase"
-    val wanted = if (LEADING_CAPITAL.containsMatchIn(key)) "pascal" else "camel"
-    if (keyCase == KeyCase.RAW) return base
-    if (keyCase == KeyCase.KEBAB && CASE_FNS.getValue(wanted)(base) != key) return null
-    val defaultCase = if (keyCase == KeyCase.CAMEL) "camel" else "kebab"
-    return if (wanted == defaultCase) base else "${base}__case.$wanted"
-}
-
-/** What the client reads from the kebab-case key of [key] under the case its capitals ask for. */
-public fun wireKeyReads(key: String): String =
-    CASE_FNS.getValue(if (LEADING_CAPITAL.containsMatchIn(key)) "pascal" else "camel")(kebab(key))
+): String? =
+    ClientCasing.keyFor(key, explicitCase, keyCase?.takeIf { it != KeyCase.RAW }?.name?.lowercase())?.let { choice ->
+        choice.key + (choice.case?.let { "__case.$it" } ?: "")
+    }
 
 /**
  * What `data-x:` with an empty key lacks besides the colon dropped: null when the attribute runs
@@ -772,29 +888,12 @@ private fun emptyKeyAdvice(
     }
 }
 
-/** The cases the 1.0.4 client has a function for (utils/text.ts); any other value leaves the key as it is. */
-private val CASE_FNS: Map<String, (String) -> String> =
-    mapOf(
-        "camel" to ::camelCase,
-        "snake" to { s -> s.replace('-', '_') },
-        "pascal" to { s -> if (s.isEmpty()) s else s.substring(0, 1).uppercase() + camelCase(s.substring(1)) },
-    )
-
-private val HYPHEN_LOWER = Regex("-[a-z]")
-
-private fun camelCase(s: String): String = HYPHEN_LOWER.replace(s) { it.value.substring(1).uppercase() }
-
 /** The key as the client recases it: each value of the last `__case` in turn, or the attribute's default without one. */
 private fun clientCase(
     key: String,
     modifiers: List<ParsedModifier>,
     defaultCase: String,
-): String {
-    val mod = modifiers.lastOrNull { it.name == "case" }
-    var out = key
-    for (c in mod?.args?.distinct() ?: listOf(defaultCase)) out = CASE_FNS[c]?.invoke(out)?.ifEmpty { null } ?: out
-    return out
-}
+): String = ClientCasing.modifyCasing(key, modifiers.lastOrNull { it.name == "case" }?.args?.distinct(), defaultCase)
 
 /** What a key is to Datastar: the noun the messages and the hover use, from `keyCase` in the catalog. */
 public enum class KeyKind { SIGNAL, EVENT, CLASS, RAW }
@@ -840,11 +939,11 @@ public fun rawKeyNote(
 
         // The object form writes a key kebab-case too (style.ts:50 in 1.0.4), so no form keeps a capital.
         spec.name == "style" && key.startsWith("--") -> {
-            " No form keeps a capital in a custom property: name it in kebab-case, here and in the CSS, as ${kebab(key)}."
+            " No form keeps a capital in a custom property: name it in kebab-case, here and in the CSS, as ${ClientCasing.kebab(key)}."
         }
 
         spec.name == "style" -> {
-            " A CSS property is written in kebab-case: $prefix${spec.name}:${kebab(key)}."
+            " A CSS property is written in kebab-case: $prefix${spec.name}:${ClientCasing.kebab(key)}."
         }
 
         else -> {
@@ -972,7 +1071,7 @@ public class MarkupValidator(
         val issues = ArrayList<Issue>()
         for (attr in tag.attributes) {
             val lower = attr.name.asciiLowercase()
-            if (prefix == "data-" && lower.startsWith("data-star-")) {
+            if (prefix == CatalogNames.PREFIX && lower.startsWith(CatalogNames.ALIASED_PREFIX)) {
                 issues +=
                     Issue(
                         attr.nameStart,
@@ -994,15 +1093,11 @@ public class MarkupValidator(
             val templated = cut || hasTemplateSyntax(attr.name) || (kotlin && KOTLIN_TEMPLATE.containsMatchIn(attr.name))
             if (spec == null && templated) continue
             if (spec == null) {
-                // The rule of the runtime guard. A key or a modifier makes a custom attribute implausible, so
-                // any one-letter neighbour is a typo. A bare name (data-test, data-kind, data-effects) is an
-                // honest word more often than not: only a swapped letter in a long name is judged.
-                val qualified = parsed.key != null || parsed.modifiers.isNotEmpty()
+                // The rule of the runtime guard, which a key or a modifier after the name makes stricter.
                 val near =
-                    catalog.attributes.firstOrNull {
-                        distance(parsed.base, it.name) == 1 &&
-                            (qualified || (it.name.length >= LONG_NAME && it.name.length == parsed.base.length))
-                    }
+                    ElementsGuard
+                        .nearAttribute(parsed.base, qualified = parsed.key != null || parsed.modifiers.isNotEmpty())
+                        ?.let { catalog.attributesByName.getValue(it) }
                 val baseEnd = attr.nameStart + prefix.length + parsed.base.length
                 if (near != null) {
                     issues +=
@@ -1211,7 +1306,7 @@ public class MarkupValidator(
                     val from = decoded.toSource(start)
                     return attr.valueStart + from to attr.valueStart + if (end > start) maxOf(decoded.toSource(end), from + 1) else from
                 }
-                for (issue in expressions.validate(decoded.text, spec.returnsValue, hyphenatedSignals)) {
+                for (issue in expressions.validate(decoded.text, hyphenatedSignals = hyphenatedSignals, attribute = spec)) {
                     val (start, end) = source(issue.start, issue.end)
                     issues +=
                         issue.copy(
@@ -1331,7 +1426,7 @@ public class MarkupValidator(
 
     /**
      * The signal an attribute declares, when the client cannot hold it or no `$` reference reaches
-     * it: the key as the client reads it ([clientKeyName]), the name in the value of `data-bind`,
+     * it: the key as the client reads it ([ClientCasing.readKey]), the name in the value of `data-bind`,
      * `data-ref` and `data-indicator`, and the keys of the object form. The DSL holds a name to the
      * same rules (`SignalNames` in streamlord-core, `Casing.signalName` and `Casing.heldKey` in
      * streamlord-html).
@@ -1351,7 +1446,7 @@ public class MarkupValidator(
         // data-signals:__proto__ has no key to the client: the `__` starts the modifiers, and no plugin is named `signals:`.
         if (!parsed.key.isNullOrEmpty() && colon >= 0 && !cut) {
             val written = attr.name.substring(colon + 1)
-            val held = clientKeyName(written.asciiLowercase())
+            val held = ClientCasing.readKey(written)
             val keyStart = attr.nameStart + colon + 1
             val keyEnd = keyStart + written.substringBefore("__").length
             // data-signals:constructor="{a: 1}" puts an object under the last part, which the client then writes into the built-in one.
@@ -1424,7 +1519,7 @@ public class MarkupValidator(
                             )
                     }
 
-                    k.objectUnder && k.key in PROTOTYPE_NAMES -> {
+                    k.objectUnder && k.key in SignalNames.PROTOTYPE_NAMES -> {
                         out +=
                             Issue(
                                 start,
@@ -1597,7 +1692,7 @@ public class MarkupValidator(
         // With an explicit __case already there, only the key itself changes, when that case gives the name back.
         val fixed =
             if (existing != null) {
-                kebab(key).takeIf { clientCase(it, listOf(existing), "camel") == key }
+                ClientCasing.kebab(key).takeIf { clientCase(it, listOf(existing), "camel") == key }
             } else {
                 wireKey(key, spec.keyCase, null)
             }
@@ -1606,11 +1701,11 @@ public class MarkupValidator(
             val noKey =
                 if (existing != null) {
                     val written = "__case." + existing.args.joinToString(".")
-                    "No key with $written gives $key back: the browser lowercases the key, and from ${kebab(key)}$written " +
-                        "Datastar reads ${clientCase(kebab(key), listOf(existing), "camel")}."
+                    "No key with $written gives $key back: the browser lowercases the key, and from ${ClientCasing.kebab(key)}$written " +
+                        "Datastar reads ${clientCase(ClientCasing.kebab(key), listOf(existing), "camel")}."
                 } else {
                     "No key gives $key back: with __case.camel or __case.pascal Datastar turns every hyphen before a " +
-                        "lower-case letter into a capital and reads ${wireKeyReads(key)}."
+                        "lower-case letter into a capital and reads ${ClientCasing.readsAs(key)}."
                 }
             return listOf(
                 Issue(
@@ -1651,7 +1746,7 @@ public class MarkupValidator(
                     val end = attr.valueEnd + if (attr.quoted) 1 else 0
                     listOf(Fix("Use the object form", attr.nameStart, end, "$name=$quote{$key: $value}$quote"))
                 } else if (spec.name == "style" && !key.startsWith("--")) {
-                    listOf(Fix("Change to ${kebab(key)}", keyStart, keyStart + key.length, kebab(key)))
+                    listOf(Fix("Change to ${ClientCasing.kebab(key)}", keyStart, keyStart + key.length, ClientCasing.kebab(key)))
                 } else {
                     emptyList()
                 }
@@ -1707,7 +1802,7 @@ public class MarkupValidator(
 
     private fun validateModifierArgs(
         spec: Modifier,
-        args: List<String>,
+        written: List<String>,
         start: Int,
         end: Int,
         attribute: AttributeSpec,
@@ -1715,6 +1810,8 @@ public class MarkupValidator(
         listensFor: String = "",
     ): List<Issue> {
         val issues = ArrayList<Issue>()
+        // An empty tag after the value, as in __threshold.50., or the one of __once., is nothing the client reads.
+        val args = written.filter { it.isNotEmpty() }
 
         fun fail(
             message: String,
@@ -1731,11 +1828,29 @@ public class MarkupValidator(
             issues += Issue(start, end, message, Severity.WARNING, "modifier-args", fixes = fixes)
         }
 
-        fun unknownFlag(f: String) =
+        fun unknownFlag(f: String) {
             ignored(
                 "Unknown flag .$f for __${spec.name}, which Datastar ignores. " +
                     "Allowed: ${spec.flags.joinToString(", ") { ".$it" }.ifEmpty { "none" }}.",
             )
+        }
+        spec.ignoredWith.firstOrNull { it in present }?.let {
+            // __half__threshold.50: onIntersect.ts takes __half and never reads __threshold.
+            ignored("Datastar ignores __${spec.name} with __$it.")
+            return issues
+        }
+        if (spec.type in FIRST_TAG_READ && written.firstOrNull() == "" && args.isNotEmpty()) {
+            // __debounce..500ms: the client reads the empty tag as the value and never comes to .500ms.
+            // Without it, the modifier is the fix only if it holds up itself: __debounce..leading has no duration.
+            val fixed = "." + args.joinToString(".")
+            val holds = validateModifierArgs(spec, args, start, end, attribute, present, listensFor).none { it.severity == Severity.ERROR }
+            fail(
+                "Datastar reads the first argument of __${spec.name}, which is empty here, and not .${args.first()}." +
+                    if (holds) " Write __${spec.name}$fixed." else "",
+                if (holds) listOf(Fix("Change to __${spec.name}$fixed", start + spec.name.length, end, fixed)) else emptyList(),
+            )
+            return issues
+        }
         when (spec.type) {
             ModifierType.FLAG -> {
                 // __prevent.stop: a second modifier joined with a dot, read as an argument.
@@ -1805,11 +1920,21 @@ public class MarkupValidator(
                     }
                     return issues
                 }
-                if (d == null || !DURATION.matches(d)) {
+                val read = d?.takeIf { it.isNotEmpty() && !DURATION.matches(it) }?.let(::clientMs)?.takeIf { abs(it) < 1e15 }
+                if (d != null && read != null) {
+                    // Not written as a duration, but read as one: __debounce.5x waits 5 ms.
                     val at = start + spec.name.length
+                    val fix = "${jsFormat(read)}ms".takeIf { read >= 0 && read % 1 == 0.0 }
+                    ignored(
+                        "Datastar reads __${spec.name}.$d as ${jsFormat(read)} ms." + (fix?.let { " Write __${spec.name}.$it." } ?: ""),
+                        fix?.let { listOf(Fix("Change to __${spec.name}.$it", at, at + 1 + d.length, ".$it")) } ?: emptyList(),
+                    )
+                } else if (d.isNullOrEmpty() || !DURATION.matches(d)) {
+                    val at = start + spec.name.length
+                    // A dot with nothing after it, __debounce., is no duration either, and the fix takes its place.
                     fail(
                         "__${spec.name} needs a duration such as __${spec.name}.500ms or __${spec.name}.1s.",
-                        if (d == null) listOf(Fix("Add .500ms", at, at, ".500ms")) else emptyList(),
+                        if (d.isNullOrEmpty() && args.size <= 1) listOf(Fix("Add .500ms", at, end, ".500ms")) else emptyList(),
                     )
                 }
                 for (f in args.drop(1)) {
@@ -1825,9 +1950,9 @@ public class MarkupValidator(
                     // The client leaves the key as it is for a case it has no function for. Where the default
                     // is kebab, which it has none for either, that is the key without the modifier.
                     if (spec.name == "case" && attribute.keyCase == KeyCase.KEBAB) {
-                        val also = rest.filter { it !in CASE_FNS }.joinToString("") { ".$it" }
+                        val also = rest.filter { it !in ClientCasing.CASES }.joinToString("") { ".$it" }
                         val head =
-                            if (v != null) {
+                            if (!v.isNullOrEmpty()) {
                                 "Unknown value .$v for __case, which Datastar ignores" + if (also.isEmpty()) "" else ", as it does $also"
                             } else {
                                 "Datastar ignores __case without a value"
@@ -1838,7 +1963,7 @@ public class MarkupValidator(
                     }
                 }
                 // __case.camel.foo: the client applies each value it has a function for and skips the rest.
-                val applied = if (spec.name == "case") rest.filter { it in CASE_FNS } else rest
+                val applied = if (spec.name == "case") rest.filter { it in ClientCasing.CASES } else rest
                 if (applied.isNotEmpty()) {
                     fail("__${spec.name} takes a single value.")
                 } else if (rest.isNotEmpty() && v != null && v in spec.values) {
@@ -1847,10 +1972,18 @@ public class MarkupValidator(
             }
 
             ModifierType.INT -> {
-                val n = args.firstOrNull()?.toIntOrNull()
-                if (n == null || (spec.min != null && n < spec.min) || (spec.max != null && n > spec.max)) {
-                    val range = if (spec.min != null) " between ${spec.min} and ${spec.max}" else ""
+                // The client reads Number of the first tag and clamps it (onIntersect.ts); NaN fails in the observer.
+                val v = args.firstOrNull()
+                val n = jsNumber(v ?: "")
+                val min = spec.min
+                val max = spec.max
+                if (n == null) {
+                    val range = if (min != null) " between $min and $max" else ""
                     fail("__${spec.name} needs an integer$range, e.g. __${spec.name}.50.")
+                } else if (v == null) {
+                    ignored("Datastar reads __${spec.name} without a value as 0.")
+                } else if ((min != null && n < min) || (max != null && n > max)) {
+                    ignored("Datastar clamps __${spec.name}.$v to ${if (min != null && n < min) min else max}.")
                 }
                 if (args.size > 1) fail("__${spec.name} takes a single value.")
             }

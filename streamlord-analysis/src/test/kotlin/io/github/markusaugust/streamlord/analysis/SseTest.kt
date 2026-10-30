@@ -1,61 +1,46 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.json.JsonObject
+import org.junit.jupiter.api.DynamicTest
+import org.junit.jupiter.api.TestFactory
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-/** The cases of the VS Code extension's `sse.test.ts`. */
+/** The cases of `twins/sse.json`, which the VS Code extension's `sse.test.ts` reads too. */
 class SseTest {
-    private fun data(messages: List<SseMessage>) = messages.map { it.data }
-
-    @Test
-    fun `a CRLF split across two chunks is one line ending`() {
-        val p = SseParser()
-        assertEquals(emptyList(), p.feed("data: x\r"))
-        assertEquals(listOf(listOf("x", "y")), data(p.feed("\ndata: y\r\n\r\n")))
-    }
-
-    @Test
-    fun `an empty chunk between the CR and the LF changes nothing`() {
-        val p = SseParser()
-        assertEquals(emptyList(), p.feed("data: x\r"))
-        assertEquals(emptyList(), p.feed(""))
-        assertEquals(emptyList(), p.feed("\n"))
-        assertEquals(listOf(listOf("x")), data(p.feed("\r\n")))
-    }
-
-    @Test
-    fun `a lone CR ends a line, also as the last character of a chunk`() {
-        val p = SseParser()
-        assertEquals(listOf(listOf("x")), data(p.feed("data: x\r\r")))
-        assertEquals(listOf(listOf("y")), data(p.feed("data: y\r\r")))
-        assertEquals(emptyList(), p.feed("data: z\r"))
-        assertEquals(listOf(listOf("z")), data(p.feed("\r")))
-    }
-
-    @Test
-    fun `a data line may start with any word`() {
-        val p = SseParser()
-        val messages = p.feed("event: e\ndata: constructor foo\ndata: toString bar\ndata: toString baz\ndata: __proto__ qux\n\n")
-        assertEquals(
-            mapOf("constructor" to "foo", "toString" to "bar\nbaz", "__proto__" to "qux"),
-            decodeDatastar(messages.single()).args,
+    private fun shown(m: SseMessage) =
+        mapOf(
+            "event" to m.event,
+            "id" to m.id,
+            "retry" to m.retry?.toLong(),
+            "data" to m.data,
+            "comments" to m.comments,
         )
-    }
 
-    @Test
-    fun `a retry that does not fit an int is dropped`() {
-        val p = SseParser()
-        assertEquals(listOf(2147483647, null), p.feed("retry: 2147483647\ndata: a\n\nretry: 2147483648\ndata: b\n\n").map { it.retry })
-    }
+    // The projections of sse.test.ts: what each chunk hands back, or every message decoded.
+    private val calls: Map<String, (List<String>) -> Any?> =
+        mapOf(
+            "feed" to { chunks ->
+                val p = SseParser()
+                chunks.map { p.feed(it).map(::shown) }
+            },
+            "decode" to { chunks ->
+                val p = SseParser()
+                chunks.flatMap(p::feed).map(::decodeDatastar).map { f ->
+                    mapOf("event" to f.event, "id" to f.id, "retry" to f.retry?.toLong(), "args" to f.args.map { listOf(it.key, it.value) })
+                }
+            },
+        )
 
-    // As the client splits it: without a space the key is the line minus its last character, and
-    // the value is the whole line (fetch.ts:115-117).
-    @Test
-    fun `a data line without a space is split as the client splits it`() {
-        val message = SseParser().feed("event: datastar-patch-signals\ndata: signals\n\n").single()
-
-        assertEquals(mapOf("signal" to "signals"), decodeDatastar(message).args)
-    }
+    @TestFactory
+    fun `sse parser`(): List<DynamicTest> =
+        twinCases("sse.json").map { c: JsonObject ->
+            val name = c.string("name")!!
+            DynamicTest.dynamicTest(name) {
+                val call = calls[c.string("call")] ?: error("$name: no call ${c.string("call")}")
+                assertEquals(c["expected"]!!.toKotlin(), call(c.array("chunks")!!.strings()), name)
+            }
+        }
 
     // One long line in small pieces used to be scanned again from its start on every piece.
     @Test
@@ -76,17 +61,6 @@ class SseTest {
                 .length,
         )
         kotlin.test.assertTrue(millis < 2_000, "took $millis ms")
-    }
-
-    // Joined as the client joins data lines, so empty ones before the first with text are gone,
-    // and a message without data has the one empty line the client splits it into.
-    @Test
-    fun `data is joined as the client joins it before it is split`() {
-        val leading = SseParser().feed("event: datastar-patch-elements\ndata:\ndata: elements <p>x</p>\n\n").single()
-        val none = SseParser().feed("event: datastar-x\n\n").single()
-
-        assertEquals(mapOf("elements" to "<p>x</p>"), decodeDatastar(leading).args)
-        assertEquals(mapOf("" to ""), decodeDatastar(none).args)
     }
 
     // The inspector shows comments alone as a keep-alive; with an id or a retry they are a frame.

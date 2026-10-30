@@ -82,26 +82,33 @@ jobs:
               # This file decides what runs, so a change to it runs everything.
               .github/workflows/*)
                 kotlin=true; vscode=true; intellij=true; docs=true; image=true; ktlint=true ;;
-              # The corpus both editors' checks are held to: CorpusTest in the SDK reads it too.
-              # And the SSE corpus both inspectors read, SseCorpusTest in streamlord-analysis too.
-              editors/vscode/test/fixtures/corpus/*|editors/vscode/test/fixtures/sse/*) vscode=true; kotlin=true; intellij=true ;;
-              # The corpus is counted on the front page, so it is site content too.
-              editors/vscode/test/fixtures/corpus/*) vscode=true; docs=true ;;
+              # The corpus both editors' checks are held to: CorpusTest in the SDK reads it too,
+              # and the front page counts it, so it is site content as well.
+              editors/vscode/test/fixtures/corpus/*) vscode=true; kotlin=true; intellij=true; docs=true ;;
+              # The other shared fixtures: the cases both analyses hold under twins/, which core
+              # reads some of too, the SSE corpus, and the templates IntelliJ reads.
+              editors/vscode/test/fixtures/*) vscode=true; kotlin=true; intellij=true ;;
+              # The site highlights its code with the extension's grammars and palette, and shows its icon.
+              editors/vscode/syntaxes/*|editors/vscode/media/*|editors/vscode/src/palette.ts) vscode=true; docs=true ;;
               editors/vscode/*)   vscode=true ;;
               editors/intellij/*) intellij=true ;;
-              # The catalog feeds the analysis, and VS Code's generated custom data.
-              catalog/*)          kotlin=true; vscode=true; intellij=true ;;
+              # The catalog feeds the analysis, which the image bundles for /judge, VS Code's generated
+              # custom data, and the counts on the front page.
+              catalog/*)          kotlin=true; vscode=true; intellij=true; docs=true; image=true ;;
               # The pages are compiled by docs-samples and indexed into the image, so
               # they are Kotlin sources and image content as much as they are prose.
               docs/src/content/docs/*) docs=true; kotlin=true; image=true ;;
+              # The front page's samples are compiled by docs-samples too.
+              docs/src/samples/*) docs=true; kotlin=true ;;
               # The transcripts the pages import are goldens the Kotlin build checks.
               docs/src/generated/*) docs=true; kotlin=true ;;
               docs/*)             docs=true ;;
               # Netlify's build of the site, which deploys from master with no other check.
               netlify.toml)       docs=true ;;
               demo/*)             kotlin=true; image=true ;;
-              # The fixtures are read by the Kotlin tests, the editors' tests and the front page.
-              conformance/*)      kotlin=true; image=true; intellij=true; vscode=true; docs=true ;;
+              # The fixtures are read by the Kotlin tests, the VS Code tests and the front page; the
+              # image and the IntelliJ plugin read none of them.
+              conformance/*)      kotlin=true; vscode=true; docs=true ;;
               # The IntelliJ plugin builds streamlord-analysis, and core beneath it, from source.
               streamlord-core/*)  kotlin=true; image=true; intellij=true ;;
               # The image runs the analysis in /judge and streamlord-test in /assert.
@@ -116,7 +123,9 @@ jobs:
               # The version catalog and the settings scripts are the plugin's build too.
               # The site reads the catalog for the versions on the front page.
               gradle/libs.versions.toml) kotlin=true; image=true; intellij=true; docs=true ;;
-              gradle/*|gradlew*|*.gradle.kts|gradle.properties)
+              # The site reads the version out of gradle.properties.
+              gradle.properties)  kotlin=true; image=true; intellij=true; docs=true ;;
+              gradle/*|gradlew*|*.gradle.kts)
                 kotlin=true; image=true; intellij=true ;;
             esac
           done <<< "$files"

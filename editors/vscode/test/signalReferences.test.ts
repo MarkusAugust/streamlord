@@ -2,158 +2,45 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { isKnownSignal, nearestSignal, signalReferencesInHtml, signalReferencesInKotlin, unknownSignalIssue } from "../src/signalReferences.ts";
 import { collectSignalDefinitions, collectSignals } from "../src/signals.ts";
+import { twinCases } from "./twins.ts";
 
-/** The cases of the analysis module's `SignalReferencesTest.kt`. */
-const refs = (src: string) => signalReferencesInKotlin(src, "data-").map((r) => [src.slice(r.start, r.end), r.name]);
-
-const unknown = (src: string, language: "kotlin" | "html" = "kotlin") => {
-  const defined = collectSignalDefinitions(src, language);
-  const found = language === "kotlin" ? signalReferencesInKotlin(src, "data-") : signalReferencesInHtml(src, "data-");
-  return found.flatMap((r) => unknownSignalIssue(r, defined) ?? []);
+type Case = {
+  name: string;
+  language: "kotlin" | "html";
+  src: string;
+  refs?: string[][];
+  unknown?: string[];
+  codes?: string[];
+  messages?: string[];
+  fixes?: string[][][];
+  signals?: string[];
+  definitions?: string[];
+  defined?: string[];
+  path: string;
+  known?: boolean;
+  nearest?: string | null;
 };
 
 describe("signal references", () => {
-  it("a misspelt signal in a multi-dollar string is unknown", () => {
-    const src = `fun f(): String = $$"""
-    <div data-signals:teller="0">
-      <button data-on:click="$telefon++">Øk</button>
-      <span data-text="$teller"></span>
-    </div>
-"""`;
-    const issues = unknown(src);
-    assert.deepEqual(issues.map((i) => src.slice(i.start, i.end)), ["$telefon"]);
-    assert.equal(issues[0]?.code, "unknown-signal");
-  });
-
-  it("a helper that reads a signal by name reads it, and one that assigns defines it", () => {
-    const src = `import io.github.markusaugust.streamlord.html.*
-
-fun f() = div {
-    dataSignals("count", "0")
-    dataText(signal("cuont"))
-    dataOn("click", increment("count"))
-    dataShow(not("opn"))
-    dataOn("click", toggle("open"))
-    dataOn("click", set("total", 1))
-    dataText(signal("total") + signal("foo-bar") + signal("items[0]") + signal("user.name"))
-}`;
-    const issues = unknown(src);
-    assert.deepEqual(issues.map((i) => src.slice(i.start, i.end)), ["cuont", "opn", "user.name"]);
-    assert.equal(issues[0]?.fixes?.[0]?.text, "count");
-    assert.equal(issues[1]?.fixes?.[0]?.text, "open");
-    assert.ok(collectSignals(src, "kotlin").has("cuont"));
-  });
-
-  it("a helper is read only in a file that uses the DSL, and only without a receiver", () => {
-    const dsl = "import io.github.markusaugust.streamlord.html.*\n";
-    assert.deepEqual(unknown(`fun t() { assertThat(x, not("error")) }`), []);
-    assert.deepEqual(unknown(`${dsl}fun t() { redis.opsForValue().increment("visits"); filter.not("x") }`), []);
-    const hamcrest = "import io.github.markusaugust.streamlord.html.dataText\nimport org.hamcrest.Matchers.not\n";
-    assert.deepEqual(unknown(`${hamcrest}fun t() { assertThat(status, not("error")) }`), []);
-    assert.deepEqual(unknown(`${dsl}import org.hamcrest.Matchers.*\nfun t() { assertThat(status, not("error")) }`), []);
-    assert.deepEqual(unknown(`${dsl}val m = Matchers.\n${" ".repeat(60)}not("zzz")`), []);
-    const named = `${dsl}fun t() = signal(name = "nope")`;
-    assert.deepEqual(unknown(named).map((i) => named.slice(i.start, i.end)), ["nope"]);
-  });
-
-  it("a helper's fix offers only a name it writes as it stands", () => {
-    const src = `import io.github.markusaugust.streamlord.html.*\nval p = """<div data-signals="{'foo-bar': 1}"></div>"""\nval t = signal("fooBar")`;
-    const issues = unknown(src);
-    assert.deepEqual(issues.map((i) => src.slice(i.start, i.end)), ["fooBar"]);
-    assert.equal(issues[0]?.fixes, undefined);
-  });
-
-  it("a page declared from toJsonValue defines what the codec can write", () => {
-    const form = `@Serializable data class Form(val email: String = "")\n`;
-    const reads = `; dataText(signal("emial")) }`;
-    const cases: [string, string[]][] = [
-      ["fun page() = div { dataSignals(codec.toJsonValue(Form()))", ["emial"]],
-      ["fun page(form: Form) = div { dataSignals(codec.toJsonValue(form))", ["emial"]],
-      ["val j = codec.toJsonValue(Form())\nfun page() = div { dataSignals(j)", ["emial"]],
-      ["fun page() = div { dataSignals(codec.toJsonValue(JacksonForm()))", []],
-      ["fun page(form: JsonObject) = div { dataSignals(form)", []],
-      ["fun page() = div { dataSignals(codec.toJsonValue(load()))", []],
-    ];
-    for (const [page, expected] of cases) {
-      const src = `import io.github.markusaugust.streamlord.html.*\n${form}${page}${reads}`;
-      assert.deepEqual(unknown(src).map((i) => src.slice(i.start, i.end)), expected, page);
-    }
-  });
-
-  it("a near name is offered as the fix, and the dollar is kept as written", () => {
-    const src = `fun f() = """<div data-signals:count="0" data-text="\${'$'}coutn"></div>"""`;
-    const [issue] = unknown(src);
-    assert.ok(issue);
-    assert.equal(src.slice(issue.start, issue.end), "${'$'}coutn");
-    const [fix] = issue.fixes ?? [];
-    assert.equal(fix?.text, "count");
-    assert.equal(src.slice(fix!.start, fix!.end), "coutn");
-    assert.match(issue.message, /Did you mean \$count\?/);
-  });
-
-  it("the expression handed to a dsl call is read", () => {
-    const src = String.raw`fun f() { dataText("\$total + \$tax") }`;
-    assert.deepEqual(refs(src), [
-      ["\\$total", "total"],
-      ["\\$tax", "tax"],
-    ]);
-  });
-
-  it("a kotlin template is not a signal", () => {
-    const src = `fun f(teller: Int) = """<button data-on:click="$teller++">x</button>"""`;
-    assert.deepEqual(refs(src), []);
-  });
-
-  it("a path reaches into a defined signal, and an object holds its paths", () => {
-    const defined = new Set(["user", "form.email"]);
-    assert.ok(isKnownSignal("user.name.length", defined));
-    assert.ok(isKnownSignal("form", defined));
-    assert.ok(isKnownSignal("form.email", defined));
-    assert.ok(!isKnownSignal("forms", defined));
-  });
-
-  it("an assignment defines the signal, a comparison does not", () => {
-    const html = `<button data-on:click="$open = true"></button><p data-show="$open && $shown == 1"></p>`;
-    assert.deepEqual(unknown(html, "html").map((i) => html.slice(i.start, i.end)), ["$shown"]);
-  });
-
-  it("markup files read bare signals without defining them", () => {
-    const html = `<div data-signals:count="0"><span data-text="$cuont"></span><span data-text="$count"></span></div>`;
-    assert.deepEqual(unknown(html, "html").map((i) => html.slice(i.start, i.end)), ["$cuont"]);
-    // Completion still offers every name it sees.
-    assert.ok(collectSignals(html, "html").has("cuont"));
-  });
-
-  it("strings, kebab-case and template syntax are left alone", () => {
-    const html = `<p data-text="'$nope' + $foo-bar"></p><p data-text="{{ x }} + $nope"></p>`;
-    assert.deepEqual(unknown(html, "html"), []);
-  });
-
-  it("serializable properties and dsl writes define signals", () => {
-    const src = `@Serializable data class S(val query: String = "")
-fun f() { patchSignals("total" to 1); dataText("\${'$'}query + \${'$'}total") }`;
-    assert.deepEqual(unknown(src), []);
-  });
-
-  it("a dollar inside a javascript identifier is not a signal", () => {
-    assert.deepEqual(signalReferencesInHtml(`<button data-on:click="foo$bar() + $$x"></button>`, "data-"), []);
-  });
-
-  it("a case modifier names the signal", () => {
-    const html =
-      `<div data-signals:my-value__case.snake="1" data-signals:big-box__case.pascal="1" data-signals:plain-key="1">` +
-      `<span data-text="$my_value + $BigBox + $plainKey"></span></div>`;
-    assert.deepEqual(unknown(html, "html"), []);
-    assert.deepEqual([...collectSignalDefinitions(html, "html")].sort(), ["BigBox", "my_value", "plainKey"]);
-  });
-
-  it("json text handed to patchSignals defines its keys", () => {
-    const src = 'fun f() { sse.patchSignals("""{"count": 1, "form": {"email": ""}}""") }';
-    assert.deepEqual([...collectSignalDefinitions(src, "kotlin")].sort(), ["count", "form", "form.email"]);
-  });
-
-  it("no fix when nothing is close", () => {
-    assert.equal(nearestSignal("telefon", new Set(["teller"])), null);
-    assert.equal(nearestSignal("telelr", new Set(["teller", "total"])), "teller");
-  });
+  for (const c of twinCases<Case>("signal-references.json")) {
+    it(c.name, () => {
+      if (c.defined) {
+        const defined = new Set(c.defined);
+        if (c.known !== undefined) assert.equal(isKnownSignal(c.path, defined), c.known, c.name);
+        if (c.nearest !== undefined) assert.equal(nearestSignal(c.path, defined), c.nearest, c.name);
+        return;
+      }
+      const { src, language } = c;
+      const defined = collectSignalDefinitions(src, language);
+      const refs = language === "kotlin" ? signalReferencesInKotlin(src, "data-") : signalReferencesInHtml(src, "data-");
+      const issues = refs.flatMap((r) => unknownSignalIssue(r, defined) ?? []);
+      if (c.refs) assert.deepEqual(refs.map((r) => [src.slice(r.start, r.end), r.name]), c.refs, c.name);
+      if (c.unknown) assert.deepEqual(issues.map((i) => src.slice(i.start, i.end)), c.unknown, c.name);
+      if (c.codes) assert.deepEqual(issues.map((i) => i.code), c.codes, c.name);
+      if (c.messages) assert.deepEqual(issues.map((i) => i.message), c.messages, c.name);
+      if (c.fixes) assert.deepEqual(issues.map((i) => (i.fixes ?? []).map((f) => [src.slice(f.start, f.end), f.text])), c.fixes, c.name);
+      if (c.signals) assert.deepEqual([...collectSignals(src, language)].sort(), c.signals, c.name);
+      if (c.definitions) assert.deepEqual([...defined].sort(), c.definitions, c.name);
+    });
+  }
 });

@@ -1,5 +1,12 @@
 package io.github.markusaugust.streamlord.core.domain
 
+import io.github.markusaugust.streamlord.core.client.CODE_TEXT
+import io.github.markusaugust.streamlord.core.client.RAW_TEXT
+import io.github.markusaugust.streamlord.core.client.commentEnd
+import io.github.markusaugust.streamlord.core.client.isHtmlSpace
+import io.github.markusaugust.streamlord.core.client.rawTextEnd
+import io.github.markusaugust.streamlord.core.client.regionMatchesAsciiIgnoreCase
+
 /**
  * What a walk over HTML reports. Offsets are into the string that was walked, so a caller can
  * ask where something sits as well as what it says.
@@ -35,18 +42,6 @@ internal interface MarkupVisitor {
     ) = Unit
 }
 
-/**
- * HTML elements whose body is text to the browser: `<` inside them opens no tag, up to the
- * element's own end tag. `plaintext` has none and runs to the end.
- */
-private val RAW_TEXT = listOf("script", "style", "textarea", "title", "xmp", "iframe", "noembed", "noframes", "noscript", "plaintext")
-
-/** Of those, the ones whose body is a program. */
-private val CODE_TEXT = listOf("script", "style")
-
-/** HTML's own white space, which is narrower than Kotlin's `isWhitespace`. */
-private fun Char.isHtmlSpace(): Boolean = this == ' ' || this == '\t' || this == '\n' || this == '\u000C' || this == '\r'
-
 /** The characters that end a tag name, and so an end tag's name as well. */
 private fun Char?.endsName(): Boolean = this == null || isHtmlSpace() || this == '/' || this == '>'
 
@@ -61,13 +56,16 @@ private fun Char?.isAsciiLetter(): Boolean = this != null && (this in 'a'..'z' |
  * It reads them as the HTML tokenizer does, comments and bogus comments included.
  *
  * With [foreign], it reads the markup as the inside of an `<svg>` or `<math>`, where `title`,
- * `textarea` and the like hold elements rather than text. Markup can switch between the two, so
- * a caller that has to be right walks it both ways and takes the stricter answer.
+ * `textarea` and the like hold elements rather than text. With [cdata] as well, a `<![CDATA[`
+ * there is a section of text that only `]]>` ends, where HTML, and an integration point such as
+ * an svg's `title`, reads a bogus comment the first `>` ends. Markup can switch between them, so a
+ * caller that has to be right walks it each way and takes the strictest answer.
  */
 internal fun scanMarkup(
     html: String,
     visitor: MarkupVisitor,
     foreign: Boolean = false,
+    cdata: Boolean = false,
 ) {
     val rawText = if (foreign) CODE_TEXT else RAW_TEXT
     var i = 0
@@ -77,6 +75,11 @@ internal fun scanMarkup(
         if (lt < 0) break
         if (html.startsWith("<!--", lt)) {
             i = commentEnd(html, lt)
+            continue
+        }
+        if (cdata && html.startsWith("<![CDATA[", lt)) {
+            val close = html.indexOf("]]>", lt + 9)
+            i = if (close < 0) n else close + 3
             continue
         }
         val first = html.getOrNull(lt + 1)
@@ -97,46 +100,12 @@ internal fun scanMarkup(
 
         rawText
             .firstOrNull {
-                html.regionMatches(lt + 1, it, 0, it.length, ignoreCase = true) && html.getOrNull(lt + 1 + it.length).endsName()
+                html.regionMatchesAsciiIgnoreCase(lt + 1, it) && html.getOrNull(lt + 1 + it.length).endsName()
             }?.let { tag ->
-                val end = if (tag == "plaintext") n else endTag(html, tag, i)
+                val end = if (tag == "plaintext") n else rawTextEnd(html, tag, i).let { if (it < 0) n else it }
                 if (tag in CODE_TEXT) visitor.code(i, end)
                 i = end
             }
-    }
-}
-
-/**
- * One past the end of the comment that opens at [lt]: `<!-->` and `<!--->` are whole comments,
- * and `-->` and `--!>` both close one.
- */
-private fun commentEnd(
-    html: String,
-    lt: Int,
-): Int {
-    if (html.startsWith("<!-->", lt)) return lt + 5
-    if (html.startsWith("<!--->", lt)) return lt + 6
-    val dash = html.indexOf("-->", lt + 4)
-    val bang = html.indexOf("--!>", lt + 4)
-    return when {
-        dash < 0 && bang < 0 -> html.length
-        bang < 0 || (dash in 0 until bang) -> dash + 3
-        else -> bang + 4
-    }
-}
-
-/** Where `</tag` begins after [from], as a whole name: `</titlex>` does not end a `title`. */
-private fun endTag(
-    html: String,
-    tag: String,
-    from: Int,
-): Int {
-    var at = from
-    while (true) {
-        val close = html.indexOf("</$tag", at, ignoreCase = true)
-        if (close < 0) return html.length
-        if (html.getOrNull(close + 2 + tag.length).endsName()) return close
-        at = close + 2
     }
 }
 

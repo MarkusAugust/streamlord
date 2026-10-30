@@ -5,12 +5,23 @@ The browser lowercases attribute names, so a capital letter in a key never reach
 where Datastar's default is not camel.
 <p>
 In the DSL the SDK writes a camelCase key correctly on its own; a hint on the call says what goes on the wire, so nothing is hidden.
+A key the SDK refuses at runtime is an error instead: one holding <code>__</code>, where Datastar starts reading modifiers, or one
+ending in <code>_</code> before a modifier the call adds, such as <code>dataSignals("foo_", "1", ifMissing = true)</code>, which the
+client would read as <code>foo</code>. So is a key with whitespace, a quote or a character that ends an attribute, and a
+signal name no <code>$</code> reaches, such as <code>a:b</code>, <code>über</code> or <code>constructor</code>, in a key, a pair or the
+name <code>dataBind</code>, <code>dataRef</code> or <code>dataIndicator</code> writes in the value.
 </p>
 <p>
 A signal name in a DSL call holds no hyphen: Datastar's client reads one as a capital in an attribute key and as a hyphen in an
 expression or a patch, so <code>dataSignals("foo-bar", ...)</code> and <code>signal("foo-bar")</code> would name two signals, and
 the SDK refuses the name at runtime. The quick fix writes it in camelCase, <code>fooBar</code>. A key with a hyphen inside a value is
 data, and an expression reaches it with brackets: <code>signal("form['first-name']")</code>.
+</p>
+<p>
+The key of <code>dataAttr</code> and <code>dataAnimate</code> is an attribute's name as HTML has it, and the SDK refuses a capital in it
+at runtime: <code>dataAttr("viewBox", ...)</code> could only set <code>view-box</code>. The quick fix writes the kebab-case name,
+<code>aria-label</code> for <code>ariaLabel</code>; an attribute that really has capitals, such as SVG's <code>viewBox</code>, takes the
+object form, <code>dataAttr("{viewBox: ...}")</code>.
 </p>
 <!-- tooltip end -->
 </body>

@@ -1,5 +1,5 @@
 import { Parser } from "acorn";
-import { catalog } from "./catalog.ts";
+import { catalog, type AttributeSpec } from "./catalog.ts";
 
 /**
  * Validation of Datastar expressions. A Datastar expression is JavaScript in which `$name` is a
@@ -91,6 +91,67 @@ function regexEnds(text: string): Int32Array {
       } else end = out[2 * (j + 1) + inClass]!;
       out[2 * j + inClass] = end;
     }
+  }
+  return out;
+}
+
+// A name standing on its own: no `.` or `@` before it (a property, an action), and no name character
+// on either side, any character beyond ASCII counted as one, as streamlord-analysis counts it.
+const NAME_EDGE = "A-Za-z0-9_$\\u0080-\\uffff";
+const BINDS_NAMES = /=>|\bfunction\b|\b(?:let|const|var)\b/;
+
+// genRx compiles every expression with these parameters, so they are always declared: evt is
+// undefined outside data-on, and never a ReferenceError.
+const ALWAYS_DECLARED: ReadonlySet<string> = new Set(catalog.compiledParameters);
+
+interface HandedIn {
+  readonly attributes: ReadonlyMap<string, string[]>;
+  readonly pattern: RegExp | null;
+}
+
+/**
+ * For each name a free attribute's expression is handed and the others are not, the attributes
+ * that hand it over: `patch` in `data-on-signal-patch`. `pattern` finds the names, null for none.
+ */
+function handedIn(attributes: readonly AttributeSpec[]): HandedIn {
+  const out = new Map<string, string[]>();
+  for (const a of attributes) if (!a.pro) for (const n of a.argNames) if (!ALWAYS_DECLARED.has(n)) out.set(n, [...(out.get(n) ?? []), a.name]);
+  const escaped = [...out.keys()].map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  return { attributes: out, pattern: escaped.length === 0 ? null : new RegExp(`(?<![${NAME_EDGE}.@])(${escaped.join("|")})(?![${NAME_EDGE}])`, "g") };
+}
+
+/**
+ * `patch` in the expression of an attribute whose plugin does not hand it over: Datastar compiles
+ * each expression with the names its plugin declares, so `patch` in `data-text` throws a
+ * ReferenceError. `handed` names the attributes that hand each such name over. An expression
+ * that declares a function or a variable may bind the name itself and is left alone, and so is a
+ * Pro attribute, whose plugin is not read here. The same rule as `scopeNameIssues` in streamlord-analysis.
+ */
+function scopeNameIssues(text: string, spec: AttributeSpec, handed: HandedIn): Issue[] {
+  if (!handed.pattern || spec.pro || spec.valueKind !== "expression" || BINDS_NAMES.test(text)) return [];
+  const regions = jsRegions(text);
+  const out: Issue[] = [];
+  for (const m of text.matchAll(handed.pattern)) {
+    const name = m[0];
+    const start = m.index;
+    const end = start + name.length;
+    let b = start - 1;
+    while (b >= 0 && /\s/.test(text[b]!)) b--;
+    let a = end;
+    while (a < text.length && /\s/.test(text[a]!)) a++;
+    const before = text[b];
+    const after = text[a];
+    // A key of an object literal, `{patch: 1}`, names nothing.
+    if (spec.argNames.includes(name) || regions[start] !== Region.CODE || (after === ":" && (before === "{" || before === ","))) continue;
+    const where = (handed.attributes.get(name) ?? []).map((a) => `data-${a}`).join(" and ");
+    out.push({
+      start,
+      end,
+      message: `${name} is not defined in data-${spec.name}: Datastar hands an expression ${name} only in ${where}, so here it throws a ReferenceError.`,
+      severity: "warning",
+      code: "scope-name",
+      link: DOCS.expressions,
+    });
   }
   return out;
 }
@@ -600,7 +661,15 @@ function filterSignalsIssues(text: string): Issue[] {
  */
 const NO_SIGNALS: ReadonlySet<string> = new Set();
 
-export function validateExpression(text: string, returnsValue?: boolean, hyphenatedSignals: ReadonlySet<string> = NO_SIGNALS): Issue[] {
+// For each name only some attributes' expressions are handed, those attributes.
+const HANDED_IN = handedIn(catalog.attributes);
+
+/** The issues of `text`, and, with the `attribute` it is the value of, a name only another attribute's expression is handed. */
+export function validateExpression(text: string, returnsValue?: boolean, hyphenatedSignals: ReadonlySet<string> = NO_SIGNALS, attribute?: AttributeSpec): Issue[] {
+  return [...validateText(text, returnsValue ?? attribute?.returnsValue, hyphenatedSignals), ...(attribute ? scopeNameIssues(text, attribute, HANDED_IN) : [])];
+}
+
+function validateText(text: string, returnsValue: boolean | undefined, hyphenatedSignals: ReadonlySet<string>): Issue[] {
   const issues: Issue[] = [];
   if (text.trim().length === 0) {
     return [{ start: 0, end: Math.max(text.length, 1), message: "Empty Datastar expression.", severity: "warning", code: "empty-expression" }];

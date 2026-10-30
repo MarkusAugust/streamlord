@@ -24,19 +24,21 @@ interface Case {
   name: string;
   source: string;
   requireIds?: boolean;
+  /** The attribute prefix of an aliased bundle; the default bundle's otherwise. */
+  prefix?: string;
   issues: Expected[];
 }
 
-const opts = { prefix: "data-", checkHtmlAttributes: true };
+const opts = (c: Case) => ({ prefix: c.prefix ?? "data-", checkHtmlAttributes: true });
 const run: Record<string, (c: Case) => Issue[]> = {
   expression: (c) => validateExpression(c.source),
-  markup: (c) => validateMarkup(c.source, { requireIds: c.requireIds ?? false, prefix: "data-", checkAttributes: true }),
-  html: (c) => analyzeHtml(c.source, opts),
-  kotlin: (c) => analyzeKotlin(c.source, opts),
+  markup: (c) => validateMarkup(c.source, { requireIds: c.requireIds ?? false, prefix: c.prefix ?? "data-", checkAttributes: true }),
+  html: (c) => analyzeHtml(c.source, opts(c)),
+  kotlin: (c) => analyzeKotlin(c.source, opts(c)),
   // The signals the source reads that it does not itself declare.
   references: (c) => {
     const defined = collectSignalDefinitions(c.source, "html");
-    return signalReferencesInHtml(c.source, "data-").flatMap((r) => unknownSignalIssue(r, defined) ?? []);
+    return signalReferencesInHtml(c.source, c.prefix ?? "data-").flatMap((r) => unknownSignalIssue(r, defined) ?? []);
   },
 };
 const byCode = (a: Issue, b: Issue) => ((a.code ?? "") < (b.code ?? "") ? -1 : (a.code ?? "") > (b.code ?? "") ? 1 : 0);

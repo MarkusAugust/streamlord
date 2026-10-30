@@ -1,26 +1,39 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { decodeDatastar, SseParser, type SseMessage } from "../src/sse.ts";
+import { twinCases } from "./twins.ts";
 
-/** The cases of the analysis module's `SseTest.kt`. */
-const data = (messages: SseMessage[]): string[][] => messages.map((m) => m.data);
+/** A case of `fixtures/twins/sse.json`, which SseTest.kt in streamlord-analysis reads too. */
+interface Case {
+  name: string;
+  call: "feed" | "decode";
+  chunks: string[];
+  expected: unknown;
+}
+
+const shown = (m: SseMessage) => ({ event: m.event, id: m.id, retry: m.retry, data: m.data, comments: m.comments });
+
+// The projections of SseTest.kt: what each chunk hands back, or every message decoded.
+const calls = {
+  feed: (c: Case) => {
+    const p = new SseParser();
+    return c.chunks.map((chunk) => p.feed(chunk).map(shown));
+  },
+  decode: (c: Case) => {
+    const p = new SseParser();
+    return c.chunks
+      .flatMap((chunk) => p.feed(chunk))
+      .map((m) => {
+        const f = decodeDatastar(m);
+        return { event: f.event, id: f.id, retry: f.retry, args: Object.entries(f.args) };
+      });
+  },
+};
 
 describe("sse parser", () => {
-  // Joined as the client joins data lines, so empty ones before the first with text are gone, and
-  // a message without data has the one empty line the client splits it into.
-  it("data is joined as the client joins it before it is split", () => {
-    const [leading] = new SseParser().feed("event: datastar-patch-elements\ndata:\ndata: elements <p>x</p>\n\n");
-    const [none] = new SseParser().feed("event: datastar-x\n\n");
-    assert.deepEqual(decodeDatastar(leading!).args, { elements: "<p>x</p>" });
-    assert.deepEqual(decodeDatastar(none!).args, { "": "" });
-  });
-
-  // As the client splits it: without a space the key is the line minus its last character, and
-  // the value is the whole line (fetch.ts:115-117).
-  it("a data line without a space is split as the client splits it", () => {
-    const [message] = new SseParser().feed("event: datastar-patch-signals\ndata: signals\n\n");
-    assert.deepEqual(decodeDatastar(message!).args, { signal: "signals" });
-  });
+  for (const c of twinCases<Case>("sse.json")) {
+    it(c.name, () => assert.deepEqual(calls[c.call](c), c.expected, c.name));
+  }
 
   // One long line in small pieces used to be scanned again from its start on every piece.
   it("a long line in small pieces is read in linear time", () => {
@@ -32,39 +45,5 @@ describe("sse parser", () => {
     const millis = performance.now() - started;
     assert.equal(messages[0]!.data[0]!.length, 800_000);
     assert.ok(millis < 2_000, `took ${millis} ms`);
-  });
-
-  it("a CRLF split across two chunks is one line ending", () => {
-    const p = new SseParser();
-    assert.deepEqual(p.feed("data: x\r"), []);
-    assert.deepEqual(data(p.feed("\ndata: y\r\n\r\n")), [["x", "y"]]);
-  });
-
-  it("an empty chunk between the CR and the LF changes nothing", () => {
-    const p = new SseParser();
-    assert.deepEqual(p.feed("data: x\r"), []);
-    assert.deepEqual(p.feed(""), []);
-    assert.deepEqual(p.feed("\n"), []);
-    assert.deepEqual(data(p.feed("\r\n")), [["x"]]);
-  });
-
-  it("a lone CR ends a line, also as the last character of a chunk", () => {
-    const p = new SseParser();
-    assert.deepEqual(data(p.feed("data: x\r\r")), [["x"]]);
-    assert.deepEqual(data(p.feed("data: y\r\r")), [["y"]]);
-    assert.deepEqual(p.feed("data: z\r"), []);
-    assert.deepEqual(data(p.feed("\r")), [["z"]]);
-  });
-
-  it("a data line may start with any word", () => {
-    const p = new SseParser();
-    const messages = p.feed("event: e\ndata: constructor foo\ndata: toString bar\ndata: toString baz\ndata: __proto__ qux\n\n");
-    assert.equal(messages.length, 1);
-    assert.deepEqual(Object.entries(decodeDatastar(messages[0]!).args), [["constructor", "foo"], ["toString", "bar\nbaz"], ["__proto__", "qux"]]);
-  });
-
-  it("a retry that does not fit an int is dropped", () => {
-    const p = new SseParser();
-    assert.deepEqual(p.feed("retry: 2147483647\ndata: a\n\nretry: 2147483648\ndata: b\n\n").map((m) => m.retry), [2147483647, null]);
   });
 });

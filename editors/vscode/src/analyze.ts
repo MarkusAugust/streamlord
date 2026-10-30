@@ -1,6 +1,8 @@
-import { catalog, parseAttributeName, type CallSiteSpec } from "./catalog.ts";
+import { catalog, parseAttributeName, type AttributeSpec, type CallSiteSpec } from "./catalog.ts";
 import { attributeDoc, DOCS, quoteAt, validateExpression, type Fix, type Issue } from "./expression.ts";
 import { PLACEHOLDER, toSource, type Interpolation, type KotlinString } from "./kotlinStrings.ts";
+import { capitalIn, kebab, nameProblem, runsIntoModifiers, spellings } from "./attributeKeys.ts";
+import { signalNameRefusal } from "./signalNames.ts";
 import { asciiLowercase, indexOfAsciiIgnoreCase, keyReading, rawKeyNote, tokenize, validateAttributes, validateMarkup, wireKey, wireKeyReads, type Attribute, type Tag } from "./markup.ts";
 import { findCallSites, isHtmlString, lexKotlin, namedArgText, selectStringArg, stringAt, type CallSite } from "./scanner.ts";
 import { dslHelpers, EXPRESSION_HELPERS, signalNameHyphenSites } from "./signalNameHyphens.ts";
@@ -24,13 +26,21 @@ export const ALL_SITE_NAMES: ReadonlySet<string> = new Set([
 
 const HTML_SITE_NAMES: ReadonlySet<string> = new Set(Object.keys(catalog.callSites.html));
 
-/** Keyed helpers that take a key but no expression, so the catalog's expression sites do not list them. */
-const KEY_ONLY_HELPERS: ReadonlySet<string> = new Set(["dataMatchMedia", "dataPersist"]);
-for (const name of KEY_ONLY_HELPERS) (ALL_SITE_NAMES as Set<string>).add(name);
+// The helpers whose key is an HTML attribute's name, in which the DSL refuses a capital.
+const ATTRIBUTE_NAME_HELPERS: ReadonlySet<string> = new Set(catalog.attributes.filter((a) => a.keyIsAttributeName).flatMap((a) => a.kotlin));
 
-/** Helpers that write the signal name in the value, which the catalog's call sites do not list. */
-const VALUE_NAME_HELPERS: ReadonlySet<string> = new Set(["dataBind", "dataRef", "dataIndicator"]);
+/** Helpers that write the signal name in the value (the catalog's `valueKind` signal), which its call sites do not list. */
+const VALUE_NAME_HELPERS: ReadonlySet<string> = new Set(catalog.attributes.filter((a) => a.valueKind === "signal").flatMap((a) => a.kotlin));
 for (const name of VALUE_NAME_HELPERS) (ALL_SITE_NAMES as Set<string>).add(name);
+
+/** Keyed helpers that take a key but no expression, so the catalog's expression sites do not list them. */
+const KEY_ONLY_HELPERS: ReadonlySet<string> = new Set(
+  catalog.attributes
+    .filter((a) => a.keyed)
+    .flatMap((a) => a.kotlin)
+    .filter((k) => !(k in catalog.callSites.expression) && !VALUE_NAME_HELPERS.has(k)),
+);
+for (const name of KEY_ONLY_HELPERS) (ALL_SITE_NAMES as Set<string>).add(name);
 
 /**
  * The last source lexed, so a hover or completion right after a diagnostics pass does not lex
@@ -327,7 +337,8 @@ function checkExpressionSite(site: CallSite, spec: CallSiteSpec, src: string, hy
   const issues = inStringLiterals(s, interpolationIssues(s, src));
   const text = s.text;
   if (text.includes(PLACEHOLDER) && s.interpolations.some((i) => i.kind === "simple")) return issues;
-  issues.push(...mapIssues(s, src, validateExpression(text, catalog.attributesByKotlin.get(site.name)?.returnsValue, hyphenated)));
+  const attribute = catalog.attributesByKotlin.get(site.name);
+  issues.push(...mapIssues(s, src, validateExpression(text, undefined, hyphenated, attribute)));
   return issues;
 }
 
@@ -391,27 +402,43 @@ function checkHtmlSite(site: CallSite, spec: CallSiteSpec, opts: AnalyzeOptions,
  */
 function checkKeyCaseSite(site: CallSite, src: string): Issue[] {
   const spec = catalog.attributesByKotlin.get(site.name);
+  if (spec && VALUE_NAME_HELPERS.has(site.name)) return valueNameIssues(site, spec.name);
   if (!spec?.keyed || !spec.keyCase) return [];
   // Only helpers whose first parameter is a key: those whose expression is a later argument
   // (dataOn, dataSignals, dataClass, ...) and the two Pro helpers that take a key and no
-  // expression. dataOnClick("expr") passes an expression, never a key, and dataBind, dataRef
-  // and dataIndicator write their name in the value.
+  // expression. dataOnClick("expr") passes an expression, never a key.
   const expr = catalog.callSites.expression[site.name];
+  if (ATTRIBUTE_NAME_HELPERS.has(site.name)) return attributeNameIssues(site, spec.name, src);
   if (expr ? expr.arg === 0 : !KEY_ONLY_HELPERS.has(site.name)) return [];
   const positional = site.args.filter((a) => a.named === null);
-  const key = positional[0]?.string;
+  const namedKey = KEY_PARAMETERS.map((p) => site.args.find((a) => a.named === p)?.string).find((k) => k) ?? null;
+  const key = namedKey ?? positional[0]?.string;
   // With an expression helper, one positional string is the object form (dataClass("{...}")); the key form has two.
-  if (!key || key.interpolations.length > 0 || (expr && positional.length < 2)) return [];
+  const objectForm = !namedKey && expr && positional.length < 2 && !site.args.some((a) => a.named === "expression");
+  if (!key || key.interpolations.length > 0 || objectForm) return [];
   const name = key.text;
   // dataSignals("{fooBar: 1}", ...) is the object form: an expression, not a key.
-  if (!/[A-Z]/.test(name) || /^\s*[{\[]/.test(name)) return [];
-  // A signal name with a hyphen is refused, which signalNameHyphenIssues says.
-  if (spec.keyCase === "camel" && name.includes("-")) return [];
+  if (/^\s*[{\[]/.test(name)) return [];
+  // A key that names a signal goes through Casing.signalName, which refuses more than a key.
+  const signalKey = spec.keyCase === "camel";
+  const refused = signalKey ? signalNameRefusal(name) : nameProblem(name);
+  if (refused) return [refusedKey(spec.name, key, name, refused)];
+  // A hyphen it refuses before the modifiers are joined on, which signalNameHyphenIssues says.
+  if (signalKey && name.includes("-")) return [];
   // `case = Case.X`, a positional `Case.X` (dataClass("name", "x", Case.CAMEL)) or `case = Case.X` in the trailing lambda.
   const named = site.args.find((a) => a.named === "case" || (a.named === null && /^\s*Case\.[A-Z]+\s*$/.test(a.text)))?.text;
-  const explicit = named ? /Case\.([A-Z]+)/.exec(named) : /\bcase\s*=\s*Case\.([A-Z]+)/.exec(trailingLambdaText(site, src));
+  const explicit = named ? /Case\.([A-Z]+)/.exec(named) : /\bcase\s*=\s*Case\.([A-Z]+)/.exec(modifiersLambda(site, src));
   const explicitCase = explicit?.[1]?.toLowerCase() ?? null;
-  const wire = wireKey(name, spec.keyCase, explicitCase);
+  const capital = /[A-Z]/.test(name);
+  const wire = capital ? wireKey(name, spec.keyCase, explicitCase) : name + (explicitCase ? `__case.${explicitCase}` : "");
+  // What the DSL writes after the key, as Casing.withModifiers is handed it: the case, then the rest.
+  if (wire !== null) {
+    // The key itself, not what comes before the first __: in b___case.pascal that is b.
+    const keyPart = capital ? kebab(name) : name;
+    const runs = runsIntoModifiers(keyPart, wire.slice(keyPart.length) + (addsModifiers(site, spec, src) ? "__" : ""));
+    if (runs) return [refusedKey(spec.name, key, name, runs)];
+  }
+  if (!capital) return [];
   if (wire === null) {
     return [{
       start: key.start,
@@ -431,6 +458,83 @@ function checkKeyCaseSite(site: CallSite, src: string): Issue[] {
     code: "key-case-wire",
     link: attributeDoc(spec.name),
   }];
+}
+
+/** A name `dataBind`, `dataRef` or `dataIndicator` writes in the value that `Casing.signalName` refuses, as it does in a key (`signalNameRefusal`). */
+function valueNameIssues(site: CallSite, attribute: string): Issue[] {
+  const name = (site.args.find((a) => a.named === "signal") ?? site.args.find((a) => a.named === "name") ?? site.args.find((a) => a.named === null))?.string;
+  if (!name || name.interpolations.length > 0) return [];
+  const split = signalNameRefusal(name.text);
+  return split ? [refusedKey(attribute, name, name.text, split)] : [];
+}
+
+/** A key the DSL refuses at runtime, as `Casing` refuses it, where a hint would say what it writes. */
+function refusedKey(attribute: string, key: KotlinString, name: string, reason: string): Issue {
+  return { start: key.start, end: key.end, message: `Streamlord refuses "${name}" at runtime: it ${reason}.`, severity: "error", code: "key-refused", link: attributeDoc(attribute) };
+}
+
+/**
+ * A capital in the key of `dataAttr` or `dataAnimate`, which the DSL refuses at runtime: the
+ * browser lowercases an attribute name, so `viewBox` could only reach `view-box`. The fixes are
+ * the spellings HTML may have, lowercased for a name with a hyphen already (`aria-Label`), else
+ * kebab-case or one word, which only the attribute tells apart (`aria-label`, `tabindex`); one
+ * that really has capitals, such as SVG's `viewBox`, the message sends to the object form.
+ */
+function attributeNameIssues(site: CallSite, attribute: string, src: string): Issue[] {
+  const positional = site.args.filter((a) => a.named === null);
+  // The key form takes the name and an expression; one positional string is the object form.
+  const key = (site.args.find((a) => a.named === "name") ?? site.args.find((a) => a.named === "attribute"))?.string ?? (positional.length >= 2 || site.args.some((a) => a.named === "expression") ? positional[0]?.string : null);
+  if (!key) return [];
+  const name = key.text;
+  if (key.interpolations.length > 0 || /^\s*[{\[]/.test(name)) return [];
+  const split = nameProblem(name);
+  if (split) return [refusedKey(attribute, key, name, split)];
+  if (!/[A-Z]/.test(name)) {
+    const runs = runsIntoModifiers(name, addsModifiers(site, catalog.attributesByKotlin.get(site.name)!, src) ? "__" : "");
+    return runs ? [refusedKey(attribute, key, name, runs)] : [];
+  }
+  const reason = capitalIn(name, site.name)!;
+  const plain = src.slice(key.contentStart, key.contentEnd) === name;
+  return [{
+    ...refusedKey(attribute, key, name, reason),
+    code: "attribute-name-case",
+    fixes: plain ? spellings(name).map((t) => ({ title: `Change to ${t}`, start: key.contentStart, end: key.contentEnd, text: t })) : [],
+  }];
+}
+
+// A property set in a lambda of modifiers, `{ once = true }`, and its value; `==` is a comparison and
+// `val once = 1` a variable of the lambda's own.
+const LAMBDA_ASSIGNMENT = /(?<!\b(?:val|var)\s)\b([A-Za-z]+)\s*=(?!=)\s*([^;\n}]*)/g;
+const KOTLIN_STRING = /"(?:[^"\\]|\\.)*"/g;
+
+// The parameter a DSL helper takes its key by, when it is passed by name.
+const KEY_PARAMETERS = ["name", "event", "key", "property", "attribute", "signal"];
+
+/**
+ * Whether the DSL writes a modifier besides `__case` after the key of `site`, as far as its text
+ * shows: `ifMissing` of `dataSignals` and `session` of `dataPersist` set to true, or a modifier of
+ * the attribute set in the lambda of modifiers, to anything but false or null. The same rule as
+ * `addsModifiers` in streamlord-analysis.
+ */
+function addsModifiers(site: CallSite, spec: AttributeSpec, src: string): boolean {
+  const positional = site.args.filter((a) => a.named === null);
+  const on = (parameter: string) => (site.args.find((a) => a.named === parameter) ?? positional[2])?.text.trim() === "true";
+  if (site.name === "dataSignals" && on("ifMissing")) return true;
+  if (site.name === "dataPersist" && on("session")) return true;
+  const names = spec.modifiers.map((m) => m.name.toLowerCase()).filter((n) => n !== "case");
+  for (const m of modifiersLambda(site, src).replace(KOTLIN_STRING, '""').matchAll(LAMBDA_ASSIGNMENT)) {
+    const property = m[1]!.toLowerCase();
+    const value = m[2]!.trim();
+    if (value !== "false" && value !== "null" && names.some((n) => property.startsWith(n))) return true;
+  }
+  return false;
+}
+
+/** The lambda of modifiers of `site`: the trailing one, or one passed as an argument, by name or not. */
+function modifiersLambda(site: CallSite, src: string): string {
+  const trailing = trailingLambdaText(site, src);
+  if (trailing) return trailing;
+  return (site.args.find((a) => a.named === "modifiers") ?? site.args.find((a) => a.named === null && a.text.trimStart().startsWith("{")))?.text ?? "";
 }
 
 /** The text of the trailing lambda `{ ... }` after a call, braces balanced; empty when there is none. */

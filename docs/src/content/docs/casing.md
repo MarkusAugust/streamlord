@@ -29,7 +29,7 @@ div {
     dataSignals("fooBar", "1")             // data-signals:foo-bar            -> $fooBar
     dataOn("widgetLoaded", "x()")          // data-on:widget-loaded__case.camel
     dataClass("isOpen", signal("open"))    // data-class:is-open__case.camel
-    dataAttr("ariaLabel", "'x'")           // data-attr:aria-label
+    dataStyle("backgroundColor", "'red'")  // data-style:background-color
 }
 ```
 
@@ -113,6 +113,12 @@ div {
     dataStyle("--brand", "'#10161f'")
 }
 ```
+
+An attribute's name is written as HTML has it: `dataAttr("aria-label", "'x'")`. `dataAttr` and
+`dataAnimate` refuse a capital in it, because the browser lowercases the key and
+`dataAttr("viewBox", ...)` could only set `view-box`. An attribute that really has capitals, such
+as SVG's `viewBox`, takes the object form, whose keys the client uses as written:
+`dataAttr("{viewBox: '0 0 24 24'}")`.
 
 A custom property keeps its case in CSS, and Datastar cannot set one with capitals: the browser
 lowercases the key, and the object form turns each capital into a hyphen, so

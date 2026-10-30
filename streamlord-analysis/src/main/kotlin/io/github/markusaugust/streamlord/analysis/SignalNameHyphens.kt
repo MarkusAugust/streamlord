@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.domain.AttributeKeys
 import io.github.markusaugust.streamlord.core.domain.SignalNames
 
 /*
@@ -10,7 +11,7 @@ import io.github.markusaugust.streamlord.core.domain.SignalNames
  */
 
 /** The helpers whose first argument is the name of a signal the page declares. */
-internal val NAMING_HELPERS: Set<String> = setOf("dataSignals", "dataComputed", "dataBind", "dataRef", "dataIndicator", "dataMatchMedia")
+internal val NAMING_HELPERS: Set<String> = Catalog.default.namingHelpers
 
 /**
  * The helper whose second argument may be `ifMissing` of the object form, `dataSignals("{...}", true)`,
@@ -22,34 +23,27 @@ private const val KEYED_OR_OBJECT = "dataSignals"
 private const val COMPUTED = "dataComputed"
 
 /** The expression helpers, whose name is JavaScript: a quoted key in brackets may hold a hyphen. */
-internal val EXPRESSION_HELPERS: Set<String> = setOf("signal", "set", "setExpr", "increment", "decrement", "toggle", "not")
+internal val EXPRESSION_HELPERS: Set<String> = Catalog.default.signalNameHelpers.keys
 
 /**
  * The expression helpers whose names other APIs share in the same scope: `set` on a map, or on
  * Ktor's headers inside `headers { }`. One counts only inside the arguments of a DSL call.
  */
-internal val SHARED_NAME_HELPERS: Set<String> = setOf("set", "toggle")
+internal val SHARED_NAME_HELPERS: Set<String> =
+    Catalog.default.signalNameHelpers
+        .filterValues { "shared" in it }
+        .keys
 
 /** The calls whose pairs name signals: on the page, `dataSignals("count" to 0)`, and from the server. */
-private val PAIR_NAMING = setOf("dataSignals", "patchSignals")
+private val PAIR_NAMING =
+    Catalog.default.signalCalls
+        .filterValues { "names" in it }
+        .keys
 
 /** Every call this check reads. */
 internal val SIGNAL_NAMING_CALLS: Set<String> = NAMING_HELPERS + EXPRESSION_HELPERS + PAIR_NAMING + "removeSignals"
 
-private val PAIR_KEY = Regex("""^[\s(]*"""")
 private val OBJECT_START = Regex("""^\s*[{\[]""")
-
-/**
- * [name] with its one hyphenated part in brackets, `form.first-name` as `form['first-name']`, or
- * null when that is no simple rewrite: a name with brackets already, or more than one such part.
- */
-internal fun bracketed(name: String): String? {
-    if ('[' in name || ']' in name) return null
-    val parts = name.split('.')
-    val i = parts.indexOfFirst { '-' in it }
-    if (i < 0 || parts.count { '-' in it } > 1) return null
-    return parts.take(i).joinToString(".") + "['" + parts[i] + "']" + parts.drop(i + 1).joinToString("") { ".$it" }
-}
 
 /** The issues of [site], a call in [SIGNAL_NAMING_CALLS], for each signal name in it that holds a hyphen. */
 internal fun signalNameHyphenIssues(
@@ -69,7 +63,7 @@ internal fun signalNameHyphenIssues(
         if (site.name in SHARED_NAME_HELPERS && !insideDslCall(site.nameStart)) return out
         val s = (first ?: site.named("name"))?.string ?: return out
         SignalNames.withoutReferenceHyphens(s.text)?.let {
-            out += hyphenIssue(s, src, it, bracketed(s.text), SignalNames.referenceAsSubtraction(s.text))
+            out += hyphenIssue(s, src, it, SignalNames.bracketed(s.text), SignalNames.referenceAsSubtraction(s.text))
         }
         return out
     }
@@ -95,7 +89,7 @@ internal fun signalNameHyphenIssues(
                 }
             }
         val s = (site.named("name") ?: site.named("signal"))?.string ?: keyed
-        if (s != null && '-' in s.text) out += hyphenIssue(s, src, SignalNames.withoutHyphens(s.text), null)
+        if (s != null && hyphenIsTheReason(s)) out += hyphenIssue(s, src, SignalNames.withoutHyphens(s.text), null)
     }
 
     if (site.name == "removeSignals") {
@@ -106,18 +100,29 @@ internal fun signalNameHyphenIssues(
     }
 
     if (site.name in PAIR_NAMING) {
-        for (a in positional) {
-            if (a.string != null) continue
-            val quote = PAIR_KEY.find(a.text)?.range?.last ?: continue
-            val s = lex.stringAt(a.start + quote + 1)?.takeIf { it.start == a.start + quote } ?: continue
-            if (!PAIR_AFTER.matchesAt(src, s.end)) continue
-            if ('-' in s.text) out += hyphenIssue(s, src, SignalNames.withoutHyphens(s.text), null)
+        for (s in pairKeys(site, src, lex)) {
+            if (if (site.name ==
+                    "dataSignals"
+                ) {
+                    hyphenIsTheReason(s)
+                } else {
+                    '-' in s.text
+                }
+            ) {
+                out += hyphenIssue(s, src, SignalNames.withoutHyphens(s.text), null)
+            }
         }
     }
     return out
 }
 
-private val PAIR_AFTER = Regex("""\s+to\b""")
+/**
+ * Whether the DSL refuses [name], a name it declares a signal by, for its hyphen: a name it refuses
+ * sooner, for a `__` or a quote, is key-refused's to report ([AttributeKeys.nameProblem]). Of a
+ * templated name only the hyphen is known.
+ */
+private fun hyphenIsTheReason(name: KotlinString): Boolean =
+    '-' in name.text && (name.interpolations.isNotEmpty() || AttributeKeys.nameProblem(name.text) == null)
 
 /** What the second argument of `dataSignals(first, second)` is, as far as its text shows: the overload Kotlin picks. */
 internal enum class SecondArgument { EXPRESSION, IF_MISSING, UNKNOWN }
@@ -126,7 +131,7 @@ internal enum class SecondArgument { EXPRESSION, IF_MISSING, UNKNOWN }
 private val BOOLEAN_OPERATOR = Regex("""==|!=|&&|\|\||\s[<>]=?\s|\s!?(?:in|is)\s""")
 
 /** A call of a helper that writes an expression, which is a String. */
-private val EXPRESSION_CALL = Regex("""^(?:signal|not|set|setExpr|increment|decrement|toggle)\s*\(""")
+private val EXPRESSION_CALL = Regex("""^(?:${EXPRESSION_HELPERS.joinToString("|")})\s*\(""")
 
 /**
  * Whether [arg], the second argument of `dataSignals`, is the expression of the keyed form, a
@@ -251,7 +256,8 @@ private fun collectHyphenSites(
             (enclosed && !openBraceBetween(text, lex, 0, at))
     }
     for (site in findCallSites(text, SIGNAL_NAMING_CALLS, lex)) {
-        val issues = signalNameHyphenIssues(site, text, lex, helpers, inside)
+        // A string template holds DSL calls too, so the pairs of one are read here as well.
+        val issues = signalNameHyphenIssues(site, text, lex, helpers, inside) + dataSignalsPairIssues(site, text, lex)
         if (issues.isNotEmpty()) out += site.shifted(shift) to issues.map { it.shifted(shift) }
     }
     if (depth >= 4) return

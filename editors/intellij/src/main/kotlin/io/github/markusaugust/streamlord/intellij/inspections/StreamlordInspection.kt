@@ -113,8 +113,9 @@ class PreferredReplaceTextFix(
 class KotlinInterpolationInspection : StreamlordInspection(setOf("kotlin-interpolation"))
 
 /**
- * Datastar expression syntax, unknown actions, Pro actions, kebab-case signals, and what the
- * client's own rewrite of an expression does that JavaScript would not.
+ * Datastar expression syntax, unknown actions, Pro actions, kebab-case signals, what the client's
+ * own rewrite of an expression does that JavaScript would not, and `patch` where the attribute
+ * does not hand it over.
  */
 class DatastarExpressionInspection :
     StreamlordInspection(
@@ -128,6 +129,7 @@ class DatastarExpressionInspection :
             "literal-rewritten",
             "signal-not-read",
             "statement-split",
+            "scope-name",
         ),
     )
 
@@ -155,6 +157,7 @@ class DatastarAttributeInspection :
             "signal-name",
             "computed-value",
             "filter-pattern",
+            "signal-null",
         ),
     )
 
@@ -178,8 +181,12 @@ class UnknownSignalInspection : StreamlordInspection(setOf("unknown-signal")) {
     }
 }
 
-/** Capitals in keys, which the browser lowercases, what the DSL writes on the wire, and a hyphen in a signal name. */
-class DatastarKeyCaseInspection : StreamlordInspection(setOf("key-case", "key-case-wire", "signal-name-hyphen"))
+/**
+ * Capitals in keys, which the browser lowercases, what the DSL writes on the wire, a key the DSL
+ * refuses, a hyphen in a signal name, and a capital in the name of an attribute.
+ */
+class DatastarKeyCaseInspection :
+    StreamlordInspection(setOf("key-case", "key-case-wire", "signal-name-hyphen", "attribute-name-case", "key-refused"))
 
 /** The markup of a patch: complete elements, ids, selectors and modes, scripts. */
 class StreamlordMarkupInspection :
@@ -211,6 +218,7 @@ object InspectionCodes {
                 "literal-rewritten",
                 "signal-not-read",
                 "statement-split",
+                "scope-name",
             ) +
             setOf(
                 "unknown-attribute",
@@ -230,8 +238,9 @@ object InspectionCodes {
                 "signal-name",
                 "computed-value",
                 "filter-pattern",
+                "signal-null",
             ) +
-            setOf("key-case", "key-case-wire", "signal-name-hyphen") +
+            setOf("key-case", "key-case-wire", "signal-name-hyphen", "attribute-name-case", "key-refused") +
             setOf(
                 "missing-id",
                 "mode-needs-selector",

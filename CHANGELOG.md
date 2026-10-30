@@ -6,6 +6,90 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `DatastarAttributes.value(value)`: a value as kotlinx.html must be handed it for the browser to
+  read it back exactly, for an attribute you write yourself (see Fixed).
+  `DatastarAttributes.expression(expression)` does the same for an expression, after the checks
+  every DSL helper makes, which the free and the Pro helpers now share.
+
+### Changed
+
+- `dataAttr` and Pro's `dataAnimate` take an attribute's name as HTML has it and refuse a capital
+  in it: the browser lowercases the key, so `dataAttr("viewBox", …)` set `view-box`, and
+  `dataAttr("ariaLabel", …)` relied on a guess that it meant `aria-label`. Write
+  `dataAttr("aria-label", …)`, and the object form, `dataAttr("{viewBox: …}")`, for an attribute
+  that really has capitals. The editors flag the call with the kebab-case fix.
+- `AttributeKeys`, `SignalNames` and `rejectDeclaredLengthAbove` in streamlord-core are marked
+  `@InternalStreamlordApi`, a new opt-in for the API Streamlord's modules share among themselves:
+  the client's rules that the DSL, the adapters and the analysis each read from one place. Code
+  outside Streamlord that calls them compiles only with `@OptIn(InternalStreamlordApi::class)`,
+  and they may change in any release.
+- The catalog reaches core and the analysis as code, generated from `catalog/datastar-1.0.4.json`
+  when they build. `ElementsGuard`'s attribute sets, its default prefixes, the attributes
+  `interpolate` refuses a hole in and `DatastarAttributes.prefix` come from it, where core listed
+  them by hand and a test compared the two. The analysis no longer reads the catalog as a resource,
+  so a native image that runs it needs no resource configuration for it.
+
+### Fixed
+
+- The editors flag, as `key-refused`, every key and signal name the DSL refuses at runtime: one
+  holding `__`, where the client starts reading modifiers, whitespace, a quote or a character that
+  ends an attribute; one ending in `_` before any modifier the call adds, its `__case`,
+  `ifMissing`, `session` or the modifiers of its lambda; and a signal name no `$` reaches, such as
+  `a:b`, `über` or `constructor`, in a key, a pair or the name of `dataBind`, `dataRef` or
+  `dataIndicator`. The hint used to say what such a key writes. The reasons come from
+  `AttributeKeys.nameProblem` and `SignalNames.nameProblem` in streamlord-core, which the DSL
+  throws with.
+- `JsLiteral`, which writes the values of `set`, `setAll` and a fetch's `payload` and `headers`,
+  refuses what `JsonWriter` refuses: a map that holds itself overflowed the stack, and `1` and
+  `"1"` as keys of one map were both written as `'1'`.
+  It now walks a value with `JsonWriter` itself, in a JavaScript style, so the two cannot part.
+  Half of a surrogate pair in a string is written `\uXXXX`, as `JsonWriter` writes it, where it
+  reached the page as U+FFFD.
+- `FetchOptions.retry` says what Datastar 1.0.4 does with `never`: a request that never reaches
+  the server is retried all the same, as with `auto`, up to `retryMaxCount`. The DSL fixture holds
+  it.
+- The editors warn, as `scope-name`, on `patch` in an expression whose attribute does not hand it
+  over, such as `data-text="patch.a"`: only `data-on-signal-patch` declares `patch`, so elsewhere
+  it throws a ReferenceError. (`evt` is declared in every expression, and is undefined outside
+  `data-on`.) The catalog says per attribute which names its plugin hands an expression,
+  `argNames`, held to the client's plugins.
+- `dataSignals("selected" to null)` declared nothing, without a word: Datastar's client holds no
+  null, so the null removes the key, and an expression that reads the signal gets `""`, as it does
+  for a null in a list. The editors warn on such a pair as `signal-null`, and the signals page says
+  what it means for a form whose field is `null`.
+- A `\` followed by `&` in an expression lost its backslash: kotlinx.html writes that pair as a
+  bare `&`, so `dataText("'\\&amp;'")` showed `&` where it meant `&amp;`, and `'\\\\&'` lost
+  one of its backslashes. Every expression the DSL writes now reaches the browser as written.
+- `LiveDatastarStream.open` puts the `datastar` parameter where the client's `URLSearchParams.set`
+  puts it, in place of one the URI carries rather than at the end, reads `data%73tar` as that
+  parameter as a form does, and sends a lone surrogate as U+FFFD.
+  It and the editors' request inspector send the request with `ClientRequest` in streamlord-core;
+  `Requests.ACCEPT` in streamlord-analysis is gone, as `DatastarProtocol.ACCEPT` says the same.
+- `ElementsGuard` and `interpolate` decode character references as the HTML tokenizer does, with the
+  decoder the analysis uses: `&nbsp;` is a no-break space, `&#0;`, a surrogate and a number past
+  U+10FFFF are U+FFFD, `&#128;` to `&#159;` are windows-1252, and `&amp`, `&lt`, `&gt`, `&quot` and
+  `&nbsp` decode without their semicolon. `data-text="&nbsp;"` is refused now, as `&#160;` was.
+  The typo rule for `data-*` names is one function, `ElementsGuard.nearAttribute`, which the
+  analysis calls.
+
+### Security
+
+- `interpolate` read an end tag with Unicode case folding, where the browser folds A to Z alone:
+  in `<script>x</ſcript>%s</script>` (U+017F, a long s) it took the value for text after the
+  script, and the browser ran it as part of the script. It is refused now, as every value inside a
+  script is. `<ſcript>` is no script either, and its content is text. Only a format that holds such
+  a tag itself was affected; a value cannot add one.
+- Inside an `<svg>` or a `<math>`, `interpolate` and `ElementsGuard` read `<![CDATA[` as HTML does,
+  as a bogus comment the first `>` ends, where the browser reads a CDATA section that only `]]>`
+  ends: in `<svg><![CDATA[ > <x a="]]><img onerror='%s'>">` the img is an element of the page,
+  and its handler held the value. Both now read the markup that way as well, and take the
+  strictest of the readings: inside an svg's `title` or `desc`, or after a tag that ends the svg,
+  the browser is back in HTML and reads a bogus comment again, so neither reading is right
+  everywhere. An `</svg>` inside a CDATA section no longer ends the part `ElementsGuard` reads as
+  svg either.
+
 ## [0.15.0] - 2026-10-28
 
 ### Added

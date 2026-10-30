@@ -7,15 +7,11 @@
 import { build } from "esbuild";
 import { existsSync, mkdirSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { ascii, conformance, release, version } from "./common.mjs";
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const referenceRoot = path.resolve(here, "../../datastar-reference");
-const versions = readdirSync(referenceRoot).filter((d) => d.startsWith("datastar-"));
-if (versions.length !== 1) throw new Error(`expected one datastar-<version> directory under ${referenceRoot}, found ${versions.length}`);
-const version = versions[0].slice("datastar-".length);
-const reference = path.join(referenceRoot, versions[0], "library", "src");
-const out = path.resolve(here, "../client");
+// The client's source, which this generator compiles from.
+const reference = path.join(release, "library", "src");
+const out = path.join(conformance, "client");
 
 // The aliases of the reference's tsconfig.json, less the ones this generator never follows.
 const aliases = {
@@ -113,6 +109,9 @@ const casingKeys = [
   "foo_bar-baz", "Foo-Bar", "FOO", "foo", "f", "F", "", "foo bar", "foo\tbar", "is-open", "widget-loaded",
   "aria-label", "data-x", "my-u-r-l", "fooBAR", "foo-b-a-r", "fooBarBaz", "foo-bar-baz", "fooBar-baz", "f-o-o", "constructor", "has-own-property",
   "a-b", "a--b", "a-b-", "-a-b", "a.-b", "a-.b", "é-b", "foo-é", "b_", "x-1-y", "v2-api", "api-v2",
+  // A character past the BMP, which a Java . takes whole and a JavaScript one half of, and U+0085,
+  // which only a JavaScript . takes.
+  "a-\u{10428}", "a-\u0085b",
 ];
 
 const casingTable = {
@@ -153,6 +152,7 @@ const rawKeys = [
   "bind:value", "bind:form.user.name", "attr:aria-label", "class:is-open", "class:is-open__case.camel",
   "signals:my__key", "signals:my__key__ifmissing", "_-proto-___case.snake", "signals:constructor",
   "signals:to-string__case.camel", "signals:foo-bar", "signals:foo-bar__case.kebab", "signals:fooBar",
+  "signals:my-key__case.snake__case.camel",
   "indicator:loading", "ref:my-element", "computed:total", "match-media:is-mobile", "json-signals__terse",
   "init", "effect", "show", "text", "on:click__delay.200ms", "on:click__throttle.1s.noleading.trailing",
   "on:click__debounce.1.5s", "on:click__debounce.leading.500ms", "on:click__debounce.500",
@@ -207,12 +207,14 @@ const expressions = [
 ];
 
 /** The text of the function body `genRx` compiles from [value]: `Function` is replaced to record it. */
-const compiledSource = (value, returnsValue) => {
+const compiledSource = (value, returnsValue, argNames) => {
   const original = globalThis.Function;
   let source = null;
+  let parameters = null;
   let compiles = null;
   globalThis.Function = (...args) => {
     source = args[args.length - 1];
+    parameters = args.slice(0, -1);
     try {
       original(...args);
       compiles = true;
@@ -222,18 +224,23 @@ const compiledSource = (value, returnsValue) => {
     return () => undefined;
   };
   try {
-    client.genRx(value, { returnsValue_: returnsValue });
+    client.genRx(value, { returnsValue_: returnsValue, argNames_: argNames });
   } finally {
     globalThis.Function = original;
   }
   if (source === null) throw new Error(`genRx never compiled ${JSON.stringify(value)}`);
-  return { source, compiles };
+  return { source, parameters, compiles };
 };
+
+// The names every expression is compiled with, and where a plugin's argNames go.
+const parameters = compiledSource("1", false).parameters;
+const parametersWithArgNames = { argNames: ["patch"], parameters: compiledSource("1", false, ["patch"]).parameters };
 
 const expressionCases = [];
 for (const expression of expressions) {
   for (const returnsValue of [false, true]) {
-    const { source, compiles } = compiledSource(expression, returnsValue);
+    const { source, parameters: compiledWith, compiles } = compiledSource(expression, returnsValue);
+    if (JSON.stringify(compiledWith) !== JSON.stringify(parameters)) throw new Error(`genRx compiled ${JSON.stringify(expression)} with other parameters`);
     expressionCases.push({ expression, returnsValue, js: source, compiles });
   }
 }
@@ -427,6 +434,54 @@ const isStringTrue = [
   { value: ["true"], isStringTrue: client.isStringTrue(["true"]) },
 ];
 
+// -------------------------------------------------------------------- plugins.json
+
+// What each attribute plugin of the free client declares when it registers: the plugins under
+// plugins/attributes, bundled with an `@engine` whose `attribute` records its argument instead of
+// queueing it. Everything else the plugins import is the reference's own.
+const pluginDir = path.join(reference, "plugins", "attributes");
+const recordingEngine = {
+  name: "recording-engine",
+  setup(build) {
+    build.onResolve({ filter: /^@engine$/ }, (args) =>
+      path.dirname(args.importer) === pluginDir ? { path: "recording-engine", namespace: "recording" } : undefined,
+    );
+    build.onLoad({ filter: /.*/, namespace: "recording" }, () => ({
+      contents:
+        `export * from ${JSON.stringify(path.join(reference, aliases["@engine"]))};\n` +
+        "export const attribute = (plugin) => globalThis.registeredPlugins.push(plugin);\n",
+      loader: "ts",
+      resolveDir: reference,
+    }));
+  },
+};
+globalThis.registeredPlugins = [];
+for (const name of ["HTMLSelectElement", "HTMLTextAreaElement", "HTMLElement", "HTMLFormElement", "HTMLButtonElement"]) {
+  globalThis[name] ??= class {};
+}
+const pluginFiles = readdirSync(pluginDir).filter((f) => f.endsWith(".ts")).sort();
+const pluginBundle = await build({
+  stdin: { contents: pluginFiles.map((f) => `import "./plugins/attributes/${f}";`).join("\n"), resolveDir: reference, loader: "ts" },
+  bundle: true,
+  write: false,
+  format: "esm",
+  platform: "neutral",
+  target: "es2022",
+  define: { ALIAS: "null" },
+  plugins: [recordingEngine, referenceOnly],
+  logLevel: "silent",
+});
+await import(`data:text/javascript;base64,${Buffer.from(pluginBundle.outputFiles[0].text).toString("base64")}`);
+const plugins = globalThis.registeredPlugins
+  .map(({ name, requirement, returnsValue, argNames }) => ({
+    name,
+    requirement: requirement ?? null,
+    returnsValue: returnsValue ?? false,
+    argNames: argNames ?? [],
+  }))
+  .sort((a, b) => a.name.localeCompare(b.name));
+if (plugins.length !== pluginFiles.length) throw new Error(`${pluginFiles.length} plugin files registered ${plugins.length} plugins`);
+
 // ------------------------------------------------------------------- writing
 
 const files = {
@@ -447,7 +502,10 @@ const files = {
     $comment:
       "The function body genRx (engine/engine.ts of the Datastar " + version + " client) hands to compileExpression for each expression, " +
       "with returnsValue false and true: Function was replaced to record its last argument. compiles says whether the real " +
-      "Function took that body.",
+      "Function took that body. parameters are the names before the body, the same for every expression; " +
+      "parametersWithArgNames those for a plugin that declares argNames.",
+    parameters,
+    parametersWithArgNames,
     cases: { rewrites: expressionCases },
   },
   "tags.json": {
@@ -466,11 +524,18 @@ const files = {
       "or a function on it gained, removed again afterwards.",
     cases: { pathToObj, filtered: signalStore, isStringTrue },
   },
+  "plugins.json": {
+    $comment:
+      "The argument each attribute plugin under plugins/attributes of the Datastar " + version + " client passes to attribute() " +
+      "from engine/engine.ts, recorded by bundling the plugins with an @engine whose attribute() records it: requirement, " +
+      "returnsValue and argNames as the plugin declares them, null, false and [] where it declares none.",
+    cases: plugins,
+  },
 };
 
 mkdirSync(out, { recursive: true });
 for (const [name, content] of Object.entries(files)) {
-  writeFileSync(path.join(out, name), `${JSON.stringify(content, null, 2)}\n`);
+  writeFileSync(path.join(out, name), ascii(`${JSON.stringify(content, null, 2)}\n`));
   const count = Array.isArray(content.cases) ? content.cases.length : Object.values(content.cases).map((c) => c.length).join("+");
   console.log(`${name}: ${count} cases`);
 }

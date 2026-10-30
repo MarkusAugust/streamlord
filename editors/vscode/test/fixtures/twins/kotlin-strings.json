@@ -1,0 +1,19 @@
+{
+  "$comment": "Reading Kotlin source: the string literal at an offset (text, interpolations as [kind, text]), the call sites of the named calls (sites: the text of each argument that is one string literal, else null) and the issues of the file (codes, starts). Read by KotlinStringsTest.kt and kotlinStrings.test.ts.",
+  "cases": [
+    {"name":"points an end-of-input error in a raw string at its closing quotes","src":"dataOnClick(\"\"\"@get('/x') +\"\"\")","codes":["expression-syntax"],"starts":[27]},
+    {"name":"points an end-of-input error in a raw string at its closing quotes, after a quote","src":"dataOnClick(\"\"\"\"x\" +\"\"\")","starts":[20],"codes":["expression-syntax"]},
+    {"name":"does not end a template at a brace in a character literal (1)","src":"\"${if (c == '}') 1 else 2} +\"","at":0,"text":"__kt__ +","interpolations":[["braced","if (c == '}') 1 else 2"]]},
+    {"name":"does not end a template at a brace in a character literal (2)","src":"\"${x.map { '{' }} +\"","at":0,"text":"__kt__ +","interpolations":[["braced","x.map { '{' }"]]},
+    {"name":"reads a template whose name is not ascii","src":"\"$\u00e5r + 1\"","at":0,"text":"__kt__ + 1","interpolations":[["simple","\u00e5r"]]},
+    {"name":"takes a literal followed by trimIndent or trimMargin as the string argument (1)","src":"dataOnClick(\"\"\"$count++\"\"\".trimIndent())","calls":["dataOnClick","dataText"],"sites":[["__kt__++"]],"codes":["kotlin-interpolation"]},
+    {"name":"takes a literal followed by trimIndent or trimMargin as the string argument (2)","src":"dataText(\"\"\"\n  |$a\n\"\"\".trimMargin(\"|\"))","calls":["dataOnClick","dataText"],"sites":[["\n  |__kt__\n"]]},
+    {"name":"takes a literal followed by trimIndent or trimMargin as the string argument (3)","src":"dataOnClick(\"x\".trim())","calls":["dataOnClick","dataText"],"sites":[[null]]},
+    {"name":"takes a literal followed by trimIndent or trimMargin as the string argument (4)","src":"dataOnClick(\"x\" + y)","calls":["dataOnClick","dataText"],"sites":[[null]]},
+    {"name":"takes a literal followed by trimIndent or trimMargin as the string argument (5)","src":"patchElements(\"\"\"<li>x</li>\"\"\".trimIndent(), mode = ElementPatchMode.APPEND)","codes":["mode-needs-selector"]},
+    {"name":"takes a literal with a comment before or after it as the string argument (1)","src":"dataOnClick(/* why */ \"x\")","calls":["dataOnClick","dataText"],"sites":[["x"]]},
+    {"name":"takes a literal with a comment before or after it as the string argument (2)","src":"dataOnClick(\n  // why\n  \"x\",\n)","calls":["dataOnClick","dataText"],"sites":[["x"]]},
+    {"name":"takes a literal with a comment before or after it as the string argument (3)","src":"dataText(\"x\" /* after */)","calls":["dataOnClick","dataText"],"sites":[["x"]]},
+    {"name":"takes a literal with a comment before or after it as the string argument (4)","src":"dataText(\n  \"x\",\n  // trailing\n)","calls":["dataOnClick","dataText"],"sites":[["x"]]}
+  ]
+}

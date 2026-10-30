@@ -14,7 +14,6 @@ import kotlin.test.assertTrue
  */
 class CorpusTest {
     private val analyzer = Analyzer()
-    private val opts = AnalyzeOptions("data-", true)
     private val files = File("../editors/vscode/test/fixtures/corpus").listFiles { f -> f.extension == "json" }!!.sortedBy { it.name }
 
     private fun run(
@@ -22,13 +21,16 @@ class CorpusTest {
         case: JsonObject,
     ): List<Issue> {
         val source = case.string("source")!!
+        // A case may give the attribute prefix of an aliased bundle; the default bundle's otherwise.
+        val prefix = case.string("prefix") ?: "data-"
+        val opts = AnalyzeOptions(prefix, true)
         return when (kind) {
             "expression" -> {
                 analyzer.validateExpression(source)
             }
 
             "markup" -> {
-                analyzer.validateMarkup(source, MarkupOptions(case.boolean("requireIds") ?: false, "data-", true))
+                analyzer.validateMarkup(source, MarkupOptions(case.boolean("requireIds") ?: false, prefix, true))
             }
 
             "html" -> {

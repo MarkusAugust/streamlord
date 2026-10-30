@@ -1,6 +1,8 @@
 package io.github.markusaugust.streamlord.core.domain
 
 import io.github.markusaugust.streamlord.core.DatastarEventValidationException
+import io.github.markusaugust.streamlord.core.InternalStreamlordApi
+import io.github.markusaugust.streamlord.core.client.clientRewrite
 
 /**
  * The signal names Datastar's client cannot hold, measured against its 1.0.4 store.
@@ -22,9 +24,10 @@ import io.github.markusaugust.streamlord.core.DatastarEventValidationException
  * is the page's own doing. A name written in code, a path such as `data-signals:a.b` takes, may
  * carry an object under it at any part, so none of its parts may be one of these.
  */
+@InternalStreamlordApi
 public object SignalNames {
     /** The properties of `Object.prototype` in a browser: every object already has them. */
-    internal val PROTOTYPE_NAMES =
+    public val PROTOTYPE_NAMES: Set<String> =
         setOf(
             "__proto__",
             "constructor",
@@ -66,6 +69,27 @@ public object SignalNames {
                 null
             }
         }
+
+    // What Datastar's client finds behind a `$`, less the hyphen a signal name may not hold: ASCII
+    // word characters, in parts joined by `.`.
+    private val SIGNAL_NAME = Regex("[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)*")
+
+    /**
+     * Why [name] cannot declare a signal in code, or `null` when it can: what
+     * [AttributeKeys.nameProblem] refuses, a hyphen ([hyphenProblem]), a part the client cannot hold
+     * ([pathProblem]), or anything but ASCII letters, digits and `_` in parts joined by `.`, since
+     * Datastar's client reads nothing else after a `$`: `$über` or `$a:b` would reach no signal.
+     * The DSL throws with this reason and the analysis reports it.
+     */
+    public fun nameProblem(name: String): String? =
+        AttributeKeys.nameProblem(name)
+            ?: hyphenProblem(name)
+            ?: pathProblem(name)
+            ?: if (SIGNAL_NAME.matches(name)) {
+                null
+            } else {
+                "is not a name a \$ reference reaches: Datastar reads ASCII letters, digits and _, in parts joined by dots"
+            }
 
     /**
      * Why [name] cannot name a signal in code, or `null` when it can: it has a hyphen.
@@ -150,9 +174,10 @@ public object SignalNames {
     // template literal without `${`, so their text is in strings; the text of one with `${` it reads
     // as code, which JavaScript does not, so the scan steps over that text itself.
     private fun wrongHyphens(text: String): Set<Int> {
-        val read = clientRewritten(text)
+        val read = clientRewrite(text)
+        val references = read.rewrites.filter { it.signal }
         val wrong = HashSet<Int>()
-        for (r in read.references) {
+        for (r in references) {
             for (i in r.start until r.end) if (text[i] == '-') wrong += i
         }
         // -1 for the text of a template literal, n for the code of a `${`, n braces deep.
@@ -180,8 +205,8 @@ public object SignalNames {
                 continue
             }
             val skip =
-                read.strings.firstOrNull { i in it }
-                    ?: read.references.firstOrNull { i >= it.start && i < it.end }?.let { it.start until it.end }
+                read.runs.firstOrNull { i in it }
+                    ?: references.firstOrNull { i >= it.start && i < it.end }?.let { it.start until it.end }
             if (skip != null) {
                 i = skip.last + 1
                 continue
@@ -283,4 +308,16 @@ public object SignalNames {
 
     private fun copy(map: Map<*, *>): LinkedHashMap<String, Any?> =
         LinkedHashMap<String, Any?>().also { out -> map.forEach { (k, v) -> out[k.toString()] = v } }
+
+    /**
+     * [name] with its one hyphenated part in brackets, `form.first-name` as `form['first-name']`,
+     * or null when that is no simple rewrite: a name with brackets already, or more than one such part.
+     */
+    public fun bracketed(name: String): String? {
+        if ('[' in name || ']' in name) return null
+        val parts = name.split('.')
+        val i = parts.indexOfFirst { '-' in it }
+        if (i < 0 || parts.count { '-' in it } > 1) return null
+        return parts.take(i).joinToString(".") + "['" + parts[i] + "']" + parts.drop(i + 1).joinToString("") { ".$it" }
+    }
 }

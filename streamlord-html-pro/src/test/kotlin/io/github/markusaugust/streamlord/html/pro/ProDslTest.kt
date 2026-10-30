@@ -10,6 +10,7 @@ import kotlinx.html.input
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.microseconds
 import kotlin.time.Duration.Companion.milliseconds
@@ -59,7 +60,7 @@ class ProDslTest {
             elements {
                 div {
                     dataAnimate("{r: String(${'$'}size * 2), cx: String(${'$'}x)}")
-                    dataAnimate("strokeWidth", signal("w")) {
+                    dataAnimate("stroke-width", signal("w")) {
                         duration = 250.milliseconds
                         delay = 50.milliseconds
                         ease = Easing.IN_OUT_CUBIC
@@ -73,6 +74,13 @@ class ProDslTest {
             """<div data-animate__ease.outbounce="{r: '1'}"></div>""",
             elements { div { dataAnimate("{r: '1'}") { ease = Easing.OUT_BOUNCE } } },
         )
+    }
+
+    @Test
+    fun `an animated attribute with a capital is refused`() {
+        val e = assertFailsWith<InvalidSignalNameException> { elements { div { dataAnimate("strokeWidth", "${'$'}w") } } }
+        assertTrue("""write it as HTML has it, stroke-width or strokewidth""" in e.message!!, e.message)
+        assertTrue("""dataAnimate("{strokeWidth: ...}")""" in e.message!!, e.message)
     }
 
     @Test

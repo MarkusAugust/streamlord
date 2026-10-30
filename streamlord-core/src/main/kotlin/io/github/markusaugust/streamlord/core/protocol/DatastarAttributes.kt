@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.core.protocol
 
+import io.github.markusaugust.streamlord.core.catalog.CatalogNames
+
 /**
  * The prefix every Datastar attribute starts with.
  *
@@ -12,7 +14,7 @@ package io.github.markusaugust.streamlord.core.protocol
 public object DatastarAttributes {
     /** `"data-"` for the standard bundle, `"data-star-"` for the aliased one. */
     @Volatile
-    public var prefix: String = "data-"
+    public var prefix: String = CatalogNames.PREFIX
 
     /** The full attribute name for a Datastar attribute such as `on:click__once`. */
     public fun name(suffix: String): String = prefix + suffix

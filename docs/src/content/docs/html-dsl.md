@@ -95,6 +95,21 @@ DatastarAttributes.prefix = "data-star-"
 It reaches everything, including the `data-effect="el.remove()"` the core writes on a script
 event.
 
+## An attribute without a helper
+
+A Datastar plugin of your own, or an attribute the DSL has no helper for, is written with the two
+calls the helpers use: `DatastarAttributes.name` puts the prefix in front, and
+`DatastarAttributes.expression` checks the expression and hands it to kotlinx.html so the browser
+reads it back as written.
+
+```kotlin sample=html
+div {
+    attributes[DatastarAttributes.name("tooltip")] = DatastarAttributes.expression("\$hint")
+}
+```
+
+That renders `data-tooltip="$hint"`, or `data-star-tooltip` with the aliased prefix.
+
 ## What this page does not cover
 
 Datastar Rocket, the separate `datastar-rocket.js` bundle with `data-if`, `data-for` and its

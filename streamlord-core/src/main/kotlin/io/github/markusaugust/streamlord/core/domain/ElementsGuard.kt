@@ -1,5 +1,12 @@
 package io.github.markusaugust.streamlord.core.domain
 
+import io.github.markusaugust.streamlord.core.InternalStreamlordApi
+import io.github.markusaugust.streamlord.core.catalog.CatalogNames
+import io.github.markusaugust.streamlord.core.client.asciiLowercase
+import io.github.markusaugust.streamlord.core.client.decodeEntities
+import io.github.markusaugust.streamlord.core.client.isHtmlSpace
+import io.github.markusaugust.streamlord.core.client.regionMatchesAsciiIgnoreCase
+
 /**
  * The `$` trap, hunted in HTML written as a string.
  *
@@ -21,32 +28,10 @@ package io.github.markusaugust.streamlord.core.domain
 public object ElementsGuard {
     /**
      * The Datastar attributes (plugin names without prefix, key or modifiers) whose value is an
-     * expression. Mirrors `valueKind: "expression"` in the catalog, and the catalog test holds
-     * the two to the same list. Pro attributes are included because their names are public.
+     * expression: `valueKind: "expression"` in the catalog. Pro attributes are included because
+     * their names are public.
      */
-    public val expressionAttributes: Set<String> =
-        setOf(
-            "attr",
-            "class",
-            "computed",
-            "effect",
-            "init",
-            "on",
-            "on-intersect",
-            "on-interval",
-            "on-signal-patch",
-            "show",
-            "signals",
-            "style",
-            "text",
-            "animate",
-            "custom-validity",
-            "match-media",
-            "on-raf",
-            "on-resize",
-            "replace-url",
-            "view-transition",
-        )
+    public val expressionAttributes: Set<String> = CatalogNames.expressionAttributes
 
     /**
      * The attributes whose value Datastar evaluates as JavaScript: [expressionAttributes], and the
@@ -54,8 +39,7 @@ public object ElementsGuard {
      * runs as code (`jsStrToObject` in text.ts). The value of every other attribute is read as it
      * stands: a signal name, a nonce, a list of attribute names.
      */
-    public val evaluatedAttributes: Set<String> =
-        expressionAttributes + setOf("json-signals", "on-signal-patch-filter", "persist", "query-string")
+    public val evaluatedAttributes: Set<String> = expressionAttributes + CatalogNames.filterAttributes
 
     /**
      * Every Datastar attribute name, free and Pro, as the catalog lists them. A `data-*` name
@@ -63,108 +47,14 @@ public object ElementsGuard {
      * browser would ignore without a word: `data-onn:click`, `data-signal:x`, `data-effekt`.
      * Anything further away is taken to be your own attribute and left alone.
      */
-    public val attributes: Set<String> =
-        expressionAttributes +
-            setOf(
-                "bind",
-                "ignore",
-                "ignore-morph",
-                "indicator",
-                "json-signals",
-                "on-signal-patch-filter",
-                "preserve-attr",
-                "ref",
-                "nonce",
-                "persist",
-                "query-string",
-                "scroll-into-view",
-            )
+    public val attributes: Set<String> = CatalogNames.attributes
 
     /**
      * The attribute prefixes recognised unless told otherwise, longest first: `data-` for the
      * standard bundle and `data-star-` for the aliased one. A bundle built with another alias
      * passes its own list to [check], or sets `attributePrefixes` on `Streamlord`.
      */
-    public val defaultPrefixes: List<String> = listOf("data-star-", "data-")
-
-    // A numeric reference decodes with or without its semicolon. A named one needs it, except the
-    // legacy few the standard lets go without, which in an attribute decode unless a letter, a
-    // digit or = follows: &lt 1 is < 1 and &amp&amp is &&.
-    private val ENTITY =
-        Regex("&(?:([A-Za-z]+);|(amp|AMP|lt|LT|gt|GT|quot|QUOT)(?![A-Za-z0-9=;])|#(\\d+);?|#[xX]([0-9a-fA-F]+);?)")
-
-    /** The named references for the ASCII a Datastar expression is made of (the HTML standard's table). */
-    private val NAMED_ENTITIES =
-        mapOf(
-            "amp" to "&",
-            "AMP" to "&",
-            "lt" to "<",
-            "LT" to "<",
-            "gt" to ">",
-            "GT" to ">",
-            "quot" to "\"",
-            "QUOT" to "\"",
-            "apos" to "'",
-            "plus" to "+",
-            "equals" to "=",
-            "excl" to "!",
-            "quest" to "?",
-            "colon" to ":",
-            "semi" to ";",
-            "comma" to ",",
-            "period" to ".",
-            "lpar" to "(",
-            "rpar" to ")",
-            "lsqb" to "[",
-            "lbrack" to "[",
-            "rsqb" to "]",
-            "rbrack" to "]",
-            "lcub" to "{",
-            "lbrace" to "{",
-            "rcub" to "}",
-            "rbrace" to "}",
-            "verbar" to "|",
-            "vert" to "|",
-            "VerticalLine" to "|",
-            "grave" to "`",
-            "DiacriticalGrave" to "`",
-            "sol" to "/",
-            "bsol" to "\\",
-            "ast" to "*",
-            "midast" to "*",
-            "percnt" to "%",
-            "Hat" to "^",
-            "dollar" to "$",
-            "num" to "#",
-            "commat" to "@",
-            "lowbar" to "_",
-            "UnderBar" to "_",
-            "Tab" to "\t",
-            "NewLine" to "\n",
-        )
-
-    /**
-     * kotlinx.html and every template engine escape attribute values, some with numeric entities
-     * (`&#x27;`, `&#61;`); the expression is what the browser decodes. One pass, as the browser
-     * does it, so `&amp;lt;` is `&lt;` and not `<`.
-     */
-    private fun decode(value: String): String =
-        if ('&' !in value) {
-            value
-        } else {
-            ENTITY.replace(value) { m ->
-                val (named, legacy, decimal, hex) = m.destructured
-                when {
-                    named.isNotEmpty() -> NAMED_ENTITIES[named] ?: m.value
-                    legacy.isNotEmpty() -> NAMED_ENTITIES.getValue(legacy)
-                    decimal.isNotEmpty() -> codePoint(decimal.toIntOrNull()) ?: m.value
-                    else -> codePoint(hex.toIntOrNull(16)) ?: m.value
-                }
-            }
-        }
-
-    /** The character a numeric reference names, or `null` for a number that names none, which is left as written. */
-    private fun codePoint(value: Int?): String? = value?.takeIf(Character::isValidCodePoint)?.let { Character.toString(it) }
+    public val defaultPrefixes: List<String> = listOf(CatalogNames.PREFIX, CatalogNames.ALIASED_PREFIX).sortedByDescending { it.length }
 
     /**
      * Returns [elements] untouched, or throws for the first broken attribute:
@@ -210,21 +100,23 @@ public object ElementsGuard {
         )
         // Inside an svg or a math, a title or a textarea holds elements rather than text. Read that
         // way only there, since in HTML the markup they show is text, and often meant so.
-        val spans = if (foreign) listOf(elements) else foreignSpans(elements, roots)
-        for (span in spans) {
-            scanMarkup(
-                span,
-                object : MarkupVisitor {
-                    override fun attribute(
-                        tag: String,
-                        name: String,
-                        valueStart: Int,
-                        valueEnd: Int,
-                        quoted: Boolean,
-                    ) = checkAttribute(name, if (valueStart < 0) null else span.substring(valueStart, valueEnd), ordered)
-                },
-                foreign = true,
-            )
+        for (cdata in listOf(false, true)) {
+            for (span in if (foreign) listOf(elements) else foreignSpans(elements, roots, cdata)) {
+                scanMarkup(
+                    span,
+                    object : MarkupVisitor {
+                        override fun attribute(
+                            tag: String,
+                            name: String,
+                            valueStart: Int,
+                            valueEnd: Int,
+                            quoted: Boolean,
+                        ) = checkAttribute(name, if (valueStart < 0) null else span.substring(valueStart, valueEnd), ordered)
+                    },
+                    foreign = true,
+                    cdata = cdata,
+                )
+            }
         }
         return elements
     }
@@ -234,7 +126,7 @@ public object ElementsGuard {
         value: String?,
         prefixes: List<String>,
     ) {
-        val lower = name.lowercase()
+        val lower = name.asciiLowercase()
         val prefix = prefixes.firstOrNull { lower.startsWith(it) } ?: return
         val rest = lower.substring(prefix.length)
         val plugin = rest.substringBefore(':').substringBefore("__")
@@ -244,17 +136,30 @@ public object ElementsGuard {
             // data-animated and data-effects are honest words a letter away from Datastar's. Only a swapped
             // letter in a long name (data-indicater, data-computer) is judged there; plurals and past tenses,
             // which add a letter, are left alone.
-            val qualified = rest.length > plugin.length
-            attributes
-                .firstOrNull { oneEditAway(plugin, it) && (qualified || (it.length >= LONG_NAME && it.length == plugin.length)) }
+            nearAttribute(plugin, qualified = rest.length > plugin.length)
                 ?.let { near ->
                     throw MistypedAttributeException(name, prefix + near + name.substring(prefix.length + plugin.length))
                 }
             return
         }
         if (plugin !in expressionAttributes) return
-        ExpressionGuard.check(decode(value ?: ""), name)
+        // kotlinx.html and every template engine escape attribute values, some with numeric references
+        // (`&#x27;`, `&#61;`); the expression is what the browser decodes, in one pass.
+        ExpressionGuard.check(decodeEntities(value ?: "").text, name)
     }
+
+    /**
+     * The Datastar attribute [plugin], a name after the prefix that is none, is taken for a typo of,
+     * or null. [qualified] says whether a key or a modifier follows it, which makes a custom
+     * attribute implausible, so any name one letter away counts. A bare name (data-test, data-kind,
+     * data-effects) is an honest word more often than not: only a swapped letter in a long name counts.
+     * The analysis reports the same names.
+     */
+    @InternalStreamlordApi
+    public fun nearAttribute(
+        plugin: String,
+        qualified: Boolean,
+    ): String? = attributes.firstOrNull { oneEditAway(plugin, it) && (qualified || (it.length >= LONG_NAME && it.length == plugin.length)) }
 
     /** Below this length a Datastar name has too many honest neighbours (test, kind, once, unit) to judge a bare `data-*` at all. */
     private const val LONG_NAME = 6
@@ -305,18 +210,24 @@ private fun foreignRoot(
     start: Int,
 ): String? =
     listOf("svg", "math").firstOrNull {
-        html.regionMatches(start + 1, it, 0, it.length, ignoreCase = true) &&
-            html.getOrNull(start + 1 + it.length).let { c -> c == null || c in " \t\n\u000C\r/>" }
+        html.regionMatchesAsciiIgnoreCase(start + 1, it) &&
+            html.getOrNull(start + 1 + it.length).let { c -> c == null || c == '/' || c == '>' || c.isHtmlSpace() }
     }
+
+/** A CDATA section, to its `]]>` or the end. */
+private val CDATA = Regex("""<!\[CDATA\[[\s\S]*?(?:]]>|$)""")
 
 /**
  * Each svg or math the HTML reading found, from its start tag to its own end tag, nested ones
- * counted, or to the end of the markup when it is never closed.
+ * counted, or to the end of the markup when it is never closed. With [cdata], an end tag inside a
+ * CDATA section is text.
  */
 private fun foreignSpans(
     html: String,
     roots: List<Int>,
+    cdata: Boolean,
 ): List<String> {
+    val sections = if (cdata) CDATA.findAll(html).map { it.range }.toList() else emptyList()
     val spans = ArrayList<String>()
     var covered = 0
     for (start in roots) {
@@ -326,6 +237,7 @@ private fun foreignSpans(
         var depth = 0
         var end = html.length
         for (m in token.findAll(html, start)) {
+            if (sections.any { m.range.first in it }) continue
             depth += if (m.groupValues[1].isEmpty()) 1 else -1
             if (depth == 0) {
                 end = html.indexOf('>', m.range.last).let { if (it < 0) html.length else it + 1 }

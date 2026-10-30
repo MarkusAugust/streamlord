@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.core.protocol
 
+import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -8,8 +9,8 @@ import kotlin.time.Duration.Companion.milliseconds
  * and the client source. Nothing here is invented; every constant is a word the browser knows.
  */
 public object DatastarProtocol {
-    /** The Datastar version this SDK speaks. */
-    public const val VERSION: String = "1.0.4"
+    /** The Datastar version this SDK speaks, the version of its catalog. */
+    public const val VERSION: String = CatalogNames.VERSION
 
     /** The `Accept` the client sends with every request (fetch.ts:82). */
     public const val ACCEPT: String = "text/event-stream, text/html, application/json"

@@ -6,7 +6,8 @@
   "scripts": {
     "reference": "node reference.mjs",
     "client": "node client.mjs",
-    "dom": "node dom.mjs"
+    "dom": "node dom.mjs",
+    "dsl": "node dsl.mjs"
   },
   "devDependencies": {
     "esbuild": "0.25.5",

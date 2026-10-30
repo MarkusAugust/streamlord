@@ -47,6 +47,8 @@ kotlin {
         allWarningsAsErrors.set(true)
         // No bridge methods for the platform's interface defaults: the Plugin Verifier reads them as overrides of deprecated API.
         freeCompilerArgs.addAll("-Xjsr305=strict", "-jvm-default=no-compatibility")
+        // The analysis and core share API among Streamlord's own modules, and the plugin is one of them.
+        optIn.add("io.github.markusaugust.streamlord.core.InternalStreamlordApi")
     }
 }
 
@@ -116,9 +118,16 @@ tasks {
         }
     }
 
-    // The tests read the SDK's catalog and the VS Code fixtures relative to the repository root.
+    // The tests read the SDK's catalog and the VS Code fixtures relative to the repository root, so a
+    // change there must run them again rather than find them up to date.
     withType<Test>().configureEach {
-        systemProperty("streamlord.repo", rootProject.projectDir.resolve("../..").canonicalPath)
+        val repo = rootProject.projectDir.resolve("../..")
+        systemProperty("streamlord.repo", repo.canonicalPath)
+        inputs.dir(repo.resolve("catalog")).withPropertyName("catalog").withPathSensitivity(PathSensitivity.RELATIVE)
+        inputs
+            .dir(repo.resolve("editors/vscode/test/fixtures"))
+            .withPropertyName("editorFixtures")
+            .withPathSensitivity(PathSensitivity.RELATIVE)
     }
 }
 
@@ -184,12 +193,18 @@ fun markdownToHtml(md: String): String {
 val generatedResources = layout.buildDirectory.dir("generated/liveTemplates")
 
 val generateHtmlLiveTemplates by tasks.registering {
-    val catalogFile = layout.projectDirectory.file("../../catalog/datastar-1.0.4.json")
+    // The one catalog there is, as core and the analysis find it.
+    val catalogFile =
+        layout.projectDirectory
+            .dir("../../catalog")
+            .asFileTree
+            .matching { include("datastar-*.json") }
+            .singleFile
     val out = generatedResources.map { it.file("liveTemplates/StreamlordHtml.xml") }
     inputs.file(catalogFile)
     outputs.file(out)
     doLast {
-        val json = groovy.json.JsonSlurper().parse(catalogFile.asFile) as Map<*, *>
+        val json = groovy.json.JsonSlurper().parse(catalogFile) as Map<*, *>
         val attributes = json["attributes"] as List<*>
 
         fun esc(s: String) =

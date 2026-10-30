@@ -1,6 +1,10 @@
+import { catalog } from "./catalog.ts";
 import { clientRewrite, DOCS, type Issue } from "./expression.ts";
+import { dataSignalsPairIssues, pairKeys } from "./signals.ts";
 import type { KotlinString } from "./kotlinStrings.ts";
 import { findCallSites, lexKotlin, stringAt, type Arg, type CallSite } from "./scanner.ts";
+import { nameProblem } from "./attributeKeys.ts";
+import { withoutHyphens } from "./signalNames.ts";
 
 /*
  * A hyphen in a signal name written in a DSL call. The client reads one as a capital in an
@@ -10,7 +14,7 @@ import { findCallSites, lexKotlin, stringAt, type Arg, type CallSite } from "./s
  */
 
 /** The helpers whose first argument is the name of a signal the page declares. */
-const NAMING_HELPERS: ReadonlySet<string> = new Set(["dataSignals", "dataComputed", "dataBind", "dataRef", "dataIndicator", "dataMatchMedia"]);
+export const NAMING_HELPERS: ReadonlySet<string> = catalog.namingHelpers;
 
 /**
  * The helper whose second argument may be `ifMissing` of the object form, `dataSignals("{...}", true)`,
@@ -22,22 +26,22 @@ const KEYED_OR_OBJECT = "dataSignals";
 const COMPUTED = "dataComputed";
 
 /** The expression helpers, whose name is JavaScript: a hyphen inside brackets is a key. */
-export const EXPRESSION_HELPERS: ReadonlySet<string> = new Set(["signal", "set", "setExpr", "increment", "decrement", "toggle", "not"]);
+export const EXPRESSION_HELPERS: ReadonlySet<string> = new Set(catalog.signalNameHelpers.keys());
 
 /**
  * The expression helpers whose names other APIs share in the same scope: `set` on a map, or on
  * Ktor's headers inside `headers { }`. One counts only inside the arguments of a DSL call.
  */
-const SHARED_NAME_HELPERS: ReadonlySet<string> = new Set(["set", "toggle"]);
+const SHARED_NAME_HELPERS: ReadonlySet<string> = new Set([...catalog.signalNameHelpers].filter(([, flags]) => flags.has("shared")).map(([name]) => name));
 
 /** The calls whose pairs name signals: on the page, `dataSignals("count" to 0)`, and from the server. */
-const PAIR_NAMING: ReadonlySet<string> = new Set(["dataSignals", "patchSignals"]);
+const PAIR_NAMING: ReadonlySet<string> = new Set([...catalog.signalCalls].filter(([, flags]) => flags.has("names")).map(([name]) => name));
 
 /** Every call this check reads. */
 export const SIGNAL_NAMING_CALLS: ReadonlySet<string> = new Set([...NAMING_HELPERS, ...EXPRESSION_HELPERS, ...PAIR_NAMING, "removeSignals"]);
 
 /** The DSL helpers whose first argument names a signal they read: `signal("count")` is `$count`. */
-export const HELPER_READ_CALLS: ReadonlySet<string> = new Set(["signal", "increment", "decrement", "not"]);
+export const HELPER_READ_CALLS: ReadonlySet<string> = new Set([...catalog.signalNameHelpers].filter(([, flags]) => flags.has("reads")).map(([name]) => name));
 
 /**
  * A file that uses the DSL: a helper call elsewhere, `redis.increment("visits")` or Hamcrest's
@@ -62,11 +66,6 @@ export function dslHelpers(src: string, names: ReadonlySet<string> = HELPER_READ
     }
   }
   return out;
-}
-
-/** `name` with each hyphen dropped and the character after it raised: `first-name` is `firstName`. */
-export function withoutHyphens(name: string): string {
-  return name.replace(/-+.?/g, (m) => m.replace(/^-+/, "").toUpperCase());
 }
 
 /**
@@ -180,9 +179,16 @@ export function bracketed(name: string): string | null {
   return `${parts.slice(0, i).join(".")}['${parts[i]}']${parts.slice(i + 1).map((p) => `.${p}`).join("")}`;
 }
 
-const PAIR_KEY = /^[\s(]*"/;
-const PAIR_AFTER = /\s+to\b/y;
 const OBJECT_START = /^\s*[{[]/;
+/**
+ * Whether the DSL refuses `name`, a name it declares a signal by, for its hyphen: a name it refuses
+ * sooner, for a `__` or a quote, is key-refused's to report (`nameProblem` in attributeKeys.ts). Of a
+ * templated name only the hyphen is known.
+ */
+function hyphenIsTheReason(name: KotlinString): boolean {
+  return name.text.includes("-") && (name.interpolations.length > 0 || nameProblem(name.text) === null);
+}
+
 /** What the second argument of `dataSignals(first, second)` is, as far as its text shows: the overload Kotlin picks. */
 export type SecondArgument = "expression" | "ifMissing" | "unknown";
 
@@ -190,7 +196,7 @@ export type SecondArgument = "expression" | "ifMissing" | "unknown";
 const BOOLEAN_OPERATOR = /==|!=|&&|\|\||\s[<>]=?\s|\s!?(?:in|is)\s/;
 
 /** A call of a helper that writes an expression, which is a String. */
-const EXPRESSION_CALL = /^(?:signal|not|set|setExpr|increment|decrement|toggle)\s*\(/;
+const EXPRESSION_CALL = new RegExp(`^(?:${[...EXPRESSION_HELPERS].join("|")})\\s*\\(`);
 
 /**
  * Whether `arg`, the second argument of `dataSignals`, is the expression of the keyed form, a
@@ -256,7 +262,7 @@ export function signalNameHyphenIssues(site: CallSite, src: string, strings: Kot
     };
     const keyed = f && isKeyed(f.text) ? f : null;
     const s = (named("name") ?? named("signal"))?.string ?? keyed;
-    if (s && s.text.includes("-")) out.push(hyphenIssue(s, src, withoutHyphens(s.text), null));
+    if (s && hyphenIsTheReason(s)) out.push(hyphenIssue(s, src, withoutHyphens(s.text), null));
   }
 
   if (site.name === "removeSignals") {
@@ -266,18 +272,11 @@ export function signalNameHyphenIssues(site: CallSite, src: string, strings: Kot
   }
 
   if (PAIR_NAMING.has(site.name)) {
-    for (const a of positional) {
-      if (a.string) continue;
-      const m = PAIR_KEY.exec(a.text);
-      if (!m) continue;
-      const quote = a.start + m[0].length - 1;
-      const s = stringAt(src, quote + 1, strings);
-      if (!s || s.start !== quote) continue;
-      PAIR_AFTER.lastIndex = s.end;
-      if (!PAIR_AFTER.test(src)) continue;
-      if (s.text.includes("-")) out.push(hyphenIssue(s, src, withoutHyphens(s.text), null));
+    for (const s of pairKeys(site, src, strings)) {
+      if (site.name === "dataSignals" ? hyphenIsTheReason(s) : s.text.includes("-")) out.push(hyphenIssue(s, src, withoutHyphens(s.text), null));
     }
   }
+
   return out;
 }
 
@@ -329,7 +328,8 @@ function collectHyphenSites(
   const inside = (at: number): boolean =>
     calls.some((c) => at > c.openParen && at < c.closeParen && !openBraceBetween(text, lex.mask, c.openParen, at)) || (enclosed && !openBraceBetween(text, lex.mask, 0, at));
   for (const site of findCallSites(text, SIGNAL_NAMING_CALLS, lex.mask)) {
-    const issues = signalNameHyphenIssues(site, text, lex.strings, helpers, inside);
+    // A string template holds DSL calls too, so the pairs of one are read here as well.
+    const issues = [...signalNameHyphenIssues(site, text, lex.strings, helpers, inside), ...dataSignalsPairIssues(site, text, lex.strings)];
     if (issues.length > 0) out.push({ at: site.nameStart + shift, issues: issues.map((i) => shifted(i, shift)) });
   }
   if (depth >= 4) return;

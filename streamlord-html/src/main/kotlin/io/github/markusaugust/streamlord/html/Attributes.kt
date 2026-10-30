@@ -31,9 +31,26 @@ public object DatastarAttributes {
 
     /** The full attribute name for a Datastar attribute such as `on:click__once`. */
     public fun name(suffix: String): String = CoreDatastarAttributes.name(suffix)
+
+    /**
+     * [value] as an attribute value must be handed to kotlinx.html for the browser to read it back
+     * exactly. kotlinx.html writes a `\` followed by `&` as a bare `&`, its way of letting a
+     * character reference through, so `'\&amp;'` would reach Datastar as `'&'`. Each such pair is
+     * therefore handed over as the two references that pass through and decode to it again.
+     *
+     * That holds for kotlinx.html's stream builders, `appendHTML`, `createHTML` and [elements],
+     * which Streamlord renders with. Its DOM builder, `document.create`, sets an attribute as it
+     * is handed, and would keep the references as text.
+     */
+    public fun value(value: String): String = if ("\\&" in value) value.replace("\\&", "\\&#92;\\&amp;") else value
+
+    /** [expression] once [ExpressionGuard] has passed it, as kotlinx.html must be handed it ([value]): how every expression a DSL helper takes is written. */
+    public fun expression(expression: String): String = value(ExpressionGuard.check(expression))
 }
 
 private fun ds(suffix: String): String = DatastarAttributes.name(suffix)
+
+private fun expr(expression: String): String = DatastarAttributes.expression(expression)
 
 /*
  * The `data-*` attributes of Datastar 1.0.4 as kotlinx.html extension functions.
@@ -60,7 +77,7 @@ public fun HTMLTag.dataSignals(
     expression: String,
     ifMissing: Boolean = false,
 ) {
-    attributes[ds("signals${signalMods(null, ifMissing)}")] = ExpressionGuard.check(expression)
+    attributes[ds("signals${signalMods(null, ifMissing)}")] = expr(expression)
 }
 
 /**
@@ -73,7 +90,8 @@ public fun HTMLTag.dataSignals(
  *
  * Each field is a signal named by its key as written, `$email` and `$firstName`, the names
  * `readSignals<Form>()` reads. A field that is `null` declares nothing, because the client
- * removes a signal patched to `null`. Every key is held to what the client can store
+ * removes a signal patched to `null`, and an expression or a `data-bind` that reads it gets `""`,
+ * which may come back to the server in place of the null. Every key is held to what the client can store
  * ([SignalNames]), and a top-level key also to a name it can hold a signal under, so `toString`
  * is refused. A key no `$name` reaches, such as `first-name` or `a b`, is written as it stands,
  * and an expression reaches it as `$['first-name']`.
@@ -105,7 +123,7 @@ public fun HTMLTag.dataSignals(
 ) {
     val (key, mod) = Casing.key(Casing.signalName(name), null, Case.CAMEL)
     attributes[ds("signals:" + Casing.heldKey(name, Casing.withModifiers(name, key, signalMods(mod, ifMissing))))] =
-        ExpressionGuard.check(expression)
+        expr(expression)
 }
 
 /**
@@ -122,6 +140,9 @@ public fun HTMLTag.dataSignals(
  * `signal("user['first-name']")` reaches. A key inside a map holding `.` is refused, since the
  * client would store it as one key that `$a.b` does not reach, and so is one it cannot hold with
  * what is under it ([SignalNames]).
+ *
+ * The client holds no null: `"selected" to null` declares nothing, since a null removes the key,
+ * and an expression that reads the signal gets `""`, as it does for a null in a list.
  */
 public fun HTMLTag.dataSignals(
     vararg signals: Pair<String, Any?>,
@@ -159,7 +180,7 @@ private fun checkKeys(
 
 /** `data-computed="{name: () => expression}"`: the values are callables. The keys are used as written; see [dataSignals]. */
 public fun HTMLTag.dataComputed(expression: String) {
-    attributes[ds("computed")] = ExpressionGuard.check(expression)
+    attributes[ds("computed")] = expr(expression)
 }
 
 /** `data-computed:name="expression"`, with [name] written as [dataSignals] writes it. */
@@ -168,7 +189,7 @@ public fun HTMLTag.dataComputed(
     expression: String,
 ) {
     val (key, mod) = Casing.key(Casing.signalName(name), null, Case.CAMEL)
-    attributes[ds("computed:" + Casing.heldKey(name, Casing.withModifiers(name, key, caseMod(mod))))] = ExpressionGuard.check(expression)
+    attributes[ds("computed:" + Casing.heldKey(name, Casing.withModifiers(name, key, caseMod(mod))))] = expr(expression)
 }
 
 /** `data-json-signals`: renders the signal store as JSON into the element. Handy while debugging. */
@@ -186,12 +207,12 @@ public fun HTMLTag.dataInit(
     expression: String,
     modifiers: InitModifiers.() -> Unit = {},
 ) {
-    attributes[ds("init${InitModifiers().apply(modifiers).build()}")] = ExpressionGuard.check(expression)
+    attributes[ds("init${InitModifiers().apply(modifiers).build()}")] = expr(expression)
 }
 
 /** `data-effect="expression"`, re-run whenever a signal it reads changes. */
 public fun HTMLTag.dataEffect(expression: String) {
-    attributes[ds("effect")] = ExpressionGuard.check(expression)
+    attributes[ds("effect")] = expr(expression)
 }
 
 // ---- Events -----------------------------------------------------------------------------------
@@ -209,7 +230,7 @@ public fun HTMLTag.dataOn(
     val mods = OnModifiers().apply(modifiers)
     val (key, mod) = Casing.key(event, mods.case, Case.KEBAB)
     mods.case = mod
-    attributes[ds("on:" + Casing.withModifiers(event, key, mods.build()))] = ExpressionGuard.check(expression)
+    attributes[ds("on:" + Casing.withModifiers(event, key, mods.build()))] = expr(expression)
 }
 
 public fun HTMLTag.dataOnClick(
@@ -261,7 +282,7 @@ public fun HTMLTag.dataOnSignalPatch(
     filter: SignalFilter? = null,
     modifiers: TimingModifiers.() -> Unit = {},
 ) {
-    attributes[ds("on-signal-patch${TimingModifiers().apply(modifiers).build()}")] = ExpressionGuard.check(expression)
+    attributes[ds("on-signal-patch${TimingModifiers().apply(modifiers).build()}")] = expr(expression)
     filter?.let { attributes[ds("on-signal-patch-filter")] = it.toJs() }
 }
 
@@ -270,7 +291,7 @@ public fun HTMLTag.dataOnInterval(
     expression: String,
     modifiers: IntervalModifiers.() -> Unit = {},
 ) {
-    attributes[ds("on-interval${IntervalModifiers().apply(modifiers).build()}")] = ExpressionGuard.check(expression)
+    attributes[ds("on-interval${IntervalModifiers().apply(modifiers).build()}")] = expr(expression)
 }
 
 /** `data-on-intersect`. */
@@ -278,7 +299,7 @@ public fun HTMLTag.dataOnIntersect(
     expression: String,
     modifiers: IntersectModifiers.() -> Unit = {},
 ) {
-    attributes[ds("on-intersect${IntersectModifiers().apply(modifiers).build()}")] = ExpressionGuard.check(expression)
+    attributes[ds("on-intersect${IntersectModifiers().apply(modifiers).build()}")] = expr(expression)
 }
 
 // ---- Binding and references -------------------------------------------------------------------
@@ -308,16 +329,16 @@ public fun HTMLTag.dataIndicator(signal: String) {
 // ---- Display ----------------------------------------------------------------------------------
 
 public fun HTMLTag.dataText(expression: String) {
-    attributes[ds("text")] = ExpressionGuard.check(expression)
+    attributes[ds("text")] = expr(expression)
 }
 
 public fun HTMLTag.dataShow(expression: String) {
-    attributes[ds("show")] = ExpressionGuard.check(expression)
+    attributes[ds("show")] = expr(expression)
 }
 
 /** `data-class="{name: expression}"`. The keys are used as written; see [dataSignals]. */
 public fun HTMLTag.dataClass(expression: String) {
-    attributes[ds("class")] = ExpressionGuard.check(expression)
+    attributes[ds("class")] = expr(expression)
 }
 
 /** `data-class:name="expression"`. A camelCase [name] is written as `is-open__case.camel`, so the class stays `isOpen`; see [Casing]. */
@@ -334,12 +355,12 @@ public fun HTMLTag.dataClass(
             "Write it in one case, or, for a class you cannot rename, use the object form, " +
                 "dataClass(\"{'$name': ...}\"), whose keys Datastar uses as written",
         )
-    attributes[ds("class:" + Casing.withModifiers(name, key, caseMod(mod)))] = ExpressionGuard.check(expression)
+    attributes[ds("class:" + Casing.withModifiers(name, key, caseMod(mod)))] = expr(expression)
 }
 
 /** `data-style="{property: expression}"`. */
 public fun HTMLTag.dataStyle(expression: String) {
-    attributes[ds("style")] = ExpressionGuard.check(expression)
+    attributes[ds("style")] = expr(expression)
 }
 
 /**
@@ -358,24 +379,24 @@ public fun HTMLTag.dataStyle(
             "is a custom property with capitals, which Datastar cannot set in either form; name it in lowercase",
         )
     }
-    attributes[ds("style:${Casing.plainKey(property)}")] = ExpressionGuard.check(expression)
+    attributes[ds("style:${Casing.plainKey(property)}")] = expr(expression)
 }
 
 /** `data-attr="{name: expression}"`. */
 public fun HTMLTag.dataAttr(expression: String) {
-    attributes[ds("attr")] = ExpressionGuard.check(expression)
+    attributes[ds("attr")] = expr(expression)
 }
 
 /**
- * `data-attr:name="expression"`. A camelCase [name] such as `ariaLabel` is written as
- * `aria-label`. An attribute that really is camelCase (SVG's `viewBox`) cannot travel in a key,
- * since the browser lowercases it; use the object form, `dataAttr("{viewBox: ...}")`.
+ * `data-attr:name="expression"`, with [name] as HTML has it: `dataAttr("aria-label", ...)`. The
+ * browser lowercases an attribute name, so a capital is refused: an attribute that really has
+ * capitals, such as SVG's `viewBox`, takes the object form, `dataAttr("{viewBox: ...}")`.
  */
 public fun HTMLTag.dataAttr(
     name: String,
     expression: String,
 ) {
-    attributes[ds("attr:${Casing.plainKey(name)}")] = ExpressionGuard.check(expression)
+    attributes[ds("attr:${Casing.attributeKey(name, "dataAttr")}")] = expr(expression)
 }
 
 // ---- Morphing and walker control --------------------------------------------------------------
@@ -392,7 +413,7 @@ public fun HTMLTag.dataIgnoreMorph() {
 
 /** `data-preserve-attr="open class"`: keep these attributes through a morph. */
 public fun HTMLTag.dataPreserveAttr(vararg names: String) {
-    attributes[ds("preserve-attr")] = names.joinToString(" ")
+    attributes[ds("preserve-attr")] = DatastarAttributes.value(names.joinToString(" "))
 }
 
 /**

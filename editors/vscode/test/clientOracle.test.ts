@@ -1,10 +1,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { twinCases } from "./twins.ts";
 import { analyzeHtml } from "../src/analyze.ts";
-import { parseAttributeName } from "../src/catalog.ts";
+import { catalog, parseAttributeName } from "../src/catalog.ts";
 import { clientRewrite, clientScript } from "../src/expression.ts";
-import { kebab, wireKey, wireKeyReads } from "../src/markup.ts";
+import { kebab } from "../src/attributeKeys.ts";
+import { wireKey, wireKeyReads } from "../src/markup.ts";
 import { referenceAsSubtraction, withoutReferenceHyphens } from "../src/signalNameHyphens.ts";
 import { clientKeyName, toCamel } from "../src/signals.ts";
 
@@ -28,7 +30,7 @@ const opts = { prefix: "data-", checkHtmlAttributes: true };
 describe("the client's rules", () => {
   it("reads the case of a key as modifyCasing does", () => {
     const cases = read<CasingCase[]>("casing.json");
-    assert.equal(cases.length, 68);
+    assert.equal(cases.length, 70);
     for (const { key, modifyCasing } of cases) {
       // A key holding __ is cut there by parseAttributeKey, so modifyCasing never sees it whole.
       if (key.includes("__")) continue;
@@ -73,7 +75,7 @@ describe("the client's rules", () => {
 
   it("splits an attribute name as parseAttributeKey does", () => {
     const cases = read<AttributeKeyCase[]>("attribute-keys.json");
-    assert.equal(cases.length, 54);
+    assert.equal(cases.length, 55);
     for (const { raw, pluginName, key, modifiers, signalCamel } of cases) {
       const parsed = parseAttributeName(`data-${raw}`, "data-");
       assert.ok(parsed, raw);
@@ -97,6 +99,15 @@ describe("the client's rules", () => {
     }
   });
 
+  it("knows the names an expression is compiled with", () => {
+    const fixture = JSON.parse(readFileSync(new URL("expressions.json", dir), "utf8")) as {
+      parameters: string[];
+      parametersWithArgNames: { argNames: string[]; parameters: string[] };
+    };
+    assert.deepEqual(catalog.compiledParameters, fixture.parameters);
+    assert.deepEqual([...catalog.compiledParameters, ...fixture.parametersWithArgNames.argNames], fixture.parametersWithArgNames.parameters);
+  });
+
   it("writes the function body genRx compiles", () => {
     const cases = read<{ rewrites: ExpressionCase[] }>("expressions.json").rewrites;
     assert.equal(cases.length, 322);
@@ -110,7 +121,7 @@ describe("the client's rules", () => {
   it("reads a reference's hyphens as genRx does", () => {
     const cases = read<{ rewrites: ExpressionCase[] }>("expressions.json").rewrites;
     type Row = { name: string; fixed: string | null; subtraction: string | null; shows: string };
-    const table = JSON.parse(readFileSync(new URL("./fixtures/reference-hyphens.json", import.meta.url), "utf8")) as { cases: Row[] };
+    const table = { cases: twinCases<Row>("reference-hyphens.json") };
     assert.equal(table.cases.length, 20);
     for (const { name, fixed, subtraction, shows } of table.cases) {
       const found = cases.filter((c) => c.expression === `$${name}` && !c.returnsValue);
@@ -146,5 +157,34 @@ describe("the client's rules", () => {
         assert.ok(Number.isNaN(read) || read <= 0 || /1e3ms$/.test(modifiers), `${modifiers}: the client waits ${wait}ms, which the check does not say`);
       }
     }
+  });
+
+  // conformance/dsl/*.json: for each DSL call there with a literal key that has a capital, the hint's
+  // wireKey is the key and __case the DSL wrote, and the name it says the client reads back is the
+  // one the call means, which DslAsTheClientReadsItTest holds to what the client did.
+  it("the wire hint names the key the dsl writes and the name the client reads", () => {
+    type DslCase = { name: string; prefix: string; call: { fn: string; key: string | null; case: string | null }; read: { attributes: [string, string][][] } };
+    let checked = 0;
+    for (const file of ["free.json", "pro.json"]) {
+      const cases = (JSON.parse(readFileSync(new URL(file, new URL("../../../conformance/dsl/", import.meta.url)), "utf8")) as { cases: DslCase[] }).cases;
+      for (const c of cases) {
+        const key = c.call.key;
+        // The hint is shown for a key with a capital, the one the DSL rewrites.
+        if (key === null || !/[A-Z]/.test(key)) continue;
+        const spec = catalog.attributesByKotlin.get(c.call.fn);
+        if (!spec?.keyed || !spec.keyCase) continue;
+        const prefix = `${c.prefix}${spec.name}:`;
+        const written = c.read.attributes.flat().map(([n]) => n).find((n) => n.startsWith(prefix))?.slice(prefix.length);
+        if (written === undefined) continue;
+        const [base, ...mods] = written.split("__");
+        const wire = base + mods.filter((m) => m.startsWith("case.")).map((m) => `__${m}`).join("");
+        assert.equal(wireKey(key, spec.keyCase, c.call.case), wire, c.name);
+        if (c.call.case === null && spec.keyCase !== "raw") {
+          assert.equal(spec.keyCase === "camel" || wire.includes("__case.") ? clientKeyName(wire) : wire, key, c.name);
+        }
+        checked++;
+      }
+    }
+    assert.ok(checked >= 15, `only ${checked} cases checked`);
   });
 });

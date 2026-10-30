@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.core.json
 
+import io.github.markusaugust.streamlord.core.InternalStreamlordApi
 import io.github.markusaugust.streamlord.core.SignalsCodecException
 import java.math.BigDecimal
 import java.math.BigInteger
@@ -21,11 +22,67 @@ import java.math.BigInteger
 public object JsonWriter {
     public const val DEFAULT_MAX_DEPTH: Int = 64
 
+    /**
+     * How a value is spelled, for a writer that walks values as this one does, with its guards,
+     * and writes them another way: `JsLiteral` in streamlord-html writes JavaScript literals.
+     */
+    @InternalStreamlordApi
+    public interface Style {
+        /** What the output is called in an error, `JSON`. */
+        public val name: String
+
+        /** What to do instead, in the error for a value it cannot hold. */
+        public val instead: String
+
+        /** Between two members or elements, `,`. */
+        public val comma: String
+
+        /** Between a key and its value, `:`. */
+        public val colon: String
+
+        /** A string value. */
+        public fun appendString(
+            sb: StringBuilder,
+            s: String,
+        )
+
+        /** The key of a member. */
+        public fun appendKey(
+            sb: StringBuilder,
+            key: String,
+        )
+    }
+
+    private object Json : Style {
+        override val name = "JSON"
+        override val instead = "Use a Map, or configure a SignalsCodec adapter (streamlord-json-kotlinx or streamlord-json-jackson)."
+        override val comma = ","
+        override val colon = ":"
+
+        override fun appendString(
+            sb: StringBuilder,
+            s: String,
+        ) = JsonWriter.appendString(sb, s)
+
+        override fun appendKey(
+            sb: StringBuilder,
+            key: String,
+        ) = JsonWriter.appendString(sb, key)
+    }
+
     /** Encode [value] as JSON text. */
     public fun write(
         value: Any?,
         maxDepth: Int = DEFAULT_MAX_DEPTH,
-    ): String = StringBuilder().also { appendValue(it, value, 0, maxDepth) }.toString()
+    ): String = write(value, Json, maxDepth)
+
+    /** [value] spelled in [style], walked and refused as [write] walks and refuses it. */
+    @InternalStreamlordApi
+    public fun write(
+        value: Any?,
+        style: Style,
+        maxDepth: Int = DEFAULT_MAX_DEPTH,
+    ): String = StringBuilder().also { Walk(it, style, maxDepth).value(value, 0) }.toString()
 
     /**
      * [write], for JSON that Datastar's client reads as an expression, such as the value of
@@ -44,107 +101,108 @@ public object JsonWriter {
     /** Encode a JSON string literal, quotes included. Also a valid JavaScript string literal. */
     public fun writeString(value: String): String = StringBuilder(value.length + 2).also { appendString(it, value) }.toString()
 
-    private fun appendValue(
-        sb: StringBuilder,
-        value: Any?,
-        depth: Int,
-        maxDepth: Int,
+    private class Walk(
+        val sb: StringBuilder,
+        val style: Style,
+        val maxDepth: Int,
     ) {
-        if (depth >= maxDepth &&
-            isContainer(value)
+        fun value(
+            value: Any?,
+            depth: Int,
         ) {
-            throw SignalsCodecException("JSON nesting deeper than $maxDepth levels (cyclic structure?)")
+            if (depth >= maxDepth && isContainer(value)) {
+                throw SignalsCodecException("${style.name} nests deeper than $maxDepth levels (cyclic structure?)")
+            }
+            when (value) {
+                null, JsonNull -> sb.append("null")
+
+                is JsonValue -> jsonValue(value, depth)
+
+                is Boolean -> sb.append(value)
+
+                is String -> style.appendString(sb, value)
+
+                is Char -> style.appendString(sb, value.toString())
+
+                is Number -> appendNumber(sb, value)
+
+                is Enum<*> -> style.appendString(sb, value.name)
+
+                is Map<*, *> -> map(value, depth)
+
+                is Iterable<*> -> all(value, depth)
+
+                is Sequence<*> -> all(value.asIterable(), depth)
+
+                is Array<*> -> all(value.asIterable(), depth)
+
+                is IntArray -> all(value.asIterable(), depth)
+
+                is LongArray -> all(value.asIterable(), depth)
+
+                is DoubleArray -> all(value.asIterable(), depth)
+
+                is BooleanArray -> all(value.asIterable(), depth)
+
+                else -> throw SignalsCodecException(
+                    "${style.name} cannot hold ${value::class.qualifiedName}. ${style.instead}",
+                )
+            }
         }
-        when (value) {
-            null, JsonNull -> sb.append("null")
 
-            is JsonValue -> appendJsonValue(sb, value, depth, maxDepth)
+        private fun jsonValue(
+            value: JsonValue,
+            depth: Int,
+        ) {
+            when (value) {
+                is JsonObject -> map(value, depth)
 
-            is Boolean -> sb.append(value)
+                is JsonArray -> all(value, depth)
 
-            is String -> appendString(sb, value)
+                is JsonString -> style.appendString(sb, value.value)
 
-            is Char -> appendString(sb, value.toString())
+                // As written, since a Long or Double would round 12345678901234567890 or 0.1000000000000000055.
+                is JsonNumber -> sb.append(value.text)
 
-            is Number -> appendNumber(sb, value)
+                is JsonBoolean -> sb.append(value.value)
 
-            is Enum<*> -> appendString(sb, value.name)
-
-            is Map<*, *> -> appendMap(sb, value, depth, maxDepth)
-
-            is Iterable<*> -> appendIterable(sb, value, depth, maxDepth)
-
-            is Sequence<*> -> appendIterable(sb, value.asIterable(), depth, maxDepth)
-
-            is Array<*> -> appendIterable(sb, value.asIterable(), depth, maxDepth)
-
-            is IntArray -> appendIterable(sb, value.asIterable(), depth, maxDepth)
-
-            is LongArray -> appendIterable(sb, value.asIterable(), depth, maxDepth)
-
-            is DoubleArray -> appendIterable(sb, value.asIterable(), depth, maxDepth)
-
-            is BooleanArray -> appendIterable(sb, value.asIterable(), depth, maxDepth)
-
-            else -> throw SignalsCodecException(
-                "JsonWriter cannot encode ${value::class.qualifiedName}. " +
-                    "Use a Map, or configure a SignalsCodec adapter (streamlord-json-kotlinx or streamlord-json-jackson).",
-            )
+                JsonNull -> sb.append("null")
+            }
         }
-    }
 
-    private fun appendJsonValue(
-        sb: StringBuilder,
-        value: JsonValue,
-        depth: Int,
-        maxDepth: Int,
-    ) {
-        when (value) {
-            is JsonObject -> appendMap(sb, value, depth, maxDepth)
-            is JsonArray -> appendIterable(sb, value, depth, maxDepth)
-            is JsonString -> appendString(sb, value.value)
-            is JsonNumber -> sb.append(value.text)
-            is JsonBoolean -> sb.append(value.value)
-            JsonNull -> sb.append("null")
+        private fun map(
+            map: Map<*, *>,
+            depth: Int,
+        ) {
+            sb.append('{')
+            var first = true
+            // Only a map with keys that are not strings can repeat one once they are written as text.
+            val written = if (map.keys.all { it is String }) null else HashSet<String>()
+            for ((key, v) in map) {
+                if (!first) sb.append(style.comma)
+                first = false
+                val name = key.toString()
+                if (written != null && !written.add(name)) throw SignalsCodecException("Two keys of the map are written as \"$name\"")
+                style.appendKey(sb, name)
+                sb.append(style.colon)
+                value(v, depth + 1)
+            }
+            sb.append('}')
         }
-    }
 
-    private fun appendMap(
-        sb: StringBuilder,
-        map: Map<*, *>,
-        depth: Int,
-        maxDepth: Int,
-    ) {
-        sb.append('{')
-        var first = true
-        // Only a map with keys that are not strings can repeat one once they are written as text.
-        val written = if (map.keys.all { it is String }) null else HashSet<String>()
-        for ((key, v) in map) {
-            if (!first) sb.append(',')
-            first = false
-            val name = key.toString()
-            if (written != null && !written.add(name)) throw SignalsCodecException("Two keys of the map are written as \"$name\"")
-            appendString(sb, name)
-            sb.append(':')
-            appendValue(sb, v, depth + 1, maxDepth)
+        private fun all(
+            items: Iterable<*>,
+            depth: Int,
+        ) {
+            sb.append('[')
+            var first = true
+            for (item in items) {
+                if (!first) sb.append(style.comma)
+                first = false
+                value(item, depth + 1)
+            }
+            sb.append(']')
         }
-        sb.append('}')
-    }
-
-    private fun appendIterable(
-        sb: StringBuilder,
-        items: Iterable<*>,
-        depth: Int,
-        maxDepth: Int,
-    ) {
-        sb.append('[')
-        var first = true
-        for (item in items) {
-            if (!first) sb.append(',')
-            first = false
-            appendValue(sb, item, depth + 1, maxDepth)
-        }
-        sb.append(']')
     }
 
     private const val PLAIN_SCALE = 100

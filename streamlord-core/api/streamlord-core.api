@@ -2,6 +2,9 @@ public final class io/github/markusaugust/streamlord/core/DatastarEventValidatio
 	public fun <init> (Ljava/lang/String;)V
 }
 
+public abstract interface annotation class io/github/markusaugust/streamlord/core/InternalStreamlordApi : java/lang/annotation/Annotation {
+}
+
 public final class io/github/markusaugust/streamlord/core/JsonParseException : io/github/markusaugust/streamlord/core/StreamlordException {
 	public fun <init> (Ljava/lang/String;I)V
 	public final fun getPosition ()I
@@ -86,6 +89,112 @@ public final class io/github/markusaugust/streamlord/core/application/Streamlord
 	public final fun getDefault ()Lio/github/markusaugust/streamlord/core/application/Streamlord;
 }
 
+public final class io/github/markusaugust/streamlord/core/catalog/CatalogNames {
+	public static final field ALIASED_PREFIX Ljava/lang/String;
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/catalog/CatalogNames;
+	public static final field PREFIX Ljava/lang/String;
+	public static final field VERSION Ljava/lang/String;
+	public final fun getAttributes ()Ljava/util/Set;
+	public final fun getExpressionAttributes ()Ljava/util/Set;
+	public final fun getFilterAttributes ()Ljava/util/Set;
+	public final fun getSignalAttributes ()Ljava/util/Set;
+}
+
+public final class io/github/markusaugust/streamlord/core/client/AsciiKt {
+	public static final fun asciiLowercase (Ljava/lang/String;)Ljava/lang/String;
+	public static final fun indexOfAsciiIgnoreCase (Ljava/lang/String;Ljava/lang/String;I)I
+	public static final fun regionMatchesAsciiIgnoreCase (Ljava/lang/String;ILjava/lang/String;)Z
+}
+
+public final class io/github/markusaugust/streamlord/core/client/ClientCasing {
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/client/ClientCasing;
+	public final fun camel (Ljava/lang/String;)Ljava/lang/String;
+	public final fun getCASES ()Ljava/util/List;
+	public final fun kebab (Ljava/lang/String;)Ljava/lang/String;
+	public final fun keyFor (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lio/github/markusaugust/streamlord/core/client/ClientCasing$KeyChoice;
+	public final fun modifyCasing (Ljava/lang/String;Ljava/util/Collection;Ljava/lang/String;)Ljava/lang/String;
+	public static synthetic fun modifyCasing$default (Lio/github/markusaugust/streamlord/core/client/ClientCasing;Ljava/lang/String;Ljava/util/Collection;Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/String;
+	public final fun readKey (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+	public static synthetic fun readKey$default (Lio/github/markusaugust/streamlord/core/client/ClientCasing;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/String;
+	public final fun readsAs (Ljava/lang/String;)Ljava/lang/String;
+	public final fun textCamel (Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/client/ClientCasing$KeyChoice {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun getCase ()Ljava/lang/String;
+	public final fun getKey ()Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/client/ClientExpressionsKt {
+	public static final fun clientRewrite (Ljava/lang/String;)Lio/github/markusaugust/streamlord/core/client/ClientRewrite;
+	public static final fun getCLIENT_SIGNAL ()Lkotlin/text/Regex;
+}
+
+public final class io/github/markusaugust/streamlord/core/client/ClientHtmlKt {
+	public static final field HTML_SPACE Ljava/lang/String;
+	public static final fun commentEnd (Ljava/lang/String;I)I
+	public static final fun decodeEntities (Ljava/lang/String;)Lio/github/markusaugust/streamlord/core/client/DecodedValue;
+	public static final fun getRAW_TEXT ()Ljava/util/List;
+	public static final fun isHtmlSpace (C)Z
+	public static final fun rawTextEnd (Ljava/lang/String;Ljava/lang/String;I)I
+}
+
+public final class io/github/markusaugust/streamlord/core/client/ClientRequest {
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/client/ClientRequest;
+	public final fun bodyless (Ljava/lang/String;)Z
+	public final fun headers (Ljava/lang/String;)Ljava/util/Map;
+	public final fun wellFormed (Ljava/lang/String;)Ljava/lang/String;
+	public final fun withSignals (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/client/ClientRewrite : io/github/markusaugust/streamlord/core/client/ClientScript {
+	public fun <init> (Ljava/lang/String;[ILjava/util/List;Ljava/util/List;)V
+	public final fun getRewrites ()Ljava/util/List;
+	public final fun getRuns ()Ljava/util/List;
+}
+
+public class io/github/markusaugust/streamlord/core/client/ClientScript {
+	public fun <init> (Ljava/lang/String;[I)V
+	public final fun getJs ()Ljava/lang/String;
+	public final fun toExpression (I)I
+}
+
+public final class io/github/markusaugust/streamlord/core/client/DecodedValue {
+	public fun <init> (Ljava/lang/String;[I)V
+	public final fun getMap ()[I
+	public final fun getText ()Ljava/lang/String;
+	public final fun toSource (I)I
+}
+
+public final class io/github/markusaugust/streamlord/core/client/Rewrite {
+	public fun <init> (ZIILjava/lang/String;)V
+	public final fun component1 ()Z
+	public final fun component2 ()I
+	public final fun component3 ()I
+	public final fun component4 ()Ljava/lang/String;
+	public final fun copy (ZIILjava/lang/String;)Lio/github/markusaugust/streamlord/core/client/Rewrite;
+	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/core/client/Rewrite;ZIILjava/lang/String;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/client/Rewrite;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEnd ()I
+	public final fun getName ()Ljava/lang/String;
+	public final fun getSignal ()Z
+	public final fun getStart ()I
+	public final fun getWritten ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/AttributeKeys {
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/domain/AttributeKeys;
+	public final fun capitalIn (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+	public final fun modifierStartIn (Ljava/lang/String;)Ljava/lang/String;
+	public final fun nameProblem (Ljava/lang/String;)Ljava/lang/String;
+	public final fun objectForm (Ljava/lang/String;)Ljava/lang/String;
+	public final fun runsIntoModifiers (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+	public final fun spellings (Ljava/lang/String;)Ljava/util/List;
+}
+
 public final class io/github/markusaugust/streamlord/core/domain/CspNonce {
 	public static final field ATTRIBUTE Ljava/lang/String;
 	public static final field HEADER Ljava/lang/String;
@@ -154,6 +263,7 @@ public final class io/github/markusaugust/streamlord/core/domain/ElementsGuard {
 	public final fun getDefaultPrefixes ()Ljava/util/List;
 	public final fun getEvaluatedAttributes ()Ljava/util/Set;
 	public final fun getExpressionAttributes ()Ljava/util/Set;
+	public final fun nearAttribute (Ljava/lang/String;Z)Ljava/lang/String;
 }
 
 public final class io/github/markusaugust/streamlord/core/domain/ElementsResponse : io/github/markusaugust/streamlord/core/domain/DatastarResponse {
@@ -309,8 +419,11 @@ public final class io/github/markusaugust/streamlord/core/domain/ScriptResponse 
 
 public final class io/github/markusaugust/streamlord/core/domain/SignalNames {
 	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/domain/SignalNames;
+	public final fun bracketed (Ljava/lang/String;)Ljava/lang/String;
+	public final fun getPROTOTYPE_NAMES ()Ljava/util/Set;
 	public final fun hyphenProblem (Ljava/lang/String;)Ljava/lang/String;
 	public final fun keyProblem (Ljava/lang/String;Z)Ljava/lang/String;
+	public final fun nameProblem (Ljava/lang/String;)Ljava/lang/String;
 	public final fun nest (Ljava/lang/Iterable;Lkotlin/jvm/functions/Function2;)Ljava/util/Map;
 	public static synthetic fun nest$default (Lio/github/markusaugust/streamlord/core/domain/SignalNames;Ljava/lang/Iterable;Lkotlin/jvm/functions/Function2;ILjava/lang/Object;)Ljava/util/Map;
 	public final fun pathProblem (Ljava/lang/String;)Ljava/lang/String;
@@ -568,10 +681,21 @@ public final class io/github/markusaugust/streamlord/core/json/JsonWriter {
 	public static final field DEFAULT_MAX_DEPTH I
 	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/json/JsonWriter;
 	public final fun write (Ljava/lang/Object;I)Ljava/lang/String;
+	public final fun write (Ljava/lang/Object;Lio/github/markusaugust/streamlord/core/json/JsonWriter$Style;I)Ljava/lang/String;
 	public static synthetic fun write$default (Lio/github/markusaugust/streamlord/core/json/JsonWriter;Ljava/lang/Object;IILjava/lang/Object;)Ljava/lang/String;
+	public static synthetic fun write$default (Lio/github/markusaugust/streamlord/core/json/JsonWriter;Ljava/lang/Object;Lio/github/markusaugust/streamlord/core/json/JsonWriter$Style;IILjava/lang/Object;)Ljava/lang/String;
 	public final fun writeExpression (Ljava/lang/Object;I)Ljava/lang/String;
 	public static synthetic fun writeExpression$default (Lio/github/markusaugust/streamlord/core/json/JsonWriter;Ljava/lang/Object;IILjava/lang/Object;)Ljava/lang/String;
 	public final fun writeString (Ljava/lang/String;)Ljava/lang/String;
+}
+
+public abstract interface class io/github/markusaugust/streamlord/core/json/JsonWriter$Style {
+	public abstract fun appendKey (Ljava/lang/StringBuilder;Ljava/lang/String;)V
+	public abstract fun appendString (Ljava/lang/StringBuilder;Ljava/lang/String;)V
+	public abstract fun getColon ()Ljava/lang/String;
+	public abstract fun getComma ()Ljava/lang/String;
+	public abstract fun getInstead ()Ljava/lang/String;
+	public abstract fun getName ()Ljava/lang/String;
 }
 
 public final class io/github/markusaugust/streamlord/core/json/SignalPatchException : java/lang/IllegalArgumentException {

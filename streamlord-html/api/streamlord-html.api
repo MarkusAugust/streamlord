@@ -96,6 +96,7 @@ public final class io/github/markusaugust/streamlord/html/Case : java/lang/Enum 
 
 public final class io/github/markusaugust/streamlord/html/Casing {
 	public static final field INSTANCE Lio/github/markusaugust/streamlord/html/Casing;
+	public final fun attributeKey (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
 	public final fun camel (Ljava/lang/String;)Ljava/lang/String;
 	public final fun heldKey (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
 	public final fun kebab (Ljava/lang/String;)Ljava/lang/String;
@@ -109,9 +110,11 @@ public final class io/github/markusaugust/streamlord/html/Casing {
 
 public final class io/github/markusaugust/streamlord/html/DatastarAttributes {
 	public static final field INSTANCE Lio/github/markusaugust/streamlord/html/DatastarAttributes;
+	public final fun expression (Ljava/lang/String;)Ljava/lang/String;
 	public final fun getPrefix ()Ljava/lang/String;
 	public final fun name (Ljava/lang/String;)Ljava/lang/String;
 	public final fun setPrefix (Ljava/lang/String;)V
+	public final fun value (Ljava/lang/String;)Ljava/lang/String;
 }
 
 public final class io/github/markusaugust/streamlord/html/ElementsKt {

@@ -1,6 +1,5 @@
 package io.github.markusaugust.streamlord.analysis
 
-import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.html.InvalidSignalNameException
 import io.github.markusaugust.streamlord.html.dataSignals
 import io.github.markusaugust.streamlord.html.not
@@ -8,7 +7,6 @@ import io.github.markusaugust.streamlord.html.signal
 import kotlinx.html.HTMLTag
 import kotlinx.html.div
 import kotlinx.html.stream.createHTML
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -20,11 +18,7 @@ import kotlin.test.assertTrue
  * renders it. The table is the one the editor's test reads, so both analyses answer to this.
  */
 class DataSignalsSecondArgumentTest {
-    private val table =
-        JsonParser
-            .parseObject(File("../editors/vscode/test/fixtures/data-signals-second-argument.json").readText())
-            .array("cases")!!
-            .objects()
+    private val table = twinCases("data-signals-second-argument.json")
 
     @Suppress("SimplifyBooleanWithConstants", "KotlinConstantConditions", "USELESS_IS_CHECK")
     private fun calls(

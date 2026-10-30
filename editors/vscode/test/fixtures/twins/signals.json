@@ -1,0 +1,32 @@
+{
+  "$comment": "The signals a file declares (signals: collectSignals, sorted), defines (definitions: collectSignalDefinitions, sorted) and declares from a value it cannot read (encoded: the definitions that are * or name a class, in order). Read by SignalsTest.kt and signals.test.ts.",
+  "cases": [
+    {"name":"a signals class may carry any modifier","language":"kotlin","src":"@Serializable public data class Signals(val count: Int = 0, var name: String)\n@Serializable internal class Inner(val inner: Int)\n@Serializable(with = X::class) private value class Wrapped(val wrapped: Int)","signals":["count","inner","name","wrapped"]},
+    {"name":"a name is collected as written, wherever it is written","language":"kotlin","src":"dataSignals(\"fooBar\" to 7); patchSignals(\"fooBar\" to 1); dataBind(\"x\")","signals":["fooBar","x"]},
+    {"name":"a name with a hyphen is collected as it stands until it is fixed","language":"kotlin","src":"dataSignals(\"foo-bar\" to 7); signal(\"foo-bar\")","signals":["foo-bar"]},
+    {"name":"a page declared from a variable is read by what the file says about it (1)","language":"kotlin","src":"val init = \"{count: 0}\"\nfun p() = div { dataSignals(init) }","encoded":[]},
+    {"name":"a page declared from a variable is read by what the file says about it (2)","language":"kotlin","src":"fun p(pairs: Array<Pair<String, Any?>>) = div { dataSignals(*pairs) }","encoded":[]},
+    {"name":"a page declared from a variable is read by what the file says about it (3)","language":"kotlin","src":"val p = \"count\" to 0\nfun f() = div { dataSignals(p) }","encoded":[]},
+    {"name":"a page declared from a variable is read by what the file says about it (4)","language":"kotlin","src":"fun p(s: JsonObject) = div { dataSignals(s) }","encoded":["*"]},
+    {"name":"a page declared from a variable is read by what the file says about it (5)","language":"kotlin","src":"class X(val form: String)\nfun p() { val form = Form(); div { dataSignals(codec.toJsonValue(form)) } }","encoded":["toJsonValue:Form"]},
+    {"name":"a page declared from a variable is read by what the file says about it (6)","language":"kotlin","src":"fun p() = div { dataSignals(codec.toJsonValue(forms.Form())) }","encoded":["toJsonValue:Form"]},
+    {"name":"a page declared from a variable is read by what the file says about it (7)","language":"kotlin","src":"fun p() = div { dataSignals(codec.toJsonValue(Form()), true) }","encoded":["toJsonValue:Form"]},
+    {"name":"a page declared from a variable is read by what the file says about it (8)","language":"kotlin","src":"fun p(text: String) = div { dataSignals(codec.toJsonValue(text)) }","encoded":[]},
+    {"name":"a page declared from a variable is read by what the file says about it (9)","language":"kotlin","src":"const val INIT = \"{count: 0}\"\nfun p() = div { dataSignals(INIT); dataSignals(initial(0)) }","encoded":[]},
+    {"name":"a page declared from a variable is read by what the file says about it (10)","language":"kotlin","src":"fun p() = div { dataSignals(codec.toJsonValue(Page<String>())) }","encoded":["toJsonValue:Page"]},
+    {"name":"a page declared from a variable is read by what the file says about it (11)","language":"kotlin","src":"fun a(form: LoginForm) = div { dataSignals(codec.toJsonValue(form)) }\nfun b(form: SearchSignals) = div { dataSignals(codec.toJsonValue(form)) }","encoded":["toJsonValue:LoginForm","toJsonValue:SearchSignals"]},
+    {"name":"the keys of a map handed over as the signals are signals","language":"kotlin","src":"stream.patchSignals(mapOf(\"count\" to 1, \"user\" to mapOf(\"name\" to \"\"))); respondSignals(hashMapOf(\"open\" to true))","signals":["count","open","user"]},
+    {"name":"a pair in parentheses is a pair","language":"kotlin","src":"dataSignals((\"count\" to 0))","signals":["count"]},
+    {"name":"the keys of the JSON a server call sends are signals: stream.patchSignals","language":"kotlin","src":"stream.patchSignals(\"\"\"{\"open\": true}\"\"\")","signals":["open"]},
+    {"name":"the keys of the JSON a server call sends are signals: call.respondSignals","language":"kotlin","src":"call.respondSignals(\"\"\"{\"open\": true}\"\"\")","signals":["open"]},
+    {"name":"the keys of the JSON a server call sends are signals: datastarSignals","language":"kotlin","src":"datastarSignals(\"\"\"{\"open\": true}\"\"\")","signals":["open"]},
+    {"name":"a key inside a pair's value declares nothing on its own","language":"kotlin","src":"dataSignals(\"user\" to mapOf(\"first-name\" to \"\", \"age\" to 1))","signals":["user"]},
+    {"name":"a property goes by its serial name, and a parenthesis does not end the class","language":"kotlin","src":"@Serializable\ndata class PageSignals(\n    @SerialName(\"page_no\") val page: Int = 0,\n    val tags: List<String> = listOf(),\n    @SerialName(value = \"sort-by\") @Required private val sort: String,\n    val after: Int = 0,\n)","signals":["after","page_no","sort-by","tags"]},
+    {"name":"a key of an object under a key is a signal under that one","language":"html","src":"<div data-signals='{\"query\": \"\", \"nested\": {\"deep\": 1}}'></div>","signals":["nested","nested.deep","query"]},
+    {"name":"the object form declares quoted keys in either kind of quote","language":"html","src":"<div data-signals__ifmissing=\"{'single': 1, bare: 2}\"></div>","signals":["bare","single"]},
+    {"name":"the object form declares a key whose quotes are escaped in a Kotlin string","language":"kotlin","src":"val k = \"<div data-signals='{\\\"esc\\\": 1}'></div>\"","signals":["esc"]},
+    {"name":"a spread of a variable may define any signal, and names none to complete","language":"html","src":"<div data-signals=\"{a: 1, ...init, b: {...more}}\"></div>","signals":["a","b"],"definitions":["*","a","b"]},
+    {"name":"a key with template syntax in it declares nothing","language":"html","src":"<div data-signals:${key}=\"1\"></div><div data-signals:{{ name }}=\"1\"></div><div data-signals:th:text=\"1\"></div><div data-signals:<%= k %>=\"1\"></div><div data-signals:foo{{x}}=\"1\"></div><div data-bind:user-name__case.kebab></div><div data-signals:\u00e5r=\"1\"></div>","signals":["user-name","\u00e5r"]},
+    {"name":"a key with a Kotlin template in it declares nothing","language":"kotlin","src":"val x = \"<div data-signals:${name}=\\\"1\\\"></div>\"","signals":[]}
+  ]
+}

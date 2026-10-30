@@ -2,6 +2,61 @@
 
 All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here.
 
+## Unreleased
+
+- A duration modifier the client reads by its number is a warning that says what it reads, with
+  the fix to write it out: `__debounce.5x` waits 5 ms, since `tagToMs` falls back to `parseFloat`,
+  and `__delay.0x1fms` 31 ms. It was an error that said a duration was missing. A tag that is no
+  number at all, such as `__debounce.soon`, is still that error.
+- The markup checks read HTML as the browser does: the content of `xmp`, `iframe`, `noembed`,
+  `noframes`, `noscript` and `plaintext` is text, a raw-text element written `<iframe/>` is still
+  open, and only its whole end tag closes it, outside svg and math but again inside their HTML
+  integration points, such as a `foreignObject`; only HTML's own white space ends an attribute
+  name, so a no-break space is part of one; a numeric reference is read whatever its number of
+  digits, one to NUL or past U+10FFFF is U+FFFD, and one from 128 to 159 is the windows-1252
+  character the browser reads. Where an svg or a math begins and ends follows the browser's tree
+  builder for the open elements: an `svg` inside a `math` is a MathML element, so its `desc` holds
+  no HTML, unless it opens right in an `annotation-xml`; `mglyph` and `malignmark` right inside a
+  MathML text element stay MathML; `<p>`, `<b>`, `<div>` and the other breakout tags, a `<font>`
+  with a color, face or size, `</p>` and `</br>`, and the end tag of an HTML element open around
+  them close the svg or math, so a `style` after them is HTML's raw text; an end tag inside an
+  integration point does not reach past a `div` open in it; and inside an svg or a math a
+  `<![CDATA[` section ends only at `]]>`. A tag name runs on past `_` and `.`, so `<style_x>` is no
+  style.
+- A comment ends where the browser ends it: `<!-->` and `<!--->` are whole comments, and `--!>`
+  closes one as `-->` does. The checks used to go quiet until the next `-->`.
+- An empty modifier argument is read as the client reads it. After the value it is nothing:
+  `__threshold.50.` and `__once.` are fine, and `__case.` has no value. As the first argument it
+  is the value: `__debounce.` needs a duration, and the fix takes the place of the dot, while
+  `__debounce..500ms` and `__threshold..50` are errors with the fix that drops the empty one,
+  offered only when what is left holds up: `__debounce..leading` still lacks a duration.
+  `__threshold` is read as the client's `Number` reads it, so `1e1` is 10, no value is 0 with a
+  warning, and a value outside 0 to 100 is a warning that the client clamps it. With `__half` or
+  `__full` it is a warning that the client never reads it.
+- The request inspector puts the `datastar` parameter where the first one stands, also one written
+  without a value or percent-encoded, as the client's `URLSearchParams.set` does, and sends and copies as curl a method
+  written in lower case as the client does.
+- A key the DSL refuses at runtime, one holding `__` or one ending in `_` before any modifier the call
+  adds (its `__case`, `ifMissing`, `session` or the modifiers of its lambda), is the error
+  `key-refused`, where the hint used to say what it writes on the wire: `dataClass("isOpen_", …)`,
+  `dataSignals("foo_", "1", ifMissing = true)` and `dataSignals("fooBar__x", …)` throw. So does a
+  `__` in the name of `dataBind`, `dataRef` or `dataIndicator`, and any key with whitespace, a quote
+  or a character that ends an attribute. A signal name no `$` reaches, such as `a:b`, `über` or
+  `constructor`, is `key-refused` too, in a key, a pair or the name of those three. In IntelliJ the
+  check is part of Datastar key casing.
+- `patch` in an expression of an attribute that does not hand it over is the warning `scope-name`:
+  only `data-on-signal-patch` declares `patch`, so `data-text="patch.a"` throws a ReferenceError.
+  In IntelliJ the check is part of Datastar expressions.
+- A pair written `"selected" to null` in `dataSignals` is the warning `signal-null`: Datastar's
+  client holds no null, so the pair declares nothing, and an expression that reads the signal
+  gets `""`. In IntelliJ
+  the check is part of Datastar attributes.
+- A capital in the key of `dataAttr` or `dataAnimate` is the error `attribute-name-case`, with the
+  kebab-case fix, since Streamlord 0.16 refuses it at runtime: the browser lowercases an
+  attribute name, so `dataAttr("viewBox", …)` could only set `view-box`. The message names the
+  object form, `dataAttr("{viewBox: …}")`, for an attribute that really has capitals. In IntelliJ
+  the check is part of Datastar key casing.
+
 ## 0.8.0
 
 - A hyphen in a signal name written in a DSL call is the error `signal-name-hyphen`, with the

@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.test
 
 import io.github.markusaugust.streamlord.core.StreamlordException
+import io.github.markusaugust.streamlord.core.client.ClientRequest
 import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.PatchElements
@@ -21,7 +22,6 @@ import java.io.InputStream
 import java.io.InputStreamReader
 import java.io.Reader
 import java.net.URI
-import java.net.URLEncoder
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
@@ -331,24 +331,6 @@ public class LiveDatastarStream private constructor(
         /** Long enough for a slow CI machine, short enough that a broken test says so. */
         public val DEFAULT_TIMEOUT: Duration = 5.seconds
 
-        // `datastar` set on the query as the client's URLSearchParams.set does (fetch.ts): one the URI
-        // already carries is replaced, the rest kept. The client re-serialises the rest and this keeps
-        // them as written, which a server reads the same.
-        private fun withSignals(
-            uri: URI,
-            signals: String,
-        ): URI {
-            val datastar = "datastar=" + URLEncoder.encode(signals, Charsets.UTF_8)
-            val kept =
-                uri.rawQuery
-                    .orEmpty()
-                    .split('&')
-                    .filter { it.isNotEmpty() && it.substringBefore('=') != "datastar" }
-            val query = (kept + datastar).joinToString("&")
-            val fragment = uri.rawFragment?.let { "#$it" } ?: ""
-            return URI(uri.toString().substringBefore('#').substringBefore('?') + "?" + query + fragment)
-        }
-
         /** HTTP/1.1, as a browser speaks to a stream on a plain `http://` origin. */
         private val client: HttpClient by lazy { HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build() }
 
@@ -382,11 +364,10 @@ public class LiveDatastarStream private constructor(
         ): LiveDatastarStream {
             val request =
                 HttpRequest
-                    .newBuilder(withSignals(uri, signals))
+                    .newBuilder(URI(ClientRequest.withSignals(uri.toString(), signals)))
                     // An infinite wait is no timeout at all; the JDK cannot hold one that long.
                     .apply { if (timeout.isFinite()) timeout(timeout.toJavaDuration()) }
-                    .header("Datastar-Request", "true")
-                    .header("Accept", DatastarProtocol.ACCEPT)
+                    .apply { ClientRequest.headers("GET").forEach { (name, value) -> header(name, value) } }
                     .apply { headers.forEach { (name, value) -> header(name, value) } }
                     .GET()
                     .build()
@@ -400,7 +381,7 @@ public class LiveDatastarStream private constructor(
                 }
             val body: InputStream = response.body()
             val contentType = response.headers().firstValue("Content-Type").orElse("")
-            val isStream = contentType.substringBefore(';').trim().equals("text/event-stream", ignoreCase = true)
+            val isStream = contentType.substringBefore(';').trim().equals(DatastarProtocol.CONTENT_TYPE_EVENT_STREAM, ignoreCase = true)
             // The JDK's client hands over the body as sent; a gzipped one would read as noise.
             val encoding = response.headers().firstValue("Content-Encoding").orElse("identity")
             val plain = encoding.trim().equals("identity", ignoreCase = true)

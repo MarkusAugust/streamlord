@@ -1,5 +1,5 @@
 {
-  "$comment": "Single source of truth for the Datastar 1.0.4 surface Streamlord knows: attributes, modifiers, actions, fetch options. Read by the Kotlin DSL tests (streamlord-html-pro/CatalogTest) and bundled into the VS Code extension. Pro entries name only publicly documented attribute names; no Datastar Pro code is included anywhere.",
+  "$comment": "Single source of truth for the Datastar 1.0.4 surface Streamlord knows: attributes, modifiers, actions, fetch options. streamlord-core compiles its names in (CatalogNames), streamlord-analysis compiles it in as text, the VS Code extension bundles it, and streamlord-html-pro/CatalogTest binds it to the DSL. Pro entries name only publicly documented attribute names; no Datastar Pro code is included anywhere.",
   "version": "1.0.4",
   "prefix": "data-",
   "aliasedPrefix": "data-star-",
@@ -27,6 +27,7 @@
   "attributes": [
     {
       "name": "attr",
+      "keyIsAttributeName": true,
       "forms": ["data-attr:<name>=\"expr\"", "data-attr=\"{name: expr}\""],
       "keyed": true,
       "keyCase": "raw",
@@ -142,6 +143,7 @@
       "keyRequired": true,
       "valueKind": "expression",
       "requires": "value",
+      "argNames": ["evt"],
       "kotlin": ["dataOn", "dataOnClick", "dataOnSubmit", "dataOnChange", "dataOnInput", "dataOnKeydown", "dataOnFetch"],
       "modifiers": [
         { "name": "once", "type": "flag" },
@@ -170,7 +172,7 @@
         { "name": "exit", "type": "flag" },
         { "name": "half", "type": "flag" },
         { "name": "full", "type": "flag" },
-        { "name": "threshold", "type": "int", "min": 0, "max": 100 },
+        { "name": "threshold", "type": "int", "min": 0, "max": 100, "ignoredWith": ["full", "half"] },
         { "$ref": "timing" },
         { "$ref": "viewtransition" }
       ],
@@ -197,6 +199,7 @@
       "valueKind": "expression",
       "returnsValue": true,
       "requires": "value",
+      "argNames": ["patch"],
       "kotlin": ["dataOnSignalPatch"],
       "modifiers": [{ "$ref": "timing" }],
       "doc": "Runs an expression whenever signals are patched. `patch` holds the patch."
@@ -287,6 +290,7 @@
     },
     {
       "name": "animate",
+      "keyIsAttributeName": true,
       "pro": true,
       "forms": ["data-animate:<attribute>=\"expr\"", "data-animate=\"{attribute: expr}\""],
       "keyed": true,
@@ -473,7 +477,7 @@
     { "name": "retryMaxCount", "type": "number", "default": "10" }
   ],
   "fetchEvents": ["started", "finished", "error", "retrying", "retries-failed"],
-  "expressionScope": ["el", "evt", "patch", "$", "@"],
+  "compiledParameters": ["el", "$", "__action", "evt"],
   "sse": {
     "events": ["datastar-patch-elements", "datastar-patch-signals"],
     "patchModes": ["outer", "inner", "replace", "prepend", "append", "before", "after", "remove"],
@@ -505,6 +509,24 @@
     },
     "selector": {
       "removeElements": { "arg": 0, "named": "selector" }
+    },
+    "signals": {
+      "$comment": "The calls whose arguments are signals by name, as pairs or names. names: the pair keys are signal names written in code, which a $ then reads. json: the call also takes the signals as JSON text.",
+      "dataSignals": { "names": true },
+      "patchSignals": { "names": true, "json": true },
+      "removeSignals": {},
+      "respondSignals": { "json": true },
+      "datastarSignals": { "json": true }
+    },
+    "signalNames": {
+      "$comment": "The expression helpers, whose first argument is a signal name written as JavaScript. reads: the helper reads the signal. shared: other APIs use the name in the same scope, so a call counts only inside a DSL call.",
+      "signal": { "reads": true },
+      "set": { "shared": true },
+      "setExpr": {},
+      "increment": { "reads": true },
+      "decrement": { "reads": true },
+      "toggle": { "shared": true },
+      "not": { "reads": true }
     }
   }
 }

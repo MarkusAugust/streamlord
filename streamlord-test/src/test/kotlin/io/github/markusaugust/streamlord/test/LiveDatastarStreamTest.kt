@@ -456,8 +456,8 @@ class LiveDatastarStreamTest {
             LiveDatastarStream.open(URI("$accept?page=2"), signals = """{"q":"a b"}""").use { }
             assertEquals("page=2&datastar=%7B%22q%22%3A%22a+b%22%7D", acceptedQuery)
 
-            // One the URI carries is replaced, as URLSearchParams.set replaces.
+            // One the URI carries is replaced where it stands, as URLSearchParams.set replaces it.
             LiveDatastarStream.open(URI("$accept?datastar=%7B%22old%22%3A1%7D&page=3"), signals = "{}").use { }
-            assertEquals("page=3&datastar=%7B%7D", acceptedQuery)
+            assertEquals("datastar=%7B%7D&page=3", acceptedQuery)
         }
 }

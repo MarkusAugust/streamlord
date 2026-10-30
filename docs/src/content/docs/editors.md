@@ -115,8 +115,10 @@ attribute rules, the signal and selector collectors, the route finder and the in
 format. The IntelliJ plugin calls it. The VS Code extension mirrors it in TypeScript, and both
 test suites run one shared corpus of expressions, markup, HTML and Kotlin, each case with the
 issue codes, the ranges and the text every quick fix must leave behind. It lives in
-`editors/vscode/test/fixtures/corpus`. The JavaScript check is two parsers, acorn in the extension
-and a port of it in Kotlin, and the corpus is what holds them to the same verdict.
+`editors/vscode/test/fixtures/corpus`. What is no issue, such as the signals a file declares, the
+routes it serves or the curl line of a saved request, is a case in `fixtures/twins` beside it, which
+both suites read the same way. The JavaScript check is two parsers, acorn in the extension and a
+port of it in Kotlin, and the corpus is what holds them to the same verdict.
 
 **You can call it too**, which is worth doing in the tests of your own markup functions:
 
