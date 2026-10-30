@@ -9,7 +9,10 @@ kotlinFloor = "2.2.21"
 # the oldest supported Boot does.
 coroutines = "1.10.2"
 coroutinesNewest = "1.11.0"
-serialization = "1.12.0"
+# A ceiling, held by the Kotlin floor. 1.12 is built by Kotlin 2.4, whose metadata a 2.2 compiler
+# refuses, so a project on kotlinFloor could not compile against streamlord-json-kotlinx. Raise it
+# only to a release the floor's compiler reads; checkKotlinFloor says whether it does.
+serialization = "1.11.0"
 kotlinxHtml = "0.12.0"
 ktor = "3.6.0"
 # The oldest Ktor the adapter promises to run on; testOldestKtor runs its tests against it.
