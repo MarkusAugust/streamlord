@@ -330,7 +330,7 @@ jobs:
           persist-credentials: false
 
       # GraalVM rather than Temurin: this job compiles the service to a native image.
-      - uses: graalvm/setup-graalvm@27b360dbb857524eaf0b4c4cef364d38e5b4f173 # v1.6.7
+      - uses: graalvm/setup-graalvm@f70bc8032f90a104502824a54bcb94b6f01715bc # v1.6.8
         with:
           java-version: "21"
           distribution: graalvm-community
@@ -626,7 +626,7 @@ jobs:
       - name: Load the image
         run: docker load -i streamlord-live.tar
 
-      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}

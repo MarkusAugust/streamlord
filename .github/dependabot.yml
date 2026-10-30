@@ -51,6 +51,14 @@ updates:
       # against; see nettyOldestKtor in gradle/libs.versions.toml.
       - dependency-name: "io.netty:netty-bom"
         update-types: ["version-update:semver-minor", "version-update:semver-major"]
+      # Jetty 11 is what Ktor 3.0's Jetty engine was built for; 12 fails testOldestKtor with
+      # NoClassDefFoundError. The BOM is only that test's (jettyOldestKtor).
+      - dependency-name: "org.eclipse.jetty:jetty-bom"
+        update-types: ["version-update:semver-major"]
+      # Held for the Kotlin floor: 1.12 is built by Kotlin 2.4, which a 2.2 compiler cannot read
+      # (see serialization in gradle/libs.versions.toml).
+      - dependency-name: "org.jetbrains.kotlinx:kotlinx-serialization*"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /editors/vscode
