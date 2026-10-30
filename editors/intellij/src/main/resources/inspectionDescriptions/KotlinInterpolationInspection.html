@@ -14,9 +14,17 @@ in a Datastar expression, in a script or an event handler, or in an unquoted att
 not help there. Constants, literals, numbers and booleans, and markup built in the template are left alone.
 </p>
 <p>
+A call to <code>interpolate(...)</code> is judged as it will run. A Kotlin template in its format is filled in before
+<code>interpolate</code> sees the markup, so it is neither escaped nor refused: a warning. More or fewer <code>%s</code> holes
+than values is an error, since <code>interpolate</code> then throws. A hole where <code>interpolate</code> refuses the value,
+a <code>String</code> in a Datastar expression or a <code>Boolean</code> in <code>style</code>, is an error; a value the text
+cannot tell there is a warning.
+</p>
+<p>
 Quick fixes: the DSL helper (<code>increment("count")</code>, <code>signal("count")</code>, <code>toggle("open")</code>), a
 <code>$$"..."</code> literal (Kotlin 2.2+) where a single dollar is text, the <code>${'$'}count</code> escape, or the
-literal rewritten as <code>interpolate(...)</code> with its import.
+literal rewritten as <code>interpolate(...)</code> with its import, and a template in a format made a <code>%s</code> hole
+with its value passed in its place.
 </p>
 <!-- tooltip end -->
 </body>
