@@ -242,7 +242,9 @@ const patchEvent = (html) => `event: datastar-patch-elements\n${html.split('\n')
 
 const runCase = async (c, pro) => {
   const fragmentHtml = c.html.startsWith('<html') ? null : c.html
-  const window = new Window({ url: 'http://localhost/' })
+  // happy-dom runs no <script> unless asked to since 20, and under data-nonce the client compiles
+  // each expression through one. What runs here is the official bundle and the DSL's own output.
+  const window = new Window({ url: 'http://localhost/', settings: { enableJavaScriptEvaluation: true } })
   const { document } = window
   wrapListeners(window)
   listening = null
