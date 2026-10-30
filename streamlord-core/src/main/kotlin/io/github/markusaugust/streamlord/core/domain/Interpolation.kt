@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.core.domain
 
+import io.github.markusaugust.streamlord.core.InternalStreamlordApi
 import io.github.markusaugust.streamlord.core.StreamlordException
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
@@ -197,14 +198,7 @@ public fun interpolate(
     }
     if (holes.isEmpty()) return format.replace("%%", "%")
 
-    val shadow = shadow(format, holes)
-    // Longest first, so `data-star-` is tried before `data-` whatever order the caller used.
-    val ordered = prefixes.sortedByDescending { it.length }
-    // As HTML, as svg or math, and as svg or math whose CDATA sections are text (see scanMarkup).
-    val landscapes =
-        listOf(false to false, true to false, true to true).map { (foreign, cdata) ->
-            Landscape(ordered, shadow).also { scanMarkup(shadow, it, foreign, cdata) }
-        }
+    val landscapes = landscapes(format, holes.map { it until it + 2 }, prefixes)
 
     val out = StringBuilder(format.length + values.size * 16)
     var cut = 0
@@ -218,12 +212,8 @@ public fun interpolate(
             }
 
             else -> {
-                for (landscape in landscapes) {
-                    val position = landscape.positionOf(hole)
-                    if (!position.admits(value)) {
-                        throw UnsafeInterpolationException(position, index, landscape.attributeAt(hole))
-                    }
-                }
+                val landing = landingOf(landscapes, hole)
+                if (!landing.position.admits(value)) throw UnsafeInterpolationException(landing.position, index, landing.attribute)
                 out.escaped(value)
             }
         }
@@ -305,7 +295,89 @@ private fun StringBuilder.escaped(value: Any?) {
 }
 
 /**
- * [format] with every hole replaced by two letters, which keeps every offset where it was.
+ * Where one hole in a piece of markup lands, as [interpolate] judges it.
+ *
+ * The editors judge a Kotlin template in an HTML string with this, so that a hole is refused or
+ * let through by the same reading in the editor as at run time.
+ *
+ * @property position The strictest of the positions the hole takes in the three readings of the
+ *   markup (HTML, svg or math, and svg or math with CDATA as text); see [interpolate].
+ * @property attribute The attribute it landed in, when it landed in a quoted one.
+ * @property valueStart Where that attribute's value starts in the markup, or -1.
+ */
+@InternalStreamlordApi
+public class HoleLanding(
+    public val position: Position,
+    public val attribute: String?,
+    public val valueStart: Int,
+)
+
+/**
+ * Where each of [holes] lands in [markup]. A hole is any span the caller will fill: `%s` to
+ * [interpolate], a Kotlin template to the editors. Each is read as a run of letters, so `<%s>` is
+ * a tag whose name is the hole.
+ */
+@InternalStreamlordApi
+public fun holeLandings(
+    markup: String,
+    holes: List<IntRange>,
+    prefixes: List<String> = ElementsGuard.defaultPrefixes,
+): List<HoleLanding> {
+    val landscapes = landscapes(markup, holes, prefixes)
+    return holes.map { landingOf(landscapes, it.first) }
+}
+
+/**
+ * Whether the start of a URL attribute's value, the literal text before its first hole, already
+ * settles the scheme, so that no value written after it can make the URL run: a `/`, `?` or `#`
+ * before any `:`, or a whole scheme that only navigates. Read as [safeUrl] reads, after entities
+ * are decoded; in `values`, a list, only the entry the hole is in counts.
+ */
+@InternalStreamlordApi
+public fun urlSchemeFixedBy(
+    attribute: String,
+    prefix: String,
+): Boolean {
+    val decoded = decodeEntities(prefix).text
+    val entry = if (attribute.asciiLowercase() == "values") decoded.substringAfterLast(';') else decoded
+    val read = entry.filterNot { it == '\t' || it == '\n' || it == '\r' }.trimStart { it <= ' ' }
+    for (c in read) {
+        when (c) {
+            '/', '?', '#' -> return true
+            ':' -> return SCHEME.find(read)?.groupValues?.get(1)?.asciiLowercase() in SAFE_SCHEMES
+        }
+    }
+    return false
+}
+
+/** Each position's place in what it lets in: everything, a number or a boolean, a number, nothing. */
+private val STRICTNESS =
+    listOf(Position.TEXT, Position.ATTRIBUTE, Position.URL, Position.DATASTAR, Position.STYLE, Position.STRUCTURE, Position.CODE)
+
+/** As HTML, as svg or math, and as svg or math whose CDATA sections are text (see scanMarkup). */
+private fun landscapes(
+    markup: String,
+    holes: List<IntRange>,
+    prefixes: List<String>,
+): List<Landscape> {
+    val shadow = shadow(markup, holes)
+    // Longest first, so `data-star-` is tried before `data-` whatever order the caller used.
+    val ordered = prefixes.sortedByDescending { it.length }
+    return listOf(false to false, true to false, true to true).map { (foreign, cdata) ->
+        Landscape(ordered, shadow).also { scanMarkup(shadow, it, foreign, cdata) }
+    }
+}
+
+private fun landingOf(
+    landscapes: List<Landscape>,
+    hole: Int,
+): HoleLanding {
+    val strictest = landscapes.maxBy { STRICTNESS.indexOf(it.positionOf(hole)) }
+    return HoleLanding(strictest.positionOf(hole), strictest.attributeAt(hole), strictest.valueStartAt(hole))
+}
+
+/**
+ * [markup] with every hole replaced by letters, which keeps every offset where it was.
  *
  * The walk has to see the markup as the browser will once the values are in place. `<%s>` is not
  * a tag to a scanner that wants a letter after the `<`, and a hole nobody reads as a tag name is
@@ -313,13 +385,12 @@ private fun StringBuilder.escaped(value: Any?) {
  * tag, and the hole inside it is structure.
  */
 private fun shadow(
-    format: String,
-    holes: List<Int>,
+    markup: String,
+    holes: List<IntRange>,
 ): String {
-    val chars = format.toCharArray()
+    val chars = markup.toCharArray()
     for (hole in holes) {
-        chars[hole] = 'd'
-        chars[hole + 1] = 's'
+        for (i in hole) chars[i] = if (i == hole.first) 'd' else 's'
     }
     return String(chars)
 }
@@ -455,6 +526,8 @@ private class Landscape(
             if (entries.any { !safeUrl(it) }) throw UnsafeInterpolationException(Position.URL, inside.first(), attributeNames[attribute])
         }
     }
+
+    fun valueStartAt(hole: Int): Int = indexOfSpan(hole, attributeStarts, attributeEnds).let { if (it >= 0) attributeStarts[it] else -1 }
 
     fun attributeAt(hole: Int): String? = indexOfSpan(hole, attributeStarts, attributeEnds).takeIf { it >= 0 }?.let { attributeNames[it] }
 

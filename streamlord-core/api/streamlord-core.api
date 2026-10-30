@@ -317,6 +317,13 @@ public final class io/github/markusaugust/streamlord/core/domain/ExpressionGuard
 	public final fun check (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
 }
 
+public final class io/github/markusaugust/streamlord/core/domain/HoleLanding {
+	public fun <init> (Lio/github/markusaugust/streamlord/core/domain/Position;Ljava/lang/String;I)V
+	public final fun getAttribute ()Ljava/lang/String;
+	public final fun getPosition ()Lio/github/markusaugust/streamlord/core/domain/Position;
+	public final fun getValueStart ()I
+}
+
 public final class io/github/markusaugust/streamlord/core/domain/InterpolatedExpressionException : io/github/markusaugust/streamlord/core/StreamlordException {
 	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
@@ -325,9 +332,12 @@ public final class io/github/markusaugust/streamlord/core/domain/InterpolatedExp
 }
 
 public final class io/github/markusaugust/streamlord/core/domain/InterpolationKt {
+	public static final fun holeLandings (Ljava/lang/String;Ljava/util/List;Ljava/util/List;)Ljava/util/List;
+	public static synthetic fun holeLandings$default (Ljava/lang/String;Ljava/util/List;Ljava/util/List;ILjava/lang/Object;)Ljava/util/List;
 	public static final fun interpolate (Ljava/lang/String;Ljava/util/List;Ljava/util/List;)Ljava/lang/String;
 	public static final fun interpolate (Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
 	public static synthetic fun interpolate$default (Ljava/lang/String;Ljava/util/List;Ljava/util/List;ILjava/lang/Object;)Ljava/lang/String;
+	public static final fun urlSchemeFixedBy (Ljava/lang/String;Ljava/lang/String;)Z
 }
 
 public final class io/github/markusaugust/streamlord/core/domain/MistypedAttributeException : io/github/markusaugust/streamlord/core/StreamlordException {

@@ -1,0 +1,524 @@
+{
+ "$comment": "Where a hole lands, by holeLandings in streamlord-core Interpolation.kt, which interpolate calls, and by holes.ts in the VS Code analysis, both of which read these cases. Each %s in markup is a hole; position is the strictest of the three readings (HTML, svg or math, and svg or math with CDATA as text), attribute the quoted attribute it landed in, or null. HoleLandingsTest also holds every case to interpolate itself: a String is refused where the position refuses one, a Number where it refuses that. urls: whether the literal start of a URL attribute's value, prefix, already settles the scheme (urlSchemeFixedBy).",
+ "cases": [
+  {
+   "name": "text",
+   "markup": "<li>%s</li>",
+   "landings": [
+    {
+     "position": "TEXT",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "quoted attribute",
+   "markup": "<li title=\"%s\">x</li>",
+   "landings": [
+    {
+     "position": "ATTRIBUTE",
+     "attribute": "title"
+    }
+   ]
+  },
+  {
+   "name": "single-quoted attribute",
+   "markup": "<li title='%s'>x</li>",
+   "landings": [
+    {
+     "position": "ATTRIBUTE",
+     "attribute": "title"
+    }
+   ]
+  },
+  {
+   "name": "part of a class list",
+   "markup": "<b class=\"a %s\">x</b>",
+   "landings": [
+    {
+     "position": "ATTRIBUTE",
+     "attribute": "class"
+    }
+   ]
+  },
+  {
+   "name": "unquoted value",
+   "markup": "<li title=%s>x</li>",
+   "landings": [
+    {
+     "position": "STRUCTURE",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "tag name",
+   "markup": "<%s class=\"c\"><p>x</p></%s>",
+   "landings": [
+    {
+     "position": "STRUCTURE",
+     "attribute": null
+    },
+    {
+     "position": "STRUCTURE",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "attribute name",
+   "markup": "<li %s=\"x\">y</li>",
+   "landings": [
+    {
+     "position": "STRUCTURE",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "attribute list",
+   "markup": "<button %s>x</button>",
+   "landings": [
+    {
+     "position": "STRUCTURE",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "href",
+   "markup": "<a href=\"%s\">x</a>",
+   "landings": [
+    {
+     "position": "URL",
+     "attribute": "href"
+    }
+   ]
+  },
+  {
+   "name": "href after a fragment",
+   "markup": "<a href=\"#%s\">x</a>",
+   "landings": [
+    {
+     "position": "URL",
+     "attribute": "href"
+    }
+   ]
+  },
+  {
+   "name": "src",
+   "markup": "<img src=\"%s\">",
+   "landings": [
+    {
+     "position": "URL",
+     "attribute": "src"
+    }
+   ]
+  },
+  {
+   "name": "values on an svg animation",
+   "markup": "<svg><animate values=\"%s\"/></svg>",
+   "landings": [
+    {
+     "position": "URL",
+     "attribute": "values"
+    }
+   ]
+  },
+  {
+   "name": "style",
+   "markup": "<p style=\"width: %spx\">x</p>",
+   "landings": [
+    {
+     "position": "STYLE",
+     "attribute": "style"
+    }
+   ]
+  },
+  {
+   "name": "event handler",
+   "markup": "<a onclick=\"%s\">x</a>",
+   "landings": [
+    {
+     "position": "CODE",
+     "attribute": "onclick"
+    }
+   ]
+  },
+  {
+   "name": "srcdoc",
+   "markup": "<iframe srcdoc=\"%s\"></iframe>",
+   "landings": [
+    {
+     "position": "CODE",
+     "attribute": "srcdoc"
+    }
+   ]
+  },
+  {
+   "name": "script body",
+   "markup": "<script>let x = %s</script>",
+   "landings": [
+    {
+     "position": "CODE",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "style body",
+   "markup": "<style>p { color: %s }</style>",
+   "landings": [
+    {
+     "position": "CODE",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "data-text",
+   "markup": "<p data-text=\"%s\"></p>",
+   "landings": [
+    {
+     "position": "DATASTAR",
+     "attribute": "data-text"
+    }
+   ]
+  },
+  {
+   "name": "data-show inside a string",
+   "markup": "<p data-show=\"'%s' == $x\"></p>",
+   "landings": [
+    {
+     "position": "DATASTAR",
+     "attribute": "data-show"
+    }
+   ]
+  },
+  {
+   "name": "data-signals object",
+   "markup": "<p data-signals=\"{n: %s}\"></p>",
+   "landings": [
+    {
+     "position": "DATASTAR",
+     "attribute": "data-signals"
+    }
+   ]
+  },
+  {
+   "name": "data-bind",
+   "markup": "<input data-bind=\"%s\">",
+   "landings": [
+    {
+     "position": "DATASTAR",
+     "attribute": "data-bind"
+    }
+   ]
+  },
+  {
+   "name": "data-bind keyed",
+   "markup": "<input data-bind:%s>",
+   "landings": [
+    {
+     "position": "STRUCTURE",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "data-ref",
+   "markup": "<p data-ref=\"%s\"></p>",
+   "landings": [
+    {
+     "position": "DATASTAR",
+     "attribute": "data-ref"
+    }
+   ]
+  },
+  {
+   "name": "data-indicator",
+   "markup": "<p data-indicator=\"%s\"></p>",
+   "landings": [
+    {
+     "position": "DATASTAR",
+     "attribute": "data-indicator"
+    }
+   ]
+  },
+  {
+   "name": "data-on with a key",
+   "markup": "<button data-on:click=\"@post('/x/%s')\">x</button>",
+   "landings": [
+    {
+     "position": "DATASTAR",
+     "attribute": "data-on:click"
+    }
+   ]
+  },
+  {
+   "name": "aliased prefix",
+   "markup": "<p data-star-text=\"%s\"></p>",
+   "landings": [
+    {
+     "position": "DATASTAR",
+     "attribute": "data-star-text"
+    }
+   ]
+  },
+  {
+   "name": "data-nonce is read as it stands",
+   "markup": "<html data-nonce=\"%s\"></html>",
+   "landings": [
+    {
+     "position": "ATTRIBUTE",
+     "attribute": "data-nonce"
+    }
+   ]
+  },
+  {
+   "name": "data-preserve-attr",
+   "markup": "<details data-preserve-attr=\"%s\"></details>",
+   "landings": [
+    {
+     "position": "ATTRIBUTE",
+     "attribute": "data-preserve-attr"
+    }
+   ]
+  },
+  {
+   "name": "a plain data attribute",
+   "markup": "<p data-id=\"%s\"></p>",
+   "landings": [
+    {
+     "position": "ATTRIBUTE",
+     "attribute": "data-id"
+    }
+   ]
+  },
+  {
+   "name": "comment",
+   "markup": "<!-- %s --><p>x</p>",
+   "landings": [
+    {
+     "position": "TEXT",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "textarea text",
+   "markup": "<textarea>%s</textarea>",
+   "landings": [
+    {
+     "position": "TEXT",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "title inside svg holds elements",
+   "markup": "<svg><title><a data-text=\"%s\"></a></title></svg>",
+   "landings": [
+    {
+     "position": "DATASTAR",
+     "attribute": "data-text"
+    }
+   ]
+  },
+  {
+   "name": "textarea is text in HTML but not in svg",
+   "markup": "<textarea><p data-text=\"%s\"></p></textarea>",
+   "landings": [
+    {
+     "position": "DATASTAR",
+     "attribute": "data-text"
+    }
+   ]
+  },
+  {
+   "name": "CDATA in svg",
+   "markup": "<svg><![CDATA[%s]]></svg>",
+   "landings": [
+    {
+     "position": "TEXT",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "two holes, two places",
+   "markup": "<a href=\"/x/%s\" title=\"%s\">%s</a>",
+   "landings": [
+    {
+     "position": "URL",
+     "attribute": "href"
+    },
+    {
+     "position": "ATTRIBUTE",
+     "attribute": "title"
+    },
+    {
+     "position": "TEXT",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "a hole after a quoted attribute in the same tag",
+   "markup": "<p class=\"a\" %s>x</p>",
+   "landings": [
+    {
+     "position": "STRUCTURE",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "a hole that is part of an attribute name",
+   "markup": "<p data-%s=\"x\">y</p>",
+   "landings": [
+    {
+     "position": "STRUCTURE",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "raw text after a closing script",
+   "markup": "<script>x</script><p>%s</p>",
+   "landings": [
+    {
+     "position": "TEXT",
+     "attribute": null
+    }
+   ]
+  }
+ ],
+ "urls": [
+  {
+   "attribute": "href",
+   "prefix": "",
+   "fixed": false
+  },
+  {
+   "attribute": "href",
+   "prefix": "/",
+   "fixed": true
+  },
+  {
+   "attribute": "href",
+   "prefix": "/x/",
+   "fixed": true
+  },
+  {
+   "attribute": "href",
+   "prefix": "#",
+   "fixed": true
+  },
+  {
+   "attribute": "href",
+   "prefix": "?q=",
+   "fixed": true
+  },
+  {
+   "attribute": "href",
+   "prefix": "https://example.com/",
+   "fixed": true
+  },
+  {
+   "attribute": "href",
+   "prefix": "https:",
+   "fixed": true
+  },
+  {
+   "attribute": "href",
+   "prefix": "http://",
+   "fixed": true
+  },
+  {
+   "attribute": "href",
+   "prefix": "mailto:",
+   "fixed": true
+  },
+  {
+   "attribute": "href",
+   "prefix": "tel:",
+   "fixed": true
+  },
+  {
+   "attribute": "href",
+   "prefix": "java",
+   "fixed": false
+  },
+  {
+   "attribute": "href",
+   "prefix": "j",
+   "fixed": false
+  },
+  {
+   "attribute": "href",
+   "prefix": " ",
+   "fixed": false
+  },
+  {
+   "attribute": "href",
+   "prefix": "javascript:",
+   "fixed": false
+  },
+  {
+   "attribute": "href",
+   "prefix": "data:",
+   "fixed": false
+  },
+  {
+   "attribute": "href",
+   "prefix": "JAVASCRIPT:",
+   "fixed": false
+  },
+  {
+   "attribute": "href",
+   "prefix": "\tjava",
+   "fixed": false
+  },
+  {
+   "attribute": "href",
+   "prefix": "&#47;",
+   "fixed": true
+  },
+  {
+   "attribute": "href",
+   "prefix": "&#106;avascript:",
+   "fixed": false
+  },
+  {
+   "attribute": "href",
+   "prefix": "x/",
+   "fixed": true
+  },
+  {
+   "attribute": "href",
+   "prefix": "HTTPS://",
+   "fixed": true
+  },
+  {
+   "attribute": "href",
+   "prefix": "ftp:",
+   "fixed": false
+  },
+  {
+   "attribute": "values",
+   "prefix": "/a;",
+   "fixed": false
+  },
+  {
+   "attribute": "values",
+   "prefix": "/a;/b",
+   "fixed": true
+  },
+  {
+   "attribute": "values",
+   "prefix": "javascript:x;/",
+   "fixed": true
+  }
+ ]
+}
