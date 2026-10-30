@@ -384,6 +384,36 @@
    ]
   },
   {
+   "name": "a quoted value in an end tag can hold >",
+   "markup": "</p x=\"><b title=\"><script>%s</script>\">",
+   "landings": [
+    {
+     "position": "CODE",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "a single-quoted value in an end tag can hold >",
+   "markup": "</p x='><i title=\"'>%s",
+   "landings": [
+    {
+     "position": "TEXT",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "a quoted value in an end tag is structure",
+   "markup": "<p>x</p title=\"%s\">",
+   "landings": [
+    {
+     "position": "STRUCTURE",
+     "attribute": null
+    }
+   ]
+  },
+  {
    "name": "raw text after a closing script",
    "markup": "<script>x</script><p>%s</p>",
    "landings": [

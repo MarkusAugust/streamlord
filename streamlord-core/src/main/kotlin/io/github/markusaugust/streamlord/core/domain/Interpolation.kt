@@ -34,6 +34,13 @@ public value class Trusted(
  * it is written as it stands in element text and judged as the text it is anywhere else: inside an
  * attribute, markup is only characters, and they are escaped like any value. Only [interpolate]
  * makes one, so holding an [Html] says where it came from.
+ *
+ * Element text means the data state on both sides. The [Html] has to close everything it opens,
+ * read as HTML and as the inside of an `<svg>` or `<math>`: a tag, an attribute value, a comment,
+ * a CDATA section, the body of a `<script>`, `<textarea>` or `<title>`, and a `<` at its very end.
+ * The hole has to stand outside all of those in the outer markup. Otherwise the fragment would
+ * move every hole after it, `interpolate("<script>")` turning the next value into a program, so
+ * it is escaped like a string instead, and shows as the markup it is.
  */
 @JvmInline
 public value class Html
@@ -235,8 +242,9 @@ public fun interpolate(
 
             else -> {
                 val landing = landingOf(landscapes, hole)
-                // Markup interpolate built is markup in element text; anywhere else it is characters.
-                if (value is Html && landing.position == Position.TEXT) {
+                // Markup interpolate built is markup where it starts and ends in the data state in
+                // every reading, so that it cannot move the holes after it; anywhere else it is characters.
+                if (value is Html && landing.position == Position.TEXT && landscapes.all { it.inData(hole) && it.closes(value.text) }) {
                     out.append(value.text)
                 } else {
                     if (!landing.position.admits(value)) throw UnsafeInterpolationException(landing.position, index, landing.attribute)
@@ -400,7 +408,7 @@ private fun landscapes(
     // Longest first, so `data-star-` is tried before `data-` whatever order the caller used.
     val ordered = prefixes.sortedByDescending { it.length }
     return listOf(false to false, true to false, true to true).map { (foreign, cdata) ->
-        Landscape(ordered, shadow).also { scanMarkup(shadow, it, foreign, cdata) }
+        Landscape(ordered, shadow, foreign, cdata).also { scanMarkup(shadow, it, foreign, cdata) }
     }
 }
 
@@ -469,6 +477,8 @@ private val ANIMATION_URL_ATTRIBUTES = setOf("values", "to", "from")
 private class Landscape(
     private val prefixes: List<String>,
     private val markup: String,
+    private val foreign: Boolean,
+    private val cdata: Boolean,
 ) : MarkupVisitor {
     private val attributeNames = ArrayList<String>()
     private val attributeTags = ArrayList<String>()
@@ -562,6 +572,16 @@ private class Landscape(
             if (entries.any { !safeUrl(it) }) throw UnsafeInterpolationException(Position.URL, inside.first(), attributeNames[attribute])
         }
     }
+
+    /**
+     * Whether [hole] is in the data state: text, and not a comment, a CDATA section or the body of
+     * a `textarea` or a `title`, which only their own closing sequence ends and which markup written
+     * there could end.
+     */
+    fun inData(hole: Int): Boolean = scanMarkup(markup.substring(0, hole), Discard, foreign, cdata)
+
+    /** Whether [html], read in this landscape, leaves nothing open for the markup after it to fall into. */
+    fun closes(html: String): Boolean = scanMarkup(html, Discard, foreign, cdata)
 
     fun valueStartAt(hole: Int): Int = indexOfSpan(hole, attributeStarts, attributeEnds).let { if (it >= 0) attributeStarts[it] else -1 }
 

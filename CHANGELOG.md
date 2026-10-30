@@ -15,7 +15,11 @@ All notable changes to Streamlord are recorded here. The format follows
 
 - `Html`, the markup `interpolate` returns, and `patchElements`, `respondElements` and
   `datastarElements` overloads that take it. In another `interpolate` it is written as markup in
-  element text and judged as the text it is anywhere else. Only `interpolate` makes one.
+  element text and judged as the text it is anywhere else. Only `interpolate` makes one. It is
+  markup only where it closes everything it opens, read as HTML and as svg or math, and the hole
+  is outside any comment, CDATA section or `textarea` or `title` body: `interpolate("<script>")`
+  or `interpolate("<a href=\"")` would otherwise turn the value after it into a program or a
+  link, so such a fragment is escaped and shows as the markup it is.
 - Two analysis codes for a Kotlin value in an HTML string, judged by where it lands as
   `interpolate` judges it at run time, with core's reading of the markup (`holeLandings`, internal
   API, which `interpolate` itself now calls): `unescaped-interpolation` where escaping saves it, a
@@ -109,6 +113,11 @@ All notable changes to Streamlord are recorded here. The format follows
 
 - `interpolate` refused a value in a start tag's name but let one into an end tag's,
   `</%s>`, where it chose which element to close. It is refused there too.
+- `interpolate` read an end tag as text, or as ending at its first `>`, where the browser reads
+  its attributes as a start tag's and a quoted value can hold a `>`: in
+  `</p x="><b title="><script>%s</script>">` it took the value for an attribute, and the browser
+  ran it. It and the editors read an end tag's quotes now, and a value anywhere in an end tag is
+  refused as structure, since the browser throws its attributes away.
 - `interpolate` read an end tag with Unicode case folding, where the browser folds A to Z alone:
   in `<script>x</ſcript>%s</script>` (U+017F, a long s) it took the value for text after the
   script, and the browser ran it as part of the script. It is refused now, as every value inside a

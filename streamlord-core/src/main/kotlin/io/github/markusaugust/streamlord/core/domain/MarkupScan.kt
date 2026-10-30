@@ -60,13 +60,16 @@ private fun Char?.isAsciiLetter(): Boolean = this != null && (this in 'a'..'z' |
  * there is a section of text that only `]]>` ends, where HTML, and an integration point such as
  * an svg's `title`, reads a bogus comment the first `>` ends. Markup can switch between them, so a
  * caller that has to be right walks it each way and takes the strictest answer.
+ *
+ * @return Whether the markup ends in the data state, with no tag, attribute value, comment, CDATA
+ *   section or raw-text body left open, and so whether markup written after it is read as written.
  */
 internal fun scanMarkup(
     html: String,
     visitor: MarkupVisitor,
     foreign: Boolean = false,
     cdata: Boolean = false,
-) {
+): Boolean {
     val rawText = if (foreign) CODE_TEXT else RAW_TEXT
     var i = 0
     val n = html.length
@@ -74,28 +77,33 @@ internal fun scanMarkup(
         val lt = html.indexOf('<', i)
         if (lt < 0) break
         if (html.startsWith("<!--", lt)) {
+            if (commentOpen(html, lt)) return false
             i = commentEnd(html, lt)
             continue
         }
         if (cdata && html.startsWith("<![CDATA[", lt)) {
             val close = html.indexOf("]]>", lt + 9)
-            i = if (close < 0) n else close + 3
+            if (close < 0) return false
+            i = close + 3
             continue
         }
-        val first = html.getOrNull(lt + 1)
+        // A < at the very end is text, until whatever is written next makes it a tag.
+        val first = html.getOrNull(lt + 1) ?: return false
         // <!x>, <?x> and </ followed by anything but a letter are bogus comments, which end at
         // the first >; a quote inside one opens nothing.
         if (first == '!' || first == '?' || (first == '/' && !html.getOrNull(lt + 2).isAsciiLetter() && html.getOrNull(lt + 2) != '>')) {
             val close = html.indexOf('>', lt + 2)
-            i = if (close < 0) n else close + 1
+            if (close < 0) return false
+            i = close + 1
             continue
         }
-        // An end tag: its name is the shape of the markup as much as a start tag's, and what
-        // follows the name up to > is read and thrown away by the browser, quotes and all.
+        // An end tag: the tokenizer reads its attributes as a start tag's, so a quoted value can
+        // hold a >, and only then throws them away. The whole of it is the shape of the markup.
         if (first == '/' && html.getOrNull(lt + 2).isAsciiLetter()) {
-            val close = html.indexOf('>', lt + 2)
-            i = if (close < 0) n else close + 1
-            visitor.tag(lt, i)
+            val end = scanTag(html, lt + 2, Discard)
+            visitor.tag(lt, if (end < 0) n else end)
+            if (end < 0) return false
+            i = end
             continue
         }
         if (!first.isAsciiLetter()) {
@@ -103,21 +111,45 @@ internal fun scanMarkup(
             continue
         }
 
-        i = scanTag(html, lt + 1, visitor)
-        visitor.tag(lt, i)
+        val end = scanTag(html, lt + 1, visitor)
+        visitor.tag(lt, if (end < 0) n else end)
+        if (end < 0) return false
+        i = end
 
-        rawText
-            .firstOrNull {
+        val tag =
+            rawText.firstOrNull {
                 html.regionMatchesAsciiIgnoreCase(lt + 1, it) && html.getOrNull(lt + 1 + it.length).endsName()
-            }?.let { tag ->
-                val end = if (tag == "plaintext") n else rawTextEnd(html, tag, i).let { if (it < 0) n else it }
-                if (tag in CODE_TEXT) visitor.code(i, end)
-                i = end
-            }
+            } ?: continue
+        val close = if (tag == "plaintext") -1 else rawTextEnd(html, tag, i)
+        if (tag in CODE_TEXT) visitor.code(i, if (close < 0) n else close)
+        if (close < 0) return false
+        i = close
     }
+    return true
 }
 
-/** Walks the attributes of one tag, starting after `<`; returns the offset past `>`. */
+/** Whether the comment at [lt] runs to the end of [html], which is where commentEnd puts it then. */
+private fun commentOpen(
+    html: String,
+    lt: Int,
+): Boolean =
+    !html.startsWith("<!-->", lt) &&
+        !html.startsWith("<!--->", lt) &&
+        html.indexOf("-->", lt + 4) < 0 &&
+        html.indexOf("--!>", lt + 4) < 0
+
+/** A visitor that wants nothing: for the attributes of an end tag, and for a walk asked only whether markup closes. */
+internal object Discard : MarkupVisitor {
+    override fun attribute(
+        tag: String,
+        name: String,
+        valueStart: Int,
+        valueEnd: Int,
+        quoted: Boolean,
+    ) = Unit
+}
+
+/** Walks the attributes of one tag, starting after `<` or `</`; returns the offset past `>`, or -1 when the markup ends first. */
 private fun scanTag(
     html: String,
     from: Int,
@@ -165,5 +197,5 @@ private fun scanTag(
             }
         }
     }
-    return n
+    return -1
 }

@@ -268,6 +268,63 @@ class InterpolationTest {
     }
 
     @Test
+    fun `markup interpolate built that leaves a script open is only characters`() {
+        val out = render("%s%s</script>", interpolate("<script>"), "alert(document.cookie)")
+
+        assertEquals("&lt;script&gt;alert(document.cookie)</script>", out)
+    }
+
+    @Test
+    fun `markup interpolate built that leaves an attribute open is only characters`() {
+        assertEquals(
+            "&lt;a href=&quot;javascript:alert(1)\">x</a>",
+            render("%s%s\">x</a>", interpolate("<a href=\""), "javascript:alert(1)"),
+        )
+        assertEquals(
+            "&lt;div data-on:click=&quot;alert(1)\"></div>",
+            render("%s%s\"></div>", interpolate("<div data-on:click=\""), "alert(1)"),
+        )
+    }
+
+    @Test
+    fun `markup interpolate built that leaves a comment, a CDATA section or a tag open is only characters`() {
+        for (open in listOf("<!-- x", "<svg><![CDATA[x", "<p", "<", "</", "<!x", "<textarea>x", "<svg><title>x")) {
+            val out = render("%s%s<script>x</script>", interpolate(open), "y")
+            assertTrue(out.startsWith("&lt;"), "$open: $out")
+        }
+    }
+
+    @Test
+    fun `markup interpolate built is only characters in a comment or a raw-text element`() {
+        assertEquals(
+            "<!-- --&gt; <a href=\"/x\">x</a> -->",
+            render("<!-- %s <a href=\"%s\">x</a> -->", interpolate("-->"), "/x"),
+        )
+        assertEquals("<textarea>&lt;b&gt;x&lt;/b&gt;</textarea>", render("<textarea>%s</textarea>", interpolate("<b>x</b>")))
+    }
+
+    @Test
+    fun `balanced markup interpolate built still nests`() {
+        val inner =
+            interpolate(
+                "<p title=\"a > b\">%s</p><!-- c --><textarea>t</textarea><script>let x = 1</script><svg><![CDATA[d]]></svg>",
+                "<i>",
+            )
+
+        assertEquals("<div>${inner.text}</div>", render("<div>%s</div>", inner))
+        assertEquals("<ul><li>a</li><li>b</li></ul>", render("<ul>%s%s</ul>", interpolate("<li>a</li>"), interpolate("<li>b</li>")))
+    }
+
+    @Test
+    fun `an end tag reads its quoted values as a start tag does`() {
+        val e =
+            assertFailsWith<UnsafeInterpolationException> {
+                render("</p x=\"><b title=\"><script>%s</script>\">", "alert(1)")
+            }
+        assertEquals(Position.CODE, e.position)
+    }
+
+    @Test
     fun `a Kotlin template writes the markup of Html and Trusted, not their names`() {
         val row = interpolate("<li>%s</li>", "x")
 

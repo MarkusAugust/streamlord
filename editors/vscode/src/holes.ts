@@ -50,7 +50,10 @@ interface Visitor {
   code(start: number, end: number): void;
 }
 
-const isLetter = (c: string | undefined) => c !== undefined && /[A-Za-z]/.test(c);
+/** Discard in MarkupScan.kt: takes the attributes of an end tag. */
+const DISCARD: Visitor = { attribute: () => {}, tag: () => {}, code: () => {} };
+
+const isLetter =(c: string | undefined) => c !== undefined && /[A-Za-z]/.test(c);
 const isSpace = (c: string | undefined) => c !== undefined && HTML_SPACE.includes(c);
 const endsName = (c: string | undefined) => c === undefined || isSpace(c) || c === "/" || c === ">";
 
@@ -102,9 +105,9 @@ function scanMarkup(html: string, visitor: Visitor, foreign: boolean, cdata: boo
       i = close < 0 ? n : close + 1;
       continue;
     }
+    // An end tag's attributes are read as a start tag's, so a quoted value can hold a >, and then thrown away.
     if (first === "/" && isLetter(html[lt + 2])) {
-      const close = html.indexOf(">", lt + 2);
-      i = close < 0 ? n : close + 1;
+      i = scanTag(html, lt + 2, DISCARD);
       visitor.tag(lt, i);
       continue;
     }
