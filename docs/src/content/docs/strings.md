@@ -88,7 +88,7 @@ it knows exactly where each value landed.
 
 ```kotlin sample=declarations
 fun hit(title: String, url: String): String =
-    interpolate("""<li><a class="fs-link" href="%s">%s</a></li>""", url, title)
+    interpolate("""<li><a class="lt-link" href="%s">%s</a></li>""", url, title)
 ```
 
 `%s` is a hole and `%%` writes one `%`. Every other `%` is literal, so `width: 50%` and `/a%20b`
@@ -150,7 +150,7 @@ Wrap it in `Trusted`, which writes the value as it stands wherever it lands:
 ```kotlin sample=statements
 val hits = repository.search("gate")
 
-interpolate("""<ul class="fs-list">%s</ul>""", Trusted(renderResults(hits)))
+interpolate("""<ul class="lt-list">%s</ul>""", Trusted(renderResults(hits)))
 ```
 
 That waives both the escaping and the refusals, which is right for a fragment you rendered

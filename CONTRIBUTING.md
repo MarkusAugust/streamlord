@@ -15,7 +15,7 @@ A security flaw goes through [SECURITY.md](SECURITY.md), never a public issue.
 | `catalog/` | `datastar-1.0.4.json`, the source of truth for the names core, the analysis and both editors read |
 | `datastar-reference/` | a local, git-ignored copy of [starfederation/datastar](https://github.com/starfederation/datastar) at the release tag Streamlord speaks, `datastar-reference/datastar-1.0.4/`, fetched by `npm run reference` in `conformance/generate`; the authority for every claim about the client, and what the generators below read |
 | `conformance/` | what the client and the servers actually do, as fixtures the tests hold Streamlord to; see below |
-| `docs/` | this project's documentation site (Astro, Fristil, Datastar) |
+| `docs/` | this project's documentation site (Astro, LO-TEK, Datastar) |
 | `demo/` | `streamlord-live`, the service behind the site's live examples and search |
 | `docs-samples/` | compiles every Kotlin example in the documentation, and generates the wire examples the pages show |
 

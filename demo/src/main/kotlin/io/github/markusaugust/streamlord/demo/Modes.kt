@@ -10,7 +10,7 @@ import kotlinx.serialization.Serializable
 /**
  * What a press did to whatever the reader typed, which is the one thing the demo is about.
  *
- * [color] is the Fristil alert colour: success when the field survived, warning when it did not.
+ * [color] is the LO-TEK alert colour: success when the field survived, warning when it did not.
  */
 public data class Verdict(
     val color: String,

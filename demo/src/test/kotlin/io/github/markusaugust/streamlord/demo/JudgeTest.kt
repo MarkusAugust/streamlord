@@ -282,7 +282,7 @@ class JudgeTest {
             application { live() }
 
             val search = client.get("/search?datastar=%7B%22query%22%3A%22readSignals%22%7D").bodyAsText()
-            assertTrue(search.contains("fs-link"), search)
+            assertTrue(search.contains("lt-link"), search)
 
             val muster =
                 client.post("/muster") {
@@ -290,6 +290,6 @@ class JudgeTest {
                     setBody("""{"banner":"Ox","swords":"x"}""")
                 }
             assertEquals(HttpStatusCode.OK, muster.status)
-            assertTrue(muster.bodyAsText().contains("fs-error-summary"), muster.bodyAsText())
+            assertTrue(muster.bodyAsText().contains("lt-error-summary"), muster.bodyAsText())
         }
 }

@@ -46,7 +46,7 @@ const { title, description, slug, headings } = Astro.props
     <ThemeRestore />
   </head>
   <body>
-    <a class="fs-skip-link" href="#content">Skip to content</a>
+    <a class="lt-skip-link" href="#content">Skip to content</a>
 
     <header class="masthead" data-theme="dark">
       <div class="masthead__identity">
@@ -71,8 +71,8 @@ const { title, description, slug, headings } = Astro.props
 
       <main class="shell__main" id="content">
         <article class="prose">
-          <h1 class="fs-heading" data-size="xl">{title}</h1>
-          <p class="fs-paragraph" data-variant="lead">{description}</p>
+          <h1 class="lt-heading" data-size="xl">{title}</h1>
+          <p class="lt-paragraph" data-variant="lead">{description}</p>
           <slot />
         </article>
         <Wire />
@@ -87,10 +87,10 @@ const { title, description, slug, headings } = Astro.props
     <CodeBlock />
 
     <script>
-      import { defineFsTabs } from "@fristil/designsystem/tabs"
+      import { defineLtTabs } from "@lo-tek/interfaces/tabs"
 
       // Once for the whole page, not once per tab set.
-      defineFsTabs()
+      defineLtTabs()
 
       /*
        * Tab sets follow each other. A reader who picks Maven on one block means Maven
@@ -101,29 +101,41 @@ const { title, description, slug, headings } = Astro.props
       const KEY = "tab-choice"
       let syncing = false
 
-      const pick = (label: string) => {
-        if (syncing) return
+      type Tabs = HTMLElement & { select(index: number): void }
+
+      // Every set's tab for this label is selected. The component writes each selection to
+      // the address, so the address is put back afterwards: it is the reader's, and should
+      // name the tab they chose, or nothing at all when the choice came from storage.
+      const pick = (label: string, keep: string) => {
         syncing = true
+        try {
+          for (const tabs of document.querySelectorAll<Tabs>("lt-tabs[data-tab-group]")) {
+            const links = [...tabs.querySelectorAll<HTMLAnchorElement>(".lt-tabs__list a[data-tab-label]")]
+            const index = links.findIndex((link) => link.dataset.tabLabel === label)
+            if (index >= 0 && links[index].getAttribute("aria-selected") !== "true") tabs.select(index)
+          }
+        } finally {
+          syncing = false
+          if (location.href !== keep) history.replaceState(history.state, "", keep)
+        }
+      }
+
+      document.addEventListener("tab-select", (event) => {
+        if (syncing) return
+        const link = (event.target as HTMLElement).querySelector<HTMLAnchorElement>(
+          '.lt-tabs__list a[aria-selected="true"]',
+        )
+        const label = link?.dataset.tabLabel
+        if (!label) return
         try {
           localStorage.setItem(KEY, label)
         } catch {}
-
-        for (const button of document.querySelectorAll<HTMLButtonElement>("[data-tab-label]")) {
-          if (button.dataset.tabLabel === label && button.getAttribute("aria-selected") !== "true") {
-            button.click()
-          }
-        }
-        syncing = false
-      }
-
-      document.addEventListener("click", (event) => {
-        const button = (event.target as HTMLElement)?.closest<HTMLButtonElement>("[data-tab-label]")
-        if (button?.dataset.tabLabel) pick(button.dataset.tabLabel)
+        pick(label, location.href)
       })
 
       try {
         const saved = localStorage.getItem(KEY)
-        if (saved) pick(saved)
+        if (saved) pick(saved, location.href)
       } catch {}
     </script>
 
@@ -144,14 +156,14 @@ const { title, description, slug, headings } = Astro.props
            The band is a data-theme="dark" island either way, so these two selectors key off
            the root's theme rather than its own. */
         background: #2c436b;
-        color: var(--fs-color-neutral-text-strong);
-        border-block-end: 1px solid color-mix(in oklab, var(--fs-color-accent-fill) 25%, transparent);
+        color: var(--lt-color-neutral-text-strong);
+        border-block-end: 1px solid color-mix(in oklab, var(--lt-color-accent-fill) 25%, transparent);
         display: flex;
         align-items: center;
         justify-content: space-between;
         flex-wrap: wrap;
-        gap: var(--fs-spacing-3) var(--fs-spacing-4);
-        padding: var(--fs-spacing-3) var(--fs-spacing-5);
+        gap: var(--lt-spacing-3) var(--lt-spacing-4);
+        padding: var(--lt-spacing-3) var(--lt-spacing-5);
       }
       @media (prefers-color-scheme: dark) {
         :root:not([data-theme="light"]) .masthead {
@@ -173,9 +185,9 @@ const { title, description, slug, headings } = Astro.props
        * direction. Off-contract on purpose, since a light fill inside a dark island is not a
        * pairing the matrix makes promises about.
        */
-      .masthead .fs-button[data-variant="ghost"]:hover {
-        background: var(--fs-color-accent-text);
-        color: var(--fs-color-accent-surface);
+      .masthead .lt-button[data-variant="ghost"]:hover {
+        background: var(--lt-color-accent-text);
+        color: var(--lt-color-accent-surface);
       }
 
       /* The badge beside the brand, never inside the link, and the two stay together when the
@@ -183,36 +195,36 @@ const { title, description, slug, headings } = Astro.props
       .masthead__identity {
         display: flex;
         align-items: center;
-        gap: var(--fs-spacing-3);
+        gap: var(--lt-spacing-3);
       }
       .masthead__brand {
         display: flex;
         align-items: center;
-        gap: var(--fs-spacing-2);
+        gap: var(--lt-spacing-2);
         font-weight: var(--font-weight-bold);
         font-size: var(--font-size-l);
-        color: var(--fs-color-neutral-text-strong);
+        color: var(--lt-color-neutral-text-strong);
         text-decoration: none;
         letter-spacing: -0.01em;
       }
       .masthead__tools {
         display: flex;
-        gap: var(--fs-spacing-2) var(--fs-spacing-3);
+        gap: var(--lt-spacing-2) var(--lt-spacing-3);
         align-items: center;
       }
 
       .shell {
         display: grid;
         grid-template-columns: 16rem minmax(0, 1fr) 14rem;
-        gap: var(--fs-spacing-8);
+        gap: var(--lt-spacing-8);
         max-width: 84rem;
         margin: 0 auto;
-        padding: var(--fs-spacing-6) var(--fs-spacing-5) var(--fs-spacing-16);
+        padding: var(--lt-spacing-6) var(--lt-spacing-5) var(--lt-spacing-16);
       }
       .shell__sidebar {
         align-self: start;
         position: sticky;
-        top: var(--fs-spacing-6);
+        top: var(--lt-spacing-6);
       }
       .shell__main {
         min-width: 0;
@@ -226,8 +238,8 @@ const { title, description, slug, headings } = Astro.props
       @media (max-width: 60rem) {
         .shell {
           grid-template-columns: minmax(0, 1fr);
-          gap: var(--fs-spacing-5);
-          padding-inline: var(--fs-spacing-4);
+          gap: var(--lt-spacing-5);
+          padding-inline: var(--lt-spacing-4);
         }
         .shell__sidebar {
           position: static;
@@ -237,23 +249,23 @@ const { title, description, slug, headings } = Astro.props
 
     <style is:global>
       .prose h1 {
-        margin-block-end: var(--fs-spacing-2);
+        margin-block-end: var(--lt-spacing-2);
       }
       .prose h2 {
-        margin-block-start: var(--fs-spacing-8);
+        margin-block-start: var(--lt-spacing-8);
         font-size: var(--font-size-l);
-        line-height: var(--fs-line-height-heading);
+        line-height: var(--lt-line-height-heading);
       }
       .prose h3 {
-        margin-block-start: var(--fs-spacing-6);
+        margin-block-start: var(--lt-spacing-6);
         font-size: var(--font-size-m);
       }
       .prose p,
       .prose li {
-        line-height: var(--fs-line-height-article);
+        line-height: var(--lt-line-height-article);
       }
       .prose a {
-        color: var(--fs-color-accent-text);
+        color: var(--lt-color-accent-text);
       }
       .prose table {
         width: 100%;
@@ -269,18 +281,18 @@ const { title, description, slug, headings } = Astro.props
        * the ground and reads as a rendering artefact rather than a deliberate rule.
        */
       .prose blockquote {
-        margin: var(--fs-spacing-6) 0;
-        padding-inline-start: var(--fs-spacing-4);
-        border-inline-start: 2px solid var(--fs-color-accent-fill);
-        color: var(--fs-color-neutral-text-subtle);
+        margin: var(--lt-spacing-6) 0;
+        padding-inline-start: var(--lt-spacing-4);
+        border-inline-start: 2px solid var(--lt-color-accent-fill);
+        color: var(--lt-color-neutral-text-subtle);
       }
       @media (prefers-color-scheme: dark) {
         :root:not([data-theme="light"]) .prose blockquote {
-          border-inline-start-color: color-mix(in oklab, var(--fs-color-accent-fill) 70%, transparent);
+          border-inline-start-color: color-mix(in oklab, var(--lt-color-accent-fill) 70%, transparent);
         }
       }
       :root[data-theme="dark"] .prose blockquote {
-        border-inline-start-color: color-mix(in oklab, var(--fs-color-accent-fill) 70%, transparent);
+        border-inline-start-color: color-mix(in oklab, var(--lt-color-accent-fill) 70%, transparent);
       }
 
     </style>

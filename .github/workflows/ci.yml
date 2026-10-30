@@ -459,7 +459,7 @@ jobs:
 
           echo "$body" | grep -q '^event: datastar-patch-elements' \
             || { echo "::error::no patch-elements frame in the response"; echo "$body" | head -5; exit 1; }
-          echo "$body" | grep -q 'fs-link' \
+          echo "$body" | grep -q 'lt-link' \
             || { echo "::error::the search returned no hits. Is the index in the image?"; exit 1; }
           echo "  a search for readSignals came back with hits"
 
@@ -493,7 +493,7 @@ jobs:
             -d '{"banner":"Ox","swords":"x"}' \
             http://localhost:8080/muster)
 
-          echo "$muster" | grep -q 'fs-error-summary' \
+          echo "$muster" | grep -q 'lt-error-summary' \
             || { echo "::error::no error summary came back from /muster"; echo "$muster" | head -8; exit 1; }
           echo "$muster" | grep -q '"bannerFault"' \
             || { echo "::error::/muster sent no field faults"; exit 1; }
@@ -708,7 +708,7 @@ jobs:
             -H 'Accept: text/event-stream' \
             "$SERVICE/search?datastar=%7B%22query%22%3A%22readSignals%22%7D")
 
-          echo "$body" | grep -q 'fs-link' \
+          echo "$body" | grep -q 'lt-link' \
             || { echo "::error::the deployed search returned no hits"; echo "$body" | head -5; exit 1; }
           echo "  a search came back with hits"
 
@@ -736,7 +736,7 @@ jobs:
             -d '{"banner":"Ox","swords":"x"}' \
             "$SERVICE/muster")
 
-          echo "$muster" | grep -q 'fs-error-summary' \
+          echo "$muster" | grep -q 'lt-error-summary' \
             || { echo "::error::the deployed form sent no error summary"; echo "$muster" | head -6; exit 1; }
           echo "  the form answered a POST"
 

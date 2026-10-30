@@ -45,7 +45,7 @@ class ValidationTest {
 
         val summary = (events[1] as PatchElements)
         assertEquals("#muster-summary", summary.selector)
-        assertTrue(summary.elements.orEmpty().contains("fs-error-summary"))
+        assertTrue(summary.elements.orEmpty().contains("lt-error-summary"))
         assertTrue(summary.elements.orEmpty().contains("One thing is wrong"))
     }
 

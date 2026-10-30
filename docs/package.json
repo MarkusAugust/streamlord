@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@astrojs/markdown-remark": "7.3.4",
-    "@fristil/designsystem": "0.34.0",
+    "@lo-tek/interfaces": "0.37.0",
     "astro": "7.4.2"
   },
   "devDependencies": {
