@@ -33,6 +33,8 @@ dependencies {
         exclude(group = "org.jetbrains", module = "annotations")
     }
 
+    // The test projects resolve against the real DSL helpers and kotlinx.html, from the jars of these.
+    testImplementation("io.github.markusaugust.streamlord:streamlord-html")
     testImplementation("junit:junit:4.13.2")
     testImplementation(kotlin("test"))
 }

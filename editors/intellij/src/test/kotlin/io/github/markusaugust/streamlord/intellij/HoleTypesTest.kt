@@ -1,6 +1,8 @@
 package io.github.markusaugust.streamlord.intellij
 
 import com.intellij.lang.annotation.HighlightSeverity
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.module.Module
 import com.intellij.openapi.roots.ContentEntry
 import com.intellij.openapi.roots.ModifiableRootModel
@@ -8,9 +10,16 @@ import com.intellij.testFramework.LightProjectDescriptor
 import com.intellij.testFramework.PsiTestUtil
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.util.PathUtil
+import io.github.markusaugust.streamlord.analysis.HoleFact
+import io.github.markusaugust.streamlord.core.domain.Trusted
 import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonParser
+import io.github.markusaugust.streamlord.html.Casing
+import io.github.markusaugust.streamlord.intellij.analysis.HoleFacts
+import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.inspections.KotlinInterpolationInspection
+import kotlinx.html.TagConsumer
+import org.jetbrains.kotlin.psi.KtFile
 import java.io.File
 
 /**
@@ -20,7 +29,7 @@ import java.io.File
 class HoleTypesTest : BasePlatformTestCase() {
     private val dir = File(System.getProperty("streamlord.repo"), "editors/vscode/test/fixtures/interpolationtests")
 
-    /** A module with the Kotlin standard library, so the types resolve. */
+    /** A module with the Kotlin standard library, Streamlord's core and DSL, and kotlinx.html, so the types resolve. */
     override fun getProjectDescriptor(): LightProjectDescriptor =
         object : LightProjectDescriptor() {
             override fun getModuleTypeId(): String = "JAVA_MODULE"
@@ -31,20 +40,23 @@ class HoleTypesTest : BasePlatformTestCase() {
                 contentEntry: ContentEntry,
             ) {
                 super.configureModule(module, model, contentEntry)
-                val stdlib = File(PathUtil.getJarPathForClass(KotlinVersion::class.java))
-                PsiTestUtil.addLibrary(model, "kotlin-stdlib", stdlib.parent, stdlib.name)
+                for ((name, type) in LIBRARIES) {
+                    val jar = File(PathUtil.getJarPathForClass(type))
+                    PsiTestUtil.addLibrary(model, name, jar.parent, jar.name)
+                }
             }
         }
 
     /**
      * Where the types change the verdict of expected.json, by hole and code: null is silent. A
-     * number in the text is safe, markup a function returns is the author's own, and a value
-     * typed String, inferred or written, is a warning rather than a hint.
+     * number in the text is safe, and a value typed String, inferred or written, is a warning
+     * rather than a hint: `everything` among them, since one of the pages it joins adds a
+     * value to its markup with `+`.
      */
     private val withTypes: Map<Pair<String, String>, String?> =
         mapOf(
             ("\$count" to "unescaped-interpolation") to null,
-            ("\${everything(query)}" to "unescaped-interpolation") to null,
+            ("\${everything(query)}" to "unescaped-interpolation") to "warning",
             ("\$name" to "unescaped-interpolation") to "warning",
             ("\$error" to "unescaped-interpolation") to "warning",
             ("\${query.trim()}" to "unescaped-interpolation") to "warning",
@@ -89,10 +101,10 @@ class HoleTypesTest : BasePlatformTestCase() {
         myFixture.configureByText(
             "Page.kt",
             """
-            import io.github.markusaugust.streamlord.core.domain.Html
+            import io.github.markusaugust.streamlord.core.domain.interpolate
             import limits.MAX
             fun card(n: Int?, s: String): String {
-                val body = Html("<b>x</b>")
+                val body = interpolate("<b>x</b>")
                 val total = n ?: 0
                 return "<p>${'$'}body ${'$'}n ${'$'}total ${'$'}MAX ${'$'}{s.length}</p>"
             }
@@ -107,6 +119,84 @@ class HoleTypesTest : BasePlatformTestCase() {
         assertEquals(emptyList<String>(), seen)
     }
 
+    fun `test a hole is markup only when its whole value is`() {
+        val facts = facts(MARKUP_PAGE)
+        val wanted =
+            mapOf(
+                "\${\"<b>\" + q}" to HoleFact.STRING,
+                "\${q + \"<b>\"}" to HoleFact.STRING,
+                "\${\"<p>\" + h + \"</p>\"}" to HoleFact.MARKUP,
+                "\${bold(q)}" to HoleFact.STRING,
+                "\${badge()}" to HoleFact.MARKUP,
+                "\${deep2()}" to HoleFact.MARKUP,
+                "\${deep1()}" to HoleFact.STRING,
+                "\${either(c)}" to HoleFact.MARKUP,
+                "\${mixed(c, q)}" to HoleFact.STRING,
+                "\${annotated()}" to HoleFact.MARKUP,
+                "\$frag" to HoleFact.MARKUP,
+                "\$h" to HoleFact.MARKUP,
+                "\${h.text}" to HoleFact.MARKUP,
+                "\$built" to HoleFact.MARKUP,
+                "\$fragment" to HoleFact.MARKUP,
+                "\${Trusted(q)}" to HoleFact.MARKUP,
+                "\${\"<li>\$q</li>\".trimIndent()}" to HoleFact.MARKUP,
+                "\${items.joinToString(\"\") { \"<li>\$it</li>\" }}" to HoleFact.MARKUP,
+                "\${items.map { \"<li>\$it</li>\" }.joinToString(\"\")}" to HoleFact.MARKUP,
+                "\${items.joinToString(\"\")}" to HoleFact.STRING,
+                "\${listOf(\"<b>a</b>\", q).joinToString()}" to HoleFact.STRING,
+                "\${if (c) \"<b>a</b>\" else q}" to HoleFact.STRING,
+                "\${when { c -> \"<b>a</b>\"; else -> \"<i>b</i>\" }}" to HoleFact.MARKUP,
+                "\${createHTML().div { +q }}" to HoleFact.MARKUP,
+                "\${elements { span { +q } }}" to HoleFact.MARKUP,
+                "\${buildString { appendHTML().div { +q } }}" to HoleFact.MARKUP,
+                "\${post(\"/save\")}" to HoleFact.CONSTANT,
+                "\${signal(\"count\")}" to HoleFact.CONSTANT,
+                "\${increment(\"n\")}" to HoleFact.CONSTANT,
+                "\${n}" to HoleFact.NUMBER,
+            )
+        val seen = wanted.keys.associateWith { facts[it] }
+        assertEquals(wanted.entries.joinToString("\n"), seen.entries.joinToString("\n"))
+        // A string with no tag in it is not HTML, so nothing in it is typed.
+        assertNull(facts["\$who"])
+    }
+
+    fun `test an edit in another file types the holes again but does not run the analysis again`() {
+        val text =
+            buildString {
+                append("package big\n")
+                for (i in 0 until 2000) append("fun card$i(name: String, n: Int) = \"<p data-n=\\\"\$n\\\">\$name</p>\"\n")
+            }
+        val file = myFixture.configureByText("Big.kt", text) as KtFile
+        val analysis = StreamlordAnalysis.getInstance(project)
+        val first = measure { analysis.kotlinIssues(file) }
+        val sites = background { analysis.kotlinSites(file) }
+        assertTrue(first.second.isNotEmpty())
+        myFixture.addFileToProject("Other.kt", "package other\nval x = 1")
+        val again = measure { analysis.kotlinIssues(file) }
+        assertSame("the analysis of the text is kept", sites, background { analysis.kotlinSites(file) })
+        assertEquals(first.second, again.second)
+        println("2000 HTML functions: first ${first.first} ms, after an edit elsewhere ${again.first} ms")
+    }
+
+    private fun <T> measure(block: () -> T): Pair<Long, T> {
+        val start = System.nanoTime()
+        val value = background(block)
+        return (System.nanoTime() - start) / 1_000_000 to value
+    }
+
+    /** In a read action off the EDT, where the Analysis API is allowed, as the highlighting runs it. */
+    private fun <T> background(block: () -> T): T =
+        ApplicationManager
+            .getApplication()
+            .executeOnPooledThread<T> { ReadAction.nonBlocking<T>(block).executeSynchronously() }
+            .get()
+
+    /** The facts of a page, by the text of each hole. */
+    private fun facts(text: String): Map<String, HoleFact> {
+        val file = myFixture.configureByText("Page.kt", text) as KtFile
+        return background { HoleFacts.of(file) }.mapKeys { (range, _) -> range.substring(file.text) }
+    }
+
     private fun severity(s: HighlightSeverity): String =
         when (s) {
             HighlightSeverity.ERROR -> "error"
@@ -116,19 +206,94 @@ class HoleTypesTest : BasePlatformTestCase() {
         }
 
     private companion object {
-        /** Just enough of Ktor, Streamlord and the annotations for the fixture files to resolve. */
+        /** Every way of building markup the facts know, and a near miss of each; `¤` is a `$`. */
+        val MARKUP_PAGE =
+            """
+            package page
+            import io.github.markusaugust.streamlord.core.domain.Html
+            import io.github.markusaugust.streamlord.core.domain.Trusted
+            import io.github.markusaugust.streamlord.core.domain.interpolate
+            import io.github.markusaugust.streamlord.html.elements
+            import io.github.markusaugust.streamlord.html.increment
+            import io.github.markusaugust.streamlord.html.post
+            import io.github.markusaugust.streamlord.html.signal
+            import kotlinx.html.div
+            import kotlinx.html.span
+            import kotlinx.html.stream.appendHTML
+            import kotlinx.html.stream.createHTML
+            import org.intellij.lang.annotations.Language
+
+            fun bold(q: String) = "<b>" + q
+            fun badge(): String = "<span>new</span>"
+            fun deep1() = deep2()
+            fun deep2() = deep3()
+            fun deep3() = deep4()
+            fun deep4() = "<i>x</i>"
+            fun either(c: Boolean): String {
+                if (c) return "<b>a</b>"
+                return "<i>b</i>"
+            }
+            fun mixed(c: Boolean, q: String): String {
+                if (c) return "<b>a</b>"
+                return q
+            }
+            @Language("HTML") fun annotated(): String = load()
+            fun load(): String = ""
+            fun plain(who: String) = "hello ¤who"
+
+            fun page(q: String, items: List<String>, n: Int, c: Boolean, @Language("HTML") frag: String, h: Html): String {
+                val built = interpolate("<b>%s</b>", q)
+                val fragment = "<b>¤q</b>"
+                return ""${'"'}
+                    <div>
+                    ¤{"<b>" + q}
+                    ¤{q + "<b>"}
+                    ¤{"<p>" + h + "</p>"}
+                    ¤{bold(q)}
+                    ¤{badge()}
+                    ¤{deep2()}
+                    ¤{deep1()}
+                    ¤{either(c)}
+                    ¤{mixed(c, q)}
+                    ¤{annotated()}
+                    ¤frag
+                    ¤h
+                    ¤{h.text}
+                    ¤built
+                    ¤fragment
+                    ¤{Trusted(q)}
+                    ¤{"<li>¤q</li>".trimIndent()}
+                    ¤{items.joinToString("") { "<li>¤it</li>" }}
+                    ¤{items.map { "<li>¤it</li>" }.joinToString("")}
+                    ¤{items.joinToString("")}
+                    ¤{listOf("<b>a</b>", q).joinToString()}
+                    ¤{if (c) "<b>a</b>" else q}
+                    ¤{when { c -> "<b>a</b>"; else -> "<i>b</i>" }}
+                    ¤{createHTML().div { +q }}
+                    ¤{elements { span { +q } }}
+                    ¤{buildString { appendHTML().div { +q } }}
+                    <button data-on:click="¤{post("/save")}" data-text="¤{signal("count")}" data-on:keydown="¤{increment("n")}">x</button>
+                    ¤{n}
+                    </div>
+                ""${'"'}
+            }
+            """.trimIndent().replace('¤', '$')
+
+        val LIBRARIES =
+            listOf(
+                "kotlin-stdlib" to KotlinVersion::class.java,
+                "streamlord-core" to Trusted::class.java,
+                "streamlord-html" to Casing::class.java,
+                "kotlinx-html" to TagConsumer::class.java,
+            )
+
+        /** Just enough of Ktor, Streamlord's Ktor module and the annotations for the fixture files to resolve. */
         val STUBS =
             mapOf(
                 "stubs/Annotations.kt" to
                     """
                     package org.intellij.lang.annotations
                     annotation class Language(val value: String)
-                    """.trimIndent(),
-                "stubs/Streamlord.kt" to
-                    """
-                    package io.github.markusaugust.streamlord.core.domain
-                    @JvmInline value class Html(val text: String)
-                    enum class ElementPatchMode { OUTER, APPEND }
                     """.trimIndent(),
                 "stubs/StreamlordKtor.kt" to
                     """

@@ -4,6 +4,15 @@ All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here
 
 ## Unreleased
 
+- A value in an HTML string counts as markup only when the whole of it is: `"<b>" + query` is the
+  `String` it is, while an HTML literal, `interpolate(...)`, `Trusted(...)`, a value declared `Html`
+  or `@Language("HTML")`, kotlinx.html output (`createHTML()`, `appendHTML()`, `elements { }`) and
+  a function, an `if` or a `when` whose every result is one of these still say nothing in element
+  text. A call to one of Streamlord's expression helpers, `${signal("count")}` or
+  `${post("/save")}`, is Datastar code you wrote and says nothing.
+- An edit in another file no longer runs the analysis of an open file again: only the types of
+  the values in its HTML strings are looked up again, and the analysis runs only if one changed.
+
 - A duration modifier the client reads by its number is a warning that says what it reads, with
   the fix to write it out: `__debounce.5x` waits 5 ms, since `tagToMs` falls back to `parseFloat`,
   and `__delay.0x1fms` 31 ms. It was an error that said a duration was missing. A tag that is no
