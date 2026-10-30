@@ -23,6 +23,12 @@ All notable changes to Streamlord are recorded here. The format follows
   `unsafe-interpolation` where it cannot, a warning (a hint for a tag or attribute name that is not
   known to be a `String`). VS Code indexes the workspace's `const val`s; IntelliJ adds types.
 - `Fix.edits` in the analysis: further replacements a fix makes, such as an import.
+- The editors judge a call to `interpolate`: `interpolate-holes`, an error, for a `%s` count that
+  does not match the values; `unsafe-interpolation` on a `%s` whose value it will refuse, an error
+  where the value is known to be refused; `interpolate-template` for a Kotlin template written into
+  the format, which is neither escaped nor refused, with a fix that makes it a `%s` hole. The
+  format is read as HTML, and `interpolate`'s `format` is marked `@Language("HTML")`.
+- A fix that quotes an attribute value written without quotes.
 
 ### Changed
 

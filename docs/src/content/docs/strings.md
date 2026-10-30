@@ -205,6 +205,13 @@ escaping aside: not when a value may be null, which a template writes as `null` 
 as nothing, nor when markup held as a `String` sits in element text, where `interpolate` would
 escape it.
 
+A call to `interpolate` is judged as it will run. A miscounted `%s` is an error,
+`interpolate-holes`, because it always throws. A `%s` whose value `interpolate` will refuse, a
+`String` in a `data-*` expression, is an error where the value is known to be one and a warning
+where it is not. And a Kotlin template written into the format, `interpolate("<p>$name</p>")`, is
+`interpolate-template`: Kotlin fills it in before `interpolate` sees the markup, so it is neither
+escaped nor refused, and the fix turns it into a `%s` hole with the value among the arguments.
+
 At run time the source is gone and only the finished string arrives, so the holes have to be left
 standing for the same question to be asked. That is the whole of what `interpolate` wants from you.
 
