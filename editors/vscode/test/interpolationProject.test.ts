@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { analyzeKotlin } from "../src/analyze.ts";
+import { constantNames } from "../src/interpolation.ts";
 
 /**
  * The five files of the interpolation test project, and what the analysis must say about each
@@ -15,6 +16,11 @@ const expected = JSON.parse(readFileSync(new URL("expected.json", dir), "utf8"))
 const CODES = new Set(["kotlin-interpolation", "unescaped-interpolation", "unsafe-interpolation"]);
 
 describe("the interpolation test project", () => {
+  it("finds the constants the workspace index gives the analysis", () => {
+    const names = Object.keys(expected.files).flatMap((f) => [...constantNames(readFileSync(new URL(f, dir), "utf8"))]);
+    assert.deepEqual(names.sort(), [...expected.constants].sort());
+  });
+
   for (const [file, issues] of Object.entries(expected.files)) {
     it(file, () => {
       const source = readFileSync(new URL(file, dir), "utf8");

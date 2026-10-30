@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { collectSelectors, type Selectors } from "./selectors.ts";
 import { collectSignalDefinitions, collectSignals } from "./signals.ts";
+import { constantNames } from "./interpolation.ts";
 
 /** Template files read as markup, as the IntelliJ plugin reads them by default, whatever language an extension gives them. */
 const MARKUP_EXTENSIONS = [
@@ -19,6 +20,8 @@ interface FileEntry {
   signals: Set<string>;
   definitions: Set<string>;
   selectors: Selectors;
+  /** The `const val` names a Kotlin file declares, which a hole in an HTML string may name. */
+  constants: Set<string>;
 }
 
 /** Workspace-wide index of signal names, kept fresh as files change. */
@@ -26,6 +29,7 @@ export class SignalIndex implements vscode.Disposable {
   private byFile = new Map<string, FileEntry>();
   private built = false;
   private definitionsUnion: Set<string> | null = null;
+  private constantsUnion: Set<string> | null = null;
   private readonly changed = new vscode.EventEmitter<void>();
   private readonly disposables: vscode.Disposable[] = [];
 
@@ -82,6 +86,7 @@ export class SignalIndex implements vscode.Disposable {
     // An open document may hold edits the disk does not.
     for (const d of vscode.workspace.textDocuments) this.update(d);
     this.definitionsUnion = null;
+    this.constantsUnion = null;
     this.changed.fire();
     return this.all().size;
   }
@@ -119,8 +124,9 @@ export class SignalIndex implements vscode.Disposable {
   private set(key: string, next: FileEntry): void {
     const previous = this.byFile.get(key);
     this.byFile.set(key, next);
-    if (!previous || !sameSet(previous.definitions, next.definitions)) {
+    if (!previous || !sameSet(previous.definitions, next.definitions) || !sameSet(previous.constants, next.constants)) {
       this.definitionsUnion = null;
+      this.constantsUnion = null;
       this.changed.fire();
     }
   }
@@ -132,10 +138,11 @@ export class SignalIndex implements vscode.Disposable {
     for (const [k, e] of this.byFile) {
       if (k !== key && !k.startsWith(folder)) continue;
       this.byFile.delete(k);
-      defined ||= e.definitions.size > 0;
+      defined ||= e.definitions.size > 0 || e.constants.size > 0;
     }
     if (defined) {
       this.definitionsUnion = null;
+      this.constantsUnion = null;
       this.changed.fire();
     }
   }
@@ -183,6 +190,15 @@ export class SignalIndex implements vscode.Disposable {
     return out;
   }
 
+  /** Every `const val` the workspace's Kotlin declares. Cached until one changes. */
+  allConstants(): ReadonlySet<string> {
+    if (this.constantsUnion) return this.constantsUnion;
+    const out = new Set<string>();
+    for (const e of this.byFile.values()) for (const n of e.constants) out.add(n);
+    this.constantsUnion = out;
+    return out;
+  }
+
   dispose(): void {
     this.disposables.forEach((d) => d.dispose());
   }
@@ -195,7 +211,13 @@ function languageByExtension(uri: vscode.Uri): "kotlin" | "html" | null {
 }
 
 function entry(text: string, language: "kotlin" | "html", version: number | null): FileEntry {
-  return { version, signals: collectSignals(text, language), definitions: collectSignalDefinitions(text, language), selectors: collectSelectors(text) };
+  return {
+    version,
+    signals: collectSignals(text, language),
+    definitions: collectSignalDefinitions(text, language),
+    selectors: collectSelectors(text),
+    constants: language === "kotlin" ? constantNames(text) : new Set(),
+  };
 }
 
 function sameSet(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {

@@ -5,6 +5,7 @@
  * `interpolate`. The twin of Interpolations.kt in streamlord-analysis; where a hole lands is
  * holes.ts, the twin of core.
  */
+import { lexKotlin } from "./scanner.ts";
 import { PLACEHOLDER, readKotlinStringAt, type Interpolation, type KotlinString } from "./kotlinStrings.ts";
 import type { Fix } from "./expression.ts";
 
@@ -50,6 +51,14 @@ export function markupView(src: string, s: KotlinString): string {
 /** Whether a trim call follows the literal, which `interpolate`'s rewrite cannot move without changing the output. */
 export function trimmed(src: string, s: KotlinString): boolean {
   return /^\s*\.\s*trim(?:Indent|Margin)\s*\(/.test(src.slice(s.end, s.end + 64));
+}
+
+/** The `const val` names a Kotlin file declares, outside strings and comments: what the workspace index gathers. */
+export function constantNames(src: string): Set<string> {
+  const { mask } = lexKotlin(src);
+  const out = new Set<string>();
+  for (const m of src.matchAll(/\bconst\s+val\s+([\p{L}_][\p{L}\p{Nd}_]*)/gu)) if (mask[m.index ?? 0] === 1) out.add(m[1] as string);
+  return out;
 }
 
 /** Every literal the lexer found, and those inside their templates. */
