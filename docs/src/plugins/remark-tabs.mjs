@@ -75,11 +75,12 @@ function wrap(run, set) {
   const group = groupOf(run[0])
   const title = titleOf(run[0], group)
   // Readable in the address, and numbered where two labels would give one id.
-  const ids = labels.map((label, i) => {
-    const id = `tabs-${set}-${slug(label) || i + 1}`
-    return labels.findIndex((other) => slug(other) === slug(label)) === i
-      ? id
-      : `${id}-${i + 1}`
+  const ids = []
+  labels.forEach((label, i) => {
+    const base = `tabs-${set}-${slug(label) || i + 1}`
+    let id = base
+    for (let n = 2; ids.includes(id); n++) id = `${base}-${n}`
+    ids.push(id)
   })
 
   const links = labels

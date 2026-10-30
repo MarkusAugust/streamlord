@@ -46,8 +46,8 @@ let css = lotek("theme", RECIPE)
 for (const { token, from, to } of LAYERS) {
   const pattern = new RegExp(`(--lt-color-${token}:\\s*)${from}\\b`, "g")
   const hits = css.match(pattern)?.length ?? 0
-  // The light block is written once and the dark one twice, for the media query and for
-  // the explicit data-theme. A light value therefore lands once and a dark value twice.
+  // Each value lands more than once, since LO-TEK writes each theme both for the system
+  // preference and for an explicit data-theme. None means the layer has moved.
   if (hits === 0) {
     throw new Error(
       `--lt-color-${token} is no longer ${from}. LO-TEK has changed the lightness or ` +

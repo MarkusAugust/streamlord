@@ -89,9 +89,6 @@ const { title, description, slug, headings } = Astro.props
     <script>
       import { defineLtTabs } from "@lo-tek/interfaces/tabs"
 
-      // Once for the whole page, not once per tab set.
-      defineLtTabs()
-
       /*
        * Tab sets follow each other. A reader who picks Maven on one block means Maven
        * everywhere, on this page and the next: the choice is about them, not about the
@@ -100,8 +97,31 @@ const { title, description, slug, headings } = Astro.props
        */
       const KEY = "tab-choice"
       let syncing = false
+      // Set while a click or a key on a tab is handled. Only that is the reader choosing: a
+      // tab the address or find in page selects follows on this page, and is not stored.
+      let deliberate = false
+
+      for (const type of ["click", "keydown"]) {
+        document.addEventListener(
+          type,
+          (event) => {
+            if (!(event.target as Element).closest?.(".lt-tabs__list")) return
+            deliberate = true
+            // A task, not a microtask: those run between the listeners of a real click.
+            setTimeout(() => {
+              deliberate = false
+            })
+          },
+          true,
+        )
+      }
 
       type Tabs = HTMLElement & { select(index: number): void }
+
+      const labels = (tabs: Element) =>
+        [...tabs.querySelectorAll<HTMLAnchorElement>(".lt-tabs__list a[data-tab-label]")].map(
+          (link) => link.dataset.tabLabel,
+        )
 
       // Every set's tab for this label is selected. The component writes each selection to
       // the address, so the address is put back afterwards: it is the reader's, and should
@@ -110,9 +130,9 @@ const { title, description, slug, headings } = Astro.props
         syncing = true
         try {
           for (const tabs of document.querySelectorAll<Tabs>("lt-tabs[data-tab-group]")) {
-            const links = [...tabs.querySelectorAll<HTMLAnchorElement>(".lt-tabs__list a[data-tab-label]")]
-            const index = links.findIndex((link) => link.dataset.tabLabel === label)
-            if (index >= 0 && links[index].getAttribute("aria-selected") !== "true") tabs.select(index)
+            const index = labels(tabs).indexOf(label)
+            const link = tabs.querySelectorAll(".lt-tabs__list a[data-tab-label]")[index]
+            if (index >= 0 && link.getAttribute("aria-selected") !== "true") tabs.select(index)
           }
         } finally {
           syncing = false
@@ -122,21 +142,44 @@ const { title, description, slug, headings } = Astro.props
 
       document.addEventListener("tab-select", (event) => {
         if (syncing) return
-        const link = (event.target as HTMLElement).querySelector<HTMLAnchorElement>(
-          '.lt-tabs__list a[aria-selected="true"]',
-        )
-        const label = link?.dataset.tabLabel
+        const tabs = (event.target as Element).closest("lt-tabs[data-tab-group]")
+        const label = tabs && labels(tabs)[(event as CustomEvent<{ index: number }>).detail.index]
         if (!label) return
-        try {
-          localStorage.setItem(KEY, label)
-        } catch {}
+        if (deliberate) {
+          try {
+            localStorage.setItem(KEY, label)
+          } catch {}
+        }
         pick(label, location.href)
       })
 
+      // Once for the whole page, not once per tab set. The component selects the tab the
+      // address names while it starts, before the later sets are upgraded, so the listener
+      // above cannot carry that one over; the lines after this do.
+      syncing = true
       try {
-        const saved = localStorage.getItem(KEY)
-        if (saved) pick(saved, location.href)
-      } catch {}
+        defineLtTabs()
+      } finally {
+        syncing = false
+      }
+
+      // A link to one tab says which tab, and wins over what the reader chose last time,
+      // without replacing it.
+      const id = location.hash.slice(1)
+      const linked = id ? document.getElementById(id) : null
+      const linkedLabel = linked?.matches("lt-tabs[data-tab-group] .lt-tabs__panel")
+        ? linked
+            .closest("lt-tabs")
+            ?.querySelector<HTMLAnchorElement>(`.lt-tabs__list a[href="#${CSS.escape(id)}"]`)?.dataset
+            .tabLabel
+        : undefined
+      if (linkedLabel) pick(linkedLabel, location.href)
+      else {
+        try {
+          const saved = localStorage.getItem(KEY)
+          if (saved) pick(saved, location.href)
+        } catch {}
+      }
     </script>
 
     <style>
@@ -264,7 +307,8 @@ const { title, description, slug, headings } = Astro.props
       .prose li {
         line-height: var(--lt-line-height-article);
       }
-      .prose a {
+      /* Not the tabs, which are links too and mark the selected one by its colour. */
+      .prose a:not(.lt-tabs__list a) {
         color: var(--lt-color-accent-text);
       }
       .prose table {
