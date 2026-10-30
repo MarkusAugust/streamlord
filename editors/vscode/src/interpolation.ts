@@ -155,7 +155,15 @@ export function isMarkup(src: string, s: KotlinString, ip: Interpolation): boole
 }
 
 /** What may end an operand of `+` at the top level: an argument or statement boundary, or an operator that binds less tightly. */
-const OPERAND_END = /^(?:[,)\]};]|\?:|&&|\|\||==|!=|<=|>=|\.\.|\bto\b|\belse\b)/;
+const OPERAND_END = /^(?:[,)\]};]|\?:|&&|\|\||==|!=|<=|>=|\.\.)/;
+
+/** The words that end an operand, as words of their own: `photo` is a name, not `pho` and `to`. */
+const OPERAND_END_WORDS = ["to", "else"];
+const WORD_CHAR = /[\p{L}\p{Nd}_]/u;
+
+function operandEndWordAt(src: string, at: number): boolean {
+  return OPERAND_END_WORDS.some((w) => src.startsWith(w, at) && !WORD_CHAR.test(src[at - 1] ?? "") && !WORD_CHAR.test(src[at + w.length] ?? ""));
+}
 
 /**
  * The `+` chain that starts at the literal `first`, read as one string: each literal's text, and
@@ -197,7 +205,7 @@ export function chainFrom(src: string, first: KotlinString, mask: Uint8Array): K
       } else if (depth === 0) {
         if (c === "\n" || c === "\r") break;
         if (c === "+" && src[k + 1] !== "+" && src[k + 1] !== "=") break;
-        if (OPERAND_END.test(src.slice(k, k + 4))) break;
+        if (OPERAND_END.test(src.slice(k, k + 4)) || operandEndWordAt(src, k)) break;
       }
       k++;
     }
