@@ -1,454 +1,92 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-
-const expect = (actual: unknown) => ({
-  toEqual: (expected: unknown) => assert.deepEqual(actual, expected),
-  toBe: (expected: unknown) => assert.equal(actual, expected),
-  toBeNull: () => assert.equal(actual, null),
-  toContain: (needle: string) => assert.ok(typeof actual === "string" && actual.includes(needle), `expected ${JSON.stringify(actual)} to contain ${JSON.stringify(needle)}`),
-  toBeGreaterThan: (n: number) => assert.ok((actual as number) > n, `expected ${actual} > ${n}`),
-});
 import { readFileSync } from "node:fs";
 import { analyzeHtml, analyzeKotlin, htmlStringAt } from "../src/analyze.ts";
-import { readKotlinStringAt } from "../src/kotlinStrings.ts";
+import { readKotlinStringAt, type KotlinString } from "../src/kotlinStrings.ts";
 import { findCallSites, findKotlinStrings } from "../src/scanner.ts";
-import { validateExpression } from "../src/expression.ts";
 import { validateMarkup } from "../src/markup.ts";
 import { collectSignals } from "../src/signals.ts";
 import { collectSelectors } from "../src/selectors.ts";
 import { decodeDatastar, mergePatchAsClient, SseParser } from "../src/sse.ts";
+import { twinCases } from "./twins.ts";
 
 const opts = { prefix: "data-", checkHtmlAttributes: true };
-const codes = (issues: { code?: string }[]) => issues.map((i) => i.code);
 
-describe("kotlin strings", () => {
-  it("decodes escapes and templates with an offset map", () => {
-    const src = 'x("a\\"b\\n${\'$\'}c$d${e}f")';
-    const s = readKotlinStringAt(src, 2)!;
-    expect(s.text).toBe('a"b\n$c__kt____kt__f');
-    expect(s.interpolations.map((i) => [i.kind, i.text])).toEqual([["simple", "d"], ["braced", "e"]]);
-    expect(src.slice(s.map[0], s.map[0]! + 1)).toBe("a");
-    expect(src.slice(s.map[1], s.map[1]! + 2)).toBe('\\"');
-    expect(s.end).toBe(src.length - 1);
-  });
+interface Case {
+  name: string;
+  kind: string;
+  source: string;
+  [field: string]: unknown;
+}
 
-  it("reads multi-dollar literals, where a single dollar is text", () => {
-    const src = 'f($$"a$b$$c$${e}${\'$\'}$$$d")';
-    const s = readKotlinStringAt(src, 2)!;
-    expect(s.dollars).toBe(2);
-    expect(s.start).toBe(2);
-    expect(s.text).toBe("a$b__kt____kt__${'$'}$__kt__");
-    expect(s.interpolations.map((i) => [i.kind, i.text])).toEqual([["simple", "c"], ["braced", "e"], ["simple", "d"]]);
-    expect(src.slice(s.interpolations[0]!.start, s.interpolations[0]!.end)).toBe("$$c");
-    expect(src.slice(s.interpolations[2]!.start, s.interpolations[2]!.end)).toBe("$$d");
-    const raw = readKotlinStringAt('$$"""<i>$x</i>"""', 0)!;
-    expect(raw.raw).toBe(true);
-    expect(raw.text).toBe("<i>$x</i>");
-    expect(readKotlinStringAt("$$x", 0)).toBeNull();
-  });
+const literal = (s: KotlinString | null) =>
+  s && {
+    start: s.start,
+    end: s.end,
+    raw: s.raw,
+    dollars: s.dollars,
+    contentStart: s.contentStart,
+    contentEnd: s.contentEnd,
+    text: s.text,
+    map: s.map,
+    interpolations: s.interpolations.map((i) => ({ start: i.start, end: i.end, kind: i.kind, text: i.text, decodedStart: i.decodedStart })),
+    unterminated: s.unterminated,
+  };
 
-  it("reads raw strings and stops at the last quote of a run", () => {
-    const src = 'f("""<div id="a">"</div>"""")';
-    const s = readKotlinStringAt(src, 2)!;
-    expect(s.raw).toBe(true);
-    expect(s.text).toBe('<div id="a">"</div>"');
-    expect(src.slice(s.end)).toBe(")");
-  });
-});
+/** What each kind of case expects, in the fields `twins/analyze.json` describes; `AnalyzerTest.kt` projects the same. */
+const project: Record<string, (c: Case) => Record<string, unknown>> = {
+  "kotlin-string": (c) => ({ string: literal(readKotlinStringAt(c.source, c.at as number)) }),
+  "call-sites": (c) => ({
+    sites: findCallSites(c.source, new Set(c.names as string[])).map((s) => ({
+      name: s.name,
+      trailingLambda: s.trailingLambda,
+      args: s.args.map((a) => ({ named: a.named, text: a.text, string: a.string?.text ?? null })),
+    })),
+  }),
+  "kotlin-strings": (c) => ({ texts: findKotlinStrings(c.source).map((s) => s.text) }),
+  "html-string-at": (c) => ({
+    at: (c.at as { needle: string }[]).map(({ needle }) => ({ needle, raw: htmlStringAt(c.source, c.source.indexOf(needle) + 1)?.raw ?? null })),
+  }),
+  signals: (c) => ({ signals: [...collectSignals(c.source, c.language as "kotlin" | "html")].sort() }),
+  selectors: (c) => {
+    const s = collectSelectors(c.source);
+    return { ids: [...s.ids].sort(), classes: [...s.classes].sort() };
+  },
+  fixture: (c) => ({ codes: analyzeHtml(readFileSync(new URL(`./fixtures/${c.file}`, import.meta.url), "utf8"), opts).map((i) => i.code) }),
+  issues: (c) => {
+    const prefix = c.prefix as string;
+    const source = c.source;
+    const issues =
+      c.language === "markup"
+        ? validateMarkup(source, { requireIds: false, prefix, checkAttributes: true })
+        : (c.language === "kotlin" ? analyzeKotlin : analyzeHtml)(source, { prefix, checkHtmlAttributes: true });
+    return { issues: issues.map((i) => ({ code: i.code, start: i.start, end: i.end, severity: i.severity })) };
+  },
+};
 
-describe("scanner", () => {
-  it("splits positional, named, string and lambda arguments", () => {
-    const src = `stream.patchElements("<li>x</li>", selector = "#list", mode = ElementPatchMode.APPEND) { once = true }
-      fun patchElements(x: String) = 1
-      dataOn("click", post("/x") + "y")`;
-    const sites = findCallSites(src, new Set(["patchElements", "dataOn", "post"]));
-    expect(sites.map((s) => s.name)).toEqual(["patchElements", "dataOn", "post"]);
-    const pe = sites[0]!;
-    expect(pe.args.map((a) => [a.named, a.string?.text ?? a.text])).toEqual([[null, "<li>x</li>"], ["selector", "#list"], ["mode", "ElementPatchMode.APPEND"]]);
-    expect(pe.trailingLambda).toBe(true);
-    expect(sites[1]!.args[1]!.string).toBeNull();
-  });
-});
-
-describe("expressions", () => {
-  it("accepts datastar syntax", () => {
-    expect(validateExpression("$count++; @post('/x', {headers: {'X-A': '1'}})")).toEqual([]);
-    expect(validateExpression("evt.key === 'Escape' && ($open = false)")).toEqual([]);
-    expect(validateExpression("@peek(() => $a.b)")).toEqual([]);
-  });
-  it("reads an object literal the way datastar does", () => {
-    expect(validateExpression("{count: 0, name: '', nested: {a: [1, 2, 3]}}")).toEqual([]);
-    expect(validateExpression("{count: 0}")).toEqual([]);
-    expect(validateExpression("{count: }").map((i) => i.start)).toEqual([8]);
-    expect(validateExpression("{n: , m: 1}").map((i) => i.start)).toEqual([4]);
-    expect(analyzeHtml(`<div data-signals="{count: 0, name: ''}"></div>`, opts)).toEqual([]);
-  });
-  it("reports syntax errors with positions and unknown actions", () => {
-    const bad = validateExpression("@post('/x'");
-    expect(bad[0]?.severity).toBe("error");
-    expect(bad[0]?.start).toBe(10);
-    expect(codes(validateExpression("@Post('/x')"))).toEqual(["unknown-action"]);
-    expect(validateExpression("@Post('/x')")[0]?.message).toContain("Did you mean @post");
-    expect(codes(validateExpression("@clipboard('x')"))).toEqual(["pro-action"]);
-    expect(codes(validateExpression("  "))).toEqual(["empty-expression"]);
-  });
-});
-
-describe("markup", () => {
-  it("requires ids on top-level elements without a selector", () => {
-    expect(codes(validateMarkup('<div id="a">x</div><span>y</span>', { requireIds: true, prefix: "data-", checkAttributes: true }))).toEqual(["missing-id"]);
-    expect(validateMarkup("<span>y</span>", { requireIds: false, prefix: "data-", checkAttributes: true })).toEqual([]);
-  });
-  it("finds unclosed and stray tags and top-level text", () => {
-    expect(codes(validateMarkup('<div id="a"><span>x</div>', { requireIds: true, prefix: "data-", checkAttributes: true }))).toEqual(["unclosed"]);
-    expect(codes(validateMarkup("</div>", { requireIds: false, prefix: "data-", checkAttributes: true }))).toEqual(["stray-close"]);
-    expect(codes(validateMarkup("Hello <b>x</b>", { requireIds: false, prefix: "data-", checkAttributes: true }))).toEqual(["top-level-text"]);
-    expect(validateMarkup('<input id="i"><br><script>if (a < b) {}</script>', { requireIds: false, prefix: "data-", checkAttributes: true })).toEqual([]);
-  });
-  it("validates data-* attributes and modifiers", () => {
-    const html = `<div id="x" data-on:click__debounce.500ms.leading__prevent="@post('/a')" data-on-intersect__threshold.150="x()"
-      data-on:click__debunce="1" data-on="x" data-text:x="1" data-signal:foo="1" data-bind="$a + 1" data-persist data-init__delay="1"></div>`;
-    const c = codes(validateMarkup(html, { requireIds: false, prefix: "data-", checkAttributes: true }));
-    expect(c).toEqual(["modifier-args", "unknown-modifier", "missing-key", "unexpected-key", "unknown-attribute", "signal-name-expected", "pro-attribute", "modifier-args"]);
-    const messages = validateMarkup(html, { requireIds: false, prefix: "data-", checkAttributes: true }).map((i) => i.message);
-    expect(messages.find((m) => m.includes("data-signal."))).toContain("Did you mean data-signals");
-    expect(messages.find((m) => m.includes("__debunce"))).toContain("Did you mean __debounce");
-  });
-  it("validates expressions inside attribute values but tolerates template syntax", () => {
-    expect(codes(validateMarkup('<div id="a" data-text="$x +"></div>', { requireIds: false, prefix: "data-", checkAttributes: true }))).toEqual(["expression-syntax"]);
-    expect(validateMarkup('<div id="a" data-text="{{ name }}" data-show="{% if x %}1{% endif %}"></div>', { requireIds: false, prefix: "data-", checkAttributes: true })).toEqual([]);
-  });
-  it("warns about capitals in keys, which the browser lowercases", () => {
-    const src = `<div data-signals:fooBar="1" data-computed:fullName="1" data-bind:MySignal data-on:widgetLoaded="x()" data-class:isOpen="$open" data-attr:ariaLabel="'x'" data-style:backgroundColor="'red'"></div>`;
-    const issues = analyzeHtml(src, opts);
-    expect(codes(issues)).toEqual(["key-case", "key-case", "key-case", "key-case", "key-case", "key-case", "key-case"]);
-    expect(issues.slice(0, 5).map((i) => i.fixes![0]!.text)).toEqual(["foo-bar", "full-name", "my-signal__case.pascal", "widget-loaded__case.camel", "is-open__case.camel"]);
-    // A kebab-case attribute would set aria-label; the object form keeps the name. No form keeps a style property's capitals.
-    expect(issues[5]!.fixes!.map((f) => f.text)).toEqual([`data-attr="{ariaLabel: 'x'}"`]);
-    expect(issues[5]!.message).toContain("sets arialabel, not ariaLabel");
-    // A CSS property is kebab-case, which is also the fix; lowercase alone would name no property.
-    expect(issues[6]!.fixes!.map((f) => f.text)).toEqual(["background-color"]);
-    expect(issues[6]!.message).toContain("A CSS property is written in kebab-case: data-style:background-color.");
-    expect(issues[0]!.message).toContain("$foobar");
-    expect(src.slice(issues[0]!.start, issues[0]!.end)).toBe("fooBar");
-    const fine = `<div data-signals:foo-bar="1" data-on:widget-loaded__case.camel="x()" data-bind="fooBar" data-signals="{fooBar: 1}" data-class:hover:bg-red-500="$x"></div>`;
-    expect(analyzeHtml(fine, opts)).toEqual([]);
-    // An explicit __case does not save a capital in the key: the browser lowercases it first.
-    const explicit = analyzeHtml(`<div data-signals:fooBar__case.kebab="1" data-on:widgetLoaded__case.camel="x()"></div>`, opts);
-    expect(codes(explicit)).toEqual(["key-case", "key-case"]);
-    // With __case.kebab no key gives fooBar back, since the browser lowercases it and kebab recases nothing.
-    expect(explicit[0]!.fixes).toEqual(undefined);
-    expect(explicit[0]!.message).toContain("No key with __case.kebab gives fooBar back");
-    expect(explicit[0]!.message).toContain("from foo-bar__case.kebab Datastar reads foo-bar.");
-    expect(explicit[1]!.fixes!.map((f) => f.text)).toEqual(["widget-loaded"]);
-    const custom = analyzeHtml(`<div data-style:--myColor="$c"></div>`, opts);
-    expect(custom[0]!.message).toContain("sets --mycolor, not --myColor. No form keeps a capital in a custom property: name it in kebab-case, here and in the CSS, as --my-color.");
-    expect(custom[0]!.fixes).toEqual([]);
-    // The aliased prefix gets the same treatment when configured.
-    expect(codes(analyzeHtml(`<div data-star-signals:fooBar="1"></div>`, { prefix: "data-star-", checkHtmlAttributes: true }))).toEqual(["key-case"]);
-  });
-
-  // A signal name with a hyphen is the hyphen check's, and an event that mixes capitals and a hyphen has no key.
-  it("hints the name the client reads from a key mixing capitals and a hyphen", () => {
-    const src = `div {
-      dataSignals("fooBar-baz", "1")
-      dataOn("fooBar-baz", "x()")
-    }`;
-    const issues = analyzeKotlin(src, opts);
-    const hints = issues.filter((i) => i.code === "key-case-wire");
-    expect(hints.length).toBe(1);
-    expect(hints[0]!.message).toContain("No key gives fooBar-baz back");
-    expect(hints[0]!.message).toContain("reads fooBarBaz. Write it in one case.");
-    expect(issues.filter((i) => i.start < src.indexOf("dataOn")).map((i) => i.code)).toEqual(["signal-name-hyphen"]);
-  });
-
-  it("hints what the dsl writes on the wire for a camelCase key", () => {
-    const src = `div {
-      dataSignals("fooBar", "1")
-      dataOn("widgetLoaded", "x()") { once = true }
-      dataClass("isOpen", "$" + "open")
-      dataStyle("backgroundColor", "'red'")
-      dataSignals("MySignal", "1")
-      dataOn("customEvent", "x()") { case = Case.KEBAB }
-      dataSignals("{fooBar: 1}")
-      dataBind("fooBar")
-      dataOnClick("@post('/Add')", { once = true })
-      dataOnFetch("evt.detail.type === 'Started'") { window = true }
-      dataRef("myRef")
-      dataIndicator("isLoading")
-      dataSignals("{fooBar: 1}", true)
-      dataPersist("myKey")
-      dataMatchMedia("isMobile", mediaQuery = "(max-width: 600px)")
-    }`;
-    const hints = analyzeKotlin(src, opts).filter((i) => i.code === "key-case-wire");
-    expect(hints.every((i) => i.severity === "hint")).toBe(true);
-    expect(hints.map((i) => src.slice(i.start, i.end))).toEqual(['"fooBar"', '"widgetLoaded"', '"isOpen"', '"backgroundColor"', '"MySignal"', '"customEvent"', '"myKey"', '"isMobile"']);
-    expect(hints.map((i) => /as (data-[a-z-]+:[^,]+),/.exec(i.message)![1])).toEqual([
-      "data-signals:foo-bar",
-      "data-on:widget-loaded__case.camel",
-      "data-class:is-open__case.camel",
-      "data-style:background-color",
-      "data-signals:my-signal__case.pascal",
-      "data-on:custom-event__case.kebab",
-      "data-persist:my-key",
-      "data-match-media:is-mobile",
-    ]);
-    expect(hints[0]!.message).toContain("$fooBar");
-    expect(hints[3]!.message).toContain("A CSS property is written in kebab-case");
-  });
-
-  it("warns, not errors, when the template is only part of an expression", () => {
-    const src = `fun seed(initial: Int) = """<div data-signals="{count: $initial}" data-signals:count="$initial" data-text="$initial"></div>"""`;
-    const issues = analyzeKotlin(src, opts).filter((i) => i.code === "kotlin-interpolation");
-    expect(issues.map((i) => i.severity)).toEqual(["warning", "warning", "warning"]);
-    expect(issues[0]!.message).toContain("server value");
-    expect(issues[0]!.fixes!.map((f) => f.title)).toEqual(["Make it a $$ literal, where $initial is a signal", "Escape as ${'$'}initial"]);
-  });
-
-  it("does not read a parameter annotation with a default as a marker for the next string", () => {
-    const src = `fun render(@Language("HTML") html: String? = null, title: String = "Untitled $x") = title`;
-    expect(analyzeKotlin(src, opts)).toEqual([]);
-    expect(findKotlinStrings(`val c = '\\u0041'; val s = "<b data-onn:x=\\"1\\">"`).map((s) => s.text)).toEqual(['<b data-onn:x="1">']);
-  });
-
-  it("treats interpolation in an aliased-prefix expression as the same error", () => {
-    const src = `fun f(count: Int) = """<p data-star-text="$count"></p>"""`;
-    const aliased = { prefix: "data-star-", checkHtmlAttributes: true };
-    expect(analyzeKotlin(src, aliased).find((i) => i.code === "kotlin-interpolation")!.severity).toBe("warning");
-    expect(analyzeKotlin(src, opts).find((i) => i.code === "kotlin-interpolation")!.severity).toBe("hint");
-  });
-
-  it("warns about a hyphen after a signal, which datastar swallows into the name", () => {
-    const issues = validateExpression("$foo-bar + $form.first-name-x + $a - $b + $count-1");
-    expect(codes(issues)).toEqual(["signal-kebab", "signal-kebab", "signal-kebab"]);
-    expect(issues.map((i) => i.fixes![0]!.text)).toEqual(["$fooBar", "$form.firstNameX", "$count - 1"]);
-    expect(issues[0]!.fixes!.map((f) => f.title)).toEqual(["Change to $fooBar", "Write $foo - bar"]);
-    expect(issues[2]!.message).toContain("one signal named count-1");
-    expect(validateExpression("$fooBar && $a-$b && $n - 1")).toEqual([]);
-    // `$total-el.offsetWidth` is `$['total-el']['offsetWidth']` to Datastar: the subtraction the author meant needs spaces.
-    const scope = validateExpression("($total-el.offsetWidth) + 'px'; $count-evt.detail.delta; $n-fn(1); $m-arr[0]");
-    expect(scope.length).toBe(4);
-    expect(scope[0]!.fixes!.map((f) => f.text)).toEqual(["$totalEl.offsetwidth", "$total - el.offsetWidth"]);
-    expect(validateExpression("@get('/item/$id-preview') && $x")).toEqual([]);
-    expect(codes(analyzeKotlin(`dataText("\${'$'}foo-bar")`, opts))).toEqual(["signal-kebab"]);
-  });
-
-  it("honours the aliased prefix", () => {
-    expect(codes(validateMarkup('<div data-star-on:click="x()" data-on:click="y("></div>', { requireIds: false, prefix: "data-star-", checkAttributes: true }))).toEqual([]);
-    expect(codes(validateMarkup('<div data-star-on:click="x()"></div>', { requireIds: false, prefix: "data-", checkAttributes: true }))).toEqual(["prefix-mismatch"]);
-  });
-});
-
-describe("analyzeKotlin", () => {
-  it("flags kotlin interpolation of signals and maps syntax errors to source", () => {
-    const src = `div {
-  dataOnClick("$count++")
-  dataText("\${'$'}count +")
-  dataOn("keydown", "evt.key === 'x' && (\\$open = false)") { once = true }
-}`;
-    const issues = analyzeKotlin(src, opts);
-    expect(codes(issues)).toEqual(["kotlin-interpolation", "expression-syntax"]);
-    expect(src.slice(issues[0]!.start, issues[0]!.end)).toBe("$count");
-    expect(issues[0]!.message).toContain('signal("count")');
-    expect(issues[1]!.start).toBeGreaterThan(src.indexOf("dataText"));
-  });
-  it("checks html patches for ids, selectors and modes", () => {
-    const src = `
-      patchElements("""<div>no id</div>""")
-      patchElements("<li>x</li>", selector = "#list", mode = ElementPatchMode.APPEND)
-      patchElements("<li>x</li>", mode = ElementPatchMode.APPEND)
-      removeElements(" ")
-      executeScript("var s = '</script>'")
-      respondElements(elements { div { id = "x" } })
-    `;
-    expect(codes(analyzeKotlin(src, opts))).toEqual(["missing-id", "mode-needs-selector", "blank-selector", "script-close"]);
-  });
-  it("keeps scanning after raw strings, nested comments and char literals", () => {
-    const src = `
-      s.patchElements("""<div>a</div>""")
-      s.patchElements("<li>x</li>", mode = ElementPatchMode.APPEND)
-      val c = '"'
-      /* outer /* inner */ still comment: patchElements("<p>") */
-      s.patchElements("""<div id="a"><span>x</div>""")
-      s.removeElements(" ")`;
-    expect(codes(analyzeKotlin(src, opts))).toEqual(["missing-id", "mode-needs-selector", "unclosed", "blank-selector"]);
-  });
-  it("ignores declarations, comments and dsl-built html", () => {
-    const src = `// dataOnClick("$x")
-      /* patchElements("<div>") */
-      fun dataOnClick(expression: String) = 1
-      patchElements(selector = "#a") { li { +"x" } }`;
-    expect(analyzeKotlin(src, opts)).toEqual([]);
-  });
-  it("treats raw strings and dotted signals", () => {
-    const src = 'dataEffect("""\n  ${\'$\'}user.name = "x"\n""")';
-    expect(analyzeKotlin(src, opts)).toEqual([]);
-  });
-});
-
-describe("free-standing html strings", () => {
-  const src = `@Language("HTML")
-fun side(tilstand: Tilstand): String = """
-  <div data-signals="{count: 0}" data-on:click__debunce.500ms="@post('/x')">
-    <span data-text="\${'$'}count"></span>
-    <p data-text="$navn"></p>
-    <i>$title</i>
-  </div>
-"""
-val row = "<li data-onn:click=\\"x()\\">x</li>"
-val notHtml = "count: $count"
-val sql = """select * from x where a < 1 and b = $b"""
-s.patchElements("""<div data-onn:x="1"></div>""")
-dataText("$count")`;
-
-  it("checks attributes like a template, and interpolation inside expressions as an error", () => {
-    const issues = analyzeKotlin(src, opts);
-    expect(codes(issues)).toEqual(["unknown-attribute", "missing-id", "kotlin-interpolation", "kotlin-interpolation", "kotlin-interpolation", "unknown-modifier", "unknown-attribute"]);
-    const [inExpression, inText] = issues.filter((i) => i.code === "kotlin-interpolation" && src.slice(i.start, i.end) !== "$count");
-    expect(src.slice(inExpression!.start, inExpression!.end)).toBe("$navn");
-    expect(inExpression!.severity).toBe("warning");
-    expect(inExpression!.fixes!.map((f) => f.title)).toEqual(["Make it a $$ literal, where $navn is a signal", "Escape as ${'$'}navn"]);
-    expect(inText!.severity).toBe("hint");
-    expect(inText!.fixes).toBe(undefined);
-    expect(src.slice(inText!.start, inText!.end)).toBe("$title");
-  });
-
-  it("finds html strings by content, marker or call site", () => {
-    const at = (needle: string) => htmlStringAt(src, src.indexOf(needle) + 1);
-    expect(at("data-signals")?.raw).toBe(true);
-    expect(at("data-onn:click")?.raw).toBe(false);
-    expect(at("count: $count")).toBeNull();
-    expect(at("select *")).toBeNull();
-    expect(at("data-onn:x")?.raw).toBe(true);
-    expect(at('"$count")')).toBeNull();
-    expect(htmlStringAt(src, src.indexOf("fun side"))).toBeNull();
-  });
-
-  it("trusts multi-dollar literals: no trap, but everything else is still checked", () => {
-    const free = 'fun side() = $$"""<div data-text="$count" data-signals="{n: $$n}" data-onn:x="1"></div>"""';
-    expect(codes(analyzeKotlin(free, opts))).toEqual(["unknown-attribute"]);
-    const call = 's.patchElements($$"""<div id="a" data-text="$count +"></div>""")';
-    const [syntax] = analyzeKotlin(call, opts);
-    expect(codes([syntax!])).toEqual(["expression-syntax"]);
-    expect(call.slice(syntax!.start, syntax!.end).length).toBeGreaterThan(0);
-    expect(syntax!.start).toBeGreaterThan(call.indexOf("$count"));
-    expect(codes(analyzeKotlin('dataOnClick($$"$count++"); dataOn("keydown", $$"$open = !$open")', opts))).toEqual([]);
-    expect(codes(analyzeKotlin('dataOnClick($$"$count +")', opts))).toEqual(["expression-syntax"]);
-    expect(findCallSites('s.patchElements($$"""<b></b>""", selector = "#x")', new Set(["patchElements"]))[0]!.args.map((a) => a.string !== null)).toEqual([true, true]);
-  });
-
-  it("honours the injection marker without a leading tag", () => {
-    const marked = `// language=HTML\nval fragment = """Hei <b data-onn:y="1">du</b>"""`;
-    expect(codes(analyzeKotlin(marked, opts))).toEqual(["unknown-attribute"]);
-    expect(codes(analyzeKotlin(marked.replace("// language=HTML\n", ""), opts))).toEqual([]);
-    const annotated = `@Language("html")\nprivate val head = """\n  \${'$'}{title}<title data-text="$t"></title>\n"""`;
-    expect(codes(analyzeKotlin(annotated, opts))).toEqual(["kotlin-interpolation"]);
-    const param = `fun wrap(@Language("HTML") html: String) = "a <b data-onn:x='1'>" + html`;
-    expect(analyzeKotlin(param, opts)).toEqual([]);
-    // On a function, the function's own String parameters do not cancel the marker.
-    const onFunction = `@Language("HTML")\nfun greeting(name: String): String = """Hello <b data-onn:click="x()">$name</b>"""`;
-    expect(codes(analyzeKotlin(onFunction, opts))).toEqual(["kotlin-interpolation", "unknown-attribute"]);
-  });
-});
-
-describe("analyzeHtml", () => {
-  it("validates a template", () => {
-    const src = `<form data-on:submit__prevent="@post('/save')" data-indicator="busy"><input data-bind:search data-onn:x="1"></form>`;
-    expect(codes(analyzeHtml(src, opts))).toEqual(["unknown-attribute"]);
-  });
-
-  it("matches the expectations written in the jvm template fixtures", () => {
-    const fixture = (name: string) => codes(analyzeHtml(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8"), opts));
-    expect(fixture("template.jte")).toEqual(["unknown-modifier", "expression-syntax"]);
-    expect(fixture("template.ftl")).toEqual(["unknown-attribute", "missing-key"]);
-    expect(fixture("template.vm")).toEqual(["modifier-args"]);
-    expect(fixture("template.mustache")).toEqual(["pro-attribute", "expression-syntax"]);
-  });
-
-  it("only treats a template keyword as such at the start of a value or after whitespace", () => {
-    expect(codes(analyzeHtml(`<a data-on:click="@get('/docs#include') +" data-text="'#end' +"></a>`, opts))).toEqual(["expression-syntax", "expression-syntax"]);
-    expect(analyzeHtml(`<a data-on:click="#if($a) x() #end" data-text="@if(x) 1 @endif"></a>`, opts)).toEqual([]);
-  });
-
-  it("skips template tags and comments when checking completeness", () => {
-    const ftl = `<#if x><div id="a" data-text="\${y}"></div><#else><p id="b">no</p></#if><#-- <span> --><%-- <b> --%>`;
-    expect(validateMarkup(ftl, { requireIds: true, prefix: "data-", checkAttributes: true })).toEqual([]);
-    expect(validateMarkup(`@if(x)<div id="a"></div>@endif`, { requireIds: true, prefix: "data-", checkAttributes: true })).toEqual([]);
-  });
-});
-
-describe("signals", () => {
-  it("collects from kotlin and html", () => {
-    const kt = `dataSignals("count" to 0, "user" to mapOf("name" to "")); dataBind("search"); signal("open"); patchSignals(Search(q = "x"))
-      mapOf("notASignal" to 1); removeSignals("gone", "away")
-      @Serializable data class Search(val query: String = "", val page: Int = 1)`;
-    expect([...collectSignals(kt, "kotlin")].sort()).toEqual(["away", "count", "gone", "open", "page", "query", "search", "user"]);
-    const html = `<div data-signals="{count: 1, open: false}" data-bind:first-name data-text="$other.x"></div>`;
-    expect([...collectSignals(html, "html")].sort()).toEqual(["count", "firstName", "open", "other.x"]);
-    const raw = `fun side() = """<div data-signals="{draft: '', __step: 1, label: 'a__b', count: 0}" data-bind:search data-indicator="busy" data-text="$kotlinTemplate" data-signals:foo-bar__ifmissing="1" data-computed:total__case.camel="1"></div>"""`;
-    expect([...collectSignals(raw, "kotlin")].sort()).toEqual(["__step", "busy", "count", "draft", "fooBar", "label", "search", "total"]);
-  });
-});
-
-describe("selectors", () => {
-  it("collects ids and classes from kotlin dsl and html", () => {
-    const src = `div { id = "feed"; classes = setOf("card", "dark") }
-      patchElements("""<ul id="list" class="menu open"><li id="\${item.id}" class="\$cls"></li></ul>""")
-      <span id="counter" class="big"></span>`;
-    const s = collectSelectors(src);
-    expect([...s.ids].sort()).toEqual(["counter", "feed", "list"]);
-    expect([...s.classes].sort()).toEqual(["big", "card", "dark", "menu", "open"]);
-  });
+describe("the analysis's twin cases", () => {
+  for (const c of twinCases<Case>("analyze.json")) {
+    it(c.name, () => {
+      const actual = project[c.kind]!(c);
+      assert.deepEqual(actual, Object.fromEntries(Object.keys(actual).map((k) => [k, c[k]])));
+    });
+  }
 });
 
 describe("sse", () => {
   it("parses frames across chunks and decodes datastar events", () => {
     const p = new SseParser();
     const a = p.feed("event: datastar-patch-elements\nid: 7\ndata: selector #a\ndata: elements <div>\ndata: elements ");
-    expect(a).toEqual([]);
+    assert.deepEqual(a, []);
     const b = p.feed("</div>\n\n: ping\n\nevent: datastar-patch-signals\r\ndata: signals {\"n\":1}\r\n\r\n");
-    expect(b.length).toBe(3);
+    assert.equal(b.length, 3);
     const f = decodeDatastar(b[0]!);
-    expect(f.args).toEqual({ selector: "#a", elements: "<div>\n</div>" });
-    expect(f.id).toBe("7");
-    expect(b[1]!.comments).toEqual(["ping"]);
-    expect(decodeDatastar(b[2]!).args.signals).toBe('{"n":1}');
+    assert.deepEqual(f.args, { selector: "#a", elements: "<div>\n</div>" });
+    assert.equal(f.id, "7");
+    assert.deepEqual(b[1]!.comments, ["ping"]);
+    assert.equal(decodeDatastar(b[2]!).args.signals, '{"n":1}');
   });
   it("merge-patches signals", () => {
-    expect(JSON.stringify(mergePatchAsClient({ a: 1, u: { n: "x", e: "y" } }, { a: null, u: { e: null, t: 1 }, l: [1] }))).toEqual('{"u":{"n":"x","t":1},"l":[1]}');
-  });
-});
-
-describe("near misses", () => {
-  const fixed = (src: string, fix: { start: number; end: number; text: string }) => src.slice(0, fix.start) + fix.text + src.slice(fix.end);
-
-  it("offers a dot for an argument joined with an underscore", () => {
-    const src = `<input data-on:input__debounce_150ms="@get('/search')">`;
-    const [issue] = analyzeHtml(src, opts);
-    expect(issue?.code).toBe("unknown-modifier");
-    expect(issue?.message).toContain("__debounce.150ms");
-    expect(fixed(src, issue!.fixes![0]!)).toBe(`<input data-on:input__debounce.150ms="@get('/search')">`);
-  });
-
-  it("offers two underscores for a modifier joined with a dot", () => {
-    const src = `<a data-on:click__prevent.stop="@post('/x')"></a>`;
-    const [issue] = analyzeHtml(src, opts);
-    expect(issue?.code).toBe("modifier-args");
-    expect(fixed(src, issue!.fixes![0]!)).toBe(`<a data-on:click__prevent__stop="@post('/x')"></a>`);
-  });
-
-  it("flags an indicator on an element that sends nothing", () => {
-    expect(analyzeHtml(`<span data-indicator:busy></span>`, opts).map((i) => i.code)).toEqual(["indicator-without-action"]);
-  });
-
-  it("leaves an indicator beside an attribute that sends a request", () => {
-    for (const src of [
-      `<button data-on:click="@post('/save')" data-indicator:busy></button>`,
-      `<div data-init="@get('/feed')" data-indicator="loading"></div>`,
-      `<div data-effect="$q &amp;&amp; @get('/search')" data-indicator:busy></div>`,
-      `<button data-on:click="{{ action }}" data-indicator:busy></button>`,
-    ]) {
-      expect(analyzeHtml(src, opts).map((i) => i.code)).toEqual([]);
-    }
+    assert.equal(JSON.stringify(mergePatchAsClient({ a: 1, u: { n: "x", e: "y" } }, { a: null, u: { e: null, t: 1 }, l: [1] })), '{"u":{"n":"x","t":1},"l":[1]}');
   });
 });
