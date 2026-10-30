@@ -7,7 +7,6 @@ import org.jetbrains.kotlin.analysis.api.KaSession
 import org.jetbrains.kotlin.analysis.api.analyze
 import org.jetbrains.kotlin.analysis.api.types.KaFlexibleType
 import org.jetbrains.kotlin.analysis.api.types.KaType
-import org.jetbrains.kotlin.idea.base.plugin.KotlinPluginModeProvider
 import org.jetbrains.kotlin.idea.references.mainReference
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.name.ClassId
@@ -53,7 +52,10 @@ object HoleFacts {
     fun of(file: KtFile): Map<TextRange, HoleFact> {
         val holes = holes(file)
         if (holes.isEmpty()) return emptyMap()
-        val typed = if (KotlinPluginModeProvider.isK2Mode()) typedK2(file, holes) else typedK1(holes)
+        // The property the Kotlin plugin's own plugin.xml switches K1 on with; KotlinPluginModeProvider,
+        // which reads it too, is scheduled for removal in 2026.2.
+        val k1 = System.getProperty("idea.kotlin.plugin.use.k1").toBoolean()
+        val typed = if (k1) typedK1(holes) else typedK2(file, holes)
         val facts = HashMap<TextRange, HoleFact>()
         for ((range, expr) in holes) {
             val fact = typed[range]
