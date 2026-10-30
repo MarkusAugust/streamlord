@@ -9,10 +9,23 @@ public data class Fix(
     val start: Int,
     val end: Int,
     val text: String,
+    /** Further replacements the fix makes elsewhere in the file, such as an import; never overlapping the main one. */
+    val edits: List<Edit> = emptyList(),
 ) {
-    /** The fix applied to [source]. */
-    public fun apply(source: String): String = source.substring(0, start) + text + source.substring(end)
+    /** Every replacement the fix makes, the last in the file first, so that making them in turn moves no offset. */
+    public val replacements: List<Edit> get() = (listOf(Edit(start, end, text)) + edits).sortedByDescending { it.start }
+
+    /** The fix applied to [source]: its replacement and every further edit. */
+    public fun apply(source: String): String =
+        replacements.fold(source) { out, e -> out.substring(0, e.start) + e.text + out.substring(e.end) }
 }
+
+/** One replacement of a [Fix]: `[start, end)` becomes [text]. */
+public data class Edit(
+    val start: Int,
+    val end: Int,
+    val text: String,
+)
 
 /** One finding of the analysis: a range in the source, a message, and what to do about it. */
 public data class Issue(

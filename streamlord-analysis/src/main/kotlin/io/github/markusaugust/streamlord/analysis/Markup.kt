@@ -117,7 +117,9 @@ public val TEMPLATE_SYNTAX: Regex =
  * calls (`<#if>`, `</#if>`, `<@row/>`), and its `<#-- -->` comments. Skipped like `<!DOCTYPE>`.
  */
 private val TEMPLATE_TAG = Regex("""^</?[#@]""")
-private val TAG_OPEN = Regex("""^<(/?)([A-Za-z][A-Za-z0-9:._-]*)""")
+
+// A Kotlin template as the name, `<$tag>`, is a tag all the same: the browser sees a name there.
+private val TAG_OPEN = Regex("""^<(/?)((?:[A-Za-z]|__kt__)[A-Za-z0-9:._-]*)""")
 
 /** A name also ends where a template construct starts: `data-x{{/if}}`, `data-x</#if>`. */
 private val ATTR_NAME = Regex("""^[^\t\n\f\r "'<>/={]+""")
