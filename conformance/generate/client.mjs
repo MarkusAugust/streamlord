@@ -7,15 +7,11 @@
 import { build } from "esbuild";
 import { existsSync, mkdirSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { ascii, conformance, release, version } from "./common.mjs";
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const referenceRoot = path.resolve(here, "../../datastar-reference");
-const versions = readdirSync(referenceRoot).filter((d) => d.startsWith("datastar-"));
-if (versions.length !== 1) throw new Error(`expected one datastar-<version> directory under ${referenceRoot}, found ${versions.length}`);
-const version = versions[0].slice("datastar-".length);
-const reference = path.join(referenceRoot, versions[0], "library", "src");
-const out = path.resolve(here, "../client");
+// The client's source, which this generator compiles from.
+const reference = path.join(release, "library", "src");
+const out = path.join(conformance, "client");
 
 // The aliases of the reference's tsconfig.json, less the ones this generator never follows.
 const aliases = {
@@ -536,9 +532,6 @@ const files = {
     cases: plugins,
   },
 };
-
-// ASCII only, as dom.mjs and dsl.mjs write theirs, so a byte order mark or a line separator in a case shows in a diff.
-const ascii = (text) => text.replace(/[^\x00-\x7f]/g, (ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, "0")}`);
 
 mkdirSync(out, { recursive: true });
 for (const [name, content] of Object.entries(files)) {

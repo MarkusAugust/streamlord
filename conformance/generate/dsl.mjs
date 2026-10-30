@@ -12,42 +12,18 @@
 // registered through the bundle's exported `attribute`, so what is read is only how the free engine
 // splits the attribute into its key and modifiers. Nothing from Datastar Pro is read here.
 import { createHash } from 'node:crypto'
-import { readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
-import { dirname, resolve, sep } from 'node:path'
+import { readFileSync, writeFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import vm from 'node:vm'
-import { transformSync } from 'esbuild'
 import { Window } from 'happy-dom'
 import * as parse5 from 'parse5'
+import { ascii, conformance, freeBundle, version } from './common.mjs'
 
-const here = dirname(fileURLToPath(import.meta.url))
-const fixtures = resolve(here, '..', 'dsl')
-const referenceRoot = resolve(here, '..', '..', 'datastar-reference')
-const versions = readdirSync(referenceRoot).filter((d) => d.startsWith('datastar-'))
-if (versions.length !== 1) throw new Error(`expected one datastar-<version> directory under ${referenceRoot}, found ${versions.length}`)
-const version = versions[0].slice('datastar-'.length)
-const reference = resolve(referenceRoot, versions[0])
+const fixtures = resolve(conformance, 'dsl')
 
-// The only thing read is the free client's release tree, never a path outside it.
-const readFreeClient = (relative) => {
-  const root = realpathSync(reference) + sep
-  const file = realpathSync(resolve(reference, relative))
-  if (!file.startsWith(root)) throw new Error(`${relative} is outside the free client`)
-  return readFileSync(file, 'utf8')
-}
-
-// As in dom.mjs: the module bundle as a strict IIFE whose exports land on `Datastar`.
 const bundles = {}
-const bundle = (file) => {
-  if (!bundles[file]) {
-    const source = readFreeClient(`bundles/${file}`)
-    bundles[file] = {
-      code: `"use strict";\n${transformSync(source, { format: 'iife', globalName: 'Datastar' }).code}`,
-      sha256: createHash('sha256').update(source).digest('hex'),
-    }
-  }
-  return bundles[file]
-}
+const bundle = (file) => (bundles[file] ??= freeBundle(file))
 const bundleFor = (prefix) => (prefix === 'data-star-' ? 'datastar-aliased.js' : 'datastar.js')
 
 // Runs inside the window before the client: the clock, the listener, observer and fetch records,
@@ -433,9 +409,6 @@ const runCase = async (c, pro) => {
   return read
 }
 
-// ASCII only, so a byte order mark or a line separator in a case shows in a diff.
-const ascii = (text) => text.replace(/[^\x00-\x7f]/g, (ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`)
-
 const files = process.argv.slice(2).length ? process.argv.slice(2) : ['free.json', 'pro.json']
 for (const name of files) {
   const file = resolve(fixtures, name)
@@ -451,8 +424,11 @@ for (const name of files) {
     $comment: fixture.$comment,
     version,
     bundles: Object.fromEntries(used.map((b) => [b, bundle(b).sha256])),
-    // The script that read the cases: a reading taken by another one is stale.
-    generator: createHash('sha256').update(readFileSync(fileURLToPath(import.meta.url))).digest('hex'),
+    // The scripts that read the cases, this one and what it shares: a reading another took is stale.
+    generator: createHash('sha256')
+      .update(readFileSync(fileURLToPath(import.meta.url)))
+      .update(readFileSync(new URL('./common.mjs', import.meta.url)))
+      .digest('hex'),
   }
   if (fixture.proAttributes) header.proAttributes = fixture.proAttributes
   if (fixture.proActions) header.proActions = fixture.proActions

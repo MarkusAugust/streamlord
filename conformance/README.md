@@ -16,7 +16,9 @@ The generators under `generate/` read only the free client under
 that `npm run reference` fetches from GitHub and checks against the sha256 in `reference.mjs`:
 `client.mjs` the sources under `library/src`, `dom.mjs` and `dsl.mjs` the built
 bundles. Nothing from Datastar Pro goes in here, and a generator refuses to read a
-file outside that directory.
+file outside that directory. `common.mjs` is what the three share: where that directory is, the
+one function that reads from it, the bundle as a script a happy-dom window runs, and the ASCII
+the fixtures are written in.
 
 ```sh
 cd conformance/generate && npm install && npm run reference && npm run client
@@ -95,7 +97,7 @@ parse5 parsed them, the client's errors, every listener it added with its target
 `IntersectionObserver` options, the requests its fetch sent and whether each was cancelled by the
 end, each `probe()` an expression ran, the store before and after the probe's events, every
 element's attributes and text at the end, and the view transitions. The header holds the sha256
-of the bundles and of `dsl.mjs` itself, and the test refuses a reading another script took.
+of the bundles and of `dsl.mjs` with `common.mjs`, and the test refuses a reading other scripts took.
 
 A `probe` may `set` a property on an element before its events, `dispatch` a list of events in
 place of one per listener, send each in a `burst`, in `rounds`, `respond` to the fetch (with an

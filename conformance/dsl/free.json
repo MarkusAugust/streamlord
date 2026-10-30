@@ -5,7 +5,7 @@
     "datastar-aliased.js": "92d37f9353b6283998a00015bfb49255afd99f115e63045c043ad6580cb88d82",
     "datastar.js": "727844adfc825ee651fb93c544a2a739986f9a21820a94524b35f0cac470cf91"
   },
-  "generator": "285e4dcc3b42a3745b644faccc4e7a74b86e3fe92884ae6f7ef0f7020fecb52c",
+  "generator": "5cc814eda3bb3a2cef9e0f97843b4c0602067c6f195d7ccdb612eb47953d0f53",
   "cases": [
     {"name":"on click","call":{"fn":"dataOnClick","key":null,"case":null},"prefix":"data-","html":"<button data-on:click=\"probe(evt)\"></button>","read":{"attributes":[[["data-on:click","probe(evt)"]]],"errors":[],"listeners":[["button","click",{"capture":false,"passive":false,"once":false}]],"timers":[],"observers":[],"requests":[],"probes":[["click"],["click"]],"fired":[{"at":"button","type":"click","round":1,"sync":1,"total":1,"defaultPrevented":false,"bubbled":true},{"at":"button","type":"click","round":2,"sync":1,"total":1,"defaultPrevented":false,"bubbled":true}],"storeBefore":"{}","store":"{}","after":[["button",[["data-on:click","probe(evt)"]],""]],"viewTransitions":0,"leftTimers":0}},
     {"name":"on submit","call":{"fn":"dataOnSubmit","key":null,"case":null},"prefix":"data-","html":"<form data-on:submit=\"probe(evt)\"></form>","read":{"attributes":[[["data-on:submit","probe(evt)"]]],"errors":[],"listeners":[["form","submit",{"capture":false,"passive":false,"once":false}]],"timers":[],"observers":[],"requests":[],"probes":[["submit"],["submit"]],"fired":[{"at":"form","type":"submit","round":1,"sync":1,"total":1,"defaultPrevented":true,"bubbled":true},{"at":"form","type":"submit","round":2,"sync":1,"total":1,"defaultPrevented":true,"bubbled":true}],"storeBefore":"{}","store":"{}","after":[["form",[["data-on:submit","probe(evt)"]],""]],"viewTransitions":0,"leftTimers":0}},

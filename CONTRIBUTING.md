@@ -80,7 +80,8 @@ the client itself does, recorded in `conformance/`:
 | `conformance/wire/` | the exact HTTP answer each adapter gives, per server, for a fixed set of requests, and in `kotlin/` the request set and the comparison both adapters' tests compile | the adapter tests, with `./gradlew :streamlord-ktor:updateTranscripts :streamlord-spring:updateTranscripts` |
 
 The generators read the free client in `datastar-reference/datastar-<version>/` and nothing
-else: `client.mjs` the sources under `library/src`, `dom.mjs` and `dsl.mjs` the built bundles. The
+else: `client.mjs` the sources under `library/src`, `dom.mjs` and `dsl.mjs` the built bundles, each
+through what `common.mjs` holds for all three. The
 directory is git-ignored, and `npm run reference` fills it: `conformance/generate/reference.mjs`
 downloads the release tag's archive from GitHub, refuses it unless its sha256 is the one written in
 the script, and unpacks it there. The repository holds no Datastar code, only that tag and checksum;

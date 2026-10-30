@@ -43,8 +43,12 @@ tasks.withType<Test>().configureEach {
  * tasks, `npm run dsl` in conformance/generate fills in the client's reading, and every other test
  * run compares the two with what the case means.
  *
- * A reading another dsl.mjs took is refused, so a change to the script alone runs the tests again.
+ * A reading another dsl.mjs or common.mjs took is refused, so a change to either alone runs the
+ * tests again.
  */
 tasks.withType<Test>().matching { it.name != "updateClientReadings" }.configureEach {
-    inputs.file(rootProject.layout.projectDirectory.file("conformance/generate/dsl.mjs"))
+    inputs
+        .files(rootProject.layout.projectDirectory.files("conformance/generate/dsl.mjs", "conformance/generate/common.mjs"))
+        .withPropertyName("dslGenerator")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
 }

@@ -188,7 +188,9 @@ internal class ClientReadings(
     private val proActions: List<String>? = null,
 ) {
     private val path = File(System.getProperty("streamlord.dslDir") ?: "../conformance/dsl", file)
-    private val generator = File(path.parentFile.parentFile, "generate/dsl.mjs")
+
+    // The script that reads the cases and what it shares with the other generators, as dsl.mjs hashes them.
+    private val generator = listOf("dsl.mjs", "common.mjs").map { File(path.parentFile.parentFile, "generate/$it") }
     private val updating = System.getProperty("streamlord.updateClientReadings") == "true"
 
     fun check(cases: List<DslCase>) {
@@ -210,8 +212,8 @@ internal class ClientReadings(
             "$file holds other cases than the test: run ./gradlew :streamlord-html-pro:updateClientReadings, then npm run dsl",
         )
         val failures = mutableListOf<String>()
-        if (written.string("generator") != sha256(generator.readBytes())) {
-            failures += "$file was read by another dsl.mjs: run npm run dsl in conformance/generate"
+        if (written.string("generator") != sha256(generator.fold(ByteArray(0)) { bytes, script -> bytes + script.readBytes() })) {
+            failures += "$file was read by another dsl.mjs or common.mjs: run npm run dsl in conformance/generate"
         }
         if (canon(written["proAttributes"]) != canon(proAttributes) || canon(written["proActions"]) != canon(proActions)) {
             failures += "$file names other Pro attributes or actions than the test: run updateClientReadings, then npm run dsl"
