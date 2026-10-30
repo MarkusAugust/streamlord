@@ -66,8 +66,10 @@ fun `no source file interpolates a signal into Datastar`() {
 }
 ```
 
-The filter keeps the errors, the interpolated signals. A Kotlin value written into an HTML string
-where escaping cannot save it is a warning, `unsafe-interpolation`, because the text alone cannot
+The filter keeps the errors: an interpolated signal, an expression that does not parse, and an
+`interpolate(...)` call that throws when it runs, with a `%s` too many or too few
+(`interpolate-holes`) or a value it is known to refuse where it lands (`unsafe-interpolation`). A
+Kotlin template that writes a value into an HTML string where escaping cannot save it is a warning, `unsafe-interpolation`, because the text alone cannot
 tell a number from a string; add `|| it.code == "unsafe-interpolation"` to fail the build on those
 too. [Strings](/strings/#this-is-the-editors-rule-at-run-time) has what each code means.
 

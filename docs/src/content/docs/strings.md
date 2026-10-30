@@ -146,9 +146,12 @@ of a server-rendered initial signal needs no waiver.
 ### Markup built from markup
 
 What `interpolate` returns is `Html`: markup whose values have been through it. Hand it to
-`patchElements`, `respondElements` or `datastarElements` as it is, or to another `interpolate`,
-which writes it as it stands in element text. Anywhere else, inside an attribute, it is characters
-like any value, and escaped or refused as one.
+`patchElements`, `respondElements` or `datastarElements` as it is; inside `respondDatastar { }`
+`patchElements(html)` needs no import of its own. Hand it to another `interpolate`, and it is
+written as it stands in element text, as long as its own markup closes everything it opens: an
+`Html` that ends inside a tag, a quoted value, a comment or a `<script>` would change how the
+browser reads the values after it, so it is escaped like a string instead. Anywhere else, inside
+an attribute, it is characters like any value, and escaped or refused as one.
 
 ```kotlin sample=statements
 val heading = interpolate("""<h2 class="lt-heading">%s</h2>""", "Gorvek")
@@ -158,7 +161,9 @@ interpolate("""<section id="hero">%s<p>%s</p></section>""", heading, "<the oath>
 
 Only `interpolate` makes an `Html`, so holding one says where it came from. A Kotlin template
 writes its markup, so `"<main>$page</main>"` works too, but the editors cannot see that
-`page` is markup unless its type says so.
+`page` is markup unless its type says so. An `Html` is never equal to a `String`: JUnit's
+`assertEquals("<p>x</p>", interpolate(...))`, or AssertJ's `isEqualTo`, compiles and fails though
+both print the same, so compare `.text`.
 
 ### When you mean it to be markup
 
@@ -178,7 +183,7 @@ reviewer can search for, which is the whole reason it is a type and not a flag.
 
 The editors ask the same question of a Kotlin template in an HTML string as you type, with the
 same reading of the markup: core's, which `interpolate` uses and the VS Code analysis is held to.
-Every `$name`, `${'$'}{...}` and value joined with `+` is a hole, and each is judged by where it
+Every `$name`, `${...}` and value joined with `+` is a hole, and each is judged by where it
 lands:
 
 | Where the hole is | What the editors say |
@@ -187,23 +192,25 @@ lands:
 | The start of a URL, `style`, a `data-*` expression, signal path or filter, `<script>`, `<style>`, `on*`, `srcdoc` | `unsafe-interpolation`: a warning, since escaping cannot help there |
 | A value without quotes | `unsafe-interpolation`: a warning, a hint for a number or a boolean, with a fix that quotes the value |
 | A tag name, an attribute name, a list of attributes | `unsafe-interpolation`: a hint, a warning when the value is a `String` or markup |
-| `$name` where a Datastar signal could stand | `kotlin-interpolation`, the [dollar trap](/dollar-trap/) |
+| `$name` where a Datastar signal could stand | `kotlin-interpolation`, the [dollar trap](/dollar-trap/); a hint when `name` is declared a number, which is safe to write in, so only what you meant is in question |
 
-A value the editor can see is yours says nothing anywhere: a `const val`, a literal, or an `if` or
-a `when` whose every branch is one. Any other value is judged by what `interpolate` would let in
+A value the editor can see is yours says nothing anywhere: a `const val`, a literal, a call to one
+of Streamlord's expression helpers, `${signal("count")}` or `${post("/save")}`, or an `if` or a
+`when` whose every branch is one. Any other value is judged by what `interpolate` would let in
 where it lands. A number or a boolean says nothing in text, an attribute, a URL or a `data-*`
 expression, and a number in `style` too; one that may be null, an `Int?`, only where escaping is
-enough. Markup you built, whether an HTML literal inside the template, an `interpolate(...)` or
-`Trusted(...)` call, or a value declared `Html`, says nothing in element text and is a warning
-anywhere else, where its quotes and tags can end what holds it. An `if` or a `when` is judged by
-its weakest branch, so `${'$'}{if (blank) "nothing" else query}` is the `String` it may be.
+enough. A hole that is markup you built, as a whole, says nothing in element text and is a warning
+anywhere else, where its quotes and tags can end what holds it: an HTML literal, an
+`interpolate(...)` or `Trusted(...)` call, a value declared `Html` or `@Language("HTML")`, or
+kotlinx.html output. `${"<b>" + query}` is not: it is the `String` the query makes it. An `if` or a
+`when` is judged by its weakest branch, so `${if (blank) "nothing" else query}` is the `String` it
+may be.
 
 VS Code knows what the file it is in declares and every `const val` in the workspace; IntelliJ
 also knows the types. Nothing here is an error, because a value the text cannot see into may well
 be a number. The `interpolate(...)` fix is offered only when the rewrite keeps the page as it was,
 escaping aside: not when a value may be null, which a template writes as `null` and `interpolate`
-as nothing, nor when markup held as a `String` sits in element text, where `interpolate` would
-escape it.
+as nothing, nor when a hole in element text may hold markup, which `interpolate` would escape.
 
 A call to `interpolate` is judged as it will run. A miscounted `%s` is an error,
 `interpolate-holes`, because it always throws. A `%s` whose value `interpolate` will refuse, a

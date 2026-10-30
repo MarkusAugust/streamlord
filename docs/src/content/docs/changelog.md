@@ -12,9 +12,10 @@ with a sentence about what to do.
 **`interpolate` returns `Html`.** Hand it to `patchElements`, `respondElements` or
 `datastarElements` as it is, or to another `interpolate`, which writes it as markup in element
 text. Where you need the string, write `.text`: `val s: String = interpolate(...)` no longer
-compiles, and `+interpolate(...)` in a kotlinx.html `unsafe` block becomes `+interpolate(...).text`.
+compiles, and `+interpolate(...)` in a kotlinx.html `unsafe` block becomes `+interpolate(...).text`. An `Html` is never equal to a `String`, so a test's `assertEquals("<p>x</p>", interpolate(...))`
+or AssertJ `isEqualTo` still compiles and fails although both print the same: compare `.text`.
 
-**The editors judge every Kotlin value in an HTML string.** `${'$'}{...}`, values joined with `+`
+**The editors judge every Kotlin value in an HTML string.** `${...}`, values joined with `+`
 and `$$` literals are judged as `$name` was, by where they land, under two new codes,
 `unescaped-interpolation` and `unsafe-interpolation`; [Strings](/strings/#this-is-the-editors-rule-at-run-time)
 has the table. A check from a test that filtered on `kotlin-interpolation` to catch values in HTML
