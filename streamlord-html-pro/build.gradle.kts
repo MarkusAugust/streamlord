@@ -39,32 +39,12 @@ tasks.withType<Test>().configureEach {
 
 /*
  * What the client does with the HTML the DSL writes, under conformance/dsl: the tests write each
- * case's input under updateClientReadings, `npm run dsl` in conformance/generate fills in the
- * client's reading, and every other test run compares the two with what the case means.
+ * case's input under updateClientReadings, which the root build registers with the other fixture
+ * tasks, `npm run dsl` in conformance/generate fills in the client's reading, and every other test
+ * run compares the two with what the case means.
+ *
+ * A reading another dsl.mjs took is refused, so a change to the script alone runs the tests again.
  */
-val dslDir = rootProject.layout.projectDirectory.dir("conformance/dsl")
-
-tasks.withType<Test>().configureEach { systemProperty("streamlord.dslDir", dslDir.asFile.path) }
 tasks.withType<Test>().matching { it.name != "updateClientReadings" }.configureEach {
-    inputs.dir(dslDir)
-    // A reading another dsl.mjs took is refused, so a change to the script alone runs the tests again.
     inputs.file(rootProject.layout.projectDirectory.file("conformance/generate/dsl.mjs"))
-}
-
-tasks.register<Test>("updateClientReadings") {
-    description = "Rewrites the inputs of the fixtures under conformance/dsl from what the DSL writes now."
-    group = "verification"
-    testClassesDirs =
-        sourceSets.test
-            .get()
-            .output.classesDirs
-    classpath =
-        sourceSets.test
-            .get()
-            .runtimeClasspath
-    useJUnitPlatform()
-    filter { includeTestsMatching("*AsTheClientReadsItTest") }
-    systemProperty("streamlord.updateClientReadings", "true")
-    // It rewrites the fixtures it does not declare as inputs, so it must never be up to date or come from the cache.
-    doNotTrackState("rewrites conformance/dsl")
 }

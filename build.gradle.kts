@@ -188,3 +188,74 @@ subprojects {
         }
     }
 }
+
+/**
+ * The fixtures under [dir], at the repository root, that a module's tests compare with, and the
+ * task [update] that rewrites them by running the tests matching [tests] with
+ * `streamlord.<update>` set. The tests find the directory in `streamlord.<property>`. Every other
+ * test task reads it as an input, so a change to a fixture alone runs the tests again; the task
+ * that rewrites it reads nothing it writes, so it is never up to date or taken from the cache.
+ * The source sets named in [compiling] compile the Kotlin under `<dir>/kotlin` with their own.
+ */
+fun Project.fixtures(
+    dir: String,
+    property: String,
+    update: String,
+    tests: String,
+    what: String,
+    compiling: Set<String> = emptySet(),
+) {
+    val fixtures = rootProject.layout.projectDirectory.dir(dir)
+    // Lazily, since a module creates some of its source sets after this runs.
+    extensions.getByType<SourceSetContainer>().matching { it.name in compiling }.configureEach {
+        (extensions.getByName("kotlin") as SourceDirectorySet).srcDir(fixtures.dir("kotlin"))
+    }
+    tasks.withType<Test>().configureEach { systemProperty("streamlord.$property", fixtures.asFile.path) }
+    tasks.withType<Test>().matching { it.name != update }.configureEach {
+        inputs.dir(fixtures).withPropertyName(property).withPathSensitivity(PathSensitivity.RELATIVE)
+    }
+    val test = extensions.getByType<SourceSetContainer>().getByName("test")
+    tasks.register<Test>(update) {
+        description = "Rewrites $what."
+        group = "verification"
+        testClassesDirs = test.output.classesDirs
+        classpath = test.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching(tests) }
+        systemProperty("streamlord.$update", "true")
+        doNotTrackState("rewrites $dir")
+    }
+}
+
+// The approved wire transcripts under conformance/wire: what each adapter answers a fixed set of
+// requests on each engine or stack, committed as text.
+project(":streamlord-ktor") {
+    fixtures(
+        "conformance/wire",
+        "wireDir",
+        "updateTranscripts",
+        "*WireTranscriptTest",
+        "the wire transcripts under conformance/wire from what the Ktor adapter answers now",
+        // The requests every adapter answers and the comparison with their transcripts.
+        compiling = setOf("test", "oldestKtorTest"),
+    )
+}
+project(":streamlord-spring") {
+    fixtures(
+        "conformance/wire",
+        "wireDir",
+        "updateTranscripts",
+        "*WireTranscriptTest",
+        "the wire transcripts under conformance/wire from what the Spring adapter answers now",
+        compiling = setOf("test"),
+    )
+}
+project(":streamlord-html-pro") {
+    fixtures(
+        "conformance/dsl",
+        "dslDir",
+        "updateClientReadings",
+        "*AsTheClientReadsItTest",
+        "the inputs of the fixtures under conformance/dsl from what the DSL writes now",
+    )
+}

@@ -37,7 +37,6 @@ val ktorOldestVersion = libs.versions.ktorOldest.get()
 
 val oldestKtorTest: SourceSet = sourceSets.create("oldestKtorTest") {
     kotlin.srcDir("src/test/kotlin")
-    kotlin.srcDir(rootProject.layout.projectDirectory.dir("conformance/wire/kotlin"))
     // HttpRequestLifecycle came in Ktor 3.4.0.
     kotlin.exclude("**/RequestLifecycleTest.kt")
     runtimeClasspath += sourceSets.main.get().output
@@ -105,39 +104,7 @@ val testJavaxTomcat = tasks.register<Test>("testJavaxTomcat") {
 
 tasks.check { dependsOn(testJavaxTomcat) }
 
-/*
- * The approved wire transcripts under conformance/wire: what the adapter answers a fixed set of
- * requests on each engine, committed as text. Every test task compares; updateTranscripts rewrites.
- */
-val wireDir = rootProject.layout.projectDirectory.dir("conformance/wire")
-
-// The requests every adapter answers and the comparison with their transcripts, one file for both adapters.
-kotlin.sourceSets.test {
-    kotlin.srcDir(wireDir.dir("kotlin"))
-}
-
-tasks.withType<Test>().configureEach { systemProperty("streamlord.wireDir", wireDir.asFile.path) }
-tasks.withType<Test>().matching { it.name != "updateTranscripts" }.configureEach { inputs.dir(wireDir) }
-
 // GoldenServerTest answers the cases of the SDK's golden files, which live in streamlord-core.
 tasks.withType<Test>().configureEach {
     inputs.dir(rootProject.layout.projectDirectory.dir("streamlord-core/src/test/resources/golden"))
-}
-
-tasks.register<Test>("updateTranscripts") {
-    description = "Rewrites the approved wire transcripts under conformance/wire from what the Ktor adapter answers now."
-    group = "verification"
-    testClassesDirs =
-        sourceSets.test
-            .get()
-            .output.classesDirs
-    classpath =
-        sourceSets.test
-            .get()
-            .runtimeClasspath
-    useJUnitPlatform()
-    filter { includeTestsMatching("*WireTranscriptTest") }
-    systemProperty("streamlord.updateTranscripts", "true")
-    // It rewrites the transcripts it does not declare as inputs, so it must never be up to date or come from the cache.
-    doNotTrackState("rewrites conformance/wire")
 }
