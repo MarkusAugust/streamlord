@@ -1,10 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { analyzeHtml, analyzeKotlin, htmlStringAt } from "../src/analyze.ts";
+import { analyzeHtml, htmlStringAt } from "../src/analyze.ts";
 import { readKotlinStringAt, type KotlinString } from "../src/kotlinStrings.ts";
 import { findCallSites, findKotlinStrings } from "../src/scanner.ts";
-import { validateMarkup } from "../src/markup.ts";
 import { collectSignals } from "../src/signals.ts";
 import { collectSelectors } from "../src/selectors.ts";
 import { decodeDatastar, mergePatchAsClient, SseParser } from "../src/sse.ts";
@@ -53,15 +52,6 @@ const project: Record<string, (c: Case) => Record<string, unknown>> = {
     return { ids: [...s.ids].sort(), classes: [...s.classes].sort() };
   },
   fixture: (c) => ({ codes: analyzeHtml(readFileSync(new URL(`./fixtures/${c.file}`, import.meta.url), "utf8"), opts).map((i) => i.code) }),
-  issues: (c) => {
-    const prefix = c.prefix as string;
-    const source = c.source;
-    const issues =
-      c.language === "markup"
-        ? validateMarkup(source, { requireIds: false, prefix, checkAttributes: true })
-        : (c.language === "kotlin" ? analyzeKotlin : analyzeHtml)(source, { prefix, checkHtmlAttributes: true });
-    return { issues: issues.map((i) => ({ code: i.code, start: i.start, end: i.end, severity: i.severity })) };
-  },
 };
 
 describe("the analysis's twin cases", () => {

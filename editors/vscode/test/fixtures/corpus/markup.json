@@ -23,6 +23,7 @@
     {"name":"template syntax in attribute values","source":"<div id=\"a\" data-text=\"{{ name }}\" data-show=\"{% if x %}1{% endif %}\"></div>","issues":[]},
     {"name":"an attribute with another prefix than the configured one","source":"<div data-star-on:click=\"x()\"></div>","issues":[{"code":"prefix-mismatch","start":5,"end":23}]},
     {"name":"freemarker tags and comments","source":"<#if x><div id=\"a\" data-text=\"${y}\"></div><#else><p id=\"b\">no</p></#if><#-- <span> --><%-- <b> --%>","requireIds":true,"issues":[]},
-    {"name":"jte control flow around an element","source":"@if(x)<div id=\"a\"></div>@endif","requireIds":true,"issues":[]}
+    {"name":"jte control flow around an element","source":"@if(x)<div id=\"a\"></div>@endif","requireIds":true,"issues":[]},
+    {"name":"attributes of an aliased prefix and of the default one","prefix":"data-star-","source":"<div data-star-on:click=\"x()\" data-on:click=\"y(\"></div>","issues":[]}
   ]
 }

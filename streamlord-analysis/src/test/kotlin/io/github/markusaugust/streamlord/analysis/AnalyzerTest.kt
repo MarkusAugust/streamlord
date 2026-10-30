@@ -44,16 +44,6 @@ class AnalyzerTest {
             )
         }
 
-    private fun issues(case: JsonObject): List<Issue> {
-        val prefix = case.string("prefix")!!
-        val source = case.string("source")!!
-        return when (case.string("language")) {
-            "markup" -> analyzer.validateMarkup(source, MarkupOptions(false, prefix, true))
-            "kotlin" -> analyzer.analyzeKotlin(source, AnalyzeOptions(prefix, true))
-            else -> analyzer.analyzeHtml(source, AnalyzeOptions(prefix, true))
-        }
-    }
-
     /** What each kind of case expects, in the fields `twins/analyze.json` describes; `analyze.test.ts` projects the same. */
     private fun project(case: JsonObject): Map<String, Any?> {
         val source = case.string("source") ?: ""
@@ -98,20 +88,6 @@ class AnalyzerTest {
             "fixture" -> {
                 val text = File("../editors/vscode/test/fixtures/${case.string("file")}").readText()
                 mapOf("codes" to analyzer.analyzeHtml(text, opts).map { it.code })
-            }
-
-            "issues" -> {
-                mapOf(
-                    "issues" to
-                        issues(case).map {
-                            mapOf(
-                                "code" to it.code,
-                                "start" to it.start.toLong(),
-                                "end" to it.end.toLong(),
-                                "severity" to it.severity.name.lowercase(),
-                            )
-                        },
-                )
             }
 
             else -> {
