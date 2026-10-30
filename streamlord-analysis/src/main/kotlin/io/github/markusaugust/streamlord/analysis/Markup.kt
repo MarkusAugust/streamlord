@@ -2,11 +2,10 @@ package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.core.client.ClientCasing
-import io.github.markusaugust.streamlord.core.client.DecodedValue
+import io.github.markusaugust.streamlord.core.client.HTML_SPACE
 import io.github.markusaugust.streamlord.core.client.RAW_TEXT
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.decodeEntities
-import io.github.markusaugust.streamlord.core.client.indexOfAsciiIgnoreCase
 import io.github.markusaugust.streamlord.core.client.rawTextEnd
 import io.github.markusaugust.streamlord.core.domain.AttributeKeys
 import io.github.markusaugust.streamlord.core.domain.ElementsGuard
@@ -96,14 +95,11 @@ public val TEMPLATE_SYNTAX: Regex =
  * calls (`<#if>`, `</#if>`, `<@row/>`), and its `<#-- -->` comments. Skipped like `<!DOCTYPE>`.
  */
 private val TEMPLATE_TAG = Regex("""^</?[#@]""")
-private val TAG_OPEN = Regex("""^<(/?)([A-Za-z][A-Za-z0-9:-]*)""")
+private val TAG_OPEN = Regex("""^<(/?)([A-Za-z][A-Za-z0-9:._-]*)""")
 
 /** A name also ends where a template construct starts: `data-x{{/if}}`, `data-x</#if>`. */
 private val ATTR_NAME = Regex("""^[^\t\n\f\r "'<>/={]+""")
 private val UNQUOTED_VALUE = Regex("""^[^\t\n\f\r >]*""")
-
-/** The white space of HTML, which alone ends an attribute name or value: a no-break space is part of one. */
-private const val HTML_SPACE = "\t\n\u000C\r "
 
 /** Datastar reads `500ms`, `1s`, and a bare number as milliseconds. */
 private val DURATION = Regex("""^\d+(ms|s)?$""")
@@ -475,10 +471,7 @@ public fun tokenize(html: String): Tokens {
     var i = 0
     var depth = 0
     var textStart = -1
-    // The svg and math elements open, and the HTML integration points open in them: inside an svg
-    // or a math a style or a script is no raw text and `/>` closes it, and inside an integration
-    // point, such as a foreignObject, the content is HTML again.
-    val scopes = ArrayList<String>()
+    val content = ForeignContent()
 
     fun flushText(end: Int) {
         if (textStart >= 0 && depth == 0) {
@@ -516,6 +509,14 @@ public fun tokenize(html: String): Tokens {
         if (commentClose != null && commentEnd >= 0) {
             flushText(i)
             i = commentEnd + commentClose.length
+            continue
+        }
+        // Where the current element is foreign, `<![CDATA[` opens a section of text that only `]]>` ends;
+        // in HTML it is a bogus comment, which the first `>` ends.
+        if (html.startsWith("<![CDATA[", i) && content.foreign) {
+            flushText(i)
+            val close = html.indexOf("]]>", i + 9)
+            i = if (close < 0) html.length else close + 3
             continue
         }
         if (html[i] == '<' &&
@@ -586,18 +587,13 @@ public fun tokenize(html: String): Tokens {
                 attributes += Attribute(attrName, nameStart, value, valueStart, quoted)
             }
             val end = minOf(j + 1, html.length)
-            // As the browser reads it, and MarkupScan in core: a `/>` closes no raw-text element,
-            // plaintext runs to the end, and only `</name` as a whole name ends the others.
-            val foreign = scopes.lastOrNull() in FOREIGN_ROOTS
+            // As the browser reads it: a `/>` closes no raw-text element, plaintext runs to the end,
+            // and only `</name` as a whole name ends the others (rawTextEnd, which core's scanner
+            // shares; it reads svg and math by walking the markup each way instead).
+            if (closing) content.end(name)
+            val foreign = !closing && content.start(name, selfClosing, attributes)
             val rawText = !closing && name in RAW_TEXT && !foreign
             tags += Tag(name, i, end, closing, (selfClosing && !rawText) || name in VOID, attributes)
-            if (closing) {
-                // An svg or a math closes what is open inside it; an integration point closes itself only.
-                val at = scopes.lastIndexOf(name)
-                if (at >= 0 && (name in FOREIGN_ROOTS || at == scopes.lastIndex)) scopes.subList(at, scopes.size).clear()
-            } else if (!selfClosing && (name in FOREIGN_ROOTS || (foreign && integrationPoint(scopes.last(), name, attributes)))) {
-                scopes += name
-            }
             if (rawText) {
                 val closeIdx = if (name == "plaintext") -1 else rawTextEnd(html, name, end)
                 i = if (closeIdx < 0) html.length else closeIdx
@@ -648,6 +644,161 @@ private fun integrationPoint(
 private val MATHML_TEXT = setOf("mi", "mo", "mn", "ms", "mtext")
 
 private val HTML_ENCODINGS = setOf("text/html", "application/xhtml+xml")
+
+/**
+ * The start tags that end foreign content, so that the browser reads them, and what follows, as
+ * HTML: `<svg><p><style>` holds an HTML style. A font does so with a color, face or size.
+ */
+private val BREAKOUT =
+    (
+        "b big blockquote body br center code dd div dl dt em embed h1 h2 h3 h4 h5 h6 head hr i img li listing menu meta nobr ol p pre " +
+            "ruby s small span strong strike sub sup table tt u ul var"
+    ).split(" ").toSet()
+private val FONT_BREAKOUT = setOf("color", "face", "size")
+
+/** The end tags that do the same. */
+private val BREAKOUT_END = setOf("br", "p")
+
+/**
+ * The HTML elements an end tag cannot close past in HTML content (the "special" category of the
+ * HTML standard): `</b>` inside a `div` inside a `b` leaves the `b` open.
+ */
+private val SPECIAL =
+    (
+        "address applet area article aside base basefont bgsound blockquote body br button caption center col colgroup dd " +
+            "details dir div dl dt embed fieldset figcaption figure footer form frame frameset h1 h2 h3 h4 h5 h6 head header " +
+            "hgroup hr html iframe img input keygen li link listing main marquee menu meta nav noembed noframes noscript object " +
+            "ol p param plaintext pre script search section select source style summary table tbody td template textarea tfoot " +
+            "th thead title tr track ul wbr xmp"
+    ).split(" ").toSet()
+
+/**
+ * Where the tokenizer stands in foreign content, as the browser's tree builder reads it: the svg
+ * and math elements open, the HTML integration points open in them, and the elements open inside
+ * each, which decide where an svg begins and what an end tag closes. Inside an svg or a math a
+ * `style` or a `script` is no raw text and `/>` closes an element; inside an integration point,
+ * such as a foreignObject, the content is HTML again.
+ */
+private class ForeignContent {
+    /** An element that changes how its content is read, and the elements open inside it. */
+    private class Scope(
+        val name: String,
+        val foreign: Boolean,
+        val namespace: String,
+    ) {
+        val open = ArrayList<String>()
+    }
+
+    // The document first, whose open elements an end tag can close an svg or a math by.
+    private val scopes = arrayListOf(Scope("", false, "html"))
+
+    /** Whether the current node is an svg or MathML element, in which `<![CDATA[` opens a section of text. */
+    val foreign: Boolean get() = scopes.last().foreign
+
+    /** Reads a start tag; returns whether it stands in foreign content, where no element holds raw text. */
+    fun start(
+        name: String,
+        selfClosing: Boolean,
+        attributes: List<Attribute>,
+    ): Boolean {
+        if (foreign && breaksOut(name, false, attributes)) popForeign()
+        val top = scopes.last()
+        if (top.foreign) {
+            when {
+                // Inside a math an svg is a MathML element, unless it opens right in an annotation-xml.
+                name == "svg" && top.namespace == "math" && top.open.lastOrNull() == "annotation-xml" -> {
+                    if (!selfClosing) scopes += Scope(name, true, "svg")
+                }
+
+                integrationPoint(top.namespace, name, attributes) -> {
+                    if (!selfClosing) scopes += Scope(name, false, top.namespace)
+                }
+
+                !selfClosing -> {
+                    top.open += name
+                }
+            }
+            return true
+        }
+        when {
+            // Right inside a MathML text element, mglyph and malignmark stay MathML.
+            top.open.isEmpty() && top.name in MATHML_TEXT && (name == "mglyph" || name == "malignmark") -> {
+                if (!selfClosing) scopes += Scope(name, true, "math")
+            }
+
+            name in FOREIGN_ROOTS -> {
+                if (!selfClosing) scopes += Scope(name, true, name)
+            }
+
+            name !in VOID && name !in RAW_TEXT -> {
+                top.open += name
+            }
+        }
+        return false
+    }
+
+    /** Reads an end tag. */
+    fun end(name: String) {
+        if (foreign && breaksOut(name, true, emptyList())) return popForeign()
+        val top = scopes.last()
+        if (top.foreign || (top.open.isEmpty() && scopes.size > 1)) {
+            // Foreign content's rule, which an integration point with nothing open inside it follows
+            // too: the nearest open element of the name, until an HTML element is open, whose rule
+            // takes over from there.
+            for (k in scopes.indices.reversed()) {
+                val scope = scopes[k]
+                if (!scope.foreign && scope.open.isNotEmpty() && k != scopes.lastIndex) {
+                    // Every integration point is special, so one open in between stops it.
+                    if (scopes.subList(k + 1, scopes.size).any { !it.foreign }) return
+                    return closeHtml(k, name)
+                }
+                val at = if (scope.foreign) scope.open.lastIndexOf(name) else -1
+                if (at >= 0) {
+                    scopes.subList(k + 1, scopes.size).clear()
+                    return scope.open.subList(at, scope.open.size).clear()
+                }
+                if (k > 0 && scope.name == name) return scopes.subList(k, scopes.size).clear()
+            }
+            return
+        }
+        closeHtml(scopes.lastIndex, name)
+    }
+
+    /**
+     * HTML content's rule for an end tag, from the elements open in the scope at [k]: the nearest
+     * open element of the name, unless a special one stands between, then the integration point
+     * itself, when the end tag spells its name. foreignObject's, which the element has in camel
+     * case, it never does.
+     */
+    private fun closeHtml(
+        k: Int,
+        name: String,
+    ) {
+        val scope = scopes[k]
+        for (e in scope.open.indices.reversed()) {
+            if (scope.open[e] == name) {
+                scopes.subList(k + 1, scopes.size).clear()
+                return scope.open.subList(e, scope.open.size).clear()
+            }
+            if (scope.open[e] in SPECIAL) return
+        }
+        if (k > 0 && k == scopes.lastIndex && name == scope.name && name != "foreignobject") scopes.removeAt(k)
+    }
+
+    private fun popForeign() {
+        while (scopes.last().foreign) scopes.removeAt(scopes.lastIndex)
+    }
+}
+
+/** Whether a tag ends the foreign content it stands in, as the tree builder reads it. */
+private fun breaksOut(
+    name: String,
+    closing: Boolean,
+    attributes: List<Attribute>,
+): Boolean {
+    if (closing) return name in BREAKOUT_END
+    return name in BREAKOUT || (name == "font" && attributes.any { it.name.asciiLowercase() in FONT_BREAKOUT })
+}
 
 /**
  * The key to write, and the `__case` to add, so that a key the author typed with capitals comes

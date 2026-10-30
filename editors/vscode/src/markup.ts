@@ -213,6 +213,147 @@ const MATHML_TEXT: ReadonlySet<string> = new Set(["mi", "mo", "mn", "ms", "mtext
 const HTML_ENCODINGS: ReadonlySet<string> = new Set(["text/html", "application/xhtml+xml"]);
 
 /**
+ * The start tags that end foreign content, so that the browser reads them, and what follows, as
+ * HTML: `<svg><p><style>` holds an HTML style. A font does so with a color, face or size.
+ */
+const BREAKOUT: ReadonlySet<string> = new Set(
+  ("b big blockquote body br center code dd div dl dt em embed h1 h2 h3 h4 h5 h6 head hr i img li listing menu meta nobr ol p pre " +
+    "ruby s small span strong strike sub sup table tt u ul var").split(" "),
+);
+const FONT_BREAKOUT: ReadonlySet<string> = new Set(["color", "face", "size"]);
+/** The end tags that do the same. */
+const BREAKOUT_END: ReadonlySet<string> = new Set(["br", "p"]);
+
+/**
+ * The HTML elements an end tag cannot close past in HTML content (the "special" category of the
+ * HTML standard): `</b>` inside a `div` inside a `b` leaves the `b` open.
+ */
+const SPECIAL: ReadonlySet<string> = new Set(
+  (
+    "address applet area article aside base basefont bgsound blockquote body br button caption center col colgroup dd " +
+    "details dir div dl dt embed fieldset figcaption figure footer form frame frameset h1 h2 h3 h4 h5 h6 head header " +
+    "hgroup hr html iframe img input keygen li link listing main marquee menu meta nav noembed noframes noscript object " +
+    "ol p param plaintext pre script search section select source style summary table tbody td template textarea tfoot " +
+    "th thead title tr track ul wbr xmp"
+  ).split(" "),
+);
+
+/** An element that changes how its content is read, and the elements open inside it. */
+interface Scope {
+  readonly name: string;
+  readonly foreign: boolean;
+  readonly namespace: string;
+  readonly open: string[];
+}
+
+/**
+ * Where the tokenizer stands in foreign content, as the browser's tree builder reads it: the svg
+ * and math elements open, the HTML integration points open in them, and the elements open inside
+ * each, which decide where an svg begins and what an end tag closes. Inside an svg or a math a
+ * `style` or a `script` is no raw text and `/>` closes an element; inside an integration point,
+ * such as a foreignObject, the content is HTML again. `ForeignContent` in the Kotlin analysis.
+ */
+class ForeignContent {
+  // The document first, whose open elements an end tag can close an svg or a math by.
+  private readonly scopes: Scope[] = [{ name: "", foreign: false, namespace: "html", open: [] }];
+
+  /** Whether the current node is an svg or MathML element, in which `<![CDATA[` opens a section of text. */
+  get foreign(): boolean {
+    return this.top.foreign;
+  }
+
+  private get top(): Scope {
+    return this.scopes[this.scopes.length - 1]!;
+  }
+
+  /** Reads a start tag; returns whether it stands in foreign content, where no element holds raw text. */
+  start(name: string, selfClosing: boolean, attributes: Attribute[]): boolean {
+    if (this.foreign && breaksOut(name, false, attributes)) this.popForeign();
+    const top = this.top;
+    if (top.foreign) {
+      // Inside a math an svg is a MathML element, unless it opens right in an annotation-xml.
+      if (name === "svg" && top.namespace === "math" && top.open[top.open.length - 1] === "annotation-xml") {
+        if (!selfClosing) this.scopes.push({ name, foreign: true, namespace: "svg", open: [] });
+      } else if (integrationPoint(top.namespace, name, attributes)) {
+        if (!selfClosing) this.scopes.push({ name, foreign: false, namespace: top.namespace, open: [] });
+      } else if (!selfClosing) {
+        top.open.push(name);
+      }
+      return true;
+    }
+    // Right inside a MathML text element, mglyph and malignmark stay MathML.
+    if (top.open.length === 0 && MATHML_TEXT.has(top.name) && (name === "mglyph" || name === "malignmark")) {
+      if (!selfClosing) this.scopes.push({ name, foreign: true, namespace: "math", open: [] });
+    } else if (FOREIGN_ROOTS.has(name)) {
+      if (!selfClosing) this.scopes.push({ name, foreign: true, namespace: name, open: [] });
+    } else if (!VOID.has(name) && !RAW_TEXT.has(name)) {
+      top.open.push(name);
+    }
+    return false;
+  }
+
+  /** Reads an end tag. */
+  end(name: string): void {
+    if (this.foreign && breaksOut(name, true, [])) return this.popForeign();
+    const top = this.top;
+    if (top.foreign || (top.open.length === 0 && this.scopes.length > 1)) {
+      // Foreign content's rule, which an integration point with nothing open inside it follows
+      // too: the nearest open element of the name, until an HTML element is open, whose rule
+      // takes over from there.
+      for (let k = this.scopes.length - 1; k >= 0; k--) {
+        const scope = this.scopes[k]!;
+        if (!scope.foreign && scope.open.length > 0 && k !== this.scopes.length - 1) {
+          // Every integration point is special, so one open in between stops it.
+          if (this.scopes.slice(k + 1).some((s) => !s.foreign)) return;
+          return this.closeHtml(k, name);
+        }
+        const at = scope.foreign ? scope.open.lastIndexOf(name) : -1;
+        if (at >= 0) {
+          this.scopes.length = k + 1;
+          scope.open.length = at;
+          return;
+        }
+        if (k > 0 && scope.name === name) {
+          this.scopes.length = k;
+          return;
+        }
+      }
+      return;
+    }
+    this.closeHtml(this.scopes.length - 1, name);
+  }
+
+  /**
+   * HTML content's rule for an end tag, from the elements open in the scope at `k`: the nearest
+   * open element of the name, unless a special one stands between, then the integration point
+   * itself, when the end tag spells its name. foreignObject's, which the element has in camel
+   * case, it never does.
+   */
+  private closeHtml(k: number, name: string): void {
+    const scope = this.scopes[k]!;
+    for (let e = scope.open.length - 1; e >= 0; e--) {
+      if (scope.open[e] === name) {
+        this.scopes.length = k + 1;
+        scope.open.length = e;
+        return;
+      }
+      if (SPECIAL.has(scope.open[e]!)) return;
+    }
+    if (k > 0 && k === this.scopes.length - 1 && name === scope.name && name !== "foreignobject") this.scopes.pop();
+  }
+
+  private popForeign(): void {
+    while (this.top.foreign) this.scopes.pop();
+  }
+}
+
+/** Whether a tag ends the foreign content it stands in, as the tree builder reads it. */
+function breaksOut(name: string, closing: boolean, attributes: Attribute[]): boolean {
+  if (closing) return BREAKOUT_END.has(name);
+  return BREAKOUT.has(name) || (name === "font" && attributes.some((a) => FONT_BREAKOUT.has(asciiLowercase(a.name))));
+}
+
+/**
  * Whether `name`, opened in the foreign element `root`, is an HTML integration point, in which the
  * browser reads the content as HTML: a foreignObject, desc or title in an svg, and in a math the
  * text elements and an annotation-xml whose encoding is HTML.
@@ -228,10 +369,7 @@ export function tokenize(html: string): { tags: Tag[]; topLevelText: { start: nu
   let i = 0;
   let depth = 0;
   let textStart = -1;
-  // The svg and math elements open, and the HTML integration points open in them: inside an svg
-  // or a math a style or a script is no raw text and `/>` closes it, and inside an integration
-  // point, such as a foreignObject, the content is HTML again.
-  const scopes: string[] = [];
+  const content = new ForeignContent();
   const flushText = (end: number) => {
     if (textStart >= 0 && depth === 0) {
       const t = html.slice(textStart, end);
@@ -261,13 +399,21 @@ export function tokenize(html: string): { tags: Tag[]; topLevelText: { start: nu
       i = commentEnd + commentClose.length;
       continue;
     }
+    // Where the current element is foreign, `<![CDATA[` opens a section of text that only `]]>` ends;
+    // in HTML it is a bogus comment, which the first `>` ends.
+    if (html.startsWith("<![CDATA[", i) && content.foreign) {
+      flushText(i);
+      const close = html.indexOf("]]>", i + 9);
+      i = close < 0 ? html.length : close + 3;
+      continue;
+    }
     if (html[i] === "<" && (html.startsWith("<!", i) || html.startsWith("<?", i) || TEMPLATE_TAG.test(html.slice(i, i + 3)))) {
       flushText(i);
       const close = html.indexOf(">", i);
       i = close < 0 ? html.length : close + 1;
       continue;
     }
-    const tagMatch = /^<(\/?)([A-Za-z][A-Za-z0-9:-]*)/.exec(html.slice(i, i + 64));
+    const tagMatch = /^<(\/?)([A-Za-z][A-Za-z0-9:._-]*)/.exec(html.slice(i, i + 64));
     if (html[i] === "<" && tagMatch) {
       flushText(i);
       const closing = tagMatch[1] === "/";
@@ -327,16 +473,10 @@ export function tokenize(html: string): { tags: Tag[]; topLevelText: { start: nu
       const end = Math.min(j + 1, html.length);
       // As the browser reads it, and MarkupScan in core: a `/>` closes no raw-text element,
       // plaintext runs to the end, and only `</name` as a whole name ends the others.
-      const foreign = FOREIGN_ROOTS.has(scopes[scopes.length - 1] ?? "");
+      if (closing) content.end(name);
+      const foreign = !closing && content.start(name, selfClosing, attributes);
       const rawText = !closing && RAW_TEXT.has(name) && !foreign;
       tags.push({ name, start: i, end, closing, selfClosing: (selfClosing && !rawText) || VOID.has(name), attributes });
-      if (closing) {
-        // An svg or a math closes what is open inside it; an integration point closes itself only.
-        const at = scopes.lastIndexOf(name);
-        if (at >= 0 && (FOREIGN_ROOTS.has(name) || at === scopes.length - 1)) scopes.length = at;
-      } else if (!selfClosing && (FOREIGN_ROOTS.has(name) || (foreign && integrationPoint(scopes[scopes.length - 1]!, name, attributes)))) {
-        scopes.push(name);
-      }
       if (rawText) {
         const closeIdx = name === "plaintext" ? -1 : rawTextEnd(html, name, end);
         i = closeIdx < 0 ? html.length : closeIdx;
@@ -682,12 +822,6 @@ export function wireKeyReads(key: string): string {
   return CASE_FNS.get(/^[A-Z]/.test(key) ? "pascal" : "camel")!(kebab(key));
 }
 
-/**
- * The browser lowercases attribute names, so a capital letter in a key never reaches Datastar:
- * `data-signals:fooBar` declares `$foobar`, `data-on:widgetLoaded` listens to `widgetloaded`.
- * The fix writes the key as [wireKey] says, so that the name the author typed is the name the
- * browser ends up with.
- */
 /** What a key is to Datastar: the noun the messages and the hover use, from `keyCase` in the catalog. */
 export function keyKind(spec: AttributeSpec): "signal" | "event" | "class" | "raw" {
   if (spec.keyCase === "camel") return "signal";
@@ -1096,6 +1230,12 @@ function validateFilter(attr: Attribute, spec: AttributeSpec, prefix: string): I
   return out;
 }
 
+/**
+ * The browser lowercases attribute names, so a capital letter in a key never reaches Datastar:
+ * `data-signals:fooBar` declares `$foobar`, `data-on:widgetLoaded` listens to `widgetloaded`.
+ * The fix writes the key as `wireKey` says, so that the name the author typed is the name the
+ * browser ends up with.
+ */
 function validateKeyCase(attr: Attribute, parsed: { key: string | null; base: string; modifiers: { name: string; args: string[] }[] }, spec: AttributeSpec, prefix: string): Issue[] {
   const colon = attr.name.indexOf(":");
   if (colon < 0 || !spec.keyCase) return [];

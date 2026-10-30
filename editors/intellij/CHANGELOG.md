@@ -10,7 +10,15 @@ All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here
   integration points, such as a `foreignObject`; only HTML's own white space ends an attribute
   name, so a no-break space is part of one; a numeric reference is read whatever its number of
   digits, one to NUL or past U+10FFFF is U+FFFD, and one from 128 to 159 is the windows-1252
-  character the browser reads.
+  character the browser reads. Where an svg or a math begins and ends follows the browser's tree
+  builder for the open elements: an `svg` inside a `math` is a MathML element, so its `desc` holds
+  no HTML, unless it opens right in an `annotation-xml`; `mglyph` and `malignmark` right inside a
+  MathML text element stay MathML; `<p>`, `<b>`, `<div>` and the other breakout tags, a `<font>`
+  with a color, face or size, `</p>` and `</br>`, and the end tag of an HTML element open around
+  them close the svg or math, so a `style` after them is HTML's raw text; an end tag inside an
+  integration point does not reach past a `div` open in it; and inside an svg or a math a
+  `<![CDATA[` section ends only at `]]>`. A tag name runs on past `_` and `.`, so `<style_x>` is no
+  style.
 - An empty modifier argument is read as the client reads it. After the value it is nothing:
   `__threshold.50.` and `__once.` are fine, and `__case.` has no value. As the first argument it
   is the value: `__debounce.` needs a duration, and the fix takes the place of the dot, while
