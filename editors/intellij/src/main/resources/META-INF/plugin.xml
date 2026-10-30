@@ -109,7 +109,7 @@
 
         <localInspection
             shortName="KotlinInterpolationInspection"
-            displayName="Kotlin interpolation of a Datastar signal"
+            displayName="Kotlin value in a Datastar expression or HTML string"
             groupName="Streamlord"
             enabledByDefault="true"
             level="ERROR"

@@ -1,14 +1,22 @@
 <html>
 <body>
-Reports a Kotlin string template where a Datastar signal was meant: <code>"$count++"</code> becomes <code>"++"</code> at runtime,
-and the browser never sees a signal.
+Reports a Kotlin value written into a Datastar expression or an HTML string, judged by where it lands, as
+<code>interpolate(...)</code> judges it at run time.
 <p>
-In a Datastar expression handed to the DSL this is an error. Inside an HTML string a template in a <code>data-*</code> expression is a
-warning, since a server value there works as often as it is the trap; in element text it is a hint, since there it is usually meant.
+A string template where a Datastar signal was meant: <code>"$count++"</code> becomes <code>"++"</code> at runtime,
+and the browser never sees a signal. In a Datastar expression handed to the DSL this is an error; in a <code>data-*</code>
+expression of an HTML string, a warning, since a server value there works as often as it is the trap.
+</p>
+<p>
+A value in element text or a quoted attribute, where escaping is enough, is a hint, or a warning for a <code>String</code>:
+build the string with <code>interpolate(...)</code>, which escapes it. A value at the start of a URL, in <code>style</code>,
+in a Datastar expression, in a script or an event handler, or in an unquoted attribute value is a warning, since escaping does
+not help there. Constants, literals, numbers and booleans, and markup built in the template are left alone.
 </p>
 <p>
 Quick fixes: the DSL helper (<code>increment("count")</code>, <code>signal("count")</code>, <code>toggle("open")</code>), a
-<code>$$"..."</code> literal (Kotlin 2.2+) where a single dollar is text, or the <code>${'$'}count</code> escape.
+<code>$$"..."</code> literal (Kotlin 2.2+) where a single dollar is text, the <code>${'$'}count</code> escape, or the
+literal rewritten as <code>interpolate(...)</code> with its import.
 </p>
 <!-- tooltip end -->
 </body>

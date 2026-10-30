@@ -97,8 +97,10 @@ open class ReplaceTextFix(
     ) {
         val file = descriptor.psiElement?.containingFile ?: return
         val document = PsiDocumentManager.getInstance(project).getDocument(file) ?: return
-        if (fix.end > document.textLength) return
-        document.replaceString(fix.start, fix.end, fix.text)
+        // The fix and its further edits (an import), from the end backwards so no offset moves.
+        val replacements = fix.replacements
+        if (replacements.any { it.end > document.textLength }) return
+        for (e in replacements) document.replaceString(e.start, e.end, e.text)
         PsiDocumentManager.getInstance(project).commitDocument(document)
     }
 }
@@ -109,8 +111,13 @@ class PreferredReplaceTextFix(
 ) : ReplaceTextFix(fix),
     HighPriorityAction
 
-/** `$count` in a Kotlin string is a Kotlin template, not a signal: the interpolation trap. */
-class KotlinInterpolationInspection : StreamlordInspection(setOf("kotlin-interpolation"))
+/**
+ * `$count` in a Kotlin string is a Kotlin template, not a signal: the interpolation trap. And a
+ * Kotlin value in an HTML string, judged by where it lands as `interpolate` judges it.
+ */
+class KotlinInterpolationInspection : StreamlordInspection(INTERPOLATION_CODES)
+
+private val INTERPOLATION_CODES = setOf("kotlin-interpolation", "unescaped-interpolation", "unsafe-interpolation")
 
 /**
  * Datastar expression syntax, unknown actions, Pro actions, kebab-case signals, what the client's
@@ -206,7 +213,7 @@ class StreamlordMarkupInspection :
 /** Every code an inspection claims, so a test can prove the analysis leaves none unclaimed. */
 object InspectionCodes {
     val all: Set<String> =
-        setOf("kotlin-interpolation") +
+        INTERPOLATION_CODES +
             setOf("unknown-signal") +
             setOf(
                 "expression-syntax",
