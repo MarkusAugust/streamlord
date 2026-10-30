@@ -90,6 +90,14 @@ internal fun scanMarkup(
             i = if (close < 0) n else close + 1
             continue
         }
+        // An end tag: its name is the shape of the markup as much as a start tag's, and what
+        // follows the name up to > is read and thrown away by the browser, quotes and all.
+        if (first == '/' && html.getOrNull(lt + 2).isAsciiLetter()) {
+            val close = html.indexOf('>', lt + 2)
+            i = if (close < 0) n else close + 1
+            visitor.tag(lt, i)
+            continue
+        }
         if (!first.isAsciiLetter()) {
             i = lt + 1
             continue

@@ -243,4 +243,10 @@ class InterpolationTest {
         val e = assertFailsWith<UnsafeInterpolationException> { interpolate("""<i style="%s">x</i>""", "background:url(//x)") }
         assertEquals(Position.STYLE, e.position)
     }
+
+    @Test
+    fun `a value in an end tag is refused like one in a start tag`() {
+        val e = assertFailsWith<UnsafeInterpolationException> { interpolate("<p>x</%s>", "div") }
+        assertEquals(Position.STRUCTURE, e.position)
+    }
 }
