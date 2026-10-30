@@ -1,4 +1,4 @@
-package io.github.markusaugust.streamlord.ktor
+package io.github.markusaugust.streamlord.wire
 
 import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.domain.ElementNamespace
@@ -22,8 +22,9 @@ import kotlin.time.Duration.Companion.milliseconds
 
 /*
  * The approved wire transcripts under conformance/wire: for a fixed set of requests, the exact
- * HTTP answer each adapter gives, committed as text and compared on every test run. The same file
- * is in streamlord-spring's tests, so the four transcripts of a case can be read side by side.
+ * HTTP answer each adapter gives, committed as text and compared on every test run. The tests of
+ * streamlord-ktor and streamlord-spring both compile this file, so every adapter answers the same
+ * requests and the four transcripts of a case can be read side by side.
  */
 
 /** One request of the fixed set every adapter answers, named as its transcript file is. */

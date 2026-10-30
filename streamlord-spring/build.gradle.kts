@@ -62,6 +62,11 @@ tasks.check { dependsOn(testNewestCoroutines) }
  */
 val wireDir = rootProject.layout.projectDirectory.dir("conformance/wire")
 
+// The requests every adapter answers and the comparison with their transcripts, one file for both adapters.
+kotlin.sourceSets.test {
+    kotlin.srcDir(wireDir.dir("kotlin"))
+}
+
 tasks.withType<Test>().configureEach { systemProperty("streamlord.wireDir", wireDir.asFile.path) }
 tasks.withType<Test>().matching { it.name != "updateTranscripts" }.configureEach { inputs.dir(wireDir) }
 

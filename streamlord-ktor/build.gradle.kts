@@ -37,6 +37,7 @@ val ktorOldestVersion = libs.versions.ktorOldest.get()
 
 val oldestKtorTest: SourceSet = sourceSets.create("oldestKtorTest") {
     kotlin.srcDir("src/test/kotlin")
+    kotlin.srcDir(rootProject.layout.projectDirectory.dir("conformance/wire/kotlin"))
     // HttpRequestLifecycle came in Ktor 3.4.0.
     kotlin.exclude("**/RequestLifecycleTest.kt")
     runtimeClasspath += sourceSets.main.get().output
@@ -109,6 +110,11 @@ tasks.check { dependsOn(testJavaxTomcat) }
  * requests on each engine, committed as text. Every test task compares; updateTranscripts rewrites.
  */
 val wireDir = rootProject.layout.projectDirectory.dir("conformance/wire")
+
+// The requests every adapter answers and the comparison with their transcripts, one file for both adapters.
+kotlin.sourceSets.test {
+    kotlin.srcDir(wireDir.dir("kotlin"))
+}
 
 tasks.withType<Test>().configureEach { systemProperty("streamlord.wireDir", wireDir.asFile.path) }
 tasks.withType<Test>().matching { it.name != "updateTranscripts" }.configureEach { inputs.dir(wireDir) }

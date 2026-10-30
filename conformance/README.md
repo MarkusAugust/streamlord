@@ -191,8 +191,9 @@ The cases, the same for every adapter:
 
 The tests are `KtorCioWireTranscriptTest` and `KtorNettyWireTranscriptTest` in `streamlord-ktor`,
 which `testOldestKtor` runs on Ktor 3.0.0 as well, and `SpringMvcWireTranscriptTest` and
-`SpringWebFluxWireTranscriptTest` in `streamlord-spring`. The request set lives in each module's
-`WireTranscripts.kt`, the same file twice. After an intended change, re-record and review the diff
+`SpringWebFluxWireTranscriptTest` in `streamlord-spring`. The request set lives once, in
+`conformance/wire/kotlin/WireTranscripts.kt`, which both modules' tests compile. After an intended
+change, re-record and review the diff
 with the rest of it:
 
 ```sh
