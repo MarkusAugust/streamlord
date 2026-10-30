@@ -120,7 +120,7 @@ export function analyzeKotlin(src: string, opts: AnalyzeOptions): Issue[] {
     const chain = topLevel.has(s) ? chainFrom(src, s, lex.mask) : null;
     const whole = chain ?? s;
     if (chain) for (let at = chain.start; at < chain.end; at++) if (src[at] === '"' || src[at] === "$") chained.add(at);
-    if (!isHtmlString(src, s) && !(chain && /^\s*<(?:[A-Za-z]|!--)/.test(chain.text))) continue;
+    if (!isHtmlString(src, s) && !(chain && /^\s*<(?:[A-Za-z]|__kt__|!--)/.test(chain.text))) continue;
     issues.push(...checkFreeHtmlString(whole, opts, src, hyphenated));
   }
   return issues;

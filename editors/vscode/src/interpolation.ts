@@ -9,7 +9,7 @@ import { lexKotlin } from "./scanner.ts";
 import { PLACEHOLDER, readKotlinStringAt, type Interpolation, type KotlinString } from "./kotlinStrings.ts";
 import type { Fix } from "./expression.ts";
 
-const HTML_START = /^\s*<(?:[A-Za-z]|!--|!doctype)/i;
+const HTML_START = /^\s*<(?:[A-Za-z]|__kt__|!--|!doctype)/i;
 const IDENT = /^[\p{L}_][\p{L}\p{Nd}_]*$/u;
 
 /** How a hole is named in a message: `$name`, `${expr}` shortened, or the operand as written. */

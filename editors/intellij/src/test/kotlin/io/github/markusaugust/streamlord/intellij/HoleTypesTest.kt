@@ -109,13 +109,14 @@ class HoleTypesTest : BasePlatformTestCase() {
 
     private fun severity(s: HighlightSeverity): String =
         when (s) {
+            HighlightSeverity.ERROR -> "error"
             HighlightSeverity.WARNING -> "warning"
             HighlightSeverity.WEAK_WARNING -> "hint"
             else -> s.name
         }
 
     private companion object {
-        /** Just enough of Ktor, Streamlord and the annotations for the five files to resolve. */
+        /** Just enough of Ktor, Streamlord and the annotations for the fixture files to resolve. */
         val STUBS =
             mapOf(
                 "stubs/Annotations.kt" to

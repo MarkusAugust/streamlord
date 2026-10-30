@@ -48,7 +48,7 @@ private val DOLLAR_RUNS = Regex("""\$+""")
 private val ASSIGN_BEFORE = Regex("""\s*=\s*$""")
 private val BRACED_TEMPLATE = Regex("""\$\{""")
 private val TRIM_AFTER = Regex("""\s*\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)""")
-private val CHAIN_HTML_START = Regex("""^\s*<(?:[A-Za-z]|!--)""")
+private val CHAIN_HTML_START = Regex("""^\s*<(?:[A-Za-z]|__kt__|!--)""")
 private val CLOSING_TAG_BEFORE = Regex("""</([A-Za-z0-9:_-]*)\z""")
 private val UNQUOTED_VALUE_BEFORE = Regex("""=[ \t\n\f\r]*[^\s"'=<>`]*\z""")
 

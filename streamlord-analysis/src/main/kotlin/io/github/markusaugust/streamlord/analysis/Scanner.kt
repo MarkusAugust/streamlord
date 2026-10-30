@@ -294,7 +294,8 @@ public fun lexKotlin(src: String): KotlinLex {
 /** Every string literal in the source that is not inside a comment, in order. */
 public fun findKotlinStrings(src: String): List<KotlinString> = lexKotlin(src).strings
 
-private val HTML_START = Regex("""^\s*<(?:[A-Za-z]|!--|!doctype)""", RegexOption.IGNORE_CASE)
+// A template as the first tag name, `"<$tag>…"`, opens a tag all the same.
+private val HTML_START = Regex("""^\s*<(?:[A-Za-z]|__kt__|!--|!doctype)""", RegexOption.IGNORE_CASE)
 private val HTML_MARKER = Regex("""@Language\(\s*"html"\s*\)|//\s*language\s*=\s*html\b""", RegexOption.IGNORE_CASE)
 private val PARAMETER_AFTER_MARKER = Regex("""^\s*(?:va[lr]\s+)?[A-Za-z_][A-Za-z0-9_]*\s*:\s*String\??\s*(?:=[^,)]*)?[,)]""")
 

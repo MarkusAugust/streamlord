@@ -118,18 +118,27 @@ object HoleFacts {
         val lower = (type as? KaFlexibleType)?.lowerBound ?: type
         val definite = type !is KaFlexibleType && !type.isMarkedNullable
         return when {
-            lower.isStringType || lower.isCharSequenceType -> HoleFact.STRING
+            lower.isStringType || lower.isCharSequenceType -> {
+                HoleFact.STRING
+            }
 
-            lower.isClassType(HTML_CLASS) -> HoleFact.MARKUP
+            lower.isClassType(HTML_CLASS) -> {
+                HoleFact.MARKUP
+            }
 
-            !definite -> null
+            // A number or a boolean that may be null prints digits, true, false or null: safe where escaping is.
+            lower.isIntType || lower.isLongType || lower.isShortType || lower.isByteType || lower.isDoubleType || lower.isFloatType ||
+                lower.isUIntType || lower.isULongType || lower.isUShortType || lower.isUByteType -> {
+                if (definite) HoleFact.NUMBER else HoleFact.NULLABLE
+            }
 
-            type.isIntType || type.isLongType || type.isShortType || type.isByteType || type.isDoubleType || type.isFloatType ||
-                type.isUIntType || type.isULongType || type.isUShortType || type.isUByteType -> HoleFact.NUMBER
+            lower.isBooleanType -> {
+                if (definite) HoleFact.BOOLEAN else HoleFact.NULLABLE
+            }
 
-            type.isBooleanType -> HoleFact.BOOLEAN
-
-            else -> null
+            else -> {
+                null
+            }
         }
     }
 
@@ -147,9 +156,17 @@ object HoleFacts {
                     val type = target.typeReference?.text?.filterNot { it.isWhitespace() } ?: continue
                     when {
                         NUMBER_TYPE.matches(type) -> HoleFact.NUMBER
+
                         BOOLEAN_TYPE.matches(type) -> HoleFact.BOOLEAN
+
+                        type.endsWith(
+                            '?',
+                        ) && (NUMBER_TYPE.matches(type.dropLast(1)) || BOOLEAN_TYPE.matches(type.dropLast(1))) -> HoleFact.NULLABLE
+
                         STRING_TYPE.matches(type) -> HoleFact.STRING
+
                         HTML_TYPE.matches(type) -> HoleFact.MARKUP
+
                         else -> continue
                     }
                 }
