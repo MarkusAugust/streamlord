@@ -4,10 +4,13 @@ import com.intellij.lang.html.HTMLLanguage
 import com.intellij.lang.injection.InjectedLanguageManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
+import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiFile
 import com.intellij.psi.util.CachedValueProvider
 import com.intellij.psi.util.CachedValuesManager
+import com.intellij.psi.util.PsiModificationTracker
 import io.github.markusaugust.streamlord.analysis.AnalyzeOptions
 import io.github.markusaugust.streamlord.analysis.Analyzer
 import io.github.markusaugust.streamlord.analysis.Catalog
@@ -34,13 +37,25 @@ class StreamlordAnalysis(
 
     fun options(): AnalyzeOptions = AnalyzeOptions(prefix = prefix, checkHtmlAttributes = true)
 
-    /** The issues of a Kotlin file, by call site or HTML string, with calls that resolve to something other than Streamlord left out. */
+    /**
+     * The issues of a Kotlin file, by call site or HTML string, with calls that resolve to something other than Streamlord left out.
+     * Each value joined into a string is judged with what the Kotlin plugin knows of its type, which another file can change.
+     */
     fun kotlinIssues(file: KtFile): List<SiteIssues> =
         CachedValuesManager.getCachedValue(file) {
             val prefix = prefix
-            val sites = analyzer.analyzeKotlinSites(file.text, AnalyzeOptions(prefix, true))
+            val dumb = DumbService.getInstance(project)
+            val facts = if (dumb.isDumb) emptyMap() else HoleFacts.of(file)
+            val options = AnalyzeOptions(prefix, true, holeFact = { start, end -> facts[TextRange(start, end)] })
+            val sites = analyzer.analyzeKotlinSites(file.text, options)
             val kept = sites.filter { s -> s.site?.let { StreamlordResolve.mayBeStreamlord(file, it) } ?: true }
-            CachedValueProvider.Result.create(kept, file, settings.tracker)
+            CachedValueProvider.Result.create(
+                kept,
+                file,
+                settings.tracker,
+                PsiModificationTracker.getInstance(project),
+                dumb.modificationTracker,
+            )
         }
 
     /** The issues of an HTML document or template. */
