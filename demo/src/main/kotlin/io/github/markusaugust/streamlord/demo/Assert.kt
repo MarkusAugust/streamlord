@@ -51,17 +51,17 @@ public fun assertEvents(signals: AssertSignals): List<DatastarEvent> {
     return listOf(
         assertionPatch {
             if (failure == null) {
-                div("fs-alert") {
+                div("lt-alert") {
                     attributes["data-color"] = "success"
-                    p("fs-alert__title") { +"Both assertions passed." }
+                    p("lt-alert__title") { +"Both assertions passed." }
                     p { +"The stream carried ${events.size} ${if (events.size == 1) "event" else "events"}." }
                 }
             } else {
-                div("fs-alert") {
+                div("lt-alert") {
                     attributes["data-color"] = "danger"
                     pre("assertion__said") { +failure }
                 }
-                p("fs-paragraph assertion__why") {
+                p("lt-paragraph assertion__why") {
                     attributes["data-size"] = "small"
                     +"This is what the test reader prints when a stream is not what the code said."
                 }

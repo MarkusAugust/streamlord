@@ -1,7 +1,7 @@
 /**
- * Generates src/styles/theme.css from fristil.tema.json, then puts the navy back.
+ * Generates src/styles/theme.css from lotek.theme.json, then puts the navy back.
  *
- * Fristil owns the lightness of every colour and the consumer owns the hue, which is how
+ * LO-TEK owns the lightness of every colour and the consumer owns the hue, which is how
  * the contrast promises hold by construction. The two neutral layers deliberately take
  * only a fraction of the brand's chroma, 8 percent for the page and 12 percent for a
  * raised surface, because a page with colour in it looks painted rather than neutral.
@@ -11,21 +11,21 @@
  * instead does not work: the neutral family also carries the body text and the borders,
  * and they turn blue long before the page does.
  *
- * So the three layers are rewritten here to the same lightness Fristil chose and the
+ * So the three layers are rewritten here to the same lightness LO-TEK chose and the
  * brand's full chroma. Lightness is what the promises are made of, so leaving it alone
- * is what keeps them, and `fristil sjekk-tema` below is what proves it rather than
+ * is what keeps them, and `lotek check-theme` below is what proves it rather than
  * asserts it.
  */
 import { execFileSync } from "node:child_process"
 import { writeFileSync } from "node:fs"
 
-const RECIPE = "fristil.tema.json"
+const RECIPE = "lotek.theme.json"
 const OUT = "src/styles/theme.css"
 
 /**
- * The three layers, as the value Fristil generates and the value we want instead.
+ * The three layers, as the value LO-TEK generates and the value we want instead.
  *
- * Both sides are written out so a replacement cannot quietly miss. Fristil's numbers are
+ * Both sides are written out so a replacement cannot quietly miss. LO-TEK's numbers are
  * derived from `ROLES` and `NEUTRAL_LAYERS`, and when a version changes one of them the
  * expected value stops matching and this script says so, which is the whole point: a
  * stale colour that still parses is the failure worth guarding against.
@@ -38,32 +38,32 @@ const LAYERS = [
   { token: "neutral-raised", from: "#323335", to: "#2d3241" },
 ]
 
-const fristil = (...args: string[]) =>
-  execFileSync("bunx", ["@fristil/designsystem", ...args], { encoding: "utf8" })
+const lotek = (...args: string[]) =>
+  execFileSync("bunx", ["@lo-tek/interfaces", ...args], { encoding: "utf8" })
 
-let css = fristil("tema", RECIPE)
+let css = lotek("theme", RECIPE)
 
 for (const { token, from, to } of LAYERS) {
-  const pattern = new RegExp(`(--fs-color-${token}:\\s*)${from}\\b`, "g")
+  const pattern = new RegExp(`(--lt-color-${token}:\\s*)${from}\\b`, "g")
   const hits = css.match(pattern)?.length ?? 0
-  // The light block is written once and the dark one twice, for the media query and for
-  // the explicit data-theme. A light value therefore lands once and a dark value twice.
+  // Each value lands more than once, since LO-TEK writes each theme both for the system
+  // preference and for an explicit data-theme. None means the layer has moved.
   if (hits === 0) {
     throw new Error(
-      `--fs-color-${token} is no longer ${from}. Fristil has changed the lightness or ` +
+      `--lt-color-${token} is no longer ${from}. LO-TEK has changed the lightness or ` +
         `the chroma of that layer, so the replacement in LAYERS is out of date.`,
     )
   }
   css = css.replace(pattern, `$1${to}`)
 }
 
-// Written from the command's output rather than its --ut flag, so that the layers can be
+// Written from the command's output rather than its --out flag, so that the layers can be
 // rewritten before the file exists. The flag ends the file with one newline and stdout
 // carries a second, which biome then reports as a formatting error.
 writeFileSync(OUT, `${css.trimEnd()}\n`)
 
 // Inherits stdio so the tool's own words reach the terminal, and its exit code ends the
 // run: a theme that breaks a promise must not be committable.
-execFileSync("bunx", ["@fristil/designsystem", "sjekk-tema", OUT], {
+execFileSync("bunx", ["@lo-tek/interfaces", "check-theme", OUT], {
   stdio: "inherit",
 })

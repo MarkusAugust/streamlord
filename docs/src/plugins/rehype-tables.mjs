@@ -1,12 +1,12 @@
 /**
- * Gives every markdown table Fristil's table, inside Fristil's scroll wrapper.
+ * Gives every markdown table LO-TEK's table, inside LO-TEK's scroll wrapper.
  *
- * Markdown writes a bare `<table>`, and Fristil styles `.fs-table`, so without this
+ * Markdown writes a bare `<table>`, and LO-TEK styles `.lt-table`, so without this
  * the documentation's tables render with no padding, no header weight and no row
  * rules. This adds the class rather than restyling `table` in our own CSS, so the
  * tables look like the design system's tables and follow it when it changes.
  *
- * The wrapper is the `.fs-table-scroll` pattern Fristil documents for consumers: a
+ * The wrapper is the `.lt-table-scroll` pattern LO-TEK documents for consumers: a
  * table of three columns with code in the cells is wider than a phone, and dragging
  * it sideways reads better than breaking `streamlord-json-jackson2` across four
  * lines. `tabindex` so the keyboard can reach the columns past the edge, and
@@ -29,13 +29,13 @@ function walk(node, state) {
 
     if (child.type !== "element" || child.tagName !== "table") return child
 
-    child.properties = { ...child.properties, className: ["fs-table"] }
+    child.properties = { ...child.properties, className: ["lt-table"] }
 
     return {
       type: "element",
       tagName: "div",
       properties: {
-        className: ["fs-table-scroll"],
+        className: ["lt-table-scroll"],
         tabindex: "0",
         role: "region",
         "aria-label": state.heading ? `Table: ${state.heading}` : "Table",

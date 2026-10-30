@@ -14,10 +14,10 @@ import kotlinx.html.span
 import kotlinx.html.ul
 
 /**
- * The results, in Fristil's classes.
+ * The results, in LO-TEK's classes.
  *
  * The service writes markup for a design system it does not ship and cannot see: the page
- * already carries `fristil.css`, so a `fs-list` arriving over the wire is styled the instant
+ * already carries `lotek.css`, so a `lt-list` arriving over the wire is styled the instant
  * it lands. That is the whole argument for patching elements rather than sending JSON. The
  * server owns the markup, and there is no second model of the page to keep in step.
  */
@@ -26,7 +26,7 @@ public fun TagConsumer<*>.results(
     query: String,
 ) {
     if (query.isBlank()) {
-        p("fs-paragraph") {
+        p("lt-paragraph") {
             attributes["data-size"] = "small"
             +"Type to search the documentation."
         }
@@ -41,22 +41,22 @@ public fun TagConsumer<*>.results(
          * becoming a Datastar expression the server signed.
          */
         onTagContentUnsafe {
-            +interpolate("""<p class="fs-paragraph" data-size="small">Nothing matches “%s”.</p>""", query)
+            +interpolate("""<p class="lt-paragraph" data-size="small">Nothing matches “%s”.</p>""", query)
         }
         return
     }
 
-    ul("fs-list hits") {
+    ul("lt-list hits") {
         attributes["data-variant"] = "plain"
         hits.forEach { hit ->
             li {
-                a(classes = "fs-link hits__where", href = hit.url) {
+                a(classes = "lt-link hits__where", href = hit.url) {
                     +hit.title
                     if (hit.heading.isNotEmpty()) {
                         span("hits__heading") { +" → ${hit.heading}" }
                     }
                 }
-                p("fs-paragraph hits__excerpt") {
+                p("lt-paragraph hits__excerpt") {
                     attributes["data-size"] = "small"
                     +hit.excerpt
                 }
@@ -92,7 +92,7 @@ public fun TagConsumer<*>.counter(
     stopped: Boolean,
 ) {
     p("counter__number") { +"$count" }
-    p("fs-paragraph counter__state") {
+    p("lt-paragraph counter__state") {
         attributes["data-size"] = "small"
         +when {
             stopped -> "Stopped at $count. The connection closed the moment you asked."
@@ -103,9 +103,9 @@ public fun TagConsumer<*>.counter(
 }
 
 /**
- * Fristil's error summary, written by a server that has never seen Fristil.
+ * LO-TEK's error summary, written by a server that has never seen LO-TEK.
  *
- * The classes and the shape are the design system's: `fs-error-summary` with `role="alert"`
+ * The classes and the shape are the design system's: `lt-error-summary` with `role="alert"`
  * and `tabindex="-1"` so it can be focused, a title, and a list of links into the fields that
  * failed. The page already carries the stylesheet, so this arrives styled and announced.
  *
@@ -117,24 +117,24 @@ public fun TagConsumer<*>.summary(
     signals: MusterSignals,
 ) {
     if (faults.isEmpty()) {
-        p("fs-paragraph muster__ok") {
+        p("lt-paragraph muster__ok") {
             attributes["data-size"] = "small"
             +"“${signals.banner.trim()}” musters ${signals.swords.trim()} swords. Ready to ride."
         }
         return
     }
 
-    div("fs-error-summary") {
+    div("lt-error-summary") {
         attributes["role"] = "alert"
         attributes["tabindex"] = "-1"
-        p("fs-error-summary__title") {
+        p("lt-error-summary__title") {
             +if (faults.size == 1) "One thing is wrong:" else "${faults.size} things are wrong:"
         }
-        ul("fs-list") {
+        ul("lt-list") {
             attributes["data-variant"] = "plain"
             faults.forEach { fault ->
                 li {
-                    // No fs-link: Fristil styles `a` inside the summary itself, in the danger
+                    // No lt-link: LO-TEK styles `a` inside the summary itself, in the danger
                     // pair that belongs to that background. Ours would fight it and lose.
                     a(href = "#${fault.field}") { +fault.says }
                 }
@@ -161,11 +161,11 @@ public fun TagConsumer<*>.stone(says: String) {
  */
 public fun TagConsumer<*>.stoneInside(says: String) {
     span("gallery__says") { +says }
-    label("fs-label gallery__label") {
+    label("lt-label gallery__label") {
         htmlFor = "chisel"
         +"Write something here. Does it survive?"
     }
-    input(classes = "fs-input gallery__chisel") {
+    input(classes = "lt-input gallery__chisel") {
         attributes["id"] = "chisel"
         placeholder = "Anything at all"
     }
@@ -183,9 +183,9 @@ public fun TagConsumer<*>.said(
     selector: String?,
     elements: String,
 ) {
-    div("fs-alert gallery__verdict") {
+    div("lt-alert gallery__verdict") {
         attributes["data-color"] = verdict.color
-        p("fs-alert__title") { +verdict.title }
+        p("lt-alert__title") { +verdict.title }
         p { +verdict.says }
     }
     p("gallery__said") {

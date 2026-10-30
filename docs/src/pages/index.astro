@@ -215,7 +215,7 @@ const TOOLS = [
     ></script>
   </head>
   <body>
-    <a class="fs-skip-link" href="#content">Skip to content</a>
+    <a class="lt-skip-link" href="#content">Skip to content</a>
 
     <!--
       Neon needs somewhere dark to be neon, and a muted variant for a light theme would lose
@@ -246,9 +246,9 @@ const TOOLS = [
           -->
           <div class="hero__actions">
             <!-- Linked only now that the service it talks to exists outside this machine. -->
-            <a class="fs-button" href="/live/">See it run</a>
-            <a class="fs-button" data-variant="secondary" href="/editors/">The editors</a>
-            <a class="fs-button" data-variant="ghost" href="/first-stream/">Your first stream</a>
+            <a class="lt-button" href="/live/">See it run</a>
+            <a class="lt-button" data-variant="secondary" href="/editors/">The editors</a>
+            <a class="lt-button" data-variant="ghost" href="/first-stream/">Your first stream</a>
           </div>
         </div>
 
@@ -283,7 +283,7 @@ const TOOLS = [
         stops it, so a reader knows what the tabs below are for before they open one.
       -->
       <section class="block">
-        <h2 class="fs-heading" data-size="m">Datastar lives in strings your compiler never reads.</h2>
+        <h2 class="lt-heading" data-size="m">Datastar lives in strings your compiler never reads.</h2>
         <p class="block__lead">
           Each of these compiles, and without Streamlord you find out in the browser. Streamlord
           stops all four: the first two in your editor and in CI, the last two in the SDK itself.
@@ -292,8 +292,8 @@ const TOOLS = [
         <div class="problems">
           {
             MISTAKES.map((mistake) => (
-              <article class="fs-card problem">
-                <h3 class="fs-card__title">{mistake.title}</h3>
+              <article class="lt-card problem">
+                <h3 class="lt-card__title">{mistake.title}</h3>
                 <div class="sample sample--wrap">
                   <Code
                     code={mistake.code}
@@ -303,13 +303,13 @@ const TOOLS = [
                     transformers={[hangingIndent]}
                   />
                 </div>
-                <p class="fs-paragraph problem__what" data-size="small">
+                <p class="lt-paragraph problem__what" data-size="small">
                   {mistake.what.split("`").map((part, at) => (at % 2 === 1 ? <code>{part}</code> : part))}
                 </p>
                 <p class="problem__caught">
                   Caught by: {mistake.caught}
                   <span class="map__dot" aria-hidden="true"> · </span>
-                  <a class="fs-link" href={mistake.href}>More</a>
+                  <a class="lt-link" href={mistake.href}>More</a>
                 </p>
               </article>
             ))
@@ -332,7 +332,7 @@ const TOOLS = [
         class="block stage"
         data-signals={`{tool: 'sdk', heads: 13, wire: true, broken: false, source: ${js(PREFILL)}}`}
       >
-        <h2 class="fs-heading" data-size="m">Four tools, designed together.</h2>
+        <h2 class="lt-heading" data-size="m">Four tools, designed together.</h2>
         <p class="block__lead">
           One feed, from start to finish: built, tested, broken by accident, and caught. Adopt
           one tool, or all four.
@@ -343,7 +343,7 @@ const TOOLS = [
           {
             TOOLS.map((tool) => (
               <button
-                class="fs-card tool"
+                class="lt-card tool"
                 data-interactive
                 type="button"
                 role="tab"
@@ -353,8 +353,8 @@ const TOOLS = [
                 data-on:click={`$tool = '${tool.id}'`}
                 data-attr:aria-selected={`$tool === '${tool.id}' ? 'true' : 'false'`}
               >
-                <span class="fs-card__title">{tool.title}</span>
-                <span class="fs-paragraph tool__line" data-size="small">{tool.line}</span>
+                <span class="lt-card__title">{tool.title}</span>
+                <span class="lt-paragraph tool__line" data-size="small">{tool.line}</span>
                 <span class="tool__fact">{tool.fact}</span>
               </button>
             ))
@@ -400,11 +400,11 @@ const TOOLS = [
             -->
             <div class="run">
               <div class="run__row">
-                <button class="fs-button" type="button" data-on:click={`@get('${SERVICE}/feed')`}>
+                <button class="lt-button" type="button" data-on:click={`@get('${SERVICE}/feed')`}>
                   Run it
                 </button>
                 <button
-                  class="fs-button"
+                  class="lt-button"
                   data-variant="secondary"
                   type="button"
                   disabled
@@ -424,7 +424,7 @@ const TOOLS = [
               <div class="run__wire">
                 <p class="run__label">On the wire</p>
                 <!-- Beside #wire, not in it, so a reset that empties the frames brings it back. -->
-                <p class="fs-paragraph run__empty" data-size="small" data-show="$heads === 13">
+                <p class="lt-paragraph run__empty" data-size="small" data-show="$heads === 13">
                   Press Run. The frames the server sends come back here, encoded by the same
                   encoder the golden-file tests check.
                 </p>
@@ -477,11 +477,11 @@ const TOOLS = [
             </div>
 
             <div class="assert__row">
-              <button class="fs-button" type="button" data-on:click={`$broken = false; @post('${SERVICE}/assert')`}>
+              <button class="lt-button" type="button" data-on:click={`$broken = false; @post('${SERVICE}/assert')`}>
                 Run this test
               </button>
               <button
-                class="fs-button"
+                class="lt-button"
                 data-variant="secondary"
                 type="button"
                 data-on:click={`$broken = true; @post('${SERVICE}/assert')`}
@@ -491,7 +491,7 @@ const TOOLS = [
             </div>
 
             <div id="assertion" class="assert__box" aria-live="polite">
-              <p class="fs-paragraph" data-size="small">
+              <p class="lt-paragraph" data-size="small">
                 Run it and the test is green. Break it and the test expects 99 instead, and the
                 reader's own failure lands here, stream and all.
               </p>
@@ -531,9 +531,9 @@ const TOOLS = [
 
             <p class="ed__where">
               Both editors say this.
-              <a class="fs-link" href={VSCODE}>VS Code Marketplace</a>
+              <a class="lt-link" href={VSCODE}>VS Code Marketplace</a>
               <span class="map__dot" aria-hidden="true"> · </span>
-              <a class="fs-link" href={INTELLIJ}>JetBrains Marketplace</a>
+              <a class="lt-link" href={INTELLIJ}>JetBrains Marketplace</a>
             </p>
           </div>
 
@@ -558,9 +558,9 @@ const TOOLS = [
               over <code>src/main/kotlin</code>. Type, and it judges.
             </p>
 
-            <label class="fs-label" for="source">Markup or Kotlin</label>
+            <label class="lt-label" for="source">Markup or Kotlin</label>
             <textarea
-              class="fs-textarea judge__source"
+              class="lt-textarea judge__source"
               id="source"
               rows="3"
               maxlength="1024"
@@ -573,7 +573,7 @@ const TOOLS = [
               {
                 TRIES.map((attempt) => (
                   <button
-                    class="fs-button"
+                    class="lt-button"
                     data-variant="secondary"
                     type="button"
                     data-on:click={`$source = ${js(attempt.source)}`}
@@ -585,7 +585,7 @@ const TOOLS = [
             </div>
 
             <div id="verdict" class="judge__box" aria-live="polite">
-              <p class="fs-paragraph judge__how" data-size="small">
+              <p class="lt-paragraph judge__how" data-size="small">
                 Change a character, or press one of the three, and the verdict lands here.
               </p>
             </div>
@@ -594,11 +594,11 @@ const TOOLS = [
       </section>
 
       <section class="block">
-        <h2 class="fs-heading" data-size="m">Try it on the repo you have open right now.</h2>
+        <h2 class="lt-heading" data-size="m">Try it on the repo you have open right now.</h2>
         <p class="block__lead">
           One dependency and one test, and every Datastar string under{" "}
           <code>src/main/kotlin</code> is read before it ships.{" "}
-          <a class="fs-link" href="/analysis/">More on the analysis</a>
+          <a class="lt-link" href="/analysis/">More on the analysis</a>
         </p>
         <div class="sample">
           <Code
@@ -631,11 +631,11 @@ const TOOLS = [
       {
         NAVIGATION.map((section) => (
           <section class="section" data-featured={section.title === FEATURED ? "" : undefined}>
-            <h2 class="fs-heading" data-size="s">{section.title}</h2>
-            <ul class="fs-list" data-variant="plain">
+            <h2 class="lt-heading" data-size="s">{section.title}</h2>
+            <ul class="lt-list" data-variant="plain">
               {section.pages.map((page) => (
                 <li>
-                  <a class="fs-link" href={`/${page.slug}/`}>
+                  <a class="lt-link" href={`/${page.slug}/`}>
                     {page.title}
                   </a>
                 </li>
@@ -658,9 +658,9 @@ const TOOLS = [
          under the content rather than as another line of it. */
       .colophon {
         max-width: 60rem;
-        margin: var(--fs-spacing-16) auto 0;
-        padding: var(--fs-spacing-5) var(--fs-spacing-6) 0;
-        border-top: 1px solid var(--fs-color-neutral-border-subtle);
+        margin: var(--lt-spacing-16) auto 0;
+        padding: var(--lt-spacing-5) var(--lt-spacing-6) 0;
+        border-top: 1px solid var(--lt-color-neutral-border-subtle);
       }
 
       /* The Søbernetics mark. Small on purpose, and small is the whole of how it stays quiet: the
@@ -674,7 +674,7 @@ const TOOLS = [
       .sobernetics {
         --sobernetics-accent: #c8102e;
         display: inline-block;
-        color: var(--fs-color-neutral-text-subtle);
+        color: var(--lt-color-neutral-text-subtle);
       }
 
       @media (prefers-color-scheme: dark) {
@@ -685,7 +685,7 @@ const TOOLS = [
 
       .sobernetics:hover,
       .sobernetics:focus-visible {
-        color: var(--fs-color-neutral-text-strong);
+        color: var(--lt-color-neutral-text-strong);
       }
 
       /* `:global` because the mark arrives through `set:html`. Astro stamps its scope id on
@@ -701,7 +701,7 @@ const TOOLS = [
       .hero {
         /* Deeper than the page's own dark surface: this is the ground the mark was drawn on. */
         background: #0c0d14;
-        color: var(--fs-color-neutral-text-strong);
+        color: var(--lt-color-neutral-text-strong);
         border-block-end: 1px solid rgba(0, 177, 250, 0.25);
       }
       /* The name across the top. Under it, where there is room, two columns: the promise down
@@ -710,10 +710,10 @@ const TOOLS = [
       .hero__inner {
         max-width: 60rem;
         margin: 0 auto;
-        padding: var(--fs-spacing-12) var(--fs-spacing-5) var(--fs-spacing-10);
+        padding: var(--lt-spacing-12) var(--lt-spacing-5) var(--lt-spacing-10);
         display: grid;
         grid-template-columns: minmax(0, 1fr);
-        gap: var(--fs-spacing-4) var(--fs-spacing-10);
+        gap: var(--lt-spacing-4) var(--lt-spacing-10);
       }
       @media (min-width: 56rem) {
         .hero__inner {
@@ -729,7 +729,7 @@ const TOOLS = [
         display: grid;
         justify-items: start;
         align-content: start;
-        gap: var(--fs-spacing-4);
+        gap: var(--lt-spacing-4);
       }
       .hero__word {
         margin: 0;
@@ -739,77 +739,77 @@ const TOOLS = [
         letter-spacing: 0.12em;
         text-transform: uppercase;
         /* Flat, so the logo beside it is the only gradient on the screen. */
-        color: var(--fs-color-accent-fill);
+        color: var(--lt-color-accent-fill);
       }
       /* The promise, second only to the name: the first sentence a reader takes in. */
       .hero__line {
         margin: 0;
-        font-size: var(--fs-font-size-xl);
-        font-weight: var(--fs-font-weight-semibold);
-        line-height: var(--fs-line-height-compact);
-        color: var(--fs-color-neutral-text-strong);
+        font-size: var(--lt-font-size-xl);
+        font-weight: var(--lt-font-weight-semibold);
+        line-height: var(--lt-line-height-compact);
+        color: var(--lt-color-neutral-text-strong);
       }
       .hero__sub {
         margin: 0;
         max-width: 46ch;
-        color: var(--fs-color-neutral-text-subtle);
-        line-height: var(--fs-line-height-article);
+        color: var(--lt-color-neutral-text-subtle);
+        line-height: var(--lt-line-height-article);
       }
       .hero__actions {
         display: flex;
         flex-wrap: wrap;
-        gap: var(--fs-spacing-3);
-        margin-block-start: var(--fs-spacing-2);
+        gap: var(--lt-spacing-3);
+        margin-block-start: var(--lt-spacing-2);
       }
 
       /* The creed: one size and one weight, set off by the same neon as the hero's border. */
       .creed {
         margin: 0;
         max-width: 46ch;
-        padding-inline-start: var(--fs-spacing-4);
+        padding-inline-start: var(--lt-spacing-4);
         border-inline-start: 2px solid rgba(0, 177, 250, 0.35);
-        color: var(--fs-color-neutral-text-subtle);
+        color: var(--lt-color-neutral-text-subtle);
       }
       .creed__words {
         margin: 0;
         font-style: italic;
-        line-height: var(--fs-line-height-article);
+        line-height: var(--lt-line-height-article);
       }
       .creed__words p {
-        margin: 0 0 var(--fs-spacing-2);
+        margin: 0 0 var(--lt-spacing-2);
       }
       .creed__words p:last-child {
         margin-block-end: 0;
       }
       .creed__who {
-        margin: var(--fs-spacing-3) 0 0;
-        font-size: var(--fs-font-size-s);
+        margin: var(--lt-spacing-3) 0 0;
+        font-size: var(--lt-font-size-s);
         font-style: normal;
       }
 
       .page {
         max-width: 60rem;
         margin: 0 auto;
-        padding: var(--fs-spacing-10) var(--fs-spacing-5) 0;
+        padding: var(--lt-spacing-10) var(--lt-spacing-5) 0;
         display: grid;
-        gap: var(--fs-spacing-12);
+        gap: var(--lt-spacing-12);
         /* One column that may shrink below its content, or the widest block sets the page. */
         grid-template-columns: minmax(0, 1fr);
       }
       .block {
         display: grid;
-        gap: var(--fs-spacing-3);
+        gap: var(--lt-spacing-3);
         justify-items: start;
         min-inline-size: 0;
       }
-      .block > .fs-heading {
+      .block > .lt-heading {
         margin: 0;
       }
       .block__lead {
         margin: 0;
         max-width: 60ch;
-        color: var(--fs-color-neutral-text-subtle);
-        line-height: var(--fs-line-height-article);
+        color: var(--lt-color-neutral-text-subtle);
+        line-height: var(--lt-line-height-article);
       }
       .block__lead code {
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -829,8 +829,8 @@ const TOOLS = [
       }
       .sample :global(pre) {
         margin: 0;
-        padding: var(--fs-spacing-4);
-        border-radius: var(--fs-spacing-1);
+        padding: var(--lt-spacing-4);
+        border-radius: var(--lt-spacing-1);
         border: 1px solid rgba(0, 177, 250, 0.2);
         overflow-x: auto;
         /*
@@ -838,7 +838,7 @@ const TOOLS = [
          * being read and starts being decoded. The sample is written narrow enough that this
          * is the whole of it. The scroll below is a safety net, not the plan.
          */
-        font-size: clamp(0.7rem, 2.9vw, var(--fs-font-size-s));
+        font-size: clamp(0.7rem, 2.9vw, var(--lt-font-size-s));
       }
       .sample :global(code) {
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -875,30 +875,30 @@ const TOOLS = [
         inline-size: 100%;
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(min(24rem, 100%), 1fr));
-        gap: var(--fs-spacing-3);
+        gap: var(--lt-spacing-3);
       }
       .problem {
         display: grid;
         grid-template-rows: auto auto 1fr auto;
-        gap: var(--fs-spacing-3);
+        gap: var(--lt-spacing-3);
         min-inline-size: 0;
       }
-      .problem .fs-card__title {
+      .problem .lt-card__title {
         margin: 0;
-        color: var(--fs-color-accent-fill);
+        color: var(--lt-color-accent-fill);
       }
       .problem__what {
         margin: 0;
-        color: var(--fs-color-neutral-text-subtle);
+        color: var(--lt-color-neutral-text-subtle);
       }
       .problem__what code {
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       }
       .problem__caught {
         margin: 0;
-        font-size: var(--fs-font-size-xs);
-        font-weight: var(--fs-font-weight-semibold);
-        color: var(--fs-color-neutral-text-strong);
+        font-size: var(--lt-font-size-xs);
+        font-weight: var(--lt-font-weight-semibold);
+        color: var(--lt-color-neutral-text-strong);
       }
 
       /* The four cards, as tabs: four across at full width, two on a tablet, one on a phone. */
@@ -906,18 +906,18 @@ const TOOLS = [
         inline-size: 100%;
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(min(13rem, 100%), 1fr));
-        gap: var(--fs-spacing-3);
+        gap: var(--lt-spacing-3);
       }
       .tool {
         inline-size: 100%;
         align-items: start;
         color: inherit;
       }
-      .tool .fs-card__title {
-        color: var(--fs-color-accent-fill);
+      .tool .lt-card__title {
+        color: var(--lt-color-accent-fill);
       }
       .tool p {
-        color: var(--fs-color-neutral-text-subtle);
+        color: var(--lt-color-neutral-text-subtle);
       }
       /* A span, because a button holds phrasing content only; it lays out as the paragraph it replaces. */
       .tool__line {
@@ -925,15 +925,15 @@ const TOOLS = [
       }
       .tool__fact {
         margin-block-start: auto;
-        padding-block-start: var(--fs-spacing-1);
-        font-size: var(--fs-font-size-xs);
-        font-weight: var(--fs-font-weight-semibold);
-        color: var(--fs-color-neutral-text-strong);
+        padding-block-start: var(--lt-spacing-1);
+        font-size: var(--lt-font-size-xs);
+        font-weight: var(--lt-font-weight-semibold);
+        color: var(--lt-color-neutral-text-strong);
       }
       /* The chosen card: the neon border the hero uses, at full strength, and nothing else moves. */
       .tool[aria-selected="true"] {
-        border-color: var(--fs-color-accent-fill);
-        box-shadow: inset 0 -2px 0 var(--fs-color-accent-fill);
+        border-color: var(--lt-color-accent-fill);
+        box-shadow: inset 0 -2px 0 var(--lt-color-accent-fill);
       }
 
       .scene {
@@ -942,7 +942,7 @@ const TOOLS = [
       }
       .scene__panel {
         display: grid;
-        gap: var(--fs-spacing-3);
+        gap: var(--lt-spacing-3);
         justify-items: start;
         min-inline-size: 0;
       }
@@ -952,17 +952,17 @@ const TOOLS = [
         inline-size: 100%;
         min-inline-size: 0;
         display: grid;
-        gap: var(--fs-spacing-3);
+        gap: var(--lt-spacing-3);
       }
       .run__row {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
-        gap: var(--fs-spacing-4);
+        gap: var(--lt-spacing-4);
       }
       .run__heads {
         margin: 0;
-        color: var(--fs-color-neutral-text-subtle);
+        color: var(--lt-color-neutral-text-subtle);
       }
       .run__heads code,
       .run__label code {
@@ -971,38 +971,38 @@ const TOOLS = [
         letter-spacing: 0;
       }
       .run__count {
-        margin-inline-start: var(--fs-spacing-1);
-        font-weight: var(--fs-font-weight-bold);
+        margin-inline-start: var(--lt-spacing-1);
+        font-weight: var(--lt-font-weight-bold);
         font-variant-numeric: tabular-nums;
-        color: var(--fs-color-accent-fill);
+        color: var(--lt-color-accent-fill);
       }
       .run__feed {
         margin: 0;
         padding: 0;
         list-style: none;
         display: grid;
-        gap: var(--fs-spacing-1);
+        gap: var(--lt-spacing-1);
       }
       .run__feed :global(li) {
-        padding: var(--fs-spacing-1) var(--fs-spacing-3);
-        border-inline-start: 2px solid var(--fs-color-accent-fill);
-        font-size: var(--fs-font-size-s);
+        padding: var(--lt-spacing-1) var(--lt-spacing-3);
+        border-inline-start: 2px solid var(--lt-color-accent-fill);
+        font-size: var(--lt-font-size-s);
       }
       .run__feed :global(.feed__verdict) {
-        border-inline-start-color: var(--fs-color-warning-text);
-        color: var(--fs-color-neutral-text-subtle);
+        border-inline-start-color: var(--lt-color-warning-text);
+        color: var(--lt-color-neutral-text-subtle);
       }
       .run__label {
         margin: 0;
-        font-size: var(--fs-font-size-xxs);
-        font-weight: var(--fs-font-weight-semibold);
+        font-size: var(--lt-font-size-xxs);
+        font-weight: var(--lt-font-weight-semibold);
         letter-spacing: 0.08em;
         text-transform: uppercase;
-        color: var(--fs-color-neutral-text-subtle);
+        color: var(--lt-color-neutral-text-subtle);
       }
       .run__wire {
         display: grid;
-        gap: var(--fs-spacing-2);
+        gap: var(--lt-spacing-2);
         /* A frame is one long line until it wraps, and a wide one must not widen the page. */
         min-inline-size: 0;
         overflow-wrap: anywhere;
@@ -1012,24 +1012,24 @@ const TOOLS = [
         inline-size: 100%;
         min-inline-size: 0;
         display: grid;
-        gap: var(--fs-spacing-2);
+        gap: var(--lt-spacing-2);
       }
       .run__empty {
         margin: 0;
-        color: var(--fs-color-neutral-text-subtle);
+        color: var(--lt-color-neutral-text-subtle);
       }
       /* The frames, as the live page shows them. The server writes the SDK panel's, so those
          are :global; the test panel's are written here from the generated transcript. */
       .run__frames :global(.wire__frame),
       .assert__frames .wire__frame {
         margin: 0;
-        padding: var(--fs-spacing-3);
+        padding: var(--lt-spacing-3);
         overflow-x: auto;
-        background: var(--fs-color-neutral-surface);
-        border-radius: var(--fs-spacing-1);
+        background: var(--lt-color-neutral-surface);
+        border-radius: var(--lt-spacing-1);
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        font-size: var(--fs-font-size-xs);
-        line-height: var(--fs-line-height-compact);
+        font-size: var(--lt-font-size-xs);
+        line-height: var(--lt-line-height-compact);
         white-space: pre-wrap;
         overflow-wrap: anywhere;
       }
@@ -1039,32 +1039,32 @@ const TOOLS = [
         display: flex;
         flex-wrap: wrap;
         align-items: center;
-        gap: var(--fs-spacing-3);
+        gap: var(--lt-spacing-3);
       }
       .assert__box {
         inline-size: 100%;
         max-inline-size: 48rem;
         min-block-size: 3rem;
         display: grid;
-        gap: var(--fs-spacing-2);
+        gap: var(--lt-spacing-2);
         overflow-wrap: anywhere;
       }
       .assert__box > p {
         margin: 0;
-        color: var(--fs-color-neutral-text-subtle);
+        color: var(--lt-color-neutral-text-subtle);
       }
       /* The reader's failure, as it prints it: the message, a blank line, and the stream event by event. */
       .assert__box :global(.assertion__said) {
         margin: 0;
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        font-size: var(--fs-font-size-xs);
-        line-height: var(--fs-line-height-compact);
+        font-size: var(--lt-font-size-xs);
+        line-height: var(--lt-line-height-compact);
         white-space: pre-wrap;
         overflow-wrap: anywhere;
       }
       .assert__box :global(.assertion__why) {
         margin: 0;
-        color: var(--fs-color-neutral-text-subtle);
+        color: var(--lt-color-neutral-text-subtle);
       }
 
       .judge__source {
@@ -1072,57 +1072,57 @@ const TOOLS = [
         max-inline-size: 48rem;
         box-sizing: border-box;
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        font-size: var(--fs-font-size-s);
+        font-size: var(--lt-font-size-s);
       }
       .judge__tries {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
-        gap: var(--fs-spacing-2);
+        gap: var(--lt-spacing-2);
       }
       .judge__tries code {
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        font-size: var(--fs-font-size-s);
+        font-size: var(--lt-font-size-s);
       }
       .judge__or {
-        font-size: var(--fs-font-size-s);
-        color: var(--fs-color-neutral-text-subtle);
+        font-size: var(--lt-font-size-s);
+        color: var(--lt-color-neutral-text-subtle);
       }
-      /* The verdict is written by the server in Fristil's classes, so what is left to style is ours. */
+      /* The verdict is written by the server in LO-TEK's classes, so what is left to style is ours. */
       .judge__box {
         inline-size: 100%;
         max-inline-size: 48rem;
         min-block-size: 3rem;
         display: grid;
-        gap: var(--fs-spacing-2);
+        gap: var(--lt-spacing-2);
         overflow-wrap: anywhere;
       }
       .judge__box :global(.judge__how) {
         margin: 0;
-        color: var(--fs-color-neutral-text-subtle);
+        color: var(--lt-color-neutral-text-subtle);
       }
       .judge__box :global(.judge__findings) {
         margin: 0;
         padding: 0;
         display: grid;
-        gap: var(--fs-spacing-2);
+        gap: var(--lt-spacing-2);
       }
       .judge__box :global(.judge__finding) {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
-        gap: var(--fs-spacing-1) var(--fs-spacing-2);
+        gap: var(--lt-spacing-1) var(--lt-spacing-2);
       }
       .judge__box :global(.judge__severity) {
-        font-size: var(--fs-font-size-xxs);
-        font-weight: var(--fs-font-weight-semibold);
+        font-size: var(--lt-font-size-xxs);
+        font-weight: var(--lt-font-weight-semibold);
         letter-spacing: 0.08em;
         text-transform: uppercase;
       }
       .judge__box :global(.judge__code) {
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        font-size: var(--fs-font-size-xs);
-        color: var(--fs-color-neutral-text-subtle);
+        font-size: var(--lt-font-size-xs);
+        color: var(--lt-color-neutral-text-subtle);
       }
 
       /*
@@ -1135,19 +1135,19 @@ const TOOLS = [
         max-inline-size: 48rem;
         box-sizing: border-box;
         border: 1px solid rgba(0, 177, 250, 0.2);
-        border-radius: var(--fs-spacing-1);
+        border-radius: var(--lt-spacing-1);
         background: #1e1e1e;
         color: #d4d4d4;
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        font-size: clamp(0.75rem, 2.9vw, var(--fs-font-size-s));
+        font-size: clamp(0.75rem, 2.9vw, var(--lt-font-size-s));
       }
       .ed__bar {
         display: flex;
         align-items: center;
-        gap: var(--fs-spacing-2);
-        padding: var(--fs-spacing-2) var(--fs-spacing-3);
+        gap: var(--lt-spacing-2);
+        padding: var(--lt-spacing-2) var(--lt-spacing-3);
         border-block-end: 1px solid #333;
-        font-size: var(--fs-font-size-xs);
+        font-size: var(--lt-font-size-xs);
         color: #9d9d9d;
       }
       .ed__dot {
@@ -1157,11 +1157,11 @@ const TOOLS = [
         background: #3c3c3c;
       }
       .ed__file {
-        margin-inline-start: var(--fs-spacing-2);
+        margin-inline-start: var(--lt-spacing-2);
       }
       .ed__code {
         margin: 0;
-        padding: var(--fs-spacing-3) var(--fs-spacing-3) var(--fs-spacing-4);
+        padding: var(--lt-spacing-3) var(--lt-spacing-3) var(--lt-spacing-4);
         line-height: 1.7;
         /* The tooltip is positioned against the line it hangs under, so the lines are blocks. */
         white-space: pre;
@@ -1212,15 +1212,15 @@ const TOOLS = [
         top: 100%;
         margin-block-start: 2px;
         display: grid;
-        gap: var(--fs-spacing-2);
-        padding: var(--fs-spacing-3);
+        gap: var(--lt-spacing-2);
+        padding: var(--lt-spacing-3);
         border: 1px solid #454545;
         border-radius: 3px;
         background: #252526;
         color: #d4d4d4;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
         white-space: normal;
-        line-height: var(--fs-line-height-compact);
+        line-height: var(--lt-line-height-compact);
         overflow-wrap: anywhere;
       }
       .ed__trap:hover ~ .ed__tip,
@@ -1240,9 +1240,9 @@ const TOOLS = [
       }
       .ed__fixes-title {
         display: block;
-        padding-block-start: var(--fs-spacing-2);
+        padding-block-start: var(--lt-spacing-2);
         border-block-start: 1px solid #454545;
-        font-size: var(--fs-font-size-xs);
+        font-size: var(--lt-font-size-xs);
         color: #9d9d9d;
       }
       .ed__fixes {
@@ -1250,13 +1250,13 @@ const TOOLS = [
         padding: 0;
         list-style: none;
         display: grid;
-        gap: var(--fs-spacing-1);
+        gap: var(--lt-spacing-1);
         color: #3794ff;
       }
       .ed__where {
         margin: 0;
-        font-size: var(--fs-font-size-s);
-        color: var(--fs-color-neutral-text-subtle);
+        font-size: var(--lt-font-size-s);
+        color: var(--lt-color-neutral-text-subtle);
       }
 
       /*
@@ -1275,37 +1275,37 @@ const TOOLS = [
         /* The hero's ground and its edge, mirrored, so the stage is framed above and below. */
         background: #0c0d14;
         border-block-start: 1px solid rgba(0, 177, 250, 0.25);
-        margin-block-start: var(--fs-spacing-16);
+        margin-block-start: var(--lt-spacing-16);
         /* Padding and not a margin on the colophon: a margin would collapse out of the band
            and leave a strip of the lighter canvas under the mark. */
-        padding-block-end: var(--fs-spacing-10);
+        padding-block-end: var(--lt-spacing-10);
       }
       .map {
         max-width: 60rem;
         margin: 0 auto;
-        padding: var(--fs-spacing-12) var(--fs-spacing-5) 0;
+        padding: var(--lt-spacing-12) var(--lt-spacing-5) 0;
         columns: 13rem 3;
-        column-gap: var(--fs-spacing-8);
+        column-gap: var(--lt-spacing-8);
       }
       .section {
         display: grid;
-        gap: var(--fs-spacing-2);
+        gap: var(--lt-spacing-2);
         break-inside: avoid;
-        margin-block-end: var(--fs-spacing-8);
+        margin-block-end: var(--lt-spacing-8);
       }
       /* The heading only, in the wordmark's blue. Enough to find, not enough to look broken. */
       .section[data-featured] h2 {
-        color: var(--fs-color-accent-fill);
+        color: var(--lt-color-accent-fill);
       }
       .section ul {
         margin: 0;
         padding: 0;
         list-style: none;
         display: grid;
-        gap: var(--fs-spacing-1);
+        gap: var(--lt-spacing-1);
       }
       .map__dot {
-        color: var(--fs-color-neutral-text-subtle);
+        color: var(--lt-color-neutral-text-subtle);
       }
     </style>
   </body>

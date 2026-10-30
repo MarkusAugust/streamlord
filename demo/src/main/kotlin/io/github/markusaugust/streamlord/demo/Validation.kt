@@ -73,7 +73,7 @@ public fun faults(signals: MusterSignals): List<Fault> =
  * a signal, and the page binds it: `data-text` for the message, `data-attr` for aria-invalid.
  *
  * The summary is the opposite case and is patched as markup, because it is a list that exists
- * only when something is wrong, it is built from Fristil's classes the server cannot see, and
+ * only when something is wrong, it is built from LO-TEK's classes the server cannot see, and
  * it is exactly the kind of thing a server is better at deciding than a browser.
  */
 public fun validationEvents(signals: MusterSignals): List<DatastarEvent> {
