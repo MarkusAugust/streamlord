@@ -109,10 +109,11 @@ export function shadowed(src: string, name: string, at: number): boolean {
 
 /**
  * The type the enclosing declaration gives `name`: a number or a boolean that cannot be null
- * (`count: Int`, `val n = 3`), or a string (`name: String`), which is what may come from outside.
+ * (`count: Int`, `val n = 3`), a string (`name: String`), which is what may come from outside, or
+ * the markup `interpolate` returns (`page: Html`).
  * The nearest declaration before `at` wins, as Kotlin's scoping does; anything else is not known.
  */
-export function declaredKind(src: string, name: string, at: number): "number" | "boolean" | "string" | null {
+export function declaredKind(src: string, name: string, at: number): "number" | "boolean" | "string" | "markup" | null {
   const scope = src.slice(scopeStart(src, at), at);
   const n = name.replace(/[$]/g, "\\$&");
   const declarations = [
@@ -127,6 +128,8 @@ export function declaredKind(src: string, name: string, at: number): "number" | 
   if (/^(?:kotlin\.)?(?:Int|Long|Short|Byte|Double|Float|UInt|ULong|UShort|UByte)$/.test(type)) return "number";
   if (/^(?:kotlin\.)?Boolean$/.test(type)) return "boolean";
   if (/^(?:kotlin\.)?(?:String|CharSequence)\??$/.test(type)) return "string";
+  // What interpolate returns: markup whose values have been through it.
+  if (/^(?:[\p{L}_][\p{L}\p{Nd}_]*\.)*Html\??$/u.test(type)) return "markup";
   return null;
 }
 

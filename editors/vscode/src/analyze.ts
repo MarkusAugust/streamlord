@@ -318,7 +318,8 @@ function judgeHoles(s: KotlinString, src: string, opts: AnalyzeOptions, view: st
     const fact = facts[k] ?? null;
     const shown = holeDisplay(ip, s.dollars);
     const at = { start: ip.start, end: ip.end, link: DOCS.expressions };
-    const own = fact === "constant" || fact === "markup";
+    // Markup is the author's own in element text; in an attribute or code it is characters that can break out.
+    const own = fact === "constant" || (fact === "markup" && landing.position === "TEXT");
     const fixes = () => (fixable ? [interpolateFix(src, s)] : undefined);
     switch (landing.position) {
       case "TEXT":
