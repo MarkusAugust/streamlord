@@ -375,7 +375,7 @@ function judgeHoles(s: KotlinString, src: string, opts: AnalyzeOptions, view: st
         }
         issues.push({
           ...at,
-          severity: "hint",
+          severity: fact === "string" ? "warning" : "hint",
           code: "unsafe-interpolation",
           message: `Kotlin writes ${shown} into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that.`,
         });

@@ -8,21 +8,22 @@ import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 
-/** Every function in way 1 and way 2, rendered, so the output can be compared with the source. */
-private fun everything(): String =
+/** Every function in way 1 and way 2, rendered with the query, so the output can be compared with the source. */
+private fun everything(query: String): String =
     listOf(
-        LanguageComment.plain(), LanguageComment.simpleInText(), LanguageComment.propertyInText(),
-        LanguageComment.callAndConditional(), LanguageComment.attributeValue(), LanguageComment.partOfClass(),
-        LanguageComment.wholeAttribute(), LanguageComment.tagName(), LanguageComment.loop(),
-        LanguageComment.datastarSignal(), LanguageComment.rawWithMargin(), LanguageComment.concatenated(),
-        LanguageComment.deliberateFindings(), LanguageComment.interpolatedSignalByMistake(),
-        LanguageAnnotation.onValue, LanguageAnnotation.onParameter(), LanguageAnnotation.onFunction(),
-        LanguageAnnotation.loop(), LanguageAnnotation.datastarSignal(),
+        LanguageComment.plain(query), LanguageComment.simpleInText(query), LanguageComment.propertyInText(query),
+        LanguageComment.callAndConditional(query), LanguageComment.attributeValue(query), LanguageComment.partOfClass(query),
+        LanguageComment.wholeAttribute(query), LanguageComment.tagName(query), LanguageComment.loop(),
+        LanguageComment.datastarSignal(query), LanguageComment.rawWithMargin(query), LanguageComment.concatenated(query),
+        LanguageComment.deliberateFindings(query), LanguageComment.interpolatedSignalByMistake(query),
+        LanguageAnnotation.onValue, LanguageAnnotation.onParameter(query), LanguageAnnotation.onFunction(query),
+        LanguageAnnotation.loop(), LanguageAnnotation.datastarSignal(query),
     ).joinToString("\n<hr>\n")
 
 fun Application.module() {
     routing {
         get("/") {
+            val query = call.request.queryParameters["q"].orEmpty()
             // language=HTML
             val html = """
                 <!doctype html>
@@ -34,10 +35,10 @@ fun Application.module() {
                   <script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.4/bundles/datastar.js"></script>
                 </head>
                 <body data-signals="{open: false}">
-                  ${everything()}
+                  ${everything(query)}
                   <hr>
                   <ul id="errors" class="lt-list"></ul>
-                  <div data-init="@get('/stream')"></div>
+                  <div data-init="@get('/stream?q=$query')"></div>
                 </body>
                 </html>
             """.trimIndent()
