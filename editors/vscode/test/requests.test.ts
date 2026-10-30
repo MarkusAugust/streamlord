@@ -1,10 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { ACCEPT, baseUrlSuggestion, requestHeaders, requestsPathProblem, describeVariables, emptyBodyHint, lineAndColumn, withBaseUrl, mergeVariables, newRequestLabel, parseEnv, parseRequestsFile, pushRecent, readsAsStream, remove, requestUrl, resolveRequest, routeHeaders, routeOptional, routeUrl, sendableUrl, serializeRequestsFile, substitute, toCurl, unreachableHint, upsert, variableCompletions, withEnvVariables, type SavedRequest } from "../src/requests.ts";
+import { baseUrlSuggestion, describeVariables, emptyBodyHint, emptyRequestsFile, lineAndColumn, mergeVariables, newRequestLabel, parseEnv, parseRequestsFile, pushRecent, readsAsStream, remove, requestHeaders, requestsPathProblem, requestUrl, resolveRequest, routeHeaders, routeOptional, routeUrl, sendableUrl, serializeRequestsFile, substitute, toCurl, unreachableHint, upsert, variableCompletions, withBaseUrl, withEnvVariables, type SavedRequest } from "../src/requests.ts";
 import { findRoutes } from "../src/routes.ts";
 import { readFileSync } from "node:fs";
-
-const req = (over: Partial<SavedRequest> = {}): SavedRequest => ({ name: "counter", url: "{{baseUrl}}/api/counter-stream", method: "GET", signals: "", headers: "", ...over });
+import { twinCases } from "./twins.ts";
 
 // fixtures/request-urls.json, which RequestsTest.kt in streamlord-analysis reads too.
 describe("the url the client opens", () => {
@@ -31,464 +30,78 @@ describe("the url the client opens", () => {
   });
 });
 
-describe("saved requests", () => {
-  it("round-trips the file and tolerates loose input", () => {
-    const parsed = parseRequestsFile(`{"requests":[{"name":"a","url":"/x","method":"post","signals":{"q":1},"headers":{"X-A":"1"}},{"bad":true},{"name":"b","url":"/y"}]}`);
-    assert.deepEqual(parsed.requests.map((r) => [r.name, r.method, r.signals.replace(/\s/g, ""), r.headers]), [["a", "POST", '{"q":1}', "X-A: 1"], ["b", "GET", "", ""]]);
-    assert.deepEqual(parseRequestsFile("not json").requests, []);
-    const text = serializeRequestsFile(parsed);
-    assert.deepEqual(parseRequestsFile(text), parsed);
-  });
+/** A case of `fixtures/twins/requests.json`: the function in `call`, its inputs, and what it gives. */
+type Case = { name: string; call: string; expected: unknown } & Record<string, any>;
 
-  it("upserts by name case-insensitively and keeps names sorted", () => {
-    let file = parseRequestsFile("{}");
-    file = upsert(file, req({ name: "Zeta" }));
-    file = upsert(file, req({ name: "alpha" }));
-    file = upsert(file, req({ name: "ZETA", url: "/new" }));
-    assert.deepEqual(file.requests.map((r) => [r.name, r.url]), [["alpha", "{{baseUrl}}/api/counter-stream"], ["ZETA", "/new"]]);
-    assert.deepEqual(remove(file, "zeta").requests.map((r) => r.name), ["alpha"]);
-  });
+const request = (r: Partial<SavedRequest> = {}): SavedRequest => ({ name: "counter", url: "{{baseUrl}}/api/counter-stream", method: "GET", signals: "", headers: "", ...r });
+const shown = (r: SavedRequest) => ({ name: r.name, url: r.url, method: r.method, signals: r.signals, headers: r.headers });
+const variables = (c: Case) => mergeVariables(c.defaultUrl, parseEnv(c.env), c.running ?? null);
 
-  it("substitutes text where a name is not a variable", () => {
-    assert.equal(substitute("no vars", {}).text, "no vars");
-    assert.equal(substitute("{{baseUrl}}/x", { baseUrl: "http://h" }).text, "http://h/x");
-  });
+// The projections of RequestsTest.kt, so that a case means the same in both twins.
+const calls: Record<string, (c: Case) => unknown> = {
+  parseRequestsFile: (c) => {
+    const file = parseRequestsFile(c.text, c.path);
+    const again = parseRequestsFile(serializeRequestsFile(file)).requests.map(shown);
+    return { requests: file.requests.map(shown), invalid: file.error !== undefined, roundTrips: JSON.stringify(again) === JSON.stringify(file.requests.map(shown)) };
+  },
+  serializeRequestsFile: (c) => serializeRequestsFile({ version: 1, requests: c.requests.map(request) }),
+  upsert: (c) => {
+    let file = emptyRequestsFile();
+    for (const r of c.upsert) file = upsert(file, request(r));
+    if (c.remove !== undefined) file = remove(file, c.remove);
+    return file.requests.map((r) => [r.name, r.url]);
+  },
+  pushRecent: (c) => (c.push as Partial<SavedRequest>[]).reduce((recent: SavedRequest[], r) => pushRecent(recent, request(r)), []).map((r) => [r.name, r.url]),
+  substitute: (c) => substitute(c.text, c.vars),
+  toCurl: (c) => toCurl(request(c.request)),
+  sendableUrl: (c) => {
+    const r = sendableUrl(c.url);
+    return { url: "url" in r ? r.url : null, error: "error" in r ? r.error : null };
+  },
+  sends: (c) => "url" in sendableUrl(c.url),
+  readsAsStream: (c) => readsAsStream(c.status, c.contentType),
+  emptyBodyHint: (c) => emptyBodyHint(c.status, c.body),
+  requestHeaders: (c) => Object.entries(requestHeaders(c.method, Object.fromEntries(c.headers))),
+  requestsPathProblem: (c) => requestsPathProblem(c.path) !== null,
+  newRequestLabel: (c) => newRequestLabel(c.saved, c.recent),
+  lineAndColumn: (c) => lineAndColumn(c.text, c.position),
+  parseEnv: (c) => parseEnv(c.text),
+  variables: (c) => {
+    const vars = variables(c);
+    return { variables: vars.map((v) => ({ name: v.name, value: v.value, source: v.source, origin: v.origin ?? null })), described: describeVariables(vars) };
+  },
+  resolveRequest: (c) => {
+    const r = resolveRequest(request(c.request), variables(c));
+    return { url: r.request.url, signals: r.request.signals, headers: r.request.headers, errors: r.errors, unset: r.unset };
+  },
+  unreachableHint: (c) => unreachableHint(c.url, variables(c), c.running ?? null),
+  baseUrlSuggestion: (c) => baseUrlSuggestion(variables(c), c.running ?? null),
+  variableCompletions: (c) => {
+    const m = variableCompletions(c.text, c.caret, c.field, variables(c));
+    return m && { from: m.from, to: m.to, names: m.items.map((v) => v.name) };
+  },
+  withEnvVariables: (c) => withEnvVariables(c.text, c.keys, c.baseUrl),
+  withBaseUrl: (c) => withBaseUrl(c.text, c.url),
+  routeRequest: (c) => findRoutes(c.source.join("\n")).map((r) => ({ url: routeUrl(r), headers: routeHeaders(r), optional: routeOptional(r) })),
+};
 
-
-  it("keeps a bounded, de-duplicated recent list", () => {
-    let recent: SavedRequest[] = [];
-    for (let i = 0; i < 12; i++) recent = pushRecent(recent, req({ name: "", url: `/r${i}` }));
-    recent = pushRecent(recent, req({ name: "", url: "/r11" }));
-    assert.equal(recent.length, 10);
-    assert.equal(recent[0]?.url, "/r11");
-    assert.equal(recent[0]?.name, "GET /r11");
-    assert.equal(recent.filter((r) => r.url === "/r11").length, 1);
-  });
-
-  it("exports curl for query-string and body methods", () => {
-    assert.equal(
-      toCurl(req({ url: "http://localhost:8080/api/x", signals: '{"q": "a b"}', headers: "X-A: 1" })),
-      `curl -N -X GET 'http://localhost:8080/api/x?datastar=%7B%22q%22%3A%22a+b%22%7D' -H 'Accept: text/event-stream, text/html, application/json' -H 'Datastar-Request: true' -H 'X-A: 1'`,
-    );
-    assert.equal(
-      toCurl(req({ url: "http://h/x", method: "POST", signals: `{"s":"it's"}` })),
-      `curl -N -X POST 'http://h/x' -H 'Accept: text/event-stream, text/html, application/json' -H 'Datastar-Request: true' -H 'Content-Type: application/json' --data-raw '{"s":"it'\\''s"}'`,
-    );
-  });
-
-  // The expected text of the next five tests is the same, character for character, in the analysis
-  // module's `RequestsTest.kt`: both editors write one shared file and export one curl line.
-
-  it("curl export takes the url as written and never throws", () => {
-    const tail = " -H 'Accept: text/event-stream, text/html, application/json' -H 'Datastar-Request: true'";
-    const get = (url: string): string => toCurl(req({ url }));
-    assert.equal(get("http://localhost:8080"), `curl -N -X GET 'http://localhost:8080?datastar=%7B%7D'${tail}`);
-    assert.equal(get("/x"), `curl -N -X GET '/x?datastar=%7B%7D'${tail}`);
-    assert.equal(get("http://x/{id}"), `curl -N -X GET 'http://x/{id}?datastar=%7B%7D'${tail}`);
-    assert.equal(get("http://h/a b"), `curl -N -X GET 'http://h/a b?datastar=%7B%7D'${tail}`);
-    assert.equal(get("{{base}}/x"), `curl -N -X GET '{{base}}/x?datastar=%7B%7D'${tail}`);
-    assert.equal(get("http://h/x?y=1&datastar=old&z=a b#frag"), `curl -N -X GET 'http://h/x?y=1&datastar=%7B%7D&z=a b#frag'${tail}`);
-    assert.equal(toCurl(req({ url: "http://localhost:8080", method: "POST" })), `curl -N -X POST 'http://localhost:8080'${tail} -H 'Content-Type: application/json' --data-raw '{}'`);
-  });
-
-  it("curl export compacts signals without respelling them", () => {
-    const tail = " -H 'Accept: text/event-stream, text/html, application/json' -H 'Datastar-Request: true'";
-    assert.equal(
-      toCurl(req({ url: "http://h/x", method: "POST", signals: ' { "n" : 1.0,\n\t"s": "a  \\" b\\u00e9</p>", "l": [ 1, 2 ] }\r\n' })),
-      `curl -N -X POST 'http://h/x'${tail} -H 'Content-Type: application/json' --data-raw '{"n":1.0,"s":"a  \\" b\\u00e9</p>","l":[1,2]}'`,
-    );
-    assert.equal(
-      toCurl(req({ url: "http://h/x", signals: `{"k":"~*'()!é \uD83D"}` })),
-      `curl -N -X GET 'http://h/x?datastar=%7B%22k%22%3A%22%7E*%27%28%29%21%C3%A9+%EF%BF%BD%22%7D'${tail}`,
-    );
-    assert.equal(
-      toCurl(req({ url: "http://h/x", method: "PUT", signals: "  not json ", headers: "X-A: 1\nBad\n B : 3 \r\nX-A: 2" })),
-      `curl -N -X PUT 'http://h/x'${tail} -H 'Content-Type: application/json' -H 'X-A: 2' -H 'B: 3' --data-raw 'not json'`,
-    );
-  });
-
-  it("saved names sort by lowercase code units, not by locale", () => {
-    const names = ["b", "a", "B", "_x", "Zeta", "éa", "zz", "a-b", "ab", "A", "10", "9", "ΌΣ", "όσ2"];
-    const file = names.reduce((acc, name) => upsert(acc, req({ name })), parseRequestsFile("{}"));
-    assert.deepEqual(file.requests.map((r) => r.name), ["10", "9", "_x", "A", "a-b", "ab", "B", "Zeta", "zz", "éa", "ΌΣ", "όσ2"]);
-    assert.equal(remove(file, "ΌΣ2").requests.at(-1)?.name, "ΌΣ");
-    assert.equal(remove(file, "όσ").requests.at(-1)?.name, "όσ2");
-  });
-
-  it("the file is written the same byte for byte", () => {
-    assert.equal(serializeRequestsFile(parseRequestsFile("{}")), '{\n  "version": 1,\n  "requests": []\n}\n');
-    const odd = 'q" b\\ t\t n\n \u0001 \u007F é \uD83D\uDE00 \u2028 \u2029 </p> / <';
-    const written = '"q\\" b\\\\ t\\t n\\n \\u0001 \u007F é \uD83D\uDE00 \\u2028 \\u2029 <\\/p> / <"';
-    assert.equal(
-      serializeRequestsFile({ version: 1, requests: [req({ name: odd, url: "/x", signals: odd }), req({ name: "b", url: "/y", method: "POST", headers: "A: 1" })] }),
-      `{\n  "version": 1,\n  "requests": [\n    {\n      "name": ${written},\n      "url": "/x",\n      "method": "GET",\n` +
-        `      "signals": ${written},\n      "headers": ""\n    },\n    {\n      "name": "b",\n      "url": "/y",\n` +
-        `      "method": "POST",\n      "signals": "",\n      "headers": "A: 1"\n    }\n  ]\n}\n`,
-    );
-  });
-
-  it("a name every object has is not a variable or a path value", () => {
-    const r = substitute("{{a}} {{constructor}} {{toString}} {{__proto__}}", { a: "1" });
-    assert.equal(r.text, "1 {{constructor}} {{toString}} {{__proto__}}");
-    assert.deepEqual(r.missing, ["constructor", "toString", "__proto__"]);
-    assert.deepEqual(resolveRequest(req({ url: "{{baseUrl}}/{{constructor}}" }), mergeVariables("http://h", parseEnv("{}"))).errors, [
-      "{{constructor}} is not set. Add it to params in .streamlord/env.json.",
-    ]);
-    const loose = `{"requests":[{"name":"a","url":"/x","headers":{"A":"b","O":{"k":[1]},"T":true}},{"name":"b","url":"/y","headers":["x"]}]}`;
-    assert.deepEqual(parseRequestsFile(loose).requests.map((r) => r.headers), ['A: b\nO: {"k":[1]}\nT: true', ""]);
-  });
-
-  it("a route opens with a variable for each parameter it needs", () => {
-    const src = `@RestController
-@RequestMapping("api/hent")
-class Visning {
-    @GetMapping(value = "/visning/{id}")
-    fun visning(
-        @PathVariable id: String,
-        @RequestParam partsnummer: String,
-        @RequestParam instans: String,
-        @RequestParam(required = false) fokus: String?,
-        @RequestHeader("Nav-Call-Id") callId: String,
-        @RequestHeader headere: Map<String, String>,
-    ) {}
-}
-fun Route.api() { get("/users/{id}/posts/{slug?}") { call.request.queryParameters["page"] } }`;
-    const [spring, ktor] = findRoutes(src);
-    assert.ok(spring && ktor);
-    assert.equal(routeUrl(spring), "{{baseUrl}}/api/hent/visning/{{id}}?partsnummer={{partsnummer}}&instans={{instans}}");
-    assert.equal(routeHeaders(spring), "Nav-Call-Id: {{Nav-Call-Id}}");
-    assert.deepEqual(routeOptional(spring), ["fokus"]);
-    assert.equal(routeUrl(ktor), "{{baseUrl}}/users/{{id}}/posts");
-    assert.equal(routeHeaders(ktor), "");
-    assert.deepEqual(routeOptional(ktor), ["slug", "page"]);
-    assert.equal(routeUrl({ method: "GET", path: "/x/{id:\\d+}", offset: 0, framework: "spring", query: [], headers: [] }), "{{baseUrl}}/x/{{id}}");
-  });
-});
-
-describe("routes", () => {
-  it("finds ktor routes with nested prefixes and path-less verbs", () => {
-    const src = `fun Route.api() {
-  route("/api") {
-    get("/counter") { }
-    route("/coffee") {
-      get("/tracker") { call.respond("x") }
-      route("/add") { withCSRFProtection { post { } } }
-    }
-    delete("/users/{id}") { }
+describe("inspector requests", () => {
+  for (const c of twinCases<Case>("requests.json")) {
+    it(c.name, () => {
+      const call = calls[c.call];
+      assert.ok(call, `${c.name}: no call ${c.call}`);
+      assert.deepEqual(call(c), c.expected, c.name);
+    });
   }
-  get("/top") { }
-  post { }  // no path, no prefix: ignored
-  // get("/comment") { }
-  val s = "get(\\"/string\\")"
-}`;
-    assert.deepEqual(
-      findRoutes(src).map((r) => `${r.method} ${r.path}`),
-      ["GET /api/counter", "GET /api/coffee/tracker", "POST /api/coffee/add", "DELETE /api/users/{id}", "GET /top"],
-    );
-  });
-
-  it("finds spring routes with a class prefix", () => {
-    const src = `@RestController
-@RequestMapping("/api")
-class FeedController {
-  @GetMapping("/feed")
-  fun feed() = 1
-  @PostMapping(value = ["/search"], produces = ["text/event-stream"])
-  fun search() = 2
-  @RequestMapping("/legacy", method = [RequestMethod.PUT])
-  fun legacy() = 3
-  @DeleteMapping
-  fun all() = 4
-}`;
-    assert.deepEqual(
-      findRoutes(src).map((r) => `${r.method} ${r.path} ${r.framework}`),
-      ["GET /api/feed spring", "POST /api/search spring", "PUT /api/legacy spring", "DELETE /api spring"],
-    );
-  });
 });
 
-// The same cases, character for character, as `sends the url of the curl line or says why not` in the
-// analysis module's `RequestsTest.kt`: both inspectors refuse the same URLs with the same words.
-describe("sendable url", () => {
-  it("sends the url of the curl line or says why not", () => {
-    const cases: [string, string | null, string | null][] = [
-      ["http://h:8080/api/x?flag&q=a%20b+c&s='x'&a%5B%5D=1#frag", "http://h:8080/api/x?flag&q=a%20b+c&s='x'&a%5B%5D=1", null],
-      ["http://h/x?filter[name]=1", null, "The URL holds [, which cannot be sent as written. Write it as %5B."],
-      ["HTTPS://h/søk/\u{1F600}", "HTTPS://h/s%C3%B8k/%F0%9F%98%80", null],
-      ["http://[::1]:8080/x", "http://[::1]:8080/x", null],
-      ["http://h/x\uD83D", "http://h/x%EF%BF%BD", null],
-      ["/api/x", null, "Not an absolute URL: /api/x. Start it with http:// or https://, or with {{baseUrl}}."],
-      ["{{base}}/x", null, "Not an absolute URL: {{base}}/x. Start it with http:// or https://, or with {{baseUrl}}."],
-      ["localhost:8080/x", null, "Not an absolute URL: localhost:8080/x. Start it with http:// or https://, or with {{baseUrl}}."],
-      ["ftp://h/x", null, "Only http:// and https:// URLs can be sent: ftp://h/x"],
-      ["http:///x", null, "No host in http:///x."],
-      ["http://h/a b", null, "The URL holds a space or a control character, which cannot be sent. Write a space as %20."],
-      ["http://h/users/{id}/x", null, "The URL still holds {id}. Fill in the path parameter before sending."],
-      ["http://h/p\"q", null, "The URL holds \", which cannot be sent as written. Write it as %22."],
-      ["http://h/p|q", null, "The URL holds |, which cannot be sent as written. Write it as %7C."],
-      ["http://h/x/[y]", null, "The URL holds [, which cannot be sent as written. Write it as %5B."],
-      ["http://h/p%zz", null, "The URL holds a % that starts no escape. Write it as %25."],
-      ["http://bø.no/x", null, "The host holds ø, which cannot be sent as written. Write the host in its xn-- form."],
-    ];
-    for (const [url, sent, error] of cases) {
-      assert.deepEqual(sendableUrl(url), sent !== null ? { url: sent } : { error }, url);
-    }
-  });
-
-  it("refuses a host or port java.net.URI cannot read, and says which", () => {
-    const cases: [string, string][] = [
-      ["http://localhost:8080api/hent/visning", "The port in localhost:8080api is not a number. Is a / missing between the port and the path?"],
-      ["http://localhost:8080:/x", "The port in localhost:8080: is not a number. Is a / missing between the port and the path?"],
-      ["http://my_service:8080/x", "The host my_service cannot be sent: a host name holds only letters, digits, hyphens and dots, and its last part starts with a letter."],
-    ];
-    for (const [url, error] of cases) assert.deepEqual(sendableUrl(url), { error }, url);
-  });
-
-  // The client's own Accept (fetch.ts:82), and the responses it reads as a stream (:587-653): a
-  // 200 that is not HTML, JSON or JavaScript, a missing Content-Type included.
-  it("reads a response as a stream as the client reads it", () => {
-    assert.equal(ACCEPT, "text/event-stream, text/html, application/json");
-    for (const type of ["text/event-stream", "text/event-stream; charset=utf-8", "text/plain", "", null, "Text/HTML"]) assert.equal(readsAsStream(200, type), true, `${type}`);
-    for (const type of ["text/html", "text/html; charset=utf-8", "application/json", "text/javascript"]) assert.equal(readsAsStream(200, type), false, type);
-    for (const status of [204, 302, 404, 500]) assert.equal(readsAsStream(status, "text/event-stream"), false, `${status}`);
-  });
-
-  it("points to the server log when an error came without a body", () => {
-    assert.equal(emptyBodyHint(400, " \n"), "The server sent no body with this 400, so the reason is in its log.");
-    assert.equal(emptyBodyHint(400, "Required request parameter 'partsnummer' is not present"), null);
-    assert.equal(emptyBodyHint(204, ""), null);
-  });
-
-  it("refuses exactly the hosts and ports the IntelliJ inspector refuses", () => {
-    // The same URLs as RequestsTest.kt, which checks each verdict against the JDK's HTTP client.
-    const sent = ["http://localhost:8080/x", "http://localhost:/x", "http://localhost", "http://h?x=1", "http://user:pw@h:1/x", "http://127.0.0.1:8080/x", "http://10.0.0.255/x", "http://[::1]:8080/x", "http://[fe80::1]/x", "http://example.com./x", "http://a-b.example.com/x", "http://x1/x", "http://1x/x", "http://123/x"];
-    const refused = ["http://localhost:8080api/x", "http://localhost:8080:/x", "http://h:-1/x", "http://h:80a", "http://my_service:8080/x", "http://-h/x", "http://h-/x", "http://a..b/x", "http://a.1b/x", "http://1.2.3.999/x", "http://1.2.3/x", "http://a.b-/x", "http://h%41/x", "http://h!/x"];
-    for (const url of sent) assert.ok("url" in sendableUrl(url), url);
-    for (const url of refused) assert.ok("error" in sendableUrl(url), url);
-  });
-});
-
-// The same cases, character for character, as the variable tests in the analysis module's
-// `RequestsTest.kt`: both inspectors read the env file, judge it and fill a request alike.
-describe("inspector variables", () => {
-  const ENV = ".streamlord/env.json is not valid";
-  const env = parseEnv(`{
-  "baseUrl": "http://127.0.0.1:8081/",
-  "signals": { "search" : "ash", "n": 1.0, "s": "\\u00e9</p>" },
-  "headers": { "Authorization": "Bearer x", "X-Csrf-Token": "abc" }
-}`);
-  const vars = mergeVariables("http://localhost:8080/", env);
-  const defaults = mergeVariables("http://localhost:8080/", parseEnv("{}"));
-
-  it("read the three keys of the env file, signals as written", () => {
-    assert.deepEqual(env, {
-      baseUrl: "http://127.0.0.1:8081",
-      signals: '{"search":"ash","n":1.0,"s":"\\u00e9</p>"}',
-      headers: [["Authorization", "Bearer x"], ["X-Csrf-Token", "abc"]],
-      params: null,
-      errors: [],
-    });
-  });
-
-  it("say what makes the env file invalid", () => {
-    // V8 gives no position for an unexpected token, so this one says less than RequestsTest.kt's.
+// Where a JSON reader stops is its own: V8 gives no position for an unexpected token, so this
+// says less than RequestsTest.kt's.
+describe("text that is not JSON", () => {
+  it("is named without a position where V8 gives none", () => {
+    assert.deepEqual(parseRequestsFile("not json"), { version: 1, requests: [], error: ".streamlord/inspector.json is not valid JSON." });
     assert.deepEqual(parseEnv("not json").errors, [".streamlord/env.json is not valid JSON."]);
-    // The comma a hand-edited file most often ends up with, after its last value.
-    assert.deepEqual(parseEnv('{\n  "baseUrl": "http://localhost:9102",\n}\n').errors, [".streamlord/env.json is not valid JSON at line 3, column 1."]);
-    assert.deepEqual(parseEnv("[]").errors, [`${ENV}: it must be an object with baseUrl, signals, headers or params.`]);
-    assert.deepEqual(parseEnv('{"csrf": "x", "baseUrl": 8080, "signals": [], "headers": {"X-A": 1}}'), {
-      baseUrl: null,
-      signals: null,
-      headers: null,
-      params: null,
-      errors: [
-        `${ENV}: "csrf" is not a known key. Use baseUrl, signals, headers or params.`,
-        `${ENV}: baseUrl must be text, such as "http://localhost:8080".`,
-        `${ENV}: signals must be a JSON object, such as {"search": "ash"}.`,
-        `${ENV}: the value of the header "X-A" must be text.`,
-      ],
-    });
-    assert.deepEqual(parseEnv('{"baseUrl": "localhost:8080", "headers": []}').errors, [
-      `${ENV}: baseUrl must start with http:// or https://.`,
-      `${ENV}: headers must be an object of names and values, such as {"Authorization": "Bearer token"}.`,
-    ]);
-  });
-
-  it("say where each value comes from", () => {
-    assert.deepEqual(defaults, [{ name: "baseUrl", value: "http://localhost:8080", source: "default" }]);
-    assert.equal(
-      describeVariables(vars),
-      'baseUrl = http://127.0.0.1:8081\nsignals = {"search":"ash","n":1.0,"s":"\\u00e9</p>"}\nheaders = Authorization: Bearer x; X-Csrf-Token: abc',
-    );
-    assert.equal(describeVariables(mergeVariables("http://h", parseEnv('{"signals": {}, "headers": {}}'))), "baseUrl = http://h   (default)\nsignals = {}\nheaders = (none)");
-  });
-
-  it("fill a request, each variable in its own field", () => {
-    const r = resolveRequest({ name: "", url: "{{baseUrl}}/x?q={{ baseUrl }}", method: "POST", signals: "{{signals}}", headers: "{{headers}}\nX-B: 1" }, vars);
-    assert.deepEqual(r.errors, []);
-    assert.deepEqual(r.unset, []);
-    assert.equal(r.request.url, "http://127.0.0.1:8081/x?q=http://127.0.0.1:8081");
-    assert.equal(r.request.signals, '{"search":"ash","n":1.0,"s":"\\u00e9</p>"}');
-    assert.equal(r.request.headers, "Authorization: Bearer x\nX-Csrf-Token: abc\nX-B: 1");
-    const bad = resolveRequest({ name: "", url: "{{baseUrl}}/{{signals}}", method: "POST", signals: '{"a": "{{csrf}}"} {{signals}}', headers: "{{headers}}\nOrigin: {{baseUrl}}" }, defaults);
-    assert.deepEqual(bad.errors, [
-      "{{signals}} belongs in the signals field.",
-      "{{csrf}} cannot stand in the signals field. Use {{signals}} there; a param goes in the URL or the headers.",
-      '{{signals}} is not set. Add "signals" to .streamlord/env.json.',
-      '{{headers}} is not set. Add "headers" to .streamlord/env.json.',
-      "{{baseUrl}} belongs in the URL field.",
-    ]);
-    assert.deepEqual(bad.unset, ["signals", "headers"]);
-  });
-
-  it("add keys to the env file without touching what is there", () => {
-    assert.equal(withEnvVariables(null, [], "http://localhost:8080"), '{\n  "baseUrl": "http://localhost:8080"\n}\n');
-    assert.equal(withEnvVariables(null, ["headers", "signals"], "http://h"), '{\n  "baseUrl": "http://h",\n  "headers": {},\n  "signals": {}\n}\n');
-    assert.equal(withEnvVariables("{}", ["signals"], "http://h"), '{\n  "signals": {}\n}');
-    assert.equal(withEnvVariables('{ "baseUrl": "http://x" }\n', ["signals", "baseUrl"], "http://h"), '{ "baseUrl": "http://x",\n  "signals": {}\n}\n');
-    assert.equal(withEnvVariables('{"signals": {}}', ["signals"], "http://h"), '{"signals": {}}');
-    assert.equal(withEnvVariables("not json", ["signals"], "http://h"), null);
-    assert.equal(withEnvVariables("[]", ["signals"], "http://h"), null);
-  });
-
-  it("explain an unreachable server by its baseUrl", () => {
-    assert.equal(
-      unreachableHint("{{baseUrl}}/hendelser", defaults),
-      "{{baseUrl}} is http://localhost:8080, the default. Set baseUrl in .streamlord/env.json if your server listens elsewhere.",
-    );
-    assert.equal(unreachableHint("{{ baseUrl }}/x", vars), "{{baseUrl}} is http://127.0.0.1:8081, from .streamlord/env.json.");
-    assert.equal(unreachableHint("http://127.0.0.1:8081/x", defaults), null);
-  });
-
-  it("count what the request list holds in its first entry", () => {
-    assert.deepEqual([newRequestLabel(0, 0), newRequestLabel(2, 5), newRequestLabel(0, 1)], ["New request…", "New request… (2 saved, 5 recent)", "New request… (1 recent)"]);
-  });
-
-  it("complete a name after {{ with what the field takes", () => {
-    const names = (c: ReturnType<typeof variableCompletions>) => c && { from: c.from, to: c.to, names: c.items.map((v) => v.name) };
-    assert.deepEqual(names(variableCompletions("{{", 2, "url", vars)), { from: 0, to: 2, names: ["baseUrl"] });
-    assert.deepEqual(names(variableCompletions("a {{ s", 6, "signals", vars)), { from: 2, to: 6, names: ["signals"] });
-    assert.deepEqual(names(variableCompletions("{{}}", 2, "headers", vars)), { from: 0, to: 4, names: ["headers"] });
-    assert.deepEqual(names(variableCompletions("X: {{H", 6, "headers", vars)), { from: 3, to: 6, names: ["headers"] });
-    assert.equal(variableCompletions("{{x", 3, "url", vars), null);
-    assert.equal(variableCompletions("{x", 2, "url", vars), null);
-    assert.equal(variableCompletions("{{", 2, "signals", defaults), null);
-    assert.equal(variableCompletions("X: {{b", 6, "headers", vars), null);
-  });
-
-  const motregning = { url: "http://localhost:9102", name: "Motregning back (dev)" };
-
-  it("take a running server as the baseUrl when the env file sets none", () => {
-    const found = mergeVariables("http://localhost:8080/", parseEnv("{}"), motregning);
-    assert.deepEqual(found, [{ name: "baseUrl", value: "http://localhost:9102", source: "running", origin: "Motregning back (dev)" }]);
-    assert.equal(describeVariables(found), "baseUrl = http://localhost:9102   (from Motregning back (dev))");
-    assert.equal(unreachableHint("{{baseUrl}}/x", found, motregning), "{{baseUrl}} is http://localhost:9102, where Motregning back (dev) said it started.");
-    assert.equal(baseUrlSuggestion(found, motregning), null);
-  });
-
-  it("let the env file win over a running server, which is offered when they differ", () => {
-    const set = mergeVariables("http://localhost:8080/", env, motregning);
-    assert.equal(set[0]?.value, "http://127.0.0.1:8081");
-    assert.equal(baseUrlSuggestion(set, motregning), "http://localhost:9102");
-    assert.equal(
-      unreachableHint("{{baseUrl}}/x", set, motregning),
-      "{{baseUrl}} is http://127.0.0.1:8081, from .streamlord/env.json. Motregning back (dev) started on http://localhost:9102.",
-    );
-    const agree = mergeVariables("http://h", parseEnv('{"baseUrl": "http://localhost:9102"}'), motregning);
-    assert.equal(baseUrlSuggestion(agree, motregning), null);
-    assert.equal(baseUrlSuggestion(set, null), null);
-  });
-
-  it("set baseUrl in the env file without touching the rest", () => {
-    assert.equal(withBaseUrl('{\n  "baseUrl": "http://localhost:8080",\n  "params": {"a": "1"}\n}\n', "http://localhost:9102"), '{\n  "baseUrl": "http://localhost:9102",\n  "params": {"a": "1"}\n}\n');
-    assert.equal(withBaseUrl('{"params": {}}', "http://x"), '{"params": {},\n  "baseUrl": "http://x"\n}');
-    assert.equal(withBaseUrl(null, "http://x"), '{\n  "baseUrl": "http://x"\n}\n');
-    assert.equal(withBaseUrl('{"baseUrl": ', "http://x"), null);
-  });
-
-  const withParams = mergeVariables("http://localhost:8080", parseEnv('{"baseUrl": "http://localhost:9102", "params": {"partsnummer": "3000 507", "instans": "m1", "fokus": ""}}'));
-
-  it("fill params into the URL encoded and into the headers as written", () => {
-    const r = resolveRequest(req({ url: "{{baseUrl}}/v?partsnummer={{partsnummer}}&instans={{ instans }}", headers: "X-Part: {{partsnummer}}" }), withParams);
-    assert.deepEqual(r.errors, []);
-    assert.equal(r.request.url, "http://localhost:9102/v?partsnummer=3000%20507&instans=m1");
-    assert.equal(r.request.headers, "X-Part: 3000 507");
-    assert.equal(describeVariables(withParams), "baseUrl = http://localhost:9102\npartsnummer = 3000 507\ninstans = m1\nfokus = (none)");
-  });
-
-  it("add a param that is missing or empty to the env file to fill in", () => {
-    const r = resolveRequest(req({ url: "{{baseUrl}}/v?a={{fokus}}&b={{saksnummer}}&c={{baseurl}}", signals: "{{instans}}" }), withParams);
-    assert.deepEqual(r.errors, [
-      "{{fokus}} is empty. Fill it in under params in .streamlord/env.json.",
-      "{{saksnummer}} is not set. Add it to params in .streamlord/env.json.",
-      "{{baseurl}} is not a variable. Did you mean {{baseUrl}}?",
-      "{{instans}} cannot stand in the signals field. Use {{signals}} there; a param goes in the URL or the headers.",
-    ]);
-    assert.deepEqual(r.unset, ["fokus", "saksnummer"]);
-  });
-
-  it("read params with what is wrong with them named", () => {
-    assert.deepEqual(parseEnv('{"params": {"headers": "x", "a b": "1", "n": 1, "ok": "1"}}').errors, [
-      `${ENV}: "headers" cannot be a param; {{headers}} is a variable of its own.`,
-      `${ENV}: "a b" cannot be a param name; {{a b}} would not be read.`,
-      `${ENV}: the value of the param "n" must be text.`,
-    ]);
-    assert.deepEqual(parseEnv('{"params": []}').errors, [`${ENV}: params must be an object of names and values, such as {"partsnummer": "123"}.`]);
-  });
-
-  it("add params to the env file without touching what is there", () => {
-    assert.equal(withEnvVariables(null, ["a", "b"], "http://h"), '{\n  "baseUrl": "http://h",\n  "params": {\n    "a": "",\n    "b": ""\n  }\n}\n');
-    assert.equal(withEnvVariables('{\n  "baseUrl": "http://x"\n}\n', ["a", "signals"], "http://h"), '{\n  "baseUrl": "http://x",\n  "signals": {},\n  "params": {\n    "a": ""\n  }\n}\n');
-    assert.equal(withEnvVariables('{\n  "params": {\n    "a": "1"\n  }\n}\n', ["a", "b"], "http://h"), '{\n  "params": {\n    "a": "1",\n    "b": ""\n  }\n}\n');
-    assert.equal(withEnvVariables('{"params": {"a": "1"}}', ["b"], "http://h"), '{"params": {"a": "1", "b": ""}}');
-    assert.equal(withEnvVariables('{"params": {}}', ["b"], "http://h"), '{"params": {\n    "b": ""\n  }}');
-    assert.equal(withEnvVariables('{"params": {"a": ""}}', ["a"], "http://h"), '{"params": {"a": ""}}');
-  });
-
-  it("complete params in the URL and the headers, not in the signals", () => {
-    const names = (c: ReturnType<typeof variableCompletions>) => c && c.items.map((v) => v.name);
-    assert.deepEqual(names(variableCompletions("{{", 2, "url", withParams)), ["baseUrl", "partsnummer", "instans", "fokus"]);
-    assert.deepEqual(names(variableCompletions("X: {{i", 6, "headers", withParams)), ["instans"]);
-    assert.equal(names(variableCompletions("{{p", 3, "signals", withParams)), null);
-  });
-});
-
-describe("line and column", () => {
-  it("counts from 1, and holds an offset outside the text to its ends, as the Kotlin twin does", () => {
-    assert.equal(lineAndColumn("ab\ncd", 3), "at line 2, column 1");
-    assert.equal(lineAndColumn("ab\ncd", 99), "at line 2, column 3");
-    assert.equal(lineAndColumn("ab\ncd", -4), "at line 1, column 1");
-  });
-});
-
-describe("requests file hygiene", () => {
-  it("says when the file is not json, and a byte order mark is not part of it", () => {
-    const bom = parseRequestsFile('\uFEFF{"requests":[{"name":"a","url":"/a"}]}');
-    assert.deepEqual(bom.requests.map((r) => r.name), ["a"]);
-    assert.equal(bom.error, undefined);
     const broken = parseRequestsFile('{"requests":[{"name":"a","url":"/a"},]}', "req.json");
-    assert.deepEqual(broken.requests, []);
     assert.ok(broken.error?.startsWith("req.json is not valid JSON"), broken.error);
-    assert.equal(parseRequestsFile("[]").error, undefined);
-    assert.deepEqual(parseEnv('\uFEFF{"params":{"bom":"1"}}').params, [["bom", "1"]]);
-  });
-
-  it("sends object signals as written in the file", () => {
-    const text = '{"requests":[{"name":"n","url":"/x","signals": { "id": 12345678901234567890, "f": 1.0, "s": "</b>" }}]}';
-    assert.equal(parseRequestsFile(text).requests[0]!.signals, '{ "id": 12345678901234567890, "f": 1.0, "s": "</b>" }');
-  });
-
-  it("keeps the requests file inside the workspace", () => {
-    assert.equal(requestsPathProblem(".streamlord/inspector.json"), null);
-    assert.equal(requestsPathProblem("tools/requests.json"), null);
-    assert.equal(requestsPathProblem(""), null);
-    for (const bad of ["../inspector.json", "a/../../inspector.json", "/etc/inspector.json", "C:\\inspector.json"]) assert.ok(requestsPathProblem(bad), bad);
-  });
-
-  // fetch.ts:81-88 in 1.0.4: the client's headers first, then the user's over them.
-  it("lets the user's headers replace the client's own", () => {
-    assert.deepEqual(Object.keys(requestHeaders("POST", { "content-type": "text/plain", "X-A": "1" })), ["Accept", "Datastar-Request", "content-type", "X-A"]);
-    assert.equal(requestHeaders("POST", { "content-type": "text/plain" })["content-type"], "text/plain");
-    assert.deepEqual(Object.keys(requestHeaders("GET", {})), ["Accept", "Datastar-Request"]);
   });
 });
