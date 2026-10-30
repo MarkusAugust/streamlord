@@ -348,3 +348,117 @@ internal fun interpolateFix(
         }
     return Fix(title, s.start, s.end, call, listOf(edit))
 }
+
+/** Where each `%s` of `interpolate`'s format starts in [text], as core counts them: `%%` is one per cent sign and never a hole. */
+internal fun percentHoles(text: String): List<Int> {
+    val found = ArrayList<Int>()
+    var i = 0
+    while (i < text.length - 1) {
+        if (text[i] == '%' && (text[i + 1] == 's' || text[i + 1] == '%')) {
+            if (text[i + 1] == 's') found += i
+            i += 2
+            continue
+        }
+        i++
+    }
+    return found
+}
+
+/**
+ * The format with each `%s` read as a hole like a Kotlin template, [PLACEHOLDER], mapped back to
+ * the source, and where each `%s` now starts. `<%s` is then a tag whose name is a hole, not a
+ * template engine's `<%`.
+ */
+internal fun withPercentHoles(
+    s: KotlinString,
+    holes: List<Int>,
+): Pair<KotlinString, List<Int>> {
+    val text = StringBuilder()
+    val map = ArrayList<Int>()
+    val at = ArrayList<Int>()
+    val set = holes.toHashSet()
+    var i = 0
+    while (i < s.text.length) {
+        if (i in set) {
+            at += text.length
+            text.append(PLACEHOLDER)
+            repeat(PLACEHOLDER.length) { map += s.map[i] }
+            i += 2
+            continue
+        }
+        text.append(s.text[i])
+        map += s.map[i]
+        i++
+    }
+    map += s.map[s.text.length]
+
+    fun shift(d: Int) = d + (PLACEHOLDER.length - 2) * holes.count { it < d }
+    val format =
+        s.copy(
+            text = text.toString(),
+            map = map.toIntArray(),
+            interpolations = s.interpolations.map { it.copy(decodedStart = shift(it.decodedStart)) },
+        )
+    return format to at
+}
+
+/** What a value handed to `interpolate` is, as far as the text shows: what core's `admits` decides by. */
+internal enum class ArgKind { STRING, NUMBER, BOOLEAN, NULL, CHAR, TRUSTED, MARKUP }
+
+private val NUMBER_LITERAL = Regex("""-?(?:0[xX][0-9A-Fa-f_]+|0[bB][01_]+|\d[\d_]*(?:\.\d[\d_]*)?(?:[eE][+-]?\d+)?)[LlFfDdUu]*""")
+private val CHAR_LITERAL = Regex("""'(?:[^'\\]|\\.[^']*)'""")
+private val IF_START = Regex("""^if\s*\(""")
+private val TEXT_OF = Regex("""^([\s\S]*?)\s*\.\s*text$""")
+
+/** Whether [text] is one call to [name] whose argument list closes at its end: `Trusted(x)`, not `Trusted(x).html`. */
+private fun wholeCall(
+    text: String,
+    name: String,
+): Boolean {
+    if (!Regex("""^$name\s*\(""").containsMatchIn(text) || !text.endsWith(")")) return false
+    val mask = lexKotlin(text).mask
+    var depth = 0
+    for (i in text.indexOf('(') until text.length) {
+        if (!mask[i]) continue
+        if (text[i] == '(') {
+            depth++
+        } else if (text[i] == ')') {
+            depth--
+            if (depth == 0) return i == text.length - 1
+        }
+    }
+    return false
+}
+
+/**
+ * The kind of a value handed to `interpolate`: a literal, `Trusted(...)`, a call to
+ * `interpolate` (its Html), or a name the enclosing declaration gives a type. Null when the text
+ * does not show it.
+ */
+internal fun valueKind(
+    src: String,
+    text: String,
+    literal: Boolean,
+    at: Int,
+): ArgKind? {
+    val t = text.trim()
+    if (literal) return ArgKind.STRING
+    if (NUMBER_LITERAL.matches(t)) return ArgKind.NUMBER
+    if (t == "true" || t == "false") return ArgKind.BOOLEAN
+    if (t == "null") return ArgKind.NULL
+    if (CHAR_LITERAL.matches(t)) return ArgKind.CHAR
+    if (IF_START.containsMatchIn(t) && literalOnly(t)) return if ('"' in t) ArgKind.STRING else null
+    if (wholeCall(t, "Trusted")) return ArgKind.TRUSTED
+    if (wholeCall(t, "interpolate")) return ArgKind.MARKUP
+    // The String of the Html: interpolate(...).text.
+    val html = TEXT_OF.find(t)?.groupValues?.get(1)
+    if (html != null && wholeCall(html, "interpolate")) return ArgKind.STRING
+    if (!IDENT.matches(t)) return null
+    return when (declaredKind(src, t, at)) {
+        HoleFact.NUMBER -> ArgKind.NUMBER
+        HoleFact.BOOLEAN -> ArgKind.BOOLEAN
+        HoleFact.STRING -> ArgKind.STRING
+        HoleFact.MARKUP -> ArgKind.MARKUP
+        else -> null
+    }
+}

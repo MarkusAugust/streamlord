@@ -117,7 +117,8 @@ class PreferredReplaceTextFix(
  */
 class KotlinInterpolationInspection : StreamlordInspection(INTERPOLATION_CODES)
 
-private val INTERPOLATION_CODES = setOf("kotlin-interpolation", "unescaped-interpolation", "unsafe-interpolation")
+private val INTERPOLATION_CODES =
+    setOf("kotlin-interpolation", "unescaped-interpolation", "unsafe-interpolation", "interpolate-template", "interpolate-holes")
 
 /**
  * Datastar expression syntax, unknown actions, Pro actions, kebab-case signals, what the client's

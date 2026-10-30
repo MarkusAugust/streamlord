@@ -5,6 +5,7 @@ import io.github.markusaugust.streamlord.core.StreamlordException
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.decodeEntities
+import org.intellij.lang.annotations.Language
 
 /**
  * Markup the caller vouches for, written into the output as it stands.
@@ -196,7 +197,7 @@ public class UnsafeInterpolationException(
  * @throws IllegalArgumentException if the number of values does not match the number of holes.
  */
 public fun interpolate(
-    format: String,
+    @Language("HTML") format: String,
     vararg values: Any?,
 ): Html = interpolate(format, values.asList(), ElementsGuard.defaultPrefixes)
 
@@ -208,7 +209,7 @@ public fun interpolate(
  * refuse a value in.
  */
 public fun interpolate(
-    format: String,
+    @Language("HTML") format: String,
     values: List<Any?>,
     prefixes: List<String> = ElementsGuard.defaultPrefixes,
 ): Html {

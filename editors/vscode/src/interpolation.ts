@@ -281,3 +281,82 @@ export function interpolateFix(src: string, s: KotlinString): Fix {
   }
   return fix;
 }
+
+/** Where each `%s` of `interpolate`'s format starts in `text`, as core counts them: `%%` is one per cent sign and never a hole. */
+export function percentHoles(text: string): number[] {
+  const found: number[] = [];
+  let i = 0;
+  while (i < text.length - 1) {
+    if (text[i] === "%" && (text[i + 1] === "s" || text[i + 1] === "%")) {
+      if (text[i + 1] === "s") found.push(i);
+      i += 2;
+      continue;
+    }
+    i++;
+  }
+  return found;
+}
+
+/**
+ * The format with each `%s` read as a hole like a Kotlin template, `__kt__`, mapped back to the
+ * source, and where each `%s` now starts. `<%s` is then a tag whose name is a hole, not a
+ * template engine's `<%`.
+ */
+export function withPercentHoles(s: KotlinString, holes: readonly number[]): { format: KotlinString; at: number[] } {
+  let text = "";
+  const map: number[] = [];
+  const at: number[] = [];
+  const set = new Set(holes);
+  for (let i = 0; i < s.text.length; ) {
+    if (set.has(i)) {
+      at.push(text.length);
+      text += PLACEHOLDER;
+      for (let c = 0; c < PLACEHOLDER.length; c++) map.push(s.map[i] as number);
+      i += 2;
+      continue;
+    }
+    text += s.text[i];
+    map.push(s.map[i] as number);
+    i++;
+  }
+  map.push(s.map[s.text.length] as number);
+  const shift = (d: number) => d + (PLACEHOLDER.length - 2) * holes.filter((h) => h < d).length;
+  return { format: { ...s, text, map, interpolations: s.interpolations.map((ip) => ({ ...ip, decodedStart: shift(ip.decodedStart) })) }, at };
+}
+
+/** What a value handed to `interpolate` is, as far as the text shows: what core's `admits` decides by. */
+export type ArgKind = "string" | "number" | "boolean" | "null" | "char" | "trusted" | "markup";
+
+/** Whether `text` is one call to `name` whose argument list closes at its end: `Trusted(x)`, not `Trusted(x).html`. */
+function wholeCall(text: string, name: string): boolean {
+  if (!new RegExp(`^${name}\\s*\\(`).test(text) || !text.endsWith(")")) return false;
+  const { mask } = lexKotlin(text);
+  let depth = 0;
+  for (let i = text.indexOf("("); i < text.length; i++) {
+    if (mask[i] === 0) continue;
+    if (text[i] === "(") depth++;
+    else if (text[i] === ")" && --depth === 0) return i === text.length - 1;
+  }
+  return false;
+}
+
+/**
+ * The kind of a value handed to `interpolate`: a literal, `Trusted(...)`, a call to
+ * `interpolate` (its Html), or a name the enclosing declaration gives a type. Null when the text
+ * does not show it.
+ */
+export function argKind(src: string, text: string, literal: boolean, at: number): ArgKind | null {
+  const t = text.trim();
+  if (literal) return "string";
+  if (/^-?(?:0[xX][0-9A-Fa-f_]+|0[bB][01_]+|\d[\d_]*(?:\.\d[\d_]*)?(?:[eE][+-]?\d+)?)[LlFfDdUu]*$/.test(t)) return "number";
+  if (t === "true" || t === "false") return "boolean";
+  if (t === "null") return "null";
+  if (/^'(?:[^'\\]|\\.[^']*)'$/.test(t)) return "char";
+  if (/^if\s*\(/.test(t) && literalOnly(t)) return t.includes('"') ? "string" : null;
+  if (wholeCall(t, "Trusted")) return "trusted";
+  if (wholeCall(t, "interpolate")) return "markup";
+  // The String of the Html: interpolate(...).text.
+  const html = /^([\s\S]*?)\s*\.\s*text$/.exec(t)?.[1];
+  if (html !== undefined && wholeCall(html, "interpolate")) return "string";
+  return IDENT.test(t) ? declaredKind(src, t, at) : null;
+}

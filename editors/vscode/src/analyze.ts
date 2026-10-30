@@ -4,9 +4,9 @@ import { PLACEHOLDER, toSource, type Interpolation, type KotlinString } from "./
 import { capitalIn, kebab, nameProblem, runsIntoModifiers, spellings } from "./attributeKeys.ts";
 import { signalNameRefusal } from "./signalNames.ts";
 import { asciiLowercase, decodeEntities, indexOfAsciiIgnoreCase, keyReading, rawKeyNote, tokenize, validateAttributes, validateMarkup, wireKey, wireKeyReads, type Attribute, type Tag } from "./markup.ts";
-import { findCallSites, isHtmlString, lexKotlin, namedArgText, selectStringArg, stringAt, type CallSite } from "./scanner.ts";
+import { findCallSites, isHtmlString, lexKotlin, namedArgText, selectStringArg, stringAt, type Arg, type CallSite } from "./scanner.ts";
 import { holeLandings, urlSchemeFixedBy, type HoleLanding } from "./holes.ts";
-import { chainFrom, declaredKind, holeDisplay, interpolateFix, isMarkup, literalOnly, markupView, plainName, shadowed, trimmed, withNested } from "./interpolation.ts";
+import { argKind, chainFrom, declaredKind, holeDisplay, interpolateFix, isMarkup, literalOnly, markupView, percentHoles, plainName, shadowed, trimmed, withNested, withPercentHoles, type ArgKind } from "./interpolation.ts";
 import { dslHelpers, EXPRESSION_HELPERS, signalNameHyphenSites } from "./signalNameHyphens.ts";
 import { clientKeyName, collectSignalDefinitions } from "./signals.ts";
 
@@ -94,6 +94,12 @@ export function analyzeKotlin(src: string, opts: AnalyzeOptions): Issue[] {
     // The literals of a `+` chain handed to the site are judged there, as one string.
     const chain = html ? markupString(site, html, src) : null;
     if (chain && !site.args.some((a) => a.string === chain)) for (const x of lex.strings) if (x.start >= chain.start && x.end <= chain.end) claimed.add(x.start);
+  }
+  for (const site of findCallSites(src, INTERPOLATE, lex.mask)) {
+    const format = interpolateFormat(site, src);
+    if (!format) continue;
+    for (const x of lex.strings) if (x.start >= format.string.start && x.end <= format.string.end) claimed.add(x.start);
+    issues.push(...checkInterpolateSite(site, format, src, opts, hyphenated));
   }
   issues.push(...signalNameHyphenSites(src, lex, dslHelpers(src, EXPRESSION_HELPERS), new Set([...ALL_SITE_NAMES, "statements"])));
   for (const m of src.matchAll(ATTRIBUTES_INDEX)) {
@@ -212,6 +218,140 @@ function checkFreeHtmlString(s: KotlinString, opts: AnalyzeOptions, src: string,
   const issues: Issue[] = judgeHoles(s, src, opts, view);
   if (opts.checkHtmlAttributes) issues.push(...mapIssues(s, src, analyzeHtmlWith(view, opts, hyphenated)));
   return issues;
+}
+
+const INTERPOLATE: ReadonlySet<string> = new Set(["interpolate"]);
+
+interface InterpolateFormat {
+  arg: Arg;
+  string: KotlinString;
+}
+
+/** The format handed to `interpolate`: its first argument or `format =`, a literal or a `+` chain that starts with one. */
+function interpolateFormat(site: CallSite, src: string): InterpolateFormat | null {
+  const arg = site.args.find((a) => a.named === "format") ?? site.args.find((a) => a.named === null);
+  if (!arg) return null;
+  if (arg.string) return arg.string.unterminated ? null : { arg, string: arg.string };
+  const lex = lexCached(src);
+  const first = lex.strings.find((x) => x.start === arg.start);
+  const chain = first ? chainFrom(src, first, lex.mask) : null;
+  return chain && chain.end === arg.end ? { arg, string: chain } : null;
+}
+
+const ESCAPED: ReadonlySet<string> = new Set(["TEXT", "ATTRIBUTE", "URL"]);
+
+/**
+ * A call to `interpolate`, judged as it will run. A Kotlin template in the format is filled in
+ * before `interpolate` sees the markup, so it is neither escaped nor refused. The `%s` holes
+ * are counted against the values, and each is judged by where it lands and what the text shows
+ * the value to be: core's `admits`, so an error only where `interpolate` throws for certain.
+ * The format is read as HTML like any free string; it is not a patch, so no id is asked for.
+ */
+function checkInterpolateSite(site: CallSite, f: InterpolateFormat, src: string, opts: AnalyzeOptions, hyphenated: ReadonlySet<string>): Issue[] {
+  const s = f.string;
+  const holes = percentHoles(s.text);
+  const { format, at } = withPercentHoles(s, holes);
+  const values = site.args.filter((a) => a !== f.arg && a.named === null);
+  // The values one by one, as the vararg overload takes them: no spread and nothing by name.
+  const plain = site.args.every((a) => a.named === null) && !values.some((a) => a.text.startsWith("*"));
+  const kinds = values.map((a) => factKind(opts.holeFact?.(a.start, a.end) ?? null) ?? argKind(src, a.text, a.string !== null, s.start));
+  const issues: Issue[] = [];
+  // The overload that takes a List is called with one or two values, each of which could be a List.
+  const counted = plain && (values.length === 0 || values.length >= 3 || kinds.some((k) => k !== null));
+  if (counted && holes.length !== values.length) {
+    const h = holes.length;
+    const v = values.length;
+    issues.push({
+      start: site.nameStart,
+      end: site.nameStart + site.name.length,
+      severity: "error",
+      code: "interpolate-holes",
+      message: `interpolate throws IllegalArgumentException here: the markup has ${h} %s ${h === 1 ? "hole" : "holes"} and ${v} ${v === 1 ? "value is" : "values are"} given. Write %% for a per cent sign that is not a hole.`,
+    });
+  }
+  const mapped = plain && holes.length === values.length;
+  const view = markupView(src, format);
+  const landings = holeLandings(
+    view,
+    [...format.interpolations.map((ip) => ip.decodedStart), ...at].map((d) => ({ start: d, end: d + PLACEHOLDER.length })),
+    [...new Set([opts.prefix, catalog.prefix, catalog.aliasedPrefix])],
+  );
+  const traps = new Map(interpolationIssues(format, src).map((i) => [i.start, i]));
+  format.interpolations.forEach((ip, k) => {
+    const landing = landings[k] as HoleLanding;
+    const trap = traps.get(ip.start);
+    if (trap && ip.kind === "simple" && landing.position === "DATASTAR") {
+      const judged = datastarTrap(trap, ip, landing, view, opts.prefix);
+      if (judged) {
+        issues.push(judged);
+        return;
+      }
+    }
+    const fact = holeFact(format, src, opts, ip);
+    if (fact === "constant" || fact === "number" || fact === "boolean" || (fact === "markup" && landing.position === "TEXT")) return;
+    const shown = holeDisplay(ip, format.dollars);
+    // A `%` right before the template would make `%%s` of the hole: a per cent sign and an s.
+    const percents = /%*$/.exec(format.text.slice(0, ip.decodedStart))?.[0].length ?? 0;
+    const fixable = ESCAPED.has(landing.position) && ip.kind !== "operand" && mapped && percents % 2 === 0;
+    issues.push({ start: ip.start, end: ip.end, severity: "warning", code: "interpolate-template", link: DOCS.expressions, message: templateMessage(shown, landing), fixes: fixable ? [holeFix(ip, shown, at, values, f.arg)] : undefined });
+  });
+  at.forEach((d, k) => {
+    const landing = landings[format.interpolations.length + k] as HoleLanding;
+    if (ESCAPED.has(landing.position)) return;
+    const arg = mapped ? values[k] : undefined;
+    const kind = arg ? (kinds[k] ?? null) : null;
+    const allowed: ArgKind[] = landing.position === "DATASTAR" ? ["number", "boolean"] : landing.position === "STYLE" ? ["number"] : [];
+    if (kind === "trusted" || (kind !== null && allowed.includes(kind))) return;
+    const shown = arg ? shorten(arg.text.trim()) : "the value of this %s";
+    issues.push({ ...toSource(format, d, d + PLACEHOLDER.length), severity: kind === null ? "warning" : "error", code: "unsafe-interpolation", link: DOCS.expressions, message: refusedMessage(shown, landing, kind !== null) });
+  });
+  if (opts.checkHtmlAttributes) issues.push(...mapIssues(format, src, analyzeHtmlWith(view, opts, hyphenated)));
+  return issues;
+}
+
+function factKind(fact: HoleFact | null): ArgKind | null {
+  return fact === "string" || fact === "number" || fact === "boolean" ? fact : fact === "markup" ? "markup" : null;
+}
+
+function shorten(text: string): string {
+  return text.length <= 30 ? text : `${text.slice(0, 29)}…`;
+}
+
+/** The template made a `%s` hole in place, and its expression passed as the value at the same place among the others. */
+function holeFix(ip: Interpolation, shown: string, holes: readonly number[], values: readonly Arg[], format: Arg): Fix {
+  const index = holes.filter((h) => h < ip.decodedStart).length;
+  const expr = ip.kind === "simple" ? ip.text : ip.text.trim();
+  const before = values[index];
+  const after = values[values.length - 1] ?? format;
+  const edit = before ? { start: before.start, end: before.start, text: `${expr}, ` } : { start: after.end, end: after.end, text: `, ${expr}` };
+  return { title: `Make ${shown} a %s hole, which interpolate escapes`, start: ip.start, end: ip.end, text: "%s", edits: [edit] };
+}
+
+/** Where a hole that is not escaped lands, said for a message, and what to write instead. */
+function landingWords(landing: HoleLanding): { where: string; instead: string } {
+  switch (landing.position) {
+    case "DATASTAR":
+      return { where: `${landing.attribute ?? "a Datastar attribute"}, which Datastar runs as an expression or follows as a signal path`, instead: "Put the value in a signal and reference it from the expression, or write the signal's name in the markup yourself." };
+    case "STYLE":
+      return { where: `${landing.attribute ?? "style"}, which is read as CSS`, instead: "Pass a number and write the unit in the markup, or choose between classes." };
+    case "CODE":
+      return { where: `${landing.attribute ?? "a script or style element"}, which the browser runs`, instead: "Put the value in a data-* attribute or a signal and read it from there; wrap markup you built yourself in Trusted(...)." };
+    default:
+      return { where: "the markup's own structure, a tag name, an attribute name or an unquoted value", instead: "Build that part of the markup from literals, or quote the attribute value; wrap markup you built yourself in Trusted(...)." };
+  }
+}
+
+function templateMessage(shown: string, landing: HoleLanding): string {
+  const base = `Kotlin fills in ${shown} before interpolate sees the markup, so interpolate neither escapes nor refuses it.`;
+  if (ESCAPED.has(landing.position)) return `${base} Make it a %s hole and pass the value to interpolate.`;
+  const { where, instead } = landingWords(landing);
+  return `${base} It lands in ${where}. ${instead}`;
+}
+
+function refusedMessage(shown: string, landing: HoleLanding, certain: boolean): string {
+  const allowed = landing.position === "DATASTAR" ? "a number or a boolean" : landing.position === "STYLE" ? "a number" : "Trusted(...)";
+  const { where, instead } = landingWords(landing);
+  return certain ? `interpolate always throws here: ${shown} lands in ${where}, and only ${allowed} is let in there. ${instead}` : `interpolate throws here unless ${shown} is ${allowed}: it lands in ${where}. ${instead}`;
 }
 
 /** The DSL helper that says the same as a whole-string expression, when there is one. */

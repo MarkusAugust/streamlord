@@ -52,6 +52,9 @@ private val UNQUOTED_VALUE_BEFORE = Regex("""=[ \t\n\f\r]*[^\s"'=<>`]*\z""")
 /** Where escaping is all a value needs, so that `interpolate(...)` takes it. */
 private val ESCAPED_POSITIONS = setOf(Position.TEXT, Position.ATTRIBUTE, Position.URL)
 
+private val INTERPOLATE = setOf("interpolate")
+private val PERCENTS_BEFORE = Regex("""%*\z""")
+
 /** kotlinx.html's own way to write any attribute: `attributes["data-on:click"] = "..."`. */
 private val ATTRIBUTES_INDEX = Regex("""\battributes\s*\[\s*"(data-[^"\\]*)"\s*]\s*=\s*""")
 
@@ -149,6 +152,12 @@ public class Analyzer(
             if (chain != null && site.args.none { it.string === chain }) {
                 for (x in lex.strings) if (x.start >= chain.start && x.end <= chain.end) claimed += x.start
             }
+            if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
+        }
+        for (site in findCallSites(src, INTERPOLATE, lex)) {
+            val format = interpolateFormat(site, src) ?: continue
+            for (x in lex.strings) if (x.start >= format.second.start && x.end <= format.second.end) claimed += x.start
+            val issues = checkInterpolateSite(site, format.first, format.second, src, opts, hyphenated)
             if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
         }
         for ((site, issues) in signalNameHyphenSites(src, lex, dslHelpers(src, EXPRESSION_HELPERS), allSiteNames + "statements")) {
@@ -409,6 +418,194 @@ public class Analyzer(
         val issues = ArrayList(judgeHoles(s, src, opts, view))
         if (opts.checkHtmlAttributes) issues += mapIssues(s, src, analyzeHtml(view, opts, hyphenated))
         return issues
+    }
+
+    /** The format handed to `interpolate`: its first argument or `format =`, a literal or a `+` chain that starts with one. */
+    private fun interpolateFormat(
+        site: CallSite,
+        src: String,
+    ): Pair<Arg, KotlinString>? {
+        val arg = site.named("format") ?: site.positional.firstOrNull() ?: return null
+        arg.string?.let { return if (it.unterminated) null else arg to it }
+        val lex = lex(src)
+        val first = lex.strings.firstOrNull { it.start == arg.start } ?: return null
+        val chain = chainFrom(src, first, lex.mask)?.takeIf { it.end == arg.end } ?: return null
+        return arg to chain
+    }
+
+    /**
+     * A call to `interpolate`, judged as it will run. A Kotlin template in the format is filled in
+     * before `interpolate` sees the markup, so it is neither escaped nor refused. The `%s` holes
+     * are counted against the values, and each is judged by where it lands and what the text shows
+     * the value to be: core's `admits`, so an error only where `interpolate` throws for certain.
+     * The format is read as HTML like any free string; it is not a patch, so no id is asked for.
+     */
+    private fun checkInterpolateSite(
+        site: CallSite,
+        formatArg: Arg,
+        s: KotlinString,
+        src: String,
+        opts: AnalyzeOptions,
+        hyphenated: Set<String>,
+    ): List<Issue> {
+        val holes = percentHoles(s.text)
+        val (format, at) = withPercentHoles(s, holes)
+        val values = site.args.filter { it !== formatArg && it.named == null }
+        // The values one by one, as the vararg overload takes them: no spread and nothing by name.
+        val plain = site.args.all { it.named == null } && values.none { it.text.startsWith("*") }
+        val kinds = values.map { factKind(opts.holeFact?.invoke(it.start, it.end)) ?: valueKind(src, it.text, it.string != null, s.start) }
+        val issues = ArrayList<Issue>()
+        // The overload that takes a List is called with one or two values, each of which could be a List.
+        val counted = plain && (values.isEmpty() || values.size >= 3 || kinds.any { it != null })
+        if (counted && holes.size != values.size) {
+            val h = holes.size
+            val v = values.size
+            issues +=
+                Issue(
+                    site.nameStart,
+                    site.nameStart + site.name.length,
+                    "interpolate throws IllegalArgumentException here: the markup has $h %s ${if (h == 1) "hole" else "holes"} and " +
+                        "$v ${if (v == 1) "value is" else "values are"} given. Write %% for a per cent sign that is not a hole.",
+                    Severity.ERROR,
+                    "interpolate-holes",
+                )
+        }
+        val mapped = plain && holes.size == values.size
+        val view = markupView(src, format)
+        val landings =
+            holeLandings(
+                view,
+                (format.interpolations.map { it.decodedStart } + at).map { it until it + PLACEHOLDER.length },
+                listOf(opts.prefix, CatalogNames.PREFIX, CatalogNames.ALIASED_PREFIX).distinct(),
+            )
+        val traps = interpolationIssues(format, src).associateBy { it.start }
+        for ((k, ip) in format.interpolations.withIndex()) {
+            val landing = landings[k]
+            val trap = traps[ip.start]
+            if (trap != null && ip.kind == InterpolationKind.SIMPLE && landing.position == Position.DATASTAR) {
+                val judged = datastarTrap(trap, ip, landing, view, opts.prefix)
+                if (judged != null) {
+                    issues += judged
+                    continue
+                }
+            }
+            val fact = holeFact(format, src, opts, ip)
+            if (fact == HoleFact.CONSTANT || fact == HoleFact.NUMBER || fact == HoleFact.BOOLEAN) continue
+            if (fact == HoleFact.MARKUP && landing.position == Position.TEXT) continue
+            val shown = holeDisplay(ip, format.dollars)
+            // A `%` right before the template would make `%%s` of the hole: a per cent sign and an s.
+            val percents = PERCENTS_BEFORE.find(format.text.substring(0, ip.decodedStart))?.value?.length ?: 0
+            val fixable = landing.position in ESCAPED_POSITIONS && ip.kind != InterpolationKind.OPERAND && mapped && percents % 2 == 0
+            val fixes = if (fixable) listOf(holeFix(ip, shown, at, values, formatArg)) else emptyList()
+            issues +=
+                Issue(ip.start, ip.end, templateMessage(shown, landing), Severity.WARNING, "interpolate-template", Docs.EXPRESSIONS, fixes)
+        }
+        for ((k, d) in at.withIndex()) {
+            val landing = landings[format.interpolations.size + k]
+            if (landing.position in ESCAPED_POSITIONS) continue
+            val arg = if (mapped) values[k] else null
+            val kind = if (arg != null) kinds[k] else null
+            val allowed =
+                when (landing.position) {
+                    Position.DATASTAR -> setOf(ArgKind.NUMBER, ArgKind.BOOLEAN)
+                    Position.STYLE -> setOf(ArgKind.NUMBER)
+                    else -> emptySet<ArgKind>()
+                }
+            if (kind == ArgKind.TRUSTED || kind in allowed) continue
+            val shown = arg?.let { shorten(it.text.trim()) } ?: "the value of this %s"
+            val r = format.toSource(d, d + PLACEHOLDER.length)
+            issues +=
+                Issue(
+                    r.first,
+                    r.last + 1,
+                    refusedMessage(shown, landing, kind != null),
+                    if (kind == null) Severity.WARNING else Severity.ERROR,
+                    "unsafe-interpolation",
+                    Docs.EXPRESSIONS,
+                )
+        }
+        if (opts.checkHtmlAttributes) issues += mapIssues(format, src, analyzeHtml(view, opts, hyphenated))
+        return issues
+    }
+
+    private fun factKind(fact: HoleFact?): ArgKind? =
+        when (fact) {
+            HoleFact.STRING -> ArgKind.STRING
+            HoleFact.NUMBER -> ArgKind.NUMBER
+            HoleFact.BOOLEAN -> ArgKind.BOOLEAN
+            HoleFact.MARKUP -> ArgKind.MARKUP
+            else -> null
+        }
+
+    private fun shorten(text: String): String = if (text.length <= 30) text else text.substring(0, 29) + "…"
+
+    /** The template made a `%s` hole in place, and its expression passed as the value at the same place among the others. */
+    private fun holeFix(
+        ip: Interpolation,
+        shown: String,
+        holes: List<Int>,
+        values: List<Arg>,
+        format: Arg,
+    ): Fix {
+        val index = holes.count { it < ip.decodedStart }
+        val expr = if (ip.kind == InterpolationKind.SIMPLE) ip.text else ip.text.trim()
+        val before = values.getOrNull(index)
+        val after = values.lastOrNull() ?: format
+        val edit = if (before != null) Edit(before.start, before.start, "$expr, ") else Edit(after.end, after.end, ", $expr")
+        return Fix("Make $shown a %s hole, which interpolate escapes", ip.start, ip.end, "%s", listOf(edit))
+    }
+
+    /** Where a hole that is not escaped lands, said for a message, and what to write instead. */
+    private fun landingWords(landing: HoleLanding): Pair<String, String> =
+        when (landing.position) {
+            Position.DATASTAR -> {
+                "${landing.attribute ?: "a Datastar attribute"}, which Datastar runs as an expression or follows as a signal path" to
+                    "Put the value in a signal and reference it from the expression, or write the signal's name in the markup yourself."
+            }
+
+            Position.STYLE -> {
+                "${landing.attribute ?: "style"}, which is read as CSS" to
+                    "Pass a number and write the unit in the markup, or choose between classes."
+            }
+
+            Position.CODE -> {
+                "${landing.attribute ?: "a script or style element"}, which the browser runs" to
+                    "Put the value in a data-* attribute or a signal and read it from there; wrap markup you built yourself in Trusted(...)."
+            }
+
+            else -> {
+                "the markup's own structure, a tag name, an attribute name or an unquoted value" to
+                    "Build that part of the markup from literals, or quote the attribute value; wrap markup you built yourself in Trusted(...)."
+            }
+        }
+
+    private fun templateMessage(
+        shown: String,
+        landing: HoleLanding,
+    ): String {
+        val base = "Kotlin fills in $shown before interpolate sees the markup, so interpolate neither escapes nor refuses it."
+        if (landing.position in ESCAPED_POSITIONS) return "$base Make it a %s hole and pass the value to interpolate."
+        val (where, instead) = landingWords(landing)
+        return "$base It lands in $where. $instead"
+    }
+
+    private fun refusedMessage(
+        shown: String,
+        landing: HoleLanding,
+        certain: Boolean,
+    ): String {
+        val allowed =
+            when (landing.position) {
+                Position.DATASTAR -> "a number or a boolean"
+                Position.STYLE -> "a number"
+                else -> "Trusted(...)"
+            }
+        val (where, instead) = landingWords(landing)
+        return if (certain) {
+            "interpolate always throws here: $shown lands in $where, and only $allowed is let in there. $instead"
+        } else {
+            "interpolate throws here unless $shown is $allowed: it lands in $where. $instead"
+        }
     }
 
     /**
