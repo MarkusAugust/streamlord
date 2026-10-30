@@ -1,0 +1,325 @@
+{
+ "$comment": "The interpolation findings both analyses give the five files of the test project in this folder, copied verbatim from the user's interpolationtests project: analyzeKotlin in editors/vscode/src/analyze.ts and Analyzer.analyzeKotlin in streamlord-analysis, each file on its own, with the const vals the workspace declares (constants) known, as the VS Code index and IntelliJ provide them. Only the interpolation codes are listed (kotlin-interpolation, unescaped-interpolation, unsafe-interpolation), and missing-id and top-level-text must not appear in any file. Offsets count UTF-16 code units; line is for the reader. What IntelliJ adds with types is in the plugin's own InspectionTest.",
+ "constants": [
+  "variant",
+  "fieldId",
+  "tag"
+ ],
+ "files": {
+  "A_LanguageComment.kt": [
+   {
+    "line": 22,
+    "hole": "$name",
+    "start": 791,
+    "end": 796,
+    "code": "unescaped-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes $name into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+   },
+   {
+    "line": 28,
+    "hole": "${applicant.email}",
+    "start": 979,
+    "end": 997,
+    "code": "unescaped-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes ${applicant.email} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+   },
+   {
+    "line": 34,
+    "hole": "$count",
+    "start": 1181,
+    "end": 1187,
+    "code": "unescaped-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes $count into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+   },
+   {
+    "line": 55,
+    "hole": "${buttonAttributes()}",
+    "start": 1947,
+    "end": 1968,
+    "code": "unsafe-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes ${buttonAttributes()} into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
+   },
+   {
+    "line": 69,
+    "hole": "$error",
+    "start": 2429,
+    "end": 2435,
+    "code": "unescaped-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes $error into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+   },
+   {
+    "line": 86,
+    "hole": "${applicant.name}",
+    "start": 3040,
+    "end": 3057,
+    "code": "unescaped-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes ${applicant.name} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+   },
+   {
+    "line": 94,
+    "hole": "applicant.name",
+    "start": 3287,
+    "end": 3301,
+    "code": "unescaped-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes applicant.name into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+   },
+   {
+    "line": 94,
+    "hole": "$count",
+    "start": 3340,
+    "end": 3346,
+    "code": "unescaped-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes $count into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+   },
+   {
+    "line": 103,
+    "hole": "${applicant.name}",
+    "start": 3718,
+    "end": 3735,
+    "code": "unescaped-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes ${applicant.name} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+   },
+   {
+    "line": 104,
+    "hole": "$count",
+    "start": 3780,
+    "end": 3786,
+    "code": "unescaped-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes $count into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+   },
+   {
+    "line": 114,
+    "hole": "$open",
+    "start": 4166,
+    "end": 4171,
+    "code": "kotlin-interpolation",
+    "severity": "warning",
+    "message": "Kotlin interpolates $open here, as the whole Datastar expression. Meant as a server value, only a number or a boolean is safe there; meant as the signal $open, make the whole literal $$\"\"\"...\"\"\" (Kotlin 2.2+), or escape as ${'$'}open."
+   }
+  ],
+  "B_LanguageAnnotation.kt": [
+   {
+    "line": 21,
+    "hole": "${applicant.name}",
+    "start": 722,
+    "end": 739,
+    "code": "unescaped-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes ${applicant.name} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+   },
+   {
+    "line": 39,
+    "hole": "$name",
+    "start": 1367,
+    "end": 1372,
+    "code": "unescaped-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes $name into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+   },
+   {
+    "line": 46,
+    "hole": "${applicant.email}",
+    "start": 1580,
+    "end": 1598,
+    "code": "unescaped-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes ${applicant.email} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+   },
+   {
+    "line": 53,
+    "hole": "$count",
+    "start": 1807,
+    "end": 1813,
+    "code": "unescaped-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes $count into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+   },
+   {
+    "line": 77,
+    "hole": "${buttonAttributes()}",
+    "start": 2572,
+    "end": 2593,
+    "code": "unsafe-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes ${buttonAttributes()} into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
+   },
+   {
+    "line": 93,
+    "hole": "$error",
+    "start": 3076,
+    "end": 3082,
+    "code": "unescaped-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes $error into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+   },
+   {
+    "line": 112,
+    "hole": "${applicant.name}",
+    "start": 3718,
+    "end": 3735,
+    "code": "unescaped-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes ${applicant.name} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+   },
+   {
+    "line": 121,
+    "hole": "applicant.name",
+    "start": 3965,
+    "end": 3979,
+    "code": "unescaped-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes applicant.name into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+   },
+   {
+    "line": 121,
+    "hole": "$count",
+    "start": 4018,
+    "end": 4024,
+    "code": "unescaped-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes $count into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+   },
+   {
+    "line": 130,
+    "hole": "${applicant.name}",
+    "start": 4331,
+    "end": 4348,
+    "code": "unescaped-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes ${applicant.name} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+   },
+   {
+    "line": 131,
+    "hole": "$count",
+    "start": 4393,
+    "end": 4399,
+    "code": "unescaped-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes $count into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+   },
+   {
+    "line": 140,
+    "hole": "$open",
+    "start": 4654,
+    "end": 4659,
+    "code": "kotlin-interpolation",
+    "severity": "warning",
+    "message": "Kotlin interpolates $open here, as the whole Datastar expression. Meant as a server value, only a number or a boolean is safe there; meant as the signal $open, make the whole literal $$\"\"\"...\"\"\" (Kotlin 2.2+), or escape as ${'$'}open."
+   }
+  ],
+  "C_Streamlord.kt": [
+   {
+    "line": 20,
+    "hole": "$name",
+    "start": 816,
+    "end": 821,
+    "code": "unescaped-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes $name into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+   },
+   {
+    "line": 23,
+    "hole": "${applicant.email}",
+    "start": 958,
+    "end": 976,
+    "code": "unescaped-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes ${applicant.email} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+   },
+   {
+    "line": 26,
+    "hole": "$count",
+    "start": 1107,
+    "end": 1113,
+    "code": "unescaped-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes $count into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+   },
+   {
+    "line": 42,
+    "hole": "${buttonAttributes()}",
+    "start": 1689,
+    "end": 1710,
+    "code": "unsafe-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes ${buttonAttributes()} into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
+   },
+   {
+    "line": 49,
+    "hole": "$error",
+    "start": 2032,
+    "end": 2038,
+    "code": "unescaped-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes $error into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+   },
+   {
+    "line": 62,
+    "hole": "${applicant.name}",
+    "start": 2556,
+    "end": 2573,
+    "code": "unescaped-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes ${applicant.name} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+   },
+   {
+    "line": 68,
+    "hole": "applicant.name",
+    "start": 2734,
+    "end": 2748,
+    "code": "unescaped-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes applicant.name into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+   },
+   {
+    "line": 75,
+    "hole": "${applicant.name}",
+    "start": 2994,
+    "end": 3011,
+    "code": "unescaped-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes ${applicant.name} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+   },
+   {
+    "line": 76,
+    "hole": "$count",
+    "start": 3054,
+    "end": 3060,
+    "code": "unescaped-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes $count into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+   },
+   {
+    "line": 83,
+    "hole": "$open",
+    "start": 3245,
+    "end": 3250,
+    "code": "kotlin-interpolation",
+    "severity": "warning",
+    "message": "Kotlin interpolates $open here, as the whole Datastar expression. Meant as a server value, only a number or a boolean is safe there; meant as the signal $open, make the whole literal $$\"\"\"...\"\"\" (Kotlin 2.2+), or escape as ${'$'}open."
+   }
+  ],
+  "Data.kt": [],
+  "Main.kt": [
+   {
+    "line": 37,
+    "hole": "${everything()}",
+    "start": 1798,
+    "end": 1813,
+    "code": "unescaped-interpolation",
+    "severity": "hint",
+    "message": "Kotlin writes ${everything()} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+   }
+  ]
+ }
+}

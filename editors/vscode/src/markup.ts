@@ -432,7 +432,8 @@ export function tokenize(html: string): { tags: Tag[]; topLevelText: { start: nu
       i = close < 0 ? html.length : close + 1;
       continue;
     }
-    const tagMatch = /^<(\/?)([A-Za-z][A-Za-z0-9:._-]*)/.exec(html.slice(i, i + 64));
+    // A Kotlin template as the name, `<$tag>`, is a tag all the same: the browser sees a name there.
+    const tagMatch = /^<(\/?)((?:[A-Za-z]|__kt__)[A-Za-z0-9:._-]*)/.exec(html.slice(i, i + 64));
     if (html[i] === "<" && tagMatch) {
       flushText(i);
       const closing = tagMatch[1] === "/";

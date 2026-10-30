@@ -13,9 +13,9 @@ export interface Interpolation {
   start: number;
   /** Source offset just past the template. */
   end: number;
-  /** `simple` for `$name`, `braced` for `${...}`. */
-  kind: "simple" | "braced";
-  /** The identifier for `simple`, the inner text for `braced`. */
+  /** `simple` for `$name`, `braced` for `${...}`, `operand` for a value joined to literals with `+`. */
+  kind: "simple" | "braced" | "operand";
+  /** The identifier for `simple`, the inner text for `braced`, the expression for `operand`. */
   text: string;
   /** Offset in the decoded text where the placeholder starts. */
   decodedStart: number;
@@ -42,6 +42,8 @@ export interface KotlinString {
   interpolations: Interpolation[];
   /** `true` when the literal never closes. */
   unterminated: boolean;
+  /** The literals inside this one's templates, `"<ul>${xs.joinToString { "<li>$it</li>" }}</ul>"`, outermost first. */
+  nested?: KotlinString[];
 }
 
 export const PLACEHOLDER = "__kt__";
@@ -87,6 +89,7 @@ export function readKotlinStringAt(src: string, at: number): KotlinString | null
   let out = "";
   const map: number[] = [];
   const interpolations: Interpolation[] = [];
+  const nested: KotlinString[] = [];
   const push = (ch: string, from: number) => {
     for (const c of ch) {
       out += c;
@@ -105,12 +108,12 @@ export function readKotlinStringAt(src: string, at: number): KotlinString | null
         for (let k = 0; k < extra; k++) push('"', i + k);
         // The end of the text is where the closing quotes start, as in an ordinary literal.
         map.push(j - 3);
-        return { start: at, end: j, raw, dollars, contentStart, contentEnd: j - 3, text: out, map, interpolations, unterminated: false };
+        return { start: at, end: j, raw, dollars, contentStart, contentEnd: j - 3, text: out, map, interpolations, unterminated: false, nested };
       }
     } else {
       if (c === '"') {
         map.push(i);
-        return { start: at, end: i + 1, raw, dollars, contentStart, contentEnd: i, text: out, map, interpolations, unterminated: false };
+        return { start: at, end: i + 1, raw, dollars, contentStart, contentEnd: i, text: out, map, interpolations, unterminated: false, nested };
       }
       if (c === "\n") break;
       if (c === "\\") {
@@ -154,6 +157,7 @@ export function readKotlinStringAt(src: string, at: number): KotlinString | null
           else if (cj === '"') {
             const inner = readKotlinStringAt(src, j);
             if (inner) {
+              nested.push(inner);
               j = inner.end;
               continue;
             }
@@ -182,7 +186,7 @@ export function readKotlinStringAt(src: string, at: number): KotlinString | null
     i++;
   }
   map.push(i);
-  return { start: at, end: i, raw, dollars, contentStart, contentEnd: i, text: out, map, interpolations, unterminated: true };
+  return { start: at, end: i, raw, dollars, contentStart, contentEnd: i, text: out, map, interpolations, unterminated: true, nested };
 }
 
 /** Map a decoded range back to source offsets. */

@@ -25,6 +25,16 @@ export interface Fix {
   start: number;
   end: number;
   text: string;
+  /** Further replacements the fix makes elsewhere in the file, such as an import; never overlapping the main one. */
+  edits?: { start: number; end: number; text: string }[];
+}
+
+/** The source after a fix: its replacement and every further edit, applied from the end so no offset moves. */
+export function applyFix(source: string, fix: Fix): string {
+  const edits = [{ start: fix.start, end: fix.end, text: fix.text }, ...(fix.edits ?? [])].sort((a, b) => b.start - a.start);
+  let out = source;
+  for (const e of edits) out = out.slice(0, e.start) + e.text + out.slice(e.end);
+  return out;
 }
 
 export const DOCS = {
