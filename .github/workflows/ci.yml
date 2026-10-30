@@ -85,8 +85,8 @@ jobs:
               # The corpus both editors' checks are held to: CorpusTest in the SDK reads it too,
               # and the front page counts it, so it is site content as well.
               editors/vscode/test/fixtures/corpus/*) vscode=true; kotlin=true; intellij=true; docs=true ;;
-              # The other shared fixtures: the SSE corpus, the reference hyphens core reads, the
-              # second argument of dataSignals the analysis reads, the templates IntelliJ reads.
+              # The other shared fixtures: the cases both analyses hold under twins/, which core
+              # reads some of too, the SSE corpus, and the templates IntelliJ reads.
               editors/vscode/test/fixtures/*) vscode=true; kotlin=true; intellij=true ;;
               # The site highlights its code with the extension's grammars and palette, and shows its icon.
               editors/vscode/syntaxes/*|editors/vscode/media/*|editors/vscode/src/palette.ts) vscode=true; docs=true ;;

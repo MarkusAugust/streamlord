@@ -168,7 +168,7 @@ class ClientOracleTest {
     fun `reads a reference's hyphens as genRx does`() {
         val names =
             JsonParser
-                .parseObject(File("../editors/vscode/test/fixtures/reference-hyphens.json").readText())
+                .parseObject(File("../editors/vscode/test/fixtures/twins/reference-hyphens.json").readText())
                 .array("cases")!!
                 .objects()
         assertEquals(20, names.size)

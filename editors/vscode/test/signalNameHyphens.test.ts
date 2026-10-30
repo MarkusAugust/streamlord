@@ -1,6 +1,5 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { analyzeKotlin } from "../src/analyze.ts";
 import type { Issue } from "../src/expression.ts";
 import { twinCases } from "./twins.ts";
@@ -31,9 +30,9 @@ describe("a hyphen in a signal name", () => {
   // The table DataSignalsSecondArgumentTest in streamlord-analysis compiles: `kotlin` is the overload the compiler picked.
   it("reads the second argument of dataSignals as the compiler does", () => {
     type Row = { argument: string; kotlin: string; analysis: string };
-    const table = JSON.parse(readFileSync(new URL("./fixtures/data-signals-second-argument.json", import.meta.url), "utf8")) as { cases: Row[] };
-    assert.equal(table.cases.length, 32);
-    for (const { argument, kotlin, analysis } of table.cases) {
+    const cases = twinCases<Row>("data-signals-second-argument.json");
+    assert.equal(cases.length, 32);
+    for (const { argument, kotlin, analysis } of cases) {
       assert.ok(analysis === "unknown" || analysis === kotlin, argument);
       const src = `${dsl}fun p(mode: String, flag: Boolean, expr: String, n: Int) = div { dataSignals("a-b", ${argument}) }`;
       assert.equal(hyphens(src).length > 0, analysis === "expression", argument);

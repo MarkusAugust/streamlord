@@ -2,21 +2,19 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { baseUrlSuggestion, describeVariables, emptyBodyHint, emptyRequestsFile, lineAndColumn, mergeVariables, newRequestLabel, parseEnv, parseRequestsFile, pushRecent, readsAsStream, remove, requestHeaders, requestsPathProblem, requestUrl, resolveRequest, routeHeaders, routeOptional, routeUrl, sendableUrl, serializeRequestsFile, substitute, toCurl, unreachableHint, upsert, variableCompletions, withBaseUrl, withEnvVariables, type SavedRequest } from "../src/requests.ts";
 import { findRoutes } from "../src/routes.ts";
-import { readFileSync } from "node:fs";
 import { twinCases } from "./twins.ts";
 
-// fixtures/request-urls.json, which RequestsTest.kt in streamlord-analysis reads too.
+// twins/request-urls.json, which RequestsTest.kt in streamlord-analysis and ClientRequestTest.kt in streamlord-core read too.
+type UrlCase = { url: string; method: string; signals: string; expected: string };
 describe("the url the client opens", () => {
   it("opens the url the client opens", () => {
-    type Case = { url: string; method: string; signals: string; expected: string };
-    const cases = (JSON.parse(readFileSync(new URL("./fixtures/request-urls.json", import.meta.url), "utf8")) as { cases: Case[] }).cases;
+    const cases = twinCases<UrlCase>("request-urls.json");
     for (const c of cases) assert.equal(requestUrl(c.url, c.method, c.signals), c.expected, JSON.stringify(c));
     assert.ok(cases.length > 0);
   });
 
   it("holds the cases to the browser's own URLSearchParams.set", () => {
-    type Case = { url: string; method: string; signals: string; expected: string };
-    const cases = (JSON.parse(readFileSync(new URL("./fixtures/request-urls.json", import.meta.url), "utf8")) as { cases: Case[] }).cases;
+    const cases = twinCases<UrlCase>("request-urls.json");
     for (const c of cases) {
       if (!["GET", "DELETE"].includes(c.method.toUpperCase())) continue;
       // The client re-serialises the rest of the query and the inspector keeps it as written, so the
@@ -54,9 +52,11 @@ const calls: Record<string, (c: Case) => unknown> = {
   pushRecent: (c) => (c.push as Partial<SavedRequest>[]).reduce((recent: SavedRequest[], r) => pushRecent(recent, request(r)), []).map((r) => [r.name, r.url]),
   substitute: (c) => substitute(c.text, c.vars),
   toCurl: (c) => toCurl(request(c.request)),
+  // Exactly one of the two is set, as in the Kotlin twin's data class.
   sendableUrl: (c) => {
-    const r = sendableUrl(c.url);
-    return { url: "url" in r ? r.url : null, error: "error" in r ? r.error : null };
+    const r = sendableUrl(c.url) as { url?: string; error?: string };
+    assert.equal(Object.keys(r).length, 1, c.name);
+    return { url: r.url ?? null, error: r.error ?? null };
   },
   sends: (c) => "url" in sendableUrl(c.url),
   readsAsStream: (c) => readsAsStream(c.status, c.contentType),

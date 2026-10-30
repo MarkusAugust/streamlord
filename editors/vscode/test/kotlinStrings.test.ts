@@ -28,8 +28,8 @@ describe("kotlin string reader", () => {
         if (c.text !== undefined) assert.equal(s.text, c.text, c.name);
         if (c.interpolations) assert.deepEqual(s.interpolations.map((i) => [i.kind, i.text]), c.interpolations, c.name);
       }
-      if (c.calls && c.sites) {
-        const sites = findCallSites(c.src, new Set(c.calls));
+      if (c.sites) {
+        const sites = findCallSites(c.src, new Set(c.calls!));
         assert.deepEqual(sites.map((site) => site.args.map((a) => a.string?.text ?? null)), c.sites, c.name);
       }
       const issues = analyzeKotlin(c.src, opts);

@@ -54,7 +54,7 @@ tasks.withType<Test>().configureEach {
     inputs.dir(root.dir("conformance/client")).withPropertyName("clientFixtures").withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.dir(root.dir("conformance/dom")).withPropertyName("domFixtures").withPathSensitivity(PathSensitivity.RELATIVE)
     inputs
-        .files(root.file("editors/vscode/test/fixtures/reference-hyphens.json"), root.file("editors/vscode/test/fixtures/request-urls.json"))
+        .files(root.file("editors/vscode/test/fixtures/twins/reference-hyphens.json"), root.file("editors/vscode/test/fixtures/twins/request-urls.json"))
         .withPropertyName("editorFixtures")
         .withPathSensitivity(PathSensitivity.RELATIVE)
 }

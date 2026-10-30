@@ -2,7 +2,6 @@ package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonObject
-import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonString
 import io.github.markusaugust.streamlord.core.json.mergePatch
 import org.junit.jupiter.api.DynamicTest
@@ -15,15 +14,10 @@ import kotlin.test.assertTrue
 
 /** The cases of `twins/requests.json`, which the VS Code extension's `requests.test.ts` reads too. */
 class RequestsTest {
-    // editors/vscode/test/fixtures/request-urls.json, which requests.test.ts reads too.
+    // twins/request-urls.json, which requests.test.ts and core's ClientRequestTest read too.
     @Test
     fun `opens the url the client opens`() {
-        val cases =
-            JsonParser
-                .parseObject(
-                    java.io.File("../editors/vscode/test/fixtures/request-urls.json").readText(),
-                ).array("cases")!!
-                .objects()
+        val cases = twinCases("request-urls.json")
         for (c in cases) {
             assertEquals(
                 c.string("expected"),
@@ -189,12 +183,5 @@ class RequestsTest {
         assertEquals(listOf(".streamlord/env.json is not valid JSON at line 1, column 1."), Requests.parseEnv("not json").errors)
         val broken = Requests.parseRequestsFile("{\"requests\":[{\"name\":\"a\",\"url\":\"/a\"},]}", "req.json")
         assertTrue(broken.error!!.startsWith("req.json is not valid JSON"), broken.error)
-    }
-
-    @Test
-    fun `merge-patches signals`() {
-        val target = JsonParser.parse("""{"a":1,"u":{"n":"x","e":"y"}}""")
-        val patch = JsonParser.parse("""{"a":null,"u":{"e":null,"t":1},"l":[1]}""")
-        assertEquals(JsonParser.parse("""{"u":{"n":"x","t":1},"l":[1]}"""), mergePatch(target, patch))
     }
 }

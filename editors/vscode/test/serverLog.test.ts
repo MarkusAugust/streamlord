@@ -13,7 +13,8 @@ interface Case {
 
 describe("server log", () => {
   for (const c of twinCases<Case>("server-log.json")) {
-    it(c.name, () => assert.equal(c.call === "startedAt" ? startedAt(c.line) : isProblem(c.line), c.expected, c.name));
+    const read = { startedAt, isProblem }[c.call];
+    it(c.name, () => assert.equal(read(c.line), c.expected, c.name));
   }
 
   // The steps of the IntelliJ plugin's test of its own RunningServers.

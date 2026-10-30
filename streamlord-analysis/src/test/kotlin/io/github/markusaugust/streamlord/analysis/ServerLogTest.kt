@@ -12,7 +12,12 @@ class ServerLogTest {
             val name = c.string("name")!!
             DynamicTest.dynamicTest(name) {
                 val line = c.string("line")!!
-                val read = if (c.string("call") == "startedAt") ServerLog.startedAt(line) else ServerLog.isProblem(line)
+                val read =
+                    when (val call = c.string("call")) {
+                        "startedAt" -> ServerLog.startedAt(line)
+                        "isProblem" -> ServerLog.isProblem(line)
+                        else -> error("Unknown call $call")
+                    }
                 assertEquals(c["expected"]!!.toKotlin(), read, name)
             }
         }

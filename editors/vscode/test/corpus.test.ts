@@ -38,7 +38,7 @@ const run: Record<string, (c: Case) => Issue[]> = {
   // The signals the source reads that it does not itself declare.
   references: (c) => {
     const defined = collectSignalDefinitions(c.source, "html");
-    return signalReferencesInHtml(c.source, "data-").flatMap((r) => unknownSignalIssue(r, defined) ?? []);
+    return signalReferencesInHtml(c.source, c.prefix ?? "data-").flatMap((r) => unknownSignalIssue(r, defined) ?? []);
   },
 };
 const byCode = (a: Issue, b: Issue) => ((a.code ?? "") < (b.code ?? "") ? -1 : (a.code ?? "") > (b.code ?? "") ? 1 : 0);

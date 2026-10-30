@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { twinCases } from "./twins.ts";
 import { analyzeHtml } from "../src/analyze.ts";
 import { catalog, parseAttributeName } from "../src/catalog.ts";
 import { clientRewrite, clientScript } from "../src/expression.ts";
@@ -120,7 +121,7 @@ describe("the client's rules", () => {
   it("reads a reference's hyphens as genRx does", () => {
     const cases = read<{ rewrites: ExpressionCase[] }>("expressions.json").rewrites;
     type Row = { name: string; fixed: string | null; subtraction: string | null; shows: string };
-    const table = JSON.parse(readFileSync(new URL("./fixtures/reference-hyphens.json", import.meta.url), "utf8")) as { cases: Row[] };
+    const table = { cases: twinCases<Row>("reference-hyphens.json") };
     assert.equal(table.cases.length, 20);
     for (const { name, fixed, subtraction, shows } of table.cases) {
       const found = cases.filter((c) => c.expression === `$${name}` && !c.returnsValue);
