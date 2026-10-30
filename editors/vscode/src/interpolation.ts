@@ -194,6 +194,8 @@ export function chainFrom(src: string, first: KotlinString, mask: Uint8Array): K
     let depth = 0;
     while (k < src.length) {
       if (mask[k] === 0) {
+        // A comment ends the operand; a string inside it is part of it.
+        if (depth === 0 && (src.startsWith("//", k) || src.startsWith("/*", k))) break;
         k++;
         continue;
       }

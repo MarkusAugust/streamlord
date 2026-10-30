@@ -256,6 +256,8 @@ internal fun chainFrom(
         var depth = 0
         while (k < src.length) {
             if (!mask[k]) {
+                // A comment ends the operand; a string inside it is part of it.
+                if (depth == 0 && (src.startsWith("//", k) || src.startsWith("/*", k))) break
                 k++
                 continue
             }
