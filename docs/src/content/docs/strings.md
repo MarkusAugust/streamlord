@@ -183,16 +183,27 @@ lands:
 
 | Where the hole is | What the editors say |
 |---|---|
-| Element text, a quoted attribute, a URL whose literal start settles the scheme (`#`, `/`, `https://`) | `unescaped-interpolation`: a hint, a warning when the value is a `String`, with a fix that rewrites the literal as `interpolate(...)` |
-| The start of a URL, `style`, a `data-*` expression or signal path, `<script>`, `on*`, a value without quotes | `unsafe-interpolation`: a warning, since escaping cannot help there |
-| A tag name, an attribute name, a list of attributes | `unsafe-interpolation`: a hint, a warning when the value is a `String` |
+| Element text, a quoted attribute, a URL whose literal start settles the scheme (`#`, `/`, `?`, `https://`) | `unescaped-interpolation`: a hint, a warning when the value is a `String` or markup, with a fix that rewrites the literal as `interpolate(...)` |
+| The start of a URL, `style`, a `data-*` expression, signal path or filter, `<script>`, `<style>`, `on*`, `srcdoc` | `unsafe-interpolation`: a warning, since escaping cannot help there |
+| A value without quotes | `unsafe-interpolation`: a warning, a hint for a number or a boolean, with a fix that quotes the value |
+| A tag name, an attribute name, a list of attributes | `unsafe-interpolation`: a hint, a warning when the value is a `String` or markup |
 | `$name` where a Datastar signal could stand | `kotlin-interpolation`, the [dollar trap](/dollar-trap/) |
 
-A value the editor can see is yours says nothing: a `const val`, a literal, an `if` that picks
-between literals, a number or a boolean, and markup you built, whether an HTML literal inside the
-template, an `interpolate(...)` call or a value declared `Html`. VS Code knows what the file it
-is in declares and every `const val` in the workspace; IntelliJ also knows the types. Nothing here
-is an error, because a value the text cannot see into may well be a number.
+A value the editor can see is yours says nothing anywhere: a `const val`, a literal, or an `if` or
+a `when` whose every branch is one. Any other value is judged by what `interpolate` would let in
+where it lands. A number or a boolean says nothing in text, an attribute, a URL or a `data-*`
+expression, and a number in `style` too; one that may be null, an `Int?`, only where escaping is
+enough. Markup you built, whether an HTML literal inside the template, an `interpolate(...)` or
+`Trusted(...)` call, or a value declared `Html`, says nothing in element text and is a warning
+anywhere else, where its quotes and tags can end what holds it. An `if` or a `when` is judged by
+its weakest branch, so `${'$'}{if (blank) "nothing" else query}` is the `String` it may be.
+
+VS Code knows what the file it is in declares and every `const val` in the workspace; IntelliJ
+also knows the types. Nothing here is an error, because a value the text cannot see into may well
+be a number. The `interpolate(...)` fix is offered only when the rewrite keeps the page as it was,
+escaping aside: not when a value may be null, which a template writes as `null` and `interpolate`
+as nothing, nor when markup held as a `String` sits in element text, where `interpolate` would
+escape it.
 
 At run time the source is gone and only the finished string arrives, so the holes have to be left
 standing for the same question to be asked. That is the whole of what `interpolate` wants from you.

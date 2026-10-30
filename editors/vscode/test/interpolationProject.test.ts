@@ -5,7 +5,7 @@ import { analyzeKotlin } from "../src/analyze.ts";
 import { constantNames } from "../src/interpolation.ts";
 
 /**
- * The five files of the interpolation test project, and what the analysis must say about each
+ * The files of the interpolation test project, and what the analysis must say about each
  * hole in them; InterpolationProjectTest.kt reads the same expected.json.
  */
 const dir = new URL("./fixtures/interpolationtests/", import.meta.url);
@@ -13,7 +13,7 @@ const expected = JSON.parse(readFileSync(new URL("expected.json", dir), "utf8"))
   constants: string[];
   files: Record<string, { start: number; end: number; code: string; severity: string; message: string }[]>;
 };
-const CODES = new Set(["kotlin-interpolation", "unescaped-interpolation", "unsafe-interpolation"]);
+const CODES = new Set(["kotlin-interpolation", "unescaped-interpolation", "unsafe-interpolation", "interpolate-template", "interpolate-holes"]);
 
 describe("the interpolation test project", () => {
   it("finds the constants the workspace index gives the analysis", () => {

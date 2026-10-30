@@ -77,17 +77,124 @@ export function withNested(strings: readonly KotlinString[]): KotlinString[] {
  * else "errors"}`, a number, `true`. Its value is markup the source spells out.
  */
 export function literalOnly(expr: string): boolean {
-  const e = expr.trim();
-  if (/^(?:-?\d[\d_]*(?:\.\d+)?[LlFfDd]?|true|false|null)$/.test(e)) return true;
-  if (/^"(?:[^"\\$]|\\.)*"$/.test(e)) return true;
-  const branches = /^if\s*\(.*?\)\s*("(?:[^"\\$]|\\.)*"|-?\d+|true|false)\s*else\s*("(?:[^"\\$]|\\.)*"|-?\d+|true|false)$/s.exec(e);
-  return branches !== null;
+  return (branches(expr) ?? [expr]).every((v) => LITERAL.test(v.trim()) || STRING_LITERAL.test(v.trim()));
 }
 
-/** The name a hole reads, when it is one plain name: `$x`, `${x}`. */
-export function plainName(ip: Interpolation): string | null {
-  const t = ip.text.trim();
-  return IDENT.test(t) ? t : null;
+const LITERAL = /^(?:-?\d[\d_]*(?:\.\d+)?[LlFfDd]?|true|false|null)$/;
+const STRING_LITERAL = /^"(?:[^"\\$]|\\.)*"$/;
+const WORD_CHAR_U = /[\p{L}\p{Nd}_]/u;
+
+const wordAt = (e: string, at: number, w: string) => e.startsWith(w, at) && !WORD_CHAR_U.test(e[at - 1] ?? "") && !WORD_CHAR_U.test(e[at + w.length] ?? "");
+
+/** Just past the string or character literal that opens at `at`, templates and all. */
+function literalEnd(e: string, at: number): number {
+  if (e[at] === "'") {
+    const close = e.indexOf("'", at + (e[at + 1] === "\\" ? 3 : 2));
+    return close < 0 ? e.length : close + 1;
+  }
+  const raw = e.startsWith('"""', at);
+  let j = at + (raw ? 3 : 1);
+  while (j < e.length) {
+    if (!raw && e[j] === "\\") j += 2;
+    else if (e.startsWith("${", j)) {
+      let depth = 1;
+      j += 2;
+      while (j < e.length && depth > 0) {
+        if (e[j] === '"' || e[j] === "'") {
+          j = literalEnd(e, j);
+          continue;
+        }
+        if (e[j] === "{") depth++;
+        else if (e[j] === "}") depth--;
+        j++;
+      }
+    } else if (raw ? e.startsWith('"""', j) : e[j] === '"') return j + (raw ? 3 : 1);
+    else j++;
+  }
+  return e.length;
+}
+
+/** How deep in brackets each character of `e` stands, a bracket counting as outside itself; -1 inside a literal. */
+function depths(e: string): number[] {
+  const out = new Array<number>(e.length).fill(-1);
+  let depth = 0;
+  for (let i = 0; i < e.length; ) {
+    const c = e[i];
+    if (c === '"' || c === "'") {
+      i = literalEnd(e, i);
+      continue;
+    }
+    if (c === ")" || c === "]" || c === "}") depth--;
+    out[i] = depth;
+    if (c === "(" || c === "[" || c === "{") depth++;
+    i++;
+  }
+  return out;
+}
+
+/** Just past the bracket that closes the one at `open`, or -1. */
+function closing(e: string, d: readonly number[], open: number): number {
+  for (let k = open + 1; k < e.length; k++) if (d[k] === d[open] && ")]}".includes(e[k] as string)) return k + 1;
+  return -1;
+}
+
+/** A branch as the value it gives: a block of one expression is that expression. */
+function unblock(v: string): string {
+  const t = v.trim();
+  return t.startsWith("{") && closing(t, depths(t), 0) === t.length ? t.slice(1, -1).trim() : t;
+}
+
+/**
+ * The values an `if` or a `when` can result in, as written, a branch that is itself one read in
+ * turn: `if (b) "x" else q` gives `"x"` and `q`. Null when the expression is neither, or one this
+ * reading cannot take apart.
+ */
+export function branches(expr: string): string[] | null {
+  const e = expr.trim();
+  const d = depths(e);
+  const expand = (v: string) => {
+    const t = unblock(v);
+    return branches(t) ?? [t];
+  };
+  const skipSpace = (from: number) => {
+    let k = from;
+    while (/\s/.test(e[k] ?? "")) k++;
+    return k;
+  };
+  if (wordAt(e, 0, "if")) {
+    const open = skipSpace(2);
+    if (e[open] !== "(") return null;
+    const close = closing(e, d, open);
+    if (close < 0) return null;
+    for (let k = close; k < e.length; k++) if (d[k] === 0 && wordAt(e, k, "else")) return [...expand(e.slice(close, k)), ...expand(e.slice(k + 4))];
+    return null;
+  }
+  if (wordAt(e, 0, "when")) {
+    let open = skipSpace(4);
+    if (e[open] === "(") {
+      open = closing(e, d, open);
+      if (open < 0) return null;
+      open = skipSpace(open);
+    }
+    if (e[open] !== "{" || closing(e, d, open) !== e.length) return null;
+    const values: string[] = [];
+    let entry = open + 1;
+    let arrow = -1;
+    for (let k = open + 1; k < e.length; k++) {
+      if (d[k] === 1 && arrow < 0 && e.startsWith("->", k)) {
+        arrow = k++;
+        continue;
+      }
+      if (k === e.length - 1 || (d[k] === 1 && (e[k] === ";" || e[k] === "\n"))) {
+        if (arrow >= 0) values.push(...expand(e.slice(arrow + 2, k)));
+        else if (e.slice(entry, k).trim() !== "") return null;
+        arrow = -1;
+        entry = k + 1;
+      }
+    }
+    return values.length > 0 ? values : null;
+  }
+  return null;
 }
 
 /** Where the declaration that encloses `at` starts: the nearest `fun` before it, or the file. */
@@ -107,30 +214,73 @@ export function shadowed(src: string, name: string, at: number): boolean {
   return new RegExp(`\\b(?:val|var)\\s+${n}\\b|[(,]\\s*(?:@\\w+(?:\\([^)]*\\))?\\s*)*${n}\\s*:|\\b${n}\\s*(?:,\\s*[\\p{L}_][\\p{L}\\p{Nd}_]*\\s*)*->|\\bfor\\s*\\(\\s*${n}\\b`, "u").test(scope);
 }
 
-/**
- * The type the enclosing declaration gives `name`: a number or a boolean that cannot be null
- * (`count: Int`, `val n = 3`), a string (`name: String`), which is what may come from outside, or
- * the markup `interpolate` returns (`page: Html`).
- * The nearest declaration before `at` wins, as Kotlin's scoping does; anything else is not known.
- */
-export function declaredKind(src: string, name: string, at: number): "number" | "boolean" | "string" | "markup" | null {
+/** The nearest declaration of `name` before `at` in the one that encloses it: the type it is given, or the literal. */
+function declarationOf(src: string, name: string, at: number): { type?: string; literal?: string } | null {
   const scope = src.slice(scopeStart(src, at), at);
   const n = name.replace(/[$]/g, "\\$&");
   const declarations = [
     ...scope.matchAll(new RegExp(`(?:[(,]\\s*(?:@\\w+(?:\\([^)]*\\))?\\s*)*(?:(?:val|var)\\s+)?|\\b(?:val|var)\\s+)${n}\\s*(?::\\s*([\\p{L}_][\\p{L}\\p{Nd}_.]*\\??)|=\\s*(-?\\d[\\d_]*(?:\\.\\d+)?[LlFfDd]?|true|false)\\b|=|->|,)`, "gu")),
   ];
   const last = declarations.pop();
-  if (!last) return null;
-  const type = last[1];
-  const literal = last[2];
-  if (literal !== undefined) return literal === "true" || literal === "false" ? "boolean" : "number";
-  if (type === undefined) return null;
-  if (/^(?:kotlin\.)?(?:Int|Long|Short|Byte|Double|Float|UInt|ULong|UShort|UByte)$/.test(type)) return "number";
-  if (/^(?:kotlin\.)?Boolean$/.test(type)) return "boolean";
-  if (/^(?:kotlin\.)?(?:String|CharSequence)\??$/.test(type)) return "string";
+  return last ? { type: last[1], literal: last[2] } : null;
+}
+
+/** What a declaration or a value shows: the facts of HoleFact the text alone can give. */
+export type TextKind = "number" | "boolean" | "nullable" | "string" | "markup";
+
+/**
+ * The type the enclosing declaration gives `name`: a number or a boolean that cannot be null
+ * (`count: Int`, `val n = 3`), one that can (`count: Int?`), a string (`name: String`), which is
+ * what may come from outside, or the markup `interpolate` returns (`page: Html`).
+ * The nearest declaration before `at` wins, as Kotlin's scoping does; anything else is not known.
+ */
+export function declaredKind(src: string, name: string, at: number): TextKind | null {
+  const d = declarationOf(src, name, at);
+  if (!d) return null;
+  if (d.literal !== undefined) return d.literal === "true" || d.literal === "false" ? "boolean" : "number";
+  if (d.type === undefined) return null;
+  const type = d.type.replace(/\?$/, "");
+  const scalar = /^(?:kotlin\.)?(?:Int|Long|Short|Byte|Double|Float|UInt|ULong|UShort|UByte)$/.test(type) ? "number" : /^(?:kotlin\.)?Boolean$/.test(type) ? "boolean" : null;
+  // Digits, true or false, or null: safe where anything is, and not where only a number or a boolean is.
+  if (scalar) return type === d.type ? scalar : "nullable";
+  if (/^(?:kotlin\.)?(?:String|CharSequence)$/.test(type)) return "string";
   // What interpolate returns: markup whose values have been through it.
-  if (/^(?:[\p{L}_][\p{L}\p{Nd}_]*\.)*Html\??$/u.test(type)) return "markup";
+  if (/^(?:[\p{L}_][\p{L}\p{Nd}_]*\.)*Html$/u.test(type)) return "markup";
   return null;
+}
+
+/**
+ * Whether a value can be null as far as the text shows: `null` itself, a name declared with a
+ * `?` type, or a safe call with no `?:` after it. A template writes null as `null`, and
+ * `interpolate` writes nothing.
+ */
+export function mayBeNull(src: string, value: string, at: number): boolean {
+  return (branches(value) ?? [value]).some((v) => {
+    const t = v.trim();
+    if (t === "null") return true;
+    if (IDENT.test(t)) return declarationOf(src, t, at)?.type?.endsWith("?") ?? false;
+    return t.includes("?.") && !t.includes("?:");
+  });
+}
+
+/**
+ * What the text shows of one value, a branch of an `if` or a `when` or a whole hole: a literal or
+ * a constant, the author's own, or what the name's declaration says. Null where it shows nothing.
+ */
+export function valueKind(src: string, value: string, at: number, constants?: ReadonlySet<string>): TextKind | "constant" | null {
+  const t = value.trim();
+  if (LITERAL.test(t) || STRING_LITERAL.test(t)) return "constant";
+  if (!IDENT.test(t)) return null;
+  if (constants?.has(t) && !shadowed(src, t, at)) return "constant";
+  return declaredKind(src, t, at);
+}
+
+/** Of the kinds a hole's values have, the one safe in the fewest places; one not known stands between a String and markup. */
+export function weakest(kinds: readonly (TextKind | "constant" | null)[]): TextKind | "constant" | null {
+  const order: (TextKind | "constant" | null)[] = ["string", null, "markup", "nullable", "boolean", "number", "constant"];
+  let worst = order.length - 1;
+  for (const k of kinds) worst = Math.min(worst, order.indexOf(k));
+  return order[worst] ?? null;
 }
 
 /** Whether `name` is a parameter or value marked `@Language("HTML")` in the declaration that encloses `at`. */
@@ -140,18 +290,60 @@ export function htmlNamed(src: string, name: string, at: number): boolean {
   return new RegExp(`@Language\\(\\s*"html"\\s*\\)\\s*(?:(?:val|var)\\s+)?${n}\\b`, "iu").test(scope);
 }
 
+const MARKUP_CALL = /(?:^|[^\p{L}\p{Nd}_.])(?:interpolate|Trusted)\s*\(/u;
+const HTML_TEXT = /^([\p{L}_][\p{L}\p{Nd}_]*)\.text$/u;
+
 /**
  * Whether a hole holds markup the author built: a template with an HTML literal inside it, a
- * call to `interpolate`, or a name marked `@Language("HTML")`. Escaping it would print the tags.
+ * call to `interpolate` or `Trusted`, the text of an `Html`, or a name marked `@Language("HTML")`.
+ * Escaping it would print the tags.
  */
 export function isMarkup(src: string, s: KotlinString, ip: Interpolation): boolean {
   if (ip.kind === "braced" || ip.kind === "operand") {
     const inner = (s.nested ?? []).filter((n) => n.start >= ip.start && n.end <= ip.end);
     if (inner.some((n) => HTML_START.test(n.text))) return true;
-    if (/(?:^|[^\p{L}\p{Nd}_.])interpolate\s*\(/u.test(ip.text)) return true;
+    if (MARKUP_CALL.test(ip.text)) return true;
   }
-  const name = plainName(ip);
-  return name !== null && htmlNamed(src, name, s.start);
+  return (branches(ip.text) ?? [ip.text]).some((v) => {
+    const t = v.trim();
+    const text = HTML_TEXT.exec(t);
+    if (text) return declaredKind(src, text[1] as string, s.start) === "markup";
+    return IDENT.test(t) && htmlNamed(src, t, s.start);
+  });
+}
+
+/**
+ * Whether markup in a hole is a value `interpolate` writes as it stands in element text, an
+ * `Html` or a `Trusted`, rather than a String it would escape.
+ */
+export function markupValued(src: string, s: KotlinString, ip: Interpolation): boolean {
+  return (branches(ip.text) ?? [ip.text]).every((v) => {
+    const t = v.trim();
+    if (IDENT.test(t)) return declaredKind(src, t, s.start) === "markup";
+    const call = /^(?:interpolate|Trusted)\s*\(/.exec(t);
+    return call !== null && closing(t, depths(t), call[0].length - 1) === t.length;
+  });
+}
+
+/**
+ * The fix for a value written into an attribute value without quotes: quotes around the whole
+ * value, which the browser reads the same, so a space in the value no longer starts an attribute.
+ * Null when the value holds a quote of its own, or spans literals joined with `+`.
+ */
+export function quoteFix(s: KotlinString, view: string, ip: Interpolation): Fix | null {
+  if (s.interpolations.some((o) => o.kind === "operand")) return null;
+  const m = /=[ \t\n\f\r]*([^ \t\n\f\r"'=<>`]*)$/.exec(view.slice(0, ip.decodedStart));
+  if (!m) return null;
+  const from = ip.decodedStart - (m[1] ?? "").length;
+  let to = ip.decodedStart;
+  while (to < view.length && !" \t\n\f\r>".includes(view[to] as string)) {
+    if ("\"'=<`".includes(view[to] as string)) return null;
+    to++;
+  }
+  const quote = s.raw ? '"' : '\\"';
+  const start = s.map[from] as number;
+  const end = s.map[to] as number;
+  return { title: "Quote the value", start, end: start, text: quote, edits: [{ start: end, end, text: quote }] };
 }
 
 /** What may end an operand of `+` at the top level: an argument or statement boundary, or an operator that binds less tightly. */
@@ -358,5 +550,7 @@ export function argKind(src: string, text: string, literal: boolean, at: number)
   // The String of the Html: interpolate(...).text.
   const html = /^([\s\S]*?)\s*\.\s*text$/.exec(t)?.[1];
   if (html !== undefined && wholeCall(html, "interpolate")) return "string";
-  return IDENT.test(t) ? declaredKind(src, t, at) : null;
+  const declared = IDENT.test(t) ? declaredKind(src, t, at) : null;
+  // An Int? may be null, which interpolate admits only where anything is: not known here.
+  return declared === "nullable" ? null : declared;
 }

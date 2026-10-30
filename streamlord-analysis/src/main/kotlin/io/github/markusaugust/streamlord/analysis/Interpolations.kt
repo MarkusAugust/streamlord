@@ -14,18 +14,20 @@ private val HTML_OPENING = Regex("""^\s*<(?:[A-Za-z]|!--|!doctype)""", RegexOpti
 private val IDENT = Regex("""[\p{L}_][\p{L}\p{Nd}_]*""")
 private val LITERAL = Regex("""(?:-?\d[\d_]*(?:\.\d+)?[LlFfDd]?|true|false|null)""")
 private val STRING_LITERAL = Regex(""""(?:[^"\\$]|\\.)*"""")
-private val LITERAL_BRANCHES =
-    Regex(
-        """if\s*\(.*?\)\s*("(?:[^"\\$]|\\.)*"|-?\d+|true|false)\s*else\s*("(?:[^"\\$]|\\.)*"|-?\d+|true|false)""",
-        RegexOption.DOT_MATCHES_ALL,
-    )
 private val FUN_KEYWORD = Regex("""\bfun\b""")
 private val NUMBER_TYPE = Regex("""(?:kotlin\.)?(?:Int|Long|Short|Byte|Double|Float|UInt|ULong|UShort|UByte)""")
 private val BOOLEAN_TYPE = Regex("""(?:kotlin\.)?Boolean""")
-private val STRING_TYPE = Regex("""(?:kotlin\.)?(?:String|CharSequence)\??""")
-private val HTML_TYPE = Regex("""(?:[\p{L}_][\p{L}\p{Nd}_]*\.)*Html\??""")
-private val INTERPOLATE_CALL = Regex("""(?:^|[^\p{L}\p{Nd}_.])interpolate\s*\(""")
+private val STRING_TYPE = Regex("""(?:kotlin\.)?(?:String|CharSequence)""")
+private val HTML_TYPE = Regex("""(?:[\p{L}_][\p{L}\p{Nd}_]*\.)*Html""")
+private val MARKUP_CALL = Regex("""(?:^|[^\p{L}\p{Nd}_.])(?:interpolate|Trusted)\s*\(""")
+private val MARKUP_CALL_START = Regex("""^(?:interpolate|Trusted)\s*\(""")
+private val HTML_TEXT = Regex("""([\p{L}_][\p{L}\p{Nd}_]*)\.text""")
+private val UNQUOTED_VALUE = Regex("""=[ \t\n\u000C\r]*([^ \t\n\u000C\r"'=<>`]*)\z""")
 private val WORD_CHAR = Regex("""[\p{L}\p{Nd}_]""")
+
+/** Each kind from the one safe in the fewest places to the one safe everywhere. */
+private val WEAKEST_FIRST =
+    listOf(HoleFact.STRING, null, HoleFact.MARKUP, HoleFact.NULLABLE, HoleFact.BOOLEAN, HoleFact.NUMBER, HoleFact.CONSTANT)
 
 /** What may end an operand of `+` at the top level: an argument or statement boundary, or an operator that binds less tightly. */
 private val OPERAND_END = Regex("""^(?:[,)\]};]|\?:|&&|\|\||==|!=|<=|>=|\.\.)""")
@@ -106,13 +108,153 @@ internal fun withNested(strings: List<KotlinString>): List<KotlinString> {
  * A braced template whose every result is a literal the author wrote: `${if (n == 1) "error"
  * else "errors"}`, a number, `true`. Its value is markup the source spells out.
  */
-internal fun literalOnly(expr: String): Boolean {
-    val e = expr.trim()
-    return LITERAL.matches(e) || STRING_LITERAL.matches(e) || LITERAL_BRANCHES.matches(e)
+internal fun literalOnly(expr: String): Boolean =
+    (branches(expr) ?: listOf(expr)).all { LITERAL.matches(it.trim()) || STRING_LITERAL.matches(it.trim()) }
+
+private fun wordAt(
+    e: String,
+    at: Int,
+    w: String,
+): Boolean =
+    e.startsWith(w, at) &&
+        !WORD_CHAR.matches(e.getOrNull(at - 1)?.toString() ?: "") &&
+        !WORD_CHAR.matches(e.getOrNull(at + w.length)?.toString() ?: "")
+
+/** Just past the string or character literal that opens at [at], templates and all. */
+private fun literalEnd(
+    e: String,
+    at: Int,
+): Int {
+    if (e[at] == '\'') {
+        val close = e.indexOf('\'', at + (if (e.getOrNull(at + 1) == '\\') 3 else 2))
+        return if (close < 0) e.length else close + 1
+    }
+    val raw = e.startsWith("\"\"\"", at)
+    var j = at + (if (raw) 3 else 1)
+    while (j < e.length) {
+        if (!raw && e[j] == '\\') {
+            j += 2
+        } else if (e.startsWith("\${", j)) {
+            var depth = 1
+            j += 2
+            while (j < e.length && depth > 0) {
+                if (e[j] == '"' || e[j] == '\'') {
+                    j = literalEnd(e, j)
+                    continue
+                }
+                if (e[j] == '{') {
+                    depth++
+                } else if (e[j] == '}') {
+                    depth--
+                }
+                j++
+            }
+        } else if (if (raw) e.startsWith("\"\"\"", j) else e[j] == '"') {
+            return j + (if (raw) 3 else 1)
+        } else {
+            j++
+        }
+    }
+    return e.length
 }
 
-/** The name a hole reads, when it is one plain name: `$x`, `${x}`. */
-internal fun plainName(ip: Interpolation): String? = ip.text.trim().takeIf { IDENT.matches(it) }
+/** How deep in brackets each character of [e] stands, a bracket counting as outside itself; -1 inside a literal. */
+private fun depths(e: String): IntArray {
+    val out = IntArray(e.length) { -1 }
+    var depth = 0
+    var i = 0
+    while (i < e.length) {
+        val c = e[i]
+        if (c == '"' || c == '\'') {
+            i = literalEnd(e, i)
+            continue
+        }
+        if (c == ')' || c == ']' || c == '}') depth--
+        out[i] = depth
+        if (c == '(' || c == '[' || c == '{') depth++
+        i++
+    }
+    return out
+}
+
+/** Just past the bracket that closes the one at [open], or -1. */
+private fun closing(
+    e: String,
+    d: IntArray,
+    open: Int,
+): Int {
+    for (k in open + 1 until e.length) if (d[k] == d[open] && e[k] in ")]}") return k + 1
+    return -1
+}
+
+/** A branch as the value it gives: a block of one expression is that expression. */
+private fun unblock(v: String): String {
+    val t = v.trim()
+    return if (t.startsWith("{") && closing(t, depths(t), 0) == t.length) t.substring(1, t.length - 1).trim() else t
+}
+
+/**
+ * The values an `if` or a `when` can result in, as written, a branch that is itself one read in
+ * turn: `if (b) "x" else q` gives `"x"` and `q`. Null when the expression is neither, or one this
+ * reading cannot take apart.
+ */
+internal fun branches(expr: String): List<String>? {
+    val e = expr.trim()
+    val d = depths(e)
+
+    fun expand(v: String): List<String> {
+        val t = unblock(v)
+        return branches(t) ?: listOf(t)
+    }
+
+    fun skipSpace(from: Int): Int {
+        var k = from
+        while (k < e.length && e[k].isWhitespace()) k++
+        return k
+    }
+    if (wordAt(e, 0, "if")) {
+        val open = skipSpace(2)
+        if (e.getOrNull(open) != '(') return null
+        val close = closing(e, d, open)
+        if (close < 0) return null
+        for (k in close until e.length) {
+            if (d[k] == 0 && wordAt(e, k, "else")) return expand(e.substring(close, k)) + expand(e.substring(k + 4))
+        }
+        return null
+    }
+    if (wordAt(e, 0, "when")) {
+        var open = skipSpace(4)
+        if (e.getOrNull(open) == '(') {
+            open = closing(e, d, open)
+            if (open < 0) return null
+            open = skipSpace(open)
+        }
+        if (e.getOrNull(open) != '{' || closing(e, d, open) != e.length) return null
+        val values = ArrayList<String>()
+        var entry = open + 1
+        var arrow = -1
+        var k = open + 1
+        while (k < e.length) {
+            if (d[k] == 1 && arrow < 0 && e.startsWith("->", k)) {
+                arrow = k
+                k += 2
+                continue
+            }
+            if (k == e.length - 1 || (d[k] == 1 && (e[k] == ';' || e[k] == '\n'))) {
+                if (arrow >= 0) {
+                    values += expand(e.substring(arrow + 2, k))
+                } else if (e.substring(entry, k).isNotBlank()) {
+                    return null
+                }
+                arrow = -1
+                entry = k + 1
+            }
+            k++
+        }
+        return values.takeIf { it.isNotEmpty() }
+    }
+    return null
+}
 
 /** Where the declaration that encloses [at] starts: the nearest `fun` before it, or the file. */
 private fun scopeStart(
@@ -141,17 +283,17 @@ internal fun shadowed(
     ).containsMatchIn(scope)
 }
 
-/**
- * The type the enclosing declaration gives [name]: a number or a boolean that cannot be null
- * (`count: Int`, `val n = 3`), a string (`name: String`), which is what may come from outside, or
- * core's `Html`, which is markup. The nearest declaration before [at] wins, as Kotlin's scoping
- * does; anything else is not known.
- */
-internal fun declaredKind(
+/** The nearest declaration of a name before a point in the one that encloses it: the type it is given, or the literal. */
+private class Declaration(
+    val type: String?,
+    val literal: String?,
+)
+
+private fun declarationOf(
     src: String,
     name: String,
     at: Int,
-): HoleFact? {
+): Declaration? {
     val scope = src.substring(scopeStart(src, at), at)
     val n = Regex.escape(name)
     val declaration =
@@ -160,16 +302,83 @@ internal fun declaredKind(
                 """(?::\s*([\p{L}_][\p{L}\p{Nd}_.]*\??)|=\s*(-?\d[\d_]*(?:\.\d+)?[LlFfDd]?|true|false)\b|=|->|,)""",
         )
     val last = declaration.findAll(scope).lastOrNull() ?: return null
-    val literal = last.groups[2]?.value
+    return Declaration(last.groups[1]?.value, last.groups[2]?.value)
+}
+
+/**
+ * The type the enclosing declaration gives [name]: a number or a boolean that cannot be null
+ * (`count: Int`, `val n = 3`), one that can (`count: Int?`), a string (`name: String`), which is
+ * what may come from outside, or core's `Html`, which is markup. The nearest declaration before
+ * [at] wins, as Kotlin's scoping does; anything else is not known.
+ */
+internal fun declaredKind(
+    src: String,
+    name: String,
+    at: Int,
+): HoleFact? {
+    val d = declarationOf(src, name, at) ?: return null
+    val literal = d.literal
     if (literal != null) return if (literal == "true" || literal == "false") HoleFact.BOOLEAN else HoleFact.NUMBER
-    val type = last.groups[1]?.value ?: return null
+    val declared = d.type ?: return null
+    val type = declared.removeSuffix("?")
+    val scalar =
+        when {
+            NUMBER_TYPE.matches(type) -> HoleFact.NUMBER
+            BOOLEAN_TYPE.matches(type) -> HoleFact.BOOLEAN
+            else -> null
+        }
+    // Digits, true or false, or null: safe where anything is, and not where only a number or a boolean is.
+    if (scalar != null) return if (type == declared) scalar else HoleFact.NULLABLE
     return when {
-        NUMBER_TYPE.matches(type) -> HoleFact.NUMBER
-        BOOLEAN_TYPE.matches(type) -> HoleFact.BOOLEAN
         STRING_TYPE.matches(type) -> HoleFact.STRING
+
+        // What interpolate returns: markup whose values have been through it.
         HTML_TYPE.matches(type) -> HoleFact.MARKUP
+
         else -> null
     }
+}
+
+/**
+ * Whether a value can be null as far as the text shows: `null` itself, a name declared with a
+ * `?` type, or a safe call with no `?:` after it. A template writes null as `null`, and
+ * `interpolate` writes nothing.
+ */
+internal fun mayBeNull(
+    src: String,
+    value: String,
+    at: Int,
+): Boolean =
+    (branches(value) ?: listOf(value)).any { v ->
+        val t = v.trim()
+        when {
+            t == "null" -> true
+            IDENT.matches(t) -> declarationOf(src, t, at)?.type?.endsWith("?") == true
+            else -> "?." in t && "?:" !in t
+        }
+    }
+
+/**
+ * What the text shows of one value, a branch of an `if` or a `when` or a whole hole: a literal or
+ * a constant, the author's own, or what the name's declaration says. Null where it shows nothing.
+ */
+internal fun valueKind(
+    src: String,
+    value: String,
+    at: Int,
+    constants: Set<String>,
+): HoleFact? {
+    val t = value.trim()
+    if (LITERAL.matches(t) || STRING_LITERAL.matches(t)) return HoleFact.CONSTANT
+    if (!IDENT.matches(t)) return null
+    if (t in constants && !shadowed(src, t, at)) return HoleFact.CONSTANT
+    return declaredKind(src, t, at)
+}
+
+/** Of the kinds a hole's values have, the one safe in the fewest places; one not known stands between a String and markup. */
+internal fun weakest(kinds: List<HoleFact?>): HoleFact? {
+    val worst = kinds.minOfOrNull { WEAKEST_FIRST.indexOf(it) } ?: WEAKEST_FIRST.lastIndex
+    return WEAKEST_FIRST[worst]
 }
 
 /** Whether [name] is a parameter or value marked `@Language("HTML")` in the declaration that encloses [at]. */
@@ -185,7 +394,8 @@ internal fun htmlNamed(
 
 /**
  * Whether a hole holds markup the author built: a template with an HTML literal inside it, a
- * call to `interpolate`, or a name marked `@Language("HTML")`. Escaping it would print the tags.
+ * call to `interpolate` or `Trusted`, the text of an `Html`, or a name marked `@Language("HTML")`.
+ * Escaping it would print the tags.
  */
 internal fun isMarkup(
     src: String,
@@ -195,10 +405,60 @@ internal fun isMarkup(
     if (ip.kind != InterpolationKind.SIMPLE) {
         val inner = s.nested.filter { it.start >= ip.start && it.end <= ip.end }
         if (inner.any { HTML_OPENING.containsMatchIn(it.text) }) return true
-        if (INTERPOLATE_CALL.containsMatchIn(ip.text)) return true
+        if (MARKUP_CALL.containsMatchIn(ip.text)) return true
     }
-    val name = plainName(ip)
-    return name != null && htmlNamed(src, name, s.start)
+    return (branches(ip.text) ?: listOf(ip.text)).any { v ->
+        val t = v.trim()
+        val text = HTML_TEXT.matchEntire(t)
+        if (text != null) {
+            declaredKind(src, text.groupValues[1], s.start) == HoleFact.MARKUP
+        } else {
+            IDENT.matches(t) && htmlNamed(src, t, s.start)
+        }
+    }
+}
+
+/**
+ * Whether markup in a hole is a value `interpolate` writes as it stands in element text, an
+ * `Html` or a `Trusted`, rather than a String it would escape.
+ */
+internal fun markupValued(
+    src: String,
+    s: KotlinString,
+    ip: Interpolation,
+): Boolean =
+    (branches(ip.text) ?: listOf(ip.text)).all { v ->
+        val t = v.trim()
+        if (IDENT.matches(t)) {
+            declaredKind(src, t, s.start) == HoleFact.MARKUP
+        } else {
+            val call = MARKUP_CALL_START.find(t)
+            call != null && closing(t, depths(t), call.value.length - 1) == t.length
+        }
+    }
+
+/**
+ * The fix for a value written into an attribute value without quotes: quotes around the whole
+ * value, which the browser reads the same, so a space in the value no longer starts an attribute.
+ * Null when the value holds a quote of its own, or spans literals joined with `+`.
+ */
+internal fun quoteFix(
+    s: KotlinString,
+    view: String,
+    ip: Interpolation,
+): Fix? {
+    if (s.interpolations.any { it.kind == InterpolationKind.OPERAND }) return null
+    val m = UNQUOTED_VALUE.find(view.substring(0, ip.decodedStart)) ?: return null
+    val from = ip.decodedStart - m.groupValues[1].length
+    var to = ip.decodedStart
+    while (to < view.length && view[to] !in " \t\n\u000C\r>") {
+        if (view[to] in "\"'=<`") return null
+        to++
+    }
+    val quote = if (s.raw) "\"" else "\\\""
+    val start = s.map[from]
+    val end = s.map[to]
+    return Fix("Quote the value", start, start, quote, listOf(Edit(end, end, quote)))
 }
 
 /** Whether `to` or `else` stands at [at] as a word of its own. */

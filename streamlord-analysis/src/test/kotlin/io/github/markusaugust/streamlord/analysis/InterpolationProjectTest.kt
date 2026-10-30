@@ -8,13 +8,14 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * The five files of the interpolation test project, and what the analysis must say about each
+ * The files of the interpolation test project, and what the analysis must say about each
  * hole in them; `interpolationProject.test.ts` reads the same expected.json.
  */
 class InterpolationProjectTest {
     private val analyzer = Analyzer()
     private val dir = File("../editors/vscode/test/fixtures/interpolationtests")
-    private val codes = setOf("kotlin-interpolation", "unescaped-interpolation", "unsafe-interpolation")
+    private val codes =
+        setOf("kotlin-interpolation", "unescaped-interpolation", "unsafe-interpolation", "interpolate-template", "interpolate-holes")
 
     private fun line(
         start: Int,

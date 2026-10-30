@@ -103,7 +103,8 @@ class HoleTypesTest : BasePlatformTestCase() {
                 .doHighlighting()
                 .filter { it.inspectionToolId == "KotlinInterpolationInspection" }
                 .map { "${it.text} ${severity(it.severity)}" }
-        assertEquals(listOf("\$n hint"), seen)
+        // An Int? prints digits or null, both safe in element text.
+        assertEquals(emptyList<String>(), seen)
     }
 
     private fun severity(s: HighlightSeverity): String =
