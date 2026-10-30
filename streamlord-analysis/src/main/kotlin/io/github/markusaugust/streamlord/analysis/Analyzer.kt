@@ -525,7 +525,7 @@ public class Analyzer(
             val landing = landings[k]
             val fact = facts[k]
             val shown = holeDisplay(ip, s.dollars)
-            // Markup the author built is silent only in element text, where it is meant as markup.
+            // Markup is the author's own in element text; in an attribute or code it is characters that can break out.
             val own = fact == HoleFact.CONSTANT || (fact == HoleFact.MARKUP && landing.position == Position.TEXT)
             val known = own || fact == HoleFact.NUMBER || fact == HoleFact.BOOLEAN
 
@@ -614,7 +614,7 @@ public class Analyzer(
                             )
                         } else {
                             issue(
-                                Severity.HINT,
+                                if (fact == HoleFact.STRING) Severity.WARNING else Severity.HINT,
                                 "unsafe-interpolation",
                                 "Kotlin writes $shown into the markup's own structure: a tag name, an attribute name " +
                                     "or a list of attributes. Fine for one chosen in code; a value from outside decides " +
