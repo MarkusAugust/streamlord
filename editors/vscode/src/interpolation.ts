@@ -269,7 +269,9 @@ export function interpolateFix(src: string, s: KotlinString): Fix {
   }
   format += src.slice(at, s.end).replace(/%/g, "%%");
   const args = s.interpolations.map((ip) => (ip.kind === "simple" ? ip.text : ip.text.trim()));
-  const fix: Fix = { title: "Build it with interpolate(...), which escapes the values", start: s.start, end: s.end, text: `interpolate(${[format, ...args].join(", ")})` };
+  // `.text`, the String the literal was: interpolate returns Html, and a fix that changed the type
+  // would break whatever took the String.
+  const fix: Fix = { title: "Build it with interpolate(...), which escapes the values", start: s.start, end: s.end, text: `interpolate(${[format, ...args].join(", ")}).text` };
   const imported = new RegExp(`^\\s*import\\s+(?:${INTERPOLATE_IMPORT.replace(/\./g, "\\.")}|io\\.github\\.markusaugust\\.streamlord\\.core\\.domain\\.\\*)\\s*$`, "m").test(src);
   if (!imported) {
     const imports = [...src.matchAll(/^import\s+[^\n]*$/gm)].pop();

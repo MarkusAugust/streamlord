@@ -332,7 +332,9 @@ internal fun interpolateFix(
     }
     format.append(src.substring(at, s.end).replace("%", "%%"))
     val args = s.interpolations.map { if (it.kind == InterpolationKind.SIMPLE) it.text else it.text.trim() }
-    val call = "interpolate(" + (listOf(format.toString()) + args).joinToString(", ") + ")"
+    // `.text`, the String the literal was: interpolate returns Html, and a fix that changed the type
+    // would break whatever took the String.
+    val call = "interpolate(" + (listOf(format.toString()) + args).joinToString(", ") + ").text"
     val title = "Build it with interpolate(...), which escapes the values"
     if (INTERPOLATE_IMPORTED.containsMatchIn(src)) return Fix(title, s.start, s.end, call)
     val imports = IMPORT_LINE.findAll(src).lastOrNull()
