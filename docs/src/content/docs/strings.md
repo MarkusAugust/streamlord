@@ -131,6 +131,11 @@ carries no `<svg>` of its own. So a `title` or a `textarea` that shows markup as
 take a hole inside a `data-*` attribute of that sample; put the whole sample in one hole instead,
 where it is text either way.
 
+One thing the reading does not follow yet is the browser building the page: inside a `<select>`
+the browser drops start tags such as `<title>` or `<style>` that the reading still takes as the
+start of text, so a format that writes one there can put a later hole somewhere it is not judged.
+Only markup you write in the format can do this, never a value; leave such tags out of a `<select>`.
+
 The refusals are the point. Escaping cannot save these: a value in a `data-*` attribute Datastar
 evaluates becomes part of a Datastar expression, and your own server signed the page it arrived
 on; a value in `data-bind`, `data-ref` or `data-indicator` is a signal path the client follows
