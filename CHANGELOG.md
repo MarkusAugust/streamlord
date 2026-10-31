@@ -38,7 +38,9 @@ All notable changes to Streamlord are recorded here. The format follows
   `Fix.replacements`, all of them in the order to make them, and `Fix.preferred`, whether an editor
   may offer the fix as the one to apply. `AnalyzeOptions.constants` takes the `const val` names the
   workspace declares, and `AnalyzeOptions.holeFact` what the editor knows of a value from its type,
-  as a `HoleFact`.
+  as a `HoleFact`. `HoleFact.UNSIGNED` is a `UInt`, `ULong`, `UShort` or `UByte`: digits, but no
+  `kotlin.Number`, so `interpolate` refuses one in a `data-*` expression or `style`, and the editors
+  say so, an error in a `%s` hole with a `toLong()` fix and a hint where a Kotlin template writes it.
 - The editors judge a call to `interpolate`: `interpolate-holes`, an error, for a `%s` count that
   does not match the values; `unsafe-interpolation` on a `%s` whose value it will refuse, an error
   where the value is known to be refused; `interpolate-template` for a Kotlin template written into
@@ -83,7 +85,9 @@ All notable changes to Streamlord are recorded here. The format follows
   0.15.0 let a relative or `https:` value through: `<script src="%s">`, `<iframe src>`,
   `<embed src>`, `<object data>`, `<base href>` and `<link href>`. Put the host in the literal,
   `"/js/%s"` or `"https://cdn.example.com/%s"`, or wrap a URL you chose yourself in `Trusted`. A
-  value in an end tag, `</%s>`, throws too: write an end tag from literals alone. Security says why.
+  value in an end tag, `</%s>`, throws too: write an end tag from literals alone. A `Trusted` value
+  in a URL no longer waives the other values in it: wrap the whole URL you chose, or put the host
+  in the literal. Security says why.
 - streamlord-analysis changes shape where code built against 0.15.0 may use it. `AnalyzeOptions`
   gained `constants` and `holeFact`, and `KotlinString` gained `nested`, which changes their JVM
   constructors and `copy`; Kotlin source compiles as before. `Fix` is no longer a data class: it

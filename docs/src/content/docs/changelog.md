@@ -23,7 +23,9 @@ in Kotlin, or wrap the inner one in `Trusted`.
 **Put the host in the literal of a URL that loads code.** `<script src="%s">`, `<iframe src>`,
 `<embed src>`, `<object data>`, `<base href>` and `<link href>` now throw where 0.15.0 let a
 relative or `https:` value through. Write `"/js/%s"` or `"https://cdn.example.com/%s"`, or wrap a
-URL you chose yourself in `Trusted`. An end tag, `</%s>`, throws too: write it from literals.
+URL you chose yourself in `Trusted`. An end tag, `</%s>`, throws too: write it from literals. A
+`Trusted` value in a URL no longer waives the other values in it, since the URL is judged whole:
+wrap the whole URL you chose, or put the host in the literal.
 [Strings](/strings/#values-from-outside) says why.
 
 **The editors judge every Kotlin value in an HTML string.** `${...}`, values joined with `+`

@@ -22,7 +22,7 @@ All notable changes to the Streamlord extension are recorded here.
   `${"$"}`, an enum entry, an `if` or a `when` between literals, and markup built in the template
   in element text say nothing.
 - A value in a URL the browser loads code from, `src` of a script, an iframe or an embed, `href`
-  of a base or `data` of an object, is a warning unless the literal before it already fixes the
+  of a base or a link, `data` of an object, is a warning unless the literal before it already fixes the
   host (`/js/`, or a whole origin such as `https://cdn.example.com/`), and an error in a call to
   `interpolate` where the value is known, since `interpolate` refuses it.
 - A call to one of Streamlord's expression helpers is your own only when every argument is: a
@@ -39,10 +39,16 @@ All notable changes to the Streamlord extension are recorded here.
   (a `String` in a `data-*` expression, a `Boolean` in `style`) and a warning where it is not. A
   Kotlin template written into the format is `interpolate-template`, a warning, since Kotlin fills
   it in before `interpolate` sees it, with a fix that makes it a `%s` hole and passes its value in
-  its place. A `%s` in element text given markup held as a `String`, `h.text` or a `val` set to
-  one, is `interpolate-template` too, a warning, since `interpolate` escapes it and its tags are
+  its place. That goes for an `Html` or a `Trusted` in element text too: Kotlin writes its text
+  into the format, where a `%s` in it is a hole and a `%%` a per cent sign, and the fix makes it a
+  `%s` hole, where `interpolate` writes it as it is. A `%s` in element text given markup held as a
+  `String`, `h.text`, `elements { }`, a `joinToString` over markup or over a collection declared
+  one of `Html` or `Trusted`, or a `val` set to any of these, is `interpolate-template` too, a warning, since `interpolate` escapes it and its tags are
   printed as text; a literal is text you chose to have escaped and says nothing. The format is read
-  as HTML, so a `%s` in it is a hole and not text.
+  as HTML, so a `%s` in it is a hole and not text. An unsigned number, a `UInt` or a `3u`, is no
+  `kotlin.Number`, which `interpolate` refuses where only a number is let in: in a `%s` hole in a
+  `data-*` expression or `style` it is an error, with a `toLong()` fix, and where a Kotlin template
+  writes one there, a hint.
 - The `interpolate(...)` rewrite is offered only where it keeps the page as it was: not for a value
   that may be null, which a template writes as `null` and `interpolate` as nothing, nor for a
   `Trusted` outside element text, nor for a hole in element text that may hold markup, which
@@ -63,13 +69,15 @@ All notable changes to the Streamlord extension are recorded here.
   `unsafe-interpolation`: Datastar runs that string as code. It was a hint that called it safe text.
 - No more `<p> has no id` inside `<$tag ...>`, whose template is a tag name, and no text fragments
   in the margin of a `trimMargin` literal. A literal that opens with a template tag, `"<$tag>…"`,
-  is read as HTML.
+  is read as HTML. `<$name` is a tag start only when a space, `>` or `/` follows the template, so
+  `Regex("<$tag\\b")` and `indexOf("<$tag")` are not read as HTML.
 - A duration modifier the client reads by its number is a warning that says what it reads, with
   the fix to write it out: `__debounce.5x` waits 5 ms, since `tagToMs` falls back to `parseFloat`,
   and `__delay.0x1fms` 31 ms. It was an error that said a duration was missing. A tag that is no
   number at all, such as `__debounce.soon`, is still that error.
 - The markup checks read HTML as the browser does: the content of `xmp`, `iframe`, `noembed`,
-  `noframes`, `noscript` and `plaintext` is text, a raw-text element written `<iframe/>` is still
+  `noframes` and `plaintext` is text, a `noscript` holds elements, as the client parses a patch
+  with scripting off, a raw-text element written `<iframe/>` is still
   open, and only its whole end tag closes it, outside svg and math but again inside their HTML
   integration points, such as a `foreignObject`; only HTML's own white space ends an attribute
   name, so a no-break space is part of one; a numeric reference is read whatever its number of

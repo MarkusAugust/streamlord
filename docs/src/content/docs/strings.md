@@ -102,7 +102,8 @@ What happens to a value is decided by where it landed, not by where it came from
 | Element text | Escaped |
 | A quoted attribute that is not Datastar's | Escaped |
 | A URL attribute: `href`, `src`, `action`, and `values`, `to` or `from` on an SVG animation | Escaped, and **refused** unless the whole value, every hole filled, is relative, `http`, `https`, `mailto` or `tel` |
-| A URL the browser loads code from: `src` of `<script>`, `<iframe>` or `<embed>`, `href` of `<base>`, `data` of `<object>`, `href` of an SVG `<script>` | Escaped, and **refused** unless the literal before the hole already fixes the host: `/x`, `#`, `?`, or a whole origin such as `https://cdn.example/` |
+| A URL the browser loads code from: `src` of `<script>`, `<iframe>` or `<embed>`, `href` of `<base>` or `<link>`, `data` of `<object>`, `href` of an SVG `<script>` | Escaped, and **refused** unless the literal before the hole already fixes the host: `/x`, `#`, `?`, or a whole origin such as `https://cdn.example/` |
+| The `content` of a `<meta>` that starts with a time, as `http-equiv="refresh"` reads it | Escaped, and the URL after `url=` **refused** unless it is relative, `http`, `https`, `mailto` or `tel` |
 | A `style` attribute | **Refused**, unless it is a number |
 | A `data-*` attribute Datastar evaluates, an expression or a signal filter, or follows as a signal path: `data-bind`, `data-ref`, `data-indicator` | **Refused**, unless it is a number or a boolean |
 | A `data-*` attribute Datastar reads as it stands: `data-nonce`, `data-preserve-attr`, `data-ignore`, `data-ignore-morph` | Escaped |
@@ -115,20 +116,27 @@ So the `url` in the example above may be `/heads/1` or `https://thurn.example/`,
 browser reads it: a hole that ends a path the markup begins takes anything, because the markup
 already chose where it points, and `href="%s%s"` cannot be made into `javascript:` across its two
 holes. Character references are decoded once the attribute is whole, as the browser does, so
-`href="&%s"` cannot be finished into `&#106;avascript:` by its value.
+`href="&%s"` cannot be finished into `&#106;avascript:` by its value. A `Trusted` value counts
+toward the URL as the literal does: it is written as it stands, and the URL is still judged whole,
+so `href="%s%s"` given `Trusted("")` and `javascript:alert(1)` throws. Only a URL with no other
+value in it goes unjudged.
 
 A URL that loads code asks more of the markup. `https://` settles the scheme of a `<script src>`
 but not whose script it is, so a value there is refused until the literal has written the host
 too: `<script src="https://cdn.example/%s">` takes a file name, `<script src="%s">` takes nothing.
 A single `/` is not enough on its own either, since the value could add a second and name another
-host; `/js/%s` is.
+host; `/js/%s` is. The same goes for `<link href>`, whatever its `rel`, since a stylesheet or a
+module loads from there too. The exception says so, and its `loadsCode` tells such a refusal apart.
+Wrap a URL you chose yourself in `Trusted`.
 
 The markup is read the way the browser's tokenizer reads it, comments, end tags and all, and in
 more than one way: as HTML, as the inside of an `<svg>` or `<math>`, where a `title` or a
 `textarea` holds elements rather than text, and following the browser's own stack of open
 elements, which switches between HTML and svg or math, and the rules for CDATA sections, as the
 markup opens and closes them. A value has to be safe every way, since a patch with an SVG namespace
-carries no `<svg>` of its own. So a `title` or a `textarea` that shows markup as a code sample cannot
+carries no `<svg>` of its own. A `<noscript>` holds elements, as the client parses a patch with
+scripting off; markup that mentions one is also read with scripting on, as a page loads it, where a
+noscript holds text, and the stricter reading wins. So a `title` or a `textarea` that shows markup as a code sample cannot
 take a hole inside a `data-*` attribute of that sample; put the whole sample in one hole instead,
 where it is text either way.
 
@@ -156,7 +164,8 @@ interpolate("""<li data-signals="{n: %s}"></li>""", 3)
 ```
 
 A number or a boolean is let into a Datastar attribute because its text is digits, a dot, a sign
-or `true`/`false`. No string renders that way and also closes a quote, so the common honest case
+or `true`/`false`. A number here is a `kotlin.Number`: a `UInt` or a `ULong` is not one, so it is
+refused there; pass `n.toLong()`. No string renders that way and also closes a quote, so the common honest case
 of a server-rendered initial signal needs no waiver.
 
 ### Markup built from markup
@@ -164,9 +173,11 @@ of a server-rendered initial signal needs no waiver.
 What `interpolate` returns is `Html`: markup whose values have been through it. Hand it to
 `patchElements`, `respondElements` or `datastarElements` as it is; inside `respondDatastar { }`
 `patchElements(html)` needs no import of its own. Hand it to another `interpolate`, and it is
-written as it stands in element text, as long as its own markup closes everything it opens: an
-`Html` that ends inside a tag, a quoted value, a comment or a `<script>` would change how the
-browser reads the values after it, so it is escaped like a string instead. Anywhere else, inside
+written as it stands in element text, as long as its own markup closes everything it opens and
+ends nothing it did not open. An `Html` that ends inside a tag, a quoted value, a comment or a
+`<script>`, leaves an element open, `interpolate("<svg>")` or an `<li>` without its `</li>`, or
+ends one it did not open, `x</div>`, would change how the browser reads the values after it, so it
+is escaped like a string instead. Anywhere else, inside
 an attribute, it is characters like any value, and escaped or refused as one.
 
 ```kotlin sample=statements
@@ -207,9 +218,10 @@ val hits = repository.search("gate")
 interpolate("""<ul class="lt-list">%s</ul>""", Trusted(renderResults(hits)))
 ```
 
-That waives both the escaping and the refusals, which is right for a fragment you rendered
+That waives both the escaping and the refusals for that value, which is right for a fragment you rendered
 yourself and wrong for anything that came out of a request. It is a word in your source that a
-reviewer can search for, which is the whole reason it is a type and not a flag.
+reviewer can search for, which is the whole reason it is a type and not a flag. It vouches for
+itself alone: in a URL with other holes it is part of the URL, and the URL is judged whole.
 
 ### This is the editors' rule, at run time
 
@@ -222,7 +234,7 @@ a DSL call, and each is judged by where it lands:
 |---|---|
 | Element text, a quoted attribute, a URL whose literal start settles the scheme (`#`, `/`, `?`, `https://`) | `unescaped-interpolation`: a hint, a warning when the value is a `String`, or markup anywhere but element text, where markup says nothing; with a fix that rewrites the literal as `interpolate(...)`, and in element text a second, "Mark … as markup", that wraps the value in `Trusted(...)` |
 | The start of a URL, `style`, a `data-*` expression, signal path or filter, `<script>`, `<style>`, `on*`, `srcdoc` | `unsafe-interpolation`: a warning, since escaping cannot help there; at the start of a URL with the fix to build it with `interpolate(...)`, which refuses a URL that runs |
-| A URL the browser loads code from (`src` of a script, an iframe or an embed, `href` of a base, `data` of an object) whose literal start does not fix the host | `unsafe-interpolation`: a warning, and no fix, since `interpolate` refuses it too; in a call to `interpolate`, an error where the value is known |
+| A URL the browser loads code from (`src` of a script, an iframe or an embed, `href` of a base or a link, `data` of an object) whose literal start does not fix the host | `unsafe-interpolation`: a warning, and no fix, since `interpolate` refuses it too; in a call to `interpolate`, an error where the value is known |
 | A value without quotes | `unsafe-interpolation`: a warning, a hint for a number or a boolean, with a fix that quotes the value |
 | A tag name, an attribute name, a list of attributes, an end tag | `unsafe-interpolation`: a hint, a warning when the value is a `String` or markup; an end tag takes no attributes, so write it from literals alone |
 | `$name` where a Datastar signal could stand | `kotlin-interpolation`, the [dollar trap](/dollar-trap/); a hint when `name` is declared a number or a boolean, which is safe to write in, so only what you meant is in question |
@@ -236,7 +248,9 @@ expression, where it runs, so it is judged as the `String` it returns. IntelliJ 
 itself and takes an entry only when the enum does not override `toString`. Any other value is judged by what `interpolate` would let in
 where it lands. A number or a boolean says nothing in text, an attribute, a URL or a `data-*`
 expression, and a number in `style` too; one that may be null, an `Int?`, only where escaping is
-enough. A hole that is markup you built, as a whole, says nothing in element text and is a warning
+enough. An unsigned number, a `UInt` or a `3u`, says nothing where escaping is enough and is a hint
+in a `data-*` expression or `style`: Kotlin writes its digits, but `interpolate` would refuse it
+there. A hole that is markup you built, as a whole, says nothing in element text and is a warning
 anywhere else, where its quotes and tags can end what holds it: an HTML literal, an
 `interpolate(...)` or `Trusted(...)` call, a value declared `Html` or `@Language("HTML")`,
 kotlinx.html output, or a `joinToString` whose every element is markup. Markup joined to a value is
@@ -258,13 +272,14 @@ to be declared `Html`.
 A call to `interpolate` is judged as it will run. A miscounted `%s` is an error,
 `interpolate-holes`, because it always throws. A `%s` whose value `interpolate` will refuse, a
 `String` in a `data-*` expression, is an error where the value is known to be one and a warning
-where it is not. And a Kotlin template written into the format, `interpolate("<p>$name</p>")`, is
+where it is not; a `UInt` there is an error, with a `toLong()` fix. And a Kotlin template written into the format, `interpolate("<p>$name</p>")`, is
 `interpolate-template`: Kotlin fills it in before `interpolate` sees the markup, so it is neither
 escaped nor refused, and the fix turns it into a `%s` hole with the value among the arguments.
-Markup is no exception. In `interpolate("<div>$inner</div>")` Kotlin writes the text of the `Html`
-`inner` into the format, where `interpolate` reads it again as markup of yours: a `%s` in it, which
-a value may have put there, becomes a hole and the call throws, and a `%%` becomes `%`. Give it a
-hole of its own:
+Markup is no exception, an `Html` or a `Trusted`: in `interpolate("<div>$inner</div>")` Kotlin
+writes the text of `inner` into the format, where `interpolate` reads it again as markup of yours,
+so a `%s` in it, which a value may have put there, becomes a hole and the call throws, and a `%%`
+becomes `%`. It is `interpolate-template` too, a warning, with the fix that gives it a hole of its
+own:
 
 ```kotlin sample=statements
 val inner = interpolate("<b>%s</b>", "Gorvek")
@@ -272,9 +287,9 @@ val inner = interpolate("<b>%s</b>", "Gorvek")
 interpolate("""<div class="lt-card">%s</div>""", inner)
 ```
 
-A `%s` in element text given markup held as a `String`, `h.text`, a `val` set to one,
-`elements { }` or a `joinToString` of such, is `interpolate-template` too, a warning: `interpolate`
-escapes it, so its tags are printed as text. Pass the `Html` itself, or wrap markup you built in `Trusted(...)`. A
+A `%s` in element text given markup held as a `String`, `h.text`, `elements { }`, a
+`joinToString` over markup or over a list of `Html`, or a `val` set to any of these, is
+`interpolate-template` too, a warning: `interpolate` escapes it, so its tags are printed as text. Pass the `Html` itself, or wrap markup you built in `Trusted(...)`. A
 literal is left alone, `"<the oath>"` among them: text you chose to have escaped.
 
 At run time the source is gone and only the finished string arrives, so the holes have to be left
