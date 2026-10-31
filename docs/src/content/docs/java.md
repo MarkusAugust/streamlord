@@ -6,7 +6,9 @@ description: "Streamlord is a Kotlin library. If your service is written in Java
 Streamlord is a Kotlin library, and it is Kotlin all the way down: suspend functions, flows,
 extension functions and default arguments. It offers no Java-facing API.
 
-If your service is written in Java, use the official SDK instead.
+If your service is written in Java, use the official SDK instead. Called from Java all the same,
+`interpolate` returns a `String`, since `Html` is a value class the JVM erases, so markup nested
+from Java into another `interpolate` is always escaped as text.
 
 ## The official Datastar Java SDK
 

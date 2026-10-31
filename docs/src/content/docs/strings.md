@@ -194,9 +194,12 @@ lands:
 | A tag name, an attribute name, a list of attributes | `unsafe-interpolation`: a hint, a warning when the value is a `String` or markup |
 | `$name` where a Datastar signal could stand | `kotlin-interpolation`, the [dollar trap](/dollar-trap/); a hint when `name` is declared a number or a boolean, which is safe to write in, so only what you meant is in question |
 
-A value the editor can see is yours says nothing anywhere: a `const val`, a literal, a call to one
-of Streamlord's expression helpers, `${signal("count")}` or `${post("/save")}`, or an `if` or a
-`when` whose every branch is one. Any other value is judged by what `interpolate` would let in
+A value the editor can see is yours says nothing anywhere: a `const val`, a literal, an `if` or a
+`when` whose every branch is one, and a call to one of Streamlord's expression helpers whose
+arguments are all yours, `${signal("count")}` or `${post("/save")}`. A helper is only as safe as
+what it is given: `${signal(query)}` writes the request's text into a Datastar expression, where it
+runs, so it is judged as the `String` it returns. IntelliJ also takes an entry of an enum that does
+not override `toString`, `${Tab.HOME}`, as yours. Any other value is judged by what `interpolate` would let in
 where it lands. A number or a boolean says nothing in text, an attribute, a URL or a `data-*`
 expression, and a number in `style` too; one that may be null, an `Int?`, only where escaping is
 enough. A hole that is markup you built, as a whole, says nothing in element text and is a warning
@@ -229,3 +232,8 @@ standing for the same question to be asked. That is the whole of what `interpola
 Spring has no auto-configuration, so the helpers take the bean: `datastarElements(html, streamlord = bean)`,
 `response.toResponseEntity(streamlord = bean)`, `events.asDatastarResponse(bean)`. With
 `Streamlord.Default` the guard is off.
+
+Hand an `Html` to `datastarElements(html)`, not to `ResponseEntity.ok(...)`. That compiles, but
+Spring writes a body through its message converters, and `StringHttpMessageConverter` takes a
+`String` only, so no converter writes an `Html` as markup. Where you need the `ResponseEntity`
+yourself, pass `html.text`.
