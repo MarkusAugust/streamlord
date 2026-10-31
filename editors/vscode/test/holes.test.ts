@@ -19,6 +19,16 @@ describe("hole landings", () => {
     }
   });
 
+  // Each hole is looked up among spans found in order: HoleLandingsTest holds core to the same.
+  it("judges many holes in time that grows with the markup", () => {
+    const markup = '<li title="%s"><a href="/x/%s">%s</a></li>'.repeat(5000);
+    const holes = [...markup.matchAll(/%s/g)].map((m) => ({ start: m.index, end: m.index + 2 }));
+    const began = performance.now();
+    assert.equal(holeLandings(markup, holes).length, 15000);
+    const took = performance.now() - began;
+    assert.ok(took < 3000, `15000 holes took ${took} ms`);
+  });
+
   it("knows when the start of a URL settles its scheme, as core does", () => {
     assert.ok(fixture.urls.length > 0);
     for (const u of fixture.urls) assert.equal(urlSchemeFixedBy(u.attribute, u.prefix), u.fixed, `${u.attribute}="${u.prefix}…"`);

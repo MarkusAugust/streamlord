@@ -408,6 +408,20 @@ public fun urlSchemeFixedBy(
     return false
 }
 
+/** The index of the last of [sorted] that is at most [at], or -1. */
+private fun lastAtOrBefore(
+    sorted: List<Int>,
+    at: Int,
+): Int {
+    var low = 0
+    var high = sorted.size - 1
+    while (low <= high) {
+        val mid = (low + high) ushr 1
+        if (sorted[mid] <= at) low = mid + 1 else high = mid - 1
+    }
+    return high
+}
+
 /** Each position's place in what it lets in: everything, a number or a boolean, a number, nothing. */
 private val STRICTNESS =
     listOf(Position.TEXT, Position.ATTRIBUTE, Position.URL, Position.DATASTAR, Position.STYLE, Position.STRUCTURE, Position.CODE)
@@ -571,7 +585,8 @@ private class Landscape(
             if (!isUrl(attribute)) continue
             val start = attributeStarts[attribute]
             val end = attributeEnds[attribute]
-            val inside = holes.indices.filter { holes[it] in start until end }
+            val first = lastAtOrBefore(holes, start - 1) + 1
+            val inside = (first until holes.size).takeWhile { holes[it] < end }
             // Trusted waives every check, this one included.
             if (inside.isEmpty() || inside.any { values[it] is Trusted }) continue
             // The attribute as it will be written, decoded once, as the browser does: a reference
@@ -614,14 +629,13 @@ private class Landscape(
         return name in ElementsGuard.evaluatedAttributes || name in signalPaths
     }
 
+    /** The span [at] is in, or -1. Spans are found in order and never overlap, so the last to start at or before it is the one. */
     private fun indexOfSpan(
         at: Int,
         starts: List<Int>,
         ends: List<Int>,
     ): Int {
-        for (i in starts.indices) {
-            if (at >= starts[i] && at < ends[i]) return i
-        }
-        return -1
+        val i = lastAtOrBefore(starts, at)
+        return if (i >= 0 && at < ends[i]) i else -1
     }
 }

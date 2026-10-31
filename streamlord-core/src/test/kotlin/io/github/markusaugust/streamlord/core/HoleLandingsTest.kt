@@ -12,6 +12,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.fail
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.measureTime
 
 /**
  * [holeLandings] and [urlSchemeFixedBy] against `editors/vscode/test/fixtures/twins/hole-landings.json`,
@@ -76,5 +78,17 @@ class HoleLandingsTest {
             val prefix = url.string("prefix")!!
             assertEquals(url.boolean("fixed"), urlSchemeFixedBy(attribute, prefix), "$attribute=\"$prefix…\"")
         }
+    }
+
+    // Each hole is looked up among spans pushed in order, so the cost grows with the markup, not
+    // with the markup times the holes: 15000 holes took seconds when every span was tried.
+    @Test
+    fun `many holes are judged in time that grows with the markup`() {
+        val markup = "<li title=\"%s\"><a href=\"/x/%s\">%s</a></li>".repeat(5000)
+        val holes = holesOf(markup)
+        val values = List(holes.size) { "v" }
+        holeLandings(markup, holes)
+        val took = measureTime { holeLandings(markup, holes) } + measureTime { interpolate(markup, values) }
+        assertTrue(took < 3.seconds, "15000 holes took $took")
     }
 }

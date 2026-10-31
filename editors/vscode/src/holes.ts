@@ -166,6 +166,25 @@ function scanTag(html: string, from: number, visitor: Visitor): number {
   return n;
 }
 
+/** The index of the last span that starts at or before `at`, or -1: lastAtOrBefore in Interpolation.kt. */
+function lastAtOrBefore(spans: readonly ({ start: number } | readonly [number, number])[], at: number): number {
+  let low = 0;
+  let high = spans.length - 1;
+  while (low <= high) {
+    const mid = (low + high) >>> 1;
+    const span = spans[mid] as { start: number } | readonly [number, number];
+    if (("start" in span ? span.start : span[0]) <= at) low = mid + 1;
+    else high = mid - 1;
+  }
+  return high;
+}
+
+/** Whether `at` is in one of `spans`, found in order and never overlapping. */
+function inSpan(spans: readonly [number, number][], at: number): boolean {
+  const span = spans[lastAtOrBefore(spans, at)];
+  return span !== undefined && at < span[1];
+}
+
 /** Landscape in Interpolation.kt. */
 class Landscape implements Visitor {
   private readonly attributes: { name: string; tag: string; start: number; end: number }[] = [];
@@ -186,7 +205,8 @@ class Landscape implements Visitor {
   }
 
   private attributeAt(at: number) {
-    return this.attributes.find((a) => at >= a.start && at < a.end);
+    const a = this.attributes[lastAtOrBefore(this.attributes, at)];
+    return a !== undefined && at < a.end ? a : undefined;
   }
 
   positionOf(at: number): Position {
@@ -199,8 +219,8 @@ class Landscape implements Visitor {
       if (URL_ATTRIBUTES.has(name) || (ANIMATION_URL_ATTRIBUTES.has(name) && ANIMATION_TAGS.has(a.tag))) return "URL";
       return "ATTRIBUTE";
     }
-    if (this.tags.some(([s, e]) => at >= s && at < e)) return "STRUCTURE";
-    if (this.codes.some(([s, e]) => at >= s && at < e)) return "CODE";
+    if (inSpan(this.tags, at)) return "STRUCTURE";
+    if (inSpan(this.codes, at)) return "CODE";
     return "TEXT";
   }
 
