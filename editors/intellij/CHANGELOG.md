@@ -33,7 +33,7 @@ All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here
   anything the text suggests. In K2 mode the types come from the Analysis API, in K1 mode from the
   declarations. A number or a boolean is safe where escaping is, and an `Int?` there too; a
   `String`, inferred or declared, is a `String`, and a `String?` or a Java `String` one that may be
-  null, so the rewrite is not offered. An enum entry whose enum does not override `toString` is
+  null, so the rewrite is not offered. An entry of a Kotlin enum that does not override `toString` is
   your own. A hole is markup only when the whole value is: an HTML literal or a trimmed one,
   `interpolate(...)`, `Trusted(...)`, a value or function declared `Html` or `@Language("HTML")`,
   kotlinx.html output (`createHTML()`, `appendHTML()`, `elements { }`), a `joinToString` over

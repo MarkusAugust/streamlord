@@ -198,7 +198,7 @@ A value the editor can see is yours says nothing anywhere: a `const val`, a lite
 `when` whose every branch is one, and a call to one of Streamlord's expression helpers whose
 arguments are all yours, `${signal("count")}` or `${post("/save")}`. A helper is only as safe as
 what it is given: `${signal(query)}` writes the request's text into a Datastar expression, where it
-runs, so it is judged as the `String` it returns. IntelliJ also takes an entry of an enum that does
+runs, so it is judged as the `String` it returns. IntelliJ also takes an entry of a Kotlin enum that does
 not override `toString`, `${Tab.HOME}`, as yours. Any other value is judged by what `interpolate` would let in
 where it lands. A number or a boolean says nothing in text, an attribute, a URL or a `data-*`
 expression, and a number in `style` too; one that may be null, an `Int?`, only where escaping is

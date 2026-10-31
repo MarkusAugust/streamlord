@@ -15,7 +15,7 @@ handler, or in an unquoted attribute value is a warning, since escaping does not
 </p>
 <p>
 Nothing is reported for the author's own values: constants, literals, an <code>if</code> or <code>when</code> between literals,
-an entry of an enum that does not override <code>toString</code>, a call to a Streamlord helper such as
+an entry of a Kotlin enum that does not override <code>toString</code>, a call to a Streamlord helper such as
 <code>signal("count")</code> whose arguments are all of these, and markup in element text. A helper given any other value,
 <code>signal(q)</code>, is judged by its type, since what it writes runs as code. A number or a boolean is safe where escaping is
 enough and in a Datastar expression, but where a signal could stand (<code>"$count"</code> with an <code>Int</code>

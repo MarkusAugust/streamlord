@@ -21,7 +21,7 @@ function that returns HTML, a `val` holding a fragment), and in HTML and templat
   judges it at run time: in text or a quoted attribute, where escaping saves it, a weak warning (a
   warning for a `String`) with a fix that rewrites the literal as `interpolate(...)`; at the start
   of a URL, in `style`, a `data-*` expression, a script or an event handler, a warning, since
-  escaping cannot help there. Constants, literals, numbers and booleans where they are safe, enum
+  escaping cannot help there. Constants, literals, numbers and booleans where they are safe, Kotlin enum
   entries and markup built in the template say nothing. A call to `interpolate` is judged too: a
   miscounted `%s` and a value it will refuse are errors, a Kotlin template in its format a warning
   with a fix that makes it a `%s` hole.

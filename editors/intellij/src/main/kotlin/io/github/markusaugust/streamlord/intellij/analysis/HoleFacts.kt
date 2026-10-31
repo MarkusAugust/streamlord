@@ -2,7 +2,6 @@ package io.github.markusaugust.streamlord.intellij.analysis
 
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
-import com.intellij.psi.PsiEnumConstant
 import com.intellij.psi.util.PsiTreeUtil
 import io.github.markusaugust.streamlord.analysis.Catalog
 import io.github.markusaugust.streamlord.analysis.HoleFact
@@ -143,34 +142,23 @@ object HoleFacts {
     }
 
     /**
-     * `Tab.HOME`, or its `name`: an entry of an enum that does not override `toString`, so what it
+     * `Tab.HOME`, or its `name`: an entry of a Kotlin enum that does not override `toString`, so what it
      * writes is the name the author gave it. K2 folds no enum entry into a constant.
      */
     private fun enumEntry(expr: KtExpression): Boolean {
         val e = KtPsiUtil.safeDeparenthesize(expr)
         if (e is KtQualifiedExpression && e.selectorExpression?.text == "name") return entryOf(e.receiverExpression) != null
-        return when (val entry = entryOf(e)) {
-            is KtEnumEntry -> {
-                val owner = PsiTreeUtil.getParentOfType(entry, KtClass::class.java) ?: return false
-                // An entry with a body of its own may override toString too.
-                listOf(entry, owner).none { c -> c.declarations.any { it is KtNamedFunction && it.name == "toString" } }
-            }
-
-            is PsiEnumConstant -> {
-                entry.containingClass?.findMethodsByName("toString", false).isNullOrEmpty()
-            }
-
-            else -> {
-                false
-            }
-        }
+        val entry = entryOf(e) ?: return false
+        val owner = PsiTreeUtil.getParentOfType(entry, KtClass::class.java) ?: return false
+        // An entry with a body of its own may override toString too.
+        return listOf(entry, owner).none { c -> c.declarations.any { it is KtNamedFunction && it.name == "toString" } }
     }
 
-    /** The enum entry a name or a qualified name resolves to. */
-    private fun entryOf(expr: KtExpression?): PsiElement? {
+    /** The Kotlin enum entry a name or a qualified name resolves to; a Java one would need the Java plugin. */
+    private fun entryOf(expr: KtExpression?): KtEnumEntry? {
         val e = expr?.let { KtPsiUtil.safeDeparenthesize(it) }
         val ref = (if (e is KtQualifiedExpression) e.selectorExpression else e) as? KtNameReferenceExpression ?: return null
-        return ref.mainReference.resolve()?.takeIf { it is KtEnumEntry || it is PsiEnumConstant }
+        return ref.mainReference.resolve() as? KtEnumEntry
     }
 
     /**
