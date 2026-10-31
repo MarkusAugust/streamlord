@@ -108,6 +108,47 @@ describe("signal index", () => {
     }
   });
 
+  it("leaves out the folders analyzeProject leaves out, below the workspace folder only", async () => {
+    const root = "/home/.wt/app";
+    const kept = `${root}/src/Page.kt`;
+    const skipped = ["build", "node_modules", ".gradle", "dist", "out", "target", ".idea", "src/.cache", "src/target"].map((f) => `${root}/${f}/Page.kt`);
+    const page = (name: string) => `fun page() = """<div data-signals:${name}="1"></div>"""`;
+    files.set(kept, encode(page("kept")));
+    for (const p of skipped) files.set(p, encode(page("skipped")));
+    const listeners: Record<string, (u: unknown) => void> = {};
+    const on = (name: string) => (l: (u: unknown) => void) => {
+      listeners[name] = l;
+      return { dispose: () => {} };
+    };
+    const { createFileSystemWatcher, findFiles } = workspace;
+    const excludes: unknown[] = [];
+    (workspace as Record<string, unknown>).createFileSystemWatcher = () => ({ onDidChange: on("change"), onDidCreate: on("create"), onDidDelete: on("delete"), dispose: () => {} });
+    workspace.findFiles = async (_include?: unknown, exclude?: unknown) => {
+      excludes.push(exclude);
+      return [kept, ...skipped].map((p) => Uri.file(p));
+    };
+    workspace.workspaceFolders = [{ uri: Uri.file(root) }];
+    try {
+      const index = new SignalIndex(new Set());
+      await index.rebuild();
+      assert.deepEqual([...index.allDefinitions()], ["kept"]);
+      const glob = "**/{build,node_modules,.gradle,dist,out,target,.*}/**";
+      assert.deepEqual(excludes, [glob, glob]);
+      for (const p of skipped) {
+        listeners.create?.(Uri.file(p));
+        listeners.change?.(Uri.file(p));
+        index.update(doc(p, "kotlin", page("opened")));
+      }
+      await settle();
+      assert.deepEqual([...index.allDefinitions()], ["kept"]);
+    } finally {
+      workspace.createFileSystemWatcher = createFileSystemWatcher;
+      workspace.findFiles = findFiles;
+      workspace.workspaceFolders = undefined;
+      files.clear();
+    }
+  });
+
   it("leaves a git diff or an untitled buffer out", () => {
     const index = new SignalIndex(new Set());
     index.update(doc("/g/page.html", "html", `<div data-signals:oldName="1"></div>`, 1, "git"));

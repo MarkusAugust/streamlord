@@ -9,7 +9,9 @@ const MARKUP_EXTENSIONS = [
   "cshtml", "razor", "php", "erb", "ejs", "liquid", "njk", "edge", "astro", "svelte", "vue",
 ];
 const SOURCE_GLOB = `**/*.{kt,${MARKUP_EXTENSIONS.join(",")}}`;
-const EXCLUDED_GLOB = "**/{build,node_modules,.gradle,dist,out,target}/**";
+/** The folders left unread, as `analyzeProject` leaves them: build output, dependencies, and every hidden folder. */
+const SKIPPED_FOLDERS: readonly string[] = ["build", "node_modules", ".gradle", "dist", "out", "target"];
+const EXCLUDED_GLOB = `**/{${SKIPPED_FOLDERS.join(",")},.*}/**`;
 const FILE_CAP = 5000;
 
 /** Where a file lives on a disk the workspace reads; a git diff, an untitled buffer or an output channel defines nothing. */
@@ -55,6 +57,7 @@ export class SignalIndex implements vscode.Disposable {
       ),
     );
     // Files changed outside the editor: a git checkout, a generated template, a file created or deleted on disk.
+    // A watcher takes no exclude: read() leaves out a file in a skipped folder.
     const watcher = vscode.workspace.createFileSystemWatcher(SOURCE_GLOB);
     this.disposables.push(
       watcher,
@@ -72,7 +75,7 @@ export class SignalIndex implements vscode.Disposable {
       vscode.workspace.findFiles(`**/*.{${MARKUP_EXTENSIONS.join(",")}}`, EXCLUDED_GLOB, FILE_CAP),
       vscode.workspace.findFiles("**/*.kt", EXCLUDED_GLOB, FILE_CAP),
     ]);
-    const files = [...markup, ...kotlin];
+    const files = [...markup, ...kotlin].filter((u) => !inSkippedFolder(u));
     await Promise.all(
       files.map(async (uri) => {
         try {
@@ -102,7 +105,7 @@ export class SignalIndex implements vscode.Disposable {
   private async read(uri: vscode.Uri): Promise<void> {
     if (!INDEXED_SCHEMES.has(uri.scheme)) return;
     const language = languageByExtension(uri);
-    if (!language) return;
+    if (!language || inSkippedFolder(uri)) return;
     if (vscode.workspace.textDocuments.some((d) => d.uri.toString() === uri.toString() && !d.isClosed)) return;
     let text: string;
     try {
@@ -150,7 +153,7 @@ export class SignalIndex implements vscode.Disposable {
   }
 
   private languageOf(document: vscode.TextDocument): "kotlin" | "html" | null {
-    if (!INDEXED_SCHEMES.has(document.uri.scheme)) return null;
+    if (!INDEXED_SCHEMES.has(document.uri.scheme) || inSkippedFolder(document.uri)) return null;
     if (document.languageId === "kotlin") return "kotlin";
     if (document.languageId === "html" || this.markupLanguages.has(document.languageId)) return "html";
     return languageByExtension(document.uri);
@@ -202,6 +205,14 @@ export class SignalIndex implements vscode.Disposable {
   dispose(): void {
     this.disposables.forEach((d) => d.dispose());
   }
+}
+
+/** Whether a folder on the way to the file, below the workspace folder that holds it, is one the index leaves unread. */
+export function inSkippedFolder(uri: vscode.Uri): boolean {
+  const roots = (vscode.workspace.workspaceFolders ?? []).map((f) => (f.uri.path.endsWith("/") ? f.uri.path : `${f.uri.path}/`));
+  const root = roots.filter((r) => uri.path.startsWith(r)).sort((a, b) => b.length - a.length)[0] ?? "/";
+  const folders = uri.path.slice(root.length).split("/").slice(0, -1);
+  return folders.some((name) => SKIPPED_FOLDERS.includes(name) || name.startsWith("."));
 }
 
 function languageByExtension(uri: vscode.Uri): "kotlin" | "html" | null {

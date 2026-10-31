@@ -66,6 +66,10 @@ private val ESCAPED_POSITIONS = setOf(Position.TEXT, Position.ATTRIBUTE, Positio
 
 private const val CODE_URL_ADVICE =
     "Start the value with a path such as /js/ or a whole origin such as https://cdn.example/, so that the value only picks a file there"
+
+/** The folders [Analyzer.analyzeProject] leaves unread, as the VS Code index does: build output and dependencies. */
+private val SKIPPED_FOLDERS = setOf("build", "node_modules", ".gradle", "dist", "out", "target")
+
 private val TRUSTED_CALL = Regex("""(?:^|[^\p{L}\p{Nd}_.])Trusted\s*\(""")
 
 /** Where a markup's holes land, read with the text of the known ones in place. */
@@ -153,9 +157,10 @@ public class Analyzer(
     ): List<Issue> = analyzeKotlinSites(src, opts).flatMap { it.issues }
 
     /**
-     * Every `.kt` file under [root], folders named `build` and hidden ones left out, analysed with
-     * the constants the files declare between them ([projectConstants]) added to [opts]'s: the
-     * verdict VS Code gives the same workspace. The issues come in path order, then by offset;
+     * Every `.kt` file under [root] that VS Code indexes, analysed with the constants the files
+     * declare between them ([projectConstants]) added to [opts]'s: the verdict VS Code gives the
+     * same workspace. Below [root], folders named `build`, `node_modules`, `.gradle`, `dist`, `out`
+     * or `target`, and hidden ones, are left out. The issues come in path order, then by offset;
      * [failures] keeps those that should fail a build.
      */
     public fun analyzeProject(
@@ -165,7 +170,7 @@ public class Analyzer(
         val files =
             root
                 .walkTopDown()
-                .onEnter { it == root || (it.name != "build" && !it.name.startsWith(".")) }
+                .onEnter { it == root || (it.name !in SKIPPED_FOLDERS && !it.name.startsWith(".")) }
                 .filter { it.isFile && it.extension == "kt" }
                 .sortedBy { it.invariantSeparatorsPath }
                 .map { it to it.readText() }

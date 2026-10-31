@@ -39,6 +39,18 @@ class AnalyzeProjectTest {
     }
 
     @Test
+    fun `leaves out the folders the VS Code index leaves out, below the root only`() {
+        val hidden = root.resolve(".worktree").apply { mkdirs() }
+        val write = { path: String -> hidden.resolve(path).apply { parentFile.mkdirs() }.writeText(swallowed) }
+        write("src/A.kt")
+        for (folder in listOf("build", "node_modules", ".gradle", "dist", "out", "target", ".idea", "src/.cache", "src/target")) {
+            write("$folder/B.kt")
+        }
+        val files = analyzer.analyzeProject(hidden).map { it.file.relativeTo(hidden).invariantSeparatorsPath }.distinct()
+        assertEquals(listOf("src/A.kt"), files)
+    }
+
+    @Test
     fun `gives each file the constants of every other`() {
         write("Keys.kt", "const val title = \"Home\"\n")
         write("Page.kt", page)

@@ -988,10 +988,14 @@ internal fun declaredKind(
     }
 }
 
-private val TRUSTED_LITERAL = Regex("""Trusted\s*\(\s*"((?:[^"\\$\n]|\\.)*)"\s*\)""")
+private val TRUSTED_LITERAL =
+    Regex("Trusted\\s*\\(\\s*(?:html\\s*=\\s*)?(?:\"((?:[^\"\\\\$\\n]|\\\\.)*)\"|\"\"\"((?:[^\"$]|\"(?!\"\"))*)\"\"\")\\s*\\)")
 private val KOTLIN_ESCAPE = Regex("""\\(u[0-9A-Fa-f]{4}|.)""")
 
-/** The text of `Trusted("...")` at [at], with a literal that holds no template, as the Kotlin compiler reads it; null for anything else. */
+/**
+ * The text of `Trusted("...")` at [at], or of `Trusted("""...""")` or `Trusted(html = ...)`, with
+ * a literal that holds no template, as the Kotlin compiler reads it; null for anything else.
+ */
 private fun literalTrusted(
     src: String,
     at: Int,
@@ -1000,6 +1004,8 @@ private fun literalTrusted(
     if (at < 0) return null
     val m = TRUSTED_LITERAL.matchAt(src, at) ?: return null
     if (whole && m.range.last + 1 != src.length) return null
+    // A raw string has no escapes.
+    m.groups[2]?.let { return it.value }
     return KOTLIN_ESCAPE.replace(m.groupValues[1]) {
         val e = it.groupValues[1]
         when {
@@ -1299,12 +1305,13 @@ private val STRING_CHANGES =
         "padEnd",
         "repeat",
     )
+private val NON_NULL_ASSERTION = Regex("""\s*!!$""")
 private val OPERAND_CHAR = Regex("""[\p{L}\p{Nd}_.?!()\[\]{}"']""")
 
 /**
  * What a call shows its result to be, by its name and what it is called on: `u.toLong()` or
- * `(a + b).toInt()` a number, `query.trim()` or `query.ifBlank { "none" }` a String when `query`
- * is one. Null for a safe call, `u?.toLong()`, which may be null, and for a call on only part of
+ * `(a + b).toInt()` a number, `x.toString()` a String, `query.trim()` or `query.ifBlank { "none" }`
+ * a String when `query` is one, `query!!.trim()` too. Null for a safe call, `u?.toLong()`, which may be null, and for a call on only part of
  * the value, `s + u.toInt()`.
  */
 private fun callKind(
@@ -1325,9 +1332,12 @@ private fun callKind(
         return null
     }
     if (call.name in NUMBER_CONVERSIONS) return if (call.lambda == null && call.args.isBlank()) HoleFact.NUMBER else null
+    // Whatever it is called on, and `x!!.toString()` too.
+    if (call.name == "toString") return if (call.lambda == null && call.args.isBlank()) HoleFact.STRING else null
     val lambda = call.name == "ifBlank" || call.name == "ifEmpty"
     if (!(call.name in STRING_CHANGES && call.lambda == null) && !(lambda && call.lambda != null && call.args.isBlank())) return null
-    if (valueKind(src, receiver, at, constants) != HoleFact.STRING) return null
+    // `query!!.trim()`: what `!!` leaves of a `String?` is a String.
+    if (valueKind(src, receiver.replace(NON_NULL_ASSERTION, ""), at, constants) != HoleFact.STRING) return null
     if (!lambda) return HoleFact.STRING
     val result = valueKind(src, lambdaResult(call.lambda!!), at, constants)
     return if (result == HoleFact.STRING || result == HoleFact.CONSTANT) HoleFact.STRING else null

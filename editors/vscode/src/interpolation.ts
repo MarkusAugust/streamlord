@@ -758,13 +758,18 @@ export function declaredKind(src: string, name: string, at: number, nonNull = fa
   return null;
 }
 
-const TRUSTED_LITERAL = /Trusted\s*\(\s*"((?:[^"\\$\n]|\\.)*)"\s*\)/y;
+const TRUSTED_LITERAL = /Trusted\s*\(\s*(?:html\s*=\s*)?(?:"((?:[^"\\$\n]|\\.)*)"|"""((?:[^"$]|"(?!""))*)""")\s*\)/y;
 
-/** The text of `Trusted("...")` at `at`, with a literal that holds no template, as the Kotlin compiler reads it; null for anything else. */
+/**
+ * The text of `Trusted("...")` at `at`, or of `Trusted("""...""")` or `Trusted(html = ...)`, with
+ * a literal that holds no template, as the Kotlin compiler reads it; null for anything else.
+ */
 function literalTrusted(src: string, at: number, whole = false): string | null {
   TRUSTED_LITERAL.lastIndex = at;
   const m = TRUSTED_LITERAL.exec(src);
   if (!m || (whole && m[0].length !== src.length - at)) return null;
+  // A raw string has no escapes.
+  if (m[2] !== undefined) return m[2];
   const escapes: Record<string, string> = { t: "\t", b: "\b", n: "\n", r: "\r" };
   return (m[1] as string).replace(/\\(u[0-9A-Fa-f]{4}|.)/g, (_, e: string) => (e.length === 5 ? String.fromCharCode(Number.parseInt(e.slice(1), 16)) : (escapes[e] ?? e)));
 }
@@ -963,17 +968,20 @@ const STRING_CHANGES: ReadonlySet<string> = new Set([
 
 /**
  * What a call shows its result to be, by its name and what it is called on: `u.toLong()` or
- * `(a + b).toInt()` a number, `query.trim()` or `query.ifBlank { "none" }` a String when `query`
- * is one. Null for a safe call, `u?.toLong()`, which may be null, and for a call on only part of
+ * `(a + b).toInt()` a number, `x.toString()` a String, `query.trim()` or `query.ifBlank { "none" }`
+ * a String when `query` is one, `query!!.trim()` too. Null for a safe call, `u?.toLong()`, which may be null, and for a call on only part of
  * the value, `s + u.toInt()`.
  */
 function callKind(src: string, t: string, at: number, constants?: ReadonlySet<string>): "number" | "string" | null {
   const call = lastCall(t);
   if (!call?.receiver || !wholeOperand(call.receiver) || t.slice(call.receiver.length).trimStart().startsWith("?")) return null;
   if (NUMBER_CONVERSIONS.has(call.name)) return call.lambda === null && call.args.trim() === "" ? "number" : null;
+  // Whatever it is called on, and `x!!.toString()` too.
+  if (call.name === "toString") return call.lambda === null && call.args.trim() === "" ? "string" : null;
   const lambda = call.name === "ifBlank" || call.name === "ifEmpty";
   if (!(STRING_CHANGES.has(call.name) && call.lambda === null) && !(lambda && call.lambda !== null && call.args.trim() === "")) return null;
-  if (valueKind(src, call.receiver, at, constants) !== "string") return null;
+  // `query!!.trim()`: what `!!` leaves of a `String?` is a String.
+  if (valueKind(src, call.receiver.replace(/\s*!!$/, ""), at, constants) !== "string") return null;
   if (!lambda) return "string";
   const result = valueKind(src, lambdaResult(call.lambda as string), at, constants);
   return result === "string" || result === "constant" ? "string" : null;

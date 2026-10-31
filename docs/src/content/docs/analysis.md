@@ -54,8 +54,8 @@ fun `no source file ships markup the analysis calls unsafe`() {
 }
 ```
 
-`analyzeProject` reads every `.kt` file under the folder, leaving out `build` and hidden folders,
-and gives each file the `const val` names the others declare, as the VS Code index does. A
+`analyzeProject` reads every `.kt` file under the folder, leaving out hidden folders and those
+named `build`, `node_modules`, `dist`, `out` or `target`, the files the VS Code index reads, and gives each file the `const val` names the others declare, as the VS Code index does. A
 constant counts when another file can see it, so not a private one, and when no file declares
 the same name as something else, a `val` with a getter for one. The test gives the verdict VS
 Code gives. It is milder than IntelliJ, which knows the type of every value and not only what

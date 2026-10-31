@@ -78,6 +78,7 @@ All notable changes to the Streamlord extension are recorded here.
   `interpolate(...)`, `Trusted(...)`, a value declared `Html` or `@Language("HTML")`, kotlinx.html
   output, a `joinToString` over markup, or an `if`, a `when` or an `?:` whose every result is markup
   or a literal.
+- The workspace index reads the files `analyzeProject` reads: it leaves out every hidden folder, such as `.idea` or a worktree under `.claude`, as well as `build`, `node_modules`, `dist`, `out` and `target`, also for a file changed on disk or opened from one.
 - In a `data-*` expression of an HTML string, `$count` where `count` is a number or a boolean is a
   hint that asks only whether the signal was meant, since the value is safe written in; it was a
   warning. `kotlin-interpolation` no longer calls a `String` fine there as a server value: only a
