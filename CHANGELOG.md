@@ -15,7 +15,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 - `Html`, the markup `interpolate` returns, and `patchElements`, `respondElements` and
   `datastarElements` overloads that take it. In another `interpolate` it is written as markup in
-  element text and judged as the text it is anywhere else. Only `interpolate` makes one. It is
+  element text and judged as the text it is anywhere else. Only `interpolate` and `joinToHtml` make
+  one. It is
   markup only where it closes everything it opens, read as HTML and as svg or math, and the hole
   is outside any comment, CDATA section or `textarea` or `title` body: `interpolate("<script>")`
   or `interpolate("<a href=\"")` would otherwise turn the value after it into a program or a
@@ -33,7 +34,11 @@ All notable changes to Streamlord are recorded here. The format follows
   hint or, for a `String`, a warning, with a fix that rewrites the literal as `interpolate(...)`;
   `unsafe-interpolation` where it cannot, a warning (a hint for a tag or attribute name that is not
   known to be a `String`). VS Code indexes the workspace's `const val`s; IntelliJ adds types.
-- `Fix.edits` in the analysis: further replacements a fix makes, such as an import.
+- `Fix.edits` in the analysis: further replacements a fix makes, such as an import, with
+  `Fix.replacements`, all of them in the order to make them, and `Fix.preferred`, whether an editor
+  may offer the fix as the one to apply. `AnalyzeOptions.constants` takes the `const val` names the
+  workspace declares, and `AnalyzeOptions.holeFact` what the editor knows of a value from its type,
+  as a `HoleFact`.
 - The editors judge a call to `interpolate`: `interpolate-holes`, an error, for a `%s` count that
   does not match the values; `unsafe-interpolation` on a `%s` whose value it will refuse, an error
   where the value is known to be refused; `interpolate-template` for a Kotlin template written into
@@ -60,7 +65,33 @@ All notable changes to Streamlord are recorded here. The format follows
   so a native image that runs it needs no resource configuration for it.
 
 - `interpolate` returns `Html` instead of `String`. The JVM signature is the same, so compiled code
-  keeps working, but `val s: String = interpolate(...)` no longer compiles: write `.text`.
+  keeps working, but Kotlin source may need changing:
+  - `val s: String = interpolate(...)` no longer compiles: write `interpolate(...).text`.
+  - `+interpolate(...)` in a kotlinx.html `unsafe { }` block no longer compiles: write
+    `+interpolate(...).text`.
+  - A test that compares the result with a string still compiles and now fails, since an `Html`
+    is never equal to a `String`, though both print the same: JUnit's
+    `assertEquals("<p>x</p>", interpolate(...))` and AssertJ's
+    `assertThat(interpolate(...)).isEqualTo("<p>x</p>")`. Compare `.text`.
+  - On Spring, `ResponseEntity.ok(interpolate(...))` still compiles, but Spring has no message
+    converter that writes an `Html` as markup. Return `datastarElements(html)`, or pass
+    `html.text` where you build the `ResponseEntity` yourself.
+  - From Java, `interpolate` still returns a `String`, so the result of one `interpolate` handed to
+    another from Java is escaped, as any string is. Nest the calls in Kotlin, or wrap the inner
+    result in `Trusted`.
+- A value in a URL the browser loads code from now throws `UnsafeInterpolationException` where
+  0.15.0 let a relative or `https:` value through: `<script src="%s">`, `<iframe src>`,
+  `<embed src>`, `<object data>`, `<base href>` and `<link href>`. Put the host in the literal,
+  `"/js/%s"` or `"https://cdn.example.com/%s"`, or wrap a URL you chose yourself in `Trusted`. A
+  value in an end tag, `</%s>`, throws too: write an end tag from literals alone. Security says why.
+- streamlord-analysis changes shape where code built against 0.15.0 may use it. `AnalyzeOptions`
+  gained `constants` and `holeFact`, and `KotlinString` gained `nested`, which changes their JVM
+  constructors and `copy`; Kotlin source compiles as before. `Fix` is no longer a data class: it
+  has no `component1()` to `component4()`, so `val (title, start, end, text) = fix` no longer
+  compiles, and its constructor and `copy` take `edits` and `preferred`, which Kotlin source
+  with four arguments still compiles against, while compiled code does not link. `InterpolationKind`
+  has a new entry, `OPERAND`, for a value joined to literals with `+`, so an exhaustive `when` over
+  it needs a branch. Recompile code built against 0.15.
 - The editors judge `${...}`, values joined with `+`, literals inside a template and `$$` literals,
   which they skipped, and no longer give every `$name` in HTML the same hint. A constant, a literal,
   a declared number or boolean and markup built in the template say nothing. In a Datastar

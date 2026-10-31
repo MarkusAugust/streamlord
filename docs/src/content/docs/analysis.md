@@ -49,7 +49,7 @@ swallowed expression:
 private val analyzer = Analyzer()
 
 @Test
-fun `no source file interpolates a signal into Datastar`() {
+fun `no source file ships markup the analysis calls unsafe`() {
     val offenders =
         java.io.File("src/main/kotlin")
             .walkTopDown()
@@ -58,7 +58,10 @@ fun `no source file interpolates a signal into Datastar`() {
                 val source = file.readText()
                 analyzer
                     .analyzeKotlin(source)
-                    .filter { it.severity == Severity.ERROR }
+                    .filter {
+                        it.severity == Severity.ERROR ||
+                            (it.code == "unsafe-interpolation" && it.severity == Severity.WARNING)
+                    }
                     .map { it.format(file.path, source) }
             }.toList()
 
@@ -68,10 +71,12 @@ fun `no source file interpolates a signal into Datastar`() {
 
 The filter keeps the errors: an interpolated signal, an expression that does not parse, and an
 `interpolate(...)` call that throws when it runs, with a `%s` too many or too few
-(`interpolate-holes`) or a value it is known to refuse where it lands (`unsafe-interpolation`). A
-Kotlin template that writes a value into an HTML string where escaping cannot save it is a warning, `unsafe-interpolation`, because the text alone cannot
-tell a number from a string; add `|| it.code == "unsafe-interpolation"` to fail the build on those
-too. [Strings](/strings/#this-is-the-editors-rule-at-run-time) has what each code means.
+(`interpolate-holes`) or a value it is known to refuse where it lands (`unsafe-interpolation`). It
+keeps the `unsafe-interpolation` warnings too: a Kotlin template that writes a value into an HTML
+string where escaping cannot save it, a warning only because the text alone cannot tell a number
+from a string. Keep the severity in that test. The same code is a hint where the value is most
+likely safe, `colspan=$n` with an `Int` `n`, or `<h$level>`, and a hint should not fail a build.
+[Strings](/strings/#this-is-the-editors-rule-at-run-time) has what each code means.
 
 `format` writes each finding as `src/main/kotlin/Page.kt:12:5: error: ... [kotlin-interpolation]`,
 the form IDEs and CI logs turn into a link to the line. `position(source)` gives the line and

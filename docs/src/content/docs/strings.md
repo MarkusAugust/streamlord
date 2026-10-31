@@ -3,7 +3,8 @@ title: "Strings"
 description: "A function that returns HTML is a first-class way to write markup here."
 ---
 
-Every place Streamlord takes HTML takes a `String`. A function returning a triple-quoted literal
+Every place Streamlord takes HTML takes a `String`, and the `Html` that
+[`interpolate`](#values-from-outside) returns as well. A function returning a triple-quoted literal
 is not a fallback for people who have not learned the DSL. It is one of the three supported
 ways, and the editor tooling treats it as such.
 
@@ -219,7 +220,7 @@ a DSL call, and each is judged by where it lands:
 
 | Where the hole is | What the editors say |
 |---|---|
-| Element text, a quoted attribute, a URL whose literal start settles the scheme (`#`, `/`, `?`, `https://`) | `unescaped-interpolation`: a hint, a warning when the value is a `String` or markup, with a fix that rewrites the literal as `interpolate(...)`, and in element text a second, "Mark … as markup", that wraps the value in `Trusted(...)` |
+| Element text, a quoted attribute, a URL whose literal start settles the scheme (`#`, `/`, `?`, `https://`) | `unescaped-interpolation`: a hint, a warning when the value is a `String`, or markup anywhere but element text, where markup says nothing; with a fix that rewrites the literal as `interpolate(...)`, and in element text a second, "Mark … as markup", that wraps the value in `Trusted(...)` |
 | The start of a URL, `style`, a `data-*` expression, signal path or filter, `<script>`, `<style>`, `on*`, `srcdoc` | `unsafe-interpolation`: a warning, since escaping cannot help there; at the start of a URL with the fix to build it with `interpolate(...)`, which refuses a URL that runs |
 | A URL the browser loads code from (`src` of a script, an iframe or an embed, `href` of a base, `data` of an object) whose literal start does not fix the host | `unsafe-interpolation`: a warning, and no fix, since `interpolate` refuses it too; in a call to `interpolate`, an error where the value is known |
 | A value without quotes | `unsafe-interpolation`: a warning, a hint for a number or a boolean, with a fix that quotes the value |
@@ -259,10 +260,21 @@ A call to `interpolate` is judged as it will run. A miscounted `%s` is an error,
 `String` in a `data-*` expression, is an error where the value is known to be one and a warning
 where it is not. And a Kotlin template written into the format, `interpolate("<p>$name</p>")`, is
 `interpolate-template`: Kotlin fills it in before `interpolate` sees the markup, so it is neither
-escaped nor refused, and the fix turns it into a `%s` hole with the value among the arguments. A
-`%s` in element text given markup held as a `String`, `h.text`, a `val` set to one, `elements { }`
-or a `joinToString` of such, is `interpolate-template` too, a warning: `interpolate` escapes it, so
-its tags are printed as text. Pass the `Html` itself, or wrap markup you built in `Trusted(...)`. A
+escaped nor refused, and the fix turns it into a `%s` hole with the value among the arguments.
+Markup is no exception. In `interpolate("<div>$inner</div>")` Kotlin writes the text of the `Html`
+`inner` into the format, where `interpolate` reads it again as markup of yours: a `%s` in it, which
+a value may have put there, becomes a hole and the call throws, and a `%%` becomes `%`. Give it a
+hole of its own:
+
+```kotlin sample=statements
+val inner = interpolate("<b>%s</b>", "Gorvek")
+
+interpolate("""<div class="lt-card">%s</div>""", inner)
+```
+
+A `%s` in element text given markup held as a `String`, `h.text`, a `val` set to one,
+`elements { }` or a `joinToString` of such, is `interpolate-template` too, a warning: `interpolate`
+escapes it, so its tags are printed as text. Pass the `Html` itself, or wrap markup you built in `Trusted(...)`. A
 literal is left alone, `"<the oath>"` among them: text you chose to have escaped.
 
 At run time the source is gone and only the finished string arrives, so the holes have to be left

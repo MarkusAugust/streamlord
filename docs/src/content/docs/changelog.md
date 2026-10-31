@@ -12,14 +12,28 @@ with a sentence about what to do.
 **`interpolate` returns `Html`.** Hand it to `patchElements`, `respondElements` or
 `datastarElements` as it is, or to another `interpolate`, which writes it as markup in element
 text. Where you need the string, write `.text`: `val s: String = interpolate(...)` no longer
-compiles, and `+interpolate(...)` in a kotlinx.html `unsafe` block becomes `+interpolate(...).text`. An `Html` is never equal to a `String`, so a test's `assertEquals("<p>x</p>", interpolate(...))`
-or AssertJ `isEqualTo` still compiles and fails although both print the same: compare `.text`.
+compiles, and `+interpolate(...)` in a kotlinx.html `unsafe` block becomes
+`+interpolate(...).text`. An `Html` is never equal to a `String`, so a test's
+`assertEquals("<p>x</p>", interpolate(...))` or AssertJ `isEqualTo` still compiles and fails
+although both print the same: compare `.text`. On Spring, `ResponseEntity.ok(interpolate(...))`
+compiles but no converter writes an `Html`: return `datastarElements(html)`, or pass `.text`. From
+Java, `interpolate` still returns a `String`, so one nested in another from Java is escaped; nest
+in Kotlin, or wrap the inner one in `Trusted`.
+
+**Put the host in the literal of a URL that loads code.** `<script src="%s">`, `<iframe src>`,
+`<embed src>`, `<object data>`, `<base href>` and `<link href>` now throw where 0.15.0 let a
+relative or `https:` value through. Write `"/js/%s"` or `"https://cdn.example.com/%s"`, or wrap a
+URL you chose yourself in `Trusted`. An end tag, `</%s>`, throws too: write it from literals.
+[Strings](/strings/#values-from-outside) says why.
 
 **The editors judge every Kotlin value in an HTML string.** `${...}`, values joined with `+`
 and `$$` literals are judged as `$name` was, by where they land, under two new codes,
 `unescaped-interpolation` and `unsafe-interpolation`; [Strings](/strings/#this-is-the-editors-rule-at-run-time)
 has the table. A check from a test that filtered on `kotlin-interpolation` to catch values in HTML
-should filter on the new codes.
+should filter on the new codes. Code that calls streamlord-analysis needs recompiling:
+`AnalyzeOptions`, `KotlinString` and `Fix` have new JVM constructors, `Fix` is no longer a data class,
+so it no longer destructures, and `InterpolationKind` has a new entry, `OPERAND`, for an exhaustive
+`when`.
 
 ## 0.15.0
 
