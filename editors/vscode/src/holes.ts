@@ -280,7 +280,8 @@ function scanMarkupTracked(html: string, visitor: Visitor, context: number, scri
       push(name === "svg" ? NS_SVG : name === "math" ? NS_MATH : NS_HTML, name, false, i);
     } else {
       if (selfClosing) continue;
-      const ns = name === "svg" ? NS_SVG : name === "math" ? NS_MATH : stackNs.length === 0 ? context : (stackNs[stackNs.length - 1] as number);
+      // In foreign content every tag takes the namespace it stands in, an `<svg>` in a math included.
+      const ns = stackNs.length === 0 ? context : (stackNs[stackNs.length - 1] as number);
       const integration =
         (ns === NS_SVG && SVG_HTML_INTEGRATION.has(name)) ||
         (ns === NS_MATH && MATH_TEXT_INTEGRATION.has(name)) ||

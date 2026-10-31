@@ -108,6 +108,14 @@ class InterpolationReadingsTest {
         assertEquals("<svg><p>a</p></svg>", interpolate("<svg>%s</svg>", interpolate("<p>%s</p>", "a")).text)
     }
 
+    // Inside foreign content an `<svg>` or `<math>` tag takes the namespace it stands in, so in a
+    // math patch `<svg><mi>` is a MathML mi, whose content is HTML.
+    @Test
+    fun `an svg tag inside a math is MathML, and a math inside an svg is svg`() {
+        assertEquals(Position.STRUCTURE, refused("<xmp><svg><mi><textarea><a href='</textarea><img src=x onerror=%s>", code).position)
+        assertEquals("<svg><math><mi>x</mi></math></svg>", interpolate("<svg><math><mi>%s</mi></math></svg>", "x").text)
+    }
+
     // A Trusted value is markup, so the values beside it are judged where its text puts them.
     @Test
     fun `a Trusted value is read as the markup it writes`() {

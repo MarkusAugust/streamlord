@@ -437,16 +437,9 @@ private fun scanMarkupTracked(
                 push(ns, name, false, i)
             } else {
                 if (selfClosing) continue
-                val ns =
-                    if (name == "svg") {
-                        NS_SVG
-                    } else if (name == "math") {
-                        NS_MATH
-                    } else if (stackNs.isEmpty()) {
-                        context
-                    } else {
-                        stackNs.last()
-                    }
+                // In foreign content every tag takes the namespace it stands in, an `<svg>` in a math
+                // included; only HTML content starts a new one.
+                val ns = if (stackNs.isEmpty()) context else stackNs.last()
                 val integration =
                     (ns == NS_SVG && name in SVG_HTML_INTEGRATION) ||
                         (ns == NS_MATH && name in MATH_TEXT_INTEGRATION) ||

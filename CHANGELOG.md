@@ -273,6 +273,12 @@ All notable changes to Streamlord are recorded here. The format follows
   swallowed its end tag, and the value came out inside it. The readings from an svg and a math are
   taken once more with no HTML element opened from them left open, and the strictest still wins,
   as the editors do too. These readings are new in this release.
+- The element-stack readings put an `<svg>` tag in the svg namespace wherever it stood, and a
+  `<math>` in MathML, but inside foreign content a tag takes the namespace it stands in: in a math
+  patch, `<xmp><svg><mi><textarea><a href='</textarea><img src=x onerror=%s>` has a MathML `mi`,
+  whose content is HTML, so the textarea ends and the value lands in a live handler, where the
+  readings saw an svg `mi` and a quoted attribute. Inside an svg or a math, an `<svg>` or `<math>`
+  now stays in the namespace around it. These readings are new in this release.
 - A `Trusted` value was written as it stands but never read back into the markup, so one in a tag
   or attribute name, or anywhere else that changes how the markup is read, waived the checks on
   the values beside it: `interpolate("<button %s=\"%s\">", Trusted("onclick"), v)` put `v` in a

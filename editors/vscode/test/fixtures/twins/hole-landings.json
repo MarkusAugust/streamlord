@@ -864,6 +864,16 @@
    ]
   },
   {
+   "name": "an svg inside a math is MathML, so its mi holds HTML",
+   "markup": "<xmp><svg><mi><textarea><a href='</textarea><img src=x onerror=%s>",
+   "landings": [
+    {
+     "position": "STRUCTURE",
+     "attribute": null
+    }
+   ]
+  },
+  {
    "name": "known text is the attribute name",
    "markup": "<button %s=\"%s\">",
    "known": {
