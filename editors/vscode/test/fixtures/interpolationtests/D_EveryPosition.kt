@@ -344,9 +344,9 @@ object EveryPosition {
 
     fun datastarWhole(query: String, n: Int, maybe: Int?, flag: Boolean, html: Html): String {
         // $query: kotlin-interpolation, warning (a server value or the signal $query: the whole expression)
-        // $n: kotlin-interpolation, warning
+        // $n: kotlin-interpolation, hint (a number is safe; only the signal $n is asked about)
         // $maybe: kotlin-interpolation, warning
-        // $flag: kotlin-interpolation, warning
+        // $flag: kotlin-interpolation, hint (a boolean is safe; only the signal $flag is asked about)
         // $html: kotlin-interpolation, warning
         // $variant: kotlin-interpolation, warning
         // ${"lit"}: nothing
@@ -364,9 +364,9 @@ object EveryPosition {
 
     fun datastarPart(query: String, n: Int, maybe: Int?, flag: Boolean, html: Html): String {
         // $query: kotlin-interpolation, warning (a server value or the signal $query: inside the expression)
-        // $n: kotlin-interpolation, warning
+        // $n: kotlin-interpolation, hint (a number is safe; only the signal $n is asked about)
         // $maybe: kotlin-interpolation, warning
-        // $flag: kotlin-interpolation, warning
+        // $flag: kotlin-interpolation, hint (a boolean is safe; only the signal $flag is asked about)
         // $html: kotlin-interpolation, warning
         // $variant: kotlin-interpolation, warning
         // ${"lit"}: nothing
@@ -490,7 +490,7 @@ object EveryPosition {
         // ${html}: unsafe-interpolation, warning
         // ${variant}: nothing
         // ${"lit"}: nothing
-        // $n: kotlin-interpolation, warning (the server value or the signal $n)
+        // $n: kotlin-interpolation, hint (the server value, a number, is safe; or the signal $n)
         // language=HTML
         return """<div>
             <p data-signals="{n: ${query}}"></p>

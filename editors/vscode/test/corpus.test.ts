@@ -26,10 +26,12 @@ interface Case {
   requireIds?: boolean;
   /** The attribute prefix of an aliased bundle; the default bundle's otherwise. */
   prefix?: string;
+  /** The workspace's `const val` names. */
+  constants?: string[];
   issues: Expected[];
 }
 
-const opts = (c: Case) => ({ prefix: c.prefix ?? "data-", checkHtmlAttributes: true });
+const opts = (c: Case) => ({ prefix: c.prefix ?? "data-", checkHtmlAttributes: true, constants: new Set(c.constants ?? []) });
 const run: Record<string, (c: Case) => Issue[]> = {
   expression: (c) => validateExpression(c.source),
   markup: (c) => validateMarkup(c.source, { requireIds: c.requireIds ?? false, prefix: c.prefix ?? "data-", checkAttributes: true }),

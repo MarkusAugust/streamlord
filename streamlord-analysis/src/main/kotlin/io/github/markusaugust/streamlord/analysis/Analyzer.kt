@@ -58,6 +58,7 @@ private val TRUSTED_CALL = Regex("""(?:^|[^\p{L}\p{Nd}_.])Trusted\s*\(""")
 
 private val INTERPOLATE = setOf("interpolate")
 private val PERCENTS_BEFORE = Regex("""%*\z""")
+private val FORMAT_SPECIFIER = Regex("""%[-#+0,(]*\d*(?:\.\d+)?[dfxXoeEgGcb](?![A-Za-z])""")
 
 /** kotlinx.html's own way to write any attribute: `attributes["data-on:click"] = "..."`. */
 private val ATTRIBUTES_INDEX = Regex("""\battributes\s*\[\s*"(data-[^"\\]*)"\s*]\s*=\s*""")
@@ -141,6 +142,7 @@ public class Analyzer(
         val out = ArrayList<SiteIssues>()
         val claimed = HashSet<Int>()
         val lex = lex(src)
+        val facts = fileFacts(src, lex)
         val hyphenated = hyphenatedSignals(src, SourceLanguage.KOTLIN)
         for (site in findCallSites(src, allSiteNames, lex)) {
             val issues = ArrayList<Issue>()
@@ -179,8 +181,8 @@ public class Analyzer(
         val topLevel = lex.strings.toHashSet()
         for (s in withNested(lex.strings)) {
             if (s.start in claimed || s.start in chained || s.unterminated) continue
-            // A literal inside a template is read on its own: its neighbours there are the template's code.
-            val chain = if (s in topLevel) chainFrom(src, s, lex.mask) else null
+            // A literal inside a template is joined to its neighbours in the template's code.
+            val chain = chainFrom(src, s, if (s in topLevel) lex.mask else facts.code)
             val whole = chain ?: s
             if (chain != null) for (at in chain.start until chain.end) if (src[at] == '"' || src[at] == '$') chained += at
             if (!isHtmlString(src, s) && !(chain != null && CHAIN_HTML_START.containsMatchIn(chain.text))) continue
@@ -464,12 +466,20 @@ public class Analyzer(
         if (counted && holes.size != values.size) {
             val h = holes.size
             val v = values.size
+            // `%d` as String.format writes it: interpolate knows only %s.
+            val specifier = FORMAT_SPECIFIER.find(s.text.replace("%%", "  "))?.value
+            val advice =
+                if (specifier != null) {
+                    "Only %s is a hole, whatever the value: write %s in place of $specifier."
+                } else {
+                    "Write %% for a per cent sign that is not a hole."
+                }
             issues +=
                 Issue(
                     site.nameStart,
                     site.nameStart + site.name.length,
                     "interpolate throws IllegalArgumentException here: the markup has $h %s ${if (h == 1) "hole" else "holes"} and " +
-                        "$v ${if (v == 1) "value is" else "values are"} given. Write %% for a per cent sign that is not a hole.",
+                        "$v ${if (v == 1) "value is" else "values are"} given. $advice",
                     Severity.ERROR,
                     "interpolate-holes",
                 )
@@ -486,21 +496,26 @@ public class Analyzer(
         for ((k, ip) in format.interpolations.withIndex()) {
             val landing = landings[k]
             val trap = traps[ip.start]
+            val fact = holeFact(format, src, opts, ip)
             if (trap != null && ip.kind == InterpolationKind.SIMPLE && landing.position == Position.DATASTAR) {
-                val judged = datastarTrap(trap, ip, landing, view, opts.prefix)
+                val judged = datastarTrap(trap, ip, landing, view, opts.prefix, fact)
                 if (judged != null) {
                     issues += judged
                     continue
                 }
             }
-            val fact = holeFact(format, src, opts, ip)
             if (fact == HoleFact.CONSTANT || fact == HoleFact.NUMBER || fact == HoleFact.BOOLEAN) continue
             if (fact == HoleFact.MARKUP && landing.position == Position.TEXT) continue
             if (fact == HoleFact.NULLABLE && landing.position in ESCAPED_POSITIONS) continue
             val shown = holeDisplay(ip, format.dollars)
             // A `%` right before the template would make `%%s` of the hole: a per cent sign and an s.
             val percents = PERCENTS_BEFORE.find(format.text.substring(0, ip.decodedStart))?.value?.length ?: 0
-            val fixable = landing.position in ESCAPED_POSITIONS && ip.kind != InterpolationKind.OPERAND && mapped && percents % 2 == 0
+            // A %s hole writes nothing for null and escapes markup, so the fix would change the page.
+            val keeps =
+                !mayBeNull(src, ip.text, s.start) &&
+                    !(landing.position == Position.TEXT && mayHoldMarkup(src, ip.text, s.start, opts.constants))
+            val fixable =
+                landing.position in ESCAPED_POSITIONS && ip.kind != InterpolationKind.OPERAND && mapped && percents % 2 == 0 && keeps
             val fixes = if (fixable) listOf(holeFix(ip, shown, at, values, formatArg)) else emptyList()
             issues +=
                 Issue(ip.start, ip.end, templateMessage(shown, landing), Severity.WARNING, "interpolate-template", Docs.EXPRESSIONS, fixes)
@@ -517,7 +532,7 @@ public class Analyzer(
                     else -> emptySet<ArgKind>()
                 }
             if (kind == ArgKind.TRUSTED || kind in allowed) continue
-            val shown = arg?.let { shorten(it.text.trim()) } ?: "the value of this %s"
+            val shown = arg?.let { shortened(it.text) } ?: "the value of this %s"
             val r = format.toSource(d, d + PLACEHOLDER.length)
             issues +=
                 Issue(
@@ -541,8 +556,6 @@ public class Analyzer(
             HoleFact.MARKUP -> ArgKind.MARKUP
             else -> null
         }
-
-    private fun shorten(text: String): String = if (text.length <= 30) text else text.substring(0, 29) + "…"
 
     /** The template made a `%s` hole in place, and its expression passed as the value at the same place among the others. */
     private fun holeFix(
@@ -721,7 +734,7 @@ public class Analyzer(
             s.dollars == 1 &&
                 !trimmed(src, s) &&
                 s.interpolations.none { it.kind == InterpolationKind.OPERAND } &&
-                s.interpolations.indices.all { k -> interpolateKeeps(src, s, s.interpolations[k], facts[k], landings[k].position) }
+                s.interpolations.indices.all { k -> interpolateKeeps(src, s, s.interpolations[k], facts[k], landings[k].position, opts) }
         val issues = ArrayList<Issue>()
         for ((k, ip) in s.interpolations.withIndex()) {
             val landing = landings[k]
@@ -783,7 +796,7 @@ public class Analyzer(
 
                 Position.DATASTAR -> {
                     val trap = traps[ip.start]?.takeIf { ip.kind == InterpolationKind.SIMPLE }
-                    val judged = trap?.let { datastarTrap(it, ip, landing, view, opts.prefix) }
+                    val judged = trap?.let { datastarTrap(it, ip, landing, view, opts.prefix, fact) }
                     if (judged != null) {
                         issues += judged
                     } else if (!own && fact != HoleFact.NUMBER && fact != HoleFact.BOOLEAN) {
@@ -849,6 +862,7 @@ public class Analyzer(
         ip: Interpolation,
         fact: HoleFact?,
         position: Position,
+        opts: AnalyzeOptions,
     ): Boolean {
         if (position == Position.DATASTAR) return fact == HoleFact.NUMBER || fact == HoleFact.BOOLEAN
         if (position == Position.STYLE) return fact == HoleFact.NUMBER
@@ -856,12 +870,18 @@ public class Analyzer(
         if (fact == HoleFact.NULLABLE || mayBeNull(src, ip.text, s.start)) return false
         if (TRUSTED_CALL.containsMatchIn(ip.text)) return position == Position.TEXT
         if (fact == HoleFact.MARKUP) return position != Position.TEXT || markupValued(src, s, ip)
+        if (position == Position.TEXT && fact != HoleFact.NUMBER && fact != HoleFact.BOOLEAN &&
+            mayHoldMarkup(src, ip.text, s.start, opts.constants)
+        ) {
+            return false
+        }
         return !(fact == HoleFact.CONSTANT && position == Position.TEXT && ip.kind != InterpolationKind.SIMPLE && '<' in ip.text)
     }
 
     /**
-     * What the analysis knows of a hole's value: the editor's facts first, then what the text shows,
-     * of the hole or of each value an `if` or a `when` in it can give.
+     * What the analysis knows of a hole's value: the editor's fact when it gives one, which no rule
+     * of the text overrides; otherwise what the text shows, of the hole or of each value an `if`, a
+     * `when` or an `?:` in it can give.
      */
     private fun holeFact(
         s: KotlinString,
@@ -869,13 +889,12 @@ public class Analyzer(
         opts: AnalyzeOptions,
         ip: Interpolation,
     ): HoleFact? {
-        val known = opts.holeFact?.invoke(ip.start, ip.end)
-        if (known == HoleFact.CONSTANT || known == HoleFact.MARKUP) return known
-        val values = if (ip.kind == InterpolationKind.SIMPLE) listOf(ip.text) else branches(ip.text) ?: listOf(ip.text)
-        val kinds = values.map { valueKind(src, it, s.start, opts.constants) }
+        opts.holeFact?.invoke(ip.start, ip.end)?.let { return it }
+        val values = if (ip.kind == InterpolationKind.SIMPLE) listOf(HoleValue(ip.text, false)) else holeValues(ip.text)
+        val kinds = values.map { valueKind(src, it.text, s.start, opts.constants, it.nonNull) }
         if (kinds.all { it == HoleFact.CONSTANT }) return HoleFact.CONSTANT
         if (isMarkup(src, s, ip)) return HoleFact.MARKUP
-        return known ?: weakest(kinds)
+        return weakest(kinds)
     }
 
     private fun unescapedMessage(shown: String): String =
@@ -900,6 +919,7 @@ public class Analyzer(
         landing: HoleLanding,
         view: String,
         prefix: String,
+        fact: HoleFact?,
     ): Issue? {
         val attribute = landing.attribute ?: return null
         if (landing.valueStart < 0) return null
@@ -914,6 +934,16 @@ public class Analyzer(
         val fixes = trap.fixes.filter { it.title.startsWith("Make it") || it.title.startsWith("Escape") }
         // data-signals:count="$initial" seeds a signal from the server, like the object form does.
         val whole = spec.name != "signals" && value.trim() == PLACEHOLDER
+        // A number or a boolean is safe written in: what is left to ask is whether a signal was meant.
+        if (fact == HoleFact.NUMBER || fact == HoleFact.BOOLEAN) {
+            return trap.copy(
+                severity = Severity.HINT,
+                fixes = fixes,
+                message =
+                    "Kotlin writes \$$name here, a ${fact.name.lowercase()} from the server, which is safe in a Datastar expression. " +
+                        "Meant as the signal \$$name, make the literal \$\$\"\"\"...\"\"\" (Kotlin 2.2+), or escape as \${'$'}$name.",
+            )
+        }
         return trap.copy(
             severity = Severity.WARNING,
             fixes = fixes,

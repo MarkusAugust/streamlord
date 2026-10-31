@@ -192,7 +192,7 @@ lands:
 | The start of a URL, `style`, a `data-*` expression, signal path or filter, `<script>`, `<style>`, `on*`, `srcdoc` | `unsafe-interpolation`: a warning, since escaping cannot help there |
 | A value without quotes | `unsafe-interpolation`: a warning, a hint for a number or a boolean, with a fix that quotes the value |
 | A tag name, an attribute name, a list of attributes | `unsafe-interpolation`: a hint, a warning when the value is a `String` or markup |
-| `$name` where a Datastar signal could stand | `kotlin-interpolation`, the [dollar trap](/dollar-trap/); a hint when `name` is declared a number, which is safe to write in, so only what you meant is in question |
+| `$name` where a Datastar signal could stand | `kotlin-interpolation`, the [dollar trap](/dollar-trap/); a hint when `name` is declared a number or a boolean, which is safe to write in, so only what you meant is in question |
 
 A value the editor can see is yours says nothing anywhere: a `const val`, a literal, a call to one
 of Streamlord's expression helpers, `${signal("count")}` or `${post("/save")}`, or an `if` or a
@@ -201,13 +201,15 @@ where it lands. A number or a boolean says nothing in text, an attribute, a URL 
 expression, and a number in `style` too; one that may be null, an `Int?`, only where escaping is
 enough. A hole that is markup you built, as a whole, says nothing in element text and is a warning
 anywhere else, where its quotes and tags can end what holds it: an HTML literal, an
-`interpolate(...)` or `Trusted(...)` call, a value declared `Html` or `@Language("HTML")`, or
-kotlinx.html output. `${"<b>" + query}` is not: it is the `String` the query makes it. An `if` or a
-`when` is judged by its weakest branch, so `${if (blank) "nothing" else query}` is the `String` it
-may be.
+`interpolate(...)` or `Trusted(...)` call, a value declared `Html` or `@Language("HTML")`,
+kotlinx.html output, or a `joinToString` whose every element is markup. Markup joined to a value is
+read as one string: in `${"<b>" + query + "</b>"}` the literals are markup and `query` is the hole
+that is judged. An `if`, a `when` or an `?:` is judged by its weakest result, so
+`${if (blank) "nothing" else query}` is the `String` it may be.
 
-VS Code knows what the file it is in declares and every `const val` in the workspace; IntelliJ
-also knows the types. Nothing here is an error, because a value the text cannot see into may well
+VS Code knows what the file it is in declares, each name in the scope it is declared in, and every
+`const val` in the workspace that the file does not declare as something else; IntelliJ also knows
+the types, and what it knows of a value comes before anything the text suggests. Nothing here is an error, because a value the text cannot see into may well
 be a number. The `interpolate(...)` fix is offered only when the rewrite keeps the page as it was,
 escaping aside: not when a value may be null, which a template writes as `null` and `interpolate`
 as nothing, nor when a hole in element text may hold markup, which `interpolate` would escape.

@@ -23,7 +23,8 @@ class CorpusTest {
         val source = case.string("source")!!
         // A case may give the attribute prefix of an aliased bundle; the default bundle's otherwise.
         val prefix = case.string("prefix") ?: "data-"
-        val opts = AnalyzeOptions(prefix, true)
+        // A case may give the workspace's `const val` names.
+        val opts = AnalyzeOptions(prefix, true, constants = case.array("constants")?.strings()?.toSet() ?: emptySet())
         return when (kind) {
             "expression" -> {
                 analyzer.validateExpression(source)

@@ -8,16 +8,23 @@
 import { lexKotlin } from "./scanner.ts";
 import { PLACEHOLDER, readKotlinStringAt, type Interpolation, type KotlinString } from "./kotlinStrings.ts";
 import type { Fix } from "./expression.ts";
+import { catalog } from "./catalog.ts";
+import { dslHelpers, EXPRESSION_HELPERS } from "./signalNameHyphens.ts";
 
 const HTML_START = /^\s*<(?:[A-Za-z]|__kt__|!--|!doctype)/i;
 const IDENT = /^[\p{L}_][\p{L}\p{Nd}_]*$/u;
 
-/** How a hole is named in a message: `$name`, `${expr}` shortened, or the operand as written. */
+/** An expression as a message quotes it: on one line, and cut short past 30 characters. */
+export function shortened(text: string): string {
+  const e = text.trim().replace(/\s+/g, " ");
+  return e.length <= 30 ? e : `${e.slice(0, 29)}…`;
+}
+
+/** How a hole is named in a message: `$name`, `${expr}` shortened, or an operand of `+` as the value it is. */
 export function holeDisplay(ip: Interpolation, dollars: number): string {
   if (ip.kind === "simple") return "$".repeat(dollars) + ip.text;
-  if (ip.kind === "operand") return ip.text;
-  const e = ip.text.trim();
-  return `${"$".repeat(dollars)}{${e.length <= 30 ? e : `${e.slice(0, 29)}…`}}`;
+  if (ip.kind === "operand") return `the value \`${shortened(ip.text)}\``;
+  return `${"$".repeat(dollars)}{${shortened(ip.text)}}`;
 }
 
 /**
@@ -197,44 +204,376 @@ export function branches(expr: string): string[] | null {
   return null;
 }
 
-/** Where the declaration that encloses `at` starts: the nearest `fun` before it, or the file. */
-function scopeStart(src: string, at: number): number {
-  const before = src.slice(0, at);
-  const m = [...before.matchAll(/\bfun\b/g)].pop();
-  return m?.index ?? 0;
+/** A name the file declares, and the stretch of it where the name means that declaration. */
+interface Declaration {
+  /** Where the name is written. */
+  at: number;
+  /** Where the declaration can first be seen: the name for a local, the scope's opening bracket otherwise. */
+  start: number;
+  /** Just past where it can last be seen. */
+  end: number;
+  type?: string;
+  /** The number or boolean literal it is set to. */
+  literal?: string;
+  /** The string literal a `const val` is set to, as written, when it holds no template. */
+  text?: string;
+  constant: boolean;
+  html: boolean;
 }
 
 /**
- * Whether `name` is declared between the enclosing function and `at`: a parameter, a local, a
- * lambda parameter. Such a name is not the workspace's constant of the same name.
+ * What the analysis needs of a whole file, read once: where the code is (template code included),
+ * the names it declares with their scopes, and whether `interpolate` is imported.
  */
-export function shadowed(src: string, name: string, at: number): boolean {
-  const scope = src.slice(scopeStart(src, at), at);
-  const n = name.replace(/[$]/g, "\\$&");
-  return new RegExp(`\\b(?:val|var)\\s+${n}\\b|[(,]\\s*(?:@\\w+(?:\\([^)]*\\))?\\s*)*${n}\\s*:|\\b${n}\\s*(?:,\\s*[\\p{L}_][\\p{L}\\p{Nd}_]*\\s*)*->|\\bfor\\s*\\(\\s*${n}\\b`, "u").test(scope);
+interface FileFacts {
+  src: string;
+  /** 1 where the character is code: outside literals and comments, or in a template's code. */
+  code: Uint8Array;
+  names: Map<string, Declaration[]>;
+  importEdits?: Fix["edits"] | null;
+  helpers?: ReadonlySet<string>;
 }
 
-/** The nearest declaration of `name` before `at` in the one that encloses it: the type it is given, or the literal. */
-function declarationOf(src: string, name: string, at: number): { type?: string; literal?: string } | null {
-  const scope = src.slice(scopeStart(src, at), at);
-  const n = name.replace(/[$]/g, "\\$&");
-  const declarations = [
-    ...scope.matchAll(new RegExp(`(?:[(,]\\s*(?:@\\w+(?:\\([^)]*\\))?\\s*)*(?:(?:val|var)\\s+)?|\\b(?:val|var)\\s+)${n}\\s*(?::\\s*([\\p{L}_][\\p{L}\\p{Nd}_.]*\\??)|=\\s*(-?\\d[\\d_]*(?:\\.\\d+)?[LlFfDd]?|true|false)\\b|=|->|,)`, "gu")),
-  ];
-  const last = declarations.pop();
-  return last ? { type: last[1], literal: last[2] } : null;
+let lastFacts: FileFacts | null = null;
+
+/** The facts of `src`, kept for the last file read: every hole of a file asks for them. */
+export function fileFacts(src: string, lex?: { strings: KotlinString[]; mask: Uint8Array }): FileFacts {
+  if (lastFacts !== null && lastFacts.src === src) return lastFacts;
+  const { strings, mask } = lex ?? lexKotlin(src);
+  const code = codeMask(src, strings, mask);
+  lastFacts = { src, code, names: declarations(src, code) };
+  return lastFacts;
+}
+
+/** The lexer's mask with the code of every `${...}` template marked as code, its braces too. */
+function codeMask(src: string, strings: readonly KotlinString[], mask: Uint8Array): Uint8Array {
+  const code = mask.slice();
+  // Outermost first, so a literal inside a template is blanked before its own templates are marked.
+  for (const s of withNested(strings)) {
+    for (const ip of s.interpolations) {
+      if (ip.kind !== "braced" || src[ip.end - 1] !== "}") continue;
+      const open = src.indexOf("{", ip.start);
+      const inner = lexKotlin(src.slice(open + 1, ip.end - 1)).mask;
+      code.set(inner, open + 1);
+      code[open] = 1;
+      code[ip.end - 1] = 1;
+    }
+  }
+  return code;
+}
+
+const NAME = String.raw`[\p{L}_][\p{L}\p{Nd}_]*`;
+const TYPE = String.raw`[\p{L}_][\p{L}\p{Nd}_.]*\??`;
+const VAL_AFTER = new RegExp(
+  String.raw`\s*(?:<[^<>]*>\s*)?((?:${NAME}\s*\.\s*)*)(${NAME})(?:\s*:\s*(${TYPE}))?(?:\s*=\s*(?:(-?\d[\d_]*(?:\.\d+)?[LlFfDd]?|true|false)|("(?:[^"\\$\n]|\\[^$])*"))(?=[ \t]*(?:[\n\r;})\],]|//|$)))?`,
+  "uy",
+);
+const DESTRUCTURED = new RegExp(String.raw`\s*\(([^()]*)\)`, "y");
+const PARAMETER = new RegExp(String.raw`^\s*(?:@[\p{L}_][\p{L}\p{Nd}_.]*(?:\s*\([^)]*\))?\s*)*((?:[\p{L}]+\s+)*?)(${NAME})\s*:\s*(${TYPE})?`, "u");
+const LAMBDA_PARAMETERS = new RegExp(String.raw`\s*((?:\([^()]*\)|${NAME})(?:\s*:\s*[\p{L}\p{Nd}_.<>?]+)?(?:\s*,\s*(?:\([^()]*\)|${NAME})(?:\s*:\s*[\p{L}\p{Nd}_.<>?]+)?)*)\s*->`, "uy");
+const FOR_VARIABLE = new RegExp(String.raw`\s*(\([^()]*\)|${NAME})(?:\s*:\s*(${TYPE}))?\s+in\b`, "uy");
+const CONST_BEFORE = /\bconst[ \t]+(?:\p{L}+[ \t]+)*$/u;
+const HTML_BEFORE = /@Language\(\s*"html"\s*\)\s*(?:\p{L}+\s+)*$/iu;
+const HTML_ANNOTATION = /@Language\(\s*"html"\s*\)/i;
+const WORD_START = /[\p{L}_]/u;
+const WORD_PART = /[\p{L}\p{Nd}_]/u;
+
+/** Whether `c` can start a name, or with `rest` go on with one: ASCII at once, the rest of Unicode by its class. */
+function wordChar(c: string | undefined, rest: boolean): boolean {
+  if (c === undefined) return false;
+  const k = c.charCodeAt(0);
+  if ((k >= 97 && k <= 122) || (k >= 65 && k <= 90) || k === 95) return true;
+  if (k >= 48 && k <= 57) return rest;
+  return k > 127 && (rest ? WORD_PART : WORD_START).test(c);
+}
+/** The words that start a declaration of their own, ending a function's expression body. */
+const DECLARATION_WORDS: ReadonlySet<string> = new Set(["fun", "val", "var", "class", "interface", "object", "init", "constructor", "typealias"]);
+
+/** Names whose declarations wait for their scope's end: a function's parameters until its body is found. */
+interface Pending {
+  decls: Declaration[];
+  kind: "fun" | "for";
+  /** `after`: the parameters closed; `expr`: an expression body; `stmt`: a loop body without braces. */
+  state: "after" | "expr" | "stmt";
+  /** Whether an expression body has begun: `=` then a line break goes on with the next line. */
+  started?: boolean;
+}
+
+/** Whether the line break at `at` ends an expression: nothing before it or after it carries the expression on. */
+function lineEnds(src: string, code: Uint8Array, at: number): boolean {
+  let k = at - 1;
+  while (k >= 0 && (code[k] !== 1 || /\s/.test(src[k] ?? ""))) k--;
+  if (/[-=+*/%&|?:.,(<>!]/.test(src[k] ?? "")) return false;
+  k = at + 1;
+  while (k < src.length && (code[k] !== 1 || /\s/.test(src[k] ?? ""))) k++;
+  return !/^(?:[-.?+*/%&|:]|else\b)/.test(src.slice(k, k + 5));
+}
+
+interface Frame {
+  open: number;
+  kind: "top" | "block" | "class" | "lambda" | "when" | "params" | "ctor" | "for" | "paren";
+  /** Declarations whose scope ends where this frame closes. */
+  ends: Declaration[];
+  commas: number[];
+  pending: Pending | null;
+  fun: boolean;
+  cls: boolean;
+  when: boolean;
+  loop: boolean;
+  /** The parameters of a class's constructor, waiting for its body. */
+  ctor: Declaration[] | null;
+}
+
+/**
+ * Every name the file declares, read from the code alone: a `val` or `var` (destructured too), a
+ * parameter of a function, a constructor or a lambda, and a loop variable, each with the stretch
+ * of the file where it is the one the name means. A named argument, `list(page = 1)`, declares
+ * nothing. Sorted by where each scope starts.
+ */
+function declarations(src: string, code: Uint8Array): Map<string, Declaration[]> {
+  const names = new Map<string, Declaration[]>();
+  const add = (name: string, d: Declaration) => {
+    if (name === "_") return;
+    const list = names.get(name);
+    if (list) list.push(d);
+    else names.set(name, [d]);
+  };
+  const frame = (open: number, kind: Frame["kind"]): Frame => ({ open, kind, ends: [], commas: [], pending: null, fun: false, cls: false, when: false, loop: false, ctor: null });
+  const stack: Frame[] = [frame(-1, "top")];
+  const top = () => stack[stack.length - 1] as Frame;
+  const settle = (p: Pending, end: number) => {
+    for (const d of p.decls) d.end = end;
+  };
+  const endPending = (f: Frame, at: number) => {
+    if (f.pending) settle(f.pending, at);
+    f.pending = null;
+    if (f.ctor) for (const d of f.ctor) d.end = at;
+    f.ctor = null;
+  };
+  /** Each parameter between the brackets of a function or a constructor. */
+  const parameters = (f: Frame, close: number): { name: string; d: Declaration }[] => {
+    const out: { name: string; d: Declaration }[] = [];
+    const cuts = [f.open, ...f.commas, close];
+    for (let k = 0; k + 1 < cuts.length; k++) {
+      const text = src.slice((cuts[k] as number) + 1, cuts[k + 1]);
+      const m = PARAMETER.exec(text);
+      if (!m) continue;
+      const vararg = /\bvararg\b/.test(m[1] ?? "");
+      out.push({ name: m[2] as string, d: { at: (cuts[k] as number) + 1 + (m.index ?? 0), start: f.open, end: src.length, type: vararg ? undefined : m[3], constant: false, html: HTML_ANNOTATION.test(text) } });
+    }
+    return out;
+  };
+  const names_ = (list: string) => [...list.matchAll(new RegExp(String.raw`(${NAME})(?:\s*:\s*(${TYPE}))?`, "gu"))];
+  for (let i = 0; i < src.length; i++) {
+    if (code[i] !== 1) continue;
+    const c = src[i] as string;
+    const f = top();
+    if (wordChar(c, false) && !wordChar(src[i - 1], true)) {
+      let end = i + 1;
+      while (wordChar(src[end], true)) end++;
+      const word = src.slice(i, end);
+      // `Row::class` names a class and declares none.
+      const reference = src.startsWith("::", i - 2);
+      const ctorOfClass = word === "constructor" && f.cls;
+      if (DECLARATION_WORDS.has(word) && !reference && !ctorOfClass) {
+        // A new declaration ends a function's expression body, a loop body without braces, or a class without one.
+        endPending(f, i);
+        f.cls = false;
+      }
+      if (reference) {
+        // A class literal.
+      } else if (word === "fun" || (word === "constructor" && !ctorOfClass)) f.fun = true;
+      else if (word === "class" || word === "interface" || word === "object") f.cls = true;
+      else if (word === "when") f.when = true;
+      else if (word === "for") f.loop = true;
+      else if ((word === "val" || word === "var") && f.kind !== "params" && f.kind !== "ctor") {
+        const constant = CONST_BEFORE.test(src.slice(Math.max(0, i - 80), i));
+        const html = HTML_BEFORE.test(src.slice(Math.max(0, i - 160), i));
+        const local = f.kind !== "top" && f.kind !== "class";
+        const scope = (at: number): Declaration => ({ at, start: local ? at : f.kind === "top" ? 0 : f.open, end: src.length, constant, html });
+        // `when (val x = ...)`: the scope is the one the brackets stand in.
+        const owner = f.kind === "paren" || f.kind === "for" ? ((stack[stack.length - 2] as Frame | undefined) ?? f) : f;
+        DESTRUCTURED.lastIndex = end;
+        const destructured = DESTRUCTURED.exec(src);
+        if (destructured) {
+          for (const n of names_(destructured[1] as string)) {
+            const d = scope(end + (destructured[0].indexOf("(") + 1) + (n.index ?? 0));
+            add(n[1] as string, d);
+            if (owner.kind !== "top") owner.ends.push(d);
+          }
+        } else {
+          VAL_AFTER.lastIndex = end;
+          const m = VAL_AFTER.exec(src);
+          // `val String.shout`: an extension, read on a receiver and never by its name alone.
+          if (m && !m[1]) {
+            const at = end + m[0].indexOf(m[2] as string, (m[0].length - m[0].trimStart().length));
+            const d = { ...scope(at), type: m[3], literal: m[4], text: constant ? m[5] : undefined };
+            add(m[2] as string, d);
+            if (owner.kind !== "top") owner.ends.push(d);
+          }
+        }
+      }
+      i = end - 1;
+      continue;
+    }
+    if (c === "(" || c === "[" || c === "{") {
+      let kind: Frame["kind"] = c === "{" ? "block" : "paren";
+      const g = frame(i, kind);
+      if (c === "(" && f.fun) {
+        kind = "params";
+        f.fun = false;
+      } else if (c === "(" && f.cls && !f.ctor) {
+        kind = "ctor";
+      } else if (c === "(" && f.loop) {
+        kind = "for";
+        f.loop = false;
+        FOR_VARIABLE.lastIndex = i + 1;
+        const m = FOR_VARIABLE.exec(src);
+        if (m) {
+          const decls: Declaration[] = [];
+          const list = (m[1] as string).startsWith("(") ? names_((m[1] as string).slice(1, -1)).map((n) => [n[1] as string, undefined] as const) : [[m[1] as string, m[2]] as const];
+          for (const [name, type] of list) {
+            const d: Declaration = { at: i + 1, start: i, end: src.length, type, constant: false, html: false };
+            add(name, d);
+            decls.push(d);
+          }
+          g.pending = { decls, kind: "for", state: "after" };
+        }
+      } else if (c === "{") {
+        f.fun = false;
+        f.loop = false;
+        if (f.pending && f.pending.state === "after") {
+          // The body of the function or the loop whose parameters just closed.
+          g.ends.push(...f.pending.decls);
+          f.pending = null;
+        } else if (f.cls) {
+          kind = "class";
+          f.cls = false;
+          if (f.ctor) g.ends.push(...f.ctor);
+          f.ctor = null;
+        } else if (f.when) {
+          kind = "when";
+          f.when = false;
+        } else {
+          LAMBDA_PARAMETERS.lastIndex = i + 1;
+          const m = LAMBDA_PARAMETERS.exec(src);
+          if (m && !code.subarray(i + 1, i + 1 + m[0].length).includes(0)) {
+            kind = "lambda";
+            for (const part of splitTopLevel(m[1] as string)) {
+              const p = part.trim();
+              const list = p.startsWith("(") ? names_(p.slice(1, -1)).map((n) => [n[1] as string, undefined] as const) : [[/^\S+?(?=\s*(?::|$))/u.exec(p)?.[0] ?? p, /:\s*(.+)$/.exec(p)?.[1]?.trim()] as const];
+              for (const [name, type] of list) {
+                const d: Declaration = { at: i + 1, start: i, end: src.length, type: type && new RegExp(`^${TYPE}$`, "u").test(type) ? type : undefined, constant: false, html: false };
+                add(name, d);
+                g.ends.push(d);
+              }
+            }
+          }
+        }
+      }
+      g.kind = kind;
+      stack.push(g);
+      continue;
+    }
+    if (c === ")" || c === "]" || c === "}") {
+      if (stack.length === 1) continue;
+      const g = stack.pop() as Frame;
+      const outer = top();
+      const handOver = (p: Pending) => {
+        if (outer.pending) settle(outer.pending, i + 1);
+        outer.pending = p;
+      };
+      if (g.kind === "for" && g.pending) {
+        handOver(g.pending);
+        g.pending = null;
+      }
+      endPending(g, i + 1);
+      for (const d of g.ends) d.end = i + 1;
+      if (g.kind === "params") handOver({ decls: parameters(g, i).map(({ name, d }) => (add(name, d), d)), kind: "fun", state: "after" });
+      else if (g.kind === "ctor") outer.ctor = parameters(g, i).map(({ name, d }) => (add(name, d), d));
+      continue;
+    }
+    if (c === ",") {
+      f.commas.push(i);
+      continue;
+    }
+    const p = f.pending;
+    if (p === null) continue;
+    if (p.state === "after") {
+      if (c === "=" && src[i + 1] !== "=" && p.kind === "fun") p.state = "expr";
+      else if (p.kind === "for" && !/\s/.test(c)) p.state = "stmt";
+    } else if (p.state === "stmt" && (c === "\n" || c === ";")) {
+      endPending(f, i);
+    } else if (p.state === "expr") {
+      if (c === ";" || (c === "\n" && p.started && lineEnds(src, code, i))) endPending(f, i);
+      else if (!/\s/.test(c)) p.started = true;
+    }
+  }
+  for (const f of stack) endPending(f, src.length);
+  for (const list of names.values()) list.sort((a, b) => a.start - b.start || a.at - b.at);
+  return names;
+}
+
+/** `text` cut at each comma outside brackets. */
+function splitTopLevel(text: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let from = 0;
+  for (let k = 0; k < text.length; k++) {
+    const c = text[k];
+    if (c === "(" || c === "<") depth++;
+    else if (c === ")" || c === ">") depth--;
+    else if (c === "," && depth === 0) {
+      out.push(text.slice(from, k));
+      from = k + 1;
+    }
+  }
+  out.push(text.slice(from));
+  return out;
+}
+
+/**
+ * The declaration `name` means at `at`: of those whose scope holds `at`, the innermost, and of
+ * two in one scope the later. Null when the file declares no such name there.
+ */
+function declarationOf(src: string, name: string, at: number): Declaration | null {
+  const list = fileFacts(src).names.get(name);
+  if (!list) return null;
+  let lo = 0;
+  let hi = list.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if ((list[mid] as Declaration).start <= at) lo = mid + 1;
+    else hi = mid;
+  }
+  for (let k = lo - 1; k >= 0; k--) {
+    const d = list[k] as Declaration;
+    if (d.end > at) return d;
+  }
+  return null;
+}
+
+/**
+ * Whether `name` is a constant the author wrote, as far as this file tells: one of the
+ * workspace's `const val` names that the file declares as nothing else, or a `const val` of its own.
+ */
+export function constantAt(src: string, name: string, at: number, constants?: ReadonlySet<string>): boolean {
+  const d = declarationOf(src, name, at);
+  if (d) return d.constant;
+  if (!constants?.has(name)) return false;
+  return (fileFacts(src).names.get(name) ?? []).every((x) => x.constant);
 }
 
 /** What a declaration or a value shows: the facts of HoleFact the text alone can give. */
 export type TextKind = "number" | "boolean" | "nullable" | "string" | "markup";
 
 /**
- * The type the enclosing declaration gives `name`: a number or a boolean that cannot be null
- * (`count: Int`, `val n = 3`), one that can (`count: Int?`), a string (`name: String`), which is
- * what may come from outside, or the markup `interpolate` returns (`page: Html`).
- * The nearest declaration before `at` wins, as Kotlin's scoping does; anything else is not known.
+ * The type the declaration `name` means at `at` gives it: a number or a boolean that cannot be
+ * null (`count: Int`, `val n = 3`), one that can (`count: Int?`), a string (`name: String`),
+ * which is what may come from outside, or the markup `interpolate` returns (`page: Html`).
+ * Anything else is not known. `nonNull` reads the value as the left side of `?:` gives it.
  */
-export function declaredKind(src: string, name: string, at: number): TextKind | null {
+export function declaredKind(src: string, name: string, at: number, nonNull = false): TextKind | null {
   const d = declarationOf(src, name, at);
   if (!d) return null;
   if (d.literal !== undefined) return d.literal === "true" || d.literal === "false" ? "boolean" : "number";
@@ -242,7 +581,7 @@ export function declaredKind(src: string, name: string, at: number): TextKind | 
   const type = d.type.replace(/\?$/, "");
   const scalar = /^(?:kotlin\.)?(?:Int|Long|Short|Byte|Double|Float|UInt|ULong|UShort|UByte)$/.test(type) ? "number" : /^(?:kotlin\.)?Boolean$/.test(type) ? "boolean" : null;
   // Digits, true or false, or null: safe where anything is, and not where only a number or a boolean is.
-  if (scalar) return type === d.type ? scalar : "nullable";
+  if (scalar) return type === d.type || nonNull ? scalar : "nullable";
   if (/^(?:kotlin\.)?(?:String|CharSequence)$/.test(type)) return "string";
   // What interpolate returns: markup whose values have been through it.
   if (/^(?:[\p{L}_][\p{L}\p{Nd}_]*\.)*Html$/u.test(type)) return "markup";
@@ -263,16 +602,76 @@ export function mayBeNull(src: string, value: string, at: number): boolean {
   });
 }
 
+/** One value a hole can result in, and whether it stands left of `?:`, which never gives null. */
+export interface HoleValue {
+  text: string;
+  nonNull: boolean;
+}
+
+/** The values a hole can result in: each branch of an `if` or a `when`, each side of `?:`. */
+export function holeValues(expr: string): HoleValue[] {
+  const t = unparen(expr);
+  const b = branches(t);
+  if (b) return b.flatMap((v) => holeValues(v));
+  const sides = splitTop(t, "?:");
+  if (sides.length > 1) return sides.flatMap((v, k) => holeValues(v).map((h) => ({ text: h.text, nonNull: h.nonNull || k < sides.length - 1 })));
+  return [{ text: t, nonNull: false }];
+}
+
+/** The expression without the brackets around all of it. */
+function unparen(expr: string): string {
+  let t = expr.trim();
+  while (t.startsWith("(") && closing(t, depths(t), 0) === t.length) t = t.slice(1, -1).trim();
+  return t;
+}
+
+/** `e` cut at each `op` outside brackets and literals; a `+` that is part of `++` or `+=`, or a sign, does not cut. */
+function splitTop(expr: string, op: string): string[] {
+  const e = expr;
+  const d = depths(e);
+  const out: string[] = [];
+  let from = 0;
+  for (let k = 0; k < e.length; k++) {
+    if (d[k] !== 0 || !e.startsWith(op, k)) continue;
+    if (op === "+") {
+      if (e[k + 1] === "+" || e[k + 1] === "=" || e[k - 1] === "+") continue;
+      const before = e.slice(from, k).trim();
+      if (before === "" || /[-+*/%=<>!&|?:(,]$/.test(before)) continue;
+    }
+    out.push(e.slice(from, k));
+    from = k + op.length;
+    k += op.length - 1;
+  }
+  out.push(e.slice(from));
+  return out;
+}
+
+const CHAR_LITERAL = /^'(?:[^'\\]|\\.[^']*)'$/;
+
+/** The calls of Streamlord's DSL that a hole may hold: `signal("count")`, `post("/x")`, each returning an expression the author wrote. */
+const HOLE_HELPERS: ReadonlySet<string> = new Set([...EXPRESSION_HELPERS, ...catalog.actions.map((a) => a.kotlin).filter((k) => k !== ""), "statements", "js"]);
+
+/** Whether `t` is one call to a helper of Streamlord's DSL, in a file that uses the DSL and imports no other function of that name. */
+function helperCall(src: string, t: string): boolean {
+  const m = /^([\p{L}_][\p{L}\p{Nd}_]*)\s*\(/u.exec(t);
+  if (!m) return false;
+  const facts = fileFacts(src);
+  facts.helpers ??= dslHelpers(src, HOLE_HELPERS);
+  return facts.helpers.has(m[1] as string) && wholeCall(t, m[1] as string);
+}
+
 /**
  * What the text shows of one value, a branch of an `if` or a `when` or a whole hole: a literal or
- * a constant, the author's own, or what the name's declaration says. Null where it shows nothing.
+ * a constant, the author's own, a call to one of Streamlord's expression helpers, which is the
+ * author's code too, or what the name's declaration says. Null where it shows nothing.
  */
-export function valueKind(src: string, value: string, at: number, constants?: ReadonlySet<string>): TextKind | "constant" | null {
+export function valueKind(src: string, value: string, at: number, constants?: ReadonlySet<string>, nonNull = false): TextKind | "constant" | null {
   const t = value.trim();
-  if (LITERAL.test(t) || STRING_LITERAL.test(t)) return "constant";
+  if (LITERAL.test(t) || STRING_LITERAL.test(t) || CHAR_LITERAL.test(t)) return "constant";
+  if (helperCall(src, t)) return "constant";
   if (!IDENT.test(t)) return null;
-  if (constants?.has(t) && !shadowed(src, t, at)) return "constant";
-  return declaredKind(src, t, at);
+  if (constantAt(src, t, at, constants)) return "constant";
+  return declaredKind(src, t, at, nonNull);
 }
 
 /** Of the kinds a hole's values have, the one safe in the fewest places; one not known stands between a String and markup. */
@@ -283,32 +682,171 @@ export function weakest(kinds: readonly (TextKind | "constant" | null)[]): TextK
   return order[worst] ?? null;
 }
 
-/** Whether `name` is a parameter or value marked `@Language("HTML")` in the declaration that encloses `at`. */
+/** Whether `name` means, at `at`, a parameter or value marked `@Language("HTML")`. */
 export function htmlNamed(src: string, name: string, at: number): boolean {
-  const scope = src.slice(scopeStart(src, at), at);
-  const n = name.replace(/[$]/g, "\\$&");
-  return new RegExp(`@Language\\(\\s*"html"\\s*\\)\\s*(?:(?:val|var)\\s+)?${n}\\b`, "iu").test(scope);
+  return declarationOf(src, name, at)?.html ?? false;
 }
 
-const MARKUP_CALL = /(?:^|[^\p{L}\p{Nd}_.])(?:interpolate|Trusted)\s*\(/u;
-const HTML_TEXT = /^([\p{L}_][\p{L}\p{Nd}_]*)\.text$/u;
+const TRIM_CALL = /^\s*\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)\s*$/;
+const USES_HTML_DSL = /^\s*(?:import\s+io\.github\.markusaugust\.streamlord\.html\.(?:elements|\*)\s*$|package\s+io\.github\.markusaugust\.streamlord\.html\b)/m;
+
+/** Whether `t` is one string literal of HTML, or one with a trim call after it. */
+function htmlLiteral(t: string): boolean {
+  const quote = /^\$*"/.exec(t);
+  if (!quote) return false;
+  const at = quote[0].length - 1;
+  const end = literalEnd(t, at);
+  const rest = t.slice(end);
+  if (rest.trim() !== "" && !TRIM_CALL.test(rest)) return false;
+  const content = t.slice(at + (t.startsWith('"""', at) ? 3 : 1), end);
+  return HTML_START.test(/trimMargin/.test(rest) ? content.replace(/^\s*\|/, "") : content);
+}
+
+/** The call that ends `t`, `receiver.name(args) { lambda }`, or null when `t` does not end in one. */
+function lastCall(t: string): { name: string; receiver: string | null; args: string; lambda: string | null } | null {
+  const e = t.trim();
+  const d = depths(e);
+  const opening = (close: number) => {
+    for (let k = close - 1; k >= 0; k--) if (d[k] === d[close] && "([{".includes(e[k] as string)) return k;
+    return -1;
+  };
+  let end = e.length;
+  let lambda: string | null = null;
+  if (e.endsWith("}") && d[end - 1] !== -1) {
+    const open = opening(end - 1);
+    if (open < 0) return null;
+    lambda = e.slice(open + 1, end - 1);
+    end = open;
+    while (end > 0 && /\s/.test(e[end - 1] ?? "")) end--;
+  }
+  let args = "";
+  if (e[end - 1] === ")" && d[end - 1] !== -1) {
+    const open = opening(end - 1);
+    if (open < 0) return null;
+    args = e.slice(open + 1, end - 1);
+    end = open;
+  } else if (lambda === null) return null;
+  const name = /([\p{L}_][\p{L}\p{Nd}_]*)\s*$/u.exec(e.slice(0, end));
+  if (!name) return null;
+  const before = e.slice(0, end - name[0].length).trimEnd();
+  if (before === "") return { name: name[1] as string, receiver: null, args, lambda };
+  const dot = /\??\.$/.exec(before);
+  return dot ? { name: name[1] as string, receiver: before.slice(0, -dot[0].length), args, lambda } : null;
+}
+
+/** What a lambda gives: its last expression, without its parameters. */
+function lambdaResult(body: string): string {
+  const b = body.replace(/^\s*(?:\([^()]*\)|[\p{L}_][\p{L}\p{Nd}_]*)(?:\s*:\s*[\p{L}\p{Nd}_.<>?]+)?(?:\s*,\s*(?:\([^()]*\)|[\p{L}_][\p{L}\p{Nd}_]*)(?:\s*:\s*[\p{L}\p{Nd}_.<>?]+)?)*\s*->/u, "");
+  const d = depths(b);
+  let from = 0;
+  for (let k = 0; k < b.length; k++) {
+    if (d[k] !== 0 || (b[k] !== "\n" && b[k] !== ";")) continue;
+    const before = b.slice(from, k).trim();
+    const after = b.slice(k + 1).trimStart();
+    // A line that ends in an operator, or one that starts with one, goes on with the next.
+    if (b[k] === "\n" && (/[-+*/%=<>&|?:.,(]$/.test(before) || /^(?:[-+*/%&|?:.]|else\b)/.test(after) || before === "")) continue;
+    from = k + 1;
+  }
+  return b.slice(from).trim();
+}
+
+/** The argument given as `name = { ... }`, as its lambda's body. */
+function namedLambda(args: string, name: string): string | null {
+  for (const a of splitTop(args, ",")) {
+    const m = new RegExp(`^\\s*${name}\\s*=\\s*\\{([\\s\\S]*)\\}\\s*$`).exec(a);
+    if (m) return m[1] as string;
+  }
+  return null;
+}
 
 /**
- * Whether a hole holds markup the author built: a template with an HTML literal inside it, a
- * call to `interpolate` or `Trusted`, the text of an `Html`, or a name marked `@Language("HTML")`.
- * Escaping it would print the tags.
+ * Whether a hole's whole result is markup the author built, which escaping would print as tags:
+ * an HTML literal, trimmed or not, or a `+` chain that opens with one; a call to `interpolate` or
+ * `Trusted`, or the text of an `Html`; a name declared `Html` or marked `@Language("HTML")`;
+ * kotlinx.html's `createHTML()`, `appendHTML()` in `buildString`, or Streamlord's `elements { }`;
+ * `joinToString` of markup; or an `if`, a `when` or an `?:` every one of whose results is markup.
  */
-export function isMarkup(src: string, s: KotlinString, ip: Interpolation): boolean {
-  if (ip.kind === "braced" || ip.kind === "operand") {
-    const inner = (s.nested ?? []).filter((n) => n.start >= ip.start && n.end <= ip.end);
-    if (inner.some((n) => HTML_START.test(n.text))) return true;
-    if (MARKUP_CALL.test(ip.text)) return true;
+export function markupValue(src: string, value: string, at: number): boolean {
+  const values = holeValues(value);
+  // `if (admin) "<b>admin</b>" else ""`: every result is markup or a literal the author wrote.
+  if (values.length > 1) {
+    const markup = values.map((v) => markupValue(src, v.text, at));
+    return markup.some((m) => m) && values.every((v, k) => markup[k] || LITERAL.test(v.text) || STRING_LITERAL.test(v.text) || CHAR_LITERAL.test(v.text));
   }
-  return (branches(ip.text) ?? [ip.text]).some((v) => {
-    const t = v.trim();
-    const text = HTML_TEXT.exec(t);
-    if (text) return declaredKind(src, text[1] as string, s.start) === "markup";
-    return IDENT.test(t) && htmlNamed(src, t, s.start);
+  const t = (values[0] as HoleValue).text;
+  if (htmlLiteral(t)) return true;
+  const sum = splitTop(t, "+");
+  if (sum.length > 1) return htmlLiteral((sum[0] as string).trim());
+  if (wholeCall(t, "interpolate") || wholeCall(t, "Trusted")) return true;
+  const textOf = /^([\s\S]*?)\s*\.\s*text$/.exec(t)?.[1];
+  if (textOf !== undefined && (wholeCall(textOf, "interpolate") || (IDENT.test(textOf) && declaredKind(src, textOf, at) === "markup"))) return true;
+  if (IDENT.test(t)) return declaredKind(src, t, at) === "markup" || htmlNamed(src, t, at);
+  if (/^createHTML\s*\(/.test(t)) return true;
+  const call = lastCall(t);
+  if (!call) return false;
+  if (call.name === "buildString" && call.receiver === null && call.lambda !== null) return /\bappendHTML\s*\(/.test(call.lambda);
+  if (call.name === "elements" && call.receiver === null && call.lambda !== null) return USES_HTML_DSL.test(src);
+  if (call.name !== "joinToString") return false;
+  const transform = call.lambda ?? namedLambda(call.args, "transform");
+  if (transform !== null) return markupValue(src, lambdaResult(transform), at);
+  return call.receiver !== null && markupElements(src, call.receiver, at);
+}
+
+/** Whether every element of a collection is markup: `listOf(a, b)` of markup, or a `map { }` to markup. */
+function markupElements(src: string, receiver: string, at: number): boolean {
+  const r = lastCall(receiver);
+  if (!r) return false;
+  if ((r.name === "listOf" || r.name === "arrayOf") && r.receiver === null && r.lambda === null) return r.args.trim() !== "" && splitTop(r.args, ",").every((a) => markupValue(src, a, at));
+  if ((r.name === "map" || r.name === "mapIndexed" || r.name === "mapNotNull") && r.lambda !== null) return markupValue(src, lambdaResult(r.lambda), at);
+  return false;
+}
+
+/** Whether a hole's value is markup the author built; see [markupValue]. */
+export function isMarkup(src: string, s: KotlinString, ip: Interpolation): boolean {
+  return markupValue(src, ip.text, s.start);
+}
+
+/** The calls whose result is the text they were given, changed but no more markup than it was. */
+const TEXT_TRANSFORMS: ReadonlySet<string> = new Set([
+  "trim", "trimStart", "trimEnd", "lowercase", "uppercase", "toLowerCase", "toUpperCase", "capitalize", "decapitalize", "replaceFirstChar",
+  "take", "takeLast", "drop", "dropLast", "substring", "substringBefore", "substringAfter", "substringBeforeLast", "substringAfterLast",
+  "removePrefix", "removeSuffix", "removeSurrounding", "padStart", "padEnd", "orEmpty", "toString", "reversed", "repeat",
+]);
+
+/** Whether a string literal in `e` holds `<` or `&`, which markup is made of. */
+function markupInLiteral(e: string): boolean {
+  for (let k = 0; k < e.length; k++) {
+    if (e[k] !== '"') continue;
+    const end = literalEnd(e, k);
+    if (/[<&]/.test(e.slice(k, end))) return true;
+    k = end - 1;
+  }
+  return false;
+}
+
+/**
+ * Whether a value in element text may hold markup that `interpolate` would escape: a constant
+ * whose value this file does not show or shows with a tag, a literal with one, or the result of a
+ * call that is not a plain change to text (`items(xs)`, a `joinToString` with tags in it). A
+ * rewrite to `interpolate` would then print the tags.
+ */
+export function mayHoldMarkup(src: string, value: string, at: number, constants?: ReadonlySet<string>): boolean {
+  return holeValues(value).some(({ text: t }) => {
+    if (LITERAL.test(t) || CHAR_LITERAL.test(t)) return false;
+    if (IDENT.test(t)) {
+      if (!constantAt(src, t, at, constants)) return false;
+      const text = declarationOf(src, t, at)?.text;
+      return text === undefined || /[<&]/.test(text);
+    }
+    if (markupInLiteral(t)) return true;
+    if (/^"/.test(t)) return false;
+    if (/^[\p{L}_][\p{L}\p{Nd}_]*(?:\s*\??\.\s*[\p{L}_][\p{L}\p{Nd}_]*)*(?:!!)?$/u.test(t)) return false;
+    const sum = splitTop(t, "+");
+    if (sum.length > 1) return sum.some((p) => mayHoldMarkup(src, p, at, constants));
+    const call = lastCall(t);
+    if (!call) return true;
+    const plain = TEXT_TRANSFORMS.has(call.name) || (call.name === "joinToString" && call.lambda === null && namedLambda(call.args, "transform") === null);
+    return !plain || call.receiver === null || mayHoldMarkup(src, call.receiver, at, constants);
   });
 }
 
@@ -464,14 +1002,21 @@ export function interpolateFix(src: string, s: KotlinString): Fix {
   // `.text`, the String the literal was: interpolate returns Html, and a fix that changed the type
   // would break whatever took the String.
   const fix: Fix = { title: "Build it with interpolate(...), which escapes the values", start: s.start, end: s.end, text: `interpolate(${[format, ...args].join(", ")}).text` };
-  const imported = new RegExp(`^\\s*import\\s+(?:${INTERPOLATE_IMPORT.replace(/\./g, "\\.")}|io\\.github\\.markusaugust\\.streamlord\\.core\\.domain\\.\\*)\\s*$`, "m").test(src);
-  if (!imported) {
-    const imports = [...src.matchAll(/^import\s+[^\n]*$/gm)].pop();
-    const pkg = /^package\s+[^\n]*$/m.exec(src);
-    const anchor = imports ? (imports.index ?? 0) + imports[0].length : pkg ? pkg.index + pkg[0].length : -1;
-    fix.edits = anchor < 0 ? [{ start: 0, end: 0, text: `import ${INTERPOLATE_IMPORT}\n\n` }] : [{ start: anchor, end: anchor, text: `\n${imports ? "" : "\n"}import ${INTERPOLATE_IMPORT}` }];
-  }
+  const facts = fileFacts(src);
+  if (facts.importEdits === undefined) facts.importEdits = importEdits(src);
+  if (facts.importEdits) fix.edits = facts.importEdits.map((e) => ({ ...e }));
   return fix;
+}
+
+const INTERPOLATE_IMPORTED = new RegExp(`^\\s*import\\s+(?:${INTERPOLATE_IMPORT.replace(/\./g, "\\.")}|io\\.github\\.markusaugust\\.streamlord\\.core\\.domain\\.\\*)\\s*$`, "m");
+
+/** The edit that imports `interpolate`, after the last import or the package, or null when the file has the import. */
+function importEdits(src: string): Fix["edits"] | null {
+  if (INTERPOLATE_IMPORTED.test(src)) return null;
+  const imports = [...src.matchAll(/^import\s+[^\n]*$/gm)].pop();
+  const pkg = /^package\s+[^\n]*$/m.exec(src);
+  const anchor = imports ? (imports.index ?? 0) + imports[0].length : pkg ? pkg.index + pkg[0].length : -1;
+  return anchor < 0 ? [{ start: 0, end: 0, text: `import ${INTERPOLATE_IMPORT}\n\n` }] : [{ start: anchor, end: anchor, text: `\n${imports ? "" : "\n"}import ${INTERPOLATE_IMPORT}` }];
 }
 
 /** Where each `%s` of `interpolate`'s format starts in `text`, as core counts them: `%%` is one per cent sign and never a hole. */

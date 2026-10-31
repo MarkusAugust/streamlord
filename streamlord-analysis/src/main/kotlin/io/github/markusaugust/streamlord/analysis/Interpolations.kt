@@ -10,18 +10,15 @@ package io.github.markusaugust.streamlord.analysis
 
 private val TRIM_MARGIN_AFTER = Regex("""^\s*\.\s*trimMargin\s*\(\s*(?:"([^"\\\n]*)")?\s*\)""")
 private val TRIM_CALL_AFTER = Regex("""^\s*\.\s*trim(?:Indent|Margin)\s*\(""")
-private val HTML_OPENING = Regex("""^\s*<(?:[A-Za-z]|!--|!doctype)""", RegexOption.IGNORE_CASE)
+private val HTML_OPENING = Regex("""^\s*<(?:[A-Za-z]|__kt__|!--|!doctype)""", RegexOption.IGNORE_CASE)
 private val IDENT = Regex("""[\p{L}_][\p{L}\p{Nd}_]*""")
 private val LITERAL = Regex("""(?:-?\d[\d_]*(?:\.\d+)?[LlFfDd]?|true|false|null)""")
 private val STRING_LITERAL = Regex(""""(?:[^"\\$]|\\.)*"""")
-private val FUN_KEYWORD = Regex("""\bfun\b""")
 private val NUMBER_TYPE = Regex("""(?:kotlin\.)?(?:Int|Long|Short|Byte|Double|Float|UInt|ULong|UShort|UByte)""")
 private val BOOLEAN_TYPE = Regex("""(?:kotlin\.)?Boolean""")
 private val STRING_TYPE = Regex("""(?:kotlin\.)?(?:String|CharSequence)""")
 private val HTML_TYPE = Regex("""(?:[\p{L}_][\p{L}\p{Nd}_]*\.)*Html""")
-private val MARKUP_CALL = Regex("""(?:^|[^\p{L}\p{Nd}_.])(?:interpolate|Trusted)\s*\(""")
 private val MARKUP_CALL_START = Regex("""^(?:interpolate|Trusted)\s*\(""")
-private val HTML_TEXT = Regex("""([\p{L}_][\p{L}\p{Nd}_]*)\.text""")
 private val UNQUOTED_VALUE = Regex("""=[ \t\n\u000C\r]*([^ \t\n\u000C\r"'=<>`]*)\z""")
 private val WORD_CHAR = Regex("""[\p{L}\p{Nd}_]""")
 
@@ -44,15 +41,22 @@ private val INTERPOLATE_IMPORTED =
 private val IMPORT_LINE = Regex("""^import\s+[^\n]*$""", setOf(RegexOption.MULTILINE, RegexOption.UNIX_LINES))
 private val PACKAGE_LINE = Regex("""^package\s+[^\n]*$""", setOf(RegexOption.MULTILINE, RegexOption.UNIX_LINES))
 
-/** How a hole is named in a message: `$name`, `${expr}` shortened, or the operand as written. */
+/** An expression as a message quotes it: on one line, and cut short past 30 characters. */
+internal fun shortened(text: String): String {
+    val e = text.trim().replace(SPACES, " ")
+    return if (e.length <= 30) e else e.substring(0, 29) + "…"
+}
+
+private val SPACES = Regex("""\s+""")
+
+/** How a hole is named in a message: `$name`, `${expr}` shortened, or an operand of `+` as the value it is. */
 internal fun holeDisplay(
     ip: Interpolation,
     dollars: Int,
 ): String {
     if (ip.kind == InterpolationKind.SIMPLE) return "$".repeat(dollars) + ip.text
-    if (ip.kind == InterpolationKind.OPERAND) return ip.text
-    val e = ip.text.trim()
-    return "$".repeat(dollars) + "{" + (if (e.length <= 30) e else e.substring(0, 29) + "…") + "}"
+    if (ip.kind == InterpolationKind.OPERAND) return "the value `${shortened(ip.text)}`"
+    return "$".repeat(dollars) + "{" + shortened(ip.text) + "}"
 }
 
 /**
@@ -256,65 +260,498 @@ internal fun branches(expr: String): List<String>? {
     return null
 }
 
-/** Where the declaration that encloses [at] starts: the nearest `fun` before it, or the file. */
-private fun scopeStart(
-    src: String,
-    at: Int,
-): Int =
-    FUN_KEYWORD
-        .findAll(src.substring(0, at))
-        .lastOrNull()
-        ?.range
-        ?.first ?: 0
-
-/**
- * Whether [name] is declared between the enclosing function and [at]: a parameter, a local, a
- * lambda parameter. Such a name is not the workspace's constant of the same name.
- */
-internal fun shadowed(
-    src: String,
-    name: String,
-    at: Int,
-): Boolean {
-    val scope = src.substring(scopeStart(src, at), at)
-    val n = Regex.escape(name)
-    return Regex(
-        """\b(?:val|var)\s+$n\b|[(,]\s*(?:@\w+(?:\([^)]*\))?\s*)*$n\s*:|\b$n\s*(?:,\s*[\p{L}_][\p{L}\p{Nd}_]*\s*)*->|\bfor\s*\(\s*$n\b""",
-    ).containsMatchIn(scope)
+/** A name the file declares, and the stretch of it where the name means that declaration. */
+internal class Declaration(
+    /** Where the name is written. */
+    val at: Int,
+    /** Where the declaration can first be seen: the name for a local, the scope's opening bracket otherwise. */
+    val start: Int,
+    val type: String?,
+    /** The number or boolean literal it is set to. */
+    val literal: String? = null,
+    /** The string literal a `const val` is set to, as written, when it holds no template. */
+    val text: String? = null,
+    val constant: Boolean = false,
+    val html: Boolean = false,
+) {
+    /** Just past where it can last be seen. */
+    var end: Int = Int.MAX_VALUE
 }
 
-/** The nearest declaration of a name before a point in the one that encloses it: the type it is given, or the literal. */
-private class Declaration(
-    val type: String?,
-    val literal: String?,
-)
+/**
+ * What the analysis needs of a whole file, read once: where the code is (template code included),
+ * the names it declares with their scopes, and whether `interpolate` is imported.
+ */
+internal class FileFacts(
+    val src: String,
+    /** `true` where the character is code: outside literals and comments, or in a template's code. */
+    val code: BooleanArray,
+    val names: Map<String, List<Declaration>>,
+) {
+    @Volatile
+    var importEdits: List<Edit>? = null
 
+    @Volatile
+    var importsChecked: Boolean = false
+
+    @Volatile
+    var helpers: Set<String>? = null
+}
+
+@Volatile
+private var lastFacts: FileFacts? = null
+
+/** The facts of [src], kept for the last file read: every hole of a file asks for them. */
+internal fun fileFacts(
+    src: String,
+    lex: KotlinLex? = null,
+): FileFacts {
+    lastFacts?.let { if (it.src == src) return it }
+    val l = lex ?: lexKotlin(src)
+    val code = codeMask(src, l.strings, l.mask)
+    return FileFacts(src, code, declarations(src, code)).also { lastFacts = it }
+}
+
+/** The lexer's mask with the code of every `${...}` template marked as code, its braces too. */
+private fun codeMask(
+    src: String,
+    strings: List<KotlinString>,
+    mask: BooleanArray,
+): BooleanArray {
+    val code = mask.copyOf()
+    // Outermost first, so a literal inside a template is blanked before its own templates are marked.
+    for (s in withNested(strings)) {
+        for (ip in s.interpolations) {
+            if (ip.kind != InterpolationKind.BRACED || src.getOrNull(ip.end - 1) != '}') continue
+            val open = src.indexOf('{', ip.start)
+            val inner = lexKotlin(src.substring(open + 1, ip.end - 1)).mask
+            inner.copyInto(code, open + 1)
+            code[open] = true
+            code[ip.end - 1] = true
+        }
+    }
+    return code
+}
+
+private const val NAME = """[\p{L}_][\p{L}\p{Nd}_]*"""
+private const val TYPE = """[\p{L}_][\p{L}\p{Nd}_.]*\??"""
+private val VAL_AFTER =
+    Regex(
+        """\s*(?:<[^<>]*>\s*)?((?:$NAME\s*\.\s*)*)($NAME)(?:\s*:\s*($TYPE))?""" +
+            """(?:\s*=\s*(?:(-?\d[\d_]*(?:\.\d+)?[LlFfDd]?|true|false)|("(?:[^"\\$\n]|\\[^$])*"))(?=[ \t]*(?:[\n\r;})\],]|//|$)))?""",
+    )
+private val DESTRUCTURED = Regex("""\s*\(([^()]*)\)""")
+private val PARAMETER = Regex("""^\s*(?:@[\p{L}_][\p{L}\p{Nd}_.]*(?:\s*\([^)]*\))?\s*)*((?:\p{L}+\s+)*?)($NAME)\s*:\s*($TYPE)?""")
+private val LAMBDA_PARAMETERS =
+    Regex(
+        """\s*((?:\([^()]*\)|$NAME)(?:\s*:\s*[\p{L}\p{Nd}_.<>?]+)?(?:\s*,\s*(?:\([^()]*\)|$NAME)(?:\s*:\s*[\p{L}\p{Nd}_.<>?]+)?)*)\s*->""",
+    )
+private val FOR_VARIABLE = Regex("""\s*(\([^()]*\)|$NAME)(?:\s*:\s*($TYPE))?\s+in\b""")
+private val NAMES = Regex("""($NAME)(?:\s*:\s*($TYPE))?""")
+private val WHOLE_TYPE = Regex(TYPE)
+private val CONST_BEFORE = Regex("""\bconst[ \t]+(?:\p{L}+[ \t]+)*$""")
+private val HTML_BEFORE = Regex("""@Language\(\s*"html"\s*\)\s*(?:\p{L}+\s+)*$""", RegexOption.IGNORE_CASE)
+private val HTML_ANNOTATION = Regex("""@Language\(\s*"html"\s*\)""", RegexOption.IGNORE_CASE)
+private val VARARG = Regex("""\bvararg\b""")
+private val LAMBDA_NAME = Regex("""^\S+?(?=\s*(?::|$))""")
+private val LAMBDA_TYPE = Regex(""":\s*(.+)$""")
+private val LINE_GOES_ON_BEFORE = Regex("""[-=+*/%&|?:.,(<>!]""")
+private val LINE_GOES_ON_AFTER = Regex("""^(?:[-.?+*/%&|:]|else\b)""")
+
+/** The words that start a declaration of their own, ending a function's expression body. */
+private val DECLARATION_WORDS = setOf("fun", "val", "var", "class", "interface", "object", "init", "constructor", "typealias")
+
+/** Names whose declarations wait for their scope's end: a function's parameters until its body is found. */
+private class PendingScope(
+    val decls: List<Declaration>,
+    val isFun: Boolean,
+) {
+    /** `after`: the parameters closed; `expr`: an expression body; `stmt`: a loop body without braces. */
+    var state: String = "after"
+
+    /** Whether an expression body has begun: `=` then a line break goes on with the next line. */
+    var started: Boolean = false
+}
+
+private class ScopeFrame(
+    val open: Int,
+    var kind: String,
+) {
+    /** Declarations whose scope ends where this frame closes. */
+    val ends = ArrayList<Declaration>()
+    val commas = ArrayList<Int>()
+    var pending: PendingScope? = null
+    var fn = false
+    var cls = false
+    var whenBlock = false
+    var loop = false
+
+    /** The parameters of a class's constructor, waiting for its body. */
+    var ctor: List<Declaration>? = null
+}
+
+private fun isWordPart(c: Char?): Boolean = c != null && (c.isLetterOrDigit() || c == '_')
+
+/** Whether the line break at [at] ends an expression: nothing before it or after it carries the expression on. */
+private fun lineEnds(
+    src: String,
+    code: BooleanArray,
+    at: Int,
+): Boolean {
+    var k = at - 1
+    while (k >= 0 && (!code[k] || src[k].isWhitespace())) k--
+    if (k >= 0 && LINE_GOES_ON_BEFORE.matches(src[k].toString())) return false
+    k = at + 1
+    while (k < src.length && (!code[k] || src[k].isWhitespace())) k++
+    return !LINE_GOES_ON_AFTER.containsMatchIn(src.substring(k, minOf(src.length, k + 5)))
+}
+
+/** `text` cut at each comma outside brackets. */
+private fun splitTopLevel(text: String): List<String> {
+    val out = ArrayList<String>()
+    var depth = 0
+    var from = 0
+    for ((k, c) in text.withIndex()) {
+        when {
+            c == '(' || c == '<' -> {
+                depth++
+            }
+
+            c == ')' || c == '>' -> {
+                depth--
+            }
+
+            c == ',' && depth == 0 -> {
+                out += text.substring(from, k)
+                from = k + 1
+            }
+        }
+    }
+    out += text.substring(from)
+    return out
+}
+
+/**
+ * Every name the file declares, read from the code alone: a `val` or `var` (destructured too), a
+ * parameter of a function, a constructor or a lambda, and a loop variable, each with the stretch
+ * of the file where it is the one the name means. A named argument, `list(page = 1)`, declares
+ * nothing. Sorted by where each scope starts.
+ */
+private fun declarations(
+    src: String,
+    code: BooleanArray,
+): Map<String, List<Declaration>> {
+    val names = HashMap<String, ArrayList<Declaration>>()
+
+    fun add(
+        name: String,
+        d: Declaration,
+    ): Declaration {
+        if (name != "_") names.getOrPut(name) { ArrayList() } += d
+        return d
+    }
+    val stack = arrayListOf(ScopeFrame(-1, "top"))
+
+    fun settle(
+        p: PendingScope,
+        end: Int,
+    ) {
+        for (d in p.decls) d.end = end
+    }
+
+    fun endPending(
+        f: ScopeFrame,
+        at: Int,
+    ) {
+        f.pending?.let { settle(it, at) }
+        f.pending = null
+        f.ctor?.forEach { it.end = at }
+        f.ctor = null
+    }
+
+    /** Each parameter between the brackets of a function or a constructor. */
+    fun parameters(
+        f: ScopeFrame,
+        close: Int,
+    ): List<Declaration> {
+        val out = ArrayList<Declaration>()
+        val cuts = listOf(f.open) + f.commas + close
+        for (k in 0 until cuts.size - 1) {
+            val text = src.substring(cuts[k] + 1, cuts[k + 1])
+            val m = PARAMETER.find(text) ?: continue
+            val vararg = VARARG.containsMatchIn(m.groupValues[1])
+            val type = if (vararg) null else m.groups[3]?.value
+            out +=
+                add(m.groupValues[2], Declaration(cuts[k] + 1 + m.range.first, f.open, type, html = HTML_ANNOTATION.containsMatchIn(text)))
+        }
+        return out
+    }
+
+    /** The names of a list such as `a, b: Int`, and the type of each. */
+    fun listed(list: String): List<Pair<String, String?>> = NAMES.findAll(list).map { it.groupValues[1] to it.groups[2]?.value }.toList()
+    var i = 0
+    while (i < src.length) {
+        if (!code[i]) {
+            i++
+            continue
+        }
+        val c = src[i]
+        val f = stack.last()
+        if ((c.isLetter() || c == '_') && !isWordPart(src.getOrNull(i - 1))) {
+            var end = i + 1
+            while (end < src.length && isWordPart(src[end])) end++
+            val word = src.substring(i, end)
+            // `Row::class` names a class and declares none.
+            val reference = src.startsWith("::", i - 2)
+            val ctorOfClass = word == "constructor" && f.cls
+            if (word in DECLARATION_WORDS && !reference && !ctorOfClass) {
+                // A new declaration ends a function's expression body, a loop body without braces, or a class without one.
+                endPending(f, i)
+                f.cls = false
+            }
+            when {
+                reference -> {}
+
+                word == "fun" || (word == "constructor" && !ctorOfClass) -> {
+                    f.fn = true
+                }
+
+                word == "class" || word == "interface" || word == "object" -> {
+                    f.cls = true
+                }
+
+                word == "when" -> {
+                    f.whenBlock = true
+                }
+
+                word == "for" -> {
+                    f.loop = true
+                }
+
+                (word == "val" || word == "var") && f.kind != "params" && f.kind != "ctor" -> {
+                    val constant = CONST_BEFORE.containsMatchIn(src.substring(maxOf(0, i - 80), i))
+                    val html = HTML_BEFORE.containsMatchIn(src.substring(maxOf(0, i - 160), i))
+                    val local = f.kind != "top" && f.kind != "class"
+                    val scopeStart = { at: Int ->
+                        if (local) {
+                            at
+                        } else if (f.kind == "top") {
+                            0
+                        } else {
+                            f.open
+                        }
+                    }
+                    // `when (val x = ...)`: the scope is the one the brackets stand in.
+                    val owner = if (f.kind == "paren" || f.kind == "for") stack.getOrNull(stack.size - 2) ?: f else f
+                    val destructured = DESTRUCTURED.matchAt(src, end)
+                    if (destructured != null) {
+                        val listStart = end + destructured.value.indexOf('(') + 1
+                        for (n in NAMES.findAll(destructured.groupValues[1])) {
+                            val at = listStart + n.range.first
+                            val d = add(n.groupValues[1], Declaration(at, scopeStart(at), null, constant = constant, html = html))
+                            if (owner.kind != "top") owner.ends += d
+                        }
+                    } else {
+                        val m = VAL_AFTER.matchAt(src, end)
+                        // `val String.shout`: an extension, read on a receiver and never by its name alone.
+                        if (m != null && m.groupValues[1].isEmpty()) {
+                            val at = m.groups[2]!!.range.first
+                            val d =
+                                add(
+                                    m.groupValues[2],
+                                    Declaration(
+                                        at,
+                                        scopeStart(at),
+                                        m.groups[3]?.value,
+                                        m.groups[4]?.value,
+                                        if (constant) m.groups[5]?.value else null,
+                                        constant,
+                                        html,
+                                    ),
+                                )
+                            if (owner.kind != "top") owner.ends += d
+                        }
+                    }
+                }
+            }
+            i = end
+            continue
+        }
+        if (c == '(' || c == '[' || c == '{') {
+            val g = ScopeFrame(i, if (c == '{') "block" else "paren")
+            if (c == '(' && f.fn) {
+                g.kind = "params"
+                f.fn = false
+            } else if (c == '(' && f.cls && f.ctor == null) {
+                g.kind = "ctor"
+            } else if (c == '(' && f.loop) {
+                g.kind = "for"
+                f.loop = false
+                val m = FOR_VARIABLE.matchAt(src, i + 1)
+                if (m != null) {
+                    val first = m.groupValues[1]
+                    val list =
+                        if (first.startsWith("(")) {
+                            listed(first.substring(1, first.length - 1)).map { it.first to null }
+                        } else {
+                            listOf(first to m.groups[2]?.value)
+                        }
+                    g.pending = PendingScope(list.map { (name, type) -> add(name, Declaration(i + 1, i, type)) }, false)
+                }
+            } else if (c == '{') {
+                f.fn = false
+                f.loop = false
+                val p = f.pending
+                if (p != null && p.state == "after") {
+                    // The body of the function or the loop whose parameters just closed.
+                    g.ends += p.decls
+                    f.pending = null
+                } else if (f.cls) {
+                    g.kind = "class"
+                    f.cls = false
+                    f.ctor?.let { g.ends += it }
+                    f.ctor = null
+                } else if (f.whenBlock) {
+                    g.kind = "when"
+                    f.whenBlock = false
+                } else {
+                    val m = LAMBDA_PARAMETERS.matchAt(src, i + 1)
+                    if (m != null && (i + 1 until i + 1 + m.value.length).all { code[it] }) {
+                        g.kind = "lambda"
+                        for (part in splitTopLevel(m.groupValues[1])) {
+                            val p0 = part.trim()
+                            val list =
+                                if (p0.startsWith("(")) {
+                                    listed(p0.substring(1, p0.length - 1)).map { it.first to null }
+                                } else {
+                                    listOf(
+                                        (LAMBDA_NAME.find(p0)?.value ?: p0) to
+                                            LAMBDA_TYPE
+                                                .find(p0)
+                                                ?.groupValues
+                                                ?.get(1)
+                                                ?.trim(),
+                                    )
+                                }
+                            for ((name, type) in list) {
+                                g.ends += add(name, Declaration(i + 1, i, type?.takeIf { WHOLE_TYPE.matches(it) }))
+                            }
+                        }
+                    }
+                }
+            }
+            stack += g
+            i++
+            continue
+        }
+        if (c == ')' || c == ']' || c == '}') {
+            if (stack.size == 1) {
+                i++
+                continue
+            }
+            val g = stack.removeAt(stack.size - 1)
+            val outer = stack.last()
+
+            fun handOver(p: PendingScope) {
+                outer.pending?.let { settle(it, i + 1) }
+                outer.pending = p
+            }
+            if (g.kind == "for") {
+                g.pending?.let { handOver(it) }
+                g.pending = null
+            }
+            endPending(g, i + 1)
+            for (d in g.ends) d.end = i + 1
+            if (g.kind == "params") {
+                handOver(PendingScope(parameters(g, i), true))
+            } else if (g.kind == "ctor") {
+                outer.ctor = parameters(g, i)
+            }
+            i++
+            continue
+        }
+        if (c == ',') {
+            f.commas += i
+            i++
+            continue
+        }
+        val p = f.pending
+        if (p != null) {
+            when (p.state) {
+                "after" -> {
+                    if (c == '=' && src.getOrNull(i + 1) != '=' && p.isFun) {
+                        p.state = "expr"
+                    } else if (!p.isFun && !c.isWhitespace()) {
+                        p.state = "stmt"
+                    }
+                }
+
+                "stmt" -> {
+                    if (c == '\n' || c == ';') endPending(f, i)
+                }
+
+                else -> {
+                    if (c == ';' || (c == '\n' && p.started && lineEnds(src, code, i))) {
+                        endPending(f, i)
+                    } else if (!c.isWhitespace()) {
+                        p.started = true
+                    }
+                }
+            }
+        }
+        i++
+    }
+    for (f in stack) endPending(f, src.length)
+    for (list in names.values) list.sortWith(compareBy<Declaration>({ it.start }, { it.at }))
+    return names
+}
+
+/**
+ * The declaration [name] means at [at]: of those whose scope holds [at], the innermost, and of
+ * two in one scope the later. Null when the file declares no such name there.
+ */
 private fun declarationOf(
     src: String,
     name: String,
     at: Int,
 ): Declaration? {
-    val scope = src.substring(scopeStart(src, at), at)
-    val n = Regex.escape(name)
-    val declaration =
-        Regex(
-            """(?:[(,]\s*(?:@\w+(?:\([^)]*\))?\s*)*(?:(?:val|var)\s+)?|\b(?:val|var)\s+)$n\s*""" +
-                """(?::\s*([\p{L}_][\p{L}\p{Nd}_.]*\??)|=\s*(-?\d[\d_]*(?:\.\d+)?[LlFfDd]?|true|false)\b|=|->|,)""",
-        )
-    val last = declaration.findAll(scope).lastOrNull() ?: return null
-    return Declaration(last.groups[1]?.value, last.groups[2]?.value)
+    val list = fileFacts(src).names[name] ?: return null
+    var lo = 0
+    var hi = list.size
+    while (lo < hi) {
+        val mid = (lo + hi) ushr 1
+        if (list[mid].start <= at) lo = mid + 1 else hi = mid
+    }
+    for (k in lo - 1 downTo 0) if (list[k].end > at) return list[k]
+    return null
 }
 
 /**
- * The type the enclosing declaration gives [name]: a number or a boolean that cannot be null
- * (`count: Int`, `val n = 3`), one that can (`count: Int?`), a string (`name: String`), which is
- * what may come from outside, or core's `Html`, which is markup. The nearest declaration before
- * [at] wins, as Kotlin's scoping does; anything else is not known.
+ * Whether [name] is a constant the author wrote, as far as this file tells: one of the
+ * workspace's `const val` names that the file declares as nothing else, or a `const val` of its own.
+ */
+internal fun constantAt(
+    src: String,
+    name: String,
+    at: Int,
+    constants: Set<String>,
+): Boolean {
+    declarationOf(src, name, at)?.let { return it.constant }
+    if (name !in constants) return false
+    return fileFacts(src).names[name].orEmpty().all { it.constant }
+}
+
+/**
+ * The type the declaration [name] means at [at] gives it: a number or a boolean that cannot be
+ * null (`count: Int`, `val n = 3`), one that can (`count: Int?`), a string (`name: String`),
+ * which is what may come from outside, or core's `Html`, which is markup. Anything else is not
+ * known. [nonNull] reads the value as the left side of `?:` gives it.
  */
 internal fun declaredKind(
     src: String,
     name: String,
     at: Int,
+    nonNull: Boolean = false,
 ): HoleFact? {
     val d = declarationOf(src, name, at) ?: return null
     val literal = d.literal
@@ -328,7 +765,7 @@ internal fun declaredKind(
             else -> null
         }
     // Digits, true or false, or null: safe where anything is, and not where only a number or a boolean is.
-    if (scalar != null) return if (type == declared) scalar else HoleFact.NULLABLE
+    if (scalar != null) return if (type == declared || nonNull) scalar else HoleFact.NULLABLE
     return when {
         STRING_TYPE.matches(type) -> HoleFact.STRING
 
@@ -358,21 +795,101 @@ internal fun mayBeNull(
         }
     }
 
+/** One value a hole can result in, and whether it stands left of `?:`, which never gives null. */
+internal class HoleValue(
+    val text: String,
+    val nonNull: Boolean,
+)
+
+/** The values a hole can result in: each branch of an `if` or a `when`, each side of `?:`. */
+internal fun holeValues(expr: String): List<HoleValue> {
+    val t = unparen(expr)
+    branches(t)?.let { b -> return b.flatMap { holeValues(it) } }
+    val sides = splitTop(t, "?:")
+    if (sides.size > 1) {
+        return sides.flatMapIndexed { k, v -> holeValues(v).map { HoleValue(it.text, it.nonNull || k < sides.size - 1) } }
+    }
+    return listOf(HoleValue(t, false))
+}
+
+/** The expression without the brackets around all of it. */
+private fun unparen(expr: String): String {
+    var t = expr.trim()
+    while (t.startsWith("(") && closing(t, depths(t), 0) == t.length) t = t.substring(1, t.length - 1).trim()
+    return t
+}
+
+private val OPERATOR_BEFORE = Regex("""[-+*/%=<>!&|?:(,]$""")
+
+/** [e] cut at each [op] outside brackets and literals; a `+` that is part of `++` or `+=`, or a sign, does not cut. */
+private fun splitTop(
+    e: String,
+    op: String,
+): List<String> {
+    val d = depths(e)
+    val out = ArrayList<String>()
+    var from = 0
+    var k = 0
+    while (k < e.length) {
+        if (d[k] != 0 || !e.startsWith(op, k)) {
+            k++
+            continue
+        }
+        if (op == "+") {
+            val before = e.substring(from, k).trim()
+            if (e.getOrNull(k + 1) == '+' || e.getOrNull(k + 1) == '=' || e.getOrNull(k - 1) == '+' || before.isEmpty() ||
+                OPERATOR_BEFORE.containsMatchIn(before)
+            ) {
+                k++
+                continue
+            }
+        }
+        out += e.substring(from, k)
+        from = k + op.length
+        k += op.length
+    }
+    out += e.substring(from)
+    return out
+}
+
+private val CALL_START = Regex("""^([\p{L}_][\p{L}\p{Nd}_]*)\s*\(""")
+
+/** The calls of Streamlord's DSL that a hole may hold: `signal("count")`, `post("/x")`, each returning an expression the author wrote. */
+private val HOLE_HELPERS: Set<String> =
+    EXPRESSION_HELPERS +
+        Catalog.default.actions
+            .map { it.kotlin }
+            .filter { it.isNotEmpty() } + "statements" + "js"
+
+/** Whether [t] is one call to a helper of Streamlord's DSL, in a file that uses the DSL and imports no other function of that name. */
+private fun helperCall(
+    src: String,
+    t: String,
+): Boolean {
+    val name = CALL_START.find(t)?.groupValues?.get(1) ?: return false
+    val facts = fileFacts(src)
+    val helpers = facts.helpers ?: dslHelpers(src, HOLE_HELPERS).also { facts.helpers = it }
+    return name in helpers && wholeCall(t, name)
+}
+
 /**
  * What the text shows of one value, a branch of an `if` or a `when` or a whole hole: a literal or
- * a constant, the author's own, or what the name's declaration says. Null where it shows nothing.
+ * a constant, the author's own, a call to one of Streamlord's expression helpers, which is the
+ * author's code too, or what the name's declaration says. Null where it shows nothing.
  */
 internal fun valueKind(
     src: String,
     value: String,
     at: Int,
     constants: Set<String>,
+    nonNull: Boolean = false,
 ): HoleFact? {
     val t = value.trim()
-    if (LITERAL.matches(t) || STRING_LITERAL.matches(t)) return HoleFact.CONSTANT
+    if (LITERAL.matches(t) || STRING_LITERAL.matches(t) || CHAR_LITERAL.matches(t)) return HoleFact.CONSTANT
+    if (helperCall(src, t)) return HoleFact.CONSTANT
     if (!IDENT.matches(t)) return null
-    if (t in constants && !shadowed(src, t, at)) return HoleFact.CONSTANT
-    return declaredKind(src, t, at)
+    if (constantAt(src, t, at, constants)) return HoleFact.CONSTANT
+    return declaredKind(src, t, at, nonNull)
 }
 
 /** Of the kinds a hole's values have, the one safe in the fewest places; one not known stands between a String and markup. */
@@ -381,42 +898,291 @@ internal fun weakest(kinds: List<HoleFact?>): HoleFact? {
     return WEAKEST_FIRST[worst]
 }
 
-/** Whether [name] is a parameter or value marked `@Language("HTML")` in the declaration that encloses [at]. */
+/** Whether [name] means, at [at], a parameter or value marked `@Language("HTML")`. */
 internal fun htmlNamed(
     src: String,
     name: String,
     at: Int,
-): Boolean {
-    val scope = src.substring(scopeStart(src, at), at)
-    return Regex("""@Language\(\s*"html"\s*\)\s*(?:(?:val|var)\s+)?${Regex.escape(name)}\b""", RegexOption.IGNORE_CASE)
-        .containsMatchIn(scope)
+): Boolean = declarationOf(src, name, at)?.html ?: false
+
+private val TRIM_CALL = Regex("""^\s*\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)\s*$""")
+private val USES_ELEMENTS =
+    Regex(
+        """^\s*(?:import\s+io\.github\.markusaugust\.streamlord\.html\.(?:elements|\*)\s*$|package\s+io\.github\.markusaugust\.streamlord\.html\b)""",
+        setOf(RegexOption.MULTILINE, RegexOption.UNIX_LINES),
+    )
+private val QUOTE_START = Regex("""^\$*"""")
+private val MARGIN_START = Regex("""^\s*\|""")
+private val TEXT_OF_VALUE = Regex("""^([\s\S]*?)\s*\.\s*text$""")
+private val CREATE_HTML = Regex("""^createHTML\s*\(""")
+private val APPEND_HTML = Regex("""\bappendHTML\s*\(""")
+private val NAME_AT_END = Regex("""([\p{L}_][\p{L}\p{Nd}_]*)\s*$""")
+private val SAFE_CALL_DOT = Regex("""\??\.$""")
+private val LAMBDA_HEAD =
+    Regex(
+        """^\s*(?:\([^()]*\)|[\p{L}_][\p{L}\p{Nd}_]*)(?:\s*:\s*[\p{L}\p{Nd}_.<>?]+)?(?:\s*,\s*(?:\([^()]*\)|[\p{L}_][\p{L}\p{Nd}_]*)(?:\s*:\s*[\p{L}\p{Nd}_.<>?]+)?)*\s*->""",
+    )
+private val ENDS_IN_OPERATOR = Regex("""[-+*/%=<>&|?:.,(]$""")
+private val STARTS_WITH_OPERATOR = Regex("""^(?:[-+*/%&|?:.]|else\b)""")
+private val PROPERTY_CHAIN = Regex("""^[\p{L}_][\p{L}\p{Nd}_]*(?:\s*\??\.\s*[\p{L}_][\p{L}\p{Nd}_]*)*(?:!!)?$""")
+private val MARKUP_CHARS = Regex("""[<&]""")
+
+/** Whether [t] is one string literal of HTML, or one with a trim call after it. */
+private fun htmlLiteral(t: String): Boolean {
+    val quote = QUOTE_START.find(t) ?: return false
+    val at = quote.value.length - 1
+    val end = literalEnd(t, at)
+    val rest = t.substring(end)
+    if (rest.isNotBlank() && !TRIM_CALL.matches(rest)) return false
+    val content = t.substring(minOf(end, at + (if (t.startsWith("\"\"\"", at)) 3 else 1)), end)
+    return HTML_OPENING.containsMatchIn(if ("trimMargin" in rest) content.replaceFirst(MARGIN_START, "") else content)
+}
+
+/** The call that ends [t], `receiver.name(args) { lambda }`. */
+private class Call(
+    val name: String,
+    val receiver: String?,
+    val args: String,
+    val lambda: String?,
+)
+
+/** The call that ends [t], or null when [t] does not end in one. */
+private fun lastCall(t: String): Call? {
+    val e = t.trim()
+    val d = depths(e)
+
+    fun opening(close: Int): Int {
+        for (k in close - 1 downTo 0) if (d[k] == d[close] && e[k] in "([{") return k
+        return -1
+    }
+    var end = e.length
+    var lambda: String? = null
+    if (e.endsWith("}") && d[end - 1] != -1) {
+        val open = opening(end - 1)
+        if (open < 0) return null
+        lambda = e.substring(open + 1, end - 1)
+        end = open
+        while (end > 0 && e[end - 1].isWhitespace()) end--
+    }
+    var args = ""
+    if (end > 0 && e[end - 1] == ')' && d[end - 1] != -1) {
+        val open = opening(end - 1)
+        if (open < 0) return null
+        args = e.substring(open + 1, end - 1)
+        end = open
+    } else if (lambda == null) {
+        return null
+    }
+    val name = NAME_AT_END.find(e.substring(0, end)) ?: return null
+    val before = e.substring(0, end - name.value.length).trimEnd()
+    if (before.isEmpty()) return Call(name.groupValues[1], null, args, lambda)
+    val dot = SAFE_CALL_DOT.find(before) ?: return null
+    return Call(name.groupValues[1], before.substring(0, before.length - dot.value.length), args, lambda)
+}
+
+/** What a lambda gives: its last expression, without its parameters. */
+private fun lambdaResult(body: String): String {
+    val b = body.replaceFirst(LAMBDA_HEAD, "")
+    val d = depths(b)
+    var from = 0
+    for (k in b.indices) {
+        if (d[k] != 0 || (b[k] != '\n' && b[k] != ';')) continue
+        val before = b.substring(from, k).trim()
+        val after = b.substring(k + 1).trimStart()
+        // A line that ends in an operator, or one that starts with one, goes on with the next.
+        if (b[k] == '\n' &&
+            (ENDS_IN_OPERATOR.containsMatchIn(before) || STARTS_WITH_OPERATOR.containsMatchIn(after) || before.isEmpty())
+        ) {
+            continue
+        }
+        from = k + 1
+    }
+    return b.substring(from).trim()
+}
+
+/** The argument given as `name = { ... }`, as its lambda's body. */
+private fun namedLambda(
+    args: String,
+    name: String,
+): String? {
+    val re = Regex("""^\s*$name\s*=\s*\{([\s\S]*)\}\s*$""")
+    for (a in splitTop(args, ",")) re.find(a)?.let { return it.groupValues[1] }
+    return null
 }
 
 /**
- * Whether a hole holds markup the author built: a template with an HTML literal inside it, a
- * call to `interpolate` or `Trusted`, the text of an `Html`, or a name marked `@Language("HTML")`.
- * Escaping it would print the tags.
+ * Whether a hole's whole result is markup the author built, which escaping would print as tags:
+ * an HTML literal, trimmed or not, or a `+` chain that opens with one; a call to `interpolate` or
+ * `Trusted`, or the text of an `Html`; a name declared `Html` or marked `@Language("HTML")`;
+ * kotlinx.html's `createHTML()`, `appendHTML()` in `buildString`, or Streamlord's `elements { }`;
+ * `joinToString` of markup; or an `if`, a `when` or an `?:` every one of whose results is markup.
  */
+internal fun markupValue(
+    src: String,
+    value: String,
+    at: Int,
+): Boolean {
+    val values = holeValues(value)
+    // `if (admin) "<b>admin</b>" else ""`: every result is markup or a literal the author wrote.
+    if (values.size > 1) {
+        val markup = values.map { markupValue(src, it.text, at) }
+        return markup.any { it } &&
+            values.indices.all { k ->
+                val v = values[k].text
+                markup[k] || LITERAL.matches(v) || STRING_LITERAL.matches(v) || CHAR_LITERAL.matches(v)
+            }
+    }
+    val t = values[0].text
+    if (htmlLiteral(t)) return true
+    val sum = splitTop(t, "+")
+    if (sum.size > 1) return htmlLiteral(sum[0].trim())
+    if (wholeCall(t, "interpolate") || wholeCall(t, "Trusted")) return true
+    val textOf = TEXT_OF_VALUE.find(t)?.groupValues?.get(1)
+    if (textOf != null &&
+        (wholeCall(textOf, "interpolate") || (IDENT.matches(textOf) && declaredKind(src, textOf, at) == HoleFact.MARKUP))
+    ) {
+        return true
+    }
+    if (IDENT.matches(t)) return declaredKind(src, t, at) == HoleFact.MARKUP || htmlNamed(src, t, at)
+    if (CREATE_HTML.containsMatchIn(t)) return true
+    val call = lastCall(t) ?: return false
+    val lambda = call.lambda
+    if (call.name == "buildString" && call.receiver == null && lambda != null) return APPEND_HTML.containsMatchIn(lambda)
+    if (call.name == "elements" && call.receiver == null && lambda != null) return USES_ELEMENTS.containsMatchIn(src)
+    if (call.name != "joinToString") return false
+    val transform = lambda ?: namedLambda(call.args, "transform")
+    if (transform != null) return markupValue(src, lambdaResult(transform), at)
+    return call.receiver != null && markupElements(src, call.receiver, at)
+}
+
+/** Whether every element of a collection is markup: `listOf(a, b)` of markup, or a `map { }` to markup. */
+private fun markupElements(
+    src: String,
+    receiver: String,
+    at: Int,
+): Boolean {
+    val r = lastCall(receiver) ?: return false
+    val lambda = r.lambda
+    if ((r.name == "listOf" || r.name == "arrayOf") && r.receiver == null && lambda == null) {
+        return r.args.isNotBlank() && splitTop(r.args, ",").all { markupValue(src, it, at) }
+    }
+    if ((r.name == "map" || r.name == "mapIndexed" || r.name == "mapNotNull") &&
+        lambda != null
+    ) {
+        return markupValue(src, lambdaResult(lambda), at)
+    }
+    return false
+}
+
+/** Whether a hole's value is markup the author built; see [markupValue]. */
 internal fun isMarkup(
     src: String,
     s: KotlinString,
     ip: Interpolation,
-): Boolean {
-    if (ip.kind != InterpolationKind.SIMPLE) {
-        val inner = s.nested.filter { it.start >= ip.start && it.end <= ip.end }
-        if (inner.any { HTML_OPENING.containsMatchIn(it.text) }) return true
-        if (MARKUP_CALL.containsMatchIn(ip.text)) return true
+): Boolean = markupValue(src, ip.text, s.start)
+
+/** The calls whose result is the text they were given, changed but no more markup than it was. */
+private val TEXT_TRANSFORMS =
+    setOf(
+        "trim",
+        "trimStart",
+        "trimEnd",
+        "lowercase",
+        "uppercase",
+        "toLowerCase",
+        "toUpperCase",
+        "capitalize",
+        "decapitalize",
+        "replaceFirstChar",
+        "take",
+        "takeLast",
+        "drop",
+        "dropLast",
+        "substring",
+        "substringBefore",
+        "substringAfter",
+        "substringBeforeLast",
+        "substringAfterLast",
+        "removePrefix",
+        "removeSuffix",
+        "removeSurrounding",
+        "padStart",
+        "padEnd",
+        "orEmpty",
+        "toString",
+        "reversed",
+        "repeat",
+    )
+
+/** Whether a string literal in [e] holds `<` or `&`, which markup is made of. */
+private fun markupInLiteral(e: String): Boolean {
+    var k = 0
+    while (k < e.length) {
+        if (e[k] != '"') {
+            k++
+            continue
+        }
+        val end = literalEnd(e, k)
+        if (MARKUP_CHARS.containsMatchIn(e.substring(k, end))) return true
+        k = end
     }
-    return (branches(ip.text) ?: listOf(ip.text)).any { v ->
-        val t = v.trim()
-        val text = HTML_TEXT.matchEntire(t)
-        if (text != null) {
-            declaredKind(src, text.groupValues[1], s.start) == HoleFact.MARKUP
-        } else {
-            IDENT.matches(t) && htmlNamed(src, t, s.start)
+    return false
+}
+
+/**
+ * Whether a value in element text may hold markup that `interpolate` would escape: a constant
+ * whose value this file does not show or shows with a tag, a literal with one, or the result of a
+ * call that is not a plain change to text (`items(xs)`, a `joinToString` with tags in it). A
+ * rewrite to `interpolate` would then print the tags.
+ */
+internal fun mayHoldMarkup(
+    src: String,
+    value: String,
+    at: Int,
+    constants: Set<String>,
+): Boolean =
+    holeValues(value).any { v ->
+        val t = v.text
+        when {
+            LITERAL.matches(t) || CHAR_LITERAL.matches(t) -> {
+                false
+            }
+
+            IDENT.matches(t) -> {
+                if (!constantAt(src, t, at, constants)) {
+                    false
+                } else {
+                    val text = declarationOf(src, t, at)?.text
+                    text == null || MARKUP_CHARS.containsMatchIn(text)
+                }
+            }
+
+            markupInLiteral(t) -> {
+                true
+            }
+
+            t.startsWith("\"") || PROPERTY_CHAIN.matches(t) -> {
+                false
+            }
+
+            else -> {
+                val sum = splitTop(t, "+")
+                if (sum.size > 1) {
+                    sum.any { mayHoldMarkup(src, it, at, constants) }
+                } else {
+                    val call = lastCall(t)
+                    if (call == null) {
+                        true
+                    } else {
+                        val plain =
+                            call.name in TEXT_TRANSFORMS ||
+                                (call.name == "joinToString" && call.lambda == null && namedLambda(call.args, "transform") == null)
+                        !plain || call.receiver == null || mayHoldMarkup(src, call.receiver, at, constants)
+                    }
+                }
+            }
         }
     }
-}
 
 /**
  * Whether markup in a hole is a value `interpolate` writes as it stands in element text, an
@@ -596,7 +1362,17 @@ internal fun interpolateFix(
     // would break whatever took the String.
     val call = "interpolate(" + (listOf(format.toString()) + args).joinToString(", ") + ").text"
     val title = "Build it with interpolate(...), which escapes the values"
-    if (INTERPOLATE_IMPORTED.containsMatchIn(src)) return Fix(title, s.start, s.end, call)
+    val facts = fileFacts(src)
+    if (!facts.importsChecked) {
+        facts.importEdits = importEdits(src)
+        facts.importsChecked = true
+    }
+    return Fix(title, s.start, s.end, call, facts.importEdits.orEmpty())
+}
+
+/** The edit that imports `interpolate`, after the last import or the package, or null when the file has the import. */
+private fun importEdits(src: String): List<Edit>? {
+    if (INTERPOLATE_IMPORTED.containsMatchIn(src)) return null
     val imports = IMPORT_LINE.findAll(src).lastOrNull()
     val pkg = PACKAGE_LINE.find(src)
     val anchor = (imports ?: pkg)?.let { it.range.last + 1 } ?: -1
@@ -606,7 +1382,7 @@ internal fun interpolateFix(
         } else {
             Edit(anchor, anchor, "\n" + (if (imports != null) "" else "\n") + "import $INTERPOLATE_IMPORT")
         }
-    return Fix(title, s.start, s.end, call, listOf(edit))
+    return listOf(edit)
 }
 
 /** Where each `%s` of `interpolate`'s format starts in [text], as core counts them: `%%` is one per cent sign and never a hole. */

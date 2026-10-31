@@ -167,7 +167,7 @@
     "end": 4671,
     "code": "unescaped-interpolation",
     "severity": "hint",
-    "message": "Kotlin writes applicant.name into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+    "message": "Kotlin writes the value `applicant.name` into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
    },
    {
     "line": 110,
@@ -176,7 +176,7 @@
     "end": 4734,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes query into style, where it is read as CSS, so escaping does not help. Choose between classes, or write a number."
+    "message": "Kotlin writes the value `query` into style, where it is read as CSS, so escaping does not help. Choose between classes, or write a number."
    },
    {
     "line": 110,
@@ -430,7 +430,7 @@
     "end": 5627,
     "code": "unescaped-interpolation",
     "severity": "hint",
-    "message": "Kotlin writes applicant.name into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+    "message": "Kotlin writes the value `applicant.name` into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
    },
    {
     "line": 138,
@@ -439,7 +439,7 @@
     "end": 5690,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes query into style, where it is read as CSS, so escaping does not help. Choose between classes, or write a number."
+    "message": "Kotlin writes the value `query` into style, where it is read as CSS, so escaping does not help. Choose between classes, or write a number."
    },
    {
     "line": 138,
@@ -657,7 +657,7 @@
     "end": 4237,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes query into style, where it is read as CSS, so escaping does not help. Choose between classes, or write a number."
+    "message": "Kotlin writes the value `query` into style, where it is read as CSS, so escaping does not help. Choose between classes, or write a number."
    },
    {
     "line": 85,
@@ -666,7 +666,7 @@
     "end": 4262,
     "code": "unescaped-interpolation",
     "severity": "hint",
-    "message": "Kotlin writes applicant.name into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+    "message": "Kotlin writes the value `applicant.name` into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
    },
    {
     "line": 93,
@@ -1045,8 +1045,8 @@
    {
     "line": 355,
     "hole": "$query",
-    "start": 13469,
-    "end": 13475,
+    "start": 13575,
+    "end": 13581,
     "code": "kotlin-interpolation",
     "severity": "warning",
     "message": "Kotlin interpolates $query here, as the whole Datastar expression. Meant as a server value, only a number or a boolean is safe there; meant as the signal $query, make the whole literal $$\"\"\"...\"\"\" (Kotlin 2.2+), or escape as ${'$'}query."
@@ -1054,17 +1054,17 @@
    {
     "line": 356,
     "hole": "$n",
-    "start": 13508,
-    "end": 13510,
+    "start": 13614,
+    "end": 13616,
     "code": "kotlin-interpolation",
-    "severity": "warning",
-    "message": "Kotlin interpolates $n here, as the whole Datastar expression. Meant as a server value, only a number or a boolean is safe there; meant as the signal $n, make the whole literal $$\"\"\"...\"\"\" (Kotlin 2.2+), or escape as ${'$'}n."
+    "severity": "hint",
+    "message": "Kotlin writes $n here, a number from the server, which is safe in a Datastar expression. Meant as the signal $n, make the literal $$\"\"\"...\"\"\" (Kotlin 2.2+), or escape as ${'$'}n."
    },
    {
     "line": 357,
     "hole": "$maybe",
-    "start": 13543,
-    "end": 13549,
+    "start": 13649,
+    "end": 13655,
     "code": "kotlin-interpolation",
     "severity": "warning",
     "message": "Kotlin interpolates $maybe here, as the whole Datastar expression. Meant as a server value, only a number or a boolean is safe there; meant as the signal $maybe, make the whole literal $$\"\"\"...\"\"\" (Kotlin 2.2+), or escape as ${'$'}maybe."
@@ -1072,17 +1072,17 @@
    {
     "line": 358,
     "hole": "$flag",
-    "start": 13582,
-    "end": 13587,
+    "start": 13688,
+    "end": 13693,
     "code": "kotlin-interpolation",
-    "severity": "warning",
-    "message": "Kotlin interpolates $flag here, as the whole Datastar expression. Meant as a server value, only a number or a boolean is safe there; meant as the signal $flag, make the whole literal $$\"\"\"...\"\"\" (Kotlin 2.2+), or escape as ${'$'}flag."
+    "severity": "hint",
+    "message": "Kotlin writes $flag here, a boolean from the server, which is safe in a Datastar expression. Meant as the signal $flag, make the literal $$\"\"\"...\"\"\" (Kotlin 2.2+), or escape as ${'$'}flag."
    },
    {
     "line": 359,
     "hole": "$html",
-    "start": 13620,
-    "end": 13625,
+    "start": 13726,
+    "end": 13731,
     "code": "kotlin-interpolation",
     "severity": "warning",
     "message": "Kotlin interpolates $html here, as the whole Datastar expression. Meant as a server value, only a number or a boolean is safe there; meant as the signal $html, make the whole literal $$\"\"\"...\"\"\" (Kotlin 2.2+), or escape as ${'$'}html."
@@ -1090,8 +1090,8 @@
    {
     "line": 360,
     "hole": "$variant",
-    "start": 13658,
-    "end": 13666,
+    "start": 13764,
+    "end": 13772,
     "code": "kotlin-interpolation",
     "severity": "warning",
     "message": "Kotlin interpolates $variant here, as the whole Datastar expression. Meant as a server value, only a number or a boolean is safe there; meant as the signal $variant, make the whole literal $$\"\"\"...\"\"\" (Kotlin 2.2+), or escape as ${'$'}variant."
@@ -1099,8 +1099,8 @@
    {
     "line": 375,
     "hole": "$query",
-    "start": 14288,
-    "end": 14294,
+    "start": 14500,
+    "end": 14506,
     "code": "kotlin-interpolation",
     "severity": "warning",
     "message": "Kotlin interpolates $query inside a Datastar expression. Meant as a server value, only a number or a boolean is safe there; meant as the signal $query, make the literal $$\"\"\"...\"\"\" (Kotlin 2.2+) or escape as ${'$'}query."
@@ -1108,17 +1108,17 @@
    {
     "line": 376,
     "hole": "$n",
-    "start": 14333,
-    "end": 14335,
+    "start": 14545,
+    "end": 14547,
     "code": "kotlin-interpolation",
-    "severity": "warning",
-    "message": "Kotlin interpolates $n inside a Datastar expression. Meant as a server value, only a number or a boolean is safe there; meant as the signal $n, make the literal $$\"\"\"...\"\"\" (Kotlin 2.2+) or escape as ${'$'}n."
+    "severity": "hint",
+    "message": "Kotlin writes $n here, a number from the server, which is safe in a Datastar expression. Meant as the signal $n, make the literal $$\"\"\"...\"\"\" (Kotlin 2.2+), or escape as ${'$'}n."
    },
    {
     "line": 377,
     "hole": "$maybe",
-    "start": 14372,
-    "end": 14378,
+    "start": 14584,
+    "end": 14590,
     "code": "kotlin-interpolation",
     "severity": "warning",
     "message": "Kotlin interpolates $maybe inside a Datastar expression. Meant as a server value, only a number or a boolean is safe there; meant as the signal $maybe, make the literal $$\"\"\"...\"\"\" (Kotlin 2.2+) or escape as ${'$'}maybe."
@@ -1126,17 +1126,17 @@
    {
     "line": 378,
     "hole": "$flag",
-    "start": 14416,
-    "end": 14421,
+    "start": 14628,
+    "end": 14633,
     "code": "kotlin-interpolation",
-    "severity": "warning",
-    "message": "Kotlin interpolates $flag inside a Datastar expression. Meant as a server value, only a number or a boolean is safe there; meant as the signal $flag, make the literal $$\"\"\"...\"\"\" (Kotlin 2.2+) or escape as ${'$'}flag."
+    "severity": "hint",
+    "message": "Kotlin writes $flag here, a boolean from the server, which is safe in a Datastar expression. Meant as the signal $flag, make the literal $$\"\"\"...\"\"\" (Kotlin 2.2+), or escape as ${'$'}flag."
    },
    {
     "line": 379,
     "hole": "$html",
-    "start": 14454,
-    "end": 14459,
+    "start": 14666,
+    "end": 14671,
     "code": "kotlin-interpolation",
     "severity": "warning",
     "message": "Kotlin interpolates $html inside a Datastar expression. Meant as a server value, only a number or a boolean is safe there; meant as the signal $html, make the literal $$\"\"\"...\"\"\" (Kotlin 2.2+) or escape as ${'$'}html."
@@ -1144,8 +1144,8 @@
    {
     "line": 380,
     "hole": "$variant",
-    "start": 14498,
-    "end": 14506,
+    "start": 14710,
+    "end": 14718,
     "code": "kotlin-interpolation",
     "severity": "warning",
     "message": "Kotlin interpolates $variant inside a Datastar expression. Meant as a server value, only a number or a boolean is safe there; meant as the signal $variant, make the literal $$\"\"\"...\"\"\" (Kotlin 2.2+) or escape as ${'$'}variant."
@@ -1153,8 +1153,8 @@
    {
     "line": 395,
     "hole": "$query",
-    "start": 15096,
-    "end": 15102,
+    "start": 15308,
+    "end": 15314,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $query into data-on:click, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in a signal, or in an attribute of its own read with el.dataset; only a number or a boolean is safe to write in."
@@ -1162,8 +1162,8 @@
    {
     "line": 397,
     "hole": "$maybe",
-    "start": 15218,
-    "end": 15224,
+    "start": 15430,
+    "end": 15436,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $maybe into data-on:click, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in a signal, or in an attribute of its own read with el.dataset; only a number or a boolean is safe to write in."
@@ -1171,8 +1171,8 @@
    {
     "line": 399,
     "hole": "$html",
-    "start": 15343,
-    "end": 15348,
+    "start": 15555,
+    "end": 15560,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $html into data-on:click, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in a signal, or in an attribute of its own read with el.dataset; only a number or a boolean is safe to write in."
@@ -1180,8 +1180,8 @@
    {
     "line": 415,
     "hole": "${query}",
-    "start": 15954,
-    "end": 15962,
+    "start": 16166,
+    "end": 16174,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes ${query} into data-text, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in a signal, or in an attribute of its own read with el.dataset; only a number or a boolean is safe to write in."
@@ -1189,8 +1189,8 @@
    {
     "line": 417,
     "hole": "${maybe}",
-    "start": 16032,
-    "end": 16040,
+    "start": 16244,
+    "end": 16252,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes ${maybe} into data-text, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in a signal, or in an attribute of its own read with el.dataset; only a number or a boolean is safe to write in."
@@ -1198,8 +1198,8 @@
    {
     "line": 419,
     "hole": "${html}",
-    "start": 16113,
-    "end": 16120,
+    "start": 16325,
+    "end": 16332,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes ${html} into data-text, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in a signal, or in an attribute of its own read with el.dataset; only a number or a boolean is safe to write in."
@@ -1207,8 +1207,8 @@
    {
     "line": 435,
     "hole": "$query",
-    "start": 16712,
-    "end": 16718,
+    "start": 16924,
+    "end": 16930,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $query into data-bind, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in a signal, or in an attribute of its own read with el.dataset; only a number or a boolean is safe to write in."
@@ -1216,8 +1216,8 @@
    {
     "line": 437,
     "hole": "$maybe",
-    "start": 16786,
-    "end": 16792,
+    "start": 16998,
+    "end": 17004,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $maybe into data-bind, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in a signal, or in an attribute of its own read with el.dataset; only a number or a boolean is safe to write in."
@@ -1225,8 +1225,8 @@
    {
     "line": 439,
     "hole": "$html",
-    "start": 16863,
-    "end": 16868,
+    "start": 17075,
+    "end": 17080,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $html into data-bind, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in a signal, or in an attribute of its own read with el.dataset; only a number or a boolean is safe to write in."
@@ -1234,8 +1234,8 @@
    {
     "line": 455,
     "hole": "$query",
-    "start": 17400,
-    "end": 17406,
+    "start": 17612,
+    "end": 17618,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $query into data-ref, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in a signal, or in an attribute of its own read with el.dataset; only a number or a boolean is safe to write in."
@@ -1243,8 +1243,8 @@
    {
     "line": 457,
     "hole": "$maybe",
-    "start": 17472,
-    "end": 17478,
+    "start": 17684,
+    "end": 17690,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $maybe into data-ref, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in a signal, or in an attribute of its own read with el.dataset; only a number or a boolean is safe to write in."
@@ -1252,8 +1252,8 @@
    {
     "line": 459,
     "hole": "$html",
-    "start": 17547,
-    "end": 17552,
+    "start": 17759,
+    "end": 17764,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $html into data-ref, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in a signal, or in an attribute of its own read with el.dataset; only a number or a boolean is safe to write in."
@@ -1261,8 +1261,8 @@
    {
     "line": 475,
     "hole": "$query",
-    "start": 18098,
-    "end": 18104,
+    "start": 18310,
+    "end": 18316,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $query into data-indicator, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in a signal, or in an attribute of its own read with el.dataset; only a number or a boolean is safe to write in."
@@ -1270,8 +1270,8 @@
    {
     "line": 477,
     "hole": "$maybe",
-    "start": 18182,
-    "end": 18188,
+    "start": 18394,
+    "end": 18400,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $maybe into data-indicator, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in a signal, or in an attribute of its own read with el.dataset; only a number or a boolean is safe to write in."
@@ -1279,8 +1279,8 @@
    {
     "line": 479,
     "hole": "$html",
-    "start": 18269,
-    "end": 18274,
+    "start": 18481,
+    "end": 18486,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $html into data-indicator, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in a signal, or in an attribute of its own read with el.dataset; only a number or a boolean is safe to write in."
@@ -1288,8 +1288,8 @@
    {
     "line": 496,
     "hole": "${query}",
-    "start": 18956,
-    "end": 18964,
+    "start": 19185,
+    "end": 19193,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes ${query} into data-signals, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in a signal, or in an attribute of its own read with el.dataset; only a number or a boolean is safe to write in."
@@ -1297,8 +1297,8 @@
    {
     "line": 498,
     "hole": "${maybe}",
-    "start": 19050,
-    "end": 19058,
+    "start": 19279,
+    "end": 19287,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes ${maybe} into data-signals, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in a signal, or in an attribute of its own read with el.dataset; only a number or a boolean is safe to write in."
@@ -1306,8 +1306,8 @@
    {
     "line": 500,
     "hole": "${html}",
-    "start": 19147,
-    "end": 19154,
+    "start": 19376,
+    "end": 19383,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes ${html} into data-signals, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in a signal, or in an attribute of its own read with el.dataset; only a number or a boolean is safe to write in."
@@ -1315,17 +1315,17 @@
    {
     "line": 503,
     "hole": "$n",
-    "start": 19295,
-    "end": 19297,
+    "start": 19524,
+    "end": 19526,
     "code": "kotlin-interpolation",
-    "severity": "warning",
-    "message": "Kotlin interpolates $n inside a Datastar expression. Meant as a server value, only a number or a boolean is safe there; meant as the signal $n, make the literal $$\"\"\"...\"\"\" (Kotlin 2.2+) or escape as ${'$'}n."
+    "severity": "hint",
+    "message": "Kotlin writes $n here, a number from the server, which is safe in a Datastar expression. Meant as the signal $n, make the literal $$\"\"\"...\"\"\" (Kotlin 2.2+), or escape as ${'$'}n."
    },
    {
     "line": 517,
     "hole": "$query",
-    "start": 19827,
-    "end": 19833,
+    "start": 20056,
+    "end": 20062,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $query into data-json-signals, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in a signal, or in an attribute of its own read with el.dataset; only a number or a boolean is safe to write in."
@@ -1333,8 +1333,8 @@
    {
     "line": 519,
     "hole": "$maybe",
-    "start": 19951,
-    "end": 19957,
+    "start": 20180,
+    "end": 20186,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $maybe into data-json-signals, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in a signal, or in an attribute of its own read with el.dataset; only a number or a boolean is safe to write in."
@@ -1342,8 +1342,8 @@
    {
     "line": 521,
     "hole": "$html",
-    "start": 20078,
-    "end": 20083,
+    "start": 20307,
+    "end": 20312,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $html into data-json-signals, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in a signal, or in an attribute of its own read with el.dataset; only a number or a boolean is safe to write in."
@@ -1351,8 +1351,8 @@
    {
     "line": 537,
     "hole": "$query",
-    "start": 20802,
-    "end": 20808,
+    "start": 21031,
+    "end": 21037,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $query into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
@@ -1360,8 +1360,8 @@
    {
     "line": 538,
     "hole": "$n",
-    "start": 20864,
-    "end": 20866,
+    "start": 21093,
+    "end": 21095,
     "code": "unsafe-interpolation",
     "severity": "hint",
     "message": "Kotlin writes $n into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
@@ -1369,8 +1369,8 @@
    {
     "line": 539,
     "hole": "$maybe",
-    "start": 20922,
-    "end": 20928,
+    "start": 21151,
+    "end": 21157,
     "code": "unsafe-interpolation",
     "severity": "hint",
     "message": "Kotlin writes $maybe into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
@@ -1378,8 +1378,8 @@
    {
     "line": 540,
     "hole": "$flag",
-    "start": 20984,
-    "end": 20989,
+    "start": 21213,
+    "end": 21218,
     "code": "unsafe-interpolation",
     "severity": "hint",
     "message": "Kotlin writes $flag into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
@@ -1387,8 +1387,8 @@
    {
     "line": 541,
     "hole": "$html",
-    "start": 21042,
-    "end": 21047,
+    "start": 21271,
+    "end": 21276,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $html into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
@@ -1396,8 +1396,8 @@
    {
     "line": 557,
     "hole": "$query",
-    "start": 21723,
-    "end": 21729,
+    "start": 21952,
+    "end": 21958,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $query into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
@@ -1405,8 +1405,8 @@
    {
     "line": 558,
     "hole": "$n",
-    "start": 21754,
-    "end": 21756,
+    "start": 21983,
+    "end": 21985,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $n into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
@@ -1414,8 +1414,8 @@
    {
     "line": 559,
     "hole": "$maybe",
-    "start": 21780,
-    "end": 21786,
+    "start": 22009,
+    "end": 22015,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $maybe into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
@@ -1423,8 +1423,8 @@
    {
     "line": 560,
     "hole": "$flag",
-    "start": 21810,
-    "end": 21815,
+    "start": 22039,
+    "end": 22044,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $flag into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
@@ -1432,8 +1432,8 @@
    {
     "line": 561,
     "hole": "$html",
-    "start": 21840,
-    "end": 21845,
+    "start": 22069,
+    "end": 22074,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $html into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
@@ -1441,8 +1441,8 @@
    {
     "line": 577,
     "hole": "$query",
-    "start": 22407,
-    "end": 22413,
+    "start": 22636,
+    "end": 22642,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $query into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
@@ -1450,8 +1450,8 @@
    {
     "line": 578,
     "hole": "${n}",
-    "start": 22440,
-    "end": 22444,
+    "start": 22669,
+    "end": 22673,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes ${n} into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
@@ -1459,8 +1459,8 @@
    {
     "line": 579,
     "hole": "${maybe}",
-    "start": 22473,
-    "end": 22481,
+    "start": 22702,
+    "end": 22710,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes ${maybe} into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
@@ -1468,8 +1468,8 @@
    {
     "line": 580,
     "hole": "$flag",
-    "start": 22510,
-    "end": 22515,
+    "start": 22739,
+    "end": 22744,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $flag into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
@@ -1477,8 +1477,8 @@
    {
     "line": 581,
     "hole": "$html",
-    "start": 22545,
-    "end": 22550,
+    "start": 22774,
+    "end": 22779,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $html into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
@@ -1486,8 +1486,8 @@
    {
     "line": 597,
     "hole": "$query",
-    "start": 23127,
-    "end": 23133,
+    "start": 23356,
+    "end": 23362,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $query into onclick, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
@@ -1495,8 +1495,8 @@
    {
     "line": 598,
     "hole": "$n",
-    "start": 23183,
-    "end": 23185,
+    "start": 23412,
+    "end": 23414,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $n into onclick, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
@@ -1504,8 +1504,8 @@
    {
     "line": 599,
     "hole": "$maybe",
-    "start": 23234,
-    "end": 23240,
+    "start": 23463,
+    "end": 23469,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $maybe into onclick, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
@@ -1513,8 +1513,8 @@
    {
     "line": 600,
     "hole": "$flag",
-    "start": 23289,
-    "end": 23294,
+    "start": 23518,
+    "end": 23523,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $flag into onclick, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
@@ -1522,8 +1522,8 @@
    {
     "line": 601,
     "hole": "$html",
-    "start": 23344,
-    "end": 23349,
+    "start": 23573,
+    "end": 23578,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $html into onclick, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
@@ -1531,8 +1531,8 @@
    {
     "line": 617,
     "hole": "$query",
-    "start": 24005,
-    "end": 24011,
+    "start": 24234,
+    "end": 24240,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $query into srcdoc, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
@@ -1540,8 +1540,8 @@
    {
     "line": 618,
     "hole": "$n",
-    "start": 24058,
-    "end": 24060,
+    "start": 24287,
+    "end": 24289,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $n into srcdoc, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
@@ -1549,8 +1549,8 @@
    {
     "line": 619,
     "hole": "$maybe",
-    "start": 24107,
-    "end": 24113,
+    "start": 24336,
+    "end": 24342,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $maybe into srcdoc, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
@@ -1558,8 +1558,8 @@
    {
     "line": 620,
     "hole": "$flag",
-    "start": 24160,
-    "end": 24165,
+    "start": 24389,
+    "end": 24394,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $flag into srcdoc, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
@@ -1567,8 +1567,8 @@
    {
     "line": 621,
     "hole": "$html",
-    "start": 24209,
-    "end": 24214,
+    "start": 24438,
+    "end": 24443,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $html into srcdoc, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
@@ -1576,8 +1576,8 @@
    {
     "line": 637,
     "hole": "$query",
-    "start": 24971,
-    "end": 24977,
+    "start": 25200,
+    "end": 25206,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $query into an attribute value without quotes, where a space starts a new attribute. Quote the value."
@@ -1585,8 +1585,8 @@
    {
     "line": 638,
     "hole": "$n",
-    "start": 25004,
-    "end": 25006,
+    "start": 25233,
+    "end": 25235,
     "code": "unsafe-interpolation",
     "severity": "hint",
     "message": "Kotlin writes $n into an attribute value without quotes, where a space starts a new attribute. Quote the value."
@@ -1594,8 +1594,8 @@
    {
     "line": 639,
     "hole": "$maybe",
-    "start": 25033,
-    "end": 25039,
+    "start": 25262,
+    "end": 25268,
     "code": "unsafe-interpolation",
     "severity": "hint",
     "message": "Kotlin writes $maybe into an attribute value without quotes, where a space starts a new attribute. Quote the value."
@@ -1603,8 +1603,8 @@
    {
     "line": 640,
     "hole": "$flag",
-    "start": 25066,
-    "end": 25071,
+    "start": 25295,
+    "end": 25300,
     "code": "unsafe-interpolation",
     "severity": "hint",
     "message": "Kotlin writes $flag into an attribute value without quotes, where a space starts a new attribute. Quote the value."
@@ -1612,8 +1612,8 @@
    {
     "line": 641,
     "hole": "$html",
-    "start": 25098,
-    "end": 25103,
+    "start": 25327,
+    "end": 25332,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $html into an attribute value without quotes, where a space starts a new attribute. Quote the value."
@@ -1621,8 +1621,8 @@
    {
     "line": 657,
     "hole": "$query",
-    "start": 25727,
-    "end": 25733,
+    "start": 25956,
+    "end": 25962,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $query into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
@@ -1630,8 +1630,8 @@
    {
     "line": 658,
     "hole": "$n",
-    "start": 25759,
-    "end": 25761,
+    "start": 25988,
+    "end": 25990,
     "code": "unsafe-interpolation",
     "severity": "hint",
     "message": "Kotlin writes $n into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
@@ -1639,8 +1639,8 @@
    {
     "line": 659,
     "hole": "$maybe",
-    "start": 25784,
-    "end": 25790,
+    "start": 26013,
+    "end": 26019,
     "code": "unsafe-interpolation",
     "severity": "hint",
     "message": "Kotlin writes $maybe into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
@@ -1648,8 +1648,8 @@
    {
     "line": 660,
     "hole": "$flag",
-    "start": 25818,
-    "end": 25823,
+    "start": 26047,
+    "end": 26052,
     "code": "unsafe-interpolation",
     "severity": "hint",
     "message": "Kotlin writes $flag into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
@@ -1657,8 +1657,8 @@
    {
     "line": 661,
     "hole": "$html",
-    "start": 25849,
-    "end": 25854,
+    "start": 26078,
+    "end": 26083,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $html into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
@@ -1666,8 +1666,8 @@
    {
     "line": 677,
     "hole": "$query",
-    "start": 26435,
-    "end": 26441,
+    "start": 26664,
+    "end": 26670,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $query into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
@@ -1675,8 +1675,8 @@
    {
     "line": 678,
     "hole": "$n",
-    "start": 26462,
-    "end": 26464,
+    "start": 26691,
+    "end": 26693,
     "code": "unsafe-interpolation",
     "severity": "hint",
     "message": "Kotlin writes $n into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
@@ -1684,8 +1684,8 @@
    {
     "line": 679,
     "hole": "$maybe",
-    "start": 26485,
-    "end": 26491,
+    "start": 26714,
+    "end": 26720,
     "code": "unsafe-interpolation",
     "severity": "hint",
     "message": "Kotlin writes $maybe into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
@@ -1693,8 +1693,8 @@
    {
     "line": 680,
     "hole": "$flag",
-    "start": 26513,
-    "end": 26518,
+    "start": 26742,
+    "end": 26747,
     "code": "unsafe-interpolation",
     "severity": "hint",
     "message": "Kotlin writes $flag into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
@@ -1702,8 +1702,8 @@
    {
     "line": 681,
     "hole": "$html",
-    "start": 26538,
-    "end": 26543,
+    "start": 26767,
+    "end": 26772,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $html into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
@@ -1711,8 +1711,8 @@
    {
     "line": 697,
     "hole": "$query",
-    "start": 27073,
-    "end": 27079,
+    "start": 27302,
+    "end": 27308,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $query into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
@@ -1720,8 +1720,8 @@
    {
     "line": 698,
     "hole": "$n",
-    "start": 27105,
-    "end": 27107,
+    "start": 27334,
+    "end": 27336,
     "code": "unsafe-interpolation",
     "severity": "hint",
     "message": "Kotlin writes $n into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
@@ -1729,8 +1729,8 @@
    {
     "line": 699,
     "hole": "$maybe",
-    "start": 27133,
-    "end": 27139,
+    "start": 27362,
+    "end": 27368,
     "code": "unsafe-interpolation",
     "severity": "hint",
     "message": "Kotlin writes $maybe into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
@@ -1738,8 +1738,8 @@
    {
     "line": 700,
     "hole": "$flag",
-    "start": 27165,
-    "end": 27170,
+    "start": 27394,
+    "end": 27399,
     "code": "unsafe-interpolation",
     "severity": "hint",
     "message": "Kotlin writes $flag into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
@@ -1747,8 +1747,8 @@
    {
     "line": 701,
     "hole": "$html",
-    "start": 27195,
-    "end": 27200,
+    "start": 27424,
+    "end": 27429,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $html into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
@@ -1756,8 +1756,8 @@
    {
     "line": 717,
     "hole": "$query",
-    "start": 27759,
-    "end": 27765,
+    "start": 27988,
+    "end": 27994,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $query into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
@@ -1765,8 +1765,8 @@
    {
     "line": 718,
     "hole": "$n",
-    "start": 27796,
-    "end": 27798,
+    "start": 28025,
+    "end": 28027,
     "code": "unsafe-interpolation",
     "severity": "hint",
     "message": "Kotlin writes $n into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
@@ -1774,8 +1774,8 @@
    {
     "line": 719,
     "hole": "$maybe",
-    "start": 27829,
-    "end": 27835,
+    "start": 28058,
+    "end": 28064,
     "code": "unsafe-interpolation",
     "severity": "hint",
     "message": "Kotlin writes $maybe into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
@@ -1783,8 +1783,8 @@
    {
     "line": 720,
     "hole": "$flag",
-    "start": 27866,
-    "end": 27871,
+    "start": 28095,
+    "end": 28100,
     "code": "unsafe-interpolation",
     "severity": "hint",
     "message": "Kotlin writes $flag into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
@@ -1792,8 +1792,8 @@
    {
     "line": 721,
     "hole": "$html",
-    "start": 27901,
-    "end": 27906,
+    "start": 28130,
+    "end": 28135,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $html into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
@@ -1801,8 +1801,8 @@
    {
     "line": 737,
     "hole": "$query",
-    "start": 28464,
-    "end": 28470,
+    "start": 28693,
+    "end": 28699,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $query into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
@@ -1810,8 +1810,8 @@
    {
     "line": 738,
     "hole": "$n",
-    "start": 28491,
-    "end": 28493,
+    "start": 28720,
+    "end": 28722,
     "code": "unsafe-interpolation",
     "severity": "hint",
     "message": "Kotlin writes $n into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
@@ -1819,8 +1819,8 @@
    {
     "line": 739,
     "hole": "$maybe",
-    "start": 28514,
-    "end": 28520,
+    "start": 28743,
+    "end": 28749,
     "code": "unsafe-interpolation",
     "severity": "hint",
     "message": "Kotlin writes $maybe into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
@@ -1828,8 +1828,8 @@
    {
     "line": 740,
     "hole": "$flag",
-    "start": 28541,
-    "end": 28546,
+    "start": 28770,
+    "end": 28775,
     "code": "unsafe-interpolation",
     "severity": "hint",
     "message": "Kotlin writes $flag into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
@@ -1837,8 +1837,8 @@
    {
     "line": 741,
     "hole": "$html",
-    "start": 28567,
-    "end": 28572,
+    "start": 28796,
+    "end": 28801,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $html into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."
@@ -1846,8 +1846,8 @@
    {
     "line": 757,
     "hole": "$query",
-    "start": 29131,
-    "end": 29137,
+    "start": 29360,
+    "end": 29366,
     "code": "unescaped-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
@@ -1855,8 +1855,8 @@
    {
     "line": 777,
     "hole": "$query",
-    "start": 29706,
-    "end": 29712,
+    "start": 29935,
+    "end": 29941,
     "code": "unescaped-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
@@ -1864,8 +1864,8 @@
    {
     "line": 797,
     "hole": "$query",
-    "start": 30355,
-    "end": 30361,
+    "start": 30584,
+    "end": 30590,
     "code": "unescaped-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
@@ -1873,8 +1873,8 @@
    {
     "line": 820,
     "hole": "$query",
-    "start": 31276,
-    "end": 31282,
+    "start": 31505,
+    "end": 31511,
     "code": "unescaped-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
@@ -1882,8 +1882,8 @@
    {
     "line": 821,
     "hole": "$query",
-    "start": 31324,
-    "end": 31330,
+    "start": 31553,
+    "end": 31559,
     "code": "unescaped-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
@@ -1891,8 +1891,8 @@
    {
     "line": 822,
     "hole": "${query}",
-    "start": 31387,
-    "end": 31395,
+    "start": 31616,
+    "end": 31624,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes ${query} into data-text, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in a signal, or in an attribute of its own read with el.dataset; only a number or a boolean is safe to write in."
@@ -1900,8 +1900,8 @@
    {
     "line": 824,
     "hole": "${maybe}",
-    "start": 31513,
-    "end": 31521,
+    "start": 31742,
+    "end": 31750,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes ${maybe} into data-text, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in a signal, or in an attribute of its own read with el.dataset; only a number or a boolean is safe to write in."
@@ -1909,8 +1909,8 @@
    {
     "line": 826,
     "hole": "$html",
-    "start": 31638,
-    "end": 31643,
+    "start": 31867,
+    "end": 31872,
     "code": "unescaped-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $html into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
@@ -1918,8 +1918,8 @@
    {
     "line": 845,
     "hole": "$$query",
-    "start": 32399,
-    "end": 32406,
+    "start": 32628,
+    "end": 32635,
     "code": "unescaped-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $$query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
@@ -1927,8 +1927,8 @@
    {
     "line": 852,
     "hole": "$$query",
-    "start": 32606,
-    "end": 32613,
+    "start": 32835,
+    "end": 32842,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $$query into data-text, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in a signal, or in an attribute of its own read with el.dataset; only a number or a boolean is safe to write in."
@@ -1936,35 +1936,35 @@
    {
     "line": 868,
     "hole": "query",
-    "start": 33141,
-    "end": 33146,
+    "start": 33370,
+    "end": 33375,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+    "message": "Kotlin writes the value `query` into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
    },
    {
     "line": 875,
     "hole": "query",
-    "start": 33404,
-    "end": 33409,
+    "start": 33633,
+    "end": 33638,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes query into style, where it is read as CSS, so escaping does not help. Choose between classes, or write a number."
+    "message": "Kotlin writes the value `query` into style, where it is read as CSS, so escaping does not help. Choose between classes, or write a number."
    },
    {
     "line": 876,
     "hole": "maybe",
-    "start": 33458,
-    "end": 33463,
+    "start": 33687,
+    "end": 33692,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes maybe into style, where it is read as CSS, so escaping does not help. Choose between classes, or write a number."
+    "message": "Kotlin writes the value `maybe` into style, where it is read as CSS, so escaping does not help. Choose between classes, or write a number."
    },
    {
     "line": 892,
     "hole": "$query",
-    "start": 34191,
-    "end": 34197,
+    "start": 34420,
+    "end": 34426,
     "code": "unescaped-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
@@ -1972,8 +1972,8 @@
    {
     "line": 899,
     "hole": "${if (flag) \"<b>$query</b>\" else \"\"}",
-    "start": 34526,
-    "end": 34562,
+    "start": 34755,
+    "end": 34791,
     "code": "unescaped-interpolation",
     "severity": "warning",
     "message": "Kotlin writes ${if (flag) \"<b>$query</b>\" els…} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
@@ -1981,8 +1981,8 @@
    {
     "line": 899,
     "hole": "$query",
-    "start": 34542,
-    "end": 34548,
+    "start": 34771,
+    "end": 34777,
     "code": "unescaped-interpolation",
     "severity": "warning",
     "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
@@ -1990,8 +1990,8 @@
    {
     "line": 919,
     "hole": "${Trusted(query)}",
-    "start": 35489,
-    "end": 35506,
+    "start": 35718,
+    "end": 35735,
     "code": "unescaped-interpolation",
     "severity": "warning",
     "message": "Kotlin writes ${Trusted(query)} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
@@ -1999,8 +1999,8 @@
    {
     "line": 920,
     "hole": "${interpolate(\"<b>%s</b>\", query)}",
-    "start": 35535,
-    "end": 35569,
+    "start": 35764,
+    "end": 35798,
     "code": "unescaped-interpolation",
     "severity": "warning",
     "message": "Kotlin writes ${interpolate(\"<b>%s</b>\", quer…} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
@@ -2008,8 +2008,8 @@
    {
     "line": 921,
     "hole": "${html.text}",
-    "start": 35598,
-    "end": 35610,
+    "start": 35827,
+    "end": 35839,
     "code": "unescaped-interpolation",
     "severity": "warning",
     "message": "Kotlin writes ${html.text} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
@@ -2017,8 +2017,8 @@
    {
     "line": 922,
     "hole": "${Trusted(query)}",
-    "start": 35643,
-    "end": 35660,
+    "start": 35872,
+    "end": 35889,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes ${Trusted(query)} into data-text, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in a signal, or in an attribute of its own read with el.dataset; only a number or a boolean is safe to write in."
@@ -2026,8 +2026,8 @@
    {
     "line": 923,
     "hole": "${interpolate(\"<b>%s</b>\", n)}",
-    "start": 35698,
-    "end": 35728,
+    "start": 35927,
+    "end": 35957,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes ${interpolate(\"<b>%s</b>\", n)} into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
@@ -2035,8 +2035,8 @@
    {
     "line": 937,
     "hole": "${if (flag) \"nothing\" else query}",
-    "start": 36467,
-    "end": 36500,
+    "start": 36696,
+    "end": 36729,
     "code": "unescaped-interpolation",
     "severity": "warning",
     "message": "Kotlin writes ${if (flag) \"nothing\" else query} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
@@ -2044,8 +2044,8 @@
    {
     "line": 938,
     "hole": "${if (flag) \"red\" else query}",
-    "start": 36534,
-    "end": 36563,
+    "start": 36763,
+    "end": 36792,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes ${if (flag) \"red\" else query} into style, where it is read as CSS, so escaping does not help. Choose between classes, or write a number."
@@ -2053,8 +2053,8 @@
    {
     "line": 942,
     "hole": "${if (flag) maybe else 0}",
-    "start": 36744,
-    "end": 36769,
+    "start": 36973,
+    "end": 36998,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes ${if (flag) maybe else 0} into style, where it is read as CSS, so escaping does not help. Choose between classes, or write a number."
@@ -2062,8 +2062,8 @@
    {
     "line": 944,
     "hole": "${if (flag) html else \"\"}",
-    "start": 36845,
-    "end": 36870,
+    "start": 37074,
+    "end": 37099,
     "code": "unescaped-interpolation",
     "severity": "warning",
     "message": "Kotlin writes ${if (flag) html else \"\"} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
@@ -2071,8 +2071,8 @@
    {
     "line": 957,
     "hole": "${when (n) { 0 -> \"none\"; else -> query }}",
-    "start": 37513,
-    "end": 37555,
+    "start": 37742,
+    "end": 37784,
     "code": "unescaped-interpolation",
     "severity": "warning",
     "message": "Kotlin writes ${when (n) { 0 -> \"none\"; else …} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
@@ -2080,8 +2080,8 @@
    {
     "line": 958,
     "hole": "${when (n) { 0 -> \"red\"; else -> query }}",
-    "start": 37589,
-    "end": 37630,
+    "start": 37818,
+    "end": 37859,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes ${when (n) { 0 -> \"red\"; else -…} into style, where it is read as CSS, so escaping does not help. Choose between classes, or write a number."
@@ -2089,8 +2089,8 @@
    {
     "line": 960,
     "hole": "${when (n) { 0 -> 1; else -> maybe }}",
-    "start": 37737,
-    "end": 37774,
+    "start": 37966,
+    "end": 38003,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "Kotlin writes ${when (n) { 0 -> 1; else -> ma…} into style, where it is read as CSS, so escaping does not help. Choose between classes, or write a number."

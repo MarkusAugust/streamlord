@@ -6,7 +6,7 @@ import { signalNameRefusal } from "./signalNames.ts";
 import { asciiLowercase, decodeEntities, indexOfAsciiIgnoreCase, keyReading, rawKeyNote, tokenize, validateAttributes, validateMarkup, wireKey, wireKeyReads, type Attribute, type Tag } from "./markup.ts";
 import { findCallSites, isHtmlString, lexKotlin, namedArgText, selectStringArg, stringAt, type Arg, type CallSite } from "./scanner.ts";
 import { holeLandings, urlSchemeFixedBy, type HoleLanding, type Position } from "./holes.ts";
-import { argKind, branches, chainFrom, declaredKind, holeDisplay, interpolateFix, isMarkup, markupValued, markupView, mayBeNull, percentHoles, quoteFix, shadowed, trimmed, valueKind, weakest, withNested, withPercentHoles, type ArgKind } from "./interpolation.ts";
+import { argKind, chainFrom, fileFacts, holeDisplay, holeValues, interpolateFix, isMarkup, markupValued, markupView, mayBeNull, mayHoldMarkup, percentHoles, quoteFix, shortened, trimmed, valueKind, weakest, withNested, withPercentHoles, type ArgKind } from "./interpolation.ts";
 import { dslHelpers, EXPRESSION_HELPERS, signalNameHyphenSites } from "./signalNameHyphens.ts";
 import { clientKeyName, collectSignalDefinitions } from "./signals.ts";
 
@@ -82,6 +82,7 @@ export function analyzeKotlin(src: string, opts: AnalyzeOptions): Issue[] {
   const issues: Issue[] = [];
   const claimed = new Set<number>();
   const lex = lexCached(src);
+  const facts = fileFacts(src, lex);
   const hyphenated = hyphenatedSignals(src, "kotlin");
   for (const site of findCallSites(src, ALL_SITE_NAMES, lex.mask)) {
     const expr = catalog.callSites.expression[site.name];
@@ -116,8 +117,8 @@ export function analyzeKotlin(src: string, opts: AnalyzeOptions): Issue[] {
   const topLevel = new Set(lex.strings);
   for (const s of withNested(lex.strings)) {
     if (claimed.has(s.start) || chained.has(s.start) || s.unterminated) continue;
-    // A literal inside a template is read on its own: its neighbours there are the template's code.
-    const chain = topLevel.has(s) ? chainFrom(src, s, lex.mask) : null;
+    // A literal inside a template is joined to its neighbours in the template's code.
+    const chain = chainFrom(src, s, topLevel.has(s) ? lex.mask : facts.code);
     const whole = chain ?? s;
     if (chain) for (let at = chain.start; at < chain.end; at++) if (src[at] === '"' || src[at] === "$") chained.add(at);
     if (!isHtmlString(src, s) && !(chain && /^\s*<(?:[A-Za-z]|__kt__|!--)/.test(chain.text))) continue;
@@ -264,12 +265,15 @@ function checkInterpolateSite(site: CallSite, f: InterpolateFormat, src: string,
   if (counted && holes.length !== values.length) {
     const h = holes.length;
     const v = values.length;
+    // `%d` as String.format writes it: interpolate knows only %s.
+    const specifier = /%[-#+0,(]*\d*(?:\.\d+)?[dfxXoeEgGcb](?![A-Za-z])/.exec(s.text.replace(/%%/g, "  "))?.[0];
+    const advice = specifier ? `Only %s is a hole, whatever the value: write %s in place of ${specifier}.` : "Write %% for a per cent sign that is not a hole.";
     issues.push({
       start: site.nameStart,
       end: site.nameStart + site.name.length,
       severity: "error",
       code: "interpolate-holes",
-      message: `interpolate throws IllegalArgumentException here: the markup has ${h} %s ${h === 1 ? "hole" : "holes"} and ${v} ${v === 1 ? "value is" : "values are"} given. Write %% for a per cent sign that is not a hole.`,
+      message: `interpolate throws IllegalArgumentException here: the markup has ${h} %s ${h === 1 ? "hole" : "holes"} and ${v} ${v === 1 ? "value is" : "values are"} given. ${advice}`,
     });
   }
   const mapped = plain && holes.length === values.length;
@@ -283,20 +287,22 @@ function checkInterpolateSite(site: CallSite, f: InterpolateFormat, src: string,
   format.interpolations.forEach((ip, k) => {
     const landing = landings[k] as HoleLanding;
     const trap = traps.get(ip.start);
+    const fact = holeFact(format, src, opts, ip);
     if (trap && ip.kind === "simple" && landing.position === "DATASTAR") {
-      const judged = datastarTrap(trap, ip, landing, view, opts.prefix);
+      const judged = datastarTrap(trap, ip, landing, view, opts.prefix, fact);
       if (judged) {
         issues.push(judged);
         return;
       }
     }
-    const fact = holeFact(format, src, opts, ip);
     if (fact === "constant" || fact === "number" || fact === "boolean" || (fact === "markup" && landing.position === "TEXT")) return;
     if (fact === "nullable" && ESCAPED.has(landing.position)) return;
     const shown = holeDisplay(ip, format.dollars);
     // A `%` right before the template would make `%%s` of the hole: a per cent sign and an s.
     const percents = /%*$/.exec(format.text.slice(0, ip.decodedStart))?.[0].length ?? 0;
-    const fixable = ESCAPED.has(landing.position) && ip.kind !== "operand" && mapped && percents % 2 === 0;
+    // A %s hole writes nothing for null and escapes markup, so the fix would change the page.
+    const keeps = !mayBeNull(src, ip.text, s.start) && !(landing.position === "TEXT" && mayHoldMarkup(src, ip.text, s.start, opts.constants));
+    const fixable = ESCAPED.has(landing.position) && ip.kind !== "operand" && mapped && percents % 2 === 0 && keeps;
     issues.push({ start: ip.start, end: ip.end, severity: "warning", code: "interpolate-template", link: DOCS.expressions, message: templateMessage(shown, landing), fixes: fixable ? [holeFix(ip, shown, at, values, f.arg)] : undefined });
   });
   at.forEach((d, k) => {
@@ -306,7 +312,7 @@ function checkInterpolateSite(site: CallSite, f: InterpolateFormat, src: string,
     const kind = arg ? (kinds[k] ?? null) : null;
     const allowed: ArgKind[] = landing.position === "DATASTAR" ? ["number", "boolean"] : landing.position === "STYLE" ? ["number"] : [];
     if (kind === "trusted" || (kind !== null && allowed.includes(kind))) return;
-    const shown = arg ? shorten(arg.text.trim()) : "the value of this %s";
+    const shown = arg ? shortened(arg.text) : "the value of this %s";
     issues.push({ ...toSource(format, d, d + PLACEHOLDER.length), severity: kind === null ? "warning" : "error", code: "unsafe-interpolation", link: DOCS.expressions, message: refusedMessage(shown, landing, kind !== null) });
   });
   if (opts.checkHtmlAttributes) issues.push(...mapIssues(format, src, analyzeHtmlWith(view, opts, hyphenated)));
@@ -315,10 +321,6 @@ function checkInterpolateSite(site: CallSite, f: InterpolateFormat, src: string,
 
 function factKind(fact: HoleFact | null): ArgKind | null {
   return fact === "string" || fact === "number" || fact === "boolean" ? fact : fact === "markup" ? "markup" : null;
-}
-
-function shorten(text: string): string {
-  return text.length <= 30 ? text : `${text.slice(0, 29)}…`;
 }
 
 /** The template made a `%s` hole in place, and its expression passed as the value at the same place among the others. */
@@ -455,7 +457,7 @@ function judgeHoles(s: KotlinString, src: string, opts: AnalyzeOptions, view: st
     s.dollars === 1 &&
     !trimmed(src, s) &&
     s.interpolations.every((ip) => ip.kind !== "operand") &&
-    s.interpolations.every((ip, k) => interpolateKeeps(src, s, ip, facts[k] ?? null, (landings[k] as HoleLanding).position));
+    s.interpolations.every((ip, k) => interpolateKeeps(src, s, ip, facts[k] ?? null, (landings[k] as HoleLanding).position, opts));
   const issues: Issue[] = [];
   s.interpolations.forEach((ip, k) => {
     const landing = landings[k] as HoleLanding;
@@ -493,7 +495,7 @@ function judgeHoles(s: KotlinString, src: string, opts: AnalyzeOptions, view: st
       case "DATASTAR": {
         const trap = traps.get(ip.start);
         if (trap && ip.kind === "simple") {
-          const judged = datastarTrap(trap, ip, landing, view, opts.prefix);
+          const judged = datastarTrap(trap, ip, landing, view, opts.prefix, fact);
           if (judged) {
             issues.push(judged);
             return;
@@ -549,27 +551,30 @@ function judgeHoles(s: KotlinString, src: string, opts: AnalyzeOptions, view: st
  * escaped there, so the rewrite would fix nothing), nor markup held as a String in element text,
  * which it would escape.
  */
-function interpolateKeeps(src: string, s: KotlinString, ip: Interpolation, fact: HoleFact | null, position: Position): boolean {
+function interpolateKeeps(src: string, s: KotlinString, ip: Interpolation, fact: HoleFact | null, position: Position, opts: AnalyzeOptions): boolean {
   if (position === "DATASTAR") return fact === "number" || fact === "boolean";
   if (position === "STYLE") return fact === "number";
   if (position !== "TEXT" && position !== "ATTRIBUTE" && position !== "URL") return false;
   if (fact === "nullable" || mayBeNull(src, ip.text, s.start)) return false;
   if (/(?:^|[^\p{L}\p{Nd}_.])Trusted\s*\(/u.test(ip.text)) return position === "TEXT";
   if (fact === "markup") return position !== "TEXT" || markupValued(src, s, ip);
+  if (position === "TEXT" && fact !== "number" && fact !== "boolean" && mayHoldMarkup(src, ip.text, s.start, opts.constants)) return false;
   return !(fact === "constant" && position === "TEXT" && ip.kind !== "simple" && ip.text.includes("<"));
 }
 
 /**
- * What the analysis knows of a hole's value: the editor's facts first, then what the text shows,
- * of the hole or of each value an `if` or a `when` in it can give.
+ * What the analysis knows of a hole's value: the editor's fact when it gives one, which no rule
+ * of the text overrides; otherwise what the text shows, of the hole or of each value an `if`, a
+ * `when` or an `?:` in it can give.
  */
 function holeFact(s: KotlinString, src: string, opts: AnalyzeOptions, ip: Interpolation): HoleFact | null {
   const known = opts.holeFact?.(ip.start, ip.end) ?? null;
-  if (known === "constant" || known === "markup") return known;
-  const kinds = (ip.kind === "simple" ? [ip.text] : (branches(ip.text) ?? [ip.text])).map((v) => valueKind(src, v, s.start, opts.constants));
+  if (known !== null) return known;
+  const values = ip.kind === "simple" ? [{ text: ip.text, nonNull: false }] : holeValues(ip.text);
+  const kinds = values.map((v) => valueKind(src, v.text, s.start, opts.constants, v.nonNull));
   if (kinds.every((k) => k === "constant")) return "constant";
   if (isMarkup(src, s, ip)) return "markup";
-  return known ?? weakest(kinds);
+  return weakest(kinds);
 }
 
 function unescapedMessage(shown: string): string {
@@ -585,7 +590,7 @@ function datastarMessage(shown: string, attribute: string): string {
  * author knows. Null when the hole sits in a JavaScript string or an attribute that takes no
  * expression, where no signal was ever possible and the value is what is judged.
  */
-function datastarTrap(trap: Issue, ip: Interpolation, landing: HoleLanding, view: string, prefix: string): Issue | null {
+function datastarTrap(trap: Issue, ip: Interpolation, landing: HoleLanding, view: string, prefix: string, fact: HoleFact | null): Issue | null {
   const attribute = landing.attribute;
   if (attribute === null || landing.valueStart < 0) return null;
   const spec = parseAttributeName(asciiLowercase(attribute), prefix)?.spec;
@@ -599,6 +604,15 @@ function datastarTrap(trap: Issue, ip: Interpolation, landing: HoleLanding, view
   const fixes = trap.fixes?.filter((f) => f.title.startsWith("Make it") || f.title.startsWith("Escape"));
   // data-signals:count="$initial" seeds a signal from the server, like the object form does.
   const whole = spec.name !== "signals" && value.trim() === PLACEHOLDER;
+  // A number or a boolean is safe written in: what is left to ask is whether a signal was meant.
+  if (fact === "number" || fact === "boolean") {
+    return {
+      ...trap,
+      severity: "hint",
+      fixes,
+      message: `Kotlin writes $${name} here, a ${fact} from the server, which is safe in a Datastar expression. Meant as the signal $${name}, make the literal $$"""...""" (Kotlin 2.2+), or escape as \${'$'}${name}.`,
+    };
+  }
   return {
     ...trap,
     severity: "warning",
