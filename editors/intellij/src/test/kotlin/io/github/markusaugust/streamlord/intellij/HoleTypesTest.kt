@@ -1,11 +1,17 @@
 package io.github.markusaugust.streamlord.intellij
 
+import com.intellij.codeHighlighting.HighlightDisplayLevel
+import com.intellij.codeInsight.daemon.HighlightDisplayKey
 import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ReadAction
+import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.module.Module
 import com.intellij.openapi.roots.ContentEntry
 import com.intellij.openapi.roots.ModifiableRootModel
+import com.intellij.profile.codeInspection.InspectionProjectProfileManager
+import com.intellij.psi.PsiDocumentManager
 import com.intellij.testFramework.LightProjectDescriptor
 import com.intellij.testFramework.PsiTestUtil
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
@@ -162,6 +168,75 @@ class HoleTypesTest : BasePlatformTestCase() {
         assertNull(facts["\$who"])
     }
 
+    fun `test a helper is the author's own only with the author's own arguments`() {
+        val facts = facts(HELPER_PAGE)
+        val wanted =
+            mapOf(
+                "\${signal(\"count\")}" to HoleFact.CONSTANT,
+                "\${signal(KEY)}" to HoleFact.CONSTANT,
+                "\${signal(q)}" to HoleFact.STRING,
+                "\${signal(\"a\" + q)}" to HoleFact.STRING,
+                "\${statements(increment(\"a\"), toggle(\"b\"))}" to HoleFact.CONSTANT,
+                "\${statements(increment(\"a\"), signal(q))}" to HoleFact.STRING,
+                "\${post(\"/save\") { contentType = ContentType.FORM }}" to HoleFact.CONSTANT,
+                "\${post(\"/save\") { selector = q }}" to HoleFact.STRING,
+                "\${post(url)}" to HoleFact.STRING,
+                "\${signal(Tab.HOME.name)}" to HoleFact.CONSTANT,
+                "\${Tab.HOME}" to HoleFact.CONSTANT,
+                "\${Tab.HOME.name}" to HoleFact.CONSTANT,
+                "\${maybe}" to HoleFact.NULLABLE_STRING,
+                "\$q" to HoleFact.STRING,
+            )
+        val seen = wanted.keys.associateWith { facts[it] }
+        assertEquals(wanted.entries.joinToString("\n"), seen.entries.joinToString("\n"))
+        // An enum that writes something other than its name is not the author's own.
+        assertNull(facts["\${Shown.ONE}"])
+    }
+
+    fun `test a level set in the profile lowers the errors and leaves the hints and warnings alone`() {
+        fun shown(name: String): List<String> {
+            // A fresh file each time: the daemon keeps the highlights of an unchanged document.
+            myFixture.configureByText(name, SEVERITY_PAGE)
+            return myFixture
+                .doHighlighting()
+                .filter { it.inspectionToolId == "KotlinInterpolationInspection" }
+                .sortedBy { it.startOffset }
+                .map { "${it.text} ${severity(it.severity)}" }
+        }
+        val own = shown("Own.kt")
+        assertEquals(listOf("interpolate error", "\$count hint", "\$name warning"), own)
+        val key = HighlightDisplayKey.find("KotlinInterpolationInspection")!!
+        val profile = InspectionProjectProfileManager.getInstance(project).currentProfile
+        try {
+            profile.setErrorLevel(key, HighlightDisplayLevel.WARNING, project)
+            assertEquals(listOf("interpolate warning", "\$count hint", "\$name warning"), shown("Warning.kt"))
+            profile.setErrorLevel(key, HighlightDisplayLevel.WEAK_WARNING, project)
+            assertEquals(listOf("interpolate hint", "\$count hint", "\$name hint"), shown("Weak.kt"))
+        } finally {
+            profile.setErrorLevel(key, HighlightDisplayLevel.ERROR, project)
+        }
+    }
+
+    fun `test an edit in another file that changes a type judges the file again`() {
+        myFixture.addFileToProject("Values.kt", "package values\nfun v(): Int = 1")
+        val file =
+            myFixture.configureByText(
+                "Page.kt",
+                "import values.v\nfun page() = \"<p>\${v()}</p>\"",
+            ) as KtFile
+        val analysis = StreamlordAnalysis.getInstance(project)
+        val number = background { analysis.kotlinIssues(file) }.flatMap { it.issues }
+        assertEquals(emptyList<String>(), number.map { it.code })
+        val values = myFixture.findFileInTempDir("Values.kt")
+        WriteCommandAction.runWriteCommandAction(project) {
+            val document = FileDocumentManager.getInstance().getDocument(values)!!
+            document.setText("package values\nfun v(): String = \"\"")
+            PsiDocumentManager.getInstance(project).commitDocument(document)
+        }
+        val string = background { analysis.kotlinIssues(file) }.flatMap { it.issues }
+        assertEquals(listOf("unescaped-interpolation"), string.map { it.code })
+    }
+
     fun `test an edit in another file types the holes again but does not run the analysis again`() {
         val text =
             buildString {
@@ -171,12 +246,10 @@ class HoleTypesTest : BasePlatformTestCase() {
         val file = myFixture.configureByText("Big.kt", text) as KtFile
         val analysis = StreamlordAnalysis.getInstance(project)
         val first = measure { analysis.kotlinIssues(file) }
-        val sites = background { analysis.kotlinSites(file) }
         assertTrue(first.second.isNotEmpty())
         myFixture.addFileToProject("Other.kt", "package other\nval x = 1")
         val again = measure { analysis.kotlinIssues(file) }
-        assertSame("the analysis of the text is kept", sites, background { analysis.kotlinSites(file) })
-        assertEquals(first.second, again.second)
+        assertSame("the analysis and the filter are kept", first.second, again.second)
         println("2000 HTML functions: first ${first.first} ms, after an edit elsewhere ${again.first} ms")
     }
 
@@ -279,6 +352,46 @@ class HoleTypesTest : BasePlatformTestCase() {
                     </div>
                 ""${'"'}
             }
+            """.trimIndent().replace('¤', '$')
+
+        /** An error, a hint and a warning of the interpolation inspection; `¤` is a `$`. */
+        val SEVERITY_PAGE =
+            """
+            import io.github.markusaugust.streamlord.core.domain.interpolate
+            fun card(count: Int, name: String): String {
+                val empty = interpolate("<p>%s</p>")
+                return "<p data-text=\"¤count\">¤name</p>"
+            }
+            """.trimIndent().replace('¤', '$')
+
+        /** Helpers with arguments of every origin, enum entries and strings that may be null; `¤` is a `$`. */
+        val HELPER_PAGE =
+            """
+            package page
+            import io.github.markusaugust.streamlord.html.FetchOptions.ContentType
+            import io.github.markusaugust.streamlord.html.increment
+            import io.github.markusaugust.streamlord.html.post
+            import io.github.markusaugust.streamlord.html.signal
+            import io.github.markusaugust.streamlord.html.statements
+            import io.github.markusaugust.streamlord.html.toggle
+
+            const val KEY = "count"
+            enum class Tab { HOME }
+            enum class Shown { ONE; override fun toString() = "<b>one</b>" }
+
+            fun page(q: String, url: String, maybe: String?): String =
+                ""${'"'}
+                <div>
+                <button data-text="¤{signal("count")}" data-show="¤{signal(KEY)}" data-class="¤{signal(q)}">x</button>
+                <button data-text="¤{signal("a" + q)}" data-on:click="¤{statements(increment("a"), toggle("b"))}">x</button>
+                <button data-on:click="¤{statements(increment("a"), signal(q))}">x</button>
+                <button data-on:click="¤{post("/save") { contentType = ContentType.FORM }}">x</button>
+                <button data-on:click="¤{post("/save") { selector = q }}" data-on:keydown="¤{post(url)}">x</button>
+                <button data-text="¤{signal(Tab.HOME.name)}" data-show="¤{Tab.HOME}" data-class="¤{Tab.HOME.name}">x</button>
+                <button data-text="¤{Shown.ONE}">x</button>
+                <p>¤{maybe} ¤q</p>
+                </div>
+                ""${'"'}
             """.trimIndent().replace('¤', '$')
 
         val LIBRARIES =

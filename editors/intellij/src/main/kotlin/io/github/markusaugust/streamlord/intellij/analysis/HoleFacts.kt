@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.intellij.analysis
 
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiEnumConstant
 import com.intellij.psi.util.PsiTreeUtil
 import io.github.markusaugust.streamlord.analysis.Catalog
 import io.github.markusaugust.streamlord.analysis.HoleFact
@@ -16,7 +17,9 @@ import org.jetbrains.kotlin.psi.KtAnnotated
 import org.jetbrains.kotlin.psi.KtBinaryExpression
 import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtCallableDeclaration
+import org.jetbrains.kotlin.psi.KtClass
 import org.jetbrains.kotlin.psi.KtConstantExpression
+import org.jetbrains.kotlin.psi.KtEnumEntry
 import org.jetbrains.kotlin.psi.KtExpression
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtIfExpression
@@ -50,7 +53,7 @@ object HoleFacts {
     private val HTML_OPENING = Regex("""^[\s|]*<(?:[A-Za-z$]|!--|!doctype)""", RegexOption.IGNORE_CASE)
     private val NUMBER_TYPE = Regex("""(?:kotlin\.)?(?:Int|Long|Short|Byte|Double|Float|UInt|ULong|UShort|UByte)""")
     private val BOOLEAN_TYPE = Regex("""(?:kotlin\.)?Boolean""")
-    private val STRING_TYPE = Regex("""(?:kotlin\.)?(?:String|CharSequence)\??""")
+    private val STRING_TYPE = Regex("""(?:kotlin\.)?(?:String|CharSequence)""")
     private val HTML_TYPE = Regex("""(?:io\.github\.markusaugust\.streamlord\.core\.domain\.)?Html\??""")
     private val TRIMS = setOf("trimIndent", "trimMargin")
     private val LISTS = setOf("listOf", "listOfNotNull", "arrayOf", "setOf", "sequenceOf")
@@ -69,20 +72,105 @@ object HoleFacts {
         // The property the Kotlin plugin's own plugin.xml switches K1 on with; KotlinPluginModeProvider,
         // which reads it too, is scheduled for removal in 2026.2.
         val k1 = System.getProperty("idea.kotlin.plugin.use.k1").toBoolean()
-        val typed = if (k1) typedK1(holes) else typedK2(file, holes)
+        return if (k1) {
+            judge(holes, ::constantK1, ::typeK1)
+        } else {
+            analyze(file) { judge(holes, { it.evaluate() != null || enumEntry(it) }, { typeFact(it.expressionType) }) }
+        }
+    }
+
+    /**
+     * Each hole by what [constant] and [typed] say of it, and what its source shows: a constant, a
+     * call to a helper with the author's own arguments, markup, a literal only, or its type.
+     */
+    private inline fun judge(
+        holes: List<Pair<TextRange, KtExpression>>,
+        noinline constant: (KtExpression) -> Boolean,
+        typed: (KtExpression) -> HoleFact?,
+    ): Map<TextRange, HoleFact> {
         val facts = HashMap<TextRange, HoleFact>()
         for ((range, expr) in holes) {
-            val fact = typed[range]
+            if (constant(expr)) {
+                facts[range] = HoleFact.CONSTANT
+                continue
+            }
+            val fact = typed(expr)
             facts[range] =
                 when {
-                    fact == HoleFact.CONSTANT || fact == HoleFact.MARKUP -> fact
-                    isHelper(expr) -> HoleFact.CONSTANT
+                    fact == HoleFact.MARKUP -> fact
+                    isHelper(expr) && ownArguments(expr, constant) -> HoleFact.CONSTANT
                     isMarkup(expr, CALL_DEPTH) -> HoleFact.MARKUP
                     literalOnly(expr) -> HoleFact.CONSTANT
                     else -> fact ?: continue
                 }
         }
         return facts
+    }
+
+    /**
+     * A value the author wrote: a constant, a literal only, an enum entry or its name, or a call to
+     * a helper whose arguments are all such. A value from anywhere else, `signal(q)` with a `q`
+     * from the request, runs as code on the page.
+     */
+    private fun authorsOwn(
+        expr: KtExpression?,
+        constant: (KtExpression) -> Boolean,
+    ): Boolean {
+        val e = expr?.let { KtPsiUtil.safeDeparenthesize(it) } ?: return false
+        return constant(e) || literalOnly(e) || enumEntry(e) || (isHelper(e) && ownArguments(e, constant))
+    }
+
+    /**
+     * Every argument of a helper call is the author's own, and a lambda of options sets each of
+     * its properties to such a value: `post("/save") { openWhenHidden = true }`.
+     */
+    private fun ownArguments(
+        expr: KtExpression,
+        constant: (KtExpression) -> Boolean,
+    ): Boolean {
+        val call = KtPsiUtil.safeDeparenthesize(expr) as? KtCallExpression ?: return false
+        return call.valueArguments.all { argument ->
+            val value = argument.getArgumentExpression()
+            val lambda = value?.let { KtPsiUtil.safeDeparenthesize(it) } as? KtLambdaExpression
+            if (lambda == null) {
+                authorsOwn(value, constant)
+            } else {
+                lambda.bodyExpression?.statements.orEmpty().all { s ->
+                    s is KtBinaryExpression && s.operationToken == KtTokens.EQ && authorsOwn(s.right, constant)
+                }
+            }
+        }
+    }
+
+    /**
+     * `Tab.HOME`, or its `name`: an entry of an enum that does not override `toString`, so what it
+     * writes is the name the author gave it. K2 folds no enum entry into a constant.
+     */
+    private fun enumEntry(expr: KtExpression): Boolean {
+        val e = KtPsiUtil.safeDeparenthesize(expr)
+        if (e is KtQualifiedExpression && e.selectorExpression?.text == "name") return entryOf(e.receiverExpression) != null
+        return when (val entry = entryOf(e)) {
+            is KtEnumEntry -> {
+                val owner = PsiTreeUtil.getParentOfType(entry, KtClass::class.java) ?: return false
+                // An entry with a body of its own may override toString too.
+                listOf(entry, owner).none { c -> c.declarations.any { it is KtNamedFunction && it.name == "toString" } }
+            }
+
+            is PsiEnumConstant -> {
+                entry.containingClass?.findMethodsByName("toString", false).isNullOrEmpty()
+            }
+
+            else -> {
+                false
+            }
+        }
+    }
+
+    /** The enum entry a name or a qualified name resolves to. */
+    private fun entryOf(expr: KtExpression?): PsiElement? {
+        val e = expr?.let { KtPsiUtil.safeDeparenthesize(it) }
+        val ref = (if (e is KtQualifiedExpression) e.selectorExpression else e) as? KtNameReferenceExpression ?: return null
+        return ref.mainReference.resolve()?.takeIf { it is KtEnumEntry || it is PsiEnumConstant }
     }
 
     /**
@@ -130,27 +218,15 @@ object HoleFacts {
         }
     }
 
-    private fun typedK2(
-        file: KtFile,
-        holes: List<Pair<TextRange, KtExpression>>,
-    ): Map<TextRange, HoleFact> =
-        analyze(file) {
-            val out = HashMap<TextRange, HoleFact>()
-            for ((range, expr) in holes) {
-                val fact = if (expr.evaluate() != null) HoleFact.CONSTANT else typeFact(expr.expressionType)
-                if (fact != null) out[range] = fact
-            }
-            out
-        }
-
     private fun KaSession.typeFact(type: KaType?): HoleFact? {
         if (type == null) return null
         // A Java String may be null, and is a string all the same; a Java Integer is not a number that is safe.
         val lower = (type as? KaFlexibleType)?.lowerBound ?: type
         val definite = type !is KaFlexibleType && !type.isMarkedNullable
         return when {
+            // A String? or a Java String: a Kotlin template writes null as "null", interpolate as nothing.
             lower.isStringType || lower.isCharSequenceType -> {
-                HoleFact.STRING
+                if (definite) HoleFact.STRING else HoleFact.NULLABLE_STRING
             }
 
             lower.isClassType(HTML_CLASS) -> {
@@ -173,37 +249,29 @@ object HoleFacts {
         }
     }
 
-    /** K1: a `const val` the reference resolves to, or the type its declaration writes out. */
-    private fun typedK1(holes: List<Pair<TextRange, KtExpression>>): Map<TextRange, HoleFact> {
-        val out = HashMap<TextRange, HoleFact>()
-        for ((range, expr) in holes) {
-            // `a?.b` may be null whatever `b` declares.
-            if (KtPsiUtil.safeDeparenthesize(expr) is KtSafeQualifiedExpression) continue
-            val target = reference(expr)?.mainReference?.resolve() as? KtCallableDeclaration ?: continue
-            val fact =
-                if (target is KtProperty && target.hasModifier(KtTokens.CONST_KEYWORD)) {
-                    HoleFact.CONSTANT
-                } else {
-                    val type = target.typeReference?.text?.filterNot { it.isWhitespace() } ?: continue
-                    when {
-                        NUMBER_TYPE.matches(type) -> HoleFact.NUMBER
+    /** K1: a `const val` the reference resolves to, or an enum entry. */
+    private fun constantK1(expr: KtExpression): Boolean {
+        if (enumEntry(expr)) return true
+        if (KtPsiUtil.safeDeparenthesize(expr) is KtCallExpression) return false
+        val target = reference(expr)?.mainReference?.resolve() as? KtProperty ?: return false
+        return target.hasModifier(KtTokens.CONST_KEYWORD)
+    }
 
-                        BOOLEAN_TYPE.matches(type) -> HoleFact.BOOLEAN
-
-                        type.endsWith(
-                            '?',
-                        ) && (NUMBER_TYPE.matches(type.dropLast(1)) || BOOLEAN_TYPE.matches(type.dropLast(1))) -> HoleFact.NULLABLE
-
-                        STRING_TYPE.matches(type) -> HoleFact.STRING
-
-                        HTML_TYPE.matches(type) -> HoleFact.MARKUP
-
-                        else -> continue
-                    }
-                }
-            out[range] = fact
+    /** K1: the type the declaration a reference resolves to writes out. */
+    private fun typeK1(expr: KtExpression): HoleFact? {
+        // `a?.b` may be null whatever `b` declares.
+        if (KtPsiUtil.safeDeparenthesize(expr) is KtSafeQualifiedExpression) return null
+        val target = reference(expr)?.mainReference?.resolve() as? KtCallableDeclaration ?: return null
+        val type = target.typeReference?.text?.filterNot { it.isWhitespace() } ?: return null
+        val nullable = type.endsWith('?')
+        val bare = type.removeSuffix("?")
+        return when {
+            NUMBER_TYPE.matches(bare) -> if (nullable) HoleFact.NULLABLE else HoleFact.NUMBER
+            BOOLEAN_TYPE.matches(bare) -> if (nullable) HoleFact.NULLABLE else HoleFact.BOOLEAN
+            STRING_TYPE.matches(bare) -> if (nullable) HoleFact.NULLABLE_STRING else HoleFact.STRING
+            HTML_TYPE.matches(type) -> HoleFact.MARKUP
+            else -> null
         }
-        return out
     }
 
     /** The name an expression's value comes from: `x`, `a.x`, `f()`, `a.f()`. */
@@ -220,7 +288,7 @@ object HoleFacts {
 
     /**
      * A call to one of Streamlord's expression helpers, `signal("count")` or `post("/save")`: Datastar
-     * code the author wrote, whatever page it ends up on. `elements { }` is markup, not code.
+     * code, the author's own when its arguments are. `elements { }` is markup, not code.
      */
     private fun isHelper(expr: KtExpression): Boolean {
         val call = KtPsiUtil.safeDeparenthesize(expr) as? KtCallExpression ?: return false

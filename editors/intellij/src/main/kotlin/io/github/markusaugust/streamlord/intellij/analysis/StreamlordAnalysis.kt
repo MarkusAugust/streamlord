@@ -6,8 +6,6 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.util.Key
-import com.intellij.openapi.util.ModificationTracker
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiFile
 import com.intellij.psi.util.CachedValueProvider
@@ -22,6 +20,7 @@ import io.github.markusaugust.streamlord.analysis.SignalReference
 import io.github.markusaugust.streamlord.analysis.SiteIssues
 import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
 import org.jetbrains.kotlin.psi.KtFile
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * The analysis, bound to the project's settings and cached per file: every inspection, the
@@ -41,32 +40,38 @@ class StreamlordAnalysis(
     fun options(): AnalyzeOptions = AnalyzeOptions(prefix = prefix, checkHtmlAttributes = true)
 
     /**
-     * The issues of a Kotlin file, by call site or HTML string, with calls that resolve to something other than Streamlord left out.
-     * What a call resolves to can change with another file, so the filter runs again on any change; the analysis beneath it does not.
+     * The issues of a Kotlin file, by call site or HTML string, with calls that resolve to something other than Streamlord left
+     * out, and each value joined into an HTML string judged by what the Kotlin plugin knows of its type. The analysis and the
+     * filter run again when the file or the settings change, as the analysis of the text alone does; an edit elsewhere types the
+     * holes again, and runs them again only when a fact comes out different.
      */
-    fun kotlinIssues(file: KtFile): List<SiteIssues> =
-        CachedValuesManager.getCachedValue(file) {
-            val kept = kotlinSites(file).filter { s -> s.site?.let { StreamlordResolve.mayBeStreamlord(file, it) } ?: true }
-            CachedValueProvider.Result.create(
-                kept,
+    fun kotlinIssues(file: KtFile): List<SiteIssues> {
+        val facts = holeFacts(file)
+        val memo =
+            CachedValuesManager.getCachedValue(
                 file,
-                settings.tracker,
-                PsiModificationTracker.getInstance(project),
-                DumbService.getInstance(project).modificationTracker,
-            )
+            ) { CachedValueProvider.Result.create(AtomicReference<Judged>(), file, settings.tracker) }
+        memo.get()?.takeIf { it.facts == facts }?.let { return it.issues }
+        val options = AnalyzeOptions(prefix, true, holeFact = { start, end -> facts[TextRange(start, end)] })
+        val sites = analyzer.analyzeKotlinSites(file.text, options)
+        val kept = sites.filter { s -> s.site?.let { StreamlordResolve.mayBeStreamlord(file, it) } ?: true }
+        memo.set(Judged(facts, kept))
+        return kept
+    }
+
+    /** The facts of a file's holes; what a value's type is can change with any file in the project. None while the IDE indexes. */
+    internal fun holeFacts(file: KtFile): Map<TextRange, HoleFact> =
+        CachedValuesManager.getCachedValue(file) {
+            val dumb = DumbService.getInstance(project)
+            val facts = if (dumb.isDumb) emptyMap() else HoleFacts.of(file)
+            CachedValueProvider.Result.create(facts, PsiModificationTracker.getInstance(project), dumb.modificationTracker)
         }
 
-    /**
-     * The analysis of a Kotlin file's text, with each value joined into an HTML string judged by what the Kotlin plugin knows
-     * of its type. Run again when the file or the settings change, or when an edit elsewhere changes one of those facts.
-     */
-    internal fun kotlinSites(file: KtFile): List<SiteIssues> =
-        CachedValuesManager.getCachedValue(file) {
-            val tracker = file.getUserData(FACTS) ?: file.putUserDataIfAbsent(FACTS, FactsTracker(file))
-            val facts = tracker.facts()
-            val options = AnalyzeOptions(prefix, true, holeFact = { start, end -> facts[TextRange(start, end)] })
-            CachedValueProvider.Result.create(analyzer.analyzeKotlinSites(file.text, options), file, settings.tracker, tracker)
-        }
+    /** The issues of a file's text as the facts it was judged with gave them. */
+    private class Judged(
+        val facts: Map<TextRange, HoleFact>,
+        val issues: List<SiteIssues>,
+    )
 
     /** The issues of an HTML document or template. */
     fun htmlIssues(file: PsiFile): List<Issue> =
@@ -88,40 +93,7 @@ class StreamlordAnalysis(
             CachedValueProvider.Result.create(analyzer.signalReferencesInHtml(file.text, options()), file, settings.tracker)
         }
 
-    /**
-     * The facts of a file's holes, typed again on any change in the project, as a tracker that moves only when they come out
-     * different: an edit in another file then costs the types of the HTML strings, not the analysis.
-     */
-    private class FactsTracker(
-        private val file: KtFile,
-    ) : ModificationTracker {
-        private var last: Map<TextRange, HoleFact>? = null
-        private var count = 0L
-
-        fun facts(): Map<TextRange, HoleFact> = current().second
-
-        override fun getModificationCount(): Long = current().first
-
-        private fun current(): Pair<Long, Map<TextRange, HoleFact>> {
-            val now =
-                CachedValuesManager.getCachedValue(file) {
-                    val dumb = DumbService.getInstance(file.project)
-                    val facts = if (dumb.isDumb) emptyMap() else HoleFacts.of(file)
-                    CachedValueProvider.Result.create(facts, PsiModificationTracker.getInstance(file.project), dumb.modificationTracker)
-                }
-            synchronized(this) {
-                if (now != last) {
-                    last = now
-                    count++
-                }
-                return count to now
-            }
-        }
-    }
-
     companion object {
-        private val FACTS = Key.create<FactsTracker>("streamlord.holeFacts")
-
         fun getInstance(project: Project): StreamlordAnalysis = project.service()
 
         /** The HTML side applies to HTML and XHTML files, and to the HTML view of a template file, but not to HTML injected into Kotlin. */
