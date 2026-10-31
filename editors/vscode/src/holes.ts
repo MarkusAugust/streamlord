@@ -127,6 +127,117 @@ function scanMarkup(html: string, visitor: Visitor, foreign: boolean, cdata: boo
   }
 }
 
+const NS_HTML = 0;
+const NS_SVG = 1;
+const NS_MATH = 2;
+const SVG_HTML_INTEGRATION = new Set(["foreignobject", "desc", "title"]);
+const MATH_TEXT_INTEGRATION = new Set(["mi", "mo", "mn", "ms", "mtext"]);
+const HTML_ANNOTATION_ENCODINGS = new Set(["text/html", "application/xhtml+xml"]);
+// prettier-ignore
+const EXITS_FOREIGN = new Set([
+  "b", "big", "blockquote", "body", "br", "center", "code", "dd", "div", "dl", "dt", "em", "embed",
+  "h1", "h2", "h3", "h4", "h5", "h6", "head", "hr", "i", "img", "li", "listing", "menu", "meta",
+  "nobr", "ol", "p", "pre", "ruby", "s", "small", "strong", "strike", "span", "sub", "sup", "table",
+  "tt", "u", "ul", "var",
+]);
+
+/** The tag name beginning at `from` (after `<` or `</`), lowercased. */
+function tagName(html: string, from: number): string {
+  let i = from;
+  while (i < html.length && !endsName(html[i])) i++;
+  return asciiLowercase(html.slice(from, i));
+}
+
+/** scanMarkupTracked in MarkupScan.kt: follows the browser's element stack and switches rule by position. */
+function scanMarkupTracked(html: string, visitor: Visitor): void {
+  const stackNs: number[] = [];
+  const stackName: string[] = [];
+  const stackHtmlContent: boolean[] = [];
+  const insertionNs = () => (stackNs.length === 0 ? NS_HTML : stackHtmlContent[stackHtmlContent.length - 1] ? NS_HTML : (stackNs[stackNs.length - 1] as number));
+  const pop = () => {
+    stackNs.pop();
+    stackName.pop();
+    stackHtmlContent.pop();
+  };
+  const n = html.length;
+  let i = 0;
+  while (i < n) {
+    const lt = html.indexOf("<", i);
+    if (lt < 0) break;
+    const foreignNow = insertionNs() !== NS_HTML;
+    if (html.startsWith("<!--", lt)) {
+      i = commentEnd(html, lt);
+      continue;
+    }
+    if (foreignNow && html.startsWith("<![CDATA[", lt)) {
+      const close = html.indexOf("]]>", lt + 9);
+      i = close < 0 ? n : close + 3;
+      continue;
+    }
+    const first = html[lt + 1];
+    if (first === "!" || first === "?" || (first === "/" && !isLetter(html[lt + 2]) && html[lt + 2] !== ">")) {
+      const close = html.indexOf(">", lt + 2);
+      i = close < 0 ? n : close + 1;
+      continue;
+    }
+    if (first === "/" && isLetter(html[lt + 2])) {
+      const end = scanTag(html, lt + 2, DISCARD);
+      visitor.tag(lt, end);
+      const name = tagName(html, lt + 2);
+      const at = stackName.lastIndexOf(name);
+      if (at >= 0) while (stackName.length > at) pop();
+      i = end;
+      continue;
+    }
+    if (!isLetter(first)) {
+      i = lt + 1;
+      continue;
+    }
+    const name = tagName(html, lt + 1);
+    if (foreignNow && EXITS_FOREIGN.has(name)) {
+      while (stackNs.length > 0 && stackNs[stackNs.length - 1] !== NS_HTML && !stackHtmlContent[stackHtmlContent.length - 1]) pop();
+    }
+    const html5 = insertionNs() === NS_HTML;
+    let encoding: string | undefined;
+    const snoop: Visitor = {
+      attribute(tag, nm, valueStart, valueEnd, quoted) {
+        if (name === "annotation-xml" && encoding === undefined && asciiLowercase(nm) === "encoding" && valueStart >= 0) encoding = html.slice(valueStart, valueEnd);
+        visitor.attribute(tag, nm, valueStart, valueEnd, quoted);
+      },
+      tag: (s, e) => visitor.tag(s, e),
+      code: (s, e) => visitor.code(s, e),
+    };
+    const end = scanTag(html, lt + 1, snoop);
+    visitor.tag(lt, end);
+    const selfClosing = end >= 2 && html[end - 2] === "/";
+    i = end;
+    if (html5) {
+      const raw = RAW_TEXT.find((t) => t === name);
+      if (raw !== undefined) {
+        const found = raw === "plaintext" ? -1 : rawTextEnd(html, raw, i);
+        const close = found < 0 ? n : found;
+        if (CODE_TEXT.includes(raw)) visitor.code(i, close);
+        i = close;
+        continue;
+      }
+      if (selfClosing) continue;
+      stackNs.push(name === "svg" ? NS_SVG : name === "math" ? NS_MATH : NS_HTML);
+      stackName.push(name);
+      stackHtmlContent.push(false);
+    } else {
+      if (selfClosing) continue;
+      const ns = name === "svg" ? NS_SVG : name === "math" ? NS_MATH : (stackNs[stackNs.length - 1] as number);
+      const integration =
+        (ns === NS_SVG && SVG_HTML_INTEGRATION.has(name)) ||
+        (ns === NS_MATH && MATH_TEXT_INTEGRATION.has(name)) ||
+        (ns === NS_MATH && name === "annotation-xml" && encoding !== undefined && HTML_ANNOTATION_ENCODINGS.has(asciiLowercase(encoding)));
+      stackNs.push(ns);
+      stackName.push(name);
+      stackHtmlContent.push(integration);
+    }
+  }
+}
+
 function scanTag(html: string, from: number, visitor: Visitor): number {
   const n = html.length;
   let i = from;
@@ -253,6 +364,11 @@ export function holeLandings(markup: string, holes: readonly Hole[], prefixes: s
     scanMarkup(shadowed, l, foreign, cdata);
     return l;
   });
+  // The fourth reading follows the browser's element stack, switching rule by position where the
+  // three fixed ones each hold one throughout: scanMarkupTracked in MarkupScan.kt.
+  const tracked = new Landscape(ordered);
+  scanMarkupTracked(shadowed, tracked);
+  landscapes.push(tracked);
   return holes.map((h) => {
     let strictest = landscapes[0] as Landscape;
     for (const l of landscapes) if (STRICTNESS.indexOf(l.positionOf(h.start)) > STRICTNESS.indexOf(strictest.positionOf(h.start))) strictest = l;

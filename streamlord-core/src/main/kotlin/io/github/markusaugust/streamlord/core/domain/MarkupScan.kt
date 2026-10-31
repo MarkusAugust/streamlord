@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.core.domain
 
 import io.github.markusaugust.streamlord.core.client.CODE_TEXT
 import io.github.markusaugust.streamlord.core.client.RAW_TEXT
+import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.commentEnd
 import io.github.markusaugust.streamlord.core.client.isHtmlSpace
 import io.github.markusaugust.streamlord.core.client.rawTextEnd
@@ -69,7 +70,9 @@ internal fun scanMarkup(
     visitor: MarkupVisitor,
     foreign: Boolean = false,
     cdata: Boolean = false,
+    tracked: Boolean = false,
 ): Boolean {
+    if (tracked) return scanMarkupTracked(html, visitor)
     val rawText = if (foreign) CODE_TEXT else RAW_TEXT
     var i = 0
     val n = html.length
@@ -126,6 +129,245 @@ internal fun scanMarkup(
         i = close
     }
     return true
+}
+
+private const val NS_HTML = 0
+private const val NS_SVG = 1
+private const val NS_MATH = 2
+
+/** SVG elements whose content the browser parses as HTML (an HTML integration point). */
+private val SVG_HTML_INTEGRATION = setOf("foreignobject", "desc", "title")
+
+/** MathML elements whose content is HTML text (a MathML text integration point). */
+private val MATH_TEXT_INTEGRATION = setOf("mi", "mo", "mn", "ms", "mtext")
+
+/** HTML tags that, met inside an `<svg>` or `<math>`, close the foreign content and return to HTML. */
+private val EXITS_FOREIGN =
+    setOf(
+        "b",
+        "big",
+        "blockquote",
+        "body",
+        "br",
+        "center",
+        "code",
+        "dd",
+        "div",
+        "dl",
+        "dt",
+        "em",
+        "embed",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "head",
+        "hr",
+        "i",
+        "img",
+        "li",
+        "listing",
+        "menu",
+        "meta",
+        "nobr",
+        "ol",
+        "p",
+        "pre",
+        "ruby",
+        "s",
+        "small",
+        "span",
+        "strong",
+        "strike",
+        "sub",
+        "sup",
+        "table",
+        "tt",
+        "u",
+        "ul",
+        "var",
+    )
+
+/**
+ * Walks [html] the way the browser's tree builder does, following its stack of open elements so
+ * that the rule at each point, a CDATA section or a bogus comment, an element's body as text or as
+ * markup, is the one in force where the markup actually sits. Where the fixed readings each hold
+ * one rule throughout, this one switches as the browser does: a `<![CDATA[` is a section only
+ * inside an `<svg>` or `<math>` that is not at an integration point, and once an `</svg>` or an
+ * exiting tag returns to HTML the same bytes are a bogus comment again.
+ *
+ * It is not a parser: it keeps only each open element's namespace and whether its content is HTML,
+ * enough to know the context, and matches an end tag to the nearest open element of its name.
+ */
+private fun scanMarkupTracked(
+    html: String,
+    visitor: MarkupVisitor,
+): Boolean {
+    val stackNs = ArrayList<Int>()
+    val stackName = ArrayList<String>()
+    val stackHtmlContent = ArrayList<Boolean>() // Whether this element's children are HTML (an integration point).
+
+    // The namespace new content is inserted into, and whether a `<![CDATA[` here is a section.
+    fun insertionNs(): Int =
+        if (stackNs.isEmpty()) {
+            NS_HTML
+        } else if (stackHtmlContent.last()) {
+            NS_HTML
+        } else {
+            stackNs.last()
+        }
+
+    var i = 0
+    val n = html.length
+    while (i < n) {
+        val lt = html.indexOf('<', i)
+        if (lt < 0) break
+        val foreignNow = insertionNs() != NS_HTML
+        if (html.startsWith("<!--", lt)) {
+            if (commentOpen(html, lt)) return false
+            i = commentEnd(html, lt)
+            continue
+        }
+        if (foreignNow && html.startsWith("<![CDATA[", lt)) {
+            val close = html.indexOf("]]>", lt + 9)
+            if (close < 0) return false
+            i = close + 3
+            continue
+        }
+        val first = html.getOrNull(lt + 1) ?: return false
+        if (first == '!' || first == '?' || (first == '/' && !html.getOrNull(lt + 2).isAsciiLetter() && html.getOrNull(lt + 2) != '>')) {
+            val close = html.indexOf('>', lt + 2)
+            if (close < 0) return false
+            i = close + 1
+            continue
+        }
+        if (first == '/' && html.getOrNull(lt + 2).isAsciiLetter()) {
+            val end = scanTag(html, lt + 2, Discard)
+            visitor.tag(lt, if (end < 0) n else end)
+            if (end < 0) return false
+            val name = tagName(html, lt + 2)
+            val at = stackName.lastIndexOf(name)
+            if (at >= 0) {
+                while (stackName.size > at) {
+                    stackNs.removeAt(stackNs.size - 1)
+                    stackName.removeAt(stackName.size - 1)
+                    stackHtmlContent.removeAt(stackHtmlContent.size - 1)
+                }
+            }
+            i = end
+            continue
+        }
+        if (!first.isAsciiLetter()) {
+            i = lt + 1
+            continue
+        }
+
+        val name = tagName(html, lt + 1)
+        // In foreign content, an HTML tag such as <p> or <img> closes the foreign elements first.
+        if (foreignNow && name in EXITS_FOREIGN) {
+            while (stackNs.isNotEmpty() && stackNs.last() != NS_HTML && !stackHtmlContent.last()) {
+                stackNs.removeAt(stackNs.size - 1)
+                stackName.removeAt(stackName.size - 1)
+                stackHtmlContent.removeAt(stackHtmlContent.size - 1)
+            }
+        }
+        val html5 = insertionNs() == NS_HTML
+
+        val encoding = EncodingSnoop(html, visitor, name == "annotation-xml")
+        val end = scanTag(html, lt + 1, encoding)
+        visitor.tag(lt, if (end < 0) n else end)
+        if (end < 0) return false
+        val selfClosing = end >= 2 && html[end - 2] == '/'
+        i = end
+
+        if (html5) {
+            // HTML raw-text and code elements swallow their body to their own close tag.
+            val raw = RAW_TEXT.firstOrNull { it.equals(name, ignoreCase = true) }
+            if (raw != null) {
+                val close = if (raw == "plaintext") -1 else rawTextEnd(html, raw, i)
+                if (raw in CODE_TEXT) visitor.code(i, if (close < 0) n else close)
+                if (close < 0) return false
+                i = close
+                continue
+            }
+            if (selfClosing) continue
+            val ns =
+                if (name == "svg") {
+                    NS_SVG
+                } else if (name == "math") {
+                    NS_MATH
+                } else {
+                    NS_HTML
+                }
+            stackNs += ns
+            stackName += name
+            stackHtmlContent += false
+        } else {
+            if (selfClosing) continue
+            val ns =
+                if (name == "svg") {
+                    NS_SVG
+                } else if (name == "math") {
+                    NS_MATH
+                } else {
+                    stackNs.last()
+                }
+            val integration =
+                (ns == NS_SVG && name in SVG_HTML_INTEGRATION) ||
+                    (ns == NS_MATH && name in MATH_TEXT_INTEGRATION) ||
+                    (ns == NS_MATH && name == "annotation-xml" && encoding.value?.asciiLowercase() in HTML_ANNOTATION_ENCODINGS)
+            stackNs += ns
+            stackName += name
+            stackHtmlContent += integration
+        }
+    }
+    return true
+}
+
+private val HTML_ANNOTATION_ENCODINGS = setOf("text/html", "application/xhtml+xml")
+
+/** The tag name beginning at [from] (after `<` or `</`), lowercased. */
+private fun tagName(
+    html: String,
+    from: Int,
+): String {
+    var i = from
+    while (i < html.length && !html[i].endsName()) i++
+    return html.substring(from, i).asciiLowercase()
+}
+
+/** Records attributes to [delegate] and, for an `annotation-xml`, keeps its `encoding` value. */
+private class EncodingSnoop(
+    private val markup: String,
+    private val delegate: MarkupVisitor,
+    private val wanted: Boolean,
+) : MarkupVisitor {
+    var value: String? = null
+
+    override fun attribute(
+        tag: String,
+        name: String,
+        valueStart: Int,
+        valueEnd: Int,
+        quoted: Boolean,
+    ) {
+        if (wanted && value == null && name.equals("encoding", ignoreCase = true) && valueStart >= 0) {
+            value = markup.substring(valueStart, valueEnd)
+        }
+        delegate.attribute(tag, name, valueStart, valueEnd, quoted)
+    }
+
+    override fun tag(
+        start: Int,
+        end: Int,
+    ) = delegate.tag(start, end)
+
+    override fun code(
+        start: Int,
+        end: Int,
+    ) = delegate.code(start, end)
 }
 
 /** Whether the comment at [lt] runs to the end of [html], which is where commentEnd puts it then. */

@@ -118,6 +118,16 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Security
 
+- `interpolate` read the markup three fixed ways, all HTML, all `<svg>`/`<math>`, and all svg or
+  math with CDATA sections as text, and took the strictest, but the browser switches reading as its
+  element stack changes and no one fixed way follows it. In
+  `<svg><![CDATA[><!--]]></svg><![CDATA[><img %s>-->]]>` the first `<![CDATA[` is a section inside
+  the svg, but once `</svg>` returns to HTML the second is a bogus comment the first `>` ends, so
+  the `<img %s>` after it is a live element and the value its attributes; every fixed reading saw
+  the img inside a comment or a section and missed it. A fourth reading now follows the browser's
+  stack, svg and math nesting, their HTML and MathML-text integration points, and the tags that
+  exit foreign content, and switches CDATA, bogus-comment and raw-text rules by position; it joins
+  the three as a conservative floor, and the strictest still wins. This was in 0.15.0.
 - A value in a URL that loads what the browser runs, `src` of `<script>`, `href` of `<base>`,
   `src` of `<iframe>` and `<embed>`, `data` of `<object>`, and `href` of an SVG `<script>`, is
   refused unless the literal before the hole already fixes the host: a path-absolute `/x` (a single

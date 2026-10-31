@@ -455,7 +455,13 @@ private fun lastAtOrBefore(
 private val STRICTNESS =
     listOf(Position.TEXT, Position.ATTRIBUTE, Position.URL, Position.DATASTAR, Position.STYLE, Position.STRUCTURE, Position.CODE)
 
-/** As HTML, as svg or math, and as svg or math whose CDATA sections are text (see scanMarkup). */
+/**
+ * Four readings of the markup: as HTML, as svg or math, as svg or math whose CDATA sections are
+ * text, and the one that follows the browser's element stack and switches rule by position (see
+ * scanMarkup). A hole takes the strictest position of the four. The three fixed readings each hold
+ * one rule throughout and so each miss where the markup changes context partway; the tracked
+ * reading catches those, while the fixed ones stay a conservative floor.
+ */
 private fun landscapes(
     markup: String,
     holes: List<IntRange>,
@@ -464,9 +470,12 @@ private fun landscapes(
     val shadow = shadow(markup, holes)
     // Longest first, so `data-star-` is tried before `data-` whatever order the caller used.
     val ordered = prefixes.sortedByDescending { it.length }
-    return listOf(false to false, true to false, true to true).map { (foreign, cdata) ->
-        Landscape(ordered, shadow, foreign, cdata).also { scanMarkup(shadow, it, foreign, cdata) }
-    }
+    val fixed =
+        listOf(false to false, true to false, true to true).map { (foreign, cdata) ->
+            Landscape(ordered, shadow, foreign, cdata, tracked = false).also { scanMarkup(shadow, it, foreign, cdata) }
+        }
+    val tracked = Landscape(ordered, shadow, foreign = false, cdata = false, tracked = true).also { scanMarkup(shadow, it, tracked = true) }
+    return fixed + tracked
 }
 
 private fun landingOf(
@@ -550,6 +559,7 @@ private class Landscape(
     private val markup: String,
     private val foreign: Boolean,
     private val cdata: Boolean,
+    private val tracked: Boolean,
 ) : MarkupVisitor {
     private val attributeNames = ArrayList<String>()
     private val attributeTags = ArrayList<String>()
@@ -667,10 +677,10 @@ private class Landscape(
      * a `textarea` or a `title`, which only their own closing sequence ends and which markup written
      * there could end.
      */
-    fun inData(hole: Int): Boolean = scanMarkup(markup.substring(0, hole), Discard, foreign, cdata)
+    fun inData(hole: Int): Boolean = scanMarkup(markup.substring(0, hole), Discard, foreign, cdata, tracked)
 
     /** Whether [html], read in this landscape, leaves nothing open for the markup after it to fall into. */
-    fun closes(html: String): Boolean = scanMarkup(html, Discard, foreign, cdata)
+    fun closes(html: String): Boolean = scanMarkup(html, Discard, foreign, cdata, tracked)
 
     fun valueStartAt(hole: Int): Int = indexOfSpan(hole, attributeStarts, attributeEnds).let { if (it >= 0) attributeStarts[it] else -1 }
 

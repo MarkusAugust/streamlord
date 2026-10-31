@@ -292,6 +292,23 @@ class InterpolationTest {
         assertEquals(Position.STRUCTURE, e.position)
     }
 
+    // Inside <svg>, a <![CDATA[ is a section the browser reads as text; once </svg> returns to
+    // HTML, the same bytes are a bogus comment the first > ends, and a hole after it is a live tag.
+    // No one fixed reading of the markup sees both, so the scanner follows the element stack.
+    @Test
+    fun `a hole the browser reaches only after svg closes is refused`() {
+        val e =
+            assertFailsWith<UnsafeInterpolationException> {
+                render("<svg><![CDATA[><!--]]></svg><![CDATA[><img %s>-->]]>", "src=x onerror=alert(1)")
+            }
+        assertEquals(Position.STRUCTURE, e.position)
+        // An svg title holds markup, and a CDATA section there ends only at ]]>, so what comes after
+        // is read as the browser reads it: a tag, not the text a plain HTML reading would see.
+        assertFailsWith<UnsafeInterpolationException> {
+            render("<svg><title><![CDATA[</title><img %s>]]>", "onerror=alert(1)")
+        }
+    }
+
     @Test
     fun `markup interpolate built goes into element text as markup`() {
         val row = interpolate("<li>%s</li>", "<b>Gorvek</b>")
