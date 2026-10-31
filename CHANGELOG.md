@@ -266,6 +266,13 @@ All notable changes to Streamlord are recorded here. The format follows
   it stands, and the whole URL is judged; only a URL with no other value in it goes unjudged. The
   host rule for a URL that loads code reads a `Trusted` value before the hole the same way. This
   was in 0.15.0.
+- The readings from inside an `<svg>` and a `<math>` kept every HTML element open to its end tag,
+  where the browser closes some by itself: a `<p>` at the next `<p>` or `<div>`, an `<li>` at the
+  next `<li>`. Once the element opened from the svg is closed, the browser is back in the svg, so
+  in `interpolate("<p><p></p><script><!</script>%s", v)` the script was an svg one whose `<!`
+  swallowed its end tag, and the value came out inside it. The readings from an svg and a math are
+  taken once more with no HTML element opened from them left open, and the strictest still wins,
+  as the editors do too. These readings are new in this release.
 
 ## [0.15.0] - 2026-10-28
 

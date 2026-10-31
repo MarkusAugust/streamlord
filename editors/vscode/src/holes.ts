@@ -167,9 +167,10 @@ function tagName(html: string, from: number): string {
 /**
  * scanMarkupTracked in MarkupScan.kt: follows the browser's element stack and switches rule by
  * position, starting inside an element of the `context` namespace, as a patch in the svg namespace
- * is parsed inside an `<svg>`.
+ * is parsed inside an `<svg>`. Without `htmlStaysOpen`, no HTML element opened straight from a
+ * foreign context stays open, as when the browser closes a `<p>` at the next `<p>` or `<div>`.
  */
-function scanMarkupTracked(html: string, visitor: Visitor, context: number, scripting: boolean): void {
+function scanMarkupTracked(html: string, visitor: Visitor, context: number, scripting: boolean, htmlStaysOpen: boolean): void {
   const rawText = scripting ? SCRIPTING_RAW_TEXT : RAW_TEXT;
   const stackNs: number[] = [];
   const stackName: string[] = [];
@@ -275,6 +276,7 @@ function scanMarkupTracked(html: string, visitor: Visitor, context: number, scri
       }
       // HTML ignores a self-closing mark on its own elements; only an svg or a math takes one.
       if (VOID.has(name) || (selfClosing && (name === "svg" || name === "math"))) continue;
+      if (!htmlStaysOpen && stackNs.length === 0 && context !== NS_HTML && name !== "svg" && name !== "math") continue;
       push(name === "svg" ? NS_SVG : name === "math" ? NS_MATH : NS_HTML, name, false, i);
     } else {
       if (selfClosing) continue;
@@ -427,7 +429,9 @@ export function holeLandings(markup: string, holes: readonly Hole[], prefixes: s
   // The tracked readings follow the browser's element stack, switching rule by position where the
   // fixed ones each hold one throughout, from HTML, from inside an svg and from inside a math:
   // scanMarkupTracked in MarkupScan.kt.
-  for (const context of [NS_HTML, NS_SVG, NS_MATH]) for (const scripting of scriptings) read((l) => scanMarkupTracked(shadowed, l, context, scripting));
+  for (const context of [NS_HTML, NS_SVG, NS_MATH]) for (const scripting of scriptings) read((l) => scanMarkupTracked(shadowed, l, context, scripting, true));
+  // From inside an svg or a math, once more with no HTML element opened from it left open.
+  for (const context of [NS_SVG, NS_MATH]) for (const scripting of scriptings) read((l) => scanMarkupTracked(shadowed, l, context, scripting, false));
   return holes.map((h) => {
     let strictest = landscapes[0] as Landscape;
     for (const l of landscapes) if (STRICTNESS.indexOf(l.positionOf(h.start)) > STRICTNESS.indexOf(strictest.positionOf(h.start))) strictest = l;

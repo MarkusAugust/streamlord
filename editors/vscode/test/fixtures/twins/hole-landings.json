@@ -1,5 +1,5 @@
 {
- "$comment": "Where a hole lands, by holeLandings in streamlord-core Interpolation.kt, which interpolate calls, and by holes.ts in the VS Code analysis, both of which read these cases. Each %s in markup is a hole; position is the strictest of the readings (HTML, svg or math, svg or math with CDATA as text, and the ones that follow the element stack from HTML, from inside an svg and from inside a math, each with scripting off and, where a noscript stands, on), attribute the quoted attribute it landed in, or null, and loadsCode, false where it is left out, whether that attribute loads what the browser runs, so that its host must be fixed (urlHostFixedBy) rather than its scheme. HoleLandingsTest also holds every case to interpolate itself: a String is refused where the position refuses one, a Number where it refuses that, and anything but Trusted in a loadsCode attribute whose literal start does not fix the host. urls: whether the literal start of a URL attribute's value, prefix, already settles the scheme (urlSchemeFixedBy).",
+ "$comment": "Where a hole lands, by holeLandings in streamlord-core Interpolation.kt, which interpolate calls, and by holes.ts in the VS Code analysis, both of which read these cases. Each %s in markup is a hole; position is the strictest of the readings (HTML, svg or math, svg or math with CDATA as text, and the ones that follow the element stack from HTML, from inside an svg and from inside a math, those two again with no HTML element opened from the svg or math left open, each with scripting off and, where a noscript stands, on), attribute the quoted attribute it landed in, or null, and loadsCode, false where it is left out, whether that attribute loads what the browser runs, so that its host must be fixed (urlHostFixedBy) rather than its scheme. HoleLandingsTest also holds every case to interpolate itself: a String is refused where the position refuses one, a Number where it refuses that, and anything but Trusted in a loadsCode attribute whose literal start does not fix the host. urls: whether the literal start of a URL attribute's value, prefix, already settles the scheme (urlSchemeFixedBy).",
  "cases": [
   {
    "name": "text",
@@ -830,6 +830,36 @@
     {
      "position": "ATTRIBUTE",
      "attribute": "content"
+    }
+   ]
+  },
+  {
+   "name": "a p the next p closes leaves an svg patch in svg, where a script holds elements",
+   "markup": "<p><p></p><script><!</script>%s",
+   "landings": [
+    {
+     "position": "CODE",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "an li the next li closes leaves a math patch in math",
+   "markup": "<li><li></li><script><!</script>%s",
+   "landings": [
+    {
+     "position": "CODE",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "a p closed by the next p, then an svg title that holds elements",
+   "markup": "<p><p>a</p><title><xmp><!--</xmp><img src=x onerror=\"%s\">",
+   "landings": [
+    {
+     "position": "CODE",
+     "attribute": "onerror"
     }
    ]
   }

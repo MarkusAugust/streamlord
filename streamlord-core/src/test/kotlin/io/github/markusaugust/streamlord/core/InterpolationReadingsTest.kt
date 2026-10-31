@@ -91,6 +91,23 @@ class InterpolationReadingsTest {
         assertEquals(Position.CODE, refused("""<textarea><mi><xmp><!--</xmp><img src=x onerror="%s">""", code).position)
     }
 
+    // In an svg or math patch, a `<p>` the next `<p>` or `<div>` closes, or an `<li>` the next one
+    // closes, leaves the stack at the patch's own element again, where a `<script>` is foreign.
+    @Test
+    fun `an HTML element the browser closes by itself returns an svg or math patch to its own namespace`() {
+        val formats =
+            listOf(
+                "<p><p></p><script><!</script>%s",
+                "<li><li></li><script><!</script>%s",
+                "<p><div></div><script><!</script>%s",
+                "<dd><dt></dt><script><!</script>%s",
+            )
+        for (format in formats) assertEquals(Position.CODE, refused(format, code).position, format)
+        assertEquals(Position.CODE, refused("""<p><p>a</p><title><xmp><!--</xmp><img src=x onerror="%s">""", code).position)
+        assertEquals("<p><p>a</p><b>x</b>", interpolate("<p><p>a</p><b>%s</b>", "x").text)
+        assertEquals("<svg><p>a</p></svg>", interpolate("<svg>%s</svg>", interpolate("<p>%s</p>", "a")).text)
+    }
+
     @Test
     fun `a Trusted value in a URL does not waive the check for the other holes there`() {
         assertEquals(1, refused("""<a href="%s%s">x</a>""", Trusted(""), "javascript:alert(1)").index)

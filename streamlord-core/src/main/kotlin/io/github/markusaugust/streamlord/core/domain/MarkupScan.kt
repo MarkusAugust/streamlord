@@ -73,7 +73,8 @@ private fun Char?.isAsciiLetter(): Boolean = this != null && (this in 'a'..'z' |
  * caller that has to be right walks it each way and takes the strictest answer. With [scripting],
  * a `noscript` is text, as a page the browser loads reads it, rather than markup, as the client
  * reads a patch. With [tracked], it follows the element stack instead (see scanMarkupTracked),
- * starting inside an element of the [context] namespace.
+ * starting inside an element of the [context] namespace, and, without [htmlStaysOpen], letting no
+ * HTML element opened straight from that context stay open.
  *
  * @return Whether the markup ends in the data state, with no tag, attribute value, comment, CDATA
  *   section or raw-text body left open, and so whether markup written after it is read as written.
@@ -87,8 +88,9 @@ internal fun scanMarkup(
     tracked: Boolean = false,
     scripting: Boolean = false,
     context: Int = NS_HTML,
+    htmlStaysOpen: Boolean = true,
 ): Boolean {
-    if (tracked) return scanMarkupTracked(html, visitor, context, scripting)
+    if (tracked) return scanMarkupTracked(html, visitor, context, scripting, htmlStaysOpen)
     val rawText =
         if (foreign) {
             CODE_TEXT
@@ -263,16 +265,25 @@ private val EXITS_FOREIGN =
  * It is not a parser: it keeps only each open element's namespace and whether its content is HTML,
  * enough to know the context, and matches an end tag to the nearest open element of its name.
  *
+ * Nor does it know the tree builder's implied end tags, by which a `<p>` closes the `<p>` before
+ * it, a `<div>` closes an open `<p>` and an `<li>` the `<li>` before it. Inside an svg or a math
+ * that matters, since once the HTML element opened from the context is closed, the tags after it
+ * are svg or math again. So it is walked both ways: with [htmlStaysOpen], every HTML element stays
+ * open to its end tag, and without, none opened straight from a foreign [context] does, which is
+ * where the browser's stack is when every such element has been closed by the next.
+ *
  * @return Whether the markup ends in the data state, leaves open no element that changes how the
  *   markup after it is read (one of another namespace than [context], an integration point, a
  *   `template` or a `select`), and has no end tag for an element it did not open, which would close
- *   one of the markup around it.
+ *   one of the markup around it. Without [htmlStaysOpen], an end tag for an HTML element it never
+ *   kept open does not count as such, since the walk with it judges that.
  */
 private fun scanMarkupTracked(
     html: String,
     visitor: MarkupVisitor,
     context: Int,
     scripting: Boolean,
+    htmlStaysOpen: Boolean,
 ): Boolean {
     val rawText = if (scripting) SCRIPTING_RAW_TEXT else RAW_TEXT
     val stackNs = ArrayList<Int>()
@@ -369,7 +380,7 @@ private fun scanMarkupTracked(
                 if ((open[name] ?: 0) > 0) {
                     val at = stackName.lastIndexOf(name)
                     while (stackName.size > at) pop(lt)
-                } else {
+                } else if (htmlStaysOpen) {
                     stray = true
                 }
                 i = end
@@ -414,6 +425,7 @@ private fun scanMarkupTracked(
                 }
                 // HTML ignores a self-closing mark on its own elements; only an svg or a math takes one.
                 if (name in VOID || (selfClosing && (name == "svg" || name == "math"))) continue
+                if (!htmlStaysOpen && stackNs.isEmpty() && context != NS_HTML && name != "svg" && name != "math") continue
                 val ns =
                     if (name == "svg") {
                         NS_SVG

@@ -487,13 +487,14 @@ private class Reading(
     val tracked: Boolean = false,
     val scripting: Boolean = false,
     val context: Int = NS_HTML,
+    val htmlStaysOpen: Boolean = true,
 ) {
     fun scan(
         html: String,
         visitor: MarkupVisitor,
-    ): Boolean = scanMarkup(html, visitor, foreign, cdata, tracked, scripting, context)
+    ): Boolean = scanMarkup(html, visitor, foreign, cdata, tracked, scripting, context, htmlStaysOpen)
 
-    fun withScripting(): Reading = Reading(foreign, cdata, tracked, scripting = true, context = context)
+    fun withScripting(): Reading = Reading(foreign, cdata, tracked, scripting = true, context = context, htmlStaysOpen = htmlStaysOpen)
 }
 
 /**
@@ -503,7 +504,9 @@ private class Reading(
  * as a patch in the svg namespace does, and inside a `<math>`. A hole takes the strictest position
  * of them all. The fixed readings each hold one rule throughout and so each miss where the markup
  * changes context partway; the tracked readings catch those, while the fixed ones stay a
- * conservative floor.
+ * conservative floor. From inside an svg and a math, the stack is followed twice: once with every
+ * HTML element open to its end tag, and once with none opened from the svg or math left open, as
+ * when the browser closes a `<p>` at the next `<p>` or `<div>` and is back in the svg.
  *
  * Markup with a `noscript` is read twice over: with scripting off, as the client parses a patch,
  * where it holds elements, and with scripting on, as a page loads, where it is text to its end tag.
@@ -522,6 +525,9 @@ private fun landscapes(
             listOf(Reading(foreign = true), Reading(foreign = true, cdata = true)) +
             listOf(NS_HTML, NS_SVG, NS_MATH).flatMap { context ->
                 scripting.map { Reading(tracked = true, scripting = it, context = context) }
+            } +
+            listOf(NS_SVG, NS_MATH).flatMap { context ->
+                scripting.map { Reading(tracked = true, scripting = it, context = context, htmlStaysOpen = false) }
             }
     return readings.map { reading -> Landscape(ordered, reading).also { reading.scan(shadow, it) } }
 }
