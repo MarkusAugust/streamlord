@@ -6,6 +6,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-31
+
 ### Added
 
 - `DatastarAttributes.value(value)`: a value as kotlinx.html must be handed it for the browser to
