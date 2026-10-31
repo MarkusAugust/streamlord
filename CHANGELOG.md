@@ -147,6 +147,25 @@ All notable changes to Streamlord are recorded here. The format follows
 - A template inside a JavaScript string of a Datastar expression, `@post('/x/$id')`, was called
   safe text. It is code Datastar runs: a warning now.
 
+- The exception for a value in a URL that loads code said to pass a relative or `https` URL, which
+  is what had been passed. It says now what the rule is: write the host into the markup before the
+  hole, as in `"/js/%s"` or `"https://cdn.example.com/%s"`, or wrap a URL you chose in `Trusted`.
+  `UnsafeInterpolationException.loadsCode` tells such a refusal apart; its constructor takes it as
+  a fourth parameter, which changes its JVM signature.
+- `href` of a `<link>` loads what it points at, a stylesheet, a module or an icon, so a value there
+  is held to the host rule above, whatever the `rel`: `<link rel="stylesheet" href="%s">` with
+  `https://evil.example/x.css` was let in. A `content` of a `<meta>` that starts with a time, as
+  `http-equiv="refresh"` reads it, has its URL held to the URL schemes, so
+  `content="0;url=%s"` refuses `javascript:`; a `content` that is no refresh, a description say,
+  takes any value as before. Both were in 0.15.0.
+- `ElementsGuard`, `interpolate` and the analysis searched to the end of the markup for both of a
+  comment's closing sequences at every comment, so a patch of many comments took time that grew
+  with its square: 800 KB of them took seconds in the guard, on every patch. `interpolate` read the
+  markup before a hole again for every `Html` value (20000 of them took the better part of a
+  minute), followed every end tag that matched nothing through the open elements, and the guard
+  searched every CDATA section of an svg for every svg tag, and the editors lowercased the whole
+  markup for each raw-text end they looked for. Each is one walk now. This was in 0.15.0.
+
 ### Security
 
 - `interpolate`, and the editors with it, took an `=` where an attribute name begins as the start
@@ -211,6 +230,31 @@ All notable changes to Streamlord are recorded here. The format follows
   the browser is back in HTML and reads a bogus comment again, so neither reading is right
   everywhere. An `</svg>` inside a CDATA section no longer ends the part `ElementsGuard` reads as
   svg either.
+- `interpolate`, `ElementsGuard` and the analysis read a `<noscript>` as text, as a browser with
+  scripting on does, but the client parses a patch with `DOMParser`, where scripting is off and a
+  noscript holds elements. So `interpolate("<noscript><xmp><a title=\"</xmp><script>%s</script>", v)`
+  and `<noscript><textarea></noscript><p title="</textarea><img src=x onerror='%s'>">` let the value
+  into a script and a handler. A noscript is markup to all of them now, and `interpolate` reads
+  markup that holds one with scripting on as well, as a page loads it, and takes the stricter. This
+  was in 0.15.0.
+- An `Html` that left an element open counted as closed, though an open `<svg>` or `<math>` changes
+  how the markup after it is read: in
+  `interpolate("%s<title><xmp><!--</xmp><script>%s</script>", interpolate("<svg>"), v)` the title
+  became an svg one that holds elements and the script ran. An `Html` is markup now only where it
+  leaves open no svg, math or element in them, no `template` and no `select`, and ends no element
+  it did not open; otherwise it is escaped. And `interpolate` reads every format inside an `<svg>`
+  and inside a `<math>` too, as the client parses a patch in those namespaces, where a `<title>` or
+  an `<mi>` holds HTML: `<title><xmp><!--</xmp><img src=x onerror="%s">` is refused now. The
+  element-stack reading also follows a `<font>` with a `color`, `face` or `size` out of foreign
+  content, keeps `<mglyph>` and `<malignmark>` MathML inside an `<mi>`, and takes the text of an
+  svg `<script>` or `<style>` for code though they hold elements. `Html` is new in this release;
+  the formats read wrong inside an svg or a math were in 0.15.0.
+- One `Trusted` value in a URL attribute waived the URL check for every other value there:
+  `interpolate("<a href=\"%s%s\">x</a>", Trusted(""), "javascript:alert(1)")` wrote a
+  `javascript:` link. A `Trusted` value now counts toward the URL as the literal does, written as
+  it stands, and the whole URL is judged; only a URL with no other value in it goes unjudged. The
+  host rule for a URL that loads code reads a `Trusted` value before the hole the same way. This
+  was in 0.15.0.
 
 ## [0.15.0] - 2026-10-28
 
