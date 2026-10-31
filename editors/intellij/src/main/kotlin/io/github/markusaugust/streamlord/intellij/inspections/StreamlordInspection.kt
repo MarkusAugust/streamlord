@@ -115,9 +115,12 @@ private fun highlightSeverity(severity: Severity): HighlightSeverity =
         Severity.INFO, Severity.HINT -> HighlightSeverity.WEAK_WARNING
     }
 
-/** The analysis's fixes, the first of them at the top of the Alt+Enter list. */
+/**
+ * The analysis's fixes, the first at the top of the Alt+Enter list unless it is marked not preferred: where the choice is the
+ * author's, such as escaping a value or marking it as markup, no fix goes above the others.
+ */
 private fun quickFixes(fixes: List<Fix>): Array<LocalQuickFix> =
-    fixes.mapIndexed { i, fix -> if (i == 0) PreferredReplaceTextFix(fix) else ReplaceTextFix(fix) }.toTypedArray()
+    fixes.mapIndexed { i, fix -> if (i == 0 && fix.preferred) PreferredReplaceTextFix(fix) else ReplaceTextFix(fix) }.toTypedArray()
 
 /** A quick fix that replaces a range of the file with text, as the analysis spelled it out. */
 open class ReplaceTextFix(
@@ -139,7 +142,7 @@ open class ReplaceTextFix(
     }
 }
 
-/** The fix the analysis lists first is the one it means: it goes to the top of the Alt+Enter list, above the IDE's own. */
+/** The fix the analysis lists first and prefers is the one it means: it goes to the top of the Alt+Enter list, above the IDE's own. */
 class PreferredReplaceTextFix(
     fix: Fix,
 ) : ReplaceTextFix(fix),

@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.intellij
 
 import com.intellij.codeHighlighting.HighlightDisplayLevel
 import com.intellij.codeInsight.daemon.HighlightDisplayKey
+import com.intellij.codeInspection.ex.QuickFixWrapper
 import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ReadAction
@@ -24,6 +25,8 @@ import io.github.markusaugust.streamlord.html.Casing
 import io.github.markusaugust.streamlord.intellij.analysis.HoleFacts
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.inspections.KotlinInterpolationInspection
+import io.github.markusaugust.streamlord.intellij.inspections.PreferredReplaceTextFix
+import io.github.markusaugust.streamlord.intellij.inspections.ReplaceTextFix
 import kotlinx.html.TagConsumer
 import org.jetbrains.kotlin.psi.KtFile
 import java.io.File
@@ -215,6 +218,18 @@ class HoleTypesTest : BasePlatformTestCase() {
         } finally {
             profile.setErrorLevel(key, HighlightDisplayLevel.ERROR, project)
         }
+    }
+
+    fun `test a String in element text offers the rewrite and Trusted with neither preferred`() {
+        myFixture.configureByText("Choice.kt", "fun card(name: String): String = \"<p>\$name</p>\"")
+        myFixture.doHighlighting()
+        val fixes =
+            myFixture
+                .getAllQuickFixes()
+                .mapNotNull { QuickFixWrapper.unwrap(it) as? ReplaceTextFix }
+        assertEquals(2, fixes.size)
+        assertTrue(fixes.joinToString { it.familyName }, fixes.any { it.familyName.startsWith("Mark ") })
+        assertTrue("no fix is preferred", fixes.none { it is PreferredReplaceTextFix })
     }
 
     fun `test an edit in another file that changes a type judges the file again`() {
