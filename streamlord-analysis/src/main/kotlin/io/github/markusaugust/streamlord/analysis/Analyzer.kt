@@ -845,7 +845,11 @@ public class Analyzer(
                     text && told[k] != HoleFact.NULLABLE_STRING &&
                         (
                             fact == HoleFact.STRING ||
-                                (fact == null && callResult(ip.text) && mayHoldMarkup(src, ip.text, s.start, opts.constants))
+                                (
+                                    fact == null &&
+                                        (callResult(ip.text) || markupTextValue(src, ip.text, s.start)) &&
+                                        mayHoldMarkup(src, ip.text, s.start, opts.constants)
+                                )
                         ) &&
                         !mayBeNull(src, ip.text, s.start)
                 val fixes = rewritten(ESCAPES_TITLE, !trust) + if (trust) listOf(trustedFix(src, s, ip, shown)) else emptyList()
@@ -1003,6 +1007,8 @@ public class Analyzer(
         if (position == Position.STYLE) return fact == HoleFact.NUMBER
         if (position !in ESCAPED_POSITIONS) return false
         if (fact == HoleFact.NULLABLE || told == HoleFact.NULLABLE_STRING || mayBeNull(src, ip.text, s.start)) return false
+        // A template writes a List as `[a, b]`; interpolate given one value that is a List takes the other overload.
+        if (visiblyList(src, ip.text, s.start)) return false
         if (TRUSTED_CALL.containsMatchIn(ip.text)) return position == Position.TEXT
         if (fact == HoleFact.MARKUP) return position != Position.TEXT || markupValued(src, s, ip)
         if (position == Position.TEXT && fact != HoleFact.NUMBER && fact != HoleFact.BOOLEAN &&

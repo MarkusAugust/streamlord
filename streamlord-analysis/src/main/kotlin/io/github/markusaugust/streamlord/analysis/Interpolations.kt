@@ -282,6 +282,8 @@ internal class Declaration(
     val string: Boolean = false,
     /** Whether it is set to a call to `interpolate` or `Trusted` and nothing more: markup. */
     val markup: Boolean = false,
+    /** What it is set to the `.text` of, `interpolate(...)` or a name: markup held as a String when that is an Html. */
+    val textOf: String? = null,
 ) {
     /** Just past where it can last be seen. */
     var end: Int = Int.MAX_VALUE
@@ -429,6 +431,27 @@ private fun markupInitialiser(
     val e = src.substring(open, minOf(src.length, open + 20_000))
     val close = closing(e, depths(e), 0)
     return close > 0 && STATEMENT_END.containsMatchIn(e.substring(close, minOf(e.length, close + 8)))
+}
+
+private val TEXT_OF_NAME = Regex("""\s*=\s*($NAME)\s*\.\s*text(?=[ \t]*(?:[\n\r;})\],]|//|$))""")
+private val TEXT_OF_CALL = Regex("""\s*=\s*interpolate\s*\(""")
+private val TEXT_AFTER = Regex("""^\s*\.\s*text""")
+
+/** What a declared name at [at] is set to the `.text` of, when that is its whole value: `name` of `= name.text`, or `interpolate(...)`. */
+private fun textInitialiser(
+    src: String,
+    at: Int,
+): String? {
+    TEXT_OF_NAME.matchAt(src, at)?.let { return it.groupValues[1] }
+    val call = TEXT_OF_CALL.matchAt(src, at) ?: return null
+    val open = call.range.last
+    val e = src.substring(open, minOf(src.length, open + 20_000))
+    val close = closing(e, depths(e), 0)
+    if (close < 0) return null
+    val text = TEXT_AFTER.find(e.substring(close, minOf(e.length, close + 16))) ?: return null
+    val after = close + text.value.length
+    if (!STATEMENT_END.containsMatchIn(e.substring(after, minOf(e.length, after + 8)))) return null
+    return src.substring(at + call.value.indexOf("interpolate"), open + close)
 }
 
 /** `text` cut at each comma outside brackets. */
@@ -581,6 +604,8 @@ private fun declarations(
                         // `val String.shout`: an extension, read on a receiver and never by its name alone.
                         if (m != null && m.groupValues[1].isEmpty()) {
                             val at = m.groups[2]!!.range.first
+                            val bare = m.groups[4] == null && m.groups[5] == null
+                            val markup = bare && markupInitialiser(src, m.range.last + 1)
                             val d =
                                 add(
                                     m.groupValues[2],
@@ -593,7 +618,8 @@ private fun declarations(
                                         constant,
                                         html,
                                         m.groups[5] != null,
-                                        m.groups[4] == null && m.groups[5] == null && markupInitialiser(src, m.range.last + 1),
+                                        markup,
+                                        if (bare && !markup) textInitialiser(src, m.range.last + 1) else null,
                                     ),
                                 )
                             if (owner.kind != "top") owner.ends += d
@@ -1276,6 +1302,10 @@ internal fun mayHoldMarkup(
                 false
             }
 
+            IDENT.matches(t) && markupText(src, t, at) -> {
+                true
+            }
+
             IDENT.matches(t) -> {
                 if (!constantAt(src, t, at, constants)) {
                     false
@@ -1346,7 +1376,35 @@ internal fun markupHeldAsString(
     src: String,
     value: String,
     at: Int,
-): Boolean = markupValue(src, value, at) && !heldAsMarkup(src, value, at)
+): Boolean {
+    // A literal is text the author chose to have escaped, `"<the oath>"`, whatever it looks like.
+    if (holeValues(value).all {
+            htmlLiteral(it.text) || stringLiteral(it.text) != null || LITERAL.matches(it.text) ||
+                CHAR_LITERAL.matches(it.text)
+        }
+    ) {
+        return false
+    }
+    return (markupValue(src, value, at) && !heldAsMarkup(src, value, at)) || markupTextValue(src, value, at)
+}
+
+/** Whether [name] means, at [at], a value set to the `.text` of an Html: `val row = interpolate(...).text`. */
+private fun markupText(
+    src: String,
+    name: String,
+    at: Int,
+): Boolean {
+    val of = declarationOf(src, name, at)?.textOf ?: return false
+    return wholeCall(of, "interpolate") ||
+        (IDENT.matches(of) && declaredKind(src, of, declarationOf(src, name, at)!!.at) == HoleFact.MARKUP)
+}
+
+/** Whether every value a hole can give is a name set to the `.text` of an Html: markup held as a String. */
+internal fun markupTextValue(
+    src: String,
+    value: String,
+    at: Int,
+): Boolean = holeValues(value).all { IDENT.matches(it.text) && markupText(src, it.text, at) }
 
 /**
  * The fix for a value written into an attribute value without quotes: quotes around the whole

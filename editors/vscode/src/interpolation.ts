@@ -233,6 +233,8 @@ interface Declaration {
   string?: boolean;
   /** Whether it is set to a call to `interpolate` or `Trusted` and nothing more: markup. */
   markup?: boolean;
+  /** What it is set to the `.text` of, `interpolate(...)` or a name: markup held as a String when that is an Html. */
+  textOf?: string;
   constant: boolean;
   html: boolean;
 }
@@ -427,7 +429,8 @@ function declarations(src: string, code: Uint8Array): Map<string, Declaration[]>
           if (m && !m[1]) {
             const at = end + m[0].indexOf(m[2] as string, (m[0].length - m[0].trimStart().length));
             const markup = m[4] === undefined && m[5] === undefined && markupInitialiser(src, end + m[0].length);
-            const d = { ...scope(at), type: m[3], literal: m[4], text: constant ? m[5] : undefined, string: m[5] !== undefined, markup };
+            const textOf = m[4] === undefined && m[5] === undefined && !markup ? textInitialiser(src, end + m[0].length) : undefined;
+            const d = { ...scope(at), type: m[3], literal: m[4], text: constant ? m[5] : undefined, string: m[5] !== undefined, markup, textOf };
             add(m[2] as string, d);
             if (owner.kind !== "top") owner.ends.push(d);
           }
@@ -546,6 +549,27 @@ function markupInitialiser(src: string, at: number): boolean {
   const e = src.slice(open, open + 20_000);
   const close = closing(e, depths(e), 0);
   return close > 0 && STATEMENT_END.test(e.slice(close, close + 8));
+}
+
+const TEXT_OF_NAME = new RegExp(String.raw`\s*=\s*(${NAME})\s*\.\s*text(?=[ \t]*(?:[\n\r;})\],]|//|$))`, "uy");
+const TEXT_OF_CALL = /\s*=\s*interpolate\s*\(/y;
+const TEXT_AFTER = /^\s*\.\s*text/;
+
+/** What a declared name at `at` is set to the `.text` of, when that is its whole value: `name` of `= name.text`, or `interpolate(...)`. */
+function textInitialiser(src: string, at: number): string | undefined {
+  TEXT_OF_NAME.lastIndex = at;
+  const name = TEXT_OF_NAME.exec(src);
+  if (name) return name[1];
+  TEXT_OF_CALL.lastIndex = at;
+  const call = TEXT_OF_CALL.exec(src);
+  if (!call) return undefined;
+  const open = at + call[0].length - 1;
+  const e = src.slice(open, open + 20_000);
+  const close = closing(e, depths(e), 0);
+  if (close < 0) return undefined;
+  const text = TEXT_AFTER.exec(e.slice(close, close + 16));
+  if (!text || !STATEMENT_END.test(e.slice(close + text[0].length, close + text[0].length + 8))) return undefined;
+  return src.slice(at + call[0].indexOf("interpolate"), open + close);
 }
 
 /** `text` cut at each comma outside brackets. */
@@ -946,6 +970,7 @@ function markupInLiteral(e: string): boolean {
 export function mayHoldMarkup(src: string, value: string, at: number, constants?: ReadonlySet<string>): boolean {
   return holeValues(value).some(({ text: t }) => {
     if (LITERAL.test(t) || CHAR_LITERAL.test(t)) return false;
+    if (IDENT.test(t) && markupText(src, t, at)) return true;
     if (IDENT.test(t)) {
       if (!constantAt(src, t, at, constants)) return false;
       const text = declarationOf(src, t, at)?.text;
@@ -986,7 +1011,21 @@ function heldAsMarkup(src: string, value: string, at: number): boolean {
  * tags are printed; an `Html` or a `Trusted` it writes as it stands.
  */
 export function markupHeldAsString(src: string, value: string, at: number): boolean {
-  return markupValue(src, value, at) && !heldAsMarkup(src, value, at);
+  // A literal is text the author chose to have escaped, `"<the oath>"`, whatever it looks like.
+  if (holeValues(value).every(({ text: t }) => htmlLiteral(t) || stringLiteral(t) !== null || LITERAL.test(t) || CHAR_LITERAL.test(t))) return false;
+  return (markupValue(src, value, at) && !heldAsMarkup(src, value, at)) || markupTextValue(src, value, at);
+}
+
+/** Whether `name` means, at `at`, a value set to the `.text` of an Html: `val row = interpolate(...).text`. */
+function markupText(src: string, name: string, at: number): boolean {
+  const d = declarationOf(src, name, at);
+  if (d?.textOf === undefined) return false;
+  return wholeCall(d.textOf, "interpolate") || (IDENT.test(d.textOf) && declaredKind(src, d.textOf, d.at) === "markup");
+}
+
+/** Whether every value a hole can give is a name set to the `.text` of an Html: markup held as a String. */
+export function markupTextValue(src: string, value: string, at: number): boolean {
+  return holeValues(value).every(({ text: t }) => IDENT.test(t) && markupText(src, t, at));
 }
 
 /**
