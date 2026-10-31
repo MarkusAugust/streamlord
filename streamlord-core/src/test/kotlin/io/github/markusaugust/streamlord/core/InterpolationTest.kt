@@ -232,6 +232,18 @@ class InterpolationTest {
         assertFailsWith<UnsafeInterpolationException> { render("""<form action='%s'></form>""", "javascript:alert(1)") }
     }
 
+    // The browser decodes the attribute once it is whole, so a reference can begin in the literal
+    // and end in the value.
+    @Test
+    fun `a url is judged as the browser decodes it, literal and values together`() {
+        val e = assertFailsWith<UnsafeInterpolationException> { render("""<a href="&%s">x</a>""", "#106;avascript:alert(1)") }
+        assertEquals(Position.URL, e.position)
+        assertFailsWith<UnsafeInterpolationException> { render("""<a href="&#%s">x</a>""", "106;avascript:alert(1)") }
+        assertFailsWith<UnsafeInterpolationException> { render("""<a href="&#%s;avascript:alert(1)">x</a>""", "106") }
+        // A value's own & is written as &amp;, so it never begins a reference.
+        assertEquals("""<a href="&amp;#106;avascript:x">x</a>""", render("""<a href="%s">x</a>""", "&#106;avascript:x"))
+    }
+
     // The markup already chose where the URL points; the value only fills in a part of it.
     @Test
     fun `a hole further into a url is an ordinary attribute`() {

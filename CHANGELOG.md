@@ -118,6 +118,11 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Security
 
+- `interpolate` decoded each literal piece of a URL attribute on its own before it judged the
+  scheme, where the browser decodes the attribute once it is whole, so a character reference could
+  begin in the markup and end in the value: `<a href="&%s">` with `#106;avascript:alert(1)` wrote
+  `&#106;avascript:`, a `javascript:` link. The URL is judged as it will be written now, the
+  literal as it stands and each value escaped, decoded once. This was in 0.15.0.
 - `interpolate` refused a value in a start tag's name but let one into an end tag's,
   `</%s>`, where it chose which element to close. It is refused there too.
 - `interpolate` read an end tag as text, or as ending at its first `>`, where the browser reads

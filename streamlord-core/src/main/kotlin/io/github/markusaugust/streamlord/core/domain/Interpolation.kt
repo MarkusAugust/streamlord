@@ -574,15 +574,18 @@ private class Landscape(
             val inside = holes.indices.filter { holes[it] in start until end }
             // Trusted waives every check, this one included.
             if (inside.isEmpty() || inside.any { values[it] is Trusted }) continue
-            val value = StringBuilder()
+            // The attribute as it will be written, decoded once, as the browser does: a reference
+            // the literal begins can end in the value, `&%s` and `#106;` making a `j`.
+            val written = StringBuilder()
             var cut = start
             for (index in inside) {
-                value.append(decodeEntities(format.substring(cut, holes[index]).replace("%%", "%")).text)
-                value.append(values[index].let { if (it is Trusted) it.html else it?.toString().orEmpty() })
+                written.literal(format, cut, holes[index])
+                written.escaped(values[index])
                 cut = holes[index] + 2
             }
-            value.append(decodeEntities(format.substring(cut, end).replace("%%", "%")).text)
-            val entries = if (attributeNames[attribute].asciiLowercase() == "values") value.split(';') else listOf(value.toString())
+            written.literal(format, cut, end)
+            val value = decodeEntities(written.toString()).text
+            val entries = if (attributeNames[attribute].asciiLowercase() == "values") value.split(';') else listOf(value)
             if (entries.any { !safeUrl(it) }) throw UnsafeInterpolationException(Position.URL, inside.first(), attributeNames[attribute])
         }
     }
