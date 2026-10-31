@@ -10,6 +10,7 @@ import { PLACEHOLDER, readKotlinStringAt, type Interpolation, type KotlinString 
 import { laterFix, type Fix } from "./expression.ts";
 import { catalog } from "./catalog.ts";
 import { dslHelpers, EXPRESSION_HELPERS } from "./signalNameHyphens.ts";
+import { escapeRegExp } from "./signals.ts";
 
 const HTML_START = /^\s*<(?:[A-Za-z]|__kt__(?=[\s>/])|!--|!doctype)/i;
 const IDENT = /^[\p{L}_][\p{L}\p{Nd}_]*$/u;
@@ -1471,7 +1472,7 @@ function importEdits(src: string, name: string): Fix["edits"] | null {
   facts.importEdits ??= new Map();
   if (facts.importEdits.has(name)) return facts.importEdits.get(name) ?? null;
   const fq = `${DOMAIN}.${name}`;
-  const imported = new RegExp(`^\\s*import\\s+(?:${fq.replace(/\./g, "\\.")}|${DOMAIN.replace(/\./g, "\\.")}\\.\\*)\\s*$`, "m");
+  const imported = new RegExp(`^\\s*import\\s+(?:${escapeRegExp(fq)}|${escapeRegExp(DOMAIN)}\\.\\*)\\s*$`, "m");
   let edits: Fix["edits"] | null = null;
   if (!imported.test(src)) {
     const imports = [...src.matchAll(/^import\s+[^\n]*$/gm)].pop();
