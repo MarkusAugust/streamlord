@@ -569,15 +569,16 @@ public class Analyzer(
             val kind = if (arg != null) kinds[k] else null
             val r = format.toSource(d, d + PLACEHOLDER.length)
             // interpolate refuses everything but Trusted in a URL that loads code, unless the literal before
-            // the URL's first hole fixes its host; it names that first hole, and a Trusted anywhere in the URL waives it.
+            // the URL's first hole fixes its host; it names that first hole. Trusted text counts toward the URL, which
+            // is judged whole, so only a URL of Trusted values alone is waived, and one holding any is not known to fail.
             if (landing.loadsCode && hostUnfixed(view, landings, starts, format.interpolations.size + k, percentAt)) {
                 val inUrl = at.indices.filter { landings[format.interpolations.size + it].valueStart == landing.valueStart }
                 if (inUrl.first() != k) continue
                 val urlKinds = inUrl.map { if (mapped) kinds[it] else null }
-                if (ArgKind.TRUSTED in urlKinds) continue
+                if (urlKinds.all { it == ArgKind.TRUSTED }) continue
                 // A template before the hole is filled in first, so what the literal fixes is known only without one.
                 val templated = format.interpolations.any { it.decodedStart >= landing.valueStart && it.decodedStart < d }
-                val certain = !templated && urlKinds.all { it != null }
+                val certain = !templated && urlKinds.all { it != null && it != ArgKind.TRUSTED }
                 val shown = arg?.let { shortened(it.text) } ?: "the value of this %s"
                 issues +=
                     Issue(

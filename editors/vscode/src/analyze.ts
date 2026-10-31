@@ -333,15 +333,16 @@ function checkInterpolateSite(site: CallSite, f: InterpolateFormat, src: string,
     const kind = arg ? (kinds[k] ?? null) : null;
     const j = format.interpolations.length + k;
     // interpolate refuses everything but Trusted in a URL that loads code, unless the literal before
-    // the URL's first hole fixes its host; it names that first hole, and a Trusted anywhere in the URL waives it.
+    // the URL's first hole fixes its host; it names that first hole. Trusted text counts toward the URL, which
+    // is judged whole, so only a URL of Trusted values alone is waived, and one holding any is not known to fail.
     if (landing.loadsCode && hostUnfixed(view, landings, starts, j, percentAt)) {
       const inUrl = at.map((_, n) => n).filter((n) => (landings[format.interpolations.length + n] as HoleLanding).valueStart === landing.valueStart);
       if (inUrl[0] !== k) return;
       const urlKinds = inUrl.map((n) => (mapped && values[n] ? (kinds[n] ?? null) : null));
-      if (urlKinds.includes("trusted")) return;
+      if (urlKinds.every((u) => u === "trusted")) return;
       // A template before the hole is filled in first, so what the literal fixes is known only without one.
       const templated = format.interpolations.some((ip) => ip.decodedStart >= landing.valueStart && ip.decodedStart < d);
-      const certain = !templated && urlKinds.every((u) => u !== null);
+      const certain = !templated && urlKinds.every((u) => u !== null && u !== "trusted");
       const shown = arg ? shortened(arg.text) : "the value of this %s";
       issues.push({ ...toSource(format, d, d + PLACEHOLDER.length), severity: certain ? "error" : "warning", code: "unsafe-interpolation", link: DOCS.expressions, message: refusedCodeUrlMessage(shown, landing.attribute ?? "the URL", certain) });
       return;
