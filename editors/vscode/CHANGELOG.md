@@ -21,6 +21,10 @@ All notable changes to the Streamlord extension are recorded here.
   an HTML string is. A constant, a qualified one such as `Routes.SAVE` among them, a literal,
   `${"$"}`, an enum entry, an `if` or a `when` between literals, and markup built in the template
   in element text say nothing.
+- A value in a URL the browser loads code from, `src` of a script, an iframe or an embed, `href`
+  of a base or `data` of an object, is a warning unless the literal before it already fixes the
+  host (`/js/`, or a whole origin such as `https://cdn.example.com/`), and an error in a call to
+  `interpolate` where the value is known, since `interpolate` refuses it.
 - A call to one of Streamlord's expression helpers is your own only when every argument is: a
   literal, a constant, a declared number or boolean, or another such helper call.
   `${signal("count")}` says nothing; `${signal(query)}` writes the request's text into a Datastar
