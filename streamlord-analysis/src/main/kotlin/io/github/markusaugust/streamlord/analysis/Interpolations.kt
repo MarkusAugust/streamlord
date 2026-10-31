@@ -10,11 +10,15 @@ package io.github.markusaugust.streamlord.analysis
 
 private val TRIM_MARGIN_AFTER = Regex("""^\s*\.\s*trimMargin\s*\(\s*(?:"([^"\\\n]*)")?\s*\)""")
 private val TRIM_CALL_AFTER = Regex("""^\s*\.\s*trim(?:Indent|Margin)\s*\(""")
-private val HTML_OPENING = Regex("""^\s*<(?:[A-Za-z]|__kt__|!--|!doctype)""", RegexOption.IGNORE_CASE)
+private val HTML_OPENING = Regex("""^\s*<(?:[A-Za-z]|__kt__(?=[\s>/])|!--|!doctype)""", RegexOption.IGNORE_CASE)
 private val IDENT = Regex("""[\p{L}_][\p{L}\p{Nd}_]*""")
 private val LITERAL = Regex("""(?:-?\d[\d_]*(?:\.\d+)?[LlFfDd]?|true|false|null)""")
 private val STRING_LITERAL = Regex(""""(?:[^"\\$]|\\.)*"""")
-private val NUMBER_TYPE = Regex("""(?:kotlin\.)?(?:Int|Long|Short|Byte|Double|Float|UInt|ULong|UShort|UByte)""")
+private val NUMBER_TYPE = Regex("""(?:kotlin\.)?(?:Int|Long|Short|Byte|Double|Float|Number)""")
+
+/** Digits, but not a `kotlin.Number`: interpolate refuses one where only a number is let in. */
+private val UNSIGNED_TYPE = Regex("""(?:kotlin\.)?(?:UInt|ULong|UShort|UByte)""")
+private val UNSIGNED_SUFFIX = Regex("""[uU][lL]?$""")
 private val BOOLEAN_TYPE = Regex("""(?:kotlin\.)?Boolean""")
 private val STRING_TYPE = Regex("""(?:kotlin\.)?(?:String|CharSequence)""")
 private val HTML_TYPE = Regex("""(?:[\p{L}_][\p{L}\p{Nd}_]*\.)*Html""")
@@ -24,7 +28,16 @@ private val WORD_CHAR = Regex("""[\p{L}\p{Nd}_]""")
 
 /** Each kind from the one safe in the fewest places to the one safe everywhere. */
 private val WEAKEST_FIRST =
-    listOf(HoleFact.STRING, null, HoleFact.MARKUP, HoleFact.NULLABLE, HoleFact.BOOLEAN, HoleFact.NUMBER, HoleFact.CONSTANT)
+    listOf(
+        HoleFact.STRING,
+        null,
+        HoleFact.MARKUP,
+        HoleFact.NULLABLE,
+        HoleFact.UNSIGNED,
+        HoleFact.BOOLEAN,
+        HoleFact.NUMBER,
+        HoleFact.CONSTANT,
+    )
 
 /** What may end an operand of `+` at the top level: an argument or statement boundary, or an operator that binds less tightly. */
 private val OPERAND_END = Regex("""^(?:[,)\]};]|\?:|&&|\|\||==|!=|<=|>=|\.\.)""")
@@ -284,6 +297,10 @@ internal class Declaration(
     val markup: Boolean = false,
     /** What it is set to the `.text` of, `interpolate(...)` or a name: markup held as a String when that is an Html. */
     val textOf: String? = null,
+    /** What the brackets after its type hold, `Html` of `List<Html>`. */
+    val typeArguments: String? = null,
+    /** Where the value a `val` is set to starts, when it is set to more than a literal; -1 otherwise. */
+    val valueAt: Int = -1,
 ) {
     /** Just past where it can last be seen. */
     var end: Int = Int.MAX_VALUE
@@ -350,10 +367,14 @@ private const val TYPE = """[\p{L}_][\p{L}\p{Nd}_.]*\??"""
 private val VAL_AFTER =
     Regex(
         """\s*(?:<[^<>]*>\s*)?((?:$NAME\s*\.\s*)*)($NAME)(?:\s*:\s*($TYPE))?""" +
-            """(?:\s*=\s*(?:(-?\d[\d_]*(?:\.\d+)?[LlFfDd]?|true|false)|("(?:[^"\\$\n]|\\[^$])*"))(?=[ \t]*(?:[\n\r;})\],]|//|$)))?""",
+            """(?:\s*=\s*(?:(-?\d[\d_]*(?:\.\d+)?(?:[uU][lL]?|[LlFfDd])?|true|false)|("(?:[^"\\$\n]|\\[^$])*"))(?=[ \t]*(?:[\n\r;})\],]|//|$)))?""",
     )
 private val DESTRUCTURED = Regex("""\s*\(([^()]*)\)""")
-private val PARAMETER = Regex("""^\s*(?:@[\p{L}_][\p{L}\p{Nd}_.]*(?:\s*\([^)]*\))?\s*)*((?:\p{L}+\s+)*?)($NAME)\s*:\s*($TYPE)?""")
+private const val TYPE_ARGUMENTS = """\s*<((?:[^<>]|<[^<>]*>)*)>"""
+private val PARAMETER =
+    Regex("""^\s*(?:@[\p{L}_][\p{L}\p{Nd}_.]*(?:\s*\([^)]*\))?\s*)*((?:\p{L}+\s+)*?)($NAME)\s*:\s*($TYPE)?(?:$TYPE_ARGUMENTS)?""")
+private val TYPE_ARGUMENTS_AFTER = Regex(TYPE_ARGUMENTS)
+private val VALUE_AFTER = Regex("""\s*=(?!=)\s*""")
 private val LAMBDA_PARAMETERS =
     Regex(
         """\s*((?:\([^()]*\)|$NAME)(?:\s*:\s*[\p{L}\p{Nd}_.<>?]+)?(?:\s*,\s*(?:\([^()]*\)|$NAME)(?:\s*:\s*[\p{L}\p{Nd}_.<>?]+)?)*)\s*->""",
@@ -529,8 +550,18 @@ private fun declarations(
             val m = PARAMETER.find(text) ?: continue
             val vararg = VARARG.containsMatchIn(m.groupValues[1])
             val type = if (vararg) null else m.groups[3]?.value
+            val arguments = if (vararg) null else m.groups[4]?.value
             out +=
-                add(m.groupValues[2], Declaration(cuts[k] + 1 + m.range.first, f.open, type, html = HTML_ANNOTATION.containsMatchIn(text)))
+                add(
+                    m.groupValues[2],
+                    Declaration(
+                        cuts[k] + 1 + m.range.first,
+                        f.open,
+                        type,
+                        html = HTML_ANNOTATION.containsMatchIn(text),
+                        typeArguments = arguments,
+                    ),
+                )
         }
         return out
     }
@@ -606,6 +637,19 @@ private fun declarations(
                             val at = m.groups[2]!!.range.first
                             val bare = m.groups[4] == null && m.groups[5] == null
                             val markup = bare && markupInitialiser(src, m.range.last + 1)
+                            val arguments = m.groups[3]?.let { TYPE_ARGUMENTS_AFTER.matchAt(src, it.range.last + 1) }
+                            // The value of a `val` set once, which a name then stands for.
+                            val valueAt =
+                                if (word == "val" && bare && !markup) {
+                                    VALUE_AFTER
+                                        .matchAt(
+                                            src,
+                                            arguments?.range?.last?.plus(1) ?: (m.range.last + 1),
+                                        )?.let { it.range.last + 1 }
+                                        ?: -1
+                                } else {
+                                    -1
+                                }
                             val d =
                                 add(
                                     m.groupValues[2],
@@ -620,6 +664,8 @@ private fun declarations(
                                         m.groups[5] != null,
                                         markup,
                                         if (bare && !markup) textInitialiser(src, m.range.last + 1) else null,
+                                        arguments?.groupValues?.get(1),
+                                        valueAt,
                                     ),
                                 )
                             if (owner.kind != "top") owner.ends += d
@@ -796,9 +842,10 @@ internal fun constantAt(
 
 /**
  * The type the declaration [name] means at [at] gives it: a number or a boolean that cannot be
- * null (`count: Int`, `val n = 3`), one that can (`count: Int?`), a string (`name: String`),
- * which is what may come from outside, or core's `Html`, which is markup. Anything else is not
- * known. [nonNull] reads the value as the left side of `?:` gives it.
+ * null (`count: Int`, `n: Number`, `val n = 3`), one that can (`count: Int?`), an unsigned number
+ * (`u: UInt`, `val u = 3u`), a string (`name: String`), which is what may come from outside, or
+ * core's `Html`, which is markup. Anything else is not known. [nonNull] reads the value as the
+ * left side of `?:` gives it.
  */
 internal fun declaredKind(
     src: String,
@@ -808,14 +855,25 @@ internal fun declaredKind(
 ): HoleFact? {
     val d = declarationOf(src, name, at) ?: return null
     val literal = d.literal
-    if (literal != null) return if (literal == "true" || literal == "false") HoleFact.BOOLEAN else HoleFact.NUMBER
+    if (literal != null) {
+        return when {
+            literal == "true" || literal == "false" -> HoleFact.BOOLEAN
+            UNSIGNED_SUFFIX.containsMatchIn(literal) -> HoleFact.UNSIGNED
+            else -> HoleFact.NUMBER
+        }
+    }
     if (d.markup) return HoleFact.MARKUP
     val declared = d.type ?: return null
     val type = declared.removeSuffix("?")
     val scalar =
         when {
             NUMBER_TYPE.matches(type) -> HoleFact.NUMBER
+
             BOOLEAN_TYPE.matches(type) -> HoleFact.BOOLEAN
+
+            // Digits too; an unsigned number that may be null is judged as any number that may be.
+            UNSIGNED_TYPE.matches(type) -> HoleFact.UNSIGNED
+
             else -> null
         }
     // Digits, true or false, or null: safe where anything is, and not where only a number or a boolean is.
@@ -977,7 +1035,7 @@ private fun ownArgument(
     val a = arg.replaceFirst(ARGUMENT_NAME, "").trim()
     if (a.startsWith("*")) return false
     val kind = weakest(holeValues(a).map { valueKind(src, it.text, at, constants, it.nonNull) })
-    return kind == HoleFact.CONSTANT || kind == HoleFact.NUMBER || kind == HoleFact.BOOLEAN
+    return kind == HoleFact.CONSTANT || kind == HoleFact.NUMBER || kind == HoleFact.BOOLEAN || kind == HoleFact.UNSIGNED
 }
 
 private val QUALIFIED = Regex("""^((?:[\p{L}_][\p{L}\p{Nd}_]*\s*\.\s*)+)([\p{L}_][\p{L}\p{Nd}_]*)$""")
@@ -1169,17 +1227,19 @@ private fun namedLambda(
  * an HTML literal, trimmed or not, or a `+` chain that opens with one; a call to `interpolate` or
  * `Trusted`, or the text of an `Html`; a name declared `Html` or marked `@Language("HTML")`;
  * kotlinx.html's `createHTML()`, `appendHTML()` in `buildString`, or Streamlord's `elements { }`;
- * `joinToString` of markup; or an `if`, a `when` or an `?:` every one of whose results is markup.
+ * `joinToString` of markup or of a collection declared one of Html; a `val` set to a call that is
+ * markup; or an `if`, a `when` or an `?:` every one of whose results is markup.
  */
 internal fun markupValue(
     src: String,
     value: String,
     at: Int,
+    depth: Int = 0,
 ): Boolean {
     val values = holeValues(value)
     // `if (admin) "<b>admin</b>" else ""`: every result is markup or a literal the author wrote.
     if (values.size > 1) {
-        val markup = values.map { markupValue(src, it.text, at) }
+        val markup = values.map { markupValue(src, it.text, at, depth) }
         return markup.any { it } &&
             values.indices.all { k ->
                 val v = values[k].text
@@ -1197,7 +1257,13 @@ internal fun markupValue(
     ) {
         return true
     }
-    if (IDENT.matches(t)) return declaredKind(src, t, at) == HoleFact.MARKUP || htmlNamed(src, t, at)
+    if (IDENT.matches(t)) {
+        if (declaredKind(src, t, at) == HoleFact.MARKUP || htmlNamed(src, t, at)) return true
+        // `val e = elements { }`: the name stands for the call it is set to; a literal it is set to is judged where it is written.
+        val d = declarationOf(src, t, at) ?: return false
+        val init = initialiser(src, d) ?: return false
+        return depth < VALUE_DEPTH && lastCall(init) != null && markupValue(src, init, d.at, depth + 1)
+    }
     if (CREATE_HTML.containsMatchIn(t)) return true
     val call = lastCall(t) ?: return false
     val lambda = call.lambda
@@ -1205,27 +1271,81 @@ internal fun markupValue(
     if (call.name == "elements" && call.receiver == null && lambda != null) return USES_ELEMENTS.containsMatchIn(src)
     if (call.name != "joinToString") return false
     val transform = lambda ?: namedLambda(call.args, "transform")
-    if (transform != null) return markupValue(src, lambdaResult(transform), at)
-    return call.receiver != null && markupElements(src, call.receiver, at)
+    if (transform != null) return markupValue(src, lambdaResult(transform), at, depth)
+    return call.receiver != null && markupElements(src, call.receiver, at, depth)
 }
 
-/** Whether every element of a collection is markup: `listOf(a, b)` of markup, or a `map { }` to markup. */
+/** How many names deep a value is followed to what it is set to. */
+private const val VALUE_DEPTH = 4
+
+/** A collection, as a declaration names its type: what `joinToString` is called on. */
+private val COLLECTION_TYPE =
+    Regex(
+        """(?:kotlin\.collections\.|kotlin\.sequences\.)?(?:List|MutableList|ArrayList|Collection|Iterable|Set|MutableSet|Sequence|Array)\??""",
+    )
+private val MARKUP_ELEMENT = Regex("""(?:[\p{L}_][\p{L}\p{Nd}_]*\.)*(?:Html|Trusted)""")
+
+/**
+ * Whether every element of a collection is markup: `listOf(a, b)` of markup, a `map { }` to
+ * markup, a name declared a `List<Html>`, or one set to such a collection.
+ */
 private fun markupElements(
     src: String,
     receiver: String,
     at: Int,
+    depth: Int,
 ): Boolean {
-    val r = lastCall(receiver) ?: return false
+    val t = receiver.trim()
+    if (IDENT.matches(t)) {
+        val d = declarationOf(src, t, at) ?: return false
+        val type = d.type
+        if (type != null) return COLLECTION_TYPE.matches(type) && d.typeArguments?.trim()?.let { MARKUP_ELEMENT.matches(it) } == true
+        val init = initialiser(src, d) ?: return false
+        return depth < VALUE_DEPTH && markupElements(src, init, d.at, depth + 1)
+    }
+    val r = lastCall(t) ?: return false
     val lambda = r.lambda
     if ((r.name == "listOf" || r.name == "arrayOf") && r.receiver == null && lambda == null) {
-        return r.args.isNotBlank() && splitTop(r.args, ",").all { markupValue(src, it, at) }
+        return r.args.isNotBlank() && splitTop(r.args, ",").all { markupValue(src, it, at, depth) }
     }
     if ((r.name == "map" || r.name == "mapIndexed" || r.name == "mapNotNull") &&
         lambda != null
     ) {
-        return markupValue(src, lambdaResult(lambda), at)
+        return markupValue(src, lambdaResult(lambda), at, depth)
     }
     return false
+}
+
+/**
+ * The value a `val` is set to, as written: from after its `=` to where the statement ends, at a
+ * line break that ends it, a `;`, a comment, or the bracket that closes what holds it. Null for a
+ * `var`, a literal, or a name declared in any other way.
+ */
+private fun initialiser(
+    src: String,
+    d: Declaration,
+): String? {
+    if (d.valueAt < 0) return null
+    val code = fileFacts(src).code
+    var depth = 0
+    var k = d.valueAt
+    while (k < src.length) {
+        if (code[k]) {
+            val c = src[k]
+            if (c == '(' || c == '[' || c == '{') {
+                depth++
+            } else if (c == ')' || c == ']' || c == '}') {
+                if (depth == 0) break
+                depth--
+            } else if (depth == 0 && (c == ';' || (c == '\n' && lineEnds(src, code, k)))) {
+                break
+            }
+        } else if (depth == 0 && (src.startsWith("//", k) || src.startsWith("/*", k))) {
+            break
+        }
+        k++
+    }
+    return src.substring(d.valueAt, k).trim().takeIf { it.isNotEmpty() }
 }
 
 /** Whether a hole's value is markup the author built; see [markupValue]. */
@@ -1760,7 +1880,7 @@ internal fun countBelow(
 }
 
 /** What a value handed to `interpolate` is, as far as the text shows: what core's `admits` decides by. */
-internal enum class ArgKind { STRING, NUMBER, BOOLEAN, NULL, CHAR, TRUSTED, MARKUP }
+internal enum class ArgKind { STRING, NUMBER, UNSIGNED, BOOLEAN, NULL, CHAR, TRUSTED, MARKUP }
 
 private val NUMBER_LITERAL = Regex("""-?(?:0[xX][0-9A-Fa-f_]+|0[bB][01_]+|\d[\d_]*(?:\.\d[\d_]*)?(?:[eE][+-]?\d+)?)[LlFfDdUu]*""")
 private val CHAR_LITERAL = Regex("""'(?:[^'\\]|\\.[^']*)'""")
@@ -1800,7 +1920,7 @@ internal fun valueKind(
 ): ArgKind? {
     val t = text.trim()
     if (literal) return ArgKind.STRING
-    if (NUMBER_LITERAL.matches(t)) return ArgKind.NUMBER
+    if (NUMBER_LITERAL.matches(t)) return if (UNSIGNED_SUFFIX.containsMatchIn(t)) ArgKind.UNSIGNED else ArgKind.NUMBER
     if (t == "true" || t == "false") return ArgKind.BOOLEAN
     if (t == "null") return ArgKind.NULL
     if (CHAR_LITERAL.matches(t)) return ArgKind.CHAR
@@ -1813,6 +1933,8 @@ internal fun valueKind(
     if (!IDENT.matches(t)) return null
     return when (declaredKind(src, t, at)) {
         HoleFact.NUMBER -> ArgKind.NUMBER
+
+        HoleFact.UNSIGNED -> ArgKind.UNSIGNED
 
         HoleFact.BOOLEAN -> ArgKind.BOOLEAN
 

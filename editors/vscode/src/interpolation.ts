@@ -11,7 +11,7 @@ import { laterFix, type Fix } from "./expression.ts";
 import { catalog } from "./catalog.ts";
 import { dslHelpers, EXPRESSION_HELPERS } from "./signalNameHyphens.ts";
 
-const HTML_START = /^\s*<(?:[A-Za-z]|__kt__|!--|!doctype)/i;
+const HTML_START = /^\s*<(?:[A-Za-z]|__kt__(?=[\s>/])|!--|!doctype)/i;
 const IDENT = /^[\p{L}_][\p{L}\p{Nd}_]*$/u;
 
 /** An expression as a message quotes it: on one line, and cut short past 30 characters. */
@@ -235,6 +235,10 @@ interface Declaration {
   markup?: boolean;
   /** What it is set to the `.text` of, `interpolate(...)` or a name: markup held as a String when that is an Html. */
   textOf?: string;
+  /** What the brackets after its type hold, `Html` of `List<Html>`. */
+  typeArguments?: string;
+  /** Where the value a `val` is set to starts, when it is set to more than a literal. */
+  valueAt?: number;
   constant: boolean;
   html: boolean;
 }
@@ -286,11 +290,14 @@ function codeMask(src: string, strings: readonly KotlinString[], mask: Uint8Arra
 const NAME = String.raw`[\p{L}_][\p{L}\p{Nd}_]*`;
 const TYPE = String.raw`[\p{L}_][\p{L}\p{Nd}_.]*\??`;
 const VAL_AFTER = new RegExp(
-  String.raw`\s*(?:<[^<>]*>\s*)?((?:${NAME}\s*\.\s*)*)(${NAME})(?:\s*:\s*(${TYPE}))?(?:\s*=\s*(?:(-?\d[\d_]*(?:\.\d+)?[LlFfDd]?|true|false)|("(?:[^"\\$\n]|\\[^$])*"))(?=[ \t]*(?:[\n\r;})\],]|//|$)))?`,
+  String.raw`\s*(?:<[^<>]*>\s*)?((?:${NAME}\s*\.\s*)*)(${NAME})(?:\s*:\s*(${TYPE}))?(?:\s*=\s*(?:(-?\d[\d_]*(?:\.\d+)?(?:[uU][lL]?|[LlFfDd])?|true|false)|("(?:[^"\\$\n]|\\[^$])*"))(?=[ \t]*(?:[\n\r;})\],]|//|$)))?`,
   "uy",
 );
 const DESTRUCTURED = new RegExp(String.raw`\s*\(([^()]*)\)`, "y");
-const PARAMETER = new RegExp(String.raw`^\s*(?:@[\p{L}_][\p{L}\p{Nd}_.]*(?:\s*\([^)]*\))?\s*)*((?:[\p{L}]+\s+)*?)(${NAME})\s*:\s*(${TYPE})?`, "u");
+const TYPE_ARGUMENTS = String.raw`\s*<((?:[^<>]|<[^<>]*>)*)>`;
+const PARAMETER = new RegExp(String.raw`^\s*(?:@[\p{L}_][\p{L}\p{Nd}_.]*(?:\s*\([^)]*\))?\s*)*((?:[\p{L}]+\s+)*?)(${NAME})\s*:\s*(${TYPE})?(?:${TYPE_ARGUMENTS})?`, "u");
+const TYPE_ARGUMENTS_AFTER = new RegExp(TYPE_ARGUMENTS, "y");
+const VALUE_AFTER = /\s*=(?!=)\s*/y;
 const LAMBDA_PARAMETERS = new RegExp(String.raw`\s*((?:\([^()]*\)|${NAME})(?:\s*:\s*[\p{L}\p{Nd}_.<>?]+)?(?:\s*,\s*(?:\([^()]*\)|${NAME})(?:\s*:\s*[\p{L}\p{Nd}_.<>?]+)?)*)\s*->`, "uy");
 const FOR_VARIABLE = new RegExp(String.raw`\s*(\([^()]*\)|${NAME})(?:\s*:\s*(${TYPE}))?\s+in\b`, "uy");
 const CONST_BEFORE = /\bconst[ \t]+(?:\p{L}+[ \t]+)*$/u;
@@ -380,7 +387,7 @@ function declarations(src: string, code: Uint8Array): Map<string, Declaration[]>
       const m = PARAMETER.exec(text);
       if (!m) continue;
       const vararg = /\bvararg\b/.test(m[1] ?? "");
-      out.push({ name: m[2] as string, d: { at: (cuts[k] as number) + 1 + (m.index ?? 0), start: f.open, end: src.length, type: vararg ? undefined : m[3], constant: false, html: HTML_ANNOTATION.test(text) } });
+      out.push({ name: m[2] as string, d: { at: (cuts[k] as number) + 1 + (m.index ?? 0), start: f.open, end: src.length, type: vararg ? undefined : m[3], typeArguments: vararg ? undefined : m[4], constant: false, html: HTML_ANNOTATION.test(text) } });
     }
     return out;
   };
@@ -430,7 +437,24 @@ function declarations(src: string, code: Uint8Array): Map<string, Declaration[]>
             const at = end + m[0].indexOf(m[2] as string, (m[0].length - m[0].trimStart().length));
             const markup = m[4] === undefined && m[5] === undefined && markupInitialiser(src, end + m[0].length);
             const textOf = m[4] === undefined && m[5] === undefined && !markup ? textInitialiser(src, end + m[0].length) : undefined;
-            const d = { ...scope(at), type: m[3], literal: m[4], text: constant ? m[5] : undefined, string: m[5] !== undefined, markup, textOf };
+            let after = end + m[0].length;
+            let typeArguments: string | undefined;
+            if (m[3] !== undefined) {
+              TYPE_ARGUMENTS_AFTER.lastIndex = after;
+              const a = TYPE_ARGUMENTS_AFTER.exec(src);
+              if (a) {
+                typeArguments = a[1];
+                after += a[0].length;
+              }
+            }
+            // The value of a `val` set once, which a name then stands for.
+            let valueAt: number | undefined;
+            if (word === "val" && m[4] === undefined && m[5] === undefined && !markup) {
+              VALUE_AFTER.lastIndex = after;
+              const v = VALUE_AFTER.exec(src);
+              if (v) valueAt = after + v[0].length;
+            }
+            const d = { ...scope(at), type: m[3], literal: m[4], text: constant ? m[5] : undefined, string: m[5] !== undefined, markup, textOf, typeArguments, valueAt };
             add(m[2] as string, d);
             if (owner.kind !== "top") owner.ends.push(d);
           }
@@ -623,22 +647,28 @@ export function constantAt(src: string, name: string, at: number, constants?: Re
 }
 
 /** What a declaration or a value shows: the facts of HoleFact the text alone can give. */
-export type TextKind = "number" | "boolean" | "nullable" | "string" | "markup";
+export type TextKind = "number" | "unsigned" | "boolean" | "nullable" | "string" | "markup";
+
+/** Digits, but not a `kotlin.Number`: interpolate refuses one where only a number is let in. */
+const UNSIGNED_TYPE = /^(?:kotlin\.)?(?:UInt|ULong|UShort|UByte)$/;
+const UNSIGNED_SUFFIX = /[uU][lL]?$/;
 
 /**
  * The type the declaration `name` means at `at` gives it: a number or a boolean that cannot be
- * null (`count: Int`, `val n = 3`), one that can (`count: Int?`), a string (`name: String`),
- * which is what may come from outside, or the markup `interpolate` returns (`page: Html`).
- * Anything else is not known. `nonNull` reads the value as the left side of `?:` gives it.
+ * null (`count: Int`, `n: Number`, `val n = 3`), one that can (`count: Int?`), an unsigned number
+ * (`u: UInt`, `val u = 3u`), a string (`name: String`), which is what may come from outside,
+ * or the markup `interpolate` returns (`page: Html`). Anything else is not known. `nonNull`
+ * reads the value as the left side of `?:` gives it.
  */
 export function declaredKind(src: string, name: string, at: number, nonNull = false): TextKind | null {
   const d = declarationOf(src, name, at);
   if (!d) return null;
-  if (d.literal !== undefined) return d.literal === "true" || d.literal === "false" ? "boolean" : "number";
+  if (d.literal !== undefined) return d.literal === "true" || d.literal === "false" ? "boolean" : UNSIGNED_SUFFIX.test(d.literal) ? "unsigned" : "number";
   if (d.markup) return "markup";
   if (d.type === undefined) return null;
   const type = d.type.replace(/\?$/, "");
-  const scalar = /^(?:kotlin\.)?(?:Int|Long|Short|Byte|Double|Float|UInt|ULong|UShort|UByte)$/.test(type) ? "number" : /^(?:kotlin\.)?Boolean$/.test(type) ? "boolean" : null;
+  // Digits too; an unsigned number that may be null is judged as any number that may be.
+  const scalar = /^(?:kotlin\.)?(?:Int|Long|Short|Byte|Double|Float|Number)$/.test(type) ? "number" : /^(?:kotlin\.)?Boolean$/.test(type) ? "boolean" : UNSIGNED_TYPE.test(type) ? "unsigned" : null;
   // Digits, true or false, or null: safe where anything is, and not where only a number or a boolean is.
   if (scalar) return type === d.type || nonNull ? scalar : "nullable";
   if (/^(?:kotlin\.)?(?:String|CharSequence)$/.test(type)) return "string";
@@ -765,7 +795,7 @@ function ownArgument(src: string, arg: string, at: number, constants?: ReadonlyS
   const a = arg.replace(ARGUMENT_NAME, "").trim();
   if (a.startsWith("*")) return false;
   const kind = weakest(holeValues(a).map((v) => valueKind(src, v.text, at, constants, v.nonNull)));
-  return kind === "constant" || kind === "number" || kind === "boolean";
+  return kind === "constant" || kind === "number" || kind === "boolean" || kind === "unsigned";
 }
 
 /**
@@ -813,7 +843,7 @@ export function valueKind(src: string, value: string, at: number, constants?: Re
 
 /** Of the kinds a hole's values have, the one safe in the fewest places; one not known stands between a String and markup. */
 export function weakest(kinds: readonly (TextKind | "constant" | null)[]): TextKind | "constant" | null {
-  const order: (TextKind | "constant" | null)[] = ["string", null, "markup", "nullable", "boolean", "number", "constant"];
+  const order: (TextKind | "constant" | null)[] = ["string", null, "markup", "nullable", "unsigned", "boolean", "number", "constant"];
   let worst = order.length - 1;
   for (const k of kinds) worst = Math.min(worst, order.indexOf(k));
   return order[worst] ?? null;
@@ -901,13 +931,14 @@ function namedLambda(args: string, name: string): string | null {
  * an HTML literal, trimmed or not, or a `+` chain that opens with one; a call to `interpolate` or
  * `Trusted`, or the text of an `Html`; a name declared `Html` or marked `@Language("HTML")`;
  * kotlinx.html's `createHTML()`, `appendHTML()` in `buildString`, or Streamlord's `elements { }`;
- * `joinToString` of markup; or an `if`, a `when` or an `?:` every one of whose results is markup.
+ * `joinToString` of markup or of a collection declared one of Html; a `val` set to a call that is
+ * markup; or an `if`, a `when` or an `?:` every one of whose results is markup.
  */
-export function markupValue(src: string, value: string, at: number): boolean {
+export function markupValue(src: string, value: string, at: number, depth = 0): boolean {
   const values = holeValues(value);
   // `if (admin) "<b>admin</b>" else ""`: every result is markup or a literal the author wrote.
   if (values.length > 1) {
-    const markup = values.map((v) => markupValue(src, v.text, at));
+    const markup = values.map((v) => markupValue(src, v.text, at, depth));
     return markup.some((m) => m) && values.every((v, k) => markup[k] || LITERAL.test(v.text) || plainString(v.text) || CHAR_LITERAL.test(v.text));
   }
   const t = (values[0] as HoleValue).text;
@@ -917,7 +948,13 @@ export function markupValue(src: string, value: string, at: number): boolean {
   if (wholeCall(t, "interpolate") || wholeCall(t, "Trusted")) return true;
   const textOf = /^([\s\S]*?)\s*\.\s*text$/.exec(t)?.[1];
   if (textOf !== undefined && (wholeCall(textOf, "interpolate") || (IDENT.test(textOf) && declaredKind(src, textOf, at) === "markup"))) return true;
-  if (IDENT.test(t)) return declaredKind(src, t, at) === "markup" || htmlNamed(src, t, at);
+  if (IDENT.test(t)) {
+    if (declaredKind(src, t, at) === "markup" || htmlNamed(src, t, at)) return true;
+    // `val e = elements { }`: the name stands for the call it is set to; a literal it is set to is judged where it is written.
+    const d = declarationOf(src, t, at);
+    const init = d ? initialiser(src, d) : null;
+    return d !== null && init !== null && depth < VALUE_DEPTH && lastCall(init) !== null && markupValue(src, init, d.at, depth + 1);
+  }
   if (/^createHTML\s*\(/.test(t)) return true;
   const call = lastCall(t);
   if (!call) return false;
@@ -925,17 +962,59 @@ export function markupValue(src: string, value: string, at: number): boolean {
   if (call.name === "elements" && call.receiver === null && call.lambda !== null) return USES_HTML_DSL.test(src);
   if (call.name !== "joinToString") return false;
   const transform = call.lambda ?? namedLambda(call.args, "transform");
-  if (transform !== null) return markupValue(src, lambdaResult(transform), at);
-  return call.receiver !== null && markupElements(src, call.receiver, at);
+  if (transform !== null) return markupValue(src, lambdaResult(transform), at, depth);
+  return call.receiver !== null && markupElements(src, call.receiver, at, depth);
 }
 
-/** Whether every element of a collection is markup: `listOf(a, b)` of markup, or a `map { }` to markup. */
-function markupElements(src: string, receiver: string, at: number): boolean {
-  const r = lastCall(receiver);
+/** How many names deep a value is followed to what it is set to. */
+const VALUE_DEPTH = 4;
+
+/** A collection, as a declaration names its type: what `joinToString` is called on. */
+const COLLECTION_TYPE = /^(?:kotlin\.collections\.|kotlin\.sequences\.)?(?:List|MutableList|ArrayList|Collection|Iterable|Set|MutableSet|Sequence|Array)\??$/;
+const MARKUP_ELEMENT = /^(?:[\p{L}_][\p{L}\p{Nd}_]*\.)*(?:Html|Trusted)$/u;
+
+/**
+ * Whether every element of a collection is markup: `listOf(a, b)` of markup, a `map { }` to
+ * markup, a name declared a `List<Html>`, or one set to such a collection.
+ */
+function markupElements(src: string, receiver: string, at: number, depth: number): boolean {
+  const t = receiver.trim();
+  if (IDENT.test(t)) {
+    const d = declarationOf(src, t, at);
+    if (!d) return false;
+    if (d.type !== undefined) return COLLECTION_TYPE.test(d.type) && MARKUP_ELEMENT.test(d.typeArguments?.trim() ?? "");
+    const init = initialiser(src, d);
+    return init !== null && depth < VALUE_DEPTH && markupElements(src, init, d.at, depth + 1);
+  }
+  const r = lastCall(t);
   if (!r) return false;
-  if ((r.name === "listOf" || r.name === "arrayOf") && r.receiver === null && r.lambda === null) return r.args.trim() !== "" && splitTop(r.args, ",").every((a) => markupValue(src, a, at));
-  if ((r.name === "map" || r.name === "mapIndexed" || r.name === "mapNotNull") && r.lambda !== null) return markupValue(src, lambdaResult(r.lambda), at);
+  if ((r.name === "listOf" || r.name === "arrayOf") && r.receiver === null && r.lambda === null) return r.args.trim() !== "" && splitTop(r.args, ",").every((a) => markupValue(src, a, at, depth));
+  if ((r.name === "map" || r.name === "mapIndexed" || r.name === "mapNotNull") && r.lambda !== null) return markupValue(src, lambdaResult(r.lambda), at, depth);
   return false;
+}
+
+/**
+ * The value a `val` is set to, as written: from after its `=` to where the statement ends, at a
+ * line break that ends it, a `;`, a comment, or the bracket that closes what holds it. Null for a
+ * `var`, a literal, or a name declared in any other way.
+ */
+function initialiser(src: string, d: Declaration): string | null {
+  if (d.valueAt === undefined) return null;
+  const { code } = fileFacts(src);
+  let depth = 0;
+  let k = d.valueAt;
+  for (; k < src.length; k++) {
+    if (code[k] === 1) {
+      const c = src[k];
+      if (c === "(" || c === "[" || c === "{") depth++;
+      else if (c === ")" || c === "]" || c === "}") {
+        if (depth === 0) break;
+        depth--;
+      } else if (depth === 0 && (c === ";" || (c === "\n" && lineEnds(src, code, k)))) break;
+    } else if (depth === 0 && (src.startsWith("//", k) || src.startsWith("/*", k))) break;
+  }
+  const text = src.slice(d.valueAt, k).trim();
+  return text === "" ? null : text;
 }
 
 /** Whether a hole's value is markup the author built; see [markupValue]. */
@@ -1306,7 +1385,7 @@ export function countBelow(sorted: readonly number[], d: number): number {
 }
 
 /** What a value handed to `interpolate` is, as far as the text shows: what core's `admits` decides by. */
-export type ArgKind = "string" | "number" | "boolean" | "null" | "char" | "trusted" | "markup";
+export type ArgKind = "string" | "number" | "unsigned" | "boolean" | "null" | "char" | "trusted" | "markup";
 
 /** Whether `text` is one call to `name` whose argument list closes at its end: `Trusted(x)`, not `Trusted(x).html`. */
 function wholeCall(text: string, name: string): boolean {
@@ -1329,7 +1408,7 @@ function wholeCall(text: string, name: string): boolean {
 export function argKind(src: string, text: string, literal: boolean, at: number): ArgKind | null {
   const t = text.trim();
   if (literal) return "string";
-  if (/^-?(?:0[xX][0-9A-Fa-f_]+|0[bB][01_]+|\d[\d_]*(?:\.\d[\d_]*)?(?:[eE][+-]?\d+)?)[LlFfDdUu]*$/.test(t)) return "number";
+  if (/^-?(?:0[xX][0-9A-Fa-f_]+|0[bB][01_]+|\d[\d_]*(?:\.\d[\d_]*)?(?:[eE][+-]?\d+)?)[LlFfDdUu]*$/.test(t)) return UNSIGNED_SUFFIX.test(t) ? "unsigned" : "number";
   if (t === "true" || t === "false") return "boolean";
   if (t === "null") return "null";
   if (/^'(?:[^'\\]|\\.[^']*)'$/.test(t)) return "char";

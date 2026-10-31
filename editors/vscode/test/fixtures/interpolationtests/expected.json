@@ -2231,6 +2231,15 @@
     "code": "interpolate-template",
     "severity": "warning",
     "message": "Kotlin fills in ${applicant.errors.joinToString…} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Make it a %s hole and pass the value to interpolate."
+   },
+   {
+    "line": 98,
+    "hole": "$inner",
+    "start": 5208,
+    "end": 5214,
+    "code": "interpolate-template",
+    "severity": "warning",
+    "message": "Kotlin fills in $inner before interpolate reads the markup, so interpolate reads what it holds as markup too: a %s in it is a hole and a %% a per cent sign, and interpolate throws or changes the markup. Make it a %s hole and pass the Html: interpolate writes an Html or a Trusted there as it is."
    }
   ]
  }

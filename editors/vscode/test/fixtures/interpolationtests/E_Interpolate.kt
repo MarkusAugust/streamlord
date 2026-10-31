@@ -89,6 +89,15 @@ object InterpolateCalls {
             query,
         )
 
+    // 16. Markup a Kotlin template writes into the format.
+    // interpolate-template, warning, on $inner: interpolate reads the Html as
+    // format too, so a %s or %% in it is a hole or a per cent sign. Fix: make
+    // it a %s hole and pass inner, which interpolate writes as it is.
+    fun markupInText(query: String): Html {
+        val inner: Html = interpolate("<b>%s</b>", query)
+        return interpolate("<div class=\"lt-card\">$inner</div>")
+    }
+
     // Correct uses: silent.
 
     // Values escaped into text and an attribute.
@@ -105,13 +114,8 @@ object InterpolateCalls {
 
     fun list(): Html = interpolate("<ul class=\"lt-list\">%s</ul>", Trusted(applicant.errors.joinToString("") { interpolate("<li>%s</li>", it).text }))
 
-    // Constants and markup in the format are the author's own.
+    // Constants in the format are the author's own.
     fun constants(query: String): Html = interpolate("<div id=\"$fieldId\" class=\"lt-card\" data-variant=\"$variant\">%s</div>", query)
-
-    fun markupInText(query: String): Html {
-        val inner: Html = interpolate("<b>%s</b>", query)
-        return interpolate("<div class=\"lt-card\">$inner</div>")
-    }
 
     // A per cent sign, and signals in a $$ literal.
     fun percent(query: String): Html = interpolate("<p class=\"lt-paragraph\">50%% done: %s</p>", query)

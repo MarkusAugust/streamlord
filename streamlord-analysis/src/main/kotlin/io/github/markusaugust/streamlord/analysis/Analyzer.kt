@@ -28,9 +28,11 @@ public data class AnalyzeOptions(
 /**
  * What the editor knows of a value: its type, or that it is a constant or markup. [NULLABLE] is a
  * number or a boolean that may be null (`Int?`): digits, true, false or null. [NULLABLE_STRING] is
- * a `String?`, which a Kotlin template writes as `null` and `interpolate` as nothing.
+ * a `String?`, which a Kotlin template writes as `null` and `interpolate` as nothing. [UNSIGNED] is
+ * a `UInt`, `ULong`, `UShort` or `UByte`: digits, but not a `kotlin.Number`, so `interpolate`
+ * refuses it where only a number is let in.
  */
-public enum class HoleFact { STRING, NULLABLE_STRING, NUMBER, BOOLEAN, NULLABLE, CONSTANT, MARKUP }
+public enum class HoleFact { STRING, NULLABLE_STRING, NUMBER, BOOLEAN, NULLABLE, CONSTANT, MARKUP, UNSIGNED }
 
 private val MODE_NAME = Regex("""(?:^|\.)([A-Z]+)\s*$""")
 private val CASE_ARG = Regex("""^\s*Case\.[A-Z]+\s*$""")
@@ -50,7 +52,10 @@ private val DOLLAR_RUNS = Regex("""\$+""")
 private val ASSIGN_BEFORE = Regex("""\s*=\s*$""")
 private val BRACED_TEMPLATE = Regex("""\$\{""")
 private val TRIM_AFTER = Regex("""\s*\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)""")
-private val CHAIN_HTML_START = Regex("""^\s*<(?:[A-Za-z]|__kt__|!--)""")
+
+// A name, a property chain or a number literal, which takes a call after it without brackets.
+private val SIMPLE_RECEIVER = Regex("""[\p{L}_][\p{L}\p{Nd}_]*(?:\.[\p{L}_][\p{L}\p{Nd}_]*)*|\p{Nd}[\p{L}\p{Nd}_]*""")
+private val CHAIN_HTML_START = Regex("""^\s*<(?:[A-Za-z]|__kt__(?=[\s>/])|!--)""")
 private val END_TAG_ATTRIBUTES = Regex("""</[^\t\n\u000C\r />]*[\t\n\u000C\r /][^>]*""")
 
 /** The characters that end an unquoted attribute value, and the space before one: ASCII only, as HTML has it. */
@@ -526,28 +531,35 @@ public class Analyzer(
                     continue
                 }
             }
-            if (fact == HoleFact.CONSTANT || fact == HoleFact.NUMBER || fact == HoleFact.BOOLEAN) continue
-            if (fact == HoleFact.MARKUP && landing.position == Position.TEXT) continue
+            // Kotlin fills in the digits of an unsigned number before interpolate sees the markup, so it is a number here.
+            if (fact == HoleFact.CONSTANT || fact == HoleFact.NUMBER || fact == HoleFact.BOOLEAN || fact == HoleFact.UNSIGNED) continue
             if (fact == HoleFact.NULLABLE && landing.position in ESCAPED_POSITIONS) continue
+            // Markup in element text is safe as markup, but interpolate reads it as format: a %s in it is a hole.
+            val markupText = fact == HoleFact.MARKUP && landing.position == Position.TEXT
             val shown = holeDisplay(ip, format.dollars)
             // A `%` right before the template would make `%%s` of the hole: a per cent sign and an s.
             val percents = runBefore(format.text, ip.decodedStart, '%')
-            // A %s hole writes nothing for null and escapes markup, so the fix would change the page.
+            // A %s hole writes nothing for null and escapes markup held as a String, so the fix would change the page;
+            // an Html or a Trusted it writes as it is.
             val keeps =
                 told != HoleFact.NULLABLE_STRING &&
                     !mayBeNull(src, ip.text, s.start) &&
-                    !(landing.position == Position.TEXT && mayHoldMarkup(src, ip.text, s.start, opts.constants))
+                    if (markupText) {
+                        markupValued(src, format, ip)
+                    } else {
+                        !(landing.position == Position.TEXT && mayHoldMarkup(src, ip.text, s.start, opts.constants))
+                    }
             // As a %s hole it would be refused, along with every hole after it in the URL, unless the literal before it fixes the host.
             val loadsAnywhere = hostUnfixed(view, landings, starts, k) { j -> j == k || percentAt(j) }
             val fixable =
                 landing.position in ESCAPED_POSITIONS && !loadsAnywhere && ip.kind != InterpolationKind.OPERAND && mapped &&
                     !listOverload && percents % 2 == 0 && keeps
-            val fixes = if (fixable) listOf(holeFix(ip, shown, at, values, formatArg)) else emptyList()
+            val fixes = if (fixable) listOf(holeFix(ip, shown, at, values, formatArg, markupText)) else emptyList()
             val message =
-                if (loadsAnywhere) {
-                    templateCodeUrlMessage(shown, landing.attribute ?: "the URL")
-                } else {
-                    templateMessage(shown, landing, endTagAt(view, ip.decodedStart))
+                when {
+                    loadsAnywhere -> templateCodeUrlMessage(shown, landing.attribute ?: "the URL")
+                    markupText -> rereadMessage(shown)
+                    else -> templateMessage(shown, landing, endTagAt(view, ip.decodedStart))
                 }
             issues += Issue(ip.start, ip.end, message, Severity.WARNING, "interpolate-template", Docs.EXPRESSIONS, fixes)
         }
@@ -596,6 +608,19 @@ public class Analyzer(
                 }
             if (kind == ArgKind.TRUSTED || kind in allowed) continue
             val shown = arg?.let { shortened(it.text) } ?: "the value of this %s"
+            if (kind == ArgKind.UNSIGNED && arg != null && (landing.position == Position.DATASTAR || landing.position == Position.STYLE)) {
+                issues +=
+                    Issue(
+                        r.first,
+                        r.last + 1,
+                        unsignedRefusedMessage(shown, landing),
+                        Severity.ERROR,
+                        "unsafe-interpolation",
+                        Docs.EXPRESSIONS,
+                        listOf(toLongFix(arg)),
+                    )
+                continue
+            }
             issues +=
                 Issue(
                     r.first,
@@ -614,10 +639,18 @@ public class Analyzer(
         when (fact) {
             HoleFact.STRING, HoleFact.NULLABLE_STRING -> ArgKind.STRING
             HoleFact.NUMBER -> ArgKind.NUMBER
+            HoleFact.UNSIGNED -> ArgKind.UNSIGNED
             HoleFact.BOOLEAN -> ArgKind.BOOLEAN
             HoleFact.MARKUP -> ArgKind.MARKUP
             else -> null
         }
+
+    /** The value converted to a Long, which is a `kotlin.Number`: `u.toLong()`, `(a + b).toLong()`. */
+    private fun toLongFix(arg: Arg): Fix {
+        val t = arg.text.trim()
+        val receiver = if (SIMPLE_RECEIVER.matches(t)) t else "($t)"
+        return Fix("Convert ${shortened(t)} with toLong()", arg.start, arg.end, "$receiver.toLong()")
+    }
 
     /** A fact as the judgement of a hole reads it: a `String?` is a String, whose null only the fixes ask about. */
     private fun plainFact(fact: HoleFact?): HoleFact? = if (fact == HoleFact.NULLABLE_STRING) HoleFact.STRING else fact
@@ -649,13 +682,15 @@ public class Analyzer(
         holes: List<Int>,
         values: List<Arg>,
         format: Arg,
+        markup: Boolean,
     ): Fix {
         val index = countBelow(holes, ip.decodedStart)
         val expr = if (ip.kind == InterpolationKind.SIMPLE) ip.text else ip.text.trim()
         val before = values.getOrNull(index)
         val after = values.lastOrNull() ?: format
         val edit = if (before != null) Edit(before.start, before.start, "$expr, ") else Edit(after.end, after.end, ", $expr")
-        return Fix("Make $shown a %s hole, which interpolate escapes", ip.start, ip.end, "%s", listOf(edit))
+        val title = "Make $shown a %s hole, " + if (markup) "where interpolate writes it as it is" else "which interpolate escapes"
+        return Fix(title, ip.start, ip.end, "%s", listOf(edit))
     }
 
     /** Where a hole that is not escaped lands, said for a message, and what to write instead. */
@@ -689,6 +724,12 @@ public class Analyzer(
             }
         }
 
+    /** Markup a Kotlin template writes into the format, which interpolate then reads as format. */
+    private fun rereadMessage(shown: String): String =
+        "Kotlin fills in $shown before interpolate reads the markup, so interpolate reads what it holds as markup too: " +
+            "a %s in it is a hole and a %% a per cent sign, and interpolate throws or changes the markup. " +
+            "Make it a %s hole and pass the Html: interpolate writes an Html or a Trusted there as it is."
+
     private fun templateMessage(
         shown: String,
         landing: HoleLanding,
@@ -699,6 +740,24 @@ public class Analyzer(
         val (where, instead) = landingWords(landing, endTag)
         return "$base It lands in $where. $instead"
     }
+
+    private fun unsignedRefusedMessage(
+        shown: String,
+        landing: HoleLanding,
+    ): String {
+        val (where, _) = landingWords(landing, false)
+        val allowed = if (landing.position == Position.DATASTAR) "a number or a boolean" else "a number"
+        return "interpolate always throws here: $shown is an unsigned number, which is not a kotlin.Number, and it lands in $where, " +
+            "where only $allowed is let in. Convert it with toLong() first."
+    }
+
+    /** An unsigned number a Kotlin template writes where interpolate would refuse it: its digits are safe as they are. */
+    private fun unsignedWrittenMessage(
+        shown: String,
+        where: String,
+    ): String =
+        "Kotlin writes $shown into $where as digits, which is safe there, but it is an unsigned number, which interpolate refuses there: " +
+            "it is not a kotlin.Number. Convert it with toLong() if you build this with interpolate."
 
     private fun refusedMessage(
         shown: String,
@@ -910,7 +969,7 @@ public class Analyzer(
             // Markup is the author's own in element text; in an attribute or code it is characters that can break out.
             val own = fact == HoleFact.CONSTANT || (fact == HoleFact.MARKUP && landing.position == Position.TEXT)
             // Digits, true, false or null: safe wherever escaping is enough.
-            val scalar = fact == HoleFact.NUMBER || fact == HoleFact.BOOLEAN || fact == HoleFact.NULLABLE
+            val scalar = fact == HoleFact.NUMBER || fact == HoleFact.BOOLEAN || fact == HoleFact.NULLABLE || fact == HoleFact.UNSIGNED
             // A String, or markup outside element text, is characters that can end what holds them.
             val severity = if (fact == HoleFact.STRING || fact == HoleFact.MARKUP) Severity.WARNING else Severity.HINT
 
@@ -972,6 +1031,10 @@ public class Analyzer(
 
                 Position.STYLE -> {
                     if (own || fact == HoleFact.NUMBER) continue
+                    if (fact == HoleFact.UNSIGNED) {
+                        issues += issue(Severity.HINT, "unsafe-interpolation", unsignedWrittenMessage(shown, landing.attribute ?: "style"))
+                        continue
+                    }
                     val css =
                         "Kotlin writes $shown into ${landing.attribute ?: "style"}, where it is read as CSS, " +
                             "so escaping does not help."
@@ -992,6 +1055,16 @@ public class Analyzer(
                     val judged = trap?.let { datastarTrap(it, ip, landing, view, opts.prefix, fact) }
                     if (judged != null) {
                         issues += judged
+                    } else if (fact == HoleFact.UNSIGNED) {
+                        issues +=
+                            issue(
+                                Severity.HINT,
+                                "unsafe-interpolation",
+                                unsignedWrittenMessage(
+                                    shown,
+                                    landing.attribute ?: "a Datastar attribute",
+                                ),
+                            )
                     } else if (!own && fact != HoleFact.NUMBER && fact != HoleFact.BOOLEAN) {
                         val attribute = landing.attribute ?: "a Datastar attribute"
                         issues += issue(Severity.WARNING, "unsafe-interpolation", datastarMessage(shown, attribute))
@@ -1102,7 +1175,7 @@ public class Analyzer(
         if (visiblyList(src, ip.text, s.start)) return false
         if (TRUSTED_CALL.containsMatchIn(ip.text)) return position == Position.TEXT
         if (fact == HoleFact.MARKUP) return position != Position.TEXT || markupValued(src, s, ip)
-        if (position == Position.TEXT && fact != HoleFact.NUMBER && fact != HoleFact.BOOLEAN &&
+        if (position == Position.TEXT && fact != HoleFact.NUMBER && fact != HoleFact.BOOLEAN && fact != HoleFact.UNSIGNED &&
             mayHoldMarkup(src, ip.text, s.start, opts.constants)
         ) {
             return false
@@ -1180,12 +1253,13 @@ public class Analyzer(
         // data-signals:count="$initial" seeds a signal from the server, like the object form does.
         val whole = spec.name != "signals" && value.trim() == PLACEHOLDER
         // A number or a boolean is safe written in: what is left to ask is whether a signal was meant.
-        if (fact == HoleFact.NUMBER || fact == HoleFact.BOOLEAN) {
+        if (fact == HoleFact.NUMBER || fact == HoleFact.BOOLEAN || fact == HoleFact.UNSIGNED) {
+            val what = if (fact == HoleFact.UNSIGNED) "an unsigned number" else "a ${fact.name.lowercase()}"
             return trap.copy(
                 severity = Severity.HINT,
                 fixes = fixes,
                 message =
-                    "Kotlin writes \$$name here, a ${fact.name.lowercase()} from the server, which is safe in a Datastar expression. " +
+                    "Kotlin writes \$$name here, $what from the server, which is safe in a Datastar expression. " +
                         "Meant as the signal \$$name, make the literal \$\$\"\"\"...\"\"\" (Kotlin 2.2+), or escape as \${'$'}$name.",
             )
         }
@@ -1288,7 +1362,8 @@ public class Analyzer(
                 continue
             }
             val fact = plainFact(holeFact(s, src, opts, ip))
-            if (fact == HoleFact.CONSTANT || fact == HoleFact.NUMBER || fact == HoleFact.BOOLEAN) continue
+            // Kotlin writes the digits of an unsigned number; it is interpolate that would refuse it.
+            if (fact == HoleFact.CONSTANT || fact == HoleFact.NUMBER || fact == HoleFact.BOOLEAN || fact == HoleFact.UNSIGNED) continue
             out +=
                 Issue(
                     start = ip.start,

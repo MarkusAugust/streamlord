@@ -197,6 +197,54 @@ class HoleTypesTest : BasePlatformTestCase() {
         assertNull(facts["\${Shown.ONE}"])
     }
 
+    fun `test an unsigned number is not a Number, and a collection of Html is markup`() {
+        val facts = facts(UNSIGNED_PAGE)
+        val wanted =
+            mapOf(
+                "\${u}" to HoleFact.UNSIGNED,
+                "\${w}" to HoleFact.UNSIGNED,
+                "\${maybe}" to HoleFact.NULLABLE,
+                "\${n}" to HoleFact.NUMBER,
+                "\${rows.joinToString(\"\")}" to HoleFact.MARKUP,
+                "\${built.joinToString(\"\")}" to HoleFact.MARKUP,
+                "\${trusted.joinToString(\"\")}" to HoleFact.MARKUP,
+                "\${names.joinToString(\"\")}" to HoleFact.STRING,
+            )
+        val seen = wanted.keys.associateWith { facts[it] }
+        assertEquals(wanted.entries.joinToString("\n"), seen.entries.joinToString("\n"))
+    }
+
+    fun `test interpolate refuses an unsigned number and rereads an Html in the format, and a pattern is no tag`() {
+        myFixture.configureByText("Unsigned.kt", UNSIGNED_CALLS)
+        val seen =
+            myFixture
+                .doHighlighting()
+                .filter { it.inspectionToolId == "KotlinInterpolationInspection" }
+                .sortedBy { it.startOffset }
+                .map { "${it.text} ${severity(it.severity)}" }
+        assertEquals(
+            listOf(
+                // `interpolate("<p data-signals=\"{n: %s}\">", u)` with `u: UInt`, and the same in style.
+                "%s error",
+                "%s error",
+                // An unsigned number Kotlin writes into data-signals: digits, but interpolate would refuse it.
+                "\${u} hint",
+                // An Html a Kotlin template writes into the format.
+                "\$inner warning",
+                // `rows.joinToString("")` of a List<Html>, which interpolate escapes in element text.
+                "%s warning",
+            ),
+            seen,
+        )
+        val fixes =
+            myFixture
+                .getAllQuickFixes()
+                .mapNotNull { QuickFixWrapper.unwrap(it) as? ReplaceTextFix }
+                .map { it.familyName }
+        assertTrue(fixes.joinToString(), fixes.contains("Convert u with toLong()"))
+        assertTrue(fixes.joinToString(), fixes.contains("Make \$inner a %s hole, where interpolate writes it as it is"))
+    }
+
     fun `test a level set in the profile lowers the errors and leaves the hints and warnings alone`() {
         fun shown(name: String): List<String> {
             // A fresh file each time: the daemon keeps the highlights of an unchanged document.
@@ -368,6 +416,47 @@ class HoleTypesTest : BasePlatformTestCase() {
                     </div>
                 ""${'"'}
             }
+            """.trimIndent().replace('¤', '$')
+
+        /** Unsigned numbers, a Number, and collections of Html, written or inferred; `¤` is a `$`. */
+        val UNSIGNED_PAGE =
+            """
+            package page
+            import io.github.markusaugust.streamlord.core.domain.Html
+            import io.github.markusaugust.streamlord.core.domain.Trusted
+            import io.github.markusaugust.streamlord.core.domain.interpolate
+
+            fun page(u: UInt, maybe: UShort?, n: Number, rows: List<Html>, names: List<String>, q: String): String {
+                val w = u.toULong()
+                val built = names.map { interpolate("<li>%s</li>", it) }
+                val trusted = sequenceOf(Trusted(q))
+                return ""${'"'}
+                    <div data-signals="{a: ¤{u}, b: ¤{w}, c: ¤{maybe}, d: ¤{n}}">
+                    ¤{rows.joinToString("")}
+                    ¤{built.joinToString("")}
+                    ¤{trusted.joinToString("")}
+                    ¤{names.joinToString("")}
+                    </div>
+                ""${'"'}
+            }
+            """.trimIndent().replace('¤', '$')
+
+        /** What interpolate refuses or rereads, and a search pattern; `¤` is a `$`. */
+        val UNSIGNED_CALLS =
+            """
+            import io.github.markusaugust.streamlord.core.domain.Html
+            import io.github.markusaugust.streamlord.core.domain.interpolate
+
+            fun signals(u: UInt): Html = interpolate("<p data-signals=\"{n: %s}\"></p>", u)
+            fun width(w: ULong): Html = interpolate("<p style=\"width: %spx\"></p>", w)
+            fun written(u: UInt, n: Number): String = "<p data-signals=\"{u: ¤{u}, n: ¤{n}}\"></p>"
+            fun reread(q: String): Html {
+                val inner = interpolate("<b>%s</b>", q)
+                return interpolate("<div>¤inner</div>")
+            }
+            fun joined(rows: List<Html>): Html = interpolate("<ul>%s</ul>", rows.joinToString(""))
+            fun pattern(tagg: String, html: String) = Regex("<¤tagg\\b[^>]*").find(html)
+            fun search(tagg: String, html: String) = html.indexOf("<¤tagg")
             """.trimIndent().replace('¤', '$')
 
         /** An error, a hint and a warning of the interpolation inspection; `¤` is a `$`. */
