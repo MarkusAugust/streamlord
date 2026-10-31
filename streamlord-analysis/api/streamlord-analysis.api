@@ -343,6 +343,7 @@ public final class io/github/markusaugust/streamlord/analysis/HoleFact : java/la
 	public static final field CONSTANT Lio/github/markusaugust/streamlord/analysis/HoleFact;
 	public static final field MARKUP Lio/github/markusaugust/streamlord/analysis/HoleFact;
 	public static final field NULLABLE Lio/github/markusaugust/streamlord/analysis/HoleFact;
+	public static final field NULLABLE_STRING Lio/github/markusaugust/streamlord/analysis/HoleFact;
 	public static final field NUMBER Lio/github/markusaugust/streamlord/analysis/HoleFact;
 	public static final field STRING Lio/github/markusaugust/streamlord/analysis/HoleFact;
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;

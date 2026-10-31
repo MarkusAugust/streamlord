@@ -26,9 +26,10 @@ public data class AnalyzeOptions(
 
 /**
  * What the editor knows of a value: its type, or that it is a constant or markup. [NULLABLE] is a
- * number or a boolean that may be null (`Int?`): digits, true, false or null.
+ * number or a boolean that may be null (`Int?`): digits, true, false or null. [NULLABLE_STRING] is
+ * a `String?`, which a Kotlin template writes as `null` and `interpolate` as nothing.
  */
-public enum class HoleFact { STRING, NUMBER, BOOLEAN, NULLABLE, CONSTANT, MARKUP }
+public enum class HoleFact { STRING, NULLABLE_STRING, NUMBER, BOOLEAN, NULLABLE, CONSTANT, MARKUP }
 
 private val MODE_NAME = Regex("""(?:^|\.)([A-Z]+)\s*$""")
 private val CASE_ARG = Regex("""^\s*Case\.[A-Z]+\s*$""")

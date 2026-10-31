@@ -27,7 +27,7 @@ export interface AnalyzeOptions {
  * What the editor knows of a value: its type, or that it is a constant or markup. `nullable` is a
  * number or a boolean that may be null (`Int?`): digits, true, false or null.
  */
-export type HoleFact = "string" | "number" | "boolean" | "nullable" | "constant" | "markup";
+export type HoleFact = "string" | "nullable-string" | "number" | "boolean" | "nullable" | "constant" | "markup";
 
 export const ALL_SITE_NAMES: ReadonlySet<string> = new Set([
   ...Object.keys(catalog.callSites.expression),
