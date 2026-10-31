@@ -199,9 +199,11 @@ function scanMarkupTracked(html: string, visitor: Visitor): void {
     }
     const html5 = insertionNs() === NS_HTML;
     let encoding: string | undefined;
+    let unquotedEnd = -1;
     const snoop: Visitor = {
       attribute(tag, nm, valueStart, valueEnd, quoted) {
         if (name === "annotation-xml" && encoding === undefined && asciiLowercase(nm) === "encoding" && valueStart >= 0) encoding = html.slice(valueStart, valueEnd);
+        if (!quoted && valueStart >= 0) unquotedEnd = valueEnd;
         visitor.attribute(tag, nm, valueStart, valueEnd, quoted);
       },
       tag: (s, e) => visitor.tag(s, e),
@@ -209,7 +211,8 @@ function scanMarkupTracked(html: string, visitor: Visitor): void {
     };
     const end = scanTag(html, lt + 1, snoop);
     visitor.tag(lt, end);
-    const selfClosing = end >= 2 && html[end - 2] === "/";
+    // A `/` that ends an unquoted value is part of the value, not a self-closing mark.
+    const selfClosing = end >= 2 && html[end - 2] === "/" && unquotedEnd !== end - 1;
     i = end;
     if (html5) {
       const raw = RAW_TEXT.find((t) => t === name);
@@ -250,7 +253,9 @@ function scanTag(html: string, from: number, visitor: Visitor): number {
       i++;
       continue;
     }
-    const nameStart = i;
+    // The first character always starts the name, even an `=`, which the tokenizer takes as part
+    // of the name here; only after it does an `=` end the name and open a value.
+    const nameStart = i++;
     while (i < n && !isSpace(html[i]) && html[i] !== ">" && html[i] !== "=" && html[i] !== "/") i++;
     const name = html.slice(nameStart, i);
     let k = i;

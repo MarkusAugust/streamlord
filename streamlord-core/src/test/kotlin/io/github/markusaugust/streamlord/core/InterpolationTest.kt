@@ -382,6 +382,18 @@ class InterpolationTest {
         assertEquals(Position.CODE, e.position)
     }
 
+    // An `=` where an attribute name begins is that name's first character, and the name runs to the
+    // next space: `='` and the value after it are one name, so the value's spaces start attributes.
+    @Test
+    fun `an = that starts an attribute name opens no value`() {
+        for (markup in listOf("<img src=x ='%s'>", "<img src=x =\"%s\">")) {
+            val e = assertFailsWith<UnsafeInterpolationException>(markup) { render(markup, " onerror=alert(1) x") }
+            assertEquals(Position.STRUCTURE, e.position, markup)
+        }
+        // After a name, even a name `=`, an `=` does open a value, and the value is escaped in it.
+        assertEquals("<img src=x = =' onerror=alert(1) x&#39;'>", render("<img src=x = ='%s'>", " onerror=alert(1) x'"))
+    }
+
     @Test
     fun `a Kotlin template writes the markup of Html and Trusted, not their names`() {
         val row = interpolate("<li>%s</li>", "x")

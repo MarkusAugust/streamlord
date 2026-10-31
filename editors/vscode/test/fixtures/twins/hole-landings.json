@@ -422,6 +422,116 @@
      "attribute": null
     }
    ]
+  },
+  {
+   "name": "an = that starts an attribute name is part of the name",
+   "markup": "<img src=x ='%s'>",
+   "landings": [
+    {
+     "position": "STRUCTURE",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "an = that starts an attribute name, double quotes",
+   "markup": "<a href=\"/x\" =\"%s\">x</a>",
+   "landings": [
+    {
+     "position": "STRUCTURE",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "a lone = is an attribute of its own",
+   "markup": "<p = title=\"%s\">x</p>",
+   "landings": [
+    {
+     "position": "ATTRIBUTE",
+     "attribute": "title"
+    }
+   ]
+  },
+  {
+   "name": "an = after the name = opens its value",
+   "markup": "<p = ='%s'>x</p>",
+   "landings": [
+    {
+     "position": "ATTRIBUTE",
+     "attribute": "="
+    }
+   ]
+  },
+  {
+   "name": "a quote inside an attribute name",
+   "markup": "<p a\"b='%s'>x</p>",
+   "landings": [
+    {
+     "position": "ATTRIBUTE",
+     "attribute": "a\"b"
+    }
+   ]
+  },
+  {
+   "name": "a quote that starts an attribute name",
+   "markup": "<p 'title=\"%s\">x</p>",
+   "landings": [
+    {
+     "position": "ATTRIBUTE",
+     "attribute": "'title"
+    }
+   ]
+  },
+  {
+   "name": "a < inside an attribute name",
+   "markup": "<p a<b=\"%s\">x</p>",
+   "landings": [
+    {
+     "position": "ATTRIBUTE",
+     "attribute": "a<b"
+    }
+   ]
+  },
+  {
+   "name": "a / between attributes",
+   "markup": "<a/href=\"%s\">x</a>",
+   "landings": [
+    {
+     "position": "URL",
+     "attribute": "href"
+    }
+   ]
+  },
+  {
+   "name": "a / after a quoted value",
+   "markup": "<a title=\"x\"/href=\"%s\">x</a>",
+   "landings": [
+    {
+     "position": "URL",
+     "attribute": "href"
+    }
+   ]
+  },
+  {
+   "name": "a / that ends an unquoted value is part of it",
+   "markup": "<svg x=a/><title><a data-text=\"%s\"></a></title></svg>",
+   "landings": [
+    {
+     "position": "DATASTAR",
+     "attribute": "data-text"
+    }
+   ]
+  },
+  {
+   "name": "a repeated attribute is judged as written",
+   "markup": "<a href=\"/x\" href=\"%s\">x</a>",
+   "landings": [
+    {
+     "position": "URL",
+     "attribute": "href"
+    }
+   ]
   }
  ],
  "urls": [

@@ -118,6 +118,13 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Security
 
+- `interpolate`, and the editors with it, took an `=` where an attribute name begins as the start
+  of a value, where the browser's tokenizer takes it as the first character of the name, which then
+  runs to the next space, `/` or `>`, quotes included. So in `<img src=x ='%s'>` the hole was judged
+  a quoted value and let in, and the value ` onerror=alert(1) x` came out as an `onerror` the
+  browser runs. A name now always takes its first character, `=` or not, and a hole there is
+  structure. A smaller misreading went with it: a `/` that ends an unquoted value, as in
+  `<svg x=a/>`, is part of the value and does not close the element. This was in 0.15.0.
 - `interpolate` read the markup three fixed ways, all HTML, all `<svg>`/`<math>`, and all svg or
   math with CDATA sections as text, and took the strictest, but the browser switches reading as its
   element stack changes and no one fixed way follows it. In

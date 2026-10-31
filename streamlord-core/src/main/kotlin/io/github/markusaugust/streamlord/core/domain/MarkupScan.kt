@@ -279,7 +279,8 @@ private fun scanMarkupTracked(
         val end = scanTag(html, lt + 1, encoding)
         visitor.tag(lt, if (end < 0) n else end)
         if (end < 0) return false
-        val selfClosing = end >= 2 && html[end - 2] == '/'
+        // A `/` that ends an unquoted value is part of the value, not a self-closing mark.
+        val selfClosing = end >= 2 && html[end - 2] == '/' && encoding.unquotedEnd != end - 1
         i = end
 
         if (html5) {
@@ -338,13 +339,18 @@ private fun tagName(
     return html.substring(from, i).asciiLowercase()
 }
 
-/** Records attributes to [delegate] and, for an `annotation-xml`, keeps its `encoding` value. */
+/**
+ * Records attributes to [delegate] and, for an `annotation-xml`, keeps its `encoding` value: the
+ * first one, since the tokenizer drops a repeated attribute. Also keeps where the last unquoted
+ * value ended.
+ */
 private class EncodingSnoop(
     private val markup: String,
     private val delegate: MarkupVisitor,
     private val wanted: Boolean,
 ) : MarkupVisitor {
     var value: String? = null
+    var unquotedEnd = -1
 
     override fun attribute(
         tag: String,
@@ -356,6 +362,7 @@ private class EncodingSnoop(
         if (wanted && value == null && name.equals("encoding", ignoreCase = true) && valueStart >= 0) {
             value = markup.substring(valueStart, valueEnd)
         }
+        if (!quoted && valueStart >= 0) unquotedEnd = valueEnd
         delegate.attribute(tag, name, valueStart, valueEnd, quoted)
     }
 
@@ -413,7 +420,9 @@ private fun scanTag(
             }
 
             else -> {
-                val nameStart = i
+                // The first character always starts the name, even an `=`, which the tokenizer
+                // takes as part of the name here; only after it does an `=` end the name and open a value.
+                val nameStart = i++
                 while (i < n && !html[i].isHtmlSpace() && html[i] != '>' && html[i] != '=' && html[i] != '/') i++
                 val name = html.substring(nameStart, i)
                 var k = i
