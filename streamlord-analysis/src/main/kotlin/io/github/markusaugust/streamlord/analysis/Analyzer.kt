@@ -67,8 +67,13 @@ private val ESCAPED_POSITIONS = setOf(Position.TEXT, Position.ATTRIBUTE, Positio
 private const val CODE_URL_ADVICE =
     "Start the value with a path such as /js/ or a whole origin such as https://cdn.example/, so that the value only picks a file there"
 private val TRUSTED_CALL = Regex("""(?:^|[^\p{L}\p{Nd}_.])Trusted\s*\(""")
-private val TRUSTED_LITERAL = Regex("""Trusted\s*\(\s*"((?:[^"\\$\n]|\\.)*)"\s*\)""")
-private val KOTLIN_ESCAPE = Regex("""\\(u[0-9A-Fa-f]{4}|.)""")
+
+/** Where a markup's holes land, read with the text of the known ones in place. */
+private class HoleReading(
+    val landings: List<HoleLanding>,
+    /** What the markup reads from where the value of hole `j`'s attribute starts to where hole `to` starts, each known text in place. */
+    val prefix: (j: Int, to: Int) -> String,
+)
 
 private val INTERPOLATE = setOf("interpolate")
 private val FORMAT_SPECIFIER = Regex("""%[-#+0,(]*\d*(?:\.\d+)?[dfxXoeEgGcb](?![A-Za-z])""")
@@ -540,13 +545,27 @@ public class Analyzer(
         val listOverload =
             values.size in 1..2 && kinds[0] == null && known[0] == null && visiblyList(src, values[0].text, s.start)
         val view = markupView(src, format)
-        val landings =
-            holeLandings(
-                view,
-                (format.interpolations.map { it.decodedStart } + at).map { it until it + PLACEHOLDER.length },
-                listOf(opts.prefix, CatalogNames.PREFIX, CatalogNames.ALIASED_PREFIX).distinct(),
-            )
         val starts = format.interpolations.map { it.decodedStart } + at
+        // interpolate reads the markup with each Trusted value's text in place: known where the value is a literal.
+        val written = HashMap<Int, String>()
+        val unknown = ArrayList<Int>()
+        if (mapped) {
+            for ((k, a) in values.withIndex()) {
+                if (kinds[k] != ArgKind.TRUSTED) continue
+                val text = trustedLiteral(src, a.text, s.start)
+                if (text == null) unknown += at[k] else written[format.interpolations.size + k] = text
+            }
+        }
+        val reading =
+            readHoles(
+                view,
+                starts.map { it until it + PLACEHOLDER.length },
+                listOf(opts.prefix, CatalogNames.PREFIX, CatalogNames.ALIASED_PREFIX).distinct(),
+                written,
+            )
+        val landings = reading.landings
+        // After a Trusted whose text is not known, a value may land elsewhere than the markup shows.
+        val uncertainFrom = unknown.minOrNull() ?: Int.MAX_VALUE
         val percentAt = { j: Int -> j >= format.interpolations.size }
         val trapOf = traps(format, src)
         for ((k, ip) in format.interpolations.withIndex()) {
@@ -579,7 +598,7 @@ public class Analyzer(
                         !(landing.position == Position.TEXT && mayHoldMarkup(src, ip.text, s.start, opts.constants))
                     }
             // As a %s hole it would be refused, along with every hole after it in the URL, unless the literal before it fixes the host.
-            val loadsAnywhere = hostUnfixed(view, landings, starts, k) { j -> j == k || percentAt(j) }
+            val loadsAnywhere = hostUnfixed(reading, starts, k) { j -> j == k || percentAt(j) }
             val fixable =
                 landing.position in ESCAPED_POSITIONS && !loadsAnywhere && ip.kind != InterpolationKind.OPERAND && mapped &&
                     !listOverload && percents % 2 == 0 && keeps
@@ -597,25 +616,30 @@ public class Analyzer(
             val arg = if (mapped) values[k] else null
             val kind = if (arg != null) kinds[k] else null
             val r = format.toSource(d, d + PLACEHOLDER.length)
+            val base = format.interpolations.size
+            val uncertain = d > uncertainFrom
             // interpolate refuses everything but Trusted in a URL that loads code, unless what comes before the
-            // URL's first value nobody vouched for fixes its host: the literal, with each Trusted before it written
-            // as it stands. It names that value, and a URL of Trusted values alone goes unjudged.
+            // URL's first value nobody vouched for fixes its host: the markup as written, a literal Trusted's text
+            // in place. It names that value, and a URL of Trusted values alone goes unjudged.
             val attribute = landing.attribute
             if (landing.loadsCode && attribute != null) {
-                val inUrl = at.indices.filter { landings[format.interpolations.size + it].valueStart == landing.valueStart }
+                // A Trusted of known text is read as markup and is not among them.
+                val inUrl = at.indices.filter { landings[base + it].valueStart == landing.valueStart }
                 val first = inUrl.firstOrNull { (if (mapped) kinds[it] else null) != ArgKind.TRUSTED }
-                val before = first?.let { writtenBefore(view, landing.valueStart, at, inUrl, it, values) }
-                if (first != null && before != null && !urlHostFixedBy(attribute, before.first)) {
+                // A Trusted before it whose text is not known ends what is known to come before.
+                val vouched = if (first != null && inUrl[0] != first) inUrl[0] else null
+                val before = first?.let { reading.prefix(base + k, base + (vouched ?: it)) }
+                if (first != null && before != null && !urlHostFixedBy(attribute, before)) {
                     if (first != k) continue
                     // A template before the hole is filled in first, so what the literal fixes is known only without one.
                     val templated = format.interpolations.any { it.decodedStart >= landing.valueStart && it.decodedStart < d }
-                    val certain = !templated && before.second && kind != null
+                    val certain = !templated && vouched == null && !uncertain && kind != null
                     val shown = arg?.let { shortened(it.text) } ?: "the value of this %s"
                     issues +=
                         Issue(
                             r.first,
                             r.last + 1,
-                            refusedCodeUrlMessage(shown, attribute, certain, !before.second),
+                            refusedCodeUrlMessage(shown, attribute, certain, vouched != null || uncertain),
                             if (certain) Severity.ERROR else Severity.WARNING,
                             "unsafe-interpolation",
                             Docs.EXPRESSIONS,
@@ -646,8 +670,8 @@ public class Analyzer(
                     Issue(
                         r.first,
                         r.last + 1,
-                        unsignedRefusedMessage(shown, landing),
-                        Severity.ERROR,
+                        if (uncertain) uncertainMessage(shown, landing, false) else unsignedRefusedMessage(shown, landing),
+                        if (uncertain) Severity.WARNING else Severity.ERROR,
                         "unsafe-interpolation",
                         Docs.EXPRESSIONS,
                         listOf(toLongFix(arg)),
@@ -658,8 +682,12 @@ public class Analyzer(
                 Issue(
                     r.first,
                     r.last + 1,
-                    refusedMessage(shown, landing, kind != null, endTagAt(view, d)),
-                    if (kind == null) Severity.WARNING else Severity.ERROR,
+                    if (uncertain && kind != null) {
+                        uncertainMessage(shown, landing, endTagAt(view, d))
+                    } else {
+                        refusedMessage(shown, landing, kind != null, endTagAt(view, d))
+                    },
+                    if (kind == null || uncertain) Severity.WARNING else Severity.ERROR,
                     "unsafe-interpolation",
                     Docs.EXPRESSIONS,
                 )
@@ -812,26 +840,74 @@ public class Analyzer(
         }
     }
 
+    /** A value interpolate refuses where the markup shows it landing, which a Trusted before it whose text is not known may move. */
+    private fun uncertainMessage(
+        shown: String,
+        landing: HoleLanding,
+        endTag: Boolean,
+    ): String {
+        val allowed =
+            when (landing.position) {
+                Position.DATASTAR -> "a number or a boolean"
+                Position.STYLE -> "a number"
+                else -> "Trusted(...)"
+            }
+        val (where, instead) = landingWords(landing, endTag)
+        return "interpolate throws here unless the Trusted text before $shown moves it: it lands in $where, " +
+            "where only $allowed is let in. $instead"
+    }
+
     /**
      * Whether the hole at [k] is in a URL that loads code, `src` of a script and the like, whose host
      * the literal before the URL's first hole does not fix: interpolate refuses every value there but
      * Trusted, as Landscape.checkUrls in core does. [counts] says which holes interpolate sees as holes.
      */
     private fun hostUnfixed(
-        view: String,
-        landings: List<HoleLanding>,
+        reading: HoleReading,
         starts: List<Int>,
         k: Int,
         counts: (Int) -> Boolean,
     ): Boolean {
-        val landing = landings[k]
+        val landing = reading.landings[k]
         val attribute = landing.attribute
         if (!landing.loadsCode || attribute == null) return false
-        var first = starts[k]
-        for ((j, l) in landings.withIndex()) {
-            if (counts(j) && l.valueStart == landing.valueStart && starts[j] < first) first = starts[j]
+        var first = k
+        for ((j, l) in reading.landings.withIndex()) {
+            if (counts(j) && l.valueStart == landing.valueStart && starts[j] < starts[first]) first = j
         }
-        return !urlHostFixedBy(attribute, view.substring(landing.valueStart, first))
+        return !urlHostFixedBy(attribute, reading.prefix(k, first))
+    }
+
+    /**
+     * The holes of [view] as interpolate reads them: holeLandings with the text of the [known] holes,
+     * a literal Trusted's, in place. A known text can hold the start of a value, where holeLandings
+     * gives the offset of the hole, so a prefix is read from the markup as written.
+     */
+    private fun readHoles(
+        view: String,
+        holes: List<IntRange>,
+        prefixes: List<String>,
+        known: Map<Int, String>,
+    ): HoleReading {
+        val landings = holeLandings(view, holes, prefixes, known)
+        if (known.isEmpty()) return HoleReading(landings) { j, to -> view.substring(landings[j].valueStart, holes[to].first) }
+        val text = StringBuilder()
+        var cut = 0
+        val starts = IntArray(holes.size)
+        for (i in holes.indices.sortedBy { holes[it].first }) {
+            val hole = holes[i]
+            text.append(view, cut, hole.first)
+            starts[i] = text.length
+            text.append(known[i] ?: view.substring(hole.first, hole.last + 1))
+            cut = hole.last + 1
+        }
+        text.append(view, cut, view.length)
+        val markup = text.toString()
+        val open = holes.indices.filter { it !in known }
+        val written by lazy {
+            holeLandings(markup, open.map { starts[it] until starts[it] + holes[it].last + 1 - holes[it].first }, prefixes)
+        }
+        return HoleReading(landings) { j, to -> markup.substring(written[open.indexOf(j)].valueStart, starts[to]) }
     }
 
     private fun codeUrlMessage(
@@ -848,69 +924,6 @@ public class Analyzer(
         "Kotlin fills in $shown before interpolate sees the markup, so interpolate neither escapes nor refuses it. " +
             "It lands in $attribute, which loads code from wherever the value points, and the markup before it does not fix the host. " +
             "$CODE_URL_ADVICE, and make it a %s hole."
-
-    /**
-     * What interpolate reads of a URL before the hole [first] of [inUrl], when it judges the host:
-     * the literal from [from], each Trusted value before the hole in place. The second is false
-     * where a Trusted's text is not a literal; the text then stops before it, and is still what
-     * fixes the host if it fixes it already.
-     */
-    private fun writtenBefore(
-        view: String,
-        from: Int,
-        at: List<Int>,
-        inUrl: List<Int>,
-        first: Int,
-        values: List<Arg>,
-    ): Pair<String, Boolean> {
-        val text = StringBuilder()
-        var cut = from
-        for (n in inUrl) {
-            if (n == first) break
-            text.append(view, cut, at[n])
-            val own = values.getOrNull(n)?.let { trustedText(it.text) } ?: return text.toString() to false
-            text.append(own)
-            cut = at[n] + PLACEHOLDER.length
-        }
-        return text.append(view, cut, at[first]).toString() to true
-    }
-
-    /** The text of `Trusted("...")` with a literal that holds no template, as the Kotlin compiler reads it; null for anything else. */
-    private fun trustedText(value: String): String? {
-        val m = TRUSTED_LITERAL.matchEntire(value.trim()) ?: return null
-        return KOTLIN_ESCAPE.replace(m.groupValues[1]) {
-            val e = it.groupValues[1]
-            when {
-                e.length == 5 -> {
-                    e
-                        .substring(1)
-                        .toInt(16)
-                        .toChar()
-                        .toString()
-                }
-
-                e == "t" -> {
-                    "\t"
-                }
-
-                e == "b" -> {
-                    "\b"
-                }
-
-                e == "n" -> {
-                    "\n"
-                }
-
-                e == "r" -> {
-                    "\r"
-                }
-
-                else -> {
-                    e
-                }
-            }
-        }
-    }
 
     private fun refusedCodeUrlMessage(
         shown: String,
@@ -1050,13 +1063,21 @@ public class Analyzer(
     ): List<Issue> {
         if (s.interpolations.isEmpty()) return emptyList()
         val trapOf = traps(s, src)
-        val landings =
-            holeLandings(
+        // A literal Trusted is markup the author wrote, read in place: the other holes are judged against it.
+        val written = HashMap<Int, String>()
+        for ((k, ip) in s.interpolations.withIndex()) {
+            if (ip.kind == InterpolationKind.OPERAND) continue
+            trustedLiteral(src, ip.text, s.start)?.let { written[k] = it }
+        }
+        val reading =
+            readHoles(
                 view,
                 s.interpolations.map { it.decodedStart until it.decodedStart + PLACEHOLDER.length },
                 // Both bundles' prefixes, as interpolate reads them: a value is judged by what either would run.
                 listOf(opts.prefix, CatalogNames.PREFIX, CatalogNames.ALIASED_PREFIX).distinct(),
+                written,
             )
+        val landings = reading.landings
         val told = s.interpolations.map { holeFact(s, src, opts, it) }
         val starts = s.interpolations.map { it.decodedStart }
         // interpolate(...) can take the literal only when every hole is a value it escapes and keeps.
@@ -1066,11 +1087,12 @@ public class Analyzer(
                 s.interpolations.none { it.kind == InterpolationKind.OPERAND } &&
                 s.interpolations.indices.all { k -> interpolateKeeps(src, s, s.interpolations[k], told[k], landings[k].position, opts) } &&
                 // interpolate refuses every value in a URL that loads code unless the literal fixes its host.
-                s.interpolations.indices.none { k -> hostUnfixed(view, landings, starts, k) { true } }
+                s.interpolations.indices.none { k -> hostUnfixed(reading, starts, k) { true } }
         // The rewrite is made once for the literal, and only when a fix is applied.
         val rewrite = interpolateText(src, s)
         val issues = ArrayList<Issue>()
         for ((k, ip) in s.interpolations.withIndex()) {
+            if (k in written) continue
             val landing = landings[k]
             val fact = plainFact(told[k])
             val shown = holeDisplay(ip, s.dollars)
@@ -1119,9 +1141,10 @@ public class Analyzer(
                 Position.URL -> {
                     if (own || scalar) continue
                     val attribute = landing.attribute ?: "the URL"
-                    val before = decodeEntities(view.substring(landing.valueStart, ip.decodedStart)).text
+                    val prefix = reading.prefix(k, k)
+                    val before = decodeEntities(prefix).text
                     issues +=
-                        if (landing.loadsCode && !urlHostFixedBy(attribute, view.substring(landing.valueStart, ip.decodedStart))) {
+                        if (landing.loadsCode && !urlHostFixedBy(attribute, prefix)) {
                             issue(Severity.WARNING, "unsafe-interpolation", codeUrlMessage(shown, attribute))
                         } else if (urlSchemeFixedBy(attribute, before)) {
                             unescaped()

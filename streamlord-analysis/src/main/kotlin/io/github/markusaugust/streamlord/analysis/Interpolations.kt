@@ -305,6 +305,8 @@ internal class Declaration(
     val shared: Boolean = false,
     /** Whether it is set to a call to `Trusted` and nothing more, which interpolate lets in wherever it lands. */
     val trusted: Boolean = false,
+    /** The text a `val` set to `Trusted("...")` writes, the literal as the Kotlin compiler reads it. */
+    val trustedText: String? = null,
 ) {
     /** Just past where it can last be seen. */
     var end: Int = Int.MAX_VALUE
@@ -720,6 +722,14 @@ private fun declarations(
                             val bare = m.groups[4] == null && m.groups[5] == null
                             val markup = bare && markupInitialiser(src, m.range.last + 1)
                             val trusted = markup && TRUSTED_INITIALISER.matchAt(src, m.range.last + 1) != null
+                            val trustedText =
+                                if (trusted &&
+                                    word == "val"
+                                ) {
+                                    literalTrusted(src, src.indexOf("Trusted", m.range.last + 1))
+                                } else {
+                                    null
+                                }
                             val arguments = m.groups[3]?.let { TYPE_ARGUMENTS_AFTER.matchAt(src, it.range.last + 1) }
                             // The value of a `val` set once, which a name then stands for.
                             val valueAt =
@@ -751,6 +761,7 @@ private fun declarations(
                                         valueAt,
                                         shared,
                                         trusted,
+                                        trustedText,
                                     ),
                                 )
                             if (owner.kind != "top") owner.ends += d
@@ -975,6 +986,67 @@ internal fun declaredKind(
 
         else -> null
     }
+}
+
+private val TRUSTED_LITERAL = Regex("""Trusted\s*\(\s*"((?:[^"\\$\n]|\\.)*)"\s*\)""")
+private val KOTLIN_ESCAPE = Regex("""\\(u[0-9A-Fa-f]{4}|.)""")
+
+/** The text of `Trusted("...")` at [at], with a literal that holds no template, as the Kotlin compiler reads it; null for anything else. */
+private fun literalTrusted(
+    src: String,
+    at: Int,
+    whole: Boolean = false,
+): String? {
+    if (at < 0) return null
+    val m = TRUSTED_LITERAL.matchAt(src, at) ?: return null
+    if (whole && m.range.last + 1 != src.length) return null
+    return KOTLIN_ESCAPE.replace(m.groupValues[1]) {
+        val e = it.groupValues[1]
+        when {
+            e.length == 5 -> {
+                e
+                    .substring(1)
+                    .toInt(16)
+                    .toChar()
+                    .toString()
+            }
+
+            e == "t" -> {
+                "\t"
+            }
+
+            e == "b" -> {
+                "\b"
+            }
+
+            e == "n" -> {
+                "\n"
+            }
+
+            e == "r" -> {
+                "\r"
+            }
+
+            else -> {
+                e
+            }
+        }
+    }
+}
+
+/**
+ * The text a Trusted value writes, when the source shows it: `Trusted("...")` with a literal that
+ * holds no template, or a `val` set to one. Null for any other value, `Trusted(name)` among them,
+ * since the value of a `const val` is not followed.
+ */
+internal fun trustedLiteral(
+    src: String,
+    value: String,
+    at: Int,
+): String? {
+    val t = value.trim()
+    if (IDENT.matches(t)) return declarationOf(src, t, at)?.trustedText
+    return literalTrusted(t, 0, whole = true)
 }
 
 /** Whether [name] at [at] is declared a `Trusted`, or set to `Trusted(...)` and nothing more: what interpolate lets in anywhere. */

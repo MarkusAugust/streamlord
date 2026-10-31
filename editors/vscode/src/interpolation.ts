@@ -289,6 +289,8 @@ interface Declaration {
   markup?: boolean;
   /** Whether it is set to a call to `Trusted` and nothing more, which interpolate lets in wherever it lands. */
   trusted?: boolean;
+  /** The text a `val` set to `Trusted("...")` writes, the literal as the Kotlin compiler reads it. */
+  trustedText?: string;
   /** What it is set to the `.text` of, `interpolate(...)` or a name: markup held as a String when that is an Html. */
   textOf?: string;
   /** What the brackets after its type hold, `Html` of `List<Html>`. */
@@ -509,6 +511,7 @@ function declarations(src: string, code: Uint8Array): Map<string, Declaration[]>
             const markup = m[4] === undefined && m[5] === undefined && markupInitialiser(src, end + m[0].length);
             TRUSTED_INITIALISER.lastIndex = end + m[0].length;
             const trusted = markup && TRUSTED_INITIALISER.test(src);
+            const trustedText = trusted && word === "val" ? (literalTrusted(src, src.indexOf("Trusted", end + m[0].length)) ?? undefined) : undefined;
             const textOf = m[4] === undefined && m[5] === undefined && !markup ? textInitialiser(src, end + m[0].length) : undefined;
             let after = end + m[0].length;
             let typeArguments: string | undefined;
@@ -527,7 +530,7 @@ function declarations(src: string, code: Uint8Array): Map<string, Declaration[]>
               const v = VALUE_AFTER.exec(src);
               if (v) valueAt = after + v[0].length;
             }
-            const d = { ...scope(at), type: m[3], literal: m[4], text: constant ? m[5] : undefined, string: m[5] !== undefined, markup, trusted, textOf, typeArguments, valueAt };
+            const d = { ...scope(at), type: m[3], literal: m[4], text: constant ? m[5] : undefined, string: m[5] !== undefined, markup, trusted, trustedText, textOf, typeArguments, valueAt };
             add(m[2] as string, d);
             if (owner.kind !== "top") owner.ends.push(d);
           }
@@ -753,6 +756,28 @@ export function declaredKind(src: string, name: string, at: number, nonNull = fa
   // Markup the author vouched for, which a Kotlin template writes as it stands.
   if (type === d.type && TRUSTED_TYPE.test(type)) return "markup";
   return null;
+}
+
+const TRUSTED_LITERAL = /Trusted\s*\(\s*"((?:[^"\\$\n]|\\.)*)"\s*\)/y;
+
+/** The text of `Trusted("...")` at `at`, with a literal that holds no template, as the Kotlin compiler reads it; null for anything else. */
+function literalTrusted(src: string, at: number, whole = false): string | null {
+  TRUSTED_LITERAL.lastIndex = at;
+  const m = TRUSTED_LITERAL.exec(src);
+  if (!m || (whole && m[0].length !== src.length - at)) return null;
+  const escapes: Record<string, string> = { t: "\t", b: "\b", n: "\n", r: "\r" };
+  return (m[1] as string).replace(/\\(u[0-9A-Fa-f]{4}|.)/g, (_, e: string) => (e.length === 5 ? String.fromCharCode(Number.parseInt(e.slice(1), 16)) : (escapes[e] ?? e)));
+}
+
+/**
+ * The text a Trusted value writes, when the source shows it: `Trusted("...")` with a literal that
+ * holds no template, or a `val` set to one. Null for any other value, `Trusted(name)` among them,
+ * since the value of a `const val` is not followed.
+ */
+export function trustedLiteral(src: string, value: string, at: number): string | null {
+  const t = value.trim();
+  if (IDENT.test(t)) return declarationOf(src, t, at)?.trustedText ?? null;
+  return literalTrusted(t, 0, true);
 }
 
 /** Whether `name` at `at` is declared a `Trusted`, or set to `Trusted(...)` and nothing more: what interpolate lets in anywhere. */

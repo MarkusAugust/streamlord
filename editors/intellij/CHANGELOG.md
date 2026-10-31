@@ -34,6 +34,11 @@ All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here
   longer leaves a warning behind. A change to a declared `String`, `query.trim()`, `take`,
   `replace`, `lowercase`, `ifBlank { "none" }` and the like, is a `String`, a warning where
   `query` is one rather than a hint.
+- A literal `Trusted("...")`, or a `val` set to one, is read as the markup it writes, in a call to
+  `interpolate` and in an HTML string alike, and the values after it are judged where they really
+  land: `interpolate("<button %s=\"%s\">", Trusted("data-on:click"), q)` is an error for a `String`
+  `q`, in a Datastar expression, and `<%s>%s</%s>` with `Trusted("script")` one in code. A
+  `Trusted` whose text is not known, `Trusted(tag)`, leaves the values after it at most a warning.
 - A call to one of Streamlord's expression helpers is your own only when every argument is: a
   literal, a constant, a declared number or boolean, or another such helper call.
   `${signal("count")}` says nothing; `${signal(query)}` writes the request's text into a Datastar

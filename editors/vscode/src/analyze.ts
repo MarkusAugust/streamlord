@@ -5,8 +5,8 @@ import { capitalIn, kebab, nameProblem, runsIntoModifiers, spellings } from "./a
 import { signalNameRefusal } from "./signalNames.ts";
 import { asciiLowercase, decodeEntities, indexOfAsciiIgnoreCase, keyReading, rawKeyNote, tokenize, validateAttributes, validateMarkup, wireKey, wireKeyReads, type Attribute, type Tag } from "./markup.ts";
 import { findCallSites, isHtmlString, lexKotlin, namedArgText, selectStringArg, stringAt, type Arg, type CallSite } from "./scanner.ts";
-import { holeLandings, urlHostFixedBy, urlSchemeFixedBy, type HoleLanding, type Position } from "./holes.ts";
-import { argKind, callResult, chainFrom, countBelow, ESCAPES_TITLE, fileFacts, holeDisplay, holeValues, interpolateFix, interpolateText, isMarkup, markupHeldAsString, markupTextValue, markupValued, markupView, mayBeNull, mayHoldMarkup, percentHoles, quoteFix, REFUSES_URL_TITLE, shortened, trimmed, trustedFix, valueKind, visiblyList, weakest, withNested, withPercentHoles, type ArgKind } from "./interpolation.ts";
+import { holeLandings, urlHostFixedBy, urlSchemeFixedBy, type Hole, type HoleLanding, type Position } from "./holes.ts";
+import { argKind, callResult, chainFrom, countBelow, ESCAPES_TITLE, fileFacts, holeDisplay, holeValues, interpolateFix, interpolateText, isMarkup, markupHeldAsString, markupTextValue, markupValued, markupView, mayBeNull, mayHoldMarkup, percentHoles, quoteFix, REFUSES_URL_TITLE, shortened, trimmed, trustedFix, trustedLiteral, valueKind, visiblyList, weakest, withNested, withPercentHoles, type ArgKind } from "./interpolation.ts";
 import { dslHelpers, EXPRESSION_HELPERS, signalNameHyphenSites } from "./signalNameHyphens.ts";
 import { clientKeyName, collectSignalDefinitions } from "./signals.ts";
 
@@ -287,12 +287,22 @@ function checkInterpolateSite(site: CallSite, f: InterpolateFormat, src: string,
   // value added would make it the vararg one's, which writes the List as one value.
   const listOverload = values.length >= 1 && values.length <= 2 && kinds[0] === null && known[0] === null && visiblyList(src, (values[0] as Arg).text, s.start);
   const view = markupView(src, format);
-  const landings = holeLandings(
-    view,
-    [...format.interpolations.map((ip) => ip.decodedStart), ...at].map((d) => ({ start: d, end: d + PLACEHOLDER.length })),
-    [...new Set([opts.prefix, catalog.prefix, catalog.aliasedPrefix])],
-  );
   const starts = [...format.interpolations.map((ip) => ip.decodedStart), ...at];
+  // interpolate reads the markup with each Trusted value's text in place: known where the value is a literal.
+  const written = new Map<number, string>();
+  const unknown: number[] = [];
+  if (mapped) {
+    values.forEach((a, k) => {
+      if (kinds[k] !== "trusted") return;
+      const text = trustedLiteral(src, a.text, s.start);
+      if (text === null) unknown.push(at[k] as number);
+      else written.set(format.interpolations.length + k, text);
+    });
+  }
+  const reading = readHoles(view, starts.map((d) => ({ start: d, end: d + PLACEHOLDER.length })), [...new Set([opts.prefix, catalog.prefix, catalog.aliasedPrefix])], written);
+  const landings = reading.landings;
+  // After a Trusted whose text is not known, a value may land elsewhere than the markup shows.
+  const uncertainFrom = Math.min(...unknown);
   const percentAt = (j: number) => j >= format.interpolations.length;
   const trapOf = traps(format, src);
   format.interpolations.forEach((ip, k) => {
@@ -322,7 +332,7 @@ function checkInterpolateSite(site: CallSite, f: InterpolateFormat, src: string,
       !mayBeNull(src, ip.text, s.start) &&
       (markupText ? markupValued(src, format, ip) : !(landing.position === "TEXT" && mayHoldMarkup(src, ip.text, s.start, opts.constants)));
     // As a %s hole it would be refused, along with every hole after it in the URL, unless the literal before it fixes the host.
-    const loadsAnywhere = hostUnfixed(view, landings, starts, k, (j) => j === k || percentAt(j));
+    const loadsAnywhere = hostUnfixed(reading, starts, k, (j) => j === k || percentAt(j));
     const fixable = ESCAPED.has(landing.position) && !loadsAnywhere && ip.kind !== "operand" && mapped && !listOverload && percents % 2 === 0 && keeps;
     const message = loadsAnywhere ? templateCodeUrlMessage(shown, landing.attribute ?? "the URL") : markupText ? rereadMessage(shown) : templateMessage(shown, landing, endTagAt(view, ip.decodedStart));
     issues.push({ start: ip.start, end: ip.end, severity: "warning", code: "interpolate-template", link: DOCS.expressions, message, fixes: fixable ? [holeFix(ip, shown, at, values, f.arg, markupText)] : undefined });
@@ -331,22 +341,26 @@ function checkInterpolateSite(site: CallSite, f: InterpolateFormat, src: string,
     const landing = landings[format.interpolations.length + k] as HoleLanding;
     const arg = mapped ? values[k] : undefined;
     const kind = arg ? (kinds[k] ?? null) : null;
-    const j = format.interpolations.length + k;
+    const base = format.interpolations.length;
+    const uncertain = d > uncertainFrom;
     // interpolate refuses everything but Trusted in a URL that loads code, unless what comes before the
-    // URL's first value nobody vouched for fixes its host: the literal, with each Trusted before it written
-    // as it stands. It names that value, and a URL of Trusted values alone goes unjudged.
+    // URL's first value nobody vouched for fixes its host: the markup as written, a literal Trusted's text
+    // in place. It names that value, and a URL of Trusted values alone goes unjudged.
     if (landing.loadsCode && landing.attribute !== null) {
-      const inUrl = at.map((_, n) => n).filter((n) => (landings[format.interpolations.length + n] as HoleLanding).valueStart === landing.valueStart);
+      // A Trusted of known text is read as markup and is not among them.
+      const inUrl = at.map((_, n) => n).filter((n) => (landings[base + n] as HoleLanding).valueStart === landing.valueStart);
       const urlKind = (n: number) => (mapped && values[n] ? (kinds[n] ?? null) : null);
       const first = inUrl.find((n) => urlKind(n) !== "trusted");
-      const before = first === undefined ? null : writtenBefore(view, landing.valueStart, at, inUrl, first, values);
-      if (first !== undefined && before !== null && !urlHostFixedBy(landing.attribute, before.text)) {
+      // A Trusted before it whose text is not known ends what is known to come before.
+      const vouched = first !== undefined && inUrl[0] !== first ? (inUrl[0] as number) : undefined;
+      const before = first === undefined ? null : reading.prefix(base + k, base + (vouched ?? first));
+      if (first !== undefined && before !== null && !urlHostFixedBy(landing.attribute, before)) {
         if (first !== k) return;
         // A template before the hole is filled in first, so what the literal fixes is known only without one.
         const templated = format.interpolations.some((ip) => ip.decodedStart >= landing.valueStart && ip.decodedStart < d);
-        const certain = !templated && before.known && kind !== null;
+        const certain = !templated && vouched === undefined && !uncertain && kind !== null;
         const shown = arg ? shortened(arg.text) : "the value of this %s";
-        issues.push({ ...toSource(format, d, d + PLACEHOLDER.length), severity: certain ? "error" : "warning", code: "unsafe-interpolation", link: DOCS.expressions, message: refusedCodeUrlMessage(shown, landing.attribute, certain, !before.known) });
+        issues.push({ ...toSource(format, d, d + PLACEHOLDER.length), severity: certain ? "error" : "warning", code: "unsafe-interpolation", link: DOCS.expressions, message: refusedCodeUrlMessage(shown, landing.attribute, certain, vouched !== undefined || uncertain) });
         return;
       }
     }
@@ -361,10 +375,12 @@ function checkInterpolateSite(site: CallSite, f: InterpolateFormat, src: string,
     if (kind === "trusted" || (kind !== null && allowed.includes(kind))) return;
     const shown = arg ? shortened(arg.text) : "the value of this %s";
     if (kind === "unsigned" && arg && (landing.position === "DATASTAR" || landing.position === "STYLE")) {
-      issues.push({ ...toSource(format, d, d + PLACEHOLDER.length), severity: "error", code: "unsafe-interpolation", link: DOCS.expressions, message: unsignedRefusedMessage(shown, landing), fixes: [toLongFix(arg)] });
+      const message = uncertain ? uncertainMessage(shown, landing, false) : unsignedRefusedMessage(shown, landing);
+      issues.push({ ...toSource(format, d, d + PLACEHOLDER.length), severity: uncertain ? "warning" : "error", code: "unsafe-interpolation", link: DOCS.expressions, message, fixes: [toLongFix(arg)] });
       return;
     }
-    issues.push({ ...toSource(format, d, d + PLACEHOLDER.length), severity: kind === null ? "warning" : "error", code: "unsafe-interpolation", link: DOCS.expressions, message: refusedMessage(shown, landing, kind !== null, endTagAt(view, d)) });
+    const message = uncertain && kind !== null ? uncertainMessage(shown, landing, endTagAt(view, d)) : refusedMessage(shown, landing, kind !== null, endTagAt(view, d));
+    issues.push({ ...toSource(format, d, d + PLACEHOLDER.length), severity: kind === null || uncertain ? "warning" : "error", code: "unsafe-interpolation", link: DOCS.expressions, message });
   });
   if (opts.checkHtmlAttributes) issues.push(...mapIssues(format, src, analyzeHtmlWith(view, opts, hyphenated)));
   return issues;
@@ -455,20 +471,62 @@ function refusedMessage(shown: string, landing: HoleLanding, certain: boolean, e
   return certain ? `interpolate always throws here: ${shown} lands in ${where}, and only ${allowed} is let in there. ${instead}` : `interpolate throws here unless ${shown} is ${allowed}: it lands in ${where}. ${instead}`;
 }
 
+/** A value interpolate refuses where the markup shows it landing, which a Trusted before it whose text is not known may move. */
+function uncertainMessage(shown: string, landing: HoleLanding, endTag: boolean): string {
+  const allowed = landing.position === "DATASTAR" ? "a number or a boolean" : landing.position === "STYLE" ? "a number" : "Trusted(...)";
+  const { where, instead } = landingWords(landing, endTag);
+  return `interpolate throws here unless the Trusted text before ${shown} moves it: it lands in ${where}, where only ${allowed} is let in. ${instead}`;
+}
+
 /**
  * Whether the hole at `k` is in a URL that loads code, `src` of a script and the like, whose host
  * the literal before the URL's first hole does not fix: interpolate refuses every value there but
  * Trusted, as Landscape.checkUrls in Interpolation.kt does. `counts` says which holes interpolate
  * sees as holes.
  */
-function hostUnfixed(view: string, landings: readonly HoleLanding[], starts: readonly number[], k: number, counts: (j: number) => boolean): boolean {
-  const landing = landings[k] as HoleLanding;
+function hostUnfixed(reading: HoleReading, starts: readonly number[], k: number, counts: (j: number) => boolean): boolean {
+  const landing = reading.landings[k] as HoleLanding;
   if (!landing.loadsCode || landing.attribute === null) return false;
-  let first = starts[k] as number;
-  landings.forEach((l, j) => {
-    if (counts(j) && l.valueStart === landing.valueStart && (starts[j] as number) < first) first = starts[j] as number;
+  let first = k;
+  reading.landings.forEach((l, j) => {
+    if (counts(j) && l.valueStart === landing.valueStart && (starts[j] as number) < (starts[first] as number)) first = j;
   });
-  return !urlHostFixedBy(landing.attribute, view.slice(landing.valueStart, first));
+  return !urlHostFixedBy(landing.attribute, reading.prefix(k, first));
+}
+
+/** Where a markup's holes land, read with the text of the known ones in place. */
+interface HoleReading {
+  landings: HoleLanding[];
+  /** What the markup reads from where the value of hole `j`'s attribute starts to where hole `to` starts, each known text in place. */
+  prefix(j: number, to: number): string;
+}
+
+/**
+ * The holes of `view` as interpolate reads them: holeLandings with the text of the `known` holes,
+ * a literal Trusted's, in place. A known text can hold the start of a value, where holeLandings
+ * gives the offset of the hole, so a prefix is read from the markup as written.
+ */
+function readHoles(view: string, holes: readonly Hole[], prefixes: string[], known: ReadonlyMap<number, string>): HoleReading {
+  const landings = holeLandings(view, holes, prefixes, known);
+  if (known.size === 0) return { landings, prefix: (j, to) => view.slice((landings[j] as HoleLanding).valueStart, (holes[to] as Hole).start) };
+  let text = "";
+  let cut = 0;
+  const starts: number[] = new Array(holes.length).fill(0);
+  for (const i of holes.map((_, n) => n).sort((a, b) => (holes[a] as Hole).start - (holes[b] as Hole).start)) {
+    const hole = holes[i] as Hole;
+    text += view.slice(cut, hole.start);
+    starts[i] = text.length;
+    text += known.get(i) ?? view.slice(hole.start, hole.end);
+    cut = hole.end;
+  }
+  text += view.slice(cut);
+  const open = holes.map((_, n) => n).filter((n) => !known.has(n));
+  let written: HoleLanding[] | undefined;
+  const prefix = (j: number, to: number) => {
+    written ??= holeLandings(text, open.map((n) => ({ start: starts[n] as number, end: (starts[n] as number) + (holes[n] as Hole).end - (holes[n] as Hole).start })), prefixes);
+    return text.slice((written[open.indexOf(j)] as HoleLanding).valueStart, starts[to]);
+  };
+  return { landings, prefix };
 }
 
 const CODE_URL_ADVICE = "Start the value with a path such as /js/ or a whole origin such as https://cdn.example/, so that the value only picks a file there";
@@ -479,36 +537,6 @@ function codeUrlMessage(shown: string, attribute: string): string {
 
 function templateCodeUrlMessage(shown: string, attribute: string): string {
   return `Kotlin fills in ${shown} before interpolate sees the markup, so interpolate neither escapes nor refuses it. It lands in ${attribute}, which loads code from wherever the value points, and the markup before it does not fix the host. ${CODE_URL_ADVICE}, and make it a %s hole.`;
-}
-
-/**
- * What interpolate reads of a URL before the hole `first` of `inUrl`, when it judges the host: the
- * literal from `from`, each Trusted value before the hole in place. `known` is false where a
- * Trusted's text is not a literal; the text then stops before it, and is still what fixes the
- * host if it fixes it already.
- */
-function writtenBefore(view: string, from: number, at: readonly number[], inUrl: readonly number[], first: number, values: readonly Arg[]): { text: string; known: boolean } {
-  let text = "";
-  let cut = from;
-  for (const n of inUrl) {
-    if (n === first) break;
-    text += view.slice(cut, at[n]);
-    const own = values[n] ? trustedText(values[n].text) : null;
-    if (own === null) return { text, known: false };
-    text += own;
-    cut = (at[n] as number) + PLACEHOLDER.length;
-  }
-  return { text: text + view.slice(cut, at[first]), known: true };
-}
-
-const TRUSTED_LITERAL = /^Trusted\s*\(\s*"((?:[^"\\$\n]|\\.)*)"\s*\)$/;
-
-/** The text of `Trusted("...")` with a literal that holds no template, as the Kotlin compiler reads it; null for anything else. */
-function trustedText(value: string): string | null {
-  const m = TRUSTED_LITERAL.exec(value.trim());
-  if (!m) return null;
-  const escapes: Record<string, string> = { t: "\t", b: "\b", n: "\n", r: "\r" };
-  return (m[1] as string).replace(/\\(u[0-9A-Fa-f]{4}|.)/g, (_, e: string) => (e.length === 5 ? String.fromCharCode(Number.parseInt(e.slice(1), 16)) : (escapes[e] ?? e)));
 }
 
 function refusedCodeUrlMessage(shown: string, attribute: string, certain: boolean, vouched: boolean): string {
@@ -621,12 +649,20 @@ function traps(s: KotlinString, src: string): (ip: Interpolation) => Issue | nul
 function judgeHoles(s: KotlinString, src: string, opts: AnalyzeOptions, view: string): Issue[] {
   if (s.interpolations.length === 0) return [];
   const trapOf = traps(s, src);
-  const landings = holeLandings(
+  // A literal Trusted is markup the author wrote, read in place: the other holes are judged against it.
+  const written = new Map<number, string>();
+  s.interpolations.forEach((ip, k) => {
+    const text = ip.kind === "operand" ? null : trustedLiteral(src, ip.text, s.start);
+    if (text !== null) written.set(k, text);
+  });
+  const reading = readHoles(
     view,
     s.interpolations.map((ip) => ({ start: ip.decodedStart, end: ip.decodedStart + PLACEHOLDER.length })),
     // Both bundles' prefixes, as interpolate reads them: a value is judged by what either would run.
     [...new Set([opts.prefix, catalog.prefix, catalog.aliasedPrefix])],
+    written,
   );
+  const landings = reading.landings;
   const told = s.interpolations.map((ip) => holeFact(s, src, opts, ip));
   const starts = s.interpolations.map((ip) => ip.decodedStart);
   // interpolate(...) can take the literal only when every hole is a value it escapes and keeps.
@@ -636,11 +672,12 @@ function judgeHoles(s: KotlinString, src: string, opts: AnalyzeOptions, view: st
     s.interpolations.every((ip) => ip.kind !== "operand") &&
     s.interpolations.every((ip, k) => interpolateKeeps(src, s, ip, told[k] ?? null, (landings[k] as HoleLanding).position, opts)) &&
     // interpolate refuses every value in a URL that loads code unless the literal fixes its host.
-    !s.interpolations.some((_, k) => hostUnfixed(view, landings, starts, k, () => true));
+    !s.interpolations.some((_, k) => hostUnfixed(reading, starts, k, () => true));
   // The rewrite is made once for the literal, and only when a fix is applied.
   const rewrite = interpolateText(src, s);
   const issues: Issue[] = [];
   s.interpolations.forEach((ip, k) => {
+    if (written.has(k)) return;
     const landing = landings[k] as HoleLanding;
     const fact = plainFact(told[k] ?? null);
     const shown = holeDisplay(ip, s.dollars);
@@ -669,8 +706,9 @@ function judgeHoles(s: KotlinString, src: string, opts: AnalyzeOptions, view: st
       case "URL": {
         if (own || scalar) return;
         const attribute = landing.attribute ?? "the URL";
-        const before = decodeEntities(view.slice(landing.valueStart, ip.decodedStart)).text;
-        if (landing.loadsCode && !urlHostFixedBy(attribute, view.slice(landing.valueStart, ip.decodedStart))) {
+        const prefix = reading.prefix(k, k);
+        const before = decodeEntities(prefix).text;
+        if (landing.loadsCode && !urlHostFixedBy(attribute, prefix)) {
           issues.push({ ...at, severity: "warning", code: "unsafe-interpolation", message: codeUrlMessage(shown, attribute) });
         } else if (urlSchemeFixedBy(attribute, before)) {
           issues.push(unescaped());
