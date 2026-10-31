@@ -13,22 +13,37 @@ All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here
   outside element text, with a fix that rewrites the literal as `interpolate(...)` and adds its
   import (as `interpolate(...).text` where the literal was a `String`). `unsafe-interpolation` is
   a value where escaping cannot help: the start of a URL, `style`, a `data-*` expression, signal
-  path or filter, a script, an event handler or `srcdoc`, a warning; a value without quotes, a
-  warning (a hint for a number or a boolean) with a fix that quotes it; a tag or attribute name,
-  a hint, a warning for a `String` or markup. A constant, a literal, an `if` or a `when` between
-  literals, a call to an expression helper whose arguments are all of these, `${signal("count")}`,
-  and markup built in the template in element text say nothing.
+  path or filter, a script, an event handler or `srcdoc`, a warning, at the start of a URL with
+  the fix to build it with `interpolate(...)`, which refuses a URL that runs; a value without
+  quotes, a warning (a hint for a number or a boolean) with a fix that quotes it; a tag or
+  attribute name, a hint, a warning for a `String` or markup; an end tag, which takes no
+  attributes, the same. A `+` chain handed straight to a DSL expression call is judged as one in
+  an HTML string is. A constant, a qualified one such as `Routes.SAVE` among them, a literal,
+  `${"$"}`, an enum entry, an `if` or a `when` between literals, and markup built in the template
+  in element text say nothing.
+- A call to one of Streamlord's expression helpers is your own only when every argument is: a
+  literal, a constant, a declared number or boolean, or another such helper call.
+  `${signal("count")}` says nothing; `${signal(query)}` writes the request's text into a Datastar
+  expression, where it runs, and is judged as the `String` it returns.
+- A `String` in element text, which may be text from outside or markup you built, gets two fixes
+  and neither first: the `interpolate(...)` rewrite, which escapes it, and "Mark … as markup",
+  which wraps it in `Trusted(...)` and adds the import. The message says to declare markup `Html`
+  or wrap it.
 - A call to `interpolate` is judged as it will run. A `%s` count that does not match the values is
   the error `interpolate-holes`, since the call throws. A `%s` whose value `interpolate` will
   refuse where it lands is `unsafe-interpolation`, an error where the value is known to be refused
   (a `String` in a `data-*` expression, a `Boolean` in `style`) and a warning where it is not. A
   Kotlin template written into the format is `interpolate-template`, a warning, since Kotlin fills
   it in before `interpolate` sees it, with a fix that makes it a `%s` hole and passes its value in
-  its place. The format is read as HTML, so a `%s` in it is a hole and not text.
+  its place. A `%s` in element text given markup held as a `String`, `h.text` or a `val` set to
+  one, is `interpolate-template` too, a warning, since `interpolate` escapes it and its tags are
+  printed as text; a literal is text you chose to have escaped and says nothing. The format is read
+  as HTML, so a `%s` in it is a hole and not text.
 - The `interpolate(...)` rewrite is offered only where it keeps the page as it was: not for a value
   that may be null, which a template writes as `null` and `interpolate` as nothing, nor for a
   `Trusted` outside element text, nor for a hole in element text that may hold markup, which
-  `interpolate` would escape.
+  `interpolate` would escape, nor for a value that is a `List`, which a template writes as
+  `[a, b]`. The rewrite doubles each per cent sign the literal writes.
 - The interpolation inspection asks the Kotlin plugin what each value is, and that comes before
   anything the text suggests. In K2 mode the types come from the Analysis API, in K1 mode from the
   declarations. A number or a boolean is safe where escaping is, and an `Int?` there too; a
@@ -38,8 +53,7 @@ All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here
   `interpolate(...)`, `Trusted(...)`, a value or function declared `Html` or `@Language("HTML")`,
   kotlinx.html output (`createHTML()`, `appendHTML()`, `elements { }`), a `joinToString` over
   markup, or a function, an `if`, a `when` or an `?:` whose every result is markup or a literal.
-  `"<b>" + query` is the `String` it is. A helper given any other value, `${signal(query)}`, is the
-  `String` it returns, since what it writes runs as code.
+  `"<b>" + query` is the `String` it is.
 - An edit in another file looks up the types of the values in an open file's HTML strings again,
   and runs the analysis of that file again only when one of them changed.
 - In a `data-*` expression of an HTML string, `$count` where `count` is a number or a boolean is a

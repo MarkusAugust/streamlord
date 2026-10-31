@@ -33,7 +33,9 @@ Quick fixes: the DSL helper (<code>increment("count")</code>, <code>signal("coun
 <code>$$"..."</code> literal (Kotlin 2.2+) where a single dollar is text, the <code>${'$'}count</code> escape, or the
 literal rewritten as <code>interpolate(...)</code> with its import, quotes around an unquoted attribute value, and a template
 in a format made a <code>%s</code> hole with its value passed in its place. The rewrite is not offered for a value that may be
-null, which a template writes as <code>null</code> and <code>interpolate</code> as nothing.
+null, which a template writes as <code>null</code> and <code>interpolate</code> as nothing. For a <code>String</code> in
+element text, which may be text from outside or markup you built, it is offered beside "Mark &hellip; as markup", which wraps
+the value in <code>Trusted(...)</code>, and neither comes first: which one is right only you know.
 </p>
 <!-- tooltip end -->
 </body>

@@ -183,23 +183,24 @@ reviewer can search for, which is the whole reason it is a type and not a flag.
 
 The editors ask the same question of a Kotlin template in an HTML string as you type, with the
 same reading of the markup: core's, which `interpolate` uses and the VS Code analysis is held to.
-Every `$name`, `${...}` and value joined with `+` is a hole, and each is judged by where it
-lands:
+Every `$name`, `${...}` and value joined with `+` is a hole, also in a `+` chain handed straight to
+a DSL call, and each is judged by where it lands:
 
 | Where the hole is | What the editors say |
 |---|---|
-| Element text, a quoted attribute, a URL whose literal start settles the scheme (`#`, `/`, `?`, `https://`) | `unescaped-interpolation`: a hint, a warning when the value is a `String` or markup, with a fix that rewrites the literal as `interpolate(...)` |
-| The start of a URL, `style`, a `data-*` expression, signal path or filter, `<script>`, `<style>`, `on*`, `srcdoc` | `unsafe-interpolation`: a warning, since escaping cannot help there |
+| Element text, a quoted attribute, a URL whose literal start settles the scheme (`#`, `/`, `?`, `https://`) | `unescaped-interpolation`: a hint, a warning when the value is a `String` or markup, with a fix that rewrites the literal as `interpolate(...)`, and in element text a second, "Mark … as markup", that wraps the value in `Trusted(...)` |
+| The start of a URL, `style`, a `data-*` expression, signal path or filter, `<script>`, `<style>`, `on*`, `srcdoc` | `unsafe-interpolation`: a warning, since escaping cannot help there; at the start of a URL with the fix to build it with `interpolate(...)`, which refuses a URL that runs |
 | A value without quotes | `unsafe-interpolation`: a warning, a hint for a number or a boolean, with a fix that quotes the value |
-| A tag name, an attribute name, a list of attributes | `unsafe-interpolation`: a hint, a warning when the value is a `String` or markup |
+| A tag name, an attribute name, a list of attributes, an end tag | `unsafe-interpolation`: a hint, a warning when the value is a `String` or markup; an end tag takes no attributes, so write it from literals alone |
 | `$name` where a Datastar signal could stand | `kotlin-interpolation`, the [dollar trap](/dollar-trap/); a hint when `name` is declared a number or a boolean, which is safe to write in, so only what you meant is in question |
 
-A value the editor can see is yours says nothing anywhere: a `const val`, a literal, an `if` or a
-`when` whose every branch is one, and a call to one of Streamlord's expression helpers whose
-arguments are all yours, `${signal("count")}` or `${post("/save")}`. A helper is only as safe as
-what it is given: `${signal(query)}` writes the request's text into a Datastar expression, where it
-runs, so it is judged as the `String` it returns. IntelliJ also takes an entry of a Kotlin enum that does
-not override `toString`, `${Tab.HOME}`, as yours. Any other value is judged by what `interpolate` would let in
+A value the editor can see is yours says nothing anywhere: a `const val`, also a qualified one such
+as `${Routes.SAVE}`, a literal, `${"$"}`, an enum entry such as `${Tab.HOME}`, an `if` or a `when`
+whose every branch is one, and a call to one of Streamlord's expression helpers whose arguments are
+all yours or a declared number or boolean, `${signal("count")}` or `${post("/save")}`. A helper is
+only as safe as what it is given: `${signal(query)}` writes the request's text into a Datastar
+expression, where it runs, so it is judged as the `String` it returns. IntelliJ reads the enum
+itself and takes an entry only when the enum does not override `toString`. Any other value is judged by what `interpolate` would let in
 where it lands. A number or a boolean says nothing in text, an attribute, a URL or a `data-*`
 expression, and a number in `style` too; one that may be null, an `Int?`, only where escaping is
 enough. A hole that is markup you built, as a whole, says nothing in element text and is a warning
@@ -216,13 +217,21 @@ the types, and what it knows of a value comes before anything the text suggests.
 be a number. The `interpolate(...)` fix is offered only when the rewrite keeps the page as it was,
 escaping aside: not when a value may be null, which a template writes as `null` and `interpolate`
 as nothing, nor when a hole in element text may hold markup, which `interpolate` would escape.
+For a `String` in element text the editors cannot tell which you hold, so they offer both the
+rewrite and "Mark … as markup", which wraps the value in `Trusted(...)`, and put neither first:
+text from outside wants the rewrite, a fragment you rendered yourself wants `Trusted`, or better,
+to be declared `Html`.
 
 A call to `interpolate` is judged as it will run. A miscounted `%s` is an error,
 `interpolate-holes`, because it always throws. A `%s` whose value `interpolate` will refuse, a
 `String` in a `data-*` expression, is an error where the value is known to be one and a warning
 where it is not. And a Kotlin template written into the format, `interpolate("<p>$name</p>")`, is
 `interpolate-template`: Kotlin fills it in before `interpolate` sees the markup, so it is neither
-escaped nor refused, and the fix turns it into a `%s` hole with the value among the arguments.
+escaped nor refused, and the fix turns it into a `%s` hole with the value among the arguments. A
+`%s` in element text given markup held as a `String`, `h.text`, a `val` set to one, `elements { }`
+or a `joinToString` of such, is `interpolate-template` too, a warning: `interpolate` escapes it, so
+its tags are printed as text. Pass the `Html` itself, or wrap markup you built in `Trusted(...)`. A
+literal is left alone, `"<the oath>"` among them: text you chose to have escaped.
 
 At run time the source is gone and only the finished string arrives, so the holes have to be left
 standing for the same question to be asked. That is the whole of what `interpolate` wants from you.
