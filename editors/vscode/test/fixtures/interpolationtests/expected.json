@@ -40,7 +40,7 @@
     "start": 1417,
     "end": 1432,
     "code": "unescaped-interpolation",
-    "severity": "hint",
+    "severity": "warning",
     "message": "Kotlin writes ${query.trim()} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
    },
    {
@@ -303,7 +303,7 @@
     "start": 2296,
     "end": 2311,
     "code": "unescaped-interpolation",
-    "severity": "hint",
+    "severity": "warning",
     "message": "Kotlin writes ${query.trim()} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
    },
    {
@@ -530,7 +530,7 @@
     "start": 1422,
     "end": 1437,
     "code": "unescaped-interpolation",
-    "severity": "hint",
+    "severity": "warning",
     "message": "Kotlin writes ${query.trim()} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
    },
    {

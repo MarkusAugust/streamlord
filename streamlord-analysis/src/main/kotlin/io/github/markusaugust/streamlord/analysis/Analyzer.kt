@@ -67,6 +67,8 @@ private val ESCAPED_POSITIONS = setOf(Position.TEXT, Position.ATTRIBUTE, Positio
 private const val CODE_URL_ADVICE =
     "Start the value with a path such as /js/ or a whole origin such as https://cdn.example/, so that the value only picks a file there"
 private val TRUSTED_CALL = Regex("""(?:^|[^\p{L}\p{Nd}_.])Trusted\s*\(""")
+private val TRUSTED_LITERAL = Regex("""Trusted\s*\(\s*"((?:[^"\\$\n]|\\.)*)"\s*\)""")
+private val KOTLIN_ESCAPE = Regex("""\\(u[0-9A-Fa-f]{4}|.)""")
 
 private val INTERPOLATE = setOf("interpolate")
 private val FORMAT_SPECIFIER = Regex("""%[-#+0,(]*\d*(?:\.\d+)?[dfxXoeEgGcb](?![A-Za-z])""")
@@ -595,28 +597,31 @@ public class Analyzer(
             val arg = if (mapped) values[k] else null
             val kind = if (arg != null) kinds[k] else null
             val r = format.toSource(d, d + PLACEHOLDER.length)
-            // interpolate refuses everything but Trusted in a URL that loads code, unless the literal before
-            // the URL's first hole fixes its host; it names that first hole. Trusted text counts toward the URL, which
-            // is judged whole, so only a URL of Trusted values alone is waived, and one holding any is not known to fail.
-            if (landing.loadsCode && hostUnfixed(view, landings, starts, format.interpolations.size + k, percentAt)) {
+            // interpolate refuses everything but Trusted in a URL that loads code, unless what comes before the
+            // URL's first value nobody vouched for fixes its host: the literal, with each Trusted before it written
+            // as it stands. It names that value, and a URL of Trusted values alone goes unjudged.
+            val attribute = landing.attribute
+            if (landing.loadsCode && attribute != null) {
                 val inUrl = at.indices.filter { landings[format.interpolations.size + it].valueStart == landing.valueStart }
-                if (inUrl.first() != k) continue
-                val urlKinds = inUrl.map { if (mapped) kinds[it] else null }
-                if (urlKinds.all { it == ArgKind.TRUSTED }) continue
-                // A template before the hole is filled in first, so what the literal fixes is known only without one.
-                val templated = format.interpolations.any { it.decodedStart >= landing.valueStart && it.decodedStart < d }
-                val certain = !templated && urlKinds.all { it != null && it != ArgKind.TRUSTED }
-                val shown = arg?.let { shortened(it.text) } ?: "the value of this %s"
-                issues +=
-                    Issue(
-                        r.first,
-                        r.last + 1,
-                        refusedCodeUrlMessage(shown, landing.attribute ?: "the URL", certain),
-                        if (certain) Severity.ERROR else Severity.WARNING,
-                        "unsafe-interpolation",
-                        Docs.EXPRESSIONS,
-                    )
-                continue
+                val first = inUrl.firstOrNull { (if (mapped) kinds[it] else null) != ArgKind.TRUSTED }
+                val before = first?.let { writtenBefore(view, landing.valueStart, at, inUrl, it, values) }
+                if (first != null && before != null && !urlHostFixedBy(attribute, before.first)) {
+                    if (first != k) continue
+                    // A template before the hole is filled in first, so what the literal fixes is known only without one.
+                    val templated = format.interpolations.any { it.decodedStart >= landing.valueStart && it.decodedStart < d }
+                    val certain = !templated && before.second && kind != null
+                    val shown = arg?.let { shortened(it.text) } ?: "the value of this %s"
+                    issues +=
+                        Issue(
+                            r.first,
+                            r.last + 1,
+                            refusedCodeUrlMessage(shown, attribute, certain, !before.second),
+                            if (certain) Severity.ERROR else Severity.WARNING,
+                            "unsafe-interpolation",
+                            Docs.EXPRESSIONS,
+                        )
+                    continue
+                }
             }
             if (landing.position in ESCAPED_POSITIONS) {
                 // Markup held as a String is text to interpolate: in element text it escapes the tags, which are then printed.
@@ -844,17 +849,92 @@ public class Analyzer(
             "It lands in $attribute, which loads code from wherever the value points, and the markup before it does not fix the host. " +
             "$CODE_URL_ADVICE, and make it a %s hole."
 
+    /**
+     * What interpolate reads of a URL before the hole [first] of [inUrl], when it judges the host:
+     * the literal from [from], each Trusted value before the hole in place. The second is false
+     * where a Trusted's text is not a literal; the text then stops before it, and is still what
+     * fixes the host if it fixes it already.
+     */
+    private fun writtenBefore(
+        view: String,
+        from: Int,
+        at: List<Int>,
+        inUrl: List<Int>,
+        first: Int,
+        values: List<Arg>,
+    ): Pair<String, Boolean> {
+        val text = StringBuilder()
+        var cut = from
+        for (n in inUrl) {
+            if (n == first) break
+            text.append(view, cut, at[n])
+            val own = values.getOrNull(n)?.let { trustedText(it.text) } ?: return text.toString() to false
+            text.append(own)
+            cut = at[n] + PLACEHOLDER.length
+        }
+        return text.append(view, cut, at[first]).toString() to true
+    }
+
+    /** The text of `Trusted("...")` with a literal that holds no template, as the Kotlin compiler reads it; null for anything else. */
+    private fun trustedText(value: String): String? {
+        val m = TRUSTED_LITERAL.matchEntire(value.trim()) ?: return null
+        return KOTLIN_ESCAPE.replace(m.groupValues[1]) {
+            val e = it.groupValues[1]
+            when {
+                e.length == 5 -> {
+                    e
+                        .substring(1)
+                        .toInt(16)
+                        .toChar()
+                        .toString()
+                }
+
+                e == "t" -> {
+                    "\t"
+                }
+
+                e == "b" -> {
+                    "\b"
+                }
+
+                e == "n" -> {
+                    "\n"
+                }
+
+                e == "r" -> {
+                    "\r"
+                }
+
+                else -> {
+                    e
+                }
+            }
+        }
+    }
+
     private fun refusedCodeUrlMessage(
         shown: String,
         attribute: String,
         certain: Boolean,
+        vouched: Boolean,
     ): String {
-        val where = "$attribute, which loads code from wherever the value points, and the markup before it does not fix the host"
+        val where = "$attribute, which loads code from wherever the value points"
         val instead = "$CODE_URL_ADVICE, or wrap a URL you chose yourself in Trusted(...)."
-        return if (certain) {
-            "interpolate always throws here: $shown lands in $where. Only Trusted(...) is let in there. $instead"
-        } else {
-            "interpolate throws here unless $shown is Trusted(...): it lands in $where. $instead"
+        return when {
+            vouched -> {
+                "interpolate throws here unless the Trusted text before $shown fixes the host or $shown is Trusted(...): " +
+                    "it lands in $where. $instead"
+            }
+
+            certain -> {
+                "interpolate always throws here: $shown lands in $where, and the markup before it does not fix the host. " +
+                    "Only Trusted(...) is let in there. $instead"
+            }
+
+            else -> {
+                "interpolate throws here unless $shown is Trusted(...): it lands in $where, " +
+                    "and the markup before it does not fix the host. $instead"
+            }
         }
     }
 

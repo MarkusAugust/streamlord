@@ -332,20 +332,23 @@ function checkInterpolateSite(site: CallSite, f: InterpolateFormat, src: string,
     const arg = mapped ? values[k] : undefined;
     const kind = arg ? (kinds[k] ?? null) : null;
     const j = format.interpolations.length + k;
-    // interpolate refuses everything but Trusted in a URL that loads code, unless the literal before
-    // the URL's first hole fixes its host; it names that first hole. Trusted text counts toward the URL, which
-    // is judged whole, so only a URL of Trusted values alone is waived, and one holding any is not known to fail.
-    if (landing.loadsCode && hostUnfixed(view, landings, starts, j, percentAt)) {
+    // interpolate refuses everything but Trusted in a URL that loads code, unless what comes before the
+    // URL's first value nobody vouched for fixes its host: the literal, with each Trusted before it written
+    // as it stands. It names that value, and a URL of Trusted values alone goes unjudged.
+    if (landing.loadsCode && landing.attribute !== null) {
       const inUrl = at.map((_, n) => n).filter((n) => (landings[format.interpolations.length + n] as HoleLanding).valueStart === landing.valueStart);
-      if (inUrl[0] !== k) return;
-      const urlKinds = inUrl.map((n) => (mapped && values[n] ? (kinds[n] ?? null) : null));
-      if (urlKinds.every((u) => u === "trusted")) return;
-      // A template before the hole is filled in first, so what the literal fixes is known only without one.
-      const templated = format.interpolations.some((ip) => ip.decodedStart >= landing.valueStart && ip.decodedStart < d);
-      const certain = !templated && urlKinds.every((u) => u !== null && u !== "trusted");
-      const shown = arg ? shortened(arg.text) : "the value of this %s";
-      issues.push({ ...toSource(format, d, d + PLACEHOLDER.length), severity: certain ? "error" : "warning", code: "unsafe-interpolation", link: DOCS.expressions, message: refusedCodeUrlMessage(shown, landing.attribute ?? "the URL", certain) });
-      return;
+      const urlKind = (n: number) => (mapped && values[n] ? (kinds[n] ?? null) : null);
+      const first = inUrl.find((n) => urlKind(n) !== "trusted");
+      const before = first === undefined ? null : writtenBefore(view, landing.valueStart, at, inUrl, first, values);
+      if (first !== undefined && before !== null && !urlHostFixedBy(landing.attribute, before.text)) {
+        if (first !== k) return;
+        // A template before the hole is filled in first, so what the literal fixes is known only without one.
+        const templated = format.interpolations.some((ip) => ip.decodedStart >= landing.valueStart && ip.decodedStart < d);
+        const certain = !templated && before.known && kind !== null;
+        const shown = arg ? shortened(arg.text) : "the value of this %s";
+        issues.push({ ...toSource(format, d, d + PLACEHOLDER.length), severity: certain ? "error" : "warning", code: "unsafe-interpolation", link: DOCS.expressions, message: refusedCodeUrlMessage(shown, landing.attribute, certain, !before.known) });
+        return;
+      }
     }
     if (ESCAPED.has(landing.position)) {
       // Markup held as a String is text to interpolate: in element text it escapes the tags, which are then printed.
@@ -478,10 +481,43 @@ function templateCodeUrlMessage(shown: string, attribute: string): string {
   return `Kotlin fills in ${shown} before interpolate sees the markup, so interpolate neither escapes nor refuses it. It lands in ${attribute}, which loads code from wherever the value points, and the markup before it does not fix the host. ${CODE_URL_ADVICE}, and make it a %s hole.`;
 }
 
-function refusedCodeUrlMessage(shown: string, attribute: string, certain: boolean): string {
-  const where = `${attribute}, which loads code from wherever the value points, and the markup before it does not fix the host`;
+/**
+ * What interpolate reads of a URL before the hole `first` of `inUrl`, when it judges the host: the
+ * literal from `from`, each Trusted value before the hole in place. `known` is false where a
+ * Trusted's text is not a literal; the text then stops before it, and is still what fixes the
+ * host if it fixes it already.
+ */
+function writtenBefore(view: string, from: number, at: readonly number[], inUrl: readonly number[], first: number, values: readonly Arg[]): { text: string; known: boolean } {
+  let text = "";
+  let cut = from;
+  for (const n of inUrl) {
+    if (n === first) break;
+    text += view.slice(cut, at[n]);
+    const own = values[n] ? trustedText(values[n].text) : null;
+    if (own === null) return { text, known: false };
+    text += own;
+    cut = (at[n] as number) + PLACEHOLDER.length;
+  }
+  return { text: text + view.slice(cut, at[first]), known: true };
+}
+
+const TRUSTED_LITERAL = /^Trusted\s*\(\s*"((?:[^"\\$\n]|\\.)*)"\s*\)$/;
+
+/** The text of `Trusted("...")` with a literal that holds no template, as the Kotlin compiler reads it; null for anything else. */
+function trustedText(value: string): string | null {
+  const m = TRUSTED_LITERAL.exec(value.trim());
+  if (!m) return null;
+  const escapes: Record<string, string> = { t: "\t", b: "\b", n: "\n", r: "\r" };
+  return (m[1] as string).replace(/\\(u[0-9A-Fa-f]{4}|.)/g, (_, e: string) => (e.length === 5 ? String.fromCharCode(Number.parseInt(e.slice(1), 16)) : (escapes[e] ?? e)));
+}
+
+function refusedCodeUrlMessage(shown: string, attribute: string, certain: boolean, vouched: boolean): string {
+  const where = `${attribute}, which loads code from wherever the value points`;
   const instead = `${CODE_URL_ADVICE}, or wrap a URL you chose yourself in Trusted(...).`;
-  return certain ? `interpolate always throws here: ${shown} lands in ${where}. Only Trusted(...) is let in there. ${instead}` : `interpolate throws here unless ${shown} is Trusted(...): it lands in ${where}. ${instead}`;
+  if (vouched) return `interpolate throws here unless the Trusted text before ${shown} fixes the host or ${shown} is Trusted(...): it lands in ${where}. ${instead}`;
+  return certain
+    ? `interpolate always throws here: ${shown} lands in ${where}, and the markup before it does not fix the host. Only Trusted(...) is let in there. ${instead}`
+    : `interpolate throws here unless ${shown} is Trusted(...): it lands in ${where}, and the markup before it does not fix the host. ${instead}`;
 }
 
 function escapedMarkupMessage(shown: string): string {

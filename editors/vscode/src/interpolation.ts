@@ -287,6 +287,8 @@ interface Declaration {
   string?: boolean;
   /** Whether it is set to a call to `interpolate` or `Trusted` and nothing more: markup. */
   markup?: boolean;
+  /** Whether it is set to a call to `Trusted` and nothing more, which interpolate lets in wherever it lands. */
+  trusted?: boolean;
   /** What it is set to the `.text` of, `interpolate(...)` or a name: markup held as a String when that is an Html. */
   textOf?: string;
   /** What the brackets after its type hold, `Html` of `List<Html>`. */
@@ -505,6 +507,8 @@ function declarations(src: string, code: Uint8Array): Map<string, Declaration[]>
           if (m && !m[1]) {
             const at = end + m[0].indexOf(m[2] as string, (m[0].length - m[0].trimStart().length));
             const markup = m[4] === undefined && m[5] === undefined && markupInitialiser(src, end + m[0].length);
+            TRUSTED_INITIALISER.lastIndex = end + m[0].length;
+            const trusted = markup && TRUSTED_INITIALISER.test(src);
             const textOf = m[4] === undefined && m[5] === undefined && !markup ? textInitialiser(src, end + m[0].length) : undefined;
             let after = end + m[0].length;
             let typeArguments: string | undefined;
@@ -523,7 +527,7 @@ function declarations(src: string, code: Uint8Array): Map<string, Declaration[]>
               const v = VALUE_AFTER.exec(src);
               if (v) valueAt = after + v[0].length;
             }
-            const d = { ...scope(at), type: m[3], literal: m[4], text: constant ? m[5] : undefined, string: m[5] !== undefined, markup, textOf, typeArguments, valueAt };
+            const d = { ...scope(at), type: m[3], literal: m[4], text: constant ? m[5] : undefined, string: m[5] !== undefined, markup, trusted, textOf, typeArguments, valueAt };
             add(m[2] as string, d);
             if (owner.kind !== "top") owner.ends.push(d);
           }
@@ -632,6 +636,8 @@ function declarations(src: string, code: Uint8Array): Map<string, Declaration[]>
 }
 
 const MARKUP_INITIALISER = /\s*=\s*(?:interpolate|Trusted)\s*\(/y;
+const TRUSTED_INITIALISER = /\s*=\s*Trusted\s*\(/y;
+const TRUSTED_TYPE = /^(?:[\p{L}_][\p{L}\p{Nd}_]*\.)*Trusted$/u;
 const STATEMENT_END = /^[ \t]*(?:[\n\r;})\],]|\/\/|$)/;
 
 /** Whether what follows a declared name at `at` is `= interpolate(...)` or `= Trusted(...)`, the whole value: `val row = interpolate(...)`. */
@@ -744,7 +750,15 @@ export function declaredKind(src: string, name: string, at: number, nonNull = fa
   if (/^(?:kotlin\.)?(?:String|CharSequence)$/.test(type)) return "string";
   // What interpolate returns: markup whose values have been through it.
   if (/^(?:[\p{L}_][\p{L}\p{Nd}_]*\.)*Html$/u.test(type)) return "markup";
+  // Markup the author vouched for, which a Kotlin template writes as it stands.
+  if (type === d.type && TRUSTED_TYPE.test(type)) return "markup";
   return null;
+}
+
+/** Whether `name` at `at` is declared a `Trusted`, or set to `Trusted(...)` and nothing more: what interpolate lets in anywhere. */
+function trustedName(src: string, name: string, at: number): boolean {
+  const d = declarationOf(src, name, at);
+  return d !== null && (d.trusted === true || (d.type !== undefined && TRUSTED_TYPE.test(d.type)));
 }
 
 /**
@@ -905,10 +919,46 @@ export function valueKind(src: string, value: string, at: number, constants?: Re
   if (call?.receiver && call.lambda === null && TEXT_TRANSFORMS.has(call.name) && valueKind(src, call.receiver, at, constants) === "constant") {
     if (call.args.trim() === "" || splitTop(call.args, ",").every((a) => ownArgument(src, a, at, constants))) return "constant";
   }
+  const kind = callKind(src, t, at, constants);
+  if (kind !== null) return kind;
   if (qualifiedConstant(src, t, at, constants)) return "constant";
   if (!IDENT.test(t)) return null;
   if (constantAt(src, t, at, constants)) return "constant";
   return declaredKind(src, t, at, nonNull);
+}
+
+/** The conversions whose result is a `kotlin.Number` whatever they are called on. */
+const NUMBER_CONVERSIONS: ReadonlySet<string> = new Set(["toLong", "toInt", "toDouble", "toFloat", "toShort", "toByte"]);
+
+/** The calls on a String whose result is a String, whatever their arguments. */
+const STRING_CHANGES: ReadonlySet<string> = new Set([
+  "trim", "trimStart", "trimEnd", "lowercase", "uppercase", "take", "drop", "takeLast", "dropLast", "replace", "substring",
+  "removePrefix", "removeSuffix", "padStart", "padEnd", "repeat",
+]);
+
+/**
+ * What a call shows its result to be, by its name and what it is called on: `u.toLong()` or
+ * `(a + b).toInt()` a number, `query.trim()` or `query.ifBlank { "none" }` a String when `query`
+ * is one. Null for a safe call, `u?.toLong()`, which may be null, and for a call on only part of
+ * the value, `s + u.toInt()`.
+ */
+function callKind(src: string, t: string, at: number, constants?: ReadonlySet<string>): "number" | "string" | null {
+  const call = lastCall(t);
+  if (!call?.receiver || !wholeOperand(call.receiver) || t.slice(call.receiver.length).trimStart().startsWith("?")) return null;
+  if (NUMBER_CONVERSIONS.has(call.name)) return call.lambda === null && call.args.trim() === "" ? "number" : null;
+  const lambda = call.name === "ifBlank" || call.name === "ifEmpty";
+  if (!(STRING_CHANGES.has(call.name) && call.lambda === null) && !(lambda && call.lambda !== null && call.args.trim() === "")) return null;
+  if (valueKind(src, call.receiver, at, constants) !== "string") return null;
+  if (!lambda) return "string";
+  const result = valueKind(src, lambdaResult(call.lambda as string), at, constants);
+  return result === "string" || result === "constant" ? "string" : null;
+}
+
+/** Whether `e` is one operand, a name, a chain of calls or a bracketed expression, with no operator outside its brackets. */
+function wholeOperand(e: string): boolean {
+  const d = depths(e);
+  for (let k = 0; k < e.length; k++) if (d[k] === 0 && !/[\p{L}\p{Nd}_.?!()[\]{}"']/u.test(e[k] as string)) return false;
+  return true;
 }
 
 /** Of the kinds a hole's values have, the one safe in the fewest places; one not known stands between a String and markup. */
@@ -1483,11 +1533,13 @@ export function argKind(src: string, text: string, literal: boolean, at: number)
   if (t === "null") return "null";
   if (/^'(?:[^'\\]|\\.[^']*)'$/.test(t)) return "char";
   if (/^if\s*\(/.test(t) && literalOnly(t)) return t.includes('"') ? "string" : null;
-  if (wholeCall(t, "Trusted")) return "trusted";
+  if (wholeCall(t, "Trusted") || (IDENT.test(t) && trustedName(src, t, at))) return "trusted";
   if (wholeCall(t, "interpolate")) return "markup";
   // The String of the Html: interpolate(...).text.
   const html = /^([\s\S]*?)\s*\.\s*text$/.exec(t)?.[1];
   if (html !== undefined && wholeCall(html, "interpolate")) return "string";
+  const called = callKind(src, t, at);
+  if (called !== null) return called;
   const declared = IDENT.test(t) ? declaredKind(src, t, at) : null;
   // `val name = "Gorvek"`: a String, though no type is written.
   if (declared === null && IDENT.test(t) && declarationOf(src, t, at)?.string) return "string";

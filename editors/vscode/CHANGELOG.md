@@ -24,7 +24,16 @@ All notable changes to the Streamlord extension are recorded here.
 - A value in a URL the browser loads code from, `src` of a script, an iframe or an embed, `href`
   of a base or a link, `data` of an object, is a warning unless the literal before it already fixes the
   host (`/js/`, or a whole origin such as `https://cdn.example.com/`), and an error in a call to
-  `interpolate` where the value is known, since `interpolate` refuses it.
+  `interpolate` where the value is known, since `interpolate` refuses it. A `Trusted("...")` before
+  the value counts with its text, as `interpolate` reads it: `Trusted("https://cdn.example.com/")`
+  fixes the host for the value after it, and `Trusted("")` fixes nothing, so the value after it is
+  named, an error where it is known.
+- A name declared `Trusted` or set to `Trusted(...)` is a `Trusted`: `interpolate` lets it in
+  anywhere, and a Kotlin template writes it as markup. `u.toLong()`, and `toInt()`, `toDouble()`,
+  `toFloat()`, `toShort()` or `toByte()` on a whole value, is a number, so the `toLong()` fix no
+  longer leaves a warning behind. A change to a declared `String`, `query.trim()`, `take`,
+  `replace`, `lowercase`, `ifBlank { "none" }` and the like, is a `String`, a warning where
+  `query` is one rather than a hint.
 - A call to one of Streamlord's expression helpers is your own only when every argument is: a
   literal, a constant, a declared number or boolean, or another such helper call.
   `${signal("count")}` says nothing; `${signal(query)}` writes the request's text into a Datastar
@@ -58,9 +67,9 @@ All notable changes to the Streamlord extension are recorded here.
   file does not declare something else of its name. A private constant is left out, since no
   other file can see it, and so is a name that some file declares as a `val` or `var` other files
   can see, a getter for one: `$title` is no longer silent everywhere because one file has a
-  `private const val title` and another a `val title get() = ...` that reads the request. Names are resolved by their scope (lambda and
-  loop parameters, local functions, destructuring and constructor properties), and a hole is markup
-  only when its whole value is: an HTML literal or a `+` chain that opens with one,
+  `private const val title` and another a `val title get() = ...` that reads the request. Names
+  are resolved by their scope (lambda and loop parameters, local functions, destructuring and
+  constructor properties), and a hole is markup only when its whole value is: an HTML literal or a `+` chain that opens with one,
   `interpolate(...)`, `Trusted(...)`, a value declared `Html` or `@Language("HTML")`, kotlinx.html
   output, a `joinToString` over markup, or an `if`, a `when` or an `?:` whose every result is markup
   or a literal.

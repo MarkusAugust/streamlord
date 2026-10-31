@@ -303,6 +303,8 @@ internal class Declaration(
     val valueAt: Int = -1,
     /** Whether another file can mean it by its bare name: a `val` or `var` at top level, in a class or a constructor, and not private. */
     val shared: Boolean = false,
+    /** Whether it is set to a call to `Trusted` and nothing more, which interpolate lets in wherever it lands. */
+    val trusted: Boolean = false,
 ) {
     /** Just past where it can last be seen. */
     var end: Int = Int.MAX_VALUE
@@ -504,6 +506,8 @@ private fun lineEnds(
 }
 
 private val MARKUP_INITIALISER = Regex("""\s*=\s*(?:interpolate|Trusted)\s*\(""")
+private val TRUSTED_INITIALISER = Regex("""\s*=\s*Trusted\s*\(""")
+private val TRUSTED_TYPE = Regex("""(?:[\p{L}_][\p{L}\p{Nd}_]*\.)*Trusted""")
 private val STATEMENT_END = Regex("""^[ \t]*(?:[\n\r;})\],]|//|$)""")
 
 /** Whether what follows a declared name at [at] is `= interpolate(...)` or `= Trusted(...)`, the whole value: `val row = interpolate(...)`. */
@@ -715,6 +719,7 @@ private fun declarations(
                             val at = m.groups[2]!!.range.first
                             val bare = m.groups[4] == null && m.groups[5] == null
                             val markup = bare && markupInitialiser(src, m.range.last + 1)
+                            val trusted = markup && TRUSTED_INITIALISER.matchAt(src, m.range.last + 1) != null
                             val arguments = m.groups[3]?.let { TYPE_ARGUMENTS_AFTER.matchAt(src, it.range.last + 1) }
                             // The value of a `val` set once, which a name then stands for.
                             val valueAt =
@@ -745,6 +750,7 @@ private fun declarations(
                                         arguments?.groupValues?.get(1),
                                         valueAt,
                                         shared,
+                                        trusted,
                                     ),
                                 )
                             if (owner.kind != "top") owner.ends += d
@@ -964,8 +970,21 @@ internal fun declaredKind(
         // What interpolate returns: markup whose values have been through it.
         HTML_TYPE.matches(type) -> HoleFact.MARKUP
 
+        // Markup the author vouched for, which a Kotlin template writes as it stands.
+        type == declared && TRUSTED_TYPE.matches(type) -> HoleFact.MARKUP
+
         else -> null
     }
+}
+
+/** Whether [name] at [at] is declared a `Trusted`, or set to `Trusted(...)` and nothing more: what interpolate lets in anywhere. */
+private fun trustedName(
+    src: String,
+    name: String,
+    at: Int,
+): Boolean {
+    val d = declarationOf(src, name, at) ?: return false
+    return d.trusted || d.type?.let { TRUSTED_TYPE.matches(it) } == true
 }
 
 /**
@@ -1178,10 +1197,74 @@ internal fun valueKind(
     ) {
         return HoleFact.CONSTANT
     }
+    callKind(src, t, at, constants)?.let { return it }
     if (qualifiedConstant(src, t, at, constants)) return HoleFact.CONSTANT
     if (!IDENT.matches(t)) return null
     if (constantAt(src, t, at, constants)) return HoleFact.CONSTANT
     return declaredKind(src, t, at, nonNull)
+}
+
+/** The conversions whose result is a `kotlin.Number` whatever they are called on. */
+private val NUMBER_CONVERSIONS = setOf("toLong", "toInt", "toDouble", "toFloat", "toShort", "toByte")
+
+/** The calls on a String whose result is a String, whatever their arguments. */
+private val STRING_CHANGES =
+    setOf(
+        "trim",
+        "trimStart",
+        "trimEnd",
+        "lowercase",
+        "uppercase",
+        "take",
+        "drop",
+        "takeLast",
+        "dropLast",
+        "replace",
+        "substring",
+        "removePrefix",
+        "removeSuffix",
+        "padStart",
+        "padEnd",
+        "repeat",
+    )
+private val OPERAND_CHAR = Regex("""[\p{L}\p{Nd}_.?!()\[\]{}"']""")
+
+/**
+ * What a call shows its result to be, by its name and what it is called on: `u.toLong()` or
+ * `(a + b).toInt()` a number, `query.trim()` or `query.ifBlank { "none" }` a String when `query`
+ * is one. Null for a safe call, `u?.toLong()`, which may be null, and for a call on only part of
+ * the value, `s + u.toInt()`.
+ */
+private fun callKind(
+    src: String,
+    t: String,
+    at: Int,
+    constants: Set<String>,
+): HoleFact? {
+    val call = lastCall(t) ?: return null
+    val receiver = call.receiver ?: return null
+    if (!wholeOperand(receiver) ||
+        t
+            .trim()
+            .substring(receiver.length)
+            .trimStart()
+            .startsWith("?")
+    ) {
+        return null
+    }
+    if (call.name in NUMBER_CONVERSIONS) return if (call.lambda == null && call.args.isBlank()) HoleFact.NUMBER else null
+    val lambda = call.name == "ifBlank" || call.name == "ifEmpty"
+    if (!(call.name in STRING_CHANGES && call.lambda == null) && !(lambda && call.lambda != null && call.args.isBlank())) return null
+    if (valueKind(src, receiver, at, constants) != HoleFact.STRING) return null
+    if (!lambda) return HoleFact.STRING
+    val result = valueKind(src, lambdaResult(call.lambda!!), at, constants)
+    return if (result == HoleFact.STRING || result == HoleFact.CONSTANT) HoleFact.STRING else null
+}
+
+/** Whether [e] is one operand, a name, a chain of calls or a bracketed expression, with no operator outside its brackets. */
+private fun wholeOperand(e: String): Boolean {
+    val d = depths(e)
+    return e.indices.all { d[it] != 0 || OPERAND_CHAR.matches(e[it].toString()) }
 }
 
 /** Of the kinds a hole's values have, the one safe in the fewest places; one not known stands between a String and markup. */
@@ -2005,11 +2088,22 @@ internal fun valueKind(
     if (t == "null") return ArgKind.NULL
     if (CHAR_LITERAL.matches(t)) return ArgKind.CHAR
     if (IF_START.containsMatchIn(t) && literalOnly(t)) return if ('"' in t) ArgKind.STRING else null
-    if (wholeCall(t, "Trusted")) return ArgKind.TRUSTED
+    if (wholeCall(t, "Trusted") || (IDENT.matches(t) && trustedName(src, t, at))) return ArgKind.TRUSTED
     if (wholeCall(t, "interpolate")) return ArgKind.MARKUP
     // The String of the Html: interpolate(...).text.
     val html = TEXT_OF.find(t)?.groupValues?.get(1)
     if (html != null && wholeCall(html, "interpolate")) return ArgKind.STRING
+    when (callKind(src, t, at, emptySet())) {
+        HoleFact.NUMBER -> {
+            return ArgKind.NUMBER
+        }
+
+        HoleFact.STRING -> {
+            return ArgKind.STRING
+        }
+
+        else -> {}
+    }
     if (!IDENT.matches(t)) return null
     return when (declaredKind(src, t, at)) {
         HoleFact.NUMBER -> ArgKind.NUMBER
