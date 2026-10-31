@@ -280,6 +280,8 @@ internal class Declaration(
     val html: Boolean = false,
     /** Whether it is set to a string literal without a template, which makes it a String. */
     val string: Boolean = false,
+    /** Whether it is set to a call to `interpolate` or `Trusted` and nothing more: markup. */
+    val markup: Boolean = false,
 ) {
     /** Just past where it can last be seen. */
     var end: Int = Int.MAX_VALUE
@@ -412,6 +414,21 @@ private fun lineEnds(
     k = at + 1
     while (k < src.length && (!code[k] || src[k].isWhitespace())) k++
     return !LINE_GOES_ON_AFTER.containsMatchIn(src.substring(k, minOf(src.length, k + 5)))
+}
+
+private val MARKUP_INITIALISER = Regex("""\s*=\s*(?:interpolate|Trusted)\s*\(""")
+private val STATEMENT_END = Regex("""^[ \t]*(?:[\n\r;})\],]|//|$)""")
+
+/** Whether what follows a declared name at [at] is `= interpolate(...)` or `= Trusted(...)`, the whole value: `val row = interpolate(...)`. */
+private fun markupInitialiser(
+    src: String,
+    at: Int,
+): Boolean {
+    val m = MARKUP_INITIALISER.matchAt(src, at) ?: return false
+    val open = m.range.last
+    val e = src.substring(open, minOf(src.length, open + 20_000))
+    val close = closing(e, depths(e), 0)
+    return close > 0 && STATEMENT_END.containsMatchIn(e.substring(close, minOf(e.length, close + 8)))
 }
 
 /** `text` cut at each comma outside brackets. */
@@ -576,6 +593,7 @@ private fun declarations(
                                         constant,
                                         html,
                                         m.groups[5] != null,
+                                        m.groups[4] == null && m.groups[5] == null && markupInitialiser(src, m.range.last + 1),
                                     ),
                                 )
                             if (owner.kind != "top") owner.ends += d
@@ -765,6 +783,7 @@ internal fun declaredKind(
     val d = declarationOf(src, name, at) ?: return null
     val literal = d.literal
     if (literal != null) return if (literal == "true" || literal == "false") HoleFact.BOOLEAN else HoleFact.NUMBER
+    if (d.markup) return HoleFact.MARKUP
     val declared = d.type ?: return null
     val type = declared.removeSuffix("?")
     val scalar =
@@ -986,6 +1005,14 @@ internal fun valueKind(
     }
     helperArguments(src, t)?.let { args ->
         return if (args.all { ownArgument(src, it, at, constants) }) HoleFact.CONSTANT else HoleFact.STRING
+    }
+    // `"ab".repeat(3)`: a plain change to text the author wrote, made with what the author wrote.
+    val call = lastCall(t)
+    if (call?.receiver != null && call.lambda == null && call.name in TEXT_TRANSFORMS &&
+        valueKind(src, call.receiver, at, constants) == HoleFact.CONSTANT &&
+        (call.args.isBlank() || splitTop(call.args, ",").all { ownArgument(src, it, at, constants) })
+    ) {
+        return HoleFact.CONSTANT
     }
     if (qualifiedConstant(src, t, at, constants)) return HoleFact.CONSTANT
     if (!IDENT.matches(t)) return null
@@ -1566,6 +1593,9 @@ private val LIST_RESULTS =
 
 /** A declared List, as a declaration reads its type: the name, without what the brackets after it hold. */
 private val LIST_TYPE = Regex("""(?:kotlin\.collections\.)?(?:List|MutableList|ArrayList)\??""")
+
+/** Whether every value a hole can give is the result of a call, which may be markup the author built: `${badge(user)}`. */
+internal fun callResult(value: String): Boolean = holeValues(value).all { lastCall(it.text) != null }
 
 /** Whether a value handed to `interpolate` is visibly a List: made by a call that makes one, or a name declared one. */
 internal fun visiblyList(

@@ -231,6 +231,8 @@ interface Declaration {
   text?: string;
   /** Whether it is set to a string literal without a template, which makes it a String. */
   string?: boolean;
+  /** Whether it is set to a call to `interpolate` or `Trusted` and nothing more: markup. */
+  markup?: boolean;
   constant: boolean;
   html: boolean;
 }
@@ -424,7 +426,8 @@ function declarations(src: string, code: Uint8Array): Map<string, Declaration[]>
           // `val String.shout`: an extension, read on a receiver and never by its name alone.
           if (m && !m[1]) {
             const at = end + m[0].indexOf(m[2] as string, (m[0].length - m[0].trimStart().length));
-            const d = { ...scope(at), type: m[3], literal: m[4], text: constant ? m[5] : undefined, string: m[5] !== undefined };
+            const markup = m[4] === undefined && m[5] === undefined && markupInitialiser(src, end + m[0].length);
+            const d = { ...scope(at), type: m[3], literal: m[4], text: constant ? m[5] : undefined, string: m[5] !== undefined, markup };
             add(m[2] as string, d);
             if (owner.kind !== "top") owner.ends.push(d);
           }
@@ -531,6 +534,20 @@ function declarations(src: string, code: Uint8Array): Map<string, Declaration[]>
   return names;
 }
 
+const MARKUP_INITIALISER = /\s*=\s*(?:interpolate|Trusted)\s*\(/y;
+const STATEMENT_END = /^[ \t]*(?:[\n\r;})\],]|\/\/|$)/;
+
+/** Whether what follows a declared name at `at` is `= interpolate(...)` or `= Trusted(...)`, the whole value: `val row = interpolate(...)`. */
+function markupInitialiser(src: string, at: number): boolean {
+  MARKUP_INITIALISER.lastIndex = at;
+  const m = MARKUP_INITIALISER.exec(src);
+  if (!m) return false;
+  const open = at + m[0].length - 1;
+  const e = src.slice(open, open + 20_000);
+  const close = closing(e, depths(e), 0);
+  return close > 0 && STATEMENT_END.test(e.slice(close, close + 8));
+}
+
 /** `text` cut at each comma outside brackets. */
 function splitTopLevel(text: string): string[] {
   const out: string[] = [];
@@ -594,6 +611,7 @@ export function declaredKind(src: string, name: string, at: number, nonNull = fa
   const d = declarationOf(src, name, at);
   if (!d) return null;
   if (d.literal !== undefined) return d.literal === "true" || d.literal === "false" ? "boolean" : "number";
+  if (d.markup) return "markup";
   if (d.type === undefined) return null;
   const type = d.type.replace(/\?$/, "");
   const scalar = /^(?:kotlin\.)?(?:Int|Long|Short|Byte|Double|Float|UInt|ULong|UShort|UByte)$/.test(type) ? "number" : /^(?:kotlin\.)?Boolean$/.test(type) ? "boolean" : null;
@@ -758,6 +776,11 @@ export function valueKind(src: string, value: string, at: number, constants?: Re
   }
   const args = helperArguments(src, t);
   if (args) return args.every((a) => ownArgument(src, a, at, constants)) ? "constant" : "string";
+  // `"ab".repeat(3)`: a plain change to text the author wrote, made with what the author wrote.
+  const call = lastCall(t);
+  if (call?.receiver && call.lambda === null && TEXT_TRANSFORMS.has(call.name) && valueKind(src, call.receiver, at, constants) === "constant") {
+    if (call.args.trim() === "" || splitTop(call.args, ",").every((a) => ownArgument(src, a, at, constants))) return "constant";
+  }
   if (qualifiedConstant(src, t, at, constants)) return "constant";
   if (!IDENT.test(t)) return null;
   if (constantAt(src, t, at, constants)) return "constant";
@@ -1156,6 +1179,11 @@ const LIST_MAKERS: ReadonlySet<string> = new Set(["listOf", "mutableListOf", "ar
 const LIST_RESULTS: ReadonlySet<string> = new Set(["toList", "toMutableList", "map", "mapNotNull", "mapIndexed", "flatMap", "filterNotNull", "sorted", "sortedBy", "sortedDescending", "sortedWith", "distinct", "chunked", "windowed", "zip"]);
 /** A declared List, as a declaration reads its type: the name, without what the brackets after it hold. */
 const LIST_TYPE = /^(?:kotlin\.collections\.)?(?:List|MutableList|ArrayList)\??$/;
+
+/** Whether every value a hole can give is the result of a call, which may be markup the author built: `${badge(user)}`. */
+export function callResult(value: string): boolean {
+  return holeValues(value).every((v) => lastCall(v.text) !== null);
+}
 
 /** Whether a value handed to `interpolate` is visibly a List: made by a call that makes one, or a name declared one. */
 export function visiblyList(src: string, value: string, at: number): boolean {

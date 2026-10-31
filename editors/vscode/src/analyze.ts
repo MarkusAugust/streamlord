@@ -6,7 +6,7 @@ import { signalNameRefusal } from "./signalNames.ts";
 import { asciiLowercase, decodeEntities, indexOfAsciiIgnoreCase, keyReading, rawKeyNote, tokenize, validateAttributes, validateMarkup, wireKey, wireKeyReads, type Attribute, type Tag } from "./markup.ts";
 import { findCallSites, isHtmlString, lexKotlin, namedArgText, selectStringArg, stringAt, type Arg, type CallSite } from "./scanner.ts";
 import { holeLandings, urlSchemeFixedBy, type HoleLanding, type Position } from "./holes.ts";
-import { argKind, chainFrom, countBelow, ESCAPES_TITLE, fileFacts, holeDisplay, holeValues, interpolateFix, interpolateText, isMarkup, markupHeldAsString, markupValued, markupView, mayBeNull, mayHoldMarkup, percentHoles, quoteFix, REFUSES_URL_TITLE, shortened, trimmed, trustedFix, valueKind, visiblyList, weakest, withNested, withPercentHoles, type ArgKind } from "./interpolation.ts";
+import { argKind, callResult, chainFrom, countBelow, ESCAPES_TITLE, fileFacts, holeDisplay, holeValues, interpolateFix, interpolateText, isMarkup, markupHeldAsString, markupValued, markupView, mayBeNull, mayHoldMarkup, percentHoles, quoteFix, REFUSES_URL_TITLE, shortened, trimmed, trustedFix, valueKind, visiblyList, weakest, withNested, withPercentHoles, type ArgKind } from "./interpolation.ts";
 import { dslHelpers, EXPRESSION_HELPERS, signalNameHyphenSites } from "./signalNameHyphens.ts";
 import { clientKeyName, collectSignalDefinitions } from "./signals.ts";
 
@@ -528,7 +528,7 @@ function judgeHoles(s: KotlinString, src: string, opts: AnalyzeOptions, view: st
       // A String in element text may be markup the author built, which only the author knows: then
       // both the rewrite, which escapes it, and Trusted, which keeps it, are offered, and neither first.
       const text = landing.position === "TEXT";
-      const trust = text && told[k] !== "nullable-string" && (fact === "string" || (fact === null && mayHoldMarkup(src, ip.text, s.start, opts.constants))) && !mayBeNull(src, ip.text, s.start);
+      const trust = text && told[k] !== "nullable-string" && (fact === "string" || (fact === null && callResult(ip.text) && mayHoldMarkup(src, ip.text, s.start, opts.constants))) && !mayBeNull(src, ip.text, s.start);
       const fixes = [...rewritten(ESCAPES_TITLE, !trust), ...(trust ? [trustedFix(src, s, ip, shown)] : [])];
       return { ...at, severity, code: "unescaped-interpolation", message: unescapedMessage(shown, fact === "markup", text), fixes: fixes.length > 0 ? fixes : undefined };
     };

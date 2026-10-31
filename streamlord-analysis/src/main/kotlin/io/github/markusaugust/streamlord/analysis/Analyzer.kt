@@ -843,7 +843,10 @@ public class Analyzer(
                 val text = landing.position == Position.TEXT
                 val trust =
                     text && told[k] != HoleFact.NULLABLE_STRING &&
-                        (fact == HoleFact.STRING || (fact == null && mayHoldMarkup(src, ip.text, s.start, opts.constants))) &&
+                        (
+                            fact == HoleFact.STRING ||
+                                (fact == null && callResult(ip.text) && mayHoldMarkup(src, ip.text, s.start, opts.constants))
+                        ) &&
                         !mayBeNull(src, ip.text, s.start)
                 val fixes = rewritten(ESCAPES_TITLE, !trust) + if (trust) listOf(trustedFix(src, s, ip, shown)) else emptyList()
                 return issue(severity, "unescaped-interpolation", unescapedMessage(shown, fact == HoleFact.MARKUP, text), fixes)
