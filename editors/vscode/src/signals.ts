@@ -145,7 +145,8 @@ function named(type: string): string {
   return UNNAMED_TYPES.has(type) ? ANY_SIGNAL : type;
 }
 
-function escapeRegExp(s: string): string {
+/** Every character a regular expression gives a meaning, backslash included, made literal. */
+export function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
