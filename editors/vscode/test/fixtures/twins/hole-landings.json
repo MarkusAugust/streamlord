@@ -550,5 +550,107 @@
    "prefix": "javascript:x;/",
    "fixed": true
   }
+ ],
+ "hosts": [
+  {
+   "attribute": "src",
+   "prefix": "",
+   "fixed": false
+  },
+  {
+   "attribute": "src",
+   "prefix": "/",
+   "fixed": false
+  },
+  {
+   "attribute": "src",
+   "prefix": "//",
+   "fixed": false
+  },
+  {
+   "attribute": "src",
+   "prefix": "/\\",
+   "fixed": false
+  },
+  {
+   "attribute": "src",
+   "prefix": "/app/",
+   "fixed": true
+  },
+  {
+   "attribute": "href",
+   "prefix": "#",
+   "fixed": true
+  },
+  {
+   "attribute": "href",
+   "prefix": "?x=",
+   "fixed": true
+  },
+  {
+   "attribute": "src",
+   "prefix": "&#47;a",
+   "fixed": true
+  },
+  {
+   "attribute": "src",
+   "prefix": "&#47;&#47;",
+   "fixed": false
+  },
+  {
+   "attribute": "src",
+   "prefix": "https://cdn.example/",
+   "fixed": true
+  },
+  {
+   "attribute": "src",
+   "prefix": "https://cdn.example",
+   "fixed": false
+  },
+  {
+   "attribute": "src",
+   "prefix": "https://cdn.example?",
+   "fixed": true
+  },
+  {
+   "attribute": "src",
+   "prefix": "HTTPS://cdn.example/",
+   "fixed": true
+  },
+  {
+   "attribute": "src",
+   "prefix": "ftp://cdn.example/",
+   "fixed": false
+  },
+  {
+   "attribute": "src",
+   "prefix": "javascript:",
+   "fixed": false
+  },
+  {
+   "attribute": "src",
+   "prefix": " \thttps://a.b/",
+   "fixed": true
+  },
+  {
+   "attribute": "data",
+   "prefix": "/x",
+   "fixed": true
+  },
+  {
+   "attribute": "href",
+   "prefix": "https://",
+   "fixed": false
+  },
+  {
+   "attribute": "values",
+   "prefix": "/a;/b",
+   "fixed": true
+  },
+  {
+   "attribute": "values",
+   "prefix": "/a;//b",
+   "fixed": false
+  }
  ]
 }

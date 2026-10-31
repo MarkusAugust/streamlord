@@ -274,3 +274,26 @@ export function urlSchemeFixedBy(attribute: string, prefix: string): boolean {
   }
   return false;
 }
+
+/**
+ * Whether the literal start of a code-loading URL attribute's value already fixes the host, so no
+ * value after it can point the load at another origin: urlHostFixedBy in Interpolation.kt. A
+ * path-absolute `/x` (not `//` or `/\`), a same-document `#`/`?`, or a whole origin `scheme://host/`
+ * with a safe scheme. A bare `/`, or a host the literal does not close, is not enough.
+ */
+export function urlHostFixedBy(attribute: string, prefix: string): boolean {
+  const decoded = decodeEntities(prefix).text;
+  const entry = asciiLowercase(attribute) === "values" ? decoded.slice(decoded.lastIndexOf(";") + 1) : decoded;
+  const read = entry.replace(/[\t\n\r]/g, "").replace(/^[\u0000- ]+/, "");
+  const first = read[0];
+  if (first === undefined) return false;
+  if (first === "#" || first === "?") return true;
+  if (first === "/") return read[1] !== undefined && read[1] !== "/" && read[1] !== "\\";
+  const scheme = SCHEME.exec(read);
+  if (scheme === null || !SAFE_SCHEMES.has(asciiLowercase(scheme[1] as string))) return false;
+  let i = scheme[0].length;
+  if (read.slice(i, i + 2) !== "//") return false;
+  i += 2;
+  while (i < read.length && read[i] !== "/" && read[i] !== "?" && read[i] !== "#") i++;
+  return i < read.length;
+}

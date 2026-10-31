@@ -244,6 +244,35 @@ class InterpolationTest {
         assertEquals("""<a href="&amp;#106;avascript:x">x</a>""", render("""<a href="%s">x</a>""", "&#106;avascript:x"))
     }
 
+    // An attribute that loads what the browser runs: the host, not only the scheme, has to be the
+    // author's, since a URL to another host loads that host's code.
+    @Test
+    fun `a code-loading url takes a value only once its host is fixed`() {
+        val loaders =
+            listOf(
+                """<script src="%s"></script>""",
+                """<base href="%s">""",
+                """<iframe src="%s"></iframe>""",
+                """<embed src="%s">""",
+                """<object data="%s"></object>""",
+                """<svg><script href="%s"></script></svg>""",
+            )
+        for (f in loaders) {
+            // The literal before the hole settles the host: a path, a full origin, a same document.
+            render(f.replace("""="%s"""", """="https://cdn.example/%s""""), "x")
+            render(f.replace("""="%s"""", """="/app/%s""""), "x")
+            render(f.replace("""="%s"""", """="#%s""""), "x")
+            // Trusted always passes, whatever the literal before it.
+            render(f, Trusted("//evil.example/x"))
+            // The whole value, a bare `/` the value can make `//host`, or a host the literal does not
+            // close, lets the value choose the origin, so it is refused.
+            val e = assertFailsWith<UnsafeInterpolationException>(f) { render(f, "https://cdn.example/x") }
+            assertEquals(Position.URL, e.position)
+            assertFailsWith<UnsafeInterpolationException>(f) { render(f.replace("""="%s"""", """="/%s""""), "/evil.example") }
+            assertFailsWith<UnsafeInterpolationException>(f) { render(f.replace("""="%s"""", """="https://cdn.example%s""""), ".evil/x") }
+        }
+    }
+
     // The markup already chose where the URL points; the value only fills in a part of it.
     @Test
     fun `a hole further into a url is an ordinary attribute`() {

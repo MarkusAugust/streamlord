@@ -1,12 +1,13 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { holeLandings, urlSchemeFixedBy } from "../src/holes.ts";
+import { holeLandings, urlHostFixedBy, urlSchemeFixedBy } from "../src/holes.ts";
 
 /** The cases core's HoleLandingsTest holds to interpolate; this port is held to the same file. */
 const fixture = JSON.parse(readFileSync(new URL("./fixtures/twins/hole-landings.json", import.meta.url), "utf8")) as {
   cases: { name: string; markup: string; landings: { position: string; attribute: string | null }[] }[];
   urls: { attribute: string; prefix: string; fixed: boolean }[];
+  hosts: { attribute: string; prefix: string; fixed: boolean }[];
 };
 
 describe("hole landings", () => {
@@ -32,5 +33,10 @@ describe("hole landings", () => {
   it("knows when the start of a URL settles its scheme, as core does", () => {
     assert.ok(fixture.urls.length > 0);
     for (const u of fixture.urls) assert.equal(urlSchemeFixedBy(u.attribute, u.prefix), u.fixed, `${u.attribute}="${u.prefix}…"`);
+  });
+
+  it("knows when the start of a code-loading URL fixes its host, as core does", () => {
+    assert.ok(fixture.hosts.length > 0);
+    for (const h of fixture.hosts) assert.equal(urlHostFixedBy(h.attribute, h.prefix), h.fixed, `${h.attribute}="${h.prefix}…"`);
   });
 });

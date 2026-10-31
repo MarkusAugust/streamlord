@@ -118,6 +118,15 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Security
 
+- A value in a URL that loads what the browser runs, `src` of `<script>`, `href` of `<base>`,
+  `src` of `<iframe>` and `<embed>`, `data` of `<object>`, and `href` of an SVG `<script>`, is
+  refused unless the literal before the hole already fixes the host: a path-absolute `/x` (a single
+  `/` and then a character that is not `/` or `\`, so a value cannot make it `//host`), a
+  same-document `#` or `?`, or a whole origin `scheme://host/` with a safe scheme. A safe scheme
+  alone no longer settles such an attribute, since `https://` can still point at another origin, and
+  a single leading `/` no longer settles its host, since the next character could be a second `/`.
+  `Trusted(...)` passes as ever. `urlHostFixedBy` (internal API) answers it, and the editors call it
+  as they call `urlSchemeFixedBy`.
 - `interpolate` decoded each literal piece of a URL attribute on its own before it judged the
   scheme, where the browser decodes the attribute once it is whole, so a character reference could
   begin in the markup and end in the value: `<a href="&%s">` with `#106;avascript:alert(1)` wrote

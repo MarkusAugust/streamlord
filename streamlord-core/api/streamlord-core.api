@@ -363,6 +363,7 @@ public final class io/github/markusaugust/streamlord/core/domain/InterpolationKt
 	public static synthetic fun interpolate$default (Ljava/lang/String;Ljava/util/List;Ljava/util/List;ILjava/lang/Object;)Ljava/lang/String;
 	public static final fun joinToHtml-eKKYyv0 (Ljava/lang/Iterable;Ljava/lang/String;)Ljava/lang/String;
 	public static synthetic fun joinToHtml-eKKYyv0$default (Ljava/lang/Iterable;Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/String;
+	public static final fun urlHostFixedBy (Ljava/lang/String;Ljava/lang/String;)Z
 	public static final fun urlSchemeFixedBy (Ljava/lang/String;Ljava/lang/String;)Z
 }
 

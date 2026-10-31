@@ -5,6 +5,7 @@ import io.github.markusaugust.streamlord.core.domain.Trusted
 import io.github.markusaugust.streamlord.core.domain.UnsafeInterpolationException
 import io.github.markusaugust.streamlord.core.domain.holeLandings
 import io.github.markusaugust.streamlord.core.domain.interpolate
+import io.github.markusaugust.streamlord.core.domain.urlHostFixedBy
 import io.github.markusaugust.streamlord.core.domain.urlSchemeFixedBy
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import java.io.File
@@ -77,6 +78,17 @@ class HoleLandingsTest {
             val attribute = url.string("attribute")!!
             val prefix = url.string("prefix")!!
             assertEquals(url.boolean("fixed"), urlSchemeFixedBy(attribute, prefix), "$attribute=\"$prefix…\"")
+        }
+    }
+
+    @Test
+    fun `knows when the start of a code-loading URL fixes its host`() {
+        val hosts = fixture.array("hosts")!!.objects()
+        assertTrue(hosts.isNotEmpty())
+        for (host in hosts) {
+            val attribute = host.string("attribute")!!
+            val prefix = host.string("prefix")!!
+            assertEquals(host.boolean("fixed"), urlHostFixedBy(attribute, prefix), "$attribute=\"$prefix…\"")
         }
     }
 

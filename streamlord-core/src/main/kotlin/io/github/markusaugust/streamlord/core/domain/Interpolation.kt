@@ -408,6 +408,35 @@ public fun urlSchemeFixedBy(
     return false
 }
 
+/**
+ * Whether the start of a code-loading URL attribute's value, the literal text before its first
+ * hole, already fixes the host, so that no value written after it can point the load at another
+ * origin: a path-absolute `/x` (a single `/` and then a character that is not `/` or `\`, so a
+ * value cannot make it `//host`), a same-document `#` or `?`, or a whole origin `scheme://host/`
+ * with a safe scheme. A bare `/`, or a host the literal does not terminate, is not enough. Read as
+ * [urlSchemeFixedBy] reads, after entities are decoded; in `values`, only the entry the hole is in.
+ */
+@InternalStreamlordApi
+public fun urlHostFixedBy(
+    attribute: String,
+    prefix: String,
+): Boolean {
+    val decoded = decodeEntities(prefix).text
+    val entry = if (attribute.asciiLowercase() == "values") decoded.substringAfterLast(';') else decoded
+    val read = entry.filterNot { it == '\t' || it == '\n' || it == '\r' }.trimStart { it <= ' ' }
+    val first = read.firstOrNull() ?: return false
+    if (first == '#' || first == '?') return true
+    if (first == '/') return read.getOrNull(1).let { it != null && it != '/' && it != '\\' }
+    // scheme://host/ : a safe scheme, `//`, authority characters, then a terminator in the literal.
+    val scheme = SCHEME.find(read) ?: return false
+    if (scheme.groupValues[1].asciiLowercase() !in SAFE_SCHEMES) return false
+    var i = scheme.value.length
+    if (!read.startsWith("//", i)) return false
+    i += 2
+    while (i < read.length && read[i] != '/' && read[i] != '?' && read[i] != '#') i++
+    return i < read.length
+}
+
 /** The index of the last of [sorted] that is at most [at], or -1. */
 private fun lastAtOrBefore(
     sorted: List<Int>,
@@ -502,6 +531,20 @@ private val URL_ATTRIBUTES =
 private val ANIMATION_TAGS = setOf("animate", "set", "animatetransform", "animatemotion")
 private val ANIMATION_URL_ATTRIBUTES = setOf("values", "to", "from")
 
+/**
+ * URL attributes that load what the browser then runs or treats as its own document, by tag: a
+ * value here must come out on the author's own host, not merely with a safe scheme. `srcdoc` and
+ * an `on*` handler are [Position.CODE] already, not URLs.
+ */
+private val CODE_URL_ATTRIBUTES =
+    mapOf(
+        "script" to setOf("src", "href", "xlink:href"),
+        "base" to setOf("href"),
+        "iframe" to setOf("src"),
+        "embed" to setOf("src"),
+        "object" to setOf("data"),
+    )
+
 private class Landscape(
     private val prefixes: List<String>,
     private val markup: String,
@@ -568,8 +611,13 @@ private class Landscape(
 
     private fun isUrl(attribute: Int): Boolean {
         val name = attributeNames[attribute].asciiLowercase()
-        return name in URL_ATTRIBUTES || (name in ANIMATION_URL_ATTRIBUTES && attributeTags[attribute] in ANIMATION_TAGS)
+        return name in URL_ATTRIBUTES ||
+            (name in ANIMATION_URL_ATTRIBUTES && attributeTags[attribute] in ANIMATION_TAGS) ||
+            codeUrl(attribute)
     }
+
+    private fun codeUrl(attribute: Int): Boolean =
+        attributeNames[attribute].asciiLowercase() in CODE_URL_ATTRIBUTES[attributeTags[attribute]].orEmpty()
 
     /**
      * Throws for the first URL attribute with a hole whose value, every value in place, would
@@ -589,6 +637,15 @@ private class Landscape(
             val inside = (first until holes.size).takeWhile { holes[it] < end }
             // Trusted waives every check, this one included.
             if (inside.isEmpty() || inside.any { values[it] is Trusted }) continue
+            // A code-loading URL has to have its host fixed by the literal before the first hole;
+            // a safe scheme is not enough, since a safe scheme can still point at another origin.
+            if (codeUrl(attribute)) {
+                val prefix = StringBuilder().apply { literal(format, start, holes[inside.first()]) }.toString()
+                if (!urlHostFixedBy(attributeNames[attribute], prefix)) {
+                    throw UnsafeInterpolationException(Position.URL, inside.first(), attributeNames[attribute])
+                }
+                continue
+            }
             // The attribute as it will be written, decoded once, as the browser does: a reference
             // the literal begins can end in the value, `&%s` and `#106;` making a `j`.
             val written = StringBuilder()
