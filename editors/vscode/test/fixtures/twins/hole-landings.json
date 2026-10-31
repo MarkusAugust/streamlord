@@ -874,6 +874,26 @@
    ]
   },
   {
+   "name": "a pre closes the p before it, so the style after is svg, and the dd that ends it stays open",
+   "markup": "<p><pre></pre><style><dd><script><li><li></li></style>%s",
+   "landings": [
+    {
+     "position": "CODE",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "a </p> in foreign content returns to HTML",
+   "markup": "<svg><g></p><style>%s</style></svg>",
+   "landings": [
+    {
+     "position": "CODE",
+     "attribute": null
+    }
+   ]
+  },
+  {
    "name": "a value after <! can make it a comment",
    "markup": "<!%s><b>x</b>",
    "landings": [

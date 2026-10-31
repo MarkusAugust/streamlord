@@ -270,9 +270,13 @@ All notable changes to Streamlord are recorded here. The format follows
   where the browser closes some by itself: a `<p>` at the next `<p>` or `<div>`, an `<li>` at the
   next `<li>`. Once the element opened from the svg is closed, the browser is back in the svg, so
   in `interpolate("<p><p></p><script><!</script>%s", v)` the script was an svg one whose `<!`
-  swallowed its end tag, and the value came out inside it. The readings from an svg and a math are
-  taken once more with no HTML element opened from them left open, and the strictest still wins,
-  as the editors do too. These readings are new in this release.
+  swallowed its end tag, and the value came out inside it. The element-stack readings now follow
+  the tree builder's implied end tags (a `p` closed by the elements that close one, an `li`, `dd`
+  or `dt` by the next, a heading by a heading, an `option` by an `option`), drop the `html`, `head`,
+  `body` and `frameset` start tags and, in body, the parts of a table outside one, and take a `</p>`
+  or `</br>` in foreign content out of it, as the browser does. The readings from an svg and a math
+  are also taken once more with no HTML element opened from them left open, and the strictest still
+  wins, as the editors do too. These readings are new in this release.
 - The element-stack readings put an `<svg>` tag in the svg namespace wherever it stood, and a
   `<math>` in MathML, but inside foreign content a tag takes the namespace it stands in: in a math
   patch, `<xmp><svg><mi><textarea><a href='</textarea><img src=x onerror=%s>` has a MathML `mi`,

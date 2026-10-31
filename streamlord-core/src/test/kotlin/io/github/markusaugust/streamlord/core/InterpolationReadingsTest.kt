@@ -105,6 +105,12 @@ class InterpolationReadingsTest {
         for (format in formats) assertEquals(Position.CODE, refused(format, code).position, format)
         assertEquals(Position.CODE, refused("""<p><p>a</p><title><xmp><!--</xmp><img src=x onerror="%s">""", code).position)
         assertEquals("<p><p>a</p><b>x</b>", interpolate("<p><p>a</p><b>%s</b>", "x").text)
+        // Closed by a `<pre>`, the `<p>` leaves the `<style>` an svg one; the `<dd>` that ends it stays open.
+        assertEquals(
+            Position.CODE,
+            refused("<p><pre></pre><style><dd>%s<li><li></li></style>%s", Trusted("<script>"), code).position,
+        )
+        assertEquals(Position.CODE, refused("<p><pre></pre><style><dd><script><li><li></li></style>%s", code).position)
         assertEquals("<svg><p>a</p></svg>", interpolate("<svg>%s</svg>", interpolate("<p>%s</p>", "a")).text)
     }
 

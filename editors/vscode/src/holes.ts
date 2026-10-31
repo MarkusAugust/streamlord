@@ -156,6 +156,28 @@ const VOID = new Set([
   "keygen", "link", "meta", "param", "source", "track", "wbr",
 ]);
 const HTML_ANNOTATION_ENCODINGS = new Set(["text/html", "application/xhtml+xml"]);
+/** IGNORED_IN_BODY, TABLE_PARTS, HEADINGS, CLOSES_P, LIST_LOOP_PASSES, BUTTON_SCOPE and SPECIAL in MarkupScan.kt. */
+const IGNORED_IN_BODY = new Set(["html", "head", "body", "frameset"]);
+const TABLE_PARTS = new Set(["caption", "col", "colgroup", "tbody", "td", "tfoot", "th", "thead", "tr"]);
+const HEADINGS = new Set(["h1", "h2", "h3", "h4", "h5", "h6"]);
+// prettier-ignore
+const CLOSES_P = new Set([
+  "address", "article", "aside", "blockquote", "center", "details", "dialog", "dir", "div", "dl", "fieldset",
+  "figcaption", "figure", "footer", "header", "hgroup", "main", "menu", "nav", "ol", "p", "search", "section",
+  "summary", "ul", "pre", "listing", "form", "plaintext", "xmp", "hr", ...HEADINGS,
+]);
+const LIST_LOOP_PASSES = new Set(["address", "div", "p"]);
+const BUTTON_SCOPE = new Set(["applet", "caption", "html", "table", "td", "th", "marquee", "object", "template", "button"]);
+// prettier-ignore
+const SPECIAL = new Set([
+  "address", "applet", "area", "article", "aside", "base", "basefont", "bgsound", "blockquote", "body", "br",
+  "button", "caption", "center", "col", "colgroup", "dd", "details", "dir", "div", "dl", "dt", "embed",
+  "fieldset", "figcaption", "figure", "footer", "form", "frame", "frameset", "h1", "h2", "h3", "h4", "h5", "h6",
+  "head", "header", "hgroup", "hr", "html", "iframe", "img", "input", "keygen", "li", "link", "listing", "main",
+  "marquee", "menu", "meta", "nav", "noembed", "noframes", "noscript", "object", "ol", "p", "param",
+  "plaintext", "pre", "script", "search", "section", "select", "source", "style", "summary", "table", "tbody",
+  "td", "template", "textarea", "tfoot", "th", "thead", "title", "tr", "track", "ul", "wbr", "xmp",
+]);
 // prettier-ignore
 const EXITS_FOREIGN = new Set([
   "b", "big", "blockquote", "body", "br", "center", "code", "dd", "div", "dl", "dt", "em", "embed",
@@ -207,6 +229,37 @@ function scanMarkupTracked(html: string, visitor: Visitor, context: number, scri
     visitor.code(foreignCodeStart, from);
     foreignCodeStart = to;
   };
+  const boundsScope = (k: number) => (stackNs[k] === NS_HTML ? BUTTON_SCOPE.has(stackName[k] as string) : (stackHtmlContent[k] as boolean) || stackName[k] === "annotation-xml");
+  const special = (k: number) => (stackNs[k] === NS_HTML ? SPECIAL.has(stackName[k] as string) : boundsScope(k));
+  const popTo = (k: number, at: number) => {
+    while (stackName.length > k) pop(at);
+  };
+  // closeImplied in MarkupScan.kt: the end tags the tree builder implies before it inserts an HTML element.
+  const closeImplied = (name: string, at: number) => {
+    const items = name === "li" ? ["li"] : name === "dd" || name === "dt" ? ["dd", "dt"] : null;
+    if (items !== null) {
+      for (let k = stackName.length - 1; k >= 0; k--) {
+        if (stackNs[k] === NS_HTML && items.includes(stackName[k] as string)) {
+          popTo(k, at);
+          break;
+        }
+        if (special(k) && !(stackNs[k] === NS_HTML && LIST_LOOP_PASSES.has(stackName[k] as string))) break;
+      }
+    }
+    if (items !== null || CLOSES_P.has(name)) {
+      for (let k = stackName.length - 1; k >= 0; k--) {
+        if (stackNs[k] === NS_HTML && stackName[k] === "p") {
+          popTo(k, at);
+          break;
+        }
+        if (boundsScope(k)) break;
+      }
+    }
+    const top = stackName[stackName.length - 1];
+    const topHtml = stackNs[stackNs.length - 1] === NS_HTML;
+    if (HEADINGS.has(name) && topHtml && top !== undefined && HEADINGS.has(top)) pop(at);
+    if ((name === "option" || name === "optgroup") && topHtml && top === "option") pop(at);
+  };
   const n = html.length;
   let i = 0;
   while (i < n) {
@@ -237,7 +290,11 @@ function scanMarkupTracked(html: string, visitor: Visitor, context: number, scri
       const end = scanTag(html, lt + 2, DISCARD);
       visitor.tag(lt, end);
       const name = tagName(html, lt + 2);
-      if ((open.get(name) ?? 0) > 0) {
+      // A `</p>` or `</br>` in foreign content closes the foreign elements, as an exiting tag does.
+      if (foreignNow && (name === "p" || name === "br")) {
+        while (stackNs.length > 0 && stackNs[stackNs.length - 1] !== NS_HTML && !stackHtmlContent[stackHtmlContent.length - 1]) pop(lt);
+      }
+      if (name !== "br" && (open.get(name) ?? 0) > 0) {
         const at = stackName.lastIndexOf(name);
         while (stackName.length > at) pop(lt);
       }
@@ -275,6 +332,9 @@ function scanMarkupTracked(html: string, visitor: Visitor, context: number, scri
       !exits && MATH_IN_TEXT.has(name) && stackNs.length > 0 && stackNs[stackNs.length - 1] === NS_MATH && MATH_TEXT_INTEGRATION.has(stackName[stackName.length - 1] as string);
     const html5 = exits || (insertionNs() === NS_HTML && !mathInText);
     if (html5) {
+      if (IGNORED_IN_BODY.has(name)) continue;
+      if (TABLE_PARTS.has(name) && context !== NS_HTML && (open.get("table") ?? 0) === 0 && (open.get("template") ?? 0) === 0) continue;
+      if (name !== "svg" && name !== "math") closeImplied(name, lt);
       const raw = rawText.find((t) => t === name);
       if (raw !== undefined) {
         const found = raw === "plaintext" ? -1 : rawTextEnd(html, raw, i);

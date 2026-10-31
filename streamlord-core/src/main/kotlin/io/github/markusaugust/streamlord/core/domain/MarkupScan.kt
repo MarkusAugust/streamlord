@@ -344,6 +344,56 @@ private fun scanMarkupTracked(
             stackNs.last()
         }
 
+    // Whether the open element at [k] bounds a search in button scope, or is special to the list item loop.
+    fun boundsScope(k: Int): Boolean =
+        if (stackNs[k] == NS_HTML) stackName[k] in BUTTON_SCOPE else stackHtmlContent[k] || stackName[k] == "annotation-xml"
+
+    fun special(k: Int): Boolean = if (stackNs[k] == NS_HTML) stackName[k] in SPECIAL else boundsScope(k)
+
+    fun popTo(
+        k: Int,
+        at: Int,
+    ) {
+        while (stackName.size > k) pop(at)
+    }
+
+    // The end tags the tree builder implies before it inserts the HTML element [name]: a `p` in
+    // button scope for the elements that close one, an `li`, `dd` or `dt` for the next of its kind,
+    // a heading for a heading, an `option` for an `option` or an `optgroup`.
+    fun closeImplied(
+        name: String,
+        at: Int,
+    ) {
+        val items =
+            when (name) {
+                "li" -> LIST_ITEM
+                "dd", "dt" -> DEFINITION_ITEMS
+                else -> null
+            }
+        if (items != null) {
+            for (k in stackName.indices.reversed()) {
+                if (stackNs[k] == NS_HTML && stackName[k] in items) {
+                    popTo(k, at)
+                    break
+                }
+                if (special(k) && !(stackNs[k] == NS_HTML && stackName[k] in LIST_LOOP_PASSES)) break
+            }
+        }
+        if (items != null || name in CLOSES_P) {
+            for (k in stackName.indices.reversed()) {
+                if (stackNs[k] == NS_HTML && stackName[k] == "p") {
+                    popTo(k, at)
+                    break
+                }
+                if (boundsScope(k)) break
+            }
+        }
+        val top = stackName.lastOrNull()
+        val topHtml = stackNs.lastOrNull() == NS_HTML
+        if (name in HEADINGS && topHtml && top in HEADINGS) pop(at)
+        if ((name == "option" || name == "optgroup") && topHtml && top == "option") pop(at)
+    }
+
     val n = html.length
 
     fun walk(): Boolean {
@@ -383,7 +433,11 @@ private fun scanMarkupTracked(
                 visitor.tag(lt, if (end < 0) n else end)
                 if (end < 0) return false
                 val name = tagName(html, lt + 2)
-                if ((open[name] ?: 0) > 0) {
+                // A `</p>` or `</br>` in foreign content closes the foreign elements, as an exiting tag does.
+                if (foreignNow && (name == "p" || name == "br")) {
+                    while (stackNs.isNotEmpty() && stackNs.last() != NS_HTML && !stackHtmlContent.last()) pop(lt)
+                }
+                if (name != "br" && (open[name] ?: 0) > 0) {
                     val at = stackName.lastIndexOf(name)
                     while (stackName.size > at) pop(lt)
                 } else if (htmlStaysOpen) {
@@ -417,6 +471,9 @@ private fun scanMarkupTracked(
             val html5 = exits || (insertionNs() == NS_HTML && !mathInText)
 
             if (html5) {
+                if (name in IGNORED_IN_BODY) continue
+                if (name in TABLE_PARTS && context != NS_HTML && (open["table"] ?: 0) == 0 && (open["template"] ?: 0) == 0) continue
+                if (name != "svg" && name != "math") closeImplied(name, lt)
                 // HTML raw-text and code elements swallow their body to their own close tag.
                 val raw = rawText.firstOrNull { it == name }
                 if (raw != null) {
@@ -461,6 +518,150 @@ private fun scanMarkupTracked(
     return ended && !stray && foreignCode == 0 &&
         stackName.indices.all { stackNs[it] == context && !stackHtmlContent[it] && stackName[it] !in CHANGES_MODE }
 }
+
+/** HTML start tags the tree builder drops in body: a patch is parsed inside one already. */
+private val IGNORED_IN_BODY = setOf("html", "head", "body", "frameset")
+
+/** The parts of a table, which the tree builder drops in body outside a `table` or a `template`. */
+private val TABLE_PARTS = setOf("caption", "col", "colgroup", "tbody", "td", "tfoot", "th", "thead", "tr")
+
+private val HEADINGS = setOf("h1", "h2", "h3", "h4", "h5", "h6")
+
+/**
+ * HTML start tags that close a `p` open in button scope. A `table` does too in a document without
+ * quirks, but a patch's own document has none, so it is left out: the reading keeps the `p` open.
+ */
+private val CLOSES_P =
+    setOf(
+        "address",
+        "article",
+        "aside",
+        "blockquote",
+        "center",
+        "details",
+        "dialog",
+        "dir",
+        "div",
+        "dl",
+        "fieldset",
+        "figcaption",
+        "figure",
+        "footer",
+        "header",
+        "hgroup",
+        "main",
+        "menu",
+        "nav",
+        "ol",
+        "p",
+        "search",
+        "section",
+        "summary",
+        "ul",
+        "pre",
+        "listing",
+        "form",
+        "plaintext",
+        "xmp",
+        "hr",
+    ) + HEADINGS
+
+private val LIST_ITEM = setOf("li")
+private val DEFINITION_ITEMS = setOf("dd", "dt")
+
+/** The special elements the list item loop walks past. */
+private val LIST_LOOP_PASSES = setOf("address", "div", "p")
+
+/** The HTML elements that bound a search for an element in button scope. */
+private val BUTTON_SCOPE = setOf("applet", "caption", "html", "table", "td", "th", "marquee", "object", "template", "button")
+
+/** The HTML elements of the tree builder's special category. */
+private val SPECIAL =
+    setOf(
+        "address",
+        "applet",
+        "area",
+        "article",
+        "aside",
+        "base",
+        "basefont",
+        "bgsound",
+        "blockquote",
+        "body",
+        "br",
+        "button",
+        "caption",
+        "center",
+        "col",
+        "colgroup",
+        "dd",
+        "details",
+        "dir",
+        "div",
+        "dl",
+        "dt",
+        "embed",
+        "fieldset",
+        "figcaption",
+        "figure",
+        "footer",
+        "form",
+        "frame",
+        "frameset",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "head",
+        "header",
+        "hgroup",
+        "hr",
+        "html",
+        "iframe",
+        "img",
+        "input",
+        "keygen",
+        "li",
+        "link",
+        "listing",
+        "main",
+        "marquee",
+        "menu",
+        "meta",
+        "nav",
+        "noembed",
+        "noframes",
+        "noscript",
+        "object",
+        "ol",
+        "p",
+        "param",
+        "plaintext",
+        "pre",
+        "script",
+        "search",
+        "section",
+        "select",
+        "source",
+        "style",
+        "summary",
+        "table",
+        "tbody",
+        "td",
+        "template",
+        "textarea",
+        "tfoot",
+        "th",
+        "thead",
+        "title",
+        "tr",
+        "track",
+        "ul",
+        "wbr",
+        "xmp",
+    )
 
 /**
  * HTML elements that, left open, change what the tree builder does with the tags after them: a
