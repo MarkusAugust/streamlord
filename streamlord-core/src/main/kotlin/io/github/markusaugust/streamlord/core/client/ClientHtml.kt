@@ -12,10 +12,17 @@ import io.github.markusaugust.streamlord.core.InternalStreamlordApi
 /**
  * HTML elements whose body is text to the browser: `<` inside them opens no tag, up to the
  * element's own end tag. `plaintext` has none and runs to the end.
+ *
+ * A `noscript` is not among them. The client parses a patch with `DOMParser`, where scripting is
+ * off and a `noscript` holds elements like a `div`; only a document parsed with scripting on, a
+ * page as the browser loads it, reads its body as text ([SCRIPTING_RAW_TEXT]).
  */
 @InternalStreamlordApi
 public val RAW_TEXT: List<String> =
-    listOf("script", "style", "textarea", "title", "xmp", "iframe", "noembed", "noframes", "noscript", "plaintext")
+    listOf("script", "style", "textarea", "title", "xmp", "iframe", "noembed", "noframes", "plaintext")
+
+/** [RAW_TEXT] as a document parsed with scripting on reads it, where a `noscript` is text too. */
+internal val SCRIPTING_RAW_TEXT: List<String> = RAW_TEXT + "noscript"
 
 /** Of those, the ones whose body is a program. */
 internal val CODE_TEXT: List<String> = listOf("script", "style")
@@ -132,21 +139,33 @@ private fun scriptEnd(
 
 /**
  * One past the end of the comment that opens at [lt]: `<!-->` and `<!--->` are whole comments,
- * and `-->` and `--!>` both close one.
+ * and `-->` and `--!>` both close one. An unclosed comment runs to the end.
  */
 @InternalStreamlordApi
 public fun commentEnd(
     html: String,
     lt: Int,
+): Int = commentClose(html, lt).let { if (it < 0) html.length else it }
+
+/**
+ * [commentEnd], or -1 when nothing closes the comment. One walk to the first closing sequence of
+ * either kind, so a run of comments is read in time that grows with it, not with it squared.
+ */
+internal fun commentClose(
+    html: String,
+    lt: Int,
 ): Int {
     if (html.startsWith("<!-->", lt)) return lt + 5
     if (html.startsWith("<!--->", lt)) return lt + 6
-    val dash = html.indexOf("-->", lt + 4)
-    val bang = html.indexOf("--!>", lt + 4)
-    return when {
-        dash < 0 && bang < 0 -> html.length
-        bang < 0 || (dash in 0 until bang) -> dash + 3
-        else -> bang + 4
+    var at = lt + 4
+    while (true) {
+        val dashes = html.indexOf("--", at)
+        if (dashes < 0) return -1
+        when (html.getOrNull(dashes + 2)) {
+            '>' -> return dashes + 3
+            '!' -> if (html.getOrNull(dashes + 3) == '>') return dashes + 4
+        }
+        at = dashes + 1
     }
 }
 

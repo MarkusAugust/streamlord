@@ -11,8 +11,12 @@ import { PROTOTYPE_NAMES } from "./signalNames.ts";
 
 const VOID = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"]);
 
-/** Elements whose content is text, whatever it looks like: a `<div>` in a `<textarea>` or a `<title>` is not a tag. The list of MarkupScan in streamlord-core. */
-const RAW_TEXT = new Set(["script", "style", "textarea", "title", "xmp", "iframe", "noembed", "noframes", "noscript", "plaintext"]);
+/**
+ * Elements whose content is text, whatever it looks like: a `<div>` in a `<textarea>` or a `<title>`
+ * is not a tag. RAW_TEXT in streamlord-core's ClientHtml.kt: not a `noscript`, which holds elements
+ * to the client, since it parses a patch with scripting off.
+ */
+const RAW_TEXT = new Set(["script", "style", "textarea", "title", "xmp", "iframe", "noembed", "noframes", "plaintext"]);
 
 /**
  * The elements whose end tag HTML lets the author leave out, each with the start tags that close
@@ -61,7 +65,16 @@ export function asciiLowercase(s: string): string {
 
 /** `indexOf` that ignores the case of A to Z; `needle` is given in lowercase. */
 export function indexOfAsciiIgnoreCase(s: string, needle: string, from: number): number {
-  return asciiLowercase(s).indexOf(needle, from);
+  for (let i = Math.max(0, from); i <= s.length - needle.length; i++) {
+    let k = 0;
+    while (k < needle.length) {
+      const c = s.charCodeAt(i + k);
+      if ((c >= 65 && c <= 90 ? c + 32 : c) !== needle.charCodeAt(k)) break;
+      k++;
+    }
+    if (k === needle.length) return i;
+  }
+  return -1;
 }
 
 /*
@@ -298,10 +311,14 @@ const BREAKOUT_END: ReadonlySet<string> = new Set(["br", "p"]);
 function htmlCommentEnd(html: string, lt: number): number {
   if (html.startsWith("<!-->", lt)) return lt + 5;
   if (html.startsWith("<!--->", lt)) return lt + 6;
-  const dash = html.indexOf("-->", lt + 4);
-  const bang = html.indexOf("--!>", lt + 4);
-  if (dash < 0 && bang < 0) return html.length;
-  return bang < 0 || (dash >= 0 && dash < bang) ? dash + 3 : bang + 4;
+  // One walk to the first closing sequence of either kind, so a run of comments costs its length.
+  for (let at = lt + 4; ; ) {
+    const dashes = html.indexOf("--", at);
+    if (dashes < 0) return html.length;
+    if (html[dashes + 2] === ">") return dashes + 3;
+    if (html[dashes + 2] === "!" && html[dashes + 3] === ">") return dashes + 4;
+    at = dashes + 1;
+  }
 }
 
 /**

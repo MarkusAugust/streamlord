@@ -10,7 +10,7 @@ import { asciiLowercase, decodeEntities, rawTextEnd } from "./markup.ts";
 export type Position = "TEXT" | "ATTRIBUTE" | "URL" | "DATASTAR" | "STYLE" | "STRUCTURE" | "CODE";
 
 export interface HoleLanding {
-  /** The strictest of the positions the hole takes in the three readings of the markup. */
+  /** The strictest of the positions the hole takes in the readings of the markup. */
   position: Position;
   /** The quoted attribute it landed in, or null. */
   attribute: string | null;
@@ -29,7 +29,10 @@ export interface Hole {
 /** Each position's place in what it lets in: everything, a number or a boolean, a number, nothing. */
 const STRICTNESS: readonly Position[] = ["TEXT", "ATTRIBUTE", "URL", "DATASTAR", "STYLE", "STRUCTURE", "CODE"];
 
-const RAW_TEXT = ["script", "style", "textarea", "title", "xmp", "iframe", "noembed", "noframes", "noscript", "plaintext"];
+/** RAW_TEXT in ClientHtml.kt: a noscript holds elements to the client, which parses with scripting off. */
+const RAW_TEXT = ["script", "style", "textarea", "title", "xmp", "iframe", "noembed", "noframes", "plaintext"];
+/** SCRIPTING_RAW_TEXT: a page loaded with scripting on reads a noscript as text. */
+const SCRIPTING_RAW_TEXT = [...RAW_TEXT, "noscript"];
 const CODE_TEXT = ["script", "style"];
 const HTML_SPACE = "\t\n\f\r ";
 
@@ -43,6 +46,7 @@ const CODE_URL_ATTRIBUTES = new Map<string, ReadonlySet<string>>([
   ["iframe", new Set(["src"])],
   ["embed", new Set(["src"])],
   ["object", new Set(["data"])],
+  ["link", new Set(["href"])],
 ]);
 
 /** The attributes Datastar evaluates or follows as a signal path: ElementsGuard.evaluatedAttributes and CatalogNames.signalAttributes. */
@@ -71,19 +75,22 @@ function startsWithAsciiIgnoreCase(html: string, at: number, needle: string): bo
   return asciiLowercase(html.slice(at, at + needle.length)) === needle;
 }
 
+/** commentEnd in ClientHtml.kt: one walk to the first `-->` or `--!>`, so many comments cost no more than their length. */
 function commentEnd(html: string, lt: number): number {
   if (html.startsWith("<!-->", lt)) return lt + 5;
   if (html.startsWith("<!--->", lt)) return lt + 6;
-  const dash = html.indexOf("-->", lt + 4);
-  const bang = html.indexOf("--!>", lt + 4);
-  if (dash < 0 && bang < 0) return html.length;
-  if (bang < 0 || (dash >= 0 && dash < bang)) return dash + 3;
-  return bang + 4;
+  for (let at = lt + 4; ; ) {
+    const dashes = html.indexOf("--", at);
+    if (dashes < 0) return html.length;
+    if (html[dashes + 2] === ">") return dashes + 3;
+    if (html[dashes + 2] === "!" && html[dashes + 3] === ">") return dashes + 4;
+    at = dashes + 1;
+  }
 }
 
 /** scanMarkup in MarkupScan.kt. */
-function scanMarkup(html: string, visitor: Visitor, foreign: boolean, cdata: boolean): void {
-  const rawText = foreign ? CODE_TEXT : RAW_TEXT;
+function scanMarkup(html: string, visitor: Visitor, foreign: boolean, cdata: boolean, scripting: boolean): void {
+  const rawText = foreign ? CODE_TEXT : scripting ? SCRIPTING_RAW_TEXT : RAW_TEXT;
   const n = html.length;
   let i = 0;
   while (i < n) {
@@ -131,6 +138,16 @@ const NS_SVG = 1;
 const NS_MATH = 2;
 const SVG_HTML_INTEGRATION = new Set(["foreignobject", "desc", "title"]);
 const MATH_TEXT_INTEGRATION = new Set(["mi", "mo", "mn", "ms", "mtext"]);
+/** The two MathML elements that stay MathML inside a text integration point. */
+const MATH_IN_TEXT = new Set(["mglyph", "malignmark"]);
+/** The attributes that make a `<font>` in foreign content return to HTML. */
+const FONT_EXITS = new Set(["color", "face", "size"]);
+/** HTML elements the browser pops as it inserts them. */
+// prettier-ignore
+const VOID = new Set([
+  "area", "base", "basefont", "bgsound", "br", "col", "embed", "frame", "hr", "image", "img", "input",
+  "keygen", "link", "meta", "param", "source", "track", "wbr",
+]);
 const HTML_ANNOTATION_ENCODINGS = new Set(["text/html", "application/xhtml+xml"]);
 // prettier-ignore
 const EXITS_FOREIGN = new Set([
@@ -147,16 +164,40 @@ function tagName(html: string, from: number): string {
   return asciiLowercase(html.slice(from, i));
 }
 
-/** scanMarkupTracked in MarkupScan.kt: follows the browser's element stack and switches rule by position. */
-function scanMarkupTracked(html: string, visitor: Visitor): void {
+/**
+ * scanMarkupTracked in MarkupScan.kt: follows the browser's element stack and switches rule by
+ * position, starting inside an element of the `context` namespace, as a patch in the svg namespace
+ * is parsed inside an `<svg>`.
+ */
+function scanMarkupTracked(html: string, visitor: Visitor, context: number, scripting: boolean): void {
+  const rawText = scripting ? SCRIPTING_RAW_TEXT : RAW_TEXT;
   const stackNs: number[] = [];
   const stackName: string[] = [];
   const stackHtmlContent: boolean[] = [];
-  const insertionNs = () => (stackNs.length === 0 ? NS_HTML : stackHtmlContent[stackHtmlContent.length - 1] ? NS_HTML : (stackNs[stackNs.length - 1] as number));
-  const pop = () => {
-    stackNs.pop();
-    stackName.pop();
+  const open = new Map<string, number>();
+  // An svg or math script or style holds elements, but its text is a program: code from the first opened to the last closed.
+  let foreignCode = 0;
+  let foreignCodeStart = -1;
+  const insertionNs = () => (stackNs.length === 0 ? context : stackHtmlContent[stackHtmlContent.length - 1] ? NS_HTML : (stackNs[stackNs.length - 1] as number));
+  const push = (ns: number, name: string, htmlContent: boolean, at: number) => {
+    stackNs.push(ns);
+    stackName.push(name);
+    stackHtmlContent.push(htmlContent);
+    open.set(name, (open.get(name) ?? 0) + 1);
+    if (ns !== NS_HTML && CODE_TEXT.includes(name) && foreignCode++ === 0) foreignCodeStart = at;
+  };
+  const pop = (at: number) => {
+    const name = stackName.pop() as string;
+    const ns = stackNs.pop();
     stackHtmlContent.pop();
+    open.set(name, (open.get(name) as number) - 1);
+    if (ns !== NS_HTML && CODE_TEXT.includes(name) && --foreignCode === 0) visitor.code(foreignCodeStart, at);
+  };
+  // A comment in a foreign script is no part of its program.
+  const skipCode = (from: number, to: number) => {
+    if (foreignCode === 0) return;
+    visitor.code(foreignCodeStart, from);
+    foreignCodeStart = to;
   };
   const n = html.length;
   let i = 0;
@@ -166,6 +207,7 @@ function scanMarkupTracked(html: string, visitor: Visitor): void {
     const foreignNow = insertionNs() !== NS_HTML;
     if (html.startsWith("<!--", lt)) {
       i = commentEnd(html, lt);
+      skipCode(lt, i);
       continue;
     }
     if (foreignNow && html.startsWith("<![CDATA[", lt)) {
@@ -177,14 +219,17 @@ function scanMarkupTracked(html: string, visitor: Visitor): void {
     if (first === "!" || first === "?" || (first === "/" && !isLetter(html[lt + 2]) && html[lt + 2] !== ">")) {
       const close = html.indexOf(">", lt + 2);
       i = close < 0 ? n : close + 1;
+      skipCode(lt, i);
       continue;
     }
     if (first === "/" && isLetter(html[lt + 2])) {
       const end = scanTag(html, lt + 2, DISCARD);
       visitor.tag(lt, end);
       const name = tagName(html, lt + 2);
-      const at = stackName.lastIndexOf(name);
-      if (at >= 0) while (stackName.length > at) pop();
+      if ((open.get(name) ?? 0) > 0) {
+        const at = stackName.lastIndexOf(name);
+        while (stackName.length > at) pop(lt);
+      }
       i = end;
       continue;
     }
@@ -193,15 +238,13 @@ function scanMarkupTracked(html: string, visitor: Visitor): void {
       continue;
     }
     const name = tagName(html, lt + 1);
-    if (foreignNow && EXITS_FOREIGN.has(name)) {
-      while (stackNs.length > 0 && stackNs[stackNs.length - 1] !== NS_HTML && !stackHtmlContent[stackHtmlContent.length - 1]) pop();
-    }
-    const html5 = insertionNs() === NS_HTML;
     let encoding: string | undefined;
+    let fontExits = false;
     let unquotedEnd = -1;
     const snoop: Visitor = {
       attribute(tag, nm, valueStart, valueEnd, quoted) {
         if (name === "annotation-xml" && encoding === undefined && asciiLowercase(nm) === "encoding" && valueStart >= 0) encoding = html.slice(valueStart, valueEnd);
+        if (name === "font" && FONT_EXITS.has(asciiLowercase(nm))) fontExits = true;
         if (!quoted && valueStart >= 0) unquotedEnd = valueEnd;
         visitor.attribute(tag, nm, valueStart, valueEnd, quoted);
       },
@@ -213,31 +256,37 @@ function scanMarkupTracked(html: string, visitor: Visitor): void {
     // A `/` that ends an unquoted value is part of the value, not a self-closing mark.
     const selfClosing = end >= 2 && html[end - 2] === "/" && unquotedEnd !== end - 1;
     i = end;
+    const exits = foreignNow && (EXITS_FOREIGN.has(name) || fontExits);
+    if (exits) {
+      while (stackNs.length > 0 && stackNs[stackNs.length - 1] !== NS_HTML && !stackHtmlContent[stackHtmlContent.length - 1]) pop(lt);
+    }
+    const mathInText =
+      !exits && MATH_IN_TEXT.has(name) && stackNs.length > 0 && stackNs[stackNs.length - 1] === NS_MATH && MATH_TEXT_INTEGRATION.has(stackName[stackName.length - 1] as string);
+    const html5 = exits || (insertionNs() === NS_HTML && !mathInText);
     if (html5) {
-      const raw = RAW_TEXT.find((t) => t === name);
+      const raw = rawText.find((t) => t === name);
       if (raw !== undefined) {
         const found = raw === "plaintext" ? -1 : rawTextEnd(html, raw, i);
         const close = found < 0 ? n : found;
-        if (CODE_TEXT.includes(raw)) visitor.code(i, close);
+        if (CODE_TEXT.includes(raw) && foreignCode === 0) visitor.code(i, close);
+        if (found >= 0) push(NS_HTML, raw, false, i);
         i = close;
         continue;
       }
-      if (selfClosing) continue;
-      stackNs.push(name === "svg" ? NS_SVG : name === "math" ? NS_MATH : NS_HTML);
-      stackName.push(name);
-      stackHtmlContent.push(false);
+      // HTML ignores a self-closing mark on its own elements; only an svg or a math takes one.
+      if (VOID.has(name) || (selfClosing && (name === "svg" || name === "math"))) continue;
+      push(name === "svg" ? NS_SVG : name === "math" ? NS_MATH : NS_HTML, name, false, i);
     } else {
       if (selfClosing) continue;
-      const ns = name === "svg" ? NS_SVG : name === "math" ? NS_MATH : (stackNs[stackNs.length - 1] as number);
+      const ns = name === "svg" ? NS_SVG : name === "math" ? NS_MATH : stackNs.length === 0 ? context : (stackNs[stackNs.length - 1] as number);
       const integration =
         (ns === NS_SVG && SVG_HTML_INTEGRATION.has(name)) ||
         (ns === NS_MATH && MATH_TEXT_INTEGRATION.has(name)) ||
         (ns === NS_MATH && name === "annotation-xml" && encoding !== undefined && HTML_ANNOTATION_ENCODINGS.has(asciiLowercase(encoding)));
-      stackNs.push(ns);
-      stackName.push(name);
-      stackHtmlContent.push(integration);
+      push(ns, name, integration, i);
     }
   }
+  if (foreignCode > 0) visitor.code(foreignCodeStart, n);
 }
 
 function scanTag(html: string, from: number, visitor: Visitor): number {
@@ -364,16 +413,21 @@ function shadow(markup: string, holes: readonly Hole[]): string {
 export function holeLandings(markup: string, holes: readonly Hole[], prefixes: string[] = PREFIXES): HoleLanding[] {
   const shadowed = shadow(markup, holes);
   const ordered = [...prefixes].sort((a, b) => b.length - a.length);
-  const landscapes = ([[false, false], [true, false], [true, true]] as const).map(([foreign, cdata]) => {
+  // With a noscript in it, the markup is read with scripting off, as the client parses a patch, and on, as a page loads.
+  const scriptings = /noscript/i.test(shadowed) ? [false, true] : [false];
+  const landscapes: Landscape[] = [];
+  const read = (scan: (l: Landscape) => void) => {
     const l = new Landscape(ordered);
-    scanMarkup(shadowed, l, foreign, cdata);
-    return l;
-  });
-  // The fourth reading follows the browser's element stack, switching rule by position where the
-  // three fixed ones each hold one throughout: scanMarkupTracked in MarkupScan.kt.
-  const tracked = new Landscape(ordered);
-  scanMarkupTracked(shadowed, tracked);
-  landscapes.push(tracked);
+    scan(l);
+    landscapes.push(l);
+  };
+  for (const scripting of scriptings) read((l) => scanMarkup(shadowed, l, false, false, scripting));
+  read((l) => scanMarkup(shadowed, l, true, false, false));
+  read((l) => scanMarkup(shadowed, l, true, true, false));
+  // The tracked readings follow the browser's element stack, switching rule by position where the
+  // fixed ones each hold one throughout, from HTML, from inside an svg and from inside a math:
+  // scanMarkupTracked in MarkupScan.kt.
+  for (const context of [NS_HTML, NS_SVG, NS_MATH]) for (const scripting of scriptings) read((l) => scanMarkupTracked(shadowed, l, context, scripting));
   return holes.map((h) => {
     let strictest = landscapes[0] as Landscape;
     for (const l of landscapes) if (STRICTNESS.indexOf(l.positionOf(h.start)) > STRICTNESS.indexOf(strictest.positionOf(h.start))) strictest = l;

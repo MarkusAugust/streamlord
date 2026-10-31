@@ -237,7 +237,7 @@ private fun foreignSpans(
         var depth = 0
         var end = html.length
         for (m in token.findAll(html, start)) {
-            if (sections.any { m.range.first in it }) continue
+            if (inSection(sections, m.range.first)) continue
             depth += if (m.groupValues[1].isEmpty()) 1 else -1
             if (depth == 0) {
                 end = html.indexOf('>', m.range.last).let { if (it < 0) html.length else it + 1 }
@@ -248,4 +248,18 @@ private fun foreignSpans(
         covered = end
     }
     return spans
+}
+
+/** Whether [at] is in one of [sections], which are in order and never overlap: a binary search, so many sections cost little. */
+private fun inSection(
+    sections: List<IntRange>,
+    at: Int,
+): Boolean {
+    var low = 0
+    var high = sections.size - 1
+    while (low <= high) {
+        val mid = (low + high) ushr 1
+        if (sections[mid].first <= at) low = mid + 1 else high = mid - 1
+    }
+    return high >= 0 && at in sections[high]
 }

@@ -1,5 +1,5 @@
 {
- "$comment": "Where a hole lands, by holeLandings in streamlord-core Interpolation.kt, which interpolate calls, and by holes.ts in the VS Code analysis, both of which read these cases. Each %s in markup is a hole; position is the strictest of the three readings (HTML, svg or math, and svg or math with CDATA as text), attribute the quoted attribute it landed in, or null, and loadsCode, false where it is left out, whether that attribute loads what the browser runs, so that its host must be fixed (urlHostFixedBy) rather than its scheme. HoleLandingsTest also holds every case to interpolate itself: a String is refused where the position refuses one, a Number where it refuses that, and anything but Trusted in a loadsCode attribute whose literal start does not fix the host. urls: whether the literal start of a URL attribute's value, prefix, already settles the scheme (urlSchemeFixedBy).",
+ "$comment": "Where a hole lands, by holeLandings in streamlord-core Interpolation.kt, which interpolate calls, and by holes.ts in the VS Code analysis, both of which read these cases. Each %s in markup is a hole; position is the strictest of the readings (HTML, svg or math, svg or math with CDATA as text, and the ones that follow the element stack from HTML, from inside an svg and from inside a math, each with scripting off and, where a noscript stands, on), attribute the quoted attribute it landed in, or null, and loadsCode, false where it is left out, whether that attribute loads what the browser runs, so that its host must be fixed (urlHostFixedBy) rather than its scheme. HoleLandingsTest also holds every case to interpolate itself: a String is refused where the position refuses one, a Number where it refuses that, and anything but Trusted in a loadsCode attribute whose literal start does not fix the host. urls: whether the literal start of a URL attribute's value, prefix, already settles the scheme (urlSchemeFixedBy).",
  "cases": [
   {
    "name": "text",
@@ -739,6 +739,97 @@
     {
      "position": "URL",
      "attribute": "data"
+    }
+   ]
+  },
+  {
+   "name": "a noscript holds markup to the client, which parses with scripting off",
+   "markup": "<noscript><xmp><a title=\"</xmp><script>%s</script>",
+   "landings": [
+    {
+     "position": "CODE",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "a noscript is text to a page, which loads with scripting on",
+   "markup": "<noscript><p title=\"</noscript><img src=x onerror='%s'>\">",
+   "landings": [
+    {
+     "position": "CODE",
+     "attribute": "onerror"
+    }
+   ]
+  },
+  {
+   "name": "an svg patch is read inside an svg, where a title holds HTML",
+   "markup": "<title><xmp><!--</xmp><img src=x onerror=\"%s\">",
+   "landings": [
+    {
+     "position": "CODE",
+     "attribute": "onerror"
+    }
+   ]
+  },
+  {
+   "name": "a math patch is read inside a math, where an mi holds HTML",
+   "markup": "<textarea><mi><xmp><!--</xmp><img src=x onerror=\"%s\">",
+   "landings": [
+    {
+     "position": "CODE",
+     "attribute": "onerror"
+    }
+   ]
+  },
+  {
+   "name": "the text of an svg style is code although the style holds elements",
+   "markup": "<style></xmp><style></style></svg>%s",
+   "landings": [
+    {
+     "position": "CODE",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "a CDATA section in an svg script is its program",
+   "markup": "<script><![CDATA[</script>%s",
+   "landings": [
+    {
+     "position": "CODE",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "a font with a color returns from svg to HTML",
+   "markup": "<svg><font color=1><title><xmp></title><img src=x onerror=\"%s\">",
+   "landings": [
+    {
+     "position": "CODE",
+     "attribute": "onerror"
+    }
+   ]
+  },
+  {
+   "name": "href of a link loads code",
+   "markup": "<link rel=\"stylesheet\" href=\"%s\">",
+   "landings": [
+    {
+     "position": "URL",
+     "attribute": "href",
+     "loadsCode": true
+    }
+   ]
+  },
+  {
+   "name": "the content of a meta is an attribute, its refresh URL judged at run time",
+   "markup": "<meta http-equiv=\"refresh\" content=\"0;url=%s\">",
+   "landings": [
+    {
+     "position": "ATTRIBUTE",
+     "attribute": "content"
     }
    ]
   }
