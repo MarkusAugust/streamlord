@@ -328,8 +328,9 @@ public final class io/github/markusaugust/streamlord/core/domain/ExpressionGuard
 }
 
 public final class io/github/markusaugust/streamlord/core/domain/HoleLanding {
-	public fun <init> (Lio/github/markusaugust/streamlord/core/domain/Position;Ljava/lang/String;I)V
+	public fun <init> (Lio/github/markusaugust/streamlord/core/domain/Position;Ljava/lang/String;IZ)V
 	public final fun getAttribute ()Ljava/lang/String;
+	public final fun getLoadsCode ()Z
 	public final fun getPosition ()Lio/github/markusaugust/streamlord/core/domain/Position;
 	public final fun getValueStart ()I
 }

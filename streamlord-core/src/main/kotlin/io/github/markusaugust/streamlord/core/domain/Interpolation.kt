@@ -353,12 +353,17 @@ private fun StringBuilder.escaped(value: Any?) {
  *   markup (HTML, svg or math, and svg or math with CDATA as text); see [interpolate].
  * @property attribute The attribute it landed in, when it landed in a quoted one.
  * @property valueStart Where that attribute's value starts in the markup, or -1.
+ * @property loadsCode Whether that attribute is a URL the browser loads and runs, or treats as its
+ *   own document, on its tag: `src` of a `<script>`, `<iframe>` or `<embed>`, `href` of a `<base>`
+ *   or an SVG `<script>`, `data` of an `<object>`. A hole there is judged by [urlHostFixedBy] rather
+ *   than [urlSchemeFixedBy].
  */
 @InternalStreamlordApi
 public class HoleLanding(
     public val position: Position,
     public val attribute: String?,
     public val valueStart: Int,
+    public val loadsCode: Boolean,
 )
 
 /**
@@ -483,7 +488,7 @@ private fun landingOf(
     hole: Int,
 ): HoleLanding {
     val strictest = landscapes.maxBy { STRICTNESS.indexOf(it.positionOf(hole)) }
-    return HoleLanding(strictest.positionOf(hole), strictest.attributeAt(hole), strictest.valueStartAt(hole))
+    return HoleLanding(strictest.positionOf(hole), strictest.attributeAt(hole), strictest.valueStartAt(hole), strictest.loadsCodeAt(hole))
 }
 
 /**
@@ -685,6 +690,8 @@ private class Landscape(
     fun valueStartAt(hole: Int): Int = indexOfSpan(hole, attributeStarts, attributeEnds).let { if (it >= 0) attributeStarts[it] else -1 }
 
     fun attributeAt(hole: Int): String? = indexOfSpan(hole, attributeStarts, attributeEnds).takeIf { it >= 0 }?.let { attributeNames[it] }
+
+    fun loadsCodeAt(hole: Int): Boolean = indexOfSpan(hole, attributeStarts, attributeEnds).let { it >= 0 && codeUrl(it) }
 
     // Their value is a signal path the client follows without a guard (bind.ts, ref.ts, indicator.ts).
     private val signalPaths = CatalogNames.signalAttributes

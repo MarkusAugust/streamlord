@@ -32,8 +32,11 @@ class HoleLandingsTest {
         assertTrue(cases.isNotEmpty())
         for (case in cases) {
             val markup = case.string("markup")!!
-            val expected = case.array("landings")!!.objects().map { it.string("position") to it.string("attribute") }
-            val actual = holeLandings(markup, holesOf(markup)).map { it.position.name to it.attribute }
+            val expected =
+                case.array("landings")!!.objects().map {
+                    Triple(it.string("position"), it.string("attribute"), it.boolean("loadsCode") ?: false)
+                }
+            val actual = holeLandings(markup, holesOf(markup)).map { Triple(it.position.name, it.attribute, it.loadsCode) }
             assertEquals(expected, actual, case.string("name"))
         }
     }
@@ -42,14 +45,19 @@ class HoleLandingsTest {
     fun `interpolate refuses exactly what the position refuses`() {
         for (case in fixture.array("cases")!!.objects()) {
             val markup = case.string("markup")!!
-            val landings = holeLandings(markup, holesOf(markup))
+            val holes = holesOf(markup)
+            val landings = holeLandings(markup, holes)
             for ((index, landing) in landings.withIndex()) {
                 for (probe in listOf<Any>("x", 7, true)) {
                     // Trusted everywhere else, which no position refuses, so only this hole decides.
                     val values = landings.indices.map { if (it == index) probe else Trusted("x") }
+                    // A URL that loads code takes nothing unless the literal before the hole fixes its host.
+                    val hostFixed =
+                        !landing.loadsCode || urlHostFixedBy(landing.attribute!!, markup.substring(landing.valueStart, holes[index].first))
                     val admitted =
                         when (landing.position) {
-                            Position.TEXT, Position.ATTRIBUTE, Position.URL -> true
+                            Position.TEXT, Position.ATTRIBUTE -> true
+                            Position.URL -> hostFixed
                             Position.DATASTAR -> probe !is String
                             Position.STYLE -> probe is Number
                             Position.STRUCTURE, Position.CODE -> false

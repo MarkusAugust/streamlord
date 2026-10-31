@@ -9,6 +9,7 @@ import io.github.markusaugust.streamlord.core.domain.AttributeKeys
 import io.github.markusaugust.streamlord.core.domain.HoleLanding
 import io.github.markusaugust.streamlord.core.domain.Position
 import io.github.markusaugust.streamlord.core.domain.holeLandings
+import io.github.markusaugust.streamlord.core.domain.urlHostFixedBy
 import io.github.markusaugust.streamlord.core.domain.urlSchemeFixedBy
 
 /*
@@ -57,6 +58,9 @@ private const val UNQUOTED_STOP = " \t\n\u000C\r\u000B\"'=<>`"
 
 /** Where escaping is all a value needs, so that `interpolate(...)` takes it. */
 private val ESCAPED_POSITIONS = setOf(Position.TEXT, Position.ATTRIBUTE, Position.URL)
+
+private const val CODE_URL_ADVICE =
+    "Start the value with a path such as /js/ or a whole origin such as https://cdn.example/, so that the value only picks a file there"
 private val TRUSTED_CALL = Regex("""(?:^|[^\p{L}\p{Nd}_.])Trusted\s*\(""")
 
 private val INTERPOLATE = setOf("interpolate")
@@ -508,6 +512,8 @@ public class Analyzer(
                 (format.interpolations.map { it.decodedStart } + at).map { it until it + PLACEHOLDER.length },
                 listOf(opts.prefix, CatalogNames.PREFIX, CatalogNames.ALIASED_PREFIX).distinct(),
             )
+        val starts = format.interpolations.map { it.decodedStart } + at
+        val percentAt = { j: Int -> j >= format.interpolations.size }
         val trapOf = traps(format, src)
         for ((k, ip) in format.interpolations.withIndex()) {
             val landing = landings[k]
@@ -531,11 +537,18 @@ public class Analyzer(
                 told != HoleFact.NULLABLE_STRING &&
                     !mayBeNull(src, ip.text, s.start) &&
                     !(landing.position == Position.TEXT && mayHoldMarkup(src, ip.text, s.start, opts.constants))
+            // As a %s hole it would be refused, along with every hole after it in the URL, unless the literal before it fixes the host.
+            val loadsAnywhere = hostUnfixed(view, landings, starts, k) { j -> j == k || percentAt(j) }
             val fixable =
-                landing.position in ESCAPED_POSITIONS && ip.kind != InterpolationKind.OPERAND && mapped && !listOverload &&
-                    percents % 2 == 0 && keeps
+                landing.position in ESCAPED_POSITIONS && !loadsAnywhere && ip.kind != InterpolationKind.OPERAND && mapped &&
+                    !listOverload && percents % 2 == 0 && keeps
             val fixes = if (fixable) listOf(holeFix(ip, shown, at, values, formatArg)) else emptyList()
-            val message = templateMessage(shown, landing, endTagAt(view, ip.decodedStart))
+            val message =
+                if (loadsAnywhere) {
+                    templateCodeUrlMessage(shown, landing.attribute ?: "the URL")
+                } else {
+                    templateMessage(shown, landing, endTagAt(view, ip.decodedStart))
+                }
             issues += Issue(ip.start, ip.end, message, Severity.WARNING, "interpolate-template", Docs.EXPRESSIONS, fixes)
         }
         for ((k, d) in at.withIndex()) {
@@ -543,6 +556,28 @@ public class Analyzer(
             val arg = if (mapped) values[k] else null
             val kind = if (arg != null) kinds[k] else null
             val r = format.toSource(d, d + PLACEHOLDER.length)
+            // interpolate refuses everything but Trusted in a URL that loads code, unless the literal before
+            // the URL's first hole fixes its host; it names that first hole, and a Trusted anywhere in the URL waives it.
+            if (landing.loadsCode && hostUnfixed(view, landings, starts, format.interpolations.size + k, percentAt)) {
+                val inUrl = at.indices.filter { landings[format.interpolations.size + it].valueStart == landing.valueStart }
+                if (inUrl.first() != k) continue
+                val urlKinds = inUrl.map { if (mapped) kinds[it] else null }
+                if (ArgKind.TRUSTED in urlKinds) continue
+                // A template before the hole is filled in first, so what the literal fixes is known only without one.
+                val templated = format.interpolations.any { it.decodedStart >= landing.valueStart && it.decodedStart < d }
+                val certain = !templated && urlKinds.all { it != null }
+                val shown = arg?.let { shortened(it.text) } ?: "the value of this %s"
+                issues +=
+                    Issue(
+                        r.first,
+                        r.last + 1,
+                        refusedCodeUrlMessage(shown, landing.attribute ?: "the URL", certain),
+                        if (certain) Severity.ERROR else Severity.WARNING,
+                        "unsafe-interpolation",
+                        Docs.EXPRESSIONS,
+                    )
+                continue
+            }
             if (landing.position in ESCAPED_POSITIONS) {
                 // Markup held as a String is text to interpolate: in element text it escapes the tags, which are then printed.
                 if (landing.position == Position.TEXT && arg != null && kind != ArgKind.MARKUP && kind != ArgKind.TRUSTED &&
@@ -685,6 +720,57 @@ public class Analyzer(
         }
     }
 
+    /**
+     * Whether the hole at [k] is in a URL that loads code, `src` of a script and the like, whose host
+     * the literal before the URL's first hole does not fix: interpolate refuses every value there but
+     * Trusted, as Landscape.checkUrls in core does. [counts] says which holes interpolate sees as holes.
+     */
+    private fun hostUnfixed(
+        view: String,
+        landings: List<HoleLanding>,
+        starts: List<Int>,
+        k: Int,
+        counts: (Int) -> Boolean,
+    ): Boolean {
+        val landing = landings[k]
+        val attribute = landing.attribute
+        if (!landing.loadsCode || attribute == null) return false
+        var first = starts[k]
+        for ((j, l) in landings.withIndex()) {
+            if (counts(j) && l.valueStart == landing.valueStart && starts[j] < first) first = starts[j]
+        }
+        return !urlHostFixedBy(attribute, view.substring(landing.valueStart, first))
+    }
+
+    private fun codeUrlMessage(
+        shown: String,
+        attribute: String,
+    ): String =
+        "Kotlin writes $shown into $attribute, which loads code from wherever the value points, and the markup before it does not fix " +
+            "the host: even an https:// URL can load code from another origin. Escaping does not help. $CODE_URL_ADVICE."
+
+    private fun templateCodeUrlMessage(
+        shown: String,
+        attribute: String,
+    ): String =
+        "Kotlin fills in $shown before interpolate sees the markup, so interpolate neither escapes nor refuses it. " +
+            "It lands in $attribute, which loads code from wherever the value points, and the markup before it does not fix the host. " +
+            "$CODE_URL_ADVICE, and make it a %s hole."
+
+    private fun refusedCodeUrlMessage(
+        shown: String,
+        attribute: String,
+        certain: Boolean,
+    ): String {
+        val where = "$attribute, which loads code from wherever the value points, and the markup before it does not fix the host"
+        val instead = "$CODE_URL_ADVICE, or wrap a URL you chose yourself in Trusted(...)."
+        return if (certain) {
+            "interpolate always throws here: $shown lands in $where. Only Trusted(...) is let in there. $instead"
+        } else {
+            "interpolate throws here unless $shown is Trusted(...): it lands in $where. $instead"
+        }
+    }
+
     private fun escapedMarkupMessage(shown: String): String =
         "interpolate escapes $shown here, so the tags it holds are printed as text: it is markup held as a String. " +
             "Pass the Html itself, join a list of Html with joinToHtml(), or wrap markup you built yourself in Trusted(...)."
@@ -805,12 +891,15 @@ public class Analyzer(
                 listOf(opts.prefix, CatalogNames.PREFIX, CatalogNames.ALIASED_PREFIX).distinct(),
             )
         val told = s.interpolations.map { holeFact(s, src, opts, it) }
+        val starts = s.interpolations.map { it.decodedStart }
         // interpolate(...) can take the literal only when every hole is a value it escapes and keeps.
         val fixable =
             s.dollars == 1 &&
                 !trimmed(src, s) &&
                 s.interpolations.none { it.kind == InterpolationKind.OPERAND } &&
-                s.interpolations.indices.all { k -> interpolateKeeps(src, s, s.interpolations[k], told[k], landings[k].position, opts) }
+                s.interpolations.indices.all { k -> interpolateKeeps(src, s, s.interpolations[k], told[k], landings[k].position, opts) } &&
+                // interpolate refuses every value in a URL that loads code unless the literal fixes its host.
+                s.interpolations.indices.none { k -> hostUnfixed(view, landings, starts, k) { true } }
         // The rewrite is made once for the literal, and only when a fix is applied.
         val rewrite = interpolateText(src, s)
         val issues = ArrayList<Issue>()
@@ -865,7 +954,9 @@ public class Analyzer(
                     val attribute = landing.attribute ?: "the URL"
                     val before = decodeEntities(view.substring(landing.valueStart, ip.decodedStart)).text
                     issues +=
-                        if (urlSchemeFixedBy(attribute, before)) {
+                        if (landing.loadsCode && !urlHostFixedBy(attribute, view.substring(landing.valueStart, ip.decodedStart))) {
+                            issue(Severity.WARNING, "unsafe-interpolation", codeUrlMessage(shown, attribute))
+                        } else if (urlSchemeFixedBy(attribute, before)) {
                             unescaped()
                         } else {
                             issue(

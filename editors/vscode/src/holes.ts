@@ -16,6 +16,8 @@ export interface HoleLanding {
   attribute: string | null;
   /** Where that attribute's value starts in the markup, or -1. */
   valueStart: number;
+  /** Whether that attribute is a URL its tag loads and runs, judged by urlHostFixedBy: CODE_URL_ATTRIBUTES. */
+  loadsCode: boolean;
 }
 
 /** A span the caller will fill: start inclusive, end exclusive. */
@@ -34,6 +36,14 @@ const HTML_SPACE = "\t\n\f\r ";
 const URL_ATTRIBUTES = new Set(["href", "src", "action", "formaction", "xlink:href", "poster", "data", "cite", "background", "ping", "manifest"]);
 const ANIMATION_TAGS = new Set(["animate", "set", "animatetransform", "animatemotion"]);
 const ANIMATION_URL_ATTRIBUTES = new Set(["values", "to", "from"]);
+/** URL attributes that load what the browser runs or treats as its own document, by tag: CODE_URL_ATTRIBUTES in Interpolation.kt. */
+const CODE_URL_ATTRIBUTES = new Map<string, ReadonlySet<string>>([
+  ["script", new Set(["src", "href", "xlink:href"])],
+  ["base", new Set(["href"])],
+  ["iframe", new Set(["src"])],
+  ["embed", new Set(["src"])],
+  ["object", new Set(["data"])],
+]);
 
 /** The attributes Datastar evaluates or follows as a signal path: ElementsGuard.evaluatedAttributes and CatalogNames.signalAttributes. */
 const DATASTAR_ATTRIBUTES = new Set(
@@ -342,7 +352,8 @@ class Landscape implements Visitor {
 
   landing(at: number): HoleLanding {
     const a = this.attributeAt(at);
-    return { position: this.positionOf(at), attribute: a?.name ?? null, valueStart: a?.start ?? -1 };
+    const loadsCode = a !== undefined && (CODE_URL_ATTRIBUTES.get(a.tag)?.has(asciiLowercase(a.name)) ?? false);
+    return { position: this.positionOf(at), attribute: a?.name ?? null, valueStart: a?.start ?? -1, loadsCode };
   }
 
   private datastar(lower: string): boolean {

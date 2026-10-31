@@ -1,5 +1,5 @@
 {
- "$comment": "Where a hole lands, by holeLandings in streamlord-core Interpolation.kt, which interpolate calls, and by holes.ts in the VS Code analysis, both of which read these cases. Each %s in markup is a hole; position is the strictest of the three readings (HTML, svg or math, and svg or math with CDATA as text), attribute the quoted attribute it landed in, or null. HoleLandingsTest also holds every case to interpolate itself: a String is refused where the position refuses one, a Number where it refuses that. urls: whether the literal start of a URL attribute's value, prefix, already settles the scheme (urlSchemeFixedBy).",
+ "$comment": "Where a hole lands, by holeLandings in streamlord-core Interpolation.kt, which interpolate calls, and by holes.ts in the VS Code analysis, both of which read these cases. Each %s in markup is a hole; position is the strictest of the three readings (HTML, svg or math, and svg or math with CDATA as text), attribute the quoted attribute it landed in, or null, and loadsCode, false where it is left out, whether that attribute loads what the browser runs, so that its host must be fixed (urlHostFixedBy) rather than its scheme. HoleLandingsTest also holds every case to interpolate itself: a String is refused where the position refuses one, a Number where it refuses that, and anything but Trusted in a loadsCode attribute whose literal start does not fix the host. urls: whether the literal start of a URL attribute's value, prefix, already settles the scheme (urlSchemeFixedBy).",
  "cases": [
   {
    "name": "text",
@@ -530,6 +530,115 @@
     {
      "position": "URL",
      "attribute": "href"
+    }
+   ]
+  },
+  {
+   "name": "src of a script loads code",
+   "markup": "<script src=\"%s\"></script>",
+   "landings": [
+    {
+     "position": "URL",
+     "attribute": "src",
+     "loadsCode": true
+    }
+   ]
+  },
+  {
+   "name": "src of a script under a path",
+   "markup": "<script src=\"/js/%s\"></script>",
+   "landings": [
+    {
+     "position": "URL",
+     "attribute": "src",
+     "loadsCode": true
+    }
+   ]
+  },
+  {
+   "name": "href of a base",
+   "markup": "<base href=\"%s\">",
+   "landings": [
+    {
+     "position": "URL",
+     "attribute": "href",
+     "loadsCode": true
+    }
+   ]
+  },
+  {
+   "name": "src of an iframe",
+   "markup": "<iframe src=\"https://a.example/%s\"></iframe>",
+   "landings": [
+    {
+     "position": "URL",
+     "attribute": "src",
+     "loadsCode": true
+    }
+   ]
+  },
+  {
+   "name": "src of an embed",
+   "markup": "<embed src=\"%s\">",
+   "landings": [
+    {
+     "position": "URL",
+     "attribute": "src",
+     "loadsCode": true
+    }
+   ]
+  },
+  {
+   "name": "data of an object",
+   "markup": "<object data=\"%s\"></object>",
+   "landings": [
+    {
+     "position": "URL",
+     "attribute": "data",
+     "loadsCode": true
+    }
+   ]
+  },
+  {
+   "name": "href of an svg script",
+   "markup": "<svg><script href=\"%s\"></script></svg>",
+   "landings": [
+    {
+     "position": "URL",
+     "attribute": "href",
+     "loadsCode": true
+    }
+   ]
+  },
+  {
+   "name": "xlink:href of an svg script",
+   "markup": "<svg><script xlink:href=\"/x/%s\"></script></svg>",
+   "landings": [
+    {
+     "position": "URL",
+     "attribute": "xlink:href",
+     "loadsCode": true
+    }
+   ]
+  },
+  {
+   "name": "a capital in the tag or the attribute",
+   "markup": "<SCRIPT SRC=\"%s\"></SCRIPT>",
+   "landings": [
+    {
+     "position": "URL",
+     "attribute": "SRC",
+     "loadsCode": true
+    }
+   ]
+  },
+  {
+   "name": "data of an embed does not load code",
+   "markup": "<embed data=\"%s\">",
+   "landings": [
+    {
+     "position": "URL",
+     "attribute": "data"
     }
    ]
   }

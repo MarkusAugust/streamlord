@@ -142,8 +142,11 @@ All notable changes to Streamlord are recorded here. The format follows
   same-document `#` or `?`, or a whole origin `scheme://host/` with a safe scheme. A safe scheme
   alone no longer settles such an attribute, since `https://` can still point at another origin, and
   a single leading `/` no longer settles its host, since the next character could be a second `/`.
-  `Trusted(...)` passes as ever. `urlHostFixedBy` (internal API) answers it, and the editors call it
-  as they call `urlSchemeFixedBy`.
+  `Trusted(...)` passes as ever. `urlHostFixedBy` (internal API) answers it, and `HoleLanding`
+  (internal API) carries `loadsCode` for such an attribute, so the editors judge a hole there by
+  the host too: a Kotlin template that may move it is an `unsafe-interpolation` warning, with no
+  rewrite to `interpolate`, which would refuse it, and a `%s` hole in an `interpolate` format whose
+  literal does not fix the host is an error where the value is known, since only `Trusted` passes.
 - `interpolate` decoded each literal piece of a URL attribute on its own before it judged the
   scheme, where the browser decodes the attribute once it is whole, so a character reference could
   begin in the markup and end in the value: `<a href="&%s">` with `#106;avascript:alert(1)` wrote
