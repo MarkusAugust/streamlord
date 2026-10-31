@@ -116,10 +116,10 @@ body {
   box-sizing: content-box;
 }
 .marketplace__where {
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--lt-font-weight-semibold);
 }
 .marketplace__id {
-  font-size: var(--font-size-xs);
+  font-size: var(--lt-font-size-xs);
   color: var(--lt-color-neutral-text-subtle);
   /* The <wbr> after each dot is where it breaks; this is for a card narrower than a part. */
   overflow-wrap: break-word;
@@ -193,12 +193,12 @@ body {
 }
 .hex__role {
   color: var(--lt-color-neutral-text-subtle);
-  font-size: var(--font-size-xs);
+  font-size: var(--lt-font-size-xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
 .hex__name {
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--lt-font-weight-semibold);
 }
 /* A hint that there is more, and which way it goes, without a script to turn it. */
 .hex__name::after {
@@ -211,7 +211,7 @@ body {
 }
 .hex__box > p {
   margin: var(--lt-spacing-2) 0 0;
-  font-size: var(--font-size-s);
+  font-size: var(--lt-font-size-s);
 }
 .hex__arrow {
   justify-self: center;
@@ -225,7 +225,7 @@ body {
 .hex figcaption {
   margin-block-start: var(--lt-spacing-3);
   color: var(--lt-color-neutral-text-subtle);
-  font-size: var(--font-size-s);
+  font-size: var(--lt-font-size-s);
 }
 /*
  * 43rem, not a round number: below 680px the longest name, IncomingRequest, breaks across two
