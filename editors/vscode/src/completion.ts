@@ -188,7 +188,8 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
     }
     const scope = /(?:^|[^A-Za-z0-9_$])([a-z]*)$/.exec(textBefore);
     if (scope && (scope[1] ?? "").length > 0) {
-      return ["el", "evt", ...(patchInScope ? ["patch"] : [])].map((v) => new vscode.CompletionItem(v, vscode.CompletionItemKind.Variable));
+      const compiled = catalog.compiledParameters.filter((n) => /^[a-z]/.test(n));
+      return [...compiled, ...(patchInScope ? ["patch"] : [])].map((v) => new vscode.CompletionItem(v, vscode.CompletionItemKind.Variable));
     }
     return [];
   }

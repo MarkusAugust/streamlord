@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.catalog.CatalogNames
+
 /*
  * The documentation the editors show on hover and in completion, as Markdown. One wording for
  * VS Code and IntelliJ.
@@ -41,7 +43,7 @@ public fun casingNote(a: AttributeSpec): String =
 /** Markdown documentation of an attribute: forms, casing rule, modifiers, Kotlin helpers and the Pro note. */
 public fun attributeDoc(
     a: AttributeSpec,
-    prefix: String = "data-",
+    prefix: String = CatalogNames.PREFIX,
 ): String {
     val mods = if (a.modifiers.isNotEmpty()) "\n\n**Modifiers:** " + a.modifiers.joinToString(", ") { "`${modifierForm(it)}`" } else ""
     val kotlin = if (a.kotlin.isNotEmpty()) "\n\n**Kotlin:** " + a.kotlin.joinToString(", ") { "`$it()`" } else ""

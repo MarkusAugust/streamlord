@@ -1,5 +1,5 @@
 /**
- * Turns a run of fenced code blocks sharing a `group=` into a Fristil tab set.
+ * Turns a run of fenced code blocks sharing a `group=` into a LO-TEK tab set.
  *
  * ````
  * ```kotlin tab="Gradle" group=install sample=none
@@ -12,14 +12,17 @@
  * Shiki still highlights them and, more importantly, `:docs-samples` still reads
  * them exactly as it did before. The Gradle task must never have to learn what a tab is.
  *
- * `fs-tabs` is a wrapper component: give it a `.fs-tabs__list` of buttons and one
- * `.fs-tabs__panel` per button, and it sets the roles, the ids, the coupling and the
- * arrow keys itself. Nothing here duplicates that.
+ * `lt-tabs` is a wrapper component: give it a `.lt-tabs__list` of links, each to the id
+ * of its `.lt-tabs__panel`, and it sets the roles, the coupling and the arrow keys
+ * itself. Nothing here duplicates that. Without JavaScript the list is a table of
+ * contents and the panels stand one after the other, so the code is still all there.
  */
 export function remarkTabs() {
   return (tree) => {
     const children = []
     let index = 0
+    // Panel ids are the page's, and a page can hold the same group more than once.
+    let sets = 0
 
     while (index < tree.children.length) {
       const run = collectRun(tree.children, index)
@@ -30,7 +33,7 @@ export function remarkTabs() {
         continue
       }
 
-      children.push(...wrap(run))
+      children.push(...wrap(run, ++sets))
       index += run.length
     }
 
@@ -65,32 +68,50 @@ function titleOf(node, fallback) {
   return node.meta?.match(/(?:^|\s)label="([^"]+)"/)?.[1] ?? fallback
 }
 
-function wrap(run) {
+function wrap(run, set) {
   const labels = run.map((node, i) =>
     labelOf(node, node.lang ?? `Tab ${i + 1}`),
   )
   const group = groupOf(run[0])
   const title = titleOf(run[0], group)
+  // Readable in the address, and numbered where two labels would give one id.
+  const ids = []
+  labels.forEach((label, i) => {
+    const base = `tabs-${set}-${slug(label) || i + 1}`
+    let id = base
+    for (let n = 2; ids.includes(id); n++) id = `${base}-${n}`
+    ids.push(id)
+  })
 
-  const buttons = labels
+  const links = labels
     .map(
-      (label) =>
-        `<button type="button" data-tab-label="${escapeHtml(label)}">${escapeHtml(label)}</button>`,
+      (label, i) =>
+        `<li><a href="#${ids[i]}" data-tab-label="${escapeHtml(label)}">${escapeHtml(label)}</a></li>`,
     )
     .join("")
 
   const out = [
-    html(`<fs-tabs class="tabs" data-tab-group="${escapeHtml(group)}">
-<div class="fs-tabs__list" aria-label="${escapeHtml(title)}">${buttons}</div>`),
+    html(`<lt-tabs class="tabs" data-tab-group="${escapeHtml(group)}">
+<ul class="lt-tabs__list" aria-label="${escapeHtml(title)}">${links}</ul>`),
   ]
 
-  run.forEach((node) => {
-    out.push(html(`<div class="fs-tabs__panel">`), node, html(`</div>`))
+  run.forEach((node, i) => {
+    out.push(
+      html(`<div class="lt-tabs__panel" id="${ids[i]}">`),
+      node,
+      html(`</div>`),
+    )
   })
 
-  out.push(html(`</fs-tabs>`))
+  out.push(html(`</lt-tabs>`))
   return out
 }
+
+const slug = (value) =>
+  String(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
 
 const html = (value) => ({ type: "html", value })
 

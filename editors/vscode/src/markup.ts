@@ -1,6 +1,8 @@
 import { catalog, distance, parseAttributeName, type AttributeSpec } from "./catalog.ts";
+import { kebab } from "./attributeKeys.ts";
 import { attributeDoc, DOCS, expressionError, filterPatternIssues, isIdentPart, jsRegions, quoteAt, Region, validateExpression, type Fix, type Issue } from "./expression.ts";
-import { clientKeyName, objectKeys, signalNameProblem, signalPathProblem, PROTOTYPE_NAMES, type ObjectKey } from "./signals.ts";
+import { clientKeyName, objectKeys, signalNameProblem, signalPathProblem, type ObjectKey } from "./signals.ts";
+import { PROTOTYPE_NAMES } from "./signalNames.ts";
 
 /**
  * Markup checks for the HTML Datastar patches: complete elements, ids where the protocol needs
@@ -9,8 +11,12 @@ import { clientKeyName, objectKeys, signalNameProblem, signalPathProblem, PROTOT
 
 const VOID = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"]);
 
-/** Elements whose content is text, whatever it looks like: a `<div>` in a `<textarea>` or a `<title>` is not a tag. */
-const RAW_TEXT = new Set(["script", "style", "textarea", "title"]);
+/**
+ * Elements whose content is text, whatever it looks like: a `<div>` in a `<textarea>` or a `<title>`
+ * is not a tag. RAW_TEXT in streamlord-core's ClientHtml.kt: not a `noscript`, which holds elements
+ * to the client, since it parses a patch with scripting off.
+ */
+const RAW_TEXT = new Set(["script", "style", "textarea", "title", "xmp", "iframe", "noembed", "noframes", "plaintext"]);
 
 /**
  * The elements whose end tag HTML lets the author leave out, each with the start tags that close
@@ -59,7 +65,16 @@ export function asciiLowercase(s: string): string {
 
 /** `indexOf` that ignores the case of A to Z; `needle` is given in lowercase. */
 export function indexOfAsciiIgnoreCase(s: string, needle: string, from: number): number {
-  return asciiLowercase(s).indexOf(needle, from);
+  for (let i = Math.max(0, from); i <= s.length - needle.length; i++) {
+    let k = 0;
+    while (k < needle.length) {
+      const c = s.charCodeAt(i + k);
+      if ((c >= 65 && c <= 90 ? c + 32 : c) !== needle.charCodeAt(k)) break;
+      k++;
+    }
+    if (k === needle.length) return i;
+  }
+  return -1;
 }
 
 /*
@@ -67,7 +82,7 @@ export function indexOfAsciiIgnoreCase(s: string, needle: string, from: number):
  * without it (unless `=` or a letter or digit follows, as in a URL's `&copy=1`), or a numeric
  * one, which the browser reads with or without its semicolon.
  */
-const ENTITY = /&(?:([A-Za-z][A-Za-z0-9]*);|(amp|AMP|lt|LT|gt|GT|quot|QUOT|nbsp)(?![=A-Za-z0-9])|#(\d{1,7});?|#[xX]([0-9A-Fa-f]{1,6});?)/y;
+const ENTITY = /&(?:([A-Za-z][A-Za-z0-9]*);|(amp|AMP|lt|LT|gt|GT|quot|QUOT|nbsp)(?![=A-Za-z0-9])|#(\d+);?|#[xX]([0-9A-Fa-f]+);?)/y;
 
 /** The named references that spell a character an expression may hold: the ASCII punctuation, and the whitespace. */
 const NAMED_ENTITIES: Record<string, string> = {
@@ -79,8 +94,95 @@ const NAMED_ENTITIES: Record<string, string> = {
   lcub: "{", lbrace: "{", verbar: "|", vert: "|", VerticalLine: "|", rcub: "}", rbrace: "}",
 };
 
-function codePoint(cp: number): string | null {
-  return cp === 0 || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff) ? null : String.fromCodePoint(cp);
+/**
+ * Where `</name` begins after `from` as a whole name, `</titlex>` not ending a `title`; -1 when
+ * nowhere. A `script` ends where the tokenizer's script data states say: rawTextEnd in core
+ * ClientHtml.kt, which holes.ts shares as MarkupScan.kt does.
+ */
+export function rawTextEnd(html: string, name: string, from: number): number {
+  if (name === "script") return scriptEnd(html, from);
+  for (let at = from; ; ) {
+    const close = indexOfAsciiIgnoreCase(html, `</${name}`, at);
+    if (close < 0) return -1;
+    if (endsTagName(html[close + 2 + name.length])) return close;
+    at = close + 1;
+  }
+}
+
+const endsTagName = (c: string | undefined) => c === undefined || c === "/" || c === ">" || "\t\n\f\r ".includes(c);
+const isAsciiAlpha = (c: string | undefined) => c !== undefined && /[A-Za-z]/.test(c);
+
+const SCRIPT_DATA = 0;
+const SCRIPT_ESCAPED = 1;
+const SCRIPT_DOUBLE_ESCAPED = 2;
+
+/**
+ * Where the body of a `<script>` that starts at `from` ends, by the script data states: scriptEnd
+ * in ClientHtml.kt. After a `<!--` the body is escaped, and a `<script` there makes it
+ * double-escaped, where a `</script>` only returns it to escaped; `-->` returns either to script data.
+ */
+function scriptEnd(html: string, from: number): number {
+  let state = SCRIPT_DATA;
+  let dashes = 0;
+  let i = from;
+  const n = html.length;
+  while (i < n) {
+    const c = html[i];
+    if (c === "-" && state !== SCRIPT_DATA) {
+      dashes = Math.min(dashes + 1, 2);
+      i++;
+    } else if (c === ">") {
+      if (dashes === 2) state = SCRIPT_DATA;
+      dashes = 0;
+      i++;
+    } else if (c !== "<") {
+      dashes = 0;
+      i++;
+    } else if (state !== SCRIPT_DOUBLE_ESCAPED && asciiLowercase(html.slice(i, i + 8)) === "</script" && endsTagName(html[i + 8])) {
+      return i;
+    } else if (state === SCRIPT_DATA) {
+      if (html.startsWith("<!--", i)) {
+        state = SCRIPT_ESCAPED;
+        dashes = 2;
+        i += 4;
+      } else {
+        i++;
+      }
+    } else {
+      dashes = 0;
+      // `<script` opens the double escape from escaped, `</script` closes it from double-escaped.
+      const slash = state === SCRIPT_DOUBLE_ESCAPED;
+      if (slash && html[i + 1] !== "/") {
+        i++;
+        continue;
+      }
+      const start = i + (slash ? 2 : 1);
+      let j = start;
+      while (isAsciiAlpha(html[j])) j++;
+      // The letters are the temporary buffer; only a space, `/` or `>` after them decides.
+      const decided = j < n && endsTagName(html[j]);
+      if (decided && j - start === 6 && asciiLowercase(html.slice(start, j)) === "script") {
+        state = slash ? SCRIPT_ESCAPED : SCRIPT_DOUBLE_ESCAPED;
+        i = j + 1;
+      } else {
+        i = Math.max(j, i + 1);
+      }
+    }
+  }
+  return -1;
+}
+
+/** The character a numeric reference names, as the browser reads it: NUL, a surrogate and past U+10FFFF are U+FFFD. */
+function codePoint(cp: number): string {
+  return cp === 0 || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff) ? "\ufffd" : String.fromCodePoint(WINDOWS_1252.get(cp) ?? cp);
+}
+
+// The numeric references the HTML standard reads as windows-1252 rather than as C1 controls: `&#128;` is the euro sign.
+const WINDOWS_1252: ReadonlyMap<number, number> = new Map([[0x80, 0x20ac], [0x82, 0x201a], [0x83, 0x0192], [0x84, 0x201e], [0x85, 0x2026], [0x86, 0x2020], [0x87, 0x2021], [0x88, 0x02c6], [0x89, 0x2030], [0x8a, 0x0160], [0x8b, 0x2039], [0x8c, 0x0152], [0x8e, 0x017d], [0x91, 0x2018], [0x92, 0x2019], [0x93, 0x201c], [0x94, 0x201d], [0x95, 0x2022], [0x96, 0x2013], [0x97, 0x2014], [0x98, 0x02dc], [0x99, 0x2122], [0x9a, 0x0161], [0x9b, 0x203a], [0x9c, 0x0153], [0x9e, 0x017e], [0x9f, 0x0178]]);
+
+/** The character `&name;` stands for; an own key only, so `&toString;` is no entity. */
+function namedEntity(name: string): string | null {
+  return Object.hasOwn(NAMED_ENTITIES, name) ? (NAMED_ENTITIES[name] ?? null) : null;
 }
 
 /**
@@ -97,7 +199,7 @@ export function decodeEntities(value: string): { text: string; map: number[] } {
   while (i < value.length) {
     ENTITY.lastIndex = i;
     const m = value[i] === "&" ? ENTITY.exec(value) : null;
-    const decoded = !m ? null : m[1] ? (NAMED_ENTITIES[m[1]] ?? null) : m[2] ? (NAMED_ENTITIES[m[2]] ?? null) : codePoint(m[3] ? parseInt(m[3], 10) : parseInt(m[4] ?? "", 16));
+    const decoded = !m ? null : m[1] ? namedEntity(m[1]) : m[2] ? namedEntity(m[2]) : codePoint(m[3] ? parseInt(m[3], 10) : parseInt(m[4] ?? "", 16));
     if (!m || decoded === null) {
       text += value[i];
       map.push(i);
@@ -183,12 +285,188 @@ export interface MarkupOptions {
 
 const NO_SIGNALS: ReadonlySet<string> = new Set();
 
+/** The white space of HTML, which alone ends an attribute name or value: a no-break space is part of one. */
+const HTML_SPACE = "\t\n\f\r ";
+
+const FOREIGN_ROOTS: ReadonlySet<string> = new Set(["svg", "math"]);
+const MATHML_TEXT: ReadonlySet<string> = new Set(["mi", "mo", "mn", "ms", "mtext"]);
+const HTML_ENCODINGS: ReadonlySet<string> = new Set(["text/html", "application/xhtml+xml"]);
+
+/**
+ * The start tags that end foreign content, so that the browser reads them, and what follows, as
+ * HTML: `<svg><p><style>` holds an HTML style. A font does so with a color, face or size.
+ */
+const BREAKOUT: ReadonlySet<string> = new Set(
+  ("b big blockquote body br center code dd div dl dt em embed h1 h2 h3 h4 h5 h6 head hr i img li listing menu meta nobr ol p pre " +
+    "ruby s small span strong strike sub sup table tt u ul var").split(" "),
+);
+const FONT_BREAKOUT: ReadonlySet<string> = new Set(["color", "face", "size"]);
+/** The end tags that do the same. */
+const BREAKOUT_END: ReadonlySet<string> = new Set(["br", "p"]);
+
+/**
+ * One past the end of the comment that opens at `lt`, as the HTML tokenizer ends it: `<!-->` and
+ * `<!--->` are whole comments, and `-->` and `--!>` both close one. `commentEnd` in core.
+ */
+function htmlCommentEnd(html: string, lt: number): number {
+  if (html.startsWith("<!-->", lt)) return lt + 5;
+  if (html.startsWith("<!--->", lt)) return lt + 6;
+  // One walk to the first closing sequence of either kind, so a run of comments costs its length.
+  for (let at = lt + 4; ; ) {
+    const dashes = html.indexOf("--", at);
+    if (dashes < 0) return html.length;
+    if (html[dashes + 2] === ">") return dashes + 3;
+    if (html[dashes + 2] === "!" && html[dashes + 3] === ">") return dashes + 4;
+    at = dashes + 1;
+  }
+}
+
+/**
+ * The HTML elements an end tag cannot close past in HTML content (the "special" category of the
+ * HTML standard): `</b>` inside a `div` inside a `b` leaves the `b` open.
+ */
+const SPECIAL: ReadonlySet<string> = new Set(
+  (
+    "address applet area article aside base basefont bgsound blockquote body br button caption center col colgroup dd " +
+    "details dir div dl dt embed fieldset figcaption figure footer form frame frameset h1 h2 h3 h4 h5 h6 head header " +
+    "hgroup hr html iframe img input keygen li link listing main marquee menu meta nav noembed noframes noscript object " +
+    "ol p param plaintext pre script search section select source style summary table tbody td template textarea tfoot " +
+    "th thead title tr track ul wbr xmp"
+  ).split(" "),
+);
+
+/** An element that changes how its content is read, and the elements open inside it. */
+interface Scope {
+  readonly name: string;
+  readonly foreign: boolean;
+  readonly namespace: string;
+  readonly open: string[];
+}
+
+/**
+ * Where the tokenizer stands in foreign content, as the browser's tree builder reads it: the svg
+ * and math elements open, the HTML integration points open in them, and the elements open inside
+ * each, which decide where an svg begins and what an end tag closes. Inside an svg or a math a
+ * `style` or a `script` is no raw text and `/>` closes an element; inside an integration point,
+ * such as a foreignObject, the content is HTML again. `ForeignContent` in the Kotlin analysis.
+ */
+class ForeignContent {
+  // The document first, whose open elements an end tag can close an svg or a math by.
+  private readonly scopes: Scope[] = [{ name: "", foreign: false, namespace: "html", open: [] }];
+
+  /** Whether the current node is an svg or MathML element, in which `<![CDATA[` opens a section of text. */
+  get foreign(): boolean {
+    return this.top.foreign;
+  }
+
+  private get top(): Scope {
+    return this.scopes[this.scopes.length - 1]!;
+  }
+
+  /** Reads a start tag; returns whether it stands in foreign content, where no element holds raw text. */
+  start(name: string, selfClosing: boolean, attributes: Attribute[]): boolean {
+    if (this.foreign && breaksOut(name, false, attributes)) this.popForeign();
+    const top = this.top;
+    if (top.foreign) {
+      // Inside a math an svg is a MathML element, unless it opens right in an annotation-xml.
+      if (name === "svg" && top.namespace === "math" && top.open[top.open.length - 1] === "annotation-xml") {
+        if (!selfClosing) this.scopes.push({ name, foreign: true, namespace: "svg", open: [] });
+      } else if (integrationPoint(top.namespace, name, attributes)) {
+        if (!selfClosing) this.scopes.push({ name, foreign: false, namespace: top.namespace, open: [] });
+      } else if (!selfClosing) {
+        top.open.push(name);
+      }
+      return true;
+    }
+    // Right inside a MathML text element, mglyph and malignmark stay MathML.
+    if (top.open.length === 0 && MATHML_TEXT.has(top.name) && (name === "mglyph" || name === "malignmark")) {
+      if (!selfClosing) this.scopes.push({ name, foreign: true, namespace: "math", open: [] });
+    } else if (FOREIGN_ROOTS.has(name)) {
+      if (!selfClosing) this.scopes.push({ name, foreign: true, namespace: name, open: [] });
+    } else if (!VOID.has(name) && !RAW_TEXT.has(name)) {
+      top.open.push(name);
+    }
+    return false;
+  }
+
+  /** Reads an end tag. */
+  end(name: string): void {
+    if (this.foreign && breaksOut(name, true, [])) return this.popForeign();
+    const top = this.top;
+    if (top.foreign || (top.open.length === 0 && this.scopes.length > 1)) {
+      // Foreign content's rule, which an integration point with nothing open inside it follows
+      // too: the nearest open element of the name, until an HTML element is open, whose rule
+      // takes over from there.
+      for (let k = this.scopes.length - 1; k >= 0; k--) {
+        const scope = this.scopes[k]!;
+        if (!scope.foreign && scope.open.length > 0 && k !== this.scopes.length - 1) {
+          // Every integration point is special, so one open in between stops it.
+          if (this.scopes.slice(k + 1).some((s) => !s.foreign)) return;
+          return this.closeHtml(k, name);
+        }
+        const at = scope.foreign ? scope.open.lastIndexOf(name) : -1;
+        if (at >= 0) {
+          this.scopes.length = k + 1;
+          scope.open.length = at;
+          return;
+        }
+        if (k > 0 && scope.name === name) {
+          this.scopes.length = k;
+          return;
+        }
+      }
+      return;
+    }
+    this.closeHtml(this.scopes.length - 1, name);
+  }
+
+  /**
+   * HTML content's rule for an end tag, from the elements open in the scope at `k`: the nearest
+   * open element of the name, unless a special one stands between, then the integration point
+   * itself, when the end tag spells its name. foreignObject's, which the element has in camel
+   * case, it never does.
+   */
+  private closeHtml(k: number, name: string): void {
+    const scope = this.scopes[k]!;
+    for (let e = scope.open.length - 1; e >= 0; e--) {
+      if (scope.open[e] === name) {
+        this.scopes.length = k + 1;
+        scope.open.length = e;
+        return;
+      }
+      if (SPECIAL.has(scope.open[e]!)) return;
+    }
+    if (k > 0 && k === this.scopes.length - 1 && name === scope.name && name !== "foreignobject") this.scopes.pop();
+  }
+
+  private popForeign(): void {
+    while (this.top.foreign) this.scopes.pop();
+  }
+}
+
+/** Whether a tag ends the foreign content it stands in, as the tree builder reads it. */
+function breaksOut(name: string, closing: boolean, attributes: Attribute[]): boolean {
+  if (closing) return BREAKOUT_END.has(name);
+  return BREAKOUT.has(name) || (name === "font" && attributes.some((a) => FONT_BREAKOUT.has(asciiLowercase(a.name))));
+}
+
+/**
+ * Whether `name`, opened in the foreign element `root`, is an HTML integration point, in which the
+ * browser reads the content as HTML: a foreignObject, desc or title in an svg, and in a math the
+ * text elements and an annotation-xml whose encoding is HTML.
+ */
+function integrationPoint(root: string, name: string, attributes: Attribute[]): boolean {
+  if (root === "svg") return name === "foreignobject" || name === "desc" || name === "title";
+  return MATHML_TEXT.has(name) || (name === "annotation-xml" && attributes.some((a) => asciiLowercase(a.name) === "encoding" && HTML_ENCODINGS.has(asciiLowercase(a.value ?? ""))));
+}
+
 export function tokenize(html: string): { tags: Tag[]; topLevelText: { start: number; end: number }[] } {
   const tags: Tag[] = [];
   const topLevelText: { start: number; end: number }[] = [];
   let i = 0;
   let depth = 0;
   let textStart = -1;
+  const content = new ForeignContent();
   const flushText = (end: number) => {
     if (textStart >= 0 && depth === 0) {
       const t = html.slice(textStart, end);
@@ -197,7 +475,13 @@ export function tokenize(html: string): { tags: Tag[]; topLevelText: { start: nu
     textStart = -1;
   };
   while (i < html.length) {
-    if (html.startsWith("<!--", i) || html.startsWith("<#--", i)) {
+    if (html.startsWith("<!--", i)) {
+      flushText(i);
+      i = htmlCommentEnd(html, i);
+      continue;
+    }
+    // A FreeMarker comment, which only `-->` ends.
+    if (html.startsWith("<#--", i)) {
       flushText(i);
       const close = html.indexOf("-->", i + 4);
       i = close < 0 ? html.length : close + 3;
@@ -218,13 +502,22 @@ export function tokenize(html: string): { tags: Tag[]; topLevelText: { start: nu
       i = commentEnd + commentClose.length;
       continue;
     }
+    // Where the current element is foreign, `<![CDATA[` opens a section of text that only `]]>` ends;
+    // in HTML it is a bogus comment, which the first `>` ends.
+    if (html.startsWith("<![CDATA[", i) && content.foreign) {
+      flushText(i);
+      const close = html.indexOf("]]>", i + 9);
+      i = close < 0 ? html.length : close + 3;
+      continue;
+    }
     if (html[i] === "<" && (html.startsWith("<!", i) || html.startsWith("<?", i) || TEMPLATE_TAG.test(html.slice(i, i + 3)))) {
       flushText(i);
       const close = html.indexOf(">", i);
       i = close < 0 ? html.length : close + 1;
       continue;
     }
-    const tagMatch = /^<(\/?)([A-Za-z][A-Za-z0-9:-]*)/.exec(html.slice(i, i + 64));
+    // A Kotlin template as the name, `<$tag>`, is a tag all the same: the browser sees a name there.
+    const tagMatch = /^<(\/?)((?:[A-Za-z]|__kt__)[A-Za-z0-9:._-]*)/.exec(html.slice(i, i + 64));
     if (html[i] === "<" && tagMatch) {
       flushText(i);
       const closing = tagMatch[1] === "/";
@@ -234,7 +527,7 @@ export function tokenize(html: string): { tags: Tag[]; topLevelText: { start: nu
       let selfClosing = false;
       while (j < html.length && html[j] !== ">") {
         const c = html[j] ?? "";
-        if (/\s/.test(c)) {
+        if (HTML_SPACE.includes(c)) {
           j++;
           continue;
         }
@@ -249,7 +542,7 @@ export function tokenize(html: string): { tags: Tag[]; topLevelText: { start: nu
           continue;
         }
         // A name also ends where a template construct starts: `data-x{{/if}}`, `data-x</#if>`.
-        const am = /^([^\s"'<>\/={]+)/.exec(html.slice(j));
+        const am = /^([^\t\n\f\r "'<>\/={]+)/.exec(html.slice(j));
         if (!am) {
           j++;
           continue;
@@ -258,13 +551,13 @@ export function tokenize(html: string): { tags: Tag[]; topLevelText: { start: nu
         const nameStart = j;
         j += attrName.length;
         let k = j;
-        while (k < html.length && /\s/.test(html[k] ?? "")) k++;
+        while (k < html.length && HTML_SPACE.includes(html[k] ?? "")) k++;
         let value: string | null = null;
         let valueStart = -1;
         let quoted = false;
         if (html[k] === "=") {
           k++;
-          while (k < html.length && /\s/.test(html[k] ?? "")) k++;
+          while (k < html.length && HTML_SPACE.includes(html[k] ?? "")) k++;
           const q = html[k];
           if (q === '"' || q === "'") {
             const close = html.indexOf(q, k + 1);
@@ -273,7 +566,7 @@ export function tokenize(html: string): { tags: Tag[]; topLevelText: { start: nu
             quoted = true;
             j = close < 0 ? html.length : close + 1;
           } else {
-            const vm = /^[^\s>]*/.exec(html.slice(k));
+            const vm = /^[^\t\n\f\r >]*/.exec(html.slice(k));
             valueStart = k;
             value = vm?.[0] ?? "";
             j = k + value.length;
@@ -282,14 +575,20 @@ export function tokenize(html: string): { tags: Tag[]; topLevelText: { start: nu
         attributes.push({ name: attrName, nameStart, value, valueStart, quoted });
       }
       const end = Math.min(j + 1, html.length);
-      tags.push({ name, start: i, end, closing, selfClosing: selfClosing || VOID.has(name), attributes });
+      // As the browser reads it, and MarkupScan in core: a `/>` closes no raw-text element,
+      // plaintext runs to the end, only `</name` as a whole name ends the others, and a script
+      // ends by the script data states.
+      if (closing) content.end(name);
+      const foreign = !closing && content.start(name, selfClosing, attributes);
+      const rawText = !closing && RAW_TEXT.has(name) && !foreign;
+      tags.push({ name, start: i, end, closing, selfClosing: (selfClosing && !rawText) || VOID.has(name), attributes });
+      if (rawText) {
+        const closeIdx = name === "plaintext" ? -1 : rawTextEnd(html, name, end);
+        i = closeIdx < 0 ? html.length : closeIdx;
+        depth++;
+        continue;
+      }
       if (!closing && !selfClosing && !VOID.has(name)) {
-        if (RAW_TEXT.has(name)) {
-          const closeIdx = indexOfAsciiIgnoreCase(html, `</${name}`, end);
-          i = closeIdx < 0 ? html.length : closeIdx;
-          depth++;
-          continue;
-        }
         depth++;
       } else if (closing) {
         depth = Math.max(0, depth - 1);
@@ -377,6 +676,15 @@ function closeImplied(stack: Tag[], opening: string): void {
 
 /** Datastar reads `500ms`, `1s`, and a bare number as milliseconds. */
 const DURATION = /^\d+(ms|s)?$/;
+
+/**
+ * `tagToMs` in tags.ts for one tag: the milliseconds the client waits, `Number` of what comes
+ * before an `ms` or an `s`, and `parseFloat` of any other tag, which reads `5x` as 5.
+ */
+const clientMs = (tag: string): number => {
+  const t = asciiLowercase(tag);
+  return t.endsWith("ms") ? Number(t.slice(0, -2)) : t.endsWith("s") ? Number(t.slice(0, -1)) * 1000 : Number.parseFloat(t);
+};
 
 /** Below this length a Datastar name has too many honest neighbours (test, kind, once) to judge a bare `data-*` at all. */
 const LONG_NAME = 6;
@@ -544,7 +852,7 @@ export function validateAttributes(tag: Tag, prefix: string, tagSource?: string,
         const from = at(start);
         return { start: attr.valueStart + from, end: attr.valueStart + (end > start ? Math.max(at(end), from + 1) : from) };
       };
-      for (const issue of validateExpression(decoded.text, spec.returnsValue, hyphenatedSignals)) {
+      for (const issue of validateExpression(decoded.text, undefined, hyphenatedSignals, spec)) {
         const fixes = issue.fixes?.map((f) => ({ ...f, ...source(f.start, f.end) }));
         issues.push({ ...issue, ...source(issue.start, issue.end), ...(fixes ? { fixes } : {}) });
       }
@@ -601,13 +909,6 @@ function clientCase(key: string, modifiers: { name: string; args: string[] }[], 
   return out;
 }
 
-/** `fooBar` -> `foo-bar`, one hyphen per capital, which Datastar's camel conversion turns back into `fooBar`. */
-export function kebab(name: string): string {
-  const out = name.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase());
-  // Only the hyphen a leading capital introduced is dropped; a CSS custom property keeps its `--`.
-  return /^[A-Z]/.test(name) ? out.replace(/^-/, "") : out;
-}
-
 /**
  * The key to write, and the `__case` to add, so that a key the author typed with capitals comes
  * back as that name: `foo-bar` for a signal (Datastar reads it as camelCase), `widget-loaded__case.camel`
@@ -635,12 +936,6 @@ export function wireKeyReads(key: string): string {
   return CASE_FNS.get(/^[A-Z]/.test(key) ? "pascal" : "camel")!(kebab(key));
 }
 
-/**
- * The browser lowercases attribute names, so a capital letter in a key never reaches Datastar:
- * `data-signals:fooBar` declares `$foobar`, `data-on:widgetLoaded` listens to `widgetloaded`.
- * The fix writes the key as [wireKey] says, so that the name the author typed is the name the
- * browser ends up with.
- */
 /** What a key is to Datastar: the noun the messages and the hover use, from `keyCase` in the catalog. */
 export function keyKind(spec: AttributeSpec): "signal" | "event" | "class" | "raw" {
   if (spec.keyCase === "camel") return "signal";
@@ -1049,6 +1344,12 @@ function validateFilter(attr: Attribute, spec: AttributeSpec, prefix: string): I
   return out;
 }
 
+/**
+ * The browser lowercases attribute names, so a capital letter in a key never reaches Datastar:
+ * `data-signals:fooBar` declares `$foobar`, `data-on:widgetLoaded` listens to `widgetloaded`.
+ * The fix writes the key as `wireKey` says, so that the name the author typed is the name the
+ * browser ends up with.
+ */
 function validateKeyCase(attr: Attribute, parsed: { key: string | null; base: string; modifiers: { name: string; args: string[] }[] }, spec: AttributeSpec, prefix: string): Issue[] {
   const colon = attr.name.indexOf(":");
   if (colon < 0 || !spec.keyCase) return [];
@@ -1108,7 +1409,7 @@ function validateKeyCase(attr: Attribute, parsed: { key: string | null; base: st
 }
 
 /** The actions the catalog lists as sending a request. */
-const BACKEND_ACTIONS = catalog.actions.filter((a) => a.kind === "backend").map((a) => a.name);
+const BACKEND_ACTIONS = catalog.backendActions;
 
 /** A call to one of them, written as Datastar parses it: no space before the parenthesis. */
 const BACKEND_ACTION = new RegExp("@(?:" + BACKEND_ACTIONS.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")\\(");
@@ -1164,12 +1465,36 @@ function dottedArguments(name: string, spec: AttributeSpec): string | null {
   return head + "." + args.join(".");
 }
 
-function validateModifierArgs(spec: AttributeSpec["modifiers"][number], args: string[], start: number, end: number, attrName: string, attribute: AttributeSpec, present: string[] = [], listensFor = ""): Issue[] {
+/** The modifiers whose value the client reads from the first tag, empty or not: `tagFirst` and `tagToMs` in tags.ts. */
+const FIRST_TAG_READ: ReadonlySet<string> = new Set(["duration", "int", "ident"]);
+
+function validateModifierArgs(spec: AttributeSpec["modifiers"][number], written: string[], start: number, end: number, attrName: string, attribute: AttributeSpec, present: string[] = [], listensFor = ""): Issue[] {
   const issues: Issue[] = [];
+  // An empty tag after the value, as in __threshold.50., or the one of __once., is nothing the client reads.
+  const args = written.filter((a) => a !== "");
   const fail = (message: string, fixes?: Issue["fixes"]) => issues.push({ start, end, message, severity: "error", code: "modifier-args", ...(fixes ? { fixes } : {}) });
   // Arguments the client never reads: the modifier still does what it does, so these are warnings.
   const ignored = (message: string, fixes?: Issue["fixes"]) => issues.push({ start, end, message, severity: "warning", code: "modifier-args", ...(fixes ? { fixes } : {}) });
-  const unknownFlag = (f: string) => ignored(`Unknown flag .${f} for __${spec.name}, which Datastar ignores. Allowed: ${(spec.flags ?? []).map((x) => "." + x).join(", ") || "none"}.`);
+  const unknownFlag = (f: string) => {
+    ignored(`Unknown flag .${f} for __${spec.name}, which Datastar ignores. Allowed: ${(spec.flags ?? []).map((x) => "." + x).join(", ") || "none"}.`);
+  };
+  const overruled = spec.ignoredWith?.find((m) => present.includes(m));
+  if (overruled) {
+    // __half__threshold.50: onIntersect.ts takes __half and never reads __threshold.
+    ignored(`Datastar ignores __${spec.name} with __${overruled}.`);
+    return issues;
+  }
+  if (FIRST_TAG_READ.has(spec.type) && written[0] === "" && args.length > 0) {
+    // __debounce..500ms: the client reads the empty tag as the value and never comes to .500ms.
+    // Without it, the modifier is the fix only if it holds up itself: __debounce..leading has no duration.
+    const fixed = "." + args.join(".");
+    const holds = validateModifierArgs(spec, args, start, end, attrName, attribute, present, listensFor).every((i) => i.severity !== "error");
+    fail(
+      `Datastar reads the first argument of __${spec.name}, which is empty here, and not .${args[0]}.${holds ? ` Write __${spec.name}${fixed}.` : ""}`,
+      holds ? [{ title: `Change to __${spec.name}${fixed}`, start: start + spec.name.length, end, text: fixed }] : undefined,
+    );
+    return issues;
+  }
   switch (spec.type) {
     case "flag": {
       // __prevent.stop: a second modifier joined with a dot, read as an argument.
@@ -1223,9 +1548,19 @@ function validateModifierArgs(spec: AttributeSpec["modifiers"][number], args: st
         for (const f of flags.slice(1)) if (!known(f)) unknownFlag(f);
         break;
       }
-      if (!d || !DURATION.test(d)) {
+      const read = d && !DURATION.test(d) ? clientMs(d) : Number.NaN;
+      if (d && Number.isFinite(read) && Math.abs(read) < 1e15) {
+        // Not written as a duration, but read as one: __debounce.5x waits 5 ms.
+        const at = start + spec.name.length;
+        const fix = read >= 0 && Number.isInteger(read) ? `${read}ms` : null;
+        ignored(
+          `Datastar reads __${spec.name}.${d} as ${read} ms.${fix ? ` Write __${spec.name}.${fix}.` : ""}`,
+          fix ? [{ title: `Change to __${spec.name}.${fix}`, start: at, end: at + 1 + d.length, text: `.${fix}` }] : undefined,
+        );
+      } else if (!d || !DURATION.test(d)) {
         fail(`__${spec.name} needs a duration such as __${spec.name}.500ms or __${spec.name}.1s.`);
-        if (!d) issues[issues.length - 1]!.fixes = [{ title: `Add .500ms`, start: start + spec.name.length, end: start + spec.name.length, text: ".500ms" }];
+        // A dot with nothing after it, __debounce., is no duration either, and the fix takes its place.
+        if (!d && args.length <= 1) issues[issues.length - 1]!.fixes = [{ title: `Add .500ms`, start: start + spec.name.length, end, text: ".500ms" }];
       }
       for (const f of flags) if (!known(f)) unknownFlag(f);
       break;
@@ -1252,9 +1587,15 @@ function validateModifierArgs(spec: AttributeSpec["modifiers"][number], args: st
     }
     case "int": {
       const [v, ...rest] = args;
-      const n = v !== undefined ? Number(v) : NaN;
-      if (!Number.isInteger(n) || (spec.min !== undefined && n < spec.min) || (spec.max !== undefined && n > spec.max)) {
-        fail(`__${spec.name} needs an integer${spec.min !== undefined ? ` between ${spec.min} and ${spec.max}` : ""}, e.g. __${spec.name}.50.`);
+      // The client reads Number of the first tag and clamps it (onIntersect.ts); NaN fails in the observer.
+      const n = Number(asciiLowercase(v ?? ""));
+      const { min, max } = spec;
+      if (Number.isNaN(n)) {
+        fail(`__${spec.name} needs an integer${min !== undefined ? ` between ${min} and ${max}` : ""}, e.g. __${spec.name}.50.`);
+      } else if (v === undefined) {
+        ignored(`Datastar reads __${spec.name} without a value as 0.`);
+      } else if ((min !== undefined && n < min) || (max !== undefined && n > max)) {
+        ignored(`Datastar clamps __${spec.name}.${v} to ${min !== undefined && n < min ? min : max}.`);
       }
       if (rest.length > 0) fail(`__${spec.name} takes a single value.`);
       break;

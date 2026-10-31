@@ -52,7 +52,7 @@ export function activate(context: vscode.ExtensionContext): void {
     let found: Issue[];
     const text = document.getText();
     if (document.languageId === "kotlin") {
-      found = analyzeKotlin(text, { prefix: prefix(), checkHtmlAttributes: true });
+      found = analyzeKotlin(text, { prefix: prefix(), checkHtmlAttributes: true, constants: signals.allConstants() });
       if (checkSignals()) found.push(...unknownSignals(document, signalReferencesInKotlin(text, prefix())));
     } else if (markup.has(document.languageId) && config().get<boolean>("diagnostics.html", true)) {
       found = analyzeHtml(text, { prefix: prefix(), checkHtmlAttributes: true });

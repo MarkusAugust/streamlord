@@ -5,6 +5,8 @@ import io.github.markusaugust.streamlord.core.SignalsDecodeException
 import io.github.markusaugust.streamlord.core.SignalsMediaTypeException
 import io.github.markusaugust.streamlord.core.SignalsTooLargeException
 import io.github.markusaugust.streamlord.core.protocol.DatastarAttributes
+import io.github.markusaugust.streamlord.wire.WireCases
+import io.github.markusaugust.streamlord.wire.WireTranscript
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application

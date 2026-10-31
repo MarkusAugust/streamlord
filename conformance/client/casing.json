@@ -1186,41 +1186,41 @@
       }
     },
     {
-      "key": "é-b",
-      "kebab": "é-b",
-      "camel": "éB",
-      "snake": "é_b",
-      "pascal": "ÉB",
+      "key": "\u00e9-b",
+      "kebab": "\u00e9-b",
+      "camel": "\u00e9B",
+      "snake": "\u00e9_b",
+      "pascal": "\u00c9B",
       "modifyCasing": {
-        "default camel": "éB",
-        "default kebab": "é-b",
-        "case.camel": "éB",
-        "case.kebab": "é-b",
-        "case.snake": "é_b",
-        "case.pascal": "ÉB",
-        "case.title": "é-b",
-        "case.snake.pascal": "É_b",
-        "case.pascal.snake": "ÉB",
-        "case.camel.snake": "éB"
+        "default camel": "\u00e9B",
+        "default kebab": "\u00e9-b",
+        "case.camel": "\u00e9B",
+        "case.kebab": "\u00e9-b",
+        "case.snake": "\u00e9_b",
+        "case.pascal": "\u00c9B",
+        "case.title": "\u00e9-b",
+        "case.snake.pascal": "\u00c9_b",
+        "case.pascal.snake": "\u00c9B",
+        "case.camel.snake": "\u00e9B"
       }
     },
     {
-      "key": "foo-é",
-      "kebab": "foo-é",
-      "camel": "fooÉ",
-      "snake": "foo_é",
-      "pascal": "FooÉ",
+      "key": "foo-\u00e9",
+      "kebab": "foo-\u00e9",
+      "camel": "foo\u00c9",
+      "snake": "foo_\u00e9",
+      "pascal": "Foo\u00c9",
       "modifyCasing": {
-        "default camel": "foo-é",
-        "default kebab": "foo-é",
-        "case.camel": "foo-é",
-        "case.kebab": "foo-é",
-        "case.snake": "foo_é",
-        "case.pascal": "Foo-é",
-        "case.title": "foo-é",
-        "case.snake.pascal": "Foo_é",
-        "case.pascal.snake": "Foo_é",
-        "case.camel.snake": "foo_é"
+        "default camel": "foo-\u00e9",
+        "default kebab": "foo-\u00e9",
+        "case.camel": "foo-\u00e9",
+        "case.kebab": "foo-\u00e9",
+        "case.snake": "foo_\u00e9",
+        "case.pascal": "Foo-\u00e9",
+        "case.title": "foo-\u00e9",
+        "case.snake.pascal": "Foo_\u00e9",
+        "case.pascal.snake": "Foo_\u00e9",
+        "case.camel.snake": "foo_\u00e9"
       }
     },
     {
@@ -1297,6 +1297,44 @@
         "case.snake.pascal": "Api_v2",
         "case.pascal.snake": "ApiV2",
         "case.camel.snake": "apiV2"
+      }
+    },
+    {
+      "key": "a-\ud801\udc28",
+      "kebab": "a-\ud801\udc28",
+      "camel": "a\ud801\udc28",
+      "snake": "a_\ud801\udc28",
+      "pascal": "A\ud801\udc28",
+      "modifyCasing": {
+        "default camel": "a-\ud801\udc28",
+        "default kebab": "a-\ud801\udc28",
+        "case.camel": "a-\ud801\udc28",
+        "case.kebab": "a-\ud801\udc28",
+        "case.snake": "a_\ud801\udc28",
+        "case.pascal": "A-\ud801\udc28",
+        "case.title": "a-\ud801\udc28",
+        "case.snake.pascal": "A_\ud801\udc28",
+        "case.pascal.snake": "A_\ud801\udc28",
+        "case.camel.snake": "a_\ud801\udc28"
+      }
+    },
+    {
+      "key": "a-\u0085b",
+      "kebab": "a-\u0085b",
+      "camel": "a\u0085b",
+      "snake": "a_\u0085b",
+      "pascal": "A\u0085b",
+      "modifyCasing": {
+        "default camel": "a-\u0085b",
+        "default kebab": "a-\u0085b",
+        "case.camel": "a-\u0085b",
+        "case.kebab": "a-\u0085b",
+        "case.snake": "a_\u0085b",
+        "case.pascal": "A-\u0085b",
+        "case.title": "a-\u0085b",
+        "case.snake.pascal": "A_\u0085b",
+        "case.pascal.snake": "A_\u0085b",
+        "case.camel.snake": "a_\u0085b"
       }
     }
   ]

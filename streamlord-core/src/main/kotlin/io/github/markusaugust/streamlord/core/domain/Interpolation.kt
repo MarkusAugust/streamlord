@@ -1,14 +1,25 @@
 package io.github.markusaugust.streamlord.core.domain
 
+import io.github.markusaugust.streamlord.core.InternalStreamlordApi
 import io.github.markusaugust.streamlord.core.StreamlordException
+import io.github.markusaugust.streamlord.core.catalog.CatalogNames
+import io.github.markusaugust.streamlord.core.client.asciiLowercase
+import io.github.markusaugust.streamlord.core.client.decodeEntities
+import io.github.markusaugust.streamlord.core.client.isHtmlSpace
+import org.intellij.lang.annotations.Language
 
 /**
  * Markup the caller vouches for, written into the output as it stands.
  *
  * [interpolate] escapes every value it is given and refuses the positions escaping cannot make
- * safe. Wrapping a value here waives both, which is the right thing for a fragment you rendered
- * yourself and the wrong thing for anything that came from a request. The type exists so that
- * waiver is a word in the source someone can search for.
+ * safe. Wrapping a value here waives both for that value, which is the right thing for a fragment
+ * you rendered yourself and the wrong thing for anything that came from a request. The type exists
+ * so that waiver is a word in the source someone can search for.
+ *
+ * It waives nothing for the values beside it. Its text becomes part of the markup, and they are
+ * judged against the markup as it will be written: `<%s %s="%s">` with `Trusted("button")` and
+ * `Trusted("onclick")` puts the third value in an event handler, which is refused, and so does
+ * `<%s>%s` with `Trusted("script")`, whose second value would be a program.
  *
  * ```kotlin
  * interpolate("""<li>%s</li>""", Trusted(renderBadge(user)))
@@ -17,7 +28,51 @@ import io.github.markusaugust.streamlord.core.StreamlordException
 @JvmInline
 public value class Trusted(
     public val html: String,
-)
+) {
+    /** The markup itself, so a Kotlin template that holds one writes the markup and not `Trusted(html=...)`. */
+    override fun toString(): String = html
+}
+
+/**
+ * Markup [interpolate] built: its own literals as written, every value escaped or refused.
+ *
+ * It can be handed on as markup, to `patchElements` or as a value in another [interpolate], where
+ * it is written as it stands in element text and judged as the text it is anywhere else: inside an
+ * attribute, markup is only characters, and they are escaped like any value. Only [interpolate]
+ * and [joinToHtml] make one, so holding an [Html] says where it came from.
+ *
+ * Element text means the data state on both sides. The [Html] has to close everything it opens,
+ * read as HTML and as the inside of an `<svg>` or `<math>`: a tag, an attribute value, a comment,
+ * a CDATA section, the body of a `<script>`, `<textarea>` or `<title>`, a `<` at its very end, an
+ * `<svg>` or a `<math>` and what is in them, a `<template>` and a `<select>`; and it may not end an
+ * element it did not open. The hole has to stand outside all of those in the outer markup. Otherwise the fragment would move
+ * every hole after it, `interpolate("<script>")` turning the next value into a program and
+ * `interpolate("<svg>")` turning a `<title>` after it into one that holds elements, so it is
+ * escaped like a string instead, and shows as the markup it is.
+ */
+@JvmInline
+public value class Html
+    @InternalStreamlordApi
+    constructor(
+        public val text: String,
+    ) {
+        /** The markup itself, so a Kotlin template that holds one writes the markup and not `Html(text=...)`. */
+        override fun toString(): String = text
+    }
+
+/**
+ * The markup of each [Html] in turn, with [separator] between them: a list of rows, say, as the
+ * one value of a hole.
+ *
+ * ```kotlin
+ * interpolate("<ul>%s</ul>", names.map { interpolate("<li>%s</li>", it) }.joinToHtml())
+ * ```
+ *
+ * Nothing is read again or escaped. Each piece already closes what it opens, so the pieces side
+ * by side do as well, and the result is markup like any other [Html].
+ */
+@OptIn(InternalStreamlordApi::class)
+public fun Iterable<Html>.joinToHtml(separator: Html = Html("")): Html = Html(joinToString(separator.text) { it.text })
 
 /** Where a value landed, which is what decides whether it can be made safe. */
 public enum class Position {
@@ -61,18 +116,29 @@ public enum class Position {
  * @property position Where it landed.
  * @property index Which value, counting the holes from zero.
  * @property attribute The attribute it landed in, when it landed in one.
+ * @property loadsCode Whether that attribute is a URL its tag loads and runs, or treats as its own
+ *   document, such as a script's `src`: a [Position.URL] where the literal before the hole has to
+ *   fix the host, which a safe scheme does not.
  */
 public class UnsafeInterpolationException(
     public val position: Position,
     public val index: Int,
     public val attribute: String? = null,
-) : StreamlordException(message(position, index, attribute)) {
+    public val loadsCode: Boolean = false,
+) : StreamlordException(message(position, index, attribute, loadsCode)) {
     private companion object {
         fun message(
             position: Position,
             index: Int,
             attribute: String?,
+            loadsCode: Boolean,
         ): String {
+            if (loadsCode) {
+                return "Value $index would land in $attribute, a URL its tag loads and runs, where the markup before it " +
+                    "does not fix the host, so any value could point the load at another origin, https or not. Write " +
+                    "the host into the markup before the hole, as in \"/js/%s\" or \"https://cdn.example.com/%s\", " +
+                    "or, if you chose the URL yourself, wrap it in Trusted(...)."
+            }
             val where =
                 when (position) {
                     Position.DATASTAR -> {
@@ -153,12 +219,21 @@ public class UnsafeInterpolationException(
  * takes a number only. A URL attribute (`href`, `src`, `action` and the like, and `values`,
  * `to` and `from` on SVG's animation elements) must come out, values and all, as a relative URL
  * or an `http`, `https`, `mailto` or `tel` one: `href="/heads/%s"` takes anything, and
- * `href="%s%s"` cannot be made into `javascript:` across its two holes.
+ * `href="%s%s"` cannot be made into `javascript:` across its two holes. A URL the browser loads
+ * and runs, a script's `src`, a `<link>`'s `href` and the like, must have its host fixed by the
+ * markup before the hole, as in `src="/js/%s"`. The URL a `<meta>` refresh reads from its
+ * `content` is held to the same schemes.
  *
- * The markup is read the way the browser's tokenizer reads it, and both as HTML and as the
- * inside of an `<svg>` or `<math>`, where a `title` or a `textarea` holds elements rather than
- * text. A value has to be safe both ways, so markup whose namespace cannot be told, a patch with
- * an SVG namespace among it, is judged as either.
+ * A [Trusted] value is not judged, and is read as the markup it is: the other values are judged
+ * where its text puts them, a tag or attribute name among it, and in a URL it counts as the
+ * markup around it does and vouches for nothing else there.
+ *
+ * The markup is read the way the browser's tokenizer reads it: as HTML, as the inside of an
+ * `<svg>` or `<math>`, where a `title` or a `textarea` holds elements rather than text, by the
+ * browser's element stack from HTML and from inside an svg or a math, and, where it holds a
+ * `noscript`, with scripting off, as the client parses a patch, and on, as a page loads. A value
+ * has to be safe every way, so markup whose namespace cannot be told, a patch with an SVG
+ * namespace among it, is judged as either.
  *
  * `%%` writes one `%`. A `%` followed by anything else is literal, so CSS and escaped URLs need
  * no ceremony; a hole is only ever `%s`, and a miscounted one fails here rather than quietly.
@@ -171,9 +246,9 @@ public class UnsafeInterpolationException(
  * @throws IllegalArgumentException if the number of values does not match the number of holes.
  */
 public fun interpolate(
-    format: String,
+    @Language("HTML") format: String,
     vararg values: Any?,
-): String = interpolate(format, values.asList(), ElementsGuard.defaultPrefixes)
+): Html = interpolate(format, values.asList(), ElementsGuard.defaultPrefixes)
 
 /**
  * [interpolate] with the values as a list, and the `data-*` prefixes to recognise.
@@ -183,70 +258,124 @@ public fun interpolate(
  * refuse a value in.
  */
 public fun interpolate(
-    format: String,
+    @Language("HTML") format: String,
     values: List<Any?>,
     prefixes: List<String> = ElementsGuard.defaultPrefixes,
-): String {
+): Html {
     val holes = holes(format)
     require(holes.size == values.size) {
         "The markup has ${holes.size} %s ${if (holes.size == 1) "hole" else "holes"} and ${values.size} " +
             "${if (values.size == 1) "value" else "values"} were given"
     }
-    if (holes.isEmpty()) return format.replace("%%", "%")
+    if (holes.isEmpty()) return Html(format.replace("%%", "%"))
 
-    val shadow = shadow(format, holes)
-    // Longest first, so `data-star-` is tried before `data-` whatever order the caller used.
-    val ordered = prefixes.sortedByDescending { it.length }
-    val landscapes = listOf(false, true).map { foreign -> Landscape(ordered, shadow).also { scanMarkup(shadow, it, foreign) } }
+    // A Trusted value is markup: it is read in place, and the other values are judged where its text puts them.
+    val known = HashMap<Int, String>()
+    for ((index, value) in values.withIndex()) if (value is Trusted) known[index] = value.html
+    val written = Written(format, holes.map { it until it + 2 }, known, percents = true)
+    val text = written.text
+    val landscapes = landscapes(text, written.open, prefixes)
 
-    val out = StringBuilder(format.length + values.size * 16)
+    val out = StringBuilder(text.length + values.size * 16)
     var cut = 0
-    for ((index, hole) in holes.withIndex()) {
-        out.literal(format, cut, hole)
+    for ((index, value) in values.withIndex()) {
+        if (value is Trusted) continue
+        val hole = written.starts[index]
+        out.append(text, cut, hole)
         cut = hole + 2
-
-        when (val value = values[index]) {
-            is Trusted -> {
-                out.append(value.html)
-            }
-
-            else -> {
-                for (landscape in landscapes) {
-                    val position = landscape.positionOf(hole)
-                    if (!position.admits(value)) {
-                        throw UnsafeInterpolationException(position, index, landscape.attributeAt(hole))
-                    }
-                }
-                out.escaped(value)
-            }
+        val landing = landingOf(landscapes, hole)
+        // Markup interpolate built is markup where it starts and ends in the data state in
+        // every reading, so that it cannot move the holes after it; anywhere else it is characters.
+        if (value is Html && landing.position == Position.TEXT && landscapes.all { it.inData(hole) && it.closes(value.text) }) {
+            out.append(value.text)
+        } else {
+            if (!landing.position.admits(value)) throw UnsafeInterpolationException(landing.position, index, landing.attribute)
+            out.escaped(value)
         }
     }
-    out.literal(format, cut, format.length)
-    for (landscape in landscapes) landscape.checkUrls(format, holes, values)
-    return out.toString()
+    out.append(text, cut, text.length)
+    for (landscape in landscapes) landscape.checkUrls(text, written.starts.asList(), values)
+    return Html(out.toString())
 }
 
 /**
- * A span of the markup itself, with `%%` collapsed to one `%`.
+ * Markup as it will be written, as far as that is known before the values are escaped: each hole
+ * whose text is known, a [Trusted] value's, replaced by that text, and every other hole left
+ * standing to be shadowed. With [percents], as a format is, `%%` in the literal is one `%`; a
+ * known text is written as it stands, `%%` and all.
  *
- * Only the literal spans pass through here. A value that happens to contain `%%` is data, and
- * data is never read back as markup.
+ * @property starts Where each hole, known or not, begins in [text], by its index.
+ * @property open The holes whose text is not known, as spans of [text].
  */
-private fun StringBuilder.literal(
-    format: String,
-    from: Int,
-    to: Int,
+private class Written(
+    markup: String,
+    holes: List<IntRange>,
+    known: Map<Int, String>,
+    percents: Boolean,
 ) {
-    var i = from
-    while (i < to) {
-        val ch = format[i]
-        if (ch == '%' && i + 1 < to && format[i + 1] == '%') {
-            append('%')
-            i += 2
-        } else {
-            append(ch)
-            i++
+    val text: String
+    val starts = IntArray(holes.size)
+    val open = ArrayList<IntRange>(holes.size - known.size)
+
+    // Runs of [text] in order: where each starts, where in the markup it came from, and whether it is a known text.
+    private val runStarts = ArrayList<Int>()
+    private val runSources = ArrayList<Int>()
+    private val runKnown = ArrayList<Boolean>()
+
+    init {
+        val out = StringBuilder(markup.length + known.values.sumOf { it.length })
+
+        fun run(
+            source: Int,
+            isKnown: Boolean,
+        ) {
+            runStarts += out.length
+            runSources += source
+            runKnown += isKnown
         }
+
+        fun literal(
+            from: Int,
+            to: Int,
+        ) {
+            run(from, false)
+            var i = from
+            while (i < to) {
+                if (percents && markup[i] == '%' && i + 1 < to && markup[i + 1] == '%') {
+                    out.append('%')
+                    i += 2
+                    run(i, false)
+                } else {
+                    out.append(markup[i])
+                    i++
+                }
+            }
+        }
+
+        var cut = 0
+        for (index in holes.indices.sortedBy { holes[it].first }) {
+            val hole = holes[index]
+            literal(cut, hole.first)
+            starts[index] = out.length
+            val text = known[index]
+            if (text != null) {
+                run(hole.first, true)
+                out.append(text)
+            } else {
+                run(hole.first, false)
+                open += out.length until out.length + (hole.last - hole.first + 1)
+                out.append(markup, hole.first, hole.last + 1)
+            }
+            cut = hole.last + 1
+        }
+        literal(cut, markup.length)
+        text = out.toString()
+    }
+
+    /** Where [at] in [text] came from in the markup; within a known text, where its hole begins. */
+    fun sourceOf(at: Int): Int {
+        val run = lastAtOrBefore(runStarts, at)
+        return if (runKnown[run]) runSources[run] else runSources[run] + at - runStarts[run]
     }
 }
 
@@ -280,7 +409,7 @@ private val SAFE_SCHEMES = setOf("http", "https", "mailto", "tel")
 internal fun safeUrl(url: String): Boolean {
     val read = url.filterNot { it == '\t' || it == '\n' || it == '\r' }.trimStart { it <= ' ' }
     val scheme = SCHEME.find(read)?.groupValues?.get(1) ?: return true
-    return scheme.lowercase() in SAFE_SCHEMES
+    return scheme.asciiLowercase() in SAFE_SCHEMES
 }
 
 private fun StringBuilder.escaped(value: Any?) {
@@ -298,7 +427,207 @@ private fun StringBuilder.escaped(value: Any?) {
 }
 
 /**
- * [format] with every hole replaced by two letters, which keeps every offset where it was.
+ * Where one hole in a piece of markup lands, as [interpolate] judges it.
+ *
+ * The editors judge a Kotlin template in an HTML string with this, so that a hole is refused or
+ * let through by the same reading in the editor as at run time.
+ *
+ * @property position The strictest of the positions the hole takes in the readings of the markup;
+ *   see [interpolate].
+ * @property attribute The attribute it landed in, when it landed in a quoted one.
+ * @property valueStart Where that attribute's value starts in the markup, or -1.
+ * @property loadsCode Whether that attribute is a URL the browser loads and runs, or treats as its
+ *   own document, on its tag: `src` of a `<script>`, `<iframe>` or `<embed>`, `href` of a `<base>`,
+ *   a `<link>` or an SVG `<script>`, `data` of an `<object>`. A hole there is judged by
+ *   [urlHostFixedBy] rather than [urlSchemeFixedBy].
+ */
+@InternalStreamlordApi
+public class HoleLanding(
+    public val position: Position,
+    public val attribute: String?,
+    public val valueStart: Int,
+    public val loadsCode: Boolean,
+)
+
+/**
+ * Where each of [holes] lands in [markup]. A hole is any span the caller will fill: `%s` to
+ * [interpolate], a Kotlin template to the editors. Each is read as a run of letters, so `<%s>` is
+ * a tag whose name is the hole.
+ *
+ * [known] holds the text of the holes, by index, whose content is known to be markup, as a
+ * [Trusted] value's is: the markup is read with that text in place of the hole, as [interpolate]
+ * reads it, so `<%s>` with `script` known puts the next hole in a script. A known hole is not
+ * judged, and its landing is [Position.TEXT] with no attribute. A [HoleLanding.valueStart] is an
+ * offset into [markup] still; one that falls inside a known text is where that hole begins.
+ */
+@InternalStreamlordApi
+public fun holeLandings(
+    markup: String,
+    holes: List<IntRange>,
+    prefixes: List<String> = ElementsGuard.defaultPrefixes,
+    known: Map<Int, String> = emptyMap(),
+): List<HoleLanding> {
+    val written = Written(markup, holes, known, percents = false)
+    val landscapes = landscapes(written.text, written.open, prefixes)
+    return holes.indices.map { index ->
+        if (index in known) {
+            HoleLanding(Position.TEXT, null, -1, false)
+        } else {
+            val landing = landingOf(landscapes, written.starts[index])
+            if (landing.valueStart < 0) {
+                landing
+            } else {
+                HoleLanding(landing.position, landing.attribute, written.sourceOf(landing.valueStart), landing.loadsCode)
+            }
+        }
+    }
+}
+
+/**
+ * Whether the start of a URL attribute's value, the literal text before its first hole, already
+ * settles the scheme, so that no value written after it can make the URL run: a `/`, `?` or `#`
+ * before any `:`, or a whole scheme that only navigates. Read as [safeUrl] reads, after entities
+ * are decoded; in `values`, a list, only the entry the hole is in counts.
+ */
+@InternalStreamlordApi
+public fun urlSchemeFixedBy(
+    attribute: String,
+    prefix: String,
+): Boolean {
+    val decoded = decodeEntities(prefix).text
+    val entry = if (attribute.asciiLowercase() == "values") decoded.substringAfterLast(';') else decoded
+    val read = entry.filterNot { it == '\t' || it == '\n' || it == '\r' }.trimStart { it <= ' ' }
+    for (c in read) {
+        when (c) {
+            '/', '?', '#' -> {
+                return true
+            }
+
+            ':' -> {
+                return SCHEME
+                    .find(read)
+                    ?.groupValues
+                    ?.get(1)
+                    ?.asciiLowercase() in SAFE_SCHEMES
+            }
+        }
+    }
+    return false
+}
+
+/**
+ * Whether the start of a code-loading URL attribute's value, the literal text before its first
+ * hole, already fixes the host, so that no value written after it can point the load at another
+ * origin: a path-absolute `/x` (a single `/` and then a character that is not `/` or `\`, so a
+ * value cannot make it `//host`), a same-document `#` or `?`, or a whole origin `scheme://host/`
+ * with a safe scheme. A bare `/`, or a host the literal does not terminate, is not enough. Read as
+ * [urlSchemeFixedBy] reads, after entities are decoded; in `values`, only the entry the hole is in.
+ */
+@InternalStreamlordApi
+public fun urlHostFixedBy(
+    attribute: String,
+    prefix: String,
+): Boolean {
+    val decoded = decodeEntities(prefix).text
+    val entry = if (attribute.asciiLowercase() == "values") decoded.substringAfterLast(';') else decoded
+    val read = entry.filterNot { it == '\t' || it == '\n' || it == '\r' }.trimStart { it <= ' ' }
+    val first = read.firstOrNull() ?: return false
+    if (first == '#' || first == '?') return true
+    if (first == '/') return read.getOrNull(1).let { it != null && it != '/' && it != '\\' }
+    // scheme://host/ : a safe scheme, `//`, authority characters, then a terminator in the literal.
+    val scheme = SCHEME.find(read) ?: return false
+    if (scheme.groupValues[1].asciiLowercase() !in SAFE_SCHEMES) return false
+    var i = scheme.value.length
+    if (!read.startsWith("//", i)) return false
+    i += 2
+    while (i < read.length && read[i] != '/' && read[i] != '?' && read[i] != '#') i++
+    return i < read.length
+}
+
+/** The index of the last of [sorted] that is at most [at], or -1. */
+private fun lastAtOrBefore(
+    sorted: List<Int>,
+    at: Int,
+): Int {
+    var low = 0
+    var high = sorted.size - 1
+    while (low <= high) {
+        val mid = (low + high) ushr 1
+        if (sorted[mid] <= at) low = mid + 1 else high = mid - 1
+    }
+    return high
+}
+
+/** Each position's place in what it lets in: everything, a number or a boolean, a number, nothing. */
+private val STRICTNESS =
+    listOf(Position.TEXT, Position.ATTRIBUTE, Position.URL, Position.DATASTAR, Position.STYLE, Position.STRUCTURE, Position.CODE)
+
+/** One way of reading markup, as [scanMarkup] takes it. */
+private class Reading(
+    val foreign: Boolean = false,
+    val cdata: Boolean = false,
+    val tracked: Boolean = false,
+    val scripting: Boolean = false,
+    val context: Int = NS_HTML,
+    val htmlStaysOpen: Boolean = true,
+) {
+    fun scan(
+        html: String,
+        visitor: MarkupVisitor,
+    ): Boolean = scanMarkup(html, visitor, foreign, cdata, tracked, scripting, context, htmlStaysOpen)
+
+    fun withScripting(): Reading = Reading(foreign, cdata, tracked, scripting = true, context = context, htmlStaysOpen = htmlStaysOpen)
+}
+
+/**
+ * The readings of the markup. Three fixed ones: as HTML, as svg or math, as svg or math whose CDATA
+ * sections are text. And the ones that follow the browser's element stack and switch rule by
+ * position (see scanMarkup), starting in HTML as a patch in a `<template>` does, inside an `<svg>`
+ * as a patch in the svg namespace does, and inside a `<math>`. A hole takes the strictest position
+ * of them all. The fixed readings each hold one rule throughout and so each miss where the markup
+ * changes context partway; the tracked readings catch those, while the fixed ones stay a
+ * conservative floor. From inside an svg and a math, the stack is followed twice: once with every
+ * HTML element open to its end tag, and once with none opened from the svg or math left open, as
+ * when the browser closes a `<p>` at the next `<p>` or `<div>` and is back in the svg.
+ *
+ * Markup with a `noscript` is read twice over: with scripting off, as the client parses a patch,
+ * where it holds elements, and with scripting on, as a page loads, where it is text to its end tag.
+ */
+private fun landscapes(
+    markup: String,
+    holes: List<IntRange>,
+    prefixes: List<String>,
+): List<Landscape> {
+    val shadow = shadow(markup, holes)
+    // Longest first, so `data-star-` is tried before `data-` whatever order the caller used.
+    val ordered = prefixes.sortedByDescending { it.length }
+    val scripting = if (mentionsNoscript(shadow)) listOf(false, true) else listOf(false)
+    val readings =
+        scripting.map { Reading(scripting = it) } +
+            listOf(Reading(foreign = true), Reading(foreign = true, cdata = true)) +
+            listOf(NS_HTML, NS_SVG, NS_MATH).flatMap { context ->
+                scripting.map { Reading(tracked = true, scripting = it, context = context) }
+            } +
+            listOf(NS_SVG, NS_MATH).flatMap { context ->
+                scripting.map { Reading(tracked = true, scripting = it, context = context, htmlStaysOpen = false) }
+            }
+    val holeEnds = holes.associate { it.first to it.last + 1 }
+    return readings.map { reading -> Landscape(ordered, reading, shadow, holeEnds).also { reading.scan(shadow, it) } }
+}
+
+/** Whether a `noscript` may stand in [html], which only then reads differently with scripting on. */
+private fun mentionsNoscript(html: String): Boolean = html.contains("noscript", ignoreCase = true)
+
+private fun landingOf(
+    landscapes: List<Landscape>,
+    hole: Int,
+): HoleLanding {
+    val strictest = landscapes.maxBy { STRICTNESS.indexOf(it.positionOf(hole)) }
+    return HoleLanding(strictest.positionOf(hole), strictest.attributeAt(hole), strictest.valueStartAt(hole), strictest.loadsCodeAt(hole))
+}
+
+/**
+ * [markup] with every hole replaced by letters, which keeps every offset where it was.
  *
  * The walk has to see the markup as the browser will once the values are in place. `<%s>` is not
  * a tag to a scanner that wants a letter after the `<`, and a hole nobody reads as a tag name is
@@ -306,13 +635,12 @@ private fun StringBuilder.escaped(value: Any?) {
  * tag, and the hole inside it is structure.
  */
 private fun shadow(
-    format: String,
-    holes: List<Int>,
+    markup: String,
+    holes: List<IntRange>,
 ): String {
-    val chars = format.toCharArray()
+    val chars = markup.toCharArray()
     for (hole in holes) {
-        chars[hole] = 'd'
-        chars[hole + 1] = 's'
+        for (i in hole) chars[i] = if (i == hole.first) 'd' else 's'
     }
     return String(chars)
 }
@@ -348,32 +676,76 @@ private fun holes(format: String): List<Int> {
 private val URL_ATTRIBUTES =
     setOf("href", "src", "action", "formaction", "xlink:href", "poster", "data", "cite", "background", "ping", "manifest")
 
+/** What the markup after a hole in a comment may begin with for dashes or a `!` in the value to end the comment there. */
+private val COMMENT_CLOSERS = listOf(">", "!>", "->", "-!>")
+
 /** SVG's animation elements, whose `values`, `to` and `from` can set an `href`. */
 private val ANIMATION_TAGS = setOf("animate", "set", "animatetransform", "animatemotion")
 private val ANIMATION_URL_ATTRIBUTES = setOf("values", "to", "from")
 
 /**
- * [text] with the character references a browser decodes in an attribute value decoded: the
- * numeric ones and the few named ones that can spell a scheme. Anything else is left as written.
+ * URL attributes that load what the browser then runs or treats as its own document, by tag: a
+ * value here must come out on the author's own host, not merely with a safe scheme. `srcdoc` and
+ * an `on*` handler are [Position.CODE] already, not URLs.
  */
-private fun decodeReferences(text: String): String =
-    REFERENCE.replace(text) { m ->
-        val (hex, dec, name) = m.destructured
-        when {
-            hex.isNotEmpty() -> hex.toIntOrNull(16)?.takeIf(Character::isValidCodePoint)?.let { Character.toString(it) }
-            dec.isNotEmpty() -> dec.toIntOrNull()?.takeIf(Character::isValidCodePoint)?.let { Character.toString(it) }
-            else -> NAMED_REFERENCES[name]
-        } ?: m.value
-    }
+private val CODE_URL_ATTRIBUTES =
+    mapOf(
+        "script" to setOf("src", "href", "xlink:href"),
+        "base" to setOf("href"),
+        "iframe" to setOf("src"),
+        "embed" to setOf("src"),
+        "object" to setOf("data"),
+        "link" to setOf("href"),
+    )
 
-private val REFERENCE = Regex("""&(?:#[xX]([0-9a-fA-F]+);?|#([0-9]+);?|([A-Za-z]+);)""")
-private val NAMED_REFERENCES =
-    mapOf("amp" to "&", "colon" to ":", "Tab" to "\t", "NewLine" to "\n", "sol" to "/", "quest" to "?", "num" to "#", "period" to ".")
+/**
+ * The URLs a refresh could read from a `<meta>`'s `content`, none when it does not start with a
+ * time: what follows the time and its separator, with and without a leading `url=` and a quote. A
+ * candidate too many only refuses more.
+ */
+private fun refreshUrls(content: String): List<String> {
+    var i = 0
+    while (i < content.length && content[i].isHtmlSpace()) i++
+    if (i >= content.length || (content[i] !in '0'..'9' && content[i] != '.')) return emptyList()
+    while (i < content.length && (content[i] in '0'..'9' || content[i] == '.')) i++
+    while (i < content.length && (content[i].isHtmlSpace() || content[i] == ';' || content[i] == ',')) i++
+    val rest = content.substring(i)
+    val key = REFRESH_URL_KEY.find(rest)
+    val url = if (key == null) rest else rest.substring(key.range.last + 1)
+    return listOf(rest, url).flatMap { listOf(it, it.trimStart('"', '\'')) }
+}
+
+private val REFRESH_URL_KEY = Regex("^[Uu][Rr][Ll][\\t\\n\\u000C\\r ]*=[\\t\\n\\u000C\\r ]*")
+
+/** The span of [text] from [from] to [to] as it will be written, with the values of the holes [inside] it escaped. */
+private fun written(
+    text: String,
+    from: Int,
+    to: Int,
+    inside: List<Int>,
+    holes: List<Int>,
+    values: List<Any?>,
+): String {
+    val out = StringBuilder()
+    var cut = from
+    for (index in inside) {
+        out.append(text, cut, holes[index])
+        out.escaped(values[index])
+        cut = holes[index] + 2
+    }
+    out.append(text, cut, to)
+    return out.toString()
+}
 
 private class Landscape(
     private val prefixes: List<String>,
+    private val reading: Reading,
+    // The shadowed markup this landscape reads, and where each hole in it ends, by where it starts.
     private val markup: String,
+    private val holeEnds: Map<Int, Int>,
 ) : MarkupVisitor {
+    private val declarationStarts = ArrayList<Int>()
+    private val declarationEnds = ArrayList<Int>()
     private val attributeNames = ArrayList<String>()
     private val attributeTags = ArrayList<String>()
     private val attributeStarts = ArrayList<Int>()
@@ -382,6 +754,8 @@ private class Landscape(
     private val tagEnds = ArrayList<Int>()
     private val codeStarts = ArrayList<Int>()
     private val codeEnds = ArrayList<Int>()
+    private val opaqueStarts = ArrayList<Int>()
+    private val opaqueEnds = ArrayList<Int>()
 
     override fun attribute(
         tag: String,
@@ -394,7 +768,7 @@ private class Landscape(
         // attributes beside it. It is left to the tag spans, which refuse.
         if (!quoted || valueStart < 0) return
         attributeNames += name
-        attributeTags += tag.lowercase()
+        attributeTags += tag.asciiLowercase()
         attributeStarts += valueStart
         attributeEnds += valueEnd
     }
@@ -415,10 +789,47 @@ private class Landscape(
         codeEnds += end
     }
 
+    override fun opaque(
+        start: Int,
+        end: Int,
+    ) {
+        opaqueStarts += start
+        opaqueEnds += end
+    }
+
+    override fun declaration(
+        start: Int,
+        end: Int,
+    ) {
+        declarationStarts += start
+        declarationEnds += end
+        opaque(start, end)
+    }
+
+    /**
+     * Whether a value at [hole] in the declaration that begins at [start] could end it or change
+     * what it is, though escaping takes its `<` and `>`: `--` or `[CDATA[` after `<!` turns a bogus
+     * comment into a comment or a section, and dashes, a `!` or a `]` before the `>` the markup
+     * writes after the hole close a comment or a section early.
+     */
+    private fun reshapes(
+        start: Int,
+        hole: Int,
+    ): Boolean {
+        val end = holeEnds[hole] ?: return false
+        val after = markup.substring(end, minOf(markup.length, end + 3))
+        if (markup.startsWith("<!--", start)) return COMMENT_CLOSERS.any { after.startsWith(it) }
+        if (!markup.startsWith("<!", start)) return false
+        val between = markup.substring(start + 2, hole)
+        return (between.length < 2 && "--".startsWith(between)) ||
+            (between.length < 7 && "[CDATA[".startsWith(between)) ||
+            (markup.startsWith("<![CDATA[", start) && (after.startsWith(">") || after.startsWith("]>")))
+    }
+
     fun positionOf(hole: Int): Position {
         val attribute = indexOfSpan(hole, attributeStarts, attributeEnds)
         if (attribute >= 0) {
-            val name = attributeNames[attribute].lowercase()
+            val name = attributeNames[attribute].asciiLowercase()
             return when {
                 datastar(name) -> Position.DATASTAR
                 name.startsWith("on") || name == "srcdoc" -> Position.CODE
@@ -429,48 +840,92 @@ private class Landscape(
         }
         if (indexOfSpan(hole, tagStarts, tagEnds) >= 0) return Position.STRUCTURE
         if (indexOfSpan(hole, codeStarts, codeEnds) >= 0) return Position.CODE
+        val declaration = indexOfSpan(hole, declarationStarts, declarationEnds)
+        if (declaration >= 0 && reshapes(declarationStarts[declaration], hole)) return Position.STRUCTURE
         return Position.TEXT
     }
 
     private fun isUrl(attribute: Int): Boolean {
-        val name = attributeNames[attribute].lowercase()
-        return name in URL_ATTRIBUTES || (name in ANIMATION_URL_ATTRIBUTES && attributeTags[attribute] in ANIMATION_TAGS)
+        val name = attributeNames[attribute].asciiLowercase()
+        return name in URL_ATTRIBUTES ||
+            (name in ANIMATION_URL_ATTRIBUTES && attributeTags[attribute] in ANIMATION_TAGS) ||
+            codeUrl(attribute)
     }
+
+    private fun codeUrl(attribute: Int): Boolean =
+        attributeNames[attribute].asciiLowercase() in CODE_URL_ATTRIBUTES[attributeTags[attribute]].orEmpty()
+
+    /** Whether this is the `content` of a `<meta>`, which, as an `http-equiv="refresh"` reads it, can hold a URL. */
+    private fun refreshContent(attribute: Int): Boolean =
+        attributeTags[attribute] == "meta" && attributeNames[attribute].asciiLowercase() == "content"
 
     /**
      * Throws for the first URL attribute with a hole whose value, every value in place, would
      * carry a scheme that does more than navigate. A list of them, as `values` holds, is judged
-     * entry by entry.
+     * entry by entry, and the `content` of a `<meta>` by the URL a refresh would read from it.
+     *
+     * [text] is the markup as [Written] has it, every [Trusted] value's text in place: it counts
+     * toward the URL as the literal does and vouches for nothing beside it, so `href="%s%s"` with
+     * `Trusted("")` first still refuses `javascript:` in the second. Only a URL with nothing but
+     * Trusted values in it goes unjudged.
      */
     fun checkUrls(
-        format: String,
+        text: String,
         holes: List<Int>,
         values: List<Any?>,
     ) {
         for (attribute in attributeStarts.indices) {
-            if (!isUrl(attribute)) continue
+            val refresh = refreshContent(attribute)
+            if (!refresh && !isUrl(attribute)) continue
             val start = attributeStarts[attribute]
             val end = attributeEnds[attribute]
-            val inside = holes.indices.filter { holes[it] in start until end }
-            // Trusted waives every check, this one included.
-            if (inside.isEmpty() || inside.any { values[it] is Trusted }) continue
-            val value = StringBuilder()
-            var cut = start
-            for (index in inside) {
-                value.append(decodeReferences(format.substring(cut, holes[index]).replace("%%", "%")))
-                value.append(values[index].let { if (it is Trusted) it.html else it?.toString().orEmpty() })
-                cut = holes[index] + 2
+            val first = lastAtOrBefore(holes, start - 1) + 1
+            val inside = (first until holes.size).takeWhile { holes[it] < end }.filter { values[it] !is Trusted }
+            val untrusted = inside.firstOrNull() ?: continue
+            val name = attributeNames[attribute]
+            // A code-loading URL has to have its host fixed before the first value nobody vouched
+            // for; a safe scheme is not enough, since a safe scheme can still point at another origin.
+            if (!refresh && codeUrl(attribute)) {
+                if (!urlHostFixedBy(name, text.substring(start, holes[untrusted]))) {
+                    throw UnsafeInterpolationException(Position.URL, untrusted, name, loadsCode = true)
+                }
+                continue
             }
-            value.append(decodeReferences(format.substring(cut, end).replace("%%", "%")))
-            val entries = if (attributeNames[attribute].lowercase() == "values") value.split(';') else listOf(value.toString())
-            if (entries.any { !safeUrl(it) }) throw UnsafeInterpolationException(Position.URL, inside.first(), attributeNames[attribute])
+            // The attribute as it will be written, decoded once, as the browser does: a reference
+            // the literal begins can end in the value, `&%s` and `#106;` making a `j`.
+            val value = decodeEntities(written(text, start, end, inside, holes, values)).text
+            val entries =
+                when {
+                    refresh -> refreshUrls(value)
+                    name.asciiLowercase() == "values" -> value.split(';')
+                    else -> listOf(value)
+                }
+            if (entries.any { !safeUrl(it) }) throw UnsafeInterpolationException(Position.URL, untrusted, name)
         }
     }
 
+    /**
+     * Whether [hole] is in the data state: text, and not a tag, a comment, a CDATA section or the
+     * body of a `textarea` or a `title`, which only their own closing sequence ends and which markup
+     * written there could end. The walk has already found each of those spans, so this is a lookup.
+     */
+    fun inData(hole: Int): Boolean = indexOfSpan(hole, tagStarts, tagEnds) < 0 && indexOfSpan(hole, opaqueStarts, opaqueEnds) < 0
+
+    /**
+     * Whether [html], read in this landscape, leaves nothing open for the markup after it to fall
+     * into, with scripting on as well when it holds a `noscript`.
+     */
+    fun closes(html: String): Boolean =
+        reading.scan(html, Discard) && (reading.scripting || !mentionsNoscript(html) || reading.withScripting().scan(html, Discard))
+
+    fun valueStartAt(hole: Int): Int = indexOfSpan(hole, attributeStarts, attributeEnds).let { if (it >= 0) attributeStarts[it] else -1 }
+
     fun attributeAt(hole: Int): String? = indexOfSpan(hole, attributeStarts, attributeEnds).takeIf { it >= 0 }?.let { attributeNames[it] }
 
+    fun loadsCodeAt(hole: Int): Boolean = indexOfSpan(hole, attributeStarts, attributeEnds).let { it >= 0 && codeUrl(it) }
+
     // Their value is a signal path the client follows without a guard (bind.ts, ref.ts, indicator.ts).
-    private val signalPaths = setOf("bind", "ref", "indicator")
+    private val signalPaths = CatalogNames.signalAttributes
 
     private fun datastar(lower: String): Boolean {
         val prefix = prefixes.firstOrNull { lower.startsWith(it) } ?: return false
@@ -479,14 +934,13 @@ private class Landscape(
         return name in ElementsGuard.evaluatedAttributes || name in signalPaths
     }
 
+    /** The span [at] is in, or -1. Spans are found in order and never overlap, so the last to start at or before it is the one. */
     private fun indexOfSpan(
         at: Int,
         starts: List<Int>,
         ends: List<Int>,
     ): Int {
-        for (i in starts.indices) {
-            if (at >= starts[i] && at < ends[i]) return i
-        }
-        return -1
+        val i = lastAtOrBefore(starts, at)
+        return if (i >= 0 && at < ends[i]) i else -1
     }
 }

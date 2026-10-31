@@ -1,5 +1,12 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.client.CLIENT_SIGNAL
+import io.github.markusaugust.streamlord.core.client.ClientCasing
+import io.github.markusaugust.streamlord.core.client.ClientScript
+import io.github.markusaugust.streamlord.core.client.Rewrite
+import io.github.markusaugust.streamlord.core.client.asciiLowercase
+import io.github.markusaugust.streamlord.core.client.clientRewrite
+
 /*
  * Validation of Datastar expressions. A Datastar expression is JavaScript in which `$name` is a
  * signal and `@name(` is an action. The client rewrites both with one pattern before it compiles
@@ -10,7 +17,6 @@ package io.github.markusaugust.streamlord.analysis
 private val SPACED_ACTION = Regex("""@([A-Za-z_$][A-Za-z0-9_$]*)(\s+)\(""")
 private val SIGNAL_PREFIX = Regex("""\$([A-Za-z_][A-Za-z0-9_.]*)?$""")
 private val ACTION_PREFIX = Regex("""@([A-Za-z_][A-Za-z0-9_]*)?$""")
-private val KEBAB_PART = Regex("""-([a-z])""")
 private val WORD_CHAR = Regex("""\w""")
 
 /** The quote of the single-, double- or backtick-quoted JavaScript string literal the offset is inside, or null. */
@@ -103,6 +109,73 @@ private fun regexEnds(text: String): IntArray {
         }
     }
     return out
+}
+
+// A name standing on its own: no `.` or `@` before it (a property, an action), and no name character
+// on either side, any character beyond ASCII counted as one, as the editor's twin counts it.
+private val NAME_EDGE = "A-Za-z0-9_$\\x{80}-\\x{10FFFF}"
+
+private val BINDS_NAMES = Regex("""=>|\bfunction\b|\b(?:let|const|var)\b""")
+
+/**
+ * For each name a free attribute's expression is handed and the others are not, the attributes
+ * that hand it over: `patch` in `data-on-signal-patch`. [pattern] finds the names, null for none.
+ */
+private class HandedIn(
+    catalog: Catalog,
+) {
+    val attributes: Map<String, List<String>> =
+        catalog.attributes
+            .filter { !it.pro }
+            .flatMap { a -> a.argNames.filter { it !in catalog.compiledParameters }.map { it to a.name } }
+            .groupBy({ it.first }, { it.second })
+
+    val pattern: Regex? =
+        attributes.keys.takeIf { it.isNotEmpty() }?.let { names ->
+            Regex("(?<![$NAME_EDGE.@])(" + names.joinToString("|") { Regex.escape(it) } + ")(?![$NAME_EDGE])")
+        }
+}
+
+/**
+ * `patch` in the expression of an attribute [spec] whose plugin does not hand it over: Datastar
+ * compiles each expression with the names its plugin declares, so `patch` in `data-text` throws a
+ * ReferenceError. [handed] names the attributes that hand each such name over. An expression
+ * that declares a function or a variable may bind the name itself and is left alone, and so is a
+ * Pro attribute, whose plugin is not read here.
+ */
+private fun scopeNameIssues(
+    text: String,
+    spec: AttributeSpec,
+    handed: HandedIn,
+): List<Issue> {
+    val names = handed.pattern ?: return emptyList()
+    if (spec.pro || spec.valueKind != ValueKind.EXPRESSION || BINDS_NAMES.containsMatchIn(text)) return emptyList()
+    val regions = jsRegions(text)
+    return names
+        .findAll(text)
+        .filter { m ->
+            val name = m.value
+            var b = m.range.first - 1
+            while (b >= 0 && isJsSpace(text[b])) b--
+            var a = m.range.last + 1
+            while (a < text.length && isJsSpace(text[a])) a++
+            val before = text.getOrNull(b)
+            val after = text.getOrNull(a)
+            // A key of an object literal, `{patch: 1}`, names nothing.
+            name !in spec.argNames && regions[m.range.first] == Region.CODE && !(after == ':' && (before == '{' || before == ','))
+        }.map { m ->
+            val where = handed.attributes[m.value].orEmpty().joinToString(" and ") { "data-$it" }
+            Issue(
+                start = m.range.first,
+                end = m.range.last + 1,
+                message =
+                    "${m.value} is not defined in data-${spec.name}: Datastar hands an expression ${m.value} only in $where, " +
+                        "so here it throws a ReferenceError.",
+                severity = Severity.WARNING,
+                code = "scope-name",
+                link = Docs.EXPRESSIONS,
+            )
+        }.toList()
 }
 
 /**
@@ -271,9 +344,6 @@ internal fun jsRegions(text: String): ByteArray {
     return kind
 }
 
-/** `foo-bar` -> `fooBar`, as Datastar reads a kebab-case key. */
-public fun toCamel(name: String): String = if ('-' in name) KEBAB_PART.replace(name) { it.groupValues[1].uppercase() } else name
-
 /** The characters `String.prototype.trim` removes: WhiteSpace and LineTerminator, which `Char.isWhitespace` is not. */
 private const val JS_WHITESPACE = "\t\n\u000B\u000C\r \u00A0\u1680\u2028\u2029\u202F\u205F\u3000\uFEFF"
 
@@ -345,196 +415,6 @@ internal fun clientStatements(text: String): List<IntRange> {
     }
     if (start >= 0) out += start until text.length
     return out
-}
-
-/** JavaScript as Datastar compiles an expression, with a map from each of its offsets back to the expression. */
-internal open class ClientScript(
-    val js: String,
-    private val origin: IntArray,
-) {
-    fun toExpression(offset: Int): Int = origin[offset.coerceIn(0, origin.size - 1)]
-}
-
-/** A `$name.path` or an `@name(` the client rewrites; [end] is the end of what it replaces. */
-internal data class Rewrite(
-    val signal: Boolean,
-    val start: Int,
-    val end: Int,
-    val name: String,
-)
-
-/** The text as the client rewrites it, what it rewrote, and the quoted runs it stepped over and left as written. */
-internal class ClientRewrite(
-    js: String,
-    origin: IntArray,
-    val rewrites: List<Rewrite>,
-    val runs: List<IntRange>,
-) : ClientScript(js, origin)
-
-/** The client's signal pattern (engine.ts:449 in 1.0.4): `\w` and `.`/`-` joined parts. */
-private val CLIENT_SIGNAL = Regex("""\$(\w+(?:[.-]\w+)*)""")
-
-/** The client's action pattern: a name and the parenthesis right after it. */
-private val CLIENT_ACTION = Regex("""@([A-Za-z_$][\w$]*)\(""")
-
-private fun signalPath(name: String): String = "$" + name.split('.').joinToString("") { "['$it']" }
-
-private fun actionCall(name: String): String = "__action(\"$name\",evt,"
-
-/** What `.` in the client's pattern does not match. */
-private fun Char.isLineTerminator(): Boolean = this == '\n' || this == '\r' || this == '\u2028' || this == '\u2029'
-
-/**
- * The end of a quoted string as the client's pattern matches one, `"[^"\\]*(?:\\.[^"\\]*)*"`:
- * an escape takes the next character unless that is a line terminator, and a string that never
- * closes is no string. Null when the pattern would not match here.
- */
-private fun quotedEnd(
-    text: String,
-    from: Int,
-    quote: Char,
-): Int? {
-    var j = from + 1
-    while (j < text.length) {
-        val c = text[j]
-        when {
-            c == quote -> return j + 1
-            c == '\\' -> if (j + 1 < text.length && !text[j + 1].isLineTerminator()) j += 2 else return null
-            else -> j++
-        }
-    }
-    return null
-}
-
-/** The end of a template literal with no `${` in it, as the client's pattern matches one; null otherwise. */
-private fun templateEnd(
-    text: String,
-    from: Int,
-): Int? {
-    var j = from + 1
-    while (j < text.length) {
-        val c = text[j]
-        when {
-            c == '`' -> return j + 1
-            c == '\\' -> if (j + 1 < text.length && !text[j + 1].isLineTerminator()) j += 2 else return null
-            c == '$' && text.getOrNull(j + 1) == '{' -> return null
-            else -> j++
-        }
-    }
-    return null
-}
-
-/**
- * The text as the client writes it before compiling, with what it rewrote (engine.ts:448-449 in
- * 1.0.4). The client does it with one pattern: a quoted string or a template literal without `${`
- * is stepped over and left as written, a `${...}` with no brace inside has its signals and then its
- * actions rewritten, and outside them a `$name.path` becomes `$['name']['path']` and an `@name(` a
- * call of the action dispatcher. Here it is a scan, since Java's engine recurses on that pattern's
- * loops and overflows on a long string of escapes; the alternatives are tried in the client's order
- * at every offset, and `ClientRewriteTest` holds the scan to the client's pattern as written. Every
- * character of a rewritten reference maps back to where the reference began.
- */
-internal fun clientRewrite(text: String): ClientRewrite {
-    val js = StringBuilder()
-    val origin = ArrayList<Int>(text.length + 16)
-    val rewrites = ArrayList<Rewrite>()
-    val runs = ArrayList<IntRange>()
-
-    fun copy(
-        from: Int,
-        to: Int,
-    ) {
-        for (k in from until to) {
-            origin += k
-            js.append(text[k])
-        }
-    }
-
-    fun put(r: Rewrite) {
-        val written = if (r.signal) signalPath(r.name) else actionCall(r.name)
-        repeat(written.length) { origin += r.start }
-        js.append(written)
-        rewrites += r
-    }
-
-    fun interpolation(
-        from: Int,
-        to: Int,
-    ) {
-        val inner = text.substring(from, to)
-        val found = ArrayList<Rewrite>()
-        for (m in CLIENT_SIGNAL.findAll(inner)) found += Rewrite(true, from + m.range.first, from + m.range.last + 1, m.groupValues[1])
-        // An action the signal pass has already rewritten a part of is no longer there to match.
-        for (m in CLIENT_ACTION.findAll(inner)) {
-            val start = from + m.range.first
-            val end = from + m.range.last + 1
-            if (found.none { it.start < end && start < it.end }) found += Rewrite(false, start, end, m.groupValues[1])
-        }
-        found.sortBy { it.start }
-        var i = from
-        for (r in found) {
-            copy(i, r.start)
-            put(r)
-            i = r.end
-        }
-        copy(i, to)
-    }
-    var i = 0
-    while (i < text.length) {
-        val c = text[i]
-        val end =
-            when {
-                c == '"' || c == '\'' -> {
-                    quotedEnd(text, i, c)?.also {
-                        copy(i, it)
-                        runs += i until it
-                    }
-                }
-
-                c == '`' -> {
-                    templateEnd(text, i)?.also {
-                        copy(i, it)
-                        runs += i until it
-                    }
-                }
-
-                c == '$' && text.getOrNull(i + 1) == '{' -> {
-                    val close = text.indexOfAny(charArrayOf('{', '}'), i + 2)
-                    if (close < 0 || text[close] != '}') {
-                        null
-                    } else {
-                        copy(i, i + 2)
-                        interpolation(i + 2, close)
-                        copy(close, close + 1)
-                        close + 1
-                    }
-                }
-
-                c == '$' -> {
-                    CLIENT_SIGNAL.matchAt(text, i)?.let { m ->
-                        put(Rewrite(true, i, m.range.last + 1, m.groupValues[1]))
-                        m.range.last + 1
-                    }
-                }
-
-                c == '@' -> {
-                    CLIENT_ACTION.matchAt(text, i)?.let { m ->
-                        put(Rewrite(false, i, m.range.last + 1, m.groupValues[1]))
-                        m.range.last + 1
-                    }
-                }
-
-                else -> {
-                    null
-                }
-            }
-        i = end ?: run {
-            copy(i, i + 1)
-            i + 1
-        }
-    }
-    origin += text.length
-    return ClientRewrite(js.toString(), origin.toIntArray(), rewrites, runs)
 }
 
 /**
@@ -828,16 +708,29 @@ internal fun expressionError(js: String): JsSyntaxError? {
 public class ExpressionValidator(
     private val catalog: Catalog = Catalog.default,
 ) {
+    private val handed = HandedIn(catalog)
+
     /**
      * The issues of [text]. With [returnsValue] known, the syntax is judged on the script Datastar
      * compiles, see [clientScript]; without it, on the text as a script, with an object literal
      * allowed to open it. A `$my-value` named in [hyphenatedSignals] is a declared signal, not a
-     * kebab-case slip.
+     * kebab-case slip. With the [attribute] it is the value of, whose [AttributeSpec.returnsValue]
+     * stands in for [returnsValue], a name only another attribute's expression is handed is flagged
+     * too ([scopeNameIssues]).
      */
     public fun validate(
         text: String,
         returnsValue: Boolean? = null,
         hyphenatedSignals: Set<String> = emptySet(),
+        attribute: AttributeSpec? = null,
+    ): List<Issue> =
+        validateText(text, returnsValue ?: attribute?.returnsValue, hyphenatedSignals) +
+            (attribute?.let { scopeNameIssues(text, it, handed) } ?: emptyList())
+
+    private fun validateText(
+        text: String,
+        returnsValue: Boolean?,
+        hyphenatedSignals: Set<String>,
     ): List<Issue> {
         val issues = ArrayList<Issue>()
         if (text.isBlank()) {
@@ -965,7 +858,7 @@ public class ExpressionValidator(
         start: Int,
         end: Int,
     ): Issue {
-        val becomes = if (r.signal) signalPath(r.name) else "${actionCall(r.name)}...)"
+        val becomes = if (r.signal) r.written else "${r.written}...)"
         val advice =
             when {
                 region == Region.TEMPLATE && r.signal -> {
@@ -1032,7 +925,7 @@ public class ExpressionValidator(
         // after a hyphen (caseFns.camel in text.ts): a key a-b-1 is the signal aB-1, a-b.c-d is aB.cD,
         // and foo-_bar keeps its name.
         val key = written.substring(1).asciiLowercase()
-        val signal = toCamel(key)
+        val signal = ClientCasing.camel(key)
         val camel = "$" + signal
         val spaced = written.replace("-", " - ")
         val fixes = ArrayList<Fix>()

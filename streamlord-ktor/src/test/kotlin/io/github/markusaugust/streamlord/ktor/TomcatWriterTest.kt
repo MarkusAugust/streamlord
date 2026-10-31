@@ -34,6 +34,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.test.fail
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 import org.apache.catalina.startup.Tomcat as TomcatServer
@@ -197,12 +198,12 @@ class TomcatWriterTest {
         }
         tomcat(discardFacades, module) { port ->
             val seen = read(port, "/after")
-            completed.get(20, TimeUnit.SECONDS)
-            val cause = failed.get(20, TimeUnit.SECONDS)
+            completed.within("Tomcat never completed the request; the client read:\n$seen")
+            val cause = failed.within("the block never failed")
             // A write let go after the request completed is noted only then.
             assertTrue(released.await(20, TimeUnit.SECONDS), "Ktor's writer never let go of the failing frame")
             assertTrue(late.isEmpty(), "Ktor's writer went on after Tomcat completed the request: $late")
-            val got = thrown.get(20, TimeUnit.SECONDS)
+            val got = thrown.within("respondDatastar never returned")
             assertTrue(got.isOrRecovers(cause), "respondDatastar threw $got, not $cause")
             if (failure != Failure.THROW) assertTrue(cause is CancellationException, "$cause")
             // Cut where Streamlord cuts; where it cannot, ended as if whole, not cut short.
@@ -237,8 +238,8 @@ class TomcatWriterTest {
         }
         tomcat(discardFacades = true, module) { port ->
             read(port, "/after")
-            val failure = failed.get(20, TimeUnit.SECONDS)
-            val got = thrown.get(20, TimeUnit.SECONDS)
+            val failure = failed.within("the block never failed")
+            val got = thrown.within("respondDatastar never returned")
             assertTrue(got.isOrRecovers(failure), "respondDatastar threw $got, not $failure")
             assertEquals(listOf("from the send pipeline"), failure.suppressed.map { it.message }, failure.stackTraceToString())
         }
@@ -274,6 +275,14 @@ class TomcatWriterTest {
             }
         }
     }
+
+    /** The value within twenty seconds, or a failure that says which of the waits ran out. */
+    private fun <T> CompletableFuture<T>.within(never: String): T =
+        try {
+            get(20, TimeUnit.SECONDS)
+        } catch (_: java.util.concurrent.TimeoutException) {
+            fail("After 20 s: $never")
+        }
 
     // kotlinx-coroutines may throw a copy of an exception that crossed coroutines, with the original as its cause.
     private fun Throwable?.isOrRecovers(failure: Throwable) =

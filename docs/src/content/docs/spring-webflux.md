@@ -25,6 +25,19 @@ event. Return the bare flow from a controller and Spring sets the content type a
 header, so prefer the response. Everything before these is your flow, and everything after is
 Spring's.
 
+Markup that holds a value from outside is built with [`interpolate`](/strings/#values-from-outside),
+and `PatchElements` takes the `Html` it returns as it is:
+
+```kotlin sample=spring
+@GetMapping("/feed")
+fun feed(): ResponseEntity<Flow<ServerSentEvent<String>>> =
+    flowOf(repository.search("gate"))
+        .map { hits ->
+            val rows = hits.map { interpolate("<li>%s</li>", it.title) }.joinToHtml()
+            PatchElements(interpolate("""<ul id="feed">%s</ul>""", rows))
+        }.asDatastarResponse()
+```
+
 The frames are written by Spring's own encoder, so they are spelled Spring's way: no space after
 any colon, `event:datastar-patch-signals`, and `id:` ahead of `event:`. The fields and the data
 are the ones Ktor and WebMVC send, and the Datastar client reads both spellings alike.

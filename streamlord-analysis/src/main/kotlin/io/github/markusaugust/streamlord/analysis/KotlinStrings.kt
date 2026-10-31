@@ -10,7 +10,8 @@ package io.github.markusaugust.streamlord.analysis
  * the Datastar expression around them: an opaque value.
  */
 
-public enum class InterpolationKind { SIMPLE, BRACED }
+/** [SIMPLE] for `$name`, [BRACED] for `${...}`, [OPERAND] for a value joined to literals with `+`. */
+public enum class InterpolationKind { SIMPLE, BRACED, OPERAND }
 
 public data class Interpolation(
     /** Source offset of the first `$` that opens the template. */
@@ -18,7 +19,10 @@ public data class Interpolation(
     /** Source offset just past the template. */
     val end: Int,
     val kind: InterpolationKind,
-    /** The identifier for [InterpolationKind.SIMPLE], the inner text for [InterpolationKind.BRACED]. */
+    /**
+     * The identifier for [InterpolationKind.SIMPLE], the inner text for [InterpolationKind.BRACED],
+     * the expression for [InterpolationKind.OPERAND].
+     */
     val text: String,
     /** Offset in the decoded text where the placeholder starts. */
     val decodedStart: Int,
@@ -45,6 +49,8 @@ public data class KotlinString(
     val interpolations: List<Interpolation>,
     /** `true` when the literal never closes. */
     val unterminated: Boolean,
+    /** The literals inside this one's templates, `"<ul>${xs.joinToString { "<li>$it</li>" }}</ul>"`, outermost first. */
+    val nested: List<KotlinString> = emptyList(),
 ) {
     /** Map a decoded range back to source offsets. */
     public fun toSource(
@@ -133,6 +139,7 @@ public fun readKotlinStringAt(
     var i = contentStart
     val d = Decoder()
     val interpolations = ArrayList<Interpolation>()
+    val nested = ArrayList<KotlinString>()
 
     while (i < src.length) {
         val c = src[i]
@@ -156,6 +163,7 @@ public fun readKotlinStringAt(
                     map = d.map.toIntArray(),
                     interpolations = interpolations,
                     unterminated = false,
+                    nested = nested,
                 )
             }
         } else {
@@ -172,6 +180,7 @@ public fun readKotlinStringAt(
                     map = d.map.toIntArray(),
                     interpolations = interpolations,
                     unterminated = false,
+                    nested = nested,
                 )
             }
             if (c == '\n') break
@@ -222,6 +231,7 @@ public fun readKotlinStringAt(
                     } else if (cj == '"') {
                         val inner = readKotlinStringAt(src, j)
                         if (inner != null) {
+                            nested += inner
                             j = inner.end
                             continue
                         }
@@ -275,6 +285,7 @@ public fun readKotlinStringAt(
         map = d.map.toIntArray(),
         interpolations = interpolations,
         unterminated = true,
+        nested = nested,
     )
 }
 

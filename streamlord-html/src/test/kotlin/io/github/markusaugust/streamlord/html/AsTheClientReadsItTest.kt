@@ -280,88 +280,12 @@ class AsTheClientReadsItTest {
         assertEquals("""<div data-style:--brand="'red'"></div>""", elements { div { dataStyle("--brand", "'red'") } })
     }
 
-    // engine.ts:415-416: how the client cuts the expression of an attribute whose value it reads,
-    // such as data-text or data-signals, into statements. It reads a quote or `/` after a `\` as
-    // escaped, so a string or regex that ends in `\` would run on, and a `;` after it would cut
-    // the expression in the middle of a string.
-    private val statements =
-        Regex(
-            """(?:\/(?:\\\/|[^/])*\/|"(?:\\"|[^"])*"|'(?:\\'|[^'])*'|`(?:\\`|[^`])*`|""" +
-                """\(\s*(?:(?:function)\s*\(\s*\)|(?:\(\s*\))\s*=>)\s*(?:\{[\s\S]*?\}|[^;){]*)\s*\)\s*\(\s*\)|[^;])+""",
-        )
-
-    // engine.ts:448: how it rewrites `$name` as a signal and `@name(` as an action, in every
-    // attribute. It skips strings but knows no regex literals, so a quote in one hides the signals
-    // after it.
-    private val rewrites =
-        Regex(
-            """(?:"[^"\\]*(?:\\.[^"\\]*)*"|'[^'\\]*(?:\\.[^'\\]*)*'|`[^`\\$]*(?:(?:\\.|\$(?!\{))[^`\\$]*)*`)|""" +
-                """\$\{([^{}]*)\}|\$(\w+(?:[.-]\w+)*)|@([A-Za-z_$][\w$]*)\(""",
-        )
-
-    private fun statementsIn(expression: String) = statements.findAll(expression).map { it.value.trim() }.toList()
-
-    private fun rewritten(
-        expression: String,
-        group: Int,
-    ) = rewrites.findAll(expression).mapNotNull { it.groups[group]?.value }.toList()
-
-    private fun signalsIn(expression: String) = rewritten(expression, 2)
-
-    private fun actionsIn(expression: String) = rewritten(expression, 3)
-
-    private fun signalsAttribute(html: String) =
-        Regex("""data-signals="([^"]*)"""")
-            .find(html)!!
-            .groupValues[1]
-            .replace("&quot;", "\"")
-            .replace("&lt;", "<")
-            .replace("&gt;", ">")
-            .replace("&amp;", "&")
-
-    @Test
-    fun `a value ending in a backslash stays inside its string`() {
-        for (value in listOf("C:\\", "a\\'", "\\\"", "x\\\\")) {
-            assertEquals(1, statementsIn(js(value) + " + " + js(";")).size, value)
-            val pairs = signalsAttribute(elements { div { dataSignals("p1" to value, "p2" to ";") } })
-            assertEquals(1, statementsIn(pairs).size, value)
-        }
-    }
-
-    @Test
-    fun `a regex filter hides no signal or action after it`() {
-        val patterns =
-            listOf(
-                "x\\\\",
-                "\\'",
-                "it's",
-                "a\"b",
-                "back`tick",
-                "^[_\$a-z]+\$",
-                "^a\$b",
-                "\\\$x",
-                "a@b(c)?",
-                "\$\\Qab\\E?",
-                "a\$\\Q_\\E",
-            )
-        for (pattern in patterns) {
-            val literal = SignalFilter.regexLiteral(Regex(pattern))
-            val expression = setAll(true, SignalFilter(include = Regex(pattern))) + "; " + set("msg", "done")
-            assertEquals(listOf("msg"), signalsIn(expression), pattern)
-            assertEquals(listOf("setAll"), actionsIn(expression), pattern)
-            // In data-text, a `/` later on would close a literal whose last `\` escaped its own end.
-            assertEquals(1, statementsIn("$literal.source + '/;'").size, pattern)
-        }
-        assertEquals("/^[_\\x24a-z]+\$/", SignalFilter.regexLiteral(Regex("^[_\$a-z]+\$")))
-        assertEquals("/^a\$(?:)b/", SignalFilter.regexLiteral(Regex("^a\$b")))
-        assertEquals("/\$(?:)ab?/", SignalFilter.regexLiteral(Regex("\$\\Qab\\E?")))
-        assertEquals("/\\x24x a\\x40b/", SignalFilter.regexLiteral(Regex("\\\$x a@b")))
-    }
-
+    // What the client does with a value ending in a backslash, a regex filter with a quote in it,
+    // and an object key holding a dollar is in conformance/dsl/free.json, held by
+    // DslAsTheClientReadsItTest in streamlord-html-pro.
     @Test
     fun `an object key holding a dollar is quoted`() {
         assertEquals("{'\$a': 1, b_1: 2}", JsLiteral.write(mapOf("\$a" to 1, "b_1" to 2)))
-        assertEquals(listOf("o"), signalsIn(set("o", mapOf("\$a" to 1, "_\$x" to 2))))
     }
 
     // The single quotes around a literal are the only ones it holds, so it can stand between the
@@ -437,8 +361,8 @@ class AsTheClientReadsItTest {
     }
 
     // parseAttributeKey splits a modifier at each `.`, so `__delay.1.5ms` reaches tagToMs as `1` and
-    // `5ms`, and it takes the first: 1 ms. Headless Chrome on the 1.0.4 bundle ran
-    // `data-on:click__delay.1.900ms` within 100 ms of the click. The DSL writes the same 1 ms.
+    // `5ms`, and it takes the first: 1 ms (tagToMs in conformance/client/tags.json). The DSL writes
+    // the same 1 ms, and conformance/dsl/free.json holds the client waiting it.
     @Test
     fun `a fraction of a millisecond is rounded down, as the client reads it`() {
         assertEquals("""<button data-on:click__debounce.1ms="x()"></button>""", click { debounce = 1.5.milliseconds })
@@ -466,8 +390,8 @@ class AsTheClientReadsItTest {
         }
     }
 
-    // Each refused here is refused by Chrome with "Nothing to repeat" or "Invalid group"; the
-    // ones written are what it compiles. The fuzz in the audit's harness checks the rest.
+    // Each refused here is refused by V8, Chrome's engine as node runs it, with "Nothing to repeat"
+    // or "Invalid group"; the ones written are what it compiles.
     @Test
     fun `a quantifier with nothing to repeat is refused`() {
         val refused =
@@ -504,8 +428,9 @@ class AsTheClientReadsItTest {
         assertEquals("/(?<n>a){2}[a]{2}(a)*/", SignalFilter.regexLiteral(Regex("(?<n>a){2}[a]{2}(a)*")))
     }
 
-    // Headless Chrome on the 1.0.4 bundle: `data-class:b___case.pascal` set the class `b`, since
-    // the client cuts the name at the first `__`; `data-class:b_` set `b_`.
+    // The client cuts an attribute name at the first `__` (parseAttributeKey in
+    // conformance/client/attribute-keys.json), so `data-class:b___case.pascal` would set the class
+    // `b`; `data-class:b_` sets `b_` (conformance/dsl/free.json).
     @Test
     fun `a key that ends in _ before a modifier is refused`() {
         val refused =
@@ -531,7 +456,7 @@ class AsTheClientReadsItTest {
         )
     }
 
-    // In headless Chrome `data-class="{'MuiButton-root': true}"` set the class `MuiButton-root`.
+    // `data-class="{'MuiButton-root': true}"` sets the class `MuiButton-root` (conformance/dsl/free.json).
     @Test
     fun `a class no key gives back points to the object form`() {
         val e = assertFailsWith<InvalidSignalNameException> { elements { div { dataClass("MuiButton-root", "true") } } }
@@ -547,10 +472,10 @@ class AsTheClientReadsItTest {
         )
     }
 
-    // JavaScript, measured in headless Chrome, matches a back reference to a group that has not
-    // closed as empty: /^(a\1)$/ and /^\1(a)$/ both match "a". Java fails it on the group's first
-    // pass, and in a repeat matches what the group took before: ^(a|b\1)+$ takes "aba" in Java and
-    // "ab" in JavaScript.
+    // V8, Chrome's engine as node runs it, matches a back reference to a group that has not closed
+    // as empty: /^(a\1)$/ and /^\1(a)$/ both match "a". Java fails it on the group's first pass, and
+    // in a repeat matches what the group took before: ^(a|b\1)+$ refuses "ab" in Java and takes
+    // "aba" as a then ba, where JavaScript, with the reference empty again on each pass, takes both.
     @Test
     fun `a back reference before its group has closed is refused`() {
         for (pattern in listOf("(a\\1)", "\\1(a)", "(a(b)\\1)", "(?<n>a\\k<n>)", "(?:a\\1)(b)", "(a|b\\1)+")) {

@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.client.clientRewrite
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals

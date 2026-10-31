@@ -1,0 +1,25 @@
+{
+  "$comment": "The issues of a Kotlin file at its call sites: codes, spans (the text of each), and fix (the first fix whose title starts with title, on the first issue or the one whose text is on, applied to the file); html: whether htmlStringAt finds an HTML string at an offset. Read by CallSitesTest.kt and callSites.test.ts.",
+  "cases": [
+    {"name":"sees a selector and a mode given by position","src":"patchElements(\"<tr></tr>\", \"#rows\", ElementPatchMode.APPEND)","codes":[]},
+    {"name":"sees a selector left out by position","src":"patchElements(\"<li>x</li>\", null, ElementPatchMode.APPEND)","codes":["mode-needs-selector"]},
+    {"name":"sees the arguments given by name (1)","src":"patchElements(elements = \"<b>x</b>\")","codes":["missing-id"]},
+    {"name":"sees the arguments given by name (2)","src":"patchElements(elements = \"<b>x</b>\", selector = \"#a\")","codes":[]},
+    {"name":"sees the arguments given by name (3)","src":"removeElements(selector = \"\")","codes":["blank-selector"]},
+    {"name":"sees the arguments given by name (4)","src":"executeScript(script = \"x</script>\")","codes":["script-close"]},
+    {"name":"reads an imported mode constant and does not guess at a variable (1)","src":"patchElements(\"<li>x</li>\", mode = APPEND)","codes":["mode-needs-selector"]},
+    {"name":"reads an imported mode constant and does not guess at a variable (2)","src":"patchElements(\"<li>x</li>\", mode = someMode)","codes":[]},
+    {"name":"reads an imported mode constant and does not guess at a variable (3)","src":"patchElements(\"<li>x</li>\", mode = ElementPatchMode.DEFAULT)","codes":["missing-id"]},
+    {"name":"reads the selector and the mode by position when the markup is a trailing lambda (1)","src":"patchElements(\"#rows\") { li { +\"x\" } }","codes":[]},
+    {"name":"reads the selector and the mode by position when the markup is a trailing lambda (2)","src":"stream.patchElements(\"#feed\", ElementPatchMode.APPEND) { li { } }","codes":[]},
+    {"name":"reads the selector and the mode by position when the markup is a trailing lambda (3)","src":"patchElements(null, ElementPatchMode.APPEND) { li { } }","codes":["mode-needs-selector"]},
+    {"name":"reads the selector and the mode by position when the markup is a trailing lambda (4)","src":"patchElements(mode = ElementPatchMode.APPEND) { li { } }","codes":["mode-needs-selector"],"fix":{"title":"Add selector","result":"patchElements(selector = \"\", mode = ElementPatchMode.APPEND) { li { } }"}},
+    {"name":"reads the selector and the mode by position when the markup is a trailing lambda (5)","src":"patchElements(\"#rows\") { li { } }","at":16,"html":false},
+    {"name":"finds the end of a script whatever comes before it","src":"executeScript(\"\u0130\u0130 x</SCRIPT>\")","spans":["</SCRIPT"],"codes":["script-close"]},
+    {"name":"keeps the escape of a dollar when it renames the signal after it (1)","src":"dataText(\"\\$a-b\")","fix":{"title":"Change to","result":"dataText(\"\\$aB\")"}},
+    {"name":"keeps the escape of a dollar when it renames the signal after it (2)","src":"dataText(\"${'$'}a-b\")","fix":{"title":"Write","result":"dataText(\"${'$'}a - b\")"}},
+    {"name":"keeps the escape of a dollar when it renames the signal after it (3)","src":"dataText($$\"$a-b\")","fix":{"title":"Change to","result":"dataText($$\"$aB\")"}},
+    {"name":"keeps a literal dollar in front of a template in the multi-dollar fix","src":"dataOnClick(\"$a + $$b\")","fix":{"on":"$a","title":"Make it","result":"dataOnClick($$$\"$a + $$$$b\")"}},
+    {"name":"replaces the trim call together with the literal when it offers a helper","src":"dataOnClick(\"\"\"$count++\"\"\".trimIndent())","fix":{"title":"Use","result":"dataOnClick(increment(\"count\"))"}}
+  ]
+}

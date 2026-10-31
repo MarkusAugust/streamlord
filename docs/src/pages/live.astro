@@ -1,5 +1,5 @@
 ---
-import { fs } from "@fristil/designsystem"
+import { lt } from "@lo-tek/interfaces"
 import Logo from "../components/Logo.astro"
 import ThemeRestore from "../components/ThemeRestore.astro"
 import ThemeToggle from "../components/ThemeToggle.astro"
@@ -29,7 +29,7 @@ import "../styles/global.css"
   </head>
 
   <body>
-    <a class="fs-skip-link" href="#content">Skip to content</a>
+    <a class="lt-skip-link" href="#content">Skip to content</a>
 
     <header class="masthead" data-theme="dark">
       <a class="masthead__brand" href="/">
@@ -43,16 +43,16 @@ import "../styles/global.css"
     </header>
 
     <main class="page" id="content" data-signals="{query: '', total: 0, wire: true}">
-      <h1 class="fs-heading" data-size="l">The search, answered by Streamlord</h1>
-      <p class="fs-paragraph" data-variant="lead">
+      <h1 class="lt-heading" data-size="l">The search, answered by Streamlord</h1>
+      <p class="lt-paragraph" data-variant="lead">
         Every keystroke is a real request. The server reads the signal the browser sends,
         searches the documentation, and patches the results into this page. Nothing here is
         recorded, and there is no JavaScript of ours on the page.
       </p>
 
       <!--
-        fs.search() rather than the classes by hand. Fristil's search field is an fs-input
-        with room for a magnifier, so it needs both classes, and writing only fs-search gets
+        lt.search() rather than the classes by hand. LO-TEK's search field is an lt-input
+        with room for a magnifier, so it needs both classes, and writing only lt-search gets
         you a half-styled field with no error anywhere, which is exactly what happened here
         before this line. The builder sets both, and type="search" with them.
 
@@ -60,10 +60,10 @@ import "../styles/global.css"
         tabbing to it.
       -->
       <div class="search" role="search">
-        <label class="fs-label" for="q">Search the documentation</label>
-        <div class="fs-search-row">
+        <label class="lt-label" for="q">Search the documentation</label>
+        <div class="lt-search-row">
           <input
-            {...fs.search()}
+            {...lt.search()}
             id="q"
             placeholder="patch mode, casing, readSignals…"
             data-bind:query
@@ -77,7 +77,7 @@ import "../styles/global.css"
             field, since the binding runs both ways) and asks for the empty result.
           -->
           <button
-            class="fs-button"
+            class="lt-button"
             data-variant="secondary"
             type="button"
             data-show="$query"
@@ -109,7 +109,7 @@ import "../styles/global.css"
             aria-live="polite"
             data-attr:aria-busy="$searching"
           >
-            <p class="fs-paragraph" data-size="small">Type to search the documentation.</p>
+            <p class="lt-paragraph" data-size="small">Type to search the documentation.</p>
           </div>
         </section>
 
@@ -134,7 +134,7 @@ import "../styles/global.css"
           <p class="panel__note">
             One endpoint, one word of difference. The field in the stone is there to be lost:
           </p>
-          <ol class="fs-list gallery__steps">
+          <ol class="lt-list gallery__steps">
             <li>Write something in the field.</li>
             <li>Press <strong>Outer</strong>. The sentence above the field changes, and what you wrote stays. That is a morph.</li>
             <li>Press <strong>Replace</strong>. What you wrote is gone. That is a replacement.</li>
@@ -145,63 +145,63 @@ import "../styles/global.css"
 
           <div class="gallery__modes">
             <button
-              class="fs-button"
+              class="lt-button"
               data-variant="secondary"
               type="button"
               data-on:click={`$mode = 'inner'; @get('${SERVICE}/modes')`}
               data-attr:aria-pressed="$lastMode === 'inner'"
             >Inner</button>
             <button
-              class="fs-button"
+              class="lt-button"
               data-variant="secondary"
               type="button"
               data-on:click={`$mode = 'outer'; @get('${SERVICE}/modes')`}
               data-attr:aria-pressed="$lastMode === 'outer'"
             >Outer</button>
             <button
-              class="fs-button"
+              class="lt-button"
               data-variant="secondary"
               type="button"
               data-on:click={`$mode = 'replace'; @get('${SERVICE}/modes')`}
               data-attr:aria-pressed="$lastMode === 'replace'"
             >Replace</button>
             <button
-              class="fs-button"
+              class="lt-button"
               data-variant="secondary"
               type="button"
               data-on:click={`$mode = 'prepend'; @get('${SERVICE}/modes')`}
               data-attr:aria-pressed="$lastMode === 'prepend'"
             >Prepend</button>
             <button
-              class="fs-button"
+              class="lt-button"
               data-variant="secondary"
               type="button"
               data-on:click={`$mode = 'append'; @get('${SERVICE}/modes')`}
               data-attr:aria-pressed="$lastMode === 'append'"
             >Append</button>
             <button
-              class="fs-button"
+              class="lt-button"
               data-variant="secondary"
               type="button"
               data-on:click={`$mode = 'before'; @get('${SERVICE}/modes')`}
               data-attr:aria-pressed="$lastMode === 'before'"
             >Before</button>
             <button
-              class="fs-button"
+              class="lt-button"
               data-variant="secondary"
               type="button"
               data-on:click={`$mode = 'after'; @get('${SERVICE}/modes')`}
               data-attr:aria-pressed="$lastMode === 'after'"
             >After</button>
             <button
-              class="fs-button"
+              class="lt-button"
               data-variant="secondary"
               type="button"
               data-on:click={`$mode = 'remove'; @get('${SERVICE}/modes')`}
               data-attr:aria-pressed="$lastMode === 'remove'"
             >Remove</button>
             <button
-              class="fs-button"
+              class="lt-button"
               data-variant="ghost"
               type="button"
               data-on:click={`$mode = 'reset'; @get('${SERVICE}/modes')`}
@@ -212,13 +212,13 @@ import "../styles/global.css"
             <div id="wall" class="gallery__wall">
               <p id="stone" class="gallery__stone">
                 <span class="gallery__says">A stone in the wall. Aim the eight modes at it.</span>
-                <label class="fs-label gallery__label" for="chisel">Write something here. Does it survive?</label>
-                <input class="fs-input gallery__chisel" id="chisel" placeholder="Anything at all" />
+                <label class="lt-label gallery__label" for="chisel">Write something here. Does it survive?</label>
+                <input class="lt-input gallery__chisel" id="chisel" placeholder="Anything at all" />
               </p>
             </div>
 
             <div id="modes-said" class="gallery__said-box">
-              <p class="fs-paragraph" data-size="small">
+              <p class="lt-paragraph" data-size="small">
                 Press a mode. Whether what you wrote survived will appear here, and under it what
                 the server sent: the mode, the selector, and the elements.
               </p>
@@ -233,7 +233,7 @@ import "../styles/global.css"
           their caret, so the server sends the *text* of each fault as a signal and the page
           binds it: data-text for the message, data-attr for aria-invalid. The summary is the
           opposite case and arrives as markup, because it only exists when something is wrong
-          and it is built from Fristil classes the server has never seen.
+          and it is built from LO-TEK classes the server has never seen.
         -->
         <section
           class="panel panel--wide"
@@ -247,10 +247,10 @@ import "../styles/global.css"
           </p>
 
           <form class="muster" data-on:submit__prevent={`@post('${SERVICE}/muster')`}>
-            <div class="fs-field muster__field">
-              <label class="fs-label" for="banner">Name of the banner</label>
+            <div class="lt-field muster__field">
+              <label class="lt-label" for="banner">Name of the banner</label>
               <input
-                class="fs-input"
+                class="lt-input"
                 id="banner"
                 type="text"
                 placeholder="The Ashen Vow"
@@ -260,17 +260,17 @@ import "../styles/global.css"
                 data-on:input__debounce.400ms={`@post('${SERVICE}/muster')`}
               />
               <p
-                class="fs-error-text"
+                class="lt-error-text"
                 id="banner-error"
                 data-show="$bannerFault"
                 data-text="$bannerFault"
               ></p>
             </div>
 
-            <div class="fs-field muster__field">
-              <label class="fs-label" for="swords">Sworn swords</label>
+            <div class="lt-field muster__field">
+              <label class="lt-label" for="swords">Sworn swords</label>
               <input
-                class="fs-input"
+                class="lt-input"
                 id="swords"
                 type="text"
                 inputmode="numeric"
@@ -281,19 +281,19 @@ import "../styles/global.css"
                 data-on:input__debounce.400ms={`@post('${SERVICE}/muster')`}
               />
               <p
-                class="fs-error-text"
+                class="lt-error-text"
                 id="swords-error"
                 data-show="$swordsFault"
                 data-text="$swordsFault"
               ></p>
             </div>
 
-            <button class="fs-button" type="submit">Muster</button>
+            <button class="lt-button" type="submit">Muster</button>
           </form>
 
           <!-- Written by the server, in the design system's own classes. -->
           <div id="muster-summary" class="muster__summary">
-            <p class="fs-paragraph" data-size="small">
+            <p class="lt-paragraph" data-size="small">
               Nothing has been sent yet. Type, and the server will answer every four hundred
               milliseconds.
             </p>
@@ -322,14 +322,14 @@ import "../styles/global.css"
 
           <div class="counter">
             <button
-              class="fs-button"
+              class="lt-button"
               type="button"
               data-on:click={`@get('${SERVICE}/counter')`}
               data-text="$running ? 'Stop' : 'Start counting'"></button>
 
             <div id="counter" class="counter__face" aria-live="polite">
               <p class="counter__number">0</p>
-              <p class="fs-paragraph counter__state" data-size="small">
+              <p class="lt-paragraph counter__state" data-size="small">
                 Press Start. The server will hold the connection open and write here.
               </p>
             </div>
@@ -345,7 +345,7 @@ import "../styles/global.css"
             description of them. The frames.
           </p>
           <div id="wire" class="panel__body">
-            <p class="fs-paragraph" data-size="small">Nothing sent yet.</p>
+            <p class="lt-paragraph" data-size="small">Nothing sent yet.</p>
           </div>
         </section>
       </div>
@@ -357,11 +357,11 @@ import "../styles/global.css"
       .masthead {
         display: flex;
         align-items: center;
-        gap: var(--fs-spacing-3);
-        padding: var(--fs-spacing-3) var(--fs-spacing-5);
+        gap: var(--lt-spacing-3);
+        padding: var(--lt-spacing-3) var(--lt-spacing-5);
         background: #2c436b;
         border-block-end: 1px solid
-          color-mix(in oklab, var(--fs-color-accent-fill) 25%, transparent);
+          color-mix(in oklab, var(--lt-color-accent-fill) 25%, transparent);
       }
       @media (prefers-color-scheme: dark) {
         :root:not([data-theme="light"]) .masthead {
@@ -375,22 +375,22 @@ import "../styles/global.css"
         margin-inline-start: auto;
       }
       /* Same swap as the shell's masthead, and for the same reason. */
-      .masthead .fs-button[data-variant="ghost"]:hover {
-        background: var(--fs-color-accent-text);
-        color: var(--fs-color-accent-surface);
+      .masthead .lt-button[data-variant="ghost"]:hover {
+        background: var(--lt-color-accent-text);
+        color: var(--lt-color-accent-surface);
       }
       .masthead__brand {
         display: flex;
         align-items: center;
-        gap: var(--fs-spacing-2);
-        font-weight: var(--font-weight-bold);
-        font-size: var(--font-size-l);
-        color: var(--fs-color-neutral-text-strong);
+        gap: var(--lt-spacing-2);
+        font-weight: var(--lt-font-weight-bold);
+        font-size: var(--lt-font-size-l);
+        color: var(--lt-color-neutral-text-strong);
         text-decoration: none;
       }
       .masthead__where {
-        color: var(--fs-color-accent-fill);
-        font-size: var(--font-size-s);
+        color: var(--lt-color-accent-fill);
+        font-size: var(--lt-font-size-s);
         letter-spacing: 0.12em;
         text-transform: uppercase;
       }
@@ -398,11 +398,11 @@ import "../styles/global.css"
       .page {
         max-width: 72rem;
         margin: 0 auto;
-        padding: var(--fs-spacing-8) var(--fs-spacing-5) var(--fs-spacing-16);
+        padding: var(--lt-spacing-8) var(--lt-spacing-5) var(--lt-spacing-16);
         display: grid;
         /* One column that may shrink below its content, or the widest panel sets the page. */
         grid-template-columns: minmax(0, 1fr);
-        gap: var(--fs-spacing-4);
+        gap: var(--lt-spacing-4);
       }
       .page > p {
         max-width: 60ch;
@@ -411,51 +411,51 @@ import "../styles/global.css"
 
       .search {
         display: grid;
-        gap: var(--fs-spacing-1);
+        gap: var(--lt-spacing-1);
         max-width: 32rem;
-        margin-block-start: var(--fs-spacing-4);
+        margin-block-start: var(--lt-spacing-4);
       }
       /* Ours replaces it, and two crosses in one field is one too many. */
-      .search :global(.fs-search::-webkit-search-cancel-button) {
+      .search :global(.lt-search::-webkit-search-cancel-button) {
         display: none;
       }
 
       .panels {
-        margin-block-start: var(--fs-spacing-6);
+        margin-block-start: var(--lt-spacing-6);
         display: grid;
         /* min() so a screen narrower than one column gets one column, not a sideways scroll. */
         grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
-        gap: var(--fs-spacing-5);
+        gap: var(--lt-spacing-5);
       }
       /* The server and the client write into the panels, so a long word must break, not widen the page. */
       .panel {
         overflow-wrap: anywhere;
         display: grid;
-        gap: var(--fs-spacing-2);
+        gap: var(--lt-spacing-2);
         align-content: start;
-        padding: var(--fs-spacing-4);
-        border: 1px solid var(--fs-color-neutral-border-subtle);
-        border-radius: var(--fs-spacing-1);
+        padding: var(--lt-spacing-4);
+        border: 1px solid var(--lt-color-neutral-border-subtle);
+        border-radius: var(--lt-spacing-1);
       }
       .panel--wide {
         grid-column: 1 / -1;
       }
       .panel__title {
         margin: 0;
-        font-size: var(--font-size-xxs);
-        font-weight: var(--font-weight-semibold);
+        font-size: var(--lt-font-size-xxs);
+        font-weight: var(--lt-font-weight-semibold);
         letter-spacing: 0.08em;
         text-transform: uppercase;
-        color: var(--fs-color-neutral-text-subtle);
+        color: var(--lt-color-neutral-text-subtle);
       }
       .panel__count,
       .panel__busy {
-        color: var(--fs-color-accent-fill);
+        color: var(--lt-color-accent-fill);
       }
       .panel__note {
         margin: 0;
-        font-size: var(--font-size-xs);
-        color: var(--fs-color-neutral-text-subtle);
+        font-size: var(--lt-font-size-xs);
+        color: var(--lt-color-neutral-text-subtle);
       }
       .panel__body {
         min-height: 3rem;
@@ -463,57 +463,57 @@ import "../styles/global.css"
       .gallery__modes {
         display: flex;
         flex-wrap: wrap;
-        gap: var(--fs-spacing-2);
+        gap: var(--lt-spacing-2);
       }
       .gallery {
-        margin-block-start: var(--fs-spacing-4);
+        margin-block-start: var(--lt-spacing-4);
         display: grid;
-        gap: var(--fs-spacing-4);
+        gap: var(--lt-spacing-4);
         grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
         align-items: start;
       }
       .gallery__wall {
         display: grid;
-        gap: var(--fs-spacing-2);
+        gap: var(--lt-spacing-2);
         align-content: start;
         min-block-size: 8rem;
-        padding: var(--fs-spacing-4);
-        border: 1px dashed var(--fs-color-neutral-border-subtle);
-        border-radius: var(--fs-spacing-1);
+        padding: var(--lt-spacing-4);
+        border: 1px dashed var(--lt-color-neutral-border-subtle);
+        border-radius: var(--lt-spacing-1);
       }
       .gallery :global(.gallery__stone) {
         margin: 0;
         display: grid;
-        gap: var(--fs-spacing-2);
-        padding: var(--fs-spacing-3);
-        border-radius: var(--fs-spacing-1);
-        background: var(--fs-color-neutral-surface);
+        gap: var(--lt-spacing-2);
+        padding: var(--lt-spacing-3);
+        border-radius: var(--lt-spacing-1);
+        background: var(--lt-color-neutral-surface);
       }
       .gallery :global(.gallery__course) {
         margin: 0;
-        padding: var(--fs-spacing-2) var(--fs-spacing-3);
-        border-inline-start: var(--fs-spacing-1) solid var(--fs-color-accent-fill);
-        color: var(--fs-color-neutral-text-subtle);
-        font-size: var(--font-size-s);
+        padding: var(--lt-spacing-2) var(--lt-spacing-3);
+        border-inline-start: var(--lt-spacing-1) solid var(--lt-color-accent-fill);
+        color: var(--lt-color-neutral-text-subtle);
+        font-size: var(--lt-font-size-s);
       }
       .gallery :global(.gallery__said) {
-        margin: 0 0 var(--fs-spacing-2);
-        font-size: var(--font-size-xs);
-        color: var(--fs-color-neutral-text-subtle);
+        margin: 0 0 var(--lt-spacing-2);
+        font-size: var(--lt-font-size-xs);
+        color: var(--lt-color-neutral-text-subtle);
       }
       .gallery :global(.gallery__wire) {
-        color: var(--fs-color-accent-fill);
+        color: var(--lt-color-accent-fill);
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       }
       .gallery :global(.gallery__chisel) {
         inline-size: 100%;
       }
       .gallery__steps {
-        margin: var(--fs-spacing-2) 0;
-        font-size: var(--font-size-s);
+        margin: var(--lt-spacing-2) 0;
+        font-size: var(--lt-font-size-s);
       }
       .gallery :global(.gallery__verdict) {
-        margin-block-end: var(--fs-spacing-3);
+        margin-block-end: var(--lt-spacing-3);
       }
       /*
        * The frame the server sent, wrapped. Without this the `pre` is one long line, the page
@@ -521,90 +521,90 @@ import "../styles/global.css"
        */
       .gallery__said-box :global(.wire__frame) {
         margin: 0;
-        padding: var(--fs-spacing-3);
-        background: var(--fs-color-neutral-surface);
-        border-radius: var(--fs-spacing-1);
+        padding: var(--lt-spacing-3);
+        background: var(--lt-color-neutral-surface);
+        border-radius: var(--lt-spacing-1);
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        font-size: var(--font-size-xs);
-        line-height: var(--fs-line-height-compact);
+        font-size: var(--lt-font-size-xs);
+        line-height: var(--lt-line-height-compact);
         white-space: pre-wrap;
         overflow-wrap: anywhere;
       }
 
       .muster {
         display: grid;
-        gap: var(--fs-spacing-4);
+        gap: var(--lt-spacing-4);
         justify-items: start;
         max-inline-size: 26rem;
       }
       .muster__field {
         display: grid;
-        gap: var(--fs-spacing-1);
+        gap: var(--lt-spacing-1);
         inline-size: 100%;
       }
       .muster__summary {
-        margin-block-start: var(--fs-spacing-4);
+        margin-block-start: var(--lt-spacing-4);
       }
-      .muster__summary :global(.fs-error-summary) {
+      .muster__summary :global(.lt-error-summary) {
         display: grid;
-        gap: var(--fs-spacing-2);
+        gap: var(--lt-spacing-2);
       }
       .muster__summary :global(.muster__ok) {
         margin: 0;
-        color: var(--fs-color-accent-fill);
+        color: var(--lt-color-accent-fill);
       }
 
       .counter {
         display: grid;
-        gap: var(--fs-spacing-3);
+        gap: var(--lt-spacing-3);
         justify-items: start;
       }
       .counter__face {
         inline-size: 100%;
         display: grid;
-        gap: var(--fs-spacing-1);
+        gap: var(--lt-spacing-1);
       }
       .counter :global(.counter__number) {
         margin: 0;
-        font-size: var(--font-size-xxl);
-        font-weight: var(--font-weight-bold);
+        font-size: var(--lt-font-size-xxl);
+        font-weight: var(--lt-font-weight-bold);
         line-height: 1;
         font-variant-numeric: tabular-nums;
-        color: var(--fs-color-accent-fill);
+        color: var(--lt-color-accent-fill);
       }
       .counter :global(.counter__state) {
         margin: 0;
-        color: var(--fs-color-neutral-text-subtle);
+        color: var(--lt-color-neutral-text-subtle);
       }
 
       .panel__json,
       .panel__body :global(.wire__frame) {
         margin: 0;
-        padding: var(--fs-spacing-3);
+        padding: var(--lt-spacing-3);
         overflow-x: auto;
-        background: var(--fs-color-neutral-surface);
-        border-radius: var(--fs-spacing-1);
+        background: var(--lt-color-neutral-surface);
+        border-radius: var(--lt-spacing-1);
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        font-size: var(--font-size-xs);
-        line-height: var(--fs-line-height-compact);
+        font-size: var(--lt-font-size-xs);
+        line-height: var(--lt-line-height-compact);
         white-space: pre-wrap;
       }
       .panel__body :global(.wire__frame + .wire__frame) {
-        margin-block-start: var(--fs-spacing-2);
+        margin-block-start: var(--lt-spacing-2);
       }
       .panel__body :global(.hits) {
         margin: 0;
         padding: 0;
         list-style: none;
         display: grid;
-        gap: var(--fs-spacing-3);
+        gap: var(--lt-spacing-3);
       }
       .panel__body :global(.hits__heading) {
-        color: var(--fs-color-neutral-text-subtle);
+        color: var(--lt-color-neutral-text-subtle);
       }
       .panel__body :global(.hits__excerpt) {
-        margin: var(--fs-spacing-1) 0 0;
-        color: var(--fs-color-neutral-text-subtle);
+        margin: var(--lt-spacing-1) 0 0;
+        color: var(--lt-color-neutral-text-subtle);
       }
     </style>
   </body>

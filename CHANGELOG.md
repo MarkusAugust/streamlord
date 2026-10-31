@@ -6,6 +6,306 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-31
+
+### Added
+
+- `DatastarAttributes.value(value)`: a value as kotlinx.html must be handed it for the browser to
+  read it back exactly, for an attribute you write yourself (see Fixed).
+  `DatastarAttributes.expression(expression)` does the same for an expression, after the checks
+  every DSL helper makes, which the free and the Pro helpers now share.
+
+- `Html`, the markup `interpolate` returns, and `patchElements`, `respondElements` and
+  `datastarElements` overloads that take it. In another `interpolate` it is written as markup in
+  element text and judged as the text it is anywhere else. Only `interpolate` and `joinToHtml` make
+  one. It is
+  markup only where it closes everything it opens, read as HTML and as svg or math, and the hole
+  is outside any comment, CDATA section or `textarea` or `title` body: `interpolate("<script>")`
+  or `interpolate("<a href=\"")` would otherwise turn the value after it into a program or a
+  link, so such a fragment is escaped and shows as the markup it is.
+- `Iterable<Html>.joinToHtml(separator)`: the markup of each `Html` in turn, as one `Html`, for a
+  list of rows as the value of a hole. Each piece already closes what it opens, so nothing is read
+  again or escaped.
+- `PatchElements(html, ...)` and `ElementsResponse(html, ...)`, functions that take an `Html` where
+  the constructors take a `String`, for code that builds the event itself, as a `Flow` of events
+  does. A constructor taking the `Html` would clash with the `String` one on the JVM; Java callers
+  are unaffected.
+- Two analysis codes for a Kotlin value in an HTML string, judged by where it lands as
+  `interpolate` judges it at run time, with core's reading of the markup (`holeLandings`, internal
+  API, which `interpolate` itself now calls): `unescaped-interpolation` where escaping saves it, a
+  hint or, for a `String`, a warning, with a fix that rewrites the literal as `interpolate(...)`;
+  `unsafe-interpolation` where it cannot, a warning (a hint for a tag or attribute name that is not
+  known to be a `String`). VS Code indexes the workspace's `const val`s; IntelliJ adds types.
+- `Fix.edits` in the analysis: further replacements a fix makes, such as an import, with
+  `Fix.replacements`, all of them in the order to make them, and `Fix.preferred`, whether an editor
+  may offer the fix as the one to apply. `AnalyzeOptions.constants` takes the `const val` names the
+  workspace declares, and `AnalyzeOptions.holeFact` what the editor knows of a value from its type,
+  as a `HoleFact`. `HoleFact.UNSIGNED` is a `UInt`, `ULong`, `UShort` or `UByte`: digits, but no
+  `kotlin.Number`, so `interpolate` refuses one in a `data-*` expression or `style`, and the editors
+  say so, an error in a `%s` hole with a `toLong()` fix and a hint where a Kotlin template writes it.
+- The editors judge a call to `interpolate`: `interpolate-holes`, an error, for a `%s` count that
+  does not match the values; `unsafe-interpolation` on a `%s` whose value it will refuse, an error
+  where the value is known to be refused; `interpolate-template` for a Kotlin template written into
+  the format, which is neither escaped nor refused, with a fix that makes it a `%s` hole. The
+  format is read as HTML, and `interpolate`'s `format` is marked `@Language("HTML")`.
+- A fix that quotes an attribute value written without quotes.
+- `Analyzer.analyzeProject(root)`: every `.kt` file under a folder, `build` and hidden folders
+  left out, analysed with the constants the files declare between them, the verdict VS Code gives
+  the same workspace. Each `ProjectIssue` carries the file, the line, the column and the `Issue`,
+  and `format()` writes it as `path:line:col: severity: message [code]`. `failures()` keeps those
+  that should fail a build: every error, and every `unsafe-interpolation` warning. The test over
+  your own sources on the analysis page is now one line. `projectConstants(sources)` gives the
+  constants alone, from each file's `constantNames` and `otherDeclaredNames`.
+
+### Changed
+
+- `dataAttr` and Pro's `dataAnimate` take an attribute's name as HTML has it and refuse a capital
+  in it: the browser lowercases the key, so `dataAttr("viewBox", …)` set `view-box`, and
+  `dataAttr("ariaLabel", …)` relied on a guess that it meant `aria-label`. Write
+  `dataAttr("aria-label", …)`, and the object form, `dataAttr("{viewBox: …}")`, for an attribute
+  that really has capitals. The editors flag the call with the kebab-case fix.
+- `AttributeKeys`, `SignalNames` and `rejectDeclaredLengthAbove` in streamlord-core are marked
+  `@InternalStreamlordApi`, a new opt-in for the API Streamlord's modules share among themselves:
+  the client's rules that the DSL, the adapters and the analysis each read from one place. Code
+  outside Streamlord that calls them compiles only with `@OptIn(InternalStreamlordApi::class)`,
+  and they may change in any release.
+- The catalog reaches core and the analysis as code, generated from `catalog/datastar-1.0.4.json`
+  when they build. `ElementsGuard`'s attribute sets, its default prefixes, the attributes
+  `interpolate` refuses a hole in and `DatastarAttributes.prefix` come from it, where core listed
+  them by hand and a test compared the two. The analysis no longer reads the catalog as a resource,
+  so a native image that runs it needs no resource configuration for it.
+
+- `interpolate` returns `Html` instead of `String`. The JVM signature is the same, so compiled code
+  keeps working, but Kotlin source may need changing:
+  - `val s: String = interpolate(...)` no longer compiles: write `interpolate(...).text`.
+  - `+interpolate(...)` in a kotlinx.html `unsafe { }` block no longer compiles: write
+    `+interpolate(...).text`.
+  - A test that compares the result with a string still compiles and now fails, since an `Html`
+    is never equal to a `String`, though both print the same: JUnit's
+    `assertEquals("<p>x</p>", interpolate(...))` and AssertJ's
+    `assertThat(interpolate(...)).isEqualTo("<p>x</p>")`. Compare `.text`.
+  - On Spring, `ResponseEntity.ok(interpolate(...))` still compiles, but Spring has no message
+    converter that writes an `Html` as markup. Return `datastarElements(html)`, or pass
+    `html.text` where you build the `ResponseEntity` yourself.
+  - From Java, `interpolate` still returns a `String`, so the result of one `interpolate` handed to
+    another from Java is escaped, as any string is. Nest the calls in Kotlin, or wrap the inner
+    result in `Trusted`.
+- A value in a URL the browser loads code from now throws `UnsafeInterpolationException` where
+  0.15.0 let a relative or `https:` value through: `<script src="%s">`, `<iframe src>`,
+  `<embed src>`, `<object data>`, `<base href>` and `<link href>`. Put the host in the literal,
+  `"/js/%s"` or `"https://cdn.example.com/%s"`, or wrap a URL you chose yourself in `Trusted`. A
+  value in an end tag, `</%s>`, throws too: write an end tag from literals alone. A `Trusted` value
+  in a URL no longer waives the other values in it: wrap the whole URL you chose, or put the host
+  in the literal. Security says why.
+- streamlord-analysis changes shape where code built against 0.15.0 may use it. `AnalyzeOptions`
+  gained `constants` and `holeFact`, and `KotlinString` gained `nested`, which changes their JVM
+  constructors and `copy`; Kotlin source compiles as before. `Fix` is no longer a data class: it
+  has no `component1()` to `component4()`, so `val (title, start, end, text) = fix` no longer
+  compiles, and its constructor and `copy` take `edits` and `preferred`, which Kotlin source
+  with four arguments still compiles against, while compiled code does not link. `InterpolationKind`
+  has a new entry, `OPERAND`, for a value joined to literals with `+`, so an exhaustive `when` over
+  it needs a branch. The casing helpers moved to core's `AttributeKeys`: `toCamel`, `kebab` and
+  `wireKeyReads` are gone from streamlord-analysis, and `Catalog` no longer has `prefix`,
+  `aliasedPrefix` and `version`, which `CatalogNames` holds. `AttributeSpec` and `Modifier` take
+  new catalog fields, which changes their JVM constructors and `copy`, and
+  `ExpressionValidator.validate` takes the attribute it judges as a fourth, defaulted parameter.
+  Recompile code built against 0.15.
+- The editors judge `${...}`, values joined with `+`, literals inside a template and `$$` literals,
+  which they skipped, and no longer give every `$name` in HTML the same hint. A constant, a literal,
+  a declared number or boolean and markup built in the template say nothing. In a Datastar
+  expression, `kotlin-interpolation` no longer calls a `String` fine as a server value: only a
+  number or a boolean is.
+- `Trusted` writes its markup in a Kotlin template, not `Trusted(html=...)`.
+
+### Fixed
+
+- The editors flag, as `key-refused`, every key and signal name the DSL refuses at runtime: one
+  holding `__`, where the client starts reading modifiers, whitespace, a quote or a character that
+  ends an attribute; one ending in `_` before any modifier the call adds, its `__case`,
+  `ifMissing`, `session` or the modifiers of its lambda; and a signal name no `$` reaches, such as
+  `a:b`, `über` or `constructor`, in a key, a pair or the name of `dataBind`, `dataRef` or
+  `dataIndicator`. The hint used to say what such a key writes. The reasons come from
+  `AttributeKeys.nameProblem` and `SignalNames.nameProblem` in streamlord-core, which the DSL
+  throws with.
+- `JsLiteral`, which writes the values of `set`, `setAll` and a fetch's `payload` and `headers`,
+  refuses what `JsonWriter` refuses: a map that holds itself overflowed the stack, and `1` and
+  `"1"` as keys of one map were both written as `'1'`.
+  It now walks a value with `JsonWriter` itself, in a JavaScript style, so the two cannot part.
+  Half of a surrogate pair in a string is written `\uXXXX`, as `JsonWriter` writes it, where it
+  reached the page as U+FFFD.
+- `FetchOptions.retry` says what Datastar 1.0.4 does with `never`: a request that never reaches
+  the server is retried all the same, as with `auto`, up to `retryMaxCount`. The DSL fixture holds
+  it.
+- The editors warn, as `scope-name`, on `patch` in an expression whose attribute does not hand it
+  over, such as `data-text="patch.a"`: only `data-on-signal-patch` declares `patch`, so elsewhere
+  it throws a ReferenceError. (`evt` is declared in every expression, and is undefined outside
+  `data-on`.) The catalog says per attribute which names its plugin hands an expression,
+  `argNames`, held to the client's plugins.
+- `dataSignals("selected" to null)` declared nothing, without a word: Datastar's client holds no
+  null, so the null removes the key, and an expression that reads the signal gets `""`, as it does
+  for a null in a list. The editors warn on such a pair as `signal-null`, and the signals page says
+  what it means for a form whose field is `null`.
+- A `\` followed by `&` in an expression lost its backslash: kotlinx.html writes that pair as a
+  bare `&`, so `dataText("'\\&amp;'")` showed `&` where it meant `&amp;`, and `'\\\\&'` lost
+  one of its backslashes. Every expression the DSL writes now reaches the browser as written.
+- `LiveDatastarStream.open` puts the `datastar` parameter where the client's `URLSearchParams.set`
+  puts it, in place of one the URI carries rather than at the end, reads `data%73tar` as that
+  parameter as a form does, and sends a lone surrogate as U+FFFD.
+  It and the editors' request inspector send the request with `ClientRequest` in streamlord-core;
+  `Requests.ACCEPT` in streamlord-analysis is gone, as `DatastarProtocol.ACCEPT` says the same.
+- `ElementsGuard` and `interpolate` decode character references as the HTML tokenizer does, with the
+  decoder the analysis uses: `&nbsp;` is a no-break space, `&#0;`, a surrogate and a number past
+  U+10FFFF are U+FFFD, `&#128;` to `&#159;` are windows-1252, and `&amp`, `&lt`, `&gt`, `&quot` and
+  `&nbsp` decode without their semicolon. `data-text="&nbsp;"` is refused now, as `&#160;` was.
+  The typo rule for `data-*` names is one function, `ElementsGuard.nearAttribute`, which the
+  analysis calls.
+
+- The editors no longer report `<p> has no id` inside `<$tag ...>`, whose template is a tag name,
+  nor text fragments in a `trimMargin` literal, whose margin is not text.
+- A template inside a JavaScript string of a Datastar expression, `@post('/x/$id')`, was called
+  safe text. It is code Datastar runs: a warning now.
+
+- The exception for a value in a URL that loads code said to pass a relative or `https` URL, which
+  is what had been passed. It says now what the rule is: write the host into the markup before the
+  hole, as in `"/js/%s"` or `"https://cdn.example.com/%s"`, or wrap a URL you chose in `Trusted`.
+  `UnsafeInterpolationException.loadsCode` tells such a refusal apart; its constructor takes it as
+  a fourth parameter, which changes its JVM signature.
+- `href` of a `<link>` loads what it points at, a stylesheet, a module or an icon, so a value there
+  is held to the host rule above, whatever the `rel`: `<link rel="stylesheet" href="%s">` with
+  `https://evil.example/x.css` was let in. A `content` of a `<meta>` that starts with a time, as
+  `http-equiv="refresh"` reads it, has its URL held to the URL schemes, so
+  `content="0;url=%s"` refuses `javascript:`; a `content` that is no refresh, a description say,
+  takes any value as before. Both were in 0.15.0.
+- `ElementsGuard`, `interpolate` and the analysis searched to the end of the markup for both of a
+  comment's closing sequences at every comment, so a patch of many comments took time that grew
+  with its square: 800 KB of them took seconds in the guard, on every patch. `interpolate` read the
+  markup before a hole again for every `Html` value (20000 of them took the better part of a
+  minute), followed every end tag that matched nothing through the open elements, and the guard
+  searched every CDATA section of an svg for every svg tag, and the editors lowercased the whole
+  markup for each raw-text end they looked for. Each is one walk now. This was in 0.15.0.
+
+### Security
+
+- `interpolate`, and the editors with it, took an `=` where an attribute name begins as the start
+  of a value, where the browser's tokenizer takes it as the first character of the name, which then
+  runs to the next space, `/` or `>`, quotes included. So in `<img src=x ='%s'>` the hole was judged
+  a quoted value and let in, and the value ` onerror=alert(1) x` came out as an `onerror` the
+  browser runs. A name now always takes its first character, `=` or not, and a hole there is
+  structure. A smaller misreading went with it: a `/` that ends an unquoted value, as in
+  `<svg x=a/>`, is part of the value and does not close the element. This was in 0.15.0.
+- `interpolate`, `ElementsGuard` and the editors ended a `<script>` at its first `</script>`, but
+  the browser's tokenizer does not always: after a `<!--` in the body, a `<script` start makes it
+  double-escaped, where `</script>` only returns it to escaped, until a `-->` or a second
+  `</script>`. So in `interpolate("<script><!--<script></script>%s", value)` the hole was judged
+  text and let in, and the value came out inside the script, which the browser runs. A script body
+  now ends where the tokenizer's script data states end it, escaped and double-escaped included,
+  so that hole is code and refused, and an `Html` that leaves a script open this way is escaped.
+  This was in 0.15.0.
+- `interpolate` read the markup three fixed ways, all HTML, all `<svg>`/`<math>`, and all svg or
+  math with CDATA sections as text, and took the strictest, but the browser switches reading as its
+  element stack changes and no one fixed way follows it. In
+  `<svg><![CDATA[><!--]]></svg><![CDATA[><img %s>-->]]>` the first `<![CDATA[` is a section inside
+  the svg, but once `</svg>` returns to HTML the second is a bogus comment the first `>` ends, so
+  the `<img %s>` after it is a live element and the value its attributes; every fixed reading saw
+  the img inside a comment or a section and missed it. A fourth reading now follows the browser's
+  stack, svg and math nesting, their HTML and MathML-text integration points, and the tags that
+  exit foreign content, and switches CDATA, bogus-comment and raw-text rules by position; it joins
+  the three as a conservative floor, and the strictest still wins. This was in 0.15.0.
+- A value in a URL that loads what the browser runs, `src` of `<script>`, `href` of `<base>`,
+  `src` of `<iframe>` and `<embed>`, `data` of `<object>`, and `href` of an SVG `<script>`, is
+  refused unless the literal before the hole already fixes the host: a path-absolute `/x` (a single
+  `/` and then a character that is not `/` or `\`, so a value cannot make it `//host`), a
+  same-document `#` or `?`, or a whole origin `scheme://host/` with a safe scheme. A safe scheme
+  alone no longer settles such an attribute, since `https://` can still point at another origin, and
+  a single leading `/` no longer settles its host, since the next character could be a second `/`.
+  `Trusted(...)` passes as ever. `urlHostFixedBy` (internal API) answers it, and `HoleLanding`
+  (internal API) carries `loadsCode` for such an attribute, so the editors judge a hole there by
+  the host too: a Kotlin template that may move it is an `unsafe-interpolation` warning, with no
+  rewrite to `interpolate`, which would refuse it, and a `%s` hole in an `interpolate` format whose
+  literal does not fix the host is an error where the value is known, since only `Trusted` passes.
+- `interpolate` decoded each literal piece of a URL attribute on its own before it judged the
+  scheme, where the browser decodes the attribute once it is whole, so a character reference could
+  begin in the markup and end in the value: `<a href="&%s">` with `#106;avascript:alert(1)` wrote
+  `&#106;avascript:`, a `javascript:` link. The URL is judged as it will be written now, the
+  literal as it stands and each value escaped, decoded once. This was in 0.15.0.
+- `interpolate` refused a value in a start tag's name but let one into an end tag's,
+  `</%s>`, where it chose which element to close. It is refused there too.
+- `interpolate` read an end tag as text, or as ending at its first `>`, where the browser reads
+  its attributes as a start tag's and a quoted value can hold a `>`: in
+  `</p x="><b title="><script>%s</script>">` it took the value for an attribute, and the browser
+  ran it. It and the editors read an end tag's quotes now, and a value anywhere in an end tag is
+  refused as structure, since the browser throws its attributes away.
+- `interpolate` read an end tag with Unicode case folding, where the browser folds A to Z alone:
+  in `<script>x</ſcript>%s</script>` (U+017F, a long s) it took the value for text after the
+  script, and the browser ran it as part of the script. It is refused now, as every value inside a
+  script is. `<ſcript>` is no script either, and its content is text. Only a format that holds such
+  a tag itself was affected; a value cannot add one.
+- Inside an `<svg>` or a `<math>`, `interpolate` and `ElementsGuard` read `<![CDATA[` as HTML does,
+  as a bogus comment the first `>` ends, where the browser reads a CDATA section that only `]]>`
+  ends: in `<svg><![CDATA[ > <x a="]]><img onerror='%s'>">` the img is an element of the page,
+  and its handler held the value. Both now read the markup that way as well, and take the
+  strictest of the readings: inside an svg's `title` or `desc`, or after a tag that ends the svg,
+  the browser is back in HTML and reads a bogus comment again, so neither reading is right
+  everywhere. An `</svg>` inside a CDATA section no longer ends the part `ElementsGuard` reads as
+  svg either.
+- `interpolate`, `ElementsGuard` and the analysis read a `<noscript>` as text, as a browser with
+  scripting on does, but the client parses a patch with `DOMParser`, where scripting is off and a
+  noscript holds elements. So `interpolate("<noscript><xmp><a title=\"</xmp><script>%s</script>", v)`
+  and `<noscript><textarea></noscript><p title="</textarea><img src=x onerror='%s'>">` let the value
+  into a script and a handler. A noscript is markup to all of them now, and `interpolate` reads
+  markup that holds one with scripting on as well, as a page loads it, and takes the stricter. This
+  was in 0.15.0.
+- An `Html` that left an element open counted as closed, though an open `<svg>` or `<math>` changes
+  how the markup after it is read: in
+  `interpolate("%s<title><xmp><!--</xmp><script>%s</script>", interpolate("<svg>"), v)` the title
+  became an svg one that holds elements and the script ran. An `Html` is markup now only where it
+  leaves open no svg, math or element in them, no `template` and no `select`, and ends no element
+  it did not open; otherwise it is escaped. And `interpolate` reads every format inside an `<svg>`
+  and inside a `<math>` too, as the client parses a patch in those namespaces, where a `<title>` or
+  an `<mi>` holds HTML: `<title><xmp><!--</xmp><img src=x onerror="%s">` is refused now. The
+  element-stack reading also follows a `<font>` with a `color`, `face` or `size` out of foreign
+  content, keeps `<mglyph>` and `<malignmark>` MathML inside an `<mi>`, and takes the text of an
+  svg `<script>` or `<style>` for code though they hold elements. `Html` is new in this release;
+  the formats read wrong inside an svg or a math were in 0.15.0.
+- One `Trusted` value in a URL attribute waived the URL check for every other value there:
+  `interpolate("<a href=\"%s%s\">x</a>", Trusted(""), "javascript:alert(1)")` wrote a
+  `javascript:` link. A `Trusted` value now counts toward the URL as the literal does, written as
+  it stands, and the whole URL is judged; only a URL with no other value in it goes unjudged. The
+  host rule for a URL that loads code reads a `Trusted` value before the hole the same way. This
+  was in 0.15.0.
+- The readings from inside an `<svg>` and a `<math>` kept every HTML element open to its end tag,
+  where the browser closes some by itself: a `<p>` at the next `<p>` or `<div>`, an `<li>` at the
+  next `<li>`. Once the element opened from the svg is closed, the browser is back in the svg, so
+  in `interpolate("<p><p></p><script><!</script>%s", v)` the script was an svg one whose `<!`
+  swallowed its end tag, and the value came out inside it. The element-stack readings now follow
+  the tree builder's implied end tags (a `p` closed by the elements that close one, an `li`, `dd`
+  or `dt` by the next, a heading by a heading, an `option` by an `option`), drop the `html`, `head`,
+  `body` and `frameset` start tags and, in body, the parts of a table outside one, and take a `</p>`
+  or `</br>` in foreign content out of it, as the browser does. The readings from an svg and a math
+  are also taken once more with no HTML element opened from them left open, and the strictest still
+  wins, as the editors do too. These readings are new in this release.
+- The element-stack readings put an `<svg>` tag in the svg namespace wherever it stood, and a
+  `<math>` in MathML, but inside foreign content a tag takes the namespace it stands in: in a math
+  patch, `<xmp><svg><mi><textarea><a href='</textarea><img src=x onerror=%s>` has a MathML `mi`,
+  whose content is HTML, so the textarea ends and the value lands in a live handler, where the
+  readings saw an svg `mi` and a quoted attribute. Inside an svg or a math, an `<svg>` or `<math>`
+  now stays in the namespace around it. These readings are new in this release.
+- `interpolate` and the editors took a value inside a comment or a bogus comment for text, but
+  escaping takes only its `<` and `>`, and its dashes can still change the comment around it: in
+  `interpolate("<!%s><a title=\"--><script>%s</script>\">", "-- x", v)` the value made `<!` a
+  comment that ran to the `-->` in the title, and the script after it was live. A hole right after
+  `<!` or `<!-`, where a value can finish a comment or a `<![CDATA[`, and one in a comment or a
+  CDATA section whose markup goes on with `>`, `!>`, `->`, `-!>` or `]>`, which a value's dashes,
+  `!` or `]` would make an early end, is refused as structure. This was in 0.15.0.
+- A `Trusted` value was written as it stands but never read back into the markup, so one in a tag
+  or attribute name, or anywhere else that changes how the markup is read, waived the checks on
+  the values beside it: `interpolate("<button %s=\"%s\">", Trusted("onclick"), v)` put `v` in a
+  handler, and `<%s>%s</%s>` with `Trusted("script")` put it in a script. `interpolate` now reads
+  the markup as it will be written, each `Trusted` value's text in place, and judges every other
+  value where that puts it, URL and host checks included; a `Trusted` value itself is still not
+  judged. `holeLandings` (internal API) takes the text of the holes whose content is known, so the
+  editors can read it the same way. This was in 0.15.0.
+
 ## [0.15.0] - 2026-10-28
 
 ### Added

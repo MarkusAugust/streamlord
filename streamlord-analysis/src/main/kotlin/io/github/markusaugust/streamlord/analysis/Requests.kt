@@ -1,8 +1,8 @@
 package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.JsonParseException
+import io.github.markusaugust.streamlord.core.client.ClientRequest
 import io.github.markusaugust.streamlord.core.json.JsonArray
-import io.github.markusaugust.streamlord.core.json.JsonNumber
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonString
@@ -37,9 +37,6 @@ public data class RequestsFile(
 }
 
 public object Requests {
-    /** What Datastar's client sends as `Accept`, and so what the inspector sends (fetch.ts:82 in 1.0.4). */
-    public const val ACCEPT: String = DatastarProtocol.ACCEPT
-
     /** How much of a response without a stream the inspector reads and shows. */
     public const val NON_STREAM_LIMIT: Int = 1024 * 1024
 
@@ -55,7 +52,7 @@ public object Requests {
         status: Int,
         contentType: String?,
     ): String? =
-        if (status != 200 && "text/event-stream" in (contentType ?: "")) {
+        if (status != 200 && DatastarProtocol.CONTENT_TYPE_EVENT_STREAM in (contentType ?: "")) {
             "Not read: the client reads no body with a $status, and a stream may never end."
         } else {
             null
@@ -78,7 +75,9 @@ public object Requests {
     public const val REQUESTS_FILE: String = ".streamlord/inspector.json"
     public const val ENV_FILE: String = ".streamlord/env.json"
     public const val RECENT_LIMIT: Int = 10
-    public val METHODS: List<String> = listOf("GET", "POST", "PUT", "PATCH", "DELETE", "QUERY")
+
+    /** The methods of the backend actions, in the catalog's order. */
+    public val METHODS: List<String> = Catalog.default.backendActions.map { it.uppercase() }
 
     private val VARIABLE = Regex("""\{\{\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\}\}""")
     private val PATH_VARIABLE = Regex("""\{([A-Za-z_][A-Za-z0-9_]*)(?::[^{}]*)?\}""")
@@ -754,34 +753,7 @@ public object Requests {
         url: String,
         method: String,
         signalsJson: String,
-    ): String {
-        if (method != "GET" && method != "DELETE") return url
-        // Taken apart as text: a URL that still holds a `{id}`, a space or an unresolved variable is
-        // one java.net.URI refuses, and the rest of it is passed on exactly as it was written.
-        val hash = url.indexOf('#')
-        val fragment = if (hash < 0) "" else url.substring(hash)
-        val beforeFragment = if (hash < 0) url else url.substring(0, hash)
-        val kept = beforeFragment.substringAfter('?', "").split('&').filter { it.isNotEmpty() && !it.startsWith("datastar=") }
-        val query = (kept + ("datastar=" + URLEncoder.encode(wellFormed(signalsJson), Charsets.UTF_8))).joinToString("&")
-        return "${beforeFragment.substringBefore('?')}?$query$fragment"
-    }
-
-    /** A surrogate without its partner becomes U+FFFD, which is what a browser encodes in its place. */
-    private fun wellFormed(s: String): String {
-        if (s.none { it.isSurrogate() }) return s
-        val out = StringBuilder(s.length)
-        var i = 0
-        while (i < s.length) {
-            val c = s[i]
-            if (c.isHighSurrogate() && i + 1 < s.length && s[i + 1].isLowSurrogate()) {
-                out.append(c).append(s[++i])
-            } else {
-                out.append(if (c.isSurrogate()) '\uFFFD' else c)
-            }
-            i++
-        }
-        return out.toString()
-    }
+    ): String = if (ClientRequest.bodyless(method)) ClientRequest.withSignals(url, signalsJson) else url
 
     private fun shellQuote(s: String): String = "'" + s.replace("'", "'\\''") + "'"
 
@@ -910,10 +882,7 @@ public object Requests {
         method: String,
         userHeaders: Map<String, String>,
     ): Map<String, String> {
-        val out = LinkedHashMap<String, String>()
-        out["Accept"] = ACCEPT
-        out["Datastar-Request"] = "true"
-        if (!(method == "GET" || method == "DELETE")) out["Content-Type"] = "application/json"
+        val out = LinkedHashMap(ClientRequest.headers(method))
         for ((k, v) in userHeaders) {
             out.keys.firstOrNull { it.equals(k, ignoreCase = true) }?.let { out.remove(it) }
             out[k] = v
@@ -926,12 +895,12 @@ public object Requests {
      * The body goes as `--data-raw`: with `--data`, curl reads signals that start with `@` from the file they name.
      */
     public fun toCurl(r: SavedRequest): String {
-        val bodyless = r.method == "GET" || r.method == "DELETE"
+        val noBody = ClientRequest.bodyless(r.method)
         val signalsJson = compactSignals(r.signals)
-        val parts = mutableListOf("curl", "-N", "-X", r.method)
+        val parts = mutableListOf("curl", "-N", "-X", r.method.uppercase())
         parts += shellQuote(requestUrl(r.url, r.method, signalsJson))
         for ((k, v) in requestHeaders(r.method, parseHeaderLines(r.headers))) parts += listOf("-H", shellQuote("$k: $v"))
-        if (!bodyless) parts += listOf("--data-raw", shellQuote(signalsJson))
+        if (!noBody) parts += listOf("--data-raw", shellQuote(signalsJson))
         return parts.joinToString(" ")
     }
 
@@ -1088,7 +1057,7 @@ public object Requests {
     /** `encodeURIComponent`: percent-encodes everything but the unreserved characters and `!'()*`. */
     private fun encodeSegment(s: String): String =
         URLEncoder
-            .encode(wellFormed(s), Charsets.UTF_8)
+            .encode(ClientRequest.wellFormed(s), Charsets.UTF_8)
             .replace("+", "%20")
             .replace("%21", "!")
             .replace("%27", "'")

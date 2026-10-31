@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.client.ClientCasing
+import io.github.markusaugust.streamlord.core.client.clientRewrite
 import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonNumber
 import io.github.markusaugust.streamlord.core.json.JsonObject
@@ -35,29 +37,6 @@ class ClientOracleTest {
         group: String,
     ): List<JsonObject> = fixture(name).obj("cases")!!.array(group)!!.objects()
 
-    /** `casing.json`: `modifyCasing` with each `__case` against [clientKeyName], and its camel default against [toCamel]. */
-    @Test
-    fun `reads the case of a key as modifyCasing does`() {
-        val cases = cases("casing.json")
-        assertEquals(68, cases.size)
-        for (case in cases) {
-            val key = case.string("key")!!
-            val table = case.obj("modifyCasing")!!
-            // A key holding __ is cut there by parseAttributeKey, so modifyCasing never sees it whole.
-            if ("__" in key) continue
-            assertEquals(table.string("default camel"), toCamel(key), key)
-            assertEquals(table.string("default camel"), clientKeyName(key), key)
-            // A key ending in _ runs into the __ of a modifier after it, and the client reads a shorter key.
-            if (key.endsWith("_")) continue
-            for ((column, value) in table) {
-                if (!column.startsWith("case.")) continue
-                // The client throws on `__case.pascal` of an empty key, which no attribute hands it: parseAttributeKey needs a character after the colon.
-                val expected = (value as? JsonString)?.value ?: continue
-                assertEquals(expected, clientKeyName("${key}__$column"), "$key with __$column")
-            }
-        }
-    }
-
     /**
      * `casing.json`: [wireKey] writes a key and a `__case` for a name typed with capitals, so that
      * the client reads the name back; the fixture says what it reads.
@@ -70,19 +49,19 @@ class ClientOracleTest {
             if (name.none { it.isUpperCase() } || name.any { it.isWhitespace() } || "__" in name) continue
             for (keyCase in listOf(KeyCase.CAMEL, KeyCase.KEBAB)) {
                 val wire = wireKey(name, keyCase, null)
-                val base = (wire ?: kebab(name)).substringBefore("__case.").lowercase()
+                val base = (wire ?: ClientCasing.kebab(name)).substringBefore("__case.").lowercase()
                 val table = casing[base]?.obj("modifyCasing") ?: fail("$base, the key written for $name, is not in casing.json: add it")
                 if (wire == null) {
                     // No key gives the name back: the client's reading under the case the capitals ask for differs.
                     val wanted = if (name.first().isUpperCase()) "pascal" else "camel"
                     assertNotEquals(name, table.string("case.$wanted"), "$name refused as a ${keyCase.name.lowercase()} key")
-                    assertEquals(table.string("case.$wanted"), wireKeyReads(name), name)
+                    assertEquals(table.string("case.$wanted"), ClientCasing.readsAs(name), name)
                     continue
                 }
                 val column = if ("__case." in wire) "case." + wire.substringAfter("__case.") else "default ${keyCase.name.lowercase()}"
                 val read = table.string(column)
-                // A signal key in markup is read as camelCase, as toCamel reads it; an event or class comes back as typed.
-                val expected = if (keyCase == KeyCase.CAMEL) toCamel(name) else name
+                // A signal key in markup is read as camelCase; an event or class comes back as typed.
+                val expected = if (keyCase == KeyCase.CAMEL) ClientCasing.camel(name) else name
                 if (read !=
                     expected
                 ) {
@@ -94,11 +73,11 @@ class ClientOracleTest {
         assertEquals(emptyList(), misread)
     }
 
-    /** `attribute-keys.json`: `parseAttributeKey` against [Catalog.parseAttributeName], and the key's casing against [clientKeyName]. */
+    /** `attribute-keys.json`: `parseAttributeKey` against [Catalog.parseAttributeName], and the key's casing against core's reading. */
     @Test
     fun `splits an attribute name as parseAttributeKey does`() {
         val cases = cases("attribute-keys.json")
-        assertEquals(54, cases.size)
+        assertEquals(55, cases.size)
         for (case in cases) {
             val raw = case.string("raw")!!
             val parsed = Catalog.default.parseAttributeName("data-$raw", "data-")!!
@@ -120,8 +99,19 @@ class ClientOracleTest {
             val expected = case.obj("modifiers")!!.mapValues { (_, v) -> (v as JsonArray).strings() }
             assertEquals(expected, modifiers, raw)
             val held = case.string("signalCamel") ?: continue
-            assertEquals(held, clientKeyName(raw.substringAfter(':')), raw)
+            // The fixture holds the function's answer for the text as given; the browser lowercases it first.
+            if (raw == raw.lowercase()) assertEquals(held, ClientCasing.readKey(raw.substringAfter(':')), raw)
         }
+    }
+
+    /** `expressions.json`: the names `genRx` compiles every expression with, and a plugin's `argNames` after them. */
+    @Test
+    fun `knows the names an expression is compiled with`() {
+        val fixture = fixture("expressions.json")
+        assertEquals(fixture.array("parameters")!!.strings(), Catalog.default.compiledParameters)
+        val with = fixture.obj("parametersWithArgNames")!!
+        assertEquals(with.array("parameters")!!.strings(), Catalog.default.compiledParameters + with.array("argNames")!!.strings())
+        assertEquals(setOf("el", "evt", "patch"), Catalog.default.scopeNames)
     }
 
     /** `expressions.json`: the body `genRx` compiles, against [clientScript] and then [clientRewrite], in the client's order. */
@@ -271,5 +261,40 @@ class ClientOracleTest {
             val flagged = store.any { (key, value) -> '.' !in key && signalPathProblem(key, objectUnder = value is JsonObject) != null }
             assertEquals(lost, flagged, store.toJson())
         }
+    }
+
+    /**
+     * The fixtures under `conformance/dsl/`: for each DSL call there with a literal key that has a capital, the hint's [wireKey]
+     * is the key and `__case` the DSL wrote, and the name the hint says the client reads back is
+     * the one the call means, which DslAsTheClientReadsItTest holds to what the client did.
+     */
+    @Test
+    fun `the wire hint names the key the dsl writes and the name the client reads`() {
+        var checked = 0
+        for (file in listOf("free.json", "pro.json")) {
+            val cases = JsonParser.parseObject(File("../conformance/dsl/$file").readText()).array("cases")!!.objects()
+            for (case in cases) {
+                val call = case.obj("call")!!
+                // The hint is shown for a key with a capital, the one the DSL rewrites.
+                val key = call.string("key")?.takeIf { k -> k.any { it.isUpperCase() } } ?: continue
+                val spec = Catalog.default.attributesByKotlin[call.string("fn")] ?: continue
+                if (!spec.keyed || spec.keyCase == null) continue
+                val prefix = case.string("prefix")!! + spec.name + ":"
+                val names =
+                    case.obj("read")!!.array("attributes")!!.flatMap { el ->
+                        (el as JsonArray).map { (it as JsonArray)[0].toKotlin() as String }
+                    }
+                val written = names.firstOrNull { it.startsWith(prefix) }?.removePrefix(prefix) ?: continue
+                val parts = written.split("__")
+                val wire = parts[0] + parts.drop(1).filter { it.startsWith("case.") }.joinToString("") { "__$it" }
+                assertEquals(wire, wireKey(key, spec.keyCase, call.string("case")), case.string("name"))
+                if (call.string("case") == null && spec.keyCase != KeyCase.RAW) {
+                    val read = if (spec.keyCase == KeyCase.CAMEL || "__case." in wire) ClientCasing.readKey(wire) else wire
+                    assertEquals(key, read, case.string("name"))
+                }
+                checked++
+            }
+        }
+        assertTrue(checked >= 15, "only $checked cases checked")
     }
 }

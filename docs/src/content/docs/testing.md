@@ -233,8 +233,9 @@ Boot. It needs `assertj-core` next to `spring-test`.
 A stream runs in an async cycle of its own, and the body is empty until the test has waited for
 it and dispatched the result. `exchange()` does that once, which is enough for an ordinary
 controller. A `suspend` controller runs in one async cycle and its stream in a second, and
-`exchange()` hands back the first, with an empty body. The helper below dispatches until no cycle
-is left, and sends the request the way Datastar's client does. It is yours to copy:
+`exchange()` returns after the first, while the stream may not have written anything yet. The
+helper below dispatches until no cycle is left, and sends the request the way Datastar's client
+does. It is yours to copy:
 
 ```kotlin sample=spring-test
 @RestController

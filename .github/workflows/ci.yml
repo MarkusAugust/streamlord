@@ -82,26 +82,33 @@ jobs:
               # This file decides what runs, so a change to it runs everything.
               .github/workflows/*)
                 kotlin=true; vscode=true; intellij=true; docs=true; image=true; ktlint=true ;;
-              # The corpus both editors' checks are held to: CorpusTest in the SDK reads it too.
-              # And the SSE corpus both inspectors read, SseCorpusTest in streamlord-analysis too.
-              editors/vscode/test/fixtures/corpus/*|editors/vscode/test/fixtures/sse/*) vscode=true; kotlin=true; intellij=true ;;
-              # The corpus is counted on the front page, so it is site content too.
-              editors/vscode/test/fixtures/corpus/*) vscode=true; docs=true ;;
+              # The corpus both editors' checks are held to: CorpusTest in the SDK reads it too,
+              # and the front page counts it, so it is site content as well.
+              editors/vscode/test/fixtures/corpus/*) vscode=true; kotlin=true; intellij=true; docs=true ;;
+              # The other shared fixtures: the cases both analyses hold under twins/, which core
+              # reads some of too, the SSE corpus, and the templates IntelliJ reads.
+              editors/vscode/test/fixtures/*) vscode=true; kotlin=true; intellij=true ;;
+              # The site highlights its code with the extension's grammars and palette, and shows its icon.
+              editors/vscode/syntaxes/*|editors/vscode/media/*|editors/vscode/src/palette.ts) vscode=true; docs=true ;;
               editors/vscode/*)   vscode=true ;;
               editors/intellij/*) intellij=true ;;
-              # The catalog feeds the analysis, and VS Code's generated custom data.
-              catalog/*)          kotlin=true; vscode=true; intellij=true ;;
+              # The catalog feeds the analysis, which the image bundles for /judge, VS Code's generated
+              # custom data, and the counts on the front page.
+              catalog/*)          kotlin=true; vscode=true; intellij=true; docs=true; image=true ;;
               # The pages are compiled by docs-samples and indexed into the image, so
               # they are Kotlin sources and image content as much as they are prose.
               docs/src/content/docs/*) docs=true; kotlin=true; image=true ;;
+              # The front page's samples are compiled by docs-samples too.
+              docs/src/samples/*) docs=true; kotlin=true ;;
               # The transcripts the pages import are goldens the Kotlin build checks.
               docs/src/generated/*) docs=true; kotlin=true ;;
               docs/*)             docs=true ;;
               # Netlify's build of the site, which deploys from master with no other check.
               netlify.toml)       docs=true ;;
               demo/*)             kotlin=true; image=true ;;
-              # The fixtures are read by the Kotlin tests, the editors' tests and the front page.
-              conformance/*)      kotlin=true; image=true; intellij=true; vscode=true; docs=true ;;
+              # The fixtures are read by the Kotlin tests, the VS Code tests and the front page; the
+              # image and the IntelliJ plugin read none of them.
+              conformance/*)      kotlin=true; vscode=true; docs=true ;;
               # The IntelliJ plugin builds streamlord-analysis, and core beneath it, from source.
               streamlord-core/*)  kotlin=true; image=true; intellij=true ;;
               # The image runs the analysis in /judge and streamlord-test in /assert.
@@ -116,7 +123,9 @@ jobs:
               # The version catalog and the settings scripts are the plugin's build too.
               # The site reads the catalog for the versions on the front page.
               gradle/libs.versions.toml) kotlin=true; image=true; intellij=true; docs=true ;;
-              gradle/*|gradlew*|*.gradle.kts|gradle.properties)
+              # The site reads the version out of gradle.properties.
+              gradle.properties)  kotlin=true; image=true; intellij=true; docs=true ;;
+              gradle/*|gradlew*|*.gradle.kts)
                 kotlin=true; image=true; intellij=true ;;
             esac
           done <<< "$files"
@@ -193,7 +202,7 @@ jobs:
       # are everywhere ktlint is run in this repository.
       - name: Check the Kotlin sources
         run: |
-          "$RUNNER_TEMP/ktlint" --relative "**/*.kt" "!**/build/**" "!**/node_modules/**"
+          "$RUNNER_TEMP/ktlint" --relative "**/*.kt" "!**/build/**" "!**/node_modules/**" "!editors/vscode/test/fixtures/**"
 
   vscode:
     name: VS Code extension
@@ -321,7 +330,7 @@ jobs:
           persist-credentials: false
 
       # GraalVM rather than Temurin: this job compiles the service to a native image.
-      - uses: graalvm/setup-graalvm@27b360dbb857524eaf0b4c4cef364d38e5b4f173 # v1.6.7
+      - uses: graalvm/setup-graalvm@f70bc8032f90a104502824a54bcb94b6f01715bc # v1.6.8
         with:
           java-version: "21"
           distribution: graalvm-community
@@ -450,7 +459,7 @@ jobs:
 
           echo "$body" | grep -q '^event: datastar-patch-elements' \
             || { echo "::error::no patch-elements frame in the response"; echo "$body" | head -5; exit 1; }
-          echo "$body" | grep -q 'fs-link' \
+          echo "$body" | grep -q 'lt-link' \
             || { echo "::error::the search returned no hits. Is the index in the image?"; exit 1; }
           echo "  a search for readSignals came back with hits"
 
@@ -484,7 +493,7 @@ jobs:
             -d '{"banner":"Ox","swords":"x"}' \
             http://localhost:8080/muster)
 
-          echo "$muster" | grep -q 'fs-error-summary' \
+          echo "$muster" | grep -q 'lt-error-summary' \
             || { echo "::error::no error summary came back from /muster"; echo "$muster" | head -8; exit 1; }
           echo "$muster" | grep -q '"bannerFault"' \
             || { echo "::error::/muster sent no field faults"; exit 1; }
@@ -617,7 +626,7 @@ jobs:
       - name: Load the image
         run: docker load -i streamlord-live.tar
 
-      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -699,7 +708,7 @@ jobs:
             -H 'Accept: text/event-stream' \
             "$SERVICE/search?datastar=%7B%22query%22%3A%22readSignals%22%7D")
 
-          echo "$body" | grep -q 'fs-link' \
+          echo "$body" | grep -q 'lt-link' \
             || { echo "::error::the deployed search returned no hits"; echo "$body" | head -5; exit 1; }
           echo "  a search came back with hits"
 
@@ -727,7 +736,7 @@ jobs:
             -d '{"banner":"Ox","swords":"x"}' \
             "$SERVICE/muster")
 
-          echo "$muster" | grep -q 'fs-error-summary' \
+          echo "$muster" | grep -q 'lt-error-summary' \
             || { echo "::error::the deployed form sent no error summary"; echo "$muster" | head -6; exit 1; }
           echo "  the form answered a POST"
 

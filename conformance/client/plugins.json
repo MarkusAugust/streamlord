@@ -1,0 +1,141 @@
+{
+  "$comment": "The argument each attribute plugin under plugins/attributes of the Datastar 1.0.4 client passes to attribute() from engine/engine.ts, recorded by bundling the plugins with an @engine whose attribute() records it: requirement, returnsValue and argNames as the plugin declares them, null, false and [] where it declares none.",
+  "cases": [
+    {
+      "name": "attr",
+      "requirement": {
+        "value": "must"
+      },
+      "returnsValue": true,
+      "argNames": []
+    },
+    {
+      "name": "bind",
+      "requirement": "exclusive",
+      "returnsValue": false,
+      "argNames": []
+    },
+    {
+      "name": "class",
+      "requirement": {
+        "value": "must"
+      },
+      "returnsValue": true,
+      "argNames": []
+    },
+    {
+      "name": "computed",
+      "requirement": {
+        "value": "must"
+      },
+      "returnsValue": true,
+      "argNames": []
+    },
+    {
+      "name": "effect",
+      "requirement": {
+        "key": "denied",
+        "value": "must"
+      },
+      "returnsValue": false,
+      "argNames": []
+    },
+    {
+      "name": "indicator",
+      "requirement": "exclusive",
+      "returnsValue": false,
+      "argNames": []
+    },
+    {
+      "name": "init",
+      "requirement": {
+        "key": "denied",
+        "value": "must"
+      },
+      "returnsValue": false,
+      "argNames": []
+    },
+    {
+      "name": "json-signals",
+      "requirement": {
+        "key": "denied"
+      },
+      "returnsValue": false,
+      "argNames": []
+    },
+    {
+      "name": "on",
+      "requirement": "must",
+      "returnsValue": false,
+      "argNames": [
+        "evt"
+      ]
+    },
+    {
+      "name": "on-intersect",
+      "requirement": {
+        "key": "denied",
+        "value": "must"
+      },
+      "returnsValue": false,
+      "argNames": []
+    },
+    {
+      "name": "on-interval",
+      "requirement": {
+        "key": "denied",
+        "value": "must"
+      },
+      "returnsValue": false,
+      "argNames": []
+    },
+    {
+      "name": "on-signal-patch",
+      "requirement": {
+        "value": "must"
+      },
+      "returnsValue": true,
+      "argNames": [
+        "patch"
+      ]
+    },
+    {
+      "name": "ref",
+      "requirement": "exclusive",
+      "returnsValue": false,
+      "argNames": []
+    },
+    {
+      "name": "show",
+      "requirement": {
+        "key": "denied",
+        "value": "must"
+      },
+      "returnsValue": true,
+      "argNames": []
+    },
+    {
+      "name": "signals",
+      "requirement": null,
+      "returnsValue": true,
+      "argNames": []
+    },
+    {
+      "name": "style",
+      "requirement": {
+        "value": "must"
+      },
+      "returnsValue": true,
+      "argNames": []
+    },
+    {
+      "name": "text",
+      "requirement": {
+        "key": "denied",
+        "value": "must"
+      },
+      "returnsValue": true,
+      "argNames": []
+    }
+  ]
+}

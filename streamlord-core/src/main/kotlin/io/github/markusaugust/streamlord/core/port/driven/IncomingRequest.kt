@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.core.port.driven
 
+import io.github.markusaugust.streamlord.core.InternalStreamlordApi
 import io.github.markusaugust.streamlord.core.SignalsTooLargeException
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
 
@@ -44,6 +45,7 @@ public val IncomingRequest.carriesSignalsInQuery: Boolean
  * Helper for adapters: reject a declared content length above [maxBytes] before a single byte
  * is read. A missing or negative length (chunked transfer) passes; the bounded read catches it.
  */
+@InternalStreamlordApi
 public fun rejectDeclaredLengthAbove(
     maxBytes: Int,
     declaredLength: Long?,

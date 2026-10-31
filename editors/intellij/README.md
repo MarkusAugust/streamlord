@@ -15,15 +15,23 @@ strings alongside the Streamlord SDK.
 function that returns HTML, a `val` holding a fragment), and in HTML and template files:
 
 - Kotlin interpolation of signals: `"$count++"` becomes `"++"` at runtime. An error with the fix
-  spelled out. In HTML strings, `$name` inside a `data-*` expression is a warning; `$name` in text
-  is a weak warning, since there it is usually meant.
+  spelled out. In HTML strings, `$name` inside a `data-*` expression is a warning, a weak warning
+  when `name` is a number or a boolean, which is safe written in.
+- A Kotlin value in an HTML string, judged by its Kotlin type and where it lands, as `interpolate`
+  judges it at run time: in text or a quoted attribute, where escaping saves it, a weak warning (a
+  warning for a `String`) with a fix that rewrites the literal as `interpolate(...)`; at the start
+  of a URL, in `style`, a `data-*` expression, a script or an event handler, a warning, since
+  escaping cannot help there. Constants, literals, numbers and booleans where they are safe, Kotlin enum
+  entries and markup built in the template say nothing. A call to `interpolate` is judged too: a
+  miscounted `%s` and a value it will refuse are errors, a Kotlin template in its format a warning
+  with a fix that makes it a `%s` hole.
 - Datastar expression syntax, checked with a real JavaScript parser, with the error at the right
   column.
 - Unknown actions (`@Post`), Pro actions and Pro attributes (they need the Pro bundle).
 - Markup in `patchElements(...)`: unclosed or stray tags, text outside elements, a missing `id`
   on a top-level element when no selector is given, a mode that needs a selector.
 - `data-*` attributes: unknown names with "did you mean", unknown modifiers, wrong modifier
-  arguments (`__debounce` without a duration, `__threshold.150`), missing or unexpected keys,
+  arguments (`__debounce` without a duration, `__threshold.abc`), missing or unexpected keys,
   and a `data-indicator` on an element that sends no request.
 - Casing: a capital letter in a key (`data-signals:fooBar`), which the browser lowercases so the
   signal becomes `$foobar`, and a hyphen after a signal in an expression (`$foo-bar`,
@@ -171,7 +179,9 @@ Settings | Tools | Streamlord:
 
 The inspections are under Settings | Editor | Inspections | Streamlord, one per family
 (interpolation, expression, attribute, signal no file defines, key casing, patch markup), each
-with its own severity.
+with its own severity. A severity you set there applies to the issues at the family's own level
+or above, and never raises one below it: setting the interpolation inspection to a warning makes its errors
+warnings and leaves its weak warnings weak.
 
 ## Datastar Pro
 

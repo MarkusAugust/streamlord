@@ -1,4 +1,4 @@
-import { compactSignals, NON_STREAM_CUT, NON_STREAM_LIMIT, readsAsStream, requestHeaders, requestUrl, sendableUrl, unreadBody } from "./requests.ts";
+import { bodyless, compactSignals, NON_STREAM_CUT, NON_STREAM_LIMIT, readsAsStream, requestHeaders, requestUrl, sendableUrl, unreadBody } from "./requests.ts";
 import { decodeDatastar, SseParser, type DatastarFrame, type SseMessage } from "./sse.ts";
 
 /**
@@ -39,8 +39,7 @@ export function buildRequest(req: StreamRequest): { url: string; init: RequestIn
   if ("error" in sendable) return sendable;
   // The user's headers come last and replace the client's own, Content-Type included, as they do in the client.
   const headers = requestHeaders(req.method, req.headers ?? {});
-  const bodyless = req.method === "GET" || req.method === "DELETE";
-  return { url: sendable.url, init: { method: req.method, headers, body: bodyless ? undefined : signalsJson } };
+  return { url: sendable.url, init: { method: req.method.toUpperCase(), headers, body: bodyless(req.method) ? undefined : signalsJson } };
 }
 
 /** Open the stream and pump events to the handlers until it closes, errors or is aborted. */

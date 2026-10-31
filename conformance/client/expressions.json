@@ -1,5 +1,23 @@
 {
-  "$comment": "The function body genRx (engine/engine.ts of the Datastar 1.0.4 client) hands to compileExpression for each expression, with returnsValue false and true: Function was replaced to record its last argument. compiles says whether the real Function took that body.",
+  "$comment": "The function body genRx (engine/engine.ts of the Datastar 1.0.4 client) hands to compileExpression for each expression, with returnsValue false and true: Function was replaced to record its last argument. compiles says whether the real Function took that body. parameters are the names before the body, the same for every expression; parametersWithArgNames those for a plugin that declares argNames.",
+  "parameters": [
+    "el",
+    "$",
+    "__action",
+    "evt"
+  ],
+  "parametersWithArgNames": {
+    "argNames": [
+      "patch"
+    ],
+    "parameters": [
+      "el",
+      "$",
+      "__action",
+      "evt",
+      "patch"
+    ]
+  },
   "cases": {
     "rewrites": [
       {
@@ -267,27 +285,27 @@
         "compiles": true
       },
       {
-        "expression": "$é",
+        "expression": "$\u00e9",
         "returnsValue": false,
-        "js": "$é",
+        "js": "$\u00e9",
         "compiles": true
       },
       {
-        "expression": "$é",
+        "expression": "$\u00e9",
         "returnsValue": true,
-        "js": "return ($é);",
+        "js": "return ($\u00e9);",
         "compiles": true
       },
       {
-        "expression": "$fooé",
+        "expression": "$foo\u00e9",
         "returnsValue": false,
-        "js": "$['foo']é",
+        "js": "$['foo']\u00e9",
         "compiles": false
       },
       {
-        "expression": "$fooé",
+        "expression": "$foo\u00e9",
         "returnsValue": true,
-        "js": "return ($['foo']é);",
+        "js": "return ($['foo']\u00e9);",
         "compiles": false
       },
       {
@@ -1011,25 +1029,25 @@
         "compiles": true
       },
       {
-        "expression": " $a ",
+        "expression": "\u00a0$a\u00a0",
         "returnsValue": false,
         "js": "$['a']",
         "compiles": true
       },
       {
-        "expression": " $a ",
+        "expression": "\u00a0$a\u00a0",
         "returnsValue": true,
         "js": "return ($['a']);",
         "compiles": true
       },
       {
-        "expression": "﻿$a",
+        "expression": "\ufeff$a",
         "returnsValue": false,
         "js": "$['a']",
         "compiles": true
       },
       {
-        "expression": "﻿$a",
+        "expression": "\ufeff$a",
         "returnsValue": true,
         "js": "return ($['a']);",
         "compiles": true

@@ -2,6 +2,8 @@ package io.github.markusaugust.streamlord.spring
 
 import io.github.markusaugust.streamlord.core.application.Streamlord
 import io.github.markusaugust.streamlord.core.protocol.DatastarAttributes
+import io.github.markusaugust.streamlord.wire.WireCases
+import io.github.markusaugust.streamlord.wire.WireTranscript
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import kotlinx.coroutines.flow.asFlow

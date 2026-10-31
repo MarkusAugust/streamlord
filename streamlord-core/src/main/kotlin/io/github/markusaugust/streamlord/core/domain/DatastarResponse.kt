@@ -64,6 +64,15 @@ public data class ElementsResponse(
             }
 }
 
+/** An [ElementsResponse] of markup [interpolate] built; a function for the reason [PatchElements] of an [Html] is one. */
+public fun ElementsResponse(
+    elements: Html,
+    selector: String? = null,
+    mode: ElementPatchMode = ElementPatchMode.DEFAULT,
+    namespace: ElementNamespace = ElementNamespace.DEFAULT,
+    useViewTransition: Boolean = false,
+): ElementsResponse = ElementsResponse(elements.text, selector, mode, namespace, useViewTransition)
+
 /** An `application/json` body patched as signals. Mirrors [PatchSignals]. */
 public data class SignalsResponse(
     @Language("JSON") val signals: String,

@@ -236,7 +236,9 @@ fun panel(): org.springframework.http.ResponseEntity<String> =
 ```
 
 A plain `text/html` response, which Datastar reads as an element patch. When you want the guard
-on that HTML, pass the bean: `datastarElements(html, streamlord = bean)`.
+on that HTML, pass the bean: `datastarElements(html, streamlord = bean)`. It takes the `Html` that
+[`interpolate`](/strings/#values-from-outside) returns as well; `ResponseEntity.ok(interpolate(...))`
+compiles, but no Spring message converter writes an `Html`, so pass it here or write `.text`.
 
 ## Reading signals
 

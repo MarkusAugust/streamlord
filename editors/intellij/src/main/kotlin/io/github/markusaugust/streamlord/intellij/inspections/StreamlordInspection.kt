@@ -7,6 +7,7 @@ import com.intellij.codeInspection.LocalInspectionTool
 import com.intellij.codeInspection.LocalQuickFix
 import com.intellij.codeInspection.ProblemDescriptor
 import com.intellij.codeInspection.ProblemHighlightType
+import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
 import com.intellij.profile.codeInspection.InspectionProjectProfileManager
@@ -45,7 +46,7 @@ abstract class StreamlordInspection(
     ): Array<ProblemDescriptor> {
         val issues = issues(file) ?: return ProblemDescriptor.EMPTY_ARRAY
         val length = file.textLength
-        val profiled = severitySetInProfile(file)
+        val profiled = profileLevel(file)
         return issues
             .filter { it.code in codes && it.start < length }
             .map { issue ->
@@ -54,24 +55,46 @@ abstract class StreamlordInspection(
                     file,
                     range,
                     issue.message + (issue.link?.let { " See $it" } ?: ""),
-                    if (profiled) ProblemHighlightType.GENERIC_ERROR_OR_WARNING else highlightType(issue.severity),
+                    if (profiled?.takes(issue.severity) ==
+                        true
+                    ) {
+                        ProblemHighlightType.GENERIC_ERROR_OR_WARNING
+                    } else {
+                        highlightType(issue.severity)
+                    },
                     isOnTheFly,
-                    *issue.fixes.mapIndexed { i, fix -> if (i == 0) PreferredReplaceTextFix(fix) else ReplaceTextFix(fix) }.toTypedArray(),
+                    *quickFixes(issue.fixes),
                 )
             }.toTypedArray()
     }
 
     /**
-     * Has the user given this inspection a severity in the profile? One family mixes severities
-     * (a syntax error beside a Pro hint), so by default each issue keeps the one the analysis
-     * gave it; a level set in the profile applies to the whole family, as the profile promises.
+     * The level the user has given this inspection in the profile, beside the one plugin.xml declares, or null when it is
+     * the declared one. One family mixes severities (a syntax error beside a Pro hint), so by default each issue keeps the one
+     * the analysis gave it.
      */
-    private fun severitySetInProfile(file: PsiFile): Boolean {
-        val key = HighlightDisplayKey.find(shortName) ?: return false
+    private fun profileLevel(file: PsiFile): ProfileLevel? {
+        val key = HighlightDisplayKey.find(shortName) ?: return null
         val profile = InspectionProjectProfileManager.getInstance(file.project).currentProfile
         // The wrapper knows the level plugin.xml declares; the tool itself only knows the platform's default.
-        val declared = profile.getInspectionTool(shortName, file)?.defaultLevel ?: return false
-        return profile.getErrorLevel(key, file) != declared
+        val declared = profile.getInspectionTool(shortName, file)?.defaultLevel ?: return null
+        val level = profile.getErrorLevel(key, file)
+        return if (level == declared) null else ProfileLevel(declared.severity, level.severity)
+    }
+
+    /**
+     * A level set in the profile applies to the issues at the declared level or above, as the profile promises, and lowers
+     * any issue it is below: an inspection declared an error and set to a warning makes its errors warnings, but never its
+     * hints warnings too.
+     */
+    private class ProfileLevel(
+        val declared: HighlightSeverity,
+        val chosen: HighlightSeverity,
+    ) {
+        fun takes(severity: Severity): Boolean {
+            val own = highlightSeverity(severity)
+            return own >= declared || chosen < own
+        }
     }
 
     private fun highlightType(severity: Severity): ProblemHighlightType =
@@ -85,6 +108,20 @@ abstract class StreamlordInspection(
         }
 }
 
+private fun highlightSeverity(severity: Severity): HighlightSeverity =
+    when (severity) {
+        Severity.ERROR -> HighlightSeverity.ERROR
+        Severity.WARNING -> HighlightSeverity.WARNING
+        Severity.INFO, Severity.HINT -> HighlightSeverity.WEAK_WARNING
+    }
+
+/**
+ * The analysis's fixes, the first at the top of the Alt+Enter list unless it is marked not preferred: where the choice is the
+ * author's, such as escaping a value or marking it as markup, no fix goes above the others.
+ */
+private fun quickFixes(fixes: List<Fix>): Array<LocalQuickFix> =
+    fixes.mapIndexed { i, fix -> if (i == 0 && fix.preferred) PreferredReplaceTextFix(fix) else ReplaceTextFix(fix) }.toTypedArray()
+
 /** A quick fix that replaces a range of the file with text, as the analysis spelled it out. */
 open class ReplaceTextFix(
     private val fix: Fix,
@@ -97,24 +134,33 @@ open class ReplaceTextFix(
     ) {
         val file = descriptor.psiElement?.containingFile ?: return
         val document = PsiDocumentManager.getInstance(project).getDocument(file) ?: return
-        if (fix.end > document.textLength) return
-        document.replaceString(fix.start, fix.end, fix.text)
+        // The fix and its further edits (an import), from the end backwards so no offset moves.
+        val replacements = fix.replacements
+        if (replacements.any { it.end > document.textLength }) return
+        for (e in replacements) document.replaceString(e.start, e.end, e.text)
         PsiDocumentManager.getInstance(project).commitDocument(document)
     }
 }
 
-/** The fix the analysis lists first is the one it means: it goes to the top of the Alt+Enter list, above the IDE's own. */
+/** The fix the analysis lists first and prefers is the one it means: it goes to the top of the Alt+Enter list, above the IDE's own. */
 class PreferredReplaceTextFix(
     fix: Fix,
 ) : ReplaceTextFix(fix),
     HighPriorityAction
 
-/** `$count` in a Kotlin string is a Kotlin template, not a signal: the interpolation trap. */
-class KotlinInterpolationInspection : StreamlordInspection(setOf("kotlin-interpolation"))
+/**
+ * `$count` in a Kotlin string is a Kotlin template, not a signal: the interpolation trap. And a
+ * Kotlin value in an HTML string, judged by where it lands as `interpolate` judges it.
+ */
+class KotlinInterpolationInspection : StreamlordInspection(INTERPOLATION_CODES)
+
+private val INTERPOLATION_CODES =
+    setOf("kotlin-interpolation", "unescaped-interpolation", "unsafe-interpolation", "interpolate-template", "interpolate-holes")
 
 /**
- * Datastar expression syntax, unknown actions, Pro actions, kebab-case signals, and what the
- * client's own rewrite of an expression does that JavaScript would not.
+ * Datastar expression syntax, unknown actions, Pro actions, kebab-case signals, what the client's
+ * own rewrite of an expression does that JavaScript would not, and `patch` where the attribute
+ * does not hand it over.
  */
 class DatastarExpressionInspection :
     StreamlordInspection(
@@ -128,6 +174,7 @@ class DatastarExpressionInspection :
             "literal-rewritten",
             "signal-not-read",
             "statement-split",
+            "scope-name",
         ),
     )
 
@@ -155,6 +202,7 @@ class DatastarAttributeInspection :
             "signal-name",
             "computed-value",
             "filter-pattern",
+            "signal-null",
         ),
     )
 
@@ -178,8 +226,12 @@ class UnknownSignalInspection : StreamlordInspection(setOf("unknown-signal")) {
     }
 }
 
-/** Capitals in keys, which the browser lowercases, what the DSL writes on the wire, and a hyphen in a signal name. */
-class DatastarKeyCaseInspection : StreamlordInspection(setOf("key-case", "key-case-wire", "signal-name-hyphen"))
+/**
+ * Capitals in keys, which the browser lowercases, what the DSL writes on the wire, a key the DSL
+ * refuses, a hyphen in a signal name, and a capital in the name of an attribute.
+ */
+class DatastarKeyCaseInspection :
+    StreamlordInspection(setOf("key-case", "key-case-wire", "signal-name-hyphen", "attribute-name-case", "key-refused"))
 
 /** The markup of a patch: complete elements, ids, selectors and modes, scripts. */
 class StreamlordMarkupInspection :
@@ -199,7 +251,7 @@ class StreamlordMarkupInspection :
 /** Every code an inspection claims, so a test can prove the analysis leaves none unclaimed. */
 object InspectionCodes {
     val all: Set<String> =
-        setOf("kotlin-interpolation") +
+        INTERPOLATION_CODES +
             setOf("unknown-signal") +
             setOf(
                 "expression-syntax",
@@ -211,6 +263,7 @@ object InspectionCodes {
                 "literal-rewritten",
                 "signal-not-read",
                 "statement-split",
+                "scope-name",
             ) +
             setOf(
                 "unknown-attribute",
@@ -230,8 +283,9 @@ object InspectionCodes {
                 "signal-name",
                 "computed-value",
                 "filter-pattern",
+                "signal-null",
             ) +
-            setOf("key-case", "key-case-wire", "signal-name-hyphen") +
+            setOf("key-case", "key-case-wire", "signal-name-hyphen", "attribute-name-case", "key-refused") +
             setOf(
                 "missing-id",
                 "mode-needs-selector",

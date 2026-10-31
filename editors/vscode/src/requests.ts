@@ -3,6 +3,7 @@
  * list and the curl export. Editor-independent.
  */
 
+import { catalog } from "./catalog.ts";
 import type { Route } from "./routes.ts";
 import type { RunningServer } from "./serverLog.ts";
 
@@ -26,7 +27,15 @@ export interface RequestsFile {
 export const REQUESTS_FILE = ".streamlord/inspector.json";
 export const ENV_FILE = ".streamlord/env.json";
 export const RECENT_LIMIT = 10;
-export const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "QUERY"];
+/** The methods of the backend actions, in the catalog's order. */
+export const METHODS = catalog.backendActions.map((a) => a.toUpperCase());
+// The methods the client sends the signals with in the query, not the body (DatastarProtocol.BODYLESS_METHODS).
+const BODYLESS: ReadonlySet<string> = new Set(["GET", "DELETE"]);
+
+/** Whether the client sends the signals of `method` in the query string, not the body: GET and DELETE, in any case. */
+export function bodyless(method: string): boolean {
+  return BODYLESS.has(method.toUpperCase());
+}
 
 export function emptyRequestsFile(): RequestsFile {
   return { version: 1, requests: [] };
@@ -606,16 +615,23 @@ export function compactSignals(signals: string): string {
 
 /** The URL the Datastar client would open: GET and DELETE carry the signals in the query string. */
 export function requestUrl(url: string, method: string, signalsJson: string): string {
-  if (method !== "GET" && method !== "DELETE") return url;
+  if (!bodyless(method)) return url;
   // Taken apart as text: a relative URL, or one that still holds an unresolved variable, is one
   // `new URL` refuses, and the rest of it is passed on exactly as it was written.
   const hash = url.indexOf("#");
   const fragment = hash < 0 ? "" : url.slice(hash);
   const beforeFragment = hash < 0 ? url : url.slice(0, hash);
   const mark = beforeFragment.indexOf("?");
-  const kept = (mark < 0 ? "" : beforeFragment.slice(mark + 1)).split("&").filter((p) => p.length > 0 && !p.startsWith("datastar="));
+  // The client sets the parameter (fetch.ts:149 in 1.0.4): URLSearchParams.set puts it where the
+  // first one stands, written with a value or without, drops the others, and appends it if there is none.
+  // It reads a name as a form does, `+` as a space and %XX as a byte, so data%73tar is the parameter too;
+  // a byte past ASCII stays one character, which is enough to tell it from datastar.
+  const ours = (p: string) => p.split("=", 1)[0]!.replace(/\+/g, " ").replace(/%([0-9A-Fa-f]{2})/g, (_, h: string) => String.fromCharCode(parseInt(h, 16))) === "datastar";
+  const pairs = (mark < 0 ? "" : beforeFragment.slice(mark + 1)).split("&").filter((p) => p.length > 0);
   // URLSearchParams is the form encoding, and unlike encodeURIComponent it never throws.
-  const query = [...kept, new URLSearchParams({ datastar: signalsJson }).toString()].join("&");
+  const param = new URLSearchParams({ datastar: signalsJson }).toString();
+  const first = pairs.findIndex(ours);
+  const query = (first < 0 ? [...pairs, param] : pairs.filter((p, k) => k === first || !ours(p)).map((p) => (ours(p) ? param : p))).join("&");
   return `${mark < 0 ? beforeFragment : beforeFragment.slice(0, mark)}?${query}${fragment}`;
 }
 
@@ -673,7 +689,7 @@ export function requestHeaders(method: string, userHeaders: Record<string, strin
   const out = new Map<string, string>();
   out.set("Accept", ACCEPT);
   out.set("Datastar-Request", "true");
-  if (!(method === "GET" || method === "DELETE")) out.set("Content-Type", "application/json");
+  if (!bodyless(method)) out.set("Content-Type", "application/json");
   for (const [k, v] of Object.entries(userHeaders)) {
     for (const existing of out.keys()) if (existing.toLowerCase() === k.toLowerCase()) out.delete(existing);
     out.set(k, v);
@@ -686,12 +702,12 @@ export function requestHeaders(method: string, userHeaders: Record<string, strin
  * The body goes as `--data-raw`: with `--data`, curl reads signals that start with `@` from the file they name.
  */
 export function toCurl(r: SavedRequest): string {
-  const bodyless = r.method === "GET" || r.method === "DELETE";
+  const noBody = bodyless(r.method);
   const signalsJson = compactSignals(r.signals);
-  const parts = ["curl", "-N", "-X", r.method];
+  const parts = ["curl", "-N", "-X", r.method.toUpperCase()];
   parts.push(shellQuote(requestUrl(r.url, r.method, signalsJson)));
   for (const [k, v] of Object.entries(requestHeaders(r.method, parseHeaderLines(r.headers)))) parts.push("-H", shellQuote(`${k}: ${v}`));
-  if (!bodyless) parts.push("--data-raw", shellQuote(signalsJson));
+  if (!noBody) parts.push("--data-raw", shellQuote(signalsJson));
   return parts.join(" ");
 }
 

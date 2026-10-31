@@ -5,6 +5,7 @@ import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.core.domain.SignalNames
+import io.github.markusaugust.streamlord.core.domain.interpolate
 import io.github.markusaugust.streamlord.core.port.driven.BufferedSseSink
 import io.github.markusaugust.streamlord.core.port.driven.SseSink
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
@@ -19,6 +20,27 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class DatastarStreamTest {
+    @Test
+    fun `markup interpolate built is patched without an import of its own`() =
+        runTest {
+            val sink = BufferedSseSink()
+            val stream = Streamlord.Default.stream(sink)
+
+            stream.patchElements(interpolate("""<li id="hit">%s</li>""", "<b>"), selector = "#feed", mode = ElementPatchMode.APPEND)
+
+            assertEquals(
+                """
+            |event: datastar-patch-elements
+            |data: selector #feed
+            |data: mode append
+            |data: elements <li id="hit">&lt;b&gt;</li>
+            |
+            |
+                """.trimMargin(),
+                sink.text(),
+            )
+        }
+
     @Test
     fun `every event is flushed and written in call order`() =
         runTest {

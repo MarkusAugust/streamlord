@@ -2,7 +2,6 @@
 
 package io.github.markusaugust.streamlord.html.pro
 
-import io.github.markusaugust.streamlord.core.domain.ExpressionGuard
 import io.github.markusaugust.streamlord.html.Case
 import io.github.markusaugust.streamlord.html.Casing
 import io.github.markusaugust.streamlord.html.DatastarAttributes
@@ -44,6 +43,8 @@ private fun requireDuration(
 }
 
 private fun ds(suffix: String): String = DatastarAttributes.name(suffix)
+
+private fun expr(expression: String): String = DatastarAttributes.expression(expression)
 
 // The timing wrapper the Pro listeners share with the free ones, in the free builders' order.
 private fun StringBuilder.appendTiming(
@@ -218,14 +219,14 @@ public fun HTMLTag.dataAnimate(
     expression: String,
     modifiers: AnimateModifiers.() -> Unit = {},
 ) {
-    attributes[ds("animate${AnimateModifiers().apply(modifiers).build()}")] = ExpressionGuard.check(expression)
+    attributes[ds("animate${AnimateModifiers().apply(modifiers).build()}")] = expr(expression)
 }
 
 /**
- * `data-animate:attribute="expression"` (Pro): animate an attribute whenever its signals change.
- * A camelCase [attribute] such as `strokeWidth` is written as `stroke-width`; one that really
- * is camelCase (SVG's `viewBox`) cannot travel in a key, since the browser lowercases it; use
- * the object form, `dataAnimate("{viewBox: ...}")`.
+ * `data-animate:attribute="expression"` (Pro): animate an attribute whenever its signals change,
+ * with [attribute] as HTML has it: `dataAnimate("stroke-width", ...)`. The browser lowercases an
+ * attribute name, so a capital is refused: one that really has capitals, such as SVG's `viewBox`,
+ * takes the object form, `dataAnimate("{viewBox: ...}")`.
  */
 public fun HTMLTag.dataAnimate(
     attribute: String,
@@ -233,12 +234,12 @@ public fun HTMLTag.dataAnimate(
     modifiers: AnimateModifiers.() -> Unit = {},
 ) {
     val mods = AnimateModifiers().apply(modifiers).build()
-    attributes[ds("animate:" + Casing.withModifiers(attribute, Casing.plainKey(attribute), mods))] = ExpressionGuard.check(expression)
+    attributes[ds("animate:" + Casing.withModifiers(attribute, Casing.attributeKey(attribute, "dataAnimate"), mods))] = expr(expression)
 }
 
 /** `data-custom-validity="expression"` (Pro): an expression yielding `''` when valid, a message otherwise. */
 public fun HTMLTag.dataCustomValidity(expression: String) {
-    attributes[ds("custom-validity")] = ExpressionGuard.check(expression)
+    attributes[ds("custom-validity")] = expr(expression)
 }
 
 /**
@@ -259,7 +260,7 @@ public fun HTMLTag.dataOnRaf(
     expression: String,
     modifiers: RafModifiers.() -> Unit = {},
 ) {
-    attributes[ds("on-raf${RafModifiers().apply(modifiers).build()}")] = ExpressionGuard.check(expression)
+    attributes[ds("on-raf${RafModifiers().apply(modifiers).build()}")] = expr(expression)
 }
 
 /** `data-on-resize="expression"` (Pro): run when the element's size changes. */
@@ -267,7 +268,7 @@ public fun HTMLTag.dataOnResize(
     expression: String,
     modifiers: ResizeModifiers.() -> Unit = {},
 ) {
-    attributes[ds("on-resize${ResizeModifiers().apply(modifiers).build()}")] = ExpressionGuard.check(expression)
+    attributes[ds("on-resize${ResizeModifiers().apply(modifiers).build()}")] = expr(expression)
 }
 
 /**
@@ -317,7 +318,7 @@ public fun HTMLTag.dataQueryString(
 
 /** `data-replace-url="expression"` (Pro): replace the browser URL without a reload. */
 public fun HTMLTag.dataReplaceUrl(expression: String) {
-    attributes[ds("replace-url")] = ExpressionGuard.check(expression)
+    attributes[ds("replace-url")] = expr(expression)
 }
 
 /** `data-scroll-into-view` (Pro): scroll the element into the viewport when it appears. */
@@ -340,5 +341,5 @@ public fun HTMLTag.dataScrollIntoView(
 
 /** `data-view-transition="expression"` (Pro): set the element's `view-transition-name`. */
 public fun HTMLTag.dataViewTransition(expression: String) {
-    attributes[ds("view-transition")] = ExpressionGuard.check(expression)
+    attributes[ds("view-transition")] = expr(expression)
 }

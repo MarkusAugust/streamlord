@@ -1,5 +1,8 @@
-import { PLACEHOLDER } from "./kotlinStrings.ts";
-import { findCallSites } from "./scanner.ts";
+import { catalog } from "./catalog.ts";
+import { PLACEHOLDER, type KotlinString } from "./kotlinStrings.ts";
+import { findCallSites, stringAt, type CallSite } from "./scanner.ts";
+import { PROTOTYPE_NAMES, signalNameRefusal } from "./signalNames.ts";
+import { attributeDoc, DOCS, type Issue } from "./expression.ts";
 
 /**
  * Collects signal names declared anywhere in a source file, for completion. Heuristic and
@@ -34,9 +37,15 @@ const HTML_ATTRIBUTE_PATTERNS: RegExp[] = [
   // The key with its modifiers, which may name the casing: data-signals:my-value__case.snake. A key
   // the client could hold and nothing else, so that template syntax (data-signals:${key},
   // data-signals:{{ name }}, data-signals:th:text) declares nothing.
-  /data-(?:star-)?(?:signals|bind|indicator|ref|computed|match-media):([\p{L}\p{N}_.-]+)(?=[\s=>"'/\\]|$)/giu,
+  new RegExp(`data-(?:star-)?(?:${catalog.signalKeyAttributes.join("|")}):([\\p{L}\\p{N}_.-]+)(?=[\\s=>"'/\\\\]|$)`, "giu"),
   // The value form names the signal as written: data-bind="user-name" is the signal user-name.
-  /data-(?:star-)?(?:bind|indicator|ref)(?:__[^=\s>]*)?=(?:\\?"([^"\\\s]+)\\?"|'([^'\s]+)')/gi,
+  new RegExp(
+    `data-(?:star-)?(?:${catalog.attributes
+      .filter((a) => a.valueKind === "signal")
+      .map((a) => a.name)
+      .join("|")})(?:__[^=\\s>]*)?=(?:\\\\?"([^"\\\\\\s]+)\\\\?"|'([^'\\s]+)')`,
+    "gi",
+  ),
   // The object form may sit in either kind of quote: JSON written by hand is `data-signals='{"query": ""}'`.
   // data-computed="{total: () => ...}" declares its keys the same way.
   /data-(?:star-)?(?:signals|computed)(?:__[^=\s>]*)?=(?:"\{([^"]*)\}"|'\{([^']*)\}')/gi,
@@ -53,8 +62,8 @@ const SERIALIZABLE_CLASS = /@Serializable\s*(?:\([^)]*\))?\s*(?:(?:public|intern
 // between it and the property.
 const PROPERTY = /(?:@SerialName\(\s*(?:value\s*=\s*)?"([^"]*)"\s*\)\s*(?:@\w+(?:\([^)]*\))?\s*)*(?:\w+\s+)*?)?\b(?:val|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:/g;
 
-const PAIR_CALLS: ReadonlySet<string> = new Set(["dataSignals", "patchSignals", "removeSignals", "respondSignals", "datastarSignals"]);
-const JSON_CALLS: ReadonlySet<string> = new Set(["patchSignals", "respondSignals", "datastarSignals"]);
+const PAIR_CALLS: ReadonlySet<string> = new Set(catalog.signalCalls.keys());
+const JSON_CALLS: ReadonlySet<string> = new Set([...catalog.signalCalls].filter(([, flags]) => flags.has("json")).map(([name]) => name));
 /**
  * `toJsonValue(...)` handed to `dataSignals`: the page declares what the codec makes of the value.
  * The class is named by `toJsonValue<Form>(...)`, by a constructor call, `toJsonValue(Form(...))`,
@@ -136,7 +145,8 @@ function named(type: string): string {
   return UNNAMED_TYPES.has(type) ? ANY_SIGNAL : type;
 }
 
-function escapeRegExp(s: string): string {
+/** Every character a regular expression gives a meaning, backslash included, made literal. */
+export function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
@@ -255,22 +265,6 @@ function matchingParen(src: string, open: number): number {
   }
   return -1;
 }
-
-/** The properties of `Object.prototype` in a browser: every object already has them (`SignalNames` in streamlord-core). */
-export const PROTOTYPE_NAMES: ReadonlySet<string> = new Set([
-  "__proto__",
-  "constructor",
-  "hasOwnProperty",
-  "isPrototypeOf",
-  "propertyIsEnumerable",
-  "toLocaleString",
-  "toString",
-  "valueOf",
-  "__defineGetter__",
-  "__defineSetter__",
-  "__lookupGetter__",
-  "__lookupSetter__",
-]);
 
 /**
  * Why the client cannot hold a signal at `path`, written with dots as `data-signals:a.b` writes it,
@@ -448,4 +442,55 @@ export function objectKeys(body: string, spread: { any: boolean } = { any: false
 /** Datastar exposes kebab-case keys as camelCase signals by default. */
 export function toCamel(name: string): string {
   return name.includes("-") ? name.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase()) : name;
+}
+
+const PAIR_KEY = /^[\s(]*"/;
+const PAIR_AFTER = /\s+to\b/y;
+const TO_NULL = /\s+to\s+null\b/y;
+
+/** The keys of the pairs among the positional arguments of `site`, `"name" to value`, as string literals. */
+export function pairKeys(site: CallSite, src: string, strings: KotlinString[]): KotlinString[] {
+  const out: KotlinString[] = [];
+  for (const a of site.args) {
+    if (a.named !== null || a.string) continue;
+    const m = PAIR_KEY.exec(a.text);
+    if (!m) continue;
+    const quote = a.start + m[0].length - 1;
+    const key = stringAt(src, quote + 1, strings);
+    if (!key || key.start !== quote) continue;
+    PAIR_AFTER.lastIndex = key.end;
+    if (PAIR_AFTER.test(src)) out.push(key);
+  }
+  return out;
+}
+
+/**
+ * What is wrong with the pairs of `site`, a `dataSignals` call: a name the DSL refuses
+ * (`signalNameRefusal`), and each `"name" to null`, which declares nothing, since
+ * Datastar's client holds no null. The same rule as `dataSignalsPairIssues` in streamlord-analysis.
+ */
+export function dataSignalsPairIssues(site: CallSite, src: string, strings: KotlinString[]): Issue[] {
+  if (site.name !== "dataSignals") return [];
+  const out: Issue[] = [];
+  for (const key of pairKeys(site, src, strings)) {
+    // A templated name is known only at runtime.
+    const split = key.interpolations.length === 0 ? signalNameRefusal(key.text) : null;
+    if (split) {
+      out.push({ start: key.start, end: key.end, message: `Streamlord refuses "${key.text}" at runtime: it ${split}.`, severity: "error", code: "key-refused", link: attributeDoc("signals") });
+      continue;
+    }
+    TO_NULL.lastIndex = key.end;
+    const toNull = TO_NULL.exec(src);
+    if (!toNull) continue;
+    const end = key.end + toNull[0].length;
+    out.push({
+      start: end - 4,
+      end,
+      message: `Datastar's client holds no null: in data-signals a null removes the key, so "${key.text}" is not declared, and an expression that reads it gets "". Declare it with the value it starts as, such as "".`,
+      severity: "warning",
+      code: "signal-null",
+      link: DOCS.signals,
+    });
+  }
+  return out;
 }

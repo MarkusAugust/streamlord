@@ -6,6 +6,8 @@ import io.github.markusaugust.streamlord.core.port.driven.IncomingRequest
 import io.github.markusaugust.streamlord.core.port.driven.rejectDeclaredLengthAbove
 import io.github.markusaugust.streamlord.core.protocol.DatastarAttributes
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
+import io.github.markusaugust.streamlord.wire.WireCases
+import io.github.markusaugust.streamlord.wire.WireTranscript
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.flow

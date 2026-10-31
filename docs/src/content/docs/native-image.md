@@ -10,6 +10,12 @@ Three things need your attention: the serializers your codec would otherwise loo
 you read by name, and the flags your server framework wants. This documentation's own search
 service is built exactly this way, with no hand-written reflection metadata at all.
 
+One part of the SDK uses reflection, on purpose: on Ktor's Tomcat and Jetty engines, Streamlord
+cuts the connection under a stream whose block threw, by reaching into the engine, since Ktor has
+no API for it ([Ktor](/ktor/)). In a native image without metadata for those engines' fields it
+does nothing, and the stream ends as the engine ends it. CIO and Netty, which a native image
+usually runs on, cut the connection themselves and need none of it.
+
 ## 1. The build file
 
 ```kotlin buildargs=demo sample=none
@@ -139,23 +145,9 @@ a string and nothing in the bytecode mentions it. Name it:
 Put that in `src/main/resources/META-INF/native-image/resource-config.json` and the plugin picks it
 up. Skip it and the image ships without the file, starts cleanly, and finds nothing.
 
-`streamlord-analysis` is such a case when it is on the image's classpath: it reads its catalog,
-`datastar-1.0.4.json` at the root of the jar, by name. The service behind this site runs the
-analysis in its `/judge` route, so its configuration names both files:
-
-```json
-{
-  "resources": {
-    "includes": [
-      { "pattern": "\\Qindex.json\\E" },
-      { "pattern": "datastar-[0-9]+\\.[0-9]+\\.[0-9]+\\.json" }
-    ]
-  }
-}
-```
-
-The second pattern is a regular expression rather than a quoted name, so the file follows the
-Datastar version the SDK speaks without this file being edited at each release.
+The service behind this site reads one such file, its search index, and names it as above.
+`streamlord-analysis`, which it runs in its `/judge` route, needs no entry: its catalog is
+compiled into it as a string, not read from the jar by name.
 
 ## 4. The container
 

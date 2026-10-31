@@ -2,7 +2,6 @@ package io.github.markusaugust.streamlord.html.pro
 
 import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
-import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
@@ -12,7 +11,12 @@ import io.github.markusaugust.streamlord.html.DatastarAttributes
 import io.github.markusaugust.streamlord.html.FetchEventType
 import io.github.markusaugust.streamlord.html.FetchOptions
 import io.github.markusaugust.streamlord.html.IntersectModifiers
+import io.github.markusaugust.streamlord.html.InvalidSignalNameException
 import io.github.markusaugust.streamlord.html.OnModifiers
+import io.github.markusaugust.streamlord.html.dataAttr
+import io.github.markusaugust.streamlord.html.dataStyle
+import io.github.markusaugust.streamlord.html.elements
+import kotlinx.html.div
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -139,32 +143,51 @@ class CatalogTest {
         assertEquals(listOf(DatastarProtocol.Events.PATCH_ELEMENTS, DatastarProtocol.Events.PATCH_SIGNALS), sse.array("events")!!.strings())
     }
 
+    /**
+     * What each attribute plugin of the free client declares when it registers,
+     * conformance/client/plugins.json, held to what the catalog says of its attribute: whether it
+     * takes a key, must have one, what its value must be, whether its expression returns a value,
+     * and the names its expression is handed. The attributes without a plugin are read by the
+     * engine and the watchers under their fixed names.
+     */
     @Test
-    fun `the elements guard checks exactly the expression-valued attributes`() {
-        val expression =
+    fun `the catalog says of each attribute what its plugin declares`() {
+        val plugins =
+            JsonParser
+                .parseObject(File("../conformance/client/plugins.json").readText())
+                .array("cases")!!
+                .objects()
+                .associateBy { it.string("name")!! }
+        val free =
             catalog
                 .array("attributes")!!
                 .objects()
-                .filter { it.string("valueKind") == "expression" }
-                .map { it.string("name")!! }
-                .toSet()
-        assertEquals(expression, ElementsGuard.expressionAttributes)
-        val filter =
-            catalog
-                .array("attributes")!!
-                .objects()
-                .filter { it.string("valueKind") == "filter" }
-                .map { it.string("name")!! }
-                .toSet()
-        assertEquals(expression + filter, ElementsGuard.evaluatedAttributes)
-        assertEquals(
-            catalog
-                .array("attributes")!!
-                .objects()
-                .map { it.string("name")!! }
-                .toSet(),
-            ElementsGuard.attributes,
-        )
+                .filter { it.boolean("pro") != true }
+                .associateBy { it.string("name")!! }
+        assertEquals(setOf("ignore", "ignore-morph", "preserve-attr", "on-signal-patch-filter", "nonce"), free.keys - plugins.keys)
+        assertEquals(emptySet(), plugins.keys - free.keys)
+        for ((name, plugin) in plugins) {
+            val attribute = free.getValue(name)
+            val requirement = plugin["requirement"]
+
+            fun part(of: String) = (requirement as? JsonObject)?.string(of) ?: plugin.string("requirement") ?: "allowed"
+            val key = part("key")
+            val value = part("value")
+            // on-signal-patch takes a key and refuses in its apply every one but those the catalog lists as keys.
+            assertEquals(key != "denied", attribute.boolean("keyed") == true || attribute.has("keys"), "$name: keyed")
+            assertEquals(key == "must", attribute.boolean("keyRequired") ?: false, "$name: keyRequired")
+            val requires =
+                if (value == "must") {
+                    "value"
+                } else if ("exclusive" in setOf(key, value)) {
+                    "exclusive"
+                } else {
+                    null
+                }
+            assertEquals(requires, attribute.string("requires"), "$name: requires")
+            assertEquals(plugin.boolean("returnsValue"), attribute.boolean("returnsValue") ?: false, "$name: returnsValue")
+            assertEquals(plugin.array("argNames")!!.strings(), attribute.array("argNames")?.strings().orEmpty(), "$name: argNames")
+        }
     }
 
     /** `keyCase` in the catalog is what [Casing] assumes per attribute; the DSL output for a camelCase key proves it. */
@@ -201,10 +224,34 @@ class CatalogTest {
                     "respondScript",
                     "datastarElements",
                     "datastarScript",
+                    // The adapters' own, which this module does not see: Ktor's and Spring's.
+                    "respondSignals",
+                    "datastarSignals",
                 )
-        for (group in listOf("expression", "html", "script", "selector")) {
-            for (fn in sites.obj(group)!!.keys) {
+        for (group in listOf("expression", "html", "script", "selector", "signals", "signalNames")) {
+            for (fn in sites.obj(group)!!.keys.filter { !it.startsWith("$") }) {
                 assertTrue(fn in known, "call site $fn in group $group does not exist in the SDK")
+            }
+        }
+    }
+
+    /** `keyIsAttributeName` is the flag of exactly the raw-key helpers that refuse a capital, as an HTML attribute name has none. */
+    @Test
+    fun `the helpers whose key is an attribute name refuse a capital and the others write it`() {
+        val write: Map<String, (String) -> Unit> =
+            mapOf(
+                "dataAttr" to { key -> elements { div { dataAttr(key, "1") } } },
+                "dataStyle" to { key -> elements { div { dataStyle(key, "1") } } },
+                "dataAnimate" to { key -> elements { div { dataAnimate(key, "1") } } },
+                "dataPersist" to { key -> elements { div { dataPersist(key) } } },
+            )
+        val raw = catalog.array("attributes")!!.objects().filter { it.string("keyCase") == "raw" }
+        assertEquals(write.keys, raw.flatMap { it.array("kotlin")!!.strings() }.toSet())
+        for (attribute in raw) {
+            val refuses = attribute.boolean("keyIsAttributeName") ?: false
+            for (fn in attribute.array("kotlin")!!.strings()) {
+                val thrown = runCatching { write.getValue(fn)("viewBox") }.exceptionOrNull()
+                assertEquals(refuses, thrown is InvalidSignalNameException, "$fn(\"viewBox\") threw $thrown")
             }
         }
     }

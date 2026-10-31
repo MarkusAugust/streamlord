@@ -34,4 +34,21 @@ dependencies {
 // The tests read these by path, so a change there must rerun them and not be served from the cache.
 tasks.withType<Test>().configureEach {
     inputs.dir(rootProject.layout.projectDirectory.dir("catalog"))
+    inputs.dir(rootProject.layout.projectDirectory.dir("conformance/client"))
+}
+
+/*
+ * What the client does with the HTML the DSL writes, under conformance/dsl: the tests write each
+ * case's input under updateClientReadings, which the root build registers with the other fixture
+ * tasks, `npm run dsl` in conformance/generate fills in the client's reading, and every other test
+ * run compares the two with what the case means.
+ *
+ * A reading another dsl.mjs or common.mjs took is refused, so a change to either alone runs the
+ * tests again.
+ */
+tasks.withType<Test>().matching { it.name != "updateClientReadings" }.configureEach {
+    inputs
+        .files(rootProject.layout.projectDirectory.files("conformance/generate/dsl.mjs", "conformance/generate/common.mjs"))
+        .withPropertyName("dslGenerator")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
 }

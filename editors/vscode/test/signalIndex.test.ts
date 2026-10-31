@@ -31,6 +31,19 @@ describe("signal index", () => {
     assert.deepEqual([...index.allDefinitions()].sort(), ["open", "query"]);
   });
 
+  it("gives the analysis the constants no file declares as anything else", () => {
+    const index = new SignalIndex(new Set());
+    let fired = 0;
+    index.onDidChangeDefinitions(() => fired++);
+    index.update(doc("/t/Keys.kt", "kotlin", `const val title = "Home"\nconst val label = "Name"\nprivate const val secret = "s"`, 1));
+    assert.deepEqual([...index.allConstants()].sort(), ["label", "title"]);
+    index.update(doc("/t/Request.kt", "kotlin", `val title get() = header("title")`, 1));
+    assert.deepEqual([...index.allConstants()], ["label"]);
+    index.update(doc("/t/Request.kt", "kotlin", `val heading get() = header("title")`, 2));
+    assert.deepEqual([...index.allConstants()].sort(), ["label", "title"]);
+    assert.equal(fired, 3);
+  });
+
   it("says when definitions change, and only then", () => {
     const index = new SignalIndex(new Set());
     let fired = 0;
@@ -92,6 +105,47 @@ describe("signal index", () => {
       assert.deepEqual([...index.allDefinitions()], ["kept"]);
     } finally {
       remove.restore();
+    }
+  });
+
+  it("leaves out the folders analyzeProject leaves out, below the workspace folder only", async () => {
+    const root = "/home/.wt/app";
+    const kept = `${root}/src/Page.kt`;
+    const skipped = ["build", "node_modules", ".gradle", "dist", "out", "target", ".idea", "src/.cache", "src/target"].map((f) => `${root}/${f}/Page.kt`);
+    const page = (name: string) => `fun page() = """<div data-signals:${name}="1"></div>"""`;
+    files.set(kept, encode(page("kept")));
+    for (const p of skipped) files.set(p, encode(page("skipped")));
+    const listeners: Record<string, (u: unknown) => void> = {};
+    const on = (name: string) => (l: (u: unknown) => void) => {
+      listeners[name] = l;
+      return { dispose: () => {} };
+    };
+    const { createFileSystemWatcher, findFiles } = workspace;
+    const excludes: unknown[] = [];
+    (workspace as Record<string, unknown>).createFileSystemWatcher = () => ({ onDidChange: on("change"), onDidCreate: on("create"), onDidDelete: on("delete"), dispose: () => {} });
+    workspace.findFiles = async (_include?: unknown, exclude?: unknown) => {
+      excludes.push(exclude);
+      return [kept, ...skipped].map((p) => Uri.file(p));
+    };
+    workspace.workspaceFolders = [{ uri: Uri.file(root) }];
+    try {
+      const index = new SignalIndex(new Set());
+      await index.rebuild();
+      assert.deepEqual([...index.allDefinitions()], ["kept"]);
+      const glob = "**/{build,node_modules,.gradle,dist,out,target,.*}/**";
+      assert.deepEqual(excludes, [glob, glob]);
+      for (const p of skipped) {
+        listeners.create?.(Uri.file(p));
+        listeners.change?.(Uri.file(p));
+        index.update(doc(p, "kotlin", page("opened")));
+      }
+      await settle();
+      assert.deepEqual([...index.allDefinitions()], ["kept"]);
+    } finally {
+      workspace.createFileSystemWatcher = createFileSystemWatcher;
+      workspace.findFiles = findFiles;
+      workspace.workspaceFolders = undefined;
+      files.clear();
     }
   });
 

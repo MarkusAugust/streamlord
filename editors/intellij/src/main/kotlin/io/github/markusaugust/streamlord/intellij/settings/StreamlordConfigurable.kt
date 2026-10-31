@@ -10,6 +10,7 @@ import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.dsl.builder.toNullableProperty
 import io.github.markusaugust.streamlord.analysis.Requests
+import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 
 /** Settings | Tools | Streamlord. */
 class StreamlordConfigurable(
@@ -25,7 +26,7 @@ class StreamlordConfigurable(
         return panel {
             group("Datastar") {
                 row("Attribute prefix:") {
-                    comboBox(listOf("data-", "data-star-"))
+                    comboBox(listOf(CatalogNames.PREFIX, CatalogNames.ALIASED_PREFIX))
                         .bindItem(state::attributePrefix.toNullableProperty())
                         .comment("data-star- when you load the aliased bundle.")
                 }

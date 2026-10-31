@@ -4,6 +4,7 @@ import io.github.markusaugust.streamlord.core.application.Streamlord
 import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 import io.github.markusaugust.streamlord.core.domain.InterpolatedExpressionException
+import io.github.markusaugust.streamlord.core.domain.MistypedAttributeException
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.Trusted
 import io.github.markusaugust.streamlord.core.domain.UnsafeInterpolationException
@@ -11,6 +12,7 @@ import io.github.markusaugust.streamlord.core.domain.interpolate
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 /**
  * The markup scanner under interpolate and ElementsGuard against the way the HTML tokenizer
@@ -24,7 +26,7 @@ class MarkupAsTheBrowserReadsTest {
         format: String,
         vararg values: Any?,
     ) {
-        assertFailsWith<UnsafeInterpolationException>(format) { interpolate(format, *values) }
+        assertFailsWith<UnsafeInterpolationException>(format) { render(format, *values) }
     }
 
     @Test
@@ -33,7 +35,42 @@ class MarkupAsTheBrowserReadsTest {
         refused("""<!---><div data-text="%s"></div>""", script)
         refused("""<!-- note --!><div data-text="%s"></div>""", script)
         // A real comment still holds text.
-        assertEquals("<!-- a&lt;b --><p></p>", interpolate("<!-- %s --><p></p>", "a<b"))
+        assertEquals("<!-- a&lt;b --><p></p>", render("<!-- %s --><p></p>", "a<b"))
+    }
+
+    @Test
+    fun `a tag name is matched by its ASCII letters only`() {
+        // The browser lowercases A to Z alone: </ſcript> (U+017F, a long s) is text inside the script.
+        refused("<script>x</\u017Fcript>%s</script>", script)
+        refused("<style>a</\u017Ftyle>%s</style>", "x")
+        // And <ſcript> is an element of its own, whose content is text.
+        assertEquals("<\u017Fcript>a&lt;b</\u017Fcript>", render("<\u017Fcript>%s</\u017Fcript>", "a<b"))
+    }
+
+    @Test
+    fun `in svg or math a CDATA section ends at its own end`() {
+        // parse5 and the browser: the img is an element of the page, not the value of a.
+        refused("""<svg><![CDATA[ > <x a="]]><img src=x onerror='%s'>">""", script)
+        refused("""<math><![CDATA[ > <x a="]]><img src=x onerror='%s'>">""", script)
+        // Outside them it is a bogus comment, which the first > ends.
+        refused("""<![CDATA[ x ]]><img src=x onerror="%s">""", script)
+        // So it is inside an HTML integration point of an svg, or after a breakout: there the img is an element.
+        refused("""<svg><title><![CDATA[><img src=x onerror="%s">]]></title></svg>""", script)
+        refused("""<svg><desc><![CDATA[><a href="%s">x</a>]]></desc></svg>""", "javascript:alert(1)")
+        refused("""<math><title><p><![CDATA[><img onerror="%s">""", script)
+    }
+
+    @Test
+    fun `character references decode as the HTML tokenizer decodes them`() {
+        // &nbsp; is a no-break space, as &#160; is, and an expression of white space alone is none.
+        val numeric = runCatching { ElementsGuard.check("""<b data-text="&#160;"></b>""") }.exceptionOrNull()
+        val named = runCatching { ElementsGuard.check("""<b data-text="&nbsp;"></b>""") }.exceptionOrNull()
+        assertEquals(numeric?.javaClass, named?.javaClass)
+        assertTrue(named != null)
+        // &#0; is U+FFFD to the browser, which no scheme starts with, so the link is a relative one.
+        assertEquals("""<a href="&#0;javascript:alert(1)">x</a>""", render("""<a href="&#0;javascript:%s">x</a>""", "alert(1)"))
+        // The legacy names decode without their semicolon.
+        refused("""<a href="javascript&colon;%s">x</a>""", "alert(1)")
     }
 
     @Test
@@ -75,8 +112,8 @@ class MarkupAsTheBrowserReadsTest {
         refused("""<a href="%s%s">x</a>""", "javascript", ":alert(1)")
         refused("""<a href="javascript:show(%s)">x</a>""", "1")
         refused("""<a href="&#106;avascript:%s">x</a>""", "alert(1)")
-        assertEquals("""<a href="/heads/x">x</a>""", interpolate("""<a href="/heads/%s">x</a>""", "x"))
-        assertEquals("""<a href="https://e.com/a">x</a>""", interpolate("""<a href="%s%s">x</a>""", "https://e.com", "/a"))
+        assertEquals("""<a href="/heads/x">x</a>""", render("""<a href="/heads/%s">x</a>""", "x"))
+        assertEquals("""<a href="https://e.com/a">x</a>""", render("""<a href="%s%s">x</a>""", "https://e.com", "/a"))
     }
 
     @Test
@@ -84,13 +121,13 @@ class MarkupAsTheBrowserReadsTest {
         refused("""<svg><a><animate attributeName="href" values="%s"/></a></svg>""", "javascript:alert(1)")
         refused("""<svg><a><set attributeName="href" to="%s"/></a></svg>""", "javascript:alert(1)")
         refused("""<svg><a><animate attributeName="href" values="/a;%s"/></a></svg>""", "javascript:alert(1)")
-        assertEquals("""<feColorMatrix values="1 0"/>""", interpolate("""<feColorMatrix values="%s"/>""", "1 0"))
+        assertEquals("""<feColorMatrix values="1 0"/>""", render("""<feColorMatrix values="%s"/>""", "1 0"))
     }
 
     @Test
     fun `custom prefixes are tried longest first`() {
         assertFailsWith<UnsafeInterpolationException> {
-            interpolate("""<div data-star-text="%s"></div>""", listOf(script), listOf("data-", "data-star-"))
+            render("""<div data-star-text="%s"></div>""", listOf(script), listOf("data-", "data-star-"))
         }
     }
 
@@ -106,6 +143,19 @@ class MarkupAsTheBrowserReadsTest {
         // In HTML, markup a textarea shows is text, and stays allowed.
         val shown = """<textarea><div data-text=""></div></textarea>"""
         assertEquals(shown, ElementsGuard.check(shown))
+        // So is markup after an end tag only Unicode case folding would read as the script's own.
+        val inScript = "<script>x</\u017Fcript><b data-text=\"++\"></b></script>"
+        assertEquals(inScript, ElementsGuard.check(inScript))
+        assertFailsWith<InterpolatedExpressionException> { ElementsGuard.check("""<svg><![CDATA[ > <x a="]]><b data-text='++'></b>">""") }
+        assertFailsWith<MistypedAttributeException> {
+            ElementsGuard.check(
+                """<svg><title><![CDATA[><div data-onn:click="x">]]></title></svg>""",
+            )
+        }
+        // An </svg> inside a CDATA section closes nothing, so the textarea after it is the svg's.
+        assertFailsWith<MistypedAttributeException> {
+            ElementsGuard.check("""<svg><![CDATA[</svg><textarea>]]><div data-onn:click="x"></div>""")
+        }
     }
 
     @Test
@@ -126,7 +176,7 @@ class MarkupAsTheBrowserReadsTest {
 
     @Test
     fun `Trusted waives the URL check too`() {
-        assertEquals("""<a href="javascript:void(0)">x</a>""", interpolate("""<a href="%s">x</a>""", Trusted("javascript:void(0)")))
+        assertEquals("""<a href="javascript:void(0)">x</a>""", render("""<a href="%s">x</a>""", Trusted("javascript:void(0)")))
     }
 
     @Test
@@ -137,3 +187,15 @@ class MarkupAsTheBrowserReadsTest {
         }
     }
 }
+
+/** [interpolate]'s markup as text, which is what these tests compare. */
+private fun render(
+    format: String,
+    vararg values: Any?,
+): String = interpolate(format, *values).text
+
+private fun render(
+    format: String,
+    values: List<Any?>,
+    prefixes: List<String> = ElementsGuard.defaultPrefixes,
+): String = interpolate(format, values, prefixes).text

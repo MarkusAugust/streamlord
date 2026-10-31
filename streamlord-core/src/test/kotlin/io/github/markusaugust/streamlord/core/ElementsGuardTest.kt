@@ -149,6 +149,15 @@ class ElementsGuardTest {
     }
 
     @Test
+    fun `a double-escaped script body runs past its first close`() {
+        // `<!--<script>` double-escapes the body, so the first `</script>` leaves it script.
+        val inside = """<script><!--<script></script><p data-text=""></p></script>"""
+        assertEquals(inside, ElementsGuard.check(inside))
+        val after = """<script><!--<script></script>--></script><p data-text=""></p>"""
+        assertFailsWith<InterpolatedExpressionException> { ElementsGuard.check(after) }
+    }
+
+    @Test
     fun `attributes that take no expression are left alone`() {
         for (ok in listOf(
             """<input data-bind="">""",

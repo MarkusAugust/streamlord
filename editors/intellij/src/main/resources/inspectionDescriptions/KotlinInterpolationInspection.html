@@ -1,14 +1,41 @@
 <html>
 <body>
-Reports a Kotlin string template where a Datastar signal was meant: <code>"$count++"</code> becomes <code>"++"</code> at runtime,
-and the browser never sees a signal.
+Reports a Kotlin value written into a Datastar expression or an HTML string, judged by where it lands, as
+<code>interpolate(...)</code> judges it at run time.
 <p>
-In a Datastar expression handed to the DSL this is an error. Inside an HTML string a template in a <code>data-*</code> expression is a
-warning, since a server value there works as often as it is the trap; in element text it is a hint, since there it is usually meant.
+A string template where a Datastar signal was meant: <code>"$count++"</code> becomes <code>"++"</code> at runtime,
+and the browser never sees a signal. In a Datastar expression handed to the DSL this is an error; in a <code>data-*</code>
+expression of an HTML string, a warning, since a server value there works as often as it is the trap.
+</p>
+<p>
+Each value is judged by its Kotlin type. A value in element text or a quoted attribute, where escaping is enough, is a hint, or
+a warning for a <code>String</code> and for markup outside element text: build the string with <code>interpolate(...)</code>,
+which escapes it. A value at the start of a URL, in <code>style</code>, in a Datastar expression, in a script or an event
+handler, or in an unquoted attribute value is a warning, since escaping does not help there.
+</p>
+<p>
+Nothing is reported for the author's own values: constants, literals, an <code>if</code> or <code>when</code> between literals,
+an entry of a Kotlin enum that does not override <code>toString</code>, a call to a Streamlord helper such as
+<code>signal("count")</code> whose arguments are all of these, and markup in element text. A helper given any other value,
+<code>signal(q)</code>, is judged by its type, since what it writes runs as code. A number or a boolean is safe where escaping is
+enough and in a Datastar expression, but where a signal could stand (<code>"$count"</code> with an <code>Int</code>
+<code>count</code>) it is a hint, since the signal may have been meant.
+</p>
+<p>
+A call to <code>interpolate(...)</code> is judged as it will run. A Kotlin template in its format is filled in before
+<code>interpolate</code> sees the markup, so it is neither escaped nor refused: a warning. More or fewer <code>%s</code> holes
+than values is an error, since <code>interpolate</code> then throws. A hole where <code>interpolate</code> refuses the value,
+a <code>String</code> in a Datastar expression or a <code>Boolean</code> in <code>style</code>, is an error; a value the text
+cannot tell there is a warning.
 </p>
 <p>
 Quick fixes: the DSL helper (<code>increment("count")</code>, <code>signal("count")</code>, <code>toggle("open")</code>), a
-<code>$$"..."</code> literal (Kotlin 2.2+) where a single dollar is text, or the <code>${'$'}count</code> escape.
+<code>$$"..."</code> literal (Kotlin 2.2+) where a single dollar is text, the <code>${'$'}count</code> escape, or the
+literal rewritten as <code>interpolate(...)</code> with its import, quotes around an unquoted attribute value, and a template
+in a format made a <code>%s</code> hole with its value passed in its place. The rewrite is not offered for a value that may be
+null, which a template writes as <code>null</code> and <code>interpolate</code> as nothing. For a <code>String</code> in
+element text, which may be text from outside or markup you built, it is offered beside "Mark &hellip; as markup", which wraps
+the value in <code>Trusted(...)</code>, and neither comes first: which one is right only you know.
 </p>
 <!-- tooltip end -->
 </body>

@@ -117,7 +117,14 @@ private fun Issue.shifted(by: Int): Issue =
         copy(
             start = start + by,
             end = end + by,
-            fixes = fixes.map { it.copy(start = it.start + by, end = it.end + by) },
+            fixes =
+                fixes.map { f ->
+                    f.copy(
+                        start = f.start + by,
+                        end = f.end + by,
+                        edits = f.edits.map { it.copy(start = it.start + by, end = it.end + by) },
+                    )
+                },
         )
     }
 
@@ -240,31 +247,31 @@ private fun verdictPatch(block: TagConsumer<*>.() -> Unit): DatastarEvent =
     patchElements(selector = "#verdict", mode = ElementPatchMode.INNER) { block() }
 
 private fun TagConsumer<*>.overLimit() {
-    div("fs-alert judge__verdict") {
+    div("lt-alert judge__verdict") {
         attributes["data-color"] = "warning"
-        p("fs-alert__title") { +"Too long" }
+        p("lt-alert__title") { +"Too long" }
         p { +"The judge reads at most 1 KiB of UTF-8." }
     }
 }
 
 /** An empty field is not clean markup, so it is not told it is. */
 private fun TagConsumer<*>.nothingYet() {
-    p("fs-paragraph judge__how") {
+    p("lt-paragraph judge__how") {
         attributes["data-size"] = "small"
         +"Paste markup or Kotlin and the judge reads it."
     }
 }
 
 private fun TagConsumer<*>.unreadable() {
-    div("fs-alert judge__verdict") {
+    div("lt-alert judge__verdict") {
         attributes["data-color"] = "warning"
-        p("fs-alert__title") { +"Unread" }
+        p("lt-alert__title") { +"Unread" }
         p { +"The judge could not get through this. It is neither markup nor Kotlin it recognises." }
     }
 }
 
 /**
- * The findings, in Fristil's classes, which the page has and the server has never seen.
+ * The findings, in LO-TEK's classes, which the page has and the server has never seen.
  *
  * Each message is the analysis's own, unchanged, because the message is what the editors show
  * and the page's claim is that this is that check. The button under a finding puts the fixed
@@ -275,27 +282,27 @@ private fun TagConsumer<*>.unreadable() {
  */
 public fun TagConsumer<*>.verdict(judgement: Judgement) {
     if (judgement.total == 0) {
-        div("fs-alert judge__verdict") {
+        div("lt-alert judge__verdict") {
             attributes["data-color"] = "success"
-            p("fs-alert__title") { +"Clean" }
+            p("lt-alert__title") { +"Clean" }
             p { +"Nothing to fix. Your editor and the CI test would let this through." }
         }
-        p("fs-paragraph judge__how") {
+        p("lt-paragraph judge__how") {
             attributes["data-size"] = "small"
             +judgement.judged.says
         }
         return
     }
 
-    div("fs-alert judge__verdict") {
+    div("lt-alert judge__verdict") {
         attributes["data-color"] = if (judgement.errors > 0) "danger" else "warning"
-        p("fs-alert__title") {
+        p("lt-alert__title") {
             +when (judgement.total) {
                 1 -> "One thing to fix"
                 else -> "${judgement.total} things to fix"
             }
         }
-        ul("fs-list judge__findings") {
+        ul("lt-list judge__findings") {
             attributes["data-variant"] = "plain"
             judgement.findings.forEach { finding ->
                 li("judge__finding") {
@@ -310,7 +317,7 @@ public fun TagConsumer<*>.verdict(judgement: Judgement) {
                         code("judge__code") { +"[$code]" }
                     }
                     finding.fixed.forEach { fixed ->
-                        button(classes = "fs-button judge__fix") {
+                        button(classes = "lt-button judge__fix") {
                             type = ButtonType.button
                             attributes["data-variant"] = "secondary"
                             attributes["data-size"] = "small"
@@ -327,7 +334,7 @@ public fun TagConsumer<*>.verdict(judgement: Judgement) {
             }
         }
     }
-    p("fs-paragraph judge__how") {
+    p("lt-paragraph judge__how") {
         attributes["data-size"] = "small"
         +judgement.judged.says
     }

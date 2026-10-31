@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.client.decodeEntities
+
 /*
  * The signals a Datastar expression reads, with their offsets, and the check of each against the
  * signals the project defines. The analysis sees one file; which names the project defines is the
@@ -31,7 +33,10 @@ internal fun expressionSignalReferences(text: String): List<SignalReference> =
         .map { SignalReference(it.start, it.end, it.name) }
 
 /** The DSL helpers whose first argument names a signal they read: `signal("count")` is `$count`. */
-internal val HELPER_READ_CALLS: Set<String> = setOf("signal", "increment", "decrement", "not")
+internal val HELPER_READ_CALLS: Set<String> =
+    Catalog.default.signalNameHelpers
+        .filterValues { "reads" in it }
+        .keys
 
 /**
  * A name a fix can write back into a helper: dotted parts, without a hyphen, which the helper

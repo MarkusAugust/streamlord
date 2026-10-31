@@ -1,14 +1,14 @@
 ---
-import { fs } from "@fristil/designsystem"
+import { lt } from "@lo-tek/interfaces"
 import { SERVICE } from "../config"
 import { href, NAVIGATION } from "../navigation"
 
-// Fristil's own classes for a search field, with ours appended rather than spread beside them.
+// LO-TEK's own classes for a search field, with ours appended rather than spread beside them.
 //
-// `{...fs.search()}` sets `class`, and the spread wins over a `class` written after it, so an
-// input carrying both ended up with Fristil's two classes and not ours, silently. Every rule
+// `{...lt.search()}` sets `class`, and the spread wins over a `class` written after it, so an
+// input carrying both ended up with LO-TEK's two classes and not ours, silently. Every rule
 // written for `.search__field` matched nothing until this was pulled apart.
-const { class: fristilClasses, ...searchAttributes } = fs.search()
+const { class: lotekClasses, ...searchAttributes } = lt.search()
 
 // The search in the masthead, on every page.
 //
@@ -40,11 +40,11 @@ const { class: fristilClasses, ...searchAttributes } = fs.search()
   data-signals="{query: '', searching: false, offline: false, wire: false}"
   data-on:datastar-fetch__document={"$offline = ['error', 'retrying', 'retries-failed'].includes(evt.detail.type)"}
 >
-  <label class="fs-sr-only" for="site-search">Search the documentation</label>
+  <label class="lt-sr-only" for="site-search">Search the documentation</label>
   <input
     {...searchAttributes}
     id="site-search"
-    class={`${fristilClasses} search__field`}
+    class={`${lotekClasses} search__field`}
     placeholder="Search"
     autocomplete="off"
     data-bind:query
@@ -78,12 +78,12 @@ const { class: fristilClasses, ...searchAttributes } = fs.search()
 
     <div id="results" class="search__results">
       <p class="search__all">Every page</p>
-      <ul class="fs-list hits" data-variant="plain">
+      <ul class="lt-list hits" data-variant="plain">
         {
           NAVIGATION.flatMap((section) =>
             section.pages.map((page) => (
               <li>
-                <a class="fs-link hits__where" href={href(page.slug)}>
+                <a class="lt-link hits__where" href={href(page.slug)}>
                   {page.title}
                   <span class="hits__heading"> · {section.title}</span>
                 </a>
@@ -105,7 +105,7 @@ const { class: fristilClasses, ...searchAttributes } = fs.search()
   /*
    * The field lifts off the band it sits on, rather than carrying a colour of its own.
    *
-   * The masthead is a data-theme="dark" island on both themes, so Fristil gave the input the
+   * The masthead is a data-theme="dark" island on both themes, so LO-TEK gave the input the
    * dark theme's surface, rgb(23, 26, 36). Against the dark band that is a gentle lift, but
    * the light theme's band is the deck's denim, rgb(44, 67, 107), and a near-black field on it
    * reads as a hole punched through the header.
@@ -116,18 +116,18 @@ const { class: fristilClasses, ...searchAttributes } = fs.search()
    */
   .search__field {
     inline-size: 100%;
-    /* background-color, not background: the shorthand wipes the background-image Fristil uses
+    /* background-color, not background: the shorthand wipes the background-image LO-TEK uses
        to draw the magnifier, and the icon vanished without a word. */
     background-color: rgb(255 255 255 / 0.1);
     border-color: rgb(255 255 255 / 0.28);
-    color: var(--fs-color-neutral-text-strong);
+    color: var(--lt-color-neutral-text-strong);
   }
   .search__field:hover {
     background-color: rgb(255 255 255 / 0.16);
   }
   /*
    * The label is there for a screen reader and hidden from the eye, so the placeholder is the
-   * only visible name this field has. Fristil's muted grey measured 3.45:1 against the lifted
+   * only visible name this field has. LO-TEK's muted grey measured 3.45:1 against the lifted
    * surface, fine for decoration, thin for the only thing that says what the box is for.
    */
   .search__field::placeholder {
@@ -148,53 +148,53 @@ const { class: fristilClasses, ...searchAttributes } = fs.search()
      * window that still gets this layout, and the viewport term catches the rest.
      */
     inline-size: min(28rem, calc(100vw - 4rem));
-    inset-block-start: calc(100% + var(--fs-spacing-2));
+    inset-block-start: calc(100% + var(--lt-spacing-2));
     z-index: 20;
     /*
      * The page's theme, taken back from the masthead's.
      *
      * The panel belongs to what you are reading, not to the furniture above it, but it is a
      * child of a data-theme="dark" island, so every colour inside it, down to the link colour
-     * Fristil gives .fs-link, was the dark theme's, and the panel arrived as a black box over a
+     * LO-TEK gives .lt-link, was the dark theme's, and the panel arrived as a black box over a
      * white article. Re-declaring the eight that the panel and its contents use, from the page
      * values captured on :root, hands the whole subtree back to the page.
      *
      * A fixed ceiling with its own scroll, because a panel that grows and shrinks with every
      * keystroke reads as a page coming apart.
      */
-    --fs-color-neutral-canvas: var(--page-background);
-    --fs-color-neutral-text-strong: var(--page-foreground);
-    --fs-color-neutral-text-subtle: var(--page-muted);
-    --fs-color-neutral-border-subtle: var(--page-divider);
-    --fs-color-neutral-surface: var(--page-neutral);
-    --fs-color-accent-text: var(--page-interactive);
-    --fs-color-accent-text-strong: var(--page-interactive-hover);
-    --fs-color-visited-text: var(--page-interactive-visited);
+    --lt-color-neutral-canvas: var(--page-background);
+    --lt-color-neutral-text-strong: var(--page-foreground);
+    --lt-color-neutral-text-subtle: var(--page-muted);
+    --lt-color-neutral-border-subtle: var(--page-divider);
+    --lt-color-neutral-surface: var(--page-neutral);
+    --lt-color-accent-text: var(--page-interactive);
+    --lt-color-accent-text-strong: var(--page-interactive-hover);
+    --lt-color-visited-text: var(--page-interactive-visited);
     color-scheme: var(--page-color-scheme);
-    background: var(--fs-color-neutral-canvas);
-    color: var(--fs-color-neutral-text-strong);
-    border: 1px solid var(--fs-color-neutral-border-subtle);
-    border-radius: var(--fs-spacing-1);
+    background: var(--lt-color-neutral-canvas);
+    color: var(--lt-color-neutral-text-strong);
+    border: 1px solid var(--lt-color-neutral-border-subtle);
+    border-radius: var(--lt-spacing-1);
     box-shadow: 0 12px 32px rgb(0 0 0 / 0.35);
     max-block-size: min(60vh, 32rem);
     overflow-y: auto;
-    padding: var(--fs-spacing-3);
+    padding: var(--lt-spacing-3);
   }
   .search__offline {
-    margin: 0 0 var(--fs-spacing-2);
-    padding: var(--fs-spacing-2);
-    border-radius: var(--fs-spacing-1);
-    background: var(--fs-color-neutral-surface);
-    color: var(--fs-color-neutral-text-subtle);
-    font-size: var(--font-size-xs);
+    margin: 0 0 var(--lt-spacing-2);
+    padding: var(--lt-spacing-2);
+    border-radius: var(--lt-spacing-1);
+    background: var(--lt-color-neutral-surface);
+    color: var(--lt-color-neutral-text-subtle);
+    font-size: var(--lt-font-size-xs);
   }
   .search__all {
-    margin: 0 0 var(--fs-spacing-2);
-    font-size: var(--font-size-xxs);
-    font-weight: var(--font-weight-semibold);
+    margin: 0 0 var(--lt-spacing-2);
+    font-size: var(--lt-font-size-xxs);
+    font-weight: var(--lt-font-weight-semibold);
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--fs-color-neutral-text-subtle);
+    color: var(--lt-color-neutral-text-subtle);
   }
 
   /* The server writes these, so they are styled here rather than where they are built. */
@@ -203,15 +203,15 @@ const { class: fristilClasses, ...searchAttributes } = fs.search()
     padding: 0;
     list-style: none;
     display: grid;
-    gap: var(--fs-spacing-2);
+    gap: var(--lt-spacing-2);
   }
   .search__results :global(.hits__heading) {
-    color: var(--fs-color-neutral-text-subtle);
-    font-weight: var(--font-weight-regular);
+    color: var(--lt-color-neutral-text-subtle);
+    font-weight: var(--lt-font-weight-regular);
   }
   .search__results :global(.hits__excerpt) {
-    margin: var(--fs-spacing-1) 0 0;
-    color: var(--fs-color-neutral-text-subtle);
+    margin: var(--lt-spacing-1) 0 0;
+    color: var(--lt-color-neutral-text-subtle);
   }
 
   /*

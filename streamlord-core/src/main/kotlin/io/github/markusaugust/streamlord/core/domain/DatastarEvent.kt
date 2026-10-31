@@ -103,6 +103,22 @@ public data class PatchElements(
 }
 
 /**
+ * A [PatchElements] of markup [interpolate] built, for code that builds the event itself, as a
+ * `Flow` of events does. A function rather than a constructor, since one taking the [Html] would
+ * clash on the JVM with the one taking its [String].
+ */
+public fun PatchElements(
+    elements: Html,
+    selector: String? = null,
+    mode: ElementPatchMode = ElementPatchMode.DEFAULT,
+    namespace: ElementNamespace = ElementNamespace.DEFAULT,
+    useViewTransition: Boolean = false,
+    viewTransitionSelector: String? = null,
+    eventId: String? = null,
+    retry: Duration? = null,
+): PatchElements = PatchElements(elements.text, selector, mode, namespace, useViewTransition, viewTransitionSelector, eventId, retry)
+
+/**
  * Patch signals into the browser's signal store using RFC 7386 JSON Merge Patch semantics:
  * a key with a value is set, a key set to `null` is removed, nested objects merge recursively.
  *

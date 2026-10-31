@@ -222,7 +222,9 @@ export function stringAt(src: string, offset: number, strings: KotlinString[] = 
   return null;
 }
 
-const HTML_START = /^\s*<(?:[A-Za-z]|!--|!doctype)/i;
+// A template as the first tag name, `"<$tag>…"`, opens a tag all the same when a space, `>` or `/` follows
+// it; `"<$tag\\b"` and `"<$tag"` are search patterns.
+const HTML_START = /^\s*<(?:[A-Za-z]|__kt__(?=[\s>/])|!--|!doctype)/i;
 const HTML_MARKER = /@Language\(\s*"html"\s*\)|\/\/\s*language\s*=\s*html\b/gi;
 
 /**

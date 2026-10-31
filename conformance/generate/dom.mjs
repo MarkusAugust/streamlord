@@ -2,34 +2,16 @@
 // happy-dom. Run by hand when the reference changes: `npm run dom`. The case inputs are read from
 // the fixtures themselves (each case's `sse`, each scenario's `store` and `steps`, and the script
 // bodies listed at the end of this file); everything else in them is written by this script.
-import { readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
-import { dirname, resolve, sep } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { readFileSync, writeFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import vm from 'node:vm'
-import { transformSync } from 'esbuild'
 import { Window } from 'happy-dom'
 import * as parse5 from 'parse5'
+import { ascii, conformance, freeBundle } from './common.mjs'
 
-const here = dirname(fileURLToPath(import.meta.url))
-const fixtures = resolve(here, '..', 'dom')
-const referenceRoot = resolve(here, '..', '..', 'datastar-reference')
-const versions = readdirSync(referenceRoot).filter((d) => d.startsWith('datastar-'))
-if (versions.length !== 1) throw new Error(`expected one datastar-<version> directory under ${referenceRoot}, found ${versions.length}`)
-const version = versions[0].slice('datastar-'.length)
-const reference = resolve(referenceRoot, versions[0])
+const fixtures = resolve(conformance, 'dom')
 
-// The only thing read is the free client's release tree, never a path outside it.
-const readFreeClient = (relative) => {
-  const root = realpathSync(reference) + sep
-  const file = realpathSync(resolve(reference, relative))
-  if (!file.startsWith(root)) throw new Error(`${relative} is outside the free client`)
-  return readFileSync(file, 'utf8')
-}
-
-// The built free bundle is an ES module; as an IIFE it can run inside a happy-dom window, where
-// its exports land on `Datastar`. A module is strict, so the IIFE has to be told: in sloppy mode
-// the assignments that make the client throw on a __proto__ key would silently do nothing.
-const client = `"use strict";\n${transformSync(readFreeClient('bundles/datastar.js'), { format: 'iife', globalName: 'Datastar' }).code}`
+const client = freeBundle('datastar.js').code
 
 // Runs inside the window before the client. A happy-dom window is its own realm, so a patch has to
 // be parsed in there for the client's isPojo to see a plain object. happy-dom has no MathML and no
@@ -277,8 +259,6 @@ const commentBodies = [
 
 const fixture = (name) => resolve(fixtures, name)
 const read = (name) => JSON.parse(readFileSync(fixture(name), 'utf8'))
-// ASCII only, so a byte order mark or a line separator in a case shows in a diff.
-const ascii = (text) => text.replace(/[^\x00-\x7f]/g, (ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`)
 const onePerLine = (cases) => `[\n${cases.map((c) => ascii(JSON.stringify(c))).join(',\n')}\n]\n`
 const write = (name, text) => {
   writeFileSync(fixture(name), text)
