@@ -20,6 +20,13 @@ All notable changes to Streamlord are recorded here. The format follows
   is outside any comment, CDATA section or `textarea` or `title` body: `interpolate("<script>")`
   or `interpolate("<a href=\"")` would otherwise turn the value after it into a program or a
   link, so such a fragment is escaped and shows as the markup it is.
+- `Iterable<Html>.joinToHtml(separator)`: the markup of each `Html` in turn, as one `Html`, for a
+  list of rows as the value of a hole. Each piece already closes what it opens, so nothing is read
+  again or escaped.
+- `PatchElements(html, ...)` and `ElementsResponse(html, ...)`, functions that take an `Html` where
+  the constructors take a `String`, for code that builds the event itself, as a `Flow` of events
+  does. A constructor taking the `Html` would clash with the `String` one on the JVM; Java callers
+  are unaffected.
 - Two analysis codes for a Kotlin value in an HTML string, judged by where it lands as
   `interpolate` judges it at run time, with core's reading of the markup (`holeLandings`, internal
   API, which `interpolate` itself now calls): `unescaped-interpolation` where escaping saves it, a

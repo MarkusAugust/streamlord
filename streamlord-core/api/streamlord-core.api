@@ -210,10 +210,20 @@ public abstract interface class io/github/markusaugust/streamlord/core/domain/Da
 	public abstract fun getRetry-FghU774 ()Lkotlin/time/Duration;
 }
 
+public final class io/github/markusaugust/streamlord/core/domain/DatastarEventKt {
+	public static final fun PatchElements-Tm2Feso (Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;)Lio/github/markusaugust/streamlord/core/domain/PatchElements;
+	public static synthetic fun PatchElements-Tm2Feso$default (Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/domain/PatchElements;
+}
+
 public abstract interface class io/github/markusaugust/streamlord/core/domain/DatastarResponse {
 	public abstract fun getBody ()Ljava/lang/String;
 	public abstract fun getContentType ()Ljava/lang/String;
 	public abstract fun getHeaders ()Ljava/util/Map;
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/DatastarResponseKt {
+	public static final fun ElementsResponse-oj7ZhCo (Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;Z)Lio/github/markusaugust/streamlord/core/domain/ElementsResponse;
+	public static synthetic fun ElementsResponse-oj7ZhCo$default (Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/domain/ElementsResponse;
 }
 
 public final class io/github/markusaugust/streamlord/core/domain/ElementNamespace : java/lang/Enum {
@@ -351,6 +361,8 @@ public final class io/github/markusaugust/streamlord/core/domain/InterpolationKt
 	public static final fun interpolate (Ljava/lang/String;Ljava/util/List;Ljava/util/List;)Ljava/lang/String;
 	public static final fun interpolate (Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
 	public static synthetic fun interpolate$default (Ljava/lang/String;Ljava/util/List;Ljava/util/List;ILjava/lang/Object;)Ljava/lang/String;
+	public static final fun joinToHtml-eKKYyv0 (Ljava/lang/Iterable;Ljava/lang/String;)Ljava/lang/String;
+	public static synthetic fun joinToHtml-eKKYyv0$default (Ljava/lang/Iterable;Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/String;
 	public static final fun urlSchemeFixedBy (Ljava/lang/String;Ljava/lang/String;)Z
 }
 

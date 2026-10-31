@@ -52,6 +52,20 @@ public value class Html
         override fun toString(): String = text
     }
 
+/**
+ * The markup of each [Html] in turn, with [separator] between them: a list of rows, say, as the
+ * one value of a hole.
+ *
+ * ```kotlin
+ * interpolate("<ul>%s</ul>", names.map { interpolate("<li>%s</li>", it) }.joinToHtml())
+ * ```
+ *
+ * Nothing is read again or escaped. Each piece already closes what it opens, so the pieces side
+ * by side do as well, and the result is markup like any other [Html].
+ */
+@OptIn(InternalStreamlordApi::class)
+public fun Iterable<Html>.joinToHtml(separator: Html = Html("")): Html = Html(joinToString(separator.text) { it.text })
+
 /** Where a value landed, which is what decides whether it can be made safe. */
 public enum class Position {
     /** Element text. Escaping is enough. */
