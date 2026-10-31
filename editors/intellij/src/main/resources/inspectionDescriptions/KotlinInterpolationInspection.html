@@ -8,10 +8,18 @@ and the browser never sees a signal. In a Datastar expression handed to the DSL 
 expression of an HTML string, a warning, since a server value there works as often as it is the trap.
 </p>
 <p>
-A value in element text or a quoted attribute, where escaping is enough, is a hint, or a warning for a <code>String</code>:
-build the string with <code>interpolate(...)</code>, which escapes it. A value at the start of a URL, in <code>style</code>,
-in a Datastar expression, in a script or an event handler, or in an unquoted attribute value is a warning, since escaping does
-not help there. Constants, literals, numbers and booleans, and markup built in the template are left alone.
+Each value is judged by its Kotlin type. A value in element text or a quoted attribute, where escaping is enough, is a hint, or
+a warning for a <code>String</code> and for markup outside element text: build the string with <code>interpolate(...)</code>,
+which escapes it. A value at the start of a URL, in <code>style</code>, in a Datastar expression, in a script or an event
+handler, or in an unquoted attribute value is a warning, since escaping does not help there.
+</p>
+<p>
+Nothing is reported for the author's own values: constants, literals, an <code>if</code> or <code>when</code> between literals,
+an entry of an enum that does not override <code>toString</code>, a call to a Streamlord helper such as
+<code>signal("count")</code> whose arguments are all of these, and markup in element text. A helper given any other value,
+<code>signal(q)</code>, is judged by its type, since what it writes runs as code. A number or a boolean is safe where escaping is
+enough and in a Datastar expression, but where a signal could stand (<code>"$count"</code> with an <code>Int</code>
+<code>count</code>) it is a hint, since the signal may have been meant.
 </p>
 <p>
 A call to <code>interpolate(...)</code> is judged as it will run. A Kotlin template in its format is filled in before
@@ -23,8 +31,9 @@ cannot tell there is a warning.
 <p>
 Quick fixes: the DSL helper (<code>increment("count")</code>, <code>signal("count")</code>, <code>toggle("open")</code>), a
 <code>$$"..."</code> literal (Kotlin 2.2+) where a single dollar is text, the <code>${'$'}count</code> escape, or the
-literal rewritten as <code>interpolate(...)</code> with its import, and a template in a format made a <code>%s</code> hole
-with its value passed in its place.
+literal rewritten as <code>interpolate(...)</code> with its import, quotes around an unquoted attribute value, and a template
+in a format made a <code>%s</code> hole with its value passed in its place. The rewrite is not offered for a value that may be
+null, which a template writes as <code>null</code> and <code>interpolate</code> as nothing.
 </p>
 <!-- tooltip end -->
 </body>
