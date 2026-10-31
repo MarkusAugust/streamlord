@@ -16,6 +16,7 @@ import org.jetbrains.kotlin.psi.KtAnnotated
 import org.jetbrains.kotlin.psi.KtBinaryExpression
 import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtCallableDeclaration
+import org.jetbrains.kotlin.psi.KtConstantExpression
 import org.jetbrains.kotlin.psi.KtExpression
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtIfExpression
@@ -77,6 +78,7 @@ object HoleFacts {
                     fact == HoleFact.CONSTANT || fact == HoleFact.MARKUP -> fact
                     isHelper(expr) -> HoleFact.CONSTANT
                     isMarkup(expr, CALL_DEPTH) -> HoleFact.MARKUP
+                    literalOnly(expr) -> HoleFact.CONSTANT
                     else -> fact ?: continue
                 }
         }
@@ -241,11 +243,37 @@ object HoleFacts {
     }
 
     /**
+     * A value whose every result the source spells out: a literal without templates, or an `if`,
+     * `when` or `?:` that picks between such. `evaluate()` folds none of these, and their type is
+     * String, but what they write is the author's.
+     */
+    private fun literalOnly(expr: KtExpression?): Boolean {
+        val e = expr?.let { KtPsiUtil.safeDeparenthesize(it) } ?: return false
+        return when (e) {
+            is KtStringTemplateExpression -> e.entries.none { it is KtStringTemplateEntryWithExpression }
+            is KtConstantExpression -> true
+            is KtIfExpression -> literalOnly(e.then) && literalOnly(e.`else`)
+            is KtWhenExpression -> e.entries.isNotEmpty() && e.entries.all { literalOnly(it.expression) }
+            is KtBinaryExpression -> e.operationToken == KtTokens.ELVIS && literalOnly(e.left) && literalOnly(e.right)
+            else -> false
+        }
+    }
+
+    private fun branchesMarkup(
+        branches: List<KtExpression?>,
+        depth: Int,
+    ): Boolean {
+        val markup = branches.map { isMarkup(it, depth) }
+        return markup.any { it } && branches.indices.all { markup[it] || literalOnly(branches[it]) }
+    }
+
+    /**
      * Whether the whole value is markup the author built: an HTML literal or a trimmed one,
      * `interpolate(...)` or `Trusted(...)`, kotlinx.html output, a value or function declared `Html`
      * or marked `@Language("HTML")`, a function whose every return is markup, `joinToString` over
      * markup, an `if`, a `when` or a `?:` whose every branch is, or a `+` of markup and literals.
      */
+
     private fun isMarkup(
         expr: KtExpression?,
         depth: Int,
@@ -256,12 +284,13 @@ object HoleFacts {
                 HTML_OPENING.containsMatchIn(e.text.trimStart('$', '"'))
             }
 
+            // Every branch markup or a literal, and one at least markup: `if (b) "<b>x</b>" else ""`.
             is KtIfExpression -> {
-                isMarkup(e.then, depth) && isMarkup(e.`else`, depth)
+                branchesMarkup(listOf(e.then, e.`else`), depth)
             }
 
             is KtWhenExpression -> {
-                e.entries.isNotEmpty() && e.entries.all { isMarkup(it.expression, depth) }
+                e.entries.isNotEmpty() && branchesMarkup(e.entries.map { it.expression }, depth)
             }
 
             is KtBinaryExpression -> {
@@ -274,7 +303,7 @@ object HoleFacts {
                     }
 
                     KtTokens.ELVIS -> {
-                        isMarkup(e.left, depth) && isMarkup(e.right, depth)
+                        branchesMarkup(listOf(e.left, e.right), depth)
                     }
 
                     else -> {

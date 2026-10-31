@@ -56,6 +56,8 @@ class HoleTypesTest : BasePlatformTestCase() {
     private val withTypes: Map<Pair<String, String>, String?> =
         mapOf(
             ("\$count" to "unescaped-interpolation") to null,
+            // An inferred Int where a signal could stand: the value is safe, only the signal question is left.
+            ("\$count" to "kotlin-interpolation") to "hint",
             ("\${everything(query)}" to "unescaped-interpolation") to "warning",
             ("\$name" to "unescaped-interpolation") to "warning",
             ("\$error" to "unescaped-interpolation") to "warning",
