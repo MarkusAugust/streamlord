@@ -101,6 +101,7 @@ What happens to a value is decided by where it landed, not by where it came from
 | Element text | Escaped |
 | A quoted attribute that is not Datastar's | Escaped |
 | A URL attribute: `href`, `src`, `action`, and `values`, `to` or `from` on an SVG animation | Escaped, and **refused** unless the whole value, every hole filled, is relative, `http`, `https`, `mailto` or `tel` |
+| A URL the browser loads code from: `src` of `<script>`, `<iframe>` or `<embed>`, `href` of `<base>`, `data` of `<object>`, `href` of an SVG `<script>` | Escaped, and **refused** unless the literal before the hole already fixes the host: `/x`, `#`, `?`, or a whole origin such as `https://cdn.example/` |
 | A `style` attribute | **Refused**, unless it is a number |
 | A `data-*` attribute Datastar evaluates, an expression or a signal filter, or follows as a signal path: `data-bind`, `data-ref`, `data-indicator` | **Refused**, unless it is a number or a boolean |
 | A `data-*` attribute Datastar reads as it stands: `data-nonce`, `data-preserve-attr`, `data-ignore`, `data-ignore-morph` | Escaped |
@@ -112,11 +113,20 @@ So the `url` in the example above may be `/heads/1` or `https://thurn.example/`,
 `javascript:` URL throws instead of becoming a link that runs. The value is judged whole, as the
 browser reads it: a hole that ends a path the markup begins takes anything, because the markup
 already chose where it points, and `href="%s%s"` cannot be made into `javascript:` across its two
-holes.
+holes. Character references are decoded once the attribute is whole, as the browser does, so
+`href="&%s"` cannot be finished into `&#106;avascript:` by its value.
 
-The markup is read the way the browser's tokenizer reads it, comments, end tags and all, and
-twice: as HTML and as the inside of an `<svg>` or `<math>`, where a `title` or a `textarea` holds
-elements rather than text. A value has to be safe both ways, since a patch with an SVG namespace
+A URL that loads code asks more of the markup. `https://` settles the scheme of a `<script src>`
+but not whose script it is, so a value there is refused until the literal has written the host
+too: `<script src="https://cdn.example/%s">` takes a file name, `<script src="%s">` takes nothing.
+A single `/` is not enough on its own either, since the value could add a second and name another
+host; `/js/%s` is.
+
+The markup is read the way the browser's tokenizer reads it, comments, end tags and all, and in
+more than one way: as HTML, as the inside of an `<svg>` or `<math>`, where a `title` or a
+`textarea` holds elements rather than text, and following the browser's own stack of open
+elements, which switches between HTML and svg or math, and the rules for CDATA sections, as the
+markup opens and closes them. A value has to be safe every way, since a patch with an SVG namespace
 carries no `<svg>` of its own. So a `title` or a `textarea` that shows markup as a code sample cannot
 take a hole inside a `data-*` attribute of that sample; put the whole sample in one hole instead,
 where it is text either way.
@@ -159,7 +169,23 @@ val heading = interpolate("""<h2 class="lt-heading">%s</h2>""", "Gorvek")
 interpolate("""<section id="hero">%s<p>%s</p></section>""", heading, "<the oath>")
 ```
 
-Only `interpolate` makes an `Html`, so holding one says where it came from. A Kotlin template
+A list of rows is a list of `Html`, and `joinToHtml()` makes them one, to stand in a single hole.
+Each row already closes what it opens, so nothing is read again or escaped:
+
+```kotlin sample=statements
+val hits = repository.search("gate")
+val rows = hits.map { interpolate("""<li><a href="%s">%s</a></li>""", it.url, it.title) }
+
+interpolate("""<ul class="lt-list">%s</ul>""", rows.joinToHtml())
+```
+
+`joinToString` would give a `String`, which `interpolate` escapes, so the rows would show as their
+tags. Where you build the events yourself, as a `Flow` does on
+[Spring WebFlux](/spring-webflux/), `PatchElements(html)` and `ElementsResponse(html)` take the
+`Html` too.
+
+Only `interpolate` makes an `Html`, and `joinToHtml()` from the ones it made, so holding one says
+where it came from. A Kotlin template
 writes its markup, so `"<main>$page</main>"` works too, but the editors cannot see that
 `page` is markup unless its type says so. An `Html` is never equal to a `String`: JUnit's
 `assertEquals("<p>x</p>", interpolate(...))`, or AssertJ's `isEqualTo`, compiles and fails though
