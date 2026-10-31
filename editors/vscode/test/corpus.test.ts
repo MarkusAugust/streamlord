@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { analyzeHtml, analyzeKotlin } from "../src/analyze.ts";
-import { validateExpression, type Issue } from "../src/expression.ts";
+import { applyFix, validateExpression, type Issue } from "../src/expression.ts";
 import { validateMarkup } from "../src/markup.ts";
 import { signalReferencesInHtml, unknownSignalIssue } from "../src/signalReferences.ts";
 import { collectSignalDefinitions } from "../src/signals.ts";
@@ -26,10 +26,12 @@ interface Case {
   requireIds?: boolean;
   /** The attribute prefix of an aliased bundle; the default bundle's otherwise. */
   prefix?: string;
+  /** The workspace's `const val` names. */
+  constants?: string[];
   issues: Expected[];
 }
 
-const opts = (c: Case) => ({ prefix: c.prefix ?? "data-", checkHtmlAttributes: true });
+const opts = (c: Case) => ({ prefix: c.prefix ?? "data-", checkHtmlAttributes: true, constants: new Set(c.constants ?? []) });
 const run: Record<string, (c: Case) => Issue[]> = {
   expression: (c) => validateExpression(c.source),
   markup: (c) => validateMarkup(c.source, { requireIds: c.requireIds ?? false, prefix: c.prefix ?? "data-", checkAttributes: true }),
@@ -56,7 +58,7 @@ describe("shared corpus", () => {
           if (c.issues[n]?.start !== undefined || !c.issues[n]) Object.assign(o, { start: i.start, end: i.end });
           if (c.issues[n]?.severity !== undefined) o.severity = i.severity;
           if (c.issues[n]?.message !== undefined) o.message = i.message;
-          if (i.fixes?.length) o.fixes = i.fixes.map((f) => c.source.slice(0, f.start) + f.text + c.source.slice(f.end));
+          if (i.fixes?.length) o.fixes = i.fixes.map((f) => applyFix(c.source, f));
           return o;
         });
         assert.deepEqual(seen, c.issues, `${file}: ${c.name}`);

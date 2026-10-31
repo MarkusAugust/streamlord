@@ -5,6 +5,7 @@ import io.github.markusaugust.streamlord.core.domain.DatastarResponse
 import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.ElementsResponse
+import io.github.markusaugust.streamlord.core.domain.Html
 import io.github.markusaugust.streamlord.core.domain.ScriptResponse
 import io.github.markusaugust.streamlord.core.domain.SignalsResponse
 import org.intellij.lang.annotations.Language
@@ -50,6 +51,16 @@ public fun datastarElements(
     useViewTransition: Boolean = false,
     streamlord: Streamlord = Streamlord.Default,
 ): ResponseEntity<String> = ElementsResponse(elements, selector, mode, namespace, useViewTransition).toResponseEntity(streamlord)
+
+/** [datastarElements] for markup [io.github.markusaugust.streamlord.core.domain.interpolate] built. */
+public fun datastarElements(
+    elements: Html,
+    selector: String? = null,
+    mode: ElementPatchMode = ElementPatchMode.DEFAULT,
+    namespace: ElementNamespace = ElementNamespace.DEFAULT,
+    useViewTransition: Boolean = false,
+    streamlord: Streamlord = Streamlord.Default,
+): ResponseEntity<String> = datastarElements(elements.text, selector, mode, namespace, useViewTransition, streamlord)
 
 /** A JSON object to be patched as signals, without opening a stream. Always `200 OK`, as [datastarElements]. */
 public fun datastarSignals(

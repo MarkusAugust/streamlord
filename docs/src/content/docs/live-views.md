@@ -105,10 +105,10 @@ Datastar request gets the patch and the URL.
 fun searchUrl(query: String): String =
     "/search?q=" + java.net.URLEncoder.encode(query, Charsets.UTF_8)
 
-fun searchResults(query: String): String =
+fun searchResults(query: String): Html =
     interpolate("""<ul id="results"><li>Results for %s</li></ul>""", query)
 
-fun searchPage(results: String): String =
+fun searchPage(results: Html): String =
     "<!doctype html><html><body>$results</body></html>"
 ```
 

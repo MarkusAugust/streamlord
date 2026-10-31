@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { collectSelectors, type Selectors } from "./selectors.ts";
 import { collectSignalDefinitions, collectSignals } from "./signals.ts";
+import { constantNames, constantsAcross, otherDeclaredNames } from "./interpolation.ts";
 
 /** Template files read as markup, as the IntelliJ plugin reads them by default, whatever language an extension gives them. */
 const MARKUP_EXTENSIONS = [
@@ -8,7 +9,9 @@ const MARKUP_EXTENSIONS = [
   "cshtml", "razor", "php", "erb", "ejs", "liquid", "njk", "edge", "astro", "svelte", "vue",
 ];
 const SOURCE_GLOB = `**/*.{kt,${MARKUP_EXTENSIONS.join(",")}}`;
-const EXCLUDED_GLOB = "**/{build,node_modules,.gradle,dist,out,target}/**";
+/** The folders left unread, as `analyzeProject` leaves them: build output, dependencies, and every hidden folder. */
+const SKIPPED_FOLDERS: readonly string[] = ["build", "node_modules", ".gradle", "dist", "out", "target"];
+const EXCLUDED_GLOB = `**/{${SKIPPED_FOLDERS.join(",")},.*}/**`;
 const FILE_CAP = 5000;
 
 /** Where a file lives on a disk the workspace reads; a git diff, an untitled buffer or an output channel defines nothing. */
@@ -19,6 +22,10 @@ interface FileEntry {
   signals: Set<string>;
   definitions: Set<string>;
   selectors: Selectors;
+  /** The `const val` names a Kotlin file lets other files see, which a hole in an HTML string may name. */
+  constants: Set<string>;
+  /** The other names a Kotlin file lets other files see, which keep a constant of the same name from counting. */
+  others: Set<string>;
 }
 
 /** Workspace-wide index of signal names, kept fresh as files change. */
@@ -26,6 +33,7 @@ export class SignalIndex implements vscode.Disposable {
   private byFile = new Map<string, FileEntry>();
   private built = false;
   private definitionsUnion: Set<string> | null = null;
+  private constantsUnion: Set<string> | null = null;
   private readonly changed = new vscode.EventEmitter<void>();
   private readonly disposables: vscode.Disposable[] = [];
 
@@ -49,6 +57,7 @@ export class SignalIndex implements vscode.Disposable {
       ),
     );
     // Files changed outside the editor: a git checkout, a generated template, a file created or deleted on disk.
+    // A watcher takes no exclude: read() leaves out a file in a skipped folder.
     const watcher = vscode.workspace.createFileSystemWatcher(SOURCE_GLOB);
     this.disposables.push(
       watcher,
@@ -66,7 +75,7 @@ export class SignalIndex implements vscode.Disposable {
       vscode.workspace.findFiles(`**/*.{${MARKUP_EXTENSIONS.join(",")}}`, EXCLUDED_GLOB, FILE_CAP),
       vscode.workspace.findFiles("**/*.kt", EXCLUDED_GLOB, FILE_CAP),
     ]);
-    const files = [...markup, ...kotlin];
+    const files = [...markup, ...kotlin].filter((u) => !inSkippedFolder(u));
     await Promise.all(
       files.map(async (uri) => {
         try {
@@ -82,6 +91,7 @@ export class SignalIndex implements vscode.Disposable {
     // An open document may hold edits the disk does not.
     for (const d of vscode.workspace.textDocuments) this.update(d);
     this.definitionsUnion = null;
+    this.constantsUnion = null;
     this.changed.fire();
     return this.all().size;
   }
@@ -95,7 +105,7 @@ export class SignalIndex implements vscode.Disposable {
   private async read(uri: vscode.Uri): Promise<void> {
     if (!INDEXED_SCHEMES.has(uri.scheme)) return;
     const language = languageByExtension(uri);
-    if (!language) return;
+    if (!language || inSkippedFolder(uri)) return;
     if (vscode.workspace.textDocuments.some((d) => d.uri.toString() === uri.toString() && !d.isClosed)) return;
     let text: string;
     try {
@@ -119,8 +129,9 @@ export class SignalIndex implements vscode.Disposable {
   private set(key: string, next: FileEntry): void {
     const previous = this.byFile.get(key);
     this.byFile.set(key, next);
-    if (!previous || !sameSet(previous.definitions, next.definitions)) {
+    if (!previous || !sameSet(previous.definitions, next.definitions) || !sameSet(previous.constants, next.constants) || !sameSet(previous.others, next.others)) {
       this.definitionsUnion = null;
+      this.constantsUnion = null;
       this.changed.fire();
     }
   }
@@ -132,16 +143,17 @@ export class SignalIndex implements vscode.Disposable {
     for (const [k, e] of this.byFile) {
       if (k !== key && !k.startsWith(folder)) continue;
       this.byFile.delete(k);
-      defined ||= e.definitions.size > 0;
+      defined ||= e.definitions.size > 0 || e.constants.size > 0 || e.others.size > 0;
     }
     if (defined) {
       this.definitionsUnion = null;
+      this.constantsUnion = null;
       this.changed.fire();
     }
   }
 
   private languageOf(document: vscode.TextDocument): "kotlin" | "html" | null {
-    if (!INDEXED_SCHEMES.has(document.uri.scheme)) return null;
+    if (!INDEXED_SCHEMES.has(document.uri.scheme) || inSkippedFolder(document.uri)) return null;
     if (document.languageId === "kotlin") return "kotlin";
     if (document.languageId === "html" || this.markupLanguages.has(document.languageId)) return "html";
     return languageByExtension(document.uri);
@@ -183,9 +195,24 @@ export class SignalIndex implements vscode.Disposable {
     return out;
   }
 
+  /** Every `const val` the workspace's Kotlin lets other files see and declares as nothing else. Cached until one changes. */
+  allConstants(): ReadonlySet<string> {
+    if (this.constantsUnion) return this.constantsUnion;
+    this.constantsUnion = constantsAcross(this.byFile.values());
+    return this.constantsUnion;
+  }
+
   dispose(): void {
     this.disposables.forEach((d) => d.dispose());
   }
+}
+
+/** Whether a folder on the way to the file, below the workspace folder that holds it, is one the index leaves unread. */
+export function inSkippedFolder(uri: vscode.Uri): boolean {
+  const roots = (vscode.workspace.workspaceFolders ?? []).map((f) => (f.uri.path.endsWith("/") ? f.uri.path : `${f.uri.path}/`));
+  const root = roots.filter((r) => uri.path.startsWith(r)).sort((a, b) => b.length - a.length)[0] ?? "/";
+  const folders = uri.path.slice(root.length).split("/").slice(0, -1);
+  return folders.some((name) => SKIPPED_FOLDERS.includes(name) || name.startsWith("."));
 }
 
 function languageByExtension(uri: vscode.Uri): "kotlin" | "html" | null {
@@ -195,7 +222,14 @@ function languageByExtension(uri: vscode.Uri): "kotlin" | "html" | null {
 }
 
 function entry(text: string, language: "kotlin" | "html", version: number | null): FileEntry {
-  return { version, signals: collectSignals(text, language), definitions: collectSignalDefinitions(text, language), selectors: collectSelectors(text) };
+  return {
+    version,
+    signals: collectSignals(text, language),
+    definitions: collectSignalDefinitions(text, language),
+    selectors: collectSelectors(text),
+    constants: language === "kotlin" ? constantNames(text) : new Set(),
+    others: language === "kotlin" ? otherDeclaredNames(text) : new Set(),
+  };
 }
 
 function sameSet(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {

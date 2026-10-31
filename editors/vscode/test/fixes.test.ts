@@ -23,14 +23,14 @@ interface Case {
 const run = { kotlin: (s: string) => analyzeKotlin(s, opts), html: (s: string) => analyzeHtml(s, opts), expression: validateExpression };
 const byCode = (a: { code?: string }, b: { code?: string }) => ((a.code ?? "") < (b.code ?? "") ? -1 : (a.code ?? "") > (b.code ?? "") ? 1 : 0);
 
-// The titles of the quick fixes and the links of the issues, as FixesTest.kt reads them from the same file; the source each fix leaves is in the shared corpus.
+// The titles of the quick fixes, each marked when it may not be preferred, and the links of the issues, as FixesTest.kt reads them from the same file; the source each fix leaves is in the shared corpus.
 describe("quick fix titles and links", () => {
   for (const c of twinCases<Case>("fixes.json")) {
     it(c.name, () => {
       const seen = [...run[c.language](c.source)]
         .sort((a, b) => a.start - b.start || a.end - b.end || byCode(a, b))
         .map((i, n) => {
-          const o: Expected = { code: i.code ?? "", text: c.source.slice(i.start, i.end), titles: (i.fixes ?? []).map((f) => f.title) };
+          const o: Expected = { code: i.code ?? "", text: c.source.slice(i.start, i.end), titles: (i.fixes ?? []).map((f) => f.title + (f.preferred === false ? " (not preferred)" : "")) };
           if (c.issues[n]?.link !== undefined) o.link = i.link;
           return o;
         });

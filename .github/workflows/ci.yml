@@ -202,7 +202,7 @@ jobs:
       # are everywhere ktlint is run in this repository.
       - name: Check the Kotlin sources
         run: |
-          "$RUNNER_TEMP/ktlint" --relative "**/*.kt" "!**/build/**" "!**/node_modules/**"
+          "$RUNNER_TEMP/ktlint" --relative "**/*.kt" "!**/build/**" "!**/node_modules/**" "!editors/vscode/test/fixtures/**"
 
   vscode:
     name: VS Code extension

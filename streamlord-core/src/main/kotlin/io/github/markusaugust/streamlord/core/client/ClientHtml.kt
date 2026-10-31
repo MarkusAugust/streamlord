@@ -12,10 +12,17 @@ import io.github.markusaugust.streamlord.core.InternalStreamlordApi
 /**
  * HTML elements whose body is text to the browser: `<` inside them opens no tag, up to the
  * element's own end tag. `plaintext` has none and runs to the end.
+ *
+ * A `noscript` is not among them. The client parses a patch with `DOMParser`, where scripting is
+ * off and a `noscript` holds elements like a `div`; only a document parsed with scripting on, a
+ * page as the browser loads it, reads its body as text ([SCRIPTING_RAW_TEXT]).
  */
 @InternalStreamlordApi
 public val RAW_TEXT: List<String> =
-    listOf("script", "style", "textarea", "title", "xmp", "iframe", "noembed", "noframes", "noscript", "plaintext")
+    listOf("script", "style", "textarea", "title", "xmp", "iframe", "noembed", "noframes", "plaintext")
+
+/** [RAW_TEXT] as a document parsed with scripting on reads it, where a `noscript` is text too. */
+internal val SCRIPTING_RAW_TEXT: List<String> = RAW_TEXT + "noscript"
 
 /** Of those, the ones whose body is a program. */
 internal val CODE_TEXT: List<String> = listOf("script", "style")
@@ -28,40 +35,137 @@ public const val HTML_SPACE: String = "\t\n\u000C\r "
 @InternalStreamlordApi
 public fun Char.isHtmlSpace(): Boolean = this in HTML_SPACE
 
-/** Where `</[name]` begins after [from] as a whole name, `</titlex>` not ending a `title`; -1 when nowhere. */
+/**
+ * Where `</[name]` begins after [from] as a whole name, `</titlex>` not ending a `title`; -1 when
+ * nowhere. A `script` ends where the tokenizer's script data states say, which is not always at
+ * the first `</script>`; see [scriptEnd].
+ */
 @InternalStreamlordApi
 public fun rawTextEnd(
     html: String,
     name: String,
     from: Int,
 ): Int {
+    if (name == "script") return scriptEnd(html, from)
     var at = from
     while (true) {
         val close = html.indexOfAsciiIgnoreCase("</$name", at)
         if (close < 0) return -1
-        val next = html.getOrNull(close + 2 + name.length)
-        if (next == null || next == '/' || next == '>' || next.isHtmlSpace()) return close
+        if (endsTagName(html.getOrNull(close + 2 + name.length))) return close
         at = close + 1
     }
 }
 
+private fun endsTagName(c: Char?): Boolean = c == null || c == '/' || c == '>' || c.isHtmlSpace()
+
+private fun Char?.isAsciiAlpha(): Boolean = this != null && (this in 'a'..'z' || this in 'A'..'Z')
+
+private const val SCRIPT_DATA = 0
+private const val SCRIPT_ESCAPED = 1
+private const val SCRIPT_DOUBLE_ESCAPED = 2
+
+/**
+ * Where the body of a `<script>` that starts at [from] ends, by the HTML tokenizer's script data
+ * states. After a `<!--` the body is escaped, and a `<script` there makes it double-escaped, where
+ * a `</script>` only returns it to escaped; `-->` returns either to script data. So in
+ * `<script><!--<script></script>x`, the `x` is still script. `dashes` stands for the dash and dash
+ * dash states, and the temporary buffer is the run of letters after `<` or `</`.
+ */
+private fun scriptEnd(
+    html: String,
+    from: Int,
+): Int {
+    var state = SCRIPT_DATA
+    var dashes = 0
+    var i = from
+    val n = html.length
+    while (i < n) {
+        val c = html[i]
+        when {
+            c == '-' && state != SCRIPT_DATA -> {
+                dashes = minOf(dashes + 1, 2)
+                i++
+            }
+
+            c == '>' -> {
+                if (dashes == 2) state = SCRIPT_DATA
+                dashes = 0
+                i++
+            }
+
+            c != '<' -> {
+                dashes = 0
+                i++
+            }
+
+            state != SCRIPT_DOUBLE_ESCAPED && html.regionMatchesAsciiIgnoreCase(i, "</script") && endsTagName(html.getOrNull(i + 8)) -> {
+                return i
+            }
+
+            state == SCRIPT_DATA -> {
+                if (html.startsWith("<!--", i)) {
+                    state = SCRIPT_ESCAPED
+                    dashes = 2
+                    i += 4
+                } else {
+                    i++
+                }
+            }
+
+            else -> {
+                dashes = 0
+                // `<script` opens the double escape from escaped, `</script` closes it from double-escaped.
+                val slash = state == SCRIPT_DOUBLE_ESCAPED
+                if (slash && html.getOrNull(i + 1) != '/') {
+                    i++
+                    continue
+                }
+                val start = i + if (slash) 2 else 1
+                var j = start
+                while (html.getOrNull(j).isAsciiAlpha()) j++
+                // The letters are the temporary buffer; only a space, `/` or `>` after them decides.
+                val decided = j < n && endsTagName(html[j])
+                if (decided && j - start == 6 && html.regionMatchesAsciiIgnoreCase(start, "script")) {
+                    state = if (slash) SCRIPT_ESCAPED else SCRIPT_DOUBLE_ESCAPED
+                    i = j + 1
+                } else {
+                    i = maxOf(j, i + 1)
+                }
+            }
+        }
+    }
+    return -1
+}
+
 /**
  * One past the end of the comment that opens at [lt]: `<!-->` and `<!--->` are whole comments,
- * and `-->` and `--!>` both close one.
+ * and `-->` and `--!>` both close one. An unclosed comment runs to the end.
  */
 @InternalStreamlordApi
 public fun commentEnd(
     html: String,
     lt: Int,
+): Int = commentClose(html, lt).let { if (it < 0) html.length else it }
+
+/**
+ * [commentEnd], or -1 when nothing closes the comment. One walk to the first closing sequence of
+ * either kind, so a run of comments is read in time that grows with it, not with it squared.
+ */
+internal fun commentClose(
+    html: String,
+    lt: Int,
 ): Int {
     if (html.startsWith("<!-->", lt)) return lt + 5
     if (html.startsWith("<!--->", lt)) return lt + 6
-    val dash = html.indexOf("-->", lt + 4)
-    val bang = html.indexOf("--!>", lt + 4)
-    return when {
-        dash < 0 && bang < 0 -> html.length
-        bang < 0 || (dash in 0 until bang) -> dash + 3
-        else -> bang + 4
+    var at = lt + 4
+    while (true) {
+        val dashes = html.indexOf("--", at)
+        if (dashes < 0) return -1
+        when (html.getOrNull(dashes + 2)) {
+            '>' -> return dashes + 3
+            '!' -> if (html.getOrNull(dashes + 3) == '>') return dashes + 4
+        }
+        at = dashes + 1
     }
 }
 

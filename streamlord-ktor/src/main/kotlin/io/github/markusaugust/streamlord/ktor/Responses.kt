@@ -7,6 +7,7 @@ import io.github.markusaugust.streamlord.core.domain.DatastarResponse
 import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.ElementsResponse
+import io.github.markusaugust.streamlord.core.domain.Html
 import io.github.markusaugust.streamlord.core.domain.ScriptResponse
 import io.github.markusaugust.streamlord.core.domain.SignalsResponse
 import io.github.markusaugust.streamlord.core.port.driven.SseSink
@@ -295,6 +296,17 @@ public suspend fun ApplicationCall.respondElements(
     useViewTransition: Boolean = false,
 ) {
     respondDatastar(ElementsResponse(elements, selector, mode, namespace, useViewTransition))
+}
+
+/** [respondElements] for markup [io.github.markusaugust.streamlord.core.domain.interpolate] built. */
+public suspend fun ApplicationCall.respondElements(
+    elements: Html,
+    selector: String? = null,
+    mode: ElementPatchMode = ElementPatchMode.DEFAULT,
+    namespace: ElementNamespace = ElementNamespace.DEFAULT,
+    useViewTransition: Boolean = false,
+) {
+    respondElements(elements.text, selector, mode, namespace, useViewTransition)
 }
 
 /** Respond with a JSON object to be patched as signals, without opening a stream. Always `200 OK`. */

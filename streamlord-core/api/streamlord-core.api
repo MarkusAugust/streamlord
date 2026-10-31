@@ -210,10 +210,20 @@ public abstract interface class io/github/markusaugust/streamlord/core/domain/Da
 	public abstract fun getRetry-FghU774 ()Lkotlin/time/Duration;
 }
 
+public final class io/github/markusaugust/streamlord/core/domain/DatastarEventKt {
+	public static final fun PatchElements-Tm2Feso (Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;)Lio/github/markusaugust/streamlord/core/domain/PatchElements;
+	public static synthetic fun PatchElements-Tm2Feso$default (Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/domain/PatchElements;
+}
+
 public abstract interface class io/github/markusaugust/streamlord/core/domain/DatastarResponse {
 	public abstract fun getBody ()Ljava/lang/String;
 	public abstract fun getContentType ()Ljava/lang/String;
 	public abstract fun getHeaders ()Ljava/util/Map;
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/DatastarResponseKt {
+	public static final fun ElementsResponse-oj7ZhCo (Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;Z)Lio/github/markusaugust/streamlord/core/domain/ElementsResponse;
+	public static synthetic fun ElementsResponse-oj7ZhCo$default (Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/domain/ElementsResponse;
 }
 
 public final class io/github/markusaugust/streamlord/core/domain/ElementNamespace : java/lang/Enum {
@@ -317,6 +327,28 @@ public final class io/github/markusaugust/streamlord/core/domain/ExpressionGuard
 	public final fun check (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
 }
 
+public final class io/github/markusaugust/streamlord/core/domain/HoleLanding {
+	public fun <init> (Lio/github/markusaugust/streamlord/core/domain/Position;Ljava/lang/String;IZ)V
+	public final fun getAttribute ()Ljava/lang/String;
+	public final fun getLoadsCode ()Z
+	public final fun getPosition ()Lio/github/markusaugust/streamlord/core/domain/Position;
+	public final fun getValueStart ()I
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/Html {
+	public static final synthetic fun box-impl (Ljava/lang/String;)Lio/github/markusaugust/streamlord/core/domain/Html;
+	public static fun constructor-impl (Ljava/lang/String;)Ljava/lang/String;
+	public fun equals (Ljava/lang/Object;)Z
+	public static fun equals-impl (Ljava/lang/String;Ljava/lang/Object;)Z
+	public static final fun equals-impl0 (Ljava/lang/String;Ljava/lang/String;)Z
+	public final fun getText ()Ljava/lang/String;
+	public fun hashCode ()I
+	public static fun hashCode-impl (Ljava/lang/String;)I
+	public fun toString ()Ljava/lang/String;
+	public static fun toString-impl (Ljava/lang/String;)Ljava/lang/String;
+	public final synthetic fun unbox-impl ()Ljava/lang/String;
+}
+
 public final class io/github/markusaugust/streamlord/core/domain/InterpolatedExpressionException : io/github/markusaugust/streamlord/core/StreamlordException {
 	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
@@ -325,9 +357,15 @@ public final class io/github/markusaugust/streamlord/core/domain/InterpolatedExp
 }
 
 public final class io/github/markusaugust/streamlord/core/domain/InterpolationKt {
+	public static final fun holeLandings (Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/Map;)Ljava/util/List;
+	public static synthetic fun holeLandings$default (Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/Map;ILjava/lang/Object;)Ljava/util/List;
 	public static final fun interpolate (Ljava/lang/String;Ljava/util/List;Ljava/util/List;)Ljava/lang/String;
 	public static final fun interpolate (Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
 	public static synthetic fun interpolate$default (Ljava/lang/String;Ljava/util/List;Ljava/util/List;ILjava/lang/Object;)Ljava/lang/String;
+	public static final fun joinToHtml-eKKYyv0 (Ljava/lang/Iterable;Ljava/lang/String;)Ljava/lang/String;
+	public static synthetic fun joinToHtml-eKKYyv0$default (Ljava/lang/Iterable;Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/String;
+	public static final fun urlHostFixedBy (Ljava/lang/String;Ljava/lang/String;)Z
+	public static final fun urlSchemeFixedBy (Ljava/lang/String;Ljava/lang/String;)Z
 }
 
 public final class io/github/markusaugust/streamlord/core/domain/MistypedAttributeException : io/github/markusaugust/streamlord/core/StreamlordException {
@@ -464,10 +502,11 @@ public final class io/github/markusaugust/streamlord/core/domain/Trusted {
 }
 
 public final class io/github/markusaugust/streamlord/core/domain/UnsafeInterpolationException : io/github/markusaugust/streamlord/core/StreamlordException {
-	public fun <init> (Lio/github/markusaugust/streamlord/core/domain/Position;ILjava/lang/String;)V
-	public synthetic fun <init> (Lio/github/markusaugust/streamlord/core/domain/Position;ILjava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lio/github/markusaugust/streamlord/core/domain/Position;ILjava/lang/String;Z)V
+	public synthetic fun <init> (Lio/github/markusaugust/streamlord/core/domain/Position;ILjava/lang/String;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getAttribute ()Ljava/lang/String;
 	public final fun getIndex ()I
+	public final fun getLoadsCode ()Z
 	public final fun getPosition ()Lio/github/markusaugust/streamlord/core/domain/Position;
 }
 
@@ -752,6 +791,8 @@ public abstract interface class io/github/markusaugust/streamlord/core/port/driv
 	public fun executeScript-yV_PMig (Ljava/lang/String;ZLjava/util/Map;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun executeScript-yV_PMig$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;ZLjava/util/Map;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public abstract fun getCodec ()Lio/github/markusaugust/streamlord/core/port/driven/SignalsCodec;
+	public fun patchElements-D-VjG7o (Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun patchElements-D-VjG7o$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public fun patchElements-D5qb1SI (Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun patchElements-D5qb1SI$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public fun patchSignals-51bEbmg (Ljava/lang/String;ZLjava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -775,6 +816,8 @@ public final class io/github/markusaugust/streamlord/core/port/driving/DatastarS
 	public static synthetic fun comment$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public static fun executeScript-yV_PMig (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;ZLjava/util/Map;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun executeScript-yV_PMig$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;ZLjava/util/Map;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static fun patchElements-D-VjG7o (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun patchElements-D-VjG7o$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public static fun patchElements-D5qb1SI (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun patchElements-D5qb1SI$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public static fun patchSignals-51bEbmg (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;ZLjava/lang/String;Lkotlin/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;

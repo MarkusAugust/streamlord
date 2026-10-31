@@ -117,7 +117,14 @@ private fun Issue.shifted(by: Int): Issue =
         copy(
             start = start + by,
             end = end + by,
-            fixes = fixes.map { it.copy(start = it.start + by, end = it.end + by) },
+            fixes =
+                fixes.map { f ->
+                    f.copy(
+                        start = f.start + by,
+                        end = f.end + by,
+                        edits = f.edits.map { it.copy(start = it.start + by, end = it.end + by) },
+                    )
+                },
         )
     }
 

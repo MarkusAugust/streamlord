@@ -5,7 +5,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * The titles of the quick fixes and the links of the issues against `twins/fixes.json`, which
+ * The titles of the quick fixes, each marked when it may not be preferred, and the links of the issues against `twins/fixes.json`, which
  * `fixes.test.ts` reads as well; the source each fix leaves is in the shared corpus.
  */
 class FixesTest {
@@ -35,7 +35,12 @@ class FixesTest {
             val seen =
                 issues.sortedWith(compareBy({ it.start }, { it.end }, { it.code })).mapIndexed { n, i ->
                     val link = i.link.takeIf { expected.getOrNull(n)?.string("link") != null }
-                    line(i.code, source.substring(i.start, i.end), i.fixes.map { it.title }, link)
+                    line(
+                        i.code,
+                        source.substring(i.start, i.end),
+                        i.fixes.map { it.title + if (it.preferred) "" else " (not preferred)" },
+                        link,
+                    )
                 }
             val wanted = expected.map { line(it.string("code"), it.string("text")!!, it.array("titles")!!.strings(), it.string("link")) }
             assertEquals(wanted, seen, case.string("name"))

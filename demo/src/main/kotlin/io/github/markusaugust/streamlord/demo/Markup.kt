@@ -41,7 +41,7 @@ public fun TagConsumer<*>.results(
          * becoming a Datastar expression the server signed.
          */
         onTagContentUnsafe {
-            +interpolate("""<p class="lt-paragraph" data-size="small">Nothing matches “%s”.</p>""", query)
+            +interpolate("""<p class="lt-paragraph" data-size="small">Nothing matches “%s”.</p>""", query).text
         }
         return
     }

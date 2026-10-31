@@ -46,29 +46,34 @@ Point it at your own sources and it becomes a test that no markup in the project
 swallowed expression:
 
 ```kotlin sample=test
-private val analyzer = Analyzer()
-
 @Test
-fun `no source file interpolates a signal into Datastar`() {
-    val offenders =
-        java.io.File("src/main/kotlin")
-            .walkTopDown()
-            .filter { it.extension == "kt" }
-            .flatMap { file ->
-                val source = file.readText()
-                analyzer
-                    .analyzeKotlin(source)
-                    .filter { it.severity == Severity.ERROR }
-                    .map { it.format(file.path, source) }
-            }.toList()
+fun `no source file ships markup the analysis calls unsafe`() {
+    val failures = Analyzer().analyzeProject(java.io.File("src/main/kotlin")).failures()
 
-    assertTrue(offenders.isEmpty(), offenders.joinToString("\n"))
+    assertTrue(failures.isEmpty(), failures.joinToString("\n") { it.format() })
 }
 ```
 
-`format` writes each finding as `src/main/kotlin/Page.kt:12:5: error: ... [kotlin-interpolation]`,
-the form IDEs and CI logs turn into a link to the line. `position(source)` gives the line and
-column alone.
+`analyzeProject` reads every `.kt` file under the folder, leaving out hidden folders and those
+named `build`, `node_modules`, `dist`, `out` or `target`, the files the VS Code index reads, and gives each file the `const val` names the others declare, as the VS Code index does. A
+constant counts when another file can see it, so not a private one, and when no file declares
+the same name as something else, a `val` with a getter for one. The test gives the verdict VS
+Code gives. It is milder than IntelliJ, which knows the type of every value and not only what
+the text shows, and so warns on some holes this test lets through.
+
+`failures()` keeps the errors: an interpolated signal, an expression that does not parse, and an
+`interpolate(...)` call that throws when it runs, with a `%s` too many or too few
+(`interpolate-holes`) or a value it is known to refuse where it lands (`unsafe-interpolation`). It
+keeps the `unsafe-interpolation` warnings too: a Kotlin template that writes a value into an HTML
+string where escaping cannot save it, a warning only because the text alone cannot tell a number
+from a string. The same code is a hint where the value is most likely safe, `colspan=$n` with an
+`Int` `n`, or `<h$level>`, and a hint does not fail a build.
+[Strings](/strings/#this-is-the-editors-rule-at-run-time) has what each code means.
+
+`format()` writes each finding as `src/main/kotlin/Page.kt:12:5: error: ... [kotlin-interpolation]`,
+the form IDEs and CI logs turn into a link to the line; `line` and `column` give the place alone.
+For a single string, `issue.format(path, source)` does the same and `position(source)` gives the
+line and column.
 
 `analyzeHtml(source)` does for template and HTML files what `analyzeKotlin` does for Kotlin,
 checking attributes and expressions; the id and completeness rules belong to `validateMarkup`. Both

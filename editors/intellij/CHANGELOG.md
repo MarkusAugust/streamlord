@@ -4,12 +4,103 @@ All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here
 
 ## Unreleased
 
+- Every Kotlin value written into an HTML string is judged by where it lands, as `interpolate`
+  judges it at run time and with core's own reading of the markup: `$name`, `${...}`, a value
+  joined with `+`, a literal inside a template and the holes of a `$$` literal, where only `$name`
+  was looked at before, and that with the same hint, "make sure it is escaped", wherever it stood.
+  `unescaped-interpolation` is a value where escaping saves it, in element text, a quoted attribute
+  or a URL whose literal start settles the scheme: a hint, a warning for a `String` and for markup
+  outside element text, with a fix that rewrites the literal as `interpolate(...)` and adds its
+  import (as `interpolate(...).text` where the literal was a `String`). `unsafe-interpolation` is
+  a value where escaping cannot help: the start of a URL, `style`, a `data-*` expression, signal
+  path or filter, a script, an event handler or `srcdoc`, a warning, at the start of a URL with
+  the fix to build it with `interpolate(...)`, which refuses a URL that runs; a value without
+  quotes, a warning (a hint for a number or a boolean) with a fix that quotes it; a tag or
+  attribute name, a hint, a warning for a `String` or markup; an end tag, which takes no
+  attributes, the same. A `+` chain handed straight to a DSL expression call is judged as one in
+  an HTML string is. A constant, a qualified one such as `Routes.SAVE` among them, a literal,
+  `${"$"}`, an enum entry, an `if` or a `when` between literals, and markup built in the template
+  in element text say nothing.
+- A value in a URL the browser loads code from, `src` of a script, an iframe or an embed, `href`
+  of a base or a link, `data` of an object, is a warning unless the literal before it already fixes the
+  host (`/js/`, or a whole origin such as `https://cdn.example.com/`), and an error in a call to
+  `interpolate` where the value is known, since `interpolate` refuses it. A `Trusted("...")` before
+  the value counts with its text, as `interpolate` reads it: `Trusted("https://cdn.example.com/")`
+  fixes the host for the value after it, and `Trusted("")` fixes nothing, so the value after it is
+  named, an error where it is known.
+- A name declared `Trusted` or set to `Trusted(...)` is a `Trusted`: `interpolate` lets it in
+  anywhere, and a Kotlin template writes it as markup. `u.toLong()`, and `toInt()`, `toDouble()`,
+  `toFloat()`, `toShort()` or `toByte()` on a whole value, is a number, so the `toLong()` fix no
+  longer leaves a warning behind. A change to a declared `String`, `query.trim()`, `take`,
+  `replace`, `lowercase`, `ifBlank { "none" }` and the like, is a `String`, a warning where
+  `query` is one rather than a hint.
+- A literal `Trusted("...")`, or a `val` set to one, is read as the markup it writes, in a call to
+  `interpolate` and in an HTML string alike, and the values after it are judged where they really
+  land: `interpolate("<button %s=\"%s\">", Trusted("data-on:click"), q)` is an error for a `String`
+  `q`, in a Datastar expression, and `<%s>%s</%s>` with `Trusted("script")` one in code. A
+  `Trusted` whose text is not known, `Trusted(tag)`, leaves the values after it at most a warning.
+- A call to one of Streamlord's expression helpers is your own only when every argument is: a
+  literal, a constant, a declared number or boolean, or another such helper call.
+  `${signal("count")}` says nothing; `${signal(query)}` writes the request's text into a Datastar
+  expression, where it runs, and is judged as the `String` it returns.
+- A `String` in element text, which may be text from outside or markup you built, gets two fixes
+  and neither first: the `interpolate(...)` rewrite, which escapes it, and "Mark … as markup",
+  which wraps it in `Trusted(...)` and adds the import. The message says to declare markup `Html`
+  or wrap it.
+- A call to `interpolate` is judged as it will run. A `%s` count that does not match the values is
+  the error `interpolate-holes`, since the call throws. A `%s` whose value `interpolate` will
+  refuse where it lands is `unsafe-interpolation`, an error where the value is known to be refused
+  (a `String` in a `data-*` expression, a `Boolean` in `style`) and a warning where it is not. A
+  Kotlin template written into the format is `interpolate-template`, a warning, since Kotlin fills
+  it in before `interpolate` sees it, with a fix that makes it a `%s` hole and passes its value in
+  its place. That goes for an `Html` or a `Trusted` in element text too: Kotlin writes its text
+  into the format, where a `%s` in it is a hole and a `%%` a per cent sign, and the fix makes it a
+  `%s` hole, where `interpolate` writes it as it is. A `%s` in element text given markup held as a
+  `String`, `h.text`, `elements { }`, a `joinToString` over markup or over a collection declared
+  one of `Html` or `Trusted`, or a `val` set to any of these, is `interpolate-template` too, a warning, since `interpolate` escapes it and its tags are
+  printed as text; a literal is text you chose to have escaped and says nothing. The format is read
+  as HTML, so a `%s` in it is a hole and not text. An unsigned number, a `UInt` or a `3u`, is no
+  `kotlin.Number`, which `interpolate` refuses where only a number is let in: in a `%s` hole in a
+  `data-*` expression or `style` it is an error, with a `toLong()` fix, and where a Kotlin template
+  writes one there, a hint.
+- The `interpolate(...)` rewrite is offered only where it keeps the page as it was: not for a value
+  that may be null, which a template writes as `null` and `interpolate` as nothing, nor for a
+  `Trusted` outside element text, nor for a hole in element text that may hold markup, which
+  `interpolate` would escape, nor for a value that is a `List`, which a template writes as
+  `[a, b]`. The rewrite doubles each per cent sign the literal writes.
+- The interpolation inspection asks the Kotlin plugin what each value is, and that comes before
+  anything the text suggests. In K2 mode the types come from the Analysis API, in K1 mode from the
+  declarations. A number or a boolean is safe where escaping is, and an `Int?` there too; a
+  `String`, inferred or declared, is a `String`, and a `String?` or a Java `String` one that may be
+  null, so the rewrite is not offered. An entry of a Kotlin enum that does not override `toString` is
+  your own. A hole is markup only when the whole value is: an HTML literal or a trimmed one,
+  `interpolate(...)`, `Trusted(...)`, a value or function declared `Html` or `@Language("HTML")`,
+  kotlinx.html output (`createHTML()`, `appendHTML()`, `elements { }`), a `joinToString` over
+  markup, or a function, an `if`, a `when` or an `?:` whose every result is markup or a literal.
+  `"<b>" + query` is the `String` it is.
+- An edit in another file looks up the types of the values in an open file's HTML strings again,
+  and runs the analysis of that file again only when one of them changed.
+- In a `data-*` expression of an HTML string, `$count` where `count` is a number or a boolean is a
+  hint that asks only whether the signal was meant, since the value is safe written in; it was a
+  warning. `kotlin-interpolation` no longer calls a `String` fine there as a server value: only a
+  number or a boolean is.
+- A template inside a JavaScript string of a Datastar expression, `@post('/x/$id')`, is the warning
+  `unsafe-interpolation`: Datastar runs that string as code. It was a hint that called it safe text.
+- No more `<p> has no id` inside `<$tag ...>`, whose template is a tag name, and no text fragments
+  in the margin of a `trimMargin` literal. A literal that opens with a template tag, `"<$tag>…"`,
+  is read as HTML. `<$name` is a tag start only when a space, `>` or `/` follows the template, so
+  `Regex("<$tag\\b")` and `indexOf("<$tag")` are not read as HTML.
+- A severity set for an inspection in the profile applies to its issues at the level `plugin.xml`
+  declares or above, and lowers any it is below. Setting the interpolation inspection, declared an
+  error, to a warning made every hint of it a warning; now its errors become warnings and its
+  hints stay weak warnings.
 - A duration modifier the client reads by its number is a warning that says what it reads, with
   the fix to write it out: `__debounce.5x` waits 5 ms, since `tagToMs` falls back to `parseFloat`,
   and `__delay.0x1fms` 31 ms. It was an error that said a duration was missing. A tag that is no
   number at all, such as `__debounce.soon`, is still that error.
 - The markup checks read HTML as the browser does: the content of `xmp`, `iframe`, `noembed`,
-  `noframes`, `noscript` and `plaintext` is text, a raw-text element written `<iframe/>` is still
+  `noframes` and `plaintext` is text, a `noscript` holds elements, as the client parses a patch
+  with scripting off, a raw-text element written `<iframe/>` is still
   open, and only its whole end tag closes it, outside svg and math but again inside their HTML
   integration points, such as a `foreignObject`; only HTML's own white space ends an attribute
   name, so a no-break space is part of one; a numeric reference is read whatever its number of
