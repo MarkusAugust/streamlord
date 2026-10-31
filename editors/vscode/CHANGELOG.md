@@ -2,7 +2,7 @@
 
 All notable changes to the Streamlord extension are recorded here.
 
-## Unreleased
+## 0.11.0
 
 - Every Kotlin value written into an HTML string is judged by where it lands, as `interpolate`
   judges it at run time and with core's own reading of the markup: `$name`, `${...}`, a value

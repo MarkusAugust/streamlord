@@ -6,6 +6,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-31
+
 ### Added
 
 - `DatastarAttributes.value(value)`: a value as kotlinx.html must be handed it for the browser to
@@ -102,7 +104,12 @@ All notable changes to Streamlord are recorded here. The format follows
   compiles, and its constructor and `copy` take `edits` and `preferred`, which Kotlin source
   with four arguments still compiles against, while compiled code does not link. `InterpolationKind`
   has a new entry, `OPERAND`, for a value joined to literals with `+`, so an exhaustive `when` over
-  it needs a branch. Recompile code built against 0.15.
+  it needs a branch. The casing helpers moved to core's `AttributeKeys`: `toCamel`, `kebab` and
+  `wireKeyReads` are gone from streamlord-analysis, and `Catalog` no longer has `prefix`,
+  `aliasedPrefix` and `version`, which `CatalogNames` holds. `AttributeSpec` and `Modifier` take
+  new catalog fields, which changes their JVM constructors and `copy`, and
+  `ExpressionValidator.validate` takes the attribute it judges as a fourth, defaulted parameter.
+  Recompile code built against 0.15.
 - The editors judge `${...}`, values joined with `+`, literals inside a template and `$$` literals,
   which they skipped, and no longer give every `$name` in HTML the same hint. A constant, a literal,
   a declared number or boolean and markup built in the template say nothing. In a Datastar

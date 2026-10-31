@@ -7,7 +7,7 @@ description: "What each release changed, and what it asks of your code."
 repository is authoritative and complete. This page carries only what changes how you write code,
 with a sentence about what to do.
 
-## Unreleased
+## 0.16.0
 
 **`interpolate` returns `Html`.** Hand it to `patchElements`, `respondElements` or
 `datastarElements` as it is, or to another `interpolate`, which writes it as markup in element
