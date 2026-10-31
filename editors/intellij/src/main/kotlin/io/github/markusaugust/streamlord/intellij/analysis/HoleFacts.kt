@@ -82,9 +82,9 @@ object HoleFacts {
      * Each hole by what [constant] and [typed] say of it, and what its source shows: a constant, a
      * call to a helper with the author's own arguments, markup, a literal only, or its type.
      */
-    private inline fun judge(
+    private fun judge(
         holes: List<Pair<TextRange, KtExpression>>,
-        noinline constant: (KtExpression) -> Boolean,
+        constant: (KtExpression) -> Boolean,
         typed: (KtExpression) -> HoleFact?,
     ): Map<TextRange, HoleFact> {
         val facts = HashMap<TextRange, HoleFact>()
@@ -97,7 +97,7 @@ object HoleFacts {
             facts[range] =
                 when {
                     fact == HoleFact.MARKUP -> fact
-                    isHelper(expr) && ownArguments(expr, constant) -> HoleFact.CONSTANT
+                    isHelper(expr) && ownArguments(expr, constant, typed) -> HoleFact.CONSTANT
                     isMarkup(expr, CALL_DEPTH) -> HoleFact.MARKUP
                     literalOnly(expr) -> HoleFact.CONSTANT
                     else -> fact ?: continue
@@ -107,16 +107,20 @@ object HoleFacts {
     }
 
     /**
-     * A value the author wrote: a constant, a literal only, an enum entry or its name, or a call to
-     * a helper whose arguments are all such. A value from anywhere else, `signal(q)` with a `q`
+     * A value the author wrote, or one that cannot carry code: a constant, a literal only, an enum
+     * entry or its name, a number or a boolean, or a call to a helper whose arguments are all such. A value from anywhere else, `signal(q)` with a `q`
      * from the request, runs as code on the page.
      */
     private fun authorsOwn(
         expr: KtExpression?,
         constant: (KtExpression) -> Boolean,
+        typed: (KtExpression) -> HoleFact?,
     ): Boolean {
         val e = expr?.let { KtPsiUtil.safeDeparenthesize(it) } ?: return false
-        return constant(e) || literalOnly(e) || enumEntry(e) || (isHelper(e) && ownArguments(e, constant))
+        if (constant(e) || literalOnly(e) || enumEntry(e)) return true
+        if (isHelper(e)) return ownArguments(e, constant, typed)
+        val fact = typed(e)
+        return fact == HoleFact.NUMBER || fact == HoleFact.BOOLEAN
     }
 
     /**
@@ -126,16 +130,17 @@ object HoleFacts {
     private fun ownArguments(
         expr: KtExpression,
         constant: (KtExpression) -> Boolean,
+        typed: (KtExpression) -> HoleFact?,
     ): Boolean {
         val call = KtPsiUtil.safeDeparenthesize(expr) as? KtCallExpression ?: return false
         return call.valueArguments.all { argument ->
             val value = argument.getArgumentExpression()
             val lambda = value?.let { KtPsiUtil.safeDeparenthesize(it) } as? KtLambdaExpression
             if (lambda == null) {
-                authorsOwn(value, constant)
+                authorsOwn(value, constant, typed)
             } else {
                 lambda.bodyExpression?.statements.orEmpty().all { s ->
-                    s is KtBinaryExpression && s.operationToken == KtTokens.EQ && authorsOwn(s.right, constant)
+                    s is KtBinaryExpression && s.operationToken == KtTokens.EQ && authorsOwn(s.right, constant, typed)
                 }
             }
         }

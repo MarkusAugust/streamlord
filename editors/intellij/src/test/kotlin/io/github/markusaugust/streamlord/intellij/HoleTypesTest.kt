@@ -189,6 +189,7 @@ class HoleTypesTest : BasePlatformTestCase() {
                 "\${Tab.HOME.name}" to HoleFact.CONSTANT,
                 "\${maybe}" to HoleFact.NULLABLE_STRING,
                 "\$q" to HoleFact.STRING,
+                "\${set(\"n\", n)}" to HoleFact.CONSTANT,
             )
         val seen = wanted.keys.associateWith { facts[it] }
         assertEquals(wanted.entries.joinToString("\n"), seen.entries.joinToString("\n"))
@@ -386,6 +387,7 @@ class HoleTypesTest : BasePlatformTestCase() {
             import io.github.markusaugust.streamlord.html.FetchOptions.ContentType
             import io.github.markusaugust.streamlord.html.increment
             import io.github.markusaugust.streamlord.html.post
+            import io.github.markusaugust.streamlord.html.set
             import io.github.markusaugust.streamlord.html.signal
             import io.github.markusaugust.streamlord.html.statements
             import io.github.markusaugust.streamlord.html.toggle
@@ -394,7 +396,7 @@ class HoleTypesTest : BasePlatformTestCase() {
             enum class Tab { HOME }
             enum class Shown { ONE; override fun toString() = "<b>one</b>" }
 
-            fun page(q: String, url: String, maybe: String?): String =
+            fun page(q: String, url: String, maybe: String?, n: Int): String =
                 ""${'"'}
                 <div>
                 <button data-text="¤{signal("count")}" data-show="¤{signal(KEY)}" data-class="¤{signal(q)}">x</button>
@@ -405,6 +407,7 @@ class HoleTypesTest : BasePlatformTestCase() {
                 <button data-text="¤{signal(Tab.HOME.name)}" data-show="¤{Tab.HOME}" data-class="¤{Tab.HOME.name}">x</button>
                 <button data-text="¤{Shown.ONE}">x</button>
                 <p>¤{maybe} ¤q</p>
+                <button data-on:click="¤{set("n", n)}">x</button>
                 </div>
                 ""${'"'}
             """.trimIndent().replace('¤', '$')
