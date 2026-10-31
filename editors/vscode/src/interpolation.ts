@@ -60,12 +60,66 @@ export function trimmed(src: string, s: KotlinString): boolean {
   return /^\s*\.\s*trim(?:Indent|Margin)\s*\(/.test(src.slice(s.end, s.end + 64));
 }
 
-/** The `const val` names a Kotlin file declares, outside strings and comments: what the workspace index gathers. */
+/** The names a Kotlin file declares that another file can mean by the bare name: its `const val`s, and every other `val` or `var`. */
+interface VisibleNames {
+  src: string;
+  constants: Set<string>;
+  others: Set<string>;
+}
+
+let lastVisible: VisibleNames | null = null;
+
+function visibleNames(src: string): VisibleNames {
+  if (lastVisible !== null && lastVisible.src === src) return lastVisible;
+  let names = lastFacts !== null && lastFacts.src === src ? lastFacts.names : null;
+  if (names === null) {
+    const { strings, mask } = lexKotlin(src);
+    names = declarations(src, codeMask(src, strings, mask));
+  }
+  const constants = new Set<string>();
+  const others = new Set<string>();
+  for (const [name, list] of names) {
+    for (const d of list) if (d.shared) (d.constant ? constants : others).add(name);
+  }
+  lastVisible = { src, constants, others };
+  return lastVisible;
+}
+
+/**
+ * The `const val` names a Kotlin file declares that other files can see: top level or in an
+ * object or a class, and not private, `internal` counting as seen. What the workspace index gathers.
+ */
 export function constantNames(src: string): Set<string> {
-  const { mask } = lexKotlin(src);
+  return visibleNames(src).constants;
+}
+
+/**
+ * The other names a Kotlin file declares that other files can see: a `val` or `var` that is not
+ * a `const`, at top level, in a class or in a constructor, getters included. A parameter or a
+ * local is seen in this file only.
+ */
+export function otherDeclaredNames(src: string): Set<string> {
+  return visibleNames(src).others;
+}
+
+/**
+ * The constants of a whole project, from each file's [constantNames] and [otherDeclaredNames]: a
+ * name counts only when no file declares it as anything else another file could mean by it.
+ */
+export function constantsAcross(files: Iterable<{ constants: ReadonlySet<string>; others: ReadonlySet<string> }>): Set<string> {
   const out = new Set<string>();
-  for (const m of src.matchAll(/\bconst\s+val\s+([\p{L}_][\p{L}\p{Nd}_]*)/gu)) if (mask[m.index ?? 0] === 1) out.add(m[1] as string);
+  const others = new Set<string>();
+  for (const f of files) {
+    for (const n of f.constants) out.add(n);
+    for (const n of f.others) others.add(n);
+  }
+  for (const n of others) out.delete(n);
   return out;
+}
+
+/** The constants of a project whose Kotlin files are `sources`; the twin of `projectConstants` in streamlord-analysis. */
+export function projectConstants(sources: Iterable<string>): Set<string> {
+  return constantsAcross([...sources].map((src) => visibleNames(src)));
 }
 
 /** Every literal the lexer found, and those inside their templates. */
@@ -241,6 +295,8 @@ interface Declaration {
   valueAt?: number;
   constant: boolean;
   html: boolean;
+  /** Whether another file can mean it by its bare name: a `val` or `var` at top level, in a class or a constructor, and not private. */
+  shared?: boolean;
 }
 
 /**
@@ -301,6 +357,9 @@ const VALUE_AFTER = /\s*=(?!=)\s*/y;
 const LAMBDA_PARAMETERS = new RegExp(String.raw`\s*((?:\([^()]*\)|${NAME})(?:\s*:\s*[\p{L}\p{Nd}_.<>?]+)?(?:\s*,\s*(?:\([^()]*\)|${NAME})(?:\s*:\s*[\p{L}\p{Nd}_.<>?]+)?)*)\s*->`, "uy");
 const FOR_VARIABLE = new RegExp(String.raw`\s*(\([^()]*\)|${NAME})(?:\s*:\s*(${TYPE}))?\s+in\b`, "uy");
 const CONST_BEFORE = /\bconst[ \t]+(?:\p{L}+[ \t]+)*$/u;
+const PRIVATE_BEFORE = /\bprivate[ \t]+(?:\p{L}+[ \t]+)*$/u;
+const PROPERTY_MODIFIERS = /\b(?:val|var)\b/;
+const PRIVATE_MODIFIER = /\bprivate\b/;
 const HTML_BEFORE = /@Language\(\s*"html"\s*\)\s*(?:\p{L}+\s+)*$/iu;
 const HTML_ANNOTATION = /@Language\(\s*"html"\s*\)/i;
 const WORD_START = /[\p{L}_]/u;
@@ -350,6 +409,10 @@ interface Frame {
   loop: boolean;
   /** The parameters of a class's constructor, waiting for its body. */
   ctor: Declaration[] | null;
+  /** Whether the class declared here is private. */
+  privateClass: boolean;
+  /** Whether what this frame declares is out of other files' sight: a private class's body, or a local one's. */
+  hidden: boolean;
 }
 
 /**
@@ -366,9 +429,11 @@ function declarations(src: string, code: Uint8Array): Map<string, Declaration[]>
     if (list) list.push(d);
     else names.set(name, [d]);
   };
-  const frame = (open: number, kind: Frame["kind"]): Frame => ({ open, kind, ends: [], commas: [], pending: null, fun: false, cls: false, when: false, loop: false, ctor: null });
+  const frame = (open: number, kind: Frame["kind"]): Frame => ({ open, kind, ends: [], commas: [], pending: null, fun: false, cls: false, when: false, loop: false, ctor: null, privateClass: false, hidden: false });
   const stack: Frame[] = [frame(-1, "top")];
   const top = () => stack[stack.length - 1] as Frame;
+  /** Whether the members of the class declared in `f` are out of other files' sight. */
+  const classHidden = (f: Frame) => f.hidden || f.privateClass || (f.kind !== "top" && f.kind !== "class");
   const settle = (p: Pending, end: number) => {
     for (const d of p.decls) d.end = end;
   };
@@ -378,8 +443,8 @@ function declarations(src: string, code: Uint8Array): Map<string, Declaration[]>
     if (f.ctor) for (const d of f.ctor) d.end = at;
     f.ctor = null;
   };
-  /** Each parameter between the brackets of a function or a constructor. */
-  const parameters = (f: Frame, close: number): { name: string; d: Declaration }[] => {
+  /** Each parameter between the brackets of a function or a constructor; `visible` for a constructor other files can see the properties of. */
+  const parameters = (f: Frame, close: number, visible = false): { name: string; d: Declaration }[] => {
     const out: { name: string; d: Declaration }[] = [];
     const cuts = [f.open, ...f.commas, close];
     for (let k = 0; k + 1 < cuts.length; k++) {
@@ -387,7 +452,7 @@ function declarations(src: string, code: Uint8Array): Map<string, Declaration[]>
       const m = PARAMETER.exec(text);
       if (!m) continue;
       const vararg = /\bvararg\b/.test(m[1] ?? "");
-      out.push({ name: m[2] as string, d: { at: (cuts[k] as number) + 1 + (m.index ?? 0), start: f.open, end: src.length, type: vararg ? undefined : m[3], typeArguments: vararg ? undefined : m[4], constant: false, html: HTML_ANNOTATION.test(text) } });
+      out.push({ name: m[2] as string, d: { at: (cuts[k] as number) + 1 + (m.index ?? 0), start: f.open, end: src.length, type: vararg ? undefined : m[3], typeArguments: vararg ? undefined : m[4], constant: false, html: HTML_ANNOTATION.test(text), shared: visible && PROPERTY_MODIFIERS.test(m[1] ?? "") && !PRIVATE_MODIFIER.test(m[1] ?? "") } });
     }
     return out;
   };
@@ -411,14 +476,18 @@ function declarations(src: string, code: Uint8Array): Map<string, Declaration[]>
       if (reference) {
         // A class literal.
       } else if (word === "fun" || (word === "constructor" && !ctorOfClass)) f.fun = true;
-      else if (word === "class" || word === "interface" || word === "object") f.cls = true;
+      else if (word === "class" || word === "interface" || word === "object") {
+        f.cls = true;
+        f.privateClass = PRIVATE_BEFORE.test(src.slice(Math.max(0, i - 80), i));
+      }
       else if (word === "when") f.when = true;
       else if (word === "for") f.loop = true;
       else if ((word === "val" || word === "var") && f.kind !== "params" && f.kind !== "ctor") {
         const constant = CONST_BEFORE.test(src.slice(Math.max(0, i - 80), i));
         const html = HTML_BEFORE.test(src.slice(Math.max(0, i - 160), i));
         const local = f.kind !== "top" && f.kind !== "class";
-        const scope = (at: number): Declaration => ({ at, start: local ? at : f.kind === "top" ? 0 : f.open, end: src.length, constant, html });
+        const shared = !local && !f.hidden && !PRIVATE_BEFORE.test(src.slice(Math.max(0, i - 80), i));
+        const scope = (at: number): Declaration => ({ at, start: local ? at : f.kind === "top" ? 0 : f.open, end: src.length, constant, html, shared });
         // `when (val x = ...)`: the scope is the one the brackets stand in.
         const owner = f.kind === "paren" || f.kind === "for" ? ((stack[stack.length - 2] as Frame | undefined) ?? f) : f;
         DESTRUCTURED.lastIndex = end;
@@ -496,6 +565,7 @@ function declarations(src: string, code: Uint8Array): Map<string, Declaration[]>
         } else if (f.cls) {
           kind = "class";
           f.cls = false;
+          g.hidden = classHidden(f);
           if (f.ctor) g.ends.push(...f.ctor);
           f.ctor = null;
         } else if (f.when) {
@@ -537,7 +607,7 @@ function declarations(src: string, code: Uint8Array): Map<string, Declaration[]>
       endPending(g, i + 1);
       for (const d of g.ends) d.end = i + 1;
       if (g.kind === "params") handOver({ decls: parameters(g, i).map(({ name, d }) => (add(name, d), d)), kind: "fun", state: "after" });
-      else if (g.kind === "ctor") outer.ctor = parameters(g, i).map(({ name, d }) => (add(name, d), d));
+      else if (g.kind === "ctor") outer.ctor = parameters(g, i, !classHidden(outer)).map(({ name, d }) => (add(name, d), d));
       continue;
     }
     if (c === ",") {

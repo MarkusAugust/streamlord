@@ -55,7 +55,10 @@ All notable changes to the Streamlord extension are recorded here.
   `interpolate` would escape, nor for a value that is a `List`, which a template writes as
   `[a, b]`. The rewrite doubles each per cent sign the literal writes.
 - A workspace index of `const val`s: a constant declared in another file is your own, where the
-  file does not declare something else of its name. Names are resolved by their scope (lambda and
+  file does not declare something else of its name. A private constant is left out, since no
+  other file can see it, and so is a name that some file declares as a `val` or `var` other files
+  can see, a getter for one: `$title` is no longer silent everywhere because one file has a
+  `private const val title` and another a `val title get() = ...` that reads the request. Names are resolved by their scope (lambda and
   loop parameters, local functions, destructuring and constructor properties), and a hole is markup
   only when its whole value is: an HTML literal or a `+` chain that opens with one,
   `interpolate(...)`, `Trusted(...)`, a value declared `Html` or `@Language("HTML")`, kotlinx.html

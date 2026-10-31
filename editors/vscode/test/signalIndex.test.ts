@@ -31,6 +31,19 @@ describe("signal index", () => {
     assert.deepEqual([...index.allDefinitions()].sort(), ["open", "query"]);
   });
 
+  it("gives the analysis the constants no file declares as anything else", () => {
+    const index = new SignalIndex(new Set());
+    let fired = 0;
+    index.onDidChangeDefinitions(() => fired++);
+    index.update(doc("/t/Keys.kt", "kotlin", `const val title = "Home"\nconst val label = "Name"\nprivate const val secret = "s"`, 1));
+    assert.deepEqual([...index.allConstants()].sort(), ["label", "title"]);
+    index.update(doc("/t/Request.kt", "kotlin", `val title get() = header("title")`, 1));
+    assert.deepEqual([...index.allConstants()], ["label"]);
+    index.update(doc("/t/Request.kt", "kotlin", `val heading get() = header("title")`, 2));
+    assert.deepEqual([...index.allConstants()].sort(), ["label", "title"]);
+    assert.equal(fired, 3);
+  });
+
   it("says when definitions change, and only then", () => {
     const index = new SignalIndex(new Set());
     let fired = 0;

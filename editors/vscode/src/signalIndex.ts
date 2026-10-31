@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { collectSelectors, type Selectors } from "./selectors.ts";
 import { collectSignalDefinitions, collectSignals } from "./signals.ts";
-import { constantNames } from "./interpolation.ts";
+import { constantNames, constantsAcross, otherDeclaredNames } from "./interpolation.ts";
 
 /** Template files read as markup, as the IntelliJ plugin reads them by default, whatever language an extension gives them. */
 const MARKUP_EXTENSIONS = [
@@ -20,8 +20,10 @@ interface FileEntry {
   signals: Set<string>;
   definitions: Set<string>;
   selectors: Selectors;
-  /** The `const val` names a Kotlin file declares, which a hole in an HTML string may name. */
+  /** The `const val` names a Kotlin file lets other files see, which a hole in an HTML string may name. */
   constants: Set<string>;
+  /** The other names a Kotlin file lets other files see, which keep a constant of the same name from counting. */
+  others: Set<string>;
 }
 
 /** Workspace-wide index of signal names, kept fresh as files change. */
@@ -124,7 +126,7 @@ export class SignalIndex implements vscode.Disposable {
   private set(key: string, next: FileEntry): void {
     const previous = this.byFile.get(key);
     this.byFile.set(key, next);
-    if (!previous || !sameSet(previous.definitions, next.definitions) || !sameSet(previous.constants, next.constants)) {
+    if (!previous || !sameSet(previous.definitions, next.definitions) || !sameSet(previous.constants, next.constants) || !sameSet(previous.others, next.others)) {
       this.definitionsUnion = null;
       this.constantsUnion = null;
       this.changed.fire();
@@ -138,7 +140,7 @@ export class SignalIndex implements vscode.Disposable {
     for (const [k, e] of this.byFile) {
       if (k !== key && !k.startsWith(folder)) continue;
       this.byFile.delete(k);
-      defined ||= e.definitions.size > 0 || e.constants.size > 0;
+      defined ||= e.definitions.size > 0 || e.constants.size > 0 || e.others.size > 0;
     }
     if (defined) {
       this.definitionsUnion = null;
@@ -190,13 +192,11 @@ export class SignalIndex implements vscode.Disposable {
     return out;
   }
 
-  /** Every `const val` the workspace's Kotlin declares. Cached until one changes. */
+  /** Every `const val` the workspace's Kotlin lets other files see and declares as nothing else. Cached until one changes. */
   allConstants(): ReadonlySet<string> {
     if (this.constantsUnion) return this.constantsUnion;
-    const out = new Set<string>();
-    for (const e of this.byFile.values()) for (const n of e.constants) out.add(n);
-    this.constantsUnion = out;
-    return out;
+    this.constantsUnion = constantsAcross(this.byFile.values());
+    return this.constantsUnion;
   }
 
   dispose(): void {
@@ -217,6 +217,7 @@ function entry(text: string, language: "kotlin" | "html", version: number | null
     definitions: collectSignalDefinitions(text, language),
     selectors: collectSelectors(text),
     constants: language === "kotlin" ? constantNames(text) : new Set(),
+    others: language === "kotlin" ? otherDeclaredNames(text) : new Set(),
   };
 }
 

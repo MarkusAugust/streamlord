@@ -15,10 +15,11 @@ today instead. Everything that touches your code is opt-in when it lands, the wa
 | Order | Planned | What it changes | What you do today |
 |---|---|---|---|
 | 1 | [Values from outside, in the DSL and in templates](#values-from-outside-in-the-dsl-and-in-templates) | what the editors and CI say about a request value in an expression | keep request data out of expression attributes |
-| 2 | [Replay in the Stream Inspector](#replay-in-the-stream-inspector) | what you can see of a stream after it ran | watch it arrive live |
-| 3 | [Delimiters the analysis has not met](#delimiters-the-analysis-has-not-met) | a false warning on a correct template file | nothing, for `data-bind` and its kind |
-| 4 | [Concurrent stream limits](#concurrent-stream-limits) | how much one reader may hold open | your framework's rate limiting |
-| 5 | [Starter templates](#starter-templates) | how long it takes to get a first page running | copy the `demo` module |
+| 2 | [The analysis as a build task](#the-analysis-as-a-build-task) | where CI runs the check | a test that calls `analyzeProject` |
+| 3 | [Replay in the Stream Inspector](#replay-in-the-stream-inspector) | what you can see of a stream after it ran | watch it arrive live |
+| 4 | [Delimiters the analysis has not met](#delimiters-the-analysis-has-not-met) | a false warning on a correct template file | nothing, for `data-bind` and its kind |
+| 5 | [Concurrent stream limits](#concurrent-stream-limits) | how much one reader may hold open | your framework's rate limiting |
+| 6 | [Starter templates](#starter-templates) | how long it takes to get a first page running | copy the `demo` module |
 
 The order is the order of the work, not a schedule. The last one waits for 1.0 on purpose: a
 template that lags the API it demonstrates teaches the wrong thing, and the API is still moving.
@@ -59,6 +60,24 @@ element text or an ordinary attribute, where kotlinx.html or your engine escapes
 read it with `el.dataset` when an expression needs it. When a value really has to reach an
 expression, patch it into a signal from the server rather than writing it into the markup, which
 is what signals are for.
+
+## The analysis as a build task
+
+The [check you run from a test](/analysis/#a-test-over-your-own-sources) is one line, but it is
+still a test you have to write, in a module that may have no tests, with `streamlord-analysis` on
+its test classpath. The editors catch the same findings as you type; CI only does if someone
+wrote that test.
+
+Planned: a Gradle plugin and a Maven plugin, each with one task, `streamlordCheck`, that runs
+`analyzeProject` over the module's Kotlin sources and fails the build on its `failures()`,
+printing each as `path:line:col: severity: message [code]`. Wired into `check` in Gradle and the
+`verify` phase in Maven, so it runs where the tests run, with nothing to write. The verdict is
+the one the test gives, so the two can live side by side while you move over.
+
+### Until then
+
+Write the test from [Analysis](/analysis/#a-test-over-your-own-sources): `analyzeProject` on
+`src/main/kotlin`, and assert that `failures()` is empty.
 
 ## Replay in the Stream Inspector
 

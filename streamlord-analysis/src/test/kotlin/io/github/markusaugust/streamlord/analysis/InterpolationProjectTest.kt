@@ -26,6 +26,13 @@ class InterpolationProjectTest {
     ) = "$code $start-$end $severity\n  message: $message"
 
     @Test
+    fun `finds the constants the project gives the analysis`() {
+        val expected = JsonParser.parseObject(dir.resolve("expected.json").readText())
+        val sources = expected.obj("files")!!.keys.map { dir.resolve(it).readText() }
+        assertEquals(expected.array("constants")!!.strings().toSet(), projectConstants(sources))
+    }
+
+    @Test
     fun `judges every hole of the project as expected json says`() {
         val expected = JsonParser.parseObject(dir.resolve("expected.json").readText())
         val opts = AnalyzeOptions("data-", true, constants = expected.array("constants")!!.strings().toSet())

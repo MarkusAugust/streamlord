@@ -301,6 +301,8 @@ internal class Declaration(
     val typeArguments: String? = null,
     /** Where the value a `val` is set to starts, when it is set to more than a literal; -1 otherwise. */
     val valueAt: Int = -1,
+    /** Whether another file can mean it by its bare name: a `val` or `var` at top level, in a class or a constructor, and not private. */
+    val shared: Boolean = false,
 ) {
     /** Just past where it can last be seen. */
     var end: Int = Int.MAX_VALUE
@@ -339,6 +341,59 @@ internal fun fileFacts(
     val l = lex ?: lexKotlin(src)
     val code = codeMask(src, l.strings, l.mask)
     return FileFacts(src, code, declarations(src, code)).also { lastFacts = it }
+}
+
+/** The names a Kotlin file declares that another file can mean by the bare name: its `const val`s, and every other `val` or `var`. */
+private class VisibleNames(
+    val src: String,
+    val constants: Set<String>,
+    val others: Set<String>,
+)
+
+@Volatile
+private var lastVisible: VisibleNames? = null
+
+private fun visibleNames(src: String): VisibleNames {
+    lastVisible?.let { if (it.src == src) return it }
+    val names =
+        lastFacts?.takeIf { it.src == src }?.names
+            ?: lexKotlin(src).let { declarations(src, codeMask(src, it.strings, it.mask)) }
+    val constants = HashSet<String>()
+    val others = HashSet<String>()
+    for ((name, list) in names) {
+        for (d in list) if (d.shared) (if (d.constant) constants else others) += name
+    }
+    return VisibleNames(src, constants, others).also { lastVisible = it }
+}
+
+/**
+ * The `const val` names a Kotlin file declares that other files can see: top level or in an
+ * object or a class, and not private, `internal` counting as seen. What [projectConstants] gathers.
+ */
+public fun constantNames(src: String): Set<String> = visibleNames(src).constants
+
+/**
+ * The other names a Kotlin file declares that other files can see: a `val` or `var` that is not
+ * a `const`, at top level, in a class or in a constructor, getters included. A parameter or a
+ * local is seen in this file only.
+ */
+public fun otherDeclaredNames(src: String): Set<String> = visibleNames(src).others
+
+/**
+ * The constants of a project whose Kotlin files are [sources], to pass as [AnalyzeOptions.constants]:
+ * each file's [constantNames], less every name some file declares as anything else another file
+ * could mean by it. The twin of `projectConstants` in the VS Code extension, whose workspace index
+ * gives its analysis the same set.
+ */
+public fun projectConstants(sources: Iterable<String>): Set<String> {
+    val out = HashSet<String>()
+    val others = HashSet<String>()
+    for (src in sources) {
+        val v = visibleNames(src)
+        out += v.constants
+        others += v.others
+    }
+    return out - others
 }
 
 /** The lexer's mask with the code of every `${...}` template marked as code, its braces too. */
@@ -383,6 +438,9 @@ private val FOR_VARIABLE = Regex("""\s*(\([^()]*\)|$NAME)(?:\s*:\s*($TYPE))?\s+i
 private val NAMES = Regex("""($NAME)(?:\s*:\s*($TYPE))?""")
 private val WHOLE_TYPE = Regex(TYPE)
 private val CONST_BEFORE = Regex("""\bconst[ \t]+(?:\p{L}+[ \t]+)*$""")
+private val PRIVATE_BEFORE = Regex("""\bprivate[ \t]+(?:\p{L}+[ \t]+)*$""")
+private val PROPERTY_MODIFIERS = Regex("""\b(?:val|var)\b""")
+private val PRIVATE_MODIFIER = Regex("""\bprivate\b""")
 private val HTML_BEFORE = Regex("""@Language\(\s*"html"\s*\)\s*(?:\p{L}+\s+)*$""", RegexOption.IGNORE_CASE)
 private val HTML_ANNOTATION = Regex("""@Language\(\s*"html"\s*\)""", RegexOption.IGNORE_CASE)
 private val VARARG = Regex("""\bvararg\b""")
@@ -421,6 +479,12 @@ private class ScopeFrame(
 
     /** The parameters of a class's constructor, waiting for its body. */
     var ctor: List<Declaration>? = null
+
+    /** Whether the class declared here is private. */
+    var privateClass = false
+
+    /** Whether what this frame declares is out of other files' sight: a private class's body, or a local one's. */
+    var hidden = false
 }
 
 private fun isWordPart(c: Char?): Boolean = c != null && (c.isLetterOrDigit() || c == '_')
@@ -521,6 +585,9 @@ private fun declarations(
     }
     val stack = arrayListOf(ScopeFrame(-1, "top"))
 
+    /** Whether the members of the class declared in [f] are out of other files' sight. */
+    fun classHidden(f: ScopeFrame) = f.hidden || f.privateClass || (f.kind != "top" && f.kind != "class")
+
     fun settle(
         p: PendingScope,
         end: Int,
@@ -538,10 +605,11 @@ private fun declarations(
         f.ctor = null
     }
 
-    /** Each parameter between the brackets of a function or a constructor. */
+    /** Each parameter between the brackets of a function or a constructor; [visible] for a constructor other files can see the properties of. */
     fun parameters(
         f: ScopeFrame,
         close: Int,
+        visible: Boolean = false,
     ): List<Declaration> {
         val out = ArrayList<Declaration>()
         val cuts = listOf(f.open) + f.commas + close
@@ -560,6 +628,10 @@ private fun declarations(
                         type,
                         html = HTML_ANNOTATION.containsMatchIn(text),
                         typeArguments = arguments,
+                        shared =
+                            visible &&
+                                PROPERTY_MODIFIERS.containsMatchIn(m.groupValues[1]) &&
+                                !PRIVATE_MODIFIER.containsMatchIn(m.groupValues[1]),
                     ),
                 )
         }
@@ -597,6 +669,7 @@ private fun declarations(
 
                 word == "class" || word == "interface" || word == "object" -> {
                     f.cls = true
+                    f.privateClass = PRIVATE_BEFORE.containsMatchIn(src.substring(maxOf(0, i - 80), i))
                 }
 
                 word == "when" -> {
@@ -611,6 +684,7 @@ private fun declarations(
                     val constant = CONST_BEFORE.containsMatchIn(src.substring(maxOf(0, i - 80), i))
                     val html = HTML_BEFORE.containsMatchIn(src.substring(maxOf(0, i - 160), i))
                     val local = f.kind != "top" && f.kind != "class"
+                    val shared = !local && !f.hidden && !PRIVATE_BEFORE.containsMatchIn(src.substring(maxOf(0, i - 80), i))
                     val scopeStart = { at: Int ->
                         if (local) {
                             at
@@ -627,7 +701,11 @@ private fun declarations(
                         val listStart = end + destructured.value.indexOf('(') + 1
                         for (n in NAMES.findAll(destructured.groupValues[1])) {
                             val at = listStart + n.range.first
-                            val d = add(n.groupValues[1], Declaration(at, scopeStart(at), null, constant = constant, html = html))
+                            val d =
+                                add(
+                                    n.groupValues[1],
+                                    Declaration(at, scopeStart(at), null, constant = constant, html = html, shared = shared),
+                                )
                             if (owner.kind != "top") owner.ends += d
                         }
                     } else {
@@ -666,6 +744,7 @@ private fun declarations(
                                         if (bare && !markup) textInitialiser(src, m.range.last + 1) else null,
                                         arguments?.groupValues?.get(1),
                                         valueAt,
+                                        shared,
                                     ),
                                 )
                             if (owner.kind != "top") owner.ends += d
@@ -708,6 +787,7 @@ private fun declarations(
                 } else if (f.cls) {
                     g.kind = "class"
                     f.cls = false
+                    g.hidden = classHidden(f)
                     f.ctor?.let { g.ends += it }
                     f.ctor = null
                 } else if (f.whenBlock) {
@@ -764,7 +844,7 @@ private fun declarations(
             if (g.kind == "params") {
                 handOver(PendingScope(parameters(g, i), true))
             } else if (g.kind == "ctor") {
-                outer.ctor = parameters(g, i)
+                outer.ctor = parameters(g, i, !classHidden(outer))
             }
             i++
             continue

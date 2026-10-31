@@ -145,6 +145,33 @@ public class Analyzer(
         opts: AnalyzeOptions = AnalyzeOptions(),
     ): List<Issue> = analyzeKotlinSites(src, opts).flatMap { it.issues }
 
+    /**
+     * Every `.kt` file under [root], folders named `build` and hidden ones left out, analysed with
+     * the constants the files declare between them ([projectConstants]) added to [opts]'s: the
+     * verdict VS Code gives the same workspace. The issues come in path order, then by offset;
+     * [failures] keeps those that should fail a build.
+     */
+    public fun analyzeProject(
+        root: java.io.File,
+        opts: AnalyzeOptions = AnalyzeOptions(),
+    ): List<ProjectIssue> {
+        val files =
+            root
+                .walkTopDown()
+                .onEnter { it == root || (it.name != "build" && !it.name.startsWith(".")) }
+                .filter { it.isFile && it.extension == "kt" }
+                .sortedBy { it.invariantSeparatorsPath }
+                .map { it to it.readText() }
+                .toList()
+        val project = opts.copy(constants = opts.constants + projectConstants(files.map { it.second }))
+        return files.flatMap { (file, source) ->
+            analyzeKotlin(source, project).sortedWith(compareBy({ it.start }, { it.end })).map { issue ->
+                val (line, column) = issue.position(source)
+                ProjectIssue(file, line, column, issue)
+            }
+        }
+    }
+
     /** The issues of a Kotlin file grouped by the string or call they belong to, so a host can veto a call it knows is not Streamlord's. */
     public fun analyzeKotlinSites(
         src: String,

@@ -47,6 +47,13 @@ All notable changes to Streamlord are recorded here. The format follows
   the format, which is neither escaped nor refused, with a fix that makes it a `%s` hole. The
   format is read as HTML, and `interpolate`'s `format` is marked `@Language("HTML")`.
 - A fix that quotes an attribute value written without quotes.
+- `Analyzer.analyzeProject(root)`: every `.kt` file under a folder, `build` and hidden folders
+  left out, analysed with the constants the files declare between them, the verdict VS Code gives
+  the same workspace. Each `ProjectIssue` carries the file, the line, the column and the `Issue`,
+  and `format()` writes it as `path:line:col: severity: message [code]`. `failures()` keeps those
+  that should fail a build: every error, and every `unsafe-interpolation` warning. The test over
+  your own sources on the analysis page is now one line. `projectConstants(sources)` gives the
+  constants alone, from each file's `constantNames` and `otherDeclaredNames`.
 
 ### Changed
 
