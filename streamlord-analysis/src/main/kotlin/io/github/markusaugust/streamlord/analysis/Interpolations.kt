@@ -32,12 +32,6 @@ private val OPERAND_END = Regex("""^(?:[,)\]};]|\?:|&&|\|\||==|!=|<=|>=|\.\.)"""
 /** The words that end an operand, as words of their own: `photo` is a name, not `pho` and `to`. */
 private val OPERAND_END_WORDS = listOf("to", "else")
 
-private const val INTERPOLATE_IMPORT = "io.github.markusaugust.streamlord.core.domain.interpolate"
-private val INTERPOLATE_IMPORTED =
-    Regex(
-        """^\s*import\s+(?:${Regex.escape(INTERPOLATE_IMPORT)}|io\.github\.markusaugust\.streamlord\.core\.domain\.\*)\s*$""",
-        setOf(RegexOption.MULTILINE, RegexOption.UNIX_LINES),
-    )
 private val IMPORT_LINE = Regex("""^import\s+[^\n]*$""", setOf(RegexOption.MULTILINE, RegexOption.UNIX_LINES))
 private val PACKAGE_LINE = Regex("""^package\s+[^\n]*$""", setOf(RegexOption.MULTILINE, RegexOption.UNIX_LINES))
 
@@ -113,7 +107,18 @@ internal fun withNested(strings: List<KotlinString>): List<KotlinString> {
  * else "errors"}`, a number, `true`. Its value is markup the source spells out.
  */
 internal fun literalOnly(expr: String): Boolean =
-    (branches(expr) ?: listOf(expr)).all { LITERAL.matches(it.trim()) || STRING_LITERAL.matches(it.trim()) }
+    (branches(expr) ?: listOf(expr)).all { LITERAL.matches(it.trim()) || plainString(it.trim()) }
+
+private val QUOTE_OPENING = Regex("""^\$*"""")
+
+/** [t] read as one whole string literal, its templates and all, or null when it is anything more or less. */
+private fun stringLiteral(t: String): KotlinString? {
+    if (!QUOTE_OPENING.containsMatchIn(t)) return null
+    return readKotlinStringAt(t, 0)?.takeIf { !it.unterminated && it.end == t.length }
+}
+
+/** Whether [t] is one string literal without a template: `"x"`, and `"$"` too, whose dollar opens none. */
+private fun plainString(t: String): Boolean = STRING_LITERAL.matches(t) || stringLiteral(t)?.interpolations?.isEmpty() == true
 
 private fun wordAt(
     e: String,
@@ -273,6 +278,8 @@ internal class Declaration(
     val text: String? = null,
     val constant: Boolean = false,
     val html: Boolean = false,
+    /** Whether it is set to a string literal without a template, which makes it a String. */
+    val string: Boolean = false,
 ) {
     /** Just past where it can last be seen. */
     var end: Int = Int.MAX_VALUE
@@ -288,14 +295,15 @@ internal class FileFacts(
     val code: BooleanArray,
     val names: Map<String, List<Declaration>>,
 ) {
-    @Volatile
-    var importEdits: List<Edit>? = null
-
-    @Volatile
-    var importsChecked: Boolean = false
+    /** The edit that imports each name of core's domain the fixes write, empty where the file has the import. */
+    val importEdits: MutableMap<String, List<Edit>> = java.util.concurrent.ConcurrentHashMap()
 
     @Volatile
     var helpers: Set<String>? = null
+
+    /** The type parameters the file declares, each with whether a value of it may be null. */
+    @Volatile
+    var typeParameters: Map<String, Boolean>? = null
 }
 
 @Volatile
@@ -567,6 +575,7 @@ private fun declarations(
                                         if (constant) m.groups[5]?.value else null,
                                         constant,
                                         html,
+                                        m.groups[5] != null,
                                     ),
                                 )
                             if (owner.kind != "top") owner.ends += d
@@ -790,10 +799,38 @@ internal fun mayBeNull(
         val t = v.trim()
         when {
             t == "null" -> true
-            IDENT.matches(t) -> declarationOf(src, t, at)?.type?.endsWith("?") == true
+            IDENT.matches(t) -> declarationOf(src, t, at)?.type?.let { it.endsWith("?") || nullableTypeParameter(src, it) } == true
             else -> "?." in t && "?:" !in t
         }
     }
+
+private val TYPE_PARAMETERS = Regex("""(?:\bfun\s*|\b(?:class|interface)\s+[\p{L}_][\p{L}\p{Nd}_]*\s*)<((?:[^<>]|<[^<>]*>)*)>""")
+private val TYPE_PARAMETER =
+    Regex("""^\s*(?:(?:in|out|reified)\s+)*([\p{L}_][\p{L}\p{Nd}_]*)\s*(?::\s*(.+?))?\s*$""", RegexOption.DOT_MATCHES_ALL)
+
+/**
+ * Whether [type] is a type parameter a value of which may be null: `T` of `fun <T> f(q: T)`,
+ * whose bound is `Any?`, and one bound by a nullable type. `T : Any` is not.
+ */
+private fun nullableTypeParameter(
+    src: String,
+    type: String,
+): Boolean {
+    val facts = fileFacts(src)
+    val known =
+        facts.typeParameters ?: HashMap<String, Boolean>().also { out ->
+            for (m in TYPE_PARAMETERS.findAll(src)) {
+                if (!facts.code[m.range.first]) continue
+                for (p in splitTopLevel(m.groupValues[1])) {
+                    val d = TYPE_PARAMETER.find(p) ?: continue
+                    val bound = d.groups[2]?.value?.trim()
+                    out[d.groupValues[1]] = out[d.groupValues[1]] == true || bound == null || bound.endsWith("?")
+                }
+            }
+            facts.typeParameters = out
+        }
+    return known[type] == true
+}
 
 /** One value a hole can result in, and whether it stands left of `?:`, which never gives null. */
 internal class HoleValue(
@@ -861,21 +898,74 @@ private val HOLE_HELPERS: Set<String> =
             .map { it.kotlin }
             .filter { it.isNotEmpty() } + "statements" + "js"
 
-/** Whether [t] is one call to a helper of Streamlord's DSL, in a file that uses the DSL and imports no other function of that name. */
-private fun helperCall(
+/**
+ * The arguments of [t] when it is one call to a helper of Streamlord's DSL, in a file that uses
+ * the DSL and imports no other function of that name; null when it is not one.
+ */
+private fun helperArguments(
     src: String,
     t: String,
-): Boolean {
-    val name = CALL_START.find(t)?.groupValues?.get(1) ?: return false
+): List<String>? {
+    val m = CALL_START.find(t) ?: return null
+    val name = m.groupValues[1]
     val facts = fileFacts(src)
     val helpers = facts.helpers ?: dslHelpers(src, HOLE_HELPERS).also { facts.helpers = it }
-    return name in helpers && wholeCall(t, name)
+    if (name !in helpers || !wholeCall(t, name)) return null
+    val args = t.substring(m.value.length, t.length - 1)
+    return if (args.isBlank()) emptyList() else splitTop(args, ",")
+}
+
+/** A name given to an argument, `value = `, which says nothing of the value. */
+private val ARGUMENT_NAME = Regex("""^\s*[\p{L}_][\p{L}\p{Nd}_]*\s*=(?!=)""")
+
+/**
+ * Whether a helper's argument is the author's own: a literal, a constant, a number or a boolean
+ * the file declares, or a helper call whose arguments are. `signal("x;alert(1)")` returns code, so
+ * a helper is only as much the author's own as what it is given.
+ */
+private fun ownArgument(
+    src: String,
+    arg: String,
+    at: Int,
+    constants: Set<String>,
+): Boolean {
+    val a = arg.replaceFirst(ARGUMENT_NAME, "").trim()
+    if (a.startsWith("*")) return false
+    val kind = weakest(holeValues(a).map { valueKind(src, it.text, at, constants, it.nonNull) })
+    return kind == HoleFact.CONSTANT || kind == HoleFact.NUMBER || kind == HoleFact.BOOLEAN
+}
+
+private val QUALIFIED = Regex("""^((?:[\p{L}_][\p{L}\p{Nd}_]*\s*\.\s*)+)([\p{L}_][\p{L}\p{Nd}_]*)$""")
+private val SCREAMING = Regex("""[A-Z][A-Z0-9_]*""")
+
+/**
+ * A constant reached through what holds it: `Routes.SAVE`, a `const val` of the workspace or of
+ * this file in an object or a class, or an enum entry, `Tab.HOME`, whose text is its name. What
+ * holds it is a type, whose name starts with a capital, and not a value the file declares.
+ */
+private fun qualifiedConstant(
+    src: String,
+    t: String,
+    at: Int,
+    constants: Set<String>,
+): Boolean {
+    val m = QUALIFIED.find(t) ?: return false
+    val holders =
+        m.groupValues[1]
+            .split(".")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+    if (!holders.last()[0].isUpperCase() || declarationOf(src, holders.first(), at) != null) return false
+    val name = m.groupValues[2]
+    if (SCREAMING.matches(name)) return true
+    return name in constants || fileFacts(src).names[name].orEmpty().any { it.constant }
 }
 
 /**
  * What the text shows of one value, a branch of an `if` or a `when` or a whole hole: a literal or
- * a constant, the author's own, a call to one of Streamlord's expression helpers, which is the
- * author's code too, or what the name's declaration says. Null where it shows nothing.
+ * a constant, the author's own; a string template, as weak as its weakest hole; a call to one of
+ * Streamlord's expression helpers, the author's code when its arguments are the author's own and
+ * a String otherwise; or what the name's declaration says. Null where it shows nothing.
  */
 internal fun valueKind(
     src: String,
@@ -886,7 +976,18 @@ internal fun valueKind(
 ): HoleFact? {
     val t = value.trim()
     if (LITERAL.matches(t) || STRING_LITERAL.matches(t) || CHAR_LITERAL.matches(t)) return HoleFact.CONSTANT
-    if (helperCall(src, t)) return HoleFact.CONSTANT
+    stringLiteral(t)?.let { literal ->
+        return weakest(
+            literal.interpolations.flatMap { ip ->
+                val values = if (ip.kind == InterpolationKind.SIMPLE) listOf(HoleValue(ip.text, false)) else holeValues(ip.text)
+                values.map { valueKind(src, it.text, at, constants, it.nonNull) }
+            },
+        )
+    }
+    helperArguments(src, t)?.let { args ->
+        return if (args.all { ownArgument(src, it, at, constants) }) HoleFact.CONSTANT else HoleFact.STRING
+    }
+    if (qualifiedConstant(src, t, at, constants)) return HoleFact.CONSTANT
     if (!IDENT.matches(t)) return null
     if (constantAt(src, t, at, constants)) return HoleFact.CONSTANT
     return declaredKind(src, t, at, nonNull)
@@ -1029,7 +1130,7 @@ internal fun markupValue(
         return markup.any { it } &&
             values.indices.all { k ->
                 val v = values[k].text
-                markup[k] || LITERAL.matches(v) || STRING_LITERAL.matches(v) || CHAR_LITERAL.matches(v)
+                markup[k] || LITERAL.matches(v) || plainString(v) || CHAR_LITERAL.matches(v)
             }
     }
     val t = values[0].text
@@ -1192,16 +1293,33 @@ internal fun markupValued(
     src: String,
     s: KotlinString,
     ip: Interpolation,
+): Boolean = heldAsMarkup(src, ip.text, s.start)
+
+private fun heldAsMarkup(
+    src: String,
+    value: String,
+    at: Int,
 ): Boolean =
-    (branches(ip.text) ?: listOf(ip.text)).all { v ->
+    (branches(value) ?: listOf(value)).all { v ->
         val t = v.trim()
         if (IDENT.matches(t)) {
-            declaredKind(src, t, s.start) == HoleFact.MARKUP
+            declaredKind(src, t, at) == HoleFact.MARKUP
         } else {
             val call = MARKUP_CALL_START.find(t)
             call != null && closing(t, depths(t), call.value.length - 1) == t.length
         }
     }
+
+/**
+ * Whether a value handed to `interpolate` is markup held as a String: `h.text`, an HTML literal,
+ * `elements { }`, a `joinToString` of markup. In element text `interpolate` escapes it, so the
+ * tags are printed; an `Html` or a `Trusted` it writes as it stands.
+ */
+internal fun markupHeldAsString(
+    src: String,
+    value: String,
+    at: Int,
+): Boolean = markupValue(src, value, at) && !heldAsMarkup(src, value, at)
 
 /**
  * The fix for a value written into an attribute value without quotes: quotes around the whole
@@ -1342,48 +1460,149 @@ internal fun chainFrom(
     )
 }
 
+private const val DOMAIN = "io.github.markusaugust.streamlord.core.domain"
+
+/** The title of the rewrite to `interpolate` where the hole is a value it escapes. */
+internal const val ESCAPES_TITLE = "Build it with interpolate(...), which escapes the values"
+
+/** Its title where the hole starts a URL, which escaping does not help but interpolate refuses when it would run. */
+internal const val REFUSES_URL_TITLE = "Build it with interpolate(...), which refuses a URL that runs"
+
 /**
  * The literal rewritten as a call to `interpolate`: each template becomes `%s` and its value an
- * argument, each `%` of the markup `%%`. With the import, when the file has none.
+ * argument, and each `%` the literal writes, as itself or as an escape, is written twice, so
+ * `interpolate` prints it once. Made the first time it is read, and once for all the holes of the
+ * literal that offer it.
  */
-internal fun interpolateFix(
+internal fun interpolateText(
     src: String,
     s: KotlinString,
-): Fix {
+): Lazy<String> = lazy(LazyThreadSafetyMode.PUBLICATION) { rewriteToInterpolate(src, s) }
+
+private fun rewriteToInterpolate(
+    src: String,
+    s: KotlinString,
+): String {
+    // Where the literal writes a per cent sign, and how many characters of source spell it.
+    val percents = HashMap<Int, Int>()
+    for (i in s.text.indices) if (s.text[i] == '%') percents[s.map[i]] = s.map[i + 1] - s.map[i]
     val format = StringBuilder()
+
+    fun copy(
+        from: Int,
+        to: Int,
+    ) {
+        var k = from
+        while (k < to) {
+            val n = percents[k] ?: 0
+            if (n > 0) {
+                format.append(src, k, k + n).append(src, k, k + n)
+                k += n
+            } else {
+                format.append(src[k++])
+            }
+        }
+    }
     var at = s.start
     for (ip in s.interpolations) {
-        format.append(src.substring(at, ip.start).replace("%", "%%")).append("%s")
+        copy(at, ip.start)
+        format.append("%s")
         at = ip.end
     }
-    format.append(src.substring(at, s.end).replace("%", "%%"))
+    copy(at, s.end)
     val args = s.interpolations.map { if (it.kind == InterpolationKind.SIMPLE) it.text else it.text.trim() }
     // `.text`, the String the literal was: interpolate returns Html, and a fix that changed the type
     // would break whatever took the String.
-    val call = "interpolate(" + (listOf(format.toString()) + args).joinToString(", ") + ").text"
-    val title = "Build it with interpolate(...), which escapes the values"
-    val facts = fileFacts(src)
-    if (!facts.importsChecked) {
-        facts.importEdits = importEdits(src)
-        facts.importsChecked = true
-    }
-    return Fix(title, s.start, s.end, call, facts.importEdits.orEmpty())
+    return "interpolate(" + (listOf(format.toString()) + args).joinToString(", ") + ").text"
 }
 
-/** The edit that imports `interpolate`, after the last import or the package, or null when the file has the import. */
-private fun importEdits(src: String): List<Edit>? {
-    if (INTERPOLATE_IMPORTED.containsMatchIn(src)) return null
-    val imports = IMPORT_LINE.findAll(src).lastOrNull()
-    val pkg = PACKAGE_LINE.find(src)
-    val anchor = (imports ?: pkg)?.let { it.range.last + 1 } ?: -1
-    val edit =
-        if (anchor < 0) {
-            Edit(0, 0, "import $INTERPOLATE_IMPORT\n\n")
-        } else {
-            Edit(anchor, anchor, "\n" + (if (imports != null) "" else "\n") + "import $INTERPOLATE_IMPORT")
-        }
-    return listOf(edit)
+/** The rewrite of the literal to `interpolate`, whose text [text] makes, with the import when the file has none. */
+internal fun interpolateFix(
+    src: String,
+    s: KotlinString,
+    text: Lazy<String>,
+    title: String,
+    preferred: Boolean,
+): Fix = Fix.later(title, s.start, s.end, importEdits(src, "interpolate"), preferred) { text.value }
+
+/**
+ * The hole made a `Trusted` value, `${Trusted(body)}`: markup the author vouches for, which the
+ * analysis then reads as the author's own. With the import, when the file has none. Never
+ * preferred: whether the value is markup only the author knows.
+ */
+internal fun trustedFix(
+    src: String,
+    s: KotlinString,
+    ip: Interpolation,
+    shown: String,
+): Fix {
+    val expr = if (ip.kind == InterpolationKind.SIMPLE) ip.text else ip.text.trim()
+    // A value joined with `+` is wrapped where it stands; a template keeps the dollars its literal opens one with.
+    val text = if (ip.kind == InterpolationKind.OPERAND) "Trusted($expr)" else "$".repeat(s.dollars) + "{Trusted($expr)}"
+    return Fix("Mark $shown as markup", ip.start, ip.end, text, importEdits(src, "Trusted"), preferred = false)
 }
+
+/** The calls that make a List, and those whose result is one, whatever they are called on; not those a String has too. */
+private val LIST_MAKERS =
+    setOf("listOf", "mutableListOf", "arrayListOf", "emptyList", "buildList", "listOfNotNull", "List", "MutableList", "ArrayList")
+private val LIST_RESULTS =
+    setOf(
+        "toList",
+        "toMutableList",
+        "map",
+        "mapNotNull",
+        "mapIndexed",
+        "flatMap",
+        "filterNotNull",
+        "sorted",
+        "sortedBy",
+        "sortedDescending",
+        "sortedWith",
+        "distinct",
+        "chunked",
+        "windowed",
+        "zip",
+    )
+
+/** A declared List, as a declaration reads its type: the name, without what the brackets after it hold. */
+private val LIST_TYPE = Regex("""(?:kotlin\.collections\.)?(?:List|MutableList|ArrayList)\??""")
+
+/** Whether a value handed to `interpolate` is visibly a List: made by a call that makes one, or a name declared one. */
+internal fun visiblyList(
+    src: String,
+    value: String,
+    at: Int,
+): Boolean {
+    val t = value.trim()
+    if (IDENT.matches(t)) return LIST_TYPE.matches(declarationOf(src, t, at)?.type ?: "")
+    val call = lastCall(t) ?: return false
+    return if (call.receiver == null) call.name in LIST_MAKERS else call.name in LIST_RESULTS
+}
+
+/** The edit that imports [name] of core's domain, after the last import or the package; none when the file has the import. */
+private fun importEdits(
+    src: String,
+    name: String,
+): List<Edit> =
+    fileFacts(src).importEdits.getOrPut(name) {
+        val fq = "$DOMAIN.$name"
+        val imported =
+            Regex(
+                """^\s*import\s+(?:${Regex.escape(fq)}|${Regex.escape(DOMAIN)}\.\*)\s*$""",
+                setOf(RegexOption.MULTILINE, RegexOption.UNIX_LINES),
+            )
+        if (imported.containsMatchIn(src)) return@getOrPut emptyList()
+        val imports = IMPORT_LINE.findAll(src).lastOrNull()
+        val pkg = PACKAGE_LINE.find(src)
+        val anchor = (imports ?: pkg)?.let { it.range.last + 1 } ?: -1
+        listOf(
+            if (anchor < 0) {
+                Edit(0, 0, "import $fq\n\n")
+            } else {
+                Edit(anchor, anchor, "\n" + (if (imports != null) "" else "\n") + "import $fq")
+            },
+        )
+    }
 
 /** Where each `%s` of `interpolate`'s format starts in [text], as core counts them: `%%` is one per cent sign and never a hole. */
 internal fun percentHoles(text: String): List<Int> {
@@ -1428,7 +1647,7 @@ internal fun withPercentHoles(
     }
     map += s.map[s.text.length]
 
-    fun shift(d: Int) = d + (PLACEHOLDER.length - 2) * holes.count { it < d }
+    fun shift(d: Int) = d + (PLACEHOLDER.length - 2) * countBelow(holes, d)
     val format =
         s.copy(
             text = text.toString(),
@@ -1436,6 +1655,20 @@ internal fun withPercentHoles(
             interpolations = s.interpolations.map { it.copy(decodedStart = shift(it.decodedStart)) },
         )
     return format to at
+}
+
+/** How many of the ascending [sorted] are below [d]. */
+internal fun countBelow(
+    sorted: List<Int>,
+    d: Int,
+): Int {
+    var lo = 0
+    var hi = sorted.size
+    while (lo < hi) {
+        val mid = (lo + hi) ushr 1
+        if (sorted[mid] < d) lo = mid + 1 else hi = mid
+    }
+    return lo
 }
 
 /** What a value handed to `interpolate` is, as far as the text shows: what core's `admits` decides by. */
@@ -1492,9 +1725,16 @@ internal fun valueKind(
     if (!IDENT.matches(t)) return null
     return when (declaredKind(src, t, at)) {
         HoleFact.NUMBER -> ArgKind.NUMBER
+
         HoleFact.BOOLEAN -> ArgKind.BOOLEAN
+
         HoleFact.STRING -> ArgKind.STRING
+
         HoleFact.MARKUP -> ArgKind.MARKUP
+
+        // `val name = "Gorvek"`: a String, though no type is written.
+        null -> if (declarationOf(src, t, at)?.string == true) ArgKind.STRING else null
+
         else -> null
     }
 }

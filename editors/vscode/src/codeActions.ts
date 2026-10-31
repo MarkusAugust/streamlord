@@ -34,7 +34,7 @@ export class StreamlordCodeActionProvider implements vscode.CodeActionProvider {
         action.edit.replace(document.uri, new vscode.Range(document.positionAt(fix.start), document.positionAt(fix.end)), fix.text);
         for (const e of fix.edits ?? []) action.edit.replace(document.uri, new vscode.Range(document.positionAt(e.start), document.positionAt(e.end)), e.text);
         if (diagnostic) action.diagnostics = [diagnostic];
-        action.isPreferred = i === 0;
+        action.isPreferred = i === 0 && fix.preferred !== false;
         actions.push(action);
       });
     }

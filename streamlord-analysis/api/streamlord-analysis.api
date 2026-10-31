@@ -309,19 +309,15 @@ public final class io/github/markusaugust/streamlord/analysis/FetchOption {
 }
 
 public final class io/github/markusaugust/streamlord/analysis/Fix {
-	public fun <init> (Ljava/lang/String;IILjava/lang/String;Ljava/util/List;)V
-	public synthetic fun <init> (Ljava/lang/String;IILjava/lang/String;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;IILjava/lang/String;Ljava/util/List;Z)V
+	public synthetic fun <init> (Ljava/lang/String;IILjava/lang/String;Ljava/util/List;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun apply (Ljava/lang/String;)Ljava/lang/String;
-	public final fun component1 ()Ljava/lang/String;
-	public final fun component2 ()I
-	public final fun component3 ()I
-	public final fun component4 ()Ljava/lang/String;
-	public final fun component5 ()Ljava/util/List;
-	public final fun copy (Ljava/lang/String;IILjava/lang/String;Ljava/util/List;)Lio/github/markusaugust/streamlord/analysis/Fix;
-	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/analysis/Fix;Ljava/lang/String;IILjava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/Fix;
+	public final fun copy (Ljava/lang/String;IILjava/lang/String;Ljava/util/List;Z)Lio/github/markusaugust/streamlord/analysis/Fix;
+	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/analysis/Fix;Ljava/lang/String;IILjava/lang/String;Ljava/util/List;ZILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/Fix;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getEdits ()Ljava/util/List;
 	public final fun getEnd ()I
+	public final fun getPreferred ()Z
 	public final fun getReplacements ()Ljava/util/List;
 	public final fun getStart ()I
 	public final fun getText ()Ljava/lang/String;

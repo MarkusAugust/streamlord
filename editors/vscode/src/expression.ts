@@ -27,6 +27,20 @@ export interface Fix {
   text: string;
   /** Further replacements the fix makes elsewhere in the file, such as an import; never overlapping the main one. */
   edits?: { start: number; end: number; text: string }[];
+  /**
+   * Whether an editor may offer the fix as the one to apply, when it comes first: false where the
+   * choice between the fixes is the author's, so none of them is preferred. Absent means true.
+   */
+  preferred?: boolean;
+}
+
+/**
+ * A fix whose text is made the first time it is read, so a literal with thousands of holes does
+ * not build a rewrite of itself for each.
+ */
+export function laterFix(fix: Omit<Fix, "text">, text: () => string): Fix {
+  let made: string | undefined;
+  return Object.defineProperty(fix, "text", { enumerable: true, get: () => (made ??= text()) }) as Fix;
 }
 
 /** The source after a fix: its replacement and every further edit, applied from the end so no offset moves. */

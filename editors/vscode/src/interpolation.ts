@@ -7,7 +7,7 @@
  */
 import { lexKotlin } from "./scanner.ts";
 import { PLACEHOLDER, readKotlinStringAt, type Interpolation, type KotlinString } from "./kotlinStrings.ts";
-import type { Fix } from "./expression.ts";
+import { laterFix, type Fix } from "./expression.ts";
 import { catalog } from "./catalog.ts";
 import { dslHelpers, EXPRESSION_HELPERS } from "./signalNameHyphens.ts";
 
@@ -84,11 +84,23 @@ export function withNested(strings: readonly KotlinString[]): KotlinString[] {
  * else "errors"}`, a number, `true`. Its value is markup the source spells out.
  */
 export function literalOnly(expr: string): boolean {
-  return (branches(expr) ?? [expr]).every((v) => LITERAL.test(v.trim()) || STRING_LITERAL.test(v.trim()));
+  return (branches(expr) ?? [expr]).every((v) => LITERAL.test(v.trim()) || plainString(v.trim()));
 }
 
 const LITERAL = /^(?:-?\d[\d_]*(?:\.\d+)?[LlFfDd]?|true|false|null)$/;
 const STRING_LITERAL = /^"(?:[^"\\$]|\\.)*"$/;
+
+/** `t` read as one whole string literal, its templates and all, or null when it is anything more or less. */
+function stringLiteral(t: string): KotlinString | null {
+  if (!/^\$*"/.test(t)) return null;
+  const s = readKotlinStringAt(t, 0);
+  return s !== null && !s.unterminated && s.end === t.length ? s : null;
+}
+
+/** Whether `t` is one string literal without a template: `"x"`, and `"$"` too, whose dollar opens none. */
+function plainString(t: string): boolean {
+  return STRING_LITERAL.test(t) || stringLiteral(t)?.interpolations.length === 0;
+}
 const WORD_CHAR_U = /[\p{L}\p{Nd}_]/u;
 
 const wordAt = (e: string, at: number, w: string) => e.startsWith(w, at) && !WORD_CHAR_U.test(e[at - 1] ?? "") && !WORD_CHAR_U.test(e[at + w.length] ?? "");
@@ -217,6 +229,8 @@ interface Declaration {
   literal?: string;
   /** The string literal a `const val` is set to, as written, when it holds no template. */
   text?: string;
+  /** Whether it is set to a string literal without a template, which makes it a String. */
+  string?: boolean;
   constant: boolean;
   html: boolean;
 }
@@ -230,8 +244,11 @@ interface FileFacts {
   /** 1 where the character is code: outside literals and comments, or in a template's code. */
   code: Uint8Array;
   names: Map<string, Declaration[]>;
-  importEdits?: Fix["edits"] | null;
+  /** The edit that imports each name of core's domain the fixes write, or null where the file has the import. */
+  importEdits?: Map<string, Fix["edits"] | null>;
   helpers?: ReadonlySet<string>;
+  /** The type parameters the file declares, each with whether a value of it may be null. */
+  typeParameters?: ReadonlyMap<string, boolean>;
 }
 
 let lastFacts: FileFacts | null = null;
@@ -407,7 +424,7 @@ function declarations(src: string, code: Uint8Array): Map<string, Declaration[]>
           // `val String.shout`: an extension, read on a receiver and never by its name alone.
           if (m && !m[1]) {
             const at = end + m[0].indexOf(m[2] as string, (m[0].length - m[0].trimStart().length));
-            const d = { ...scope(at), type: m[3], literal: m[4], text: constant ? m[5] : undefined };
+            const d = { ...scope(at), type: m[3], literal: m[4], text: constant ? m[5] : undefined, string: m[5] !== undefined };
             add(m[2] as string, d);
             if (owner.kind !== "top") owner.ends.push(d);
           }
@@ -597,9 +614,38 @@ export function mayBeNull(src: string, value: string, at: number): boolean {
   return (branches(value) ?? [value]).some((v) => {
     const t = v.trim();
     if (t === "null") return true;
-    if (IDENT.test(t)) return declarationOf(src, t, at)?.type?.endsWith("?") ?? false;
+    if (IDENT.test(t)) {
+      const type = declarationOf(src, t, at)?.type;
+      return type !== undefined && (type.endsWith("?") || nullableTypeParameter(src, type));
+    }
     return t.includes("?.") && !t.includes("?:");
   });
+}
+
+const TYPE_PARAMETERS = /(?:\bfun\s*|\b(?:class|interface)\s+[\p{L}_][\p{L}\p{Nd}_]*\s*)<((?:[^<>]|<[^<>]*>)*)>/gu;
+const TYPE_PARAMETER = /^\s*(?:(?:in|out|reified)\s+)*([\p{L}_][\p{L}\p{Nd}_]*)\s*(?::\s*(.+?))?\s*$/su;
+
+/**
+ * Whether `type` is a type parameter a value of which may be null: `T` of `fun <T> f(q: T)`,
+ * whose bound is `Any?`, and one bound by a nullable type. `T : Any` is not.
+ */
+function nullableTypeParameter(src: string, type: string): boolean {
+  const facts = fileFacts(src);
+  if (facts.typeParameters === undefined) {
+    const out = new Map<string, boolean>();
+    for (const m of src.matchAll(TYPE_PARAMETERS)) {
+      if (facts.code[m.index ?? 0] !== 1) continue;
+      for (const p of splitTopLevel(m[1] as string)) {
+        const d = TYPE_PARAMETER.exec(p);
+        if (!d) continue;
+        const name = d[1] as string;
+        const bound = d[2]?.trim();
+        out.set(name, (out.get(name) ?? false) || bound === undefined || bound.endsWith("?"));
+      }
+    }
+    facts.typeParameters = out;
+  }
+  return facts.typeParameters.get(type) ?? false;
 }
 
 /** One value a hole can result in, and whether it stands left of `?:`, which never gives null. */
@@ -651,24 +697,68 @@ const CHAR_LITERAL = /^'(?:[^'\\]|\\.[^']*)'$/;
 /** The calls of Streamlord's DSL that a hole may hold: `signal("count")`, `post("/x")`, each returning an expression the author wrote. */
 const HOLE_HELPERS: ReadonlySet<string> = new Set([...EXPRESSION_HELPERS, ...catalog.actions.map((a) => a.kotlin).filter((k) => k !== ""), "statements", "js"]);
 
-/** Whether `t` is one call to a helper of Streamlord's DSL, in a file that uses the DSL and imports no other function of that name. */
-function helperCall(src: string, t: string): boolean {
+/**
+ * The arguments of `t` when it is one call to a helper of Streamlord's DSL, in a file that uses
+ * the DSL and imports no other function of that name; null when it is not one.
+ */
+function helperArguments(src: string, t: string): string[] | null {
   const m = /^([\p{L}_][\p{L}\p{Nd}_]*)\s*\(/u.exec(t);
-  if (!m) return false;
+  if (!m) return null;
   const facts = fileFacts(src);
   facts.helpers ??= dslHelpers(src, HOLE_HELPERS);
-  return facts.helpers.has(m[1] as string) && wholeCall(t, m[1] as string);
+  if (!facts.helpers.has(m[1] as string) || !wholeCall(t, m[1] as string)) return null;
+  const args = t.slice(m[0].length, -1);
+  return args.trim() === "" ? [] : splitTop(args, ",");
+}
+
+/** A name given to an argument, `value = `, which says nothing of the value. */
+const ARGUMENT_NAME = /^\s*[\p{L}_][\p{L}\p{Nd}_]*\s*=(?!=)/u;
+
+/**
+ * Whether a helper's argument is the author's own: a literal, a constant, a number or a boolean
+ * the file declares, or a helper call whose arguments are. `signal("x;alert(1)")` returns code, so
+ * a helper is only as much the author's own as what it is given.
+ */
+function ownArgument(src: string, arg: string, at: number, constants?: ReadonlySet<string>): boolean {
+  const a = arg.replace(ARGUMENT_NAME, "").trim();
+  if (a.startsWith("*")) return false;
+  const kind = weakest(holeValues(a).map((v) => valueKind(src, v.text, at, constants, v.nonNull)));
+  return kind === "constant" || kind === "number" || kind === "boolean";
+}
+
+/**
+ * A constant reached through what holds it: `Routes.SAVE`, a `const val` of the workspace or of
+ * this file in an object or a class, or an enum entry, `Tab.HOME`, whose text is its name. What
+ * holds it is a type, whose name starts with a capital, and not a value the file declares.
+ */
+function qualifiedConstant(src: string, t: string, at: number, constants?: ReadonlySet<string>): boolean {
+  const m = /^((?:[\p{L}_][\p{L}\p{Nd}_]*\s*\.\s*)+)([\p{L}_][\p{L}\p{Nd}_]*)$/u.exec(t);
+  if (!m) return false;
+  const holders = (m[1] as string).split(".").map((p) => p.trim()).filter((p) => p !== "");
+  const holder = holders[holders.length - 1] as string;
+  if (!/^\p{Lu}/u.test(holder) || declarationOf(src, holders[0] as string, at) !== null) return false;
+  const name = m[2] as string;
+  if (/^[A-Z][A-Z0-9_]*$/.test(name)) return true;
+  return (constants?.has(name) ?? false) || (fileFacts(src).names.get(name) ?? []).some((d) => d.constant);
 }
 
 /**
  * What the text shows of one value, a branch of an `if` or a `when` or a whole hole: a literal or
- * a constant, the author's own, a call to one of Streamlord's expression helpers, which is the
- * author's code too, or what the name's declaration says. Null where it shows nothing.
+ * a constant, the author's own; a string template, as weak as its weakest hole; a call to one of
+ * Streamlord's expression helpers, the author's code when its arguments are the author's own and
+ * a String otherwise; or what the name's declaration says. Null where it shows nothing.
  */
 export function valueKind(src: string, value: string, at: number, constants?: ReadonlySet<string>, nonNull = false): TextKind | "constant" | null {
   const t = value.trim();
   if (LITERAL.test(t) || STRING_LITERAL.test(t) || CHAR_LITERAL.test(t)) return "constant";
-  if (helperCall(src, t)) return "constant";
+  const literal = stringLiteral(t);
+  if (literal) {
+    const kinds = literal.interpolations.flatMap((ip) => (ip.kind === "simple" ? [{ text: ip.text, nonNull: false }] : holeValues(ip.text)).map((v) => valueKind(src, v.text, at, constants, v.nonNull)));
+    return weakest(kinds);
+  }
+  const args = helperArguments(src, t);
+  if (args) return args.every((a) => ownArgument(src, a, at, constants)) ? "constant" : "string";
+  if (qualifiedConstant(src, t, at, constants)) return "constant";
   if (!IDENT.test(t)) return null;
   if (constantAt(src, t, at, constants)) return "constant";
   return declaredKind(src, t, at, nonNull);
@@ -771,7 +861,7 @@ export function markupValue(src: string, value: string, at: number): boolean {
   // `if (admin) "<b>admin</b>" else ""`: every result is markup or a literal the author wrote.
   if (values.length > 1) {
     const markup = values.map((v) => markupValue(src, v.text, at));
-    return markup.some((m) => m) && values.every((v, k) => markup[k] || LITERAL.test(v.text) || STRING_LITERAL.test(v.text) || CHAR_LITERAL.test(v.text));
+    return markup.some((m) => m) && values.every((v, k) => markup[k] || LITERAL.test(v.text) || plainString(v.text) || CHAR_LITERAL.test(v.text));
   }
   const t = (values[0] as HoleValue).text;
   if (htmlLiteral(t)) return true;
@@ -855,12 +945,25 @@ export function mayHoldMarkup(src: string, value: string, at: number, constants?
  * `Html` or a `Trusted`, rather than a String it would escape.
  */
 export function markupValued(src: string, s: KotlinString, ip: Interpolation): boolean {
-  return (branches(ip.text) ?? [ip.text]).every((v) => {
+  return heldAsMarkup(src, ip.text, s.start);
+}
+
+function heldAsMarkup(src: string, value: string, at: number): boolean {
+  return (branches(value) ?? [value]).every((v) => {
     const t = v.trim();
-    if (IDENT.test(t)) return declaredKind(src, t, s.start) === "markup";
+    if (IDENT.test(t)) return declaredKind(src, t, at) === "markup";
     const call = /^(?:interpolate|Trusted)\s*\(/.exec(t);
     return call !== null && closing(t, depths(t), call[0].length - 1) === t.length;
   });
+}
+
+/**
+ * Whether a value handed to `interpolate` is markup held as a String: `h.text`, an HTML literal,
+ * `elements { }`, a `joinToString` of markup. In element text `interpolate` escapes it, so the
+ * tags are printed; an `Html` or a `Trusted` it writes as it stands.
+ */
+export function markupHeldAsString(src: string, value: string, at: number): boolean {
+  return markupValue(src, value, at) && !heldAsMarkup(src, value, at);
 }
 
 /**
@@ -983,40 +1086,102 @@ export function chainFrom(src: string, first: KotlinString, mask: Uint8Array): K
   };
 }
 
-const INTERPOLATE_IMPORT = "io.github.markusaugust.streamlord.core.domain.interpolate";
+const DOMAIN = "io.github.markusaugust.streamlord.core.domain";
+
+/** The title of the rewrite to `interpolate` where the hole is a value it escapes. */
+export const ESCAPES_TITLE = "Build it with interpolate(...), which escapes the values";
+/** Its title where the hole starts a URL, which escaping does not help but interpolate refuses when it would run. */
+export const REFUSES_URL_TITLE = "Build it with interpolate(...), which refuses a URL that runs";
 
 /**
  * The literal rewritten as a call to `interpolate`: each template becomes `%s` and its value an
- * argument, each `%` of the markup `%%`. With the import, when the file has none.
+ * argument, and each `%` the literal writes, as itself or as an escape, is written twice, so
+ * `interpolate` prints it once. Made the first time it is read, and once for all the holes of the
+ * literal that offer it.
  */
-export function interpolateFix(src: string, s: KotlinString): Fix {
+export function interpolateText(src: string, s: KotlinString): () => string {
+  let made: string | undefined;
+  return () => (made ??= rewriteToInterpolate(src, s));
+}
+
+function rewriteToInterpolate(src: string, s: KotlinString): string {
+  // Where the literal writes a per cent sign, and how many characters of source spell it.
+  const percents = new Map<number, number>();
+  for (let i = 0; i < s.text.length; i++) if (s.text[i] === "%") percents.set(s.map[i] as number, (s.map[i + 1] as number) - (s.map[i] as number));
+  const copy = (from: number, to: number) => {
+    let out = "";
+    for (let k = from; k < to; ) {
+      const n = percents.get(k) ?? 0;
+      if (n > 0) {
+        out += src.slice(k, k + n).repeat(2);
+        k += n;
+      } else out += src[k++];
+    }
+    return out;
+  };
   let format = "";
   let at = s.start;
   for (const ip of s.interpolations) {
-    format += src.slice(at, ip.start).replace(/%/g, "%%");
-    format += "%s";
+    format += copy(at, ip.start) + "%s";
     at = ip.end;
   }
-  format += src.slice(at, s.end).replace(/%/g, "%%");
+  format += copy(at, s.end);
   const args = s.interpolations.map((ip) => (ip.kind === "simple" ? ip.text : ip.text.trim()));
   // `.text`, the String the literal was: interpolate returns Html, and a fix that changed the type
   // would break whatever took the String.
-  const fix: Fix = { title: "Build it with interpolate(...), which escapes the values", start: s.start, end: s.end, text: `interpolate(${[format, ...args].join(", ")}).text` };
-  const facts = fileFacts(src);
-  if (facts.importEdits === undefined) facts.importEdits = importEdits(src);
-  if (facts.importEdits) fix.edits = facts.importEdits.map((e) => ({ ...e }));
-  return fix;
+  return `interpolate(${[format, ...args].join(", ")}).text`;
 }
 
-const INTERPOLATE_IMPORTED = new RegExp(`^\\s*import\\s+(?:${INTERPOLATE_IMPORT.replace(/\./g, "\\.")}|io\\.github\\.markusaugust\\.streamlord\\.core\\.domain\\.\\*)\\s*$`, "m");
+/** The rewrite of the literal to `interpolate`, whose text `text` makes, with the import when the file has none. */
+export function interpolateFix(src: string, s: KotlinString, text: () => string, title: string, preferred: boolean): Fix {
+  const edits = importEdits(src, "interpolate");
+  return laterFix({ title, start: s.start, end: s.end, ...(edits ? { edits: edits.map((e) => ({ ...e })) } : {}), ...(preferred ? {} : { preferred: false }) }, text);
+}
 
-/** The edit that imports `interpolate`, after the last import or the package, or null when the file has the import. */
-function importEdits(src: string): Fix["edits"] | null {
-  if (INTERPOLATE_IMPORTED.test(src)) return null;
-  const imports = [...src.matchAll(/^import\s+[^\n]*$/gm)].pop();
-  const pkg = /^package\s+[^\n]*$/m.exec(src);
-  const anchor = imports ? (imports.index ?? 0) + imports[0].length : pkg ? pkg.index + pkg[0].length : -1;
-  return anchor < 0 ? [{ start: 0, end: 0, text: `import ${INTERPOLATE_IMPORT}\n\n` }] : [{ start: anchor, end: anchor, text: `\n${imports ? "" : "\n"}import ${INTERPOLATE_IMPORT}` }];
+/**
+ * The hole made a `Trusted` value, `${Trusted(body)}`: markup the author vouches for, which the
+ * analysis then reads as the author's own. With the import, when the file has none. Never
+ * preferred: whether the value is markup only the author knows.
+ */
+export function trustedFix(src: string, s: KotlinString, ip: Interpolation, shown: string): Fix {
+  const expr = ip.kind === "simple" ? ip.text : ip.text.trim();
+  // A value joined with `+` is wrapped where it stands; a template keeps the dollars its literal opens one with.
+  const text = ip.kind === "operand" ? `Trusted(${expr})` : `${"$".repeat(s.dollars)}{Trusted(${expr})}`;
+  const edits = importEdits(src, "Trusted");
+  return { title: `Mark ${shown} as markup`, start: ip.start, end: ip.end, text, ...(edits ? { edits: edits.map((e) => ({ ...e })) } : {}), preferred: false };
+}
+
+/** The calls that make a List, and those whose result is one, whatever they are called on; not those a String has too. */
+const LIST_MAKERS: ReadonlySet<string> = new Set(["listOf", "mutableListOf", "arrayListOf", "emptyList", "buildList", "listOfNotNull", "List", "MutableList", "ArrayList"]);
+const LIST_RESULTS: ReadonlySet<string> = new Set(["toList", "toMutableList", "map", "mapNotNull", "mapIndexed", "flatMap", "filterNotNull", "sorted", "sortedBy", "sortedDescending", "sortedWith", "distinct", "chunked", "windowed", "zip"]);
+/** A declared List, as a declaration reads its type: the name, without what the brackets after it hold. */
+const LIST_TYPE = /^(?:kotlin\.collections\.)?(?:List|MutableList|ArrayList)\??$/;
+
+/** Whether a value handed to `interpolate` is visibly a List: made by a call that makes one, or a name declared one. */
+export function visiblyList(src: string, value: string, at: number): boolean {
+  const t = value.trim();
+  if (IDENT.test(t)) return LIST_TYPE.test(declarationOf(src, t, at)?.type ?? "");
+  const call = lastCall(t);
+  if (call === null) return false;
+  return call.receiver === null ? LIST_MAKERS.has(call.name) : LIST_RESULTS.has(call.name);
+}
+
+/** The edit that imports `name` of core's domain, after the last import or the package, or null when the file has the import. */
+function importEdits(src: string, name: string): Fix["edits"] | null {
+  const facts = fileFacts(src);
+  facts.importEdits ??= new Map();
+  if (facts.importEdits.has(name)) return facts.importEdits.get(name) ?? null;
+  const fq = `${DOMAIN}.${name}`;
+  const imported = new RegExp(`^\\s*import\\s+(?:${fq.replace(/\./g, "\\.")}|${DOMAIN.replace(/\./g, "\\.")}\\.\\*)\\s*$`, "m");
+  let edits: Fix["edits"] | null = null;
+  if (!imported.test(src)) {
+    const imports = [...src.matchAll(/^import\s+[^\n]*$/gm)].pop();
+    const pkg = /^package\s+[^\n]*$/m.exec(src);
+    const anchor = imports ? (imports.index ?? 0) + imports[0].length : pkg ? pkg.index + pkg[0].length : -1;
+    edits = anchor < 0 ? [{ start: 0, end: 0, text: `import ${fq}\n\n` }] : [{ start: anchor, end: anchor, text: `\n${imports ? "" : "\n"}import ${fq}` }];
+  }
+  facts.importEdits.set(name, edits);
+  return edits;
 }
 
 /** Where each `%s` of `interpolate`'s format starts in `text`, as core counts them: `%%` is one per cent sign and never a hole. */
@@ -1057,8 +1222,20 @@ export function withPercentHoles(s: KotlinString, holes: readonly number[]): { f
     i++;
   }
   map.push(s.map[s.text.length] as number);
-  const shift = (d: number) => d + (PLACEHOLDER.length - 2) * holes.filter((h) => h < d).length;
+  const shift = (d: number) => d + (PLACEHOLDER.length - 2) * countBelow(holes, d);
   return { format: { ...s, text, map, interpolations: s.interpolations.map((ip) => ({ ...ip, decodedStart: shift(ip.decodedStart) })) }, at };
+}
+
+/** How many of the ascending `sorted` are below `d`. */
+export function countBelow(sorted: readonly number[], d: number): number {
+  let lo = 0;
+  let hi = sorted.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if ((sorted[mid] as number) < d) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
 }
 
 /** What a value handed to `interpolate` is, as far as the text shows: what core's `admits` decides by. */
@@ -1096,6 +1273,8 @@ export function argKind(src: string, text: string, literal: boolean, at: number)
   const html = /^([\s\S]*?)\s*\.\s*text$/.exec(t)?.[1];
   if (html !== undefined && wholeCall(html, "interpolate")) return "string";
   const declared = IDENT.test(t) ? declaredKind(src, t, at) : null;
+  // `val name = "Gorvek"`: a String, though no type is written.
+  if (declared === null && IDENT.test(t) && declarationOf(src, t, at)?.string) return "string";
   // An Int? may be null, which interpolate admits only where anything is: not known here.
   return declared === "nullable" ? null : declared;
 }

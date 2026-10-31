@@ -3,21 +3,73 @@ package io.github.markusaugust.streamlord.analysis
 /** How serious an [Issue] is; editors map these to their own diagnostic levels. */
 public enum class Severity { ERROR, WARNING, INFO, HINT }
 
-/** A quick fix: replace `[start, end)` with [text]. Offsets are in the same space as the issue's. */
-public data class Fix(
-    val title: String,
-    val start: Int,
-    val end: Int,
-    val text: String,
+/**
+ * A quick fix: replace `[start, end)` with [text]. Offsets are in the same space as the issue's.
+ *
+ * The text of a fix that rewrites a whole literal is made only when it is asked for, so a literal
+ * with thousands of holes does not build a rewrite for each.
+ */
+public class Fix private constructor(
+    public val title: String,
+    public val start: Int,
+    public val end: Int,
+    private val made: Lazy<String>,
     /** Further replacements the fix makes elsewhere in the file, such as an import; never overlapping the main one. */
-    val edits: List<Edit> = emptyList(),
+    public val edits: List<Edit>,
+    /**
+     * Whether an editor may offer the fix as the one to apply, when it comes first: false where the
+     * choice between the fixes is the author's, so none of them is preferred.
+     */
+    public val preferred: Boolean,
 ) {
+    public constructor(
+        title: String,
+        start: Int,
+        end: Int,
+        text: String,
+        edits: List<Edit> = emptyList(),
+        preferred: Boolean = true,
+    ) : this(title, start, end, lazyOf(text), edits, preferred)
+
+    /** What `[start, end)` becomes. */
+    public val text: String get() = made.value
+
     /** Every replacement the fix makes, the last in the file first, so that making them in turn moves no offset. */
     public val replacements: List<Edit> get() = (listOf(Edit(start, end, text)) + edits).sortedByDescending { it.start }
 
     /** The fix applied to [source]: its replacement and every further edit. */
     public fun apply(source: String): String =
         replacements.fold(source) { out, e -> out.substring(0, e.start) + e.text + out.substring(e.end) }
+
+    /** The fix with some of its parts changed; the text is made only if it is changed or asked for. */
+    public fun copy(
+        title: String = this.title,
+        start: Int = this.start,
+        end: Int = this.end,
+        text: String? = null,
+        edits: List<Edit> = this.edits,
+        preferred: Boolean = this.preferred,
+    ): Fix = Fix(title, start, end, if (text != null) lazyOf(text) else made, edits, preferred)
+
+    override fun equals(other: Any?): Boolean =
+        other is Fix && title == other.title && start == other.start && end == other.end && text == other.text &&
+            edits == other.edits && preferred == other.preferred
+
+    override fun hashCode(): Int = listOf(title, start, end, text, edits, preferred).hashCode()
+
+    override fun toString(): String = "Fix(title=$title, start=$start, end=$end, text=$text, edits=$edits, preferred=$preferred)"
+
+    internal companion object {
+        /** A fix whose text is made the first time it is read. */
+        fun later(
+            title: String,
+            start: Int,
+            end: Int,
+            edits: List<Edit> = emptyList(),
+            preferred: Boolean = true,
+            text: () -> String,
+        ): Fix = Fix(title, start, end, lazy(LazyThreadSafetyMode.PUBLICATION, text), edits, preferred)
+    }
 }
 
 /** One replacement of a [Fix]: `[start, end)` becomes [text]. */
