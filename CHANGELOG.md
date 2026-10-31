@@ -125,6 +125,14 @@ All notable changes to Streamlord are recorded here. The format follows
   browser runs. A name now always takes its first character, `=` or not, and a hole there is
   structure. A smaller misreading went with it: a `/` that ends an unquoted value, as in
   `<svg x=a/>`, is part of the value and does not close the element. This was in 0.15.0.
+- `interpolate`, `ElementsGuard` and the editors ended a `<script>` at its first `</script>`, but
+  the browser's tokenizer does not always: after a `<!--` in the body, a `<script` start makes it
+  double-escaped, where `</script>` only returns it to escaped, until a `-->` or a second
+  `</script>`. So in `interpolate("<script><!--<script></script>%s", value)` the hole was judged
+  text and let in, and the value came out inside the script, which the browser runs. A script body
+  now ends where the tokenizer's script data states end it, escaped and double-escaped included,
+  so that hole is code and refused, and an `Html` that leaves a script open this way is escaped.
+  This was in 0.15.0.
 - `interpolate` read the markup three fixed ways, all HTML, all `<svg>`/`<math>`, and all svg or
   math with CDATA sections as text, and took the strictest, but the browser switches reading as its
   element stack changes and no one fixed way follows it. In

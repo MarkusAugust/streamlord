@@ -28,21 +28,106 @@ public const val HTML_SPACE: String = "\t\n\u000C\r "
 @InternalStreamlordApi
 public fun Char.isHtmlSpace(): Boolean = this in HTML_SPACE
 
-/** Where `</[name]` begins after [from] as a whole name, `</titlex>` not ending a `title`; -1 when nowhere. */
+/**
+ * Where `</[name]` begins after [from] as a whole name, `</titlex>` not ending a `title`; -1 when
+ * nowhere. A `script` ends where the tokenizer's script data states say, which is not always at
+ * the first `</script>`; see [scriptEnd].
+ */
 @InternalStreamlordApi
 public fun rawTextEnd(
     html: String,
     name: String,
     from: Int,
 ): Int {
+    if (name == "script") return scriptEnd(html, from)
     var at = from
     while (true) {
         val close = html.indexOfAsciiIgnoreCase("</$name", at)
         if (close < 0) return -1
-        val next = html.getOrNull(close + 2 + name.length)
-        if (next == null || next == '/' || next == '>' || next.isHtmlSpace()) return close
+        if (endsTagName(html.getOrNull(close + 2 + name.length))) return close
         at = close + 1
     }
+}
+
+private fun endsTagName(c: Char?): Boolean = c == null || c == '/' || c == '>' || c.isHtmlSpace()
+
+private fun Char?.isAsciiAlpha(): Boolean = this != null && (this in 'a'..'z' || this in 'A'..'Z')
+
+private const val SCRIPT_DATA = 0
+private const val SCRIPT_ESCAPED = 1
+private const val SCRIPT_DOUBLE_ESCAPED = 2
+
+/**
+ * Where the body of a `<script>` that starts at [from] ends, by the HTML tokenizer's script data
+ * states. After a `<!--` the body is escaped, and a `<script` there makes it double-escaped, where
+ * a `</script>` only returns it to escaped; `-->` returns either to script data. So in
+ * `<script><!--<script></script>x`, the `x` is still script. `dashes` stands for the dash and dash
+ * dash states, and the temporary buffer is the run of letters after `<` or `</`.
+ */
+private fun scriptEnd(
+    html: String,
+    from: Int,
+): Int {
+    var state = SCRIPT_DATA
+    var dashes = 0
+    var i = from
+    val n = html.length
+    while (i < n) {
+        val c = html[i]
+        when {
+            c == '-' && state != SCRIPT_DATA -> {
+                dashes = minOf(dashes + 1, 2)
+                i++
+            }
+
+            c == '>' -> {
+                if (dashes == 2) state = SCRIPT_DATA
+                dashes = 0
+                i++
+            }
+
+            c != '<' -> {
+                dashes = 0
+                i++
+            }
+
+            state != SCRIPT_DOUBLE_ESCAPED && html.regionMatchesAsciiIgnoreCase(i, "</script") && endsTagName(html.getOrNull(i + 8)) -> {
+                return i
+            }
+
+            state == SCRIPT_DATA -> {
+                if (html.startsWith("<!--", i)) {
+                    state = SCRIPT_ESCAPED
+                    dashes = 2
+                    i += 4
+                } else {
+                    i++
+                }
+            }
+
+            else -> {
+                dashes = 0
+                // `<script` opens the double escape from escaped, `</script` closes it from double-escaped.
+                val slash = state == SCRIPT_DOUBLE_ESCAPED
+                if (slash && html.getOrNull(i + 1) != '/') {
+                    i++
+                    continue
+                }
+                val start = i + if (slash) 2 else 1
+                var j = start
+                while (html.getOrNull(j).isAsciiAlpha()) j++
+                // The letters are the temporary buffer; only a space, `/` or `>` after them decides.
+                val decided = j < n && endsTagName(html[j])
+                if (decided && j - start == 6 && html.regionMatchesAsciiIgnoreCase(start, "script")) {
+                    state = if (slash) SCRIPT_ESCAPED else SCRIPT_DOUBLE_ESCAPED
+                    i = j + 1
+                } else {
+                    i = maxOf(j, i + 1)
+                }
+            }
+        }
+    }
+    return -1
 }
 
 /**

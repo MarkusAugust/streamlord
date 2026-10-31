@@ -424,6 +424,106 @@
    ]
   },
   {
+   "name": "a script started inside an escaped script body hides the first close",
+   "markup": "<script><!--<script></script>%s",
+   "landings": [
+    {
+     "position": "CODE",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "an uppercase script start double-escapes too",
+   "markup": "<script><!--<SCRIPT></script>%s",
+   "landings": [
+    {
+     "position": "CODE",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "a double-escaped close returns to escaped, which the next close ends",
+   "markup": "<script><!--<script></script></script>%s",
+   "landings": [
+    {
+     "position": "TEXT",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "a double-escaped script ends at the arrow, then at its close",
+   "markup": "<script><!--<script></script>--></script>%s",
+   "landings": [
+    {
+     "position": "TEXT",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "an arrow inside the double-escaped part ends the escape",
+   "markup": "<script><!-- <script --></script>%s",
+   "landings": [
+    {
+     "position": "TEXT",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "an escaped script body without a script start ends at its close",
+   "markup": "<script><!--</script>%s",
+   "landings": [
+    {
+     "position": "TEXT",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "a longer name opens no double escape",
+   "markup": "<script><!--<scripts></script>%s",
+   "landings": [
+    {
+     "position": "TEXT",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "a broken comment start escapes nothing",
+   "markup": "<script><!-<script></script>%s",
+   "landings": [
+    {
+     "position": "TEXT",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "a hole inside the double-escaped part is code",
+   "markup": "<script><!--<script>%s</script>x</script>",
+   "landings": [
+    {
+     "position": "CODE",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "double escape at an svg integration point",
+   "markup": "<svg><foreignObject><script><!--<script></script>%s",
+   "landings": [
+    {
+     "position": "CODE",
+     "attribute": null
+    }
+   ]
+  },
+  {
    "name": "an = that starts an attribute name is part of the name",
    "markup": "<img src=x ='%s'>",
    "landings": [

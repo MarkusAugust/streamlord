@@ -110,6 +110,17 @@ class InterpolationTest {
     }
 
     @Test
+    fun `a script double-escaped by a comment and a script start runs past its first close`() {
+        // In `<!--<script>` the tokenizer is double-escaped, where `</script>` does not end the element.
+        val failure = assertFailsWith<UnsafeInterpolationException> { render("<script><!--<script></script>%s", "x") }
+        assertEquals(Position.CODE, failure.position)
+        assertFailsWith<UnsafeInterpolationException> { render("<script><!--<SCRIPT ></script>%s</script>", "x") }
+        // `-->` leaves the escape, and a close in escaped ends the element.
+        assertEquals("<script><!--<script>--></script>x", render("<script><!--<script>--></script>%s", "x"))
+        assertEquals("<script><!--<script></script></script>x", render("<script><!--<script></script></script>%s", "x"))
+    }
+
+    @Test
     fun `a title or a textarea is text, not code`() {
         assertEquals("<title>&lt;b&gt;</title>", render("<title>%s</title>", "<b>"))
         assertEquals("<textarea>&lt;b&gt;</textarea>", render("<textarea>%s</textarea>", "<b>"))
@@ -330,6 +341,9 @@ class InterpolationTest {
         val out = render("%s%s</script>", interpolate("<script>"), "alert(document.cookie)")
 
         assertEquals("&lt;script&gt;alert(document.cookie)</script>", out)
+        // A double-escaped body is still open after its first close.
+        val escaped = render("%s%s", interpolate("<script><!--<script></script>"), "x")
+        assertEquals("&lt;script&gt;&lt;!--&lt;script&gt;&lt;/script&gt;x", escaped)
     }
 
     @Test

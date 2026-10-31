@@ -618,8 +618,9 @@ public fun tokenize(html: String): Tokens {
             }
             val end = minOf(j + 1, html.length)
             // As the browser reads it: a `/>` closes no raw-text element, plaintext runs to the end,
-            // and only `</name` as a whole name ends the others (rawTextEnd, which core's scanner
-            // shares; it reads svg and math by walking the markup each way instead).
+            // only `</name` as a whole name ends the others, and a script ends by the script data
+            // states (rawTextEnd, which core's scanner shares; it reads svg and math by walking the
+            // markup each way instead).
             if (closing) content.end(name)
             val foreign = !closing && content.start(name, selfClosing, attributes)
             val rawText = !closing && name in RAW_TEXT && !foreign

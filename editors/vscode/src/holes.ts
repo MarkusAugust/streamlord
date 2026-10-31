@@ -5,7 +5,7 @@
  * HoleLandingsTest also holds to `interpolate` itself.
  */
 import { catalog } from "./catalog.ts";
-import { asciiLowercase, decodeEntities } from "./markup.ts";
+import { asciiLowercase, decodeEntities, rawTextEnd } from "./markup.ts";
 
 export type Position = "TEXT" | "ATTRIBUTE" | "URL" | "DATASTAR" | "STYLE" | "STRUCTURE" | "CODE";
 
@@ -69,17 +69,6 @@ const endsName = (c: string | undefined) => c === undefined || isSpace(c) || c =
 
 function startsWithAsciiIgnoreCase(html: string, at: number, needle: string): boolean {
   return asciiLowercase(html.slice(at, at + needle.length)) === needle;
-}
-
-function rawTextEnd(html: string, name: string, from: number): number {
-  const lower = asciiLowercase(html);
-  for (let at = from; ; ) {
-    const close = lower.indexOf(`</${name}`, at);
-    if (close < 0) return -1;
-    const next = html[close + 2 + name.length];
-    if (next === undefined || next === "/" || next === ">" || isSpace(next)) return close;
-    at = close + 1;
-  }
 }
 
 function commentEnd(html: string, lt: number): number {

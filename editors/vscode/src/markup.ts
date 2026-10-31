@@ -81,15 +81,82 @@ const NAMED_ENTITIES: Record<string, string> = {
   lcub: "{", lbrace: "{", verbar: "|", vert: "|", VerticalLine: "|", rcub: "}", rbrace: "}",
 };
 
-/** Where `</name` begins after `from` as a whole name, `</titlex>` not ending a `title`; -1 when nowhere. */
-function rawTextEnd(html: string, name: string, from: number): number {
+/**
+ * Where `</name` begins after `from` as a whole name, `</titlex>` not ending a `title`; -1 when
+ * nowhere. A `script` ends where the tokenizer's script data states say: rawTextEnd in core
+ * ClientHtml.kt, which holes.ts shares as MarkupScan.kt does.
+ */
+export function rawTextEnd(html: string, name: string, from: number): number {
+  if (name === "script") return scriptEnd(html, from);
   for (let at = from; ; ) {
     const close = indexOfAsciiIgnoreCase(html, `</${name}`, at);
     if (close < 0) return -1;
-    const next = html[close + 2 + name.length];
-    if (next === undefined || next === "/" || next === ">" || "\t\n\f\r ".includes(next)) return close;
+    if (endsTagName(html[close + 2 + name.length])) return close;
     at = close + 1;
   }
+}
+
+const endsTagName = (c: string | undefined) => c === undefined || c === "/" || c === ">" || "\t\n\f\r ".includes(c);
+const isAsciiAlpha = (c: string | undefined) => c !== undefined && /[A-Za-z]/.test(c);
+
+const SCRIPT_DATA = 0;
+const SCRIPT_ESCAPED = 1;
+const SCRIPT_DOUBLE_ESCAPED = 2;
+
+/**
+ * Where the body of a `<script>` that starts at `from` ends, by the script data states: scriptEnd
+ * in ClientHtml.kt. After a `<!--` the body is escaped, and a `<script` there makes it
+ * double-escaped, where a `</script>` only returns it to escaped; `-->` returns either to script data.
+ */
+function scriptEnd(html: string, from: number): number {
+  let state = SCRIPT_DATA;
+  let dashes = 0;
+  let i = from;
+  const n = html.length;
+  while (i < n) {
+    const c = html[i];
+    if (c === "-" && state !== SCRIPT_DATA) {
+      dashes = Math.min(dashes + 1, 2);
+      i++;
+    } else if (c === ">") {
+      if (dashes === 2) state = SCRIPT_DATA;
+      dashes = 0;
+      i++;
+    } else if (c !== "<") {
+      dashes = 0;
+      i++;
+    } else if (state !== SCRIPT_DOUBLE_ESCAPED && asciiLowercase(html.slice(i, i + 8)) === "</script" && endsTagName(html[i + 8])) {
+      return i;
+    } else if (state === SCRIPT_DATA) {
+      if (html.startsWith("<!--", i)) {
+        state = SCRIPT_ESCAPED;
+        dashes = 2;
+        i += 4;
+      } else {
+        i++;
+      }
+    } else {
+      dashes = 0;
+      // `<script` opens the double escape from escaped, `</script` closes it from double-escaped.
+      const slash = state === SCRIPT_DOUBLE_ESCAPED;
+      if (slash && html[i + 1] !== "/") {
+        i++;
+        continue;
+      }
+      const start = i + (slash ? 2 : 1);
+      let j = start;
+      while (isAsciiAlpha(html[j])) j++;
+      // The letters are the temporary buffer; only a space, `/` or `>` after them decides.
+      const decided = j < n && endsTagName(html[j]);
+      if (decided && j - start === 6 && asciiLowercase(html.slice(start, j)) === "script") {
+        state = slash ? SCRIPT_ESCAPED : SCRIPT_DOUBLE_ESCAPED;
+        i = j + 1;
+      } else {
+        i = Math.max(j, i + 1);
+      }
+    }
+  }
+  return -1;
 }
 
 /** The character a numeric reference names, as the browser reads it: NUL, a surrogate and past U+10FFFF are U+FFFD. */
@@ -492,7 +559,8 @@ export function tokenize(html: string): { tags: Tag[]; topLevelText: { start: nu
       }
       const end = Math.min(j + 1, html.length);
       // As the browser reads it, and MarkupScan in core: a `/>` closes no raw-text element,
-      // plaintext runs to the end, and only `</name` as a whole name ends the others.
+      // plaintext runs to the end, only `</name` as a whole name ends the others, and a script
+      // ends by the script data states.
       if (closing) content.end(name);
       const foreign = !closing && content.start(name, selfClosing, attributes);
       const rawText = !closing && RAW_TEXT.has(name) && !foreign;
