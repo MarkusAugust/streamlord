@@ -116,6 +116,19 @@ class InterpolationReadingsTest {
         assertEquals("<svg><math><mi>x</mi></math></svg>", interpolate("<svg><math><mi>%s</mi></math></svg>", "x").text)
     }
 
+    // Escaping takes a value's `<` and `>`, not its dashes, `!` or `[`, which can still finish the
+    // markup's own `<!` into a comment or end a comment where the markup writes a `>`.
+    @Test
+    fun `a value cannot open or end a comment the markup around it begins`() {
+        assertEquals(Position.STRUCTURE, refused("""<!%s><a title="--><script>%s</script>">""", "-- x", code).position)
+        assertEquals(Position.STRUCTURE, refused("""<!-%s><a title="--><script>%s</script>">""", "- x", code).position)
+        assertEquals(Position.STRUCTURE, refused("""<!--%s><img src=x onerror=%s>-->""", "--", code).position)
+        assertEquals(Position.STRUCTURE, refused("""<!--x-%s><img src=x onerror=%s>-->""", "-", code).position)
+        assertEquals(Position.STRUCTURE, refused("""<svg><![CDATA[%s]><img src=x onerror=%s>]]></svg>""", "]", code).position)
+        assertEquals("<!-- a - b -->", interpolate("<!-- %s -->", "a - b").text)
+        assertEquals("<!--x-->", interpolate("<!--%s-->", "x").text)
+    }
+
     // A Trusted value is markup, so the values beside it are judged where its text puts them.
     @Test
     fun `a Trusted value is read as the markup it writes`() {

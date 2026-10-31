@@ -51,6 +51,12 @@ internal interface MarkupVisitor {
         start: Int,
         end: Int,
     ) = Unit
+
+    /** An [opaque] span that begins at its own `<`: a comment, a CDATA section or a bogus comment. */
+    fun declaration(
+        start: Int,
+        end: Int,
+    ) = opaque(start, end)
 }
 
 /** The characters that end a tag name, and so an end tag's name as well. */
@@ -106,14 +112,14 @@ internal fun scanMarkup(
         if (lt < 0) break
         if (html.startsWith("<!--", lt)) {
             val close = commentClose(html, lt)
-            visitor.opaque(lt, if (close < 0) n else close)
+            visitor.declaration(lt, if (close < 0) n else close)
             if (close < 0) return false
             i = close
             continue
         }
         if (cdata && html.startsWith("<![CDATA[", lt)) {
             val close = html.indexOf("]]>", lt + 9)
-            visitor.opaque(lt, if (close < 0) n else close + 3)
+            visitor.declaration(lt, if (close < 0) n else close + 3)
             if (close < 0) return false
             i = close + 3
             continue
@@ -124,7 +130,7 @@ internal fun scanMarkup(
         // the first >; a quote inside one opens nothing.
         if (first == '!' || first == '?' || (first == '/' && !html.getOrNull(lt + 2).isAsciiLetter() && html.getOrNull(lt + 2) != '>')) {
             val close = html.indexOf('>', lt + 2)
-            visitor.opaque(lt, if (close < 0) n else close + 1)
+            visitor.declaration(lt, if (close < 0) n else close + 1)
             if (close < 0) return false
             i = close + 1
             continue
@@ -348,7 +354,7 @@ private fun scanMarkupTracked(
             val foreignNow = insertionNs() != NS_HTML
             if (html.startsWith("<!--", lt)) {
                 val close = commentClose(html, lt)
-                visitor.opaque(lt, if (close < 0) n else close)
+                visitor.declaration(lt, if (close < 0) n else close)
                 skipCode(lt, if (close < 0) n else close)
                 if (close < 0) return false
                 i = close
@@ -356,7 +362,7 @@ private fun scanMarkupTracked(
             }
             if (foreignNow && html.startsWith("<![CDATA[", lt)) {
                 val close = html.indexOf("]]>", lt + 9)
-                visitor.opaque(lt, if (close < 0) n else close + 3)
+                visitor.declaration(lt, if (close < 0) n else close + 3)
                 if (close < 0) return false
                 i = close + 3
                 continue
@@ -366,7 +372,7 @@ private fun scanMarkupTracked(
                 (first == '/' && !html.getOrNull(lt + 2).isAsciiLetter() && html.getOrNull(lt + 2) != '>')
             ) {
                 val close = html.indexOf('>', lt + 2)
-                visitor.opaque(lt, if (close < 0) n else close + 1)
+                visitor.declaration(lt, if (close < 0) n else close + 1)
                 skipCode(lt, if (close < 0) n else close + 1)
                 if (close < 0) return false
                 i = close + 1

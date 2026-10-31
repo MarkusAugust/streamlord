@@ -611,7 +611,8 @@ private fun landscapes(
             listOf(NS_SVG, NS_MATH).flatMap { context ->
                 scripting.map { Reading(tracked = true, scripting = it, context = context, htmlStaysOpen = false) }
             }
-    return readings.map { reading -> Landscape(ordered, reading).also { reading.scan(shadow, it) } }
+    val holeEnds = holes.associate { it.first to it.last + 1 }
+    return readings.map { reading -> Landscape(ordered, reading, shadow, holeEnds).also { reading.scan(shadow, it) } }
 }
 
 /** Whether a `noscript` may stand in [html], which only then reads differently with scripting on. */
@@ -675,6 +676,9 @@ private fun holes(format: String): List<Int> {
 private val URL_ATTRIBUTES =
     setOf("href", "src", "action", "formaction", "xlink:href", "poster", "data", "cite", "background", "ping", "manifest")
 
+/** What the markup after a hole in a comment may begin with for dashes or a `!` in the value to end the comment there. */
+private val COMMENT_CLOSERS = listOf(">", "!>", "->", "-!>")
+
 /** SVG's animation elements, whose `values`, `to` and `from` can set an `href`. */
 private val ANIMATION_TAGS = setOf("animate", "set", "animatetransform", "animatemotion")
 private val ANIMATION_URL_ATTRIBUTES = setOf("values", "to", "from")
@@ -736,7 +740,12 @@ private fun written(
 private class Landscape(
     private val prefixes: List<String>,
     private val reading: Reading,
+    // The shadowed markup this landscape reads, and where each hole in it ends, by where it starts.
+    private val markup: String,
+    private val holeEnds: Map<Int, Int>,
 ) : MarkupVisitor {
+    private val declarationStarts = ArrayList<Int>()
+    private val declarationEnds = ArrayList<Int>()
     private val attributeNames = ArrayList<String>()
     private val attributeTags = ArrayList<String>()
     private val attributeStarts = ArrayList<Int>()
@@ -788,6 +797,35 @@ private class Landscape(
         opaqueEnds += end
     }
 
+    override fun declaration(
+        start: Int,
+        end: Int,
+    ) {
+        declarationStarts += start
+        declarationEnds += end
+        opaque(start, end)
+    }
+
+    /**
+     * Whether a value at [hole] in the declaration that begins at [start] could end it or change
+     * what it is, though escaping takes its `<` and `>`: `--` or `[CDATA[` after `<!` turns a bogus
+     * comment into a comment or a section, and dashes, a `!` or a `]` before the `>` the markup
+     * writes after the hole close a comment or a section early.
+     */
+    private fun reshapes(
+        start: Int,
+        hole: Int,
+    ): Boolean {
+        val end = holeEnds[hole] ?: return false
+        val after = markup.substring(end, minOf(markup.length, end + 3))
+        if (markup.startsWith("<!--", start)) return COMMENT_CLOSERS.any { after.startsWith(it) }
+        if (!markup.startsWith("<!", start)) return false
+        val between = markup.substring(start + 2, hole)
+        return (between.length < 2 && "--".startsWith(between)) ||
+            (between.length < 7 && "[CDATA[".startsWith(between)) ||
+            (markup.startsWith("<![CDATA[", start) && (after.startsWith(">") || after.startsWith("]>")))
+    }
+
     fun positionOf(hole: Int): Position {
         val attribute = indexOfSpan(hole, attributeStarts, attributeEnds)
         if (attribute >= 0) {
@@ -802,6 +840,8 @@ private class Landscape(
         }
         if (indexOfSpan(hole, tagStarts, tagEnds) >= 0) return Position.STRUCTURE
         if (indexOfSpan(hole, codeStarts, codeEnds) >= 0) return Position.CODE
+        val declaration = indexOfSpan(hole, declarationStarts, declarationEnds)
+        if (declaration >= 0 && reshapes(declarationStarts[declaration], hole)) return Position.STRUCTURE
         return Position.TEXT
     }
 

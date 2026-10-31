@@ -874,6 +874,46 @@
    ]
   },
   {
+   "name": "a value after <! can make it a comment",
+   "markup": "<!%s><b>x</b>",
+   "landings": [
+    {
+     "position": "STRUCTURE",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "a value before the markup's > can end a comment",
+   "markup": "<!--%s><b>x</b>-->",
+   "landings": [
+    {
+     "position": "STRUCTURE",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "a value inside a comment the markup ends",
+   "markup": "<!-- %s -->",
+   "landings": [
+    {
+     "position": "TEXT",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "a value before the markup's ]> can end a CDATA section",
+   "markup": "<svg><![CDATA[%s]>]]></svg>",
+   "landings": [
+    {
+     "position": "STRUCTURE",
+     "attribute": null
+    }
+   ]
+  },
+  {
    "name": "known text is the attribute name",
    "markup": "<button %s=\"%s\">",
    "known": {

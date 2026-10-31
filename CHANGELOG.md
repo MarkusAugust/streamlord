@@ -279,6 +279,13 @@ All notable changes to Streamlord are recorded here. The format follows
   whose content is HTML, so the textarea ends and the value lands in a live handler, where the
   readings saw an svg `mi` and a quoted attribute. Inside an svg or a math, an `<svg>` or `<math>`
   now stays in the namespace around it. These readings are new in this release.
+- `interpolate` and the editors took a value inside a comment or a bogus comment for text, but
+  escaping takes only its `<` and `>`, and its dashes can still change the comment around it: in
+  `interpolate("<!%s><a title=\"--><script>%s</script>\">", "-- x", v)` the value made `<!` a
+  comment that ran to the `-->` in the title, and the script after it was live. A hole right after
+  `<!` or `<!-`, where a value can finish a comment or a `<![CDATA[`, and one in a comment or a
+  CDATA section whose markup goes on with `>`, `!>`, `->`, `-!>` or `]>`, which a value's dashes,
+  `!` or `]` would make an early end, is refused as structure. This was in 0.15.0.
 - A `Trusted` value was written as it stands but never read back into the markup, so one in a tag
   or attribute name, or anywhere else that changes how the markup is read, waived the checks on
   the values beside it: `interpolate("<button %s=\"%s\">", Trusted("onclick"), v)` put `v` in a

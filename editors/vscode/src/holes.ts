@@ -34,6 +34,8 @@ const RAW_TEXT = ["script", "style", "textarea", "title", "xmp", "iframe", "noem
 /** SCRIPTING_RAW_TEXT: a page loaded with scripting on reads a noscript as text. */
 const SCRIPTING_RAW_TEXT = [...RAW_TEXT, "noscript"];
 const CODE_TEXT = ["script", "style"];
+/** What the markup after a hole in a comment may begin with for dashes or a `!` in the value to end the comment there. */
+const COMMENT_CLOSERS = [">", "!>", "->", "-!>"];
 const HTML_SPACE = "\t\n\f\r ";
 
 const URL_ATTRIBUTES = new Set(["href", "src", "action", "formaction", "xlink:href", "poster", "data", "cite", "background", "ping", "manifest"]);
@@ -62,6 +64,8 @@ interface Visitor {
   attribute(tag: string, name: string, valueStart: number, valueEnd: number, quoted: boolean): void;
   tag(start: number, end: number): void;
   code(start: number, end: number): void;
+  /** A comment, a CDATA section or a bogus comment, from its own `<`: declaration in MarkupScan.kt. */
+  declaration?(start: number, end: number): void;
 }
 
 /** Discard in MarkupScan.kt: takes the attributes of an end tag. */
@@ -98,17 +102,20 @@ function scanMarkup(html: string, visitor: Visitor, foreign: boolean, cdata: boo
     if (lt < 0) break;
     if (html.startsWith("<!--", lt)) {
       i = commentEnd(html, lt);
+      visitor.declaration?.(lt, i);
       continue;
     }
     if (cdata && html.startsWith("<![CDATA[", lt)) {
       const close = html.indexOf("]]>", lt + 9);
       i = close < 0 ? n : close + 3;
+      visitor.declaration?.(lt, i);
       continue;
     }
     const first = html[lt + 1];
     if (first === "!" || first === "?" || (first === "/" && !isLetter(html[lt + 2]) && html[lt + 2] !== ">")) {
       const close = html.indexOf(">", lt + 2);
       i = close < 0 ? n : close + 1;
+      visitor.declaration?.(lt, i);
       continue;
     }
     // An end tag's attributes are read as a start tag's, so a quoted value can hold a >, and then thrown away.
@@ -208,18 +215,21 @@ function scanMarkupTracked(html: string, visitor: Visitor, context: number, scri
     const foreignNow = insertionNs() !== NS_HTML;
     if (html.startsWith("<!--", lt)) {
       i = commentEnd(html, lt);
+      visitor.declaration?.(lt, i);
       skipCode(lt, i);
       continue;
     }
     if (foreignNow && html.startsWith("<![CDATA[", lt)) {
       const close = html.indexOf("]]>", lt + 9);
       i = close < 0 ? n : close + 3;
+      visitor.declaration?.(lt, i);
       continue;
     }
     const first = html[lt + 1];
     if (first === "!" || first === "?" || (first === "/" && !isLetter(html[lt + 2]) && html[lt + 2] !== ">")) {
       const close = html.indexOf(">", lt + 2);
       i = close < 0 ? n : close + 1;
+      visitor.declaration?.(lt, i);
       skipCode(lt, i);
       continue;
     }
@@ -357,8 +367,14 @@ class Landscape implements Visitor {
   private readonly attributes: { name: string; tag: string; start: number; end: number }[] = [];
   private readonly tags: [number, number][] = [];
   private readonly codes: [number, number][] = [];
+  private readonly declarations: [number, number][] = [];
 
-  constructor(private readonly prefixes: string[]) {}
+  /** `markup` is the shadowed markup read, `holeEnds` where each hole in it ends, by where it starts. */
+  constructor(
+    private readonly prefixes: string[],
+    private readonly markup: string,
+    private readonly holeEnds: ReadonlyMap<number, number>,
+  ) {}
 
   attribute(tag: string, name: string, valueStart: number, valueEnd: number, quoted: boolean): void {
     if (!quoted || valueStart < 0) return;
@@ -369,6 +385,21 @@ class Landscape implements Visitor {
   }
   code(start: number, end: number): void {
     this.codes.push([start, end]);
+  }
+  declaration(start: number, end: number): void {
+    this.declarations.push([start, end]);
+  }
+
+  /** reshapes in Interpolation.kt: whether a value at `hole` could open or end the declaration around it early. */
+  private reshapes(start: number, hole: number): boolean {
+    const end = this.holeEnds.get(hole);
+    if (end === undefined) return false;
+    const m = this.markup;
+    const after = m.slice(end, end + 3);
+    if (m.startsWith("<!--", start)) return COMMENT_CLOSERS.some((c) => after.startsWith(c));
+    if (!m.startsWith("<!", start)) return false;
+    const between = m.slice(start + 2, hole);
+    return (between.length < 2 && "--".startsWith(between)) || (between.length < 7 && "[CDATA[".startsWith(between)) || (m.startsWith("<![CDATA[", start) && (after.startsWith(">") || after.startsWith("]>")));
   }
 
   private attributeAt(at: number) {
@@ -388,6 +419,8 @@ class Landscape implements Visitor {
     }
     if (inSpan(this.tags, at)) return "STRUCTURE";
     if (inSpan(this.codes, at)) return "CODE";
+    const d = this.declarations[lastAtOrBefore(this.declarations, at)];
+    if (d !== undefined && at < d[1] && this.reshapes(d[0], at)) return "STRUCTURE";
     return "TEXT";
   }
 
@@ -457,12 +490,13 @@ function written(markup: string, holes: readonly Hole[], known: ReadonlyMap<numb
 export function holeLandings(markup: string, holes: readonly Hole[], prefixes: string[] = PREFIXES, known: ReadonlyMap<number, string> = new Map()): HoleLanding[] {
   const w = written(markup, holes, known);
   const shadowed = shadow(w.text, w.open);
+  const holeEnds = new Map(w.open.map((h) => [h.start, h.end]));
   const ordered = [...prefixes].sort((a, b) => b.length - a.length);
   // With a noscript in it, the markup is read with scripting off, as the client parses a patch, and on, as a page loads.
   const scriptings = /noscript/i.test(shadowed) ? [false, true] : [false];
   const landscapes: Landscape[] = [];
   const read = (scan: (l: Landscape) => void) => {
-    const l = new Landscape(ordered);
+    const l = new Landscape(ordered, shadowed, holeEnds);
     scan(l);
     landscapes.push(l);
   };
