@@ -7,7 +7,9 @@ import io.github.markusaugust.streamlord.core.domain.holeLandings
 import io.github.markusaugust.streamlord.core.domain.interpolate
 import io.github.markusaugust.streamlord.core.domain.urlHostFixedBy
 import io.github.markusaugust.streamlord.core.domain.urlSchemeFixedBy
+import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
+import io.github.markusaugust.streamlord.core.json.JsonString
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -26,6 +28,14 @@ class HoleLandingsTest {
 
     private fun holesOf(markup: String): List<IntRange> = Regex("%s").findAll(markup).map { it.range }.toList()
 
+    // The text of the holes whose content the case gives, as a Trusted value's is known.
+    private fun knownOf(case: JsonObject): Map<Int, String> =
+        case
+            .obj("known")
+            ?.entries
+            ?.associate { (index, text) -> index.toInt() to (text as JsonString).value }
+            .orEmpty()
+
     @Test
     fun `lands each hole where the fixture says`() {
         val cases = fixture.array("cases")!!.objects()
@@ -36,7 +46,12 @@ class HoleLandingsTest {
                 case.array("landings")!!.objects().map {
                     Triple(it.string("position"), it.string("attribute"), it.boolean("loadsCode") ?: false)
                 }
-            val actual = holeLandings(markup, holesOf(markup)).map { Triple(it.position.name, it.attribute, it.loadsCode) }
+            val actual =
+                holeLandings(
+                    markup,
+                    holesOf(markup),
+                    known = knownOf(case),
+                ).map { Triple(it.position.name, it.attribute, it.loadsCode) }
             assertEquals(expected, actual, case.string("name"))
         }
     }
@@ -46,11 +61,15 @@ class HoleLandingsTest {
         for (case in fixture.array("cases")!!.objects()) {
             val markup = case.string("markup")!!
             val holes = holesOf(markup)
-            val landings = holeLandings(markup, holes)
-            for ((index, landing) in landings.withIndex()) {
+            val known = knownOf(case)
+            for (index in holes.indices) {
+                if (index in known) continue
+                // Trusted everywhere else, which no position refuses, so only this hole decides: the
+                // case's own text where it gives one, and a letter, as a hole is read, where not.
+                val others = holes.indices.filter { it != index }.associateWith { known[it] ?: "x" }
+                val landing = holeLandings(markup, holes, known = others)[index]
                 for (probe in listOf<Any>("x", 7, true)) {
-                    // Trusted everywhere else, which no position refuses, so only this hole decides.
-                    val values = landings.indices.map { if (it == index) probe else Trusted("x") }
+                    val values = holes.indices.map { if (it == index) probe else Trusted(others.getValue(it)) }
                     // A URL that loads code takes nothing unless the literal before the hole fixes its host.
                     val hostFixed =
                         !landing.loadsCode || urlHostFixedBy(landing.attribute!!, markup.substring(landing.valueStart, holes[index].first))
@@ -76,6 +95,15 @@ class HoleLandingsTest {
                 }
             }
         }
+    }
+
+    @Test
+    fun `gives the start of a value in the markup it was handed, known text or not`() {
+        val (name, url) = holeLandings("<a %s=\"x%s\">", listOf(3..4, 8..9), known = mapOf(0 to "href"))
+        assertEquals(Position.TEXT, name.position)
+        assertEquals(null, name.attribute)
+        assertEquals(Position.URL, url.position)
+        assertEquals(7, url.valueStart)
     }
 
     @Test

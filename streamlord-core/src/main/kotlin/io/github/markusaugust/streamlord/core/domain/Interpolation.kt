@@ -12,9 +12,14 @@ import org.intellij.lang.annotations.Language
  * Markup the caller vouches for, written into the output as it stands.
  *
  * [interpolate] escapes every value it is given and refuses the positions escaping cannot make
- * safe. Wrapping a value here waives both, which is the right thing for a fragment you rendered
- * yourself and the wrong thing for anything that came from a request. The type exists so that
- * waiver is a word in the source someone can search for.
+ * safe. Wrapping a value here waives both for that value, which is the right thing for a fragment
+ * you rendered yourself and the wrong thing for anything that came from a request. The type exists
+ * so that waiver is a word in the source someone can search for.
+ *
+ * It waives nothing for the values beside it. Its text becomes part of the markup, and they are
+ * judged against the markup as it will be written: `<%s %s="%s">` with `Trusted("button")` and
+ * `Trusted("onclick")` puts the third value in an event handler, which is refused, and so does
+ * `<%s>%s` with `Trusted("script")`, whose second value would be a program.
  *
  * ```kotlin
  * interpolate("""<li>%s</li>""", Trusted(renderBadge(user)))
@@ -216,9 +221,12 @@ public class UnsafeInterpolationException(
  * or an `http`, `https`, `mailto` or `tel` one: `href="/heads/%s"` takes anything, and
  * `href="%s%s"` cannot be made into `javascript:` across its two holes. A URL the browser loads
  * and runs, a script's `src`, a `<link>`'s `href` and the like, must have its host fixed by the
- * markup before the hole, as in `src="/js/%s"`. A [Trusted] value in a URL counts as the markup
- * around it does and vouches for nothing else there. The URL a `<meta>` refresh reads from its
+ * markup before the hole, as in `src="/js/%s"`. The URL a `<meta>` refresh reads from its
  * `content` is held to the same schemes.
+ *
+ * A [Trusted] value is not judged, and is read as the markup it is: the other values are judged
+ * where its text puts them, a tag or attribute name among it, and in a URL it counts as the
+ * markup around it does and vouches for nothing else there.
  *
  * The markup is read the way the browser's tokenizer reads it: as HTML, as the inside of an
  * `<svg>` or `<math>`, where a `title` or a `textarea` holds elements rather than text, by the
@@ -261,58 +269,113 @@ public fun interpolate(
     }
     if (holes.isEmpty()) return Html(format.replace("%%", "%"))
 
-    val landscapes = landscapes(format, holes.map { it until it + 2 }, prefixes)
+    // A Trusted value is markup: it is read in place, and the other values are judged where its text puts them.
+    val known = HashMap<Int, String>()
+    for ((index, value) in values.withIndex()) if (value is Trusted) known[index] = value.html
+    val written = Written(format, holes.map { it until it + 2 }, known, percents = true)
+    val text = written.text
+    val landscapes = landscapes(text, written.open, prefixes)
 
-    val out = StringBuilder(format.length + values.size * 16)
+    val out = StringBuilder(text.length + values.size * 16)
     var cut = 0
-    for ((index, hole) in holes.withIndex()) {
-        out.literal(format, cut, hole)
+    for ((index, value) in values.withIndex()) {
+        if (value is Trusted) continue
+        val hole = written.starts[index]
+        out.append(text, cut, hole)
         cut = hole + 2
-
-        when (val value = values[index]) {
-            is Trusted -> {
-                out.append(value.html)
-            }
-
-            else -> {
-                val landing = landingOf(landscapes, hole)
-                // Markup interpolate built is markup where it starts and ends in the data state in
-                // every reading, so that it cannot move the holes after it; anywhere else it is characters.
-                if (value is Html && landing.position == Position.TEXT && landscapes.all { it.inData(hole) && it.closes(value.text) }) {
-                    out.append(value.text)
-                } else {
-                    if (!landing.position.admits(value)) throw UnsafeInterpolationException(landing.position, index, landing.attribute)
-                    out.escaped(value)
-                }
-            }
+        val landing = landingOf(landscapes, hole)
+        // Markup interpolate built is markup where it starts and ends in the data state in
+        // every reading, so that it cannot move the holes after it; anywhere else it is characters.
+        if (value is Html && landing.position == Position.TEXT && landscapes.all { it.inData(hole) && it.closes(value.text) }) {
+            out.append(value.text)
+        } else {
+            if (!landing.position.admits(value)) throw UnsafeInterpolationException(landing.position, index, landing.attribute)
+            out.escaped(value)
         }
     }
-    out.literal(format, cut, format.length)
-    for (landscape in landscapes) landscape.checkUrls(format, holes, values)
+    out.append(text, cut, text.length)
+    for (landscape in landscapes) landscape.checkUrls(text, written.starts.asList(), values)
     return Html(out.toString())
 }
 
 /**
- * A span of the markup itself, with `%%` collapsed to one `%`.
+ * Markup as it will be written, as far as that is known before the values are escaped: each hole
+ * whose text is known, a [Trusted] value's, replaced by that text, and every other hole left
+ * standing to be shadowed. With [percents], as a format is, `%%` in the literal is one `%`; a
+ * known text is written as it stands, `%%` and all.
  *
- * Only the literal spans pass through here. A value that happens to contain `%%` is data, and
- * data is never read back as markup.
+ * @property starts Where each hole, known or not, begins in [text], by its index.
+ * @property open The holes whose text is not known, as spans of [text].
  */
-private fun StringBuilder.literal(
-    format: String,
-    from: Int,
-    to: Int,
+private class Written(
+    markup: String,
+    holes: List<IntRange>,
+    known: Map<Int, String>,
+    percents: Boolean,
 ) {
-    var i = from
-    while (i < to) {
-        val ch = format[i]
-        if (ch == '%' && i + 1 < to && format[i + 1] == '%') {
-            append('%')
-            i += 2
-        } else {
-            append(ch)
-            i++
+    val text: String
+    val starts = IntArray(holes.size)
+    val open = ArrayList<IntRange>(holes.size - known.size)
+
+    // Runs of [text] in order: where each starts, where in the markup it came from, and whether it is a known text.
+    private val runStarts = ArrayList<Int>()
+    private val runSources = ArrayList<Int>()
+    private val runKnown = ArrayList<Boolean>()
+
+    init {
+        val out = StringBuilder(markup.length + known.values.sumOf { it.length })
+
+        fun run(
+            source: Int,
+            isKnown: Boolean,
+        ) {
+            runStarts += out.length
+            runSources += source
+            runKnown += isKnown
         }
+
+        fun literal(
+            from: Int,
+            to: Int,
+        ) {
+            run(from, false)
+            var i = from
+            while (i < to) {
+                if (percents && markup[i] == '%' && i + 1 < to && markup[i + 1] == '%') {
+                    out.append('%')
+                    i += 2
+                    run(i, false)
+                } else {
+                    out.append(markup[i])
+                    i++
+                }
+            }
+        }
+
+        var cut = 0
+        for (index in holes.indices.sortedBy { holes[it].first }) {
+            val hole = holes[index]
+            literal(cut, hole.first)
+            starts[index] = out.length
+            val text = known[index]
+            if (text != null) {
+                run(hole.first, true)
+                out.append(text)
+            } else {
+                run(hole.first, false)
+                open += out.length until out.length + (hole.last - hole.first + 1)
+                out.append(markup, hole.first, hole.last + 1)
+            }
+            cut = hole.last + 1
+        }
+        literal(cut, markup.length)
+        text = out.toString()
+    }
+
+    /** Where [at] in [text] came from in the markup; within a known text, where its hole begins. */
+    fun sourceOf(at: Int): Int {
+        val run = lastAtOrBefore(runStarts, at)
+        return if (runKnown[run]) runSources[run] else runSources[run] + at - runStarts[run]
     }
 }
 
@@ -390,15 +453,34 @@ public class HoleLanding(
  * Where each of [holes] lands in [markup]. A hole is any span the caller will fill: `%s` to
  * [interpolate], a Kotlin template to the editors. Each is read as a run of letters, so `<%s>` is
  * a tag whose name is the hole.
+ *
+ * [known] holds the text of the holes, by index, whose content is known to be markup, as a
+ * [Trusted] value's is: the markup is read with that text in place of the hole, as [interpolate]
+ * reads it, so `<%s>` with `script` known puts the next hole in a script. A known hole is not
+ * judged, and its landing is [Position.TEXT] with no attribute. A [HoleLanding.valueStart] is an
+ * offset into [markup] still; one that falls inside a known text is where that hole begins.
  */
 @InternalStreamlordApi
 public fun holeLandings(
     markup: String,
     holes: List<IntRange>,
     prefixes: List<String> = ElementsGuard.defaultPrefixes,
+    known: Map<Int, String> = emptyMap(),
 ): List<HoleLanding> {
-    val landscapes = landscapes(markup, holes, prefixes)
-    return holes.map { landingOf(landscapes, it.first) }
+    val written = Written(markup, holes, known, percents = false)
+    val landscapes = landscapes(written.text, written.open, prefixes)
+    return holes.indices.map { index ->
+        if (index in known) {
+            HoleLanding(Position.TEXT, null, -1, false)
+        } else {
+            val landing = landingOf(landscapes, written.starts[index])
+            if (landing.valueStart < 0) {
+                landing
+            } else {
+                HoleLanding(landing.position, landing.attribute, written.sourceOf(landing.valueStart), landing.loadsCode)
+            }
+        }
+    }
 }
 
 /**
@@ -631,9 +713,9 @@ private fun refreshUrls(content: String): List<String> {
 
 private val REFRESH_URL_KEY = Regex("^[Uu][Rr][Ll][\\t\\n\\u000C\\r ]*=[\\t\\n\\u000C\\r ]*")
 
-/** The value from [from] to [to] as it will be written: the literal, a Trusted value as it stands, and every other value escaped. */
+/** The span of [text] from [from] to [to] as it will be written, with the values of the holes [inside] it escaped. */
 private fun written(
-    format: String,
+    text: String,
     from: Int,
     to: Int,
     inside: List<Int>,
@@ -643,14 +725,11 @@ private fun written(
     val out = StringBuilder()
     var cut = from
     for (index in inside) {
-        out.literal(format, cut, holes[index])
-        when (val value = values[index]) {
-            is Trusted -> out.append(value.html)
-            else -> out.escaped(value)
-        }
+        out.append(text, cut, holes[index])
+        out.escaped(values[index])
         cut = holes[index] + 2
     }
-    out.literal(format, cut, to)
+    out.append(text, cut, to)
     return out.toString()
 }
 
@@ -745,13 +824,13 @@ private class Landscape(
      * carry a scheme that does more than navigate. A list of them, as `values` holds, is judged
      * entry by entry, and the `content` of a `<meta>` by the URL a refresh would read from it.
      *
-     * A [Trusted] value is written as it stands and counts toward the URL as the literal does: it
-     * vouches for itself and not for the values beside it, so `href="%s%s"` with `Trusted("")`
-     * first still refuses `javascript:` in the second. Only a URL with nothing but Trusted values
-     * in it goes unjudged.
+     * [text] is the markup as [Written] has it, every [Trusted] value's text in place: it counts
+     * toward the URL as the literal does and vouches for nothing beside it, so `href="%s%s"` with
+     * `Trusted("")` first still refuses `javascript:` in the second. Only a URL with nothing but
+     * Trusted values in it goes unjudged.
      */
     fun checkUrls(
-        format: String,
+        text: String,
         holes: List<Int>,
         values: List<Any?>,
     ) {
@@ -761,19 +840,20 @@ private class Landscape(
             val start = attributeStarts[attribute]
             val end = attributeEnds[attribute]
             val first = lastAtOrBefore(holes, start - 1) + 1
-            val inside = (first until holes.size).takeWhile { holes[it] < end }
-            val untrusted = inside.firstOrNull { values[it] !is Trusted } ?: continue
+            val inside = (first until holes.size).takeWhile { holes[it] < end }.filter { values[it] !is Trusted }
+            val untrusted = inside.firstOrNull() ?: continue
             val name = attributeNames[attribute]
             // A code-loading URL has to have its host fixed before the first value nobody vouched
             // for; a safe scheme is not enough, since a safe scheme can still point at another origin.
             if (!refresh && codeUrl(attribute)) {
-                val prefix = written(format, start, holes[untrusted], inside.filter { it < untrusted }, holes, values)
-                if (!urlHostFixedBy(name, prefix)) throw UnsafeInterpolationException(Position.URL, untrusted, name, loadsCode = true)
+                if (!urlHostFixedBy(name, text.substring(start, holes[untrusted]))) {
+                    throw UnsafeInterpolationException(Position.URL, untrusted, name, loadsCode = true)
+                }
                 continue
             }
             // The attribute as it will be written, decoded once, as the browser does: a reference
             // the literal begins can end in the value, `&%s` and `#106;` making a `j`.
-            val value = decodeEntities(written(format, start, end, inside, holes, values)).text
+            val value = decodeEntities(written(text, start, end, inside, holes, values)).text
             val entries =
                 when {
                     refresh -> refreshUrls(value)

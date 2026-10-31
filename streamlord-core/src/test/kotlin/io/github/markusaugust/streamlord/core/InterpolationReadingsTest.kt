@@ -108,6 +108,24 @@ class InterpolationReadingsTest {
         assertEquals("<svg><p>a</p></svg>", interpolate("<svg>%s</svg>", interpolate("<p>%s</p>", "a")).text)
     }
 
+    // A Trusted value is markup, so the values beside it are judged where its text puts them.
+    @Test
+    fun `a Trusted value is read as the markup it writes`() {
+        assertEquals(Position.DATASTAR, refused("""<button %s="%s">""", Trusted("data-on:click"), code).position)
+        assertEquals(Position.CODE, refused("""<button %s="%s">""", Trusted("onclick"), code).position)
+        assertEquals(Position.URL, refused("""<a %s="%s">x</a>""", Trusted("href"), "javascript:alert(1)").position)
+        assertEquals(1, refused("<%s>%s</%s>", Trusted("script"), code, Trusted("script")).index)
+        assertTrue(refused("""<%s src="%s"></script>""", Trusted("script"), "https://evil.example/x.js").loadsCode)
+        assertEquals(Position.CODE, refused("""<p %sonclick="%s">""", Trusted(""), code).position)
+        assertEquals(Position.CODE, refused("<scrip%st>%s</script>", Trusted(""), code).position)
+        assertEquals(1, refused("""x<%s <img title="--><img src=x onerror=%s>">""", Trusted("!--"), code).index)
+        assertEquals(1, refused("""x<%s<i src="<b><a href="x="%s>""", Trusted("/"), code).index)
+        assertEquals("""<button title="&lt;b&gt;">""", interpolate("""<button %s="%s">""", Trusted("title"), "<b>").text)
+        assertEquals("<b>%s</b>", interpolate("<%s>%s</%s>", Trusted("b"), "%s", Trusted("b")).text)
+        // The format's own %% is one per cent; a Trusted value's text is written as it stands.
+        assertEquals("<i>a%%b 1%</i>", interpolate("<i>%s %s%%</i>", Trusted("a%%b"), 1).text)
+    }
+
     @Test
     fun `a Trusted value in a URL does not waive the check for the other holes there`() {
         assertEquals(1, refused("""<a href="%s%s">x</a>""", Trusted(""), "javascript:alert(1)").index)

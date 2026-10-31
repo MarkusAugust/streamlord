@@ -221,7 +221,16 @@ interpolate("""<ul class="lt-list">%s</ul>""", Trusted(renderResults(hits)))
 That waives both the escaping and the refusals for that value, which is right for a fragment you rendered
 yourself and wrong for anything that came out of a request. It is a word in your source that a
 reviewer can search for, which is the whole reason it is a type and not a flag. It vouches for
-itself alone: in a URL with other holes it is part of the URL, and the URL is judged whole.
+itself alone: in a URL with other holes it is part of the URL, and the URL is judged whole. Its
+text is markup like the literal around it, so the other values are judged where it puts them:
+
+```kotlin sample=statements
+val name = "Gorvek"
+
+interpolate("""<button %s="%s">""", Trusted("title"), name)    // escaped into the title
+interpolate("""<button %s="%s">""", Trusted("onclick"), name)  // throws: the browser runs it
+interpolate("<%s>%s</%s>", Trusted("script"), name, Trusted("script")) // throws: a script body
+```
 
 ### This is the editors' rule, at run time
 

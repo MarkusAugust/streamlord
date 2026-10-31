@@ -273,6 +273,14 @@ All notable changes to Streamlord are recorded here. The format follows
   swallowed its end tag, and the value came out inside it. The readings from an svg and a math are
   taken once more with no HTML element opened from them left open, and the strictest still wins,
   as the editors do too. These readings are new in this release.
+- A `Trusted` value was written as it stands but never read back into the markup, so one in a tag
+  or attribute name, or anywhere else that changes how the markup is read, waived the checks on
+  the values beside it: `interpolate("<button %s=\"%s\">", Trusted("onclick"), v)` put `v` in a
+  handler, and `<%s>%s</%s>` with `Trusted("script")` put it in a script. `interpolate` now reads
+  the markup as it will be written, each `Trusted` value's text in place, and judges every other
+  value where that puts it, URL and host checks included; a `Trusted` value itself is still not
+  judged. `holeLandings` (internal API) takes the text of the holes whose content is known, so the
+  editors can read it the same way. This was in 0.15.0.
 
 ## [0.15.0] - 2026-10-28
 

@@ -411,9 +411,51 @@ function shadow(markup: string, holes: readonly Hole[]): string {
   return chars.join("");
 }
 
-/** Where each of `holes` lands in `markup`: holeLandings in Interpolation.kt. */
-export function holeLandings(markup: string, holes: readonly Hole[], prefixes: string[] = PREFIXES): HoleLanding[] {
-  const shadowed = shadow(markup, holes);
+/**
+ * The markup as it will be written: each hole in `known`, by index, replaced by its text, and every
+ * other hole left standing. Written in Interpolation.kt, which collapses a format's `%%` as well.
+ */
+function written(markup: string, holes: readonly Hole[], known: ReadonlyMap<number, string>) {
+  let text = "";
+  const starts: number[] = new Array(holes.length).fill(0);
+  const open: Hole[] = [];
+  // Runs of text in order: where each starts, where in the markup it came from, and whether it is a known text.
+  const runs: { start: number; source: number; known: boolean }[] = [];
+  let cut = 0;
+  const order = holes.map((_, i) => i).sort((a, b) => (holes[a] as Hole).start - (holes[b] as Hole).start);
+  for (const index of order) {
+    const hole = holes[index] as Hole;
+    runs.push({ start: text.length, source: cut, known: false });
+    text += markup.slice(cut, hole.start);
+    starts[index] = text.length;
+    const k = known.get(index);
+    runs.push({ start: text.length, source: hole.start, known: k !== undefined });
+    if (k !== undefined) text += k;
+    else {
+      open.push({ start: text.length, end: text.length + hole.end - hole.start });
+      text += markup.slice(hole.start, hole.end);
+    }
+    cut = hole.end;
+  }
+  runs.push({ start: text.length, source: cut, known: false });
+  text += markup.slice(cut);
+  const sourceOf = (at: number) => {
+    const run = runs[lastAtOrBefore(runs, at)] as { start: number; source: number; known: boolean };
+    return run.known ? run.source : run.source + at - run.start;
+  };
+  return { text, starts, open, sourceOf };
+}
+
+/**
+ * Where each of `holes` lands in `markup`: holeLandings in Interpolation.kt. `known` holds the text
+ * of the holes, by index, whose content is known to be markup, as a Trusted value's is: the markup
+ * is read with that text in place of the hole. A known hole is not judged, and lands as TEXT with no
+ * attribute; a `valueStart` is still an offset into `markup`, where the hole begins if it falls
+ * inside a known text.
+ */
+export function holeLandings(markup: string, holes: readonly Hole[], prefixes: string[] = PREFIXES, known: ReadonlyMap<number, string> = new Map()): HoleLanding[] {
+  const w = written(markup, holes, known);
+  const shadowed = shadow(w.text, w.open);
   const ordered = [...prefixes].sort((a, b) => b.length - a.length);
   // With a noscript in it, the markup is read with scripting off, as the client parses a patch, and on, as a page loads.
   const scriptings = /noscript/i.test(shadowed) ? [false, true] : [false];
@@ -432,10 +474,13 @@ export function holeLandings(markup: string, holes: readonly Hole[], prefixes: s
   for (const context of [NS_HTML, NS_SVG, NS_MATH]) for (const scripting of scriptings) read((l) => scanMarkupTracked(shadowed, l, context, scripting, true));
   // From inside an svg or a math, once more with no HTML element opened from it left open.
   for (const context of [NS_SVG, NS_MATH]) for (const scripting of scriptings) read((l) => scanMarkupTracked(shadowed, l, context, scripting, false));
-  return holes.map((h) => {
+  return holes.map((_, index) => {
+    if (known.has(index)) return { position: "TEXT", attribute: null, valueStart: -1, loadsCode: false };
+    const at = w.starts[index] as number;
     let strictest = landscapes[0] as Landscape;
-    for (const l of landscapes) if (STRICTNESS.indexOf(l.positionOf(h.start)) > STRICTNESS.indexOf(strictest.positionOf(h.start))) strictest = l;
-    return strictest.landing(h.start);
+    for (const l of landscapes) if (STRICTNESS.indexOf(l.positionOf(at)) > STRICTNESS.indexOf(strictest.positionOf(at))) strictest = l;
+    const landing = strictest.landing(at);
+    return landing.valueStart < 0 ? landing : { ...landing, valueStart: w.sourceOf(landing.valueStart) };
   });
 }
 

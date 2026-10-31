@@ -1,5 +1,5 @@
 {
- "$comment": "Where a hole lands, by holeLandings in streamlord-core Interpolation.kt, which interpolate calls, and by holes.ts in the VS Code analysis, both of which read these cases. Each %s in markup is a hole; position is the strictest of the readings (HTML, svg or math, svg or math with CDATA as text, and the ones that follow the element stack from HTML, from inside an svg and from inside a math, those two again with no HTML element opened from the svg or math left open, each with scripting off and, where a noscript stands, on), attribute the quoted attribute it landed in, or null, and loadsCode, false where it is left out, whether that attribute loads what the browser runs, so that its host must be fixed (urlHostFixedBy) rather than its scheme. HoleLandingsTest also holds every case to interpolate itself: a String is refused where the position refuses one, a Number where it refuses that, and anything but Trusted in a loadsCode attribute whose literal start does not fix the host. urls: whether the literal start of a URL attribute's value, prefix, already settles the scheme (urlSchemeFixedBy).",
+ "$comment": "Where a hole lands, by holeLandings in streamlord-core Interpolation.kt, which interpolate calls, and by holes.ts in the VS Code analysis, both of which read these cases. Each %s in markup is a hole; position is the strictest of the readings (HTML, svg or math, svg or math with CDATA as text, and the ones that follow the element stack from HTML, from inside an svg and from inside a math, those two again with no HTML element opened from the svg or math left open, each with scripting off and, where a noscript stands, on), attribute the quoted attribute it landed in, or null, and loadsCode, false where it is left out, whether that attribute loads what the browser runs, so that its host must be fixed (urlHostFixedBy) rather than its scheme. HoleLandingsTest also holds every case to interpolate itself: a String is refused where the position refuses one, a Number where it refuses that, and anything but Trusted in a loadsCode attribute whose literal start does not fix the host. known, where a case has it, gives the text of holes by index whose content is known markup, as a Trusted value is: the markup is read with that text in place of the hole, the hole itself is not judged and lands as TEXT, and HoleLandingsTest passes it to interpolate as Trusted. urls: whether the literal start of a URL attribute's value, prefix, already settles the scheme (urlSchemeFixedBy).",
  "cases": [
   {
    "name": "text",
@@ -860,6 +860,131 @@
     {
      "position": "CODE",
      "attribute": "onerror"
+    }
+   ]
+  },
+  {
+   "name": "known text is the attribute name",
+   "markup": "<button %s=\"%s\">",
+   "known": {
+    "0": "data-on:click"
+   },
+   "landings": [
+    {
+     "position": "TEXT",
+     "attribute": null
+    },
+    {
+     "position": "DATASTAR",
+     "attribute": "data-on:click"
+    }
+   ]
+  },
+  {
+   "name": "known text names an ordinary attribute",
+   "markup": "<button %s=\"%s\">",
+   "known": {
+    "0": "title"
+   },
+   "landings": [
+    {
+     "position": "TEXT",
+     "attribute": null
+    },
+    {
+     "position": "ATTRIBUTE",
+     "attribute": "title"
+    }
+   ]
+  },
+  {
+   "name": "known text names a URL attribute",
+   "markup": "<a %s=\"%s\">x</a>",
+   "known": {
+    "0": "href"
+   },
+   "landings": [
+    {
+     "position": "TEXT",
+     "attribute": null
+    },
+    {
+     "position": "URL",
+     "attribute": "href"
+    }
+   ]
+  },
+  {
+   "name": "known text is the tag name of a script",
+   "markup": "<%s>%s</%s>",
+   "known": {
+    "0": "script",
+    "2": "script"
+   },
+   "landings": [
+    {
+     "position": "TEXT",
+     "attribute": null
+    },
+    {
+     "position": "CODE",
+     "attribute": null
+    },
+    {
+     "position": "TEXT",
+     "attribute": null
+    }
+   ]
+  },
+  {
+   "name": "known text makes a script whose src loads code",
+   "markup": "<%s src=\"%s\"></script>",
+   "known": {
+    "0": "script"
+   },
+   "landings": [
+    {
+     "position": "TEXT",
+     "attribute": null
+    },
+    {
+     "position": "URL",
+     "attribute": "src",
+     "loadsCode": true
+    }
+   ]
+  },
+  {
+   "name": "empty known text joins the attribute name to the tag",
+   "markup": "<p %sonclick=\"%s\">",
+   "known": {
+    "0": ""
+   },
+   "landings": [
+    {
+     "position": "TEXT",
+     "attribute": null
+    },
+    {
+     "position": "CODE",
+     "attribute": "onclick"
+    }
+   ]
+  },
+  {
+   "name": "known text opens a comment that moves the tags after it",
+   "markup": "x<%s <img title=\"--><img src=x onerror=%s>\">",
+   "known": {
+    "0": "!--"
+   },
+   "landings": [
+    {
+     "position": "TEXT",
+     "attribute": null
+    },
+    {
+     "position": "STRUCTURE",
+     "attribute": null
     }
    ]
   }

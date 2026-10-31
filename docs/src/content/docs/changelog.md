@@ -25,7 +25,10 @@ in Kotlin, or wrap the inner one in `Trusted`.
 relative or `https:` value through. Write `"/js/%s"` or `"https://cdn.example.com/%s"`, or wrap a
 URL you chose yourself in `Trusted`. An end tag, `</%s>`, throws too: write it from literals. A
 `Trusted` value in a URL no longer waives the other values in it, since the URL is judged whole:
-wrap the whole URL you chose, or put the host in the literal.
+wrap the whole URL you chose, or put the host in the literal. Nor does a `Trusted` tag or
+attribute name: the values beside it are judged where its text puts them, so a value after
+`<%s>` with `Trusted("script")`, or in `%s="%s"` with `Trusted("onclick")`, throws. Write such
+names in the literal, or wrap the whole of what you chose.
 [Strings](/strings/#values-from-outside) says why.
 
 **The editors judge every Kotlin value in an HTML string.** `${...}`, values joined with `+`
