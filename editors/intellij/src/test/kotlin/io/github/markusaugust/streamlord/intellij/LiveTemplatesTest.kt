@@ -10,4 +10,11 @@ class LiveTemplatesTest : BasePlatformTestCase() {
         assertEquals(names.toString(), names.size, names.toSet().size)
         assertTrue(names.toString(), "data-init" in names && "data-init-get" in names)
     }
+
+    // A value Datastar takes as text, not as an expression.
+    fun `test a text value is a value, not an expression`() {
+        val xml = javaClass.getResource("/liveTemplates/StreamlordHtml.xml")!!.readText()
+        assertTrue(xml, xml.contains("<template name=\"data-nonce\" value=\"data-nonce=&quot;\$VALUE\$&quot;\$END\$\""))
+        assertTrue(xml, xml.contains("<variable name=\"VALUE\" expression=\"\" defaultValue=\"&quot;value&quot;\""))
+    }
 }

@@ -1,4 +1,5 @@
 import raw from "../../../catalog/datastar-1.0.4.json" with { type: "json" };
+import domEventsFile from "../../../catalog/dom-events.json" with { type: "json" };
 
 export type ModifierType = "flag" | "duration" | "enum" | "int" | "ident" | "idents";
 
@@ -56,6 +57,18 @@ export interface ActionSpec {
   signature: string;
   kotlin: string;
   doc: string;
+  /** The parameters as the signature names them: `@get(uri, options?)` takes `uri` and `options?`. */
+  parameters: string[];
+}
+
+/** ActionSpec.parameters in Catalog.kt. */
+function parametersOf(signature: string): string[] {
+  const open = signature.indexOf("(");
+  const inner = signature.slice(open + 1, signature.lastIndexOf(")"));
+  return inner
+    .split(",")
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
 }
 
 export interface CallSiteSpec {
@@ -75,8 +88,13 @@ export interface Catalog {
   attributesByKotlin: Map<string, AttributeSpec>;
   actions: ActionSpec[];
   actionsByName: Map<string, ActionSpec>;
-  fetchOptions: { name: string; type: string; default: string }[];
+  /** `doc`: what the option does, as Datastar 1.0.4's fetch.ts reads it. */
+  fetchOptions: { name: string; type: string; default: string; doc?: string }[];
   fetchEvents: string[];
+  /** The events Datastar dispatches on the document, which `data-on` listens there for on its own (on.ts:52 in 1.0.4). */
+  datastarEvents: { name: string; doc: string }[];
+  /** The DOM events an element can be listened to for, from catalog/dom-events.json. */
+  domEvents: { name: string; mdn: string | null }[];
   /** The names `genRx` compiles every expression with, before a plugin's own `argNames` (engine.ts:467). */
   compiledParameters: string[];
   patchModes: string[];
@@ -149,6 +167,7 @@ function build(): Catalog {
     signature: a.signature as string,
     kotlin: a.kotlin as string,
     doc: a.doc as string,
+    parameters: parametersOf(a.signature as string),
   }));
   // dataOnSignalPatch writes data-on-signal-patch from its string and the filter companion from a
   // SignalFilter, so a helper is the attribute its string argument fills, never the filter.
@@ -175,6 +194,8 @@ function build(): Catalog {
     actionsByName: new Map(actions.map((a) => [a.name, a])),
     fetchOptions: raw.fetchOptions,
     fetchEvents: raw.fetchEvents,
+    datastarEvents: raw.datastarEvents,
+    domEvents: domEventsFile.events,
     compiledParameters: raw.compiledParameters,
     patchModes: raw.sse.patchModes,
     signalCalls: flagged(raw.kotlinCallSites.signals as Record<string, unknown>),

@@ -22,6 +22,11 @@ abstract class GenerateCatalogText : DefaultTask() {
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val catalog: RegularFileProperty
 
+    /** catalog/dom-events.json, the DOM events both editors offer after `data-on:`, compiled in beside the catalog. */
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val domEvents: RegularFileProperty
+
     @get:OutputDirectory
     abstract val output: DirectoryProperty
 
@@ -49,12 +54,15 @@ abstract class GenerateCatalogText : DefaultTask() {
                 append('"')
             }
         // Cut at most every 8192 characters, never between the two halves of a surrogate pair.
-        val json = file.readText()
-        val cuts = generateSequence(0) { at -> if (at >= json.length) null else minOf(json.length, at + 8192).let { if (it < json.length && json[it - 1].isHighSurrogate()) it - 1 else it } }
-        val pieces = cuts.zipWithNext { from, to -> json.substring(from, to) }.joinToString(",\n") { "            ${literal(it)}" }
+        fun pieces(json: String): String {
+            val cuts = generateSequence(0) { at -> if (at >= json.length) null else minOf(json.length, at + 8192).let { if (it < json.length && json[it - 1].isHighSurrogate()) it - 1 else it } }
+            return cuts.zipWithNext { from, to -> json.substring(from, to) }.joinToString(",\n") { "            ${literal(it)}" }
+        }
+        val pieces = pieces(file.readText())
+        val events = pieces(domEvents.get().asFile.readText())
         val text =
             """
-            |// Generated from catalog/${file.name} by :streamlord-analysis:generateCatalogText. Do not edit.
+            |// Generated from catalog/${file.name} and catalog/dom-events.json by :streamlord-analysis:generateCatalogText. Do not edit.
             |package io.github.markusaugust.streamlord.analysis
             |
             |/** catalog/${file.name} as it stands, for [Catalog.default]. */
@@ -64,6 +72,12 @@ abstract class GenerateCatalogText : DefaultTask() {
             |    val JSON: String =
             |        listOf(
             |$pieces,
+            |        ).joinToString("")
+            |
+            |    /** catalog/dom-events.json as it stands, for [Catalog.domEvents]. */
+            |    val DOM_EVENTS: String =
+            |        listOf(
+            |$events,
             |        ).joinToString("")
             |}
             |
@@ -83,6 +97,7 @@ val generateCatalogText =
                 .matching { include("datastar-*.json") }
                 .singleFile,
         )
+        domEvents.set(rootProject.layout.projectDirectory.file("catalog/dom-events.json"))
         output.set(layout.buildDirectory.dir("generated/catalogText"))
     }
 

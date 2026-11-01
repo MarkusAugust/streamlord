@@ -22,14 +22,18 @@ import com.intellij.psi.PsiFile
 import io.github.markusaugust.streamlord.analysis.ActionSpec
 import io.github.markusaugust.streamlord.analysis.AttributeSpec
 import io.github.markusaugust.streamlord.analysis.Catalog
+import io.github.markusaugust.streamlord.analysis.ExpressionAtCaret
 import io.github.markusaugust.streamlord.analysis.ModifierType
 import io.github.markusaugust.streamlord.analysis.ValueKind
+import io.github.markusaugust.streamlord.analysis.actionCallAt
 import io.github.markusaugust.streamlord.analysis.actionDoc
 import io.github.markusaugust.streamlord.analysis.actionPrefixAt
 import io.github.markusaugust.streamlord.analysis.attributeDoc
+import io.github.markusaugust.streamlord.analysis.fetchOptionDoc
 import io.github.markusaugust.streamlord.analysis.findCallSites
 import io.github.markusaugust.streamlord.analysis.markdownToHtml
 import io.github.markusaugust.streamlord.analysis.signalPrefixAt
+import io.github.markusaugust.streamlord.analysis.valueAtCaret
 import io.github.markusaugust.streamlord.intellij.Streamlord
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.index.SignalIndex
@@ -70,7 +74,16 @@ class StreamlordCompletionContributor : CompletionContributor() {
                     hostFile == null && file.virtualFile != null && !manager.isInjectedFragment(file) &&
                         StreamlordSettings.getInstance(project).state.yieldAttributeNamesToDatastarPlugin &&
                         PluginManagerCore.isPluginInstalled(PluginId.getId(Streamlord.DATASTAR_PLUGIN_ID))
-                Html(file.text, parameters.offset, analysis, index, hostFile ?: file, result, offerAttributeNames = !yieldNames).complete()
+                Html(
+                    file.text,
+                    parameters.offset,
+                    analysis,
+                    index,
+                    hostFile ?: file,
+                    result,
+                    offerAttributeNames = !yieldNames,
+                    valueFile = file,
+                ).complete()
             }
         }
     }
@@ -107,24 +120,15 @@ class StreamlordCompletionContributor : CompletionContributor() {
                 result.stopHere()
                 return
             }
-            val html = analyzer.htmlStringAt(src, offset)
-            if (html != null && offset > html.contentStart && offset <= html.contentEnd) {
-                if (Html(src, offset, analysis, index, file, result, offerAttributeNames = true).complete()) result.stopHere()
+            // A Datastar expression, in a DSL string or in an attribute value of an HTML string, read decoded.
+            DatastarCaret.expressionAt(file, offset)?.let { expression ->
+                if (expressionItems(expression, src, offset, index, file, result)) result.stopHere()
                 return
             }
-            val lex = analyzer.lex(src)
-            val site =
-                findCallSites(src, catalog.expressionCallSites.keys, lex).firstOrNull { it.openParen < offset && offset <= it.closeParen }
-                    ?: return
-            val spec = catalog.expressionCallSites[site.name] ?: return
-            val s =
-                site.selectString(spec) ?: site.args.mapNotNull { it.string }.firstOrNull { it.start < offset && offset <= it.end }
-                    ?: return
-            if (offset <= s.start || offset > s.contentEnd + (if (s.unterminated) 1 else 0)) return
-            val text = src.substring(s.contentStart, offset)
-            // dataOnSignalPatch also writes the filter, so the call is looked up among the attribute's own names.
-            val patch = catalog.attributesByName["on-signal-patch"]?.kotlin?.contains(site.name) == true
-            if (expressionItems(text, index, file, result, allowActions = true, patchInScope = patch)) result.stopHere()
+            val html = analyzer.htmlStringAt(src, offset)
+            if (html != null && offset > html.contentStart && offset <= html.contentEnd) {
+                Html(src, offset, analysis, index, file, result, offerAttributeNames = true, valueFile = null).complete()
+            }
         }
 
         /** `selector = "#|"` on any DSL call, or the first argument of removeElements: ids and classes from the project. */
@@ -182,7 +186,11 @@ class StreamlordCompletionContributor : CompletionContributor() {
         }
     }
 
-    /** Signals, actions, attribute names, modifiers and modifier values in markup, whether a file or a string in Kotlin. */
+    /**
+     * Signals, actions, attribute names, modifiers and modifier values in markup, whether a file or a
+     * string in Kotlin. [valueFile] is the markup file whose attribute values are read here; for a
+     * string in Kotlin they are read on the Kotlin side, with the string decoded.
+     */
     private class Html(
         val src: String,
         val offset: Int,
@@ -191,32 +199,20 @@ class StreamlordCompletionContributor : CompletionContributor() {
         val indexFile: PsiFile,
         val result: CompletionResultSet,
         val offerAttributeNames: Boolean,
+        val valueFile: PsiFile?,
     ) {
         val catalog: Catalog = analysis.catalog
         val prefix: String = analysis.prefix
 
         /** Returns true when the caret sat in a `data-*` value and the expression items were offered. */
         fun complete(): Boolean {
+            if (valueFile != null) {
+                // Inside an attribute value, read as the browser reads the markup: over several lines and in either quote.
+                DatastarCaret.expressionAt(valueFile, offset)?.let { return expressionItems(it, src, offset, index, indexFile, result) }
+                if (valueAtCaret(src, offset, prefix) != null) return false
+            }
             val lineStart = src.lastIndexOf('\n', maxOf(0, offset - 1)) + 1
             val before = src.substring(maxOf(lineStart, offset - 400), offset.coerceIn(0, src.length))
-            // Inside an attribute value: name="...|
-            val inValue = Regex("""([^\s"'<>=]+)\s*=\s*"([^"]*)$""").find(before)
-            if (inValue != null) {
-                val parsed = catalog.parseAttributeName(inValue.groupValues[1].lowercase(), prefix)
-                val spec = parsed?.spec ?: return false
-                if (spec.valueKind == ValueKind.EXPRESSION || spec.valueKind == ValueKind.SIGNAL) {
-                    return expressionItems(
-                        inValue.groupValues[2],
-                        index,
-                        indexFile,
-                        result,
-                        allowActions =
-                            spec.valueKind == ValueKind.EXPRESSION,
-                        patchInScope = spec.name == "on-signal-patch",
-                    )
-                }
-                return false
-            }
             // On an attribute name inside a tag: <div data-on:cl|
             val inName =
                 Regex(
@@ -227,6 +223,12 @@ class StreamlordCompletionContributor : CompletionContributor() {
             val tagName = inName.groupValues[1].lowercase()
             if ("__" in partial) {
                 modifierItems(partial)
+                return false
+            }
+            // The event of data-on. Datastar's own always; in plain HTML files the official plugin offers the DOM's, as it does
+            // the names, and knows none of Datastar's.
+            if (partial.lowercase().startsWith("${prefix}on:")) {
+                eventItems(partial, partial.substring(0, prefix.length + 3), withDom = offerAttributeNames)
                 return false
             }
             if (!partial.startsWith(prefix.substring(0, minOf(prefix.length, maxOf(1, partial.length))))) return false
@@ -264,6 +266,50 @@ class StreamlordCompletionContributor : CompletionContributor() {
             EditorModificationUtil.insertStringAtCaret(editor, tail.toString())
             if (caretBack > 0) editor.caretModel.moveToOffset(editor.caretModel.offset - caretBack)
         }
+
+        /** After `data-on:`, Datastar's own events first, then the DOM's when [withDom], each written out as the whole attribute name. */
+        private fun eventItems(
+            partial: String,
+            head: String,
+            withDom: Boolean,
+        ) {
+            val matcher =
+                result.withPrefixMatcher(PlainPrefixMatcher(partial)).withRelevanceSorter(
+                    sorter {
+                        if (it.startsWith(head + "datastar-")) {
+                            0
+                        } else {
+                            1
+                        }
+                    },
+                )
+            for (e in catalog.datastarEvents) {
+                matcher.addFixed(eventElement(head + e.name, "Datastar event", markdownToHtml(e.doc)))
+            }
+            if (!withDom) return
+            for (e in catalog.domEvents) {
+                val doc = e.mdn?.let { "<p><a href=\"$it\">${e.name} on MDN</a></p>" } ?: "<p>A DOM event.</p>"
+                matcher.addFixed(eventElement(head + e.name, "DOM event", doc))
+            }
+        }
+
+        private fun eventElement(
+            name: String,
+            type: String,
+            html: String,
+        ): LookupElement =
+            LookupElementBuilder
+                .create(LookupDoc(name, html), name)
+                .withTypeText(type)
+                .withIcon(AllIcons.Nodes.Property)
+                .withInsertHandler { context, _ ->
+                    // A value is opened only where none follows yet.
+                    val after = context.document.charsSequence.subSequence(context.tailOffset, context.document.textLength)
+                    if (!after.trimStart().startsWith("=")) {
+                        EditorModificationUtil.insertStringAtCaret(context.editor, "=\"\"")
+                        context.editor.caretModel.moveToOffset(context.editor.caretModel.offset - 1)
+                    }
+                }
 
         private fun modifierItems(partial: String) {
             val parsed = catalog.parseAttributeName(partial.lowercase(), prefix)
@@ -328,45 +374,62 @@ class StreamlordCompletionContributor : CompletionContributor() {
         private val SELECTOR_ARG_NAMES = setOf("selector", "viewTransitionSelector")
 
         /**
-         * Signals after `$`, actions after `@`, the scope variables after a bare lowercase prefix. Returns true when the caret
-         * sits in a signal or action position, where the items offered are the whole story.
+         * Signals after `$`, actions after `@`, the options of a backend action on a key of its options object, the scope
+         * variables after a bare lowercase prefix. Returns true when the caret sits in a signal, action or option position,
+         * where the items offered are the whole story. [source] and [caret] are the text the editor replaces in: what is
+         * replaced is measured back from the caret there, where the expression may be written with escapes.
          */
         fun expressionItems(
-            textBefore: String,
+            expression: ExpressionAtCaret,
+            source: CharSequence,
+            caret: Int,
             index: SignalIndex,
             file: PsiFile,
             result: CompletionResultSet,
-            allowActions: Boolean,
-            patchInScope: Boolean = false,
         ): Boolean {
             val catalog = StreamlordAnalysis.getInstance(file.project).catalog
+            val textBefore = expression.before
             val sig = signalPrefixAt(textBefore, textBefore.length)
             if (sig != null) {
                 val local = index.forFile(file)
+                // The dollar is replaced too where the source writes it plainly, and left as written otherwise (\$, ${'$'}).
+                val dollar = if (source.getOrNull(caret - sig.length - 1) == '$') "$" else ""
                 val matcher =
-                    result.withPrefixMatcher(PlainPrefixMatcher("$$sig")).withRelevanceSorter(
-                        sorter {
-                            if (it.removePrefix("$") in
-                                local
-                            ) {
-                                0
-                            } else {
-                                1
-                            }
-                        },
+                    result.withPrefixMatcher(PlainPrefixMatcher(dollar + sig)).withRelevanceSorter(
+                        sorter { if (it.removePrefix("$") in local) 0 else 1 },
                     )
                 for (name in index.all().sorted()) {
                     val isLocal = name in local
                     matcher.addFixed(
                         LookupElementBuilder
-                            .create("$$name")
+                            .create(dollar + name)
+                            .withPresentableText("$$name")
                             .withTypeText(if (isLocal) "signal (this file)" else "signal (project)")
                             .withIcon(AllIcons.Nodes.Variable),
                     )
                 }
                 return true
             }
-            if (!allowActions) return false
+            if (!expression.allowActions) return false
+            actionCallAt(textBefore, textBefore.length)?.option?.let { option ->
+                val matcher = result.withPrefixMatcher(PlainPrefixMatcher(option.typed)).withRelevanceSorter(sorter { 0 })
+                for (o in catalog.fetchOptions) {
+                    if (o.name in option.written) continue
+                    matcher.addFixed(
+                        LookupElementBuilder
+                            .create(LookupDoc(o.name, markdownToHtml(fetchOptionDoc(o))), o.name)
+                            .withTailText(" = ${o.default}", true)
+                            .withTypeText(o.type)
+                            .withIcon(AllIcons.Nodes.Property)
+                            .withInsertHandler { context, _ ->
+                                // The colon is written only where none follows yet.
+                                val after = context.document.charsSequence.subSequence(context.tailOffset, context.document.textLength)
+                                if (!after.trimStart().startsWith(":")) EditorModificationUtil.insertStringAtCaret(context.editor, ": ")
+                            },
+                    )
+                }
+                return true
+            }
             val act = actionPrefixAt(textBefore, textBefore.length)
             if (act != null) {
                 // By name, Pro after the rest, as VS Code lists them.
@@ -385,7 +448,7 @@ class StreamlordCompletionContributor : CompletionContributor() {
                 val matcher = result.withPrefixMatcher(PlainPrefixMatcher(scope.groupValues[1]))
                 // `patch` is a name only in `data-on-signal-patch`, the one attribute the client hands it to.
                 val compiled = catalog.compiledParameters.filter { it.first() in 'a'..'z' }
-                for (v in compiled + listOfNotNull("patch".takeIf { patchInScope })) {
+                for (v in compiled + listOfNotNull("patch".takeIf { expression.patchInScope })) {
                     matcher.addFixed(LookupElementBuilder.create(v).withTypeText("Datastar scope").withIcon(AllIcons.Nodes.Variable))
                 }
             }

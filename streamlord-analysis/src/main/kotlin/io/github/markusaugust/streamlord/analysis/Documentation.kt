@@ -53,6 +53,9 @@ public fun attributeDoc(
     return "**$prefix${a.name}**\n\n${a.doc}\n\n$forms$casing$mods$kotlin$pro"
 }
 
+/** Markdown documentation of an option of the backend actions: its type, its default and what it does. */
+public fun fetchOptionDoc(o: FetchOption): String = "**${o.name}**: `${o.type}`, default `${o.default}`\n\n${o.doc}"
+
 /** Markdown documentation of an action, with its signature and the Kotlin helper when asked for. */
 public fun actionDoc(
     a: ActionSpec,

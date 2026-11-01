@@ -203,6 +203,8 @@ class DatastarAttributeInspection :
             "computed-value",
             "filter-pattern",
             "signal-null",
+            "missing-nonce",
+            "invalid-nonce",
         ),
     )
 
@@ -284,6 +286,8 @@ object InspectionCodes {
                 "computed-value",
                 "filter-pattern",
                 "signal-null",
+                "missing-nonce",
+                "invalid-nonce",
             ) +
             setOf("key-case", "key-case-wire", "signal-name-hyphen", "attribute-name-case", "key-refused") +
             setOf(

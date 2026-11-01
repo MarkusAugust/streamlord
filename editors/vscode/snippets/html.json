@@ -76,7 +76,7 @@
   },
   "data-preserve-attr": {
     "prefix": "data-preserve-attr",
-    "body": "data-preserve-attr=\"${2:expression}\"",
+    "body": "data-preserve-attr=\"${2:value}\"",
     "description": "Keeps the listed attributes through a morph."
   },
   "data-ref": {
@@ -106,7 +106,7 @@
   },
   "data-nonce": {
     "prefix": "data-nonce",
-    "body": "data-nonce=\"${2:expression}\"",
+    "body": "data-nonce=\"${2:value}\"",
     "description": "On the html element: enables CSP mode with this nonce."
   },
   "data-animate": {

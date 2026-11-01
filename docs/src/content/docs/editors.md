@@ -83,11 +83,32 @@ whether handed to the DSL or standing free, and in HTML and template files. Kotl
 interpolation traps, syntax errors with the right column, missing ids, unknown attributes and
 modifiers, capitals in keys, signal names the client cannot hold, and the places where Datastar's
 own rewrite of an expression does what JavaScript would not, such as a `$name` in the text of a
-template literal that also holds a `${...}`.
+template literal that also holds a `${...}`. An empty `data-nonce` on `<html>` is an error, since
+Datastar throws `NonceRequired` and does not start, and one that is no base64 value a warning,
+since a browser ignores it in the policy and blocks the scripts.
 
 **Completions** for signals, actions, attributes, modifiers, ids and classes. Signals are
 collected from the whole project, since the page that declares one is rarely the file that reads
-it.
+it. They work where the value runs over several lines or sits in single quotes, and in Kotlin
+strings, where a `\$` or `${'$'}` before the name stays as you wrote it.
+
+**Help inside an expression.** Put the caret in the options of a backend action and completion
+offers the ones not yet written, each with what Datastar 1.0.4 does with it; hovering one says the
+same. Parameter info shows the action's parameters with the one the caret is on: Parameter Info in
+IntelliJ (⌘P on macOS, Ctrl+P elsewhere), Trigger Parameter Hints in VS Code (⇧⌘Space on macOS,
+Ctrl+Shift+Space elsewhere), and on typing `(` or `,`. After `data-on:` come Datastar's own events,
+`datastar-fetch` and `datastar-signal-patch`, then the DOM's, with their pages on MDN where
+TypeScript names one. In Kotlin the help starts once the DSL call's parenthesis is closed, as the
+IDE closes it for you.
+
+```html
+<button data-on:click="@post('/save', {retry: 'error', retryMaxCount: 3})">Save</button>
+<div data-on:datastar-fetch="evt.detail.type === 'error' && ($failed = true)"></div>
+```
+
+`retry` here is worth the hover: in 1.0.4 a request that fails on the network is retried
+whatever it says, so `'auto'` and `'never'` act alike, and `'error'` is what also retries a 4xx or
+5xx answer.
 
 **Hover documentation**, snippets, and syntax highlighting of the Datastar tokens only, never
 of your Kotlin or your HTML, which belong to your theme. In IntelliJ the Datastar tokens take
@@ -136,11 +157,14 @@ shows the test that runs it over a whole project in CI.
 
 ## In IntelliJ specifically
 
-The plugin adds what the IDE does not have. The Kotlin plugin already gives you completion, KDoc
-and type errors for the DSL, and `@Language("HTML")` on Streamlord's parameters turns on HTML
-injection by itself. What the plugin brings is the Datastar checks, HTML injection into the
-strings that carry no annotation, and stepping aside for the official Datastar plugin's attribute
-completion when that one is installed.
+The plugin adds what the IDE does not have. The Kotlin plugin already gives you completion, KDoc and
+type errors for the DSL, and `@Language("HTML")` on Streamlord's parameters turns on HTML injection
+by itself. What the plugin brings is the Datastar checks, HTML injection into the strings that carry
+no annotation, and stepping aside for the official Datastar plugin's attribute and DOM event
+completion when that one is installed. Its spell checking reads only the strings of a Datastar
+expression, in HTML and in the DSL calls and HTML strings of Kotlin, so `$usrnm` is no typo and
+`'Sav'` still is; a template file IntelliJ reads as plain text, a `.peb` without its plugin, say, is
+still spelled whole.
 
 ## And on this site
 

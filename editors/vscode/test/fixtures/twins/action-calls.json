@@ -1,0 +1,21 @@
+{
+  "$comment": "Which action call a caret stands in, in a Datastar expression (actionCallAt): the caret is at the end of before, and only the text before it is read. action is the innermost @name( still open around the caret, or null; argument counts from 0. option is set when the caret is where a key of a backend action's options object goes: typed is what is written of the key so far, written the keys already in the object. Read by CompletionContextsTest.kt and completionContext.test.ts.",
+  "cases": [
+    { "name": "the first argument", "before": "@get(", "action": "get", "argument": 0, "option": null },
+    { "name": "the second argument, before its object", "before": "@get('/x', ", "action": "get", "argument": 1, "option": null },
+    { "name": "a key of the options object", "before": "@get('/x', {ret", "action": "get", "argument": 1, "option": { "typed": "ret", "written": [] } },
+    { "name": "the keys already written", "before": "@post('/x', {retry: 'never', selector: '#a', ", "action": "post", "argument": 1, "option": { "typed": "", "written": ["retry", "selector"] } },
+    { "name": "a value in the options object is no key", "before": "@post('/x', {retry: ", "action": "post", "argument": 1, "option": null },
+    { "name": "an object inside an option is not the options object", "before": "@post('/x', {headers: {", "action": "post", "argument": 1, "option": null },
+    { "name": "a comma in a string counts for nothing", "before": "@get('/x, {", "action": "get", "argument": 0, "option": null },
+    { "name": "a template literal with code in it", "before": "@get(`/x/${$id}`, {", "action": "get", "argument": 1, "option": { "typed": "", "written": [] } },
+    { "name": "a comma in a nested call counts for nothing", "before": "@fit(Math.max($a, $b), 0, 100, ", "action": "fit", "argument": 3, "option": null },
+    { "name": "a signals action", "before": "$a = 1; @setAll(", "action": "setAll", "argument": 0, "option": null },
+    { "name": "only a backend action has the options object", "before": "@intl('number', $n, {", "action": "intl", "argument": 2, "option": null },
+    { "name": "a closed call", "before": "@get('/x', {retry: 'never'}); $b", "action": null },
+    { "name": "an action handed to a call that is no action", "before": "foo(@get('/a'), ", "action": null },
+    { "name": "an action in a comment", "before": "$a++ // @get(", "action": null },
+    { "name": "an action name without its parenthesis", "before": "@get", "action": null },
+    { "name": "the innermost action", "before": "@post('/x', {payload: @peek(() => ", "action": "peek", "argument": 0, "option": null }
+  ]
+}

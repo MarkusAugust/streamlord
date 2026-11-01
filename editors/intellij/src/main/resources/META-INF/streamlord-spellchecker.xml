@@ -1,0 +1,18 @@
+<idea-plugin>
+    <!-- First for each language, and claiming only Datastar expressions, so the language's own strategy keeps everything else. -->
+    <extensions defaultExtensionNs="com.intellij">
+        <spellchecker.support
+            language="HTML"
+            order="first"
+            implementationClass="io.github.markusaugust.streamlord.intellij.spelling.DatastarSpellcheckingStrategy" />
+        <!-- The tokens inside an attribute value are XML's; the strategy keeps to HTML files itself. -->
+        <spellchecker.support
+            language="XML"
+            order="first"
+            implementationClass="io.github.markusaugust.streamlord.intellij.spelling.DatastarSpellcheckingStrategy" />
+        <spellchecker.support
+            language="kotlin"
+            order="first"
+            implementationClass="io.github.markusaugust.streamlord.intellij.spelling.DatastarSpellcheckingStrategy" />
+    </extensions>
+</idea-plugin>
