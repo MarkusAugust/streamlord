@@ -4,7 +4,9 @@ import com.intellij.ide.highlighter.HtmlFileType
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiFile
@@ -12,6 +14,7 @@ import com.intellij.psi.search.FileTypeIndex
 import com.intellij.psi.search.FilenameIndex
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.util.PsiModificationTracker
+import com.intellij.util.ForcefulReparseModificationTracker
 import io.github.markusaugust.streamlord.analysis.Selectors
 import io.github.markusaugust.streamlord.analysis.SourceLanguage
 import io.github.markusaugust.streamlord.analysis.collectSelectors
@@ -48,9 +51,13 @@ class SignalIndex(
     private var unionGeneration = 0L
     private val unionLock = Any()
 
-    /** The PSI, VFS and settings counts of the last full read, so a pass over many files reads the project once. */
+    /** The counts of the last full read, so a pass over many files reads the project once. */
     @Volatile
     private var refreshedAt: List<Long> = emptyList()
+
+    /** The files to read, with the counts they were listed at: an edit changes a file, not which files there are. */
+    @Volatile
+    private var listed: Pair<List<Long>, List<VirtualFile>> = emptyList<Long>() to emptyList()
 
     /** The names declared in one file, from its current text. */
     fun forFile(file: PsiFile): Set<String> = entryFor(file)?.signals ?: emptySet()
@@ -97,6 +104,7 @@ class SignalIndex(
         entries.clear()
         dropUnion()
         refreshedAt = emptyList()
+        listed = emptyList<Long>() to emptyList()
         return all().size
     }
 
@@ -126,20 +134,41 @@ class SignalIndex(
     /** Read every project file the index does not know at its current stamp. Callers hold a read action (completion, inspections). */
     private fun refresh() {
         // While the IDE indexes, the file type index is not there to ask; what is cached is offered.
-        if (com.intellij.openapi.project.DumbService
-                .isDumb(project)
-        ) {
-            return
-        }
+        if (DumbService.isDumb(project)) return
         // Read the project again only when something in it changed since the last read: its PSI, a file
-        // on disk (a `git pull` touches files the IDE never parsed), or the template extensions.
+        // on disk (a `git pull` touches files the IDE never parsed), or the template extensions. Every
+        // count but the PSI's also lists the files again: the roots and file types decide what is in the
+        // project, an overridden file type moves only the forced reparse count, and indexing that
+        // finishes may find files a listing made while it scanned did not.
         val counts =
             listOf(
                 PsiModificationTracker.getInstance(project).modificationCount,
                 VirtualFileManager.getInstance().modificationCount,
                 StreamlordSettings.getInstance(project).tracker.modificationCount,
+                ProjectRootManager.getInstance(project).modificationCount,
+                ForcefulReparseModificationTracker.getInstance().modificationCount,
+                DumbService.getInstance(project).modificationTracker.modificationCount,
             )
         if (counts == refreshedAt) return
+        val seen = HashSet<String>()
+        for (vf in projectFiles(counts.drop(1))) {
+            if (!vf.isValid) continue
+            val language = languageOf(vf) ?: continue
+            seen += vf.path
+            val document = FileDocumentManager.getInstance().getCachedDocument(vf)
+            val stamp = document?.modificationStamp ?: vf.modificationStamp
+            val cached = entries[vf.path]
+            if (cached != null && cached.stamp == stamp) continue
+            val text = document?.text ?: runCatching { String(vf.contentsToByteArray(), vf.charset) }.getOrNull() ?: continue
+            index(vf.path, stamp, text, language)
+        }
+        // A file deleted, renamed or moved out of the project defines nothing any more.
+        if (entries.keys.retainAll(seen)) dropUnion()
+        refreshedAt = counts
+    }
+
+    private fun projectFiles(counts: List<Long>): List<VirtualFile> {
+        listed.let { (at, files) -> if (at == counts) return files }
         val scope = GlobalSearchScope.projectScope(project)
         // Markup first, and the cap on what is kept rather than on what is listed: the pages that define
         // signals must not be crowded out by Kotlin sources or by files under build directories.
@@ -154,20 +183,7 @@ class SignalIndex(
                     .asSequence()
                     .filter(::indexable)
                     .take(FILE_CAP)
-        val seen = HashSet<String>()
-        for (vf in files) {
-            val language = languageOf(vf) ?: continue
-            seen += vf.path
-            val document = FileDocumentManager.getInstance().getCachedDocument(vf)
-            val stamp = document?.modificationStamp ?: vf.modificationStamp
-            val cached = entries[vf.path]
-            if (cached != null && cached.stamp == stamp) continue
-            val text = document?.text ?: runCatching { String(vf.contentsToByteArray(), vf.charset) }.getOrNull() ?: continue
-            index(vf.path, stamp, text, language)
-        }
-        // A file deleted, renamed or moved out of the project defines nothing any more.
-        if (entries.keys.retainAll(seen)) dropUnion()
-        refreshedAt = counts
+        return files.toList().also { listed = counts to it }
     }
 
     private fun indexable(vf: VirtualFile): Boolean =

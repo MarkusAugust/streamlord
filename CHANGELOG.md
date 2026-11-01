@@ -47,6 +47,13 @@ All notable changes to Streamlord are recorded here. The format follows
   quotes, so it offered nothing in a value over several lines, such as a `data-signals` object, or
   in single quotes. It reads the value as the browser does now. In a Kotlin string, a signal written
   `\$` completes too and keeps its backslash.
+- The IntelliJ plugin listed every Kotlin and markup file of the project again after each
+  keystroke, to find the signals other files define, asking the IDE once for each template extension
+  in its settings. That cost 150 to 330 ms a keystroke whatever the project's size, one file or
+  seventy thousand. It lists them again only when files change on disk, when a file is saved, when
+  the project's roots or file types or the plugin's settings change, or when the IDE finishes
+  indexing. A keystroke costs under 5 ms in a small project and 5 to 17 ms in one of a few thousand
+  Kotlin files or more.
 
 ## [0.16.0] - 2026-10-31
 
