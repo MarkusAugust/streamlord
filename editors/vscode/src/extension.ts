@@ -11,6 +11,7 @@ import { RequestStore } from "./requestStore.ts";
 import { RouteLensProvider } from "./routeLens.ts";
 import type { Route } from "./routes.ts";
 import { RunningServers } from "./serverLog.ts";
+import { StreamlordSignatureHelpProvider } from "./signatureHelp.ts";
 import { signalReferencesInHtml, signalReferencesInKotlin, unknownSignalIssue, type SignalReference } from "./signalReferences.ts";
 import { SignalIndex } from "./signalIndex.ts";
 
@@ -113,6 +114,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.languages.registerCompletionItemProvider(selector, new StreamlordCompletionProvider(signals, prefix), "$", "@", "#", "_", ".", "-", ":"),
     vscode.languages.registerHoverProvider(selector, new StreamlordHoverProvider(prefix)),
+    vscode.languages.registerSignatureHelpProvider(selector, new StreamlordSignatureHelpProvider(prefix), "(", ","),
     vscode.languages.registerCodeActionsProvider(selector, new StreamlordCodeActionProvider(issues), { providedCodeActionKinds: StreamlordCodeActionProvider.kinds }),
     vscode.commands.registerCommand("streamlord.inspector.open", () => inspector.open()),
     vscode.commands.registerCommand("streamlord.colors.apply", () => applyRecommendedColors()),
