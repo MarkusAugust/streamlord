@@ -3,7 +3,7 @@ import { attributeDoc, DOCS, laterFix, quoteAt, validateExpression, type Fix, ty
 import { PLACEHOLDER, readKotlinStringAt, toSource, type Interpolation, type KotlinString } from "./kotlinStrings.ts";
 import { capitalIn, kebab, nameProblem, runsIntoModifiers, spellings } from "./attributeKeys.ts";
 import { signalNameRefusal } from "./signalNames.ts";
-import { asciiLowercase, decodeEntities, indexOfAsciiIgnoreCase, keyReading, rawKeyNote, tokenize, validateAttributes, validateMarkup, wireKey, wireKeyReads, type Attribute, type Tag } from "./markup.ts";
+import { asciiLowercase, decodeEntities, indexOfAsciiIgnoreCase, keyReading, nonceProblem, rawKeyNote, tokenize, validateAttributes, validateMarkup, wireKey, wireKeyReads, type Attribute, type Tag } from "./markup.ts";
 import { findCallSites, isHtmlString, lexKotlin, namedArgText, selectStringArg, stringAt, type Arg, type CallSite } from "./scanner.ts";
 import { holeLandings, urlHostFixedBy, urlSchemeFixedBy, type Hole, type HoleLanding, type Position } from "./holes.ts";
 import { argKind, callResult, chainFrom, countBelow, ESCAPES_TITLE, fileFacts, holeDisplay, holeValues, interpolateFix, interpolateText, isMarkup, markupHeldAsString, markupTextValue, markupValued, markupView, mayBeNull, mayHoldMarkup, percentHoles, quoteFix, REFUSES_URL_TITLE, shortened, trimmed, trustedFix, trustedLiteral, valueKind, visiblyList, weakest, withNested, withPercentHoles, type ArgKind } from "./interpolation.ts";
@@ -106,6 +106,7 @@ export function analyzeKotlin(src: string, opts: AnalyzeOptions): Issue[] {
     for (const x of lex.strings) if (x.start >= format.string.start && x.end <= format.string.end) claimed.add(x.start);
     issues.push(...checkInterpolateSite(site, format, src, opts, hyphenated));
   }
+  for (const site of findCallSites(src, NONCE_CALLS, lex.mask)) issues.push(...checkNonceSite(site));
   issues.push(...signalNameHyphenSites(src, lex, dslHelpers(src, EXPRESSION_HELPERS), new Set([...ALL_SITE_NAMES, "statements"])));
   for (const m of src.matchAll(ATTRIBUTES_INDEX)) {
     if (lex.mask[m.index ?? 0] === 0) continue;
@@ -230,6 +231,28 @@ function checkFreeHtmlString(s: KotlinString, opts: AnalyzeOptions, src: string,
 }
 
 const INTERPOLATE: ReadonlySet<string> = new Set(["interpolate"]);
+
+/** The DSL helpers that write data-nonce: dataNonce. */
+const NONCE_CALLS: ReadonlySet<string> = new Set(catalog.attributesByName.get("nonce")?.kotlin ?? []);
+
+/** `dataNonce("...")` of a literal it refuses as the page renders, through CspNonce.checked: empty, or no base64 value. checkNonceSite in Analyzer.kt. */
+function checkNonceSite(site: CallSite): Issue[] {
+  const s = site.args.filter((a) => a.named === null)[0]?.string;
+  if (!s || s.unterminated || s.interpolations.length > 0) return [];
+  const problem = nonceProblem(s.text);
+  if (!problem) return [];
+  const empty = s.text.length === 0;
+  return [
+    {
+      start: empty ? s.start : s.contentStart,
+      end: empty ? s.end : s.contentEnd,
+      message: `${problem.replace(/\.$/, "")}. ${site.name} refuses it as the page renders.`,
+      severity: "error",
+      code: empty ? "missing-nonce" : "invalid-nonce",
+      link: attributeDoc("nonce"),
+    },
+  ];
+}
 
 interface InterpolateFormat {
   arg: Arg;

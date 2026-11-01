@@ -9,6 +9,7 @@ import io.github.markusaugust.streamlord.core.client.commentEnd
 import io.github.markusaugust.streamlord.core.client.decodeEntities
 import io.github.markusaugust.streamlord.core.client.rawTextEnd
 import io.github.markusaugust.streamlord.core.domain.AttributeKeys
+import io.github.markusaugust.streamlord.core.domain.CspNonce
 import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 import io.github.markusaugust.streamlord.core.domain.SignalNames
 import io.github.markusaugust.streamlord.core.json.JsonParser
@@ -1239,6 +1240,26 @@ public class MarkupValidator(
                         Severity.WARNING,
                         "wrong-element",
                     )
+            }
+            // The client reads the nonce off <html> as it loads and throws for an empty one (csp.ts:9-16);
+            // the policy's nonce-source takes a base64 value only, and a browser ignores any other.
+            if (spec.name == "nonce" && tag.name == "html" && !templated) {
+                val raw = attr.value.orEmpty()
+                if (raw.isEmpty()) {
+                    issues += Issue(attr.nameStart, nameEnd, CspNonce.problem("")!!, Severity.ERROR, "missing-nonce", link)
+                } else if (!hasTemplateSyntax(raw)) {
+                    CspNonce.problem(decodeEntities(raw).text)?.let { problem ->
+                        issues +=
+                            Issue(
+                                attr.valueStart,
+                                attr.valueEnd,
+                                "$problem. A browser ignores such a nonce in the policy and blocks what it would allow.",
+                                Severity.WARNING,
+                                "invalid-nonce",
+                                link,
+                            )
+                    }
+                }
             }
             // data-on:my__event: the event is the key before the first __, so the name the author may have
             // meant whole is cut there, and recased as __case says.

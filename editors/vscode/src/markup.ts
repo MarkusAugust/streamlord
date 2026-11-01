@@ -218,6 +218,16 @@ export function decodeEntities(value: string): { text: string; map: number[] } {
  * Does the value hold template syntax, so that it cannot be judged before rendering? A `${`
  * inside a JavaScript template literal is JavaScript's own and does not count.
  */
+/** Section 2.3.1 of CSP Level 3: a nonce-value is a base64-value, padding included. */
+const BASE64_NONCE = /^[A-Za-z0-9+/\-_]+={0,2}$/;
+
+/** Why `nonce` cannot be one, or null when it can: CspNonce.problem in streamlord-core, word for word. */
+export function nonceProblem(nonce: string): string | null {
+  if (nonce.length === 0) return "The CSP nonce is empty. Datastar raises NonceRequired for an empty data-nonce and does not start.";
+  if (!BASE64_NONCE.test(nonce)) return `'${nonce}' is not a valid CSP nonce; it must be a base64 value, as CSP Level 3 section 2.3.1 defines one`;
+  return null;
+}
+
 export function hasTemplateSyntax(value: string): boolean {
   for (const m of value.matchAll(new RegExp(TEMPLATE_SYNTAX.source, "g"))) {
     if (m[0] !== "${" || quoteAt(value, m.index) !== "`") return true;
@@ -804,6 +814,19 @@ export function validateAttributes(tag: Tag, prefix: string, tagSource?: string,
     }
     if (spec.onlyOn && !spec.onlyOn.includes(tag.name)) {
       issues.push({ start: attr.nameStart, end: nameEnd, message: `${prefix}${spec.name} only works on <${spec.onlyOn.join(">, <")}>.`, severity: "warning", code: "wrong-element" });
+    }
+    // The client reads the nonce off <html> as it loads and throws for an empty one (csp.ts:9-16);
+    // the policy's nonce-source takes a base64 value only, and a browser ignores any other.
+    if (spec.name === "nonce" && tag.name === "html" && !templated) {
+      const raw = attr.value ?? "";
+      if (raw.length === 0) {
+        issues.push({ start: attr.nameStart, end: nameEnd, message: nonceProblem("") ?? "", severity: "error", code: "missing-nonce", link: attributeDoc(spec.name) });
+      } else if (!hasTemplateSyntax(raw)) {
+        const problem = nonceProblem(decodeEntities(raw).text);
+        if (problem) {
+          issues.push({ start: attr.valueStart, end: attr.valueStart + raw.length, message: `${problem}. A browser ignores such a nonce in the policy and blocks what it would allow.`, severity: "warning", code: "invalid-nonce", link: attributeDoc(spec.name) });
+        }
+      }
     }
     // data-on:my__event: the event is the key before the first __, so the name the author may have
     // meant whole is cut there, and recased as __case says.

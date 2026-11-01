@@ -73,12 +73,22 @@ public object CspNonce {
      * @throws IllegalArgumentException if the nonce is empty or is not a CSP base64-value.
      */
     public fun checked(nonce: String): String {
-        require(nonce.isNotEmpty()) {
-            "The CSP nonce is empty. Datastar raises NonceRequired for an empty data-nonce and does not start."
-        }
-        require(BASE64.matches(nonce)) {
-            "'$nonce' is not a valid CSP nonce; it must be a base64 value, as CSP Level 3 section 2.3.1 defines one"
-        }
+        problem(nonce)?.let { throw IllegalArgumentException(it) }
         return nonce
     }
+
+    /**
+     * Why [nonce] cannot be one, or null when it can: empty, or no CSP base64-value. [checked]
+     * refuses it with this message, and the editors say it of a `data-nonce` in markup.
+     */
+    public fun problem(nonce: String): String? =
+        when {
+            nonce.isEmpty() -> "The CSP nonce is empty. Datastar raises NonceRequired for an empty data-nonce and does not start."
+
+            !BASE64.matches(
+                nonce,
+            ) -> "'$nonce' is not a valid CSP nonce; it must be a base64 value, as CSP Level 3 section 2.3.1 defines one"
+
+            else -> null
+        }
 }
