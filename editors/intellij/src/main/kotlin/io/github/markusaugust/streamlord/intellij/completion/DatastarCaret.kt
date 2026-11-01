@@ -34,7 +34,13 @@ object DatastarCaret {
                 )
             }
         }
-        if (!file.language.isKindOf(HTMLLanguage.INSTANCE) && !StreamlordAnalysis.isTemplateText(file)) return null
+        // Markup: an HTML file, a template read as text, or a template whose plugin gives it an HTML view beside its own
+        // language (FreeMarker, Thymeleaf), where parameter info and hover are handed the template's file and not the view.
+        val markup =
+            file.language.isKindOf(HTMLLanguage.INSTANCE) ||
+                StreamlordAnalysis.isTemplateText(file) ||
+                file.viewProvider.allFiles.any { it.language.isKindOf(HTMLLanguage.INSTANCE) }
+        if (!markup) return null
         return analysis.analyzer.expressionAtCaret(file.text, offset, false, analysis.prefix)
     }
 }
