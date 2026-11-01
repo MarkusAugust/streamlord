@@ -100,8 +100,8 @@ public data class FetchOption(
     val doc: String = "",
 )
 
-/** An event Datastar dispatches itself, with what its listener is handed. */
-public data class DatastarEvent(
+/** An event Datastar dispatches on the document, with what its listener is handed: not an SSE event, which core.domain.DatastarEvent is. */
+public data class DocumentEvent(
     val name: String,
     val doc: String,
 )
@@ -141,8 +141,8 @@ public class Catalog private constructor(
     public val fetchEvents: List<String>
 
     /** The events Datastar dispatches on the document, which `data-on` listens there for on its own (on.ts:52 in 1.0.4). */
-    public val datastarEvents: List<DatastarEvent> =
-        (raw.array("datastarEvents")?.objects() ?: emptyList()).map { DatastarEvent(it.string("name") ?: "", it.string("doc") ?: "") }
+    public val datastarEvents: List<DocumentEvent> =
+        (raw.array("datastarEvents")?.objects() ?: emptyList()).map { DocumentEvent(it.string("name") ?: "", it.string("doc") ?: "") }
 
     /** The DOM events an element can be listened to for, from `catalog/dom-events.json`, which no Datastar version changes. */
     public val domEvents: List<DomEvent> get() = DOM_EVENTS

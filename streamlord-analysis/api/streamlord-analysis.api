@@ -250,19 +250,6 @@ public final class io/github/markusaugust/streamlord/analysis/CompletionContextK
 	public static final fun valueAtCaret (Ljava/lang/String;ILjava/lang/String;)Lio/github/markusaugust/streamlord/analysis/ValueAtCaret;
 }
 
-public final class io/github/markusaugust/streamlord/analysis/DatastarEvent {
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
-	public final fun component1 ()Ljava/lang/String;
-	public final fun component2 ()Ljava/lang/String;
-	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/DatastarEvent;
-	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/analysis/DatastarEvent;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/DatastarEvent;
-	public fun equals (Ljava/lang/Object;)Z
-	public final fun getDoc ()Ljava/lang/String;
-	public final fun getName ()Ljava/lang/String;
-	public fun hashCode ()I
-	public fun toString ()Ljava/lang/String;
-}
-
 public final class io/github/markusaugust/streamlord/analysis/DatastarFrame {
 	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/util/Map;Ljava/lang/String;J)V
 	public final fun component1 ()Ljava/lang/String;
@@ -293,6 +280,19 @@ public final class io/github/markusaugust/streamlord/analysis/Docs {
 	public static final field SIGNALS Ljava/lang/String;
 	public static final field SSE Ljava/lang/String;
 	public final fun attribute (Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/analysis/DocumentEvent {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/DocumentEvent;
+	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/analysis/DocumentEvent;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/DocumentEvent;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDoc ()Ljava/lang/String;
+	public final fun getName ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
 }
 
 public final class io/github/markusaugust/streamlord/analysis/DocumentationKt {
