@@ -231,6 +231,7 @@ val generateHtmlLiveTemplates by tasks.registering {
                     "none" -> ""
                     "signal" -> "=\"\$SIGNAL\$\""
                     "filter" -> "=\"\$FILTER\$\""
+                    "text" -> "=\"\$VALUE\$\""
                     else -> "=\"\$EXPRESSION\$\""
                 }
             sb.append(
@@ -253,6 +254,12 @@ val generateHtmlLiveTemplates by tasks.registering {
                 "filter" -> {
                     sb.append(
                         "    <variable name=\"FILTER\" expression=\"\" defaultValue=\"&quot;{include: /.*/}&quot;\" alwaysStopAt=\"true\" />\n",
+                    )
+                }
+
+                "text" -> {
+                    sb.append(
+                        "    <variable name=\"VALUE\" expression=\"\" defaultValue=\"&quot;value&quot;\" alwaysStopAt=\"true\" />\n",
                     )
                 }
 

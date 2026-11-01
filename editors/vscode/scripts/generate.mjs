@@ -58,7 +58,7 @@ writeFileSync(join(root, "html-customdata.json"), JSON.stringify(customData, nul
 const htmlSnippets = {};
 for (const a of catalog.attributes) {
   const key = a.keyed ? (a.keyRequired ? ":${1:" + (a.name === "on" ? "click" : "name") + "}" : "") : "";
-  const value = a.valueKind === "none" ? "" : a.valueKind === "signal" ? '="${2:signal}"' : a.valueKind === "filter" ? '="${2:{include: /.*/\\}}"' : '="${2:expression}"';
+  const value = a.valueKind === "none" ? "" : a.valueKind === "signal" ? '="${2:signal}"' : a.valueKind === "filter" ? '="${2:{include: /.*/\\}}"' : a.valueKind === "text" ? '="${2:value}"' : '="${2:expression}"';
   htmlSnippets[`data-${a.name}`] = {
     prefix: `data-${a.name}`,
     body: `data-${a.name}${key}${value}`,
