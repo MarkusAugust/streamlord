@@ -1,4 +1,5 @@
 import raw from "../../../catalog/datastar-1.0.4.json" with { type: "json" };
+import domEventsFile from "../../../catalog/dom-events.json" with { type: "json" };
 
 export type ModifierType = "flag" | "duration" | "enum" | "int" | "ident" | "idents";
 
@@ -193,8 +194,8 @@ function build(): Catalog {
     actionsByName: new Map(actions.map((a) => [a.name, a])),
     fetchOptions: raw.fetchOptions,
     fetchEvents: raw.fetchEvents,
-    datastarEvents: [],
-    domEvents: [],
+    datastarEvents: raw.datastarEvents,
+    domEvents: domEventsFile.events,
     compiledParameters: raw.compiledParameters,
     patchModes: raw.sse.patchModes,
     signalCalls: flagged(raw.kotlinCallSites.signals as Record<string, unknown>),

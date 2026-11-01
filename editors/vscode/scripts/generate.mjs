@@ -8,6 +8,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { domEventsFile, pinnedLibDom } from "./domEvents.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
@@ -69,4 +70,7 @@ htmlSnippets["data-init @get"] = { prefix: "data-init", body: `data-init="@get('
 mkdirSync(join(root, "snippets"), { recursive: true });
 writeFileSync(join(root, "snippets/html.json"), JSON.stringify(htmlSnippets, null, 2) + "\n");
 
-console.log(`generated html-customdata.json (${customData.globalAttributes.length} attributes) and snippets/html.json (${Object.keys(htmlSnippets).length} snippets)`);
+// ---- DOM events, which both editors offer after data-on: -----------------------------------
+writeFileSync(join(root, "../../catalog/dom-events.json"), domEventsFile(pinnedLibDom()));
+
+console.log(`generated catalog/dom-events.json, html-customdata.json (${customData.globalAttributes.length} attributes) and snippets/html.json (${Object.keys(htmlSnippets).length} snippets)`);

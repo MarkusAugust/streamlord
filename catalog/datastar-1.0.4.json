@@ -477,6 +477,10 @@
     { "name": "retryMaxCount", "type": "number", "default": "10", "doc": "How many times Datastar retries before it gives up and dispatches retries-failed." }
   ],
   "fetchEvents": ["started", "finished", "error", "retrying", "retries-failed"],
+  "datastarEvents": [
+    { "name": "datastar-fetch", "doc": "Dispatched on the document at each step of a backend action's request; data-on listens there on its own. evt.detail.type is started, finished, error, retrying, retries-failed or the datastar-* event the response sent, and evt.detail.el the element that sent the request." },
+    { "name": "datastar-signal-patch", "doc": "Dispatched on the document when signals change; data-on listens there on its own. evt.detail is the patch: the signals that changed, with their new values." }
+  ],
   "compiledParameters": ["el", "$", "__action", "evt"],
   "sse": {
     "events": ["datastar-patch-elements", "datastar-patch-signals"],
