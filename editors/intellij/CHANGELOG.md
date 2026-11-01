@@ -2,6 +2,14 @@
 
 All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here.
 
+## 0.9.1
+
+- `data-on:click`, `data-signals:count` and every other Datastar key in an HTML file no longer
+  show "Namespace 'data-on' is not bound". IntelliJ reads the colon as an XML namespace; in HTML
+  it is none. A name such as `foo:bar` is still reported, and so is a Datastar key in XHTML, where
+  a parser that reads the page as XML stops at it. With the Attribute prefix in Settings | Tools |
+  Streamlord set to `data-star-`, `data-star-on:click` is covered the same way.
+
 ## 0.9.0
 
 - Every Kotlin value written into an HTML string is judged by where it lands, as `interpolate`
