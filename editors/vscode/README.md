@@ -100,8 +100,9 @@ Kotlin the HTML completions apply. A value is read as the browser reads it, so a
 over several lines and in single quotes, and in a Kotlin string a `\$` or `${'$'}` before a signal
 stays as written.
 
-**Signature help** (⇧⌘Space on macOS, Ctrl+Shift+Space elsewhere, and on typing `(` or `,`)
-inside an action call: `@get(uri, options?)`, with the argument the caret is on.
+**Signature help** (⇧⌘Space on macOS, Ctrl+Shift+Space elsewhere, and on typing `(` or `,`) inside
+an action call: `@get(uri, options?)`, with the argument the caret is on. In Kotlin the help starts
+once the DSL call's parenthesis is closed, as the IDE closes it for you.
 
 **Hover**: documentation for every attribute, modifier, action and option of a backend action,
 and for the DSL functions, in HTML files, templates and HTML strings in Kotlin alike.

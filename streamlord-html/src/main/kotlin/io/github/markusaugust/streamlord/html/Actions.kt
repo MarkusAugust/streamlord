@@ -31,8 +31,9 @@ public class FetchOptions {
 
     /**
      * Retry policy: `'auto'` (default), `'error'`, `'always'`, `'never'`. Datastar 1.0.4's client
-     * retries a request that never reaches the server whatever this says, so `'never'` acts as
-     * `'auto'` does: neither retries an answer, both retry a failed request, up to [retryMaxCount].
+     * retries a request that fails on the network, before or during the response, whatever this
+     * says, so `'never'` acts as `'auto'` does: neither retries an answer, both retry a failed
+     * request, up to [retryMaxCount] times in a row.
      */
     public var retry: Retry? = null
 

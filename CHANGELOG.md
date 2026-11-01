@@ -11,11 +11,13 @@ All notable changes to Streamlord are recorded here. The format follows
 - Both editors help inside a Datastar expression. In the options object of a backend action,
   `@get('/x', {|})`, completion offers the options not yet written and hover says what each does,
   from a `doc` each option now has in the catalog, written from Datastar 1.0.4's `fetch.ts`.
-  Parameter info in IntelliJ and signature help in VS Code show an action's parameters with the
-  one the caret is on. After `data-on:` come Datastar's own events, `datastar-fetch` and
-  `datastar-signal-patch`, which the catalog now lists as `datastarEvents`, and the DOM's, each
-  with its page on MDN, from `catalog/dom-events.json`, which `npm run build` generates from the
-  `lib.dom.d.ts` of the TypeScript the extension pins and a test holds to it.
+  Parameter info in IntelliJ and signature help in VS Code show an action's parameters with the one
+  the caret is on. After `data-on:` come Datastar's own events, `datastar-fetch` and
+  `datastar-signal-patch`, which the catalog now lists as `datastarEvents`, and the DOM's, with
+  their pages on MDN where TypeScript names one, from `catalog/dom-events.json`, which `npm run
+  build` generates from the `lib.dom.d.ts` of the TypeScript the extension pins and a test holds to
+  it. In IntelliJ the list shows each item's documentation (F1 on macOS, Ctrl+Q elsewhere). In
+  Kotlin the help starts once the DSL call's parenthesis is closed, as the IDE closes it for you.
 - The editors flag a `data-nonce` on `<html>` that stops Datastar: `missing-nonce`, an error, for
   an empty one, which makes the client throw `NonceRequired`; `invalid-nonce`, a warning, for one
   that is no base64 value, which a browser ignores in the policy. A templated value says nothing.
@@ -24,11 +26,13 @@ All notable changes to Streamlord are recorded here. The format follows
   now throws with.
 - In the analysis, for editors: `valueAtCaret`, the attribute value a caret stands in, read by
   core's `holeLandings`; `actionCallAt`, the action call, argument and option key at a caret;
-  `proseRanges`, the strings of an expression; `ActionSpec.parameters`; `fetchOptionDoc`;
-  `Catalog.datastarEvents` and `Catalog.domEvents`.
-- The IntelliJ plugin's spell checking reads only the strings of a Datastar expression, in HTML
-  and in Kotlin, so a signal name such as `$usrnm` is no typo and `'Sav'` still is. A template file
-  IntelliJ reads as plain text is still spelled whole.
+  `expressionAtCaret` and `ExpressionAtCaret`, the Datastar expression before a caret in markup
+  or Kotlin; `ActionCall` and `OptionKeyAt`; `proseRanges`, the strings of an expression;
+  `ActionSpec.parameters`; `fetchOptionDoc`; `Catalog.datastarEvents` of `DocumentEvent` and
+  `Catalog.domEvents` of `DomEvent`.
+- The IntelliJ plugin's spell checking reads only the strings of a Datastar expression, in HTML and
+  in the DSL calls and HTML strings of Kotlin, so a signal name such as `$usrnm` is no typo and
+  `'Sav'` still is. A template file IntelliJ reads as plain text is still spelled whole.
 
 ### Changed
 

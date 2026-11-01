@@ -95,9 +95,11 @@ strings, where a `\$` or `${'$'}` before the name stays as you wrote it.
 **Help inside an expression.** Put the caret in the options of a backend action and completion
 offers the ones not yet written, each with what Datastar 1.0.4 does with it; hovering one says the
 same. Parameter info shows the action's parameters with the one the caret is on: Parameter Info in
-IntelliJ (⌘P on macOS, Ctrl+P elsewhere), Trigger Parameter Hints in VS Code (⇧⌘Space,
-Ctrl+Shift+Space), and on typing `(` or `,`. After `data-on:` come Datastar's own events,
-`datastar-fetch` and `datastar-signal-patch`, then the DOM's, each with its page on MDN.
+IntelliJ (⌘P on macOS, Ctrl+P elsewhere), Trigger Parameter Hints in VS Code (⇧⌘Space on macOS,
+Ctrl+Shift+Space elsewhere), and on typing `(` or `,`. After `data-on:` come Datastar's own events,
+`datastar-fetch` and `datastar-signal-patch`, then the DOM's, with their pages on MDN where
+TypeScript names one. In Kotlin the help starts once the DSL call's parenthesis is closed, as the
+IDE closes it for you.
 
 ```html
 <button data-on:click="@post('/save', {retry: 'error', retryMaxCount: 3})">Save</button>
@@ -155,13 +157,14 @@ shows the test that runs it over a whole project in CI.
 
 ## In IntelliJ specifically
 
-The plugin adds what the IDE does not have. The Kotlin plugin already gives you completion, KDoc
-and type errors for the DSL, and `@Language("HTML")` on Streamlord's parameters turns on HTML
-injection by itself. What the plugin brings is the Datastar checks, HTML injection into the
-strings that carry no annotation, and stepping aside for the official Datastar plugin's attribute
-and DOM event completion when that one is installed. Its spell checking reads only the strings of
-a Datastar expression in HTML and in Kotlin, so `$usrnm` is no typo and `'Sav'` still is; a template
-file IntelliJ reads as plain text, a `.peb` without its plugin, say, is still spelled whole.
+The plugin adds what the IDE does not have. The Kotlin plugin already gives you completion, KDoc and
+type errors for the DSL, and `@Language("HTML")` on Streamlord's parameters turns on HTML injection
+by itself. What the plugin brings is the Datastar checks, HTML injection into the strings that carry
+no annotation, and stepping aside for the official Datastar plugin's attribute and DOM event
+completion when that one is installed. Its spell checking reads only the strings of a Datastar
+expression, in HTML and in the DSL calls and HTML strings of Kotlin, so `$usrnm` is no typo and
+`'Sav'` still is; a template file IntelliJ reads as plain text, a `.peb` without its plugin, say, is
+still spelled whole.
 
 ## And on this site
 

@@ -84,19 +84,19 @@ or `${'$'}` before a signal stays as written. When the official Datastar plugin 
 attribute names and DOM events in HTML files are left to it, so nothing is listed twice;
 Datastar's own events, which it does not know, are offered all the same.
 
-**Parameter info** (⌘P on macOS, Ctrl+P elsewhere, and on typing `(` or `,`) inside an action
-call, in HTML files, templates and Kotlin strings alike: `@get(uri, options?)`, with the argument
-the caret is on.
-Inside a Datastar string in a Kotlin call it stands in for the Kotlin plugin's help with the call
-around the string.
+**Parameter info** (⌘P on macOS, Ctrl+P elsewhere, and on typing `(` or `,`) inside an action call,
+in HTML files, templates and Kotlin strings alike: `@get(uri, options?)`, with the argument the
+caret is on. Inside a Datastar string in a Kotlin call it stands in for the Kotlin plugin's help
+with the call around the string. In Kotlin the help starts once the DSL call's parenthesis is
+closed, as the IDE closes it for you.
 
 **Documentation** on hover (F1 on macOS, Ctrl+Q elsewhere) for every attribute, modifier, action
 and option of a backend action, in HTML files, templates and HTML strings in Kotlin alike, and for
 the DSL functions where the Kotlin plugin has no KDoc to show.
 
-**Spelling**: in a Datastar expression, in HTML and in Kotlin, only the strings are checked, so a
-signal such as `$usrnm` is no typo and `'Sav'` still is. A template file IntelliJ reads as plain
-text is still spelled whole.
+**Spelling**: in a Datastar expression, in HTML and in the DSL calls and HTML strings of Kotlin,
+only the strings are checked, so a signal such as `$usrnm` is no typo and `'Sav'` still is. A
+template file IntelliJ reads as plain text is still spelled whole.
 
 **Highlighting** of Datastar expressions inside DSL strings and HTML strings, and of `data-*`
 attributes in HTML: prefix, plugin, key, modifiers and modifier arguments each get their own
