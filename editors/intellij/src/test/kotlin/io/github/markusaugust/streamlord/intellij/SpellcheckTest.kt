@@ -2,7 +2,9 @@ package io.github.markusaugust.streamlord.intellij
 
 import com.intellij.grazie.ide.inspection.grammar.GrazieInspection
 import com.intellij.grazie.spellcheck.GrazieSpellCheckingInspection
+import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
+import io.github.markusaugust.streamlord.intellij.spelling.DatastarSpellcheckingStrategy
 
 /** In a Datastar expression only the text in quotes is prose: a signal or an action name is no word to spell. */
 class SpellcheckTest : BasePlatformTestCase() {
@@ -24,6 +26,28 @@ class SpellcheckTest : BasePlatformTestCase() {
         assertTrue(found.toString(), found.any { "Lagree" in it })
         assertTrue(found.toString(), found.any { "Wrongg" in it })
         assertTrue(found.toString(), found.none { "usrnm" in it })
+    }
+
+    // The spell checker asks for every element of every pass, so the answer must not read the whole file each time.
+    fun `test the strategy answers in time for a large kotlin file`() {
+        val src = (0 until 600).joinToString("\n") { "fun f$it() { val s = \"text $it\"; dataOnClick(\"\\\$n$it++\") }" }
+        myFixture.configureByText("Big.kt", src)
+        val strategy = DatastarSpellcheckingStrategy()
+        val started = System.nanoTime()
+        var claimed = 0
+        PsiTreeUtil.processElements(myFixture.file) {
+            if (strategy.isMyContext(it)) claimed++
+            true
+        }
+        val ms = (System.nanoTime() - started) / 1_000_000
+        assertTrue("claimed $claimed", claimed > 0)
+        assertTrue("took $ms ms", ms < 1500)
+    }
+
+    // A Kotlin escape ends a word: `\nline` is a new line and then `line`.
+    fun `test a kotlin escape in a string of an expression ends the word`() {
+        val found = typos("Esc.kt", "fun f() { dataOnClick(\"\\\$m = 'Line one\\nline two'\") }")
+        assertTrue(found.toString(), found.isEmpty())
     }
 
     fun `test only the strings of an expression in a kotlin dsl call are spelled`() {
