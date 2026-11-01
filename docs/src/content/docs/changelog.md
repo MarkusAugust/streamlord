@@ -7,6 +7,19 @@ description: "What each release changed, and what it asks of your code."
 repository is authoritative and complete. This page carries only what changes how you write code,
 with a sentence about what to do.
 
+## 0.17.0
+
+**Code that uses the SDK needs no change.** The release is help in the editors, inside a Datastar
+expression.
+
+**A test over your sources can now fail on `data-nonce`.** The analysis reports an empty
+`data-nonce` on `<html>` as `missing-nonce`, an error, since Datastar then throws `NonceRequired`
+and does not start, and one that is no base64 value as `invalid-nonce`, a warning. `dataNonce` of
+such a literal is an error either way, since it throws as the page renders. Put the nonce your
+server sends in the `Content-Security-Policy` header there; [Security](/security/#csp) shows how. Code
+that calls streamlord-analysis needs recompiling: `FetchOption` has a fourth property, `doc`, and
+no constructor or `copy` of three arguments.
+
 ## 0.16.0
 
 **`interpolate` returns `Html`.** Hand it to `patchElements`, `respondElements` or

@@ -68,7 +68,17 @@ public data class ActionSpec(
     val signature: String,
     val kotlin: String,
     val doc: String,
-)
+) {
+    /** The parameters as the signature names them: `@get(uri, options?)` takes `uri` and `options?`. */
+    val parameters: List<String>
+        get() =
+            signature
+                .substringAfter('(')
+                .substringBeforeLast(')')
+                .split(',')
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+}
 
 /** Which argument of a Streamlord call holds the Datastar string, and where its companions are. */
 public data class CallSiteSpec(
@@ -86,6 +96,20 @@ public data class FetchOption(
     val name: String,
     val type: String,
     val default: String,
+    /** What the option does, as Datastar 1.0.4's `fetch.ts` reads it. */
+    val doc: String = "",
+)
+
+/** An event Datastar dispatches on the document, with what its listener is handed: not an SSE event, which core.domain.DatastarEvent is. */
+public data class DocumentEvent(
+    val name: String,
+    val doc: String,
+)
+
+/** A DOM event, with its page on MDN when TypeScript's lib.dom.d.ts names one. */
+public data class DomEvent(
+    val name: String,
+    val mdn: String?,
 )
 
 /** A rendered attribute name such as `data-on:click__once__debounce.500ms`, taken apart. */
@@ -115,6 +139,13 @@ public class Catalog private constructor(
     public val actions: List<ActionSpec>
     public val fetchOptions: List<FetchOption>
     public val fetchEvents: List<String>
+
+    /** The events Datastar dispatches on the document, which `data-on` listens there for on its own (on.ts:52 in 1.0.4). */
+    public val datastarEvents: List<DocumentEvent> =
+        (raw.array("datastarEvents")?.objects() ?: emptyList()).map { DocumentEvent(it.string("name") ?: "", it.string("doc") ?: "") }
+
+    /** The DOM events an element can be listened to for, from `catalog/dom-events.json`, which no Datastar version changes. */
+    public val domEvents: List<DomEvent> get() = DOM_EVENTS
 
     /** The names `genRx` compiles every expression with, before a plugin's own `argNames` (engine.ts:467). */
     public val compiledParameters: List<String>
@@ -170,7 +201,7 @@ public class Catalog private constructor(
             }
         fetchOptions =
             (raw.array("fetchOptions")?.objects() ?: emptyList()).map {
-                FetchOption(it.string("name") ?: "", it.string("type") ?: "", it.string("default") ?: "")
+                FetchOption(it.string("name") ?: "", it.string("type") ?: "", it.string("default") ?: "", it.string("doc") ?: "")
             }
         fetchEvents = raw.array("fetchEvents")?.strings() ?: emptyList()
         compiledParameters = raw.array("compiledParameters")!!.strings()
@@ -288,6 +319,15 @@ public class Catalog private constructor(
 
         /** Read a catalog from its JSON text. */
         public fun parse(json: String): Catalog = Catalog(JsonParser.parseObject(json))
+
+        private val DOM_EVENTS: List<DomEvent> by lazy {
+            JsonParser
+                .parseObject(
+                    CatalogText.DOM_EVENTS,
+                ).array("events")!!
+                .objects()
+                .map { DomEvent(it.string("name")!!, it.string("mdn")) }
+        }
     }
 }
 

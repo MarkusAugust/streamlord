@@ -6,6 +6,57 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-01
+
+### Added
+
+- Both editors help inside a Datastar expression. In the options object of a backend action,
+  `@get('/x', {|})`, completion offers the options not yet written and hover says what each does,
+  from a `doc` each option now has in the catalog, written from Datastar 1.0.4's `fetch.ts`.
+  Parameter info in IntelliJ and signature help in VS Code show an action's parameters with the one
+  the caret is on. After `data-on:` come Datastar's own events, `datastar-fetch` and
+  `datastar-signal-patch`, which the catalog now lists as `datastarEvents`, and the DOM's, with
+  their pages on MDN where TypeScript names one, from `catalog/dom-events.json`, which `npm run
+  build` generates from the `lib.dom.d.ts` of the TypeScript the extension pins and a test holds to
+  it. In IntelliJ the list shows each item's documentation (F1 on macOS, Ctrl+Q elsewhere). In
+  Kotlin the help starts once the DSL call's parenthesis is closed, as the IDE closes it for you.
+- The editors flag a `data-nonce` on `<html>` that stops Datastar: `missing-nonce`, an error, for
+  an empty one, which makes the client throw `NonceRequired`; `invalid-nonce`, a warning, for one
+  that is no base64 value, which a browser ignores in the policy. A templated value says nothing.
+  `dataNonce` of such a literal, which throws as the page renders, is an error either way.
+- `CspNonce.problem(nonce)`: why a nonce cannot be one, or null, in the words `CspNonce.checked`
+  now throws with.
+- In the analysis, for editors: `valueAtCaret`, the attribute value a caret stands in, read by
+  core's `holeLandings`; `actionCallAt`, the action call, argument and option key at a caret;
+  `expressionAtCaret` and `ExpressionAtCaret`, the Datastar expression before a caret in markup
+  or Kotlin; `ActionCall` and `OptionKeyAt`; `proseRanges`, the strings of an expression;
+  `ActionSpec.parameters`; `fetchOptionDoc`; `Catalog.datastarEvents` of `DocumentEvent` and
+  `Catalog.domEvents` of `DomEvent`.
+- The IntelliJ plugin's spell checking reads only the strings of a Datastar expression, in HTML and
+  in the DSL calls and HTML strings of Kotlin, so a signal name such as `$usrnm` is no typo and
+  `'Sav'` still is. A template file IntelliJ reads as plain text is still spelled whole.
+
+### Changed
+
+- `FetchOption` in the analysis gains `doc`, which replaces its three-argument constructor and
+  `copy`. The analysis is read by the editors only.
+- The VS Code snippet and the IntelliJ live template of `data-nonce` and `data-preserve-attr` ask
+  for a value where they asked for an expression, since Datastar takes their value as text.
+
+### Fixed
+
+- Completion in both editors read an attribute value from its own line only, and only in double
+  quotes, so it offered nothing in a value over several lines, such as a `data-signals` object, or
+  in single quotes. It reads the value as the browser does now. In a Kotlin string, a signal written
+  `\$` completes too and keeps its backslash.
+- The IntelliJ plugin listed every Kotlin and markup file of the project again after each
+  keystroke, to find the signals other files define, asking the IDE once for each template extension
+  in its settings. That cost 150 to 330 ms a keystroke whatever the project's size, one file or
+  seventy thousand. It lists them again only when files change on disk, when a file is saved, when
+  the project's roots or file types or the plugin's settings change, or when the IDE finishes
+  indexing. A keystroke costs under 5 ms in a small project and 5 to 17 ms in one of a few thousand
+  Kotlin files or more.
+
 ## [0.16.0] - 2026-10-31
 
 ### Added

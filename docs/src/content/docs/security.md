@@ -280,7 +280,9 @@ All three are in Datastar 1.0.4's `engine/csp.ts`, and none of them announce the
   arrived, which is why the test below is worth writing.
 - **An empty `data-nonce` throws `NonceRequired`** and the client does not start. The plugin, the
   filter and `dataNonce` all refuse an empty nonce before it reaches the markup, so this one can
-  only happen if you write the attribute yourself.
+  only happen if you write the attribute yourself, and then both editors flag it. They warn too on
+  a nonce that is no base64 value, which a browser ignores in the policy, and say nothing of one a
+  template fills in.
 
 Patched-in scripts are the exception that needs no work from you: Datastar re-creates every
 `<script>` it patches in and gives it the page's nonce. Never put a stream response's nonce on an

@@ -120,6 +120,26 @@ class InspectionTest : BasePlatformTestCase() {
         assertEquals(listOf("\\\$total"), unknown())
     }
 
+    fun `test a file added after the first read defines signals, and so does an unsaved edit elsewhere`() {
+        val page = myFixture.addFileToProject("page.html", "<div data-signals:total=\"0\"></div>")
+        myFixture.configureByText("Routes.kt", "fun f() { dataText(\"\\\$query + \\\$total + \\\$sum\") }")
+        val unknown = { myFixture.doHighlighting().filter { it.description?.contains("defines the signal") == true }.map { it.text } }
+        assertEquals(listOf("\\\$query", "\\\$sum"), unknown())
+        myFixture.addFileToProject("search.html", "<input data-bind:query>")
+        assertEquals(listOf("\\\$sum"), unknown())
+        val document =
+            com.intellij.psi.PsiDocumentManager
+                .getInstance(project)
+                .getDocument(page)!!
+        com.intellij.openapi.command.WriteCommandAction.runWriteCommandAction(project) {
+            document.setText("<div data-signals:total=\"0\" data-signals:sum=\"0\"></div>")
+            com.intellij.psi.PsiDocumentManager
+                .getInstance(project)
+                .commitDocument(document)
+        }
+        assertEquals(emptyList<String>(), unknown())
+    }
+
     fun `test a template extension from the settings defines signals in its own file`() {
         myFixture.configureByText(
             "page.njk",

@@ -1,14 +1,15 @@
 import * as vscode from "vscode";
 import { htmlStringAt, lexCached } from "./analyze.ts";
+import { expressionAtCaret, type ExpressionAtCaret } from "./caret.ts";
 import { catalog, parseAttributeName, type AttributeSpec } from "./catalog.ts";
+import { actionCallAt } from "./completionContext.ts";
 import { actionPrefixAt, signalPrefixAt } from "./expression.ts";
 import { keyKind } from "./markup.ts";
-import { findCallSites, selectStringArg } from "./scanner.ts";
+import { findCallSites } from "./scanner.ts";
 import type { SignalIndex } from "./signalIndex.ts";
 
 export { stringAt } from "./scanner.ts";
 
-const EXPRESSION_SITES: ReadonlySet<string> = new Set(Object.keys(catalog.callSites.expression));
 const ALL_SITES: ReadonlySet<string> = new Set([
   ...Object.keys(catalog.callSites.expression),
   ...Object.keys(catalog.callSites.html),
@@ -31,19 +32,12 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
   private kotlin(src: string, offset: number, document: vscode.TextDocument, position: vscode.Position): vscode.CompletionItem[] {
     const selectorItems = this.selectorItems(src, offset, document, position);
     if (selectorItems) return selectorItems;
+    const expression = expressionAtCaret(src, offset, true, this.prefix());
+    if (expression) return this.expressionItems(expression, src, offset, document, position);
     // HTML in a string, handed to patchElements or free-standing: the HTML side applies.
     const html = htmlStringAt(src, offset);
     if (html && offset > html.contentStart && offset <= html.contentEnd) return this.html(src, offset, document, position);
-    const site = findCallSites(src, EXPRESSION_SITES, lexCached(src).mask).find((s) => s.openParen < offset && offset <= s.closeParen);
-    if (!site) return [];
-    const spec = catalog.callSites.expression[site.name];
-    if (!spec) return [];
-    const s = selectStringArg(site, spec.arg, spec.named) ?? site.args.map((a) => a.string).find((x) => x && x.start < offset && offset <= x.end) ?? null;
-    if (!s || offset <= s.start || offset > s.contentEnd + (s.unterminated ? 1 : 0)) return [];
-    const text = src.slice(s.contentStart, offset);
-    // dataOnSignalPatch also writes the filter, so the call is looked up among the attribute's own names.
-    const patch = catalog.attributesByName.get("on-signal-patch")?.kotlin.includes(site.name) ?? false;
-    return [...this.expressionItems(text, document, position, offset - text.length, true, patch), ...this.modifierPropertyItems(src, offset, site.name)];
+    return [];
   }
 
   /** `selector = "#|"` on any DSL call, or the first argument of removeElements: ids and classes from the workspace. */
@@ -88,17 +82,13 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
   /** Signals, actions, attribute names (outside plain HTML), modifiers and modifier values in markup languages. */
   private html(src: string, offset: number, document: vscode.TextDocument, position: vscode.Position): vscode.CompletionItem[] {
     const prefix = this.prefix();
+    // Inside an attribute value, read as the browser reads the markup: over several lines and in either quote.
+    if (document.languageId !== "kotlin") {
+      const expression = expressionAtCaret(src, offset, false, prefix);
+      if (expression) return this.expressionItems(expression, src, offset, document, position);
+    }
     const lineStart = src.lastIndexOf("\n", offset - 1) + 1;
     const before = src.slice(Math.max(lineStart, offset - 400), offset);
-    // Inside an attribute value: name="...|
-    const inValue = /([^\s"'<>=]+)\s*=\s*"([^"]*)$/.exec(before);
-    if (inValue) {
-      const parsed = parseAttributeName((inValue[1] ?? "").toLowerCase(), prefix);
-      if (parsed?.spec && (parsed.spec.valueKind === "expression" || parsed.spec.valueKind === "signal")) {
-        return this.expressionItems(inValue[2] ?? "", document, position, offset - (inValue[2] ?? "").length, parsed.spec.valueKind === "expression", parsed.spec.name === "on-signal-patch");
-      }
-      return [];
-    }
     // On an attribute name inside a tag: <div data-on:cl|
     // What comes before is whitespace-separated runs of plain characters and quoted strings, each
     // character read one way only. Telling names from values instead made `<a != != …` backtrack
@@ -108,6 +98,8 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
     const partial = inName[2] ?? "";
     const tagName = (inName[1] ?? "").toLowerCase();
     if (partial.includes("__")) return this.modifierItems(partial, prefix, document, position);
+    // The event of data-on, which VS Code's HTML service knows nothing of, in any file.
+    if (partial.toLowerCase().startsWith(`${prefix}on:`)) return this.eventItems(partial.slice(prefix.length + 3), src, offset, position);
     if (!partial.startsWith(prefix.slice(0, Math.max(1, partial.length)))) return [];
     // In plain HTML files the attribute names come from html-customdata.json through VS Code's own
     // HTML service, with the same docs; offering them here as well would list them twice. Inside
@@ -158,29 +150,55 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
     });
   }
 
-  /** `patch` is a name only in `data-on-signal-patch`, the one attribute the client hands it to. */
-  private expressionItems(textBefore: string, document: vscode.TextDocument, position: vscode.Position, textStartOffset: number, allowActions: boolean, patchInScope = false): vscode.CompletionItem[] {
+  /**
+   * Signals after `$`, actions after `@`, the options of a backend action on a key of its options
+   * object, the scope names after a bare lowercase word. `patch` is a name only in
+   * `data-on-signal-patch`, the one attribute the client hands it to. What is replaced is measured
+   * back from the caret in the source, where the text before it may be written with escapes.
+   */
+  private expressionItems(expression: ExpressionAtCaret, src: string, offset: number, document: vscode.TextDocument, position: vscode.Position): vscode.CompletionItem[] {
+    const textBefore = expression.before;
     const sig = signalPrefixAt(textBefore, textBefore.length);
     if (sig !== null) {
       const local = this.signals.forFile(document.uri.toString());
+      // The dollar is replaced too where the source writes it plainly, and left as written otherwise (\$, ${'$'}).
+      const dollar = src[offset - sig.length - 1] === "$" ? "$" : "";
       return [...this.signals.all()].sort().map((name) => {
         const item = new vscode.CompletionItem("$" + name, vscode.CompletionItemKind.Variable);
         const isLocal = local.has(name);
         item.detail = isLocal ? "signal (this file)" : "signal (workspace)";
         item.sortText = (isLocal ? "0" : "1") + name;
-        item.range = new vscode.Range(document.positionAt(textStartOffset + textBefore.length - sig.length - 1), position);
-        item.filterText = "$" + name;
+        item.range = new vscode.Range(document.positionAt(offset - sig.length - dollar.length), position);
+        item.insertText = dollar + name;
+        item.filterText = dollar + name;
         return item;
       });
     }
-    if (!allowActions) return [];
+    if (!expression.allowActions) return [];
+    const call = actionCallAt(textBefore, textBefore.length);
+    if (call?.option) {
+      const typed = call.option.typed;
+      // The colon is written only where none follows yet.
+      const colon = /^\s*:/.test(src.slice(offset)) ? "" : ": ";
+      return catalog.fetchOptions
+        .filter((o) => !call.option?.written.includes(o.name))
+        .map((o) => {
+          const item = new vscode.CompletionItem(o.name, vscode.CompletionItemKind.Property);
+          item.detail = o.type;
+          item.documentation = new vscode.MarkdownString(fetchOptionDoc(o));
+          item.range = new vscode.Range(document.positionAt(offset - typed.length), position);
+          item.insertText = o.name + colon;
+          item.sortText = o.name;
+          return item;
+        });
+    }
     const act = actionPrefixAt(textBefore, textBefore.length);
     if (act !== null) {
       return [...catalog.actions].sort((x, y) => Number(x.pro) - Number(y.pro) || byName(x.name, y.name)).map((a) => {
         const item = new vscode.CompletionItem("@" + a.name, vscode.CompletionItemKind.Function);
         item.detail = (a.pro ? "Pro · " : "") + a.signature;
         item.documentation = a.doc;
-        item.range = new vscode.Range(document.positionAt(textStartOffset + textBefore.length - act.length - 1), position);
+        item.range = new vscode.Range(document.positionAt(offset - act.length - 1), position);
         item.insertText = new vscode.SnippetString("@" + a.name + (a.kind === "backend" ? "('${1:/path}')" : a.name === "peek" ? "(() => ${1})" : "(${1})"));
         item.sortText = (a.pro ? "1" : "0") + a.name;
         return item;
@@ -189,17 +207,35 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
     const scope = /(?:^|[^A-Za-z0-9_$])([a-z]*)$/.exec(textBefore);
     if (scope && (scope[1] ?? "").length > 0) {
       const compiled = catalog.compiledParameters.filter((n) => /^[a-z]/.test(n));
-      return [...compiled, ...(patchInScope ? ["patch"] : [])].map((v) => new vscode.CompletionItem(v, vscode.CompletionItemKind.Variable));
+      return [...compiled, ...(expression.patchInScope ? ["patch"] : [])].map((v) => new vscode.CompletionItem(v, vscode.CompletionItemKind.Variable));
     }
     return [];
   }
 
-  /** Inside the modifier lambda of a DSL call: `dataOnClick("...") { deb| }`. */
-  private modifierPropertyItems(src: string, offset: number, fn: string): vscode.CompletionItem[] {
-    void src;
-    void offset;
-    void fn;
-    return [];
+  /** The event of `data-on:`, Datastar's own first, then the DOM's; `typed` is what is written of it. */
+  private eventItems(typed: string, src: string, offset: number, position: vscode.Position): vscode.CompletionItem[] {
+    const range = new vscode.Range(position.translate(0, -typed.length), position);
+    // A value is opened only where none follows yet.
+    const value = /^\s*=/.test(src.slice(offset)) ? "" : '="${1}"';
+    const datastar = catalog.datastarEvents.map((e) => {
+      const item = new vscode.CompletionItem(e.name, vscode.CompletionItemKind.Event);
+      item.detail = "Datastar event";
+      item.documentation = new vscode.MarkdownString(e.doc);
+      item.sortText = "0" + e.name;
+      return item;
+    });
+    const dom = catalog.domEvents.map((e) => {
+      const item = new vscode.CompletionItem(e.name, vscode.CompletionItemKind.Event);
+      item.detail = "DOM event";
+      if (e.mdn) item.documentation = new vscode.MarkdownString(`[MDN](${e.mdn})`);
+      item.sortText = "1" + e.name;
+      return item;
+    });
+    return [...datastar, ...dom].map((item) => {
+      item.range = range;
+      item.insertText = new vscode.SnippetString(String(item.label) + value);
+      return item;
+    });
   }
 }
 
@@ -209,6 +245,11 @@ export function docFor(a: AttributeSpec, prefix: string): string {
   const pro = a.pro ? "\n\n_Datastar Pro. Requires the Pro bundle, which you license and load yourself._" : "";
   const casing = a.keyed ? "\n\n**Key casing:** " + casingNote(a) : "";
   return `**${prefix}${a.name}**\n\n${a.doc}\n\n${a.forms.map((f) => "`" + f.replace(/^data-/, prefix) + "`").join("  \n")}${casing}${mods}${kotlin}${pro}`;
+}
+
+/** fetchOptionDoc in Documentation.kt: an option of the backend actions, its type, its default and what it does. */
+export function fetchOptionDoc(o: (typeof catalog.fetchOptions)[number]): string {
+  return `**${o.name}**: \`${o.type}\`, default \`${o.default}\`\n\n${o.doc ?? ""}`;
 }
 
 /** The browser lowercases attribute names; how Datastar reads the key differs per attribute. */

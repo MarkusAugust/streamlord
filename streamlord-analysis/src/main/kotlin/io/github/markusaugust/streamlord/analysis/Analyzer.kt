@@ -6,6 +6,7 @@ import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.decodeEntities
 import io.github.markusaugust.streamlord.core.client.indexOfAsciiIgnoreCase
 import io.github.markusaugust.streamlord.core.domain.AttributeKeys
+import io.github.markusaugust.streamlord.core.domain.CspNonce
 import io.github.markusaugust.streamlord.core.domain.HoleLanding
 import io.github.markusaugust.streamlord.core.domain.Position
 import io.github.markusaugust.streamlord.core.domain.holeLandings
@@ -217,6 +218,10 @@ public class Analyzer(
             val issues = checkInterpolateSite(site, format.first, format.second, src, opts, hyphenated)
             if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
         }
+        for (site in findCallSites(src, nonceCalls, lex)) {
+            val issues = checkNonceSite(site)
+            if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
+        }
         for ((site, issues) in signalNameHyphenSites(src, lex, dslHelpers(src, EXPRESSION_HELPERS), allSiteNames + "statements")) {
             out += SiteIssues(site, null, issues)
         }
@@ -241,6 +246,27 @@ public class Analyzer(
             if (issues.isNotEmpty()) out += SiteIssues(null, whole, issues)
         }
         return out
+    }
+
+    /** The DSL helpers that write `data-nonce`: `dataNonce`. */
+    private val nonceCalls: Set<String> = catalog.attributesByName["nonce"]?.kotlin?.toSet() ?: emptySet()
+
+    /** `dataNonce("...")` of a literal it refuses as the page renders, through [CspNonce.checked]: empty, or no base64 value. */
+    private fun checkNonceSite(site: CallSite): List<Issue> {
+        val s = (site.named("nonce") ?: site.positional.firstOrNull())?.string ?: return emptyList()
+        if (s.unterminated || s.interpolations.isNotEmpty()) return emptyList()
+        val problem = CspNonce.problem(s.text) ?: return emptyList()
+        val empty = s.text.isEmpty()
+        return listOf(
+            Issue(
+                start = if (empty) s.start else s.contentStart,
+                end = if (empty) s.end else s.contentEnd,
+                message = problem.removeSuffix(".") + ". ${site.name} refuses it as the page renders.",
+                severity = Severity.ERROR,
+                code = if (empty) "missing-nonce" else "invalid-nonce",
+                link = Docs.attribute("nonce"),
+            ),
+        )
     }
 
     /** The string literal assigned in an `attributes["..."] =` match, when it is the whole value: not the first half of a concatenation. */

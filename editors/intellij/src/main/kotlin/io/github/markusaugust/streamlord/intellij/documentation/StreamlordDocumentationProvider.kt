@@ -5,10 +5,14 @@ import com.intellij.lang.html.HTMLLanguage
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiManager
 import com.intellij.psi.impl.FakePsiElement
+import io.github.markusaugust.streamlord.analysis.actionCallAt
 import io.github.markusaugust.streamlord.analysis.actionDoc
 import io.github.markusaugust.streamlord.analysis.attributeDoc
+import io.github.markusaugust.streamlord.analysis.fetchOptionDoc
 import io.github.markusaugust.streamlord.analysis.markdownToHtml
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
+import io.github.markusaugust.streamlord.intellij.completion.DatastarCaret
+import io.github.markusaugust.streamlord.intellij.completion.LookupDoc
 import org.jetbrains.kotlin.idea.references.mainReference
 import org.jetbrains.kotlin.psi.KtFile
 
@@ -35,6 +39,17 @@ class StreamlordDocumentationProvider : AbstractDocumentationProvider() {
         originalElement: PsiElement?,
     ): String? = (element as? DocTarget)?.html
 
+    /** An option or an event in the completion list, which carries its documentation. */
+    override fun getDocumentationElementForLookupItem(
+        psiManager: PsiManager,
+        `object`: Any?,
+        element: PsiElement?,
+    ): PsiElement? {
+        val doc = `object` as? LookupDoc ?: return null
+        val file = element?.containingFile ?: return null
+        return DocTarget(file, doc.html, doc.name)
+    }
+
     private fun resolves(element: PsiElement): Boolean {
         val ref = element.parent as? org.jetbrains.kotlin.psi.KtNameReferenceExpression ?: return false
         return try {
@@ -59,6 +74,14 @@ class StreamlordDocumentationProvider : AbstractDocumentationProvider() {
             if (word.startsWith("@")) {
                 val a = catalog.actionsByName[word.substring(1)] ?: return@let
                 return markdownToHtml(actionDoc(a)) to word
+            }
+        }
+        // A key of a backend action's options object, read as the key it is with the caret at its end.
+        wordAt(text, offset) { it.isLetterOrDigit() || it == '_' || it == '$' }?.let { (word, end) ->
+            val option = catalog.fetchOptions.firstOrNull { it.name == word } ?: return@let
+            val expression = DatastarCaret.expressionAt(file, end) ?: return@let
+            if (expression.allowActions && actionCallAt(expression.before, expression.before.length)?.option?.typed == word) {
+                return markdownToHtml(fetchOptionDoc(option)) to word
             }
         }
         val htmlSide = file !is KtFile || analysis.analyzer.htmlStringAt(text, offset) != null

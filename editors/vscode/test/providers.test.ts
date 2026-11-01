@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { MockDocument, Position } from "./vscode-mock.ts";
 import { StreamlordCompletionProvider } from "../src/completion.ts";
 import { StreamlordHoverProvider } from "../src/hover.ts";
+import { StreamlordSignatureHelpProvider } from "../src/signatureHelp.ts";
 import { analyzeHtml } from "../src/analyze.ts";
 import { collectSelectors } from "../src/selectors.ts";
 import { collectSignals } from "../src/signals.ts";
@@ -173,8 +174,94 @@ describe("completion provider", () => {
   });
 });
 
+describe("help inside an expression", () => {
+  const index = new FakeIndex().add("file:///other.html", other, "html");
+  /** Where an item's range starts; the provider sets a plain range. */
+  const startOf = (item: { range?: unknown }) => (item.range as { start: Position }).start;
+  /** The items at the end of `src`, in a document of `language`. */
+  const at = (src: string, language = "html") => {
+    const doc = new MockDocument(src, language);
+    const provider = new StreamlordCompletionProvider(index as never, () => "data-");
+    return { doc, items: provider.provideCompletionItems(doc as never, doc.positionAt(src.length) as never) };
+  };
+
+  it("offers signals in a value over several lines and in single quotes", () => {
+    assert.ok(at(`<div data-signals="{\n  a: 1,\n  b: $`).items.some((i) => i.label === "$busy"), "several lines");
+    assert.ok(at(`<div data-text='$`).items.some((i) => i.label === "$busy"), "single quotes");
+  });
+
+  it("replaces the signal from its dollar as the source writes it", () => {
+    const html = at(`<div data-show="$a &amp;&amp; $bu`);
+    const busy = html.items.find((i) => i.label === "$busy");
+    assert.equal(html.doc.offsetAt(startOf(busy!)), html.doc.text.length - 3);
+    // In an ordinary Kotlin string the dollar is written \$, which stays as it is.
+    const kotlin = at(`val x = "<div data-text=\\"\\$bu`, "kotlin");
+    const k = kotlin.items.find((i) => i.label === "$busy");
+    assert.equal(kotlin.doc.offsetAt(startOf(k!)), kotlin.doc.text.length - 3);
+  });
+
+  it("offers the options of a backend action not yet written, with what each does", () => {
+    const { items } = at(`<div data-on:click="@get('/x', {retry: 'never', re`);
+    const labels = items.map((i) => i.label);
+    assert.ok(labels.includes("retryInterval") && !labels.includes("retry"), labels.join());
+    assert.match(String((items.find((i) => i.label === "retryInterval")?.documentation as { value: string }).value), /\*\*retryInterval\*\*/);
+  });
+
+  it("offers the options in a template and in a Kotlin DSL string", () => {
+    assert.ok(at(`<div data-on:click="@get('/x', {ret`, "pebble").items.some((i) => i.label === "retryInterval"), "pebble");
+    const kotlin = new MockDocument(`fun f() { dataOnClick("@get('/x', {ret})") }`, "kotlin");
+    const provider = new StreamlordCompletionProvider(index as never, () => "data-");
+    const items = provider.provideCompletionItems(kotlin as never, kotlin.positionAt(kotlin.text.indexOf("})")) as never);
+    assert.ok(items.some((i) => i.label === "retryInterval"), "kotlin");
+  });
+
+  it("writes the colon after an option only where none follows", () => {
+    const doc = new MockDocument(`<div data-on:click="@get('/x', {retr: 'never'})"></div>`, "html");
+    const provider = new StreamlordCompletionProvider(index as never, () => "data-");
+    const items = provider.provideCompletionItems(doc as never, doc.positionAt(doc.text.indexOf(":", 35)) as never);
+    assert.equal(items.find((i) => i.label === "retry")?.insertText, "retry");
+    assert.equal(at(`<div data-on:click="@get('/x', {retr`).items.find((i) => i.label === "retry")?.insertText, "retry: ");
+  });
+
+  it("offers DOM events and Datastar's own after data-on:", () => {
+    const { doc, items } = at(`<button data-on:cl`);
+    const click = items.find((i) => i.label === "click");
+    assert.ok(click && items.some((i) => i.label === "datastar-fetch"));
+    assert.equal(doc.offsetAt(startOf(click)), doc.text.length - 2);
+  });
+});
+
+describe("signature help", () => {
+  const help = new StreamlordSignatureHelpProvider(() => "data-");
+  const signature = (src: string, language: string, offset = src.length) => {
+    const doc = new MockDocument(src, language);
+    return help.provideSignatureHelp(doc as never, doc.positionAt(offset) as never);
+  };
+
+  it("shows the action's parameters with the one at the caret", () => {
+    const h = signature(`<div data-on:click="@get('/x', `, "html");
+    assert.equal(h?.signatures[0]?.label, "@get(uri, options?)");
+    assert.deepEqual(h?.signatures[0]?.parameters.map((p) => p.label), ["uri", "options?"]);
+    assert.equal(h?.activeParameter, 1);
+    const src = `div { dataOnClick("@post(") }`;
+    assert.equal(signature(src, "kotlin", src.indexOf("(\")") + 1)?.activeParameter, 0);
+    assert.equal(signature(`<div data-text="$count`, "html"), null);
+  });
+});
+
 describe("hover provider", () => {
   const hover = new StreamlordHoverProvider(() => "data-");
+
+  it("documents an option of a backend action", () => {
+    const src = `<div data-on:click="@get('/x', {retryScaler: 3})">`;
+    const doc = new MockDocument(src, "html");
+    const h = hover.provideHover(doc as never, doc.positionAt(src.indexOf("retryScaler") + 3) as never);
+    assert.match(String((h?.contents as unknown as { value: string }).value), /\*\*retryScaler\*\*/);
+    const ksrc = `fun f() { dataOnClick("@get('/x', {retryScaler: 3})") }`;
+    const kdoc = new MockDocument(ksrc, "kotlin");
+    const k = hover.provideHover(kdoc as never, kdoc.positionAt(ksrc.indexOf("retryScaler") + 3) as never);
+    assert.match(String((k?.contents as unknown as { value: string }).value), /\*\*retryScaler\*\*/);
+  });
 
   it("documents dsl functions, attributes and actions", () => {
     const kdoc = new MockDocument(`div { dataOnClick("@post('/x')") }`, "kotlin");

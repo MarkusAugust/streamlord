@@ -1,0 +1,86 @@
+{
+  "$comment": "Which attribute value a caret stands in, read as the browser reads the markup (valueAtCaret): the markup is before + after, the caret between them, prefix the attribute prefix (data- when left out). attribute is the attribute's name as written, or null when the caret stands in no quoted attribute value; value is the value before the caret with character references decoded. Read by CompletionContextsTest.kt and completionContext.test.ts.",
+  "cases": [
+    {
+      "name": "a value over several lines",
+      "before": "<div data-signals=\"{\n  user: {name: '',\n    age: $",
+      "after": "}}\"></div>",
+      "attribute": "data-signals",
+      "value": "{\n  user: {name: '',\n    age: $"
+    },
+    {
+      "name": "a value in single quotes",
+      "before": "<div data-text='$cou",
+      "after": "'></div>",
+      "attribute": "data-text",
+      "value": "$cou"
+    },
+    {
+      "name": "character references are decoded",
+      "before": "<div data-show=\"$a &amp;&amp; $",
+      "after": "\"></div>",
+      "attribute": "data-show",
+      "value": "$a && $"
+    },
+    {
+      "name": "the attribute the caret is in, not the first",
+      "before": "<div data-text=\"$count\" data-on:click=\"@get('/x', {ret",
+      "after": "})\"></div>",
+      "attribute": "data-on:click",
+      "value": "@get('/x', {ret"
+    },
+    {
+      "name": "a value the markup does not close yet",
+      "before": "<div data-text=\"$cou",
+      "after": "",
+      "attribute": "data-text",
+      "value": "$cou"
+    },
+    {
+      "name": "template syntax in the value stays in it",
+      "before": "<div data-text=\"{{ x }} $c",
+      "after": "\"></div>",
+      "attribute": "data-text",
+      "value": "{{ x }} $c"
+    },
+    {
+      "name": "any attribute is named, Datastar's or not",
+      "before": "<a href=\"/x",
+      "after": "\">",
+      "attribute": "href",
+      "value": "/x"
+    },
+    {
+      "name": "the aliased prefix",
+      "prefix": "data-star-",
+      "before": "<div data-star-text=\"$c",
+      "after": "\"></div>",
+      "attribute": "data-star-text",
+      "value": "$c"
+    },
+    {
+      "name": "element text is no value",
+      "before": "<div data-text=\"$count\">$",
+      "after": "</div>",
+      "attribute": null
+    },
+    {
+      "name": "between two attributes is no value",
+      "before": "<div data-text=\"$count\" ",
+      "after": "></div>",
+      "attribute": null
+    },
+    {
+      "name": "markup in a script is text of the script",
+      "before": "<script>let a = '<div data-text=\"$x",
+      "after": "\"></div>'\n</script>",
+      "attribute": null
+    },
+    {
+      "name": "markup in a comment is no markup",
+      "before": "<!-- <div data-text=\"$c",
+      "after": "\"></div> -->",
+      "attribute": null
+    }
+  ]
+}
