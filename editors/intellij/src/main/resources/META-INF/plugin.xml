@@ -43,6 +43,19 @@
             order="first"
             implementationClass="io.github.markusaugust.streamlord.intellij.completion.DatastarCompletionConfidence" />
 
+        <!-- XML covers HTML, which builds on it; first, so the tag's own parameter info does not answer inside a value. -->
+        <codeInsight.parameterInfo
+            language="XML"
+            order="first"
+            implementationClass="io.github.markusaugust.streamlord.intellij.completion.DatastarParameterInfoHandler" />
+        <codeInsight.parameterInfo
+            language="kotlin"
+            order="first"
+            implementationClass="io.github.markusaugust.streamlord.intellij.completion.DatastarParameterInfoHandler" />
+        <codeInsight.parameterInfo
+            language="TEXT"
+            implementationClass="io.github.markusaugust.streamlord.intellij.completion.DatastarParameterInfoHandler" />
+
         <lang.documentationProvider
             language="kotlin"
             order="first"
