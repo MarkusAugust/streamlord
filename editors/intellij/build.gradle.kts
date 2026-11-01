@@ -22,6 +22,8 @@ dependencies {
         intellijIdea(providers.gradleProperty("platformVersion"))
         bundledPlugin("org.jetbrains.kotlin")
         bundledPlugin("com.intellij.modules.json")
+        // The spellchecker, which ships inside Grazie; optional at run time (streamlord-spellchecker.xml).
+        bundledPlugin("tanvd.grazi")
         testFramework(TestFrameworkType.Platform)
     }
 
