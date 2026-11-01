@@ -60,6 +60,9 @@
         <annotator language="kotlin" implementationClass="io.github.markusaugust.streamlord.intellij.highlighting.KotlinDatastarAnnotator" />
         <annotator language="TEXT" implementationClass="io.github.markusaugust.streamlord.intellij.highlighting.TemplateTextAnnotator" />
         <colorSettingsPage implementation="io.github.markusaugust.streamlord.intellij.highlighting.DatastarColorSettingsPage" />
+        <lang.inspectionSuppressor
+            language="HTML"
+            implementationClass="io.github.markusaugust.streamlord.intellij.inspections.DatastarNamespaceSuppressor" />
 
         <multiHostInjector implementation="io.github.markusaugust.streamlord.intellij.injection.HtmlStringInjector" />
         <defaultLiveTemplates file="/liveTemplates/Streamlord.xml" />
