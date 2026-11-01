@@ -26,8 +26,9 @@ All notable changes to Streamlord are recorded here. The format follows
   core's `holeLandings`; `actionCallAt`, the action call, argument and option key at a caret;
   `proseRanges`, the strings of an expression; `ActionSpec.parameters`; `fetchOptionDoc`;
   `Catalog.datastarEvents` and `Catalog.domEvents`.
-- The IntelliJ plugin's spell checking reads only the strings of a Datastar expression, so a
-  signal name such as `$usrnm` is no typo and `'Sav'` still is.
+- The IntelliJ plugin's spell checking reads only the strings of a Datastar expression, in HTML
+  and in Kotlin, so a signal name such as `$usrnm` is no typo and `'Sav'` still is. A template file
+  IntelliJ reads as plain text is still spelled whole.
 
 ### Changed
 
@@ -40,9 +41,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 - Completion in both editors read an attribute value from its own line only, and only in double
   quotes, so it offered nothing in a value over several lines, such as a `data-signals` object, or
-  in single quotes, and replaced a signal from the wrong place after a character reference. It
-  reads the value as the browser does now. In a Kotlin string, a signal written `\$` completes too
-  and keeps its backslash.
+  in single quotes. It reads the value as the browser does now. In a Kotlin string, a signal written
+  `\$` completes too and keeps its backslash.
 
 ## [0.16.0] - 2026-10-31
 

@@ -214,10 +214,6 @@ export function decodeEntities(value: string): { text: string; map: number[] } {
   return { text, map };
 }
 
-/**
- * Does the value hold template syntax, so that it cannot be judged before rendering? A `${`
- * inside a JavaScript template literal is JavaScript's own and does not count.
- */
 /** Section 2.3.1 of CSP Level 3: a nonce-value is a base64-value, padding included. */
 const BASE64_NONCE = /^[A-Za-z0-9+/\-_]+={0,2}$/;
 
@@ -228,6 +224,10 @@ export function nonceProblem(nonce: string): string | null {
   return null;
 }
 
+/**
+ * Does the value hold template syntax, so that it cannot be judged before rendering? A `${`
+ * inside a JavaScript template literal is JavaScript's own and does not count.
+ */
 export function hasTemplateSyntax(value: string): boolean {
   for (const m of value.matchAll(new RegExp(TEMPLATE_SYNTAX.source, "g"))) {
     if (m[0] !== "${" || quoteAt(value, m.index) !== "`") return true;

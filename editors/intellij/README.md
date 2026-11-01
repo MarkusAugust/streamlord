@@ -81,19 +81,22 @@ action, `@get('/x', {|})`, the options not yet written; after `data-on:`, Datast
 (`datastar-fetch`, `datastar-signal-patch`) and the DOM's. A value is read as the browser reads
 it, so all of this works over several lines and in single quotes, and in a Kotlin string a `\$`
 or `${'$'}` before a signal stays as written. When the official Datastar plugin is installed, the
-attribute names and events in HTML files are left to it, so nothing is listed twice.
+attribute names and DOM events in HTML files are left to it, so nothing is listed twice;
+Datastar's own events, which it does not know, are offered all the same.
 
-**Parameter info** (⌘P on macOS, Ctrl+P elsewhere) inside an action call, in HTML files,
-templates and Kotlin strings alike: `@get(uri, options?)`, with the argument the caret is on.
+**Parameter info** (⌘P on macOS, Ctrl+P elsewhere, and on typing `(` or `,`) inside an action
+call, in HTML files, templates and Kotlin strings alike: `@get(uri, options?)`, with the argument
+the caret is on.
 Inside a Datastar string in a Kotlin call it stands in for the Kotlin plugin's help with the call
 around the string.
 
-**Documentation** on hover (Ctrl+Q) for every attribute, modifier, action and option of a
-backend action, in HTML files, templates and HTML strings in Kotlin alike, and for the DSL
-functions where the Kotlin plugin has no KDoc to show.
+**Documentation** on hover (F1 on macOS, Ctrl+Q elsewhere) for every attribute, modifier, action
+and option of a backend action, in HTML files, templates and HTML strings in Kotlin alike, and for
+the DSL functions where the Kotlin plugin has no KDoc to show.
 
-**Spelling**: in a Datastar expression only the strings are checked, so a signal such as
-`$usrnm` is no typo and `'Sav'` still is.
+**Spelling**: in a Datastar expression, in HTML and in Kotlin, only the strings are checked, so a
+signal such as `$usrnm` is no typo and `'Sav'` still is. A template file IntelliJ reads as plain
+text is still spelled whole.
 
 **Highlighting** of Datastar expressions inside DSL strings and HTML strings, and of `data-*`
 attributes in HTML: prefix, plugin, key, modifiers and modifier arguments each get their own
@@ -195,7 +198,7 @@ Settings | Tools | Streamlord:
 |---|---|---|
 | Attribute prefix | `data-` | `data-star-` when you load the aliased bundle. |
 | Inject HTML into Kotlin strings | on | Strings that open with a tag, without `@Language("HTML")`. |
-| Leave attribute names to the Datastar plugin | on | No double listing of attribute names and events in HTML files when the official plugin is installed. |
+| Leave attribute names to the Datastar plugin | on | No double listing of attribute names and DOM events in HTML files when the official plugin is installed. |
 | Default base URL | `http://localhost:8080/` | `{{baseUrl}}` unless `.streamlord/env.json` sets `baseUrl`. |
 | Saved requests file | `.streamlord/inspector.json` | Project-relative. |
 | Gutter icons on routes | on | "Open in Stream Inspector" on Ktor and Spring routes. |

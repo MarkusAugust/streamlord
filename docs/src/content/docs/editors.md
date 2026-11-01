@@ -104,7 +104,7 @@ Ctrl+Shift+Space), and on typing `(` or `,`. After `data-on:` come Datastar's ow
 <div data-on:datastar-fetch="evt.detail.type === 'error' && ($failed = true)"></div>
 ```
 
-`retry` here is worth the hover: in 1.0.4 a request that never reaches the server is retried
+`retry` here is worth the hover: in 1.0.4 a request that fails on the network is retried
 whatever it says, so `'auto'` and `'never'` act alike, and `'error'` is what also retries a 4xx or
 5xx answer.
 
@@ -159,8 +159,9 @@ The plugin adds what the IDE does not have. The Kotlin plugin already gives you 
 and type errors for the DSL, and `@Language("HTML")` on Streamlord's parameters turns on HTML
 injection by itself. What the plugin brings is the Datastar checks, HTML injection into the
 strings that carry no annotation, and stepping aside for the official Datastar plugin's attribute
-and event completion when that one is installed. Its spell checking reads only the strings of a
-Datastar expression, so `$usrnm` is no typo and `'Sav'` still is.
+and DOM event completion when that one is installed. Its spell checking reads only the strings of
+a Datastar expression in HTML and in Kotlin, so `$usrnm` is no typo and `'Sav'` still is; a template
+file IntelliJ reads as plain text, a `.peb` without its plugin, say, is still spelled whole.
 
 ## And on this site
 

@@ -470,11 +470,11 @@
     { "name": "payload", "type": "any", "default": "the filtered signal store", "doc": "What a 'json' request sends in place of the signals; filterSignals is then not read." },
     { "name": "requestCancellation", "type": "'auto' | 'cleanup' | 'disabled' | AbortController", "default": "'auto'", "doc": "'auto' cancels a request with the same method and URL that is still running; 'cleanup' does so too, and also cancels the request when its element or attribute goes; 'disabled' lets requests run side by side. An AbortController cancels the request from your own code." },
     { "name": "responseOverrides", "type": "{selector?, mode?, namespace?, useViewTransition?} | {onlyIfMissing?}", "default": "none", "doc": "Documented, but Datastar 1.0.4's client never reads it: set the datastar-* headers on the response instead." },
-    { "name": "retry", "type": "'auto' | 'error' | 'always' | 'never'", "default": "'auto'", "doc": "When Datastar sends the request again. 1.0.4 retries a request that never reaches the server whatever this says, so 'auto' and 'never' act alike and retry no answer; 'error' also retries a 4xx or 5xx response; 'always' retries any answer but a 204 or a redirect, and a stream that has ended. Never more than retryMaxCount times." },
-    { "name": "retryInterval", "type": "number (ms)", "default": "1000", "doc": "Milliseconds before the first retry, multiplied by retryScaler for each one after. A retry: line in the stream sets it too." },
+    { "name": "retry", "type": "'auto' | 'error' | 'always' | 'never'", "default": "'auto'", "doc": "When Datastar sends the request again. A request that fails on the network, before or during the response, is retried whatever this says, so 'auto' and 'never' act alike; 'error' also retries a 4xx or 5xx answer; 'always' also retries any status but 200, 204 or a redirect, and an event stream when it ends. A 200 answer of HTML, JSON or JavaScript is never retried." },
+    { "name": "retryInterval", "type": "number (ms)", "default": "1000", "doc": "Milliseconds before the first retry, multiplied by retryScaler for each one after and set back by a 200 answer. A retry: line in the stream sets it too." },
     { "name": "retryScaler", "type": "number", "default": "2", "doc": "What the wait is multiplied by after each retry, up to retryMaxWait." },
     { "name": "retryMaxWait", "type": "number (ms)", "default": "30000", "doc": "The longest wait between two retries, in milliseconds." },
-    { "name": "retryMaxCount", "type": "number", "default": "10", "doc": "How many times Datastar retries before it gives up and dispatches retries-failed." }
+    { "name": "retryMaxCount", "type": "number", "default": "10", "doc": "How many retries in a row Datastar makes before it gives up and dispatches retries-failed; a 200 answer starts the count again." }
   ],
   "fetchEvents": ["started", "finished", "error", "retrying", "retries-failed"],
   "datastarEvents": [
