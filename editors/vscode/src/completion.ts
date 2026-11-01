@@ -211,6 +211,11 @@ export function docFor(a: AttributeSpec, prefix: string): string {
   return `**${prefix}${a.name}**\n\n${a.doc}\n\n${a.forms.map((f) => "`" + f.replace(/^data-/, prefix) + "`").join("  \n")}${casing}${mods}${kotlin}${pro}`;
 }
 
+/** fetchOptionDoc in Documentation.kt: an option of the backend actions, its type, its default and what it does. */
+export function fetchOptionDoc(o: (typeof catalog.fetchOptions)[number]): string {
+  return `**${o.name}**: \`${o.type}\`, default \`${o.default}\`\n\n${o.doc ?? ""}`;
+}
+
 /** The browser lowercases attribute names; how Datastar reads the key differs per attribute. */
 function casingNote(a: AttributeSpec): string {
   switch (keyKind(a)) {
