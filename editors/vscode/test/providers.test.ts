@@ -207,6 +207,14 @@ describe("help inside an expression", () => {
     assert.match(String((items.find((i) => i.label === "retryInterval")?.documentation as { value: string }).value), /\*\*retryInterval\*\*/);
   });
 
+  it("offers the options in a template and in a Kotlin DSL string", () => {
+    assert.ok(at(`<div data-on:click="@get('/x', {ret`, "pebble").items.some((i) => i.label === "retryInterval"), "pebble");
+    const kotlin = new MockDocument(`fun f() { dataOnClick("@get('/x', {ret})") }`, "kotlin");
+    const provider = new StreamlordCompletionProvider(index as never, () => "data-");
+    const items = provider.provideCompletionItems(kotlin as never, kotlin.positionAt(kotlin.text.indexOf("})")) as never);
+    assert.ok(items.some((i) => i.label === "retryInterval"), "kotlin");
+  });
+
   it("writes the colon after an option only where none follows", () => {
     const doc = new MockDocument(`<div data-on:click="@get('/x', {retr: 'never'})"></div>`, "html");
     const provider = new StreamlordCompletionProvider(index as never, () => "data-");
@@ -249,6 +257,10 @@ describe("hover provider", () => {
     const doc = new MockDocument(src, "html");
     const h = hover.provideHover(doc as never, doc.positionAt(src.indexOf("retryScaler") + 3) as never);
     assert.match(String((h?.contents as unknown as { value: string }).value), /\*\*retryScaler\*\*/);
+    const ksrc = `fun f() { dataOnClick("@get('/x', {retryScaler: 3})") }`;
+    const kdoc = new MockDocument(ksrc, "kotlin");
+    const k = hover.provideHover(kdoc as never, kdoc.positionAt(ksrc.indexOf("retryScaler") + 3) as never);
+    assert.match(String((k?.contents as unknown as { value: string }).value), /\*\*retryScaler\*\*/);
   });
 
   it("documents dsl functions, attributes and actions", () => {
