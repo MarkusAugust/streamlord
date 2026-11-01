@@ -41,6 +41,13 @@ class CompletionContextsTest {
     }
 
     @Test
+    fun `the prose of an expression is its strings and the text of its templates`() {
+        val text = "\$usrnm + ' Lagree' + `x \${\$a} y` // done"
+        // jsRegions counts the `${` and `}` of a template with its text.
+        assertEquals(listOf("' Lagree'", "`x \${", "} y`"), proseRanges(text).map { text.substring(it.first, it.last + 1) })
+    }
+
+    @Test
     fun `the catalog offers the DOM events and Datastar's own`() {
         val catalog = Catalog.default
         val click = catalog.domEvents.firstOrNull { it.name == "click" }

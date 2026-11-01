@@ -127,3 +127,24 @@ public fun actionCallAt(
 }
 
 private val CLOSERS = mapOf('(' to ')', '[' to ']', '{' to '}')
+
+/**
+ * The prose of an expression: the runs of its string and template literals, with their quotes, as
+ * offsets into [text]. A spell checker reads these and leaves signals, actions and code alone.
+ */
+public fun proseRanges(text: String): List<IntRange> {
+    val regions = jsRegions(text)
+    val out = ArrayList<IntRange>()
+    var i = 0
+    while (i < text.length) {
+        val kind = regions[i]
+        if (kind != Region.STRING && kind != Region.TEMPLATE) {
+            i++
+            continue
+        }
+        val start = i
+        while (i < text.length && regions[i] == kind) i++
+        out += start until i
+    }
+    return out
+}

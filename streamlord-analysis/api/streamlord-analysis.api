@@ -245,6 +245,7 @@ public final class io/github/markusaugust/streamlord/analysis/CatalogKt {
 
 public final class io/github/markusaugust/streamlord/analysis/CompletionContextKt {
 	public static final fun actionCallAt (Ljava/lang/String;I)Lio/github/markusaugust/streamlord/analysis/ActionCall;
+	public static final fun proseRanges (Ljava/lang/String;)Ljava/util/List;
 	public static final fun valueAtCaret (Ljava/lang/String;ILjava/lang/String;)Lio/github/markusaugust/streamlord/analysis/ValueAtCaret;
 }
 
