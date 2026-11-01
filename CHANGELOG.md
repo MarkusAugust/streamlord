@@ -6,6 +6,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-01
+
 ### Added
 
 - Both editors help inside a Datastar expression. In the options object of a backend action,
