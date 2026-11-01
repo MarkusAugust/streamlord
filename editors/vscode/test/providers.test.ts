@@ -207,6 +207,14 @@ describe("help inside an expression", () => {
     assert.match(String((items.find((i) => i.label === "retryInterval")?.documentation as { value: string }).value), /\*\*retryInterval\*\*/);
   });
 
+  it("writes the colon after an option only where none follows", () => {
+    const doc = new MockDocument(`<div data-on:click="@get('/x', {retr: 'never'})"></div>`, "html");
+    const provider = new StreamlordCompletionProvider(index as never, () => "data-");
+    const items = provider.provideCompletionItems(doc as never, doc.positionAt(doc.text.indexOf(":", 35)) as never);
+    assert.equal(items.find((i) => i.label === "retry")?.insertText, "retry");
+    assert.equal(at(`<div data-on:click="@get('/x', {retr`).items.find((i) => i.label === "retry")?.insertText, "retry: ");
+  });
+
   it("offers DOM events and Datastar's own after data-on:", () => {
     const { doc, items } = at(`<button data-on:cl`);
     const click = items.find((i) => i.label === "click");

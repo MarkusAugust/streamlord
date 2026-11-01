@@ -45,6 +45,16 @@ class ExpressionHelpTest : BasePlatformTestCase() {
         assertDoesntContain(options, "retry")
     }
 
+    fun `test the colon after an option is written only where none follows`() {
+        myFixture.configureByText("h.html", "<div data-on:click=\"@get('/x', {retryMax<caret>: 10})\"></div>")
+        val items = myFixture.completeBasic()
+        if (items != null) {
+            myFixture.lookup.currentItem = items.first { it.lookupString == "retryMaxCount" }
+            myFixture.finishLookup(Lookup.NORMAL_SELECT_CHAR)
+        }
+        assertTrue(myFixture.file.text, myFixture.file.text.contains("{retryMaxCount: 10}"))
+    }
+
     fun `test events after data-on`() {
         assertContainsElements(lookups("d.html", "<button data-on:<caret>></button>"), "data-on:click", "data-on:datastar-fetch")
     }
