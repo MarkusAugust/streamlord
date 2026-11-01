@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.intellij
 
 import com.intellij.codeInsight.lookup.Lookup
+import com.intellij.testFramework.DumbModeTestUtils
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.testFramework.utils.parameterInfo.MockCreateParameterInfoContext
 import com.intellij.testFramework.utils.parameterInfo.MockUpdateParameterInfoContext
@@ -77,6 +78,30 @@ class ExpressionHelpTest : BasePlatformTestCase() {
 
         myFixture.configureByText("f.html", "<div data-text=\"\$count<caret>\"></div>")
         assertNull(handler.findElementForParameterInfo(MockCreateParameterInfoContext(myFixture.editor, myFixture.file)))
+    }
+
+    // Parameter info reads the catalog and the text only, so it answers while the IDE indexes.
+    fun `test parameter info answers in dumb mode`() {
+        myFixture.configureByText("i.html", "<div data-on:click=\"@post('/x', <caret>\"></div>")
+        DumbModeTestUtils.runInDumbModeSynchronously(project) {
+            val create = MockCreateParameterInfoContext(myFixture.editor, myFixture.file)
+            assertNotNull(DatastarParameterInfoHandler().findElementForParameterInfo(create))
+            assertEquals("post", (create.itemsToShow!!.single() as ActionSpec).name)
+        }
+    }
+
+    // A template file works as HTML does: FreeMarker has its plugin here, so `.ftl` is its own language with an HTML view.
+    fun `test options and parameter info in a template file`() {
+        assertContainsElements(lookups("page.ftl", "<div data-on:click=\"@get('/x', {ret<caret>})\"></div>"), "retry", "retryInterval")
+        myFixture.configureByText("call.ftl", "<div data-on:click=\"@get('/x', <caret>)\"></div>")
+        val create = MockCreateParameterInfoContext(myFixture.editor, myFixture.file)
+        assertNotNull(DatastarParameterInfoHandler().findElementForParameterInfo(create))
+    }
+
+    // HTML injected into a Kotlin string is read from the string, decoded.
+    fun `test options in html injected into a kotlin string`() {
+        val options = lookups("Page.kt", "fun page() = \"\"\"<div data-on:click=\"@get('/x', {ret<caret>})\"></div>\"\"\"")
+        assertContainsElements(options, "retry", "retryInterval")
     }
 
     fun `test an option of a backend action is documented`() {

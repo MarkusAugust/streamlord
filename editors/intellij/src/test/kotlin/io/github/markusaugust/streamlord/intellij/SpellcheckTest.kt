@@ -44,6 +44,12 @@ class SpellcheckTest : BasePlatformTestCase() {
         assertTrue("took $ms ms", ms < 1500)
     }
 
+    fun `test only the strings of an expression in html injected into kotlin are spelled`() {
+        val found = typos("Inj.kt", "fun page() = \"\"\"<div data-text=\"\$usrnm + ' Lagree'\" title=\"Wrongg\"></div>\"\"\"")
+        assertTrue(found.toString(), found.any { "Lagree" in it })
+        assertTrue(found.toString(), found.none { "usrnm" in it })
+    }
+
     // A Kotlin escape ends a word: `\nline` is a new line and then `line`.
     fun `test a kotlin escape in a string of an expression ends the word`() {
         val found = typos("Esc.kt", "fun f() { dataOnClick(\"\\\$m = 'Line one\\nline two'\") }")
