@@ -59,6 +59,29 @@ export class MarkdownString {
   }
 }
 
+export class ParameterInformation {
+  label: string | [number, number];
+  constructor(label: string | [number, number]) {
+    this.label = label;
+  }
+}
+
+export class SignatureInformation {
+  label: string;
+  documentation?: unknown;
+  parameters: ParameterInformation[] = [];
+  constructor(label: string, documentation?: unknown) {
+    this.label = label;
+    this.documentation = documentation;
+  }
+}
+
+export class SignatureHelp {
+  signatures: SignatureInformation[] = [];
+  activeSignature = 0;
+  activeParameter = 0;
+}
+
 export class Hover {
   contents: unknown;
   range?: Range;
