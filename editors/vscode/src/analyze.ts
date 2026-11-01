@@ -237,7 +237,7 @@ const NONCE_CALLS: ReadonlySet<string> = new Set(catalog.attributesByName.get("n
 
 /** `dataNonce("...")` of a literal it refuses as the page renders, through CspNonce.checked: empty, or no base64 value. checkNonceSite in Analyzer.kt. */
 function checkNonceSite(site: CallSite): Issue[] {
-  const s = site.args.filter((a) => a.named === null)[0]?.string;
+  const s = (site.args.find((a) => a.named === "nonce") ?? site.args.filter((a) => a.named === null)[0])?.string;
   if (!s || s.unterminated || s.interpolations.length > 0) return [];
   const problem = nonceProblem(s.text);
   if (!problem) return [];

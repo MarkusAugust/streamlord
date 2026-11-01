@@ -178,6 +178,8 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
     const call = actionCallAt(textBefore, textBefore.length);
     if (call?.option) {
       const typed = call.option.typed;
+      // The colon is written only where none follows yet.
+      const colon = /^\s*:/.test(src.slice(offset)) ? "" : ": ";
       return catalog.fetchOptions
         .filter((o) => !call.option?.written.includes(o.name))
         .map((o) => {
@@ -185,7 +187,7 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
           item.detail = o.type;
           item.documentation = new vscode.MarkdownString(fetchOptionDoc(o));
           item.range = new vscode.Range(document.positionAt(offset - typed.length), position);
-          item.insertText = o.name + ": ";
+          item.insertText = o.name + colon;
           item.sortText = o.name;
           return item;
         });

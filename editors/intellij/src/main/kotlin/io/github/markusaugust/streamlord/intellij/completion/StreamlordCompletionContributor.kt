@@ -224,9 +224,10 @@ class StreamlordCompletionContributor : CompletionContributor() {
                 modifierItems(partial)
                 return false
             }
-            // The event of data-on; in plain HTML files the official plugin offers the DOM's, as it does the names.
+            // The event of data-on. Datastar's own always; in plain HTML files the official plugin offers the DOM's, as it does
+            // the names, and knows none of Datastar's.
             if (partial.lowercase().startsWith("${prefix}on:")) {
-                if (offerAttributeNames) eventItems(partial, partial.substring(0, prefix.length + 3))
+                eventItems(partial, partial.substring(0, prefix.length + 3), withDom = offerAttributeNames)
                 return false
             }
             if (!partial.startsWith(prefix.substring(0, minOf(prefix.length, maxOf(1, partial.length))))) return false
@@ -265,10 +266,11 @@ class StreamlordCompletionContributor : CompletionContributor() {
             if (caretBack > 0) editor.caretModel.moveToOffset(editor.caretModel.offset - caretBack)
         }
 
-        /** After `data-on:`, Datastar's own events first, then the DOM's, each written out as the whole attribute name. */
+        /** After `data-on:`, Datastar's own events first, then the DOM's when [withDom], each written out as the whole attribute name. */
         private fun eventItems(
             partial: String,
             head: String,
+            withDom: Boolean,
         ) {
             val matcher =
                 result.withPrefixMatcher(PlainPrefixMatcher(partial)).withRelevanceSorter(
@@ -283,6 +285,7 @@ class StreamlordCompletionContributor : CompletionContributor() {
             for (e in catalog.datastarEvents) {
                 matcher.addFixed(eventElement(head + e.name, "Datastar event"))
             }
+            if (!withDom) return
             for (e in catalog.domEvents) {
                 matcher.addFixed(eventElement(head + e.name, "DOM event"))
             }
@@ -414,7 +417,11 @@ class StreamlordCompletionContributor : CompletionContributor() {
                             .create(o.name)
                             .withTypeText(o.type)
                             .withIcon(AllIcons.Nodes.Property)
-                            .withInsertHandler { context, _ -> EditorModificationUtil.insertStringAtCaret(context.editor, ": ") },
+                            .withInsertHandler { context, _ ->
+                                // The colon is written only where none follows yet.
+                                val after = context.document.charsSequence.subSequence(context.tailOffset, context.document.textLength)
+                                if (!after.trimStart().startsWith(":")) EditorModificationUtil.insertStringAtCaret(context.editor, ": ")
+                            },
                     )
                 }
                 return true

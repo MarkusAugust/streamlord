@@ -1247,7 +1247,8 @@ public class MarkupValidator(
                 val raw = attr.value.orEmpty()
                 if (raw.isEmpty()) {
                     issues += Issue(attr.nameStart, nameEnd, CspNonce.problem("")!!, Severity.ERROR, "missing-nonce", link)
-                } else if (!hasTemplateSyntax(raw)) {
+                } else if (!hasTemplateSyntax(raw) && '$' !in raw) {
+                    // A nonce holds no `$`, so one there is a template's: `$nonce` in Velocity.
                     CspNonce.problem(decodeEntities(raw).text)?.let { problem ->
                         issues +=
                             Issue(

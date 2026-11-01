@@ -253,7 +253,7 @@ public class Analyzer(
 
     /** `dataNonce("...")` of a literal it refuses as the page renders, through [CspNonce.checked]: empty, or no base64 value. */
     private fun checkNonceSite(site: CallSite): List<Issue> {
-        val s = site.positional.firstOrNull()?.string ?: return emptyList()
+        val s = (site.named("nonce") ?: site.positional.firstOrNull())?.string ?: return emptyList()
         if (s.unterminated || s.interpolations.isNotEmpty()) return emptyList()
         val problem = CspNonce.problem(s.text) ?: return emptyList()
         val empty = s.text.isEmpty()
