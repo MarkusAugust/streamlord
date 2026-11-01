@@ -18,6 +18,27 @@ class CompletionContextsTest {
     }
 
     @Test
+    fun `which Datastar expression a caret stands in`() {
+        val analyzer = Analyzer()
+        for (case in twinCases("expressions-at-caret.json")) {
+            val name = case.string("name")
+            val before = case.string("before")!!
+            val at =
+                analyzer.expressionAtCaret(
+                    before + case.string("after")!!,
+                    before.length,
+                    case.boolean("kotlin")!!,
+                    case.string("prefix") ?: "data-",
+                )
+            val expected = case.obj("expression")
+            assertEquals(expected?.string("before"), at?.before, name)
+            if (expected == null) continue
+            assertEquals(expected.boolean("allowActions"), at?.allowActions, name)
+            assertEquals(expected.boolean("patchInScope"), at?.patchInScope, name)
+        }
+    }
+
+    @Test
     fun `which action call a caret stands in`() {
         for (case in twinCases("action-calls.json")) {
             val name = case.string("name")

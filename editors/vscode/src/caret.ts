@@ -1,8 +1,9 @@
 /**
  * The Datastar expression a caret stands in, in any file the extension reads: an attribute value
- * in markup, an HTML string in Kotlin, or the string handed to a DSL call. Completion and
+ * in markup, an HTML string in Kotlin, or the string handed to a DSL call. Completion, hover and
  * signature help read it alike; the text before the caret is what the browser or the DSL hands
- * Datastar, with Kotlin's escapes and character references decoded.
+ * Datastar, with Kotlin's escapes and character references decoded. The twin of
+ * expressionAtCaret in CompletionContext.kt, both held to test/fixtures/twins/expressions-at-caret.json.
  */
 import { htmlStringAt, lexCached } from "./analyze.ts";
 import { catalog, parseAttributeName } from "./catalog.ts";

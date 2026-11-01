@@ -245,6 +245,7 @@ public final class io/github/markusaugust/streamlord/analysis/CatalogKt {
 
 public final class io/github/markusaugust/streamlord/analysis/CompletionContextKt {
 	public static final fun actionCallAt (Ljava/lang/String;I)Lio/github/markusaugust/streamlord/analysis/ActionCall;
+	public static final fun expressionAtCaret (Lio/github/markusaugust/streamlord/analysis/Analyzer;Ljava/lang/String;IZLjava/lang/String;)Lio/github/markusaugust/streamlord/analysis/ExpressionAtCaret;
 	public static final fun proseRanges (Ljava/lang/String;)Ljava/util/List;
 	public static final fun valueAtCaret (Ljava/lang/String;ILjava/lang/String;)Lio/github/markusaugust/streamlord/analysis/ValueAtCaret;
 }
@@ -329,6 +330,21 @@ public final class io/github/markusaugust/streamlord/analysis/Edit {
 	public final fun getEnd ()I
 	public final fun getStart ()I
 	public final fun getText ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/analysis/ExpressionAtCaret {
+	public fun <init> (Ljava/lang/String;ZZ)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Z
+	public final fun component3 ()Z
+	public final fun copy (Ljava/lang/String;ZZ)Lio/github/markusaugust/streamlord/analysis/ExpressionAtCaret;
+	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/analysis/ExpressionAtCaret;Ljava/lang/String;ZZILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/ExpressionAtCaret;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAllowActions ()Z
+	public final fun getBefore ()Ljava/lang/String;
+	public final fun getPatchInScope ()Z
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }

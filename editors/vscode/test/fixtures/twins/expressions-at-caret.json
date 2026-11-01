@@ -1,0 +1,16 @@
+{
+  "$comment": "The Datastar expression a caret stands in (expressionAtCaret): source is before + after with the caret between them, read as Kotlin when kotlin is true and as markup otherwise, with prefix the attribute prefix (data- when left out). expression is null outside one, or the expression before the caret as Datastar is handed it, Kotlin's escapes and character references decoded, whether actions belong there (an expression, not a signal name) and whether patch is in scope. Read by CompletionContextsTest.kt and completionContext.test.ts.",
+  "cases": [
+    { "name": "an expression attribute in markup", "kotlin": false, "before": "<div data-on:click=\"@get(", "after": "\"></div>", "expression": { "before": "@get(", "allowActions": true, "patchInScope": false } },
+    { "name": "a signal-name attribute takes no actions", "kotlin": false, "before": "<input data-bind=\"us", "after": "\">", "expression": { "before": "us", "allowActions": false, "patchInScope": false } },
+    { "name": "patch is in scope in data-on-signal-patch", "kotlin": false, "before": "<div data-on-signal-patch=\"pat", "after": "\"></div>", "expression": { "before": "pat", "allowActions": true, "patchInScope": true } },
+    { "name": "an attribute that is no Datastar one", "kotlin": false, "before": "<a href=\"/x", "after": "\">", "expression": null },
+    { "name": "a DSL string with an escaped dollar", "kotlin": true, "before": "fun f() { dataOnClick(\"\\$cou", "after": "\") }", "expression": { "before": "$cou", "allowActions": true, "patchInScope": false } },
+    { "name": "a DSL string with a templated dollar", "kotlin": true, "before": "fun f() { dataOnClick(\"${'$'}cou", "after": "\") }", "expression": { "before": "$cou", "allowActions": true, "patchInScope": false } },
+    { "name": "a DSL string with escaped quotes", "kotlin": true, "before": "fun f() { dataOnClick(\"a = \\\"x\\\"; \\$n", "after": "\") }", "expression": { "before": "a = \"x\"; $n", "allowActions": true, "patchInScope": false } },
+    { "name": "dataOnSignalPatch has patch in scope", "kotlin": true, "before": "fun f() { dataOnSignalPatch(\"pat", "after": "\") }", "expression": { "before": "pat", "allowActions": true, "patchInScope": true } },
+    { "name": "an HTML string with escapes", "kotlin": true, "before": "val x = \"<div data-text=\\\"\\$bu", "after": "\\\"></div>\"", "expression": { "before": "$bu", "allowActions": true, "patchInScope": false } },
+    { "name": "a raw HTML string over several lines", "kotlin": true, "before": "fun f() = \"\"\"<div data-signals=\"{\n  a: $", "after": "}\"></div>\"\"\"", "expression": { "before": "{\n  a: $", "allowActions": true, "patchInScope": false } },
+    { "name": "Kotlin code is no expression", "kotlin": true, "before": "val x = 1", "after": "", "expression": null }
+  ]
+}

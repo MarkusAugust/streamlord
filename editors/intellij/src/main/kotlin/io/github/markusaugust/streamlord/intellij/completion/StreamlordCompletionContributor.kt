@@ -22,6 +22,7 @@ import com.intellij.psi.PsiFile
 import io.github.markusaugust.streamlord.analysis.ActionSpec
 import io.github.markusaugust.streamlord.analysis.AttributeSpec
 import io.github.markusaugust.streamlord.analysis.Catalog
+import io.github.markusaugust.streamlord.analysis.ExpressionAtCaret
 import io.github.markusaugust.streamlord.analysis.ModifierType
 import io.github.markusaugust.streamlord.analysis.ValueKind
 import io.github.markusaugust.streamlord.analysis.actionCallAt

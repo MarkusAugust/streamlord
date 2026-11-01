@@ -36,6 +36,66 @@ public fun valueAtCaret(
     return ValueAtCaret(attribute, landing.valueStart, decodeEntities(markup.substring(landing.valueStart, offset)).text)
 }
 
+/** The Datastar expression before a caret, as Datastar is handed it, and what belongs there. */
+public data class ExpressionAtCaret(
+    val before: String,
+    /** Whether actions belong there: an expression, not a signal name. */
+    val allowActions: Boolean,
+    /** Whether `patch` is in scope: data-on-signal-patch only. */
+    val patchInScope: Boolean,
+)
+
+/**
+ * The Datastar expression [offset] stands in, in [src], read as Kotlin when [kotlin] and as markup
+ * otherwise: an attribute value by [valueAtCaret], in markup or in an HTML string in Kotlin, or the
+ * string handed to a DSL expression call. Kotlin's escapes and character references are decoded.
+ */
+public fun Analyzer.expressionAtCaret(
+    src: String,
+    offset: Int,
+    kotlin: Boolean,
+    prefix: String,
+): ExpressionAtCaret? {
+    if (offset !in 0..src.length) return null
+    if (!kotlin) return expressionInMarkup(src, offset, prefix)
+    htmlStringAt(src, offset)?.let { html ->
+        if (offset <= html.contentStart || offset > html.contentEnd) return null
+        return expressionInMarkup(html.text, decodedIndex(html, offset), prefix)
+    }
+    val site =
+        findCallSites(src, catalog.expressionCallSites.keys, lex(src)).firstOrNull { it.openParen < offset && offset <= it.closeParen }
+            ?: return null
+    val spec = catalog.expressionCallSites[site.name] ?: return null
+    val s =
+        site.selectString(spec) ?: site.args.mapNotNull { it.string }.firstOrNull { it.start < offset && offset <= it.end } ?: return null
+    if (offset <= s.start || offset > s.contentEnd + (if (s.unterminated) 1 else 0)) return null
+    // dataOnSignalPatch also writes the filter, so the call is looked up among the attribute's own names.
+    val patch = catalog.attributesByName["on-signal-patch"]?.kotlin?.contains(site.name) == true
+    return ExpressionAtCaret(s.text.substring(0, decodedIndex(s, offset)), allowActions = true, patchInScope = patch)
+}
+
+/** The expression in the attribute value [caret] stands in, in [markup], or null. */
+private fun Analyzer.expressionInMarkup(
+    markup: String,
+    caret: Int,
+    prefix: String,
+): ExpressionAtCaret? {
+    val at = valueAtCaret(markup, caret, prefix) ?: return null
+    val spec = catalog.parseAttributeName(at.attribute.lowercase(), prefix)?.spec ?: return null
+    if (spec.valueKind != ValueKind.EXPRESSION && spec.valueKind != ValueKind.SIGNAL) return null
+    return ExpressionAtCaret(at.before, spec.valueKind == ValueKind.EXPRESSION, spec.name == "on-signal-patch")
+}
+
+/** The decoded index of a source offset in a Kotlin string: the last character that starts at or before it. */
+private fun decodedIndex(
+    s: KotlinString,
+    offset: Int,
+): Int {
+    var i = 0
+    while (i + 1 < s.map.size && s.map[i + 1] <= offset) i++
+    return minOf(i, s.text.length)
+}
+
 /** The action call a caret stands in: the action's name, which argument, and the key of the options object when the caret is on one. */
 public data class ActionCall(
     val action: String,
