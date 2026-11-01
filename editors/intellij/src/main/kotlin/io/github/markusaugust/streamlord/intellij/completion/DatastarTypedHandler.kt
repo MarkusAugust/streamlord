@@ -21,7 +21,8 @@ class DatastarTypedHandler : TypedHandlerDelegate() {
         file: PsiFile,
     ): Result {
         if (charTyped == '(' || charTyped == ',') {
-            if (DatastarCaret.expressionAt(file, editor.caretModel.offset)?.allowActions == true) {
+            // The handler runs before the character goes in and before the document is committed, so the text is the editor's.
+            if (DatastarCaret.expressionAt(file, editor.caretModel.offset, fromDocument = true)?.allowActions == true) {
                 AutoPopupController.getInstance(project).autoPopupParameterInfo(editor, null)
             }
             return Result.CONTINUE

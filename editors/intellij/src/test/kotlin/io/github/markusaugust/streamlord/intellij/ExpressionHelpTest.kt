@@ -1,13 +1,13 @@
 package io.github.markusaugust.streamlord.intellij
 
-import com.intellij.codeInsight.hint.ParameterInfoControllerBase
 import com.intellij.codeInsight.lookup.Lookup
-import com.intellij.testFramework.AutoPopupParameterInfoTestUtil
+import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.testFramework.DumbModeTestUtils
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.testFramework.utils.parameterInfo.MockCreateParameterInfoContext
 import com.intellij.testFramework.utils.parameterInfo.MockUpdateParameterInfoContext
 import io.github.markusaugust.streamlord.analysis.ActionSpec
+import io.github.markusaugust.streamlord.intellij.completion.DatastarCaret
 import io.github.markusaugust.streamlord.intellij.completion.DatastarParameterInfoHandler
 import io.github.markusaugust.streamlord.intellij.documentation.StreamlordDocumentationProvider
 
@@ -133,12 +133,18 @@ class ExpressionHelpTest : BasePlatformTestCase() {
         assertTrue(docOf("data-on:click"), docOf("data-on:click").contains("developer.mozilla.org"))
     }
 
-    // Typing ( in an expression opens the action's parameter info, from the text as typed.
-    fun `test typing a parenthesis opens parameter info`() {
-        myFixture.configureByText("l.html", "<div data-on:click=\"@get<caret>\"></div>")
-        myFixture.type('(')
-        AutoPopupParameterInfoTestUtil.waitForAutoPopup(project)
-        assertTrue(ParameterInfoControllerBase.existsForEditor(myFixture.editor))
+    // The typed handler runs before the document is committed, so it reads the editor's text: what was just typed is there.
+    fun `test the typed handler reads the text as typed`() {
+        for ((name, text) in listOf(
+            "l.html" to "<div data-on:click=\"<caret>\"></div>",
+            "L.kt" to "fun f() { dataOnClick(\"<caret>\") }",
+        )) {
+            myFixture.configureByText(name, text)
+            val at = myFixture.caretOffset
+            WriteCommandAction.runWriteCommandAction(project) { myFixture.editor.document.insertString(at, "@get") }
+            assertNull(name, DatastarCaret.expressionAt(myFixture.file, at + 4))
+            assertEquals(name, "@get", DatastarCaret.expressionAt(myFixture.file, at + 4, fromDocument = true)?.before)
+        }
     }
 
     fun `test an option of a backend action is documented`() {

@@ -12,6 +12,7 @@ import io.github.markusaugust.streamlord.analysis.fetchOptionDoc
 import io.github.markusaugust.streamlord.analysis.markdownToHtml
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.completion.DatastarCaret
+import io.github.markusaugust.streamlord.intellij.completion.LookupDoc
 import org.jetbrains.kotlin.idea.references.mainReference
 import org.jetbrains.kotlin.psi.KtFile
 
@@ -37,6 +38,17 @@ class StreamlordDocumentationProvider : AbstractDocumentationProvider() {
         element: PsiElement?,
         originalElement: PsiElement?,
     ): String? = (element as? DocTarget)?.html
+
+    /** An option or an event in the completion list, which carries its documentation. */
+    override fun getDocumentationElementForLookupItem(
+        psiManager: PsiManager,
+        `object`: Any?,
+        element: PsiElement?,
+    ): PsiElement? {
+        val doc = `object` as? LookupDoc ?: return null
+        val file = element?.containingFile ?: return null
+        return DocTarget(file, doc.html, doc.name)
+    }
 
     private fun resolves(element: PsiElement): Boolean {
         val ref = element.parent as? org.jetbrains.kotlin.psi.KtNameReferenceExpression ?: return false

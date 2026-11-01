@@ -29,6 +29,7 @@ import io.github.markusaugust.streamlord.analysis.actionCallAt
 import io.github.markusaugust.streamlord.analysis.actionDoc
 import io.github.markusaugust.streamlord.analysis.actionPrefixAt
 import io.github.markusaugust.streamlord.analysis.attributeDoc
+import io.github.markusaugust.streamlord.analysis.fetchOptionDoc
 import io.github.markusaugust.streamlord.analysis.findCallSites
 import io.github.markusaugust.streamlord.analysis.markdownToHtml
 import io.github.markusaugust.streamlord.analysis.signalPrefixAt
@@ -283,20 +284,22 @@ class StreamlordCompletionContributor : CompletionContributor() {
                     },
                 )
             for (e in catalog.datastarEvents) {
-                matcher.addFixed(eventElement(head + e.name, "Datastar event"))
+                matcher.addFixed(eventElement(head + e.name, "Datastar event", markdownToHtml(e.doc)))
             }
             if (!withDom) return
             for (e in catalog.domEvents) {
-                matcher.addFixed(eventElement(head + e.name, "DOM event"))
+                val doc = e.mdn?.let { "<p><a href=\"$it\">${e.name} on MDN</a></p>" } ?: "<p>A DOM event.</p>"
+                matcher.addFixed(eventElement(head + e.name, "DOM event", doc))
             }
         }
 
         private fun eventElement(
             name: String,
             type: String,
+            html: String,
         ): LookupElement =
             LookupElementBuilder
-                .create(name)
+                .create(LookupDoc(name, html), name)
                 .withTypeText(type)
                 .withIcon(AllIcons.Nodes.Property)
                 .withInsertHandler { context, _ ->
@@ -414,7 +417,8 @@ class StreamlordCompletionContributor : CompletionContributor() {
                     if (o.name in option.written) continue
                     matcher.addFixed(
                         LookupElementBuilder
-                            .create(o.name)
+                            .create(LookupDoc(o.name, markdownToHtml(fetchOptionDoc(o))), o.name)
+                            .withTailText(" = ${o.default}", true)
                             .withTypeText(o.type)
                             .withIcon(AllIcons.Nodes.Property)
                             .withInsertHandler { context, _ ->

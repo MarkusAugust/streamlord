@@ -17,7 +17,11 @@ import io.github.markusaugust.streamlord.analysis.ValueKind
 import io.github.markusaugust.streamlord.analysis.findCallSites
 import io.github.markusaugust.streamlord.analysis.proseRanges
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
+import org.jetbrains.kotlin.psi.KtDeclaration
+import org.jetbrains.kotlin.psi.KtDotQualifiedExpression
 import org.jetbrains.kotlin.psi.KtFile
+import org.jetbrains.kotlin.psi.KtSimpleNameStringTemplateEntry
+import org.jetbrains.kotlin.psi.KtStringTemplateEntryWithExpression
 import org.jetbrains.kotlin.psi.KtStringTemplateExpression
 import org.jetbrains.kotlin.psi.KtValueArgument
 
@@ -39,6 +43,11 @@ class DatastarSpellcheckingStrategy :
 
     /** The expression [element] is or lies in: a Datastar attribute value, or the string of a DSL expression call. */
     private fun owner(element: PsiElement): PsiElement? {
+        if (element.containingFile is KtFile) {
+            // A string in a Kotlin file, not one in its injected HTML, which is a file of its own.
+            val string = PsiTreeUtil.getParentOfType(element, KtStringTemplateExpression::class.java, false, KtDeclaration::class.java)
+            return string?.takeIf { isExpressionString(it) }
+        }
         PsiTreeUtil.getParentOfType(element, XmlAttributeValue::class.java, false)?.let { value ->
             if (!value.containingFile.language.isKindOf(HTMLLanguage.INSTANCE)) return null
             val attribute = value.parent as? XmlAttribute ?: return null
@@ -46,8 +55,7 @@ class DatastarSpellcheckingStrategy :
             val spec = analysis.catalog.parseAttributeName(attribute.name.lowercase(), analysis.prefix)?.spec ?: return null
             return value.takeIf { spec.valueKind == ValueKind.EXPRESSION || spec.valueKind == ValueKind.SIGNAL }
         }
-        val string = PsiTreeUtil.getParentOfType(element, KtStringTemplateExpression::class.java, false) ?: return null
-        return string.takeIf { isExpressionString(it) }
+        return null
     }
 
     /**
@@ -56,7 +64,10 @@ class DatastarSpellcheckingStrategy :
      * version of the file, and a string that is no argument is answered without them.
      */
     private fun isExpressionString(string: KtStringTemplateExpression): Boolean {
-        if (string.parent !is KtValueArgument) return false
+        // An argument, as written or with its indent trimmed: `dataOnClick("""...""".trimIndent())`.
+        val parent = string.parent
+        val argument = if (parent is KtDotQualifiedExpression && parent.receiverExpression === string) parent.parent else parent
+        if (argument !is KtValueArgument) return false
         val file = string.containingFile as? KtFile ?: return false
         return string.textRange.startOffset in expressionStrings(file)
     }
@@ -69,8 +80,10 @@ class DatastarSpellcheckingStrategy :
             val src = file.text
             val starts =
                 findCallSites(src, catalog.expressionCallSites.keys, analysis.analyzer.lex(src))
-                    .mapNotNull { site -> catalog.expressionCallSites[site.name]?.let { site.selectString(it)?.start } }
-                    .toSet()
+                    .mapNotNull { site ->
+                        // The string by its place, or by its name: `dataOnClick(expression = "...")`.
+                        catalog.expressionCallSites[site.name]?.let { (site.selectString(it) ?: site.named("expression")?.string)?.start }
+                    }.toSet()
             CachedValueProvider.Result.create(starts, file)
         }
 
@@ -89,13 +102,43 @@ class DatastarSpellcheckingStrategy :
             val text = element.text
             val content = content(element, text)
             val kotlin = element is KtStringTemplateExpression
+            // A Kotlin template inside the string is Kotlin's code, spelled where it is declared.
+            val templates =
+                (element as? KtStringTemplateExpression)
+                    ?.entries
+                    ?.filter { it is KtStringTemplateEntryWithExpression || it is KtSimpleNameStringTemplateEntry }
+                    ?.map { it.textRange.shiftLeft(element.textRange.startOffset) }
+                    .orEmpty()
             for (range in proseRanges(text.substring(content.startOffset, content.endOffset))) {
                 val from = content.startOffset + range.first
                 val to = content.startOffset + range.last + 1
-                for (piece in if (kotlin) betweenEscapes(text, from, to) else listOf(TextRange(from, to))) {
+                val pieces = if (kotlin) betweenEscapes(text, from, to) else listOf(TextRange(from, to))
+                for (piece in pieces.flatMap { without(it, templates) }) {
                     consumer.consumeToken(element, text, false, 0, piece, PlainTextSplitter.getInstance())
                 }
             }
+        }
+
+        /** [range] with each of [cuts] taken out of it. */
+        private fun without(
+            range: TextRange,
+            cuts: List<TextRange>,
+        ): List<TextRange> {
+            var pieces = listOf(range)
+            for (cut in cuts) {
+                pieces =
+                    pieces.flatMap { piece ->
+                        if (!piece.intersects(cut)) {
+                            listOf(piece)
+                        } else {
+                            listOfNotNull(
+                                TextRange(piece.startOffset, cut.startOffset).takeIf { cut.startOffset > piece.startOffset },
+                                TextRange(cut.endOffset, piece.endOffset).takeIf { cut.endOffset < piece.endOffset },
+                            )
+                        }
+                    }
+            }
+            return pieces
         }
 
         /** The runs of [text] between [from] and [to] that hold no Kotlin escape: `\n` ends a word, as a new line does. */

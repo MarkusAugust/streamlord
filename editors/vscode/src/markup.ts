@@ -821,8 +821,9 @@ export function validateAttributes(tag: Tag, prefix: string, tagSource?: string,
       const raw = attr.value ?? "";
       if (raw.length === 0) {
         issues.push({ start: attr.nameStart, end: nameEnd, message: nonceProblem("") ?? "", severity: "error", code: "missing-nonce", link: attributeDoc(spec.name) });
-      } else if (!hasTemplateSyntax(raw) && !raw.includes("$")) {
-        // A nonce holds no `$`, so one there is a template's: `$nonce` in Velocity.
+      } else if (!hasTemplateSyntax(raw) && !/[$@{}[\]<%#]/.test(decodeEntities(raw).text)) {
+        // No base64 value holds one of these, so a value with one is a template's: `$nonce` in Velocity,
+        // `@nonce` in Razor or Twirl, `{nonce}` in Svelte.
         const problem = nonceProblem(decodeEntities(raw).text);
         if (problem) {
           issues.push({ start: attr.valueStart, end: attr.valueStart + raw.length, message: `${problem}. A browser ignores such a nonce in the policy and blocks what it would allow.`, severity: "warning", code: "invalid-nonce", link: attributeDoc(spec.name) });
