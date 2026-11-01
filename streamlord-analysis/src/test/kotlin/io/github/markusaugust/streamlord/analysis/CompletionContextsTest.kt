@@ -31,4 +31,12 @@ class CompletionContextsTest {
             assertEquals(option?.array("written")?.strings(), call.option?.written, name)
         }
     }
+
+    @Test
+    fun `the catalog says what each option does and names each action's parameters`() {
+        val catalog = Catalog.default
+        assertEquals(emptyList(), catalog.fetchOptions.filter { it.doc.isBlank() }.map { it.name })
+        assertEquals(listOf("uri", "options?"), catalog.actionsByName.getValue("get").parameters)
+        assertEquals(listOf("() => expr"), catalog.actionsByName.getValue("peek").parameters)
+    }
 }

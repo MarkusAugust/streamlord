@@ -56,6 +56,18 @@ export interface ActionSpec {
   signature: string;
   kotlin: string;
   doc: string;
+  /** The parameters as the signature names them: `@get(uri, options?)` takes `uri` and `options?`. */
+  parameters: string[];
+}
+
+/** ActionSpec.parameters in Catalog.kt. */
+function parametersOf(signature: string): string[] {
+  const open = signature.indexOf("(");
+  const inner = signature.slice(open + 1, signature.lastIndexOf(")"));
+  return inner
+    .split(",")
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
 }
 
 export interface CallSiteSpec {
@@ -75,7 +87,8 @@ export interface Catalog {
   attributesByKotlin: Map<string, AttributeSpec>;
   actions: ActionSpec[];
   actionsByName: Map<string, ActionSpec>;
-  fetchOptions: { name: string; type: string; default: string }[];
+  /** `doc`: what the option does, as Datastar 1.0.4's fetch.ts reads it. */
+  fetchOptions: { name: string; type: string; default: string; doc?: string }[];
   fetchEvents: string[];
   /** The names `genRx` compiles every expression with, before a plugin's own `argNames` (engine.ts:467). */
   compiledParameters: string[];
@@ -149,6 +162,7 @@ function build(): Catalog {
     signature: a.signature as string,
     kotlin: a.kotlin as string,
     doc: a.doc as string,
+    parameters: parametersOf(a.signature as string),
   }));
   // dataOnSignalPatch writes data-on-signal-patch from its string and the filter companion from a
   // SignalFilter, so a helper is the attribute its string argument fills, never the filter.

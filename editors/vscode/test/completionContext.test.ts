@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { catalog } from "../src/catalog.ts";
 import { actionCallAt, valueAtCaret } from "../src/completionContext.ts";
 import { twinCases } from "./twins.ts";
 
@@ -40,4 +41,12 @@ describe("action calls", () => {
       assert.deepEqual(call.option, c.option ?? null);
     });
   }
+});
+
+describe("the catalog for completion", () => {
+  it("says what each option does and names each action's parameters", () => {
+    assert.deepEqual(catalog.fetchOptions.filter((o) => !o.doc?.trim()).map((o) => o.name), []);
+    assert.deepEqual(catalog.actionsByName.get("get")?.parameters, ["uri", "options?"]);
+    assert.deepEqual(catalog.actionsByName.get("peek")?.parameters, ["() => expr"]);
+  });
 });
