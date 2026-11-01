@@ -28,6 +28,10 @@ function that returns HTML, a `val` holding a fragment), and in HTML and templat
 - Datastar expression syntax, checked with a real JavaScript parser, with the error at the right
   column.
 - Unknown actions (`@Post`), Pro actions and Pro attributes (they need the Pro bundle).
+- An empty `data-nonce` on `<html>`, which makes Datastar throw `NonceRequired` and not start,
+  is an error; one that is no base64 value, which a browser ignores in the policy, a warning; one
+  a template fills in says nothing. `dataNonce` of such a literal, which throws as the page
+  renders, is an error either way.
 - Markup in `patchElements(...)`: unclosed or stray tags, text outside elements, a missing `id`
   on a top-level element when no selector is given, a mode that needs a selector.
 - `data-*` attributes: unknown names with "did you mean", unknown modifiers, wrong modifier
@@ -72,12 +76,24 @@ A call the Kotlin plugin resolves to something other than Streamlord is left alo
 **Completion**: `$` offers every signal name declared anywhere in the project (Kotlin DSL calls,
 `@Serializable` classes, HTML strings and templates), this file's first; `@` offers actions;
 `data-` offers attributes; `__` offers modifiers and their values; `#` and `.` in any `selector`
-argument offer the ids and classes declared in the project. When the official Datastar plugin is
-installed, the attribute names in HTML files are left to it, so nothing is listed twice.
+argument offer the ids and classes declared in the project; in the options object of a backend
+action, `@get('/x', {|})`, the options not yet written; after `data-on:`, Datastar's own events
+(`datastar-fetch`, `datastar-signal-patch`) and the DOM's. A value is read as the browser reads
+it, so all of this works over several lines and in single quotes, and in a Kotlin string a `\$`
+or `${'$'}` before a signal stays as written. When the official Datastar plugin is installed, the
+attribute names and events in HTML files are left to it, so nothing is listed twice.
 
-**Documentation** on hover (Ctrl+Q) for every attribute, modifier and action, in HTML files,
-templates and HTML strings in Kotlin alike, and for the DSL functions where the Kotlin plugin
-has no KDoc to show.
+**Parameter info** (⌘P on macOS, Ctrl+P elsewhere) inside an action call, in HTML files,
+templates and Kotlin strings alike: `@get(uri, options?)`, with the argument the caret is on.
+Inside a Datastar string in a Kotlin call it stands in for the Kotlin plugin's help with the call
+around the string.
+
+**Documentation** on hover (Ctrl+Q) for every attribute, modifier, action and option of a
+backend action, in HTML files, templates and HTML strings in Kotlin alike, and for the DSL
+functions where the Kotlin plugin has no KDoc to show.
+
+**Spelling**: in a Datastar expression only the strings are checked, so a signal such as
+`$usrnm` is no typo and `'Sav'` still is.
 
 **Highlighting** of Datastar expressions inside DSL strings and HTML strings, and of `data-*`
 attributes in HTML: prefix, plugin, key, modifiers and modifier arguments each get their own
@@ -179,7 +195,7 @@ Settings | Tools | Streamlord:
 |---|---|---|
 | Attribute prefix | `data-` | `data-star-` when you load the aliased bundle. |
 | Inject HTML into Kotlin strings | on | Strings that open with a tag, without `@Language("HTML")`. |
-| Leave attribute names to the Datastar plugin | on | No double listing in HTML files when the official plugin is installed. |
+| Leave attribute names to the Datastar plugin | on | No double listing of attribute names and events in HTML files when the official plugin is installed. |
 | Default base URL | `http://localhost:8080/` | `{{baseUrl}}` unless `.streamlord/env.json` sets `baseUrl`. |
 | Saved requests file | `.streamlord/inspector.json` | Project-relative. |
 | Gutter icons on routes | on | "Open in Stream Inspector" on Ktor and Spring routes. |

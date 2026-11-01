@@ -28,6 +28,10 @@ function that returns HTML, a `val` holding a fragment), and in `.html` and temp
 - Datastar expression syntax, checked with a real JavaScript parser, with the error at the
   right column.
 - Unknown actions (`@Post`), Pro actions and Pro attributes (hint: they need the Pro bundle).
+- An empty `data-nonce` on `<html>`, which makes Datastar throw `NonceRequired` and not start,
+  is an error; one that is no base64 value, which a browser ignores in the policy, a warning; one
+  a template fills in says nothing. `dataNonce` of such a literal, which throws as the page
+  renders, is an error either way.
 - Markup in `patchElements(...)`: unclosed or stray tags, text outside elements, missing `id`
   on top-level elements when no selector is given, a mode that needs a selector.
 - `data-*` attributes: unknown names with "did you mean", unknown modifiers, wrong modifier
@@ -89,11 +93,18 @@ are not elements.
 **Completions**: `#` and `.` in any `selector` argument offer the ids and classes declared
 anywhere in the workspace, this file first; `$` offers every signal name declared anywhere in the workspace (Kotlin DSL
 calls, `@Serializable` classes, HTML strings and templates); `@` offers actions with snippets; `data-`
-offers attributes; `__` offers modifiers and their values. Inside an HTML string in Kotlin
-the HTML completions apply.
+offers attributes; `__` offers modifiers and their values; in the options object of a backend
+action, `@get('/x', {|})`, the options not yet written; after `data-on:`, Datastar's own events
+(`datastar-fetch`, `datastar-signal-patch`) and the DOM's, in any file. Inside an HTML string in
+Kotlin the HTML completions apply. A value is read as the browser reads it, so all of this works
+over several lines and in single quotes, and in a Kotlin string a `\$` or `${'$'}` before a signal
+stays as written.
 
-**Hover**: documentation for every attribute, modifier and action, and for the DSL functions,
-in HTML files, templates and HTML strings in Kotlin alike.
+**Signature help** (⇧⌘Space on macOS, Ctrl+Shift+Space elsewhere, and on typing `(` or `,`)
+inside an action call: `@get(uri, options?)`, with the argument the caret is on.
+
+**Hover**: documentation for every attribute, modifier, action and option of a backend action,
+and for the DSL functions, in HTML files, templates and HTML strings in Kotlin alike.
 
 **Syntax highlighting** of Datastar expressions and HTML inside the DSL strings and in
 free-standing HTML strings, and of `data-*` attributes in HTML (plugin, key, modifiers and
