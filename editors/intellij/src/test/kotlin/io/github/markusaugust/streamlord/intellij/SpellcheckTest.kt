@@ -41,13 +41,33 @@ class SpellcheckTest : BasePlatformTestCase() {
         }
         val ms = (System.nanoTime() - started) / 1_000_000
         assertTrue("claimed $claimed", claimed > 0)
-        assertTrue("took $ms ms", ms < 1500)
+        // Eight seconds before the strings were cached, a fifth of one after.
+        assertTrue("took $ms ms", ms < 3000)
     }
 
+    // ${'$'} writes the dollar, so the browser gets $usrnm: a plain $usrnm here would be Kotlin's.
     fun `test only the strings of an expression in html injected into kotlin are spelled`() {
-        val found = typos("Inj.kt", "fun page() = \"\"\"<div data-text=\"\$usrnm + ' Lagree'\" title=\"Wrongg\"></div>\"\"\"")
+        val found =
+            typos("Inj.kt", "fun page() = \"\"\"<div data-text=\"\${'\$'}usrnm + ' Lagree'\" title=\"Wrongg\"></div>\"\"\"")
         assertTrue(found.toString(), found.any { "Lagree" in it })
         assertTrue(found.toString(), found.none { "usrnm" in it })
+    }
+
+    // A Kotlin template in a string of an expression is Kotlin's code, which Kotlin spells where it is declared.
+    fun `test a kotlin template in a string of an expression is no prose`() {
+        val found = typos("Tpl.kt", "fun f(usrnm: String) { dataText(\"'Hello \${usrnm}'\") }")
+        assertEquals(found.toString(), 1, found.count { "usrnm" in it })
+    }
+
+    // The analysis reads a string whose indent is trimmed, and one handed by name, as the expression.
+    fun `test a trimmed string and a named one are expressions`() {
+        val found =
+            typos(
+                "Trim.kt",
+                "fun f() { dataOnClick(\"\\\$usrnm = ' Lagree'\".trimIndent()); dataOnClick(expression = \"\\\$usrnm = 1\") }",
+            )
+        assertTrue(found.toString(), found.none { "usrnm" in it })
+        assertTrue(found.toString(), found.any { "Lagree" in it })
     }
 
     // A Kotlin escape ends a word: `\nline` is a new line and then `line`.

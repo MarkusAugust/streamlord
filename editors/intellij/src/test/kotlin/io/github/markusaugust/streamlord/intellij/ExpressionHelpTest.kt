@@ -1,6 +1,8 @@
 package io.github.markusaugust.streamlord.intellij
 
+import com.intellij.codeInsight.hint.ParameterInfoControllerBase
 import com.intellij.codeInsight.lookup.Lookup
+import com.intellij.testFramework.AutoPopupParameterInfoTestUtil
 import com.intellij.testFramework.DumbModeTestUtils
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.testFramework.utils.parameterInfo.MockCreateParameterInfoContext
@@ -102,6 +104,41 @@ class ExpressionHelpTest : BasePlatformTestCase() {
     fun `test options in html injected into a kotlin string`() {
         val options = lookups("Page.kt", "fun page() = \"\"\"<div data-on:click=\"@get('/x', {ret<caret>})\"></div>\"\"\"")
         assertContainsElements(options, "retry", "retryInterval")
+    }
+
+    // The documentation of the lookup's items (F1 or Ctrl+Q while the list is open).
+    fun `test options and events are documented in the list`() {
+        val provider = StreamlordDocumentationProvider()
+
+        fun docOf(name: String): String {
+            val item = myFixture.lookupElements!!.first { it.lookupString == name }
+            val element = provider.getDocumentationElementForLookupItem(psiManager, item.`object`, myFixture.file)
+            return provider.generateDoc(element, null).orEmpty()
+        }
+        myFixture.configureByText("j.html", "<div data-on:click=\"@get('/x', {<caret>})\"></div>")
+        myFixture.completeBasic()
+        assertTrue(docOf("retry"), docOf("retry").contains("<b>retry</b>"))
+        assertTrue(
+            myFixture.lookupElements!!.first { it.lookupString == "retry" }.let { item ->
+                val presentation =
+                    com.intellij.codeInsight.lookup
+                        .LookupElementPresentation()
+                item.renderElement(presentation)
+                presentation.tailText.orEmpty().contains("'auto'")
+            },
+        )
+        myFixture.configureByText("k.html", "<button data-on:<caret>></button>")
+        myFixture.completeBasic()
+        assertTrue(docOf("data-on:datastar-fetch"), docOf("data-on:datastar-fetch").contains("document"))
+        assertTrue(docOf("data-on:click"), docOf("data-on:click").contains("developer.mozilla.org"))
+    }
+
+    // Typing ( in an expression opens the action's parameter info, from the text as typed.
+    fun `test typing a parenthesis opens parameter info`() {
+        myFixture.configureByText("l.html", "<div data-on:click=\"@get<caret>\"></div>")
+        myFixture.type('(')
+        AutoPopupParameterInfoTestUtil.waitForAutoPopup(project)
+        assertTrue(ParameterInfoControllerBase.existsForEditor(myFixture.editor))
     }
 
     fun `test an option of a backend action is documented`() {

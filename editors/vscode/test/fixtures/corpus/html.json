@@ -228,6 +228,7 @@
     {"name":"a base64 nonce with its padding is fine","source":"<html data-nonce=\"abc123+/-_==\"><body></body></html>","issues":[]},
     {"name":"a templated nonce is judged once rendered","source":"<html data-nonce=\"{{ nonce }}\" lang=\"en\"><body data-signals:a=\"${nonce}\"></body></html>","issues":[]},
     {"name":"a templated nonce in Thymeleaf's own attribute is no data-nonce","source":"<html th:data-nonce=\"${nonce}\"><body></body></html>","issues":[]},
-    {"name":"a nonce a Velocity or Kotlin template fills in is judged once rendered","source":"<html data-nonce=\"$nonce\"><body data-nonce=\"x\"></body></html>\n<html data-nonce=\"$!nonce\"></html>","issues":[{"code":"wrong-element","start":32,"end":42}]}
+    {"name":"a nonce a Velocity or Kotlin template fills in is judged once rendered","source":"<html data-nonce=\"$nonce\"><body data-nonce=\"x\"></body></html>\n<html data-nonce=\"$!nonce\"></html>","issues":[{"code":"wrong-element","start":32,"end":42}]},
+    {"name":"a nonce Razor, Twirl or Svelte fills in is judged once rendered","source":"<html data-nonce=\"@nonce\"></html>\n<html data-nonce=\"@helper.CSPNonce()\"></html>\n<html data-nonce=\"{nonce}\"></html>","issues":[]}
   ]
 }
