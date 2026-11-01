@@ -90,6 +90,10 @@ export interface Catalog {
   /** `doc`: what the option does, as Datastar 1.0.4's fetch.ts reads it. */
   fetchOptions: { name: string; type: string; default: string; doc?: string }[];
   fetchEvents: string[];
+  /** The events Datastar dispatches on the document, which `data-on` listens there for on its own (on.ts:52 in 1.0.4). */
+  datastarEvents: { name: string; doc: string }[];
+  /** The DOM events an element can be listened to for, from catalog/dom-events.json. */
+  domEvents: { name: string; mdn: string | null }[];
   /** The names `genRx` compiles every expression with, before a plugin's own `argNames` (engine.ts:467). */
   compiledParameters: string[];
   patchModes: string[];
@@ -189,6 +193,8 @@ function build(): Catalog {
     actionsByName: new Map(actions.map((a) => [a.name, a])),
     fetchOptions: raw.fetchOptions,
     fetchEvents: raw.fetchEvents,
+    datastarEvents: [],
+    domEvents: [],
     compiledParameters: raw.compiledParameters,
     patchModes: raw.sse.patchModes,
     signalCalls: flagged(raw.kotlinCallSites.signals as Record<string, unknown>),

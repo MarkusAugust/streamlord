@@ -100,6 +100,18 @@ public data class FetchOption(
     val doc: String = "",
 )
 
+/** An event Datastar dispatches itself, with what its listener is handed. */
+public data class DatastarEvent(
+    val name: String,
+    val doc: String,
+)
+
+/** A DOM event, with its page on MDN when TypeScript's lib.dom.d.ts names one. */
+public data class DomEvent(
+    val name: String,
+    val mdn: String?,
+)
+
 /** A rendered attribute name such as `data-on:click__once__debounce.500ms`, taken apart. */
 public data class ParsedAttribute(
     val base: String,
@@ -127,6 +139,12 @@ public class Catalog private constructor(
     public val actions: List<ActionSpec>
     public val fetchOptions: List<FetchOption>
     public val fetchEvents: List<String>
+
+    /** The events Datastar dispatches on the document, which `data-on` listens there for on its own (on.ts:52 in 1.0.4). */
+    public val datastarEvents: List<DatastarEvent> = emptyList()
+
+    /** The DOM events an element can be listened to for, from `catalog/dom-events.json`. */
+    public val domEvents: List<DomEvent> = emptyList()
 
     /** The names `genRx` compiles every expression with, before a plugin's own `argNames` (engine.ts:467). */
     public val compiledParameters: List<String>

@@ -39,4 +39,13 @@ class CompletionContextsTest {
         assertEquals(listOf("uri", "options?"), catalog.actionsByName.getValue("get").parameters)
         assertEquals(listOf("() => expr"), catalog.actionsByName.getValue("peek").parameters)
     }
+
+    @Test
+    fun `the catalog offers the DOM events and Datastar's own`() {
+        val catalog = Catalog.default
+        val click = catalog.domEvents.firstOrNull { it.name == "click" }
+        assertEquals("https://developer.mozilla.org/docs/Web/API/Element/click_event", click?.mdn)
+        assertEquals(true, catalog.domEvents.any { it.name == "animationend" })
+        assertEquals(listOf("datastar-fetch", "datastar-signal-patch"), catalog.datastarEvents.map { it.name })
+    }
 }
