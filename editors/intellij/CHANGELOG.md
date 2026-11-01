@@ -2,6 +2,35 @@
 
 All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here.
 
+## 0.10.0
+
+- Help inside a Datastar expression. In the options object of a backend action,
+  `@get('/x', {|})`, completion offers the options not yet written, with each one's default beside
+  it, and hover says what each does in Datastar 1.0.4. `retry` is the one worth reading: a request
+  that fails on the network is retried whatever it says. Parameter info (⌘P on macOS, Ctrl+P
+  elsewhere) shows an action's parameters with the one the caret is on, and opens on typing `(` or
+  `,`. The list shows each item's documentation (F1 on macOS, Ctrl+Q elsewhere). In Kotlin the
+  help starts once the DSL call's parenthesis is closed, as the IDE closes it for you.
+- After `data-on:` come Datastar's own events, `datastar-fetch` and `datastar-signal-patch`, then
+  the DOM's, with their pages on MDN. With the official Datastar plugin installed, the DOM events in
+  HTML files are left to it.
+- Completion works in a value over several lines, such as a `data-signals` object, and in single
+  quotes, where it offered nothing. In a Kotlin string a signal written `\$` completes too and
+  keeps its backslash.
+- An empty `data-nonce` on `<html>` is an error, `missing-nonce`: Datastar throws `NonceRequired`
+  and does not start. One that is no base64 value is a warning, `invalid-nonce`, since a browser
+  ignores it in the policy. A value a template fills in says nothing. `dataNonce` of such a literal
+  is an error either way, since it throws as the page renders.
+- Spell checking reads only the strings of a Datastar expression, in HTML and in the DSL calls and
+  HTML strings of Kotlin: `$usrnm` is no typo, `'Sav'` still is. A template file IntelliJ reads as
+  plain text is still spelled whole.
+- The `data-nonce` and `data-preserve-attr` live templates ask for a value, not an expression.
+- Typing no longer costs 150 to 330 ms a keystroke in any project. The plugin listed the project's
+  Kotlin and markup files again after each edit to find the signals other files define; it lists
+  them again only when files change on disk or are saved, or the project's roots, file types or the
+  plugin's settings change, and a keystroke costs under 5 ms in a small project and 5 to 17 ms in
+  one of a few thousand Kotlin files or more.
+
 ## 0.9.1
 
 - `data-on:click`, `data-signals:count` and every other Datastar key in an HTML file no longer
