@@ -92,6 +92,13 @@ Streamlord lets you give any of them one.
 tags complete and close as in an HTML file. Streamlord's own parameters carry the annotation
 already.
 
+**No namespace warning** on a key: IntelliJ reads the colon in `data-on:click` as an XML
+namespace and warns that `data-on` is not bound. In an HTML file that warning is gone for every
+Datastar attribute, and for `data-star-on:click` when the Attribute prefix in Settings | Tools |
+Streamlord is `data-star-`. A name such as `foo:bar` is still reported, and so is a Datastar key
+in XHTML, where a parser that reads the page as XML (a browser given it as XML, or JSF Facelets)
+stops at it.
+
 **Live templates** for Ktor and Spring routes and the DSL calls in Kotlin, for a function that
 returns HTML as a `$$"""..."""` string (`htmlFunction`), and for every `data-*` attribute in
 HTML (`data-on` Tab).
