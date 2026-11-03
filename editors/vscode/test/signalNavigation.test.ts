@@ -35,7 +35,7 @@ function workspaceOf(files: Record<string, string>) {
   const at = (path: string) => {
     const doc = docs.find((d) => d.uri.path === path)!;
     const offset = doc.text.indexOf("|");
-    doc.text = doc.text.replace("|", "");
+    doc.text = doc.text.slice(0, offset) + doc.text.slice(offset + 1);
     return [doc as unknown as vscode.TextDocument, doc.positionAt(offset) as unknown as vscode.Position] as const;
   };
   /** Each location as its file and the text it covers. */
