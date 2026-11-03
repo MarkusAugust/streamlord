@@ -79,6 +79,14 @@
             implementationClass="io.github.markusaugust.streamlord.intellij.inspections.DatastarNamespaceSuppressor" />
 
         <multiHostInjector implementation="io.github.markusaugust.streamlord.intellij.injection.HtmlStringInjector" />
+        <psi.referenceContributor
+            language="kotlin"
+            implementation="io.github.markusaugust.streamlord.intellij.navigation.SignalReferenceContributor" />
+        <psi.referenceContributor
+            language="XML"
+            implementation="io.github.markusaugust.streamlord.intellij.navigation.SignalReferenceContributor" />
+        <referencesSearch implementation="io.github.markusaugust.streamlord.intellij.navigation.SignalReferencesSearcher" />
+        <findUsagesHandlerFactory implementation="io.github.markusaugust.streamlord.intellij.navigation.SignalFindUsagesHandlerFactory" />
         <defaultLiveTemplates file="/liveTemplates/Streamlord.xml" />
         <defaultLiveTemplates file="/liveTemplates/StreamlordHtml.xml" />
         <notificationGroup id="Streamlord" displayType="BALLOON" />
