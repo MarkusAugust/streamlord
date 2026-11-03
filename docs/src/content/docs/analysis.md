@@ -17,7 +17,7 @@ Take it where your tests can see it, and nowhere else:
 ```kotlin sample=none
 dependencies {
     testImplementation(
-        "io.github.markusaugust.streamlord:streamlord-analysis:0.17.0",
+        "io.github.markusaugust.streamlord:streamlord-analysis:0.18.0",
     )
 }
 ```

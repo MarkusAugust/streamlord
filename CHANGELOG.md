@@ -6,6 +6,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-11-03
+
 ### Added
 
 - Both editors go to a signal, find where it is used and rename it. Go to declaration on `$count`
