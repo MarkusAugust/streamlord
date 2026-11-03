@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
-import { placesIn, textOf, type Places, type SignalIndex } from "./signalIndex.ts";
-import { namesSignal, signalSites, siteAt, siteRenameText, type SignalSite } from "./signalSites.ts";
+import { INDEXED_SCHEMES, placesIn, textOf, type Places, type SignalIndex } from "./signalIndex.ts";
+import { namesSignal, renameRefusal, signalSites, siteAt, siteRenameText, type SignalSite } from "./signalSites.ts";
 
 /** The index as the providers use it: what the workspace defines, and where each file names signals. */
 type Index = Pick<SignalIndex, "allDefinitions" | "allPlaces">;
@@ -30,6 +30,8 @@ export class SignalNavigationProvider implements vscode.DefinitionProvider, vsco
   prepareRename(document: vscode.TextDocument, position: vscode.Position): { range: vscode.Range; placeholder: string } {
     const site = this.siteAt(document, position);
     if (!site) throw new Error("No signal here to rename.");
+    const refusal = renameRefusal(site);
+    if (refusal) throw new Error(refusal);
     return { range: new vscode.Range(document.positionAt(site.start), document.positionAt(site.end)), placeholder: site.signal };
   }
 
@@ -41,11 +43,13 @@ export class SignalNavigationProvider implements vscode.DefinitionProvider, vsco
   async provideRenameEdits(document: vscode.TextDocument, position: vscode.Position, newName: string): Promise<vscode.WorkspaceEdit> {
     const site = this.siteAt(document, position);
     if (!site) throw new Error("No signal here to rename.");
+    const refusal = renameRefusal(site);
+    if (refusal) throw new Error(refusal);
     const old = site.signal;
     if (newName !== old && this.index.allDefinitions().has(newName)) throw new Error(`The workspace already defines the signal '${newName}'.`);
     const edit = new vscode.WorkspaceEdit();
     const byFile = new Map<string, Found[]>();
-    for (const found of await this.sitesOf(old)) byFile.set(found.uri, [...(byFile.get(found.uri) ?? []), found]);
+    for (const found of await this.sitesOf(old, true)) byFile.set(found.uri, [...(byFile.get(found.uri) ?? []), found]);
     for (const [uri, sites] of byFile) {
       const text = await textOf(uri);
       if (text === null) continue;
@@ -60,17 +64,19 @@ export class SignalNavigationProvider implements vscode.DefinitionProvider, vsco
   }
 
   private siteAt(document: vscode.TextDocument, position: vscode.Position): SignalSite | null {
+    // A git diff or an untitled buffer is no file of the workspace, which is what a rename edits.
+    if (!INDEXED_SCHEMES.has(document.uri.scheme)) return null;
     const language = document.languageId === "kotlin" ? "kotlin" : "html";
     const places = placesIn(document.getText(), language, this.prefix());
     return siteAt(signalSites(places.reads, places.declarations, this.index.allDefinitions()), document.offsetAt(position));
   }
 
-  /** Every site in the workspace that names `name` or defines a signal under it. */
-  private async sitesOf(name: string): Promise<Found[]> {
+  /** Every site in the workspace that names `name`, and with `under` every one that defines a signal under it. */
+  private async sitesOf(name: string, under = false): Promise<Found[]> {
     const defined = this.index.allDefinitions();
     const out: Found[] = [];
     for (const [uri, places] of await this.index.allPlaces()) {
-      for (const site of signalSites(places.reads, places.declarations, defined)) if (namesSignal(site, name)) out.push({ uri, site, places });
+      for (const site of signalSites(places.reads, places.declarations, defined)) if (namesSignal(site, name, under)) out.push({ uri, site, places });
     }
     return out;
   }

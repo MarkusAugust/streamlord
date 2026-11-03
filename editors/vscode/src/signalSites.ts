@@ -17,12 +17,14 @@ export interface SignalSite {
 /**
  * The sites of a file: each part of a read whose path up to it the workspace defines, so that
  * `$user.name.length` reads `user` in its first part and `user.name` in its second, and every
- * defining place.
+ * defining place. A read that a defining place covers, `$count = 1`, which assigns the signal,
+ * is that place alone, so that a rename writes it once.
  */
 export function signalSites(reads: readonly SignalReference[], declarations: readonly SignalDeclaration[], defined: ReadonlySet<string>): SignalSite[] {
   const out: SignalSite[] = [];
   for (const read of reads) {
     let at = read.end - read.name.length;
+    if (declarations.some((d) => d.start <= at && read.end <= d.end)) continue;
     let path = "";
     for (const part of read.name.split(".")) {
       path = path ? `${path}.${part}` : part;
@@ -39,9 +41,19 @@ export function siteAt(sites: readonly SignalSite[], offset: number): SignalSite
   return sites.find((s) => s.start <= offset && offset <= s.end) ?? null;
 }
 
-/** Does `site` name the signal `name`, or define one under it, which a rename moves with it? */
-export function namesSignal(site: SignalSite, name: string): boolean {
-  return site.signal === name || (site.declaration !== undefined && site.signal.startsWith(`${name}.`));
+/** Does `site` name the signal `name`, or, `under` given, define one under it, which a rename moves with it? */
+export function namesSignal(site: SignalSite, name: string, under = false): boolean {
+  return site.signal === name || (under && site.declaration !== undefined && site.signal.startsWith(`${name}.`));
+}
+
+/**
+ * Why the signal at `site` cannot be renamed from there, or null. A read of a name with a hyphen
+ * is not found, so a rename would leave them stale; a property of a signals class is Kotlin's.
+ */
+export function renameRefusal(site: SignalSite): string | null {
+  if (site.signal.includes("-")) return `A rename does not find the reads of '${site.signal}', whose hyphen no $name reaches.`;
+  if (site.declaration?.kind === "property") return `'${site.signal}' is a property of a signals class: rename it with Kotlin's rename.`;
+  return null;
 }
 
 /**

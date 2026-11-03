@@ -16,7 +16,7 @@ const EXCLUDED_GLOB = `**/{${SKIPPED_FOLDERS.join(",")},.*}/**`;
 const FILE_CAP = 5000;
 
 /** Where a file lives on a disk the workspace reads; a git diff, an untitled buffer or an output channel defines nothing. */
-const INDEXED_SCHEMES: ReadonlySet<string> = new Set(["file", "vscode-remote", "vscode-vfs"]);
+export const INDEXED_SCHEMES: ReadonlySet<string> = new Set(["file", "vscode-remote", "vscode-vfs"]);
 
 interface FileEntry {
   version: number | null;

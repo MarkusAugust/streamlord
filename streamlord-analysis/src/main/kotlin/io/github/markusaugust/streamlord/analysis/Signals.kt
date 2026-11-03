@@ -279,8 +279,12 @@ public fun signalDeclarations(
     language: SourceLanguage,
 ): List<SignalDeclaration> = definedAt(src, language, Spread()).sortedWith(compareBy({ it.start }, { it.end }))
 
-/** A name a rename may write: dotted parts of letters, digits, `_`, `$` and `-`. */
-private val RENAMABLE = Regex("""[\p{L}\p{N}_$-]+(?:\.[\p{L}\p{N}_$-]+)*""")
+/**
+ * A name a rename may write: dotted parts of ASCII letters, digits and `_`, not opening with a
+ * digit. What a `$name` reads and what a Kotlin string holds without a template or a name the DSL
+ * refuses: a `$` would be a template in Kotlin and `-` throws in a DSL call.
+ */
+private val RENAMABLE = Regex("""[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*""")
 
 /** The characters of a key and its modifiers, as [KEYED_ATTRIBUTE] reads them. */
 private val KEY_TAIL = Regex("""[\p{L}\p{N}_.-]*""")
@@ -310,13 +314,12 @@ public fun signalRenameText(
         SignalDeclaration.Kind.OBJECT_KEY -> {
             val parent = d.name.substringBeforeLast('.', "")
             if (newName.substringBeforeLast('.', "") != parent) return null
-            val key = newName.substringAfterLast('.')
-            val quoted = src.getOrNull(d.start - 1) == '"' || src.getOrNull(d.start - 1) == '\''
-            if (!quoted && !BARE_KEY.matches(key)) null else key
+            // A quoted key with a dot in it is one part, `'a.b'`, which the path's last part is not.
+            if ('.' in src.substring(d.start, d.end)) return null
+            newName.substringAfterLast('.')
         }
 
         SignalDeclaration.Kind.KEY -> {
-            if ('.' in newName) return null
             val modifiers = KEY_TAIL.matchAt(src, d.end)?.value ?: ""
             val kebab = '-' in src.substring(d.start, d.end)
             val spellings =

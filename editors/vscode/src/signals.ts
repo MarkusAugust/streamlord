@@ -202,13 +202,15 @@ export interface SignalDeclaration {
   kind: "name" | "key" | "objectKey" | "property";
 }
 
-/** A name a rename may write: dotted parts of letters, digits, `_`, `$` and `-`. */
-const RENAMABLE = /^[\p{L}\p{N}_$-]+(?:\.[\p{L}\p{N}_$-]+)*$/u;
+/**
+ * A name a rename may write: dotted parts of ASCII letters, digits and `_`, not opening with a
+ * digit. What a `$name` reads and what a Kotlin string holds without a template or a name the DSL
+ * refuses: a `$` would be a template in Kotlin and `-` throws in a DSL call.
+ */
+const RENAMABLE = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/;
 
 /** The characters of a key and its modifiers, as the keyed attribute pattern reads them. */
 const KEY_TAIL = /[\p{L}\p{N}_.-]*/uy;
-
-const BARE_KEY = /^[A-Za-z0-9_$]+$/;
 
 /**
  * What to write at `d` in `src` so that the place defines `newName`, or null when nothing written
@@ -227,12 +229,11 @@ export function signalRenameText(src: string, d: SignalDeclaration, newName: str
     case "objectKey": {
       const parentOf = (path: string) => (path.includes(".") ? path.slice(0, path.lastIndexOf(".")) : "");
       if (parentOf(newName) !== parentOf(d.name)) return null;
-      const key = newName.slice(newName.lastIndexOf(".") + 1);
-      const quoted = src[d.start - 1] === '"' || src[d.start - 1] === "'";
-      return !quoted && !BARE_KEY.test(key) ? null : key;
+      // A quoted key with a dot in it is one part, `'a.b'`, which the path's last part is not.
+      if (src.slice(d.start, d.end).includes(".")) return null;
+      return newName.slice(newName.lastIndexOf(".") + 1);
     }
     case "key": {
-      if (newName.includes(".")) return null;
       KEY_TAIL.lastIndex = d.end;
       const modifiers = KEY_TAIL.exec(src)?.[0] ?? "";
       const readKey = (written: string) => clientKeyName(written.replace(/[A-Z]/g, (c) => c.toLowerCase()));

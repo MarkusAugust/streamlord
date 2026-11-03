@@ -105,4 +105,25 @@ describe("signal navigation", () => {
     await workspace.applyEdit((await w.provider.provideRenameEdits(doc, pos, "my_title")) as never);
     assert.equal(w.docs[0]!.text, `<div data-signals:my-title__case.snake="0" data-text="$my_title"></div>`);
   });
+
+  it("writes an assignment once, as the place that defines the signal", async () => {
+    const w = workspaceOf({ "/w/page.html": `<div data-signals:count="0" data-on:click="$count = $count + 1" data-text="$co|unt"></div>` });
+    const [doc, pos] = w.at("/w/page.html");
+    const edit = (await w.provider.provideRenameEdits(doc, pos, "total")) as unknown as { replacements: { range: vscode.Range }[] };
+    const ranges = edit.replacements.map((r) => [doc.offsetAt(r.range.start), doc.offsetAt(r.range.end)]).sort((a, b) => a[0]! - b[0]!);
+    for (let i = 1; i < ranges.length; i++) assert.ok(ranges[i]![0]! >= ranges[i - 1]![1]!, `overlapping edits: ${JSON.stringify(ranges)}`);
+    assert.equal(ranges.length, 4);
+  });
+
+  it("refuses a rename its reads would not follow", async () => {
+    const w = workspaceOf({ "/w/page.html": `<input data-bind="user-na|me"><span data-text="$user-name"></span>` });
+    const [doc, pos] = w.at("/w/page.html");
+    assert.throws(() => w.provider.prepareRename(doc, pos), /hyphen/);
+  });
+
+  it("lists no signal under the one asked for among its references", async () => {
+    const w = workspaceOf({ "/w/page.html": `<div data-signals="{us|er: {name: ''}}"></div>` });
+    const [doc, pos] = w.at("/w/page.html");
+    assert.deepEqual(w.show(await w.provider.provideReferences(doc, pos, { includeDeclaration: true })), ["/w/page.html user"]);
+  });
 });
