@@ -105,6 +105,12 @@ it.
 
 ## Dependabot
 
+Every Tuesday, after Dependabot's Monday run, `.github/workflows/dependencies.yml` keeps one issue,
+"Dependency status", up to date: each open Dependabot pull request with the branch it goes into,
+its age, its checks and what to do with it, and every open code scanning alert. It comments, which
+notifies, when something is open, and closes the issue when nothing is. Scheduled workflows run
+from `master`, so a change to it takes effect with the next release.
+
 Version updates go to the release branch (`target-branch` in `.github/dependabot.yml`).
 Dependabot reads that file from `master` only, so a change to it goes to `master`.
 

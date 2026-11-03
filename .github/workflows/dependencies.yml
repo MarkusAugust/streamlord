@@ -1,0 +1,108 @@
+name: Dependency status
+
+# What Dependabot leaves waiting: its open pull requests, and what code scanning still reports. It
+# opens them and moves on, and a pull request nobody looks at is an update that never lands. Once a
+# week, after Dependabot's Monday run, this keeps one issue, "Dependency status", up to date: a
+# comment, which notifies, when something is open, and the issue closed when nothing is. What to do
+# with each item is in RELEASING.md, under "First: security alerts and updates".
+#
+# The Dependabot alerts themselves are not listed: the workflow token cannot read them, so the
+# issue links to them.
+
+on:
+  schedule:
+    - cron: "23 6 * * 2"
+  workflow_dispatch:
+  # A change to this file is tried on its pull request, which writes the report to the job summary
+  # and touches no issue.
+  pull_request:
+    paths: [.github/workflows/dependencies.yml]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  security-events: read
+
+jobs:
+  report:
+    name: Dependency status
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/dependabot.yml
+          sparse-checkout-cone-mode: false
+
+      - name: Write the report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # The branch version updates go to, as the release commit last set it.
+          target=$(grep -m1 -oE 'target-branch: *[^ ]+' .github/dependabot.yml | awk '{print $2}')
+          now=$(date -u +%s)
+          {
+            echo "## Dependabot pull requests"
+            echo
+            prs=$(gh pr list -R "$REPO" --author 'app/dependabot' --state open --limit 100 \
+              --json number,title,baseRefName,createdAt,statusCheckRollup)
+            if [ "$(jq length <<<"$prs")" -eq 0 ]; then
+              echo "None open."
+            else
+              echo "| Pull request | Into | Days open | Checks | To do |"
+              echo "| --- | --- | --- | --- | --- |"
+              jq -r --arg target "$target" --argjson now "$now" '.[] |
+                ([.statusCheckRollup[]? | (.conclusion // .state // "") | ascii_downcase]) as $c |
+                (if any($c[]; . == "failure" or . == "error" or . == "cancelled" or . == "timed_out") then "red"
+                 elif any($c[]; . == "" or . == "pending" or . == "in_progress" or . == "queued") then "running"
+                 elif ($c | length) == 0 then "none" else "green" end) as $checks |
+                (if .baseRefName == "master" then "a security update: retarget it to \($target)"
+                 elif .baseRefName != $target then "into \(.baseRefName), not \($target): close it, Dependabot opens it again"
+                 elif $checks == "red" then "fix or close it"
+                 else "review and merge it" end) as $todo |
+                "| #\(.number) \(.title | gsub("\\|"; "/")) | \(.baseRefName) | \((($now - (.createdAt | fromdate)) / 86400) | floor) | \($checks) | \($todo) |"' <<<"$prs"
+            fi
+            echo
+            echo "## Code scanning"
+            echo
+            alerts=$(gh api "repos/$REPO/code-scanning/alerts?state=open&per_page=100")
+            if [ "$(jq length <<<"$alerts")" -eq 0 ]; then
+              echo "No open alert."
+            else
+              jq -r '.[] | "- \(.rule.security_severity_level // .rule.severity): \(.rule.id) in \(.most_recent_instance.location.path):\(.most_recent_instance.location.start_line) (\(.html_url))"' <<<"$alerts"
+            fi
+            echo
+            echo "## Dependabot alerts"
+            echo
+            echo "Listed on the [Security tab](https://github.com/$REPO/security/dependabot), which this workflow cannot read."
+            echo "RELEASING.md says how to tell an alert that needs a patch from one that reaches only tests or tooling."
+          } > report.md
+          open_items=$(( $(jq length <<<"$prs") + $(jq length <<<"$alerts") ))
+          echo "open=$open_items" >> "$GITHUB_ENV"
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the issue up to date
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          title="Dependency status"
+          issue=$(gh issue list -R "$REPO" --state open --search "in:title \"$title\"" --json number,title \
+            --jq "map(select(.title == \"$title\")) | first | .number // empty")
+          if [ "$open" -eq 0 ]; then
+            if [ -n "$issue" ]; then
+              gh issue close -R "$REPO" "$issue" --comment "Nothing is open any more."
+            fi
+            exit 0
+          fi
+          if [ -z "$issue" ]; then
+            gh issue create -R "$REPO" --title "$title" --body-file report.md
+          else
+            gh issue edit -R "$REPO" "$issue" --body-file report.md
+            gh issue comment -R "$REPO" "$issue" --body "$open open, as of $(date -u +%F). The list is in the issue."
+          fi
