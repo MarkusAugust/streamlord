@@ -100,6 +100,17 @@ Kotlin the HTML completions apply. A value is read as the browser reads it, so a
 over several lines and in single quotes, and in a Kotlin string a `\$` or `${'$'}` before a signal
 stays as written.
 
+**Signal navigation**: Go to Definition (F12, or ⌘+click on macOS and Ctrl+click elsewhere) on
+`$count` goes to every place the workspace defines it: a `data-signals` on the page, a
+`patchSignals` in a handler, a property of a signals class. Find All References (⇧F12) lists those
+places and every expression that reads the signal, in markup and Kotlin strings alike. Rename
+Symbol (F2) rewrites them all, each as its place needs: renaming `itemCount` to `basketCount`
+writes the key `data-signals:basket-count`, since the browser lowercases a key. A place that
+cannot hold the new name stops the rename with a message before anything is written: a key whose
+`__case` gives no spelling of it back, a key of an object asked to move under another object, a
+property of a signals class, which Kotlin's rename renames. In `$user.name.length` each part is
+its own signal, so the caret on `user` renames `user` and on `name` renames `user.name`.
+
 **Signature help** (⇧⌘Space on macOS, Ctrl+Shift+Space elsewhere, and on typing `(` or `,`) inside
 an action call: `@get(uri, options?)`, with the argument the caret is on. In Kotlin the help starts
 once the DSL call's parenthesis is closed, as the IDE closes it for you.

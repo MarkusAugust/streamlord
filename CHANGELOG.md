@@ -6,6 +6,19 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Both editors go to a signal, find where it is used and rename it. Go to declaration on `$count`
+  lands on every place the project defines it, in markup and in Kotlin; find usages lists those
+  and every expression that reads it; rename rewrites them all, each as its place needs, and stops
+  before writing anything at a place that cannot hold the new name. In `$user.name.length` each
+  part is its own signal. The IntelliJ plugin answers from positions its index keeps, so a search
+  reads no file again; on ktor the first search takes about 1 s and each one after it 1 to 2 ms.
+- In the analysis, for editors: `signalDeclarations` and `SignalDeclaration`, every place a source
+  defines a signal with the offsets of the name as written and its `Kind`; `signalRenameText` and
+  `signalReadRenameText`, what a rename writes at a defining place or a read, or null where nothing
+  can.
+
 ## [0.17.0] - 2026-11-01
 
 ### Added
