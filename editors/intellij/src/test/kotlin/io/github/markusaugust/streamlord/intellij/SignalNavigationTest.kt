@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.intellij
 
 import com.intellij.codeInsight.TargetElementUtil
+import com.intellij.codeInsight.navigation.actions.GotoDeclarationAction
 import com.intellij.codeInsight.navigation.actions.GotoDeclarationOrUsageHandler2
 import com.intellij.psi.impl.source.tree.injected.InjectedLanguageEditorUtil
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
@@ -38,7 +39,12 @@ class SignalNavigationTest : BasePlatformTestCase() {
      * goes there, and not to find usages, which it does on a defining place.
      */
     private fun targets(): List<Pair<String, String>> {
-        val outcome = GotoDeclarationOrUsageHandler2.testGTDUOutcome(myFixture.editor, myFixture.file, myFixture.caretOffset)
+        val outcome =
+            GotoDeclarationOrUsageHandler2.testGTDUOutcomeInNonBlockingReadAction(
+                myFixture.editor,
+                myFixture.file,
+                myFixture.caretOffset,
+            )
         assertEquals(GotoDeclarationOrUsageHandler2.GTDUOutcome.GTD, outcome)
         // In HTML injected into a Kotlin string the reference is the string's, at the offset in the file.
         val editor = InjectedLanguageEditorUtil.getTopLevelEditor(myFixture.editor)
@@ -207,14 +213,24 @@ class SignalNavigationTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test a template read as plain text is a conflict, not a half rename`() {
-        myFixture.addFileToProject("page.jte", "<div data-signals:count=\"0\"></div>")
+    fun `test a template read as plain text is navigated and renamed`() {
+        val template = myFixture.addFileToProject("page.jte", "<div data-signals:count=\"0\"></div>")
         myFixture.configureByText("other.html", "<b data-text=\"\$co<caret>unt\"></b>")
-        try {
-            myFixture.renameElementAtCaretUsingHandler("total")
-            fail("the template holds no reference a rename can rewrite")
-        } catch (e: com.intellij.refactoring.BaseRefactoringProcessor.ConflictsInTestsException) {
-            assertTrue(e.messages.joinToString(), e.messages.any { "page.jte" in it && "plain text" in it })
-        }
+        assertEquals(listOf("page.jte" to "count"), targets())
+        myFixture.renameElementAtCaretUsingHandler("total")
+        assertEquals("<div data-signals:total=\"0\"></div>", template.text)
+        myFixture.configureByText("view.jte", "<b data-text=\"\$to<caret>tal\"></b>")
+        val outcome =
+            GotoDeclarationOrUsageHandler2.testGTDUOutcomeInNonBlockingReadAction(
+                myFixture.editor,
+                myFixture.file,
+                myFixture.caretOffset,
+            )
+        assertEquals(GotoDeclarationOrUsageHandler2.GTDUOutcome.GTD, outcome)
+        val found = GotoDeclarationAction.findAllTargetElements(project, myFixture.editor, myFixture.caretOffset)
+        assertEquals(listOf("page.jte"), found.map { it.containingFile.name })
+        myFixture.renameElementAtCaretUsingHandler("sum")
+        assertEquals("<div data-signals:sum=\"0\"></div>", template.text)
+        assertEquals("<b data-text=\"\$sum\"></b>", myFixture.file.text)
     }
 }

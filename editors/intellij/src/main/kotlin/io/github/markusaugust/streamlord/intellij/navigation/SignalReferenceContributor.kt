@@ -83,8 +83,22 @@ class SignalPsiReference(
         return signalRenameText(text, d, newName + d.name.removePrefix(old))
     }
 
-    override fun multiResolve(incompleteCode: Boolean): Array<ResolveResult> =
-        SignalTarget.of(element.containingFile, signal).map { PsiElementResolveResult(it) }.toTypedArray()
+    /**
+     * Every place the project defines the signal, but one another plugin's reference here already
+     * goes to: the official Datastar plugin finds the signals of the same HTML file, and go to
+     * declaration would list that place twice. Find usages and rename take every place all the same.
+     */
+    override fun multiResolve(incompleteCode: Boolean): Array<ResolveResult> {
+        val others =
+            element.references
+                .filter { it !is SignalPsiReference && it.rangeInElement == rangeInElement }
+                .mapNotNull { it.resolve() }
+        return SignalTarget
+            .of(element.containingFile, signal)
+            .filterNot { t -> others.any(t::samePlaceAs) }
+            .map { PsiElementResolveResult(it) }
+            .toTypedArray()
+    }
 
     override fun isReferenceTo(element: PsiElement): Boolean = element is SignalTarget && element.name == signal
 

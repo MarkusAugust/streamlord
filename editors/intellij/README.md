@@ -87,14 +87,16 @@ Datastar's own events, which it does not know, are offered all the same.
 **Signal navigation**: Ctrl+click (⌘+click on macOS) or Go to Declaration on `$count` goes to every
 place the project defines it: a `data-signals` on the page, a `patchSignals` in a handler, a
 property of a signals class. Find Usages (Alt+F7) lists those places and every expression that reads
-the signal, in HTML files, Kotlin strings and the templates IntelliJ gives an HTML tree; a template
-it reads as plain text has none yet. Rename (Shift+F6) rewrites them all, each as its place needs:
-renaming `itemCount` to `basketCount` writes the key `data-signals:basket-count`, since the browser
-lowercases a key. A place that cannot hold the new name stops the rename before anything is written:
-a key whose `__case` gives no spelling of it back, a key of an object asked to move under another
-object, a property of a signals class, which Kotlin's own rename renames. In `$user.name.length`
-each part is its own signal, so the caret on `user` renames `user` and on `name` renames
-`user.name`. The places come from the plugin's index, so a search reads no file again.
+the signal, in HTML files, Kotlin strings and templates, those IntelliJ reads as plain text among
+them. Rename (Shift+F6) rewrites them all, each as its place needs: renaming `itemCount` to
+`basketCount` writes the key `data-signals:basket-count`, since the browser lowercases a key. A
+place that cannot hold the new name stops the rename before anything is written: a key whose
+`__case` gives no spelling of it back, a key of an object asked to move under another object, a
+property of a signals class, which Kotlin's own rename renames. In `$user.name.length` each part is
+its own signal, so the caret on `user` renames `user` and on `name` renames `user.name`. The places
+come from the plugin's index, so a search reads no file again. Beside the official Datastar plugin,
+which finds the signals of the same HTML file, a place is listed once, and rename is this plugin's,
+so it reaches every file.
 
 **Parameter info** (⌘P on macOS, Ctrl+P elsewhere, and on typing `(` or `,`) inside an action call,
 in HTML files, templates and Kotlin strings alike: `@get(uri, options?)`, with the argument the

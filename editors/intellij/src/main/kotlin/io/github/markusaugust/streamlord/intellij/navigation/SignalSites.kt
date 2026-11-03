@@ -1,7 +1,10 @@
 package io.github.markusaugust.streamlord.intellij.navigation
 
 import com.intellij.lang.injection.InjectedLanguageManager
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiFile
+import com.intellij.psi.PsiManager
+import com.intellij.psi.PsiPlainText
 import com.intellij.psi.util.CachedValueProvider
 import com.intellij.psi.util.CachedValuesManager
 import com.intellij.psi.util.PsiModificationTracker
@@ -60,6 +63,11 @@ object SignalSites {
                     analysis.htmlSignalReferences(file)
                 }
 
+                // A template IntelliJ gives no HTML tree is read as text, as the inspections read it.
+                StreamlordAnalysis.isTemplateText(file) -> {
+                    analysis.htmlSignalReferences(file)
+                }
+
                 else -> {
                     return emptyList()
                 }
@@ -93,6 +101,35 @@ object SignalSites {
         }
         for (d in declarations) out += SignalSite(d.start, d.end, d.name, d, host(d.start))
         return out
+    }
+
+    /**
+     * The reference of a template read as text at [at]: starting there with [start], or else
+     * holding it, as a caret does. Plain text holds no contributed references, so it is made from
+     * the file's sites on its one text element.
+     */
+    fun textReferenceAt(
+        file: PsiFile,
+        at: Int,
+        start: Boolean,
+    ): SignalPsiReference? {
+        if (!StreamlordAnalysis.isTemplateText(file)) return null
+        val text = file.findElementAt(at) as? PsiPlainText ?: return null
+        val site = of(file).firstOrNull { if (start) it.start == at else at in it.start..it.end } ?: return null
+        return SignalPsiReference(text, site.start, site.end, site.signal, site.declaration)
+    }
+
+    /**
+     * The tree of [vf] that holds its signal references: the HTML view of a template that has one,
+     * which the base language's tree of the template does not hold, or else the file's own.
+     */
+    fun psiOf(
+        manager: PsiManager,
+        vf: VirtualFile,
+    ): PsiFile? {
+        val provider = manager.findViewProvider(vf) ?: return null
+        val base = provider.getPsi(provider.baseLanguage)
+        return provider.allFiles.firstOrNull { it !== base && StreamlordAnalysis.isHtmlSide(it) } ?: base
     }
 
     /** The calls that define a signal by a name in a string, which are someone else's when they resolve elsewhere. */

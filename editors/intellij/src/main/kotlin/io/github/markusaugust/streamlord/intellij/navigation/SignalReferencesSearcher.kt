@@ -5,6 +5,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiManager
+import com.intellij.psi.PsiPlainText
 import com.intellij.psi.PsiReference
 import com.intellij.psi.search.LocalSearchScope
 import com.intellij.psi.search.SearchScope
@@ -63,7 +64,7 @@ class SignalReferencesSearcher : QueryExecutorBase<PsiReference, ReferencesSearc
                 .map { it.file }
                 .distinct()
                 .filter { scope.contains(it) }
-                .mapNotNull { manager.findFile(it) }
+                .mapNotNull { SignalSites.psiOf(manager, it) }
         }
 
         /** The signal reference that starts at [at] in [file], on the innermost element that holds one. */
@@ -72,6 +73,8 @@ class SignalReferencesSearcher : QueryExecutorBase<PsiReference, ReferencesSearc
             at: Int,
         ): SignalPsiReference? {
             val leaf = file.findElementAt(at) ?: return null
+            // Plain text holds no contributed references, so a template read as text gets them made from its sites.
+            if (leaf is PsiPlainText) return SignalSites.textReferenceAt(file, at, start = true)
             for (host in leaf.parentsOfType<PsiElement>(withSelf = true)) {
                 val base = host.textRange.startOffset
                 host.references

@@ -14,6 +14,8 @@ All notable changes to Streamlord are recorded here. The format follows
   before writing anything at a place that cannot hold the new name. In `$user.name.length` each
   part is its own signal. The IntelliJ plugin answers from positions its index keeps, so a search
   reads no file again; on ktor the first search takes about 1 s and each one after it 1 to 2 ms.
+  In IntelliJ this covers templates read as plain text too, and beside the official Datastar
+  plugin a place is listed once.
 - In the analysis, for editors: `signalDeclarations` and `SignalDeclaration`, every place a source
   defines a signal with the offsets of the name as written and its `Kind`; `signalRenameText` and
   `signalReadRenameText`, what a rename writes at a defining place or a read, or null where nothing

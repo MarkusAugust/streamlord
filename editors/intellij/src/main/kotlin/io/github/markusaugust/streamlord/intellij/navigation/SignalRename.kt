@@ -56,12 +56,14 @@ class SignalRenameHandler : RenameHandler {
     }
 
     private fun targetAt(dataContext: DataContext): SignalTarget? =
-        referenceAt(dataContext)?.multiResolve(false)?.firstNotNullOfOrNull { it.element as? SignalTarget }
+        referenceAt(dataContext)?.let { SignalTarget.of(it.element.containingFile, it.signal).firstOrNull() }
 
     private fun referenceAt(dataContext: DataContext): SignalPsiReference? {
         val editor = CommonDataKeys.EDITOR.getData(dataContext) ?: return null
         // In HTML injected into a Kotlin string the reference is the string's.
         for (e in listOf(editor, InjectedLanguageEditorUtil.getTopLevelEditor(editor)).distinct()) {
+            val file = e.project?.let { PsiDocumentManager.getInstance(it).getPsiFile(e.document) }
+            file?.let { SignalSites.textReferenceAt(it, e.caretModel.offset, start = false) }?.let { return it }
             // A Kotlin string may hold other plugins' references at the same place, which the platform joins into one.
             val found = TargetElementUtil.findReference(e, e.caretModel.offset)
             val reference =
@@ -141,7 +143,7 @@ class SignalRenameProcessor : RenamePsiElementProcessor() {
         val index = SignalIndex.getInstance(project)
         val manager = PsiManager.getInstance(project)
         for (place in index.declarationsOf(old, inside = true) + index.readsOf(old)) {
-            val file = manager.findFile(place.file) ?: continue
+            val file = SignalSites.psiOf(manager, place.file) ?: continue
             val sites = SignalSites.of(file).filter { it.start >= place.start && it.end <= place.end }
             if (sites.any { SignalReferencesSearcher.referenceAt(file, it.start) != null }) continue
             val written = file.text.substring(place.start, place.end)

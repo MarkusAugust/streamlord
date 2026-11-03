@@ -7,6 +7,7 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiManager
+import com.intellij.psi.PsiNamedElement
 import com.intellij.psi.impl.FakePsiElement
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.SearchScope
@@ -69,6 +70,10 @@ class SignalTarget(
             override fun getIcon(unused: Boolean): Icon = AllIcons.Nodes.Variable
         }
 
+    /** Is [other], another plugin's element, the official Datastar plugin's say, for this same place? */
+    fun samePlaceAs(other: PsiElement): Boolean =
+        other !is SignalTarget && other is PsiNamedElement && other.containingFile == file && other.textOffset == range.startOffset
+
     override fun equals(other: Any?): Boolean =
         other is SignalTarget && other.file == file && other.range == range && other.signal == signal
 
@@ -84,7 +89,7 @@ class SignalTarget(
         ): List<SignalTarget> {
             val manager = PsiManager.getInstance(file.project)
             return SignalIndex.getInstance(file.project).declarationsOf(name).mapNotNull { place ->
-                val target = manager.findFile(place.file) ?: return@mapNotNull null
+                val target = SignalSites.psiOf(manager, place.file) ?: return@mapNotNull null
                 // A call to someone else's `set("count", 1)` defines no signal.
                 if (target is KtFile && !SignalSites.byStreamlord(target, place.start)) return@mapNotNull null
                 SignalTarget(target, TextRange(place.start, place.end), name)
