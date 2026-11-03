@@ -114,7 +114,8 @@ object SignalSites {
         start: Boolean,
     ): SignalPsiReference? {
         if (!StreamlordAnalysis.isTemplateText(file)) return null
-        val text = file.findElementAt(at) as? PsiPlainText ?: return null
+        // A caret just after a name that ends the file stands past the last element.
+        val text = (file.findElementAt(at) ?: file.findElementAt(at - 1)) as? PsiPlainText ?: return null
         val site = of(file).firstOrNull { if (start) it.start == at else at in it.start..it.end } ?: return null
         return SignalPsiReference(text, site.start, site.end, site.signal, site.declaration)
     }

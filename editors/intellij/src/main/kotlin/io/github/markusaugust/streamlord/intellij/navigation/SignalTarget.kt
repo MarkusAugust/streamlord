@@ -7,7 +7,6 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiManager
-import com.intellij.psi.PsiNamedElement
 import com.intellij.psi.impl.FakePsiElement
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.SearchScope
@@ -70,10 +69,6 @@ class SignalTarget(
             override fun getIcon(unused: Boolean): Icon = AllIcons.Nodes.Variable
         }
 
-    /** Is [other], another plugin's element, the official Datastar plugin's say, for this same place? */
-    fun samePlaceAs(other: PsiElement): Boolean =
-        other !is SignalTarget && other is PsiNamedElement && other.containingFile == file && other.textOffset == range.startOffset
-
     override fun equals(other: Any?): Boolean =
         other is SignalTarget && other.file == file && other.range == range && other.signal == signal
 
@@ -82,6 +77,18 @@ class SignalTarget(
     override fun toString(): String = "SignalTarget($signal at ${file.name}$range)"
 
     companion object {
+        /**
+         * The target for the defining place [element] stands on when it is another plugin's stand-in
+         * for it: the official Datastar plugin's element for a signal it finds in the same file.
+         */
+        fun standingFor(element: PsiElement): SignalTarget? {
+            if (element !is FakePsiElement || element is SignalTarget) return null
+            val file = element.containingFile ?: return null
+            val at = element.textOffset
+            val site = SignalSites.of(file).firstOrNull { it.declaration != null && at in it.start until it.end } ?: return null
+            return SignalTarget(file, TextRange(site.start, site.end), site.signal)
+        }
+
         /** Every place the project defines [name]. */
         fun of(
             file: PsiFile,

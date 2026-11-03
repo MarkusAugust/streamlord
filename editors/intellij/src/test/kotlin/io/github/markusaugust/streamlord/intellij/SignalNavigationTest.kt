@@ -7,6 +7,7 @@ import com.intellij.psi.impl.source.tree.injected.InjectedLanguageEditorUtil
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import io.github.markusaugust.streamlord.intellij.index.SignalIndex
 import io.github.markusaugust.streamlord.intellij.navigation.SignalTarget
+import io.github.markusaugust.streamlord.intellij.navigation.SignalUsageTargetProvider
 
 class SignalNavigationTest : BasePlatformTestCase() {
     fun `test the index keeps where each signal is defined and read`() {
@@ -229,6 +230,9 @@ class SignalNavigationTest : BasePlatformTestCase() {
         assertEquals(GotoDeclarationOrUsageHandler2.GTDUOutcome.GTD, outcome)
         val found = GotoDeclarationAction.findAllTargetElements(project, myFixture.editor, myFixture.caretOffset)
         assertEquals(listOf("page.jte"), found.map { it.containingFile.name })
+        val usages = SignalUsageTargetProvider().getTargets(myFixture.editor, myFixture.file)!!.single()
+        val target = (usages as com.intellij.usages.PsiElementUsageTarget).element
+        assertEquals(listOf("other.html", "page.jte", "view.jte"), myFixture.findUsages(target).map { it.file!!.name }.sorted())
         myFixture.renameElementAtCaretUsingHandler("sum")
         assertEquals("<div data-signals:sum=\"0\"></div>", template.text)
         assertEquals("<b data-text=\"\$sum\"></b>", myFixture.file.text)

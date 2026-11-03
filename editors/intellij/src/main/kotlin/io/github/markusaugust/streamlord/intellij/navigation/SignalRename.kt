@@ -148,7 +148,7 @@ class SignalRenameProcessor : RenamePsiElementProcessor() {
             if (sites.any { SignalReferencesSearcher.referenceAt(file, it.start) != null }) continue
             val written = file.text.substring(place.start, place.end)
             if (file !is KtFile) {
-                conflicts.putValue(file, "'$written' in ${file.name} is not renamed: IntelliJ reads the file as plain text.")
+                conflicts.putValue(file, "'$written' in ${file.name} is not renamed: the plugin finds no reference there to rewrite.")
             } else if (index.declarationsIn(file).any { it.start == place.start && it.kind == SignalDeclaration.Kind.PROPERTY }) {
                 conflicts.putValue(file, "'$written' in ${file.name} is a property of a signals class: rename it with Kotlin's rename.")
             }
