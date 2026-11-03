@@ -1,5 +1,5 @@
 {
-  "$comment": "The signals a file declares (signals: collectSignals, sorted), defines (definitions: collectSignalDefinitions, sorted) and declares from a value it cannot read (encoded: the definitions that are * or name a class, in order). Read by SignalsTest.kt and signals.test.ts.",
+  "$comment": "The signals a file declares (signals: collectSignals, sorted), defines (definitions: collectSignalDefinitions, sorted) and declares from a value it cannot read (encoded: the definitions that are * or name a class, in order). Where each definition is written (declarations: signalDeclarations, in source order, each the name and the text at its offsets). Every name of definitions but * and the class entries has a declaration, and no declaration names anything else. Read by SignalsTest.kt and signals.test.ts.",
   "cases": [
     {"name":"a signals class may carry any modifier","language":"kotlin","src":"@Serializable public data class Signals(val count: Int = 0, var name: String)\n@Serializable internal class Inner(val inner: Int)\n@Serializable(with = X::class) private value class Wrapped(val wrapped: Int)","signals":["count","inner","name","wrapped"]},
     {"name":"a name is collected as written, wherever it is written","language":"kotlin","src":"dataSignals(\"fooBar\" to 7); patchSignals(\"fooBar\" to 1); dataBind(\"x\")","signals":["fooBar","x"]},
@@ -26,7 +26,16 @@
     {"name":"the object form declares quoted keys in either kind of quote","language":"html","src":"<div data-signals__ifmissing=\"{'single': 1, bare: 2}\"></div>","signals":["bare","single"]},
     {"name":"the object form declares a key whose quotes are escaped in a Kotlin string","language":"kotlin","src":"val k = \"<div data-signals='{\\\"esc\\\": 1}'></div>\"","signals":["esc"]},
     {"name":"a spread of a variable may define any signal, and names none to complete","language":"html","src":"<div data-signals=\"{a: 1, ...init, b: {...more}}\"></div>","signals":["a","b"],"definitions":["*","a","b"]},
-    {"name":"a key with template syntax in it declares nothing","language":"html","src":"<div data-signals:${key}=\"1\"></div><div data-signals:{{ name }}=\"1\"></div><div data-signals:th:text=\"1\"></div><div data-signals:<%= k %>=\"1\"></div><div data-signals:foo{{x}}=\"1\"></div><div data-bind:user-name__case.kebab></div><div data-signals:\u00e5r=\"1\"></div>","signals":["user-name","\u00e5r"]},
-    {"name":"a key with a Kotlin template in it declares nothing","language":"kotlin","src":"val x = \"<div data-signals:${name}=\\\"1\\\"></div>\"","signals":[]}
+    {"name":"a key with template syntax in it declares nothing","language":"html","src":"<div data-signals:${key}=\"1\"></div><div data-signals:{{ name }}=\"1\"></div><div data-signals:th:text=\"1\"></div><div data-signals:<%= k %>=\"1\"></div><div data-signals:foo{{x}}=\"1\"></div><div data-bind:user-name__case.kebab></div><div data-signals:år=\"1\"></div>","signals":["user-name","år"]},
+    {"name":"a key with a Kotlin template in it declares nothing","language":"kotlin","src":"val x = \"<div data-signals:${name}=\\\"1\\\"></div>\"","signals":[]},
+    {"name":"a keyed attribute is written without its modifiers, and named as the client reads it","language":"html","src":"<div data-signals:my-value__case.snake=\"1\"></div>","declarations":[["my_value","my-value"]]},
+    {"name":"the value form names the signal as written","language":"html","src":"<input data-bind=\"user-name\"><span data-ref='el'></span>","declarations":[["user-name","user-name"],["el","el"]]},
+    {"name":"an object form declares each key where it is written, a quoted one inside its quotes","language":"html","src":"<div data-signals=\"{user: {name: 'x'}, 'q': 1}\"></div>","declarations":[["user","user"],["user.name","name"],["q","q"]]},
+    {"name":"an assignment declares the signal it assigns to, a read does not","language":"html","src":"<span data-text=\"$count\"></span><button data-on:click=\"$count = 1\"></button>","declarations":[["count","count"]]},
+    {"name":"a spread declares no place","language":"html","src":"<div data-signals=\"{...init}\"></div>","declarations":[]},
+    {"name":"a pair and the pairs of a map","language":"kotlin","src":"fun p() = div { dataSignals(\"count\" to 0) }\nfun h() = patchSignals(mapOf(\"a\" to 1, \"b\" to 2))","declarations":[["count","count"],["a","a"],["b","b"]]},
+    {"name":"a key of signals sent as JSON text","language":"kotlin","src":"fun h() = patchSignals(\"\"\"{\"total\": 1, \"cart\": {\"n\": 2}}\"\"\")","declarations":[["total","total"],["cart","cart"],["cart.n","n"]]},
+    {"name":"a DSL helper and a signals class with a serial name","language":"kotlin","src":"fun p() = input { dataBind(\"query\") }\n@Serializable data class S(@SerialName(\"page_no\") val page: Int, val size: Int)","declarations":[["query","query"],["page_no","page_no"],["size","size"]]},
+    {"name":"markup in a Kotlin string, with escaped quotes and an escaped dollar","language":"kotlin","src":"val f = \"<div data-signals='{\\\"open\\\": false}' data-on:click=\\\"${'$'}shown = true\\\"></div>\"","declarations":[["open","open"],["shown","shown"]]}
   ]
 }

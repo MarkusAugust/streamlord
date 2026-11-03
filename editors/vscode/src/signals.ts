@@ -1,5 +1,5 @@
 import { catalog } from "./catalog.ts";
-import { PLACEHOLDER, type KotlinString } from "./kotlinStrings.ts";
+import { PLACEHOLDER, toSource, type KotlinString } from "./kotlinStrings.ts";
 import { findCallSites, stringAt, type CallSite } from "./scanner.ts";
 import { PROTOTYPE_NAMES, signalNameRefusal } from "./signalNames.ts";
 import { attributeDoc, DOCS, type Issue } from "./expression.ts";
@@ -13,8 +13,8 @@ import { attributeDoc, DOCS, type Issue } from "./expression.ts";
 // refused at runtime (signalNameHyphenIssues) and collected as written. set, setExpr and toggle
 // assign the signal, which creates it.
 const KOTLIN_PATTERNS: RegExp[] = [
-  /\b(?:set|setExpr|toggle|dataBind|dataIndicator|dataRef|dataComputed|dataMatchMedia)\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"/g,
-  /\bdataSignals\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"\s*,/g,
+  /\b(?:set|setExpr|toggle|dataBind|dataIndicator|dataRef|dataComputed|dataMatchMedia)\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"/dg,
+  /\bdataSignals\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"\s*,/dg,
 ];
 
 /** A dollar escaped in a Kotlin string: a signal read, which completion offers and a definition is not. */
@@ -26,7 +26,7 @@ const KOTLIN_READS: RegExp[] = [
 ];
 
 /** `$name = ...` in an expression: Datastar creates a signal it is assigned to, so the assignment defines it. */
-const ASSIGNED_SIGNAL = /(?:\$|\$\{'\$'\})([A-Za-z_][A-Za-z0-9_.]*)\s*=(?![=>])/g;
+const ASSIGNED_SIGNAL = /(?:\$|\$\{'\$'\})([A-Za-z_][A-Za-z0-9_.]*)\s*=(?![=>])/dg;
 
 /**
  * Declarations in markup, read as the client stores them. These also run over Kotlin, where they
@@ -37,30 +37,30 @@ const HTML_ATTRIBUTE_PATTERNS: RegExp[] = [
   // The key with its modifiers, which may name the casing: data-signals:my-value__case.snake. A key
   // the client could hold and nothing else, so that template syntax (data-signals:${key},
   // data-signals:{{ name }}, data-signals:th:text) declares nothing.
-  new RegExp(`data-(?:star-)?(?:${catalog.signalKeyAttributes.join("|")}):([\\p{L}\\p{N}_.-]+)(?=[\\s=>"'/\\\\]|$)`, "giu"),
+  new RegExp(`data-(?:star-)?(?:${catalog.signalKeyAttributes.join("|")}):([\\p{L}\\p{N}_.-]+)(?=[\\s=>"'/\\\\]|$)`, "dgiu"),
   // The value form names the signal as written: data-bind="user-name" is the signal user-name.
   new RegExp(
     `data-(?:star-)?(?:${catalog.attributes
       .filter((a) => a.valueKind === "signal")
       .map((a) => a.name)
       .join("|")})(?:__[^=\\s>]*)?=(?:\\\\?"([^"\\\\\\s]+)\\\\?"|'([^'\\s]+)')`,
-    "gi",
+    "dgi",
   ),
   // The object form may sit in either kind of quote: JSON written by hand is `data-signals='{"query": ""}'`.
   // data-computed="{total: () => ...}" declares its keys the same way.
-  /data-(?:star-)?(?:signals|computed)(?:__[^=\s>]*)?=(?:"\{([^"]*)\}"|'\{([^']*)\}')/gi,
+  /data-(?:star-)?(?:signals|computed)(?:__[^=\s>]*)?=(?:"\{([^"]*)\}"|'\{([^']*)\}')/dgi,
 ];
 
 
 /** A bare `$name` is a signal in markup; in Kotlin it is a template, so it stays out of the Kotlin list. */
-const HTML_PATTERNS: RegExp[] = [...HTML_ATTRIBUTE_PATTERNS, /\$([A-Za-z_][A-Za-z0-9_.]*)/g];
+const BARE_SIGNAL = /\$([A-Za-z_][A-Za-z0-9_.]*)/g;
 
 // Any modifier may stand between the annotation and `class`: an explicit-API module writes
 // `@Serializable public data class`.
 const SERIALIZABLE_CLASS = /@Serializable\s*(?:\([^)]*\))?\s*(?:(?:public|internal|private|protected|open|final|abstract|sealed|value|inline|data)\s+)*class\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/g;
 // `@SerialName` renames the signal, so it is read with whatever annotations and modifiers stand
 // between it and the property.
-const PROPERTY = /(?:@SerialName\(\s*(?:value\s*=\s*)?"([^"]*)"\s*\)\s*(?:@\w+(?:\([^)]*\))?\s*)*(?:\w+\s+)*?)?\b(?:val|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:/g;
+const PROPERTY = /(?:@SerialName\(\s*(?:value\s*=\s*)?"([^"]*)"\s*\)\s*(?:@\w+(?:\([^)]*\))?\s*)*(?:\w+\s+)*?)?\b(?:val|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:/dg;
 
 const PAIR_CALLS: ReadonlySet<string> = new Set(catalog.signalCalls.keys());
 const JSON_CALLS: ReadonlySet<string> = new Set([...catalog.signalCalls].filter(([, flags]) => flags.has("json")).map(([name]) => name));
@@ -159,21 +159,41 @@ export const ENCODED_CLASS = "toJsonValue:";
 export const READABLE_CLASS = "class:";
 
 /** The argument as one pair, in parentheses or not; a `"k" to` further in is a key inside the value. */
-const PAIR = /^[\s(]*"([A-Za-z_][A-Za-z0-9_.-]*)"\s+to\b/;
-const NAME = /^"([A-Za-z_][A-Za-z0-9_.-]*)"$/;
+const PAIR = /^[\s(]*"([A-Za-z_][A-Za-z0-9_.-]*)"\s+to\b/d;
+const NAME = /^"([A-Za-z_][A-Za-z0-9_.-]*)"$/d;
 
 /** A map handed over as the signals, `patchSignals(mapOf("count" to 0))`: its own pairs are the keys. */
 const MAP_CALLS: ReadonlySet<string> = new Set(["mapOf", "mutableMapOf", "hashMapOf", "linkedMapOf"]);
 const MAP_CALL = /^\s*(?:mutable|hash|linked)?[mM]apOf\s*\(/;
 
-/** The literal keys of an argument that is a pair, or a map of pairs; nothing inside a value. */
-function argumentKeys(text: string): string[] {
+/** The literal keys of an argument that is a pair, or a map of pairs, with offsets in `text`; nothing inside a value. */
+function argumentKeys(text: string): SignalDeclaration[] {
   const pair = PAIR.exec(text);
-  if (pair?.[1]) return [pair[1]];
+  if (pair) return [declarationAt(pair, 1, 0)];
   if (!MAP_CALL.test(text)) return [];
   const map = findCallSites(text, MAP_CALLS)[0];
   if (!map) return [];
-  return map.args.filter((a) => a.named === null).flatMap((a) => PAIR.exec(a.text)?.[1] ?? []);
+  return map.args.filter((a) => a.named === null).flatMap((a) => {
+    const m = PAIR.exec(a.text);
+    return m ? [declarationAt(m, 1, a.start)] : [];
+  });
+}
+
+/** Group `group` of a match made with the `d` flag, at `offset` further on. */
+function declarationAt(m: RegExpExecArray, group: number, offset: number, name: string = m[group]!): SignalDeclaration {
+  const [start, end] = m.indices![group]!;
+  return { start: offset + start, end: offset + end, name };
+}
+
+/**
+ * A place where a source defines a signal: `name` as the client holds it, and the offsets of the
+ * name as it is written there, without its quotes or modifiers. `data-signals:my-value__case.snake`
+ * defines `my_value`, written `my-value`; under `@SerialName("page_no") val page` the name is `page_no`.
+ */
+export interface SignalDeclaration {
+  start: number;
+  end: number;
+  name: string;
 }
 
 export function collectSignals(src: string, language: "kotlin" | "html"): Set<string> {
@@ -186,8 +206,10 @@ export function collectSignals(src: string, language: "kotlin" | "html"): Set<st
  * plus every signal an expression assigns to.
  */
 export function collectSignalDefinitions(src: string, language: "kotlin" | "html"): Set<string> {
-  const out = collect(src, language, false);
-  for (const m of src.matchAll(ASSIGNED_SIGNAL)) if (m[1] && !m[1].includes(PLACEHOLDER)) out.add(m[1]);
+  const out = new Set<string>();
+  const spread = { any: false };
+  for (const d of definedAt(src, language, spread)) out.add(d.name);
+  if (spread.any) out.add(ANY_SIGNAL);
   if (language === "kotlin") {
     SERIALIZABLE_CLASS.lastIndex = 0;
     for (const m of src.matchAll(SERIALIZABLE_CLASS)) if (m[1]) out.add(READABLE_CLASS + m[1]);
@@ -198,45 +220,92 @@ export function collectSignalDefinitions(src: string, language: "kotlin" | "html
   return out;
 }
 
-function collect(src: string, language: "kotlin" | "html", reads: boolean): Set<string> {
-  const out = new Set<string>();
+/**
+ * Every place `src` defines a signal that `collectSignalDefinitions` names, in source order: what
+ * go to declaration lands on and a rename rewrites. A spread and a codec define signals at no place
+ * that names them, so neither is here.
+ */
+export function signalDeclarations(src: string, language: "kotlin" | "html"): SignalDeclaration[] {
+  return definedAt(src, language, { any: false }).sort((a, b) => a.start - b.start || a.end - b.end);
+}
+
+function definedAt(src: string, language: "kotlin" | "html", spread: { any: boolean }): SignalDeclaration[] {
+  const out = declared(src, language, spread);
+  if (language === "kotlin") {
+    SERIALIZABLE_CLASS.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = SERIALIZABLE_CLASS.exec(src)) !== null) {
+      const open = m.index + m[0].length - 1;
+      const close = matchingParen(src, open);
+      if (close < 0) continue;
+      for (const p of src.slice(open, close).matchAll(PROPERTY)) out.push(declarationAt(p, p[1] !== undefined ? 1 : 2, open));
+    }
+  }
+  for (const m of src.matchAll(ASSIGNED_SIGNAL)) out.push(declarationAt(m, 1, 0));
+  const seen = new Set<string>();
+  return out.filter((d) => {
+    const key = `${d.start}:${d.end}:${d.name}`;
+    if (d.name.includes(PLACEHOLDER) || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/**
+ * The places the markup attributes and the DSL calls of `src` define a signal, which a page puts
+ * there: no `@Serializable` property and no assignment. `spread.any` is set when an object form
+ * spreads a variable into itself, which may define any signal.
+ */
+function declared(src: string, language: "kotlin" | "html", spread: { any: boolean }): SignalDeclaration[] {
+  const out: SignalDeclaration[] = [];
   if (language === "kotlin") {
     for (const site of findCallSites(src, PAIR_CALLS)) {
       const positional = site.args.filter((a) => a.named === null);
       positional.forEach((a, idx) => {
-        for (const key of argumentKeys(a.text)) out.add(key);
+        for (const key of argumentKeys(a.text)) out.push({ ...key, start: a.start + key.start, end: a.start + key.end });
         // patchSignals("""{"count": 1}"""): the signals as JSON text.
-        if (JSON_CALLS.has(site.name) && a.string && /^\s*\{/.test(a.string.text)) {
-          const json = a.string.text;
-          for (const path of objectKeyPaths(json.slice(json.indexOf("{") + 1, json.lastIndexOf("}")))) out.add(path);
+        const s = a.string;
+        if (JSON_CALLS.has(site.name) && s && /^\s*\{/.test(s.text)) {
+          const open = s.text.indexOf("{") + 1;
+          for (const k of objectKeys(s.text.slice(open, Math.max(open, s.text.lastIndexOf("}"))), spread)) {
+            const at = toSource(s, open + k.nameStart, open + k.nameStart + k.key.length);
+            out.push({ start: at.start, end: at.end, name: k.path });
+          }
         }
         const name = NAME.exec(a.text);
-        if (!name?.[1]) return;
+        if (!name) return;
         // removeSignals("a", "b"), and dataSignals("name", "expression"), whose key the client reads back as the name.
-        if (site.name === "removeSignals") out.add(name[1]);
-        if (site.name === "dataSignals" && idx === 0 && positional[1]?.string) out.add(name[1]);
+        if (site.name === "removeSignals") out.push(declarationAt(name, 1, a.start));
+        if (site.name === "dataSignals" && idx === 0 && positional[1]?.string) out.push(declarationAt(name, 1, a.start));
       });
     }
+    for (const re of KOTLIN_PATTERNS) for (const m of src.matchAll(re)) out.push(declarationAt(m, 1, 0));
   }
-  const patterns =
-    language === "kotlin" ? [...KOTLIN_PATTERNS, ...(reads ? KOTLIN_READS : []), ...HTML_ATTRIBUTE_PATTERNS] : reads ? HTML_PATTERNS : HTML_ATTRIBUTE_PATTERNS;
-  for (const re of patterns) {
-    re.lastIndex = 0;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(src)) !== null) {
-      // A keyed attribute may carry modifiers after the key: data-signals:foo-bar__ifmissing. The
-      // object form's body is captured whole, `__` and all.
-      const captured = m[1] ?? m[2] ?? "";
-      if (re === HTML_ATTRIBUTE_PATTERNS[2]) {
-        for (const path of objectKeyPaths(captured)) out.add(path);
-      } else if (re === HTML_ATTRIBUTE_PATTERNS[0]) {
-        // `__case` names the signal: data-signals:my-value__case.snake is `$my_value`.
-        out.add(clientKeyName(captured.replace(/[A-Z]/g, (c) => c.toLowerCase())));
-      } else if (re === HTML_ATTRIBUTE_PATTERNS[1]) {
-        out.add(captured);
-      } else if (captured) {
-        out.add(captured);
-      }
+  const [keyed, value, object] = HTML_ATTRIBUTE_PATTERNS as [RegExp, RegExp, RegExp];
+  // A keyed attribute may carry modifiers after the key: data-signals:foo-bar__ifmissing, and
+  // `__case` names the signal: data-signals:my-value__case.snake is `$my_value`.
+  for (const m of src.matchAll(keyed)) {
+    const start = m.indices![1]![0];
+    const key = m[1]!.split("__")[0]!;
+    out.push({ start, end: start + key.length, name: clientKeyName(m[1]!.replace(/[A-Z]/g, (c) => c.toLowerCase())) });
+  }
+  for (const m of src.matchAll(value)) out.push(declarationAt(m, m[1] !== undefined ? 1 : 2, 0));
+  for (const m of src.matchAll(object)) {
+    const group = m[1] !== undefined ? 1 : 2;
+    const bodyStart = m.indices![group]![0];
+    for (const k of objectKeys(m[group]!, spread)) out.push({ start: bodyStart + k.nameStart, end: bodyStart + k.nameStart + k.key.length, name: k.path });
+  }
+  return out;
+}
+
+function collect(src: string, language: "kotlin" | "html", reads: boolean): Set<string> {
+  const out = new Set<string>();
+  const spread = { any: false };
+  for (const d of declared(src, language, spread)) out.add(d.name);
+  if (spread.any) out.add(ANY_SIGNAL);
+  if (reads) {
+    for (const re of language === "kotlin" ? KOTLIN_READS : [BARE_SIGNAL]) {
+      for (const m of src.matchAll(re)) if (m[1]) out.add(m[1]);
     }
   }
   if (language === "kotlin") {
@@ -363,6 +432,8 @@ export interface ObjectKey {
   end: number;
   valueStart: number;
   object: boolean;
+  /** Where `key` itself starts, inside its quotes if it has any. */
+  nameStart: number;
 }
 
 /**
@@ -386,10 +457,12 @@ export function objectKeys(body: string, spread: { any: boolean } = { any: false
       skipSpace();
       let key: string | null = null;
       const keyStart = i;
+      let nameStart = i;
       const escaped = body[i] === "\\" && (body[i + 1] === '"' || body[i + 1] === "'");
       const quote = escaped ? body[i + 1] : body[i];
       if (quote === '"' || quote === "'") {
         const from = i + (escaped ? 2 : 1);
+        nameStart = from;
         let j = from;
         while (j < body.length && body[j] !== quote && !(body[j] === "\\" && body[j + 1] === quote)) j++;
         key = body.slice(from, j);
@@ -408,7 +481,7 @@ export function objectKeys(body: string, spread: { any: boolean } = { any: false
         i++;
         skipSpace();
         objectFor = body[i] === "{" ? parts : null;
-        out.push({ path: parts.join("."), parts, key, start: keyStart, end: keyEnd, valueStart: i, object: objectFor !== null });
+        out.push({ path: parts.join("."), parts, key, start: keyStart, end: keyEnd, valueStart: i, object: objectFor !== null, nameStart });
       }
       continue;
     }
