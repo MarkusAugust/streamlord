@@ -2,6 +2,21 @@
 
 All notable changes to the Streamlord extension are recorded here.
 
+## 0.13.0
+
+- Go to a signal, find where it is used, rename it. Go to Definition (F12, or ⌘+click on macOS and
+  Ctrl+click elsewhere) on `$count` goes to every place the workspace defines it: a `data-signals`
+  on the page, a `patchSignals` in a handler, a property of a signals class. In `$user.name.length`
+  each part is its own signal, `user` and then `user.name` where the workspace defines it. Find All
+  References (⇧F12) lists those places and every expression that reads the signal, in markup and
+  Kotlin strings. Rename Symbol (F2) rewrites them all, each as its place needs: renaming
+  `itemCount` to `basketCount` writes the key `data-signals:basket-count`. A place that cannot hold
+  the new name stops the rename with a message before anything is written: a key whose `__case`
+  gives no spelling of it back, a key of an object asked to move under another object, a property
+  of a signals class, which Kotlin's rename renames, or a name with `$`, `-` or a letter beyond
+  ASCII. A signal whose name holds a hyphen is not renamed, since its reads are not found.
+- The places are kept from the first search on, so a search reads no file again until it changes.
+
 ## 0.12.0
 
 - Help inside a Datastar expression. In the options object of a backend action,

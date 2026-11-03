@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { collectSelectors, type Selectors } from "./selectors.ts";
-import { collectSignalDefinitions, collectSignals } from "./signals.ts";
+import { collectSignalDefinitions, collectSignals, signalDeclarations, type SignalDeclaration } from "./signals.ts";
+import { signalReferencesInHtml, signalReferencesInKotlin, type SignalReference } from "./signalReferences.ts";
 import { constantNames, constantsAcross, otherDeclaredNames } from "./interpolation.ts";
 
 /** Template files read as markup, as the IntelliJ plugin reads them by default, whatever language an extension gives them. */
@@ -15,10 +16,13 @@ const EXCLUDED_GLOB = `**/{${SKIPPED_FOLDERS.join(",")},.*}/**`;
 const FILE_CAP = 5000;
 
 /** Where a file lives on a disk the workspace reads; a git diff, an untitled buffer or an output channel defines nothing. */
-const INDEXED_SCHEMES: ReadonlySet<string> = new Set(["file", "vscode-remote", "vscode-vfs"]);
+export const INDEXED_SCHEMES: ReadonlySet<string> = new Set(["file", "vscode-remote", "vscode-vfs"]);
 
 interface FileEntry {
   version: number | null;
+  language: "kotlin" | "html";
+  /** Where the file defines and reads signals: worked out on the first search, which completion never asks for. */
+  places?: Places;
   signals: Set<string>;
   definitions: Set<string>;
   selectors: Selectors;
@@ -28,7 +32,20 @@ interface FileEntry {
   others: Set<string>;
 }
 
-/** Workspace-wide index of signal names, kept fresh as files change. */
+/** Where a file defines and reads signals, and where its lines start, so that an offset becomes a position without the text. */
+export interface Places {
+  /** The attribute prefix the reads were found with. */
+  prefix: string;
+  declarations: SignalDeclaration[];
+  reads: SignalReference[];
+  lineStarts: number[];
+}
+
+/**
+ * Workspace-wide index of signal names, kept fresh as files change. It keeps where each signal is
+ * defined and read as well, so that go to definition, find references and rename read a file only
+ * the first time one is asked for.
+ */
 export class SignalIndex implements vscode.Disposable {
   private byFile = new Map<string, FileEntry>();
   private built = false;
@@ -41,7 +58,10 @@ export class SignalIndex implements vscode.Disposable {
   readonly onDidChangeDefinitions = this.changed.event;
 
   /** `markupLanguages` are the language ids the extension reads as markup, from `streamlord.languages`. */
-  constructor(private readonly markupLanguages: ReadonlySet<string>) {
+  constructor(
+    private readonly markupLanguages: ReadonlySet<string>,
+    private readonly prefix: () => string = () => "data-",
+  ) {
     this.disposables.push(
       this.changed,
       vscode.workspace.onDidSaveTextDocument((d) => this.update(d)),
@@ -202,6 +222,28 @@ export class SignalIndex implements vscode.Disposable {
     return this.constantsUnion;
   }
 
+  /** Where every indexed file defines and reads signals, by uri; a file is read again only the first time. */
+  async allPlaces(): Promise<Map<string, Places>> {
+    const out = new Map<string, Places>();
+    await Promise.all(
+      [...this.byFile].map(async ([uri, e]) => {
+        const places = await this.placesOf(uri, e);
+        if (places) out.set(uri, places);
+      }),
+    );
+    return out;
+  }
+
+  private async placesOf(uri: string, e: FileEntry): Promise<Places | null> {
+    if (e.places?.prefix === this.prefix()) return e.places;
+    const text = await textOf(uri);
+    if (text === null) return null;
+    const places = placesIn(text, e.language, this.prefix());
+    // Kept only while the entry is the index's: an edit meanwhile has put a new one in its place.
+    if (this.byFile.get(uri) === e) e.places = places;
+    return places;
+  }
+
   dispose(): void {
     this.disposables.forEach((d) => d.dispose());
   }
@@ -221,9 +263,29 @@ function languageByExtension(uri: vscode.Uri): "kotlin" | "html" | null {
   return MARKUP_EXTENSIONS.includes(extension) ? "html" : null;
 }
 
+/** The text of a file: an open document's, which may hold edits the disk does not, or else the disk's. */
+export async function textOf(uri: string): Promise<string | null> {
+  const open = vscode.workspace.textDocuments.find((d) => d.uri.toString() === uri);
+  if (open) return open.getText();
+  try {
+    return Buffer.from(await vscode.workspace.fs.readFile(vscode.Uri.parse(uri))).toString("utf8");
+  } catch {
+    return null;
+  }
+}
+
+/** Where `text` defines and reads signals. */
+export function placesIn(text: string, language: "kotlin" | "html", prefix: string): Places {
+  const lineStarts = [0];
+  for (let i = 0; i < text.length; i++) if (text[i] === "\n") lineStarts.push(i + 1);
+  const reads = language === "kotlin" ? signalReferencesInKotlin(text, prefix) : signalReferencesInHtml(text, prefix);
+  return { prefix, declarations: signalDeclarations(text, language), reads, lineStarts };
+}
+
 function entry(text: string, language: "kotlin" | "html", version: number | null): FileEntry {
   return {
     version,
+    language,
     signals: collectSignals(text, language),
     definitions: collectSignalDefinitions(text, language),
     selectors: collectSelectors(text),

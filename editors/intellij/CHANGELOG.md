@@ -2,6 +2,27 @@
 
 All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here.
 
+## 0.11.0
+
+- Go to a signal, find where it is used, rename it. Ctrl+click (⌘+click on macOS) on `$count` goes
+  to every place the project defines it: a `data-signals` on the page, a `patchSignals` in a
+  handler, a property of a signals class. In `$user.name.length` each part is its own signal,
+  `user` and then `user.name` where the project defines it. Find Usages (Alt+F7) lists those places
+  and every expression that reads the signal, in HTML, Kotlin strings and templates, those IntelliJ
+  reads as plain text among them. Rename (Shift+F6) rewrites them all, each as its place needs:
+  renaming `itemCount` to `basketCount` writes the key `data-signals:basket-count`. A place that
+  cannot hold the new name is a conflict shown before anything is written: a key whose `__case`
+  gives no spelling of it back, a key of an object asked to move under another object, a property
+  of a signals class, which Kotlin's rename renames, or a name with `$`, `-` or a letter beyond
+  ASCII. A call to something other than Streamlord defines nothing and is left alone.
+- The places come from the plugin's index, so a search reads no file again: on ktor the first
+  search takes about 1 s and each one after it 1 to 2 ms, and typing costs what it did.
+- Beside the official Datastar plugin a place is listed once, a signal its own page defines still
+  resolves, and rename is this plugin's, so it reaches every file.
+- In a template read as plain text, holding ⌘ (Ctrl elsewhere) over a signal underlines the whole
+  file, since the file is one piece of text to IntelliJ; the click still goes to the signal.
+  Ctrl+click on the only place a signal is defined goes to itself; Alt+F7 there shows its usages.
+
 ## 0.10.0
 
 - Help inside a Datastar expression. In the options object of a backend action,

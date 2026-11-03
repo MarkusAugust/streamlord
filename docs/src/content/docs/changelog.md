@@ -7,6 +7,13 @@ description: "What each release changed, and what it asks of your code."
 repository is authoritative and complete. This page carries only what changes how you write code,
 with a sentence about what to do.
 
+## 0.18.0
+
+**Code that uses the SDK needs no change.** The release is signal navigation in the editors: go
+to declaration, find usages and rename. The analysis gains `signalDeclarations`,
+`signalRenameText` and `signalReadRenameText` for editors, and nothing it reported before has
+changed.
+
 ## 0.17.0
 
 **Code that uses the SDK needs no change.** The release is help in the editors, inside a Datastar

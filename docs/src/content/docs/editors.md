@@ -92,6 +92,31 @@ collected from the whole project, since the page that declares one is rarely the
 it. They work where the value runs over several lines or sits in single quotes, and in Kotlin
 strings, where a `\$` or `${'$'}` before the name stays as you wrote it.
 
+**Go to a signal, find where it is used, rename it.** Ctrl+click (⌘+click on macOS) on a signal
+goes to every place the project defines it: a `data-signals` on the page, a `patchSignals` in the
+handler that answers it, a property of a signals class. Find usages lists those places and every
+expression that reads it, in markup and in Kotlin strings alike: Alt+F7 in IntelliJ, ⇧F12 in VS
+Code. Rename rewrites them all, each as its place needs: Shift+F6 in IntelliJ, F2 in VS Code.
+
+```html
+<div data-signals:item-count="0">
+  <button data-on:click="$itemCount++">Add</button>
+  <span data-text="$itemCount"></span>
+</div>
+```
+
+```kotlin sample=stream
+patchSignals("itemCount" to 3)
+```
+
+Rename `itemCount` to `basketCount` and the key becomes `data-signals:basket-count`, since the
+browser lowercases an attribute's key and Datastar reads the kebab-case back as camelCase; the two
+reads and the pair in the handler become `basketCount`. A place that cannot hold the new name stops
+the rename before anything is written, and says which: a key whose `__case` modifier gives no
+spelling of the name back, a key of an object asked to move under another object, or a property of
+a signals class, which Kotlin's own rename renames. In `$user.name.length` each part is its own
+signal: the caret on `user` renames `user`, on `name` it renames `user.name`.
+
 **Help inside an expression.** Put the caret in the options of a backend action and completion
 offers the ones not yet written, each with what Datastar 1.0.4 does with it; hovering one says the
 same. Parameter info shows the action's parameters with the one the caret is on: Parameter Info in
