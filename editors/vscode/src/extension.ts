@@ -14,6 +14,7 @@ import { RunningServers } from "./serverLog.ts";
 import { StreamlordSignatureHelpProvider } from "./signatureHelp.ts";
 import { signalReferencesInHtml, signalReferencesInKotlin, unknownSignalIssue, type SignalReference } from "./signalReferences.ts";
 import { SignalIndex } from "./signalIndex.ts";
+import { SignalNavigationProvider } from "./signalNavigation.ts";
 
 /** Languages that get HTML-side support, from the setting; Kotlin always gets the Kotlin side. */
 function markupLanguages(): string[] {
@@ -28,7 +29,8 @@ export function activate(context: vscode.ExtensionContext): void {
   const issues = new IssueStore();
 
   const diagnostics = vscode.languages.createDiagnosticCollection("streamlord");
-  const signals = new SignalIndex(markup);
+  const signals = new SignalIndex(markup, prefix);
+  const navigation = new SignalNavigationProvider(signals, prefix);
   const running = new RunningServers();
   // A debug session's output is the one an extension may read, so that is where a server is seen to start.
   context.subscriptions.push(
@@ -115,6 +117,9 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.languages.registerCompletionItemProvider(selector, new StreamlordCompletionProvider(signals, prefix), "$", "@", "#", "_", ".", "-", ":"),
     vscode.languages.registerHoverProvider(selector, new StreamlordHoverProvider(prefix)),
     vscode.languages.registerSignatureHelpProvider(selector, new StreamlordSignatureHelpProvider(prefix), "(", ","),
+    vscode.languages.registerDefinitionProvider(selector, navigation),
+    vscode.languages.registerReferenceProvider(selector, navigation),
+    vscode.languages.registerRenameProvider(selector, navigation),
     vscode.languages.registerCodeActionsProvider(selector, new StreamlordCodeActionProvider(issues), { providedCodeActionKinds: StreamlordCodeActionProvider.kinds }),
     vscode.commands.registerCommand("streamlord.inspector.open", () => inspector.open()),
     vscode.commands.registerCommand("streamlord.colors.apply", () => applyRecommendedColors()),
