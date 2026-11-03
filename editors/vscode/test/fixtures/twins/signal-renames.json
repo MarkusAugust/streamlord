@@ -1,0 +1,23 @@
+{
+  "$comment": "What a rename writes at a place that defines a signal (signalRenameText) or reads it (signalReadRenameText). For a definition, at is the text written at the first declaration that has it, and text is what goes there for rename, or null when nothing written there can define it. For a read, read is the signal a part of an expression's path stands for, and text what goes over that part. Read by SignalRenamesTest.kt and signalRenames.test.ts.",
+  "cases": [
+    {"name":"a pair is written as it stands","language":"kotlin","src":"fun h() = patchSignals(mapOf(\"count\" to 1))","at":"count","rename":"total","text":"total"},
+    {"name":"an assignment is written as it stands","language":"html","src":"<b data-on:click=\"$count = 1\"></b>","at":"count","rename":"total","text":"total"},
+    {"name":"a serial name is the annotation's string","language":"kotlin","src":"@Serializable data class S(@SerialName(\"page_no\") val page: Int)","at":"page_no","rename":"page_index","text":"page_index"},
+    {"name":"a property of a signals class is Kotlin's to rename","language":"kotlin","src":"@Serializable data class S(val page: Int)","at":"page","rename":"index","text":null},
+    {"name":"an attribute key with capitals is written kebab-case","language":"html","src":"<div data-signals:count=\"0\"></div>","at":"count","rename":"totalCount","text":"total-count"},
+    {"name":"an attribute key keeps its modifiers and its spelling","language":"html","src":"<div data-signals:my-value__case.snake=\"0\"></div>","at":"my-value","rename":"my_title","text":"my-title"},
+    {"name":"an attribute key no spelling gives back is refused","language":"html","src":"<div data-signals:my-value__case.snake=\"0\"></div>","at":"my-value","rename":"myTitle","text":null},
+    {"name":"an attribute key holds no path","language":"html","src":"<div data-signals:count=\"0\"></div>","at":"count","rename":"a.b","text":null},
+    {"name":"an object key is the last part of the path","language":"html","src":"<div data-signals=\"{user: {name: ''}}\"></div>","at":"name","rename":"user.title","text":"title"},
+    {"name":"an object key stays under its object","language":"html","src":"<div data-signals=\"{user: {name: ''}}\"></div>","at":"name","rename":"account.name","text":null},
+    {"name":"a bare object key that would need quotes is refused","language":"html","src":"<div data-signals=\"{count: 0}\"></div>","at":"count","rename":"total-count","text":null},
+    {"name":"a quoted object key may hold a hyphen","language":"html","src":"<div data-signals=\"{'count': 0}\"></div>","at":"count","rename":"total-count","text":"total-count"},
+    {"name":"a JSON key in a Kotlin string","language":"kotlin","src":"fun h() = patchSignals(\"\"\"{\"count\": 1}\"\"\")","at":"count","rename":"total","text":"total"},
+    {"name":"a name no expression can read is refused","language":"kotlin","src":"fun h() = patchSignals(mapOf(\"count\" to 1))","at":"count","rename":"to tal","text":null},
+    {"name":"a read of the signal itself","read":"count","rename":"total","text":"total"},
+    {"name":"a read of a signal in an object rewrites its own part","read":"user.name","rename":"user.title","text":"title"},
+    {"name":"a read keeps its signal under its object","read":"user.name","rename":"account.name","text":null},
+    {"name":"a read of a signal is not turned into a path","read":"count","rename":"a.b","text":null}
+  ]
+}

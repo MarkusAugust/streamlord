@@ -5,7 +5,6 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.patterns.PlatformPatterns
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiElementResolveResult
-import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiPolyVariantReferenceBase
 import com.intellij.psi.PsiReference
 import com.intellij.psi.PsiReferenceContributor
@@ -16,6 +15,9 @@ import com.intellij.psi.util.parentOfType
 import com.intellij.psi.xml.XmlAttribute
 import com.intellij.psi.xml.XmlAttributeValue
 import com.intellij.util.ProcessingContext
+import io.github.markusaugust.streamlord.analysis.SignalDeclaration
+import io.github.markusaugust.streamlord.analysis.signalReadRenameText
+import io.github.markusaugust.streamlord.analysis.signalRenameText
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.index.SignalIndex
 import org.jetbrains.kotlin.psi.KtFile
@@ -61,62 +63,71 @@ private object SignalReferenceProvider : PsiReferenceProvider() {
         fun ours(at: Int): Boolean =
             at >= range.startOffset &&
                 (element !is KtStringTemplateExpression || file.findElementAt(at)?.parentOfType<KtStringTemplateExpression>() == element)
+        val index = SignalIndex.getInstance(file.project)
+        val defined = index.definitionsSeenFrom(file)
         val out = ArrayList<PsiReference>()
         for (read in reads) {
             val nameStart = read.end - read.name.length
-            if (read.end <= range.endOffset && ours(nameStart)) out += SignalPsiReference(element, nameStart, read.name)
+            if (read.end > range.endOffset || !ours(nameStart)) continue
+            // `$user.name.length` reads `user` in its first part and `user.name` in its second, where the project defines them.
+            var at = nameStart
+            var path = ""
+            for (part in read.name.split('.')) {
+                path = if (path.isEmpty()) part else "$path.$part"
+                if (path in defined) out += SignalPsiReference(element, at, at + part.length, path)
+                at += part.length + 1
+            }
         }
-        for (d in SignalIndex.getInstance(file.project).declarationsIn(file)) {
-            if (d.end <= range.endOffset && ours(d.start)) out += SignalPsiReference(element, d.start, d.name, d.end)
+        for (d in index.declarationsIn(file)) {
+            if (d.end <= range.endOffset && ours(d.start)) out += SignalPsiReference(element, d.start, d.end, d.name, d)
         }
         return out.toTypedArray()
     }
 }
 
 /**
- * A signal read or defined at [start] in [element]'s file, written [path]: `user.name.length` reads
- * `user.name` if the project defines it, or else `user`. The reference covers the part it resolves
- * to, which is what a rename rewrites; a defining place covers the name as written.
+ * A signal read or defined from [start] to [end] in [element]'s file. A read covers one part of its
+ * path, the last part of [signal]: `name` in `$user.name` for `user.name`. A defining place covers
+ * the name as written, and [declaration] says how a new one is written there.
  */
 class SignalPsiReference(
     element: PsiElement,
     private val start: Int,
-    private val path: String,
-    private val definedEnd: Int? = null,
+    private val end: Int,
+    val signal: String,
+    private val declaration: SignalDeclaration? = null,
 ) : PsiPolyVariantReferenceBase<PsiElement>(element) {
-    /** The signal this reference stands for, or the whole path when the project defines none of it. */
-    val signal: String by lazy { if (definedEnd != null) path else resolvedName(element.containingFile, path) }
-
     override fun calculateDefaultRangeInElement(): TextRange {
         val base = element.textRange.startOffset
-        val end = definedEnd ?: (start + signal.length)
         return TextRange(start - base, end - base)
+    }
+
+    /**
+     * What goes in place of the reference's range when the signal [old] is renamed [newName], or
+     * null when nothing written here can name it.
+     */
+    fun renameText(
+        old: String,
+        newName: String,
+    ): String? {
+        val d = declaration ?: return signalReadRenameText(signal, newName)
+        val text = element.containingFile.text
+        if (d.name == old) return signalRenameText(text, d, newName)
+        // A key inside the object renamed is written without the object's name, and stays as it is.
+        if (d.kind == SignalDeclaration.Kind.OBJECT_KEY) return text.substring(d.start, d.end)
+        // Any other place that defines a signal under [old], `"user.name" to 1` when `user` is renamed, moves with it.
+        return signalRenameText(text, d, newName + d.name.removePrefix(old))
     }
 
     override fun multiResolve(incompleteCode: Boolean): Array<ResolveResult> =
         SignalTarget.of(element.containingFile, signal).map { PsiElementResolveResult(it) }.toTypedArray()
 
-    /** A read of `user.name` is a usage of `user` as well. */
+    /** A place that defines a signal under another, `user.name` under `user`, moves with it in a rename. */
     override fun isReferenceTo(element: PsiElement): Boolean =
-        element is SignalTarget && (element.name == signal || signal.startsWith(element.name + "."))
+        element is SignalTarget && (element.name == signal || (declaration != null && signal.startsWith(element.name + ".")))
 
     override fun getVariants(): Array<Any> = emptyArray()
 
     /** A defining place is no read: it is where go to declaration lands, and where find usages starts. */
-    val defines: Boolean get() = definedEnd != null
-
-    private companion object {
-        fun resolvedName(
-            file: PsiFile,
-            path: String,
-        ): String {
-            val index = SignalIndex.getInstance(file.project)
-            var p = path
-            while (true) {
-                if (index.declarationsOf(p).isNotEmpty()) return p
-                if ('.' !in p) return path
-                p = p.substringBeforeLast('.')
-            }
-        }
-    }
+    val defines: Boolean get() = declaration != null
 }

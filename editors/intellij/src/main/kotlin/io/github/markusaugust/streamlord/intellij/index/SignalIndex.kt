@@ -96,10 +96,19 @@ class SignalIndex(
     /** Where [file] reads signals, from its current text, calls to something other than Streamlord among them. */
     fun readsIn(file: PsiFile): List<SignalReference> = entryFor(file)?.let { placesOf(it, file.text) }?.reads ?: emptyList()
 
-    /** Every place in the project that defines the signal [name]. */
-    fun declarationsOf(name: String): List<Place> {
+    /** Every place in the project that defines the signal [name], and with [inside] every one that defines a signal under it. */
+    fun declarationsOf(
+        name: String,
+        inside: Boolean = false,
+    ): List<Place> {
         refresh()
-        return places { e -> placesOf(e, null)?.declarations?.filter { it.name == name }?.map { Triple(it.start, it.end, it.name) } }
+        val under = "$name."
+        return places { e ->
+            placesOf(e, null)
+                ?.declarations
+                ?.filter { it.name == name || (inside && it.name.startsWith(under)) }
+                ?.map { Triple(it.start, it.end, it.name) }
+        }
     }
 
     /** Every place in the project that reads the signal [name] or reads into it, `$user.name` for `user`. */

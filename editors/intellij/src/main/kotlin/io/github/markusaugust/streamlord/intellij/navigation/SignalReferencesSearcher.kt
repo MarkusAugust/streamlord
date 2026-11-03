@@ -25,9 +25,13 @@ class SignalReferencesSearcher : QueryExecutorBase<PsiReference, ReferencesSearc
         val scope = parameters.effectiveSearchScope
         val manager = PsiManager.getInstance(project)
         val seen = HashSet<PsiReference>()
-        // A defining place is found at the name as written, a read at the name after its dollar.
+        // A defining place is found at the name as written, and one that defines a signal under this
+        // one is a usage too, since a rename moves it with it. A read is found at the part of its
+        // path that names this signal: `name` in `$user.name` for `user.name`.
+        val parent = target.name.substringBeforeLast('.', "").let { if (it.isEmpty()) 0 else it.length + 1 }
         val places =
-            index.declarationsOf(target.name).map { it to it.start } + index.readsOf(target.name).map { it to it.end - it.name.length }
+            index.declarationsOf(target.name, inside = true).map { it to it.start } +
+                index.readsOf(target.name).map { it to it.end - it.name.length + parent }
         for ((place, at) in places) {
             if (!scope.contains(place.file)) continue
             val file = manager.findFile(place.file) ?: continue

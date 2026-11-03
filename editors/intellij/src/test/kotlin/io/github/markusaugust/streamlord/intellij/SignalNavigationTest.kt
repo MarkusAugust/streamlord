@@ -92,4 +92,60 @@ class SignalNavigationTest : BasePlatformTestCase() {
             usages.sortedWith(compareBy({ it.first }, { it.second })),
         )
     }
+
+    fun `test rename writes the new name as each place wants it`() {
+        val page = myFixture.addFileToProject("page.html", "<div data-signals:count=\"0\"><span data-text=\"\$count\"></span></div>")
+        val view =
+            myFixture.addFileToProject(
+                "View.kt",
+                dsl + "fun f() = span { dataText(\"\${'\$'}count\") }\nfun h() = patchSignals(mapOf(\"count\" to 1))",
+            )
+        myFixture.configureByText("other.html", "<b data-text=\"\$co<caret>unt + 1\"></b>")
+        myFixture.renameElementAtCaretUsingHandler("totalCount")
+        assertEquals("<b data-text=\"\$totalCount + 1\"></b>", myFixture.file.text)
+        assertEquals("<div data-signals:total-count=\"0\"><span data-text=\"\$totalCount\"></span></div>", page.text)
+        assertEquals(
+            dsl + "fun f() = span { dataText(\"\${'\$'}totalCount\") }\nfun h() = patchSignals(mapOf(\"totalCount\" to 1))",
+            view.text,
+        )
+    }
+
+    fun `test rename of an object moves what is under it`() {
+        val page = myFixture.addFileToProject("page.html", "<div data-signals=\"{user: {name: ''}}\"></div>")
+        val view = myFixture.addFileToProject("View.kt", dsl + "fun h() = patchSignals(mapOf(\"user.name\" to 1))")
+        myFixture.configureByText("Free.kt", "fun g() = \"\"\"<span data-text=\"\${'\$'}us<caret>er.name\"></span>\"\"\"")
+        myFixture.renameElementAtCaretUsingHandler("account")
+        assertEquals("<div data-signals=\"{account: {name: ''}}\"></div>", page.text)
+        assertEquals(dsl + "fun h() = patchSignals(mapOf(\"account.name\" to 1))", view.text)
+        assertEquals(
+            "fun g() = \"\"\"<span data-text=\"\${'\$'}account.name\"></span>\"\"\"",
+            InjectedLanguageEditorUtil.getTopLevelEditor(myFixture.editor).document.text,
+        )
+    }
+
+    fun `test each part of a read names its own signal`() {
+        myFixture.addFileToProject("page.html", "<div data-signals=\"{user: {name: ''}}\"></div>")
+        myFixture.configureByText("other.html", "<b data-text=\"\$user.na<caret>me.length\"></b>")
+        assertEquals(listOf("page.html" to "name"), targets())
+        myFixture.renameElementAtCaretUsingHandler("user.title")
+        assertEquals("<b data-text=\"\$user.title.length\"></b>", myFixture.file.text)
+        assertEquals(
+            "<div data-signals=\"{user: {title: ''}}\"></div>",
+            myFixture.findFileInTempDir("page.html").let {
+                psiManager.findFile(it)!!.text
+            },
+        )
+    }
+
+    fun `test rename stops at a place that cannot hold the new name`() {
+        myFixture.configureByText("page.html", "<div data-signals:my-value__case.snake=\"0\" data-text=\"\$my_va<caret>lue\"></div>")
+        try {
+            myFixture.renameElementAtCaretUsingHandler("myTitle")
+            fail("a key under __case.snake gives no camelCase name back")
+        } catch (e: com.intellij.refactoring.BaseRefactoringProcessor.ConflictsInTestsException) {
+            assertTrue(e.messages.joinToString(), e.messages.any { "my-value" in it && "myTitle" in it })
+        }
+        myFixture.renameElementAtCaretUsingHandler("my_title")
+        assertEquals("<div data-signals:my-title__case.snake=\"0\" data-text=\"\$my_title\"></div>", myFixture.file.text)
+    }
 }

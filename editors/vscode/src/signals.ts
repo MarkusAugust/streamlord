@@ -3,6 +3,7 @@ import { PLACEHOLDER, toSource, type KotlinString } from "./kotlinStrings.ts";
 import { findCallSites, stringAt, type CallSite } from "./scanner.ts";
 import { PROTOTYPE_NAMES, signalNameRefusal } from "./signalNames.ts";
 import { attributeDoc, DOCS, type Issue } from "./expression.ts";
+import { kebab } from "./attributeKeys.ts";
 
 /**
  * Collects signal names declared anywhere in a source file, for completion. Heuristic and
@@ -182,18 +183,74 @@ function argumentKeys(text: string): SignalDeclaration[] {
 /** Group `group` of a match made with the `d` flag, at `offset` further on. */
 function declarationAt(m: RegExpExecArray, group: number, offset: number, name: string = m[group]!): SignalDeclaration {
   const [start, end] = m.indices![group]!;
-  return { start: offset + start, end: offset + end, name };
+  return { start: offset + start, end: offset + end, name, kind: "name" };
 }
 
 /**
  * A place where a source defines a signal: `name` as the client holds it, and the offsets of the
  * name as it is written there, without its quotes or modifiers. `data-signals:my-value__case.snake`
  * defines `my_value`, written `my-value`; under `@SerialName("page_no") val page` the name is `page_no`.
+ * `kind` says how a new name is written there (see `signalRenameText`): `name` as it stands (a pair,
+ * a helper's argument, the value form, an assignment, a serial name), `key` an attribute's key, which
+ * the client lowercases and recases by its modifiers, `objectKey` the last part of the path in an
+ * object or JSON, and `property` a property of a signals class, which Kotlin's own rename renames.
  */
 export interface SignalDeclaration {
   start: number;
   end: number;
   name: string;
+  kind: "name" | "key" | "objectKey" | "property";
+}
+
+/** A name a rename may write: dotted parts of letters, digits, `_`, `$` and `-`. */
+const RENAMABLE = /^[\p{L}\p{N}_$-]+(?:\.[\p{L}\p{N}_$-]+)*$/u;
+
+/** The characters of a key and its modifiers, as the keyed attribute pattern reads them. */
+const KEY_TAIL = /[\p{L}\p{N}_.-]*/uy;
+
+const BARE_KEY = /^[A-Za-z0-9_$]+$/;
+
+/**
+ * What to write at `d` in `src` so that the place defines `newName`, or null when nothing written
+ * there can: a property of a signals class, which Kotlin's rename renames; a key of an object
+ * asked to move under another object; a bare key that would need quotes; or an attribute key whose
+ * modifiers turn every spelling of `newName` into another name. An attribute key keeps its
+ * modifiers and is spelled as the old one was, kebab-case for kebab-case.
+ */
+export function signalRenameText(src: string, d: SignalDeclaration, newName: string): string | null {
+  if (!RENAMABLE.test(newName)) return null;
+  switch (d.kind) {
+    case "name":
+      return newName;
+    case "property":
+      return null;
+    case "objectKey": {
+      const parentOf = (path: string) => (path.includes(".") ? path.slice(0, path.lastIndexOf(".")) : "");
+      if (parentOf(newName) !== parentOf(d.name)) return null;
+      const key = newName.slice(newName.lastIndexOf(".") + 1);
+      const quoted = src[d.start - 1] === '"' || src[d.start - 1] === "'";
+      return !quoted && !BARE_KEY.test(key) ? null : key;
+    }
+    case "key": {
+      if (newName.includes(".")) return null;
+      KEY_TAIL.lastIndex = d.end;
+      const modifiers = KEY_TAIL.exec(src)?.[0] ?? "";
+      const readKey = (written: string) => clientKeyName(written.replace(/[A-Z]/g, (c) => c.toLowerCase()));
+      const spellings = src.slice(d.start, d.end).includes("-") ? [newName.replace(/_/g, "-"), kebab(newName), newName] : [newName, kebab(newName)];
+      return spellings.find((s) => readKey(s + modifiers) === newName) ?? null;
+    }
+  }
+}
+
+/**
+ * What to write over the last part of a read of `signal`, `name` in `$user.name` for `user.name`,
+ * when the signal is renamed `newName`, or null when it cannot be: a read names its signal part by
+ * part, so a rename keeps the signal under the object it is in.
+ */
+export function signalReadRenameText(signal: string, newName: string): string | null {
+  const parentOf = (path: string) => (path.includes(".") ? path.slice(0, path.lastIndexOf(".")) : "");
+  if (!RENAMABLE.test(newName) || parentOf(newName) !== parentOf(signal)) return null;
+  return newName.slice(newName.lastIndexOf(".") + 1);
 }
 
 export function collectSignals(src: string, language: "kotlin" | "html"): Set<string> {
@@ -238,7 +295,10 @@ function definedAt(src: string, language: "kotlin" | "html", spread: { any: bool
       const open = m.index + m[0].length - 1;
       const close = matchingParen(src, open);
       if (close < 0) continue;
-      for (const p of src.slice(open, close).matchAll(PROPERTY)) out.push(declarationAt(p, p[1] !== undefined ? 1 : 2, open));
+      // Under @SerialName the name is the annotation's string, which a rename may rewrite.
+      for (const p of src.slice(open, close).matchAll(PROPERTY)) {
+        out.push({ ...declarationAt(p, p[1] !== undefined ? 1 : 2, open), kind: p[1] !== undefined ? "name" : "property" });
+      }
     }
   }
   for (const m of src.matchAll(ASSIGNED_SIGNAL)) out.push(declarationAt(m, 1, 0));
@@ -269,7 +329,7 @@ function declared(src: string, language: "kotlin" | "html", spread: { any: boole
           const open = s.text.indexOf("{") + 1;
           for (const k of objectKeys(s.text.slice(open, Math.max(open, s.text.lastIndexOf("}"))), spread)) {
             const at = toSource(s, open + k.nameStart, open + k.nameStart + k.key.length);
-            out.push({ start: at.start, end: at.end, name: k.path });
+            out.push({ start: at.start, end: at.end, name: k.path, kind: "objectKey" });
           }
         }
         const name = NAME.exec(a.text);
@@ -287,13 +347,15 @@ function declared(src: string, language: "kotlin" | "html", spread: { any: boole
   for (const m of src.matchAll(keyed)) {
     const start = m.indices![1]![0];
     const key = m[1]!.split("__")[0]!;
-    out.push({ start, end: start + key.length, name: clientKeyName(m[1]!.replace(/[A-Z]/g, (c) => c.toLowerCase())) });
+    out.push({ start, end: start + key.length, name: clientKeyName(m[1]!.replace(/[A-Z]/g, (c) => c.toLowerCase())), kind: "key" });
   }
   for (const m of src.matchAll(value)) out.push(declarationAt(m, m[1] !== undefined ? 1 : 2, 0));
   for (const m of src.matchAll(object)) {
     const group = m[1] !== undefined ? 1 : 2;
     const bodyStart = m.indices![group]![0];
-    for (const k of objectKeys(m[group]!, spread)) out.push({ start: bodyStart + k.nameStart, end: bodyStart + k.nameStart + k.key.length, name: k.path });
+    for (const k of objectKeys(m[group]!, spread)) {
+      out.push({ start: bodyStart + k.nameStart, end: bodyStart + k.nameStart + k.key.length, name: k.path, kind: "objectKey" });
+    }
   }
   return out;
 }
