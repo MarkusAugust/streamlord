@@ -80,6 +80,49 @@ An element without `dataIgnoreMorph` should assume any attribute can change unde
 attributes in `attributeChangedCallback` rather than once in `connectedCallback`, and set again
 whatever the element added for itself, because the server's markup does not carry it.
 
+### Choosing ids
+
+Datastar's [SSE events reference](https://data-star.dev/reference/sse_events) says "By default,
+Datastar morphs elements by matching top-level elements based on their ID." and "Be sure to
+place IDs on top-level elements to be morphed, as well as on elements within them that you'd like
+to preserve state on (event listeners, CSS transitions, etc.)." Take each id from a key in the
+data, keep it unique on the page, and render the same one, on the same tag, every time:
+
+```kotlin sample=html
+data class Case(val id: Int, val title: String)
+val cases = listOf(Case(41, "Broken lamp"), Case(42, "Lost keys"))
+
+ul {
+    id = "cases"
+    for (case in cases) {
+        li {
+            id = "case-${case.id}" // the case, wherever it sits in the list
+            // id = "case-$index"                not the position
+            // id = "case-${UUID.randomUUID()}"  not a new id on every render
+            +case.title
+            textInput(name = "note")
+        }
+    }
+}
+```
+
+An index or a counter names a position. Insert a case at the top and it gets `case-0`, the id of
+the row that was first, so it takes over that row's element and the text the reader typed in
+it. An element whose id the patch does not carry, a random one or one that changed, is not
+morphed: the client removes it and inserts the server's, and focus and typed text go with it.
+An id that appears twice, on the page or in the patch, is dropped from the matching by id.
+
+Leave the id off and the element is matched by its tag and its place among its siblings, so a
+new sibling of the same tag inserted in front of it can take it over, typed text and all. Every
+element that holds what the reader did, a field, an open `<details>`, a focused control, needs a
+stable id, or must sit where nothing is inserted before it.
+
+Datastar documents none of this beyond the two sentences above. It is what the 1.0.4 client does,
+read in `isSoftMatch` and `findBestMatch` in `library/src/plugins/watchers/patchElements.ts` and
+tested with Datastar 1.0.4, and a later version may match differently. The matching through the
+ids an element contains is the "id sets" that [idiomorph](https://github.com/bigskysoftware/idiomorph)
+describes; idiomorph does not document the case without an id either.
+
 ## Showing a change before the server answers
 
 The `datastar-fetch` event reports every request's life: `started`, `finished`, `error`,
