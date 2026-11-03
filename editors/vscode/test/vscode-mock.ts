@@ -127,6 +127,7 @@ const uri = (path: string): MockUri => ({ scheme: "file", path, toString: () => 
 
 export const Uri = {
   file: uri,
+  parse: (value: string) => uri(value.replace(/^file:\/\//, "")),
   joinPath: (base: MockUri, ...parts: string[]) => {
     const segments = [...base.path.split("/"), ...parts.flatMap((p) => p.split("/"))];
     const out: string[] = [];
@@ -148,6 +149,13 @@ export interface OpenDocument {
   getText(): string;
   positionAt(offset: number): Position;
   offsetAt(p: Position): number;
+}
+
+export class Location {
+  constructor(
+    readonly uri: MockUri,
+    readonly range: Range,
+  ) {}
 }
 
 export class WorkspaceEdit {

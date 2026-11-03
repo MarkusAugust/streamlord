@@ -176,12 +176,45 @@ private val NAME = Regex("""^"([A-Za-z_][A-Za-z0-9_.-]*)"$""")
 private val MAP_CALLS = setOf("mapOf", "mutableMapOf", "hashMapOf", "linkedMapOf")
 private val MAP_CALL = Regex("""^\s*(?:mutable|hash|linked)?[mM]apOf\s*\(""")
 
-/** The literal keys of an argument that is a pair, or a map of pairs; nothing inside a value. */
-private fun argumentKeys(text: String): List<String> {
-    PAIR.find(text)?.let { return listOf(it.groupValues[1]) }
+/** The literal keys of an argument that is a pair, or a map of pairs, with offsets in [text]; nothing inside a value. */
+private fun argumentKeys(text: String): List<SignalDeclaration> {
+    PAIR.find(text)?.let { return listOf(declarationAt(it.groups[1]!!, 0)) }
     if (!MAP_CALL.containsMatchIn(text)) return emptyList()
     val map = findCallSites(text, MAP_CALLS).firstOrNull() ?: return emptyList()
-    return map.positional.mapNotNull { PAIR.find(it.text)?.groupValues?.get(1) }
+    return map.positional.mapNotNull { a -> PAIR.find(a.text)?.let { declarationAt(it.groups[1]!!, a.start) } }
+}
+
+private fun declarationAt(
+    group: MatchGroup,
+    offset: Int,
+    name: String = group.value,
+): SignalDeclaration = SignalDeclaration(offset + group.range.first, offset + group.range.last + 1, name)
+
+/**
+ * A place where a source defines a signal: [name] as the client holds it, and the offsets of the
+ * name as it is written there, without its quotes or modifiers. `data-signals:my-value__case.snake`
+ * defines `my_value`, written `my-value`; under `@SerialName("page_no") val page` the name is `page_no`.
+ * [kind] says how a new name is written there (see [signalRenameText]).
+ */
+public data class SignalDeclaration(
+    val start: Int,
+    val end: Int,
+    val name: String,
+    val kind: Kind = Kind.NAME,
+) {
+    public enum class Kind {
+        /** The name as it stands: a pair, a helper's argument, the value form, an assignment, a serial name. */
+        NAME,
+
+        /** An attribute's key, which the client lowercases and recases by the modifiers after it. */
+        KEY,
+
+        /** A key of an object, in the object form or in JSON: the last part of the path. */
+        OBJECT_KEY,
+
+        /** A property of a signals class, which Kotlin's own rename renames. */
+        PROPERTY,
+    }
 }
 
 public fun collectSignals(
@@ -223,18 +256,175 @@ public fun collectSignalDefinitions(
     src: String,
     language: SourceLanguage,
 ): Set<String> {
-    val out = LinkedHashSet(collect(src, language, reads = false))
+    val out = LinkedHashSet<String>()
+    val spread = Spread()
+    for (d in definedAt(src, language, spread)) out += d.name
+    if (spread.any) out += ANY_SIGNAL
     if (language == SourceLanguage.KOTLIN) {
-        for ((type, properties) in serializableProperties(src)) {
-            out += READABLE_CLASS + type
-            for (property in properties) out += property.name
-        }
-        // A page declared from a class defines what its codec writes: the properties above for a
+        for (type in serializableProperties(src).keys) out += READABLE_CLASS + type
+        // A page declared from a class defines what its codec writes: the properties for a
         // @Serializable one, any name for one the analysis cannot read, or for a value of no named class.
         for (type in encodedSignalTypes(src)) out += if (type == ANY_SIGNAL) ANY_SIGNAL else ENCODED_CLASS + type
     }
-    for (m in ASSIGNED_SIGNAL.findAll(src)) out += m.groupValues[1]
-    out.removeAll { PLACEHOLDER in it }
+    return out
+}
+
+/**
+ * Every place [src] defines a signal that [collectSignalDefinitions] names, in source order: what
+ * go to declaration lands on and a rename rewrites. A spread and a codec define signals at no place
+ * that names them, so neither is here.
+ */
+public fun signalDeclarations(
+    src: String,
+    language: SourceLanguage,
+): List<SignalDeclaration> = definedAt(src, language, Spread()).sortedWith(compareBy({ it.start }, { it.end }))
+
+/**
+ * A name a rename may write: dotted parts of ASCII letters, digits and `_`, not opening with a
+ * digit. What a `$name` reads and what a Kotlin string holds without a template or a name the DSL
+ * refuses: a `$` would be a template in Kotlin and `-` throws in a DSL call.
+ */
+private val RENAMABLE = Regex("""[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*""")
+
+/** The characters of a key and its modifiers, as [KEYED_ATTRIBUTE] reads them. */
+private val KEY_TAIL = Regex("""[\p{L}\p{N}_.-]*""")
+
+/**
+ * What to write at [d] in [src] so that the place defines [newName], or null when nothing written
+ * there can: a property of a signals class, which Kotlin's rename renames; a key of an object
+ * asked to move under another object; a bare key that would need quotes; or an attribute key whose
+ * modifiers turn every spelling of [newName] into another name. An attribute key keeps its
+ * modifiers and is spelled as the old one was, kebab-case for kebab-case.
+ */
+public fun signalRenameText(
+    src: String,
+    d: SignalDeclaration,
+    newName: String,
+): String? {
+    if (!RENAMABLE.matches(newName)) return null
+    return when (d.kind) {
+        SignalDeclaration.Kind.NAME -> {
+            newName
+        }
+
+        SignalDeclaration.Kind.PROPERTY -> {
+            null
+        }
+
+        SignalDeclaration.Kind.OBJECT_KEY -> {
+            val parent = d.name.substringBeforeLast('.', "")
+            if (newName.substringBeforeLast('.', "") != parent) return null
+            // A quoted key with a dot in it is one part, `'a.b'`, which the path's last part is not.
+            if ('.' in src.substring(d.start, d.end)) return null
+            newName.substringAfterLast('.')
+        }
+
+        SignalDeclaration.Kind.KEY -> {
+            val modifiers = KEY_TAIL.matchAt(src, d.end)?.value ?: ""
+            val kebab = '-' in src.substring(d.start, d.end)
+            val spellings =
+                if (kebab) {
+                    listOf(
+                        newName.replace('_', '-'),
+                        ClientCasing.kebab(newName),
+                        newName,
+                    )
+                } else {
+                    listOf(newName, ClientCasing.kebab(newName))
+                }
+            spellings.firstOrNull { ClientCasing.readKey(it + modifiers) == newName }
+        }
+    }
+}
+
+/**
+ * What to write over the last part of a read of [signal], `name` in `$user.name` for `user.name`,
+ * when the signal is renamed [newName], or null when it cannot be: a read names its signal part by
+ * part, so a rename keeps the signal under the object it is in.
+ */
+public fun signalReadRenameText(
+    signal: String,
+    newName: String,
+): String? {
+    if (!RENAMABLE.matches(newName) || newName.substringBeforeLast('.', "") != signal.substringBeforeLast('.', "")) return null
+    return newName.substringAfterLast('.')
+}
+
+private fun definedAt(
+    src: String,
+    language: SourceLanguage,
+    spread: Spread,
+): List<SignalDeclaration> {
+    val out = ArrayList(declared(src, language, spread))
+    if (language == SourceLanguage.KOTLIN) {
+        for (properties in serializableProperties(src).values) {
+            // Under @SerialName the name is the annotation's string, which a rename may rewrite.
+            for (p in properties) {
+                val kind = if (src.getOrNull(p.start - 1) == '"') SignalDeclaration.Kind.NAME else SignalDeclaration.Kind.PROPERTY
+                out += SignalDeclaration(p.start, p.end, p.name, kind)
+            }
+        }
+    }
+    for (m in ASSIGNED_SIGNAL.findAll(src)) out += declarationAt(m.groups[1]!!, 0)
+    return out.filter { PLACEHOLDER !in it.name }.distinct()
+}
+
+/**
+ * The places the markup attributes and the DSL calls of [src] define a signal, which a page puts
+ * there: no `@Serializable` property and no assignment. [spread] is set when an object form
+ * spreads a variable into itself, which may define any signal.
+ */
+private fun declared(
+    src: String,
+    language: SourceLanguage,
+    spread: Spread,
+): List<SignalDeclaration> {
+    val out = ArrayList<SignalDeclaration>()
+    if (language == SourceLanguage.KOTLIN) {
+        for (site in findCallSites(src, PAIR_CALLS)) {
+            val positional = site.positional
+            positional.forEachIndexed { idx, a ->
+                for (key in argumentKeys(a.text)) out += key.copy(start = a.start + key.start, end = a.start + key.end)
+                // patchSignals("""{"count": 1}"""): the signals as JSON text.
+                if (site.name in JSON_CALLS) {
+                    val s = a.string
+                    s?.text?.takeIf { JSON_OBJECT.containsMatchIn(it) }?.let { json ->
+                        val open = json.indexOf('{') + 1
+                        for (k in objectKeys(json.substring(open, maxOf(open, json.lastIndexOf('}'))), spread)) {
+                            val at = s.toSource(open + k.nameStart, open + k.nameStart + k.key.length)
+                            out += SignalDeclaration(at.first, at.last + 1, k.path, SignalDeclaration.Kind.OBJECT_KEY)
+                        }
+                    }
+                }
+                val name = NAME.find(a.text)?.groups?.get(1) ?: return@forEachIndexed
+                // removeSignals("a", "b"), and dataSignals("name", "expression"), whose key the client reads back as the name.
+                if (site.name == "removeSignals") out += declarationAt(name, a.start)
+                if (site.name == "dataSignals" && idx == 0 && positional.getOrNull(1)?.string != null) out += declarationAt(name, a.start)
+            }
+        }
+        for (re in KOTLIN_PATTERNS) for (m in re.findAll(src)) out += declarationAt(m.groups[1]!!, 0)
+    }
+    // A keyed attribute may carry modifiers after the key: data-signals:foo-bar__ifmissing, and
+    // `__case` names the signal: data-signals:my-value__case.snake is `$my_value`.
+    for (m in KEYED_ATTRIBUTE.findAll(src)) {
+        val written = m.groups[1]!!
+        val key = written.value.substringBefore("__")
+        out +=
+            SignalDeclaration(
+                written.range.first,
+                written.range.first + key.length,
+                ClientCasing.readKey(written.value),
+                SignalDeclaration.Kind.KEY,
+            )
+    }
+    for (m in VALUE_ATTRIBUTE.findAll(src)) out += declarationAt(m.groups[1] ?: m.groups[2]!!, 0)
+    for (m in OBJECT_ATTRIBUTE.findAll(src)) {
+        val body = m.groups[1] ?: m.groups[2]!!
+        for (k in objectKeys(body.value, spread)) {
+            val start = body.range.first + k.nameStart
+            out += SignalDeclaration(start, start + k.key.length, k.path, SignalDeclaration.Kind.OBJECT_KEY)
+        }
+    }
     return out
 }
 
@@ -244,32 +434,13 @@ private fun collect(
     reads: Boolean,
 ): Set<String> {
     val out = LinkedHashSet<String>()
+    val spread = Spread()
+    for (d in declared(src, language, spread)) out += d.name
+    if (spread.any) out += ANY_SIGNAL
     if (language == SourceLanguage.KOTLIN) {
-        for (site in findCallSites(src, PAIR_CALLS)) {
-            val positional = site.positional
-            positional.forEachIndexed { idx, a ->
-                for (key in argumentKeys(a.text)) out += key
-                // patchSignals("""{"count": 1}"""): the signals as JSON text.
-                if (site.name in JSON_CALLS) {
-                    a.string?.text?.takeIf { JSON_OBJECT.containsMatchIn(it) }?.let { json ->
-                        out += objectKeyPaths(json.substring(json.indexOf('{') + 1, maxOf(json.indexOf('{') + 1, json.lastIndexOf('}'))))
-                    }
-                }
-                val name = NAME.find(a.text)?.groupValues?.get(1) ?: return@forEachIndexed
-                // removeSignals("a", "b"), and dataSignals("name", "expression"), whose key the client reads back as the name.
-                if (site.name == "removeSignals") out += name
-                if (site.name == "dataSignals" && idx == 0 && positional.getOrNull(1)?.string != null) out += name
-            }
-        }
-        for (re in KOTLIN_PATTERNS) for (m in re.findAll(src)) out += m.groupValues[1]
         if (reads) for (re in KOTLIN_READS) for (m in re.findAll(src)) out += m.groupValues[1]
         if (reads) for (m in HELPER_READS.findAll(src)) out += m.groupValues[1]
     }
-    // A keyed attribute may carry modifiers after the key: data-signals:foo-bar__ifmissing, and
-    // `__case` names the signal: data-signals:my-value__case.snake is `$my_value`.
-    for (m in KEYED_ATTRIBUTE.findAll(src)) out += ClientCasing.readKey(m.groupValues[1])
-    for (m in VALUE_ATTRIBUTE.findAll(src)) out += m.groups[1]?.value ?: m.groupValues[2]
-    for (m in OBJECT_ATTRIBUTE.findAll(src)) out += objectKeyPaths(m.groups[1]?.value ?: m.groupValues[2])
     if (reads && language == SourceLanguage.HTML) {
         for (m in BARE_SIGNAL.findAll(src)) out += m.groupValues[1]
     }
@@ -345,6 +516,8 @@ internal data class ObjectKey(
     val end: Int,
     val valueStart: Int,
     val objectUnder: Boolean,
+    /** Where [key] itself starts, inside its quotes if it has any. */
+    val nameStart: Int = start,
 )
 
 /**
@@ -396,10 +569,12 @@ internal fun objectKeys(
             skipSpace()
             var key: String? = null
             val keyStart = i
+            var nameStart = i
             val escaped = body.getOrNull(i) == '\\' && (body.getOrNull(i + 1) == '"' || body.getOrNull(i + 1) == '\'')
             val quote = if (escaped) body.getOrNull(i + 1) else body.getOrNull(i)
             if (quote == '"' || quote == '\'') {
                 val from = i + if (escaped) 2 else 1
+                nameStart = from
                 var j = from
                 while (j < body.length && body[j] != quote && !(body[j] == '\\' && body.getOrNull(j + 1) == quote)) j++
                 key = body.substring(minOf(from, body.length), minOf(j, body.length))
@@ -418,7 +593,7 @@ internal fun objectKeys(
                 i++
                 skipSpace()
                 objectFor = if (body.getOrNull(i) == '{') parts else null
-                out += ObjectKey(parts.joinToString("."), parts, key, keyStart, keyEnd, i, objectFor != null)
+                out += ObjectKey(parts.joinToString("."), parts, key, keyStart, keyEnd, i, objectFor != null, nameStart)
             }
             continue
         }

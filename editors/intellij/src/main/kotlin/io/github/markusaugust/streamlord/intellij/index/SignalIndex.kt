@@ -4,6 +4,7 @@ import com.intellij.ide.highlighter.HtmlFileType
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.fileEditor.impl.LoadTextUtil
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ProjectRootManager
@@ -16,10 +17,14 @@ import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.util.PsiModificationTracker
 import com.intellij.util.ForcefulReparseModificationTracker
 import io.github.markusaugust.streamlord.analysis.Selectors
+import io.github.markusaugust.streamlord.analysis.SignalDeclaration
+import io.github.markusaugust.streamlord.analysis.SignalReference
 import io.github.markusaugust.streamlord.analysis.SourceLanguage
 import io.github.markusaugust.streamlord.analysis.collectSelectors
 import io.github.markusaugust.streamlord.analysis.collectSignalDefinitions
 import io.github.markusaugust.streamlord.analysis.collectSignals
+import io.github.markusaugust.streamlord.analysis.signalDeclarations
+import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
 import org.jetbrains.kotlin.idea.KotlinFileType
 import java.util.concurrent.ConcurrentHashMap
@@ -28,17 +33,38 @@ import java.util.concurrent.ConcurrentHashMap
  * Project-wide index of signal names and of element ids and classes, for completion. Heuristic
  * and generous, like the VS Code extension's: every Kotlin and HTML file in the project is read
  * once and again when it changes, up to a cap, and the names are offered with this file's first.
+ * It keeps where each signal is defined and read as well, so that go to declaration, find usages
+ * and rename read no file again: a word search re-reads thousands of files in a large project.
  */
 @Service(Service.Level.PROJECT)
 class SignalIndex(
     private val project: Project,
 ) {
     private class Entry(
+        val file: VirtualFile?,
         val stamp: Long,
         val length: Int,
+        val prefix: String,
         val signals: Set<String>,
         val definitions: Set<String>,
         val selectors: Selectors,
+    ) {
+        /** Where the file defines and reads signals: worked out on the first search, which completion never asks for. */
+        @Volatile
+        var places: Places? = null
+    }
+
+    private class Places(
+        val declarations: List<SignalDeclaration>,
+        val reads: List<SignalReference>,
+    )
+
+    /** A place in a project file where a signal is defined or read, by the file's offsets. */
+    class Place(
+        val file: VirtualFile,
+        val start: Int,
+        val end: Int,
+        val name: String,
     )
 
     private val entries = ConcurrentHashMap<String, Entry>()
@@ -63,6 +89,72 @@ class SignalIndex(
     fun forFile(file: PsiFile): Set<String> = entryFor(file)?.signals ?: emptySet()
 
     fun selectorsForFile(file: PsiFile): Selectors = entryFor(file)?.selectors ?: Selectors.EMPTY
+
+    /** Where [file] defines signals, from its current text. */
+    fun declarationsIn(file: PsiFile): List<SignalDeclaration> =
+        entryFor(file)?.let { placesOf(it, file.text) }?.declarations ?: emptyList()
+
+    /** Where [file] reads signals, from its current text, calls to something other than Streamlord among them. */
+    fun readsIn(file: PsiFile): List<SignalReference> = entryFor(file)?.let { placesOf(it, file.text) }?.reads ?: emptyList()
+
+    /** Every place in the project that defines the signal [name], and with [inside] every one that defines a signal under it. */
+    fun declarationsOf(
+        name: String,
+        inside: Boolean = false,
+    ): List<Place> {
+        refresh()
+        val under = "$name."
+        return places { e ->
+            placesOf(e, null)
+                ?.declarations
+                ?.filter { it.name == name || (inside && it.name.startsWith(under)) }
+                ?.map { Triple(it.start, it.end, it.name) }
+        }
+    }
+
+    /** Every place in the project that reads the signal [name] or reads into it, `$user.name` for `user`. */
+    fun readsOf(name: String): List<Place> {
+        refresh()
+        val inside = "$name."
+        return places { e ->
+            placesOf(e, null)?.reads?.filter { it.name == name || it.name.startsWith(inside) }?.map { Triple(it.start, it.end, it.name) }
+        }
+    }
+
+    /**
+     * Where [e]'s file defines and reads signals, from [text] or else from the file as it is now.
+     * They are kept only when that is the text [e] was made from; a caller checks each place against
+     * the file's own references.
+     */
+    private fun placesOf(
+        e: Entry,
+        text: String?,
+    ): Places? {
+        e.places?.let { return it }
+        val vf = e.file ?: return null
+        val language = languageOf(vf) ?: return null
+        val document = FileDocumentManager.getInstance().getCachedDocument(vf)
+        val stamp = document?.modificationStamp ?: vf.modificationStamp
+        val current = text ?: document?.text ?: runCatching { LoadTextUtil.loadText(vf).toString() }.getOrNull() ?: return null
+        val analysis = StreamlordAnalysis.getInstance(project)
+        val reads =
+            when (language) {
+                SourceLanguage.KOTLIN -> analysis.analyzer.signalReferencesInKotlin(current, analysis.options())
+                SourceLanguage.HTML -> analysis.analyzer.signalReferencesInHtml(current, analysis.options())
+            }.map { SignalReference(it.start, it.end, it.name) }
+        val places = Places(signalDeclarations(current, language), reads)
+        if (current.length == e.length && (text != null || stamp == e.stamp)) e.places = places
+        return places
+    }
+
+    private fun places(of: (Entry) -> List<Triple<Int, Int, String>>?): List<Place> {
+        val out = ArrayList<Place>()
+        for (e in entries.values) {
+            val file = e.file?.takeIf { it.isValid } ?: continue
+            for ((start, end, name) in of(e) ?: continue) out += Place(file, start, end, name)
+        }
+        return out
+    }
 
     /** Every signal name declared anywhere in the project. */
     fun all(): Set<String> {
@@ -114,18 +206,27 @@ class SignalIndex(
         val key = file.virtualFile?.path ?: file.name
         val stamp = file.modificationStamp
         val cached = entries[key]
-        if (cached != null && cached.stamp == stamp && cached.length == text.length) return cached
-        return index(key, stamp, text, language)
+        if (cached != null && cached.stamp == stamp && cached.length == text.length && cached.prefix == prefix()) return cached
+        return index(key, file.virtualFile, stamp, text, language)
     }
 
     private fun index(
         key: String,
+        file: VirtualFile?,
         stamp: Long,
         text: String,
         language: SourceLanguage,
     ): Entry {
         val entry =
-            Entry(stamp, text.length, collectSignals(text, language), collectSignalDefinitions(text, language), collectSelectors(text))
+            Entry(
+                file,
+                stamp,
+                text.length,
+                prefix(),
+                collectSignals(text, language),
+                collectSignalDefinitions(text, language),
+                collectSelectors(text),
+            )
         val previous = entries.put(key, entry)
         if (previous?.definitions != entry.definitions) dropUnion()
         return entry
@@ -158,9 +259,9 @@ class SignalIndex(
             val document = FileDocumentManager.getInstance().getCachedDocument(vf)
             val stamp = document?.modificationStamp ?: vf.modificationStamp
             val cached = entries[vf.path]
-            if (cached != null && cached.stamp == stamp) continue
-            val text = document?.text ?: runCatching { String(vf.contentsToByteArray(), vf.charset) }.getOrNull() ?: continue
-            index(vf.path, stamp, text, language)
+            if (cached != null && cached.stamp == stamp && cached.prefix == prefix()) continue
+            val text = document?.text ?: runCatching { LoadTextUtil.loadText(vf).toString() }.getOrNull() ?: continue
+            index(vf.path, vf, stamp, text, language)
         }
         // A file deleted, renamed or moved out of the project defines nothing any more.
         if (entries.keys.retainAll(seen)) dropUnion()
@@ -188,6 +289,8 @@ class SignalIndex(
 
     private fun indexable(vf: VirtualFile): Boolean =
         vf.isValid && !vf.isDirectory && vf.length <= SIZE_CAP && vf.path.split('/').none { it in SKIPPED_DIRECTORIES }
+
+    private fun prefix(): String = StreamlordSettings.getInstance(project).attributePrefix
 
     private fun dropUnion() {
         synchronized(unionLock) {

@@ -69,6 +69,13 @@ class SignalIndexBenchmarkTest : BasePlatformTestCase() {
             }
         println("BENCH definitionsSeenFrom after one edit, ms: $afterEdit")
 
+        // What find usages and go to declaration ask of the stored positions.
+        for (word in listOf("count", "value", "loading", "selectedId")) {
+            var found = 0
+            val took = timed(1) { found = index.declarationsOf(word).size + index.readsOf(word).size }.single()
+            println("BENCH stored places of '$word': $found, $took ms")
+        }
+
         // What a references search does without stored positions: the word index's candidates, each read again.
         for (word in listOf("count", "value", "loading", "selectedId")) {
             var candidates = 0
