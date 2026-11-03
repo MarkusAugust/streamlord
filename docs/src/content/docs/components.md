@@ -86,7 +86,7 @@ Datastar's [SSE events reference](https://data-star.dev/reference/sse_events) sa
 Datastar morphs elements by matching top-level elements based on their ID." and "Be sure to
 place IDs on top-level elements to be morphed, as well as on elements within them that you'd like
 to preserve state on (event listeners, CSS transitions, etc.)." Take each id from a key in the
-data, keep it unique on the page, and render the same one, on the same tag, every time:
+data, keep it unique on the whole page, and render the same one, on the same tag, every time:
 
 ```kotlin sample=html
 data class Case(val id: Int, val title: String)
@@ -96,30 +96,55 @@ ul {
     id = "cases"
     for (case in cases) {
         li {
-            id = "case-${case.id}" // the case, wherever it sits in the list
-            // id = "case-$index"                not the position
-            // id = "case-${UUID.randomUUID()}"  not a new id on every render
+            id = "case-${case.id}"
             +case.title
-            textInput(name = "note")
+            textInput(name = "note-${case.id}")
         }
     }
 }
 ```
 
-An index or a counter names a position. Insert a case at the top and it gets `case-0`, the id of
-the row that was first, so it takes over that row's element and the text the reader typed in
-it. An element whose id the patch does not carry, a random one or one that changed, is not
-morphed: the client removes it and inserts the server's, and focus and typed text go with it.
-An id that appears twice, on the page or in the patch, is dropped from the matching by id.
+Not this, where the id names a position:
 
-Leave the id off and the element is matched by its tag and its place among its siblings, so a
-new sibling of the same tag inserted in front of it can take it over, typed text and all. Every
-element that holds what the reader did, a field, an open `<details>`, a focused control, needs a
-stable id, or must sit where nothing is inserted before it.
+```kotlin sample=html
+val titles = listOf("Broken lamp", "Lost keys")
+
+ul {
+    id = "cases"
+    titles.forEachIndexed { index, title ->
+        li {
+            id = "case-$index"
+            +title
+            textInput(name = "note-$index")
+        }
+    }
+}
+```
+
+Insert a case at the top and it gets `case-0`, the id of the row that was first, so it takes over
+that row's element and the text the reader typed in it. A counter in the loop does the same; a
+random id such as `UUID.randomUUID()` is new on every render. Inside the patched element, an
+element whose id the patch does not carry is not morphed: the client removes it and inserts the
+server's, and focus and typed text go with it. At the top level the client looks for the element by
+its id, so a changed id finds nothing: it warns `PatchElementsNoTargetsFound` and leaves the page
+as it was.
+
+Unique means on the whole page, not only in the list. The client looks an id up in the whole
+document, so when the rows change order, a `#case-41` in a sidebar can be moved into the list in
+place of the row. A duplicate inside the patched element or in the patch is dropped from the
+matching by id.
+
+Leave the id off and the element is matched by its tag and its place among its siblings, unless
+it holds elements with ids, which it then follows. A new sibling of the same tag inserted in
+front of it can take it over, typed text and all. Every element that holds what the reader did,
+a field or a focused control, needs a stable id, or must sit where nothing is inserted before
+it. An id keeps the element, not what the browser set on it: an open `<details>` closes on the
+next morph unless it also carries `dataPreserveAttr("open")`.
 
 Datastar documents none of this beyond the two sentences above. It is what the 1.0.4 client does,
-read in `isSoftMatch` and `findBestMatch` in `library/src/plugins/watchers/patchElements.ts` and
-tested with Datastar 1.0.4, and a later version may match differently. The matching through the
+read in `isSoftMatch` and `findBestMatch` in
+[`patchElements.ts`](https://github.com/starfederation/datastar/blob/v1.0.4/library/src/plugins/watchers/patchElements.ts)
+and tested with Datastar 1.0.4, and a later version may match differently. The matching through the
 ids an element contains is the "id sets" that [idiomorph](https://github.com/bigskysoftware/idiomorph)
 describes; idiomorph does not document the case without an id either.
 
