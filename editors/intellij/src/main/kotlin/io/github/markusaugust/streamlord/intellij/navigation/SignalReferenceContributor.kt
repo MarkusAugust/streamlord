@@ -1,6 +1,5 @@
 package io.github.markusaugust.streamlord.intellij.navigation
 
-import com.intellij.lang.injection.InjectedLanguageManager
 import com.intellij.openapi.util.TextRange
 import com.intellij.patterns.PlatformPatterns
 import com.intellij.psi.PsiElement
@@ -11,16 +10,12 @@ import com.intellij.psi.PsiReferenceContributor
 import com.intellij.psi.PsiReferenceProvider
 import com.intellij.psi.PsiReferenceRegistrar
 import com.intellij.psi.ResolveResult
-import com.intellij.psi.util.parentOfType
 import com.intellij.psi.xml.XmlAttribute
 import com.intellij.psi.xml.XmlAttributeValue
 import com.intellij.util.ProcessingContext
 import io.github.markusaugust.streamlord.analysis.SignalDeclaration
 import io.github.markusaugust.streamlord.analysis.signalReadRenameText
 import io.github.markusaugust.streamlord.analysis.signalRenameText
-import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
-import io.github.markusaugust.streamlord.intellij.index.SignalIndex
-import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtStringTemplateExpression
 
 /**
@@ -42,46 +37,15 @@ private object SignalReferenceProvider : PsiReferenceProvider() {
         context: ProcessingContext,
     ): Array<PsiReference> {
         val file = element.containingFile ?: return PsiReference.EMPTY_ARRAY
-        val reads =
-            when {
-                file is KtFile -> {
-                    StreamlordAnalysis.getInstance(file.project).kotlinSignalReferences(file)
-                }
-
-                StreamlordAnalysis.isHtmlSide(file) && !InjectedLanguageManager.getInstance(file.project).isInjectedFragment(file) -> {
-                    StreamlordAnalysis.getInstance(file.project).htmlSignalReferences(file)
-                }
-
-                else -> {
-                    return PsiReference.EMPTY_ARRAY
-                }
-            }
         // An attribute holds its value, which has references of its own: the attribute keeps to its name.
         val range = (element as? XmlAttribute)?.nameElement?.textRange ?: element.textRange
-
         // A string inside a template of this one holds its own references.
-        fun ours(at: Int): Boolean =
-            at >= range.startOffset &&
-                (element !is KtStringTemplateExpression || file.findElementAt(at)?.parentOfType<KtStringTemplateExpression>() == element)
-        val index = SignalIndex.getInstance(file.project)
-        val defined = index.definitionsSeenFrom(file)
-        val out = ArrayList<PsiReference>()
-        for (read in reads) {
-            val nameStart = read.end - read.name.length
-            if (read.end > range.endOffset || !ours(nameStart)) continue
-            // `$user.name.length` reads `user` in its first part and `user.name` in its second, where the project defines them.
-            var at = nameStart
-            var path = ""
-            for (part in read.name.split('.')) {
-                path = if (path.isEmpty()) part else "$path.$part"
-                if (path in defined) out += SignalPsiReference(element, at, at + part.length, path)
-                at += part.length + 1
-            }
-        }
-        for (d in index.declarationsIn(file)) {
-            if (d.end <= range.endOffset && ours(d.start)) out += SignalPsiReference(element, d.start, d.end, d.name, d)
-        }
-        return out.toTypedArray()
+        val host = if (element is KtStringTemplateExpression) element.textRange.startOffset else -1
+        return SignalSites
+            .of(file)
+            .filter { it.start >= range.startOffset && it.end <= range.endOffset && it.host == host }
+            .map { SignalPsiReference(element, it.start, it.end, it.signal, it.declaration) }
+            .toTypedArray()
     }
 }
 
@@ -122,9 +86,7 @@ class SignalPsiReference(
     override fun multiResolve(incompleteCode: Boolean): Array<ResolveResult> =
         SignalTarget.of(element.containingFile, signal).map { PsiElementResolveResult(it) }.toTypedArray()
 
-    /** A place that defines a signal under another, `user.name` under `user`, moves with it in a rename. */
-    override fun isReferenceTo(element: PsiElement): Boolean =
-        element is SignalTarget && (element.name == signal || (declaration != null && signal.startsWith(element.name + ".")))
+    override fun isReferenceTo(element: PsiElement): Boolean = element is SignalTarget && element.name == signal
 
     override fun getVariants(): Array<Any> = emptyArray()
 

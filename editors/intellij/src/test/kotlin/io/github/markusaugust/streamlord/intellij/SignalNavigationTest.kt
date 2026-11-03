@@ -148,4 +148,73 @@ class SignalNavigationTest : BasePlatformTestCase() {
         myFixture.renameElementAtCaretUsingHandler("my_title")
         assertEquals("<div data-signals:my-title__case.snake=\"0\" data-text=\"\$my_title\"></div>", myFixture.file.text)
     }
+
+    fun `test a search reads only what the index reads, and no word search`() {
+        val skipped = myFixture.addFileToProject("build/gen.html", "<b data-text=\"\$count\"></b>")
+        myFixture.addFileToProject("page.html", "<div data-signals:count=\"0\"></div>")
+        myFixture.configureByText("other.html", "<b data-text=\"\$co<caret>unt\"></b>")
+        val target =
+            TargetElementUtil
+                .getInstance()
+                .getTargetCandidates(
+                    TargetElementUtil.findReference(myFixture.editor, myFixture.caretOffset)!!,
+                ).first()
+        assertEquals(listOf("other.html", "page.html"), myFixture.findUsages(target).map { it.file!!.name }.sorted())
+        myFixture.renameElementAtCaretUsingHandler("total")
+        assertEquals("<b data-text=\"\$count\"></b>", skipped.text)
+    }
+
+    fun `test a file with CRLF line endings that no editor holds`() {
+        val vf = myFixture.tempDirFixture.createFile("page.html", "<p>\r\n</p>\r\n<div data-signals:count=\"0\"></div>")
+        myFixture.configureByText("other.html", "<b data-text=\"\$co<caret>unt\"></b>")
+        assertEquals(listOf("page.html" to "count"), targets())
+        assertTrue(vf.isValid)
+    }
+
+    fun `test an assignment is renamed once`() {
+        myFixture.configureByText(
+            "page.html",
+            "<div data-signals:count=\"0\" data-on:click=\"\$count = \$count + 1\" data-text=\"\$co<caret>unt\"></div>",
+        )
+        myFixture.renameElementAtCaretUsingHandler("total")
+        assertEquals(
+            "<div data-signals:total=\"0\" data-on:click=\"\$total = \$total + 1\" data-text=\"\$total\"></div>",
+            myFixture.file.text,
+        )
+    }
+
+    fun `test a call to something else defines no signal and is not renamed`() {
+        val other =
+            myFixture.addFileToProject(
+                "Other.kt",
+                "class Other { fun patchSignals(m: Map<String, Int>) = m }\nfun o() = Other().patchSignals(mapOf(\"count\" to 1))",
+            )
+        myFixture.addFileToProject("page.html", "<div data-signals:count=\"0\"></div>")
+        myFixture.configureByText("other.html", "<b data-text=\"\$co<caret>unt\"></b>")
+        assertEquals(listOf("page.html" to "count"), targets())
+        myFixture.renameElementAtCaretUsingHandler("total")
+        assertTrue(other.text, "\"count\" to 1" in other.text)
+    }
+
+    fun `test a place a rename cannot reach is a conflict`() {
+        myFixture.addFileToProject("Signals.kt", "@Serializable data class S(val count: Int)")
+        myFixture.configureByText("page.html", "<div data-signals:count=\"0\" data-text=\"\$co<caret>unt\"></div>")
+        try {
+            myFixture.renameElementAtCaretUsingHandler("total")
+            fail("a property of a signals class is Kotlin's to rename")
+        } catch (e: com.intellij.refactoring.BaseRefactoringProcessor.ConflictsInTestsException) {
+            assertTrue(e.messages.joinToString(), e.messages.any { "property of a signals class" in it })
+        }
+    }
+
+    fun `test a template read as plain text is a conflict, not a half rename`() {
+        myFixture.addFileToProject("page.jte", "<div data-signals:count=\"0\"></div>")
+        myFixture.configureByText("other.html", "<b data-text=\"\$co<caret>unt\"></b>")
+        try {
+            myFixture.renameElementAtCaretUsingHandler("total")
+            fail("the template holds no reference a rename can rewrite")
+        } catch (e: com.intellij.refactoring.BaseRefactoringProcessor.ConflictsInTestsException) {
+            assertTrue(e.messages.joinToString(), e.messages.any { "page.jte" in it && "plain text" in it })
+        }
+    }
 }

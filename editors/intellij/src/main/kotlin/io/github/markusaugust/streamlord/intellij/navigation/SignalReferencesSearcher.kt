@@ -1,18 +1,22 @@
 package io.github.markusaugust.streamlord.intellij.navigation
 
 import com.intellij.openapi.application.QueryExecutorBase
+import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiManager
 import com.intellij.psi.PsiReference
+import com.intellij.psi.search.LocalSearchScope
+import com.intellij.psi.search.SearchScope
 import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.psi.util.parentsOfType
 import com.intellij.util.Processor
 import io.github.markusaugust.streamlord.intellij.index.SignalIndex
 
 /**
- * The references to a signal, from the places [SignalIndex] keeps: no file is read again. Each place
- * is checked against the references its file holds now, which also leaves out a call that resolves
- * to something other than Streamlord.
+ * The references to a signal, from the files [SignalIndex] says name it: no word search, and no
+ * file the index leaves out. Each file's references are its [SignalSites], which leave out a call
+ * that resolves to something other than Streamlord.
  */
 class SignalReferencesSearcher : QueryExecutorBase<PsiReference, ReferencesSearch.SearchParameters>(true) {
     override fun processQuery(
@@ -20,32 +24,62 @@ class SignalReferencesSearcher : QueryExecutorBase<PsiReference, ReferencesSearc
         consumer: Processor<in PsiReference>,
     ) {
         val target = parameters.elementToSearch as? SignalTarget ?: return
-        val project = parameters.project
-        val index = SignalIndex.getInstance(project)
-        val scope = parameters.effectiveSearchScope
-        val manager = PsiManager.getInstance(project)
-        val seen = HashSet<PsiReference>()
-        // A defining place is found at the name as written, and one that defines a signal under this
-        // one is a usage too, since a rename moves it with it. A read is found at the part of its
-        // path that names this signal: `name` in `$user.name` for `user.name`.
-        val parent = target.name.substringBeforeLast('.', "").let { if (it.isEmpty()) 0 else it.length + 1 }
-        val places =
-            index.declarationsOf(target.name, inside = true).map { it to it.start } +
-                index.readsOf(target.name).map { it to it.end - it.name.length + parent }
-        for ((place, at) in places) {
-            if (!scope.contains(place.file)) continue
-            val file = manager.findFile(place.file) ?: continue
-            val leaf = file.findElementAt(at) ?: continue
+        // The target's own scope is empty, so that the platform's word search finds nothing: the scope asked for is this one.
+        references(parameters.project, target.name, parameters.scopeDeterminedByUser, under = false) { consumer.process(it) }
+    }
+
+    companion object {
+        /**
+         * Every reference in [scope] to the signal [name], and with [under] every place that defines a
+         * signal under it, which a rename moves with it. Stops when [consumer] says so.
+         */
+        fun references(
+            project: Project,
+            name: String,
+            scope: SearchScope,
+            under: Boolean,
+            consumer: (SignalPsiReference) -> Boolean,
+        ) {
+            for (file in filesNaming(project, name, scope)) {
+                for (site in SignalSites.of(file)) {
+                    val names = site.signal == name || (under && site.declaration != null && site.signal.startsWith("$name."))
+                    if (!names) continue
+                    val ref = referenceAt(file, site.start) ?: continue
+                    if (!consumer(ref)) return
+                }
+            }
+        }
+
+        /** The files in [scope] that may name [name]: those of a local scope, or those the index finds it in. */
+        fun filesNaming(
+            project: Project,
+            name: String,
+            scope: SearchScope,
+        ): List<PsiFile> {
+            if (scope is LocalSearchScope) return scope.scope.mapNotNull { it.containingFile }.distinct()
+            val index = SignalIndex.getInstance(project)
+            val manager = PsiManager.getInstance(project)
+            return (index.declarationsOf(name, inside = true) + index.readsOf(name))
+                .map { it.file }
+                .distinct()
+                .filter { scope.contains(it) }
+                .mapNotNull { manager.findFile(it) }
+        }
+
+        /** The signal reference that starts at [at] in [file], on the innermost element that holds one. */
+        fun referenceAt(
+            file: PsiFile,
+            at: Int,
+        ): SignalPsiReference? {
+            val leaf = file.findElementAt(at) ?: return null
             for (host in leaf.parentsOfType<PsiElement>(withSelf = true)) {
                 val base = host.textRange.startOffset
-                val found =
-                    host.references.filterIsInstance<SignalPsiReference>().filter {
-                        it.rangeInElement.startOffset + base == at && it.isReferenceTo(target)
-                    }
-                if (found.isEmpty()) continue
-                for (ref in found) if (seen.add(ref) && !consumer.process(ref)) return
-                break
+                host.references
+                    .firstNotNullOfOrNull { ref ->
+                        (ref as? SignalPsiReference)?.takeIf { it.rangeInElement.startOffset + base == at }
+                    }?.let { return it }
             }
+            return null
         }
     }
 }

@@ -4,6 +4,7 @@ import com.intellij.ide.highlighter.HtmlFileType
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.fileEditor.impl.LoadTextUtil
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ProjectRootManager
@@ -134,7 +135,7 @@ class SignalIndex(
         val language = languageOf(vf) ?: return null
         val document = FileDocumentManager.getInstance().getCachedDocument(vf)
         val stamp = document?.modificationStamp ?: vf.modificationStamp
-        val current = text ?: document?.text ?: runCatching { String(vf.contentsToByteArray(), vf.charset) }.getOrNull() ?: return null
+        val current = text ?: document?.text ?: runCatching { LoadTextUtil.loadText(vf).toString() }.getOrNull() ?: return null
         val analysis = StreamlordAnalysis.getInstance(project)
         val reads =
             when (language) {
@@ -259,7 +260,7 @@ class SignalIndex(
             val stamp = document?.modificationStamp ?: vf.modificationStamp
             val cached = entries[vf.path]
             if (cached != null && cached.stamp == stamp && cached.prefix == prefix()) continue
-            val text = document?.text ?: runCatching { String(vf.contentsToByteArray(), vf.charset) }.getOrNull() ?: continue
+            val text = document?.text ?: runCatching { LoadTextUtil.loadText(vf).toString() }.getOrNull() ?: continue
             index(vf.path, vf, stamp, text, language)
         }
         // A file deleted, renamed or moved out of the project defines nothing any more.

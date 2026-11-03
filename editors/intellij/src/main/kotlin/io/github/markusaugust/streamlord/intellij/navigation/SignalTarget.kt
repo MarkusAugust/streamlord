@@ -8,7 +8,10 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiManager
 import com.intellij.psi.impl.FakePsiElement
+import com.intellij.psi.search.GlobalSearchScope
+import com.intellij.psi.search.SearchScope
 import io.github.markusaugust.streamlord.intellij.index.SignalIndex
+import org.jetbrains.kotlin.psi.KtFile
 import javax.swing.Icon
 
 /**
@@ -44,6 +47,13 @@ class SignalTarget(
 
     override fun getIcon(open: Boolean): Icon = AllIcons.Nodes.Variable
 
+    /**
+     * No scope of its own, so that the platform's word search, which reads every file holding the
+     * name again and those the index leaves out with them, finds nothing to search:
+     * [SignalReferencesSearcher] answers from the index, in the scope the search was asked for.
+     */
+    override fun getUseScope(): SearchScope = GlobalSearchScope.EMPTY_SCOPE
+
     override fun getPresentation(): ItemPresentation =
         object : ItemPresentation {
             override fun getPresentableText(): String = "\$$signal"
@@ -75,6 +85,8 @@ class SignalTarget(
             val manager = PsiManager.getInstance(file.project)
             return SignalIndex.getInstance(file.project).declarationsOf(name).mapNotNull { place ->
                 val target = manager.findFile(place.file) ?: return@mapNotNull null
+                // A call to someone else's `set("count", 1)` defines no signal.
+                if (target is KtFile && !SignalSites.byStreamlord(target, place.start)) return@mapNotNull null
                 SignalTarget(target, TextRange(place.start, place.end), name)
             }
         }
