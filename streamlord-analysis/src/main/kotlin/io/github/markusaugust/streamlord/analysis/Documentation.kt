@@ -40,13 +40,17 @@ public fun casingNote(a: AttributeSpec): String =
         }
     }
 
-/** Markdown documentation of an attribute: forms, casing rule, modifiers, Kotlin helpers and the Pro note. */
+/**
+ * Markdown documentation of an attribute: forms, casing rule, modifiers, Kotlin helpers and the Pro
+ * note. [withKotlin] leaves the helpers out, for a project without streamlord-html.
+ */
 public fun attributeDoc(
     a: AttributeSpec,
     prefix: String = CatalogNames.PREFIX,
+    withKotlin: Boolean = true,
 ): String {
     val mods = if (a.modifiers.isNotEmpty()) "\n\n**Modifiers:** " + a.modifiers.joinToString(", ") { "`${modifierForm(it)}`" } else ""
-    val kotlin = if (a.kotlin.isNotEmpty()) "\n\n**Kotlin:** " + a.kotlin.joinToString(", ") { "`$it()`" } else ""
+    val kotlin = if (withKotlin && a.kotlin.isNotEmpty()) "\n\n**Kotlin:** " + a.kotlin.joinToString(", ") { "`$it()`" } else ""
     val pro = if (a.pro) "\n\n_Datastar Pro. Requires the Pro bundle, which you license and load yourself._" else ""
     val casing = if (a.keyed) "\n\n**Key casing:** " + casingNote(a) else ""
     val forms = a.forms.joinToString("  \n") { "`" + it.replaceFirst("data-", prefix) + "`" }

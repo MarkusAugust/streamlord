@@ -45,9 +45,6 @@ private val OPERAND_END = Regex("""^(?:[,)\]};]|\?:|&&|\|\||==|!=|<=|>=|\.\.)"""
 /** The words that end an operand, as words of their own: `photo` is a name, not `pho` and `to`. */
 private val OPERAND_END_WORDS = listOf("to", "else")
 
-private val IMPORT_LINE = Regex("""^import\s+[^\n]*$""", setOf(RegexOption.MULTILINE, RegexOption.UNIX_LINES))
-private val PACKAGE_LINE = Regex("""^package\s+[^\n]*$""", setOf(RegexOption.MULTILINE, RegexOption.UNIX_LINES))
-
 /** An expression as a message quotes it: on one line, and cut short past 30 characters. */
 internal fun shortened(text: String): String {
     val e = text.trim().replace(SPACES, " ")
@@ -322,11 +319,21 @@ internal class FileFacts(
     val code: BooleanArray,
     val names: Map<String, List<Declaration>>,
 ) {
-    /** The edit that imports each name of core's domain the fixes write, empty where the file has the import. */
+    /** The edit that imports each name the fixes write, by its qualified name, empty where the file has the import. */
     val importEdits: MutableMap<String, List<Edit>> = java.util.concurrent.ConcurrentHashMap()
 
+    /** The helpers a hole may call that no import from elsewhere shadows, whether or not the file uses the DSL. */
     @Volatile
     var helpers: Set<String>? = null
+
+    /** Where each call of a name of core's domain starts, by the name. */
+    val coreCalls: MutableMap<String, List<Int>> = java.util.concurrent.ConcurrentHashMap()
+
+    /** Whether something other than core's domain takes each name in this file, by the name ([shadowedInFile]). */
+    val shadowed: MutableMap<String, Boolean> = java.util.concurrent.ConcurrentHashMap()
+
+    /** Whether the file's imports show it uses the DSL: what decides when the host does not know. */
+    val usesDsl: Boolean by lazy(LazyThreadSafetyMode.PUBLICATION) { USES_HTML_DSL.containsMatchIn(src) }
 
     /** The type parameters the file declares, each with whether a value of it may be null. */
     @Volatile
@@ -949,6 +956,7 @@ internal fun declaredKind(
     name: String,
     at: Int,
     nonNull: Boolean = false,
+    core: Boolean = true,
 ): HoleFact? {
     val d = declarationOf(src, name, at) ?: return null
     val literal = d.literal
@@ -959,7 +967,8 @@ internal fun declaredKind(
             else -> HoleFact.NUMBER
         }
     }
-    if (d.markup) return HoleFact.MARKUP
+    // Without core, Html, Trusted and interpolate are not Streamlord's, and nothing says what they hold.
+    if (d.markup) return if (core) HoleFact.MARKUP else null
     val declared = d.type ?: return null
     val type = declared.removeSuffix("?")
     val scalar =
@@ -979,10 +988,10 @@ internal fun declaredKind(
         STRING_TYPE.matches(type) -> HoleFact.STRING
 
         // What interpolate returns: markup whose values have been through it.
-        HTML_TYPE.matches(type) -> HoleFact.MARKUP
+        core && HTML_TYPE.matches(type) -> HoleFact.MARKUP
 
         // Markup the author vouched for, which a Kotlin template writes as it stands.
-        type == declared && TRUSTED_TYPE.matches(type) -> HoleFact.MARKUP
+        core && type == declared && TRUSTED_TYPE.matches(type) -> HoleFact.MARKUP
 
         else -> null
     }
@@ -1185,11 +1194,13 @@ private val HOLE_HELPERS: Set<String> =
 private fun helperArguments(
     src: String,
     t: String,
+    sdk: Sdk,
 ): List<String>? {
     val m = CALL_START.find(t) ?: return null
     val name = m.groupValues[1]
     val facts = fileFacts(src)
-    val helpers = facts.helpers ?: dslHelpers(src, HOLE_HELPERS).also { facts.helpers = it }
+    if (!(sdk.htmlDsl ?: facts.usesDsl)) return null
+    val helpers = facts.helpers ?: unshadowed(src, HOLE_HELPERS).also { facts.helpers = it }
     if (name !in helpers || !wholeCall(t, name)) return null
     val args = t.substring(m.value.length, t.length - 1)
     return if (args.isBlank()) emptyList() else splitTop(args, ",")
@@ -1208,10 +1219,11 @@ private fun ownArgument(
     arg: String,
     at: Int,
     constants: Set<String>,
+    sdk: Sdk,
 ): Boolean {
     val a = arg.replaceFirst(ARGUMENT_NAME, "").trim()
     if (a.startsWith("*")) return false
-    val kind = weakest(holeValues(a).map { valueKind(src, it.text, at, constants, it.nonNull) })
+    val kind = weakest(holeValues(a).map { valueKind(src, it.text, at, constants, it.nonNull, sdk) })
     return kind == HoleFact.CONSTANT || kind == HoleFact.NUMBER || kind == HoleFact.BOOLEAN || kind == HoleFact.UNSIGNED
 }
 
@@ -1253,6 +1265,7 @@ internal fun valueKind(
     at: Int,
     constants: Set<String>,
     nonNull: Boolean = false,
+    sdk: Sdk = Sdk.DEFAULT,
 ): HoleFact? {
     val t = value.trim()
     if (LITERAL.matches(t) || STRING_LITERAL.matches(t) || CHAR_LITERAL.matches(t)) return HoleFact.CONSTANT
@@ -1260,26 +1273,26 @@ internal fun valueKind(
         return weakest(
             literal.interpolations.flatMap { ip ->
                 val values = if (ip.kind == InterpolationKind.SIMPLE) listOf(HoleValue(ip.text, false)) else holeValues(ip.text)
-                values.map { valueKind(src, it.text, at, constants, it.nonNull) }
+                values.map { valueKind(src, it.text, at, constants, it.nonNull, sdk) }
             },
         )
     }
-    helperArguments(src, t)?.let { args ->
-        return if (args.all { ownArgument(src, it, at, constants) }) HoleFact.CONSTANT else HoleFact.STRING
+    helperArguments(src, t, sdk)?.let { args ->
+        return if (args.all { ownArgument(src, it, at, constants, sdk) }) HoleFact.CONSTANT else HoleFact.STRING
     }
     // `"ab".repeat(3)`: a plain change to text the author wrote, made with what the author wrote.
     val call = lastCall(t)
     if (call?.receiver != null && call.lambda == null && call.name in TEXT_TRANSFORMS &&
-        valueKind(src, call.receiver, at, constants) == HoleFact.CONSTANT &&
-        (call.args.isBlank() || splitTop(call.args, ",").all { ownArgument(src, it, at, constants) })
+        valueKind(src, call.receiver, at, constants, sdk = sdk) == HoleFact.CONSTANT &&
+        (call.args.isBlank() || splitTop(call.args, ",").all { ownArgument(src, it, at, constants, sdk) })
     ) {
         return HoleFact.CONSTANT
     }
-    callKind(src, t, at, constants)?.let { return it }
+    callKind(src, t, at, constants, sdk)?.let { return it }
     if (qualifiedConstant(src, t, at, constants)) return HoleFact.CONSTANT
     if (!IDENT.matches(t)) return null
     if (constantAt(src, t, at, constants)) return HoleFact.CONSTANT
-    return declaredKind(src, t, at, nonNull)
+    return declaredKind(src, t, at, nonNull, sdk.core)
 }
 
 /** The conversions whose result is a `kotlin.Number` whatever they are called on. */
@@ -1319,6 +1332,7 @@ private fun callKind(
     t: String,
     at: Int,
     constants: Set<String>,
+    sdk: Sdk = Sdk.DEFAULT,
 ): HoleFact? {
     val call = lastCall(t) ?: return null
     val receiver = call.receiver ?: return null
@@ -1337,9 +1351,9 @@ private fun callKind(
     val lambda = call.name == "ifBlank" || call.name == "ifEmpty"
     if (!(call.name in STRING_CHANGES && call.lambda == null) && !(lambda && call.lambda != null && call.args.isBlank())) return null
     // `query!!.trim()`: what `!!` leaves of a `String?` is a String.
-    if (valueKind(src, receiver.replace(NON_NULL_ASSERTION, ""), at, constants) != HoleFact.STRING) return null
+    if (valueKind(src, receiver.replace(NON_NULL_ASSERTION, ""), at, constants, sdk = sdk) != HoleFact.STRING) return null
     if (!lambda) return HoleFact.STRING
-    val result = valueKind(src, lambdaResult(call.lambda!!), at, constants)
+    val result = valueKind(src, lambdaResult(call.lambda!!), at, constants, sdk = sdk)
     return if (result == HoleFact.STRING || result == HoleFact.CONSTANT) HoleFact.STRING else null
 }
 
@@ -1363,10 +1377,12 @@ internal fun htmlNamed(
 ): Boolean = declarationOf(src, name, at)?.html ?: false
 
 private val TRIM_CALL = Regex("""^\s*\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)\s*$""")
+
+// Lines as `USES_HTML_DSL` reads them: they start after `\n` alone and are indented with spaces and tabs.
 private val USES_ELEMENTS =
     Regex(
-        """^\s*(?:import\s+io\.github\.markusaugust\.streamlord\.html\.(?:elements|\*)\s*$|package\s+io\.github\.markusaugust\.streamlord\.html\b)""",
-        setOf(RegexOption.MULTILINE, RegexOption.UNIX_LINES),
+        """(?:^|(?<=\n))[ \t]*(?:import[ \t]+io\.github\.markusaugust\.streamlord\.html\.(?:elements|\*)[ \t\r]*(?=\n|(?![\s\S]))|""" +
+            """package[ \t]+io\.github\.markusaugust\.streamlord\.html(?![\p{L}\p{Nd}_]))""",
     )
 private val QUOTE_START = Regex("""^\$*"""")
 private val MARGIN_START = Regex("""^\s*\|""")
@@ -1480,11 +1496,12 @@ internal fun markupValue(
     value: String,
     at: Int,
     depth: Int = 0,
+    sdk: Sdk = Sdk.DEFAULT,
 ): Boolean {
     val values = holeValues(value)
     // `if (admin) "<b>admin</b>" else ""`: every result is markup or a literal the author wrote.
     if (values.size > 1) {
-        val markup = values.map { markupValue(src, it.text, at, depth) }
+        val markup = values.map { markupValue(src, it.text, at, depth, sdk) }
         return markup.any { it } &&
             values.indices.all { k ->
                 val v = values[k].text
@@ -1495,29 +1512,31 @@ internal fun markupValue(
     if (htmlLiteral(t)) return true
     val sum = splitTop(t, "+")
     if (sum.size > 1) return htmlLiteral(sum[0].trim())
-    if (wholeCall(t, "interpolate") || wholeCall(t, "Trusted")) return true
+    if (sdk.core && (wholeCall(t, "interpolate") || wholeCall(t, "Trusted"))) return true
     val textOf = TEXT_OF_VALUE.find(t)?.groupValues?.get(1)
-    if (textOf != null &&
+    if (sdk.core &&
+        textOf != null &&
         (wholeCall(textOf, "interpolate") || (IDENT.matches(textOf) && declaredKind(src, textOf, at) == HoleFact.MARKUP))
     ) {
         return true
     }
     if (IDENT.matches(t)) {
-        if (declaredKind(src, t, at) == HoleFact.MARKUP || htmlNamed(src, t, at)) return true
+        if (declaredKind(src, t, at, core = sdk.core) == HoleFact.MARKUP || htmlNamed(src, t, at)) return true
         // `val e = elements { }`: the name stands for the call it is set to; a literal it is set to is judged where it is written.
         val d = declarationOf(src, t, at) ?: return false
         val init = initialiser(src, d) ?: return false
-        return depth < VALUE_DEPTH && lastCall(init) != null && markupValue(src, init, d.at, depth + 1)
+        return depth < VALUE_DEPTH && lastCall(init) != null && markupValue(src, init, d.at, depth + 1, sdk)
     }
     if (CREATE_HTML.containsMatchIn(t)) return true
     val call = lastCall(t) ?: return false
     val lambda = call.lambda
     if (call.name == "buildString" && call.receiver == null && lambda != null) return APPEND_HTML.containsMatchIn(lambda)
-    if (call.name == "elements" && call.receiver == null && lambda != null) return USES_ELEMENTS.containsMatchIn(src)
+    val elements = call.name == "elements" && call.receiver == null && lambda != null
+    if (elements) return sdk.htmlDsl != false && USES_ELEMENTS.containsMatchIn(src)
     if (call.name != "joinToString") return false
     val transform = lambda ?: namedLambda(call.args, "transform")
-    if (transform != null) return markupValue(src, lambdaResult(transform), at, depth)
-    return call.receiver != null && markupElements(src, call.receiver, at, depth)
+    if (transform != null) return markupValue(src, lambdaResult(transform), at, depth, sdk)
+    return call.receiver != null && markupElements(src, call.receiver, at, depth, sdk)
 }
 
 /** How many names deep a value is followed to what it is set to. */
@@ -1539,24 +1558,27 @@ private fun markupElements(
     receiver: String,
     at: Int,
     depth: Int,
+    sdk: Sdk,
 ): Boolean {
     val t = receiver.trim()
     if (IDENT.matches(t)) {
         val d = declarationOf(src, t, at) ?: return false
         val type = d.type
-        if (type != null) return COLLECTION_TYPE.matches(type) && d.typeArguments?.trim()?.let { MARKUP_ELEMENT.matches(it) } == true
+        if (type != null) {
+            return sdk.core && COLLECTION_TYPE.matches(type) && d.typeArguments?.trim()?.let { MARKUP_ELEMENT.matches(it) } == true
+        }
         val init = initialiser(src, d) ?: return false
-        return depth < VALUE_DEPTH && markupElements(src, init, d.at, depth + 1)
+        return depth < VALUE_DEPTH && markupElements(src, init, d.at, depth + 1, sdk)
     }
     val r = lastCall(t) ?: return false
     val lambda = r.lambda
     if ((r.name == "listOf" || r.name == "arrayOf") && r.receiver == null && lambda == null) {
-        return r.args.isNotBlank() && splitTop(r.args, ",").all { markupValue(src, it, at, depth) }
+        return r.args.isNotBlank() && splitTop(r.args, ",").all { markupValue(src, it, at, depth, sdk) }
     }
     if ((r.name == "map" || r.name == "mapIndexed" || r.name == "mapNotNull") &&
         lambda != null
     ) {
-        return markupValue(src, lambdaResult(lambda), at, depth)
+        return markupValue(src, lambdaResult(lambda), at, depth, sdk)
     }
     return false
 }
@@ -1598,7 +1620,8 @@ internal fun isMarkup(
     src: String,
     s: KotlinString,
     ip: Interpolation,
-): Boolean = markupValue(src, ip.text, s.start)
+    sdk: Sdk = Sdk.DEFAULT,
+): Boolean = markupValue(src, ip.text, s.start, sdk = sdk)
 
 /** The calls whose result is the text they were given, changed but no more markup than it was. */
 private val TEXT_TRANSFORMS =
@@ -1966,6 +1989,103 @@ private fun rewriteToInterpolate(
     return "interpolate(" + (listOf(format.toString()) + args).joinToString(", ") + ").text"
 }
 
+/**
+ * Whether a fix may write [name] of core's domain, `interpolate` or `Trusted`, in [src]: core is
+ * there, no call of the name is one the host knows is somebody else's ([foreignCalls]), and nothing
+ * else in the file takes the name.
+ */
+internal fun coreNameUsable(
+    src: String,
+    name: String,
+    sdk: Sdk,
+    foreignCalls: Set<Int>,
+): Boolean {
+    if (!sdk.core) return false
+    val facts = fileFacts(src)
+    if (foreignCalls.isNotEmpty() &&
+        facts.coreCalls.getOrPut(name) { findCallSites(src, setOf(name)).map { it.nameStart } }.any { it in foreignCalls }
+    ) {
+        return false
+    }
+    return !facts.shadowed.getOrPut(name) { shadowedInFile(src, facts.code, name) }
+}
+
+/**
+ * Whether something other than core's domain takes [name] in [src]: an import of it from elsewhere,
+ * by name or as an alias, or a `fun`, `class`, `object`, `interface` or `typealias` of that name at
+ * the top of the file. An import of core's own name settles it, since an explicit import wins.
+ * A star import from outside Streamlord counts only where the file already uses the name: an
+ * explicit import the fix adds wins over a star import, so the one risk is that it takes the name
+ * from uses that meant the star import's. With no use there is nothing to take, and the import is
+ * unambiguous.
+ */
+private fun shadowedInFile(
+    src: String,
+    code: BooleanArray,
+    name: String,
+): Boolean {
+    val targets =
+        keywordLines(src, code, "import").map {
+            src
+                .substring(it.start, it.codeEnd)
+                .trim()
+                .removeSuffix(";")
+                .trim()
+        }
+    if ("$DOMAIN.$name" in targets) return false
+    for (t in targets) {
+        val alias = t.substringAfter(" as ", "").trim()
+        if (alias.isNotEmpty()) {
+            if (alias == name) return true
+            continue
+        }
+        if (t.endsWith(".$name")) return true
+        if (t.endsWith(".*") && t != "$DOMAIN.*" && !t.startsWith("io.github.markusaugust.streamlord.") && usedInCode(src, code, name)) {
+            return true
+        }
+    }
+    val declared = Regex("""\b(?:fun|class|object|interface|typealias)\s+(?:<[^>]*>\s*)?${Regex.escape(name)}(?![\p{L}\p{Nd}_])""")
+    for (m in declared.findAll(src)) {
+        if (!code[m.range.first]) continue
+        var depth = 0
+        for (i in 0 until m.range.first) {
+            if (!code[i]) continue
+            if (src[i] == '{') {
+                depth++
+            } else if (src[i] == '}') {
+                depth--
+            }
+        }
+        if (depth == 0) return true
+    }
+    return false
+}
+
+/**
+ * Whether the code of [src] uses [name] as a bare name, templates included: a call of
+ * `interpolate`, or `Trusted` called or named as a type. A qualified name, an import's among them,
+ * is not one.
+ */
+private fun usedInCode(
+    src: String,
+    code: BooleanArray,
+    name: String,
+): Boolean {
+    val call = name == "interpolate"
+    var k = src.indexOf(name)
+    while (k >= 0) {
+        val before = src.getOrNull(k - 1)
+        val after = k + name.length
+        val word =
+            code[k] &&
+                (before == null || !(before.isLetterOrDigit() || before == '_' || before == '.')) &&
+                src.getOrNull(after)?.let { it.isLetterOrDigit() || it == '_' } != true
+        if (word && (!call || src.substring(after).trimStart().startsWith("("))) return true
+        k = src.indexOf(name, k + 1)
+    }
+    return false
+}
+
 /** The rewrite of the literal to `interpolate`, whose text [text] makes, with the import when the file has none. */
 internal fun interpolateFix(
     src: String,
@@ -1973,7 +2093,7 @@ internal fun interpolateFix(
     text: Lazy<String>,
     title: String,
     preferred: Boolean,
-): Fix = Fix.later(title, s.start, s.end, importEdits(src, "interpolate"), preferred) { text.value }
+): Fix = Fix.later(title, s.start, s.end, importEdits(src, DOMAIN, "interpolate"), preferred) { text.value }
 
 /**
  * The hole made a `Trusted` value, `${Trusted(body)}`: markup the author vouches for, which the
@@ -1989,7 +2109,7 @@ internal fun trustedFix(
     val expr = if (ip.kind == InterpolationKind.SIMPLE) ip.text else ip.text.trim()
     // A value joined with `+` is wrapped where it stands; a template keeps the dollars its literal opens one with.
     val text = if (ip.kind == InterpolationKind.OPERAND) "Trusted($expr)" else "$".repeat(s.dollars) + "{Trusted($expr)}"
-    return Fix("Mark $shown as markup", ip.start, ip.end, text, importEdits(src, "Trusted"), preferred = false)
+    return Fix("Mark $shown as markup", ip.start, ip.end, text, importEdits(src, DOMAIN, "Trusted"), preferred = false)
 }
 
 /** The calls that make a List, and those whose result is one, whatever they are called on; not those a String has too. */
@@ -2032,30 +2152,169 @@ internal fun visiblyList(
     return if (call.receiver == null) call.name in LIST_MAKERS else call.name in LIST_RESULTS
 }
 
-/** The edit that imports [name] of core's domain, after the last import or the package; none when the file has the import. */
-private fun importEdits(
+/** The package of streamlord-html, whose helpers the expression fixes write. */
+internal const val HTML_PACKAGE = "io.github.markusaugust.streamlord.html"
+
+/**
+ * The edit that imports [name] of [pkg]: after the last import, else after the package line, else
+ * after what heads the file ([fileHeaderEnd]), in the file's own line break. None when the file has
+ * the import, imports the whole package, or is in it. Only code counts, so an `import` line in a
+ * raw string is not one.
+ */
+internal fun importEdits(
     src: String,
+    pkg: String,
     name: String,
-): List<Edit> =
-    fileFacts(src).importEdits.getOrPut(name) {
-        val fq = "$DOMAIN.$name"
-        val imported =
-            Regex(
-                """^\s*import\s+(?:${Regex.escape(fq)}|${Regex.escape(DOMAIN)}\.\*)\s*$""",
-                setOf(RegexOption.MULTILINE, RegexOption.UNIX_LINES),
-            )
-        if (imported.containsMatchIn(src)) return@getOrPut emptyList()
-        val imports = IMPORT_LINE.findAll(src).lastOrNull()
-        val pkg = PACKAGE_LINE.find(src)
-        val anchor = (imports ?: pkg)?.let { it.range.last + 1 } ?: -1
-        listOf(
-            if (anchor < 0) {
-                Edit(0, 0, "import $fq\n\n")
-            } else {
-                Edit(anchor, anchor, "\n" + (if (imports != null) "" else "\n") + "import $fq")
-            },
-        )
+): List<Edit> {
+    val facts = fileFacts(src)
+    val fq = "$pkg.$name"
+    return facts.importEdits.getOrPut(fq) {
+        val imports = keywordLines(src, facts.code, "import")
+        val pkgLine = keywordLines(src, facts.code, "package").firstOrNull()
+        val target = { line: KeywordLine ->
+            src
+                .substring(line.start, line.codeEnd)
+                .trim()
+                .removeSuffix(";")
+                .trim()
+        }
+        val imported = imports.any { target(it) == fq || target(it) == "$pkg.*" } || pkgLine?.let(target) == pkg
+        if (imported) return@getOrPut emptyList()
+        val nl = lineBreak(src)
+        val last = imports.lastOrNull()
+        if (last != null) return@getOrPut listOf(Edit(last.end, last.end, "${nl}import $fq"))
+        if (pkgLine != null) return@getOrPut listOf(Edit(pkgLine.end, pkgLine.end, "$nl${nl}import $fq"))
+        val head = fileHeaderEnd(src, facts.code)
+        if (head == 0) return@getOrPut listOf(Edit(0, 0, "import $fq$nl$nl"))
+        // A blank line after the header and one before the code that follows, as Kotlin style has it.
+        var k = head
+        var breaks = 0
+        while (k < src.length && isSpace(src[k])) if (src[k++] == '\n') breaks++
+        listOf(Edit(head, head, "$nl${nl}import $fq" + if (breaks < 2 && k < src.length) nl else ""))
     }
+}
+
+/** The line break [src] writes: `\r\n` when its first line ends so, else `\n`. */
+private fun lineBreak(src: String): String {
+    val at = src.indexOf('\n')
+    return if (at > 0 && src[at - 1] == '\r') "\r\n" else "\n"
+}
+
+/** Where a keyword's line goes on: just past the keyword, where its code ends before a comment, and where the line ends before its break. */
+private class KeywordLine(
+    val start: Int,
+    val codeEnd: Int,
+    val end: Int,
+)
+
+/**
+ * Each place [keyword], a hard keyword such as `import` or `package`, stands in the code of [src]
+ * as a word, wherever on its line: after a block comment or a file annotation too. A line ends at `\n` alone,
+ * as Kotlin reads it, and before the `\r` of a `\r\n`.
+ */
+private fun keywordLines(
+    src: String,
+    code: BooleanArray,
+    keyword: String,
+): List<KeywordLine> {
+    val out = ArrayList<KeywordLine>()
+    var k = src.indexOf(keyword)
+    while (k >= 0) {
+        val after = k + keyword.length
+        val before = src.getOrNull(k - 1)
+        val word = before == null || !(before.isLetterOrDigit() || before == '_' || before == '.' || before == '`')
+        if (code[k] && word && src.getOrNull(after)?.let(::isSpace) == true) {
+            var end = src.indexOf('\n', after).let { if (it < 0) src.length else it }
+            if (end > after && src[end - 1] == '\r') end--
+            var codeEnd = after
+            while (codeEnd < end && code[codeEnd]) codeEnd++
+            out += KeywordLine(after, codeEnd, end)
+        }
+        k = src.indexOf(keyword, k + 1)
+    }
+    return out
+}
+
+/**
+ * Where what heads a file with no package line and no import ends: a `#!` line, `@file:`
+ * annotations, and comments with a blank line after them or more of the header, such as a
+ * licence. Comments with no blank line between them are one, so a licence in `//` lines stays
+ * whole; one right above code documents that code and is not part of it. 0 when there is none.
+ */
+private fun fileHeaderEnd(
+    src: String,
+    code: BooleanArray,
+): Int {
+    var end = 0
+    if (src.startsWith("#!")) {
+        end = src.indexOf('\n').let { if (it < 0) src.length else it }
+        if (end > 0 && src[end - 1] == '\r') end--
+    }
+    val comment = { at: Int -> !code[at] && (src.startsWith("//", at) || src.startsWith("/*", at)) }
+    var k = end
+    while (true) {
+        while (k < src.length && isSpace(src[k])) k++
+        if (k >= src.length) return end
+        if (code[k] && src.startsWith("@file:", k)) {
+            k = annotationEnd(src, code, k + 6)
+            end = k
+            continue
+        }
+        if (!comment(k)) return end
+        var c = k
+        var n: Int
+        var breaks: Int
+        while (true) {
+            // A line comment's mask ends at its line break; a block comment's after its `*/`.
+            while (c < src.length && !code[c]) c++
+            while (c > k && isSpace(src[c - 1])) c--
+            n = c
+            breaks = 0
+            while (n < src.length && isSpace(src[n])) if (src[n++] == '\n') breaks++
+            if (n < src.length && breaks < 2 && comment(n)) {
+                c = n
+                continue
+            }
+            break
+        }
+        if (breaks < 2 && n < src.length && !src.startsWith("@file:", n)) return end
+        end = c
+        k = c
+    }
+}
+
+/** The spaces and line breaks the head of a file is read past: ASCII only, as `isWhitespace` in interpolation.ts. */
+private fun isSpace(c: Char): Boolean = c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\u000C'
+
+/** Just past the annotation whose name starts at [from], after `@file:`: a name and its arguments, or a bracketed list. */
+private fun annotationEnd(
+    src: String,
+    code: BooleanArray,
+    from: Int,
+): Int {
+    var k = from
+    while (k < src.length && (src[k] == ' ' || src[k] == '\t')) k++
+    if (k < src.length && src[k] != '[') {
+        while (k < src.length && (src[k].isLetterOrDigit() || src[k] == '_' || src[k] == '.')) k++
+        var a = k
+        while (a < src.length && (src[a] == ' ' || src[a] == '\t')) a++
+        if (a >= src.length || src[a] != '(') return k
+        k = a
+    }
+    if (k >= src.length) return k
+    var depth = 0
+    while (k < src.length) {
+        if (code[k]) {
+            if (src[k] == '(' || src[k] == '[') {
+                depth++
+            } else if (src[k] == ')' || src[k] == ']') {
+                if (--depth == 0) return k + 1
+            }
+        }
+        k++
+    }
+    return k
+}
 
 /** Where each `%s` of `interpolate`'s format starts in [text], as core counts them: `%%` is one per cent sign and never a hole. */
 internal fun percentHoles(text: String): List<Int> {

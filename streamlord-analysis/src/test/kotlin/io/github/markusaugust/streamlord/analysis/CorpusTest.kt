@@ -23,8 +23,17 @@ class CorpusTest {
         val source = case.string("source")!!
         // A case may give the attribute prefix of an aliased bundle; the default bundle's otherwise.
         val prefix = case.string("prefix") ?: "data-"
-        // A case may give the workspace's `const val` names.
-        val opts = AnalyzeOptions(prefix, true, constants = case.array("constants")?.strings()?.toSet() ?: emptySet())
+        // A case may give the workspace's `const val` names, which modules the project has, and the calls that are not Streamlord's.
+        val foreign = case.array("foreign")?.strings()?.toSet()
+        val opts =
+            AnalyzeOptions(
+                prefix,
+                true,
+                constants = case.array("constants")?.strings()?.toSet() ?: emptySet(),
+                htmlDsl = case.boolean("htmlDsl"),
+                core = case.boolean("core"),
+                foreignCalls = foreign?.let { callStarts(source, it).toSet() } ?: emptySet(),
+            )
         return when (kind) {
             "expression" -> {
                 analyzer.validateExpression(source)
@@ -48,10 +57,40 @@ class CorpusTest {
                 analyzer.signalReferencesInHtml(source, opts).mapNotNull { unknownSignalIssue(it, defined) }
             }
 
+            // The same of a Kotlin source: the signals its DSL calls and HTML strings read that it does not declare.
+            "kotlin-references" -> {
+                val defined = collectSignalDefinitions(source, SourceLanguage.KOTLIN)
+                analyzer.signalReferencesInKotlin(source, opts).mapNotNull { unknownSignalIssue(it, defined) }
+            }
+
             else -> {
                 error("Unknown corpus kind $kind")
             }
         }
+    }
+
+    /**
+     * Where each call of [names] in [text] starts, those in the code of a `${'$'}{...}` template too, read
+     * as the hyphen check reads them (collectHyphenSites): offsets of the whole source.
+     */
+    private fun callStarts(
+        text: String,
+        names: Set<String>,
+        shift: Int = 0,
+        depth: Int = 0,
+    ): List<Int> {
+        val lex = lexKotlin(text)
+        val out = findCallSites(text, names, lex).mapTo(ArrayList()) { it.nameStart + shift }
+        if (depth >= 4) return out
+        for (s in lex.strings) {
+            for (t in s.interpolations) {
+                if (t.kind != InterpolationKind.BRACED) continue
+                val open = text.indexOf('{', t.start)
+                if (open < 0 || open + 1 > t.end - 1 || text.substring(open + 1, t.end - 1) != t.text) continue
+                out += callStarts(t.text, names, shift + open + 1, depth + 1)
+            }
+        }
+        return out
     }
 
     /**

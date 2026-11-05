@@ -239,12 +239,18 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
   }
 }
 
-export function docFor(a: AttributeSpec, prefix: string): string {
+/** attributeDoc in Documentation.kt: `withKotlin` leaves the helpers out, for a project without streamlord-html. */
+export function docFor(a: AttributeSpec, prefix: string, withKotlin = true): string {
   const mods = a.modifiers.length ? "\n\n**Modifiers:** " + a.modifiers.map((m) => "`__" + m.name + (m.type === "flag" ? "" : m.type === "enum" ? "." + (m.values ?? []).join("|") : m.type === "duration" ? ".500ms" : m.type === "int" ? ".n" : ".name") + "`").join(", ") : "";
-  const kotlin = a.kotlin.length ? "\n\n**Kotlin:** " + a.kotlin.map((k) => "`" + k + "()`").join(", ") : "";
+  const kotlin = withKotlin && a.kotlin.length ? "\n\n**Kotlin:** " + a.kotlin.map((k) => "`" + k + "()`").join(", ") : "";
   const pro = a.pro ? "\n\n_Datastar Pro. Requires the Pro bundle, which you license and load yourself._" : "";
   const casing = a.keyed ? "\n\n**Key casing:** " + casingNote(a) : "";
   return `**${prefix}${a.name}**\n\n${a.doc}\n\n${a.forms.map((f) => "`" + f.replace(/^data-/, prefix) + "`").join("  \n")}${casing}${mods}${kotlin}${pro}`;
+}
+
+/** actionDoc in Documentation.kt: an action, its signature and, unless `withKotlin` is false, its Kotlin helper. */
+export function actionDoc(a: (typeof catalog.actions)[number], withKotlin = true): string {
+  return `**${a.signature}**\n\n${a.doc}${a.pro ? "\n\n_Datastar Pro._" : ""}${withKotlin ? `\n\nKotlin: \`${a.kotlin}()\`` : ""}`;
 }
 
 /** fetchOptionDoc in Documentation.kt: an option of the backend actions, its type, its default and what it does. */

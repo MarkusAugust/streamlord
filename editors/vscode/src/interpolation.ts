@@ -5,12 +5,11 @@
  * `interpolate`. The twin of Interpolations.kt in streamlord-analysis; where a hole lands is
  * holes.ts, the twin of core.
  */
-import { lexKotlin } from "./scanner.ts";
+import { findCallSites, lexKotlin } from "./scanner.ts";
 import { PLACEHOLDER, readKotlinStringAt, type Interpolation, type KotlinString } from "./kotlinStrings.ts";
 import { laterFix, type Fix } from "./expression.ts";
 import { catalog } from "./catalog.ts";
-import { dslHelpers, EXPRESSION_HELPERS } from "./signalNameHyphens.ts";
-import { escapeRegExp } from "./signals.ts";
+import { EXPRESSION_HELPERS, unshadowed, USES_HTML_DSL } from "./signalNameHyphens.ts";
 
 const HTML_START = /^\s*<(?:[A-Za-z]|__kt__(?=[\s>/])|!--|!doctype)/i;
 const IDENT = /^[\p{L}_][\p{L}\p{Nd}_]*$/u;
@@ -313,9 +312,16 @@ interface FileFacts {
   /** 1 where the character is code: outside literals and comments, or in a template's code. */
   code: Uint8Array;
   names: Map<string, Declaration[]>;
-  /** The edit that imports each name of core's domain the fixes write, or null where the file has the import. */
+  /** The edit that imports each name the fixes write, by its qualified name, or null where the file has the import. */
   importEdits?: Map<string, Fix["edits"] | null>;
+  /** The helpers a hole may call that no import from elsewhere shadows, whether or not the file uses the DSL. */
   helpers?: ReadonlySet<string>;
+  /** Where each call of a name of core's domain starts, by the name. */
+  coreCalls?: Map<string, number[]>;
+  /** Whether something other than core's domain takes each name in this file, by the name (`shadowedInFile`). */
+  shadowed?: Map<string, boolean>;
+  /** Whether the file's imports show it uses the DSL: what decides when the host does not know. */
+  usesDsl?: boolean;
   /** The type parameters the file declares, each with whether a value of it may be null. */
   typeParameters?: ReadonlyMap<string, boolean>;
 }
@@ -726,6 +732,26 @@ export function constantAt(src: string, name: string, at: number, constants?: Re
   return (fileFacts(src).names.get(name) ?? []).every((x) => x.constant);
 }
 
+/** Which of Streamlord's modules the analysed file can use, as the analysis options say: `Sdk` in Analyzer.kt. */
+export interface Sdk {
+  readonly core: boolean;
+  /** As the options' `htmlDsl`: null leaves it to the file's imports. */
+  readonly htmlDsl: boolean | null;
+}
+
+export const SDK_DEFAULT: Sdk = { core: true, htmlDsl: null };
+const SDK_DSL: Sdk = { core: true, htmlDsl: true };
+const SDK_CORE_ONLY: Sdk = { core: true, htmlDsl: false };
+const SDK_NONE: Sdk = { core: false, htmlDsl: false };
+
+/** The modules `opts` says the file can use: without core there is no streamlord-html either. */
+export function sdkOf(opts: { htmlDsl?: boolean | null; core?: boolean | null }): Sdk {
+  if (opts.core === false) return SDK_NONE;
+  if (opts.htmlDsl === true) return SDK_DSL;
+  if (opts.htmlDsl === false) return SDK_CORE_ONLY;
+  return SDK_DEFAULT;
+}
+
 /** What a declaration or a value shows: the facts of HoleFact the text alone can give. */
 export type TextKind = "number" | "unsigned" | "boolean" | "nullable" | "string" | "markup";
 
@@ -740,11 +766,12 @@ const UNSIGNED_SUFFIX = /[uU][lL]?$/;
  * or the markup `interpolate` returns (`page: Html`). Anything else is not known. `nonNull`
  * reads the value as the left side of `?:` gives it.
  */
-export function declaredKind(src: string, name: string, at: number, nonNull = false): TextKind | null {
+export function declaredKind(src: string, name: string, at: number, nonNull = false, core = true): TextKind | null {
   const d = declarationOf(src, name, at);
   if (!d) return null;
   if (d.literal !== undefined) return d.literal === "true" || d.literal === "false" ? "boolean" : UNSIGNED_SUFFIX.test(d.literal) ? "unsigned" : "number";
-  if (d.markup) return "markup";
+  // Without core, Html, Trusted and interpolate are not Streamlord's, and nothing says what they hold.
+  if (d.markup) return core ? "markup" : null;
   if (d.type === undefined) return null;
   const type = d.type.replace(/\?$/, "");
   // Digits too; an unsigned number that may be null is judged as any number that may be.
@@ -753,9 +780,9 @@ export function declaredKind(src: string, name: string, at: number, nonNull = fa
   if (scalar) return type === d.type || nonNull ? scalar : "nullable";
   if (/^(?:kotlin\.)?(?:String|CharSequence)$/.test(type)) return "string";
   // What interpolate returns: markup whose values have been through it.
-  if (/^(?:[\p{L}_][\p{L}\p{Nd}_]*\.)*Html$/u.test(type)) return "markup";
+  if (core && /^(?:[\p{L}_][\p{L}\p{Nd}_]*\.)*Html$/u.test(type)) return "markup";
   // Markup the author vouched for, which a Kotlin template writes as it stands.
-  if (type === d.type && TRUSTED_TYPE.test(type)) return "markup";
+  if (core && type === d.type && TRUSTED_TYPE.test(type)) return "markup";
   return null;
 }
 
@@ -888,11 +915,13 @@ const HOLE_HELPERS: ReadonlySet<string> = new Set([...EXPRESSION_HELPERS, ...cat
  * The arguments of `t` when it is one call to a helper of Streamlord's DSL, in a file that uses
  * the DSL and imports no other function of that name; null when it is not one.
  */
-function helperArguments(src: string, t: string): string[] | null {
+function helperArguments(src: string, t: string, sdk: Sdk): string[] | null {
   const m = /^([\p{L}_][\p{L}\p{Nd}_]*)\s*\(/u.exec(t);
   if (!m) return null;
   const facts = fileFacts(src);
-  facts.helpers ??= dslHelpers(src, HOLE_HELPERS);
+  facts.usesDsl ??= USES_HTML_DSL.test(src);
+  if (!(sdk.htmlDsl ?? facts.usesDsl)) return null;
+  facts.helpers ??= unshadowed(src, HOLE_HELPERS);
   if (!facts.helpers.has(m[1] as string) || !wholeCall(t, m[1] as string)) return null;
   const args = t.slice(m[0].length, -1);
   return args.trim() === "" ? [] : splitTop(args, ",");
@@ -906,10 +935,10 @@ const ARGUMENT_NAME = /^\s*[\p{L}_][\p{L}\p{Nd}_]*\s*=(?!=)/u;
  * the file declares, or a helper call whose arguments are. `signal("x;alert(1)")` returns code, so
  * a helper is only as much the author's own as what it is given.
  */
-function ownArgument(src: string, arg: string, at: number, constants?: ReadonlySet<string>): boolean {
+function ownArgument(src: string, arg: string, at: number, constants: ReadonlySet<string> | undefined, sdk: Sdk): boolean {
   const a = arg.replace(ARGUMENT_NAME, "").trim();
   if (a.startsWith("*")) return false;
-  const kind = weakest(holeValues(a).map((v) => valueKind(src, v.text, at, constants, v.nonNull)));
+  const kind = weakest(holeValues(a).map((v) => valueKind(src, v.text, at, constants, v.nonNull, sdk)));
   return kind === "constant" || kind === "number" || kind === "boolean" || kind === "unsigned";
 }
 
@@ -935,27 +964,27 @@ function qualifiedConstant(src: string, t: string, at: number, constants?: Reado
  * Streamlord's expression helpers, the author's code when its arguments are the author's own and
  * a String otherwise; or what the name's declaration says. Null where it shows nothing.
  */
-export function valueKind(src: string, value: string, at: number, constants?: ReadonlySet<string>, nonNull = false): TextKind | "constant" | null {
+export function valueKind(src: string, value: string, at: number, constants?: ReadonlySet<string>, nonNull = false, sdk: Sdk = SDK_DEFAULT): TextKind | "constant" | null {
   const t = value.trim();
   if (LITERAL.test(t) || STRING_LITERAL.test(t) || CHAR_LITERAL.test(t)) return "constant";
   const literal = stringLiteral(t);
   if (literal) {
-    const kinds = literal.interpolations.flatMap((ip) => (ip.kind === "simple" ? [{ text: ip.text, nonNull: false }] : holeValues(ip.text)).map((v) => valueKind(src, v.text, at, constants, v.nonNull)));
+    const kinds = literal.interpolations.flatMap((ip) => (ip.kind === "simple" ? [{ text: ip.text, nonNull: false }] : holeValues(ip.text)).map((v) => valueKind(src, v.text, at, constants, v.nonNull, sdk)));
     return weakest(kinds);
   }
-  const args = helperArguments(src, t);
-  if (args) return args.every((a) => ownArgument(src, a, at, constants)) ? "constant" : "string";
+  const args = helperArguments(src, t, sdk);
+  if (args) return args.every((a) => ownArgument(src, a, at, constants, sdk)) ? "constant" : "string";
   // `"ab".repeat(3)`: a plain change to text the author wrote, made with what the author wrote.
   const call = lastCall(t);
-  if (call?.receiver && call.lambda === null && TEXT_TRANSFORMS.has(call.name) && valueKind(src, call.receiver, at, constants) === "constant") {
-    if (call.args.trim() === "" || splitTop(call.args, ",").every((a) => ownArgument(src, a, at, constants))) return "constant";
+  if (call?.receiver && call.lambda === null && TEXT_TRANSFORMS.has(call.name) && valueKind(src, call.receiver, at, constants, false, sdk) === "constant") {
+    if (call.args.trim() === "" || splitTop(call.args, ",").every((a) => ownArgument(src, a, at, constants, sdk))) return "constant";
   }
-  const kind = callKind(src, t, at, constants);
+  const kind = callKind(src, t, at, constants, sdk);
   if (kind !== null) return kind;
   if (qualifiedConstant(src, t, at, constants)) return "constant";
   if (!IDENT.test(t)) return null;
   if (constantAt(src, t, at, constants)) return "constant";
-  return declaredKind(src, t, at, nonNull);
+  return declaredKind(src, t, at, nonNull, sdk.core);
 }
 
 /** The conversions whose result is a `kotlin.Number` whatever they are called on. */
@@ -973,7 +1002,7 @@ const STRING_CHANGES: ReadonlySet<string> = new Set([
  * a String when `query` is one, `query!!.trim()` too. Null for a safe call, `u?.toLong()`, which may be null, and for a call on only part of
  * the value, `s + u.toInt()`.
  */
-function callKind(src: string, t: string, at: number, constants?: ReadonlySet<string>): "number" | "string" | null {
+function callKind(src: string, t: string, at: number, constants?: ReadonlySet<string>, sdk: Sdk = SDK_DEFAULT): "number" | "string" | null {
   const call = lastCall(t);
   if (!call?.receiver || !wholeOperand(call.receiver) || t.slice(call.receiver.length).trimStart().startsWith("?")) return null;
   if (NUMBER_CONVERSIONS.has(call.name)) return call.lambda === null && call.args.trim() === "" ? "number" : null;
@@ -982,9 +1011,9 @@ function callKind(src: string, t: string, at: number, constants?: ReadonlySet<st
   const lambda = call.name === "ifBlank" || call.name === "ifEmpty";
   if (!(STRING_CHANGES.has(call.name) && call.lambda === null) && !(lambda && call.lambda !== null && call.args.trim() === "")) return null;
   // `query!!.trim()`: what `!!` leaves of a `String?` is a String.
-  if (valueKind(src, call.receiver.replace(/\s*!!$/, ""), at, constants) !== "string") return null;
+  if (valueKind(src, call.receiver.replace(/\s*!!$/, ""), at, constants, false, sdk) !== "string") return null;
   if (!lambda) return "string";
-  const result = valueKind(src, lambdaResult(call.lambda as string), at, constants);
+  const result = valueKind(src, lambdaResult(call.lambda as string), at, constants, false, sdk);
   return result === "string" || result === "constant" ? "string" : null;
 }
 
@@ -1009,7 +1038,8 @@ export function htmlNamed(src: string, name: string, at: number): boolean {
 }
 
 const TRIM_CALL = /^\s*\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)\s*$/;
-const USES_HTML_DSL = /^\s*(?:import\s+io\.github\.markusaugust\.streamlord\.html\.(?:elements|\*)\s*$|package\s+io\.github\.markusaugust\.streamlord\.html\b)/m;
+// Lines as `USES_HTML_DSL` reads them: they start after `\n` alone and are indented with spaces and tabs.
+const USES_ELEMENTS = /(?:^|(?<=\n))[ \t]*(?:import[ \t]+io\.github\.markusaugust\.streamlord\.html\.(?:elements|\*)[ \t\r]*(?=\n|(?![\s\S]))|package[ \t]+io\.github\.markusaugust\.streamlord\.html(?![\p{L}\p{Nd}_]))/u;
 
 /** Whether `t` is one string literal of HTML, or one with a trim call after it. */
 function htmlLiteral(t: string): boolean {
@@ -1088,36 +1118,36 @@ function namedLambda(args: string, name: string): string | null {
  * `joinToString` of markup or of a collection declared one of Html; a `val` set to a call that is
  * markup; or an `if`, a `when` or an `?:` every one of whose results is markup.
  */
-export function markupValue(src: string, value: string, at: number, depth = 0): boolean {
+export function markupValue(src: string, value: string, at: number, depth = 0, sdk: Sdk = SDK_DEFAULT): boolean {
   const values = holeValues(value);
   // `if (admin) "<b>admin</b>" else ""`: every result is markup or a literal the author wrote.
   if (values.length > 1) {
-    const markup = values.map((v) => markupValue(src, v.text, at, depth));
+    const markup = values.map((v) => markupValue(src, v.text, at, depth, sdk));
     return markup.some((m) => m) && values.every((v, k) => markup[k] || LITERAL.test(v.text) || plainString(v.text) || CHAR_LITERAL.test(v.text));
   }
   const t = (values[0] as HoleValue).text;
   if (htmlLiteral(t)) return true;
   const sum = splitTop(t, "+");
   if (sum.length > 1) return htmlLiteral((sum[0] as string).trim());
-  if (wholeCall(t, "interpolate") || wholeCall(t, "Trusted")) return true;
+  if (sdk.core && (wholeCall(t, "interpolate") || wholeCall(t, "Trusted"))) return true;
   const textOf = /^([\s\S]*?)\s*\.\s*text$/.exec(t)?.[1];
-  if (textOf !== undefined && (wholeCall(textOf, "interpolate") || (IDENT.test(textOf) && declaredKind(src, textOf, at) === "markup"))) return true;
+  if (sdk.core && textOf !== undefined && (wholeCall(textOf, "interpolate") || (IDENT.test(textOf) && declaredKind(src, textOf, at) === "markup"))) return true;
   if (IDENT.test(t)) {
-    if (declaredKind(src, t, at) === "markup" || htmlNamed(src, t, at)) return true;
+    if (declaredKind(src, t, at, false, sdk.core) === "markup" || htmlNamed(src, t, at)) return true;
     // `val e = elements { }`: the name stands for the call it is set to; a literal it is set to is judged where it is written.
     const d = declarationOf(src, t, at);
     const init = d ? initialiser(src, d) : null;
-    return d !== null && init !== null && depth < VALUE_DEPTH && lastCall(init) !== null && markupValue(src, init, d.at, depth + 1);
+    return d !== null && init !== null && depth < VALUE_DEPTH && lastCall(init) !== null && markupValue(src, init, d.at, depth + 1, sdk);
   }
   if (/^createHTML\s*\(/.test(t)) return true;
   const call = lastCall(t);
   if (!call) return false;
   if (call.name === "buildString" && call.receiver === null && call.lambda !== null) return /\bappendHTML\s*\(/.test(call.lambda);
-  if (call.name === "elements" && call.receiver === null && call.lambda !== null) return USES_HTML_DSL.test(src);
+  if (call.name === "elements" && call.receiver === null && call.lambda !== null) return sdk.htmlDsl !== false && USES_ELEMENTS.test(src);
   if (call.name !== "joinToString") return false;
   const transform = call.lambda ?? namedLambda(call.args, "transform");
-  if (transform !== null) return markupValue(src, lambdaResult(transform), at, depth);
-  return call.receiver !== null && markupElements(src, call.receiver, at, depth);
+  if (transform !== null) return markupValue(src, lambdaResult(transform), at, depth, sdk);
+  return call.receiver !== null && markupElements(src, call.receiver, at, depth, sdk);
 }
 
 /** How many names deep a value is followed to what it is set to. */
@@ -1131,19 +1161,19 @@ const MARKUP_ELEMENT = /^(?:[\p{L}_][\p{L}\p{Nd}_]*\.)*(?:Html|Trusted)$/u;
  * Whether every element of a collection is markup: `listOf(a, b)` of markup, a `map { }` to
  * markup, a name declared a `List<Html>`, or one set to such a collection.
  */
-function markupElements(src: string, receiver: string, at: number, depth: number): boolean {
+function markupElements(src: string, receiver: string, at: number, depth: number, sdk: Sdk): boolean {
   const t = receiver.trim();
   if (IDENT.test(t)) {
     const d = declarationOf(src, t, at);
     if (!d) return false;
-    if (d.type !== undefined) return COLLECTION_TYPE.test(d.type) && MARKUP_ELEMENT.test(d.typeArguments?.trim() ?? "");
+    if (d.type !== undefined) return sdk.core && COLLECTION_TYPE.test(d.type) && MARKUP_ELEMENT.test(d.typeArguments?.trim() ?? "");
     const init = initialiser(src, d);
-    return init !== null && depth < VALUE_DEPTH && markupElements(src, init, d.at, depth + 1);
+    return init !== null && depth < VALUE_DEPTH && markupElements(src, init, d.at, depth + 1, sdk);
   }
   const r = lastCall(t);
   if (!r) return false;
-  if ((r.name === "listOf" || r.name === "arrayOf") && r.receiver === null && r.lambda === null) return r.args.trim() !== "" && splitTop(r.args, ",").every((a) => markupValue(src, a, at, depth));
-  if ((r.name === "map" || r.name === "mapIndexed" || r.name === "mapNotNull") && r.lambda !== null) return markupValue(src, lambdaResult(r.lambda), at, depth);
+  if ((r.name === "listOf" || r.name === "arrayOf") && r.receiver === null && r.lambda === null) return r.args.trim() !== "" && splitTop(r.args, ",").every((a) => markupValue(src, a, at, depth, sdk));
+  if ((r.name === "map" || r.name === "mapIndexed" || r.name === "mapNotNull") && r.lambda !== null) return markupValue(src, lambdaResult(r.lambda), at, depth, sdk);
   return false;
 }
 
@@ -1172,8 +1202,8 @@ function initialiser(src: string, d: Declaration): string | null {
 }
 
 /** Whether a hole's value is markup the author built; see [markupValue]. */
-export function isMarkup(src: string, s: KotlinString, ip: Interpolation): boolean {
-  return markupValue(src, ip.text, s.start);
+export function isMarkup(src: string, s: KotlinString, ip: Interpolation, sdk: Sdk = SDK_DEFAULT): boolean {
+  return markupValue(src, ip.text, s.start, 0, sdk);
 }
 
 /** The calls whose result is the text they were given, changed but no more markup than it was. */
@@ -1427,9 +1457,87 @@ function rewriteToInterpolate(src: string, s: KotlinString): string {
   return `interpolate(${[format, ...args].join(", ")}).text`;
 }
 
+/**
+ * Whether a fix may write `name` of core's domain, `interpolate` or `Trusted`, in `src`: core is
+ * there, no call of the name is one the host knows is somebody else's (`foreignCalls`), and nothing
+ * else in the file takes the name. `coreNameUsable` in Interpolations.kt.
+ */
+export function coreNameUsable(src: string, name: string, sdk: Sdk, foreignCalls: ReadonlySet<number> | undefined): boolean {
+  if (!sdk.core) return false;
+  const facts = fileFacts(src);
+  if (foreignCalls && foreignCalls.size > 0) {
+    facts.coreCalls ??= new Map();
+    let starts = facts.coreCalls.get(name);
+    if (!starts) {
+      starts = findCallSites(src, new Set([name]), lexKotlin(src).mask).map((c) => c.nameStart);
+      facts.coreCalls.set(name, starts);
+    }
+    if (starts.some((at) => foreignCalls.has(at))) return false;
+  }
+  facts.shadowed ??= new Map();
+  let shadowed = facts.shadowed.get(name);
+  if (shadowed === undefined) {
+    shadowed = shadowedInFile(src, facts.code, name);
+    facts.shadowed.set(name, shadowed);
+  }
+  return !shadowed;
+}
+
+/**
+ * Whether something other than core's domain takes `name` in `src`: an import of it from elsewhere,
+ * by name or as an alias, or a `fun`, `class`, `object`, `interface` or `typealias` of that name at
+ * the top of the file. An import of core's own name settles it, since an explicit import wins.
+ * A star import from outside Streamlord counts only where the file already uses the name: an
+ * explicit import the fix adds wins over a star import, so the one risk is that it takes the name
+ * from uses that meant the star import's. With no use there is nothing to take, and the import is
+ * unambiguous.
+ */
+function shadowedInFile(src: string, code: Uint8Array, name: string): boolean {
+  const targets = keywordLines(src, code, "import").map((l) => src.slice(l.start, l.codeEnd).trim().replace(/;$/, "").trim());
+  if (targets.includes(`${DOMAIN}.${name}`)) return false;
+  for (const t of targets) {
+    const as = t.indexOf(" as ");
+    if (as >= 0) {
+      if (t.slice(as + 4).trim() === name) return true;
+      continue;
+    }
+    if (t.endsWith(`.${name}`)) return true;
+    if (t.endsWith(".*") && t !== `${DOMAIN}.*` && !t.startsWith("io.github.markusaugust.streamlord.") && usedInCode(src, code, name)) return true;
+  }
+  const declared = new RegExp(String.raw`\b(?:fun|class|object|interface|typealias)\s+(?:<[^>]*>\s*)?${name}(?![\p{L}\p{Nd}_])`, "gu");
+  for (const m of src.matchAll(declared)) {
+    const at = m.index ?? 0;
+    if (code[at] !== 1) continue;
+    let depth = 0;
+    for (let i = 0; i < at; i++) {
+      if (code[i] !== 1) continue;
+      if (src[i] === "{") depth++;
+      else if (src[i] === "}") depth--;
+    }
+    if (depth === 0) return true;
+  }
+  return false;
+}
+
+/**
+ * Whether the code of `src` uses `name` as a bare name, templates included: a call of
+ * `interpolate`, or `Trusted` called or named as a type. A qualified name, an import's among them,
+ * is not one. `usedInCode` in Interpolations.kt.
+ */
+function usedInCode(src: string, code: Uint8Array, name: string): boolean {
+  const call = name === "interpolate";
+  for (let k = src.indexOf(name); k >= 0; k = src.indexOf(name, k + 1)) {
+    const before = src[k - 1];
+    const after = src[k + name.length];
+    const word = code[k] === 1 && (before === undefined || !/[\p{L}\p{Nd}_.]/u.test(before)) && (after === undefined || !/[\p{L}\p{Nd}_]/u.test(after));
+    if (word && (!call || src.slice(k + name.length).trimStart().startsWith("("))) return true;
+  }
+  return false;
+}
+
 /** The rewrite of the literal to `interpolate`, whose text `text` makes, with the import when the file has none. */
 export function interpolateFix(src: string, s: KotlinString, text: () => string, title: string, preferred: boolean): Fix {
-  const edits = importEdits(src, "interpolate");
+  const edits = importEdits(src, DOMAIN, "interpolate");
   return laterFix({ title, start: s.start, end: s.end, ...(edits ? { edits: edits.map((e) => ({ ...e })) } : {}), ...(preferred ? {} : { preferred: false }) }, text);
 }
 
@@ -1442,7 +1550,7 @@ export function trustedFix(src: string, s: KotlinString, ip: Interpolation, show
   const expr = ip.kind === "simple" ? ip.text : ip.text.trim();
   // A value joined with `+` is wrapped where it stands; a template keeps the dollars its literal opens one with.
   const text = ip.kind === "operand" ? `Trusted(${expr})` : `${"$".repeat(s.dollars)}{Trusted(${expr})}`;
-  const edits = importEdits(src, "Trusted");
+  const edits = importEdits(src, DOMAIN, "Trusted");
   return { title: `Mark ${shown} as markup`, start: ip.start, end: ip.end, text, ...(edits ? { edits: edits.map((e) => ({ ...e })) } : {}), preferred: false };
 }
 
@@ -1466,22 +1574,152 @@ export function visiblyList(src: string, value: string, at: number): boolean {
   return call.receiver === null ? LIST_MAKERS.has(call.name) : LIST_RESULTS.has(call.name);
 }
 
-/** The edit that imports `name` of core's domain, after the last import or the package, or null when the file has the import. */
-function importEdits(src: string, name: string): Fix["edits"] | null {
+/** The package of streamlord-html, whose helpers the expression fixes write. */
+export const HTML_PACKAGE = "io.github.markusaugust.streamlord.html";
+
+/**
+ * The edit that imports `name` of `pkg`: after the last import, else after the package line, else
+ * after what heads the file (`fileHeaderEnd`), in the file's own line break. Null when the file has
+ * the import, imports the whole package, or is in it. Only code counts, so an `import` line in a
+ * raw string is not one.
+ */
+export function importEdits(src: string, pkg: string, name: string): Fix["edits"] | null {
   const facts = fileFacts(src);
   facts.importEdits ??= new Map();
-  if (facts.importEdits.has(name)) return facts.importEdits.get(name) ?? null;
-  const fq = `${DOMAIN}.${name}`;
-  const imported = new RegExp(`^\\s*import\\s+(?:${escapeRegExp(fq)}|${escapeRegExp(DOMAIN)}\\.\\*)\\s*$`, "m");
+  const fq = `${pkg}.${name}`;
+  if (facts.importEdits.has(fq)) return facts.importEdits.get(fq) ?? null;
+  const imports = keywordLines(src, facts.code, "import");
+  const pkgLine = keywordLines(src, facts.code, "package")[0];
+  const target = (line: KeywordLine) => src.slice(line.start, line.codeEnd).trim().replace(/;$/, "").trim();
+  const imported = imports.some((l) => target(l) === fq || target(l) === `${pkg}.*`) || (pkgLine !== undefined && target(pkgLine) === pkg);
   let edits: Fix["edits"] | null = null;
-  if (!imported.test(src)) {
-    const imports = [...src.matchAll(/^import\s+[^\n]*$/gm)].pop();
-    const pkg = /^package\s+[^\n]*$/m.exec(src);
-    const anchor = imports ? (imports.index ?? 0) + imports[0].length : pkg ? pkg.index + pkg[0].length : -1;
-    edits = anchor < 0 ? [{ start: 0, end: 0, text: `import ${fq}\n\n` }] : [{ start: anchor, end: anchor, text: `\n${imports ? "" : "\n"}import ${fq}` }];
+  if (!imported) {
+    const nl = lineBreak(src);
+    const last = imports[imports.length - 1];
+    if (last) edits = [{ start: last.end, end: last.end, text: `${nl}import ${fq}` }];
+    else if (pkgLine) edits = [{ start: pkgLine.end, end: pkgLine.end, text: `${nl}${nl}import ${fq}` }];
+    else {
+      const head = fileHeaderEnd(src, facts.code);
+      if (head === 0) edits = [{ start: 0, end: 0, text: `import ${fq}${nl}${nl}` }];
+      else {
+        // A blank line after the header and one before the code that follows, as Kotlin style has it.
+        let k = head;
+        let breaks = 0;
+        while (k < src.length && isWhitespace(src[k] as string)) if (src[k++] === "\n") breaks++;
+        edits = [{ start: head, end: head, text: `${nl}${nl}import ${fq}` + (breaks < 2 && k < src.length ? nl : "") }];
+      }
+    }
   }
-  facts.importEdits.set(name, edits);
+  facts.importEdits.set(fq, edits);
   return edits;
+}
+
+/** The line break `src` writes: `\r\n` when its first line ends so, else `\n`. */
+function lineBreak(src: string): string {
+  const at = src.indexOf("\n");
+  return at > 0 && src[at - 1] === "\r" ? "\r\n" : "\n";
+}
+
+/** The spaces and line breaks the head of a file is read past: ASCII only, as `isSpace` in Interpolations.kt. */
+function isWhitespace(c: string): boolean {
+  return c === " " || c === "\t" || c === "\n" || c === "\r" || c === "\f";
+}
+
+/** Where a keyword's line goes on: just past the keyword, where its code ends before a comment, and where the line ends before its break. */
+interface KeywordLine {
+  start: number;
+  codeEnd: number;
+  end: number;
+}
+
+/**
+ * Each place `keyword`, a hard keyword such as `import` or `package`, stands in the code of `src`
+ * as a word, wherever on its line: after a block comment or a file annotation too. A line ends at `\n` alone,
+ * as Kotlin reads it, and before the `\r` of a `\r\n`.
+ */
+function keywordLines(src: string, code: Uint8Array, keyword: string): KeywordLine[] {
+  const out: KeywordLine[] = [];
+  for (let k = src.indexOf(keyword); k >= 0; k = src.indexOf(keyword, k + 1)) {
+    const after = k + keyword.length;
+    const before = src[k - 1];
+    const word = before === undefined || !/[\p{L}\p{Nd}_.`]/u.test(before);
+    const next = src[after];
+    if (code[k] !== 1 || !word || next === undefined || !isWhitespace(next)) continue;
+    let end = src.indexOf("\n", after);
+    if (end < 0) end = src.length;
+    if (end > after && src[end - 1] === "\r") end--;
+    let codeEnd = after;
+    while (codeEnd < end && code[codeEnd] === 1) codeEnd++;
+    out.push({ start: after, codeEnd, end });
+  }
+  return out;
+}
+
+/**
+ * Where what heads a file with no package line and no import ends: a `#!` line, `@file:`
+ * annotations, and comments with a blank line after them or more of the header, such as a
+ * licence. Comments with no blank line between them are one, so a licence in `//` lines stays
+ * whole; one right above code documents that code and is not part of it. 0 when there is none.
+ */
+function fileHeaderEnd(src: string, code: Uint8Array): number {
+  let end = 0;
+  if (src.startsWith("#!")) {
+    const nl = src.indexOf("\n");
+    end = nl < 0 ? src.length : nl;
+    if (end > 0 && src[end - 1] === "\r") end--;
+  }
+  const comment = (at: number) => code[at] !== 1 && (src.startsWith("//", at) || src.startsWith("/*", at));
+  let k = end;
+  for (;;) {
+    while (k < src.length && isWhitespace(src[k] as string)) k++;
+    if (k >= src.length) return end;
+    if (code[k] === 1 && src.startsWith("@file:", k)) {
+      k = annotationEnd(src, code, k + 6);
+      end = k;
+      continue;
+    }
+    if (!comment(k)) return end;
+    let c = k;
+    let n: number;
+    let breaks: number;
+    for (;;) {
+      // A line comment's mask ends at its line break; a block comment's after its `*/`.
+      while (c < src.length && code[c] !== 1) c++;
+      while (c > k && isWhitespace(src[c - 1] as string)) c--;
+      n = c;
+      breaks = 0;
+      while (n < src.length && isWhitespace(src[n] as string)) if (src[n++] === "\n") breaks++;
+      if (n < src.length && breaks < 2 && comment(n)) {
+        c = n;
+        continue;
+      }
+      break;
+    }
+    if (breaks < 2 && n < src.length && !src.startsWith("@file:", n)) return end;
+    end = c;
+    k = c;
+  }
+}
+
+/** Just past the annotation whose name starts at `from`, after `@file:`: a name and its arguments, or a bracketed list. */
+function annotationEnd(src: string, code: Uint8Array, from: number): number {
+  let k = from;
+  while (k < src.length && (src[k] === " " || src[k] === "\t")) k++;
+  if (k < src.length && src[k] !== "[") {
+    while (k < src.length && /[\p{L}\p{Nd}_.]/u.test(src[k] as string)) k++;
+    let a = k;
+    while (a < src.length && (src[a] === " " || src[a] === "\t")) a++;
+    if (a >= src.length || src[a] !== "(") return k;
+    k = a;
+  }
+  let depth = 0;
+  for (; k < src.length; k++) {
+    if (code[k] !== 1) continue;
+    const ch = src[k];
+    if (ch === "(" || ch === "[") depth++;
+    else if ((ch === ")" || ch === "]") && --depth === 0) return k + 1;
+  }
+  return k;
 }
 
 /** Where each `%s` of `interpolate`'s format starts in `text`, as core counts them: `%%` is one per cent sign and never a hole. */

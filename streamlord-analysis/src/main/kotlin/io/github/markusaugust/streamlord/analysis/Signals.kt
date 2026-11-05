@@ -255,10 +255,23 @@ public fun collectDeclaredSignals(
 public fun collectSignalDefinitions(
     src: String,
     language: SourceLanguage,
+): Set<String> = collectSignalDefinitions(src, language, NOT_FOREIGN)
+
+/** No call is somebody else's: what a definition is read with when the host says nothing. */
+private val NOT_FOREIGN: (String, Int) -> Boolean = { _, _ -> false }
+
+/**
+ * [collectSignalDefinitions] with the calls that are not Streamlord's left out, as [foreign] says
+ * by the name of each and where the name starts: they define no signal.
+ */
+internal fun collectSignalDefinitions(
+    src: String,
+    language: SourceLanguage,
+    foreign: (name: String, nameStart: Int) -> Boolean,
 ): Set<String> {
     val out = LinkedHashSet<String>()
     val spread = Spread()
-    for (d in definedAt(src, language, spread)) out += d.name
+    for (d in definedAt(src, language, spread, foreign)) out += d.name
     if (spread.any) out += ANY_SIGNAL
     if (language == SourceLanguage.KOTLIN) {
         for (type in serializableProperties(src).keys) out += READABLE_CLASS + type
@@ -354,8 +367,9 @@ private fun definedAt(
     src: String,
     language: SourceLanguage,
     spread: Spread,
+    foreign: (String, Int) -> Boolean = NOT_FOREIGN,
 ): List<SignalDeclaration> {
-    val out = ArrayList(declared(src, language, spread))
+    val out = ArrayList(declared(src, language, spread, foreign))
     if (language == SourceLanguage.KOTLIN) {
         for (properties in serializableProperties(src).values) {
             // Under @SerialName the name is the annotation's string, which a rename may rewrite.
@@ -378,10 +392,12 @@ private fun declared(
     src: String,
     language: SourceLanguage,
     spread: Spread,
+    foreign: (String, Int) -> Boolean = NOT_FOREIGN,
 ): List<SignalDeclaration> {
     val out = ArrayList<SignalDeclaration>()
     if (language == SourceLanguage.KOTLIN) {
         for (site in findCallSites(src, PAIR_CALLS)) {
+            if (foreign(site.name, site.nameStart)) continue
             val positional = site.positional
             positional.forEachIndexed { idx, a ->
                 for (key in argumentKeys(a.text)) out += key.copy(start = a.start + key.start, end = a.start + key.end)
@@ -402,7 +418,13 @@ private fun declared(
                 if (site.name == "dataSignals" && idx == 0 && positional.getOrNull(1)?.string != null) out += declarationAt(name, a.start)
             }
         }
-        for (re in KOTLIN_PATTERNS) for (m in re.findAll(src)) out += declarationAt(m.groups[1]!!, 0)
+        for (re in KOTLIN_PATTERNS) {
+            for (m in re.findAll(src)) {
+                // Each pattern starts at the name of the call it reads.
+                if (foreign(m.value.substringBefore('('), m.range.first)) continue
+                out += declarationAt(m.groups[1]!!, 0)
+            }
+        }
     }
     // A keyed attribute may carry modifiers after the key: data-signals:foo-bar__ifmissing, and
     // `__case` names the signal: data-signals:my-value__case.snake is `$my_value`.

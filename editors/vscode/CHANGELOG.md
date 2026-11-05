@@ -2,6 +2,19 @@
 
 All notable changes to the Streamlord extension are recorded here.
 
+## Unreleased
+
+- A fix that writes a DSL helper, such as `increment("count")`, adds its import when the file does
+  not have it. In the kotlinx.html form, `attributes["data-on:click"] = "$count++"`, a helper is
+  offered only in a file that imports from streamlord-html. In that form and at a DSL call alike,
+  none is offered when an import from elsewhere, such as Hamcrest's `not`, takes its name.
+- `attributes["data-bind"] = "$count"`, and `data-indicator` and `data-ref`, get one fix,
+  `count`: these attributes take a signal's name. A constant there is the name, and no issue.
+- An import a fix adds goes after a `#!` line, `@file:` annotations and a licence comment, in the
+  file's own line break, and an `import` line in a raw string is not taken for one.
+- HTML handed to a Streamlord call that does not read it, as in `patchElements(header,
+  "<p>$name</p>")`, is checked as any HTML string.
+
 ## 0.13.0
 
 - Go to a signal, find where it is used, rename it. Go to Definition (F12, or ⌘+click on macOS and

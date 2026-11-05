@@ -47,20 +47,38 @@ private val PLAIN_HELPER_NAME = Regex("""[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-
 
 /**
  * A file that uses the DSL: a helper call elsewhere, `redis.increment("visits")` or Hamcrest's
- * `not("error")`, is somebody else's.
+ * `not("error")`, is somebody else's. A line starts after `\n` alone and is indented with spaces
+ * and tabs, as `USES_HTML_DSL` in signalNameHyphens.ts reads it.
  */
 internal val USES_HTML_DSL =
-    Regex("""(?m)^\s*(?:import\s+io\.github\.markusaugust\.streamlord\.html\.|package\s+io\.github\.markusaugust\.streamlord\.html\b)""")
+    Regex(
+        """(?:^|(?<=\n))[ \t]*(?:import[ \t]+io\.github\.markusaugust\.streamlord\.html\.|""" +
+            """package[ \t]+io\.github\.markusaugust\.streamlord\.html(?![\p{L}\p{Nd}_]))""",
+    )
 
-/** An import of a name from outside the DSL: `import org.hamcrest.Matchers.not`, or `.*` of Hamcrest's matchers. */
-private val FOREIGN_IMPORT = Regex("""(?m)^\s*import\s+(?!io\.github\.markusaugust\.streamlord\.html\.)([A-Za-z_][\w.]*)\.(\w+|\*)""")
+/** An import of a name from outside the DSL: `import org.hamcrest.Matchers.not`, or `.*` of Hamcrest's matchers. Lines as in [USES_HTML_DSL]. */
+private val FOREIGN_IMPORT =
+    Regex("""(?:^|(?<=\n))[ \t]*import[ \t]+(?!io\.github\.markusaugust\.streamlord\.html\.)([A-Za-z_][\w.]*)\.(\w+|\*)""")
 
-/** The helpers of [names] that [src] reads as the DSL's: those no import from elsewhere puts in their place. */
+/**
+ * The helpers of [names] that [src] reads as the DSL's: those no import from elsewhere puts in their
+ * place. [htmlDsl] is whether streamlord-html is on the classpath, as [AnalyzeOptions.htmlDsl]
+ * says; when that is not known, a file that imports nothing of the DSL has none.
+ */
 internal fun dslHelpers(
     src: String,
     names: Set<String> = HELPER_READ_CALLS,
+    htmlDsl: Boolean? = null,
 ): Set<String> {
-    if (!USES_HTML_DSL.containsMatchIn(src)) return emptySet()
+    if (!(htmlDsl ?: USES_HTML_DSL.containsMatchIn(src))) return emptySet()
+    return unshadowed(src, names)
+}
+
+/** The names of [names] that no import from outside the DSL in [src] puts in their place. */
+internal fun unshadowed(
+    src: String,
+    names: Set<String>,
+): Set<String> {
     val out = names.toMutableSet()
     for (m in FOREIGN_IMPORT.findAll(src)) {
         val (from, name) = m.destructured
