@@ -164,6 +164,18 @@
         }
       },
       {
+        "scopeName": "streamlord.kotlin.dsl.injection",
+        "path": "./syntaxes/kotlin-dsl-injection.tmLanguage.json",
+        "injectTo": [
+          "source.kotlin"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.inline.datastar": "datastar-expression",
+          "meta.embedded.block.html": "html",
+          "meta.embedded.block.javascript": "javascript"
+        }
+      },
+      {
         "scopeName": "streamlord.html.injection",
         "path": "./syntaxes/html-injection.tmLanguage.json",
         "injectTo": [

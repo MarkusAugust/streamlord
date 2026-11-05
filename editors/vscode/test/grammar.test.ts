@@ -21,6 +21,7 @@ const grammars: Record<string, textmate.IRawGrammar> = {
   "text.html.basic": read("test/fixtures/host-html.json"),
   "source.datastar": read("syntaxes/datastar-expression.tmLanguage.json"),
   "streamlord.kotlin.injection": read("syntaxes/kotlin-injection.tmLanguage.json"),
+  "streamlord.kotlin.dsl.injection": read("syntaxes/kotlin-dsl-injection.tmLanguage.json"),
   "streamlord.html.injection": read("syntaxes/html-injection.tmLanguage.json"),
 };
 
@@ -35,11 +36,16 @@ before(async () => {
       createOnigString: (s: string) => new oniguruma.OnigString(s),
     }),
     loadGrammar: async (scope: string) => grammars[scope] ?? null,
-    getInjections: (scope: string) => (scope === "source.kotlin" ? ["streamlord.kotlin.injection", "streamlord.html.injection"] : scope === "text.html.basic" ? ["streamlord.html.injection"] : undefined),
+    getInjections: (scope: string) => (scope === "source.kotlin" ? ["streamlord.kotlin.injection", "streamlord.kotlin.dsl.injection", "streamlord.html.injection"] : scope === "text.html.basic" ? ["streamlord.html.injection"] : undefined),
   });
 });
 
-async function tokens(scope: string, line: string): Promise<{ text: string; scopes: string[] }[]> {
+/** The DSL's import, after which a file's DSL calls are Streamlord's. */
+const DSL_IMPORT = "import io.github.markusaugust.streamlord.html.*";
+
+/** The tokens of `line`; a Kotlin line is read in a file that imports the DSL, unless `withDsl` is false. */
+async function tokens(scope: string, line: string, withDsl = true): Promise<{ text: string; scopes: string[] }[]> {
+  if (scope === "source.kotlin" && withDsl) return (await tokenLines(scope, [DSL_IMPORT, line]))[1]!;
   const grammar = await registry.loadGrammar(scope);
   assert.ok(grammar);
   const result = grammar.tokenizeLine(line, tm.INITIAL);
@@ -63,6 +69,46 @@ async function tokenLines(scope: string, lines: string[]): Promise<{ text: strin
 }
 
 describe("kotlin injection grammar", () => {
+  // A file calls the DSL's top-level functions only through its import, so without one a DSL-named call is somebody else's.
+  it("colours a DSL call only in a file that imports the DSL, and HTML in any file", async () => {
+    const call = `dataText("\\$count + 1")`;
+    const embedded = (t: { text: string; scopes: string[] }[]) => t.some((x) => x.scopes.includes("meta.embedded.inline.datastar"));
+    assert.ok(embedded(await tokens("source.kotlin", call)), "with the import");
+    assert.ok(!embedded(await tokens("source.kotlin", call, false)), "without it");
+    const inPackage = await tokenLines("source.kotlin", ["package io.github.markusaugust.streamlord.html", call]);
+    assert.ok(embedded(inPackage[1]!), "in the DSL's own package");
+    const html = await tokens("source.kotlin", `patchElements("""<div data-text="$count"></div>""")`, false);
+    assert.match(scopeOf(html, "count"), /variable\.other\.constant\.signal\.datastar/);
+    // An import inside a comment or a raw string opens nothing, and a name that only starts as the package is another.
+    for (const [why, lines] of [
+      ["in a block comment", ["/*", DSL_IMPORT, "*/", call]],
+      ["in a raw string", ['val sample = """', DSL_IMPORT, '"""', call]],
+      ["another package", ["package io.github.markusaugust.streamlord.htmlx", call]],
+    ] as const) {
+      const t = await tokenLines("source.kotlin", [...lines]);
+      const last = t[t.length - 1]!;
+      assert.ok(!embedded(last), why);
+      // Opened there, the region would never let the comment or the string close.
+      assert.ok(last.every((x) => !x.scopes.some((s) => s.startsWith("comment.block") || s.startsWith("string.quoted.triple"))), `${why}: closed`);
+    }
+  });
+
+  it("leaves a DSL call written in a string alone, and keeps HTML and scripts, in a file with the import", async () => {
+    const embedded = (t: { text: string; scopes: string[] }[], scope: string) => t.some((x) => x.scopes.includes(scope));
+    assert.ok(!embedded(await tokens("source.kotlin", `val s = """dataText("\\$x")"""`), "meta.embedded.inline.datastar"), "a call in a string");
+    assert.ok(!embedded(await tokens("source.kotlin", `/* dataText("\\$x") */`), "meta.embedded.inline.datastar"), "a call in a comment");
+    // Markup that does not open with a tag is HTML only as patchElements' argument.
+    assert.ok(embedded(await tokens("source.kotlin", `patchElements("""Hi <b data-text="$count"></b>""")`), "meta.embedded.block.html"), "html");
+    assert.ok(embedded(await tokens("source.kotlin", `executeScript("""console.log(1)""")`), "meta.embedded.block.javascript"), "script");
+  });
+
+  it("opens the file's DSL region once, and adds nothing to Kotlin's own scopes", async () => {
+    const lines = await tokenLines("source.kotlin", [DSL_IMPORT, "import io.github.markusaugust.streamlord.html.signal", "val x = 1"]);
+    for (const line of lines) for (const t of line) assert.equal(t.scopes.filter((s) => s === "meta.dsl-file.streamlord").length, 1, t.text);
+    const bare = await tokens("source.kotlin", "val x = 1", false);
+    assert.deepEqual(lines[2]!.map((t) => t.scopes.filter((s) => s !== "meta.dsl-file.streamlord")), bare.map((t) => t.scopes));
+  });
+
   // The client reads a signal as \$(\w+(?:[.-]\w+)*) (engine.ts): digits and hyphens are part of the name.
   it("reads a signal as far as the client does", async () => {
     const t = await tokens("source.kotlin", `dataText("$123 + $foo-bar + $items.0.name")`);

@@ -126,11 +126,11 @@ a call named as the DSL's where the DSL is missing, and judges the HTML handed t
 library's `patchElements` as any HTML string. VS Code reads what a file's imports prove: a
 DSL-named call is Streamlord's only in a file that imports the DSL, and no call is in a file that
 imports the official SDK alone. Elsewhere it cannot tell whether the project has
-streamlord-core, so it offers `interpolate` and `Trusted` in any project, and its colours cannot
-see the imports. In kotlinx.html's `attributes["data-on:click"] = "..."` both check the value,
-complete signals and actions in it and document an action such as `@post` there; IntelliJ IDEA
-colours it too, VS Code not yet. VS Code checks a template file once an extension for that engine is installed, since
-that is what tells VS Code the file's language.
+streamlord-core, so it offers `interpolate` and `Trusted` in any project. In kotlinx.html's
+`attributes["data-on:click"] = "..."` both check the value, complete signals and actions in it
+and document an action such as `@post` there; IntelliJ IDEA colours it too, VS Code not yet.
+VS Code checks a template file once an extension for that engine is installed, since that is
+what tells VS Code the file's language.
 [The editors page](https://streamlord-docs.netlify.app/editors/) has the rest.
 
 ## The analysis: CI stops it anyway
