@@ -11,6 +11,9 @@
       "include": "streamlord.kotlin.injection#expression-call-second-arg"
     },
     {
+      "include": "streamlord.kotlin.injection#attributes-index"
+    },
+    {
       "include": "streamlord.kotlin.injection#html-call"
     },
     {

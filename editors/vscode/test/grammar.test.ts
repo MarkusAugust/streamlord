@@ -93,6 +93,59 @@ describe("kotlin injection grammar", () => {
     }
   });
 
+  // kotlinx.html's own form is Datastar in every file, as an attribute in HTML is.
+  it("colours kotlinx.html's attributes form with and without the import", async () => {
+    const line = `button { attributes["data-on:click__debounce.500ms"] = "\\$count++; @post('/x')" }`;
+    for (const withDsl of [false, true]) {
+      const t = await tokens("source.kotlin", line, withDsl);
+      assert.match(scopeOf(t, "on"), /entity\.other\.attribute-name\.datastar/, `name, import ${withDsl}`);
+      assert.match(scopeOf(t, "debounce"), /datastar/, `modifier, import ${withDsl}`);
+      assert.match(scopeOf(t, "post"), /entity\.name\.function\.action\.backend\.datastar/, `value, import ${withDsl}`);
+      assert.match(scopeOf(t, "count"), /meta\.embedded\.inline\.datastar/, `signal, import ${withDsl}`);
+    }
+    const embedded = (t: { text: string; scopes: string[] }[]) => t.some((x) => x.scopes.includes("meta.embedded.inline.datastar"));
+    // Only a value the diagnostics judge: an expression attribute's, the whole statement, in one double-quoted literal.
+    for (const [why, source] of [
+      ["a signal name", `input { attributes["data-bind"] = "username" }`],
+      ["a nonce", `script { attributes["data-nonce"] = "r4nd0m-ABC" }`],
+      ["joined to more", `span { attributes["data-text"] = "\\$a + " + b }`],
+      ["a raw string", `button { attributes["data-on:click"] = """@post('/x')""" }`],
+    ] as const) {
+      const t = await tokens("source.kotlin", source, false);
+      assert.ok(!embedded(t), why);
+      assert.ok(t.some((x) => x.scopes.some((s) => s.startsWith("entity.other.attribute-name.datastar"))), `${why}: the name`);
+    }
+    assert.ok(embedded(await tokens("source.kotlin", `span { attributes["data-text"] = "\\$a"; x() }`, false)), "followed by another statement");
+    const assigned = await tokens("source.kotlin", `span { attributes["data-text"] = "\\$a" }`, false);
+    assert.match(scopeOf(assigned, "="), /keyword\.operator\.assignment\.kotlin/, "the assignment keeps its colour");
+    assert.ok(!(await tokens("source.kotlin", `div { attributes["data-text_x"] = "y" }`, false)).some((x) => x.scopes.some((s) => s.includes("datastar"))), "one underscore is no modifier");
+    // A raw string is Kotlin's to colour, in a DSL call too: taking its first quote for a literal's mispaired the rest.
+    for (const source of [`dataText("""\\$x""")`, `dataOn("click", """\\$x""")`]) {
+      const t = await tokenLines("source.kotlin", [DSL_IMPORT, source, "val y = 2"]);
+      assert.ok(!embedded(t[1]!), source);
+      assert.ok(t[2]!.every((x) => !x.scopes.some((s) => s.startsWith("string"))), `${source}: the next line is code`);
+    }
+    const named = await tokens("source.kotlin", `div { attributes["data-text"] = handler }`, false);
+    assert.match(scopeOf(named, "text"), /entity\.other\.attribute-name\.datastar/, "a key whose value is no literal");
+    // A data-* attribute of the page's own, or a typo, is no Datastar attribute.
+    for (const other of [`div { attributes["data-color"] = "success" }`, `div { attributes["data-onn:click"] = "x" }`]) {
+      const t = await tokens("source.kotlin", other, false);
+      assert.ok(t.every((x) => !x.scopes.some((s) => s.includes("datastar"))), other);
+    }
+  });
+
+  it("knows exactly the catalog's attributes, and its expression attributes, in the attributes form", () => {
+    const catalog = JSON.parse(readFileSync(new URL("../../catalog/datastar-1.0.4.json", root), "utf8")) as { attributes: { name: string; valueKind: string }[] };
+    const grammar = JSON.parse(readFileSync(new URL("syntaxes/kotlin-injection.tmLanguage.json", root), "utf8"));
+    const [value, name] = grammar.repository["attributes-index"].patterns as [{ begin: string }, { match: string }];
+    // The alternation of names: the group after data-(?:star-)?.
+    const names = (pattern: string) => /\(\?:((?:[a-z-]+\|)+[a-z-]+)\)/.exec(pattern)?.[1]?.split("|").sort() ?? [];
+    const of = (kinds: (k: string) => boolean) => [...new Set(catalog.attributes.filter((a) => kinds(a.valueKind)).map((a) => a.name))].sort();
+    assert.deepEqual(names(name.match), of(() => true));
+    assert.deepEqual(names(value.begin), of((k) => k === "expression"));
+    assert.ok(names(value.begin).length > 10 && names(name.match).length > names(value.begin).length);
+  });
+
   it("leaves a DSL call written in a string alone, and keeps HTML and scripts, in a file with the import", async () => {
     const embedded = (t: { text: string; scopes: string[] }[], scope: string) => t.some((x) => x.scopes.includes(scope));
     assert.ok(!embedded(await tokens("source.kotlin", `val s = """dataText("\\$x")"""`), "meta.embedded.inline.datastar"), "a call in a string");

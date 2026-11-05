@@ -40,7 +40,8 @@ All notable changes to Streamlord are recorded here. The format follows
 - The VS Code extension reads from a Kotlin file's imports whether it can call streamlord-html: a
   DSL-named call in a file without the DSL's import gets no Datastar diagnostics, completion,
   hover or signature help, reads no signal, and is not coloured as Datastar. In a file that
-  imports the official SDK and nothing of Streamlord no call is Streamlord's.
+  imports the official SDK and nothing of Streamlord no call is Streamlord's. It colours
+  kotlinx.html's `attributes["data-..."] = "..."` too, for the catalog's attributes only.
 
 ### Fixed
 

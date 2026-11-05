@@ -4,6 +4,15 @@ All notable changes to the Streamlord extension are recorded here.
 
 ## Unreleased
 
+- kotlinx.html's own form, `attributes["data-on:click__debounce.500ms"] = "@post('/save')"`, is
+  coloured in every file: the name, its key and modifiers in the key, and the expression in the
+  value of an attribute that takes one, where the literal is the whole statement, as the checks
+  read it. Only the catalog's attributes: the page's own `data-color`, or a typo such as
+  `data-onn`, is left as it is here, though in an HTML string every `data-*` attribute is still
+  coloured.
+- A raw string handed to a DSL call, such as `dataText("""$x""")`, is left to Kotlin's grammar.
+  Its quotes were paired wrongly, and with fwcd's Kotlin grammar the lines after it were coloured
+  as a string.
 - The extension reads from a Kotlin file's imports whether it can call streamlord-html. The DSL's
   functions are top-level functions of that module, which a file can call only through an import,
   so in a file without one a call named as the DSL's, `dataOnClick` or `signal`, is somebody
