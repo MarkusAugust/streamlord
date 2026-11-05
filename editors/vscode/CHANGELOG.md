@@ -12,6 +12,9 @@ All notable changes to the Streamlord extension are recorded here.
   `count`: these attributes take a signal's name. A constant there is the name, and no issue.
 - An import a fix adds goes after a `#!` line, `@file:` annotations and a licence comment, in the
   file's own line break, and an `import` line in a raw string is not taken for one.
+- Completion, signature help and hover on the keys of an action's options work in the value of
+  kotlinx.html's own form, `attributes["data-on:click"] = "@post('/save')"`, as in the string of a
+  DSL call.
 - HTML handed to a Streamlord call that does not read it, as in `patchElements(header,
   "<p>$name</p>")`, is checked as any HTML string.
 

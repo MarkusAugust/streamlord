@@ -30,14 +30,13 @@ class DatastarCompletionConfidence : CompletionConfidence() {
                 val s = lex.stringAt(offset) ?: return ThreeState.UNSURE
                 val calls = StreamlordCalls.of(psiFile)
                 if (calls.htmlStringAt(analysis, src, offset) != null) return ThreeState.NO
+                // kotlinx.html's own form, whatever the project has.
+                if (analysis.analyzer.attributesIndexes(src).any { it.value?.start == s.start }) return ThreeState.NO
                 val names = calls.siteNames(analysis)
                 if (names.isEmpty()) return ThreeState.UNSURE
-                val inSite =
-                    findCallSites(src, names, lex).any {
-                        it.openParen < s.start &&
-                            s.end <= it.closeParen + 1
-                    }
-                if (inSite) ThreeState.NO else ThreeState.UNSURE
+                val sites = findCallSites(src, names, lex).filter { it.openParen < s.start && s.end <= it.closeParen + 1 }
+                // A call the Kotlin plugin resolves elsewhere keeps the platform's rule.
+                if (sites.isNotEmpty() && analysis.foreignAmong(psiFile, sites).size < sites.size) ThreeState.NO else ThreeState.UNSURE
             }
 
             psiFile.language.isKindOf(HTMLLanguage.INSTANCE) || StreamlordAnalysis.isTemplateText(psiFile) -> {

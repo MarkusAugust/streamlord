@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.decodeEntities
 import io.github.markusaugust.streamlord.core.domain.holeLandings
 
@@ -47,8 +48,8 @@ public data class ExpressionAtCaret(
 
 /**
  * The Datastar expression [offset] stands in, in [src], read as Kotlin when [kotlin] and as markup
- * otherwise: an attribute value by [valueAtCaret], in markup or in an HTML string in Kotlin, or the
- * string handed to a DSL expression call. Kotlin's escapes and character references are decoded.
+ * otherwise: an attribute value by [valueAtCaret], in markup or in an HTML string in Kotlin, the value of
+ * an `attributes["data-..."] =`, or the string handed to a DSL expression call. Kotlin's escapes and character references are decoded.
  */
 public fun Analyzer.expressionAtCaret(
     src: String,
@@ -58,6 +59,14 @@ public fun Analyzer.expressionAtCaret(
 ): ExpressionAtCaret? {
     if (offset !in 0..src.length) return null
     if (!kotlin) return expressionInMarkup(src, offset, prefix)
+    // The diagnostics read kotlinx.html's own form before a free HTML string, and so does the caret.
+    attributesIndexes(src).firstOrNull { it.nameStart <= offset && offset <= (it.value?.end ?: it.nameStart) }?.let { at ->
+        val s = at.value ?: return null
+        if (offset <= s.start || offset > s.contentEnd + (if (s.unterminated) 1 else 0)) return null
+        val spec = catalog.parseAttributeName(at.name.asciiLowercase(), prefix)?.spec ?: return null
+        if (spec.valueKind != ValueKind.EXPRESSION && spec.valueKind != ValueKind.SIGNAL) return null
+        return ExpressionAtCaret(s.text.substring(0, decodedIndex(s, offset)), spec.valueKind == ValueKind.EXPRESSION, spec.name == "on-signal-patch")
+    }
     htmlStringAt(src, offset)?.let { html ->
         if (offset <= html.contentStart || offset > html.contentEnd) return null
         return expressionInMarkup(html.text, decodedIndex(html, offset), prefix)

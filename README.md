@@ -127,8 +127,8 @@ library's `patchElements` as any HTML string. VS Code cannot tell: it offers a D
 where the file imports from the DSL, but offers `interpolate` and `Trusted` in any project, and
 applies the rules of a Streamlord patch, such as an id on each element, to the official SDK's
 `patchElements`. In kotlinx.html's `attributes["data-on:click"] = "..."` both check the value,
-and hover documents an action such as `@post` there, but neither completes the value or colours
-it yet. VS Code checks a template file once an extension for that engine is installed, since
+complete signals and actions in it and document an action such as `@post` there; IntelliJ IDEA
+colours it too, VS Code not yet. VS Code checks a template file once an extension for that engine is installed, since
 that is what tells VS Code the file's language.
 [The editors page](https://streamlord-docs.netlify.app/editors/) has the rest.
 

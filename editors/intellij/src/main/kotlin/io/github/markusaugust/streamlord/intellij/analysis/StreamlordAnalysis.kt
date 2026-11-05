@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.intellij.analysis
 
 import com.intellij.lang.html.HTMLLanguage
 import com.intellij.lang.injection.InjectedLanguageManager
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.DumbService
@@ -20,6 +21,7 @@ import io.github.markusaugust.streamlord.analysis.HoleFact
 import io.github.markusaugust.streamlord.analysis.Issue
 import io.github.markusaugust.streamlord.analysis.SignalReference
 import io.github.markusaugust.streamlord.analysis.SiteIssues
+import io.github.markusaugust.streamlord.analysis.findCallSites
 import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
 import org.jetbrains.kotlin.psi.KtFile
 import java.util.concurrent.ConcurrentHashMap
@@ -142,6 +144,67 @@ class StreamlordAnalysis(
         return out
     }
 
+    /**
+     * Where the name starts of each of [sites] that the Kotlin plugin resolves to something other than Streamlord, for colouring,
+     * spelling, completion and hover, which pass over every call and not only those with an issue. A call is resolved only when
+     * there is a reason to doubt it: it is made on a receiver, or the file declares its name or imports it from another package.
+     * Any other is taken by its name unless the diagnostics resolved it already, and a star import is no reason, since
+     * kotlinx.html's own is in nearly every file.
+     */
+    fun foreignAmong(
+        file: KtFile,
+        sites: List<CallSite>,
+    ): Set<Int> {
+        // Nothing is resolved on the UI thread, where a typed handler or an action may ask: there the names decide.
+        if (sites.isEmpty() || ApplicationManager.getApplication().isDispatchThread) return emptySet()
+        val src = file.text
+        val elsewhere = namesFromElsewhere(file)
+        // A call the diagnostics resolve keeps their verdict, so the two never disagree on it; they are cached, and
+        // highlighting runs them anyway.
+        kotlinIssues(file)
+        val resolved = resolved(file)
+        val known = sites.filter { resolved.foreign[it.nameStart] == true }.mapTo(HashSet()) { it.nameStart }
+        val doubted = sites.filter { it.nameStart !in known && (it.name in elsewhere || onReceiver(src, it.nameStart)) }
+        if (doubted.isEmpty()) return known
+        return known + foreignCalls(file, resolved, doubted)
+    }
+
+    /** Whether the innermost call with one of [names] whose parentheses hold [offset] resolves to something other than Streamlord. */
+    fun isForeignCallAt(
+        file: KtFile,
+        offset: Int,
+        names: Set<String>,
+    ): Boolean {
+        val src = file.text
+        val site =
+            findCallSites(src, names, analyzer.lex(src)).lastOrNull { it.openParen < offset && offset <= it.closeParen } ?: return false
+        return foreignAmong(file, listOf(site)).isNotEmpty()
+    }
+
+    /** Whether the call whose name starts at [nameStart] is made on a receiver: `tag.dataText(...)`. */
+    private fun onReceiver(
+        src: String,
+        nameStart: Int,
+    ): Boolean {
+        var i = nameStart - 1
+        while (i >= 0 && src[i].isWhitespace()) i--
+        return i >= 0 && src[i] == '.'
+    }
+
+    /** The names [file] declares as functions or imports from outside Streamlord, by an import of its own or an alias. */
+    private fun namesFromElsewhere(file: KtFile): Set<String> =
+        CachedValuesManager.getCachedValue(file) {
+            val src = file.text
+            val names = HashSet<String>()
+            FUNCTION_NAME.findAll(src).mapTo(names) { it.groupValues[1] }
+            for (m in IMPORT.findAll(src)) {
+                val path = m.groupValues[1].replace("`", "")
+                if (path.startsWith(StreamlordResolve.PACKAGE)) continue
+                names += m.groupValues[2].ifEmpty { path.substringAfterLast('.') }
+            }
+            CachedValueProvider.Result.create(names, file)
+        }
+
     /** How many calls have been resolved, for a test to see that an edit elsewhere resolves none again. */
     internal val resolves = AtomicInteger()
 
@@ -202,6 +265,13 @@ class StreamlordAnalysis(
         }
 
     companion object {
+        /** The name of a function declared: `fun dataText(`, `fun HTMLTag.dataText(`, `fun <T> T.dataText(`. */
+        private val FUNCTION_NAME = Regex("""\bfun\s[^(\n]*?`?\b(\w+)`?\s*\(""")
+
+        /** An import of one name, with its alias: `import a.b.dataText` or `import a.b.c as dataText`. */
+        private val IMPORT =
+            Regex("""^[ \t]*import\s+([\w.`]+?)(?:\s+as\s+`?(\w+)`?)?[ \t]*;?[ \t]*(?://.*)?$""", RegexOption.MULTILINE)
+
         fun getInstance(project: Project): StreamlordAnalysis = project.service()
 
         /** The HTML side applies to HTML and XHTML files, and to the HTML view of a template file, but not to HTML injected into Kotlin. */
