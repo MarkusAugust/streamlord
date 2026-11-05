@@ -7,8 +7,10 @@ All notable changes to the Streamlord extension are recorded here.
 - The extension reads from a Kotlin file's imports whether it can call streamlord-html. The DSL's
   functions are top-level functions of that module, which a file can call only through an import,
   so in a file without one a call named as the DSL's, `dataOnClick` or `signal`, is somebody
-  else's: its string gets no Datastar diagnostics, completion, hover or signature help, defines
-  and reads no signal, and hover leaves the Kotlin helpers out. Until you write the import, a DSL
+  else's: its string gets no Datastar diagnostics, completion, hover or signature help, reads no
+  signal, and hover leaves the Kotlin helpers out. A signal it declares, as in
+  `dataSignals("count" to 0)`, still counts: a helper of your own by that name writes the same
+  attribute. Until you write the import, a DSL
   call's string is not checked either, so the `$count` trap shows once the import is there. A
   file that imports the official Datastar SDK and nothing of Streamlord has no Streamlord call:
   its HTML is checked as any HTML string, and no fix or message sends you to `interpolate` or
