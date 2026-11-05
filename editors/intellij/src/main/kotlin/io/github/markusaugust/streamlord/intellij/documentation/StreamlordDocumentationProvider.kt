@@ -81,11 +81,13 @@ class StreamlordDocumentationProvider : AbstractDocumentationProvider() {
         val dsl = ProjectLibraries.known(file, StreamlordLibrary.HTML) != false
         val calls = (file as? KtFile)?.let { StreamlordCalls.of(it) }
         // An action, `@post`, anywhere in a string or attribute value, `attributes["data-on:click"]` among them;
-        // without the DSL not in the string of a call named as the DSL's, which is somebody else's.
+        // not in the string of a call named as the DSL's that is somebody else's, as every such call is without the DSL.
         wordAt(text, offset) { it == '@' || it.isLetterOrDigit() || it == '_' }?.let { (word, _) ->
             if (word.startsWith("@")) {
                 val a = catalog.actionsByName[word.substring(1)] ?: return@let
-                if (calls?.dsl == false && inCallNamed(file, offset, analysis.analyzer.dslNames)) return@let
+                if (file is KtFile && inCallNamed(file, offset, analysis.analyzer.dslNames)) {
+                    if (calls?.dsl == false || analysis.isForeignCallAt(file, offset, analysis.analyzer.dslNames)) return@let
+                }
                 return markdownToHtml(actionDoc(a, withKotlin = dsl)) to word
             }
         }
@@ -97,14 +99,20 @@ class StreamlordDocumentationProvider : AbstractDocumentationProvider() {
                 return markdownToHtml(fetchOptionDoc(option)) to word
             }
         }
-        val htmlSide = calls == null || calls.htmlStringAt(analysis, text, offset) != null
+        // kotlinx.html's own form names the attribute in its key, whatever the project has.
+        val key =
+            (file as? KtFile)?.let {
+                analysis.analyzer.attributesIndexes(text).any { at -> offset in at.nameStart..at.nameStart + at.name.length }
+            } == true
+        val htmlSide = calls == null || key || calls.htmlStringAt(analysis, text, offset) != null
         if (htmlSide) {
             val (word, _) = wordAt(text, offset) { it.isLetterOrDigit() || it in "_:.-" } ?: return null
             val parsed = catalog.parseAttributeName(word.lowercase(), prefix)
             val spec = parsed?.spec ?: return null
             return markdownToHtml(attributeDoc(spec, prefix, withKotlin = dsl)) to word
         }
-        if (!dsl) return null
+        // A DSL function's name is code, never a word in a string.
+        if (!dsl || analysis.analyzer.lex(text).stringAt(offset) != null) return null
         val (word, end) = wordAt(text, offset) { it.isLetterOrDigit() || it == '_' } ?: return null
         catalog.attributesByKotlin[word]?.let { return markdownToHtml(attributeDoc(it, prefix)) to word }
         val action = catalog.actions.firstOrNull { it.kotlin == word } ?: return null

@@ -11,6 +11,13 @@
     { "name": "dataOnSignalPatch has patch in scope", "kotlin": true, "before": "fun f() { dataOnSignalPatch(\"pat", "after": "\") }", "expression": { "before": "pat", "allowActions": true, "patchInScope": true } },
     { "name": "an HTML string with escapes", "kotlin": true, "before": "val x = \"<div data-text=\\\"\\$bu", "after": "\\\"></div>\"", "expression": { "before": "$bu", "allowActions": true, "patchInScope": false } },
     { "name": "a raw HTML string over several lines", "kotlin": true, "before": "fun f() = \"\"\"<div data-signals=\"{\n  a: $", "after": "}\"></div>\"\"\"", "expression": { "before": "{\n  a: $", "allowActions": true, "patchInScope": false } },
-    { "name": "Kotlin code is no expression", "kotlin": true, "before": "val x = 1", "after": "", "expression": null }
+    { "name": "Kotlin code is no expression", "kotlin": true, "before": "val x = 1", "after": "", "expression": null },
+    { "name": "the value of an attributes index", "kotlin": true, "before": "fun FlowContent.f() { button { attributes[\"data-on:click\"] = \"@po", "after": "\" } }", "expression": { "before": "@po", "allowActions": true, "patchInScope": false } },
+    { "name": "an attributes index with an escaped dollar", "kotlin": true, "before": "fun FlowContent.f() { span { attributes[\"data-text\"] = \"\\$cou", "after": "\" } }", "expression": { "before": "$cou", "allowActions": true, "patchInScope": false } },
+    { "name": "an attributes index for a signal name takes no actions", "kotlin": true, "before": "fun FlowContent.f() { input { attributes[\"data-bind\"] = \"us", "after": "\" } }", "expression": { "before": "us", "allowActions": false, "patchInScope": false } },
+    { "name": "an attributes index whose value is still typed", "kotlin": true, "before": "fun FlowContent.f() { div { attributes[\"data-on-signal-patch\"] = \"pa", "after": "", "expression": { "before": "pa", "allowActions": true, "patchInScope": true } },
+    { "name": "the name of an attributes index is no expression", "kotlin": true, "before": "fun FlowContent.f() { div { attributes[\"data-te", "after": "xt\"] = \"$x\" } }", "expression": null },
+    { "name": "an attributes index for a non-expression attribute", "kotlin": true, "before": "fun FlowContent.f() { div { attributes[\"data-ignore-morph\"] = \"tr", "after": "ue\" } }", "expression": null },
+    { "name": "an attributes index inside a string is text", "kotlin": true, "before": "val s = \"\"\"attributes[\"data-text\"] = \"$co", "after": " x\"\"\"", "expression": null }
   ]
 }

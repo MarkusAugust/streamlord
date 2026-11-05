@@ -31,6 +31,12 @@ All notable changes to Streamlord are recorded here. The format follows
   before. The plugin now depends on IntelliJ's bundled Java plugin, which the Kotlin plugin needs
   already. The analysis gains `Analyzer.dslNames`, the calls streamlord-html alone defines, so an
   editor leaves out the same calls the analysis does.
+- In the analysis, for editors: `Analyzer.attributesIndexes` finds each kotlinx.html
+  `attributes["data-..."] = "..."` of a file, and `expressionAtCaret` reads the expression in its
+  value, so completion, hover and signature help work there in both editors. The IntelliJ plugin
+  also colours that form, spells only the strings of its expression, and gives a call named as the
+  DSL's that it resolves elsewhere no colours, completion, hover or spelling, where the call is on a
+  receiver, its name is declared or imported from elsewhere in the file, or it has an issue.
 
 ### Fixed
 

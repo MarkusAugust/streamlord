@@ -29,14 +29,14 @@ object DatastarCaret {
         val documents = PsiDocumentManager.getInstance(file.project)
 
         fun textOf(f: PsiFile): String = (if (fromDocument) documents.getDocument(f)?.text else null) ?: f.text
-        if (file is KtFile) return inKotlin(analysis, file, textOf(file), offset)
+        if (file is KtFile) return inKotlin(analysis, file, textOf(file), offset, fromDocument)
         // HTML injected into a Kotlin string is read on the Kotlin side, where the string is decoded: the
         // injected text keeps Kotlin's escapes and leaves out what a template writes.
         val manager = InjectedLanguageManager.getInstance(file.project)
         if (manager.isInjectedFragment(file)) {
             val host = manager.getInjectionHost(file)?.containingFile
             if (host is KtFile) {
-                return inKotlin(analysis, host, textOf(host), manager.injectedToHost(file, offset))
+                return inKotlin(analysis, host, textOf(host), manager.injectedToHost(file, offset), fromDocument)
             }
         }
         // Markup: an HTML file, a template read as text, or a template whose plugin gives it an HTML view beside its own
@@ -49,16 +49,26 @@ object DatastarCaret {
         return analysis.analyzer.expressionAtCaret(textOf(file), offset, false, analysis.prefix)
     }
 
-    /** The expression in Kotlin: in an HTML string, or in the string of a DSL call where the module has the DSL. */
+    /**
+     * The expression in Kotlin: in kotlinx.html's `attributes["data-..."] =` or an HTML string whatever the project has, and in
+     * the string of a DSL call where the module has the DSL and the call is Streamlord's.
+     */
     private fun inKotlin(
         analysis: StreamlordAnalysis,
         file: KtFile,
         text: String,
         offset: Int,
+        fromDocument: Boolean,
     ): ExpressionAtCaret? {
-        val calls = StreamlordCalls.of(file)
-        // The analysis reads an HTML string first and a DSL call's string after; without the DSL only the first is Datastar.
-        if (!calls.dsl && calls.htmlStringAt(analysis, text, offset) == null) return null
-        return analysis.analyzer.expressionAtCaret(text, offset, true, analysis.prefix)
+        val analyzer = analysis.analyzer
+        val datastarAnyway =
+            analyzer.attributesIndexes(text).any { it.nameStart <= offset && offset <= (it.value?.end ?: it.nameStart) } ||
+                StreamlordCalls.of(file).htmlStringAt(analysis, text, offset) != null
+        if (!datastarAnyway) {
+            if (!StreamlordCalls.of(file).dsl) return null
+            // A document ahead of the file is read by the names alone: the verdicts are by the file's offsets.
+            if (!fromDocument && analysis.isForeignCallAt(file, offset, analyzer.catalog.expressionCallSites.keys)) return null
+        }
+        return analyzer.expressionAtCaret(text, offset, true, analysis.prefix)
     }
 }

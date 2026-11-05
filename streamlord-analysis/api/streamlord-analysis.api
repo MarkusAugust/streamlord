@@ -72,6 +72,7 @@ public final class io/github/markusaugust/streamlord/analysis/Analyzer {
 	public static synthetic fun analyzeKotlinSites$default (Lio/github/markusaugust/streamlord/analysis/Analyzer;Ljava/lang/String;Lio/github/markusaugust/streamlord/analysis/AnalyzeOptions;ILjava/lang/Object;)Ljava/util/List;
 	public final fun analyzeProject (Ljava/io/File;Lio/github/markusaugust/streamlord/analysis/AnalyzeOptions;)Ljava/util/List;
 	public static synthetic fun analyzeProject$default (Lio/github/markusaugust/streamlord/analysis/Analyzer;Ljava/io/File;Lio/github/markusaugust/streamlord/analysis/AnalyzeOptions;ILjava/lang/Object;)Ljava/util/List;
+	public final fun attributesIndexes (Ljava/lang/String;)Ljava/util/List;
 	public final fun getCallSiteNames ()Ljava/util/Set;
 	public final fun getCatalog ()Lio/github/markusaugust/streamlord/analysis/Catalog;
 	public final fun getDslNames ()Ljava/util/Set;
@@ -163,6 +164,23 @@ public final class io/github/markusaugust/streamlord/analysis/AttributeSpec {
 	public final fun getRequires ()Lio/github/markusaugust/streamlord/analysis/Requires;
 	public final fun getReturnsValue ()Z
 	public final fun getValueKind ()Lio/github/markusaugust/streamlord/analysis/ValueKind;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/analysis/AttributesIndex {
+	public fun <init> (Ljava/lang/String;ILio/github/markusaugust/streamlord/analysis/KotlinString;Z)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()I
+	public final fun component3 ()Lio/github/markusaugust/streamlord/analysis/KotlinString;
+	public final fun component4 ()Z
+	public final fun copy (Ljava/lang/String;ILio/github/markusaugust/streamlord/analysis/KotlinString;Z)Lio/github/markusaugust/streamlord/analysis/AttributesIndex;
+	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/analysis/AttributesIndex;Ljava/lang/String;ILio/github/markusaugust/streamlord/analysis/KotlinString;ZILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/AttributesIndex;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getName ()Ljava/lang/String;
+	public final fun getNameStart ()I
+	public final fun getValue ()Lio/github/markusaugust/streamlord/analysis/KotlinString;
+	public final fun getWhole ()Z
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }

@@ -54,6 +54,17 @@ class ResolveCacheTest : StreamlordTestCase() {
         assertEquals("the patchElements calls again", resolved + 50, analysis.resolves.get())
     }
 
+    // Colours and spelling pass over every call, with an issue or not: the DSL's own, called as written, are taken by their names.
+    fun `test highlighting resolves only a call with a reason to doubt it`() {
+        val calls = (0 until 50).joinToString("\n") { "fun FlowContent.f$it() { span { dataText(\"$it + 1\") } }" }
+        myFixture.addFileToProject("Other.kt", "class Other { fun dataText(s: String) {} }")
+        myFixture.configureByText("View.kt", "fun g(o: Other) { o.dataText(\"\\\$m\") }\n$calls")
+        val analysis = StreamlordAnalysis.getInstance(project)
+        val before = analysis.resolves.get()
+        myFixture.doHighlighting()
+        assertEquals("the call on a receiver only", 1, analysis.resolves.get() - before)
+    }
+
     fun `test the autopopup opens in the string of a dsl call`() {
         myFixture.configureByText("Feed.kt", "fun f() { dataText(\"\$<caret>\") }")
         val offset = myFixture.caretOffset

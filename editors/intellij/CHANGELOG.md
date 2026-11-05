@@ -25,6 +25,21 @@ All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here
   templates among them, behaves as in 0.11.0 until it is done.
 - The plugin now declares that it needs IntelliJ's Java support, which the Kotlin plugin needs
   already.
+- kotlinx.html's own way to write Datastar, `attributes["data-on:click"] = "@post('/save')"`, gets
+  what a DSL call gets, in every project: completion of signals and actions in the value, colours
+  in the name and the value, and hover on the attribute's name. The spell checker reads only the
+  strings of the expression, so `$usrnm` is no typo there. A value joined to more with `+` is a
+  template, and only its name is coloured, as only its name is checked.
+- In a project with streamlord-html, a call named as the DSL's that IntelliJ resolves to another
+  function, such as `other.dataText("...")` on a class of your own or a `dataText` imported from
+  another package, gets no Datastar colours, completion, hover or spelling, as it got no
+  diagnostics already. To keep highlighting fast a call is resolved for this only when there is a
+  reason to doubt it: it is made on a receiver, the file declares its name or imports it from
+  outside Streamlord, or it has an issue the diagnostics resolved it for. Any other call of a
+  DSL name is taken as Streamlord's, as before, even one that comes from a star import, a file in
+  the same package or a member of an enclosing class.
+- Hover on a word in a Kotlin string, such as `post` in `"@post('/x')"`, no longer shows the
+  documentation of the DSL function of that name.
 - The spell checker failed on a Kotlin string whose expression has a template right after an
   empty string, such as `dataText("''$count")`, and IntelliJ reported the error.
 

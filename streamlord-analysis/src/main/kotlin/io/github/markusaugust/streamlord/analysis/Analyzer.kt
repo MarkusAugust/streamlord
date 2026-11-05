@@ -349,6 +349,22 @@ public class Analyzer(
         )
     }
 
+    /**
+     * Each `attributes["data-..."] = "..."` in [src], kotlinx.html's own way to write an attribute, for completion and colouring:
+     * the name, where it starts, and the literal that follows the `=`, unterminated while it is typed.
+     */
+    public fun attributesIndexes(src: String): List<AttributesIndex> {
+        val lex = lex(src)
+        val out = ArrayList<AttributesIndex>()
+        for (m in ATTRIBUTES_INDEX.findAll(src)) {
+            if (!lex.mask[m.range.first]) continue
+            val value = lex.stringAt(m.range.last + 2)?.takeIf { it.start == m.range.last + 1 }
+            val nameStart = m.range.first + m.value.indexOf('"') + 1
+            out += AttributesIndex(m.groupValues[1], nameStart, value, attributesIndexValue(src, m, lex) != null)
+        }
+        return out
+    }
+
     /** The string literal assigned in an `attributes["..."] =` match, when it is the whole value: not the first half of a concatenation. */
     private fun attributesIndexValue(
         src: String,
@@ -2022,6 +2038,17 @@ public class Analyzer(
         return emptyList()
     }
 }
+
+/**
+ * An `attributes["data-..."] = "..."`: the attribute's [name], where it starts in the source, and the literal assigned. The
+ * diagnostics judge the value only when it is [whole], the full statement and not the first half of a concatenation.
+ */
+public data class AttributesIndex(
+    val name: String,
+    val nameStart: Int,
+    val value: KotlinString?,
+    val whole: Boolean,
+)
 
 /** The issues that belong to one DSL call, or to one free-standing HTML string. */
 public data class SiteIssues(
