@@ -14,7 +14,7 @@ coroutinesNewest = "1.11.0"
 # only to a release the floor's compiler reads; checkKotlinFloor says whether it does.
 serialization = "1.11.0"
 kotlinxHtml = "0.12.0"
-ktor = "3.6.0"
+ktor = "3.6.1"
 # The oldest Ktor the adapter promises to run on; testOldestKtor runs its tests against it.
 ktorOldest = "3.0.0"
 # The Netty testOldestKtor runs Ktor 3.0's Netty engine on. Ktor 3.0.0 brings 4.1.114.Final, which
