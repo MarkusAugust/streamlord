@@ -21,7 +21,8 @@ const STREAMLORD_IMPORT = /^[ \t]*import[ \t]+io\.github\.markusaugust\.streamlo
  */
 export function kotlinModules(src: string): Pick<AnalyzeOptions, "htmlDsl" | "core"> {
   if (OFFICIAL_SDK_IMPORT.test(src) && !STREAMLORD_IMPORT.test(src)) return { core: false, htmlDsl: false };
-  return { core: null, htmlDsl: USES_HTML_DSL.test(src) };
+  // A file read from disk may start with a byte order mark, which would hide an import on its first line.
+  return { core: null, htmlDsl: USES_HTML_DSL.test(src.charCodeAt(0) === 0xfeff ? src.slice(1) : src) };
 }
 
 /** The HTML string at `offset`: one that looks like HTML, or the markup handed to a Streamlord call where the file has core. */

@@ -18,6 +18,7 @@ describe("which Streamlord modules a Kotlin file can use", () => {
     assert.deepEqual(kotlinModules("import io.github.markusaugust.streamlord.html.signal as s\n"), { core: null, htmlDsl: true });
     assert.deepEqual(kotlinModules("package io.github.markusaugust.streamlord.html\n"), { core: null, htmlDsl: true });
     assert.deepEqual(kotlinModules("import kotlinx.html.*\n"), { core: null, htmlDsl: false });
+    assert.deepEqual(kotlinModules("\uFEFF" + DSL), { core: null, htmlDsl: true });
   });
 
   // Whether the project has core no text proves, so core stays unknown and is taken for there, but for the official SDK.
