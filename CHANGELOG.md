@@ -37,6 +37,10 @@ All notable changes to Streamlord are recorded here. The format follows
   also colours that form, spells only the strings of its expression, and gives a call named as the
   DSL's that it resolves elsewhere no colours, completion, hover or spelling, where the call is on a
   receiver, its name is declared or imported from elsewhere in the file, or it has an issue.
+- The VS Code extension reads from a Kotlin file's imports whether it can call streamlord-html: a
+  DSL-named call in a file without the DSL's import gets no Datastar diagnostics, completion,
+  hover or signature help, and reads no signal. In a file that imports the official SDK and
+  nothing of Streamlord no call is Streamlord's.
 
 ### Fixed
 

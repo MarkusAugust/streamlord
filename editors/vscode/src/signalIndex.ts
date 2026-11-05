@@ -3,6 +3,7 @@ import { collectSelectors, type Selectors } from "./selectors.ts";
 import { collectSignalDefinitions, collectSignals, signalDeclarations, type SignalDeclaration } from "./signals.ts";
 import { signalReferencesInHtml, signalReferencesInKotlin, type SignalReference } from "./signalReferences.ts";
 import { constantNames, constantsAcross, otherDeclaredNames } from "./interpolation.ts";
+import { kotlinModules } from "./modules.ts";
 
 /** Template files read as markup, as the IntelliJ plugin reads them by default, whatever language an extension gives them. */
 const MARKUP_EXTENSIONS = [
@@ -274,11 +275,11 @@ export async function textOf(uri: string): Promise<string | null> {
   }
 }
 
-/** Where `text` defines and reads signals. */
+/** Where `text` defines and reads signals, a Kotlin file's with the modules it can use (see `kotlinModules`). */
 export function placesIn(text: string, language: "kotlin" | "html", prefix: string): Places {
   const lineStarts = [0];
   for (let i = 0; i < text.length; i++) if (text[i] === "\n") lineStarts.push(i + 1);
-  const reads = language === "kotlin" ? signalReferencesInKotlin(text, prefix) : signalReferencesInHtml(text, prefix);
+  const reads = language === "kotlin" ? signalReferencesInKotlin(text, prefix, kotlinModules(text)) : signalReferencesInHtml(text, prefix);
   return { prefix, declarations: signalDeclarations(text, language), reads, lineStarts };
 }
 
