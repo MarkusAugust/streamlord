@@ -56,7 +56,7 @@ object SignalSites {
         val reads =
             when {
                 file is KtFile -> {
-                    analysis.kotlinSignalReferences(file)
+                    analysis.streamlordSignalReferences(file)
                 }
 
                 StreamlordAnalysis.isHtmlSide(file) && !InjectedLanguageManager.getInstance(file.project).isInjectedFragment(file) -> {

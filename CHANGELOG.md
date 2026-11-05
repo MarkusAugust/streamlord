@@ -20,9 +20,26 @@ All notable changes to Streamlord are recorded here. The format follows
   nothing but the fixes below. Code that calls streamlord-analysis needs recompiling: the
   constructor and `copy` of `AnalyzeOptions` take the three new properties, and `attributeDoc` its
   third parameter; Kotlin source compiles as before.
+- The IntelliJ plugin tells the analysis which of Streamlord's modules each module of the project
+  has, through IntelliJ's own record of its libraries, and names the calls it resolves to another
+  library. In a project without streamlord-html a call named as the DSL's is somebody else's: its
+  string gets no Datastar diagnostics, completion, hover, parameter info or colours, the spell
+  checker reads it as prose, no fix writes a helper, and hover leaves the Kotlin helpers out.
+  Without streamlord-core no call is Streamlord's, and no fix or message sends the author to
+  `interpolate` or `Trusted`. The live templates are offered only in a module that has the modules
+  each one writes calls of. While IntelliJ indexes it cannot tell, and the plugin behaves as
+  before. The plugin now depends on IntelliJ's bundled Java plugin, which the Kotlin plugin needs
+  already. The analysis gains `Analyzer.dslNames`, the calls streamlord-html alone defines, so an
+  editor leaves out the same calls the analysis does.
 
 ### Fixed
 
+- The IntelliJ plugin's spell checker failed on a Kotlin string whose expression has a template
+  right after an empty string, such as `dataText("''$count")`, and IntelliJ reported the error.
+- In the IntelliJ plugin, HTML handed straight to a call of another library, such as the official
+  Datastar SDK's `patchElements`, got no diagnostics at all: the plugin dropped every issue of a call
+  that resolved elsewhere. It is judged as any HTML string now, so `data-onn` is reported there,
+  while the rules of a Streamlord patch, an id on each element among them, are not applied.
 - In both editors, `attributes["data-on:click"] = "$count++"` was offered `increment("count")` and
   told to write `signal(...)` in a file with nothing of streamlord-html in it. A helper is offered
   there only when the file imports from the DSL, or the host says it is there. In that form and at

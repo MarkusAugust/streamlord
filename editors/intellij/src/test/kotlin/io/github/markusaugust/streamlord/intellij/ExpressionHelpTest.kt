@@ -3,7 +3,6 @@ package io.github.markusaugust.streamlord.intellij
 import com.intellij.codeInsight.lookup.Lookup
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.testFramework.DumbModeTestUtils
-import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.testFramework.utils.parameterInfo.MockCreateParameterInfoContext
 import com.intellij.testFramework.utils.parameterInfo.MockUpdateParameterInfoContext
 import io.github.markusaugust.streamlord.analysis.ActionSpec
@@ -12,7 +11,7 @@ import io.github.markusaugust.streamlord.intellij.completion.DatastarParameterIn
 import io.github.markusaugust.streamlord.intellij.documentation.StreamlordDocumentationProvider
 
 /** Help inside a Datastar expression: completion where the value is, its options and events, parameter info and option docs. */
-class ExpressionHelpTest : BasePlatformTestCase() {
+class ExpressionHelpTest : StreamlordTestCase() {
     private fun lookups(
         name: String,
         text: String,

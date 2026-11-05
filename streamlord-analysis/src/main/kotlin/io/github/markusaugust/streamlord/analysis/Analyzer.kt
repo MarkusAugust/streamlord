@@ -170,7 +170,7 @@ public class Analyzer(
      * The calls streamlord-html alone defines, which are somebody else's in a project without it:
      * the attributes' helpers, the expression call sites and the expression helpers.
      */
-    private val dslNames: Set<String> =
+    public val dslNames: Set<String> =
         catalog.attributes.flatMap { it.kotlin }.toSet() + catalog.expressionCallSites.keys + catalog.signalNameHelpers.keys +
             "statements"
 

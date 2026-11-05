@@ -4,12 +4,11 @@ import com.intellij.codeInsight.TargetElementUtil
 import com.intellij.codeInsight.navigation.actions.GotoDeclarationAction
 import com.intellij.codeInsight.navigation.actions.GotoDeclarationOrUsageHandler2
 import com.intellij.psi.impl.source.tree.injected.InjectedLanguageEditorUtil
-import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import io.github.markusaugust.streamlord.intellij.index.SignalIndex
 import io.github.markusaugust.streamlord.intellij.navigation.SignalTarget
 import io.github.markusaugust.streamlord.intellij.navigation.SignalUsageTargetProvider
 
-class SignalNavigationTest : BasePlatformTestCase() {
+class SignalNavigationTest : StreamlordTestCase() {
     fun `test the index keeps where each signal is defined and read`() {
         val page =
             myFixture.addFileToProject(

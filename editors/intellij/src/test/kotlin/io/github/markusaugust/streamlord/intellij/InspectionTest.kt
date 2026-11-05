@@ -4,7 +4,6 @@ import com.intellij.codeHighlighting.HighlightDisplayLevel
 import com.intellij.codeInsight.daemon.HighlightDisplayKey
 import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.profile.codeInspection.InspectionProjectProfileManager
-import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.inspections.DatastarAttributeInspection
 import io.github.markusaugust.streamlord.intellij.inspections.DatastarExpressionInspection
@@ -14,7 +13,7 @@ import io.github.markusaugust.streamlord.intellij.inspections.KotlinInterpolatio
 import io.github.markusaugust.streamlord.intellij.inspections.StreamlordMarkupInspection
 import io.github.markusaugust.streamlord.intellij.inspections.UnknownSignalInspection
 
-class InspectionTest : BasePlatformTestCase() {
+class InspectionTest : StreamlordTestCase() {
     override fun setUp() {
         super.setUp()
         myFixture.enableInspections(
@@ -54,6 +53,17 @@ class InspectionTest : BasePlatformTestCase() {
         )
     }
 
+    // The project has the DSL, so a kotlinx.html attribute is offered its helper; WithoutStreamlordTest has the other side.
+    fun `test a kotlinx html attribute is offered the helper where the project has the dsl`() {
+        myFixture.configureByText(
+            "Page.kt",
+            "import kotlinx.html.*\nfun FlowContent.f() { button { attributes[\"data-on:click\"] = \"\$count++\" } }",
+        )
+        myFixture.doHighlighting()
+        val fixes = myFixture.getAllQuickFixes().map { it.text }
+        assertTrue(fixes.toString(), "Use increment(\"count\")" in fixes)
+    }
+
     fun `test html files get the template side`() {
         myFixture.configureByText(
             "page.html",
@@ -87,6 +97,38 @@ class InspectionTest : BasePlatformTestCase() {
         )
         myFixture.configureByText("Theirs.kt", "fun f() = patchElements(\"<div>no id</div>\")")
         assertEquals(1, myFixture.doHighlighting().count { it.description?.contains("has no id") == true })
+    }
+
+    // The official Datastar SDK's patchElements is not Streamlord's: its HTML is judged as any HTML string, not as a patch.
+    fun `test html handed to the official sdk is judged as a free string`() {
+        myFixture.addFileToProject(
+            "dev/datastar/kotlin/sdk/ServerSentEventGenerator.kt",
+            """
+            package dev.datastar.kotlin.sdk
+            class ServerSentEventGenerator {
+                fun patchElements(elements: String, selector: String? = null) {}
+            }
+            """.trimIndent(),
+        )
+        myFixture.configureByText(
+            "Official.kt",
+            """
+            import dev.datastar.kotlin.sdk.ServerSentEventGenerator
+            fun f(sse: ServerSentEventGenerator) = sse.patchElements("<div data-onn:x=\"1\">x</div>")
+            """.trimIndent(),
+        )
+        val shown = myFixture.doHighlighting().mapNotNull { it.description }
+        assertTrue(shown.toString(), shown.any { it.contains("Unknown Datastar attribute data-onn.") })
+        assertTrue(shown.toString(), shown.none { it.contains("has no id") })
+    }
+
+    fun `test a dsl name of another library reads no signal`() {
+        myFixture.addFileToProject("other/Text.kt", "package other\nfun dataText(expression: String) = expression")
+        myFixture.configureByText("Theirs.kt", "import other.dataText\nfun f() { dataText(\"\\\$nope\") }")
+        val unknown = { myFixture.doHighlighting().filter { it.description?.contains("defines the signal") == true }.map { it.text } }
+        assertEquals(emptyList<String>(), unknown())
+        myFixture.configureByText("Ours.kt", "fun f() { dataText(\"\\\$nope\") }")
+        assertEquals(listOf("\\\$nope"), unknown())
     }
 
     fun `test a signal no file defines is a warning`() {

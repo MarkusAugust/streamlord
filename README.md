@@ -119,9 +119,17 @@ you type, with `increment("heads")` one quick fix away. Here is the same trap in
 
 They read Datastar as a language in HTML, Kotlin strings and template files: diagnostics with
 quick fixes, completion, hover, highlighting that colours only the Datastar tokens, and a Stream
-Inspector that shows the events a response sent. They need no part of the Streamlord SDK, so
-they work just as well in a project on the official SDK. VS Code checks a template file once an
-extension for that engine is installed, since that is what tells VS Code the file's language.
+Inspector that shows the events a response sent. They need no part of the Streamlord SDK, and
+work in a project on the official SDK too. IntelliJ IDEA reads which of Streamlord's modules a
+project has: it offers no fix that writes what the project lacks, reads no string as Datastar for
+a call named as the DSL's where the DSL is missing, and judges the HTML handed to another
+library's `patchElements` as any HTML string. VS Code cannot tell: it offers a DSL helper only
+where the file imports from the DSL, but offers `interpolate` and `Trusted` in any project, and
+applies the rules of a Streamlord patch, such as an id on each element, to the official SDK's
+`patchElements`. In kotlinx.html's `attributes["data-on:click"] = "..."` both check the value,
+and hover documents an action such as `@post` there, but neither completes the value or colours
+it yet. VS Code checks a template file once an extension for that engine is installed, since
+that is what tells VS Code the file's language.
 [The editors page](https://streamlord-docs.netlify.app/editors/) has the rest.
 
 ## The analysis: CI stops it anyway

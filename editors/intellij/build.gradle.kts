@@ -21,6 +21,8 @@ dependencies {
     intellijPlatform {
         intellijIdea(providers.gradleProperty("platformVersion"))
         bundledPlugin("org.jetbrains.kotlin")
+        // JavaLibraryUtil, which tells which of Streamlord's modules a project has; Kotlin depends on it anyway.
+        bundledPlugin("com.intellij.java")
         bundledPlugin("com.intellij.modules.json")
         // The spellchecker, which ships inside Grazie; optional at run time (streamlord-spellchecker.xml).
         bundledPlugin("tanvd.grazi")
@@ -37,6 +39,10 @@ dependencies {
 
     // The test projects resolve against the real DSL helpers and kotlinx.html, from the jars of these.
     testImplementation("io.github.markusaugust.streamlord:streamlord-html")
+    // For the classes the plugin knows the adapters by, and the projects of the live template tests.
+    // Ktor and Spring are compileOnly in them, so neither comes along.
+    testImplementation("io.github.markusaugust.streamlord:streamlord-ktor")
+    testImplementation("io.github.markusaugust.streamlord:streamlord-spring")
     testImplementation("junit:junit:4.13.2")
     testImplementation(kotlin("test"))
 }

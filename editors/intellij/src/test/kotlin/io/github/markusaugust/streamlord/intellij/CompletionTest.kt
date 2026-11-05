@@ -3,9 +3,8 @@ package io.github.markusaugust.streamlord.intellij
 import com.intellij.codeInsight.lookup.Lookup
 import com.intellij.psi.statistics.StatisticsManager
 import com.intellij.psi.statistics.impl.StatisticsManagerImpl
-import com.intellij.testFramework.fixtures.BasePlatformTestCase
 
-class CompletionTest : BasePlatformTestCase() {
+class CompletionTest : StreamlordTestCase() {
     private val actions =
         listOf("@delete", "@get", "@patch", "@peek", "@post", "@put", "@query", "@setAll", "@toggleAll", "@clipboard", "@fit", "@intl")
     private val onModifiers =

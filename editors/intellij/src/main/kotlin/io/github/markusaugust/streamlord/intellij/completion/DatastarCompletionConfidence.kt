@@ -7,6 +7,7 @@ import com.intellij.psi.PsiFile
 import com.intellij.util.ThreeState
 import io.github.markusaugust.streamlord.analysis.findCallSites
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
+import io.github.markusaugust.streamlord.intellij.analysis.StreamlordCalls
 import org.jetbrains.kotlin.psi.KtFile
 
 /**
@@ -27,9 +28,12 @@ class DatastarCompletionConfidence : CompletionConfidence() {
             psiFile is KtFile -> {
                 val lex = analysis.analyzer.lex(src)
                 val s = lex.stringAt(offset) ?: return ThreeState.UNSURE
-                if (analysis.analyzer.htmlStringAt(src, offset) != null) return ThreeState.NO
+                val calls = StreamlordCalls.of(psiFile)
+                if (calls.htmlStringAt(analysis, src, offset) != null) return ThreeState.NO
+                val names = calls.siteNames(analysis)
+                if (names.isEmpty()) return ThreeState.UNSURE
                 val inSite =
-                    findCallSites(src, analysis.analyzer.callSiteNames, lex).any {
+                    findCallSites(src, names, lex).any {
                         it.openParen < s.start &&
                             s.end <= it.closeParen + 1
                     }
