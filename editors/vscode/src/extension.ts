@@ -7,6 +7,7 @@ import { StreamlordCompletionProvider } from "./completion.ts";
 import type { Issue } from "./expression.ts";
 import { StreamlordHoverProvider } from "./hover.ts";
 import { Inspector } from "./inspector.ts";
+import { kotlinModules } from "./modules.ts";
 import { RequestStore } from "./requestStore.ts";
 import { RouteLensProvider } from "./routeLens.ts";
 import type { Route } from "./routes.ts";
@@ -55,8 +56,9 @@ export function activate(context: vscode.ExtensionContext): void {
     let found: Issue[];
     const text = document.getText();
     if (document.languageId === "kotlin") {
-      found = analyzeKotlin(text, { prefix: prefix(), checkHtmlAttributes: true, constants: signals.allConstants() });
-      if (checkSignals()) found.push(...unknownSignals(document, signalReferencesInKotlin(text, prefix())));
+      const sdk = kotlinModules(text);
+      found = analyzeKotlin(text, { prefix: prefix(), checkHtmlAttributes: true, constants: signals.allConstants(), ...sdk });
+      if (checkSignals()) found.push(...unknownSignals(document, signalReferencesInKotlin(text, prefix(), sdk)));
     } else if (markup.has(document.languageId) && config().get<boolean>("diagnostics.html", true)) {
       found = analyzeHtml(text, { prefix: prefix(), checkHtmlAttributes: true });
       if (checkSignals()) found.push(...unknownSignals(document, signalReferencesInHtml(text, prefix())));

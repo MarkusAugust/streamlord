@@ -65,7 +65,7 @@ for (const name of KEY_ONLY_HELPERS) (ALL_SITE_NAMES as Set<string>).add(name);
  * The calls streamlord-html alone defines, which are somebody else's in a project without it:
  * the attributes' helpers, the expression call sites and the expression helpers.
  */
-const DSL_NAMES: ReadonlySet<string> = new Set([...catalog.attributes.flatMap((a) => a.kotlin), ...Object.keys(catalog.callSites.expression), ...catalog.signalNameHelpers.keys(), "statements"]);
+export const DSL_NAMES: ReadonlySet<string> = new Set([...catalog.attributes.flatMap((a) => a.kotlin), ...Object.keys(catalog.callSites.expression), ...catalog.signalNameHelpers.keys(), "statements"]);
 
 /** Whether the call named `name` at `nameStart` is not Streamlord's, as `opts` says: then its strings are free strings. */
 export function foreignCalls(opts: Pick<AnalyzeOptions, "htmlDsl" | "core" | "foreignCalls">): (name: string, nameStart: number) => boolean {

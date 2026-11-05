@@ -41,7 +41,10 @@ class FakeIndex {
   }
 }
 
-const kotlinSrc = `div {
+/** The DSL's import, without which a DSL-named call is somebody else's. */
+const DSL = "import io.github.markusaugust.streamlord.html.*\n";
+
+const kotlinSrc = `${DSL}div {
     dataSignals("count" to 0, "open" to false)
     dataOnClick("$")
     dataOnClick("@")
@@ -62,7 +65,7 @@ describe("completion provider", () => {
   const doc = new MockDocument(kotlinSrc, "kotlin");
 
   it("offers signals after $ with this file's first", () => {
-    const items = complete(doc, 2, 18, index).sort((a, b) => (a.sortText ?? "").localeCompare(b.sortText ?? ""));
+    const items = complete(doc, 3, 18, index).sort((a, b) => (a.sortText ?? "").localeCompare(b.sortText ?? ""));
     const labels = items.map((i) => i.label);
     assert.deepEqual(labels.slice(0, 2), ["$count", "$open"]);
     assert.ok(labels.includes("$busy"));
@@ -72,7 +75,7 @@ describe("completion provider", () => {
   });
 
   it("offers actions after @ with pro last", () => {
-    const items = complete(doc, 3, 18, index);
+    const items = complete(doc, 4, 18, index);
     const labels = items.map((i) => i.label);
     assert.ok(labels.indexOf("@clipboard") > labels.indexOf("@toggleAll"));
     assert.ok(items.every((i) => String(i.label).startsWith("@")));
@@ -88,7 +91,7 @@ describe("completion provider", () => {
       assert.deepEqual(items.map((i) => String(i.label)), sorted);
       return sorted;
     };
-    assert.deepEqual(shown(complete(doc, 3, 18, index)), ["@delete", "@get", "@patch", "@peek", "@post", "@put", "@query", "@setAll", "@toggleAll", "@clipboard", "@fit", "@intl"]);
+    assert.deepEqual(shown(complete(doc, 4, 18, index)), ["@delete", "@get", "@patch", "@peek", "@post", "@put", "@query", "@setAll", "@toggleAll", "@clipboard", "@fit", "@intl"]);
     const hdoc = new MockDocument(`<div data-on:click__\n<div data-on-intersect__\n<input data-bind:value__`, "html");
     assert.deepEqual(shown(complete(hdoc, 0, 20, index)), ["capture", "case", "debounce", "delay", "document", "once", "outside", "passive", "prevent", "stop", "throttle", "viewtransition", "window"]);
     assert.deepEqual(shown(complete(hdoc, 1, 24, index)), ["debounce", "delay", "exit", "full", "half", "once", "threshold", "throttle", "viewtransition"]);
@@ -96,17 +99,17 @@ describe("completion provider", () => {
   });
 
   it("offers ids after # in a selector argument and classes after .", () => {
-    const line5 = kotlinSrc.split("\n")[5]!;
-    const hashItems = complete(doc, 5, line5.indexOf('"#"') + 2, index);
+    const line5 = kotlinSrc.split("\n")[6]!;
+    const hashItems = complete(doc, 6, line5.indexOf('"#"') + 2, index);
     assert.deepEqual(hashItems.map((i) => i.label), ["#counter", "#feed"]);
     assert.equal(hashItems[0]?.detail, "id (this file)");
-    const line6 = kotlinSrc.split("\n")[6]!;
-    const dotItems = complete(doc, 6, line6.indexOf('"."') + 2, index);
+    const line6 = kotlinSrc.split("\n")[7]!;
+    const dotItems = complete(doc, 7, line6.indexOf('"."') + 2, index);
     assert.deepEqual(dotItems.map((i) => i.label), [".big", ".card"]);
   });
 
   it("offers nothing outside datastar strings", () => {
-    assert.deepEqual(complete(doc, 1, 5, index), []);
+    assert.deepEqual(complete(doc, 2, 5, index), []);
   });
 
   it("offers attributes, modifiers and modifier values in html", () => {
@@ -126,9 +129,9 @@ describe("completion provider", () => {
   });
 
   it("offers patch only in data-on-signal-patch, where the client defines it", () => {
-    const labels = (src: string, language: string, at = src.length) => complete(new MockDocument(src, language), 0, at, index).map((i) => i.label);
+    const labels = (src: string, language: string, at = src.length, line = 0) => complete(new MockDocument(src, language), line, at, index).map((i) => i.label);
     assert.ok(labels(`<div data-on-signal-patch="pat`, "html").includes("patch"));
-    assert.ok(labels(`dataOnSignalPatch("pat")`, "kotlin", 22).includes("patch"));
+    assert.ok(labels(`${DSL}dataOnSignalPatch("pat")`, "kotlin", 22, 1).includes("patch"));
     const elsewhere = labels(`<div data-on:click="pat`, "html");
     assert.ok(elsewhere.includes("evt") && !elsewhere.includes("patch"), elsewhere.join());
   });
@@ -209,7 +212,7 @@ describe("help inside an expression", () => {
 
   it("offers the options in a template and in a Kotlin DSL string", () => {
     assert.ok(at(`<div data-on:click="@get('/x', {ret`, "pebble").items.some((i) => i.label === "retryInterval"), "pebble");
-    const kotlin = new MockDocument(`fun f() { dataOnClick("@get('/x', {ret})") }`, "kotlin");
+    const kotlin = new MockDocument(`${DSL}fun f() { dataOnClick("@get('/x', {ret})") }`, "kotlin");
     const provider = new StreamlordCompletionProvider(index as never, () => "data-");
     const items = provider.provideCompletionItems(kotlin as never, kotlin.positionAt(kotlin.text.indexOf("})")) as never);
     assert.ok(items.some((i) => i.label === "retryInterval"), "kotlin");
@@ -243,7 +246,7 @@ describe("signature help", () => {
     assert.equal(h?.signatures[0]?.label, "@get(uri, options?)");
     assert.deepEqual(h?.signatures[0]?.parameters.map((p) => p.label), ["uri", "options?"]);
     assert.equal(h?.activeParameter, 1);
-    const src = `div { dataOnClick("@post(") }`;
+    const src = `${DSL}div { dataOnClick("@post(") }`;
     assert.equal(signature(src, "kotlin", src.indexOf("(\")") + 1)?.activeParameter, 0);
     assert.equal(signature(`<div data-text="$count`, "html"), null);
   });
@@ -257,17 +260,17 @@ describe("hover provider", () => {
     const doc = new MockDocument(src, "html");
     const h = hover.provideHover(doc as never, doc.positionAt(src.indexOf("retryScaler") + 3) as never);
     assert.match(String((h?.contents as unknown as { value: string }).value), /\*\*retryScaler\*\*/);
-    const ksrc = `fun f() { dataOnClick("@get('/x', {retryScaler: 3})") }`;
+    const ksrc = `${DSL}fun f() { dataOnClick("@get('/x', {retryScaler: 3})") }`;
     const kdoc = new MockDocument(ksrc, "kotlin");
     const k = hover.provideHover(kdoc as never, kdoc.positionAt(ksrc.indexOf("retryScaler") + 3) as never);
     assert.match(String((k?.contents as unknown as { value: string }).value), /\*\*retryScaler\*\*/);
   });
 
   it("documents dsl functions, attributes and actions", () => {
-    const kdoc = new MockDocument(`div { dataOnClick("@post('/x')") }`, "kotlin");
-    const h = hover.provideHover(kdoc as never, new Position(0, 8) as never);
+    const kdoc = new MockDocument(`${DSL}div { dataOnClick("@post('/x')") }`, "kotlin");
+    const h = hover.provideHover(kdoc as never, new Position(1, 8) as never);
     assert.match(String((h?.contents as unknown as { value: string }).value), /\*\*data-on\*\*/);
-    const a = hover.provideHover(kdoc as never, new Position(0, 20) as never);
+    const a = hover.provideHover(kdoc as never, new Position(1, 20) as never);
     assert.match(String((a?.contents as unknown as { value: string }).value), /@post\(uri, options\?\)/);
     const hdoc = new MockDocument(`<div data-on-intersect__once="x()">`, "html");
     const attr = hover.provideHover(hdoc as never, new Position(0, 10) as never);
@@ -276,8 +279,8 @@ describe("hover provider", () => {
   });
 
   it("documents dataOnSignalPatch as the attribute its expression fills, not the filter it also writes", () => {
-    const kdoc = new MockDocument(`div { dataOnSignalPatch("console.log(patch)", SignalFilter.exclude("^_")) }`, "kotlin");
-    const value = String((hover.provideHover(kdoc as never, new Position(0, 10) as never)?.contents as unknown as { value: string }).value);
+    const kdoc = new MockDocument(`${DSL}div { dataOnSignalPatch("console.log(patch)", SignalFilter.exclude("^_")) }`, "kotlin");
+    const value = String((hover.provideHover(kdoc as never, new Position(1, 10) as never)?.contents as unknown as { value: string }).value);
     assert.match(value, /\*\*data-on-signal-patch\*\*/);
     assert.doesNotMatch(value, /data-on-signal-patch-filter/);
   });

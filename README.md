@@ -123,10 +123,11 @@ Inspector that shows the events a response sent. They need no part of the Stream
 work in a project on the official SDK too. IntelliJ IDEA reads which of Streamlord's modules a
 project has: it offers no fix that writes what the project lacks, reads no string as Datastar for
 a call named as the DSL's where the DSL is missing, and judges the HTML handed to another
-library's `patchElements` as any HTML string. VS Code cannot tell: it offers a DSL helper only
-where the file imports from the DSL, but offers `interpolate` and `Trusted` in any project, and
-applies the rules of a Streamlord patch, such as an id on each element, to the official SDK's
-`patchElements`. In kotlinx.html's `attributes["data-on:click"] = "..."` both check the value,
+library's `patchElements` as any HTML string. VS Code reads what a file's imports prove: a
+DSL-named call is Streamlord's only in a file that imports the DSL, and no call is in a file that
+imports the official SDK alone. Elsewhere it cannot tell whether the project has
+streamlord-core, so it offers `interpolate` and `Trusted` in any project, and its colours cannot
+see the imports. In kotlinx.html's `attributes["data-on:click"] = "..."` both check the value,
 complete signals and actions in it and document an action such as `@post` there; IntelliJ IDEA
 colours it too, VS Code not yet. VS Code checks a template file once an extension for that engine is installed, since
 that is what tells VS Code the file's language.
