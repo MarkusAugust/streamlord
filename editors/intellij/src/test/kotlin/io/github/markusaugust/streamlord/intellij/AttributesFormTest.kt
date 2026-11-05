@@ -152,8 +152,10 @@ class ForeignDslCallTest : StreamlordTestCase() {
     fun `test nothing is resolved on the ui thread`() {
         val file = myFixture.configureByText("Other.kt", onReceiver) as KtFile
         val analysis = StreamlordAnalysis.getInstance(project)
-        assertFalse(analysis.isForeignCallAt(file, file.text.indexOf("@post") + 2, analysis.catalog.expressionCallSites.keys))
-        assertTrue(inBackground { analysis.isForeignCallAt(file, file.text.indexOf("@post") + 2, analysis.catalog.expressionCallSites.keys) })
+        val offset = file.text.indexOf("@post") + 2
+        val names = analysis.catalog.expressionCallSites.keys
+        assertFalse(analysis.isForeignCallAt(file, offset, names))
+        assertTrue(inBackground { analysis.isForeignCallAt(file, offset, names) })
     }
 
     /** What [block] gives in a read action off the UI thread, where the platform runs highlighting, hover and spelling. */

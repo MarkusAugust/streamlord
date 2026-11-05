@@ -65,7 +65,8 @@ public fun Analyzer.expressionAtCaret(
         if (offset <= s.start || offset > s.contentEnd + (if (s.unterminated) 1 else 0)) return null
         val spec = catalog.parseAttributeName(at.name.asciiLowercase(), prefix)?.spec ?: return null
         if (spec.valueKind != ValueKind.EXPRESSION && spec.valueKind != ValueKind.SIGNAL) return null
-        return ExpressionAtCaret(s.text.substring(0, decodedIndex(s, offset)), spec.valueKind == ValueKind.EXPRESSION, spec.name == "on-signal-patch")
+        val before = s.text.substring(0, decodedIndex(s, offset))
+        return ExpressionAtCaret(before, spec.valueKind == ValueKind.EXPRESSION, spec.name == "on-signal-patch")
     }
     htmlStringAt(src, offset)?.let { html ->
         if (offset <= html.contentStart || offset > html.contentEnd) return null

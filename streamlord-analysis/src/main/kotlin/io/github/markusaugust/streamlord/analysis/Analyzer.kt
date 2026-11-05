@@ -355,10 +355,14 @@ public class Analyzer(
      */
     public fun attributesIndexes(src: String): List<AttributesIndex> {
         val lex = lex(src)
-        return ATTRIBUTES_INDEX.findAll(src).filter { lex.mask[it.range.first] }.map { m ->
+        val out = ArrayList<AttributesIndex>()
+        for (m in ATTRIBUTES_INDEX.findAll(src)) {
+            if (!lex.mask[m.range.first]) continue
             val value = lex.stringAt(m.range.last + 2)?.takeIf { it.start == m.range.last + 1 }
-            AttributesIndex(m.groupValues[1], m.range.first + m.value.indexOf('"') + 1, value, attributesIndexValue(src, m, lex) != null)
-        }.toList()
+            val nameStart = m.range.first + m.value.indexOf('"') + 1
+            out += AttributesIndex(m.groupValues[1], nameStart, value, attributesIndexValue(src, m, lex) != null)
+        }
+        return out
     }
 
     /** The string literal assigned in an `attributes["..."] =` match, when it is the whole value: not the first half of a concatenation. */
