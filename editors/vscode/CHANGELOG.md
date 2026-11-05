@@ -17,8 +17,11 @@ All notable changes to the Streamlord extension are recorded here.
   `Trusted`. An HTML string and kotlinx.html's `attributes["data-..."] =` are Datastar in every
   file. Whether a project has streamlord-core at all a file's text cannot tell, since a parent
   pom or a published catalog names it out of sight, so elsewhere the extension takes core for
-  there, as before. The colours cannot see the imports: a DSL-named string is still coloured in a
-  file without the DSL.
+  there, as before. The colours follow the same import: a DSL-named call's string is coloured as
+  Datastar from the DSL's import, or its own package line, to the end of the file, and nowhere
+  else. An import in a comment or a raw string counts for neither. With the Kotlin grammars of
+  JetBrains' extension and of fwcd's, Kotlin's own colours are as before. Where the Kotlin
+  language server's semantic highlighting paints a string, it is painted over either way.
 - A fix that writes a DSL helper, such as `increment("count")`, adds its import when the file does
   not have it. In the kotlinx.html form, `attributes["data-on:click"] = "$count++"`, a helper is
   offered only in a file that imports from streamlord-html. In that form and at a DSL call alike,

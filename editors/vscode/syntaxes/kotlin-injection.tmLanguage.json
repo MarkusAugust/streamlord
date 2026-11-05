@@ -1,13 +1,10 @@
 {
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
   "scopeName": "streamlord.kotlin.injection",
-  "injectionSelector": "L:source.kotlin -comment -string",
+  "injectionSelector": "L:source.kotlin -comment -string -meta.dsl-file.streamlord",
   "patterns": [
     {
-      "include": "#expression-call-first-arg"
-    },
-    {
-      "include": "#expression-call-second-arg"
+      "include": "#dsl-file"
     },
     {
       "include": "#html-call"
@@ -20,6 +17,17 @@
     }
   ],
   "repository": {
+    "dsl-file": {
+      "comment": "From the DSL's import, or its own package, to the end of the file: a file calls the DSL's top-level functions only through one, so only there are its calls Streamlord's. The region adds a scope and Kotlin's grammar inside it, nothing else; streamlord.kotlin.dsl.injection colours the calls in it, at any depth, and this grammar stays out of it so it does not open again.",
+      "name": "meta.dsl-file.streamlord",
+      "begin": "^(?=[ \\t]*(?:import[ \\t]+io\\.github\\.markusaugust\\.streamlord\\.html\\.|package[ \\t]+io\\.github\\.markusaugust\\.streamlord\\.html(?![\\p{L}\\p{Nd}_])))",
+      "end": "(?!)",
+      "patterns": [
+        {
+          "include": "source.kotlin"
+        }
+      ]
+    },
     "html-string": {
       "comment": "HTML in a string that is not handed to a Streamlord call: a function that returns markup, a val with a fragment. Recognised by its first character, or by IntelliJ's injection marker (@Language(\"HTML\") or // language=HTML) before it.",
       "patterns": [
