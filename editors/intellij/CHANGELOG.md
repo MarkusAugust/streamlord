@@ -2,6 +2,32 @@
 
 All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here.
 
+## Unreleased
+
+- The plugin reads which of Streamlord's modules each module of the project has, as IntelliJ
+  knows its libraries. Without streamlord-html, a call named as the DSL's, `dataOnClick` or
+  `signal`, is somebody else's: its string gets no Datastar diagnostics, completion, hover,
+  parameter info or colours, and the spell checker reads it as prose. No fix writes a DSL
+  helper, and hover in HTML leaves out the Kotlin helpers. Without streamlord-core no call is
+  Streamlord's, and no fix or message sends you to `interpolate` or `Trusted`. A Ktor or Spring
+  project without the DSL is such a project. An HTML string is read as Datastar in every project.
+- HTML handed to a call of another library, the official Datastar SDK's `patchElements` among
+  them, gets the checks of any HTML string: an unknown attribute or modifier is reported there,
+  where nothing was before, and the rules of a Streamlord patch, such as an id on each element,
+  are not applied.
+- The Streamlord live templates are offered only where the module has what they write:
+  `patchSignals`, `patchElementsHtml`, `removeElements` and `executeScript` with streamlord-core;
+  `patchElements`, `dataOnClick`, `dataSignals` and `dataInit` with streamlord-html;
+  `ktor-datastar-route` and `ktor-datastar-flow` with streamlord-ktor and streamlord-html;
+  `ktor-datastar-signals` with streamlord-ktor; `spring-datastar-endpoint` with
+  streamlord-spring.
+- While IntelliJ indexes it cannot tell what a module has, and every part of the plugin, the
+  templates among them, behaves as in 0.11.0 until it is done.
+- The plugin now declares that it needs IntelliJ's Java support, which the Kotlin plugin needs
+  already.
+- The spell checker failed on a Kotlin string whose expression has a template right after an
+  empty string, such as `dataText("''$count")`, and IntelliJ reported the error.
+
 ## 0.11.0
 
 - Go to a signal, find where it is used, rename it. Ctrl+click (⌘+click on macOS) on `$count` goes

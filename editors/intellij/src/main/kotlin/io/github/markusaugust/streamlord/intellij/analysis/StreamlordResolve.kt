@@ -11,8 +11,10 @@ import org.jetbrains.kotlin.psi.KtNameReferenceExpression
 /**
  * Names first, resolve as confirmation. The scanner finds a call by its name, which works before
  * the indexes are ready and in a file that does not compile. When the Kotlin plugin can resolve
- * the call and it is not Streamlord's, the diagnostics are held back: a `patchElements` of the
- * user's own is theirs to judge.
+ * the call and it is not Streamlord's, its name is handed to the analysis as one of
+ * [AnalyzeOptions.foreignCalls][io.github.markusaugust.streamlord.analysis.AnalyzeOptions.foreignCalls]:
+ * the strings of a `patchElements` of the user's own, or of the official SDK's, are then judged as
+ * any string handed to an unknown function.
  */
 object StreamlordResolve {
     const val PACKAGE = "io.github.markusaugust.streamlord"

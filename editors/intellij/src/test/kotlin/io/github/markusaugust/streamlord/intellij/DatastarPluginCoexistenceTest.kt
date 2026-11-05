@@ -20,7 +20,6 @@ import com.intellij.psi.impl.FakePsiElement
 import com.intellij.psi.impl.source.resolve.reference.PsiReferenceContributorEP
 import com.intellij.psi.xml.XmlAttribute
 import com.intellij.psi.xml.XmlAttributeValue
-import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.util.ProcessingContext
 
 /** The official plugin's signal element: a declaration in the same file, named by its last part, which renames itself. */
@@ -105,7 +104,7 @@ object OfficialProvider : PsiReferenceProvider() {
  * its reference contributor is copied here in the shape its sources have, since the plugin is no
  * dependency of these tests.
  */
-class DatastarPluginCoexistenceTest : BasePlatformTestCase() {
+class DatastarPluginCoexistenceTest : StreamlordTestCase() {
     override fun setUp() {
         super.setUp()
         val ep = PsiReferenceContributorEP()

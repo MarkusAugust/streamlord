@@ -2,6 +2,8 @@ package io.github.markusaugust.streamlord.intellij.spelling
 
 import com.intellij.lang.html.HTMLLanguage
 import com.intellij.openapi.project.DumbAware
+import com.intellij.openapi.project.DumbService
+import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
 import com.intellij.psi.util.CachedValueProvider
@@ -17,6 +19,7 @@ import io.github.markusaugust.streamlord.analysis.ValueKind
 import io.github.markusaugust.streamlord.analysis.findCallSites
 import io.github.markusaugust.streamlord.analysis.proseRanges
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
+import io.github.markusaugust.streamlord.intellij.analysis.StreamlordCalls
 import org.jetbrains.kotlin.psi.KtDeclaration
 import org.jetbrains.kotlin.psi.KtDotQualifiedExpression
 import org.jetbrains.kotlin.psi.KtFile
@@ -72,19 +75,33 @@ class DatastarSpellcheckingStrategy :
         return string.textRange.startOffset in expressionStrings(file)
     }
 
-    /** Where each string a DSL expression call hands Datastar starts in [file]. */
+    /**
+     * Where each string a DSL expression call hands Datastar starts in [file]: none without the DSL, where such a call is
+     * somebody else's and its string prose. Worked out again when the file or the project's libraries change.
+     */
     private fun expressionStrings(file: KtFile): Set<Int> =
         CachedValuesManager.getCachedValue(file) {
-            val analysis = StreamlordAnalysis.getInstance(file.project)
+            val project = file.project
+            val analysis = StreamlordAnalysis.getInstance(project)
             val catalog = analysis.catalog
             val src = file.text
             val starts =
-                findCallSites(src, catalog.expressionCallSites.keys, analysis.analyzer.lex(src))
-                    .mapNotNull { site ->
-                        // The string by its place, or by its name: `dataOnClick(expression = "...")`.
-                        catalog.expressionCallSites[site.name]?.let { (site.selectString(it) ?: site.named("expression")?.string)?.start }
-                    }.toSet()
-            CachedValueProvider.Result.create(starts, file)
+                if (!StreamlordCalls.of(file).dsl) {
+                    emptySet()
+                } else {
+                    findCallSites(src, catalog.expressionCallSites.keys, analysis.analyzer.lex(src))
+                        .mapNotNull { site ->
+                            // The string by its place, or by its name: `dataOnClick(expression = "...")`.
+                            val spec = catalog.expressionCallSites[site.name] ?: return@mapNotNull null
+                            (site.selectString(spec) ?: site.named("expression")?.string)?.start
+                        }.toSet()
+                }
+            CachedValueProvider.Result.create(
+                starts,
+                file,
+                ProjectRootManager.getInstance(project),
+                DumbService.getInstance(project).modificationTracker,
+            )
         }
 
     /** The strings of an expression, read from its text as written: a signal value's text is a name and has none. */
@@ -131,9 +148,10 @@ class DatastarSpellcheckingStrategy :
                         if (!piece.intersects(cut)) {
                             listOf(piece)
                         } else {
+                            // Built only when they hold something: a cut can run past either end of the piece.
                             listOfNotNull(
-                                TextRange(piece.startOffset, cut.startOffset).takeIf { cut.startOffset > piece.startOffset },
-                                TextRange(cut.endOffset, piece.endOffset).takeIf { cut.endOffset < piece.endOffset },
+                                if (cut.startOffset > piece.startOffset) TextRange(piece.startOffset, cut.startOffset) else null,
+                                if (cut.endOffset < piece.endOffset) TextRange(cut.endOffset, piece.endOffset) else null,
                             )
                         }
                     }

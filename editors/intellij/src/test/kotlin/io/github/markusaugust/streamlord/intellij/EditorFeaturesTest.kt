@@ -6,12 +6,11 @@ import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.colors.impl.AbstractColorsScheme
 import com.intellij.openapi.editor.colors.impl.EditorColorsSchemeImpl
 import com.intellij.openapi.editor.markup.TextAttributes
-import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import io.github.markusaugust.streamlord.intellij.documentation.StreamlordDocumentationProvider
 import io.github.markusaugust.streamlord.intellij.highlighting.DatastarColors
 import java.awt.Color
 
-class EditorFeaturesTest : BasePlatformTestCase() {
+class EditorFeaturesTest : StreamlordTestCase() {
     fun `test hover documents attributes actions and dsl functions`() {
         val provider = StreamlordDocumentationProvider()
         myFixture.configureByText("page.html", "<div data-on-intersect__once=\"@post('/x')\"></div>")

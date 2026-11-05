@@ -15,6 +15,7 @@ import io.github.markusaugust.streamlord.analysis.tokenize
 import io.github.markusaugust.streamlord.analysis.tokenizeAttributeName
 import io.github.markusaugust.streamlord.analysis.tokenizeExpression
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
+import io.github.markusaugust.streamlord.intellij.analysis.StreamlordCalls
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtStringTemplateExpression
 
@@ -52,9 +53,9 @@ class HtmlDatastarAnnotator : Annotator {
 }
 
 /**
- * Colours for Datastar in Kotlin strings: the expression handed to a DSL call (`dataText("$count")`),
- * and inside an HTML string, whether handed to `patchElements` or free-standing, the `data-*`
- * attribute names and their expressions.
+ * Colours for Datastar in Kotlin strings: the expression handed to a DSL call (`dataText("$count")`)
+ * where the project has the DSL, and inside an HTML string, whether handed to `patchElements` or
+ * free-standing, the `data-*` attribute names and their expressions.
  */
 class KotlinDatastarAnnotator : Annotator {
     override fun annotate(
@@ -69,11 +70,14 @@ class KotlinDatastarAnnotator : Annotator {
         val start = element.textRange.startOffset
         val lex = analyzer.lex(src)
         val s = lex.strings.firstOrNull { it.start == start || (it.start < start && it.end == element.textRange.endOffset) } ?: return
-        val html = analyzer.htmlStringAt(src, s.contentStart + 1)
+        val calls = StreamlordCalls.of(file)
+        val html = calls.htmlStringAt(analysis, src, s.contentStart + 1)
         if (html != null && html.start == s.start) {
             paintHtml(holder, src, s, analysis)
             return
         }
+        // Every call that takes an expression is the DSL's, which is somebody else's in a project without it.
+        if (!calls.dsl) return
         val site =
             findCallSites(src, analyzer.catalog.expressionCallSites.keys, lex).firstOrNull {
                 it.openParen < s.start &&

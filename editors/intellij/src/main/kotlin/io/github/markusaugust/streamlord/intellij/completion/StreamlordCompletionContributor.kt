@@ -26,9 +26,7 @@ import io.github.markusaugust.streamlord.analysis.ExpressionAtCaret
 import io.github.markusaugust.streamlord.analysis.ModifierType
 import io.github.markusaugust.streamlord.analysis.ValueKind
 import io.github.markusaugust.streamlord.analysis.actionCallAt
-import io.github.markusaugust.streamlord.analysis.actionDoc
 import io.github.markusaugust.streamlord.analysis.actionPrefixAt
-import io.github.markusaugust.streamlord.analysis.attributeDoc
 import io.github.markusaugust.streamlord.analysis.fetchOptionDoc
 import io.github.markusaugust.streamlord.analysis.findCallSites
 import io.github.markusaugust.streamlord.analysis.markdownToHtml
@@ -36,6 +34,7 @@ import io.github.markusaugust.streamlord.analysis.signalPrefixAt
 import io.github.markusaugust.streamlord.analysis.valueAtCaret
 import io.github.markusaugust.streamlord.intellij.Streamlord
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
+import io.github.markusaugust.streamlord.intellij.analysis.StreamlordCalls
 import io.github.markusaugust.streamlord.intellij.index.SignalIndex
 import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
 import org.jetbrains.kotlin.psi.KtFile
@@ -61,7 +60,7 @@ class StreamlordCompletionContributor : CompletionContributor() {
                 // A string with HTML injected into it is completed inside the injection; the Kotlin pass stays quiet there.
                 val src = file.text
                 val offset = parameters.offset
-                val html = analysis.analyzer.htmlStringAt(src, offset)
+                val html = StreamlordCalls.of(file).htmlStringAt(analysis, src, offset)
                 if (html != null && hostHasInjection(file, html.contentStart, html.contentEnd)) return
                 Kotlin(file, src, offset, analysis, result).complete()
             }
@@ -112,6 +111,7 @@ class StreamlordCompletionContributor : CompletionContributor() {
         val analyzer = analysis.analyzer
         val catalog: Catalog = analyzer.catalog
         val index = SignalIndex.getInstance(file.project)
+        val calls = StreamlordCalls.of(file)
 
         fun complete() {
             // Inside a selector, a Datastar expression or a data-* value, the Kotlin plugin's own list (string templates,
@@ -125,7 +125,7 @@ class StreamlordCompletionContributor : CompletionContributor() {
                 if (expressionItems(expression, src, offset, index, file, result)) result.stopHere()
                 return
             }
-            val html = analyzer.htmlStringAt(src, offset)
+            val html = calls.htmlStringAt(analysis, src, offset)
             if (html != null && offset > html.contentStart && offset <= html.contentEnd) {
                 Html(src, offset, analysis, index, file, result, offerAttributeNames = true, valueFile = null).complete()
             }
@@ -133,9 +133,9 @@ class StreamlordCompletionContributor : CompletionContributor() {
 
         /** `selector = "#|"` on any DSL call, or the first argument of removeElements: ids and classes from the project. */
         private fun selectorItems(): Boolean {
-            val lex = analyzer.lex(src)
+            val names = calls.siteNames(analysis).takeIf { it.isNotEmpty() } ?: return false
             val site =
-                findCallSites(src, analyzer.callSiteNames, lex).firstOrNull { it.openParen < offset && offset <= it.closeParen }
+                findCallSites(src, names, analyzer.lex(src)).firstOrNull { it.openParen < offset && offset <= it.closeParen }
                     ?: return false
             val arg =
                 site.args.firstOrNull { a ->
@@ -499,14 +499,6 @@ class StreamlordCompletionContributor : CompletionContributor() {
                     }
                 }
         }
-
-        /** Documentation of an attribute for the lookup, as HTML. */
-        fun attributeHtml(
-            a: AttributeSpec,
-            prefix: String,
-        ): String = markdownToHtml(attributeDoc(a, prefix))
-
-        fun actionHtml(a: ActionSpec): String = markdownToHtml(actionDoc(a))
     }
 }
 

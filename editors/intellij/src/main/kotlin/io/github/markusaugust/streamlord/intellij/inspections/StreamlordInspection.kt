@@ -211,14 +211,15 @@ class DatastarAttributeInspection :
 /**
  * A `$name` no file in the project defines: a misspelt signal, or one renamed on one side only.
  * The analysis finds what each expression reads; the project index says what is defined, from
- * every Kotlin and markup file. Not run while the IDE indexes, when the index is not complete.
+ * every Kotlin and markup file. Not run while the IDE indexes, when the index is not complete. An
+ * expression handed to a call that resolves to something other than Streamlord is not read.
  */
 class UnknownSignalInspection : StreamlordInspection(setOf("unknown-signal")) {
     override fun issues(file: PsiFile): List<Issue>? {
         val analysis = StreamlordAnalysis.getInstance(file.project)
         val refs =
             when {
-                file is KtFile -> analysis.kotlinSignalReferences(file)
+                file is KtFile -> analysis.streamlordSignalReferences(file)
                 StreamlordAnalysis.isMarkupSide(file) -> analysis.htmlSignalReferences(file)
                 else -> return null
             }

@@ -6,6 +6,7 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiFile
 import com.intellij.psi.util.CachedValueProvider
@@ -13,6 +14,7 @@ import com.intellij.psi.util.CachedValuesManager
 import com.intellij.psi.util.PsiModificationTracker
 import io.github.markusaugust.streamlord.analysis.AnalyzeOptions
 import io.github.markusaugust.streamlord.analysis.Analyzer
+import io.github.markusaugust.streamlord.analysis.CallSite
 import io.github.markusaugust.streamlord.analysis.Catalog
 import io.github.markusaugust.streamlord.analysis.HoleFact
 import io.github.markusaugust.streamlord.analysis.Issue
@@ -20,6 +22,8 @@ import io.github.markusaugust.streamlord.analysis.SignalReference
 import io.github.markusaugust.streamlord.analysis.SiteIssues
 import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
 import org.jetbrains.kotlin.psi.KtFile
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -37,27 +41,109 @@ class StreamlordAnalysis(
 
     val prefix: String get() = settings.attributePrefix
 
-    fun options(): AnalyzeOptions = AnalyzeOptions(prefix = prefix, checkHtmlAttributes = true)
+    /** The options for [file], with which of Streamlord's modules it can use; with no file, what the text alone says. */
+    fun options(file: PsiFile? = null): AnalyzeOptions =
+        AnalyzeOptions(
+            prefix = prefix,
+            checkHtmlAttributes = true,
+            htmlDsl = file?.let { ProjectLibraries.known(it, StreamlordLibrary.HTML) },
+            core = file?.let { ProjectLibraries.known(it, StreamlordLibrary.CORE) },
+        )
 
     /**
-     * The issues of a Kotlin file, by call site or HTML string, with calls that resolve to something other than Streamlord left
-     * out, and each value joined into an HTML string judged by what the Kotlin plugin knows of its type. The analysis and the
-     * filter run again when the file or the settings change, as the analysis of the text alone does; an edit elsewhere types the
-     * holes again, and runs them again only when a fact comes out different.
+     * The issues of a Kotlin file, by call site or HTML string, each value joined into an HTML string judged by what the Kotlin
+     * plugin knows of its type. A call that resolves to something other than Streamlord is read as any call is, its HTML string
+     * a free one. The text is judged again when the file, the settings or the project's modules change; an edit elsewhere types
+     * the holes again, and judges them again only when a fact comes out different.
      */
     fun kotlinIssues(file: KtFile): List<SiteIssues> {
+        val judged = judgedText(file)
+        if (judged.issues.none { it.site != null }) return judged.issues
+        val resolved = resolved(file)
+        val foreign = foreignCalls(file, resolved, judged.issues.mapNotNull { it.site })
+        if (foreign.isEmpty()) return judged.issues
+        resolved.issues?.takeIf { it.first === judged && it.second == foreign }?.let { return it.third }
+        val facts = judged.facts
+        val options = judged.options.copy(foreignCalls = foreign, holeFact = { start, end -> facts[TextRange(start, end)] })
+        val kept = analyzer.analyzeKotlinSites(file.text, options)
+        resolved.issues = Triple(judged, foreign, kept)
+        return kept
+    }
+
+    /** The issues of the text alone, as the facts and the modules the file can use give them. */
+    private fun judgedText(file: KtFile): Judged {
         val facts = holeFacts(file)
+        val options = options(file)
         val memo =
             CachedValuesManager.getCachedValue(
                 file,
             ) { CachedValueProvider.Result.create(AtomicReference<Judged>(), file, settings.tracker) }
-        memo.get()?.takeIf { it.facts == facts }?.let { return it.issues }
-        val options = AnalyzeOptions(prefix, true, holeFact = { start, end -> facts[TextRange(start, end)] })
-        val sites = analyzer.analyzeKotlinSites(file.text, options)
-        val kept = sites.filter { s -> s.site?.let { StreamlordResolve.mayBeStreamlord(file, it) } ?: true }
-        memo.set(Judged(facts, kept))
-        return kept
+        memo.get()?.takeIf { it.facts == facts && it.options == options }?.let { return it }
+        val judged =
+            Judged(
+                facts,
+                options,
+                analyzer.analyzeKotlinSites(file.text, options.copy(holeFact = { start, end -> facts[TextRange(start, end)] })),
+            )
+        memo.set(judged)
+        return judged
     }
+
+    /**
+     * What resolving the calls of [file] found, and the second pass each verdict led to. A call comes to resolve elsewhere
+     * through this file's own text, its imports among it, or through a change of the project's libraries, so the verdicts are
+     * kept until one of those changes; a declaration moved in another file is seen at this file's next edit, as before.
+     * Indexing starting or ending does not touch the libraries' tracker, so it counts too.
+     */
+    private fun resolved(file: KtFile): Resolved =
+        CachedValuesManager.getCachedValue(file) {
+            CachedValueProvider.Result.create(
+                Resolved(),
+                file,
+                settings.tracker,
+                ProjectRootManager.getInstance(project),
+                DumbService.getInstance(project).modificationTracker,
+            )
+        }
+
+    /** The verdicts of [resolved], and the second passes that follow from them. */
+    private class Resolved {
+        /** Whether the call whose name starts at an offset resolves to something other than Streamlord. */
+        val foreign = ConcurrentHashMap<Int, Boolean>()
+
+        /** The issues of a first pass, the calls found foreign in it, and the issues with those named. */
+        @Volatile
+        var issues: Triple<Judged, Set<Int>, List<SiteIssues>>? = null
+
+        /** The same for the signal references. */
+        @Volatile
+        var references: Triple<List<SignalReference>, Set<Int>, List<SignalReference>>? = null
+    }
+
+    /**
+     * Where the name of each of [sites] starts that the Kotlin plugin resolves to something other than Streamlord. Each call
+     * is resolved once for the verdicts of [resolved]; while the IDE indexes, none is.
+     */
+    private fun foreignCalls(
+        file: KtFile,
+        resolved: Resolved,
+        sites: List<CallSite>,
+    ): Set<Int> {
+        if (DumbService.isDumb(project)) return emptySet()
+        val out = HashSet<Int>()
+        for (site in sites) {
+            val foreign =
+                resolved.foreign[site.nameStart] ?: (!StreamlordResolve.mayBeStreamlord(file, site)).also {
+                    resolves.incrementAndGet()
+                    resolved.foreign[site.nameStart] = it
+                }
+            if (foreign) out += site.nameStart
+        }
+        return out
+    }
+
+    /** How many calls have been resolved, for a test to see that an edit elsewhere resolves none again. */
+    internal val resolves = AtomicInteger()
 
     /** The facts of a file's holes; what a value's type is can change with any file in the project. None while the IDE indexes. */
     internal fun holeFacts(file: KtFile): Map<TextRange, HoleFact> =
@@ -67,9 +153,10 @@ class StreamlordAnalysis(
             CachedValueProvider.Result.create(facts, PsiModificationTracker.getInstance(project), dumb.modificationTracker)
         }
 
-    /** The issues of a file's text as the facts it was judged with gave them. */
+    /** A first pass: the facts and the options it was run with, and the issues they gave. */
     private class Judged(
         val facts: Map<TextRange, HoleFact>,
+        val options: AnalyzeOptions,
         val issues: List<SiteIssues>,
     )
 
@@ -79,13 +166,34 @@ class StreamlordAnalysis(
             CachedValueProvider.Result.create(analyzer.analyzeHtml(file.text, options()), file, settings.tracker)
         }
 
-    /** The signals the expressions of a Kotlin file read, with calls that resolve to something other than Streamlord left out. */
-    fun kotlinSignalReferences(file: KtFile): List<SignalReference> =
-        CachedValuesManager.getCachedValue(file) {
-            val refs = analyzer.signalReferencesInKotlin(file.text, options())
-            val kept = refs.filter { r -> r.site?.let { StreamlordResolve.mayBeStreamlord(file, it) } ?: true }
-            CachedValueProvider.Result.create(kept, file, settings.tracker)
-        }
+    /** The options a Kotlin file's text is read with, and the signals its expressions read, by the text alone. */
+    private fun kotlinSignalReferences(file: KtFile): Pair<AnalyzeOptions, List<SignalReference>> {
+        val options = options(file)
+        val memo =
+            CachedValuesManager.getCachedValue(file) {
+                CachedValueProvider.Result.create(AtomicReference<Pair<AnalyzeOptions, List<SignalReference>>>(), file, settings.tracker)
+            }
+        memo.get()?.takeIf { it.first == options }?.let { return it }
+        val read = options to analyzer.signalReferencesInKotlin(file.text, options)
+        memo.set(read)
+        return read
+    }
+
+    /**
+     * The signals the expressions of a Kotlin file read, with the calls the Kotlin plugin resolves elsewhere named: an
+     * expression handed to one is no Datastar, and its HTML string is a free one. Only a call that holds a read is resolved.
+     */
+    fun streamlordSignalReferences(file: KtFile): List<SignalReference> {
+        val (options, refs) = kotlinSignalReferences(file)
+        if (refs.none { it.site != null }) return refs
+        val resolved = resolved(file)
+        val foreign = foreignCalls(file, resolved, refs.mapNotNull { it.site })
+        if (foreign.isEmpty()) return refs
+        resolved.references?.takeIf { it.first === refs && it.second == foreign }?.let { return it.third }
+        val kept = analyzer.signalReferencesInKotlin(file.text, options.copy(foreignCalls = foreign))
+        resolved.references = Triple(refs, foreign, kept)
+        return kept
+    }
 
     /** The signals the expressions of an HTML document or template read. */
     fun htmlSignalReferences(file: PsiFile): List<SignalReference> =

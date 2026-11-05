@@ -7,6 +7,7 @@ import com.intellij.psi.PsiFile
 import io.github.markusaugust.streamlord.analysis.ExpressionAtCaret
 import io.github.markusaugust.streamlord.analysis.expressionAtCaret
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
+import io.github.markusaugust.streamlord.intellij.analysis.StreamlordCalls
 import org.jetbrains.kotlin.psi.KtFile
 
 /**
@@ -28,14 +29,14 @@ object DatastarCaret {
         val documents = PsiDocumentManager.getInstance(file.project)
 
         fun textOf(f: PsiFile): String = (if (fromDocument) documents.getDocument(f)?.text else null) ?: f.text
-        if (file is KtFile) return analysis.analyzer.expressionAtCaret(textOf(file), offset, true, analysis.prefix)
+        if (file is KtFile) return inKotlin(analysis, file, textOf(file), offset)
         // HTML injected into a Kotlin string is read on the Kotlin side, where the string is decoded: the
         // injected text keeps Kotlin's escapes and leaves out what a template writes.
         val manager = InjectedLanguageManager.getInstance(file.project)
         if (manager.isInjectedFragment(file)) {
             val host = manager.getInjectionHost(file)?.containingFile
             if (host is KtFile) {
-                return analysis.analyzer.expressionAtCaret(textOf(host), manager.injectedToHost(file, offset), true, analysis.prefix)
+                return inKotlin(analysis, host, textOf(host), manager.injectedToHost(file, offset))
             }
         }
         // Markup: an HTML file, a template read as text, or a template whose plugin gives it an HTML view beside its own
@@ -46,5 +47,18 @@ object DatastarCaret {
                 file.viewProvider.allFiles.any { it.language.isKindOf(HTMLLanguage.INSTANCE) }
         if (!markup) return null
         return analysis.analyzer.expressionAtCaret(textOf(file), offset, false, analysis.prefix)
+    }
+
+    /** The expression in Kotlin: in an HTML string, or in the string of a DSL call where the module has the DSL. */
+    private fun inKotlin(
+        analysis: StreamlordAnalysis,
+        file: KtFile,
+        text: String,
+        offset: Int,
+    ): ExpressionAtCaret? {
+        val calls = StreamlordCalls.of(file)
+        // The analysis reads an HTML string first and a DSL call's string after; without the DSL only the first is Datastar.
+        if (!calls.dsl && calls.htmlStringAt(analysis, text, offset) == null) return null
+        return analysis.analyzer.expressionAtCaret(text, offset, true, analysis.prefix)
     }
 }
