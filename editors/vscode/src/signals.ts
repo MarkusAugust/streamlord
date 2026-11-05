@@ -263,10 +263,10 @@ export function collectSignals(src: string, language: "kotlin" | "html"): Set<st
  * [collectSignals] finds without the reads (a bare `$name` in markup, a `${'$'}name` in Kotlin),
  * plus every signal an expression assigns to.
  */
-export function collectSignalDefinitions(src: string, language: "kotlin" | "html"): Set<string> {
+export function collectSignalDefinitions(src: string, language: "kotlin" | "html", foreign: (name: string, nameStart: number) => boolean = NOT_FOREIGN): Set<string> {
   const out = new Set<string>();
   const spread = { any: false };
-  for (const d of definedAt(src, language, spread)) out.add(d.name);
+  for (const d of definedAt(src, language, spread, foreign)) out.add(d.name);
   if (spread.any) out.add(ANY_SIGNAL);
   if (language === "kotlin") {
     SERIALIZABLE_CLASS.lastIndex = 0;
@@ -287,8 +287,11 @@ export function signalDeclarations(src: string, language: "kotlin" | "html"): Si
   return definedAt(src, language, { any: false }).sort((a, b) => a.start - b.start || a.end - b.end);
 }
 
-function definedAt(src: string, language: "kotlin" | "html", spread: { any: boolean }): SignalDeclaration[] {
-  const out = declared(src, language, spread);
+/** No call is somebody else's: what a definition is read with when the host says nothing. */
+const NOT_FOREIGN = (): boolean => false;
+
+function definedAt(src: string, language: "kotlin" | "html", spread: { any: boolean }, foreign: (name: string, nameStart: number) => boolean = NOT_FOREIGN): SignalDeclaration[] {
+  const out = declared(src, language, spread, foreign);
   if (language === "kotlin") {
     SERIALIZABLE_CLASS.lastIndex = 0;
     let m: RegExpExecArray | null;
@@ -317,10 +320,11 @@ function definedAt(src: string, language: "kotlin" | "html", spread: { any: bool
  * there: no `@Serializable` property and no assignment. `spread.any` is set when an object form
  * spreads a variable into itself, which may define any signal.
  */
-function declared(src: string, language: "kotlin" | "html", spread: { any: boolean }): SignalDeclaration[] {
+function declared(src: string, language: "kotlin" | "html", spread: { any: boolean }, foreign: (name: string, nameStart: number) => boolean = NOT_FOREIGN): SignalDeclaration[] {
   const out: SignalDeclaration[] = [];
   if (language === "kotlin") {
     for (const site of findCallSites(src, PAIR_CALLS)) {
+      if (foreign(site.name, site.nameStart)) continue;
       const positional = site.args.filter((a) => a.named === null);
       positional.forEach((a, idx) => {
         for (const key of argumentKeys(a.text)) out.push({ ...key, start: a.start + key.start, end: a.start + key.end });
@@ -340,7 +344,12 @@ function declared(src: string, language: "kotlin" | "html", spread: { any: boole
         if (site.name === "dataSignals" && idx === 0 && positional[1]?.string) out.push(declarationAt(name, 1, a.start));
       });
     }
-    for (const re of KOTLIN_PATTERNS) for (const m of src.matchAll(re)) out.push(declarationAt(m, 1, 0));
+    for (const re of KOTLIN_PATTERNS) {
+      for (const m of src.matchAll(re)) {
+        // Each pattern starts at the name of the call it reads.
+        if (!foreign(m[0].slice(0, m[0].indexOf("(")), m.index ?? 0)) out.push(declarationAt(m, 1, 0));
+      }
+    }
   }
   const [keyed, value, object] = HTML_ATTRIBUTE_PATTERNS as [RegExp, RegExp, RegExp];
   // A keyed attribute may carry modifiers after the key: data-signals:foo-bar__ifmissing, and

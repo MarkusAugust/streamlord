@@ -34,7 +34,7 @@ class InspectionTest : BasePlatformTestCase() {
         assertEquals("\$count", highlights[0].text)
         val fix = myFixture.getAllQuickFixes().first { it.text == "Use increment(\"count\")" }
         myFixture.launchAction(fix)
-        myFixture.checkResult("fun f() { dataOnClick(increment(\"count\")) }")
+        myFixture.checkResult("import io.github.markusaugust.streamlord.html.increment\n\nfun f() { dataOnClick(increment(\"count\")) }")
     }
 
     fun `test html strings in kotlin get the attribute checks with offsets`() {

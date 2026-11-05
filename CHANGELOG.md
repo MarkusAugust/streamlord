@@ -6,6 +6,49 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- In the analysis, for editors: `AnalyzeOptions.htmlDsl`, `core` and `foreignCalls`, what the host
+  knows of the project. With `htmlDsl = false` the DSL's calls are somebody else's, and no fix
+  writes a helper; with `core = false` no call is Streamlord's, no fix or message sends the author
+  to `interpolate`, `Trusted` or `Html`, which are no longer read as markup, and a call or a value
+  of unknown type written into element text is a hint, since it may be markup the author built,
+  while a known String keeps its warning. `foreignCalls` names the calls a host has resolved to
+  another library, such as the official Datastar SDK's `patchElements`, whose strings are then read
+  as any string handed to an unknown function, and which declare no signal for the hyphen checks.
+  `attributeDoc` takes `withKotlin`, as `actionDoc` does. Left at their defaults they change
+  nothing but the fixes below. Code that calls streamlord-analysis needs recompiling: the
+  constructor and `copy` of `AnalyzeOptions` take the three new properties, and `attributeDoc` its
+  third parameter; Kotlin source compiles as before.
+
+### Fixed
+
+- In both editors, `attributes["data-on:click"] = "$count++"` was offered `increment("count")` and
+  told to write `signal(...)` in a file with nothing of streamlord-html in it. A helper is offered
+  there only when the file imports from the DSL, or the host says it is there. In that form and at
+  a DSL call alike, none is offered when an import from elsewhere, such as Hamcrest's `not`, takes
+  its name, and a helper is offered only for a literal it says whole: the JVM analysis also offered
+  `signal("count")` for `"""$count` with a line break before its closing quotes, and dropped the
+  line break. Every helper fix now imports the helper, unless the file imports it, the whole DSL,
+  or is in its package.
+- `attributes["data-bind"] = "$count"`, and the same for `data-indicator` and `data-ref`, was
+  offered `signal("count")` and escapes that each led to a new warning. These attributes take a
+  name: the one fix now writes the literal without the dollar, `count`, and says so, and a path such
+  as `$user.loading` or `form.$name` stays as written. A constant or a number there is the name the
+  author chose and gets no issue, as in markup.
+- An import a fix added went above a `#!` line, `@file:` annotations or a licence comment in a
+  file without a package or imports, and an `import` line inside a raw string or a comment was
+  taken for one. It goes after them now, a licence in `//` lines stays whole, and only code counts:
+  a package line after a comment or an annotation is found, and an import with a comment after it
+  is the import. The import is written with the file's own line break.
+- The two editors read a file's imports alike: a line starts after a line feed and is indented
+  with spaces and tabs, where the JVM analysis also took a NEL as a line break and VS Code a
+  no-break space as indentation.
+- A Streamlord call claimed every string handed to it, so `patchElements(header, "<p>$name</p>")`
+  and `patchElements("<p>$name</p>") { }`, whose HTML it never reads, were not judged at all. Only
+  the strings a call reads are its own now; the rest are read as free strings, for their holes and
+  their signals, while a script, a selector or a helper's name is still the call's own.
+
 ## [0.18.0] - 2026-11-03
 
 ### Added

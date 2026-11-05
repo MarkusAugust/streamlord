@@ -1,5 +1,6 @@
-import { ALL_SITE_NAMES, ATTRIBUTES_INDEX, attributesIndexValue, lexCached, markupString } from "./analyze.ts";
+import { ALL_SITE_NAMES, ATTRIBUTES_INDEX, attributesIndexValue, foreignCalls, judgedStrings, lexCached, markupString, type AnalyzeOptions } from "./analyze.ts";
 import { dslHelpers } from "./signalNameHyphens.ts";
+import { sdkOf } from "./interpolation.ts";
 import { catalog, distance, parseAttributeName } from "./catalog.ts";
 import { clientSignalReads, DOCS, type Issue } from "./expression.ts";
 import { PLACEHOLDER, toSource, type KotlinString } from "./kotlinStrings.ts";
@@ -72,17 +73,21 @@ export function signalReferencesInHtml(html: string, prefix: string): SignalRefe
  * Every signal the Datastar expressions of a Kotlin file read: in the expression handed to a DSL
  * call, in the name handed to a helper such as `signal("count")`, and in the attributes of HTML
  * strings, handed to a call or free-standing. A Kotlin template (`$count` in a plain literal) is
- * not a signal and is left out; the interpolation check speaks for it.
+ * not a signal and is left out; the interpolation check speaks for it. `opts` says which modules
+ * the project has and which calls are somebody else's, as for the analysis.
  */
-export function signalReferencesInKotlin(src: string, prefix: string): SignalReference[] {
+export function signalReferencesInKotlin(src: string, prefix: string, opts: Pick<AnalyzeOptions, "htmlDsl" | "core" | "foreignCalls"> = {}): SignalReference[] {
   const out: SignalReference[] = [];
   const claimed = new Set<number>();
   const lex = lexCached(src);
+  const foreign = foreignCalls(opts);
   const add = (s: KotlinString, refs: SignalReference[]) => {
     for (const ref of refs) out.push({ ...ref, ...toSource(s, ref.start, ref.end) });
   };
   for (const site of findCallSites(src, ALL_SITE_NAMES, lex.mask)) {
-    for (const a of site.args) if (a.string) claimed.add(a.string.start);
+    if (foreign(site.name, site.nameStart)) continue;
+    // The literals the analysis judges at the site are the site's; a `+` chain's are read as free strings, as ever.
+    for (const judged of judgedStrings(site, src)) if (site.args.some((a) => a.string?.start === judged.start && a.string.end === judged.end)) claimed.add(judged.start);
     const expr = catalog.callSites.expression[site.name];
     if (expr && !(expr.onlyIfStringArgs && site.args.some((a) => a.named === null && a.string === null))) {
       const s = selectStringArg(site, expr.arg, expr.named);
@@ -94,13 +99,13 @@ export function signalReferencesInKotlin(src: string, prefix: string): SignalRef
       if (s && !s.unterminated) add(s, signalReferencesInHtml(s.text, prefix));
     }
   }
-  const names = dslHelpers(src);
+  const names = dslHelpers(src, undefined, sdkOf(opts).htmlDsl);
   const helpers = names.size > 0 ? findCallSites(src, names, lex.mask) : [];
   for (const site of helpers) {
     // A call on a receiver, `filter.not("x")`, is not the top-level helper.
     let i = site.nameStart - 1;
     while (i >= 0 && /\s/.test(src[i] ?? "")) i--;
-    if (src[i] === ".") continue;
+    if (src[i] === "." || foreign(site.name, site.nameStart)) continue;
     const s = (site.args.find((a) => a.named === null) ?? site.args.find((a) => a.named === "name"))?.string;
     if (!s || s.unterminated) continue;
     const ref = helperSignalReference(s.text);
