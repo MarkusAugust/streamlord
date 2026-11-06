@@ -27,10 +27,11 @@ All notable changes to Streamlord are recorded here. The format follows
   checker reads it as prose, no fix writes a helper, and hover leaves the Kotlin helpers out.
   Without streamlord-core no call is Streamlord's, and no fix or message sends the author to
   `interpolate` or `Trusted`. The live templates are offered only in a module that has the modules
-  each one writes calls of. While IntelliJ indexes it cannot tell, and the plugin behaves as
-  before. The plugin now depends on IntelliJ's bundled Java plugin, which the Kotlin plugin needs
-  already. The analysis gains `Analyzer.dslNames`, the calls streamlord-html alone defines, so an
-  editor leaves out the same calls the analysis does.
+  each one writes calls of. A file moved to another module is judged by that module at once.
+  While IntelliJ indexes it cannot tell, and the plugin behaves as before. The plugin now depends
+  on IntelliJ's bundled Java plugin, which the Kotlin plugin needs already. The analysis gains
+  `Analyzer.dslNames`, the calls streamlord-html alone defines, so an editor leaves out the same
+  calls the analysis does.
 - In the analysis, for editors: `Analyzer.attributesIndexes` finds each kotlinx.html
   `attributes["data-..."] = "..."` of a file, and `expressionAtCaret` reads the expression in its
   value, so completion, hover and signature help work there in both editors. The IntelliJ plugin

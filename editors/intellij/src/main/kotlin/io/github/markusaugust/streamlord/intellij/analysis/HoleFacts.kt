@@ -250,13 +250,13 @@ object HoleFacts {
                 if (definite) HoleFact.STRING else HoleFact.NULLABLE_STRING
             }
 
-            lower.isClassType(HTML_CLASS) -> {
+            lower.isClass(HTML_CLASS) -> {
                 HoleFact.MARKUP
             }
 
             // A number or a boolean that may be null prints digits, true, false or null: safe where escaping is.
             lower.isIntType || lower.isLongType || lower.isShortType || lower.isByteType || lower.isDoubleType || lower.isFloatType ||
-                lower.isClassType(NUMBER_CLASS) -> {
+                lower.isClass(NUMBER_CLASS) -> {
                 if (definite) HoleFact.NUMBER else HoleFact.NULLABLE
             }
 
@@ -275,12 +275,15 @@ object HoleFacts {
         }
     }
 
+    // KaType.isClassType is deprecated in 2026.3; the cast answers the same in every version.
+    private fun KaType.isClass(classId: ClassId): Boolean = (this as? KaClassType)?.classId == classId
+
     /** Whether a collection's elements are Html or Trusted, by its one type argument: `List<Html>`, `Sequence<Trusted>`. */
     private fun KaSession.markupElements(type: KaType?): Boolean {
         val lower = (type as? KaFlexibleType)?.lowerBound ?: type
         val element = (lower as? KaClassType)?.typeArguments?.singleOrNull()?.type ?: return false
         val bare = (element as? KaFlexibleType)?.lowerBound ?: element
-        return bare.isClassType(HTML_CLASS) || bare.isClassType(TRUSTED_CLASS)
+        return bare.isClass(HTML_CLASS) || bare.isClass(TRUSTED_CLASS)
     }
 
     /** K1: a collection the declaration a reference resolves to writes out as one of Html or Trusted. */

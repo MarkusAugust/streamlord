@@ -11,6 +11,7 @@ All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here
   helper, and hover in HTML leaves out the Kotlin helpers. Without streamlord-core no call is
   Streamlord's, and no fix or message sends you to `interpolate` or `Trusted`. A Ktor or Spring
   project without the DSL is such a project. An HTML string is read as Datastar in every project.
+  A file moved to another module is judged by that module's libraries at once.
 - HTML handed to a call of another library, the official Datastar SDK's `patchElements` among
   them, gets the checks of any HTML string: an unknown attribute or modifier is reported there,
   where nothing was before, and the rules of a Streamlord patch, such as an id on each element,

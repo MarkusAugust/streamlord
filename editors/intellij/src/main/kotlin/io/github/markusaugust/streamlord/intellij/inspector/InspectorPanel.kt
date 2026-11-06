@@ -7,7 +7,7 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.fileEditor.FileDocumentManager
-import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
@@ -410,7 +410,7 @@ class InspectorPanel(
     private fun editVariables(names: List<String>) {
         try {
             val (file, extended) = store.defineVariables(names)
-            FileEditorManager.getInstance(project).openFile(file, true)
+            OpenFileDescriptor(project, file).navigate(true)
             if (!extended) error("${Requests.ENV_FILE} is not a JSON object, so nothing was added to it.")
         } catch (e: Exception) {
             error(e.message ?: "Could not open ${Requests.ENV_FILE}.")
@@ -632,7 +632,7 @@ class InspectorPanel(
     private fun useBaseUrl(url: String) {
         try {
             val (file, changed) = store.useBaseUrl(url)
-            FileEditorManager.getInstance(project).openFile(file, true)
+            OpenFileDescriptor(project, file).navigate(true)
             if (!changed) error("${Requests.ENV_FILE} is not a JSON object, so baseUrl was not changed.")
         } catch (e: Exception) {
             error(e.message ?: "Could not open ${Requests.ENV_FILE}.")
