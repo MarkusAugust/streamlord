@@ -2,7 +2,7 @@
 
 All notable changes to the Streamlord extension are recorded here.
 
-## Unreleased
+## 0.14.0
 
 - A helper called on a receiver, `headers.set("Cache-Control", "no-cache")` or
   `map.set("count", 1)`, defines no signal any more.

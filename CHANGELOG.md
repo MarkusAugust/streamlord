@@ -6,6 +6,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-11-06
+
 ### Added
 
 - In the analysis, for editors: `AnalyzeOptions.htmlDsl`, `core` and `foreignCalls`, what the host

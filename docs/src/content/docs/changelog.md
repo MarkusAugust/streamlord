@@ -7,6 +7,15 @@ description: "What each release changed, and what it asks of your code."
 repository is authoritative and complete. This page carries only what changes how you write code,
 with a sentence about what to do.
 
+## 0.19.0
+
+**Code that uses the SDK needs no change.** The release is editors that know what the project
+has: in a module or a file without streamlord-html a call named as the DSL's is somebody else's,
+and gets no Datastar checks, help or colours. Code that calls streamlord-analysis needs
+recompiling: the constructor and `copy` of `AnalyzeOptions` take three new properties, `htmlDsl`,
+`core` and `foreignCalls`, and `attributeDoc` a third parameter, `withKotlin`. Kotlin source
+compiles as before.
+
 ## 0.18.0
 
 **Code that uses the SDK needs no change.** The release is signal navigation in the editors: go

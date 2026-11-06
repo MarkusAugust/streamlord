@@ -2,7 +2,7 @@
 
 All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here.
 
-## Unreleased
+## 0.12.0
 
 - Only the catalog's attributes are coloured as Datastar in HTML, in an HTML file and in an HTML
   string in Kotlin alike, as in kotlinx.html's `attributes["data-..."]`. The page's own
