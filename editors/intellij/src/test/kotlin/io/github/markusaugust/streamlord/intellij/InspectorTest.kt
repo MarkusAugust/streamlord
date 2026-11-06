@@ -313,11 +313,7 @@ class InspectorTest : BasePlatformTestCase() {
             }
             """.trimIndent(),
         )
-        myFixture.doHighlighting()
-        val markers =
-            com.intellij.codeInsight.daemon.impl.DaemonCodeAnalyzerImpl
-                .getLineMarkers(myFixture.editor.document, project)
-        val texts = markers.mapNotNull { it.lineMarkerTooltip }.sorted()
+        val texts = myFixture.findAllGutters().mapNotNull { it.tooltipText }.sorted()
         assertEquals(listOf("Open in Stream Inspector · GET /api/counter", "Open in Stream Inspector · POST /x/y"), texts)
     }
 

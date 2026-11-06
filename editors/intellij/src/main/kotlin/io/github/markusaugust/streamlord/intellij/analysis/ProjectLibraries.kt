@@ -4,11 +4,8 @@ import com.intellij.java.library.JavaLibraryUtil
 import com.intellij.lang.injection.InjectedLanguageManager
 import com.intellij.openapi.module.ModuleUtilCore
 import com.intellij.openapi.project.DumbService
-import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
-import com.intellij.psi.util.CachedValueProvider
-import com.intellij.psi.util.CachedValuesManager
 
 /** A module of the Streamlord SDK, known by a public class it has had since 0.10.0. */
 enum class StreamlordLibrary(
@@ -23,8 +20,9 @@ enum class StreamlordLibrary(
 /**
  * Which of Streamlord's modules the code at an element can use, by the platform's own check, which
  * finds a jar and a source module alike. It counts a module's test-scoped libraries for its main
- * sources too. Kept per file until the project's libraries change or the IDE starts or stops
- * indexing. Needs a read lock.
+ * sources too. The platform keeps the answer per module until the libraries change, so the file's
+ * module is looked up each time: a file moved to another module is judged by its new one at once.
+ * Needs a read lock.
  */
 object ProjectLibraries {
     /** Whether [library] is there for [element], or null while the IDE indexes, when the platform cannot tell. */
@@ -35,13 +33,7 @@ object ProjectLibraries {
         val project = element.project
         // An injected fragment is a file of its own, outside every module; its host's module is the one.
         val file = InjectedLanguageManager.getInstance(project).getTopLevelFile(element) ?: element.containingFile ?: return null
-        return CachedValuesManager.getCachedValue(file) {
-            CachedValueProvider.Result.create(
-                StreamlordLibrary.entries.map { find(file, it) }.toTypedArray(),
-                ProjectRootManager.getInstance(project),
-                DumbService.getInstance(project).modificationTracker,
-            )
-        }[library.ordinal]
+        return find(file, library)
     }
 
     private fun find(

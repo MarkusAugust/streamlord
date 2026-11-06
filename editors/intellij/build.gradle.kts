@@ -106,6 +106,7 @@ intellijPlatform {
                 sinceBuild = providers.gradleProperty("platformSinceBuild").get()
             }
         }
+        ignoredProblemsFile = layout.projectDirectory.file("gradle/verifier-ignored-problems.txt")
     }
 
     signing {
@@ -202,7 +203,7 @@ fun markdownToHtml(md: String): String {
  */
 val generatedResources = layout.buildDirectory.dir("generated/liveTemplates")
 
-val generateHtmlLiveTemplates by tasks.registering {
+val generateHtmlLiveTemplates = tasks.register("generateHtmlLiveTemplates") {
     // The one catalog there is, as core and the analysis find it.
     val catalogFile =
         layout.projectDirectory
