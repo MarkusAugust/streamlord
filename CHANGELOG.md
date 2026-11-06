@@ -48,6 +48,11 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- The build arguments on the native-image page failed with Ktor 3.6.1, on some twenty
+  `kotlinx.coroutines` classes "unintentionally initialized at build time": Ktor 3.6.1 reads
+  `Dispatchers.IO` as `io.ktor.utils.io.jvm.javaio.ReadingKt` is initialized, and the list
+  initializes `io.ktor` at build time. The list now ends with
+  `--initialize-at-run-time=io.ktor.utils.io.jvm.javaio.ReadingKt`.
 - Both editors coloured every `data-*` attribute in HTML as Datastar, the page's own `data-color`
   and a typo such as `data-onn` among them. Only the catalog's attributes are coloured now, and
   in VS Code only the value of one that takes an expression is coloured as an expression.

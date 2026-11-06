@@ -65,7 +65,7 @@ graalvmNative {
             /*
              * Ktor's own GraalVM sample, taken whole and not narrowed flag by flag:
              * github.com/ktorio/ktor-samples/tree/main/graalvm, on the same Kotlin 2.4.20 and
-             * Ktor 3.6.0 as this module. Initializing the whole `kotlin` package at build time
+             * Ktor 3.6.1 as this module. Initializing the whole `kotlin` package at build time
              * is the documented position there, not a blunt instrument to be refined.
              *
              * ch.qos.logback is in the sample and not here, because this service has no logging
@@ -92,6 +92,11 @@ graalvmNative {
                 "-H:+InstallExitHandlers",
                 "-H:+ReportUnsupportedElementsAtRuntime",
                 "-H:+ReportExceptionStackTraces",
+                // Ktor 3.6.1 reads Dispatchers.IO as this class is initialized, so with io.ktor at
+                // build time it takes coroutines' schedulers into the image and the build fails.
+                // Ktor's default response transform refers to it, so every server reaches it; the
+                // sample, on 3.6.1 as well, has no such line yet.
+                "--initialize-at-run-time=io.ktor.utils.io.jvm.javaio.ReadingKt",
             )
 
             /*
