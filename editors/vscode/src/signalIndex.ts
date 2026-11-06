@@ -3,6 +3,7 @@ import { collectSelectors, type Selectors } from "./selectors.ts";
 import { collectSignalDefinitions, collectSignals, signalDeclarations, type SignalDeclaration } from "./signals.ts";
 import { signalReferencesInHtml, signalReferencesInKotlin, type SignalReference } from "./signalReferences.ts";
 import { constantNames, constantsAcross, otherDeclaredNames } from "./interpolation.ts";
+import { catalog } from "./catalog.ts";
 import { kotlinModules } from "./modules.ts";
 
 /** Template files read as markup, as the IntelliJ plugin reads them by default, whatever language an extension gives them. */
@@ -280,15 +281,29 @@ export function placesIn(text: string, language: "kotlin" | "html", prefix: stri
   const lineStarts = [0];
   for (let i = 0; i < text.length; i++) if (text[i] === "\n") lineStarts.push(i + 1);
   const reads = language === "kotlin" ? signalReferencesInKotlin(text, prefix, kotlinModules(text)) : signalReferencesInHtml(text, prefix);
-  return { prefix, declarations: signalDeclarations(text, language), reads, lineStarts };
+  return { prefix, declarations: signalDeclarations(text, language, foreignIn(text, language)), reads, lineStarts };
 }
 
+/**
+ * The calls of `text` that are somebody else's and define no signal: in a Kotlin file without the
+ * DSL's import, its short helpers, `set`, `toggle` and `signal`, whose names other APIs use too. A
+ * `data*` helper names the attribute it writes, so a helper of the project's own still counts, and
+ * so does a core call, since the official SDK's `patchSignals` defines signals too.
+ */
+function foreignIn(text: string, language: "kotlin" | "html"): (name: string) => boolean {
+  if (language !== "kotlin" || kotlinModules(text).htmlDsl !== false) return () => false;
+  return (name) => SHORT_HELPERS.has(name);
+}
+
+const SHORT_HELPERS: ReadonlySet<string> = new Set(catalog.signalNameHelpers.keys());
+
 function entry(text: string, language: "kotlin" | "html", version: number | null): FileEntry {
+  const foreign = foreignIn(text, language);
   return {
     version,
     language,
-    signals: collectSignals(text, language),
-    definitions: collectSignalDefinitions(text, language),
+    signals: collectSignals(text, language, foreign),
+    definitions: collectSignalDefinitions(text, language, foreign),
     selectors: collectSelectors(text),
     constants: language === "kotlin" ? constantNames(text) : new Set(),
     others: language === "kotlin" ? otherDeclaredNames(text) : new Set(),

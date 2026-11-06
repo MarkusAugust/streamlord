@@ -22,9 +22,31 @@ const KOTLIN_PATTERNS: RegExp[] = [
 const KOTLIN_READS: RegExp[] = [
   /\$\{'\$'\}([A-Za-z_][A-Za-z0-9_.]*)/g,
   /\\\$([A-Za-z_][A-Za-z0-9_.]*)/g,
-  // A helper that reads a signal by name: signal("count") is $count.
-  /\b(?:signal|increment|decrement|not)\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"/g,
 ];
+
+/** A helper that reads a signal by name: `signal("count")` is `$count`, which completion offers and a definition is not. */
+const HELPER_READS = /\b(?:signal|increment|decrement|not)\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"/g;
+
+/** The helpers that name a signal, which a call on a receiver, `headers.set("Cache-Control", ...)`, is not. */
+const SIGNAL_NAME_HELPERS: ReadonlySet<string> = new Set(catalog.signalNameHelpers.keys());
+
+/** Whether the call whose name starts at `at` is made on a receiver: a `.` before it, past whitespace and line comments. */
+function onReceiver(src: string, at: number): boolean {
+  let i = at - 1;
+  while (i >= 0) {
+    const c = src[i]!;
+    if (c === "\n") {
+      // A line comment ending the line before says nothing about a receiver.
+      const lineStart = src.lastIndexOf("\n", i - 1) + 1;
+      const comment = src.indexOf("//", lineStart);
+      i = comment >= lineStart && comment < i ? comment - 1 : i - 1;
+      continue;
+    }
+    if (!/\s/.test(c)) return c === ".";
+    i--;
+  }
+  return false;
+}
 
 /** `$name = ...` in an expression: Datastar creates a signal it is assigned to, so the assignment defines it. */
 const ASSIGNED_SIGNAL = /(?:\$|\$\{'\$'\})([A-Za-z_][A-Za-z0-9_.]*)\s*=(?![=>])/dg;
@@ -63,6 +85,9 @@ const SERIALIZABLE_CLASS = /@Serializable\s*(?:\([^)]*\))?\s*(?:(?:public|intern
 // between it and the property.
 const PROPERTY = /(?:@SerialName\(\s*(?:value\s*=\s*)?"([^"]*)"\s*\)\s*(?:@\w+(?:\([^)]*\))?\s*)*(?:\w+\s+)*?)?\b(?:val|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:/dg;
 
+/** No call is somebody else's: what a definition is read with when the host says nothing. */
+const NOT_FOREIGN = (): boolean => false;
+
 const PAIR_CALLS: ReadonlySet<string> = new Set(catalog.signalCalls.keys());
 const JSON_CALLS: ReadonlySet<string> = new Set([...catalog.signalCalls].filter(([, flags]) => flags.has("json")).map(([name]) => name));
 /**
@@ -91,9 +116,10 @@ const VALUE_TYPES: ReadonlySet<string> = new Set([
  * of something else, or a variable typed `JsonValue` or `JsonObject`. Any other argument, a string
  * or a pair held in a variable, declares nothing here.
  */
-export function encodedSignalTypes(src: string): Set<string> {
+export function encodedSignalTypes(src: string, foreign: (name: string, nameStart: number) => boolean = NOT_FOREIGN): Set<string> {
   const out = new Set<string>();
   for (const site of findCallSites(src, new Set(["dataSignals"]))) {
+    if (foreign(site.name, site.nameStart)) continue;
     const positional = site.args.filter((x) => x.named === null);
     // dataSignals(value) or dataSignals(value, true), the second being ifMissing.
     const first = positional.length === 1 || (positional.length === 2 && BOOLEAN_ARG.test(positional[1]?.text ?? "")) ? positional[0] : undefined;
@@ -254,8 +280,12 @@ export function signalReadRenameText(signal: string, newName: string): string | 
   return newName.slice(newName.lastIndexOf(".") + 1);
 }
 
-export function collectSignals(src: string, language: "kotlin" | "html"): Set<string> {
-  return collect(src, language, true);
+/**
+ * The signals a source names, for completion. A call `foreign` names is somebody else's and names
+ * none: the extension passes the DSL's names for a file that cannot call the DSL.
+ */
+export function collectSignals(src: string, language: "kotlin" | "html", foreign: (name: string, nameStart: number) => boolean = NOT_FOREIGN): Set<string> {
+  return collect(src, language, true, foreign);
 }
 
 /**
@@ -273,7 +303,7 @@ export function collectSignalDefinitions(src: string, language: "kotlin" | "html
     for (const m of src.matchAll(SERIALIZABLE_CLASS)) if (m[1]) out.add(READABLE_CLASS + m[1]);
     // A page declared from a class defines what its codec writes: the properties for a
     // @Serializable one, any name for one the analysis cannot read, or for a value of no named class.
-    for (const type of encodedSignalTypes(src)) out.add(type === ANY_SIGNAL ? ANY_SIGNAL : ENCODED_CLASS + type);
+    for (const type of encodedSignalTypes(src, foreign)) out.add(type === ANY_SIGNAL ? ANY_SIGNAL : ENCODED_CLASS + type);
   }
   return out;
 }
@@ -283,12 +313,9 @@ export function collectSignalDefinitions(src: string, language: "kotlin" | "html
  * go to declaration lands on and a rename rewrites. A spread and a codec define signals at no place
  * that names them, so neither is here.
  */
-export function signalDeclarations(src: string, language: "kotlin" | "html"): SignalDeclaration[] {
-  return definedAt(src, language, { any: false }).sort((a, b) => a.start - b.start || a.end - b.end);
+export function signalDeclarations(src: string, language: "kotlin" | "html", foreign: (name: string, nameStart: number) => boolean = NOT_FOREIGN): SignalDeclaration[] {
+  return definedAt(src, language, { any: false }, foreign).sort((a, b) => a.start - b.start || a.end - b.end);
 }
-
-/** No call is somebody else's: what a definition is read with when the host says nothing. */
-const NOT_FOREIGN = (): boolean => false;
 
 function definedAt(src: string, language: "kotlin" | "html", spread: { any: boolean }, foreign: (name: string, nameStart: number) => boolean = NOT_FOREIGN): SignalDeclaration[] {
   const out = declared(src, language, spread, foreign);
@@ -347,7 +374,11 @@ function declared(src: string, language: "kotlin" | "html", spread: { any: boole
     for (const re of KOTLIN_PATTERNS) {
       for (const m of src.matchAll(re)) {
         // Each pattern starts at the name of the call it reads.
-        if (!foreign(m[0].slice(0, m[0].indexOf("(")), m.index ?? 0)) out.push(declarationAt(m, 1, 0));
+        const name = m[0].slice(0, m[0].indexOf("("));
+        if (foreign(name, m.index)) continue;
+        // A helper called on a receiver, `headers.set("Cache-Control", ...)`, is not the top-level helper.
+        if (SIGNAL_NAME_HELPERS.has(name) && onReceiver(src, m.index)) continue;
+        out.push(declarationAt(m, 1, 0));
       }
     }
   }
@@ -370,14 +401,20 @@ function declared(src: string, language: "kotlin" | "html", spread: { any: boole
   return out;
 }
 
-function collect(src: string, language: "kotlin" | "html", reads: boolean): Set<string> {
+function collect(src: string, language: "kotlin" | "html", reads: boolean, foreign: (name: string, nameStart: number) => boolean): Set<string> {
   const out = new Set<string>();
   const spread = { any: false };
-  for (const d of declared(src, language, spread)) out.add(d.name);
+  for (const d of declared(src, language, spread, foreign)) out.add(d.name);
   if (spread.any) out.add(ANY_SIGNAL);
   if (reads) {
     for (const re of language === "kotlin" ? KOTLIN_READS : [BARE_SIGNAL]) {
       for (const m of src.matchAll(re)) if (m[1]) out.add(m[1]);
+    }
+  }
+  if (reads && language === "kotlin") {
+    for (const m of src.matchAll(HELPER_READS)) {
+      if (foreign(m[0].slice(0, m[0].indexOf("(")), m.index) || onReceiver(src, m.index)) continue;
+      out.add(m[1]!);
     }
   }
   if (language === "kotlin") {
