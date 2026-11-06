@@ -292,6 +292,31 @@ describe("html injection grammar", () => {
     assert.ok(t.some((x) => x.text.includes("open") && x.scopes.includes("meta.embedded.inline.datastar")));
   });
 
+  it("reads a value in single quotes, and one in escaped quotes in a plain Kotlin string", async () => {
+    const html = await tokens("text.html.basic", `<div data-show='$open' data-signals='{"a": 1}' data-bind='name' class="x">`);
+    assert.ok(html.some((x) => x.text.includes("open") && x.scopes.includes("meta.embedded.inline.datastar")), "single quotes");
+    assert.ok(html.some((x) => x.text.includes("a") && x.scopes.includes("meta.embedded.inline.datastar")), "JSON in single quotes");
+    assert.match(scopeOf(html, "bind"), /attribute-name\.datastar\.plugin/);
+    assert.ok(html.some((x) => x.text === "name" && !x.scopes.some((s) => s.includes("datastar"))), "a plain value keeps HTML's string");
+    assert.match(scopeOf(html, "class"), /entity\.other\.attribute-name\.html/);
+    const kt = await tokens("source.kotlin", `val h = "<div data-show=\\"\\$open\\" data-text='\\$count' data-persist id=\\"a\\">"`, false);
+    assert.match(scopeOf(kt, "open"), /signal\.datastar/);
+    assert.match(scopeOf(kt, "count"), /signal\.datastar/);
+    // A Kotlin `\$` is an escape before the signal; the value ends at its escaped quote.
+    assert.ok(kt.some((x) => x.text === "\\" && x.scopes.includes("constant.character.escape.kotlin")));
+    assert.ok(kt.filter((x) => x.text === `\\"` && x.scopes.includes("punctuation.definition.string.end.html")).length >= 1);
+    assert.match(scopeOf(kt, "persist"), /attribute-name\.datastar\.plugin/);
+    // The Kotlin string still ends where it did.
+    assert.match(kt[kt.length - 1]!.scopes.join(" "), /punctuation\.definition\.string\.end\.kotlin/);
+    // JSON keys in escaped quotes inside a single-quoted value close where they open, and so does the Kotlin string.
+    const json = await tokenLines("source.kotlin", [`val h = "<div data-signals='{\\"a\\": 1}'></div>"`, "val after = 1"]);
+    assert.match(json[0]![json[0]!.length - 1]!.scopes.join(" "), /punctuation\.definition\.string\.end\.kotlin/);
+    assert.ok(json[1]!.every((x) => !x.scopes.some((s) => s.includes("datastar") || s.includes("html"))), "the next line is Kotlin");
+    // A Kotlin string that ends inside an escaped value ends the value too. The open tag runs on, as HTML's own grammar has it.
+    const cut = await tokenLines("source.kotlin", [`val h = "<div data-show=\\"\\$a" + x`, "val after = 1"]);
+    assert.ok(cut[1]!.every((x) => !x.scopes.some((s) => s.includes("datastar"))), "the line after a cut value is no Datastar");
+  });
+
   it("colours the same in an HTML string in Kotlin", async () => {
     const t = await tokens("source.kotlin", `val h = """<div data-color="x" data-show="$a"></div>"""`);
     assert.ok(!t.some((x) => x.text.includes("color") && x.scopes.some((s) => s.includes("datastar"))));

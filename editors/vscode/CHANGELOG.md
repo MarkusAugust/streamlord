@@ -16,6 +16,9 @@ All notable changes to the Streamlord extension are recorded here.
   `data-variant`, or a typo such as `data-onn`, keeps the colour HTML gives an attribute, and its
   value is not coloured as an expression. Of the catalog's attributes, only one that takes an
   expression has its value coloured as one: `data-bind="user.name"` keeps a plain string.
+- A Datastar attribute's value in single quotes, `data-signals='{"open": false}'`, and one in
+  escaped quotes in a plain Kotlin string, `"<div data-show=\"\$open\">"`, are coloured as the
+  double-quoted value is. Neither the name nor the value was coloured as Datastar.
 - A raw string handed to a DSL call, such as `dataText("""$x""")`, is left to Kotlin's grammar.
   Its quotes were paired wrongly, and with fwcd's Kotlin grammar the lines after it were coloured
   as a string.
