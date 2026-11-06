@@ -6,12 +6,11 @@ import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.colors.impl.AbstractColorsScheme
 import com.intellij.openapi.editor.colors.impl.EditorColorsSchemeImpl
 import com.intellij.openapi.editor.markup.TextAttributes
-import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import io.github.markusaugust.streamlord.intellij.documentation.StreamlordDocumentationProvider
 import io.github.markusaugust.streamlord.intellij.highlighting.DatastarColors
 import java.awt.Color
 
-class EditorFeaturesTest : BasePlatformTestCase() {
+class EditorFeaturesTest : StreamlordTestCase() {
     fun `test hover documents attributes actions and dsl functions`() {
         val provider = StreamlordDocumentationProvider()
         myFixture.configureByText("page.html", "<div data-on-intersect__once=\"@post('/x')\"></div>")
@@ -70,6 +69,22 @@ class EditorFeaturesTest : BasePlatformTestCase() {
         assertEquals(DatastarColors.SIGNAL, kt["count"])
         assertEquals(DatastarColors.ATTRIBUTE_PLUGIN, kt["text"])
         assertEquals(DatastarColors.SIGNAL, kt["n"])
+    }
+
+    fun `test only the catalog's attributes are coloured as datastar`() {
+        // The page's own data-color, or a typo, is left to HTML, as in VS Code.
+        val page = "<div data-color=\"red\" data-onn:click=\"x\" data-show=\"\$open\"></div>"
+        myFixture.configureByText("page.html", page)
+        val html = myFixture.doHighlighting().filter { it.forcedTextAttributesKey != null }.map { it.text }
+        assertTrue(html.toString(), "show" in html && "color" !in html && "onn" !in html && "data-" in html)
+        assertEquals(1, html.count { it == "data-" })
+        myFixture.configureByText(
+            "View.kt",
+            "import kotlinx.html.*\nfun g() = \"\"\"<p data-color=\"red\" data-text=\"x\"></p>\"\"\"\n" +
+                "fun FlowContent.f() { div { attributes[\"data-color\"] = \"red\" } }",
+        )
+        val kt = myFixture.doHighlighting().filter { it.forcedTextAttributesKey != null }.map { it.text }
+        assertTrue(kt.toString(), "text" in kt && "color" !in kt)
     }
 
     fun `test html is injected into a free-standing html string`() {

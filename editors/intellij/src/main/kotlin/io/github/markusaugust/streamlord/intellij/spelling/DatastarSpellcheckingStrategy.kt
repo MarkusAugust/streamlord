@@ -2,6 +2,8 @@ package io.github.markusaugust.streamlord.intellij.spelling
 
 import com.intellij.lang.html.HTMLLanguage
 import com.intellij.openapi.project.DumbAware
+import com.intellij.openapi.project.DumbService
+import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
 import com.intellij.psi.util.CachedValueProvider
@@ -17,6 +19,9 @@ import io.github.markusaugust.streamlord.analysis.ValueKind
 import io.github.markusaugust.streamlord.analysis.findCallSites
 import io.github.markusaugust.streamlord.analysis.proseRanges
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
+import io.github.markusaugust.streamlord.intellij.analysis.StreamlordCalls
+import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
+import org.jetbrains.kotlin.psi.KtBinaryExpression
 import org.jetbrains.kotlin.psi.KtDeclaration
 import org.jetbrains.kotlin.psi.KtDotQualifiedExpression
 import org.jetbrains.kotlin.psi.KtFile
@@ -41,7 +46,7 @@ class DatastarSpellcheckingStrategy :
 
     override fun getTokenizer(element: PsiElement): Tokenizer<*> = if (owner(element) === element) Prose else EMPTY_TOKENIZER
 
-    /** The expression [element] is or lies in: a Datastar attribute value, or the string of a DSL expression call. */
+    /** The expression [element] is or lies in: a Datastar attribute value, or the string of a DSL expression call or of `attributes[...]`. */
     private fun owner(element: PsiElement): PsiElement? {
         if (element.containingFile is KtFile) {
             // A string in a Kotlin file, not one in its injected HTML, which is a file of its own.
@@ -59,32 +64,55 @@ class DatastarSpellcheckingStrategy :
     }
 
     /**
-     * Whether [string] is the string a DSL expression call hands Datastar, `dataOnClick("...")`. The
-     * spell checker asks for every element of every pass, so the strings are found once for each
-     * version of the file, and a string that is no argument is answered without them.
+     * Whether [string] is the string a DSL expression call hands Datastar, `dataOnClick("...")`, or the value of
+     * `attributes["data-text"] = "..."`. The spell checker asks for every element of every pass, so the strings are
+     * found once for each version of the file, and a string that is neither is answered without them.
      */
     private fun isExpressionString(string: KtStringTemplateExpression): Boolean {
         // An argument, as written or with its indent trimmed: `dataOnClick("""...""".trimIndent())`.
         val parent = string.parent
         val argument = if (parent is KtDotQualifiedExpression && parent.receiverExpression === string) parent.parent else parent
-        if (argument !is KtValueArgument) return false
+        // Or the value of kotlinx.html's `attributes["data-text"] = "..."`.
+        if (argument !is KtValueArgument && !(parent is KtBinaryExpression && parent.right === string)) return false
         val file = string.containingFile as? KtFile ?: return false
         return string.textRange.startOffset in expressionStrings(file)
     }
 
-    /** Where each string a DSL expression call hands Datastar starts in [file]. */
+    /**
+     * Where each string starts in [file] that kotlinx.html's `attributes["data-..."] =` or a DSL expression call hands
+     * Datastar. A DSL call's is not one without the DSL, where such a call is somebody else's and its string prose, nor
+     * when the Kotlin plugin resolves the call elsewhere. Worked out again when the file, the settings or the project's
+     * libraries change.
+     */
     private fun expressionStrings(file: KtFile): Set<Int> =
         CachedValuesManager.getCachedValue(file) {
-            val analysis = StreamlordAnalysis.getInstance(file.project)
+            val project = file.project
+            val analysis = StreamlordAnalysis.getInstance(project)
             val catalog = analysis.catalog
             val src = file.text
-            val starts =
-                findCallSites(src, catalog.expressionCallSites.keys, analysis.analyzer.lex(src))
-                    .mapNotNull { site ->
-                        // The string by its place, or by its name: `dataOnClick(expression = "...")`.
-                        catalog.expressionCallSites[site.name]?.let { (site.selectString(it) ?: site.named("expression")?.string)?.start }
-                    }.toSet()
-            CachedValueProvider.Result.create(starts, file)
+            val starts = HashSet<Int>()
+            // kotlinx.html's own form is Datastar whatever the project has.
+            for (at in analysis.analyzer.attributesIndexes(src)) {
+                val kind = catalog.parseAttributeName(at.name.lowercase(), analysis.prefix)?.spec?.valueKind
+                if (at.whole && (kind == ValueKind.EXPRESSION || kind == ValueKind.SIGNAL)) at.value?.let { starts += it.start }
+            }
+            if (StreamlordCalls.of(file).dsl) {
+                val sites = findCallSites(src, catalog.expressionCallSites.keys, analysis.analyzer.lex(src))
+                val foreign = analysis.foreignAmong(file, sites)
+                for (site in sites) {
+                    if (site.nameStart in foreign) continue
+                    // The string by its place, or by its name: `dataOnClick(expression = "...")`.
+                    val spec = catalog.expressionCallSites[site.name] ?: continue
+                    (site.selectString(spec) ?: site.named("expression")?.string)?.let { starts += it.start }
+                }
+            }
+            CachedValueProvider.Result.create(
+                starts,
+                file,
+                StreamlordSettings.getInstance(project).tracker,
+                ProjectRootManager.getInstance(project),
+                DumbService.getInstance(project).modificationTracker,
+            )
         }
 
     /** The strings of an expression, read from its text as written: a signal value's text is a name and has none. */
@@ -131,9 +159,10 @@ class DatastarSpellcheckingStrategy :
                         if (!piece.intersects(cut)) {
                             listOf(piece)
                         } else {
+                            // Built only when they hold something: a cut can run past either end of the piece.
                             listOfNotNull(
-                                TextRange(piece.startOffset, cut.startOffset).takeIf { cut.startOffset > piece.startOffset },
-                                TextRange(cut.endOffset, piece.endOffset).takeIf { cut.endOffset < piece.endOffset },
+                                if (cut.startOffset > piece.startOffset) TextRange(piece.startOffset, cut.startOffset) else null,
+                                if (cut.endOffset < piece.endOffset) TextRange(cut.endOffset, piece.endOffset) else null,
                             )
                         }
                     }

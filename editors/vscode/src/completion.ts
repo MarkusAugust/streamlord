@@ -1,10 +1,11 @@
 import * as vscode from "vscode";
-import { htmlStringAt, lexCached } from "./analyze.ts";
+import { lexCached } from "./analyze.ts";
 import { expressionAtCaret, type ExpressionAtCaret } from "./caret.ts";
 import { catalog, parseAttributeName, type AttributeSpec } from "./catalog.ts";
 import { actionCallAt } from "./completionContext.ts";
 import { actionPrefixAt, signalPrefixAt } from "./expression.ts";
 import { keyKind } from "./markup.ts";
+import { kotlinExpressionAtCaret, kotlinHtmlStringAt, kotlinModules, streamlordSites } from "./modules.ts";
 import { findCallSites } from "./scanner.ts";
 import type { SignalIndex } from "./signalIndex.ts";
 
@@ -30,19 +31,27 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
   }
 
   private kotlin(src: string, offset: number, document: vscode.TextDocument, position: vscode.Position): vscode.CompletionItem[] {
-    const selectorItems = this.selectorItems(src, offset, document, position);
+    const modules = kotlinModules(src);
+    const selectorItems = this.selectorItems(src, offset, document, position, streamlordSites(ALL_SITES, modules));
     if (selectorItems) return selectorItems;
-    const expression = expressionAtCaret(src, offset, true, this.prefix());
+    const expression = kotlinExpressionAtCaret(src, offset, this.prefix(), modules);
     if (expression) return this.expressionItems(expression, src, offset, document, position);
     // HTML in a string, handed to patchElements or free-standing: the HTML side applies.
-    const html = htmlStringAt(src, offset);
+    const html = kotlinHtmlStringAt(src, offset, modules);
     if (html && offset > html.contentStart && offset <= html.contentEnd) return this.html(src, offset, document, position);
     return [];
   }
 
   /** `selector = "#|"` on any DSL call, or the first argument of removeElements: ids and classes from the workspace. */
-  private selectorItems(src: string, offset: number, document: vscode.TextDocument, position: vscode.Position): vscode.CompletionItem[] | null {
-    const site = findCallSites(src, ALL_SITES, lexCached(src).mask).find((s) => s.openParen < offset && offset <= s.closeParen);
+  private selectorItems(
+    src: string,
+    offset: number,
+    document: vscode.TextDocument,
+    position: vscode.Position,
+    sites: ReadonlySet<string>,
+  ): vscode.CompletionItem[] | null {
+    if (sites.size === 0) return null;
+    const site = findCallSites(src, sites, lexCached(src).mask).find((s) => s.openParen < offset && offset <= s.closeParen);
     if (!site) return null;
     const arg = site.args.find((a) => a.string && a.string.start < offset && offset <= a.string.contentEnd + (a.string.unterminated ? 1 : 0));
     if (!arg?.string) return null;
@@ -239,12 +248,18 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
   }
 }
 
-export function docFor(a: AttributeSpec, prefix: string): string {
+/** attributeDoc in Documentation.kt: `withKotlin` leaves the helpers out, for a project without streamlord-html. */
+export function docFor(a: AttributeSpec, prefix: string, withKotlin = true): string {
   const mods = a.modifiers.length ? "\n\n**Modifiers:** " + a.modifiers.map((m) => "`__" + m.name + (m.type === "flag" ? "" : m.type === "enum" ? "." + (m.values ?? []).join("|") : m.type === "duration" ? ".500ms" : m.type === "int" ? ".n" : ".name") + "`").join(", ") : "";
-  const kotlin = a.kotlin.length ? "\n\n**Kotlin:** " + a.kotlin.map((k) => "`" + k + "()`").join(", ") : "";
+  const kotlin = withKotlin && a.kotlin.length ? "\n\n**Kotlin:** " + a.kotlin.map((k) => "`" + k + "()`").join(", ") : "";
   const pro = a.pro ? "\n\n_Datastar Pro. Requires the Pro bundle, which you license and load yourself._" : "";
   const casing = a.keyed ? "\n\n**Key casing:** " + casingNote(a) : "";
   return `**${prefix}${a.name}**\n\n${a.doc}\n\n${a.forms.map((f) => "`" + f.replace(/^data-/, prefix) + "`").join("  \n")}${casing}${mods}${kotlin}${pro}`;
+}
+
+/** actionDoc in Documentation.kt: an action, its signature and, unless `withKotlin` is false, its Kotlin helper. */
+export function actionDoc(a: (typeof catalog.actions)[number], withKotlin = true): string {
+  return `**${a.signature}**\n\n${a.doc}${a.pro ? "\n\n_Datastar Pro._" : ""}${withKotlin ? `\n\nKotlin: \`${a.kotlin}()\`` : ""}`;
 }
 
 /** fetchOptionDoc in Documentation.kt: an option of the backend actions, its type, its default and what it does. */

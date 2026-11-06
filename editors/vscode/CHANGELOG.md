@@ -2,6 +2,60 @@
 
 All notable changes to the Streamlord extension are recorded here.
 
+## 0.14.0
+
+- A helper called on a receiver, `headers.set("Cache-Control", "no-cache")` or
+  `map.set("count", 1)`, defines no signal any more.
+- kotlinx.html's own form, `attributes["data-on:click__debounce.500ms"] = "@post('/save')"`, is
+  coloured in every file: the name, its key and modifiers in the key, and the expression in the
+  value of an attribute that takes one, where the literal is the whole statement, as the checks
+  read it. Only the catalog's attributes: the page's own `data-color`, or a typo such as
+  `data-onn`, is left as it is.
+- In an HTML file and in an HTML string in Kotlin, only the catalog's attributes are coloured as
+  Datastar, in any case, as the browser reads a name. The page's own `data-color` or
+  `data-variant`, or a typo such as `data-onn`, keeps the colour HTML gives an attribute, and its
+  value is not coloured as an expression. Of the catalog's attributes, only one that takes an
+  expression has its value coloured as one: `data-bind="user.name"` keeps a plain string.
+- A Datastar attribute's value in single quotes, `data-signals='{"open": false}'`, and one in
+  escaped quotes in a plain Kotlin string, `"<div data-show=\"\$open\">"`, are coloured as the
+  double-quoted value is. Neither the name nor the value was coloured as Datastar.
+- A raw string handed to a DSL call, such as `dataText("""$x""")`, is left to Kotlin's grammar.
+  Its quotes were paired wrongly, and with fwcd's Kotlin grammar the lines after it were coloured
+  as a string.
+- The extension reads from a Kotlin file's imports whether it can call streamlord-html. The DSL's
+  functions are top-level functions of that module, which a file can call only through an import,
+  so in a file without one a call named as the DSL's, `dataOnClick` or `signal`, is somebody
+  else's: its string gets no Datastar diagnostics, completion, hover or signature help, reads no
+  signal, and hover leaves the Kotlin helpers out. A signal it declares, as in
+  `dataSignals("count" to 0)`, still counts: a helper of your own by that name writes the same
+  attribute. The short helpers (`set`, `setExpr`, `toggle`, `signal`, `increment`, `decrement`
+  and `not`) are somebody else's there, since other APIs use those names: they define no signal,
+  and completion offers no name from them. Until you write the import, a DSL
+  call's string is not checked either, so the `$count` trap shows once the import is there. A
+  file that imports the official Datastar SDK and nothing of Streamlord has no Streamlord call:
+  its HTML is checked as any HTML string, and no fix or message sends you to `interpolate` or
+  `Trusted`. An HTML string and kotlinx.html's `attributes["data-..."] =` are Datastar in every
+  file. Whether a project has streamlord-core at all a file's text cannot tell, since a parent
+  pom or a published catalog names it out of sight, so elsewhere the extension takes core for
+  there, as before. The colours follow the same import: a DSL-named call's string is coloured as
+  Datastar from the DSL's import, or its own package line, to the end of the file, and nowhere
+  else. An import in a comment or a raw string counts for neither. With the Kotlin grammars of
+  JetBrains' extension and of fwcd's, Kotlin's own colours are as before. Where the Kotlin
+  language server's semantic highlighting paints a string, it is painted over either way.
+- A fix that writes a DSL helper, such as `increment("count")`, adds its import when the file does
+  not have it. In the kotlinx.html form, `attributes["data-on:click"] = "$count++"`, a helper is
+  offered only in a file that imports from streamlord-html. In that form and at a DSL call alike,
+  none is offered when an import from elsewhere, such as Hamcrest's `not`, takes its name.
+- `attributes["data-bind"] = "$count"`, and `data-indicator` and `data-ref`, get one fix,
+  `count`: these attributes take a signal's name. A constant there is the name, and no issue.
+- An import a fix adds goes after a `#!` line, `@file:` annotations and a licence comment, in the
+  file's own line break, and an `import` line in a raw string is not taken for one.
+- Completion, signature help and hover on the keys of an action's options work in the value of
+  kotlinx.html's own form, `attributes["data-on:click"] = "@post('/save')"`, as in the string of a
+  DSL call.
+- HTML handed to a Streamlord call that does not read it, as in `patchElements(header,
+  "<p>$name</p>")`, is checked as any HTML string.
+
 ## 0.13.0
 
 - Go to a signal, find where it is used, rename it. Go to Definition (F12, or ⌘+click on macOS and

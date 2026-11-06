@@ -226,16 +226,18 @@ private fun hyphenIssue(
 /**
  * The calls of [src] whose signal names hold a hyphen, with their issues, including the calls inside
  * a string template, `"${signal("is-running")} ? 'Stop' : 'Go'"`, which the scanner reads as code
- * of their own. [dslCalls] names the calls whose arguments a shared-name helper counts inside.
+ * of their own. [dslCalls] names the calls whose arguments a shared-name helper counts inside;
+ * [foreign] says, by its name and where the name starts in [src], which call is not Streamlord's.
  */
 internal fun signalNameHyphenSites(
     src: String,
     lex: KotlinLex,
     helpers: Set<String>,
     dslCalls: Set<String>,
+    foreign: (name: String, nameStart: Int) -> Boolean = { _, _ -> false },
 ): List<Pair<CallSite, List<Issue>>> {
     val out = ArrayList<Pair<CallSite, List<Issue>>>()
-    collectHyphenSites(src, lex, helpers, dslCalls, enclosed = false, shift = 0, depth = 0, out = out)
+    collectHyphenSites(src, lex, helpers, dslCalls, foreign, enclosed = false, shift = 0, depth = 0, out = out)
     return out.sortedBy { it.first.nameStart }
 }
 
@@ -244,18 +246,20 @@ private fun collectHyphenSites(
     lex: KotlinLex,
     helpers: Set<String>,
     dslCalls: Set<String>,
+    foreign: (String, Int) -> Boolean,
     enclosed: Boolean,
     shift: Int,
     depth: Int,
     out: MutableList<Pair<CallSite, List<Issue>>>,
 ) {
-    val calls = findCallSites(text, dslCalls, lex)
+    val calls = findCallSites(text, dslCalls, lex).filterNot { foreign(it.name, it.nameStart + shift) }
     // Inside the arguments of a DSL call, and not in a lambda there: `buildMap { set("first-name", "") }` is a map's.
     val inside = { at: Int ->
         calls.any { at > it.openParen && at < it.closeParen && !openBraceBetween(text, lex, it.openParen, at) } ||
             (enclosed && !openBraceBetween(text, lex, 0, at))
     }
     for (site in findCallSites(text, SIGNAL_NAMING_CALLS, lex)) {
+        if (foreign(site.name, site.nameStart + shift)) continue
         // A string template holds DSL calls too, so the pairs of one are read here as well.
         val issues = signalNameHyphenIssues(site, text, lex, helpers, inside) + dataSignalsPairIssues(site, text, lex)
         if (issues.isNotEmpty()) out += site.shifted(shift) to issues.map { it.shifted(shift) }
@@ -266,7 +270,7 @@ private fun collectHyphenSites(
             if (t.kind != InterpolationKind.BRACED) continue
             val open = text.indexOf('{', t.start)
             if (open < 0 || open + 1 > t.end - 1 || text.substring(open + 1, t.end - 1) != t.text) continue
-            collectHyphenSites(t.text, lexKotlin(t.text), helpers, dslCalls, inside(t.start), shift + open + 1, depth + 1, out)
+            collectHyphenSites(t.text, lexKotlin(t.text), helpers, dslCalls, foreign, inside(t.start), shift + open + 1, depth + 1, out)
         }
     }
 }

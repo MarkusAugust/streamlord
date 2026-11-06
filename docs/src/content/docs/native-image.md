@@ -47,6 +47,7 @@ graalvmNative {
                 "-H:+InstallExitHandlers",
                 "-H:+ReportUnsupportedElementsAtRuntime",
                 "-H:+ReportExceptionStackTraces",
+                "--initialize-at-run-time=io.ktor.utils.io.jvm.javaio.ReadingKt",
             )
         }
     }
@@ -61,12 +62,25 @@ C header beside it.
 
 The list of build arguments is Ktor's, from
 [ktor-samples/graalvm](https://github.com/ktorio/ktor-samples/tree/main/graalvm), and this is it
-whole, with one line of our own: `-H:+UnlockExperimentalVMOptions`, because the three `-H:+`
-options after it are experimental and GraalVM is about to refuse them without it. It is also, in
-this order, every build argument the service behind this site uses, bar the container flag that
-step 4 adds on Linux. Take it whole rather than adding entries one at a time
-against a theory of what an error means: three attempts here were spent doing that, and each
-theory was wrong.
+whole, with two lines of our own. The first is `-H:+UnlockExperimentalVMOptions`, because the
+three `-H:+` options after it are experimental and GraalVM is about to refuse them without it.
+The second is `--initialize-at-run-time=io.ktor.utils.io.jvm.javaio.ReadingKt`, because Ktor
+3.6.1 reads `Dispatchers.IO` as that class is initialized: with `io.ktor` initialized at build
+time, the build then fails on some twenty `kotlinx.coroutines` classes "unintentionally
+initialized at build time". Ktor's default response transform refers to that class, so a Ktor
+3.6.1 server needs the line whatever it serves; the sample, on Ktor 3.6.1 as well, has no such
+line yet. The list is also, in this order, every build argument the service behind this site
+uses, bar the container flag that step 4 adds on Linux. Take it whole rather than adding entries
+one at a time against a theory of what an error means: three attempts here were spent doing that,
+and each theory was wrong.
+
+If the build still fails on `kotlinx.coroutines` classes initialized at build time, ask
+native-image why rather than guessing. Add
+`--trace-class-initialization=kotlinx.coroutines.Dispatchers`, as the error message suggests: the
+trace ends in the `io.ktor` class whose static initializer reached `Dispatchers`, and that class
+goes in an `--initialize-at-run-time` line of its own. `respondOutputStream` and
+`respondTextWriter`, which this service does not call, lead to one such class in Ktor's
+`BlockingBridgeKt`.
 
 Two deliberate differences from the sample. Add `ch.qos.logback` back with the logging backend if
 you use one. And where the sample names `kotlinx.io.bytestring.ByteString` and

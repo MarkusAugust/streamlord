@@ -11,8 +11,10 @@ import org.jetbrains.kotlin.psi.KtNameReferenceExpression
 /**
  * Names first, resolve as confirmation. The scanner finds a call by its name, which works before
  * the indexes are ready and in a file that does not compile. When the Kotlin plugin can resolve
- * the call and it is not Streamlord's, the diagnostics are held back: a `patchElements` of the
- * user's own is theirs to judge.
+ * the call and it is not Streamlord's, its name is handed to the analysis as one of
+ * [AnalyzeOptions.foreignCalls][io.github.markusaugust.streamlord.analysis.AnalyzeOptions.foreignCalls]:
+ * the strings of a `patchElements` of the user's own, or of the official SDK's, are then judged as
+ * any string handed to an unknown function.
  */
 object StreamlordResolve {
     const val PACKAGE = "io.github.markusaugust.streamlord"
@@ -43,10 +45,20 @@ object StreamlordResolve {
      * Does the declaration live in a Streamlord package? Kotlin sources and decompiled Kotlin name their package; anything else is
      * judged by where its file sits, so the check needs no plugin beyond Kotlin's.
      */
-    fun isStreamlord(target: PsiElement): Boolean {
-        val file = target.containingFile ?: return true
-        if (file is KtFile) return file.packageFqName.asString().startsWith(PACKAGE)
-        val path = file.virtualFile?.path?.replace('\\', '/') ?: return true
-        return PACKAGE.replace('.', '/') in path
+    fun isStreamlord(target: PsiElement): Boolean = inPackage(target, PACKAGE) ?: true
+
+    /** Does the declaration live in the official Datastar SDK, whose `patchSignals` defines signals as core's does? */
+    fun isOfficialSdk(target: PsiElement): Boolean = inPackage(target, OFFICIAL_SDK) ?: false
+
+    private const val OFFICIAL_SDK = "dev.datastar.kotlin"
+
+    private fun inPackage(
+        target: PsiElement,
+        name: String,
+    ): Boolean? {
+        val file = target.containingFile ?: return null
+        if (file is KtFile) return file.packageFqName.asString().startsWith(name)
+        val path = file.virtualFile?.path?.replace('\\', '/') ?: return null
+        return name.replace('.', '/') in path
     }
 }

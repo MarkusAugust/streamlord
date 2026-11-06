@@ -5,8 +5,11 @@ import com.intellij.lang.annotation.Annotator
 import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
+import com.intellij.psi.util.CachedValueProvider
+import com.intellij.psi.util.CachedValuesManager
 import com.intellij.psi.xml.XmlAttribute
 import com.intellij.psi.xml.XmlAttributeValue
+import io.github.markusaugust.streamlord.analysis.AttributesIndex
 import io.github.markusaugust.streamlord.analysis.KotlinString
 import io.github.markusaugust.streamlord.analysis.ValueKind
 import io.github.markusaugust.streamlord.analysis.findCallSites
@@ -15,12 +18,13 @@ import io.github.markusaugust.streamlord.analysis.tokenize
 import io.github.markusaugust.streamlord.analysis.tokenizeAttributeName
 import io.github.markusaugust.streamlord.analysis.tokenizeExpression
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
+import io.github.markusaugust.streamlord.intellij.analysis.StreamlordCalls
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtStringTemplateExpression
 
 /**
- * Colours for Datastar in HTML: the parts of a `data-*` attribute name and the expression in its
- * value. Runs on HTML files, on the HTML view of template files, and on HTML injected anywhere
+ * Colours for Datastar in HTML: the parts of a Datastar attribute's name, one of the catalog's,
+ * and the expression in its value. The page's own `data-color`, or a typo, is left to HTML. Runs on HTML files, on the HTML view of template files, and on HTML injected anywhere
  * but into a Kotlin string, where [KotlinDatastarAnnotator] paints with the exact offsets.
  */
 class HtmlDatastarAnnotator : Annotator {
@@ -34,10 +38,10 @@ class HtmlDatastarAnnotator : Annotator {
         val analysis = StreamlordAnalysis.getInstance(file.project)
         val prefix = analysis.prefix
         val name = element.name
+        val spec = analysis.catalog.parseAttributeName(name.lowercase(), prefix)?.spec ?: return
         val parts = tokenizeAttributeName(name, prefix) ?: return
         val nameStart = element.nameElement.textRange.startOffset
         for (p in parts) paint(holder, TextRange(nameStart + p.start, nameStart + p.end), DatastarColors.of(p.part))
-        val spec = analysis.catalog.parseAttributeName(name.lowercase(), prefix)?.spec ?: return
         if (spec.valueKind != ValueKind.EXPRESSION) return
         val valueElement: XmlAttributeValue = element.valueElement ?: return
         val range = valueElement.valueTextRange
@@ -52,9 +56,10 @@ class HtmlDatastarAnnotator : Annotator {
 }
 
 /**
- * Colours for Datastar in Kotlin strings: the expression handed to a DSL call (`dataText("$count")`),
- * and inside an HTML string, whether handed to `patchElements` or free-standing, the `data-*`
- * attribute names and their expressions.
+ * Colours for Datastar in Kotlin strings: the expression handed to a DSL call (`dataText("$count")`)
+ * where the project has the DSL and the call is Streamlord's, the name and the expression of
+ * kotlinx.html's `attributes["data-text"] = "$count"`, and inside an HTML string, whether handed to
+ * `patchElements` or free-standing, the `data-*` attribute names and their expressions.
  */
 class KotlinDatastarAnnotator : Annotator {
     override fun annotate(
@@ -69,11 +74,29 @@ class KotlinDatastarAnnotator : Annotator {
         val start = element.textRange.startOffset
         val lex = analyzer.lex(src)
         val s = lex.strings.firstOrNull { it.start == start || (it.start < start && it.end == element.textRange.endOffset) } ?: return
-        val html = analyzer.htmlStringAt(src, s.contentStart + 1)
+        // kotlinx.html's own form is Datastar whatever the project has: the name in the key, the expression in the value.
+        for (at in attributesIndexes(file, analysis)) {
+            if (s.start == at.value?.start) {
+                if (!at.whole) return
+                val spec = analysis.catalog.parseAttributeName(at.name.lowercase(), analysis.prefix)?.spec ?: return
+                if (spec.valueKind == ValueKind.EXPRESSION && s.text.isNotBlank()) paintExpression(holder, src, s, 0, s.text.length)
+                return
+            }
+            if (s.contentStart == at.nameStart) {
+                analysis.catalog.parseAttributeName(at.name.lowercase(), analysis.prefix)?.spec ?: return
+                val parts = tokenizeAttributeName(at.name, analysis.prefix) ?: return
+                for (p in parts) paint(holder, TextRange(at.nameStart + p.start, at.nameStart + p.end), DatastarColors.of(p.part))
+                return
+            }
+        }
+        val calls = StreamlordCalls.of(file)
+        val html = calls.htmlStringAt(analysis, src, s.contentStart + 1)
         if (html != null && html.start == s.start) {
             paintHtml(holder, src, s, analysis)
             return
         }
+        // Every call that takes an expression is the DSL's, which is somebody else's in a project without it.
+        if (!calls.dsl) return
         val site =
             findCallSites(src, analyzer.catalog.expressionCallSites.keys, lex).firstOrNull {
                 it.openParen < s.start &&
@@ -82,9 +105,18 @@ class KotlinDatastarAnnotator : Annotator {
                 ?: return
         val spec = analyzer.catalog.expressionCallSites[site.name] ?: return
         val chosen = site.selectString(spec) ?: return
-        if (chosen.start != s.start) return
+        if (chosen.start != s.start || analysis.foreignAmong(file, listOf(site)).isNotEmpty()) return
         paintExpression(holder, src, s, 0, s.text.length)
     }
+
+    /** The `attributes["data-..."] =` of [file], found once for each version of it: the annotator is called for every string. */
+    private fun attributesIndexes(
+        file: KtFile,
+        analysis: StreamlordAnalysis,
+    ): List<AttributesIndex> =
+        CachedValuesManager.getCachedValue(file) {
+            CachedValueProvider.Result.create(analysis.analyzer.attributesIndexes(file.text), file)
+        }
 
     private fun paintHtml(
         holder: AnnotationHolder,
@@ -95,12 +127,12 @@ class KotlinDatastarAnnotator : Annotator {
         val prefix = analysis.prefix
         for (tag in tokenize(s.text).tags) {
             for (attr in tag.attributes) {
+                val spec = analysis.catalog.parseAttributeName(attr.name.lowercase(), prefix)?.spec ?: continue
                 val parts = tokenizeAttributeName(attr.name, prefix) ?: continue
                 for (p in parts) {
                     val r = s.toSource(attr.nameStart + p.start, attr.nameStart + p.end)
                     paint(holder, TextRange(r.first, r.last + 1), DatastarColors.of(p.part))
                 }
-                val spec = analysis.catalog.parseAttributeName(attr.name.lowercase(), prefix)?.spec ?: continue
                 val value = attr.value ?: continue
                 if (spec.valueKind != ValueKind.EXPRESSION || value.isBlank()) continue
                 paintExpression(holder, src, s, attr.valueStart, attr.valueStart + value.length)

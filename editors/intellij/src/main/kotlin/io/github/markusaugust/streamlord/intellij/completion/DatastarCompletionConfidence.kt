@@ -7,6 +7,7 @@ import com.intellij.psi.PsiFile
 import com.intellij.util.ThreeState
 import io.github.markusaugust.streamlord.analysis.findCallSites
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
+import io.github.markusaugust.streamlord.intellij.analysis.StreamlordCalls
 import org.jetbrains.kotlin.psi.KtFile
 
 /**
@@ -27,13 +28,15 @@ class DatastarCompletionConfidence : CompletionConfidence() {
             psiFile is KtFile -> {
                 val lex = analysis.analyzer.lex(src)
                 val s = lex.stringAt(offset) ?: return ThreeState.UNSURE
-                if (analysis.analyzer.htmlStringAt(src, offset) != null) return ThreeState.NO
-                val inSite =
-                    findCallSites(src, analysis.analyzer.callSiteNames, lex).any {
-                        it.openParen < s.start &&
-                            s.end <= it.closeParen + 1
-                    }
-                if (inSite) ThreeState.NO else ThreeState.UNSURE
+                val calls = StreamlordCalls.of(psiFile)
+                if (calls.htmlStringAt(analysis, src, offset) != null) return ThreeState.NO
+                // kotlinx.html's own form, whatever the project has.
+                if (analysis.analyzer.attributesIndexes(src).any { it.value?.start == s.start }) return ThreeState.NO
+                val names = calls.siteNames(analysis)
+                if (names.isEmpty()) return ThreeState.UNSURE
+                val sites = findCallSites(src, names, lex).filter { it.openParen < s.start && s.end <= it.closeParen + 1 }
+                // A call the Kotlin plugin resolves elsewhere keeps the platform's rule.
+                if (sites.isNotEmpty() && analysis.foreignAmong(psiFile, sites).size < sites.size) ThreeState.NO else ThreeState.UNSURE
             }
 
             psiFile.language.isKindOf(HTMLLanguage.INSTANCE) || StreamlordAnalysis.isTemplateText(psiFile) -> {

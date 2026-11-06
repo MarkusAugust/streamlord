@@ -6,6 +6,103 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-11-06
+
+### Added
+
+- In the analysis, for editors: `AnalyzeOptions.htmlDsl`, `core` and `foreignCalls`, what the host
+  knows of the project. With `htmlDsl = false` the DSL's calls are somebody else's, and no fix
+  writes a helper; with `core = false` no call is Streamlord's, no fix or message sends the author
+  to `interpolate`, `Trusted` or `Html`, which are no longer read as markup, and a call or a value
+  of unknown type written into element text is a hint, since it may be markup the author built,
+  while a known String keeps its warning. `foreignCalls` names the calls a host has resolved to
+  another library, such as the official Datastar SDK's `patchElements`, whose strings are then read
+  as any string handed to an unknown function, and which declare no signal for the hyphen checks.
+  `attributeDoc` takes `withKotlin`, as `actionDoc` does. Left at their defaults they change
+  nothing but the fixes below. Code that calls streamlord-analysis needs recompiling: the
+  constructor and `copy` of `AnalyzeOptions` take the three new properties, and `attributeDoc` its
+  third parameter; Kotlin source compiles as before.
+- The IntelliJ plugin tells the analysis which of Streamlord's modules each module of the project
+  has, through IntelliJ's own record of its libraries, and names the calls it resolves to another
+  library. In a project without streamlord-html a call named as the DSL's is somebody else's: its
+  string gets no Datastar diagnostics, completion, hover, parameter info or colours, the spell
+  checker reads it as prose, no fix writes a helper, and hover leaves the Kotlin helpers out.
+  Without streamlord-core no call is Streamlord's, and no fix or message sends the author to
+  `interpolate` or `Trusted`. The live templates are offered only in a module that has the modules
+  each one writes calls of. A file moved to another module is judged by that module at once.
+  While IntelliJ indexes it cannot tell, and the plugin behaves as before. The plugin now depends
+  on IntelliJ's bundled Java plugin, which the Kotlin plugin needs already. The analysis gains
+  `Analyzer.dslNames`, the calls streamlord-html alone defines, so an editor leaves out the same
+  calls the analysis does.
+- In the analysis, for editors: `Analyzer.attributesIndexes` finds each kotlinx.html
+  `attributes["data-..."] = "..."` of a file, and `expressionAtCaret` reads the expression in its
+  value, so completion, hover and signature help work there in both editors. The IntelliJ plugin
+  also colours that form, spells only the strings of its expression, and gives a call named as the
+  DSL's that it resolves elsewhere no colours, completion, hover or spelling, where the call is on a
+  receiver, its name is declared or imported from elsewhere in the file, or it has an issue.
+- The VS Code extension reads from a Kotlin file's imports whether it can call streamlord-html: a
+  DSL-named call in a file without the DSL's import gets no Datastar diagnostics, completion,
+  hover or signature help, reads no signal, and is not coloured as Datastar. In a file that
+  imports the official SDK and nothing of Streamlord no call is Streamlord's. It colours
+  kotlinx.html's `attributes["data-..."] = "..."` too, for the catalog's attributes only.
+
+### Fixed
+
+- The build arguments on the native-image page failed with Ktor 3.6.1, on some twenty
+  `kotlinx.coroutines` classes "unintentionally initialized at build time": Ktor 3.6.1 reads
+  `Dispatchers.IO` as `io.ktor.utils.io.jvm.javaio.ReadingKt` is initialized, and the list
+  initializes `io.ktor` at build time. The list now ends with
+  `--initialize-at-run-time=io.ktor.utils.io.jvm.javaio.ReadingKt`.
+- Both editors coloured every `data-*` attribute in HTML as Datastar, the page's own `data-color`
+  and a typo such as `data-onn` among them. Only the catalog's attributes are coloured now, and
+  in VS Code only the value of one that takes an expression is coloured as an expression.
+- The VS Code extension coloured no Datastar attribute whose value sits in single quotes, or in
+  escaped quotes in a plain Kotlin string, `"<div data-show=\"\$open\">"`.
+- The signal index of both editors read a helper called on a receiver, such as
+  `headers.set("Cache-Control", "no-cache")` or `map.set("count", 1)`, as defining a signal. In
+  code that cannot call streamlord-html, the DSL's short helpers (`set`, `setExpr`, `toggle`,
+  `signal`, `increment`, `decrement` and `not`) are somebody else's too: they define no signal
+  and completion offers no name from them. A `data*` helper still defines its signal there, so a
+  `dataSignals` you wrote yourself keeps working. The analysis gains overloads of
+  `collectSignals`, `collectSignalDefinitions` and `signalDeclarations` that take the names of the
+  calls to leave out.
+- In the IntelliJ plugin, go to declaration, find usages and rename now find a signal defined by a
+  `data*` helper you wrote yourself, or by the official Datastar SDK's `patchSignals`, which they
+  left out. A `$name` whose only definition they
+  leave out, such as somebody else's `set`, is no longer a link that says "Cannot find
+  declaration", and rename no longer reports a conflict with such a definition.
+- The IntelliJ plugin's spell checker failed on a Kotlin string whose expression has a template
+  right after an empty string, such as `dataText("''$count")`, and IntelliJ reported the error.
+- In the IntelliJ plugin, HTML handed straight to a call of another library, such as the official
+  Datastar SDK's `patchElements`, got no diagnostics at all: the plugin dropped every issue of a call
+  that resolved elsewhere. It is judged as any HTML string now, so `data-onn` is reported there,
+  while the rules of a Streamlord patch, an id on each element among them, are not applied.
+- In both editors, `attributes["data-on:click"] = "$count++"` was offered `increment("count")` and
+  told to write `signal(...)` in a file with nothing of streamlord-html in it. A helper is offered
+  there only when the file imports from the DSL, or the host says it is there. In that form and at
+  a DSL call alike, none is offered when an import from elsewhere, such as Hamcrest's `not`, takes
+  its name, and a helper is offered only for a literal it says whole: the JVM analysis also offered
+  `signal("count")` for `"""$count` with a line break before its closing quotes, and dropped the
+  line break. Every helper fix now imports the helper, unless the file imports it, the whole DSL,
+  or is in its package.
+- `attributes["data-bind"] = "$count"`, and the same for `data-indicator` and `data-ref`, was
+  offered `signal("count")` and escapes that each led to a new warning. These attributes take a
+  name: the one fix now writes the literal without the dollar, `count`, and says so, and a path such
+  as `$user.loading` or `form.$name` stays as written. A constant or a number there is the name the
+  author chose and gets no issue, as in markup.
+- An import a fix added went above a `#!` line, `@file:` annotations or a licence comment in a
+  file without a package or imports, and an `import` line inside a raw string or a comment was
+  taken for one. It goes after them now, a licence in `//` lines stays whole, and only code counts:
+  a package line after a comment or an annotation is found, and an import with a comment after it
+  is the import. The import is written with the file's own line break.
+- The two editors read a file's imports alike: a line starts after a line feed and is indented
+  with spaces and tabs, where the JVM analysis also took a NEL as a line break and VS Code a
+  no-break space as indentation.
+- A Streamlord call claimed every string handed to it, so `patchElements(header, "<p>$name</p>")`
+  and `patchElements("<p>$name</p>") { }`, whose HTML it never reads, were not judged at all. Only
+  the strings a call reads are its own now; the rest are read as free strings, for their holes and
+  their signals, while a script, a selector or a helper's name is still the call's own.
+
 ## [0.18.0] - 2026-11-03
 
 ### Added

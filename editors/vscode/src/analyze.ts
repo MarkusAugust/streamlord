@@ -6,8 +6,8 @@ import { signalNameRefusal } from "./signalNames.ts";
 import { asciiLowercase, decodeEntities, indexOfAsciiIgnoreCase, keyReading, nonceProblem, rawKeyNote, tokenize, validateAttributes, validateMarkup, wireKey, wireKeyReads, type Attribute, type Tag } from "./markup.ts";
 import { findCallSites, isHtmlString, lexKotlin, namedArgText, selectStringArg, stringAt, type Arg, type CallSite } from "./scanner.ts";
 import { holeLandings, urlHostFixedBy, urlSchemeFixedBy, type Hole, type HoleLanding, type Position } from "./holes.ts";
-import { argKind, callResult, chainFrom, countBelow, ESCAPES_TITLE, fileFacts, holeDisplay, holeValues, interpolateFix, interpolateText, isMarkup, markupHeldAsString, markupTextValue, markupValued, markupView, mayBeNull, mayHoldMarkup, percentHoles, quoteFix, REFUSES_URL_TITLE, shortened, trimmed, trustedFix, trustedLiteral, valueKind, visiblyList, weakest, withNested, withPercentHoles, type ArgKind } from "./interpolation.ts";
-import { dslHelpers, EXPRESSION_HELPERS, signalNameHyphenSites } from "./signalNameHyphens.ts";
+import { argKind, callResult, chainFrom, coreNameUsable, countBelow, ESCAPES_TITLE, fileFacts, holeDisplay, holeValues, HTML_PACKAGE, importEdits, interpolateFix, interpolateText, isMarkup, markupHeldAsString, markupTextValue, markupValued, markupView, mayBeNull, mayHoldMarkup, percentHoles, quoteFix, REFUSES_URL_TITLE, sdkOf, shortened, trimmed, trustedFix, trustedLiteral, valueKind, visiblyList, weakest, withNested, withPercentHoles, type ArgKind } from "./interpolation.ts";
+import { dslHelpers, EXPRESSION_HELPERS, signalNameHyphenSites, unshadowed } from "./signalNameHyphens.ts";
 import { clientKeyName, collectSignalDefinitions } from "./signals.ts";
 
 /**
@@ -21,6 +21,12 @@ export interface AnalyzeOptions {
   constants?: ReadonlySet<string>;
   /** What the editor knows of the value in a hole, from types the text cannot show (IntelliJ). */
   holeFact?: (start: number, end: number) => HoleFact | null;
+  /** Whether streamlord-html is on the classpath: null or absent when the host does not know, and the file's imports decide. */
+  htmlDsl?: boolean | null;
+  /** Whether streamlord-core is on the classpath; null or absent counts as present. Without core there is no streamlord-html either. */
+  core?: boolean | null;
+  /** Where the name of each call starts (`CallSite.nameStart`) that the host knows is not Streamlord's. */
+  foreignCalls?: ReadonlySet<number>;
 }
 
 /**
@@ -56,6 +62,20 @@ const KEY_ONLY_HELPERS: ReadonlySet<string> = new Set(
 for (const name of KEY_ONLY_HELPERS) (ALL_SITE_NAMES as Set<string>).add(name);
 
 /**
+ * The calls streamlord-html alone defines, which are somebody else's in a project without it:
+ * the attributes' helpers, the expression call sites and the expression helpers.
+ */
+export const DSL_NAMES: ReadonlySet<string> = new Set([...catalog.attributes.flatMap((a) => a.kotlin), ...Object.keys(catalog.callSites.expression), ...catalog.signalNameHelpers.keys(), "statements"]);
+
+/** Whether the call named `name` at `nameStart` is not Streamlord's, as `opts` says: then its strings are free strings. */
+export function foreignCalls(opts: Pick<AnalyzeOptions, "htmlDsl" | "core" | "foreignCalls">): (name: string, nameStart: number) => boolean {
+  const sdk = sdkOf(opts);
+  const given = opts.foreignCalls;
+  // Every call the analysis looks for is core's or the DSL's, so without core none is Streamlord's.
+  return (name, at) => !sdk.core || (given?.has(at) ?? false) || (sdk.htmlDsl === false && DSL_NAMES.has(name));
+}
+
+/**
  * The last source lexed, so a hover or completion right after a diagnostics pass does not lex
  * the file again. Bounded: a file past the cap is lexed each time rather than kept resident.
  */
@@ -69,8 +89,8 @@ export const ATTRIBUTES_INDEX = /\battributes\s*\[\s*"(data-[^"\\]*)"\s*]\s*=\s*
  * there: `data-signals:my-value__case.kebab`, `data-bind="my-value"`, `{'my-value': 1}`, or
  * `data-signals:a-1`, which camel casing leaves as it is.
  */
-export function hyphenatedSignals(src: string, language: "kotlin" | "html"): ReadonlySet<string> {
-  return new Set([...collectSignalDefinitions(src, language)].filter((n) => n.includes("-")));
+export function hyphenatedSignals(src: string, language: "kotlin" | "html", foreign?: (name: string, nameStart: number) => boolean): ReadonlySet<string> {
+  return new Set([...collectSignalDefinitions(src, language, foreign)].filter((n) => n.includes("-")));
 }
 let lastLex: { src: string; lex: ReturnType<typeof lexKotlin> } | null = null;
 export function lexCached(src: string): ReturnType<typeof lexKotlin> {
@@ -84,10 +104,16 @@ export function analyzeKotlin(src: string, opts: AnalyzeOptions): Issue[] {
   const claimed = new Set<number>();
   const lex = lexCached(src);
   const facts = fileFacts(src, lex);
-  const hyphenated = hyphenatedSignals(src, "kotlin");
+  const foreign = foreignCalls(opts);
+  const hyphenated = hyphenatedSignals(src, "kotlin", foreign);
+  // At a DSL call the DSL is there; an import from elsewhere may still take a helper's name.
+  let unshadowedHelpers: ReadonlySet<string> | undefined;
+  const siteHelpers = () => (unshadowedHelpers ??= unshadowed(src, EXPRESSION_HELPERS));
   for (const site of findCallSites(src, ALL_SITE_NAMES, lex.mask)) {
+    // Somebody else's call: its strings are judged as any string handed to an unknown function.
+    if (foreign(site.name, site.nameStart)) continue;
     const expr = catalog.callSites.expression[site.name];
-    if (expr) issues.push(...checkExpressionSite(site, expr, src, hyphenated, opts));
+    if (expr) issues.push(...checkExpressionSite(site, expr, src, hyphenated, opts, siteHelpers()));
     const html = catalog.callSites.html[site.name];
     if (html) issues.push(...checkHtmlSite(site, html, opts, src, hyphenated));
     const script = catalog.callSites.script[site.name];
@@ -95,19 +121,18 @@ export function analyzeKotlin(src: string, opts: AnalyzeOptions): Issue[] {
     const selector = catalog.callSites.selector[site.name];
     if (selector) issues.push(...checkSelectorSite(site, selector));
     issues.push(...checkKeyCaseSite(site, src));
-    for (const a of site.args) if (a.string) claimed.add(a.string.start);
-    // The literals of a `+` chain handed to the site are judged there, as one string.
-    const chain = html ? markupString(site, html, src) : expr ? expressionString(site, expr, src) : null;
-    if (chain && !site.args.some((a) => a.string === chain)) for (const x of lex.strings) if (x.start >= chain.start && x.end <= chain.end) claimed.add(x.start);
+    // The literals of a `+` chain handed to the site are judged there, as one string; the arguments it does not read are free.
+    for (const judged of judgedStrings(site, src)) for (const x of lex.strings) if (x.start >= judged.start && x.end <= judged.end) claimed.add(x.start);
   }
   for (const site of findCallSites(src, INTERPOLATE, lex.mask)) {
+    if (foreign(site.name, site.nameStart)) continue;
     const format = interpolateFormat(site, src);
     if (!format) continue;
     for (const x of lex.strings) if (x.start >= format.string.start && x.end <= format.string.end) claimed.add(x.start);
     issues.push(...checkInterpolateSite(site, format, src, opts, hyphenated));
   }
-  for (const site of findCallSites(src, NONCE_CALLS, lex.mask)) issues.push(...checkNonceSite(site));
-  issues.push(...signalNameHyphenSites(src, lex, dslHelpers(src, EXPRESSION_HELPERS), new Set([...ALL_SITE_NAMES, "statements"])));
+  for (const site of findCallSites(src, NONCE_CALLS, lex.mask)) if (!foreign(site.name, site.nameStart)) issues.push(...checkNonceSite(site));
+  issues.push(...signalNameHyphenSites(src, lex, dslHelpers(src, EXPRESSION_HELPERS, sdkOf(opts).htmlDsl), new Set([...ALL_SITE_NAMES, "statements"]), foreign));
   for (const m of src.matchAll(ATTRIBUTES_INDEX)) {
     if (lex.mask[m.index ?? 0] === 0) continue;
     const value = attributesIndexValue(src, m, lex.strings);
@@ -127,6 +152,30 @@ export function analyzeKotlin(src: string, opts: AnalyzeOptions): Issue[] {
     issues.push(...checkFreeHtmlString(whole, opts, src, hyphenated));
   }
   return issues;
+}
+
+/**
+ * The strings `site` judges: the markup, the expression, the script or the selector it is handed,
+ * a `+` chain whole, and the key or the name of a helper that takes only that.
+ */
+export function judgedStrings(site: CallSite, src: string): KotlinString[] {
+  const out: KotlinString[] = [];
+  const add = (s: KotlinString | null | undefined) => {
+    if (s) out.push(s);
+  };
+  const html = catalog.callSites.html[site.name];
+  if (html) add(markupString(site, html, src));
+  const expr = catalog.callSites.expression[site.name];
+  if (expr && !(expr.onlyIfStringArgs && site.args.some((a) => a.named === null && a.string === null))) add(expressionString(site, expr, src));
+  const script = catalog.callSites.script[site.name];
+  if (script) add(selectStringArg(site, script.arg, script.named));
+  const selector = catalog.callSites.selector[site.name];
+  if (selector) add(selectStringArg(site, selector.arg, selector.named));
+  const named = (name: string) => site.args.find((a) => a.named === name);
+  const first = site.args.find((a) => a.named === null);
+  if (KEY_ONLY_HELPERS.has(site.name)) add((KEY_PARAMETERS.map(named).find((a) => a) ?? first)?.string);
+  if (VALUE_NAME_HELPERS.has(site.name)) add((named("signal") ?? named("name") ?? first)?.string);
+  return out;
 }
 
 /** What may follow the value of an assignment: the end of the statement, nothing more of an expression. */
@@ -157,7 +206,9 @@ function checkAttributesIndex(m: RegExpMatchArray, value: KotlinString | null, o
   const tag: Tag = { name: "div", start: 0, end: valueStart + text.length + 1, closing: false, selfClosing: false, attributes: [attribute] };
   const issues: Issue[] = [];
   const kind = parseAttributeName(asciiLowercase(name), opts.prefix)?.spec?.valueKind;
-  if (value && (kind === "expression" || kind === "signal")) issues.push(...expressionHoles(value, src, opts, name));
+  // kotlinx.html's own form: a helper is offered only where the file can call it.
+  if (value && kind === "expression") issues.push(...expressionHoles(value, src, opts, name, dslHelpers(src, EXPRESSION_HELPERS, sdkOf(opts).htmlDsl)));
+  if (value && kind === "signal") issues.push(...signalNameHoles(value, src, opts, name));
   // With a template in the value the interpolation issue speaks for it, as at a DSL call.
   const judgeValue = value !== null && !(value.text.includes(PLACEHOLDER) && value.interpolations.some((i) => i.kind === "simple"));
   // A range in the value maps through the literal as a whole, so an error at its end keeps a width.
@@ -177,6 +228,36 @@ function checkAttributesIndex(m: RegExpMatchArray, value: KotlinString | null, o
     issues.push({ ...i, ...range(i.start, i.end), ...(fixes ? { fixes } : {}) });
   }
   return issues;
+}
+
+/**
+ * The templates in the value of an attribute that takes a signal's name, `data-bind`: `$count`
+ * there is a Kotlin value, and the name is written without the dollar. Any other template
+ * writes a Kotlin value into the signal path, as in markup.
+ */
+function signalNameHoles(s: KotlinString, src: string, opts: AnalyzeOptions, attribute: string): Issue[] {
+  const out: Issue[] = [];
+  for (const ip of s.interpolations) {
+    // A constant or a number the author wrote is the name, as it is in markup.
+    const fact = plainFact(holeFact(s, src, opts, ip));
+    if (fact === "constant" || fact === "number" || fact === "boolean" || fact === "unsigned") continue;
+    if (ip.kind === "simple" && s.dollars === 1) {
+      // The literal without the dollar, as written: what the fix writes and the message shows.
+      const written = src.slice(s.contentStart, ip.start) + src.slice(ip.start + 1, s.contentEnd);
+      out.push({
+        start: ip.start,
+        end: ip.end,
+        message: `Kotlin interpolates $${ip.text} here, and ${attribute} takes a signal name, not an expression. Write ${written}.`,
+        severity: "error",
+        code: "kotlin-interpolation",
+        link: DOCS.expressions,
+        fixes: [{ title: `Write ${written}`, start: s.contentStart, end: s.contentEnd, text: written }],
+      });
+      continue;
+    }
+    out.push({ start: ip.start, end: ip.end, severity: "warning", code: "unsafe-interpolation", link: DOCS.expressions, message: datastarMessage(holeDisplay(ip, s.dollars), attribute) });
+  }
+  return out;
 }
 
 /**
@@ -575,12 +656,13 @@ function escapedMarkupMessage(shown: string): string {
   return `interpolate escapes ${shown} here, so the tags it holds are printed as text: it is markup held as a String. Pass the Html itself, join a list of Html with joinToHtml(), or wrap markup you built yourself in Trusted(...).`;
 }
 
-/** The DSL helper that says the same as a whole-string expression, when there is one. */
-const HELPERS: [RegExp, (n: string) => string][] = [
-  [/^\$([A-Za-z_][A-Za-z0-9_.]*)$/, (n) => `signal("${n}")`],
-  [/^\$([A-Za-z_][A-Za-z0-9_.]*)\+\+$/, (n) => `increment("${n}")`],
-  [/^\$([A-Za-z_][A-Za-z0-9_.]*)--$/, (n) => `decrement("${n}")`],
-  [/^!\$([A-Za-z_][A-Za-z0-9_.]*)$/, (n) => `not("${n}")`],
+/** The DSL helper that says the same as a whole-string expression, when there is one, by its name. */
+const HELPERS: [RegExp, string][] = [
+  [/^\$([A-Za-z_][A-Za-z0-9_.]*)$/, "signal"],
+  [/^\$([A-Za-z_][A-Za-z0-9_.]*)\+\+$/, "increment"],
+  [/^\$([A-Za-z_][A-Za-z0-9_.]*)--$/, "decrement"],
+  [/^!\$([A-Za-z_][A-Za-z0-9_.]*)$/, "not"],
+  [/^\$([A-Za-z_][A-Za-z0-9_.]*) = !\$\1$/, "toggle"],
 ];
 
 const TRIM_AFTER = /\s*\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)/y;
@@ -615,9 +697,10 @@ function multiDollarFix(s: KotlinString, src: string, signal: Interpolation, dol
 
 /**
  * The trap of each `$name` in a literal, `kotlin-interpolation`, made when a hole asks for it:
- * what is shared by every hole of the literal is read once.
+ * what is shared by every hole of the literal is read once. `available` names the DSL helpers
+ * a fix may write, each with its import; null where the literal is handed to a DSL call.
  */
-function traps(s: KotlinString, src: string): (ip: Interpolation) => Issue | null {
+function traps(s: KotlinString, src: string, available: ReadonlySet<string> | null = null): (ip: Interpolation) => Issue | null {
   // In a multi-dollar literal a single $ is text, so there is no trap: every template there is deliberate.
   if (s.dollars > 1) return () => null;
   let shared: { dollars: number; helpers: Fix[]; whole: boolean } | undefined;
@@ -636,24 +719,28 @@ function traps(s: KotlinString, src: string): (ip: Interpolation) => Issue | nul
       TRIM_AFTER.lastIndex = s.end;
       const end = s.end + (TRIM_AFTER.exec(src)?.[0].length ?? 0);
       for (const [re, helper] of HELPERS) {
+        if (available !== null && !available.has(helper)) continue;
         const m = re.exec(content);
-        if (m?.[1]) helpers.unshift({ title: `Use ${helper(m[1])}`, start: s.start, end, text: helper(m[1]) });
+        if (!m?.[1]) continue;
+        const call = `${helper}("${m[1]}")`;
+        const edits = importEdits(src, HTML_PACKAGE, helper);
+        helpers.unshift({ title: `Use ${call}`, start: s.start, end, text: call, ...(edits ? { edits } : {}) });
       }
-      const toggle = /^\$([A-Za-z_][A-Za-z0-9_.]*) = !\$\1$/.exec(content);
-      if (toggle?.[1]) helpers.unshift({ title: `Use toggle("${toggle[1]}")`, start: s.start, end, text: `toggle("${toggle[1]}")` });
     }
     shared = { dollars: Math.max(2, longestRun + 1), helpers, whole };
     return shared;
   };
+  // Where the DSL may be missing, signal(...) is advised only where it can be called.
+  const advisesSignal = available === null || available.has("signal");
   return (ip) => {
     if (ip.kind !== "simple") return null;
     const { dollars, helpers, whole } = literal();
-    const fixes: Fix[] = [...helpers.map((h) => ({ ...h })), ...(whole ? [multiDollarFix(s, src, ip, dollars)] : []), { title: `Escape as \${'$'}${ip.text}`, start: ip.start, end: ip.start + 1, text: "${'$'}" }];
+    const fixes: Fix[] = [...helpers.map((h) => ({ ...h, ...(h.edits ? { edits: h.edits.map((e) => ({ ...e })) } : {}) })), ...(whole ? [multiDollarFix(s, src, ip, dollars)] : []), { title: `Escape as \${'$'}${ip.text}`, start: ip.start, end: ip.start + 1, text: "${'$'}" }];
     if (!s.raw) fixes.push({ title: `Escape as \\$${ip.text}`, start: ip.start, end: ip.start, text: "\\" });
     return {
       start: ip.start,
       end: ip.end,
-      message: `Kotlin interpolates $${ip.text} here; the browser will never see a signal. Write signal("${ip.text}"), make the literal $$"..." (Kotlin 2.2+), or escape as \${'$'}${ip.text}.`,
+      message: `Kotlin interpolates $${ip.text} here; the browser will never see a signal. ${advisesSignal ? `Write signal("${ip.text}"), make` : "Make"} the literal $$"..." (Kotlin 2.2+), or escape as \${'$'}${ip.text}.`,
       severity: "error",
       code: "kotlin-interpolation",
       link: DOCS.expressions,
@@ -672,10 +759,16 @@ function traps(s: KotlinString, src: string): (ip: Interpolation) => Issue | nul
 function judgeHoles(s: KotlinString, src: string, opts: AnalyzeOptions, view: string): Issue[] {
   if (s.interpolations.length === 0) return [];
   const trapOf = traps(s, src);
+  // Without core there is no interpolate to build the string with, and Trusted is not Streamlord's.
+  const sdk = sdkOf(opts);
+  const core = sdk.core;
+  // A fix writes interpolate or Trusted only where the name is core's: not somebody else's call or import.
+  const canInterpolate = coreNameUsable(src, "interpolate", sdk, opts.foreignCalls);
+  const canTrust = coreNameUsable(src, "Trusted", sdk, opts.foreignCalls);
   // A literal Trusted is markup the author wrote, read in place: the other holes are judged against it.
   const written = new Map<number, string>();
   s.interpolations.forEach((ip, k) => {
-    const text = ip.kind === "operand" ? null : trustedLiteral(src, ip.text, s.start);
+    const text = ip.kind === "operand" || !core ? null : trustedLiteral(src, ip.text, s.start);
     if (text !== null) written.set(k, text);
   });
   const reading = readHoles(
@@ -690,6 +783,7 @@ function judgeHoles(s: KotlinString, src: string, opts: AnalyzeOptions, view: st
   const starts = s.interpolations.map((ip) => ip.decodedStart);
   // interpolate(...) can take the literal only when every hole is a value it escapes and keeps.
   const fixable =
+    canInterpolate &&
     s.dollars === 1 &&
     !trimmed(src, s) &&
     s.interpolations.every((ip) => ip.kind !== "operand") &&
@@ -717,8 +811,10 @@ function judgeHoles(s: KotlinString, src: string, opts: AnalyzeOptions, view: st
       // both the rewrite, which escapes it, and Trusted, which keeps it, are offered, and neither first.
       const text = landing.position === "TEXT";
       const trust = text && told[k] !== "nullable-string" && (fact === "string" || (fact === null && (callResult(ip.text) || markupTextValue(src, ip.text, s.start)) && mayHoldMarkup(src, ip.text, s.start, opts.constants))) && !mayBeNull(src, ip.text, s.start);
-      const fixes = [...rewritten(ESCAPES_TITLE, !trust), ...(trust ? [trustedFix(src, s, ip, shown)] : [])];
-      return { ...at, severity, code: "unescaped-interpolation", message: unescapedMessage(shown, fact === "markup", text), fixes: fixes.length > 0 ? fixes : undefined };
+      // A call or a value of unknown type may be markup the author composed; a known String stays a warning.
+      if (!core) return { ...at, severity: trust && fact === null ? "hint" : severity, code: "unescaped-interpolation", message: plainUnescapedMessage(shown, fact, text) };
+      const fixes = [...rewritten(ESCAPES_TITLE, !trust), ...(trust && canTrust ? [trustedFix(src, s, ip, shown)] : [])];
+      return { ...at, severity, code: "unescaped-interpolation", message: unescapedMessage(shown, fact === "markup", text, canInterpolate, canTrust), fixes: fixes.length > 0 ? fixes : undefined };
     };
     switch (landing.position) {
       case "TEXT":
@@ -737,14 +833,15 @@ function judgeHoles(s: KotlinString, src: string, opts: AnalyzeOptions, view: st
           issues.push(unescaped());
         } else {
           const fixes = rewritten(REFUSES_URL_TITLE);
-          issues.push({ ...at, severity: "warning", code: "unsafe-interpolation", message: `Kotlin writes ${shown} at the start of ${attribute}, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs.`, fixes: fixes.length > 0 ? fixes : undefined });
+          issues.push({ ...at, severity: "warning", code: "unsafe-interpolation", message: `Kotlin writes ${shown} at the start of ${attribute}, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://${canInterpolate ? ", or build the string with interpolate(...), which refuses a scheme that runs." : "."}`, fixes: fixes.length > 0 ? fixes : undefined });
         }
         return;
       }
       case "STYLE":
         if (own || fact === "number") return;
         if (fact === "unsigned") {
-          issues.push({ ...at, severity: "hint", code: "unsafe-interpolation", message: unsignedWrittenMessage(shown, landing.attribute ?? "style") });
+          // Its digits are safe; only interpolate would refuse it.
+          if (core) issues.push({ ...at, severity: "hint", code: "unsafe-interpolation", message: unsignedWrittenMessage(shown, landing.attribute ?? "style") });
           return;
         }
         issues.push({
@@ -765,7 +862,7 @@ function judgeHoles(s: KotlinString, src: string, opts: AnalyzeOptions, view: st
           return;
         }
         if (fact === "unsigned") {
-          issues.push({ ...at, severity: "hint", code: "unsafe-interpolation", message: unsignedWrittenMessage(shown, landing.attribute ?? "a Datastar attribute") });
+          if (core) issues.push({ ...at, severity: "hint", code: "unsafe-interpolation", message: unsignedWrittenMessage(shown, landing.attribute ?? "a Datastar attribute") });
           return;
         }
         if (own || fact === "number" || fact === "boolean") return;
@@ -866,18 +963,30 @@ function interpolateKeeps(src: string, s: KotlinString, ip: Interpolation, told:
 function holeFact(s: KotlinString, src: string, opts: AnalyzeOptions, ip: Interpolation): HoleFact | null {
   const known = opts.holeFact?.(ip.start, ip.end) ?? null;
   if (known !== null) return known;
+  const sdk = sdkOf(opts);
   const values = ip.kind === "simple" ? [{ text: ip.text, nonNull: false }] : holeValues(ip.text);
-  const kinds = values.map((v) => valueKind(src, v.text, s.start, opts.constants, v.nonNull));
+  const kinds = values.map((v) => valueKind(src, v.text, s.start, opts.constants, v.nonNull, sdk));
   if (kinds.every((k) => k === "constant")) return "constant";
-  if (isMarkup(src, s, ip)) return "markup";
+  if (isMarkup(src, s, ip, sdk)) return "markup";
   return weakest(kinds);
 }
 
-function unescapedMessage(shown: string, markup: boolean, text: boolean): string {
+/**
+ * What a value written into the HTML as it is can do, and what to write instead: `interpolate`
+ * and `trusted` say whether a fix may name `interpolate` and `Trusted` in this file, which plain
+ * Kotlin and kotlinx.html stand in for where it may not.
+ */
+function unescapedMessage(shown: string, markup: boolean, text: boolean, interpolate: boolean, trusted: boolean): string {
   // Markup an attribute holds is only characters, whose quotes end the value: that it is markup is the problem.
   if (markup) return `Kotlin writes ${shown} into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup.`;
-  const base = `Kotlin writes ${shown} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it`;
-  return text ? `${base}; if it is markup you built, declare it Html or wrap it in Trusted(...).` : `${base}.`;
+  const base = `Kotlin writes ${shown} into the HTML as it is. If it can hold text from outside, ${interpolate ? "build the string with interpolate(...), which escapes it" : `escape it before it goes in, or build this part with kotlinx.html, which escapes ${text ? "text" : "attribute values"}`}`;
+  if (!text) return `${base}.`;
+  return `${base}; if it is markup you built, ${trusted ? "declare it Html or wrap it in Trusted(...)" : "this is fine"}.`;
+}
+
+/** `unescapedMessage` for a project without core: what the browser does, and what plain Kotlin or kotlinx.html can do. */
+function plainUnescapedMessage(shown: string, fact: HoleFact | null, text: boolean): string {
+  return unescapedMessage(shown, fact === "markup", text, false, false);
 }
 
 function datastarMessage(shown: string, attribute: string): string {
@@ -948,12 +1057,13 @@ function expressionString(site: CallSite, spec: CallSiteSpec, src: string): Kotl
   return selectStringArg(site, spec.arg, spec.named) ?? chainArg(site, spec, src);
 }
 
-function checkExpressionSite(site: CallSite, spec: CallSiteSpec, src: string, hyphenated: ReadonlySet<string>, opts: AnalyzeOptions): Issue[] {
+function checkExpressionSite(site: CallSite, spec: CallSiteSpec, src: string, hyphenated: ReadonlySet<string>, opts: AnalyzeOptions, helpers: ReadonlySet<string>): Issue[] {
   if (spec.onlyIfStringArgs && site.args.some((a) => a.named === null && a.string === null)) return [];
   const s = expressionString(site, spec, src);
   if (!s || s.unterminated) return [];
   const attribute = catalog.attributesByKotlin.get(site.name);
-  const issues = expressionHoles(s, src, opts, attribute ? `${catalog.prefix}${attribute.name}` : `the expression of ${site.name}`);
+  // An import from elsewhere, Hamcrest's not, takes a helper's name here too.
+  const issues = expressionHoles(s, src, opts, attribute ? `${catalog.prefix}${attribute.name}` : `the expression of ${site.name}`, helpers);
   const text = s.text;
   if (text.includes(PLACEHOLDER) && s.interpolations.some((i) => i.kind === "simple")) return issues;
   issues.push(...mapIssues(s, src, validateExpression(text, undefined, hyphenated, attribute)));
@@ -968,8 +1078,8 @@ function checkExpressionSite(site: CallSite, spec: CallSiteSpec, src: string, hy
  * from outside ends the string and the rest runs. A number or a boolean is safe there, as
  * `interpolate` lets in.
  */
-function expressionHoles(s: KotlinString, src: string, opts: AnalyzeOptions, attribute: string): Issue[] {
-  const trapOf = traps(s, src);
+function expressionHoles(s: KotlinString, src: string, opts: AnalyzeOptions, attribute: string, helpers: ReadonlySet<string> | null = null): Issue[] {
+  const trapOf = traps(s, src, helpers);
   const out: Issue[] = [];
   for (const ip of s.interpolations) {
     const trap = trapOf(ip);

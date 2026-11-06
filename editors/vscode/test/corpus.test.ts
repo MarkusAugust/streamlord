@@ -4,7 +4,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import { analyzeHtml, analyzeKotlin } from "../src/analyze.ts";
 import { applyFix, validateExpression, type Issue } from "../src/expression.ts";
 import { validateMarkup } from "../src/markup.ts";
-import { signalReferencesInHtml, unknownSignalIssue } from "../src/signalReferences.ts";
+import { findCallSites, lexKotlin } from "../src/scanner.ts";
+import { signalReferencesInHtml, signalReferencesInKotlin, unknownSignalIssue } from "../src/signalReferences.ts";
 import { collectSignalDefinitions } from "../src/signals.ts";
 
 /**
@@ -28,10 +29,44 @@ interface Case {
   prefix?: string;
   /** The workspace's `const val` names. */
   constants?: string[];
+  /** Whether the project has streamlord-html, as the host knows it; the file decides otherwise. */
+  htmlDsl?: boolean;
+  /** false: the project has no streamlord-core. */
+  core?: boolean;
+  /** The calls the host knows are not Streamlord's: every call of these names in the source. */
+  foreign?: string[];
   issues: Expected[];
 }
 
-const opts = (c: Case) => ({ prefix: c.prefix ?? "data-", checkHtmlAttributes: true, constants: new Set(c.constants ?? []) });
+/**
+ * Where each call of `names` in `text` starts, those in the code of a `${...}` template too, read
+ * as the hyphen check reads them (collectHyphenSites): offsets of the whole source.
+ */
+function callStarts(text: string, names: ReadonlySet<string>, shift = 0, depth = 0): number[] {
+  const lex = lexKotlin(text);
+  const out = findCallSites(text, names, lex.mask).map((s) => s.nameStart + shift);
+  if (depth >= 4) return out;
+  for (const s of lex.strings) {
+    for (const t of s.interpolations) {
+      if (t.kind !== "braced") continue;
+      const open = text.indexOf("{", t.start);
+      if (open < 0 || open + 1 > t.end - 1 || text.slice(open + 1, t.end - 1) !== t.text) continue;
+      out.push(...callStarts(t.text, names, shift + open + 1, depth + 1));
+    }
+  }
+  return out;
+}
+
+/** Where every call of the case's foreign names starts, as the scanner finds the calls. */
+const foreignCalls = (c: Case) => new Set(c.foreign ? callStarts(c.source, new Set(c.foreign)) : []);
+const opts = (c: Case) => ({
+  prefix: c.prefix ?? "data-",
+  checkHtmlAttributes: true,
+  constants: new Set(c.constants ?? []),
+  htmlDsl: c.htmlDsl ?? null,
+  core: c.core ?? null,
+  foreignCalls: foreignCalls(c),
+});
 const run: Record<string, (c: Case) => Issue[]> = {
   expression: (c) => validateExpression(c.source),
   markup: (c) => validateMarkup(c.source, { requireIds: c.requireIds ?? false, prefix: c.prefix ?? "data-", checkAttributes: true }),
@@ -41,6 +76,11 @@ const run: Record<string, (c: Case) => Issue[]> = {
   references: (c) => {
     const defined = collectSignalDefinitions(c.source, "html");
     return signalReferencesInHtml(c.source, c.prefix ?? "data-").flatMap((r) => unknownSignalIssue(r, defined) ?? []);
+  },
+  // The same of a Kotlin source: the signals its DSL calls and HTML strings read that it does not declare.
+  "kotlin-references": (c) => {
+    const defined = collectSignalDefinitions(c.source, "kotlin");
+    return signalReferencesInKotlin(c.source, c.prefix ?? "data-", opts(c)).flatMap((r) => unknownSignalIssue(r, defined) ?? []);
   },
 };
 const byCode = (a: Issue, b: Issue) => ((a.code ?? "") < (b.code ?? "") ? -1 : (a.code ?? "") > (b.code ?? "") ? 1 : 0);

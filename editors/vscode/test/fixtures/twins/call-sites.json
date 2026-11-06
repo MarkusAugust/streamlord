@@ -20,6 +20,6 @@
     {"name":"keeps the escape of a dollar when it renames the signal after it (2)","src":"dataText(\"${'$'}a-b\")","fix":{"title":"Write","result":"dataText(\"${'$'}a - b\")"}},
     {"name":"keeps the escape of a dollar when it renames the signal after it (3)","src":"dataText($$\"$a-b\")","fix":{"title":"Change to","result":"dataText($$\"$aB\")"}},
     {"name":"keeps a literal dollar in front of a template in the multi-dollar fix","src":"dataOnClick(\"$a + $$b\")","fix":{"on":"$a","title":"Make it","result":"dataOnClick($$$\"$a + $$$$b\")"}},
-    {"name":"replaces the trim call together with the literal when it offers a helper","src":"dataOnClick(\"\"\"$count++\"\"\".trimIndent())","fix":{"title":"Use","result":"dataOnClick(increment(\"count\"))"}}
+    {"name":"replaces the trim call together with the literal when it offers a helper","src":"import io.github.markusaugust.streamlord.html.increment\n\ndataOnClick(\"\"\"$count++\"\"\".trimIndent())","fix":{"title":"Use","result":"import io.github.markusaugust.streamlord.html.increment\n\ndataOnClick(increment(\"count\"))"}}
   ]
 }

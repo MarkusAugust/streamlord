@@ -59,9 +59,10 @@ class JudgeTest {
             assertTrue(body.contains("[kotlin-interpolation]"), body)
             assertTrue(body.contains("Read as Kotlin"), body)
 
-            // The fix is a button that puts the whole fixed line back into the field, not the helper alone.
+            // The fix is a button that puts the whole fixed paste back into the field, not the helper alone: the import with it.
             assertTrue(body.contains("judge__fix"), body)
-            assertTrue(body.contains("""data-on:click="${'$'}source = 'dataOnClick(increment(\x22count\x22))'""""), body)
+            val fixed = """import io.github.markusaugust.streamlord.html.increment\n\ndataOnClick(increment(\x22count\x22))"""
+            assertTrue(body.contains("""data-on:click="${'$'}source = '$fixed'""""), body)
         }
 
     @Test

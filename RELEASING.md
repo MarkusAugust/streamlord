@@ -50,6 +50,42 @@ treat as a release branch):
 The tag goes on the release branch first; `master` gets the release only once Maven Central has
 it.
 
+### First: security alerts and updates
+
+Before the release commit, and again before the release is merged into `master`, list what GitHub
+reports and what has a newer version:
+
+```sh
+gh api 'repos/MarkusAugust/streamlord/dependabot/alerts?state=open&per_page=100' \
+  -q '.[] | "\(.security_advisory.severity) \(.dependency.package.name) \(.dependency.manifest_path) fixed=\(.security_vulnerability.first_patched_version.identifier)"'
+gh api 'repos/MarkusAugust/streamlord/code-scanning/alerts?state=open&per_page=100' \
+  -q '.[] | "\(.rule.security_severity_level) \(.rule.id) \(.most_recent_instance.location.path)"'
+gh api 'repos/MarkusAugust/streamlord/secret-scanning/alerts?state=open' -q '.[] | .secret_type'
+gh pr list --author 'app/dependabot'
+(cd editors/vscode && npm outdated)
+(cd docs && bun outdated)
+```
+
+For each alert, find out whether the dependency reaches anything that ships:
+`./gradlew :<module>:dependencyInsight --dependency <group> --configuration runtimeClasspath` for
+each published module and for `demo`, which is deployed, and `npm explain <package>` in
+`editors/vscode`.
+
+- It reaches a published module, the IntelliJ plugin, the extension's bundle or the demo service:
+  patch it on the release branch, through a pull request, before the release commit. If no fixed
+  version exists, say so in `CHANGELOG.md`.
+- It reaches only tests, build tooling or a version pinned on purpose to test an old one: no patch
+  is needed. Dismiss the alert on GitHub with that reason, so that the open list holds only what
+  still needs work.
+
+Dependabot's pull requests against the release branch are merged or closed with a reason before
+the release commit. A security update it opened against `master` is retargeted to the release
+branch (see [Dependabot](#dependabot)). CodeQL runs on pull requests into `master` only, so the
+release pull request is where a new finding shows: a red CodeQL stops that merge until it is fixed
+on the release branch.
+
+### The steps
+
 1. If `master` has moved since the branch was cut, merge `origin/master` into the release branch
    through a pull request.
 2. The release commit, `chore(release): <version>`:
@@ -104,6 +140,12 @@ it.
    `https://streamlord-live-production.up.railway.app/health` answers with the merge commit.
 
 ## Dependabot
+
+Every Tuesday, after Dependabot's Monday run, `.github/workflows/dependencies.yml` keeps one issue,
+"Dependency status", up to date: each open Dependabot pull request with the branch it goes into,
+its age, its checks and what to do with it, and every open code scanning alert. It comments, which
+notifies, when something is open, and closes the issue when nothing is. Scheduled workflows run
+from `master`, so a change to it takes effect with the next release.
 
 Version updates go to the release branch (`target-branch` in `.github/dependabot.yml`).
 Dependabot reads that file from `master` only, so a change to it goes to `master`.

@@ -22,20 +22,30 @@ enough and in a Datastar expression, but where a signal could stand (<code>"$cou
 <code>count</code>) it is a hint, since the signal may have been meant.
 </p>
 <p>
-A call to <code>interpolate(...)</code> is judged as it will run. A Kotlin template in its format is filled in before
+Where the module has Streamlord's core, a call to <code>interpolate(...)</code> is judged as it will run. A Kotlin template in its format is filled in before
 <code>interpolate</code> sees the markup, so it is neither escaped nor refused: a warning. More or fewer <code>%s</code> holes
 than values is an error, since <code>interpolate</code> then throws. A hole where <code>interpolate</code> refuses the value,
 a <code>String</code> in a Datastar expression or a <code>Boolean</code> in <code>style</code>, is an error; a value the text
 cannot tell there is a warning.
 </p>
 <p>
-Quick fixes: the DSL helper (<code>increment("count")</code>, <code>signal("count")</code>, <code>toggle("open")</code>), a
-<code>$$"..."</code> literal (Kotlin 2.2+) where a single dollar is text, the <code>${'$'}count</code> escape, or the
-literal rewritten as <code>interpolate(...)</code> with its import, quotes around an unquoted attribute value, and a template
-in a format made a <code>%s</code> hole with its value passed in its place. The rewrite is not offered for a value that may be
-null, which a template writes as <code>null</code> and <code>interpolate</code> as nothing. For a <code>String</code> in
-element text, which may be text from outside or markup you built, it is offered beside "Mark &hellip; as markup", which wraps
-the value in <code>Trusted(...)</code>, and neither comes first: which one is right only you know.
+Quick fixes, each offered where the project can use what it writes. The DSL helper (<code>increment("count")</code>,
+<code>signal("count")</code>, <code>toggle("open")</code>) with its import, where the module has streamlord-html, no import
+from elsewhere takes the helper's name, and the helper says the whole literal. A <code>$$"..."</code> literal (Kotlin 2.2+) where a single dollar is text, and the
+<code>${'$'}count</code> escape, in any project. The literal rewritten as <code>interpolate(...)</code> with its import, where the
+module has Streamlord's core; it is not offered for a value that may be null, which a template writes as <code>null</code> and
+<code>interpolate</code> as nothing. Quotes around an unquoted attribute value, and a template in a format made a
+<code>%s</code> hole with its value passed in its place. For a <code>String</code> in element text, which may be text from
+outside or markup you built, the rewrite is offered beside "Mark &hellip; as markup", which wraps the value in
+<code>Trusted(...)</code>, again only with core, and neither comes first: which one is right only you know.
+</p>
+<p>
+Without core no call is Streamlord's, and the message says what the browser does and what plain Kotlin or kotlinx.html can do
+about it, rather than send you to <code>interpolate</code>. A call, or a value whose type the IDE cannot tell, in element text is
+then a hint, since it may be markup you built; a <code>String</code> keeps its warning. A call that resolves to another library,
+such as the official Datastar SDK's <code>patchElements</code>, is not Streamlord's: the HTML string handed to it is judged as any
+other HTML string. While the IDE indexes it cannot tell what the module has or what a call resolves to: core counts as there,
+every call of a Streamlord name as Streamlord's, and the file's imports say whether the DSL is.
 </p>
 <!-- tooltip end -->
 </body>

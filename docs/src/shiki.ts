@@ -36,11 +36,11 @@ import kotlinInjection from "../../editors/vscode/syntaxes/kotlin-injection.tmLa
  * triple-quoted Kotlin string is highlighted as HTML. If Shiki compiles the
  * Kotlin grammar before the HTML one, `text.html.basic` is built as a
  * dependency with no injections attached, and the compiled grammar is cached,
- * after which our HTML injection never applies and every `data-*` attribute in
+ * after which our HTML injection never applies and every Datastar attribute in
  * an HTML block renders as a plain attribute. Loading the base HTML language
  * first means it is compiled with the injection in place.
  *
- * Measured, not guessed: with the order reversed, `data-on-input__debounce.300ms`
+ * Measured, not guessed: with the order reversed, `data-on:input__debounce.300ms`
  * comes out as one span instead of prefix, plugin, separator and modifier.
  */
 // Astro types `langs` as registration objects only, while Shiki also accepts

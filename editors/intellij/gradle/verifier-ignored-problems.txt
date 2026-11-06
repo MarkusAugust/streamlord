@@ -1,0 +1,7 @@
+// IntelliJ IDEA 2026.3 moved HTML and XML into the bundled plugin com.intellij.xml, which declares
+// com.intellij.modules.xml. Plugin Verifier 1.411 does not resolve that alias in 2026.3 and reports the
+// same for the IDE's own intellij.spellchecker.xml. The tests pass in 2026.3. Remove these lines when the
+// verifier catches up.
+io.github.markusaugust.streamlord::Package 'com\.intellij\.psi\.xml' is not found.*
+io.github.markusaugust.streamlord::Access to unresolved class com\.intellij\.ide\.highlighter\.HtmlFileType.*
+io.github.markusaugust.streamlord::Access to unresolved class com\.intellij\.lang\.html\.HTMLLanguage.*

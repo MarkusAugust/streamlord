@@ -1,0 +1,26 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "scopeName": "streamlord.kotlin.dsl.injection",
+  "comment": "Inside a file that imports the DSL (meta.dsl-file.streamlord, opened by streamlord.kotlin.injection): its calls, and everything else that grammar colours, from that grammar's own rules.",
+  "injectionSelector": "L:meta.dsl-file.streamlord -comment -string",
+  "patterns": [
+    {
+      "include": "streamlord.kotlin.injection#expression-call-first-arg"
+    },
+    {
+      "include": "streamlord.kotlin.injection#expression-call-second-arg"
+    },
+    {
+      "include": "streamlord.kotlin.injection#attributes-index"
+    },
+    {
+      "include": "streamlord.kotlin.injection#html-call"
+    },
+    {
+      "include": "streamlord.kotlin.injection#script-call"
+    },
+    {
+      "include": "streamlord.kotlin.injection#html-string"
+    }
+  ]
+}

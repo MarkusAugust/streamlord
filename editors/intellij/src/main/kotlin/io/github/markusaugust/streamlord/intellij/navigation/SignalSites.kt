@@ -1,6 +1,8 @@
 package io.github.markusaugust.streamlord.intellij.navigation
 
 import com.intellij.lang.injection.InjectedLanguageManager
+import com.intellij.openapi.project.DumbService
+import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiManager
@@ -48,6 +50,9 @@ object SignalSites {
                 compute(file),
                 PsiModificationTracker.getInstance(file.project),
                 StreamlordSettings.getInstance(file.project).tracker,
+                // Which modules have the DSL decides which definitions count.
+                ProjectRootManager.getInstance(file.project),
+                DumbService.getInstance(file.project).modificationTracker,
             )
         }
 
@@ -56,7 +61,7 @@ object SignalSites {
         val reads =
             when {
                 file is KtFile -> {
-                    analysis.kotlinSignalReferences(file)
+                    analysis.streamlordSignalReferences(file)
                 }
 
                 StreamlordAnalysis.isHtmlSide(file) && !InjectedLanguageManager.getInstance(file.project).isInjectedFragment(file) -> {
@@ -86,6 +91,11 @@ object SignalSites {
             } else {
                 -1
             }
+        // A name the project defines only where go to declaration finds no place, in somebody else's `set` say, is no
+        // link: a reference that resolves to nothing would say "Cannot find declaration".
+        val targeted = HashMap<String, Boolean>()
+
+        fun linked(path: String) = path in defined && targeted.getOrPut(path) { SignalTarget.of(file, path).isNotEmpty() }
         val out = ArrayList<SignalSite>()
         for (read in reads) {
             var at = read.end - read.name.length
@@ -95,7 +105,7 @@ object SignalSites {
             var path = ""
             for (part in read.name.split('.')) {
                 path = if (path.isEmpty()) part else "$path.$part"
-                if (path in defined) out += SignalSite(at, at + part.length, path, null, host(at))
+                if (linked(path)) out += SignalSite(at, at + part.length, path, null, host(at))
                 at += part.length + 1
             }
         }
@@ -133,16 +143,20 @@ object SignalSites {
         return provider.allFiles.firstOrNull { it !== base && StreamlordAnalysis.isHtmlSide(it) } ?: base
     }
 
-    /** The calls that define a signal by a name in a string, which are someone else's when they resolve elsewhere. */
-    private val DEFINING_CALLS: Set<String> by lazy {
-        Catalog.default.signalCalls.keys +
-            setOf("set", "setExpr", "toggle", "dataBind", "dataIndicator", "dataRef", "dataComputed", "dataMatchMedia")
-    }
+    /** A `data*` helper names the attribute it writes, so it defines its signal whatever it resolves to, a helper of the project's own among them. */
+    private val ATTRIBUTE_HELPERS: Set<String> by lazy { Catalog.default.attributes.flatMapTo(HashSet()) { it.kotlin } }
+
+    /** The DSL's short helpers, whose names other APIs use too: Streamlord's only when they resolve there. */
+    private val SHORT_HELPERS: Set<String> by lazy { Catalog.default.signalNameHelpers.keys }
+
+    /** Core's calls, `patchSignals` and its kin: Streamlord's or the official SDK's, not those of a class of the project's own. */
+    private val CORE_CALLS: Set<String> by lazy { Catalog.default.signalCalls.keys - ATTRIBUTE_HELPERS }
 
     /**
      * Is the definition at [at] in [file] Streamlord's? It is unless the nearest call around it that
-     * defines signals resolves to something else, `redis.set("count", 1)` say. A key in an HTML
-     * string or a property of a signals class has no such call.
+     * defines signals resolves to something that does not, `headers { set("count", 1) }` say. A key
+     * in an HTML string or a property of a signals class has no such call, and a call that does not
+     * resolve counts.
      */
     fun byStreamlord(
         file: KtFile,
@@ -151,9 +165,11 @@ object SignalSites {
         val leaf = file.findElementAt(at) ?: return true
         for (call in leaf.parentsOfType<KtCallExpression>()) {
             val callee = call.calleeExpression as? KtNameReferenceExpression ?: continue
-            if (callee.getReferencedName() !in DEFINING_CALLS) continue
+            val name = callee.getReferencedName()
+            if (name in ATTRIBUTE_HELPERS) return true
+            if (name !in SHORT_HELPERS && name !in CORE_CALLS) continue
             val target = callee.mainReference.resolve() ?: return true
-            return StreamlordResolve.isStreamlord(target)
+            return StreamlordResolve.isStreamlord(target) || (name in CORE_CALLS && StreamlordResolve.isOfficialSdk(target))
         }
         return true
     }

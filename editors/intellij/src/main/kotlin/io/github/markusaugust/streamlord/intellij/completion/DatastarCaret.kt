@@ -7,6 +7,7 @@ import com.intellij.psi.PsiFile
 import io.github.markusaugust.streamlord.analysis.ExpressionAtCaret
 import io.github.markusaugust.streamlord.analysis.expressionAtCaret
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
+import io.github.markusaugust.streamlord.intellij.analysis.StreamlordCalls
 import org.jetbrains.kotlin.psi.KtFile
 
 /**
@@ -28,14 +29,14 @@ object DatastarCaret {
         val documents = PsiDocumentManager.getInstance(file.project)
 
         fun textOf(f: PsiFile): String = (if (fromDocument) documents.getDocument(f)?.text else null) ?: f.text
-        if (file is KtFile) return analysis.analyzer.expressionAtCaret(textOf(file), offset, true, analysis.prefix)
+        if (file is KtFile) return inKotlin(analysis, file, textOf(file), offset, fromDocument)
         // HTML injected into a Kotlin string is read on the Kotlin side, where the string is decoded: the
         // injected text keeps Kotlin's escapes and leaves out what a template writes.
         val manager = InjectedLanguageManager.getInstance(file.project)
         if (manager.isInjectedFragment(file)) {
             val host = manager.getInjectionHost(file)?.containingFile
             if (host is KtFile) {
-                return analysis.analyzer.expressionAtCaret(textOf(host), manager.injectedToHost(file, offset), true, analysis.prefix)
+                return inKotlin(analysis, host, textOf(host), manager.injectedToHost(file, offset), fromDocument)
             }
         }
         // Markup: an HTML file, a template read as text, or a template whose plugin gives it an HTML view beside its own
@@ -46,5 +47,28 @@ object DatastarCaret {
                 file.viewProvider.allFiles.any { it.language.isKindOf(HTMLLanguage.INSTANCE) }
         if (!markup) return null
         return analysis.analyzer.expressionAtCaret(textOf(file), offset, false, analysis.prefix)
+    }
+
+    /**
+     * The expression in Kotlin: in kotlinx.html's `attributes["data-..."] =` or an HTML string whatever the project has, and in
+     * the string of a DSL call where the module has the DSL and the call is Streamlord's.
+     */
+    private fun inKotlin(
+        analysis: StreamlordAnalysis,
+        file: KtFile,
+        text: String,
+        offset: Int,
+        fromDocument: Boolean,
+    ): ExpressionAtCaret? {
+        val analyzer = analysis.analyzer
+        val datastarAnyway =
+            analyzer.attributesIndexes(text).any { it.nameStart <= offset && offset <= (it.value?.end ?: it.nameStart) } ||
+                StreamlordCalls.of(file).htmlStringAt(analysis, text, offset) != null
+        if (!datastarAnyway) {
+            if (!StreamlordCalls.of(file).dsl) return null
+            // A document ahead of the file is read by the names alone: the verdicts are by the file's offsets.
+            if (!fromDocument && analysis.isForeignCallAt(file, offset, analyzer.catalog.expressionCallSites.keys)) return null
+        }
+        return analyzer.expressionAtCaret(text, offset, true, analysis.prefix)
     }
 }

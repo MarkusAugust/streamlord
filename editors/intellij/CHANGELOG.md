@@ -2,6 +2,64 @@
 
 All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here.
 
+## 0.12.0
+
+- Only the catalog's attributes are coloured as Datastar in HTML, in an HTML file and in an HTML
+  string in Kotlin alike, as in kotlinx.html's `attributes["data-..."]`. The page's own
+  `data-color`, or a typo such as `data-onn`, keeps the colour HTML gives an attribute.
+- The plugin reads which of Streamlord's modules each module of the project has, as IntelliJ
+  knows its libraries. Without streamlord-html, a call named as the DSL's, `dataOnClick` or
+  `signal`, is somebody else's: its string gets no Datastar diagnostics, completion, hover,
+  parameter info or colours, and the spell checker reads it as prose. No fix writes a DSL
+  helper, and hover in HTML leaves out the Kotlin helpers. Without streamlord-core no call is
+  Streamlord's, and no fix or message sends you to `interpolate` or `Trusted`. A Ktor or Spring
+  project without the DSL is such a project. An HTML string is read as Datastar in every project.
+  A file moved to another module is judged by that module's libraries at once. In a module without
+  streamlord-html the DSL's short helpers (`set`, `setExpr`, `toggle`, `signal`, `increment`, `decrement` and `not`) are
+  somebody else's too, since other APIs use those names: they define no signal for completion,
+  the unknown-signal check or go to declaration, and completion offers no name from them. A `data*` helper
+  names the attribute it writes, so `dataSignals("count" to 0)` defines `count` in every module,
+  a helper of your own by that name among them.
+- A helper called on a receiver, `headers.set("Cache-Control", "no-cache")` or
+  `map.set("count", 1)`, defines no signal any more.
+- Go to declaration, find usages and rename find a signal defined by a `data*` helper of your own,
+  where they left it out because the call resolves to your function rather than Streamlord's, and
+  one defined by the official Datastar SDK's `patchSignals`.
+- A `$name` whose only definition is one go to declaration leaves out, such as somebody else's
+  `set` called through an implicit receiver, is no longer a link that says "Cannot find
+  declaration". Rename no longer reports a conflict with such a definition.
+- HTML handed to a call of another library, the official Datastar SDK's `patchElements` among
+  them, gets the checks of any HTML string: an unknown attribute or modifier is reported there,
+  where nothing was before, and the rules of a Streamlord patch, such as an id on each element,
+  are not applied.
+- The Streamlord live templates are offered only where the module has what they write:
+  `patchSignals`, `patchElementsHtml`, `removeElements` and `executeScript` with streamlord-core;
+  `patchElements`, `dataOnClick`, `dataSignals` and `dataInit` with streamlord-html;
+  `ktor-datastar-route` and `ktor-datastar-flow` with streamlord-ktor and streamlord-html;
+  `ktor-datastar-signals` with streamlord-ktor; `spring-datastar-endpoint` with
+  streamlord-spring.
+- While IntelliJ indexes it cannot tell what a module has, and every part of the plugin, the
+  templates among them, behaves as in 0.11.0 until it is done.
+- The plugin now declares that it needs IntelliJ's Java support, which the Kotlin plugin needs
+  already.
+- kotlinx.html's own way to write Datastar, `attributes["data-on:click"] = "@post('/save')"`, gets
+  what a DSL call gets, in every project: completion of signals and actions in the value, colours
+  in the name and the value, and hover on the attribute's name. The spell checker reads only the
+  strings of the expression, so `$usrnm` is no typo there. A value joined to more with `+` is a
+  template, and only its name is coloured, as only its name is checked.
+- In a project with streamlord-html, a call named as the DSL's that IntelliJ resolves to another
+  function, such as `other.dataText("...")` on a class of your own or a `dataText` imported from
+  another package, gets no Datastar colours, completion, hover or spelling, as it got no
+  diagnostics already. To keep highlighting fast a call is resolved for this only when there is a
+  reason to doubt it: it is made on a receiver, the file declares its name or imports it from
+  outside Streamlord, or it has an issue the diagnostics resolved it for. Any other call of a
+  DSL name is taken as Streamlord's, as before, even one that comes from a star import, a file in
+  the same package or a member of an enclosing class.
+- Hover on a word in a Kotlin string, such as `post` in `"@post('/x')"`, no longer shows the
+  documentation of the DSL function of that name.
+- The spell checker failed on a Kotlin string whose expression has a template right after an
+  empty string, such as `dataText("''$count")`, and IntelliJ reported the error.
+
 ## 0.11.0
 
 - Go to a signal, find where it is used, rename it. Ctrl+click (⌘+click on macOS) on `$count` goes

@@ -45,16 +45,26 @@ export const HELPER_READ_CALLS: ReadonlySet<string> = new Set([...catalog.signal
 
 /**
  * A file that uses the DSL: a helper call elsewhere, `redis.increment("visits")` or Hamcrest's
- * `not("error")`, is somebody else's.
+ * `not("error")`, is somebody else's. A line starts after `\n` alone and is indented with spaces
+ * and tabs, as `USES_HTML_DSL` in SignalReferences.kt reads it.
  */
-const USES_HTML_DSL = /^\s*(?:import\s+io\.github\.markusaugust\.streamlord\.html\.|package\s+io\.github\.markusaugust\.streamlord\.html\b)/m;
+export const USES_HTML_DSL = /(?:^|(?<=\n))[ \t]*(?:import[ \t]+io\.github\.markusaugust\.streamlord\.html\.|package[ \t]+io\.github\.markusaugust\.streamlord\.html(?![\p{L}\p{Nd}_]))/u;
 
-/** An import of a name from outside the DSL: `import org.hamcrest.Matchers.not`, or `.*` of Hamcrest's matchers. */
-const FOREIGN_IMPORT = /^\s*import\s+(?!io\.github\.markusaugust\.streamlord\.html\.)([A-Za-z_][\w.]*)\.(\w+|\*)/gm;
+/** An import of a name from outside the DSL: `import org.hamcrest.Matchers.not`, or `.*` of Hamcrest's matchers. Lines as in `USES_HTML_DSL`. */
+const FOREIGN_IMPORT = /(?:^|(?<=\n))[ \t]*import[ \t]+(?!io\.github\.markusaugust\.streamlord\.html\.)([A-Za-z_][\w.]*)\.(\w+|\*)/g;
 
-/** The helpers of `names` that `src` reads as the DSL's: those no import from elsewhere puts in their place. */
-export function dslHelpers(src: string, names: ReadonlySet<string> = HELPER_READ_CALLS): Set<string> {
-  if (!USES_HTML_DSL.test(src)) return new Set();
+/**
+ * The helpers of `names` that `src` reads as the DSL's: those no import from elsewhere puts in their
+ * place. `htmlDsl` is whether streamlord-html is on the classpath, as the analysis options say;
+ * when that is not known, a file that imports nothing of the DSL has none.
+ */
+export function dslHelpers(src: string, names: ReadonlySet<string> = HELPER_READ_CALLS, htmlDsl: boolean | null = null): Set<string> {
+  if (!(htmlDsl ?? USES_HTML_DSL.test(src))) return new Set();
+  return unshadowed(src, names);
+}
+
+/** The names of `names` that no import from outside the DSL in `src` puts in their place. */
+export function unshadowed(src: string, names: ReadonlySet<string>): Set<string> {
   const out = new Set(names);
   for (const m of src.matchAll(FOREIGN_IMPORT)) {
     const [, from = "", name = ""] = m;
@@ -305,11 +315,18 @@ function hyphenIssue(s: KotlinString, src: string, fixed: string, bracketedName:
 /**
  * The issues of the calls of `src` whose signal names hold a hyphen, including the calls inside a
  * string template, `"${signal("is-running")} ? 'Stop' : 'Go'"`, which the scanner reads as code of
- * their own. `dslCalls` names the calls whose arguments a shared-name helper counts inside.
+ * their own. `dslCalls` names the calls whose arguments a shared-name helper counts inside;
+ * `foreign` says, by its name and where the name starts in `src`, which call is not Streamlord's.
  */
-export function signalNameHyphenSites(src: string, lex: { strings: KotlinString[]; mask: Uint8Array }, helpers: ReadonlySet<string>, dslCalls: ReadonlySet<string>): Issue[] {
+export function signalNameHyphenSites(
+  src: string,
+  lex: { strings: KotlinString[]; mask: Uint8Array },
+  helpers: ReadonlySet<string>,
+  dslCalls: ReadonlySet<string>,
+  foreign: (name: string, nameStart: number) => boolean = () => false,
+): Issue[] {
   const out: { at: number; issues: Issue[] }[] = [];
-  collectHyphenSites(src, lex, helpers, dslCalls, false, 0, 0, out);
+  collectHyphenSites(src, lex, helpers, dslCalls, foreign, false, 0, 0, out);
   return out.sort((a, b) => a.at - b.at).flatMap((o) => o.issues);
 }
 
@@ -318,16 +335,18 @@ function collectHyphenSites(
   lex: { strings: KotlinString[]; mask: Uint8Array },
   helpers: ReadonlySet<string>,
   dslCalls: ReadonlySet<string>,
+  foreign: (name: string, nameStart: number) => boolean,
   enclosed: boolean,
   shift: number,
   depth: number,
   out: { at: number; issues: Issue[] }[],
 ): void {
-  const calls = findCallSites(text, dslCalls, lex.mask);
+  const calls = findCallSites(text, dslCalls, lex.mask).filter((c) => !foreign(c.name, c.nameStart + shift));
   // Inside the arguments of a DSL call, and not in a lambda there: `buildMap { set("first-name", "") }` is a map's.
   const inside = (at: number): boolean =>
     calls.some((c) => at > c.openParen && at < c.closeParen && !openBraceBetween(text, lex.mask, c.openParen, at)) || (enclosed && !openBraceBetween(text, lex.mask, 0, at));
   for (const site of findCallSites(text, SIGNAL_NAMING_CALLS, lex.mask)) {
+    if (foreign(site.name, site.nameStart + shift)) continue;
     // A string template holds DSL calls too, so the pairs of one are read here as well.
     const issues = [...signalNameHyphenIssues(site, text, lex.strings, helpers, inside), ...dataSignalsPairIssues(site, text, lex.strings)];
     if (issues.length > 0) out.push({ at: site.nameStart + shift, issues: issues.map((i) => shifted(i, shift)) });
@@ -338,7 +357,7 @@ function collectHyphenSites(
       if (t.kind !== "braced") continue;
       const open = text.indexOf("{", t.start);
       if (open < 0 || open + 1 > t.end - 1 || text.slice(open + 1, t.end - 1) !== t.text) continue;
-      collectHyphenSites(t.text, lexKotlin(t.text), helpers, dslCalls, inside(t.start), shift + open + 1, depth + 1, out);
+      collectHyphenSites(t.text, lexKotlin(t.text), helpers, dslCalls, foreign, inside(t.start), shift + open + 1, depth + 1, out);
     }
   }
 }

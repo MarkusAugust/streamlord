@@ -3,11 +3,10 @@ package io.github.markusaugust.streamlord.intellij
 import com.intellij.grazie.ide.inspection.grammar.GrazieInspection
 import com.intellij.grazie.spellcheck.GrazieSpellCheckingInspection
 import com.intellij.psi.util.PsiTreeUtil
-import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import io.github.markusaugust.streamlord.intellij.spelling.DatastarSpellcheckingStrategy
 
 /** In a Datastar expression only the text in quotes is prose: a signal or an action name is no word to spell. */
-class SpellcheckTest : BasePlatformTestCase() {
+class SpellcheckTest : StreamlordTestCase() {
     override fun setUp() {
         super.setUp()
         myFixture.enableInspections(GrazieSpellCheckingInspection(), GrazieInspection())
@@ -26,6 +25,12 @@ class SpellcheckTest : BasePlatformTestCase() {
         assertTrue(found.toString(), found.any { "Lagree" in it })
         assertTrue(found.toString(), found.any { "Wrongg" in it })
         assertTrue(found.toString(), found.none { "usrnm" in it })
+    }
+
+    // An empty string in the expression is prose of no length, which a template right after it covers past its end.
+    fun `test a template after an empty string in an expression is spelled without failing`() {
+        val found = typos("Empty.kt", "fun f(count: Int) { dataText(\"''\${'$'}count + ' Lagree'\") }")
+        assertTrue(found.toString(), found.any { "Lagree" in it })
     }
 
     // The spell checker asks for every element of every pass, so the answer must not read the whole file each time.

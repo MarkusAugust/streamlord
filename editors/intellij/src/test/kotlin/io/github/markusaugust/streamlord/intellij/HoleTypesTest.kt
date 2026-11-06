@@ -8,26 +8,16 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.fileEditor.FileDocumentManager
-import com.intellij.openapi.module.Module
-import com.intellij.openapi.roots.ContentEntry
-import com.intellij.openapi.roots.ModifiableRootModel
 import com.intellij.profile.codeInspection.InspectionProjectProfileManager
 import com.intellij.psi.PsiDocumentManager
-import com.intellij.testFramework.LightProjectDescriptor
-import com.intellij.testFramework.PsiTestUtil
-import com.intellij.testFramework.fixtures.BasePlatformTestCase
-import com.intellij.util.PathUtil
 import io.github.markusaugust.streamlord.analysis.HoleFact
-import io.github.markusaugust.streamlord.core.domain.Trusted
 import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonParser
-import io.github.markusaugust.streamlord.html.Casing
 import io.github.markusaugust.streamlord.intellij.analysis.HoleFacts
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.inspections.KotlinInterpolationInspection
 import io.github.markusaugust.streamlord.intellij.inspections.PreferredReplaceTextFix
 import io.github.markusaugust.streamlord.intellij.inspections.ReplaceTextFix
-import kotlinx.html.TagConsumer
 import org.jetbrains.kotlin.psi.KtFile
 import java.io.File
 
@@ -35,26 +25,8 @@ import java.io.File
  * The interpolation test project with the Kotlin plugin's types: what IntelliJ says of each hole
  * beyond the text alone, which expected.json gives for both analyses.
  */
-class HoleTypesTest : BasePlatformTestCase() {
+class HoleTypesTest : StreamlordTestCase() {
     private val dir = File(System.getProperty("streamlord.repo"), "editors/vscode/test/fixtures/interpolationtests")
-
-    /** A module with the Kotlin standard library, Streamlord's core and DSL, and kotlinx.html, so the types resolve. */
-    override fun getProjectDescriptor(): LightProjectDescriptor =
-        object : LightProjectDescriptor() {
-            override fun getModuleTypeId(): String = "JAVA_MODULE"
-
-            override fun configureModule(
-                module: Module,
-                model: ModifiableRootModel,
-                contentEntry: ContentEntry,
-            ) {
-                super.configureModule(module, model, contentEntry)
-                for ((name, type) in LIBRARIES) {
-                    val jar = File(PathUtil.getJarPathForClass(type))
-                    PsiTestUtil.addLibrary(model, name, jar.parent, jar.name)
-                }
-            }
-        }
 
     /**
      * Where the types change the verdict of expected.json, by hole and code: null is silent. A
@@ -500,14 +472,6 @@ class HoleTypesTest : BasePlatformTestCase() {
                 </div>
                 ""${'"'}
             """.trimIndent().replace('¤', '$')
-
-        val LIBRARIES =
-            listOf(
-                "kotlin-stdlib" to KotlinVersion::class.java,
-                "streamlord-core" to Trusted::class.java,
-                "streamlord-html" to Casing::class.java,
-                "kotlinx-html" to TagConsumer::class.java,
-            )
 
         /** Just enough of Ktor, Streamlord's Ktor module and the annotations for the fixture files to resolve. */
         val STUBS =
