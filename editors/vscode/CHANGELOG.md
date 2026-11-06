@@ -10,8 +10,12 @@ All notable changes to the Streamlord extension are recorded here.
   coloured in every file: the name, its key and modifiers in the key, and the expression in the
   value of an attribute that takes one, where the literal is the whole statement, as the checks
   read it. Only the catalog's attributes: the page's own `data-color`, or a typo such as
-  `data-onn`, is left as it is here, though in an HTML string every `data-*` attribute is still
-  coloured.
+  `data-onn`, is left as it is.
+- In an HTML file and in an HTML string in Kotlin, only the catalog's attributes are coloured as
+  Datastar, in any case, as the browser reads a name. The page's own `data-color` or
+  `data-variant`, or a typo such as `data-onn`, keeps the colour HTML gives an attribute, and its
+  value is not coloured as an expression. Of the catalog's attributes, only one that takes an
+  expression has its value coloured as one: `data-bind="user.name"` keeps a plain string.
 - A raw string handed to a DSL call, such as `dataText("""$x""")`, is left to Kotlin's grammar.
   Its quotes were paired wrongly, and with fwcd's Kotlin grammar the lines after it were coloured
   as a string.

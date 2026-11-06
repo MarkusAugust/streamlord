@@ -4,6 +4,9 @@ All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here
 
 ## Unreleased
 
+- Only the catalog's attributes are coloured as Datastar in HTML, in an HTML file and in an HTML
+  string in Kotlin alike, as in kotlinx.html's `attributes["data-..."]`. The page's own
+  `data-color`, or a typo such as `data-onn`, keeps the colour HTML gives an attribute.
 - The plugin reads which of Streamlord's modules each module of the project has, as IntelliJ
   knows its libraries. Without streamlord-html, a call named as the DSL's, `dataOnClick` or
   `signal`, is somebody else's: its string gets no Datastar diagnostics, completion, hover,

@@ -265,4 +265,46 @@ describe("html injection grammar", () => {
     assert.match(scopeOf(t, "on-intersect"), /attribute-name\.datastar\.plugin/);
     assert.match(scopeOf(t, ".50"), /constant\.numeric\.datastar/);
   });
+
+  it("leaves a data-* attribute of the page's own, or a typo, to HTML", async () => {
+    const others = [`<div data-color="success">`, `<div data-onn:click="x()">`, `<div data-tooltip>`, `<div data-signalsx:a="1">`];
+    // A name that starts as one of the catalog's is not one: the check after the name keeps these out.
+    others.push(`<div data-ignored>`, `<div data-persistent>`, `<div data-showx>`, `<div data-on-intersects="x()">`);
+    for (const other of others) {
+      const t = await tokens("text.html.basic", other);
+      assert.ok(t.every((x) => !x.scopes.some((s) => s.includes("datastar"))), other);
+    }
+    const t = await tokens("text.html.basic", `<div data-on-intersect="x()" data-ignore-morph data-show="$open">`);
+    assert.match(scopeOf(t, "on-intersect"), /attribute-name\.datastar\.plugin/);
+    assert.match(scopeOf(t, "ignore-morph"), /attribute-name\.datastar\.plugin/);
+    assert.match(scopeOf(t, "show"), /attribute-name\.datastar\.plugin/);
+    // The browser lowercases a name, and so do the checks.
+    const upper = await tokens("text.html.basic", `<div DATA-SHOW="$open" data-On:Click="x()">`);
+    assert.match(scopeOf(upper, "SHOW"), /attribute-name\.datastar\.plugin/);
+    assert.match(scopeOf(upper, "On"), /attribute-name\.datastar\.plugin/);
+  });
+
+  it("reads only the value of an attribute that takes an expression as one", async () => {
+    const t = await tokens("text.html.basic", `<input data-bind="user.name" data-show="$open">`);
+    assert.match(scopeOf(t, "bind"), /attribute-name\.datastar\.plugin/);
+    assert.ok(!scopeOf(t, "user.name").includes("datastar"), scopeOf(t, "user.name"));
+    assert.match(scopeOf(t, "user.name"), /string\.quoted\.double\.html/);
+    assert.ok(t.some((x) => x.text.includes("open") && x.scopes.includes("meta.embedded.inline.datastar")));
+  });
+
+  it("colours the same in an HTML string in Kotlin", async () => {
+    const t = await tokens("source.kotlin", `val h = """<div data-color="x" data-show="$a"></div>"""`);
+    assert.ok(!t.some((x) => x.text.includes("color") && x.scopes.some((s) => s.includes("datastar"))));
+    assert.match(scopeOf(t, "show"), /attribute-name\.datastar\.plugin/);
+  });
+
+  it("knows exactly the catalog's attributes", () => {
+    const catalog = JSON.parse(readFileSync(new URL("../../catalog/datastar-1.0.4.json", root), "utf8")) as { attributes: { name: string; valueKind: string }[] };
+    const grammar = JSON.parse(readFileSync(new URL("syntaxes/html-injection.tmLanguage.json", root), "utf8"));
+    const names = (pattern: string) => /\(\?:((?:[a-z-]+\|)*[a-z-]+)\)\)/.exec(pattern)?.[1]?.split("|").sort() ?? [];
+    const of = (kinds: (k: string) => boolean) => [...new Set(catalog.attributes.filter((a) => kinds(a.valueKind)).map((a) => a.name))].sort();
+    assert.deepEqual(names(grammar.repository["datastar-attribute-with-value"].begin), of((k) => k === "expression"));
+    assert.deepEqual(names(grammar.repository["datastar-attribute-with-plain-value"].begin), of((k) => k !== "expression"));
+    assert.deepEqual(names(grammar.repository["datastar-attribute-bare"].match), of(() => true));
+  });
 });
