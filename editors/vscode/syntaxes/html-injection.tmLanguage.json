@@ -7,13 +7,16 @@
       "include": "#datastar-attribute-with-value"
     },
     {
+      "include": "#datastar-attribute-with-plain-value"
+    },
+    {
       "include": "#datastar-attribute-bare"
     }
   ],
   "repository": {
     "attribute-name": {
       "comment": "data-on:click__debounce.500ms.leading -> prefix | plugin | :key | __modifier.args. Not anchored: capture sub-patterns run mid-line, where ^ never matches.",
-      "match": "(data-(?:star-)?)([a-z][a-z-]*)(?:(:)((?:[A-Za-z0-9.-]|_(?!_))+))?((?:__[A-Za-z0-9_.-]+)*)",
+      "match": "((?i:data-(?:star-)?))([A-Za-z][A-Za-z-]*)(?:(:)((?:[A-Za-z0-9.-]|_(?!_))+))?((?:__[A-Za-z0-9_.-]+)*)",
       "captures": {
         "1": {
           "name": "entity.other.attribute-name.datastar.prefix"
@@ -61,7 +64,8 @@
       }
     },
     "datastar-attribute-with-value": {
-      "begin": "\\b(?=data-(?:star-)?[a-z])(data-(?:star-)?[A-Za-z0-9_:.-]+)(\\s*=\\s*)(\")",
+      "comment": "The catalog's attributes only: the page's own data-color, or a typo such as data-onn, is left to HTML. The check after the name keeps data-on-intersects and data-ignored out. In any case, as the browser lowercases a name. Only an attribute that takes an expression has its value read as one; the others are datastar-attribute-with-plain-value. grammar.test.ts holds the lists to the catalog.",
+      "begin": "\\b((?i:data-(?:star-)?(?:custom-validity|on-signal-patch|view-transition|on-intersect|match-media|on-interval|replace-url|on-resize|computed|animate|signals|effect|on-raf|class|style|attr|init|show|text|on))(?=[:=\\s]|__)[A-Za-z0-9_:.-]*)(\\s*=\\s*)(\")",
       "beginCaptures": {
         "1": {
           "patterns": [
@@ -98,8 +102,40 @@
         }
       ]
     },
+    "datastar-attribute-with-plain-value": {
+      "comment": "A Datastar attribute whose value is a name, a selector or text, not an expression: its name is Datastar's, its value a string as HTML has it.",
+      "begin": "\\b((?i:data-(?:star-)?(?:on-signal-patch-filter|scroll-into-view|preserve-attr|ignore-morph|json-signals|query-string|indicator|persist|ignore|nonce|bind|ref))(?=[:=\\s]|__)[A-Za-z0-9_:.-]*)(\\s*=\\s*)(\")",
+      "beginCaptures": {
+        "1": {
+          "patterns": [
+            {
+              "include": "#attribute-name"
+            }
+          ]
+        },
+        "2": {
+          "name": "punctuation.separator.key-value.html"
+        },
+        "3": {
+          "name": "punctuation.definition.string.begin.html"
+        }
+      },
+      "end": "(\")",
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.string.end.html"
+        }
+      },
+      "contentName": "string.quoted.double.html",
+      "patterns": [
+        {
+          "match": "&quot;|&amp;|&lt;|&gt;|&#\\d+;",
+          "name": "constant.character.entity.html"
+        }
+      ]
+    },
     "datastar-attribute-bare": {
-      "match": "\\b(data-(?:star-)?[a-z][A-Za-z0-9_:.-]*)(?=[\\s/>])",
+      "match": "\\b((?i:data-(?:star-)?(?:on-signal-patch-filter|scroll-into-view|custom-validity|on-signal-patch|view-transition|preserve-attr|ignore-morph|json-signals|on-intersect|query-string|match-media|on-interval|replace-url|indicator|on-resize|computed|animate|persist|signals|effect|ignore|on-raf|class|nonce|style|attr|bind|init|show|text|ref|on))(?=[:\\s/>]|__)[A-Za-z0-9_:.-]*)(?=[\\s/>])",
       "captures": {
         "1": {
           "patterns": [

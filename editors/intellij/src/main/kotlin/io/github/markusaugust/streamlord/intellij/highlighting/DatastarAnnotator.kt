@@ -23,8 +23,8 @@ import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtStringTemplateExpression
 
 /**
- * Colours for Datastar in HTML: the parts of a `data-*` attribute name and the expression in its
- * value. Runs on HTML files, on the HTML view of template files, and on HTML injected anywhere
+ * Colours for Datastar in HTML: the parts of a Datastar attribute's name, one of the catalog's,
+ * and the expression in its value. The page's own `data-color`, or a typo, is left to HTML. Runs on HTML files, on the HTML view of template files, and on HTML injected anywhere
  * but into a Kotlin string, where [KotlinDatastarAnnotator] paints with the exact offsets.
  */
 class HtmlDatastarAnnotator : Annotator {
@@ -38,10 +38,10 @@ class HtmlDatastarAnnotator : Annotator {
         val analysis = StreamlordAnalysis.getInstance(file.project)
         val prefix = analysis.prefix
         val name = element.name
+        val spec = analysis.catalog.parseAttributeName(name.lowercase(), prefix)?.spec ?: return
         val parts = tokenizeAttributeName(name, prefix) ?: return
         val nameStart = element.nameElement.textRange.startOffset
         for (p in parts) paint(holder, TextRange(nameStart + p.start, nameStart + p.end), DatastarColors.of(p.part))
-        val spec = analysis.catalog.parseAttributeName(name.lowercase(), prefix)?.spec ?: return
         if (spec.valueKind != ValueKind.EXPRESSION) return
         val valueElement: XmlAttributeValue = element.valueElement ?: return
         val range = valueElement.valueTextRange
@@ -83,6 +83,7 @@ class KotlinDatastarAnnotator : Annotator {
                 return
             }
             if (s.contentStart == at.nameStart) {
+                analysis.catalog.parseAttributeName(at.name.lowercase(), analysis.prefix)?.spec ?: return
                 val parts = tokenizeAttributeName(at.name, analysis.prefix) ?: return
                 for (p in parts) paint(holder, TextRange(at.nameStart + p.start, at.nameStart + p.end), DatastarColors.of(p.part))
                 return
@@ -126,12 +127,12 @@ class KotlinDatastarAnnotator : Annotator {
         val prefix = analysis.prefix
         for (tag in tokenize(s.text).tags) {
             for (attr in tag.attributes) {
+                val spec = analysis.catalog.parseAttributeName(attr.name.lowercase(), prefix)?.spec ?: continue
                 val parts = tokenizeAttributeName(attr.name, prefix) ?: continue
                 for (p in parts) {
                     val r = s.toSource(attr.nameStart + p.start, attr.nameStart + p.end)
                     paint(holder, TextRange(r.first, r.last + 1), DatastarColors.of(p.part))
                 }
-                val spec = analysis.catalog.parseAttributeName(attr.name.lowercase(), prefix)?.spec ?: continue
                 val value = attr.value ?: continue
                 if (spec.valueKind != ValueKind.EXPRESSION || value.isBlank()) continue
                 paintExpression(holder, src, s, attr.valueStart, attr.valueStart + value.length)

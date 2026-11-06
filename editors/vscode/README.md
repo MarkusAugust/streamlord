@@ -119,9 +119,9 @@ once the DSL call's parenthesis is closed, as the IDE closes it for you.
 and for the DSL functions, in HTML files, templates and HTML strings in Kotlin alike.
 
 **Syntax highlighting** of Datastar expressions and HTML inside the DSL strings and in
-free-standing HTML strings, and of `data-*` attributes in HTML (plugin, key, modifiers and
-modifier arguments each get their own scope, and the attribute value is highlighted as a
-Datastar expression). Most themes color only
+free-standing HTML strings, and of Datastar's attributes in HTML, the catalog's and no other
+`data-*` (plugin, key, modifiers and modifier arguments each get their own scope, and the value
+of an attribute that takes an expression is highlighted as a Datastar expression). Most themes color only
 a few of these scopes, so run `Streamlord: Apply recommended colors` once to write a palette
 into your user settings; `Streamlord: Remove recommended colors` takes it out again.
 

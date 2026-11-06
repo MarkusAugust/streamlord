@@ -46,6 +46,9 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- Both editors coloured every `data-*` attribute in HTML as Datastar, the page's own `data-color`
+  and a typo such as `data-onn` among them. Only the catalog's attributes are coloured now, and
+  in VS Code only the value of one that takes an expression is coloured as an expression.
 - The signal index of both editors read a helper called on a receiver, such as
   `headers.set("Cache-Control", "no-cache")` or `map.set("count", 1)`, as defining a signal. In
   code that cannot call streamlord-html, the DSL's short helpers (`set`, `setExpr`, `toggle`,

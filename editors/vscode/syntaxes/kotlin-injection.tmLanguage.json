@@ -32,7 +32,7 @@
       ]
     },
     "attributes-index": {
-      "comment": "kotlinx.html's own way to write an attribute, attributes[\"data-on:click\"] = \"...\": Datastar in every file, for the catalog's attributes only, longest first so data-on-intersect is not data-on; grammar.test.ts holds both lists to the catalog. The name in the key as an attribute name. A literal assigned to an attribute that takes an expression is the expression when it is the whole statement, as the diagnostics read it: not the first half of a concatenation, and not a raw string.",
+      "comment": "kotlinx.html's own way to write an attribute, attributes[\"data-on:click\"] = \"...\": Datastar in every file, for the catalog's attributes only, the check after the name keeping data-on-intersects out; grammar.test.ts holds both lists to the catalog. The name in the key as an attribute name. A literal assigned to an attribute that takes an expression is the expression when it is the whole statement, as the diagnostics read it: not the first half of a concatenation, and not a raw string.",
       "patterns": [
         {
           "begin": "\\b(attributes)(\\s*\\[\\s*)(\")(data-(?:star-)?(?:custom-validity|on-signal-patch|view-transition|on-intersect|match-media|on-interval|replace-url|on-resize|computed|animate|signals|effect|on-raf|class|style|attr|init|show|text|on)(?=[:\"]|__)[A-Za-z0-9_:.-]*)(\")(\\s*\\])(\\s*)(=)(\\s*\\$*)(\")(?!\"\")(?=(?:[^\"\\\\]|\\\\.)*\"[ \\t]*(?:[;}]|$))",
