@@ -46,6 +46,19 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- The signal index of both editors read a helper called on a receiver, such as
+  `headers.set("Cache-Control", "no-cache")` or `map.set("count", 1)`, as defining a signal. In
+  code that cannot call streamlord-html, the DSL's short helpers (`set`, `setExpr`, `toggle`,
+  `signal`, `increment`, `decrement` and `not`) are somebody else's too: they define no signal
+  and completion offers no name from them. A `data*` helper still defines its signal there, so a
+  `dataSignals` you wrote yourself keeps working. The analysis gains overloads of
+  `collectSignals`, `collectSignalDefinitions` and `signalDeclarations` that take the names of the
+  calls to leave out.
+- In the IntelliJ plugin, go to declaration, find usages and rename now find a signal defined by a
+  `data*` helper you wrote yourself, or by the official Datastar SDK's `patchSignals`, which they
+  left out. A `$name` whose only definition they
+  leave out, such as somebody else's `set`, is no longer a link that says "Cannot find
+  declaration", and rename no longer reports a conflict with such a definition.
 - The IntelliJ plugin's spell checker failed on a Kotlin string whose expression has a template
   right after an empty string, such as `dataText("''$count")`, and IntelliJ reported the error.
 - In the IntelliJ plugin, HTML handed straight to a call of another library, such as the official

@@ -2,10 +2,13 @@ package io.github.markusaugust.streamlord.intellij.analysis
 
 import com.intellij.java.library.JavaLibraryUtil
 import com.intellij.lang.injection.InjectedLanguageManager
+import com.intellij.openapi.module.Module
 import com.intellij.openapi.module.ModuleUtilCore
 import com.intellij.openapi.project.DumbService
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.roots.ProjectFileIndex
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiElement
-import com.intellij.psi.PsiFile
 
 /** A module of the Streamlord SDK, known by a public class it has had since 0.10.0. */
 enum class StreamlordLibrary(
@@ -33,16 +36,25 @@ object ProjectLibraries {
         val project = element.project
         // An injected fragment is a file of its own, outside every module; its host's module is the one.
         val file = InjectedLanguageManager.getInstance(project).getTopLevelFile(element) ?: element.containingFile ?: return null
-        return find(file, library)
+        if (DumbService.isDumb(project)) return null
+        return find(project, ModuleUtilCore.findModuleForPsiElement(file), library)
+    }
+
+    /** Whether [library] is there for the project file [file], as [known] says for an element; no tree is built for it. */
+    fun known(
+        project: Project,
+        file: VirtualFile,
+        library: StreamlordLibrary,
+    ): Boolean? {
+        if (DumbService.isDumb(project)) return null
+        return find(project, ProjectFileIndex.getInstance(project).getModuleForFile(file), library)
     }
 
     private fun find(
-        file: PsiFile,
+        project: Project,
+        module: Module?,
         library: StreamlordLibrary,
     ): Boolean? {
-        val project = file.project
-        if (DumbService.isDumb(project)) return null
-        val module = ModuleUtilCore.findModuleForPsiElement(file)
         // A scratch file or one in memory belongs to no module: what the project has is the best guess.
         val found =
             if (module != null) {

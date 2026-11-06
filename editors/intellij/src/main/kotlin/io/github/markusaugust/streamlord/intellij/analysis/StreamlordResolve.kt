@@ -45,10 +45,20 @@ object StreamlordResolve {
      * Does the declaration live in a Streamlord package? Kotlin sources and decompiled Kotlin name their package; anything else is
      * judged by where its file sits, so the check needs no plugin beyond Kotlin's.
      */
-    fun isStreamlord(target: PsiElement): Boolean {
-        val file = target.containingFile ?: return true
-        if (file is KtFile) return file.packageFqName.asString().startsWith(PACKAGE)
-        val path = file.virtualFile?.path?.replace('\\', '/') ?: return true
-        return PACKAGE.replace('.', '/') in path
+    fun isStreamlord(target: PsiElement): Boolean = inPackage(target, PACKAGE) ?: true
+
+    /** Does the declaration live in the official Datastar SDK, whose `patchSignals` defines signals as core's does? */
+    fun isOfficialSdk(target: PsiElement): Boolean = inPackage(target, OFFICIAL_SDK) ?: false
+
+    private const val OFFICIAL_SDK = "dev.datastar.kotlin"
+
+    private fun inPackage(
+        target: PsiElement,
+        name: String,
+    ): Boolean? {
+        val file = target.containingFile ?: return null
+        if (file is KtFile) return file.packageFqName.asString().startsWith(name)
+        val path = file.virtualFile?.path?.replace('\\', '/') ?: return null
+        return name.replace('.', '/') in path
     }
 }

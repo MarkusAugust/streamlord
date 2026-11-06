@@ -11,7 +11,20 @@ All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here
   helper, and hover in HTML leaves out the Kotlin helpers. Without streamlord-core no call is
   Streamlord's, and no fix or message sends you to `interpolate` or `Trusted`. A Ktor or Spring
   project without the DSL is such a project. An HTML string is read as Datastar in every project.
-  A file moved to another module is judged by that module's libraries at once.
+  A file moved to another module is judged by that module's libraries at once. In a module without
+  streamlord-html the DSL's short helpers (`set`, `setExpr`, `toggle`, `signal`, `increment`, `decrement` and `not`) are
+  somebody else's too, since other APIs use those names: they define no signal for completion,
+  the unknown-signal check or go to declaration, and completion offers no name from them. A `data*` helper
+  names the attribute it writes, so `dataSignals("count" to 0)` defines `count` in every module,
+  a helper of your own by that name among them.
+- A helper called on a receiver, `headers.set("Cache-Control", "no-cache")` or
+  `map.set("count", 1)`, defines no signal any more.
+- Go to declaration, find usages and rename find a signal defined by a `data*` helper of your own,
+  where they left it out because the call resolves to your function rather than Streamlord's, and
+  one defined by the official Datastar SDK's `patchSignals`.
+- A `$name` whose only definition is one go to declaration leaves out, such as somebody else's
+  `set` called through an implicit receiver, is no longer a link that says "Cannot find
+  declaration". Rename no longer reports a conflict with such a definition.
 - HTML handed to a call of another library, the official Datastar SDK's `patchElements` among
   them, gets the checks of any HTML string: an unknown attribute or modifier is reported there,
   where nothing was before, and the rules of a Streamlord patch, such as an id on each element,

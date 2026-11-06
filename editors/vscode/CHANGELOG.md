@@ -4,6 +4,8 @@ All notable changes to the Streamlord extension are recorded here.
 
 ## Unreleased
 
+- A helper called on a receiver, `headers.set("Cache-Control", "no-cache")` or
+  `map.set("count", 1)`, defines no signal any more.
 - kotlinx.html's own form, `attributes["data-on:click__debounce.500ms"] = "@post('/save')"`, is
   coloured in every file: the name, its key and modifiers in the key, and the expression in the
   value of an attribute that takes one, where the literal is the whole statement, as the checks
@@ -19,7 +21,9 @@ All notable changes to the Streamlord extension are recorded here.
   else's: its string gets no Datastar diagnostics, completion, hover or signature help, reads no
   signal, and hover leaves the Kotlin helpers out. A signal it declares, as in
   `dataSignals("count" to 0)`, still counts: a helper of your own by that name writes the same
-  attribute. Until you write the import, a DSL
+  attribute. The short helpers (`set`, `setExpr`, `toggle`, `signal`, `increment`, `decrement`
+  and `not`) are somebody else's there, since other APIs use those names: they define no signal,
+  and completion offers no name from them. Until you write the import, a DSL
   call's string is not checked either, so the `$count` trap shows once the import is there. A
   file that imports the official Datastar SDK and nothing of Streamlord has no Streamlord call:
   its HTML is checked as any HTML string, and no fix or message sends you to `interpolate` or

@@ -24,10 +24,13 @@ import io.github.markusaugust.streamlord.analysis.collectSelectors
 import io.github.markusaugust.streamlord.analysis.collectSignalDefinitions
 import io.github.markusaugust.streamlord.analysis.collectSignals
 import io.github.markusaugust.streamlord.analysis.signalDeclarations
+import io.github.markusaugust.streamlord.intellij.analysis.ProjectLibraries
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
+import io.github.markusaugust.streamlord.intellij.analysis.StreamlordLibrary
 import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
 import org.jetbrains.kotlin.idea.KotlinFileType
 import java.util.concurrent.ConcurrentHashMap
+import java.util.regex.Pattern
 
 /**
  * Project-wide index of signal names and of element ids and classes, for completion. Heuristic
@@ -35,6 +38,14 @@ import java.util.concurrent.ConcurrentHashMap
  * once and again when it changes, up to a cap, and the names are offered with this file's first.
  * It keeps where each signal is defined and read as well, so that go to declaration, find usages
  * and rename read no file again: a word search re-reads thousands of files in a large project.
+ *
+ * What is kept comes from a file's text alone. The DSL's short helpers, `set`, `setExpr`,
+ * `toggle`, `signal`, `increment`, `decrement` and `not`, share their names with other APIs, so a
+ * Kotlin file that calls one is read a second time without them, and which of the two counts is
+ * asked of the file's module each time: in a module without streamlord-html they are somebody
+ * else's, and a file moved to another module or a library added changes no text. A `data*` helper names the attribute it writes, so it counts in
+ * every module, a helper of the project's own among them. A `set` through an implicit receiver in
+ * a module with the DSL, `headers { set("x", 1) }`, counts too: the text cannot tell.
  */
 @Service(Service.Level.PROJECT)
 class SignalIndex(
@@ -47,16 +58,30 @@ class SignalIndex(
         val prefix: String,
         val signals: Set<String>,
         val definitions: Set<String>,
+        /** What the file names and defines without its short DSL helpers, or null when it calls none. */
+        val withoutDsl: Names?,
         val selectors: Selectors,
     ) {
-        /** Where the file defines and reads signals: worked out on the first search, which completion never asks for. */
+        /**
+         * Where the file defines signals and where it reads them, each worked out when first asked for, which completion
+         * never does. Where it defines them is cheap, and highlighting asks for it; the reads only a search asks for.
+         */
         @Volatile
-        var places: Places? = null
+        var declared: Declared? = null
+
+        @Volatile
+        var reads: List<SignalReference>? = null
     }
 
-    private class Places(
+    private class Names(
+        val signals: Set<String>,
+        val definitions: Set<String>,
+    )
+
+    private class Declared(
         val declarations: List<SignalDeclaration>,
-        val reads: List<SignalReference>,
+        /** The declarations without the file's short DSL helpers, when it calls any. */
+        val withoutDsl: List<SignalDeclaration>?,
     )
 
     /** A place in a project file where a signal is defined or read, by the file's offsets. */
@@ -69,9 +94,12 @@ class SignalIndex(
 
     private val entries = ConcurrentHashMap<String, Entry>()
 
-    /** The union of every entry's definitions, dropped whenever an entry's definitions change or an entry goes. */
+    /**
+     * The union of every entry's definitions, with the counts of the roots and of indexing it was made at,
+     * since those decide which modules have the DSL. Dropped whenever an entry's definitions change or an entry goes.
+     */
     @Volatile
-    private var definitionsUnion: Set<String>? = null
+    private var definitionsUnion: Pair<List<Long>, Set<String>>? = null
 
     /** Bumped with each drop, so a union built from entries that changed meanwhile is not kept. Guarded by [unionLock]. */
     private var unionGeneration = 0L
@@ -86,16 +114,19 @@ class SignalIndex(
     private var listed: Pair<List<Long>, List<VirtualFile>> = emptyList<Long>() to emptyList()
 
     /** The names declared in one file, from its current text. */
-    fun forFile(file: PsiFile): Set<String> = entryFor(file)?.signals ?: emptySet()
+    fun forFile(file: PsiFile): Set<String> = entryFor(file)?.let { signalsOf(it, file) } ?: emptySet()
 
     fun selectorsForFile(file: PsiFile): Selectors = entryFor(file)?.selectors ?: Selectors.EMPTY
 
     /** Where [file] defines signals, from its current text. */
-    fun declarationsIn(file: PsiFile): List<SignalDeclaration> =
-        entryFor(file)?.let { placesOf(it, file.text) }?.declarations ?: emptyList()
+    fun declarationsIn(file: PsiFile): List<SignalDeclaration> {
+        val e = entryFor(file) ?: return emptyList()
+        val declared = declaredIn(e, file.text) ?: return emptyList()
+        return if (withoutDsl(e, file)) declared.withoutDsl ?: declared.declarations else declared.declarations
+    }
 
     /** Where [file] reads signals, from its current text, calls to something other than Streamlord among them. */
-    fun readsIn(file: PsiFile): List<SignalReference> = entryFor(file)?.let { placesOf(it, file.text) }?.reads ?: emptyList()
+    fun readsIn(file: PsiFile): List<SignalReference> = entryFor(file)?.let { readsIn(it, file.text) } ?: emptyList()
 
     /** Every place in the project that defines the signal [name], and with [inside] every one that defines a signal under it. */
     fun declarationsOf(
@@ -105,8 +136,8 @@ class SignalIndex(
         refresh()
         val under = "$name."
         return places { e ->
-            placesOf(e, null)
-                ?.declarations
+            declaredIn(e, null)
+                ?.let { if (withoutDsl(e)) it.withoutDsl ?: it.declarations else it.declarations }
                 ?.filter { it.name == name || (inside && it.name.startsWith(under)) }
                 ?.map { Triple(it.start, it.end, it.name) }
         }
@@ -117,34 +148,63 @@ class SignalIndex(
         refresh()
         val inside = "$name."
         return places { e ->
-            placesOf(e, null)?.reads?.filter { it.name == name || it.name.startsWith(inside) }?.map { Triple(it.start, it.end, it.name) }
+            readsIn(e, null)?.filter { it.name == name || it.name.startsWith(inside) }?.map { Triple(it.start, it.end, it.name) }
         }
     }
 
     /**
-     * Where [e]'s file defines and reads signals, from [text] or else from the file as it is now.
-     * They are kept only when that is the text [e] was made from; a caller checks each place against
-     * the file's own references.
+     * The text of [e]'s file: [text], or else the file as it is now, with whether it is the text [e] was
+     * made from, when what is worked out from it may be kept. A caller checks each place against the
+     * file's own references.
      */
-    private fun placesOf(
+    private fun textOf(
         e: Entry,
         text: String?,
-    ): Places? {
-        e.places?.let { return it }
+    ): Pair<String, Boolean>? {
         val vf = e.file ?: return null
-        val language = languageOf(vf) ?: return null
         val document = FileDocumentManager.getInstance().getCachedDocument(vf)
         val stamp = document?.modificationStamp ?: vf.modificationStamp
         val current = text ?: document?.text ?: runCatching { LoadTextUtil.loadText(vf).toString() }.getOrNull() ?: return null
+        return current to (current.length == e.length && (text != null || stamp == e.stamp))
+    }
+
+    private fun declaredIn(
+        e: Entry,
+        text: String?,
+    ): Declared? {
+        e.declared?.let { return it }
+        val language = e.file?.let(::languageOf) ?: return null
+        val (current, keep) = textOf(e, text) ?: return null
+        val helpers = shortHelpers()
+        // The current text may call a short helper the text the entry was made from did not.
+        val withoutDsl =
+            if (language == SourceLanguage.KOTLIN &&
+                callsAny(current, helpers)
+            ) {
+                signalDeclarations(current, language, helpers)
+            } else {
+                null
+            }
+        val declared = Declared(signalDeclarations(current, language), withoutDsl)
+        if (keep) e.declared = declared
+        return declared
+    }
+
+    private fun readsIn(
+        e: Entry,
+        text: String?,
+    ): List<SignalReference>? {
+        e.reads?.let { return it }
+        val language = e.file?.let(::languageOf) ?: return null
+        val (current, keep) = textOf(e, text) ?: return null
         val analysis = StreamlordAnalysis.getInstance(project)
         val reads =
             when (language) {
                 SourceLanguage.KOTLIN -> analysis.analyzer.signalReferencesInKotlin(current, analysis.options())
                 SourceLanguage.HTML -> analysis.analyzer.signalReferencesInHtml(current, analysis.options())
             }.map { SignalReference(it.start, it.end, it.name) }
-        val places = Places(signalDeclarations(current, language), reads)
-        if (current.length == e.length && (text != null || stamp == e.stamp)) e.places = places
-        return places
+        if (keep) e.reads = reads
+        return reads
     }
 
     private fun places(of: (Entry) -> List<Triple<Int, Int, String>>?): List<Place> {
@@ -160,23 +220,57 @@ class SignalIndex(
     fun all(): Set<String> {
         refresh()
         val out = LinkedHashSet<String>()
-        for (e in entries.values) out += e.signals
+        for (e in entries.values) out += signalsOf(e)
         return out
+    }
+
+    private fun signalsOf(
+        e: Entry,
+        psi: PsiFile? = null,
+    ): Set<String> = if (withoutDsl(e, psi)) e.withoutDsl!!.signals else e.signals
+
+    private fun definitionsOf(
+        e: Entry,
+        psi: PsiFile? = null,
+    ): Set<String> = if (withoutDsl(e, psi)) e.withoutDsl!!.definitions else e.definitions
+
+    /**
+     * Whether [e]'s file is read without its short DSL helpers: it calls some, and its module has no
+     * streamlord-html. Asked each time, of [psi] when there is one. While the IDE indexes the
+     * module cannot tell, and the calls count.
+     */
+    private fun withoutDsl(
+        e: Entry,
+        psi: PsiFile? = null,
+    ): Boolean {
+        if (e.withoutDsl == null) return false
+        val known =
+            if (psi != null) {
+                ProjectLibraries.known(psi, StreamlordLibrary.HTML)
+            } else {
+                e.file?.let { ProjectLibraries.known(project, it, StreamlordLibrary.HTML) }
+            }
+        return known == false
     }
 
     /**
      * Every signal name defined anywhere in the project, [file] read from its current text: what a
-     * `$name` is checked against. No reads, as [all] has. Cached until a definition changes.
+     * `$name` is checked against. No reads, as [all] has. Cached until a definition or a library changes.
      */
     fun definitionsSeenFrom(file: PsiFile): Set<String> {
         refresh()
-        val own = entryFor(file)?.definitions ?: emptySet()
-        definitionsUnion?.let { if (it.containsAll(own)) return it }
+        val own = entryFor(file)?.let { definitionsOf(it, file) } ?: emptySet()
+        val at =
+            listOf(
+                ProjectRootManager.getInstance(project).modificationCount,
+                DumbService.getInstance(project).modificationTracker.modificationCount,
+            )
+        definitionsUnion?.let { (stamp, union) -> if (stamp == at && union.containsAll(own)) return union }
         val generation = synchronized(unionLock) { unionGeneration }
         val out = HashSet<String>()
-        for (e in entries.values) out += e.definitions
+        for (e in entries.values) out += definitionsOf(e)
         out += own
-        synchronized(unionLock) { if (unionGeneration == generation) definitionsUnion = out }
+        synchronized(unionLock) { if (unionGeneration == generation) definitionsUnion = at to out }
         return out
     }
 
@@ -217,6 +311,13 @@ class SignalIndex(
         text: String,
         language: SourceLanguage,
     ): Entry {
+        val helpers = shortHelpers()
+        val withoutDsl =
+            if (language == SourceLanguage.KOTLIN && callsAny(text, helpers)) {
+                Names(collectSignals(text, language, helpers), collectSignalDefinitions(text, language, helpers))
+            } else {
+                null
+            }
         val entry =
             Entry(
                 file,
@@ -225,10 +326,11 @@ class SignalIndex(
                 prefix(),
                 collectSignals(text, language),
                 collectSignalDefinitions(text, language),
+                withoutDsl,
                 collectSelectors(text),
             )
         val previous = entries.put(key, entry)
-        if (previous?.definitions != entry.definitions) dropUnion()
+        if (previous?.definitions != entry.definitions || previous.withoutDsl?.definitions != entry.withoutDsl?.definitions) dropUnion()
         return entry
     }
 
@@ -292,6 +394,27 @@ class SignalIndex(
 
     private fun prefix(): String = StreamlordSettings.getInstance(project).attributePrefix
 
+    /** The DSL's helpers that name a signal, whose names other APIs use too. */
+    private fun shortHelpers(): Set<String> =
+        StreamlordAnalysis
+            .getInstance(project)
+            .catalog.signalNameHelpers.keys
+
+    /** Whether [text] calls one of [names] on no receiver: a file without such a call reads the same in every module. */
+    private fun callsAny(
+        text: String,
+        names: Set<String>,
+    ): Boolean {
+        val m = CALL.matcher(text)
+        while (m.find()) {
+            if (m.group(1) !in names) continue
+            var i = m.start() - 1
+            while (i >= 0 && text[i].isWhitespace()) i--
+            if (i < 0 || text[i] != '.') return true
+        }
+        return false
+    }
+
     private fun dropUnion() {
         synchronized(unionLock) {
             unionGeneration++
@@ -311,6 +434,7 @@ class SignalIndex(
         }
 
     companion object {
+        private val CALL = Pattern.compile("""\b([A-Za-z_]\w*)\s*\(""")
         private const val FILE_CAP = 5000
         private const val SIZE_CAP = 1_000_000L
         private val SKIPPED_DIRECTORIES = setOf("build", "node_modules", ".gradle", "dist", "out", "target")

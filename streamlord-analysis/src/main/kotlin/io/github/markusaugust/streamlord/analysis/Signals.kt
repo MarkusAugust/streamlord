@@ -69,6 +69,29 @@ private val ASSIGNED_SIGNAL = Regex("""(?:\$|\$\{'\$'\})([A-Za-z_][A-Za-z0-9_.]*
 private val BARE_SIGNAL = Regex("""\$([A-Za-z_][A-Za-z0-9_.]*)""")
 
 private val PAIR_CALLS = Catalog.default.signalCalls.keys
+
+/** Whether the call whose name starts at [at] is made on a receiver: a `.` before it, past whitespace and line comments. */
+private fun onReceiver(
+    src: String,
+    at: Int,
+): Boolean {
+    var i = at - 1
+    while (i >= 0) {
+        val c = src[i]
+        if (c == '\n') {
+            // A line comment ending the line before says nothing about a receiver.
+            val lineStart = src.lastIndexOf('\n', i - 1) + 1
+            val comment = src.indexOf("//", lineStart)
+            i = if (comment in lineStart until i) comment - 1 else i - 1
+            continue
+        }
+        if (!c.isWhitespace()) return c == '.'
+        i--
+    }
+    return false
+}
+
+private val SIGNAL_NAME_HELPERS = Catalog.default.signalNameHelpers.keys
 private val JSON_CALLS =
     Catalog.default.signalCalls
         .filterValues { "json" in it }
@@ -103,9 +126,13 @@ private val VALUE_TYPES =
  * of something else, or a variable typed `JsonValue` or `JsonObject`. Any other argument, a string
  * or a pair held in a variable, declares nothing here.
  */
-internal fun encodedSignalTypes(src: String): Set<String> {
+internal fun encodedSignalTypes(
+    src: String,
+    foreign: (String, Int) -> Boolean = NOT_FOREIGN,
+): Set<String> {
     val out = LinkedHashSet<String>()
     for (site in findCallSites(src, setOf("dataSignals"))) {
+        if (foreign(site.name, site.nameStart)) continue
         val positional = site.positional
         // dataSignals(value) or dataSignals(value, true), the second being ifMissing.
         val a =
@@ -220,8 +247,25 @@ public data class SignalDeclaration(
 public fun collectSignals(
     src: String,
     language: SourceLanguage,
+): Set<String> = collectSignals(src, language, NOT_FOREIGN)
+
+/**
+ * [collectSignals] with the calls named in [foreign] left out: they are somebody else's and name no
+ * signal. An editor passes the catalog's `signalNameHelpers` for a file that cannot call
+ * streamlord-html: their names, `set` and `toggle`, are other APIs' too.
+ */
+public fun collectSignals(
+    src: String,
+    language: SourceLanguage,
+    foreign: Set<String>,
+): Set<String> = collectSignals(src, language) { name, _ -> name in foreign }
+
+private fun collectSignals(
+    src: String,
+    language: SourceLanguage,
+    foreign: (String, Int) -> Boolean,
 ): Set<String> {
-    val out = LinkedHashSet(collectDeclaredSignals(src, language))
+    val out = LinkedHashSet(collect(src, language, reads = true, foreign))
     if (language == SourceLanguage.KOTLIN) {
         for (properties in serializableProperties(src).values) for (property in properties) out += property.name
     }
@@ -240,7 +284,7 @@ public fun collectSignals(
 public fun collectDeclaredSignals(
     src: String,
     language: SourceLanguage,
-): Set<String> = collect(src, language, reads = true)
+): Set<String> = collect(src, language, reads = true, NOT_FOREIGN)
 
 /**
  * The signals this source defines, which a `$name` in an expression is checked against: what
@@ -256,6 +300,13 @@ public fun collectSignalDefinitions(
     src: String,
     language: SourceLanguage,
 ): Set<String> = collectSignalDefinitions(src, language, NOT_FOREIGN)
+
+/** [collectSignalDefinitions] with the calls named in [foreign] left out, as [collectSignals] takes them. */
+public fun collectSignalDefinitions(
+    src: String,
+    language: SourceLanguage,
+    foreign: Set<String>,
+): Set<String> = collectSignalDefinitions(src, language) { name, _ -> name in foreign }
 
 /** No call is somebody else's: what a definition is read with when the host says nothing. */
 private val NOT_FOREIGN: (String, Int) -> Boolean = { _, _ -> false }
@@ -277,7 +328,7 @@ internal fun collectSignalDefinitions(
         for (type in serializableProperties(src).keys) out += READABLE_CLASS + type
         // A page declared from a class defines what its codec writes: the properties for a
         // @Serializable one, any name for one the analysis cannot read, or for a value of no named class.
-        for (type in encodedSignalTypes(src)) out += if (type == ANY_SIGNAL) ANY_SIGNAL else ENCODED_CLASS + type
+        for (type in encodedSignalTypes(src, foreign)) out += if (type == ANY_SIGNAL) ANY_SIGNAL else ENCODED_CLASS + type
     }
     return out
 }
@@ -290,7 +341,15 @@ internal fun collectSignalDefinitions(
 public fun signalDeclarations(
     src: String,
     language: SourceLanguage,
-): List<SignalDeclaration> = definedAt(src, language, Spread()).sortedWith(compareBy({ it.start }, { it.end }))
+): List<SignalDeclaration> = signalDeclarations(src, language, emptySet())
+
+/** [signalDeclarations] with the calls named in [foreign] left out, as [collectSignals] takes them. */
+public fun signalDeclarations(
+    src: String,
+    language: SourceLanguage,
+    foreign: Set<String>,
+): List<SignalDeclaration> =
+    definedAt(src, language, Spread()) { name, _ -> name in foreign }.sortedWith(compareBy({ it.start }, { it.end }))
 
 /**
  * A name a rename may write: dotted parts of ASCII letters, digits and `_`, not opening with a
@@ -421,7 +480,10 @@ private fun declared(
         for (re in KOTLIN_PATTERNS) {
             for (m in re.findAll(src)) {
                 // Each pattern starts at the name of the call it reads.
-                if (foreign(m.value.substringBefore('('), m.range.first)) continue
+                val name = m.value.substringBefore('(')
+                if (foreign(name, m.range.first)) continue
+                // A helper called on a receiver, `headers.set("Cache-Control", ...)`, is not the top-level helper.
+                if (name in SIGNAL_NAME_HELPERS && onReceiver(src, m.range.first)) continue
                 out += declarationAt(m.groups[1]!!, 0)
             }
         }
@@ -454,14 +516,20 @@ private fun collect(
     src: String,
     language: SourceLanguage,
     reads: Boolean,
+    foreign: (String, Int) -> Boolean,
 ): Set<String> {
     val out = LinkedHashSet<String>()
     val spread = Spread()
-    for (d in declared(src, language, spread)) out += d.name
+    for (d in declared(src, language, spread, foreign)) out += d.name
     if (spread.any) out += ANY_SIGNAL
     if (language == SourceLanguage.KOTLIN) {
         if (reads) for (re in KOTLIN_READS) for (m in re.findAll(src)) out += m.groupValues[1]
-        if (reads) for (m in HELPER_READS.findAll(src)) out += m.groupValues[1]
+        if (reads) {
+            for (m in HELPER_READS.findAll(src)) {
+                if (foreign(m.value.substringBefore('('), m.range.first) || onReceiver(src, m.range.first)) continue
+                out += m.groupValues[1]
+            }
+        }
     }
     if (reads && language == SourceLanguage.HTML) {
         for (m in BARE_SIGNAL.findAll(src)) out += m.groupValues[1]

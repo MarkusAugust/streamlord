@@ -109,7 +109,8 @@ class SignalRenameProcessor : RenamePsiElementProcessor() {
         conflicts: MultiMap<PsiElement, String>,
     ) {
         val old = (element as SignalTarget).name
-        if (newName != old && SignalIndex.getInstance(element.project).declarationsOf(newName).isNotEmpty()) {
+        // A definition in somebody else's call, which go to declaration leaves out, is no conflict either.
+        if (newName != old && SignalTarget.of(element.containingFile, newName).isNotEmpty()) {
             conflicts.putValue(element, "The project already defines the signal '$newName'.")
         }
         val project = element.project
