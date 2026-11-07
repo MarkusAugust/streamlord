@@ -168,6 +168,18 @@ class InterpolationTest {
     }
 
     @Test
+    fun `a miscounted call says how many placeholders and values there are, in the singular for one`() {
+        assertEquals(
+            "The markup has 0 %s placeholders and 1 value was given",
+            assertFailsWith<IllegalArgumentException> { interpolate("<li></li>", "a") }.message,
+        )
+        assertEquals(
+            "The markup has 1 %s placeholder and 2 values were given",
+            assertFailsWith<IllegalArgumentException> { interpolate("<li>%s</li>", "a", "b") }.message,
+        )
+    }
+
+    @Test
     fun `only a per cent and an s is a hole, so css and escaped urls need no ceremony`() {
         assertEquals("""<div style="width: 50%">x</div>""", render("""<div style="width: 50%">%s</div>""", "x"))
         assertEquals("""<a href="/a%20b">x</a>""", render("""<a href="/a%20b">%s</a>""", "x"))
