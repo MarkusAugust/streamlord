@@ -5,7 +5,7 @@
  */
 import { catalog } from "./catalog.ts";
 import { jsRegions, Region } from "./expression.ts";
-import { holeLandings } from "./holes.ts";
+import { landingAsParsed } from "./holes.ts";
 import { decodeEntities } from "./markup.ts";
 
 /** The attribute value a caret stands in: the attribute's name as written, where its value starts, and the value before the caret, decoded. */
@@ -20,15 +20,17 @@ const CARET = "x";
 
 /**
  * The quoted attribute value `offset` stands in, in `markup` read as the browser reads it, or null.
- * The reading is `holeLandings`, so a value over several lines, in single quotes or in a script's
- * text is told as `interpolate` tells it.
+ * The reading is `landingAsParsed`, the browser's as it parses a patch, so a value over several
+ * lines, in single quotes or in a script's text is found, and the text of a `<textarea>` or a
+ * `<title>` is text, though `interpolate`, which takes the strictest reading, still judges a value
+ * there.
  */
 export function valueAtCaret(markup: string, offset: number, prefix: string): ValueAtCaret | null {
   if (offset < 0 || offset > markup.length) return null;
   // A hole is at least one character wide, so the caret gets one of its own.
   const probe = markup.slice(0, offset) + CARET + markup.slice(offset);
-  const landing = holeLandings(probe, [{ start: offset, end: offset + 1 }], [prefix])[0];
-  if (!landing?.attribute) return null;
+  const landing = landingAsParsed(probe, { start: offset, end: offset + 1 }, [prefix]);
+  if (!landing.attribute) return null;
   if (landing.valueStart < 0 || landing.valueStart > offset) return null;
   return { attribute: landing.attribute, valueStart: landing.valueStart, before: decodeEntities(markup.slice(landing.valueStart, offset)).text };
 }

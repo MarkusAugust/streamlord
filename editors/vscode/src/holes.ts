@@ -579,6 +579,22 @@ export function holeLandings(markup: string, holes: readonly Hole[], prefixes: s
   });
 }
 
+/**
+ * Where `hole` lands in `markup` as the browser parses it as a patch: the one reading that follows
+ * the browser's element stack from HTML, with scripting off. Where `holeLandings` takes the
+ * strictest of every reading, this is the reading the markup has, which an editor shows at the
+ * caret: in a `<textarea>` the text is text. Its `valueStart` is an offset into `markup`.
+ * landingAsParsed in Interpolation.kt.
+ */
+export function landingAsParsed(markup: string, hole: Hole, prefixes: string[] = PREFIXES): HoleLanding {
+  const w = written(markup, [hole], new Map());
+  const shadowed = shadow(w.text, w.open);
+  const parsed = new Landscape([...prefixes].sort((a, b) => b.length - a.length), shadowed, new Map(w.open.map((h) => [h.start, h.end])));
+  scanMarkupTracked(shadowed, parsed, NS_HTML, false, true);
+  const landing = parsed.landing(w.starts[0] as number);
+  return landing.valueStart < 0 ? landing : { ...landing, valueStart: w.sourceOf(landing.valueStart) };
+}
+
 /** Whether the literal start of a URL attribute's value already settles the scheme: urlSchemeFixedBy in Interpolation.kt. */
 export function urlSchemeFixedBy(attribute: string, prefix: string): boolean {
   const decoded = decodeEntities(prefix).text;
