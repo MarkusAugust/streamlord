@@ -121,7 +121,7 @@ public class TextPlace(
     public val integrationPoint: Boolean,
     /** That element's name, lowercased, or null where none is open. */
     public val parent: String?,
-    /** Whether a `form` is open around it. */
+    /** Whether the browser's form pointer is set there: a `form` started before it and not yet ended, even one its parent closed. */
     public val formOpen: Boolean,
 )
 
@@ -383,6 +383,9 @@ private fun scanMarkupTracked(
     val open = HashMap<String, Int>()
     // How many special elements are open, so an end tag for none open knows whether one would stop it.
     var specialOpen = 0
+    // The browser's form pointer: a form started and not yet ended, though its parent may have closed it.
+    var formPointer = false
+
     // How many `html`, `head` and `body` start tags are open: the tree builder drops them, but the text after one is inside it.
     var documentOpen = 0
     var stray = false
@@ -533,7 +536,7 @@ private fun scanMarkupTracked(
                     namespace = if (top < 0) -1 else insertionNs(),
                     integrationPoint = top >= 0 && stackNs[top] != NS_HTML && stackHtmlContent[top],
                     parent = stackName.lastOrNull(),
-                    formOpen = (open["form"] ?: 0) > 0,
+                    formOpen = formPointer,
                 ),
             )
         }
@@ -614,6 +617,7 @@ private fun scanMarkupTracked(
                 // A `</p>` or `</br>` in foreign content closes the foreign elements, as an exiting tag does.
                 if (foreignNow && (name == "p" || name == "br")) exitForeign(lt)
                 if (name in IGNORED_IN_BODY && documentOpen > 0) documentOpen--
+                if (name == "form") formPointer = false
                 val at = if (name == "br") -1 else endTagTarget(name)
                 if (at >= 0) {
                     popTo(at, lt)
@@ -677,6 +681,7 @@ private fun scanMarkupTracked(
                 }
                 // HTML ignores a self-closing mark on its own elements; only an svg or a math takes one.
                 if (name in VOID || (selfClosing && (name == "svg" || name == "math"))) continue
+                if (name == "form") formPointer = true
                 if (!htmlStaysOpen && stackNs.isEmpty() && context != NS_HTML && name != "svg" && name != "math") continue
                 val ns =
                     if (name == "svg") {

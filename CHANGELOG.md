@@ -18,21 +18,22 @@ All notable changes to Streamlord are recorded here. The format follows
     are: an `<object>`, an `<applet>` or a `<marquee>` bounds every one, the svg's end tags stop at a
     `<foreignObject>`, a `<desc>` or an `<mi>` with a `<g/>` left open in it, and an `<a>` is opened
     again around the text after its parent;
-  - a table part out of its place closes the table or the cell around it: a `<td>` in a `<td>`, or
-    a `<td>` in an svg's `<desc>` in a table cell; and a first `<col>` in a `<template>` or at the
-    start of a patch drops all that follows it;
-  - a formatting element's end tag leaves a block opened in it open, so in `<div>%s</div>` the
-    value `<b><div>x</b>` takes the text after it into its own `div`;
-  - a `<form>` inside the format's form or inside a table moves the format's fields out of their
-    form;
+  - a table part out of its place closes the table or the cell around it: a `<td>` in a `<td>`, a
+    `<td>` in an svg's `<desc>` in a table cell, or a `<table>` between rows; and a first `<col>` in
+    a `<template>` or at the start of a patch drops all that follows it;
+  - an end tag closes nothing past an element that bounds its search, and a formatting element's
+    leaves a block opened in it open, so in `<div>%s</div>` the values `<div><object></div>` and
+    `<b><div>x</b>` take the text after them into their own elements;
+  - a `<form>` where the format has started one, even one whose parent has closed, moves the
+    format's fields out of their form;
   - straight in a patch in the svg namespace, an `<image>` or an `<input>` is an svg element left
     open around the rest of the patch.
 
   Such a value is escaped now, and so is any `Html` that leaves an element open where it is written,
   such as an `<a>` without its `</a>`, or an `<option>a` in `<select>%s</select>`. `<path/>` in
   `<svg>%s</svg>`, `<p>x</p>` in a `<foreignObject>`, `<ul><li>a<li>b</ul>`, an `<input>` in a
-  `<form>`, cells in `<tr>%s</tr>`, rows in a `<tbody>`, a whole table and a whole form are still
-  markup. 0.19.0 has the fault: it writes `<em></em>` into
+  `<form>`, cells in `<tr>%s</tr>`, rows in a `<tbody>` or at a patch's top level, a whole table
+  and a whole form are still markup. 0.19.0 has the fault: it writes `<em></em>` into
   `<svg><g>%s</g></svg>` as markup.
 
 ### Changed
@@ -64,6 +65,11 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- `interpolate` escaped an `Html` value of an element that holds HTML, such as
+  `<a href="/x"><span>a</span></a>`, a `<button>` or a `<label>` with a `<span>` in it, or a
+  `<section>` with a `<p>`, written into a `<div>`, an `<li>` or another element. It read the value
+  as if the format were an svg, where the `<span>` leaves the `<a>`. It reads the value where it
+  lands now. 0.19.0 has the fault.
 - A value declared `Html` or `Trusted` of another package written out in full, `com.acme.Html`
   among them, was taken for Streamlord's markup: joined into HTML, handed to `interpolate(...)` or
   joined with `joinToString`, without a word. It is judged now as any value of a type the editor

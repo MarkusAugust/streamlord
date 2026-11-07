@@ -168,8 +168,11 @@ class InterpolationReadingsTest {
                 "<div>%sQ1</div>Q2" to "<b><div>x</b>",
                 "<div>%sQ1</div>Q2" to "<b><p>x</b>",
                 "<form>%s<input name=a></form>" to "<form></form>",
-                "<div>%s</div>" to "<table><form></form></table>",
-                "<table>%s</table>" to "<form></form>",
+                "<table>%s<tr><td>Q1</td></tr></table>Q2" to "<table></table>",
+                "<table><tr>%s<td>Q1</td></tr></table>Q2" to "<table></table>",
+                "<table><tr><td>%s</td><td>Q1</td></tr></table>" to "<table><table></table></table>",
+                "<div><form></div>%s" to "<form><input name=a></form>",
+                "<div>%sQ1</div>Q2" to "<div><object></div>",
                 "%s<text>Q1</text>" to "<image href=\"a.png\">",
                 "%s<text>Q1</text>" to "<input>",
             )
@@ -191,11 +194,39 @@ class InterpolationReadingsTest {
                 "<table><tr><td>%s</td></tr></table>" to "<table><tr><td>x</td></tr></table>",
                 "<div>%s</div>" to "<b>x</b><div>y</div>",
                 "<div>%s</div>" to "<form><input name=a></form>",
+                "<table>%s</table>" to "<form></form>",
+                "<div>%s</div>" to "<table><form></form></table>",
                 "<table><tr><td>%s</td></tr></table>" to "<form><input name=a></form>",
                 "%s" to "<image href=\"a.png\"/>",
+                // At a patch's top level, or in a template, a row or a table section is no harm.
+                "%s" to "<tr id=r1><td>a</td><td>b</td></tr>",
+                "%s<p>after</p>" to "<thead><tr><td>a</td></tr></thead>",
+                "<template>%s</template>" to "<tr><td>a</td></tr>",
+                "%s" to "<colgroup><col></colgroup>",
             )
         for ((format, markup) in cases) {
             assertEquals(format.replace("%s", markup), interpolate(format, interpolate(markup)).text, "$format with $markup")
+        }
+    }
+
+    // Read from inside an svg or a math, an `<a>` or a `<button>` is an svg element a `<span>` in it
+    // leaves, so its end tag closed nothing there; where the value lands, in HTML, it is a link.
+    @Test
+    fun `an Html of a link, a button, a form or a section holding HTML is still markup`() {
+        val values =
+            listOf(
+                "<a href=\"/x\"><span>a</span></a>",
+                "<a href=x><img src=a></a>",
+                "<button><span>a</span></button>",
+                "<label><span>a</span></label>",
+                "<form><div>a</div></form>",
+                "<section><p>a</p></section>",
+                "<article><h2>t</h2><p>a</p></article>",
+            )
+        for (format in listOf("<div>%s</div>", "<li>%s</li>")) {
+            for (markup in values) {
+                assertEquals(format.replace("%s", markup), interpolate(format, interpolate(markup)).text, "$format with $markup")
+            }
         }
     }
 

@@ -122,7 +122,7 @@ export interface TextPlace {
   integrationPoint: boolean;
   /** That element's name, lowercased, or null where none is open. */
   parent: string | null;
-  /** Whether a `form` is open around it. */
+  /** Whether the browser's form pointer is set there, even for a form its parent closed. */
   formOpen: boolean;
 }
 
@@ -291,6 +291,8 @@ export function scanMarkupTracked(html: string, visitor: Visitor, context: numbe
   let specialOpen = 0;
   // documentOpen in MarkupScan.kt: the html, head and body start tags open, which the tree builder drops.
   let documentOpen = 0;
+  // formPointer in MarkupScan.kt: a form started and not yet ended.
+  let formPointer = false;
   const isSpecial = (ns: number, name: string, htmlContent: boolean) => (ns === NS_HTML ? SPECIAL.has(name) : htmlContent || name === "annotation-xml");
   // An svg or math script or style holds elements, but its text is a program: code from the first opened to the last closed.
   let foreignCode = 0;
@@ -380,7 +382,7 @@ export function scanMarkupTracked(html: string, visitor: Visitor, context: numbe
         namespace: top < 0 ? -1 : insertionNs(),
         integrationPoint: top >= 0 && stackNs[top] !== NS_HTML && (stackHtmlContent[top] as boolean),
         parent: stackName[top] ?? null,
-        formOpen: (open.get("form") ?? 0) > 0,
+        formOpen: formPointer,
       });
     }
   };
@@ -446,6 +448,7 @@ export function scanMarkupTracked(html: string, visitor: Visitor, context: numbe
         break;
       }
       if (IGNORED_IN_BODY.has(name) && documentOpen > 0) documentOpen--;
+      if (name === "form") formPointer = false;
       // A `</p>` or `</br>` in foreign content closes the foreign elements, as an exiting tag does.
       if (foreignNow && (name === "p" || name === "br")) {
         while (stackNs.length > 0 && stackNs[stackNs.length - 1] !== NS_HTML && !stackHtmlContent[stackHtmlContent.length - 1]) pop(lt);
@@ -513,6 +516,7 @@ export function scanMarkupTracked(html: string, visitor: Visitor, context: numbe
       }
       // HTML ignores a self-closing mark on its own elements; only an svg or a math takes one.
       if (VOID.has(name) || (selfClosing && (name === "svg" || name === "math"))) continue;
+      if (name === "form") formPointer = true;
       if (!htmlStaysOpen && stackNs.length === 0 && context !== NS_HTML && name !== "svg" && name !== "math") continue;
       push(name === "svg" ? NS_SVG : name === "math" ? NS_MATH : NS_HTML, name, false, i);
     } else {

@@ -611,6 +611,7 @@ private class Reading(
     fun of(
         namespace: Int,
         leaves: Boolean,
+        closesAll: Boolean = true,
     ): Reading =
         Reading(
             tracked = true,
@@ -618,7 +619,7 @@ private class Reading(
             context = namespace,
             htmlStaysOpen = htmlStaysOpen,
             insideMarkup = leaves,
-            closesAll = true,
+            closesAll = closesAll,
         )
 
     fun withScripting(): Reading = Reading(foreign, cdata, tracked, true, context, htmlStaysOpen, templates, insideMarkup, closesAll)
@@ -993,18 +994,28 @@ private class Landscape(
     ): Boolean {
         fun closesIn(r: Reading) =
             r.scan(html, Discard) && (r.scripting || !mentionsNoscript(html) || r.withScripting().scan(html, Discard))
-        if (!closesIn(reading)) return false
+        // A reading that follows the element stack reads the value where it lands, not where the
+        // reading starts: read from inside an svg, the `<a>` of `<div>%s</div>` and an `<a><span>` is
+        // HTML. The fixed readings have no stack to know it by.
         val at = indexOfSpan(hole, textStarts, textEnds)
-        if (at < 0) return true
+        if (!reading.tracked || at < 0) return closesIn(reading)
         val place = textPlaces[at]
         // Right in an integration point the value is HTML, whatever the reading started in.
         if (place.integrationPoint) return closesIn(reading.of(NS_HTML, leaves = false)) && fits(html, place)
         // Read from an svg or a math, a format's `<form>` or `<math>` is an element of that namespace,
-        // so that reading leaves the format's elements to the one from HTML. Straight in the patch's
-        // own svg or math it still reads the value there, where an `<image>` or an `<input>` is an
-        // element left open; the reading that closes HTML elements by itself leaves even that.
+        // so that reading only checks the value closes, and leaves the rest to the reading from HTML.
+        // Straight in the patch's own svg or math it may leave nothing open, where an `<image>` or an
+        // `<input>` is an element left open; the reading that closes HTML elements by itself leaves that.
         if (reading.context != NS_HTML) {
-            return place.namespace >= 0 || !reading.htmlStaysOpen || closesIn(reading.of(reading.context, leaves = false))
+            val top = place.namespace < 0
+            return closesIn(
+                reading.of(
+                    if (top) reading.context else place.namespace,
+                    leaves = false,
+                    closesAll =
+                        top && reading.htmlStaysOpen,
+                ),
+            )
         }
         val namespace = if (place.namespace < 0) NS_HTML else place.namespace
         return closesIn(reading.of(namespace, leaves = namespace != NS_HTML)) && (namespace != NS_HTML || fits(html, place))
@@ -1040,8 +1051,9 @@ private class Landscape(
 /**
  * Whether [html], written into HTML at [place], keeps the shape the walk reads it in, where the
  * walk does not follow the tree builder: its table parts stand in its own table or in the element
- * that holds them, a formatting element's end tag leaves none of its block elements open, and a
- * form in it is not inside a form or a table, where the browser's form pointer moves fields.
+ * that holds them, and a `<table>` does not stand in a table mode, which it closes; no end tag of it
+ * reaches past an element that bounds the search, or past a block a formatting element holds; and it
+ * has no form where the format has one, whose form pointer the browser keeps.
  */
 private fun fits(
     html: String,
@@ -1062,8 +1074,18 @@ private val TABLE_PARTS_IN =
         "tfoot" to setOf("table"),
     )
 
-/** The elements whose content the tree builder reads in a table mode, where a form is no container. */
+/**
+ * The table parts that do no harm straight at a patch's top level or in a `<template>`, where the
+ * browser drops them or reads them as a table's: not a cell, which takes the format's rows with it,
+ * and not a bare `<col>`, which turns all that follows into a column group that drops it.
+ */
+private val TOP_LEVEL_PARTS = setOf("tr", "thead", "tbody", "tfoot", "caption", "colgroup")
+
+/** The elements whose content the tree builder reads in a table mode, where a `<table>` closes the open one. */
 private val TABLE_MODES = setOf("table", "tbody", "thead", "tfoot", "tr")
+
+/** The elements that bound the search of an end tag in scope, so it cannot close what is open outside them. */
+private val SCOPE_BOUNDS = setOf("applet", "caption", "html", "marquee", "object", "table", "td", "th", "template")
 
 private val FORMATTING = setOf("a", "b", "big", "code", "em", "font", "i", "nobr", "s", "small", "strike", "strong", "tt", "u")
 
@@ -1075,7 +1097,7 @@ private class ValueShape(
     private val open = ArrayList<String>()
 
     // The element a table part or a form of the value goes into: its own innermost table element, or where it lands.
-    private fun tableContext(): String? = open.lastOrNull { it == "table" || it in TABLE_PARTS_IN } ?: place.parent
+    private fun tableContext(): String? = open.lastOrNull { it == "table" || it in TABLE_PARTS_IN || it == "template" } ?: place.parent
 
     override fun attribute(
         tag: String,
@@ -1094,8 +1116,12 @@ private class ValueShape(
         rawText: Boolean,
     ) {
         val holders = TABLE_PARTS_IN[name]
-        if (holders != null && "table" !in open && tableContext() !in holders) fits = false
-        if (name == "form" && (place.formOpen || tableContext() in TABLE_MODES)) fits = false
+        val context = tableContext()
+        val topLevel = (context == null || context == "template") && name in TOP_LEVEL_PARTS
+        if (holders != null && "table" !in open && context !in holders && !topLevel) fits = false
+        // In a table mode a `<table>` closes the open one first.
+        if (name == "table" && context in TABLE_MODES) fits = false
+        if (name == "form" && place.formOpen) fits = false
         if (name !in VOID) open += name
     }
 
@@ -1104,10 +1130,13 @@ private class ValueShape(
         start: Int,
         end: Int,
     ) {
-        if (name == "form" && (place.formOpen || tableContext() in TABLE_MODES)) fits = false
+        if (name == "form" && place.formOpen) fits = false
         val at = open.lastIndexOf(name)
         if (at < 0) return
-        if (name in FORMATTING && open.subList(at + 1, open.size).any { it in SPECIAL }) fits = false
+        val inside = open.subList(at + 1, open.size)
+        if (name in FORMATTING && inside.any { it in SPECIAL }) fits = false
+        // An object, a table or a cell opened inside bounds the end tag's search, which then closes nothing.
+        if (inside.any { it in SCOPE_BOUNDS }) fits = false
         open.subList(at, open.size).clear()
     }
 }
