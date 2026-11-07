@@ -270,7 +270,7 @@ object HoleFacts {
     /** K1: a collection the declaration a reference resolves to writes out as one of Html or Trusted. */
     private fun markupElementsK1(expr: KtExpression): Boolean {
         val target = reference(expr)?.mainReference?.resolve() as? KtCallableDeclaration ?: return false
-        val type = target.typeReference?.text?.filterNot { it.isWhitespace() } ?: return false
+        val type = target.typeReference?.text ?: return false
         return isMarkupCollection(type)
     }
 
@@ -543,7 +543,7 @@ object HoleFacts {
             val target = ref.mainReference.resolve() ?: return false
             if (target is KtAnnotated && languageHtml(target)) return true
             if (target is KtCallableDeclaration) {
-                val type = target.typeReference?.text?.filterNot { it.isWhitespace() }
+                val type = target.typeReference?.text
                 if (type != null && ValueFact.ofTypeName(type) == ValueFact.MARKUP) return true
             }
             if (target is KtProperty) {

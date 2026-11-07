@@ -1,7 +1,7 @@
 /**
  * What a Kotlin type or string literal, as the source writes it, tells of a value joined into
- * HTML. The twin of ValueTypes.kt in streamlord-analysis, which the IntelliJ plugin reads its K1
- * types with too; the cases both hold are in twins/value-types.json.
+ * HTML. The twin of ValueTypes.kt in streamlord-analysis, which the IntelliJ plugin reads types
+ * and literals with too; the cases both hold are in twins/value-types.json.
  */
 import type { HoleFact } from "./analyze.ts";
 

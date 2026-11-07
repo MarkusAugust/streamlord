@@ -21,14 +21,15 @@ All notable changes to Streamlord are recorded here. The format follows
 
 - streamlord-analysis has `ValueFact.ofTypeName`, `isMarkupCollection` and `opensWithTag`: what a
   declared type or the start of a string literal tells of a value joined into HTML. The analysis,
-  its TS twin and the IntelliJ plugin's K1 mode read types and literals with them, so the three
-  can no longer judge the same value differently.
+  its TS twin and the IntelliJ plugin read types and literals with them, where each had a copy of
+  its own.
 
 ### Fixed
 
-- A value declared `Html` or `Trusted` of another package, `com.acme.Html` among them, was taken
-  for Streamlord's markup and joined into HTML without a word. Only Streamlord's own are markup by
-  their type now; another is judged as any value of a type the editor does not know.
+- A value declared `Html` or `Trusted` of another package written out in full, `com.acme.Html`
+  among them, was taken for Streamlord's markup: joined into HTML, handed to `interpolate(...)` or
+  joined with `joinToString`, without a word. It is judged now as any value of a type the editor
+  does not know.
 - A string literal that opens with a tag a template names, `"<$tag>x</$tag>"`, is markup in VS Code
   too, as it was in IntelliJ; VS Code asked for `interpolate(...)` around it. The template in the
   tag name is still judged on its own.

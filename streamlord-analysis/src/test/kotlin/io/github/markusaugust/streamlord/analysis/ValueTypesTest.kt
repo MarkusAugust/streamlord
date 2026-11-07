@@ -8,6 +8,14 @@ class ValueTypesTest {
     private val cases = twinCases("value-types.json")
 
     @Test
+    fun `every case asks one of the three`() {
+        for (c in cases) {
+            val asked = listOf("type", "collection", "content").count { c.string(it) != null }
+            assertEquals(1, asked, c.string("name"))
+        }
+    }
+
+    @Test
     fun `the fact of a declared type`() {
         for (c in cases.filter { it.string("type") != null }) {
             val fact = c.string("fact")?.let { ValueFact.valueOf(it.uppercase().replace('-', '_')) }

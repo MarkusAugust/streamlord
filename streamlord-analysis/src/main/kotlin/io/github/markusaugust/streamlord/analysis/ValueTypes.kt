@@ -2,8 +2,8 @@ package io.github.markusaugust.streamlord.analysis
 
 /*
  * What a Kotlin type or string literal, as the source writes it, tells of a value joined into
- * HTML. The analysis reads declarations with these, and the IntelliJ plugin reads with them what
- * its K1 mode resolves, so each rule is written once. The twin of valueTypes.ts; the cases both
+ * HTML. The analysis reads declarations with these, and the IntelliJ plugin reads with them the
+ * types and literals it finds, so each rule is written once. The twin of valueTypes.ts; the cases both
  * hold are in twins/value-types.json.
  */
 

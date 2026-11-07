@@ -13,7 +13,11 @@ import java.io.File
  * add one there; do not widen the test.
  */
 class ValueFactsBoundaryTest {
-    private val adapter = File("src/main/kotlin/io/github/markusaugust/streamlord/intellij/analysis/HoleFacts.kt")
+    private val adapter =
+        File(
+            System.getProperty("streamlord.repo"),
+            "editors/intellij/src/main/kotlin/io/github/markusaugust/streamlord/intellij/analysis/HoleFacts.kt",
+        )
     private val textRule = Regex("""\bRegex\s*\(|\.toRegex\s*\(""")
 
     @Test
