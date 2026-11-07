@@ -964,7 +964,7 @@ internal fun declaredKind(
     val declared = d.type ?: return null
     return when (val fact = ValueFact.ofTypeName(declared)) {
         // Digits, true or false, or null: safe where anything is, and not where only a number or a boolean is.
-        ValueFact.NULLABLE -> if (nonNull) ValueFact.ofTypeName(declared.removeSuffix("?")) else fact
+        ValueFact.NULLABLE -> if (nonNull) ValueFact.ofTypeName(declared.filterNot { it.isWhitespace() }.removeSuffix("?")) else fact
 
         // A template writes `null` for it, which the analysis judges as the string it may also be.
         ValueFact.NULLABLE_STRING -> ValueFact.STRING

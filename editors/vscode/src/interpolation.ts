@@ -772,7 +772,7 @@ export function declaredKind(src: string, name: string, at: number, nonNull = fa
   if (d.type === undefined) return null;
   const fact = valueFactOfTypeName(d.type);
   // Digits, true or false, or null: safe where anything is, and not where only a number or a boolean is.
-  if (fact === "nullable") return nonNull ? (valueFactOfTypeName(d.type.replace(/\?$/, "")) as TextKind) : fact;
+  if (fact === "nullable") return nonNull ? (valueFactOfTypeName(d.type.replace(/\s+/g, "").replace(/\?$/, "")) as TextKind) : fact;
   // A template writes `null` for it, which the analysis judges as the string it may also be.
   if (fact === "nullable-string") return "string";
   if (fact === "markup") return core ? fact : null;

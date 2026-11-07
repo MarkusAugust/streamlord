@@ -6,6 +6,7 @@ import com.intellij.psi.util.PsiTreeUtil
 import io.github.markusaugust.streamlord.analysis.Catalog
 import io.github.markusaugust.streamlord.analysis.ValueFact
 import io.github.markusaugust.streamlord.analysis.isMarkupCollection
+import io.github.markusaugust.streamlord.analysis.ofTypeName
 import io.github.markusaugust.streamlord.analysis.opensWithTag
 import org.jetbrains.kotlin.analysis.api.KaSession
 import org.jetbrains.kotlin.analysis.api.analyze

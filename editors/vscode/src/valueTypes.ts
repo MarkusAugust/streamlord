@@ -23,9 +23,10 @@ const MARKUP_COLLECTION = new RegExp(
 
 /**
  * A tag, a comment or a doctype first: `<$tag ` and `<${t} ` among them when a space, `>` or `/`
- * follows the template, and `__kt__`, a `%s` of interpolate's format read as one.
+ * follows the template, and `__kt__`, a `%s` of interpolate's format read as one. Whitespace and
+ * letters as HTML has them, ASCII only, so the twins cannot fold or space them apart.
  */
-const TAG_START = /^\s*<(?:[A-Za-z]|(?:__kt__|\$(?:\{[^{}]*\}|[\p{L}_][\p{L}\p{Nd}_]*))(?=[\s>/])|!--|!doctype)/iu;
+const TAG_START = /^[ \t\n\f\r]*<(?:[A-Za-z]|(?:__kt__|\$(?:\{[^{}]*\}|[\p{L}_][\p{L}\p{Nd}_]*))(?=[ \t\n\f\r>/])|!--|![Dd][Oo][Cc][Tt][Yy][Pp][Ee])/u;
 
 const noSpace = (t: string) => t.replace(/\s+/g, "");
 

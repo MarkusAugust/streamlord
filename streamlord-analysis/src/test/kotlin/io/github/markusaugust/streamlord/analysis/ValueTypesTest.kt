@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.analysis
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /** The cases of `twins/value-types.json`, which `valueTypes.test.ts` reads too. */
 class ValueTypesTest {
@@ -10,8 +11,9 @@ class ValueTypesTest {
     @Test
     fun `every case asks one of the three`() {
         for (c in cases) {
-            val asked = listOf("type", "collection", "content").count { c.string(it) != null }
-            assertEquals(1, asked, c.string("name"))
+            val asked = listOf("type" to "fact", "collection" to "markup", "content" to "tag").filter { (q, _) -> q in c }
+            assertEquals(1, asked.size, c.string("name"))
+            assertTrue(asked.single().second in c, "${c.string("name")} gives no ${asked.single().second}")
         }
     }
 

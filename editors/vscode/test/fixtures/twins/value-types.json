@@ -40,6 +40,8 @@
     {"name":"a %s of interpolate's format as the tag name","content":"<__kt__ id=\"x\">","tag":true},
     {"name":"text before the tag","content":"x <p>","tag":false},
     {"name":"a less-than sign that opens no tag","content":"<3","tag":false},
+    {"name":"a letter outside ASCII opens no tag, whatever its case folds to","content":"<\u017F>","tag":false},
+    {"name":"a no-break space is not whitespace to HTML","content":"\u00A0<p>","tag":false},
     {"name":"a margin without trimMargin","content":"  |<p>","tag":false},
     {"name":"a margin trimMargin removes","content":"  |<p>","trimMargin":true,"tag":true},
     {"name":"a margin on the line after the opening quotes","content":"\n    |<p>","trimMargin":true,"tag":true},

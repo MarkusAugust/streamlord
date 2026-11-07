@@ -29,17 +29,23 @@ private val MARKUP_COLLECTION =
 
 /**
  * A tag, a comment or a doctype first: `<$tag ` and `<${t} ` among them when a space, `>` or `/`
- * follows the template, and `__kt__`, a `%s` of interpolate's format read as one.
+ * follows the template, and `__kt__`, a `%s` of interpolate's format read as one. Whitespace and
+ * letters as HTML has them, ASCII only, so the twins cannot fold or space them apart.
  */
 private val TAG_START =
     Regex(
-        """^\s*<(?:[A-Za-z]|(?:__kt__|\$(?:\{[^{}]*\}|[\p{L}_][\p{L}\p{Nd}_]*))(?=[\s>/])|!--|!doctype)""",
-        RegexOption.IGNORE_CASE,
+        """^[ \t\n\f\r]*<(?:[A-Za-z]|(?:__kt__|\$(?:\{[^{}]*\}|[\p{L}_][\p{L}\p{Nd}_]*))(?=[ \t\n\f\r>/])|!--|""" +
+            """![Dd][Oo][Cc][Tt][Yy][Pp][Ee])""",
     )
 private val MARGIN_START = Regex("""^\s*\|""")
 
-/** The fact a declared type gives, the whitespace in it ignored; see [ValueFact.ofTypeName]. */
-internal fun valueFactOfTypeName(written: String): ValueFact? {
+/**
+ * The fact a type gives, as a declaration writes it, the whitespace in it ignored: `Int`
+ * [ValueFact.NUMBER] and `Int?` [ValueFact.NULLABLE], `String?` [ValueFact.NULLABLE_STRING], and
+ * Streamlord's `Html` or `Trusted` [ValueFact.MARKUP], bare or in full. Null for any other type,
+ * `com.acme.Html` among them.
+ */
+public fun ValueFact.Companion.ofTypeName(written: String): ValueFact? {
     val type = written.filterNot { it.isWhitespace() }
     val bare = type.removeSuffix("?")
     val nullable = bare != type

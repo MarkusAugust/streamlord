@@ -72,14 +72,8 @@ public enum class ValueFact {
     UNSIGNED,
     ;
 
-    public companion object {
-        /**
-         * The fact a type gives, as a declaration writes it: `Int` [NUMBER] and `Int?` [NULLABLE],
-         * `String?` [NULLABLE_STRING], and Streamlord's `Html` or `Trusted` [MARKUP], bare or in
-         * full. Null for any other type, `com.acme.Html` among them.
-         */
-        public fun ofTypeName(type: String): ValueFact? = valueFactOfTypeName(type)
-    }
+    /** What [ofTypeName] in ValueTypes.kt hangs on. */
+    public companion object
 }
 
 private val MODE_NAME = Regex("""(?:^|\.)([A-Z]+)\s*$""")
