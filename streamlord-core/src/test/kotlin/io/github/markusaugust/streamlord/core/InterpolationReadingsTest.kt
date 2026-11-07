@@ -171,6 +171,7 @@ class InterpolationReadingsTest {
                 "<table>%s<tr><td>Q1</td></tr></table>Q2" to "<table></table>",
                 "<table><tr>%s<td>Q1</td></tr></table>Q2" to "<table></table>",
                 "<table><tr><td>%s</td><td>Q1</td></tr></table>" to "<table><table></table></table>",
+                "<table><colgroup>%s</colgroup><tr><td>Q1</td></tr></table>Q2" to "<table><td>x</table>",
                 "<div><form></div>%s" to "<form><input name=a></form>",
                 "<div>%sQ1</div>Q2" to "<div><object></div>",
                 // A formatting element an end tag of another closes is opened again after the value.

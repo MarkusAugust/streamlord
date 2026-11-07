@@ -1087,7 +1087,7 @@ private val TABLE_PARTS_IN =
 private val TOP_LEVEL_PARTS = setOf("tr", "thead", "tbody", "tfoot", "caption", "colgroup")
 
 /** The elements whose content the tree builder reads in a table mode, where a `<table>` closes the open one. */
-private val TABLE_MODES = setOf("table", "tbody", "thead", "tfoot", "tr")
+private val TABLE_MODES = setOf("table", "tbody", "thead", "tfoot", "tr", "colgroup")
 
 /** The elements that bound the search of an end tag in scope, so it cannot close what is open outside them. */
 private val SCOPE_BOUNDS = setOf("applet", "caption", "html", "marquee", "object", "table", "td", "th", "template")
