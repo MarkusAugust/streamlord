@@ -112,6 +112,22 @@ const SCRIPTING_RAW_TEXT = [...RAW_TEXT, "noscript"];
 const CODE_TEXT = ["script", "style"];
 const HTML_SPACE = "\t\n\f\r ";
 
+/** Where a run of text stands among the elements open around it: TextPlace in MarkupScan.kt. */
+export interface TextPlace {
+  /** How many elements are open around it. */
+  depth: number;
+  /** The namespace of the open element it goes into: an integration point's content is HTML, and -1 where none is open. */
+  namespace: number;
+  /** Whether that element is an svg or math integration point. */
+  integrationPoint: boolean;
+  /** That element's name, lowercased, or null where none is open. */
+  parent: string | null;
+  /** Whether the browser's form pointer is set there, even for a form its parent closed. */
+  formOpen: boolean;
+  /** Whether a `p` is open there in button scope. */
+  paragraphInScope: boolean;
+}
+
 /** What a walk over HTML reports: MarkupVisitor in MarkupScan.kt. Offsets are into the string that was walked. */
 export interface Visitor {
   attribute(tag: string, name: string, nameStart: number, valueStart: number, valueEnd: number, quoted: boolean): void;
@@ -123,12 +139,8 @@ export interface Visitor {
   startTag?(name: string, start: number, end: number, selfClosing: boolean, rawText: boolean): void;
   /** An end tag, by walkMarkup, its name lowercased. */
   endTag?(name: string, start: number, end: number): void;
-  /**
-   * Text between the tags, with the number of elements open around it, the namespace of the open
-   * element it goes into (an integration point's content is HTML, and -1 where none is open), and
-   * whether that element is an svg or math integration point.
-   */
-  text?(start: number, end: number, depth: number, namespace: number, integrationPoint: boolean): void;
+  /** Text between the tags, and where it stands: TextPlace in MarkupScan.kt. */
+  text?(start: number, end: number, place: TextPlace): void;
 }
 
 /** Discard in MarkupScan.kt: takes the attributes of an end tag. */
@@ -281,6 +293,8 @@ export function scanMarkupTracked(html: string, visitor: Visitor, context: numbe
   let specialOpen = 0;
   // documentOpen in MarkupScan.kt: the html, head and body start tags open, which the tree builder drops.
   let documentOpen = 0;
+  // formPointer in MarkupScan.kt: a form started and not yet ended.
+  let formPointer = false;
   const isSpecial = (ns: number, name: string, htmlContent: boolean) => (ns === NS_HTML ? SPECIAL.has(name) : htmlContent || name === "annotation-xml");
   // An svg or math script or style holds elements, but its text is a program: code from the first opened to the last closed.
   let foreignCode = 0;
@@ -359,13 +373,28 @@ export function scanMarkupTracked(html: string, visitor: Visitor, context: numbe
     }
     return NOT_OPEN;
   };
+  // paragraphInScope in MarkupScan.kt.
+  const paragraphInScope = () => {
+    for (let k = stackName.length - 1; k >= 0; k--) {
+      if (stackNs[k] === NS_HTML && stackName[k] === "p") return true;
+      if (boundsScope(k)) return false;
+    }
+    return false;
+  };
   const n = html.length;
   // Where the text since the last tag, comment or raw-text body began.
   let textStart = 0;
   const text = (to: number) => {
     if (to > textStart) {
       const top = stackName.length - 1;
-      visitor.text?.(textStart, to, top + 1 + documentOpen, top < 0 ? -1 : insertionNs(), top >= 0 && stackNs[top] !== NS_HTML && (stackHtmlContent[top] as boolean));
+      visitor.text?.(textStart, to, {
+        depth: top + 1 + documentOpen,
+        namespace: top < 0 ? -1 : insertionNs(),
+        integrationPoint: top >= 0 && stackNs[top] !== NS_HTML && (stackHtmlContent[top] as boolean),
+        parent: stackName[top] ?? null,
+        formOpen: formPointer,
+        paragraphInScope: paragraphInScope(),
+      });
     }
   };
   let i = 0;
@@ -430,6 +459,7 @@ export function scanMarkupTracked(html: string, visitor: Visitor, context: numbe
         break;
       }
       if (IGNORED_IN_BODY.has(name) && documentOpen > 0) documentOpen--;
+      if (name === "form") formPointer = false;
       // A `</p>` or `</br>` in foreign content closes the foreign elements, as an exiting tag does.
       if (foreignNow && (name === "p" || name === "br")) {
         while (stackNs.length > 0 && stackNs[stackNs.length - 1] !== NS_HTML && !stackHtmlContent[stackHtmlContent.length - 1]) pop(lt);
@@ -497,6 +527,7 @@ export function scanMarkupTracked(html: string, visitor: Visitor, context: numbe
       }
       // HTML ignores a self-closing mark on its own elements; only an svg or a math takes one.
       if (VOID.has(name) || (selfClosing && (name === "svg" || name === "math"))) continue;
+      if (name === "form" && (open.get("template") ?? 0) === 0) formPointer = true;
       if (!htmlStaysOpen && stackNs.length === 0 && context !== NS_HTML && name !== "svg" && name !== "math") continue;
       push(name === "svg" ? NS_SVG : name === "math" ? NS_MATH : NS_HTML, name, false, i);
     } else {

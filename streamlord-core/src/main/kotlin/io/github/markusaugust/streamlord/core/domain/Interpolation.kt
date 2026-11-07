@@ -611,6 +611,7 @@ private class Reading(
     fun of(
         namespace: Int,
         leaves: Boolean,
+        closesAll: Boolean = true,
     ): Reading =
         Reading(
             tracked = true,
@@ -618,7 +619,7 @@ private class Reading(
             context = namespace,
             htmlStaysOpen = htmlStaysOpen,
             insideMarkup = leaves,
-            closesAll = true,
+            closesAll = closesAll,
         )
 
     fun withScripting(): Reading = Reading(foreign, cdata, tracked, true, context, htmlStaysOpen, templates, insideMarkup, closesAll)
@@ -813,8 +814,7 @@ private class Landscape(
     private val opaqueEnds = ArrayList<Int>()
     private val textStarts = ArrayList<Int>()
     private val textEnds = ArrayList<Int>()
-    private val textNamespaces = ArrayList<Int>()
-    private val textIntegrationPoints = ArrayList<Boolean>()
+    private val textPlaces = ArrayList<TextPlace>()
 
     override fun attribute(
         tag: String,
@@ -860,14 +860,11 @@ private class Landscape(
     override fun text(
         start: Int,
         end: Int,
-        depth: Int,
-        namespace: Int,
-        integrationPoint: Boolean,
+        place: TextPlace,
     ) {
         textStarts += start
         textEnds += end
-        textNamespaces += namespace
-        textIntegrationPoints += integrationPoint
+        textPlaces += place
     }
 
     override fun declaration(
@@ -987,9 +984,9 @@ private class Landscape(
     /**
      * Whether [html], read in this landscape, leaves nothing open for the markup after it to fall
      * into, with scripting on as well when it holds a `noscript`. A reading that follows the element
-     * stack also reads it where it lands, at [hole], and there it leaves no element open at all: the
-     * format's end tags do not all reach one, as an object bounds them, an integration point stops
-     * an svg's, and an `<a>` is opened again after its parent closes.
+     * stack reads it where it lands, at [hole], rather than where the reading starts, and there it
+     * leaves no element open at all: the format's end tags do not all reach one, as an object bounds
+     * them, an integration point stops an svg's, and an `<a>` is opened again after its parent closes.
      */
     fun closes(
         html: String,
@@ -997,17 +994,34 @@ private class Landscape(
     ): Boolean {
         fun closesIn(r: Reading) =
             r.scan(html, Discard) && (r.scripting || !mentionsNoscript(html) || r.withScripting().scan(html, Discard))
-        if (!closesIn(reading)) return false
+        // A reading that follows the element stack reads the value where it lands, not where the
+        // reading starts: read from inside an svg, the `<a>` of `<div>%s</div>` and an `<a><span>` is
+        // HTML. The fixed readings have no stack to know it by.
         val at = indexOfSpan(hole, textStarts, textEnds)
-        if (at < 0) return true
+        if (!reading.tracked || at < 0) return closesIn(reading)
+        val place = textPlaces[at]
         // Right in an integration point the value is HTML, whatever the reading started in.
-        if (textIntegrationPoints[at]) return closesIn(reading.of(NS_HTML, leaves = false))
+        if (place.integrationPoint) return closesIn(reading.of(NS_HTML, leaves = false)) && fits(html, place)
         // Read from an svg or a math, a format's `<form>` or `<math>` is an element of that namespace,
-        // so that reading leaves the rest to the one from HTML, where the format's elements are what
-        // its author wrote.
-        if (reading.context != NS_HTML) return true
-        val namespace = if (textNamespaces[at] < 0) NS_HTML else textNamespaces[at]
-        return closesIn(reading.of(namespace, leaves = namespace != NS_HTML))
+        // so that reading only checks the value closes, and leaves the rest to the reading from HTML.
+        // Straight in the patch's own svg or math it may leave nothing open, where an `<image>` or an
+        // `<input>` is an element left open; the reading that closes HTML elements by itself leaves that.
+        if (reading.context != NS_HTML) {
+            val top = place.namespace < 0
+            // Inside an element of the format whose name is HTML's, `<td>` or `<nav>`, the svg or math
+            // patch this reading supposes is not one an author writes, and the reading from HTML judges it.
+            if (!top && place.namespace != NS_HTML && place.parent !in FOREIGN_NAMES) return true
+            return closesIn(
+                reading.of(
+                    if (top) reading.context else place.namespace,
+                    leaves = false,
+                    closesAll =
+                        top && reading.htmlStaysOpen,
+                ),
+            )
+        }
+        val namespace = if (place.namespace < 0) NS_HTML else place.namespace
+        return closesIn(reading.of(namespace, leaves = namespace != NS_HTML)) && (namespace != NS_HTML || fits(html, place))
     }
 
     fun valueStartAt(hole: Int): Int = indexOfSpan(hole, attributeStarts, attributeEnds).let { if (it >= 0) attributeStarts[it] else -1 }
@@ -1036,3 +1050,131 @@ private class Landscape(
         return if (i >= 0 && at < ends[i]) i else -1
     }
 }
+
+/**
+ * Whether [html], written into HTML at [place], keeps the shape the walk reads it in, where the
+ * walk does not follow the tree builder: its table parts stand in its own table or in the element
+ * that holds them, and a `<table>` does not stand in a table mode, which it closes; no end tag of it
+ * reaches past an element that bounds the search, past a block a formatting element holds, or past
+ * a formatting element of another, which the browser opens again after it; no start tag of it closes
+ * the format's `p` while it has an element open; and it has no form where the format has one, whose
+ * form pointer the browser keeps.
+ */
+private fun fits(
+    html: String,
+    place: TextPlace,
+): Boolean = ValueShape(place).also { scanMarkup(html, it, tracked = true) }.fits
+
+/** The table parts, each with the elements that hold it. */
+private val TABLE_PARTS_IN =
+    mapOf(
+        "td" to setOf("tr"),
+        "th" to setOf("tr"),
+        "tr" to setOf("table", "tbody", "thead", "tfoot"),
+        "col" to setOf("colgroup"),
+        "caption" to setOf("table"),
+        "colgroup" to setOf("table"),
+        "tbody" to setOf("table"),
+        "thead" to setOf("table"),
+        "tfoot" to setOf("table"),
+    )
+
+/**
+ * The table parts that do no harm straight at a patch's top level or in a `<template>`, where the
+ * browser drops them or reads them as a table's: not a cell, which takes the format's rows with it,
+ * and not a bare `<col>`, which turns all that follows into a column group that drops it.
+ */
+private val TOP_LEVEL_PARTS = setOf("tr", "thead", "tbody", "tfoot", "caption", "colgroup")
+
+/** The elements whose content the tree builder reads in a table mode, where a `<table>` closes the open one. */
+private val TABLE_MODES = setOf("table", "tbody", "thead", "tfoot", "tr", "colgroup")
+
+/** The elements that bound the search of an end tag in scope, so it cannot close what is open outside them. */
+private val SCOPE_BOUNDS = setOf("applet", "caption", "html", "marquee", "object", "table", "td", "th", "template")
+
+/** The elements that bound the search of a table's end tags, in table scope. */
+private val TABLE_SCOPE_BOUNDS = setOf("html", "table", "template")
+
+private val FORMATTING = setOf("a", "b", "big", "code", "em", "font", "i", "nobr", "s", "small", "strike", "strong", "tt", "u")
+
+/** Reads the start and end tags of a value for [fits], keeping the elements it opens as they open and close. */
+private class ValueShape(
+    private val place: TextPlace,
+) : MarkupVisitor {
+    var fits = true
+    private val open = ArrayList<String>()
+
+    // Whether a `p` of the format is still open around the value, for a start tag of it to close.
+    private var outerParagraph = place.paragraphInScope
+
+    // The element a table part or a form of the value goes into: its own innermost table element, or where it lands.
+    private fun tableContext(): String? = open.lastOrNull { it == "table" || it in TABLE_PARTS_IN || it == "template" } ?: place.parent
+
+    override fun attribute(
+        tag: String,
+        name: String,
+        nameStart: Int,
+        valueStart: Int,
+        valueEnd: Int,
+        quoted: Boolean,
+    ) = Unit
+
+    override fun startTag(
+        name: String,
+        start: Int,
+        end: Int,
+        selfClosing: Boolean,
+        rawText: Boolean,
+    ) {
+        val holders = TABLE_PARTS_IN[name]
+        val context = tableContext()
+        val topLevel = (context == null || context == "template") && name in TOP_LEVEL_PARTS
+        if (holders != null && "table" !in open && context !in holders && !topLevel) fits = false
+        // In a table mode a `<table>` closes the open one first.
+        if (name == "table" && context in TABLE_MODES) fits = false
+        if (name == "form" && place.formOpen) fits = false
+        // A start tag that closes the format's `p` closes all the value has open inside it as well, and
+        // the value's end tags for those then reach the format.
+        // Inside the value's own svg or math, a `<section>` is an element of that namespace and closes no `p`.
+        if (outerParagraph && (name in CLOSES_P || name == "li" || name == "dd" || name == "dt") &&
+            open.none { it == "p" || it in SCOPE_BOUNDS || it == "button" || it == "svg" || it == "math" }
+        ) {
+            if (open.isNotEmpty()) fits = false
+            outerParagraph = false
+        }
+        if (name !in VOID) open += name
+    }
+
+    override fun endTag(
+        name: String,
+        start: Int,
+        end: Int,
+    ) {
+        if (name == "form" && place.formOpen) fits = false
+        val at = open.lastIndexOf(name)
+        if (at < 0) return
+        val inside = open.subList(at + 1, open.size)
+        if (name in FORMATTING && inside.any { it in SPECIAL }) fits = false
+        // A formatting element another end tag closes is opened again around the text after it.
+        if (inside.any { it in FORMATTING }) fits = false
+        // An object, a table or a cell opened inside bounds the end tag's search, which then closes
+        // nothing; a table's own end tags search only past a table or a template, and close its cells.
+        val bounds = if (name == "table" || name in TABLE_PARTS_IN) TABLE_SCOPE_BOUNDS else SCOPE_BOUNDS
+        if (inside.any { it in bounds }) fits = false
+        open.subList(at, open.size).clear()
+    }
+}
+
+/** The names of svg and MathML elements, inside which a reading from an svg or a math judges a value. */
+private val FOREIGN_NAMES =
+    (
+        "a animate animatemotion animatetransform circle clippath defs desc ellipse feblend fecolormatrix " +
+            "fecomponenttransfer fecomposite feconvolvematrix fediffuselighting fedisplacementmap fedistantlight " +
+            "fedropshadow feflood fefunca fefuncb fefuncg fefuncr fegaussianblur feimage femerge femergenode " +
+            "femorphology feoffset fepointlight fespecularlighting fespotlight fetile feturbulence filter foreignobject " +
+            "g image line lineargradient marker mask metadata mpath path pattern polygon polyline radialgradient rect " +
+            "script set stop style svg switch symbol text textpath title tspan use view " +
+            "math maction annotation annotation-xml menclose merror mfenced mfrac mi mmultiscripts mn mo mover mpadded " +
+            "mphantom mprescripts mroot mrow ms mspace msqrt mstyle msub msubsup msup mtable mtd mtext mtr munder " +
+            "munderover semantics none mglyph malignmark"
+    ).split(" ").toSet()

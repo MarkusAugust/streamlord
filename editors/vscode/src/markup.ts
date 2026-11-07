@@ -198,8 +198,8 @@ export function tokenize(html: string, templates = true): { tags: Tag[]; topLeve
         attributes = [];
         tags.push({ name: asciiLowercase(html.slice(start + 2, start + 2 + name.length)), start, end, closing: true, selfClosing: false, attributes: [] });
       },
-      text(start, end, depth) {
-        if (depth > 0) return;
+      text(start, end, place) {
+        if (place.depth > 0) return;
         const t = html.slice(start, end);
         if (t.trim().length === 0) return;
         topLevelText.push({ start: start + (t.length - t.trimStart().length), end: start + t.trimEnd().length });

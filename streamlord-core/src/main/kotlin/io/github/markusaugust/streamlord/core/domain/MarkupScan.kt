@@ -61,19 +61,11 @@ public interface MarkupVisitor {
         end: Int,
     ): Unit = Unit
 
-    /**
-     * Text between the tags, by [walkMarkup] and the walks that follow the element stack, with the
-     * number of elements open around it and the namespace of the open element it is inserted into:
-     * 0 for HTML, an integration point's included, 1 for svg and 2 for MathML, and -1 where none of
-     * the markup's own is open and it goes into the element the walk starts inside. [integrationPoint]
-     * says that element is an svg or math one whose content is HTML, such as a `foreignObject`.
-     */
+    /** Text between the tags, by [walkMarkup] and the walks that follow the element stack, and where it stands. */
     public fun text(
         start: Int,
         end: Int,
-        depth: Int,
-        namespace: Int,
-        integrationPoint: Boolean,
+        place: TextPlace,
     ): Unit = Unit
 
     /** The body of a `<script>` or `<style>`, which is code to the browser rather than text. */
@@ -113,6 +105,27 @@ public fun walkMarkup(
 ) {
     scanMarkupTracked(html, visitor, NS_HTML, scripting = false, htmlStaysOpen = true, templates = templates)
 }
+
+/** Where a run of text stands among the elements open around it, as a walk that follows the element stack reports it. */
+@InternalStreamlordApi
+public class TextPlace(
+    /** How many elements are open around it. */
+    public val depth: Int,
+    /**
+     * The namespace of the open element it is inserted into: 0 for HTML, an integration point's
+     * included, 1 for svg and 2 for MathML, and -1 where none of the markup's own is open and it goes
+     * into the element the walk starts inside.
+     */
+    public val namespace: Int,
+    /** Whether that element is an svg or math one whose content is HTML, such as a `foreignObject`. */
+    public val integrationPoint: Boolean,
+    /** That element's name, lowercased, or null where none is open. */
+    public val parent: String?,
+    /** Whether the browser's form pointer is set there: a `form` started before it and not yet ended, even one its parent closed. */
+    public val formOpen: Boolean,
+    /** Whether a `p` is open there in button scope, which a `<div>`, a `<p>` or an `<li>` written there closes. */
+    public val paragraphInScope: Boolean,
+)
 
 /** The characters that end a tag name, and so an end tag's name as well. */
 private fun Char?.endsName(): Boolean = this == null || isHtmlSpace() || this == '/' || this == '>'
@@ -246,7 +259,7 @@ private val MATH_IN_TEXT = setOf("mglyph", "malignmark")
 private val FONT_EXITS = setOf("color", "face", "size")
 
 /** HTML elements the browser never leaves open: it pops each as it inserts it. */
-private val VOID =
+internal val VOID =
     setOf(
         "area",
         "base",
@@ -372,6 +385,9 @@ private fun scanMarkupTracked(
     val open = HashMap<String, Int>()
     // How many special elements are open, so an end tag for none open knows whether one would stop it.
     var specialOpen = 0
+    // The browser's form pointer: a form started and not yet ended, though its parent may have closed it.
+    var formPointer = false
+
     // How many `html`, `head` and `body` start tags are open: the tree builder drops them, but the text after one is inside it.
     var documentOpen = 0
     var stray = false
@@ -506,6 +522,15 @@ private fun scanMarkupTracked(
         return NOT_OPEN
     }
 
+    // Whether a `p` is open in button scope, as closeImplied looks for one.
+    fun paragraphInScope(): Boolean {
+        for (k in stackName.indices.reversed()) {
+            if (stackNs[k] == NS_HTML && stackName[k] == "p") return true
+            if (boundsScope(k)) return false
+        }
+        return false
+    }
+
     val n = html.length
 
     // Where the text since the last tag, comment or raw-text body began.
@@ -513,12 +538,18 @@ private fun scanMarkupTracked(
 
     fun text(to: Int) {
         if (to > textStart) {
+            val top = stackName.lastIndex
             visitor.text(
                 textStart,
                 to,
-                stackName.size + documentOpen,
-                if (stackName.isEmpty()) -1 else insertionNs(),
-                stackName.isNotEmpty() && stackNs.last() != NS_HTML && stackHtmlContent.last(),
+                TextPlace(
+                    depth = top + 1 + documentOpen,
+                    namespace = if (top < 0) -1 else insertionNs(),
+                    integrationPoint = top >= 0 && stackNs[top] != NS_HTML && stackHtmlContent[top],
+                    parent = stackName.lastOrNull(),
+                    formOpen = formPointer,
+                    paragraphInScope = paragraphInScope(),
+                ),
             )
         }
     }
@@ -598,6 +629,7 @@ private fun scanMarkupTracked(
                 // A `</p>` or `</br>` in foreign content closes the foreign elements, as an exiting tag does.
                 if (foreignNow && (name == "p" || name == "br")) exitForeign(lt)
                 if (name in IGNORED_IN_BODY && documentOpen > 0) documentOpen--
+                if (name == "form") formPointer = false
                 val at = if (name == "br") -1 else endTagTarget(name)
                 if (at >= 0) {
                     popTo(at, lt)
@@ -661,6 +693,8 @@ private fun scanMarkupTracked(
                 }
                 // HTML ignores a self-closing mark on its own elements; only an svg or a math takes one.
                 if (name in VOID || (selfClosing && (name == "svg" || name == "math"))) continue
+                // In a template the browser leaves the form pointer alone.
+                if (name == "form" && (open["template"] ?: 0) == 0) formPointer = true
                 if (!htmlStaysOpen && stackNs.isEmpty() && context != NS_HTML && name != "svg" && name != "math") continue
                 val ns =
                     if (name == "svg") {
@@ -791,7 +825,7 @@ private val HEADINGS = setOf("h1", "h2", "h3", "h4", "h5", "h6")
  * HTML start tags that close a `p` open in button scope. A `table` does too in a document without
  * quirks, but a patch's own document has none, so it is left out: the reading keeps the `p` open.
  */
-private val CLOSES_P =
+internal val CLOSES_P =
     setOf(
         "address",
         "article",
@@ -836,7 +870,7 @@ private val LIST_LOOP_PASSES = setOf("address", "div", "p")
 private val BUTTON_SCOPE = setOf("applet", "caption", "html", "table", "td", "th", "marquee", "object", "template", "button")
 
 /** The HTML elements of the tree builder's special category. */
-private val SPECIAL =
+internal val SPECIAL =
     setOf(
         "address",
         "applet",

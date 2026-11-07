@@ -9,6 +9,7 @@ import io.github.markusaugust.streamlord.core.domain.CspNonce
 import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 import io.github.markusaugust.streamlord.core.domain.MarkupVisitor
 import io.github.markusaugust.streamlord.core.domain.SignalNames
+import io.github.markusaugust.streamlord.core.domain.TextPlace
 import io.github.markusaugust.streamlord.core.domain.templateConstructEnd
 import io.github.markusaugust.streamlord.core.domain.walkMarkup
 import io.github.markusaugust.streamlord.core.json.JsonParser
@@ -480,11 +481,9 @@ public fun tokenize(
             override fun text(
                 start: Int,
                 end: Int,
-                depth: Int,
-                namespace: Int,
-                integrationPoint: Boolean,
+                place: TextPlace,
             ) {
-                if (depth > 0) return
+                if (place.depth > 0) return
                 val t = html.substring(start, end)
                 if (t.isBlank()) return
                 val lead = t.length - t.trimStart().length

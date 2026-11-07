@@ -151,6 +151,99 @@ class InterpolationReadingsTest {
         }
     }
 
+    // A table part out of its place closes the table or the cell around it, or, as a first `<col>`,
+    // turns what follows into a column group that drops it; a formatting element's end tag leaves a
+    // block opened in it open; a form inside a form or a table moves the format's fields out of theirs;
+    // and straight in an svg patch an `<image>` or an `<input>` is an svg element left open.
+    @Test
+    fun `an Html that reshapes a table, a form or a formatting element is written as text`() {
+        val cases =
+            listOf(
+                "<table><tr><td>%s</td></tr></table>" to "<td></td>",
+                "<table><tr><td>%s</td></tr></table>" to "<col>",
+                "<table><tr><td><svg><desc>%s</desc></svg></td></tr></table>" to "<td></td>",
+                "<template>%sQ1</template>" to "<col>",
+                "Q0%s<p>Q1</p>" to "<col>",
+                "<div>%s</div>" to "<tr><td>a</td></tr>",
+                "<div>%sQ1</div>Q2" to "<b><div>x</b>",
+                "<div>%sQ1</div>Q2" to "<b><p>x</b>",
+                "<form>%s<input name=a></form>" to "<form></form>",
+                "<table>%s<tr><td>Q1</td></tr></table>Q2" to "<table></table>",
+                "<table><tr>%s<td>Q1</td></tr></table>Q2" to "<table></table>",
+                "<table><tr><td>%s</td><td>Q1</td></tr></table>" to "<table><table></table></table>",
+                "<table><colgroup>%s</colgroup><tr><td>Q1</td></tr></table>Q2" to "<table><td>x</table>",
+                "<div><form></div>%s" to "<form><input name=a></form>",
+                "<div>%sQ1</div>Q2" to "<div><object></div>",
+                // A formatting element an end tag of another closes is opened again after the value.
+                "<div>%sQ1</div>Q2" to "<noscript><b>x</noscript>",
+                "<div>%sQ1</div>Q2" to "<span><b>x</span>",
+                // The value's `<p>` closes the format's, and its own element with it, so its end tag reaches the format.
+                "<svg><foreignObject><p>%sQ1</p></foreignObject><text>Q2</text></svg>" to "<foreignObject><p>x</p></foreignObject>",
+                "<p>%s</p>" to "<span><p>x</p></span>",
+                "%s<text>Q1</text>" to "<image href=\"a.png\">",
+                "%s<text>Q1</text>" to "<input>",
+            )
+        for ((format, markup) in cases) {
+            val out = interpolate(format, interpolate(markup)).text
+            assertFalse(markup in out, "$format with $markup: $out")
+        }
+    }
+
+    @Test
+    fun `an Html of table parts in their place, of a whole form, or of formatting is still markup`() {
+        val cases =
+            listOf(
+                "<table><tr>%s</tr></table>" to "<td>a</td><td>b</td>",
+                "<table><tbody>%s</tbody></table>" to "<tr><td>a</td></tr>",
+                "<table>%s</table>" to "<caption>c</caption>",
+                "<table><colgroup>%s</colgroup></table>" to "<col>",
+                "<div>%s</div>" to "<table><tr><td>a</td></tr></table>",
+                "<table><tr><td>%s</td></tr></table>" to "<table><tr><td>x</td></tr></table>",
+                "<div>%s</div>" to "<b>x</b><div>y</div>",
+                "<div>%s</div>" to "<form><input name=a></form>",
+                "<table>%s</table>" to "<form></form>",
+                "<div>%s</div>" to "<table><form></form></table>",
+                "<table><tr><td>%s</td></tr></table>" to "<form><input name=a></form>",
+                "%s" to "<image href=\"a.png\"/>",
+                // At a patch's top level, or in a template, a row or a table section is no harm.
+                "%s" to "<tr id=r1><td>a</td><td>b</td></tr>",
+                "%s<p>after</p>" to "<thead><tr><td>a</td></tr></thead>",
+                // A table's end tags close its open cells and caption first.
+                "<div>%s</div>" to "<table><tr><td>a<td>b</table>",
+                "<div>%s</div>" to "<table><tr><td>a</tr></table>",
+                "<div>%s</div>" to "<table><caption>c</table>",
+                // Inside an svg a `<section>` closes no `<p>`; in a template a form sets no form pointer.
+                "<p>%s</p>" to "<svg><section></section></svg>",
+                "<template><form></template><div>%s</div>" to "<form><input name=a></form>",
+                "<template>%s</template>" to "<tr><td>a</td></tr>",
+                "%s" to "<colgroup><col></colgroup>",
+            )
+        for ((format, markup) in cases) {
+            assertEquals(format.replace("%s", markup), interpolate(format, interpolate(markup)).text, "$format with $markup")
+        }
+    }
+
+    // Read from inside an svg or a math, an `<a>` or a `<button>` is an svg element a `<span>` in it
+    // leaves, so its end tag closed nothing there; where the value lands, in HTML, it is a link.
+    @Test
+    fun `an Html of a link, a button, a form or a section holding HTML is still markup`() {
+        val values =
+            listOf(
+                "<a href=\"/x\"><span>a</span></a>",
+                "<a href=x><img src=a></a>",
+                "<button><span>a</span></button>",
+                "<label><span>a</span></label>",
+                "<form><div>a</div></form>",
+                "<section><p>a</p></section>",
+                "<article><h2>t</h2><p>a</p></article>",
+            )
+        for (format in listOf("<div>%s</div>", "<li>%s</li>", "<table><tr><td>%s</td></tr></table>", "<nav>%s</nav>", "<main>%s</main>")) {
+            for (markup in values) {
+                assertEquals(format.replace("%s", markup), interpolate(format, interpolate(markup)).text, "$format with $markup")
+            }
+        }
+    }
+
     @Test
     fun `an Html that stays in the svg or math it lands in is still markup`() {
         val cases =
