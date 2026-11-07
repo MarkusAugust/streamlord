@@ -22,11 +22,17 @@ const MARKUP_COLLECTION = new RegExp(
 );
 
 /**
- * A tag, a comment or a doctype first: `<$tag ` and `<${t} ` among them when a space, `>` or `/`
- * follows the template, and `__kt__`, a `%s` of interpolate's format read as one. Whitespace and
- * letters as HTML has them, ASCII only, so the twins cannot fold or space them apart.
+ * A tag, a comment or a doctype first, with what may stand for the tag name when a space, `>` or
+ * `/` follows it. Whitespace and letters as HTML has them, ASCII only, so the twins cannot fold or
+ * space them apart.
  */
-const TAG_START = /^[ \t\n\f\r]*<(?:[A-Za-z]|(?:__kt__|\$(?:\{[^{}]*\}|[\p{L}_][\p{L}\p{Nd}_]*))(?=[ \t\n\f\r>/])|!--|![Dd][Oo][Cc][Tt][Yy][Pp][Ee])/u;
+const tagStart = (template: string) => new RegExp(String.raw`^[ \t\n\f\r]*<(?:[A-Za-z]|(?:${template})(?=[ \t\n\f\r>/])|!--|![Dd][Oo][Cc][Tt][Yy][Pp][Ee])`, "u");
+
+/** In the source: `<$tag ` and `<${t} `, and `__kt__`, a `%s` of interpolate's format read as one. */
+const TAG_START = tagStart(String.raw`__kt__|\$(?:\{[^{}]*\}|[\p{L}_][\p{L}\p{Nd}_]*)`);
+
+/** In the text at runtime, where each template is `__kt__` and a `$` left is one the author wrote. */
+const TEXT_TAG_START = tagStart("__kt__");
 
 const noSpace = (t: string) => t.replace(/\s+/g, "");
 
@@ -50,6 +56,20 @@ export function valueFactOfTypeName(written: string): HoleFact | null {
   return null;
 }
 
+/**
+ * The fact a declaration of the type `written` gives its value: `nonNull` reads it as the left
+ * side of `?:` does, and without `core` Html and Trusted are not Streamlord's.
+ */
+export function declaredFact(written: string, nonNull: boolean, core: boolean): HoleFact | null {
+  const fact = valueFactOfTypeName(written);
+  // Digits, true or false, or null: safe where anything is, and not where only a number or a boolean is.
+  if (fact === "nullable") return nonNull ? valueFactOfTypeName(written.replace(/\s+/g, "").replace(/\?$/, "")) : fact;
+  // A template writes `null` for it, which the analysis judges as the string it may also be.
+  if (fact === "nullable-string") return "string";
+  if (fact === "markup") return core ? fact : null;
+  return fact;
+}
+
 /** Whether `type` is a collection of Streamlord's markup, as `List<Html>`; the whitespace in it is ignored. */
 export const isMarkupCollection = (type: string): boolean => MARKUP_COLLECTION.test(noSpace(type));
 
@@ -61,3 +81,6 @@ export const isTrustedType = (type: string): boolean => TRUSTED_TYPE.test(noSpac
  * or a doctype, as markup does. `trimMargin` reads it as `.trimMargin()` leaves it, past the first `|`.
  */
 export const opensWithTag = (content: string, trimMargin = false): boolean => TAG_START.test(trimMargin ? content.replace(/^\s*\|/, "") : content);
+
+/** `opensWithTag` for a literal's text at runtime, `KotlinString.text`, where each template is `__kt__`. */
+export const textOpensWithTag = (text: string): boolean => TEXT_TAG_START.test(text);

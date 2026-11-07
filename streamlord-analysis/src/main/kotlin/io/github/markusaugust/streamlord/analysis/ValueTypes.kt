@@ -28,15 +28,18 @@ private val MARKUP_COLLECTION =
     )
 
 /**
- * A tag, a comment or a doctype first: `<$tag ` and `<${t} ` among them when a space, `>` or `/`
- * follows the template, and `__kt__`, a `%s` of interpolate's format read as one. Whitespace and
- * letters as HTML has them, ASCII only, so the twins cannot fold or space them apart.
+ * A tag, a comment or a doctype first, with what may stand for the tag name when a space, `>` or
+ * `/` follows it. Whitespace and letters as HTML has them, ASCII only, so the twins cannot fold or
+ * space them apart.
  */
-private val TAG_START =
-    Regex(
-        """^[ \t\n\f\r]*<(?:[A-Za-z]|(?:__kt__|\$(?:\{[^{}]*\}|[\p{L}_][\p{L}\p{Nd}_]*))(?=[ \t\n\f\r>/])|!--|""" +
-            """![Dd][Oo][Cc][Tt][Yy][Pp][Ee])""",
-    )
+private fun tagStart(template: String): Regex =
+    Regex("""^[ \t\n\f\r]*<(?:[A-Za-z]|(?:$template)(?=[ \t\n\f\r>/])|!--|![Dd][Oo][Cc][Tt][Yy][Pp][Ee])""")
+
+/** In the source: `<$tag ` and `<${t} `, and `__kt__`, a `%s` of interpolate's format read as one. */
+private val TAG_START = tagStart("""__kt__|\$(?:\{[^{}]*\}|[\p{L}_][\p{L}\p{Nd}_]*)""")
+
+/** In the text at runtime, where each template is `__kt__` and a `$` left is one the author wrote. */
+private val TEXT_TAG_START = tagStart("__kt__")
 private val MARGIN_START = Regex("""^\s*\|""")
 
 /**
@@ -68,6 +71,27 @@ public fun ValueFact.Companion.ofTypeName(written: String): ValueFact? {
     }
 }
 
+/**
+ * The fact a declaration of the type [written] gives its value: [nonNull] reads it as the left
+ * side of `?:` does, and without [core] Html and Trusted are not Streamlord's.
+ */
+internal fun declaredFact(
+    written: String,
+    nonNull: Boolean,
+    core: Boolean,
+): ValueFact? =
+    when (val fact = ValueFact.ofTypeName(written)) {
+        // Digits, true or false, or null: safe where anything is, and not where only a number or a boolean is.
+        ValueFact.NULLABLE -> if (nonNull) ValueFact.ofTypeName(written.filterNot { it.isWhitespace() }.removeSuffix("?")) else fact
+
+        // A template writes `null` for it, which the analysis judges as the string it may also be.
+        ValueFact.NULLABLE_STRING -> ValueFact.STRING
+
+        ValueFact.MARKUP -> if (core) fact else null
+
+        else -> fact
+    }
+
 /** Whether [type] is a collection of Streamlord's markup, as `List<Html>`; the whitespace in it is ignored. */
 public fun isMarkupCollection(type: String): Boolean = MARKUP_COLLECTION.matches(type.filterNot { it.isWhitespace() })
 
@@ -79,6 +103,9 @@ public fun opensWithTag(
     content: String,
     trimMargin: Boolean = false,
 ): Boolean = TAG_START.containsMatchIn(if (trimMargin) content.replaceFirst(MARGIN_START, "") else content)
+
+/** [opensWithTag] for a literal's text at runtime, [KotlinString.text], where each template is `__kt__`. */
+internal fun textOpensWithTag(text: String): Boolean = TEXT_TAG_START.containsMatchIn(text)
 
 /** Whether [type] is Streamlord's `Trusted`, which cannot be null. */
 internal fun isTrustedType(type: String): Boolean = TRUSTED_TYPE.matches(type.filterNot { it.isWhitespace() })

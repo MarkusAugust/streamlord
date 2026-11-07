@@ -5,9 +5,11 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.util.PsiTreeUtil
 import io.github.markusaugust.streamlord.analysis.Catalog
 import io.github.markusaugust.streamlord.analysis.ValueFact
+import io.github.markusaugust.streamlord.analysis.isMarkup
 import io.github.markusaugust.streamlord.analysis.isMarkupCollection
 import io.github.markusaugust.streamlord.analysis.ofTypeName
 import io.github.markusaugust.streamlord.analysis.opensWithTag
+import io.github.markusaugust.streamlord.analysis.writesItself
 import org.jetbrains.kotlin.analysis.api.KaSession
 import org.jetbrains.kotlin.analysis.api.analyze
 import org.jetbrains.kotlin.analysis.api.types.KaClassType
@@ -74,7 +76,7 @@ object HoleFacts {
         // which reads it too, is scheduled for removal in 2026.2.
         val k1 = System.getProperty("idea.kotlin.plugin.use.k1").toBoolean()
         return if (k1) {
-            judge(holes, ::constantK1, ::typeK1, ::markupElementsK1) { ValueFact.ofTypeName(it.text) == ValueFact.MARKUP }
+            judge(holes, ::constantK1, ::typeK1, ::markupElementsK1) { ValueFact.ofTypeName(it.text).isMarkup() }
         } else {
             analyze(file) {
                 judge(
@@ -82,7 +84,7 @@ object HoleFacts {
                     { it.evaluate() != null || enumEntry(it) },
                     { typeFact(it.expressionType) },
                     { markupElements(it.expressionType) },
-                    { typeFact(it.type) == ValueFact.MARKUP },
+                    { typeFact(it.type).isMarkup() },
                 )
             }
         }
@@ -109,7 +111,7 @@ object HoleFacts {
             val fact = typed(expr)
             facts[range] =
                 when {
-                    fact == ValueFact.MARKUP -> fact
+                    fact.isMarkup() -> ValueFact.MARKUP
                     isHelper(expr) && ownArguments(expr, constant, typed) -> ValueFact.CONSTANT
                     markup.isMarkup(expr, CALL_DEPTH) -> ValueFact.MARKUP
                     literalOnly(expr) -> ValueFact.CONSTANT
@@ -133,7 +135,7 @@ object HoleFacts {
         if (constant(e) || literalOnly(e) || enumEntry(e)) return true
         if (isHelper(e)) return ownArguments(e, constant, typed)
         val fact = typed(e)
-        return fact == ValueFact.NUMBER || fact == ValueFact.BOOLEAN || fact == ValueFact.UNSIGNED
+        return fact.writesItself()
     }
 
     /**

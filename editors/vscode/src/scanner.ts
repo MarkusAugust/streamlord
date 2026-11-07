@@ -1,4 +1,5 @@
 import { charLiteralEnd, isStringStart, readKotlinStringAt, type KotlinString } from "./kotlinStrings.ts";
+import { textOpensWithTag } from "./valueTypes.ts";
 
 /**
  * Finds calls to known DSL functions in Kotlin source and splits their arguments, without a
@@ -222,9 +223,6 @@ export function stringAt(src: string, offset: number, strings: KotlinString[] = 
   return null;
 }
 
-// A template as the first tag name, `"<$tag>…"`, opens a tag all the same when a space, `>` or `/` follows
-// it; `"<$tag\\b"` and `"<$tag"` are search patterns.
-const HTML_START = /^\s*<(?:[A-Za-z]|__kt__(?=[\s>/])|!--|!doctype)/i;
 const HTML_MARKER = /@Language\(\s*"html"\s*\)|\/\/\s*language\s*=\s*html\b/gi;
 
 /**
@@ -234,7 +232,7 @@ const HTML_MARKER = /@Language\(\s*"html"\s*\)|\/\/\s*language\s*=\s*html\b/gi;
  * string literal only.
  */
 export function isHtmlString(src: string, s: KotlinString): boolean {
-  if (HTML_START.test(s.text)) return true;
+  if (textOpensWithTag(s.text)) return true;
   const before = src.slice(Math.max(0, s.start - 240), s.start);
   const markers = [...before.matchAll(HTML_MARKER)];
   const last = markers[markers.length - 1];

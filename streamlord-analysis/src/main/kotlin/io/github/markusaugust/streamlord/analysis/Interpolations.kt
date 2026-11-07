@@ -19,19 +19,6 @@ private val MARKUP_CALL_START = Regex("""^(?:interpolate|Trusted)\s*\(""")
 private val UNQUOTED_VALUE = Regex("""=[ \t\n\u000C\r]*([^ \t\n\u000C\r"'=<>`]*)\z""")
 private val WORD_CHAR = Regex("""[\p{L}\p{Nd}_]""")
 
-/** Each kind from the one safe in the fewest places to the one safe everywhere. */
-private val WEAKEST_FIRST =
-    listOf(
-        ValueFact.STRING,
-        null,
-        ValueFact.MARKUP,
-        ValueFact.NULLABLE,
-        ValueFact.UNSIGNED,
-        ValueFact.BOOLEAN,
-        ValueFact.NUMBER,
-        ValueFact.CONSTANT,
-    )
-
 /** What may end an operand of `+` at the top level: an argument or statement boundary, or an operator that binds less tightly. */
 private val OPERAND_END = Regex("""^(?:[,)\]};]|\?:|&&|\|\||==|!=|<=|>=|\.\.)""")
 
@@ -962,17 +949,7 @@ internal fun declaredKind(
     // Without core, Html, Trusted and interpolate are not Streamlord's, and nothing says what they hold.
     if (d.markup) return if (core) ValueFact.MARKUP else null
     val declared = d.type ?: return null
-    return when (val fact = ValueFact.ofTypeName(declared)) {
-        // Digits, true or false, or null: safe where anything is, and not where only a number or a boolean is.
-        ValueFact.NULLABLE -> if (nonNull) ValueFact.ofTypeName(declared.filterNot { it.isWhitespace() }.removeSuffix("?")) else fact
-
-        // A template writes `null` for it, which the analysis judges as the string it may also be.
-        ValueFact.NULLABLE_STRING -> ValueFact.STRING
-
-        ValueFact.MARKUP -> if (core) fact else null
-
-        else -> fact
-    }
+    return declaredFact(declared, nonNull, core)
 }
 
 private val TRUSTED_LITERAL =
@@ -1202,7 +1179,7 @@ private fun ownArgument(
     val a = arg.replaceFirst(ARGUMENT_NAME, "").trim()
     if (a.startsWith("*")) return false
     val kind = weakest(holeValues(a).map { valueKind(src, it.text, at, constants, it.nonNull, sdk) })
-    return kind == ValueFact.CONSTANT || kind == ValueFact.NUMBER || kind == ValueFact.BOOLEAN || kind == ValueFact.UNSIGNED
+    return kind.writesItself()
 }
 
 private val QUALIFIED = Regex("""^((?:[\p{L}_][\p{L}\p{Nd}_]*\s*\.\s*)+)([\p{L}_][\p{L}\p{Nd}_]*)$""")
@@ -1261,7 +1238,7 @@ internal fun valueKind(
     // `"ab".repeat(3)`: a plain change to text the author wrote, made with what the author wrote.
     val call = lastCall(t)
     if (call?.receiver != null && call.lambda == null && call.name in TEXT_TRANSFORMS &&
-        valueKind(src, call.receiver, at, constants, sdk = sdk) == ValueFact.CONSTANT &&
+        valueKind(src, call.receiver, at, constants, sdk = sdk).isConstant() &&
         (call.args.isBlank() || splitTop(call.args, ",").all { ownArgument(src, it, at, constants, sdk) })
     ) {
         return ValueFact.CONSTANT
@@ -1329,22 +1306,16 @@ private fun callKind(
     val lambda = call.name == "ifBlank" || call.name == "ifEmpty"
     if (!(call.name in STRING_CHANGES && call.lambda == null) && !(lambda && call.lambda != null && call.args.isBlank())) return null
     // `query!!.trim()`: what `!!` leaves of a `String?` is a String.
-    if (valueKind(src, receiver.replace(NON_NULL_ASSERTION, ""), at, constants, sdk = sdk) != ValueFact.STRING) return null
+    if (!valueKind(src, receiver.replace(NON_NULL_ASSERTION, ""), at, constants, sdk = sdk).isString()) return null
     if (!lambda) return ValueFact.STRING
     val result = valueKind(src, lambdaResult(call.lambda!!), at, constants, sdk = sdk)
-    return if (result == ValueFact.STRING || result == ValueFact.CONSTANT) ValueFact.STRING else null
+    return if (result.isString() || result.isConstant()) ValueFact.STRING else null
 }
 
 /** Whether [e] is one operand, a name, a chain of calls or a bracketed expression, with no operator outside its brackets. */
 private fun wholeOperand(e: String): Boolean {
     val d = depths(e)
     return e.indices.all { d[it] != 0 || OPERAND_CHAR.matches(e[it].toString()) }
-}
-
-/** Of the kinds a hole's values have, the one safe in the fewest places; one not known stands between a String and markup. */
-internal fun weakest(kinds: List<ValueFact?>): ValueFact? {
-    val worst = kinds.minOfOrNull { WEAKEST_FIRST.indexOf(it) } ?: WEAKEST_FIRST.lastIndex
-    return WEAKEST_FIRST[worst]
 }
 
 /** Whether [name] means, at [at], a parameter or value marked `@Language("HTML")`. */
@@ -1493,12 +1464,12 @@ internal fun markupValue(
     val textOf = TEXT_OF_VALUE.find(t)?.groupValues?.get(1)
     if (sdk.core &&
         textOf != null &&
-        (wholeCall(textOf, "interpolate") || (IDENT.matches(textOf) && declaredKind(src, textOf, at) == ValueFact.MARKUP))
+        (wholeCall(textOf, "interpolate") || (IDENT.matches(textOf) && declaredKind(src, textOf, at).isMarkup()))
     ) {
         return true
     }
     if (IDENT.matches(t)) {
-        if (declaredKind(src, t, at, core = sdk.core) == ValueFact.MARKUP || htmlNamed(src, t, at)) return true
+        if (declaredKind(src, t, at, core = sdk.core).isMarkup() || htmlNamed(src, t, at)) return true
         // `val e = elements { }`: the name stands for the call it is set to; a literal it is set to is judged where it is written.
         val d = declarationOf(src, t, at) ?: return false
         val init = initialiser(src, d) ?: return false
@@ -1718,7 +1689,7 @@ private fun heldAsMarkup(
     (branches(value) ?: listOf(value)).all { v ->
         val t = v.trim()
         if (IDENT.matches(t)) {
-            declaredKind(src, t, at) == ValueFact.MARKUP
+            declaredKind(src, t, at).isMarkup()
         } else {
             val call = MARKUP_CALL_START.find(t)
             call != null && closing(t, depths(t), call.value.length - 1) == t.length
@@ -1754,7 +1725,7 @@ private fun markupText(
 ): Boolean {
     val of = declarationOf(src, name, at)?.textOf ?: return false
     return wholeCall(of, "interpolate") ||
-        (IDENT.matches(of) && declaredKind(src, of, declarationOf(src, name, at)!!.at) == ValueFact.MARKUP)
+        (IDENT.matches(of) && declaredKind(src, of, declarationOf(src, name, at)!!.at).isMarkup())
 }
 
 /** Whether every value a hole can give is a name set to the `.text` of an Html: markup held as a String. */
@@ -2404,32 +2375,9 @@ internal fun valueKind(
     // The String of the Html: interpolate(...).text.
     val html = TEXT_OF.find(t)?.groupValues?.get(1)
     if (html != null && wholeCall(html, "interpolate")) return ArgKind.STRING
-    when (callKind(src, t, at, emptySet())) {
-        ValueFact.NUMBER -> {
-            return ArgKind.NUMBER
-        }
-
-        ValueFact.STRING -> {
-            return ArgKind.STRING
-        }
-
-        else -> {}
-    }
+    callKind(src, t, at, emptySet())?.argKind()?.let { return it }
     if (!IDENT.matches(t)) return null
-    return when (declaredKind(src, t, at)) {
-        ValueFact.NUMBER -> ArgKind.NUMBER
-
-        ValueFact.UNSIGNED -> ArgKind.UNSIGNED
-
-        ValueFact.BOOLEAN -> ArgKind.BOOLEAN
-
-        ValueFact.STRING -> ArgKind.STRING
-
-        ValueFact.MARKUP -> ArgKind.MARKUP
-
-        // `val name = "Gorvek"`: a String, though no type is written.
-        null -> if (declarationOf(src, t, at)?.string == true) ArgKind.STRING else null
-
-        else -> null
-    }
+    // `val name = "Gorvek"`: a String, though no type is written.
+    val declared = declaredKind(src, t, at) ?: return if (declarationOf(src, t, at)?.string == true) ArgKind.STRING else null
+    return declared.argKind()
 }
