@@ -485,6 +485,25 @@ public fun holeLandings(
 }
 
 /**
+ * Where [hole] lands in [markup] as the browser parses it as a patch: the one reading that follows
+ * its element stack from HTML, with scripting off. Where [holeLandings] takes the strictest of
+ * every reading, so that nothing is let through that one of them would refuse, this is the reading
+ * the markup has, which an editor shows at the caret: in a `<textarea>` the text is text.
+ */
+@InternalStreamlordApi
+public fun landingAsParsed(
+    markup: String,
+    hole: IntRange,
+    prefixes: List<String> = ElementsGuard.defaultPrefixes,
+): HoleLanding {
+    val written = Written(markup, listOf(hole), emptyMap(), percents = false)
+    val parsed = landscapes(written.text, written.open, prefixes, listOf(Reading(tracked = true, context = NS_HTML)))
+    val landing = landingOf(parsed, written.starts[0])
+    if (landing.valueStart < 0) return landing
+    return HoleLanding(landing.position, landing.attribute, written.sourceOf(landing.valueStart), landing.loadsCode)
+}
+
+/**
  * Whether the start of a URL attribute's value, the literal text before its first hole, already
  * settles the scheme, so that no value written after it can make the URL run: a `/`, `?` or `#`
  * before any `:`, or a whole scheme that only navigates. Read as [safeUrl] reads, after entities
@@ -593,18 +612,20 @@ private class Reading(
  *
  * Markup with a `noscript` is read twice over: with scripting off, as the client parses a patch,
  * where it holds elements, and with scripting on, as a page loads, where it is text to its end tag.
+ * Given [only], the markup is read those ways instead.
  */
 private fun landscapes(
     markup: String,
     holes: List<IntRange>,
     prefixes: List<String>,
+    only: List<Reading>? = null,
 ): List<Landscape> {
     val shadow = shadow(markup, holes)
     // Longest first, so `data-star-` is tried before `data-` whatever order the caller used.
     val ordered = prefixes.sortedByDescending { it.length }
     val scripting = if (mentionsNoscript(shadow)) listOf(false, true) else listOf(false)
     val readings =
-        scripting.map { Reading(scripting = it) } +
+        only ?: scripting.map { Reading(scripting = it) } +
             listOf(Reading(foreign = true), Reading(foreign = true, cdata = true)) +
             listOf(NS_HTML, NS_SVG, NS_MATH).flatMap { context ->
                 scripting.map { Reading(tracked = true, scripting = it, context = context) }

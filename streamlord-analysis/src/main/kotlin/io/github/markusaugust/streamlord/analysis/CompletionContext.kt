@@ -2,7 +2,7 @@ package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.decodeEntities
-import io.github.markusaugust.streamlord.core.domain.holeLandings
+import io.github.markusaugust.streamlord.core.domain.landingAsParsed
 
 /*
  * Where a caret stands, for completion, hover and parameter info; shared with completionContext.ts.
@@ -20,8 +20,9 @@ private const val CARET = 'x'
 
 /**
  * The quoted attribute value [offset] stands in, in [markup] read as the browser reads it, or null.
- * The reading is core's [holeLandings], so a value over several lines, in single quotes or in a
- * script's text is told as `interpolate` tells it.
+ * The reading is core's [landingAsParsed], the browser's as it parses a patch, so a value over
+ * several lines, in single quotes or in a script's text is told as `interpolate` tells it, and
+ * the text of a `<textarea>` or a `<title>` is text.
  */
 public fun valueAtCaret(
     markup: String,
@@ -31,7 +32,7 @@ public fun valueAtCaret(
     if (offset !in 0..markup.length) return null
     // A hole is at least one character wide, so the caret gets one of its own.
     val probe = StringBuilder(markup).insert(offset, CARET).toString()
-    val landing = holeLandings(probe, listOf(offset..offset), listOf(prefix)).single()
+    val landing = landingAsParsed(probe, offset..offset, listOf(prefix))
     val attribute = landing.attribute ?: return null
     if (landing.valueStart !in 0..offset) return null
     return ValueAtCaret(attribute, landing.valueStart, decodeEntities(markup.substring(landing.valueStart, offset)).text)

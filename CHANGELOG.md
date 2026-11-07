@@ -43,6 +43,10 @@ All notable changes to Streamlord are recorded here. The format follows
   checked as HTML, as one literal that opens with it is.
 - A vertical tab before the first `<`, and in VS Code a no-break space, made a literal markup. Only
   the whitespace HTML has does now.
+- In both editors, inside a `<textarea>` or a `<title>`, where the browser reads
+  `<i data-text="1 +">` as text, completion, hover and signature help no longer treat it as a
+  Datastar expression. The checks already read it as text there. Inside an `<svg>`, where a
+  `textarea` holds elements, both still read the expression.
 
 ## [0.19.0] - 2026-11-06
 

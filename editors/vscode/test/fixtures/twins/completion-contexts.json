@@ -81,6 +81,25 @@
       "before": "<!-- <div data-text=\"$c",
       "after": "\"></div> -->",
       "attribute": null
+    },
+    {
+      "name": "a textarea's content is text, not markup",
+      "before": "<textarea><i data-text=\"1 + $",
+      "after": "\"></i></textarea>",
+      "attribute": null
+    },
+    {
+      "name": "a title's content is text, not markup",
+      "before": "<title><i data-text=\"$",
+      "after": "\"></i></title>",
+      "attribute": null
+    },
+    {
+      "name": "in an svg a textarea is svg's, and an i after it is HTML again",
+      "before": "<svg><textarea><i data-text=\"$",
+      "after": "\"></i></textarea></svg>",
+      "attribute": "data-text",
+      "value": "$"
     }
   ]
 }
