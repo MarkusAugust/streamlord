@@ -36,8 +36,8 @@ public fun TagConsumer<*>.results(
     if (hits.isEmpty()) {
         /*
          * The one place a reader's own words reach the page, so it is written as a string and
-         * filled by `interpolate` rather than by the DSL. The hole lands in element text, which
-         * escaping makes safe; a hole in a `data-*` attribute would be refused here instead of
+         * filled by `interpolate` rather than by the DSL. The placeholder lands in element text,
+         * which escaping makes safe; one in a `data-*` attribute would be refused here instead of
          * becoming a Datastar expression the server signed.
          */
         onTagContentUnsafe {

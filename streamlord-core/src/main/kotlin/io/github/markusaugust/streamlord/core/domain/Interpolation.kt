@@ -45,10 +45,11 @@ public value class Trusted(
  * read as HTML and as the inside of an `<svg>` or `<math>`: a tag, an attribute value, a comment,
  * a CDATA section, the body of a `<script>`, `<textarea>` or `<title>`, a `<` at its very end, an
  * `<svg>` or a `<math>` and what is in them, a `<template>` and a `<select>`; and it may not end an
- * element it did not open. The hole has to stand outside all of those in the outer markup. Otherwise the fragment would move
- * every hole after it, `interpolate("<script>")` turning the next value into a program and
- * `interpolate("<svg>")` turning a `<title>` after it into one that holds elements, so it is
- * escaped like a string instead, and shows as the markup it is.
+ * element it did not open. The placeholder it fills has to stand outside all of those in the outer
+ * markup. Otherwise the fragment would move every placeholder after it, `interpolate("<script>")`
+ * turning the next value into a program and `interpolate("<svg>")` turning a `<title>` after it
+ * into one that holds elements, so it is escaped like a string instead, and shows as the markup it
+ * is.
  */
 @JvmInline
 public value class Html
@@ -62,7 +63,7 @@ public value class Html
 
 /**
  * The markup of each [Html] in turn, with [separator] between them: a list of rows, say, as the
- * one value of a hole.
+ * one value of a placeholder.
  *
  * ```kotlin
  * interpolate("<ul>%s</ul>", names.map { interpolate("<li>%s</li>", it) }.joinToHtml())
@@ -114,11 +115,11 @@ public enum class Position {
  * Raised when a value would land somewhere escaping cannot make safe.
  *
  * @property position Where it landed.
- * @property index Which value, counting the holes from zero.
+ * @property index Which value, counting the placeholders from zero.
  * @property attribute The attribute it landed in, when it landed in one.
  * @property loadsCode Whether that attribute is a URL its tag loads and runs, or treats as its own
- *   document, such as a script's `src`: a [Position.URL] where the literal before the hole has to
- *   fix the host, which a safe scheme does not.
+ *   document, such as a script's `src`: a [Position.URL] where the literal before the placeholder
+ *   has to fix the host, which a safe scheme does not.
  */
 public class UnsafeInterpolationException(
     public val position: Position,
@@ -136,7 +137,7 @@ public class UnsafeInterpolationException(
             if (loadsCode) {
                 return "Value $index would land in $attribute, a URL its tag loads and runs, where the markup before it " +
                     "does not fix the host, so any value could point the load at another origin, https or not. Write " +
-                    "the host into the markup before the hole, as in \"/js/%s\" or \"https://cdn.example.com/%s\", " +
+                    "the host into the markup before the placeholder, as in \"/js/%s\" or \"https://cdn.example.com/%s\", " +
                     "or, if you chose the URL yourself, wrap it in Trusted(...)."
             }
             val where =
@@ -195,12 +196,12 @@ public class UnsafeInterpolationException(
 }
 
 /**
- * Writes [values] into [format] at its `%s` holes, escaped, and refuses any hole that landed
- * somewhere escaping cannot make safe.
+ * Writes [values] into [format] at its `%s` placeholders, escaped, and refuses any value that
+ * landed somewhere escaping cannot make safe.
  *
  * The question is not where a value came from, which Streamlord cannot know by the time it is
  * handed a string. It is where the value lands, which is a fact about [format] alone: Kotlin has
- * already finished with the literal, so every `%s` in it is a hole the caller left on purpose and
+ * already finished with the literal, so every `%s` in it is a placeholder the caller left on purpose and
  * everything around it is markup the caller wrote. That is enough to say, of each value, whether
  * it becomes text, an attribute, part of a Datastar expression, or the shape of the markup.
  *
@@ -219,9 +220,9 @@ public class UnsafeInterpolationException(
  * takes a number only. A URL attribute (`href`, `src`, `action` and the like, and `values`,
  * `to` and `from` on SVG's animation elements) must come out, values and all, as a relative URL
  * or an `http`, `https`, `mailto` or `tel` one: `href="/heads/%s"` takes anything, and
- * `href="%s%s"` cannot be made into `javascript:` across its two holes. A URL the browser loads
+ * `href="%s%s"` cannot be made into `javascript:` across its two placeholders. A URL the browser loads
  * and runs, a script's `src`, a `<link>`'s `href` and the like, must have its host fixed by the
- * markup before the hole, as in `src="/js/%s"`. The URL a `<meta>` refresh reads from its
+ * markup before the placeholder, as in `src="/js/%s"`. The URL a `<meta>` refresh reads from its
  * `content` is held to the same schemes.
  *
  * A [Trusted] value is not judged, and is read as the markup it is: the other values are judged
@@ -236,14 +237,14 @@ public class UnsafeInterpolationException(
  * namespace among it, is judged as either.
  *
  * `%%` writes one `%`. A `%` followed by anything else is literal, so CSS and escaped URLs need
- * no ceremony; a hole is only ever `%s`, and a miscounted one fails here rather than quietly.
+ * no ceremony; a placeholder is only ever `%s`, and a miscounted one fails here rather than quietly.
  *
  * This is the rule the editors enforce as you type, where they can see the Kotlin source and its
- * `${'$'}{...}`. At render time the source is gone, so the holes have to be left standing. That is
+ * `${'$'}{...}`. At render time the source is gone, so the placeholders have to be left standing. That is
  * the whole of what this function asks of you.
  *
  * @throws UnsafeInterpolationException if a value landed where escaping cannot help.
- * @throws IllegalArgumentException if the number of values does not match the number of holes.
+ * @throws IllegalArgumentException if the number of values does not match the number of placeholders.
  */
 public fun interpolate(
     @Language("HTML") format: String,
@@ -264,8 +265,8 @@ public fun interpolate(
 ): Html {
     val holes = holes(format)
     require(holes.size == values.size) {
-        "The markup has ${holes.size} %s ${if (holes.size == 1) "hole" else "holes"} and ${values.size} " +
-            "${if (values.size == 1) "value" else "values"} were given"
+        "The markup has ${holes.size} %s ${if (holes.size == 1) "placeholder" else "placeholders"} and ${values.size} " +
+            "${if (values.size == 1) "value was" else "values were"} given"
     }
     if (holes.isEmpty()) return Html(format.replace("%%", "%"))
 

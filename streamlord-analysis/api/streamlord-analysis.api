@@ -53,9 +53,9 @@ public final class io/github/markusaugust/streamlord/analysis/AnalyzeOptions {
 	public final fun getConstants ()Ljava/util/Set;
 	public final fun getCore ()Ljava/lang/Boolean;
 	public final fun getForeignCalls ()Ljava/util/Set;
-	public final fun getHoleFact ()Lkotlin/jvm/functions/Function2;
 	public final fun getHtmlDsl ()Ljava/lang/Boolean;
 	public final fun getPrefix ()Ljava/lang/String;
+	public final fun getValueFact ()Lkotlin/jvm/functions/Function2;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
@@ -429,20 +429,6 @@ public final class io/github/markusaugust/streamlord/analysis/Framework : java/l
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/Framework;
 	public static fun values ()[Lio/github/markusaugust/streamlord/analysis/Framework;
-}
-
-public final class io/github/markusaugust/streamlord/analysis/HoleFact : java/lang/Enum {
-	public static final field BOOLEAN Lio/github/markusaugust/streamlord/analysis/HoleFact;
-	public static final field CONSTANT Lio/github/markusaugust/streamlord/analysis/HoleFact;
-	public static final field MARKUP Lio/github/markusaugust/streamlord/analysis/HoleFact;
-	public static final field NULLABLE Lio/github/markusaugust/streamlord/analysis/HoleFact;
-	public static final field NULLABLE_STRING Lio/github/markusaugust/streamlord/analysis/HoleFact;
-	public static final field NUMBER Lio/github/markusaugust/streamlord/analysis/HoleFact;
-	public static final field STRING Lio/github/markusaugust/streamlord/analysis/HoleFact;
-	public static final field UNSIGNED Lio/github/markusaugust/streamlord/analysis/HoleFact;
-	public static fun getEntries ()Lkotlin/enums/EnumEntries;
-	public static fun valueOf (Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/HoleFact;
-	public static fun values ()[Lio/github/markusaugust/streamlord/analysis/HoleFact;
 }
 
 public final class io/github/markusaugust/streamlord/analysis/Interpolation {
@@ -1365,6 +1351,20 @@ public final class io/github/markusaugust/streamlord/analysis/ValueAtCaret {
 	public final fun getValueStart ()I
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/analysis/ValueFact : java/lang/Enum {
+	public static final field BOOLEAN Lio/github/markusaugust/streamlord/analysis/ValueFact;
+	public static final field CONSTANT Lio/github/markusaugust/streamlord/analysis/ValueFact;
+	public static final field MARKUP Lio/github/markusaugust/streamlord/analysis/ValueFact;
+	public static final field NULLABLE Lio/github/markusaugust/streamlord/analysis/ValueFact;
+	public static final field NULLABLE_STRING Lio/github/markusaugust/streamlord/analysis/ValueFact;
+	public static final field NUMBER Lio/github/markusaugust/streamlord/analysis/ValueFact;
+	public static final field STRING Lio/github/markusaugust/streamlord/analysis/ValueFact;
+	public static final field UNSIGNED Lio/github/markusaugust/streamlord/analysis/ValueFact;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/ValueFact;
+	public static fun values ()[Lio/github/markusaugust/streamlord/analysis/ValueFact;
 }
 
 public final class io/github/markusaugust/streamlord/analysis/ValueKind : java/lang/Enum {

@@ -377,13 +377,13 @@ function checkInterpolateSite(site: CallSite, f: InterpolateFormat, src: string,
     const v = values.length;
     // `%d` as String.format writes it: interpolate knows only %s.
     const specifier = /%[-#+0,(]*\d*(?:\.\d+)?[dfxXoeEgGcb](?![A-Za-z])/.exec(s.text.replace(/%%/g, "  "))?.[0];
-    const advice = specifier ? `Only %s is a hole, whatever the value: write %s in place of ${specifier}.` : "Write %% for a per cent sign that is not a hole.";
+    const advice = specifier ? `Only %s is a placeholder, whatever the value: write %s in place of ${specifier}.` : "Write %% for a per cent sign that is not a placeholder.";
     issues.push({
       start: site.nameStart,
       end: site.nameStart + site.name.length,
       severity: "error",
-      code: "interpolate-holes",
-      message: `interpolate throws IllegalArgumentException here: the markup has ${h} %s ${h === 1 ? "hole" : "holes"} and ${v} ${v === 1 ? "value is" : "values are"} given. ${advice}`,
+      code: "interpolate-placeholders",
+      message: `interpolate throws IllegalArgumentException here: the markup has ${h} %s ${h === 1 ? "placeholder" : "placeholders"} and ${v} ${v === 1 ? "value is" : "values are"} given. ${advice}`,
     });
   }
   const mapped = plain && holes.length === values.length;
@@ -527,7 +527,7 @@ function holeFix(ip: Interpolation, shown: string, holes: readonly number[], val
   const before = values[index];
   const after = values[values.length - 1] ?? format;
   const edit = before ? { start: before.start, end: before.start, text: `${expr}, ` } : { start: after.end, end: after.end, text: `, ${expr}` };
-  const title = markup ? `Make ${shown} a %s hole, where interpolate writes it as it is` : `Make ${shown} a %s hole, which interpolate escapes`;
+  const title = markup ? `Make ${shown} a %s placeholder, where interpolate writes it as it is` : `Make ${shown} a %s placeholder, which interpolate escapes`;
   return { title, start: ip.start, end: ip.end, text: "%s", edits: [edit] };
 }
 
@@ -548,12 +548,12 @@ function landingWords(landing: HoleLanding, endTag: boolean): { where: string; i
 
 /** Markup a Kotlin template writes into the format, which interpolate then reads as format. */
 function rereadMessage(shown: string): string {
-  return `Kotlin fills in ${shown} before interpolate reads the markup, so interpolate reads what it holds as markup too: a %s in it is a hole and a %% a per cent sign, and interpolate throws or changes the markup. Make it a %s hole and pass the Html: interpolate writes an Html or a Trusted there as it is.`;
+  return `Kotlin fills in ${shown} before interpolate reads the markup, so interpolate reads what it holds as markup too: a %s in it is a placeholder and a %% a per cent sign, and interpolate throws or changes the markup. Make it a %s placeholder and pass the Html: interpolate writes an Html or a Trusted there as it is.`;
 }
 
 function templateMessage(shown: string, landing: HoleLanding, endTag: boolean): string {
   const base = `Kotlin fills in ${shown} before interpolate sees the markup, so interpolate neither escapes nor refuses it.`;
-  if (ESCAPED.has(landing.position)) return `${base} Make it a %s hole and pass the value to interpolate.`;
+  if (ESCAPED.has(landing.position)) return `${base} Make it a %s placeholder and pass the value to interpolate.`;
   const { where, instead } = landingWords(landing, endTag);
   return `${base} It lands in ${where}. ${instead}`;
 }
@@ -640,7 +640,7 @@ function codeUrlMessage(shown: string, attribute: string): string {
 }
 
 function templateCodeUrlMessage(shown: string, attribute: string): string {
-  return `Kotlin fills in ${shown} before interpolate sees the markup, so interpolate neither escapes nor refuses it. It lands in ${attribute}, which loads code from wherever the value points, and the markup before it does not fix the host. ${CODE_URL_ADVICE}, and make it a %s hole.`;
+  return `Kotlin fills in ${shown} before interpolate sees the markup, so interpolate neither escapes nor refuses it. It lands in ${attribute}, which loads code from wherever the value points, and the markup before it does not fix the host. ${CODE_URL_ADVICE}, and make it a %s placeholder.`;
 }
 
 function refusedCodeUrlMessage(shown: string, attribute: string, certain: boolean, vouched: boolean): string {

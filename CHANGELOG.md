@@ -6,6 +6,17 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- A `%s` in `interpolate`'s format is called a placeholder everywhere Streamlord shows it: in the
+  documentation, in the editors' messages and fixes, and in what `interpolate` throws. The editors'
+  error for a `%s` count that does not match the values is `interpolate-placeholders`, where it was
+  `interpolate-holes`; anything that names the old code needs the new one.
+- `HoleFact` in streamlord-analysis is `ValueFact`, and `AnalyzeOptions.holeFact` is
+  `AnalyzeOptions.valueFact`. Code that names either needs the new name.
+- The `holeLimit` parameter of `mergePatchAsClient` in streamlord-core is `emptySlotLimit`, and its
+  refusal speaks of empty slots. A call that names the argument needs the new name.
+
 ## [0.19.0] - 2026-11-06
 
 ### Added
@@ -100,8 +111,9 @@ All notable changes to Streamlord are recorded here. The format follows
   no-break space as indentation.
 - A Streamlord call claimed every string handed to it, so `patchElements(header, "<p>$name</p>")`
   and `patchElements("<p>$name</p>") { }`, whose HTML it never reads, were not judged at all. Only
-  the strings a call reads are its own now; the rest are read as free strings, for their holes and
-  their signals, while a script, a selector or a helper's name is still the call's own.
+  the strings a call reads are its own now; the rest are read as free strings, for the values
+  written into them and their signals, while a script, a selector or a helper's name is still the
+  call's own.
 
 ## [0.18.0] - 2026-11-03
 
@@ -183,14 +195,13 @@ All notable changes to Streamlord are recorded here. The format follows
 - `Html`, the markup `interpolate` returns, and `patchElements`, `respondElements` and
   `datastarElements` overloads that take it. In another `interpolate` it is written as markup in
   element text and judged as the text it is anywhere else. Only `interpolate` and `joinToHtml` make
-  one. It is
-  markup only where it closes everything it opens, read as HTML and as svg or math, and the hole
-  is outside any comment, CDATA section or `textarea` or `title` body: `interpolate("<script>")`
-  or `interpolate("<a href=\"")` would otherwise turn the value after it into a program or a
-  link, so such a fragment is escaped and shows as the markup it is.
+  one. It is markup only where it closes everything it opens, read as HTML and as svg or math, and
+  the placeholder it fills is outside any comment, CDATA section or `textarea` or `title` body:
+  `interpolate("<script>")` or `interpolate("<a href=\"")` would otherwise turn the value after it
+  into a program or a link, so such a fragment is escaped and shows as the markup it is.
 - `Iterable<Html>.joinToHtml(separator)`: the markup of each `Html` in turn, as one `Html`, for a
-  list of rows as the value of a hole. Each piece already closes what it opens, so nothing is read
-  again or escaped.
+  list of rows as the value of a placeholder. Each piece already closes what it opens, so nothing is
+  read again or escaped.
 - `PatchElements(html, ...)` and `ElementsResponse(html, ...)`, functions that take an `Html` where
   the constructors take a `String`, for code that builds the event itself, as a `Flow` of events
   does. A constructor taking the `Html` would clash with the `String` one on the JVM; Java callers
@@ -207,11 +218,12 @@ All notable changes to Streamlord are recorded here. The format follows
   workspace declares, and `AnalyzeOptions.holeFact` what the editor knows of a value from its type,
   as a `HoleFact`. `HoleFact.UNSIGNED` is a `UInt`, `ULong`, `UShort` or `UByte`: digits, but no
   `kotlin.Number`, so `interpolate` refuses one in a `data-*` expression or `style`, and the editors
-  say so, an error in a `%s` hole with a `toLong()` fix and a hint where a Kotlin template writes it.
+  say so, an error in a `%s` placeholder with a `toLong()` fix and a hint where a Kotlin template
+  writes it.
 - The editors judge a call to `interpolate`: `interpolate-holes`, an error, for a `%s` count that
   does not match the values; `unsafe-interpolation` on a `%s` whose value it will refuse, an error
   where the value is known to be refused; `interpolate-template` for a Kotlin template written into
-  the format, which is neither escaped nor refused, with a fix that makes it a `%s` hole. The
+  the format, which is neither escaped nor refused, with a fix that makes it a `%s` placeholder. The
   format is read as HTML, and `interpolate`'s `format` is marked `@Language("HTML")`.
 - A fix that quotes an attribute value written without quotes.
 - `Analyzer.analyzeProject(root)`: every `.kt` file under a folder, `build` and hidden folders
@@ -236,9 +248,9 @@ All notable changes to Streamlord are recorded here. The format follows
   and they may change in any release.
 - The catalog reaches core and the analysis as code, generated from `catalog/datastar-1.0.4.json`
   when they build. `ElementsGuard`'s attribute sets, its default prefixes, the attributes
-  `interpolate` refuses a hole in and `DatastarAttributes.prefix` come from it, where core listed
-  them by hand and a test compared the two. The analysis no longer reads the catalog as a resource,
-  so a native image that runs it needs no resource configuration for it.
+  `interpolate` refuses a placeholder in and `DatastarAttributes.prefix` come from it, where core
+  listed them by hand and a test compared the two. The analysis no longer reads the catalog as a
+  resource, so a native image that runs it needs no resource configuration for it.
 
 - `interpolate` returns `Html` instead of `String`. The JVM signature is the same, so compiled code
   keeps working, but Kotlin source may need changing:
@@ -332,9 +344,9 @@ All notable changes to Streamlord are recorded here. The format follows
 
 - The exception for a value in a URL that loads code said to pass a relative or `https` URL, which
   is what had been passed. It says now what the rule is: write the host into the markup before the
-  hole, as in `"/js/%s"` or `"https://cdn.example.com/%s"`, or wrap a URL you chose in `Trusted`.
-  `UnsafeInterpolationException.loadsCode` tells such a refusal apart; its constructor takes it as
-  a fourth parameter, which changes its JVM signature.
+  placeholder, as in `"/js/%s"` or `"https://cdn.example.com/%s"`, or wrap a URL you chose in
+  `Trusted`. `UnsafeInterpolationException.loadsCode` tells such a refusal apart; its constructor
+  takes it as a fourth parameter, which changes its JVM signature.
 - `href` of a `<link>` loads what it points at, a stylesheet, a module or an icon, so a value there
   is held to the host rule above, whatever the `rel`: `<link rel="stylesheet" href="%s">` with
   `https://evil.example/x.css` was let in. A `content` of a `<meta>` that starts with a time, as
@@ -344,28 +356,28 @@ All notable changes to Streamlord are recorded here. The format follows
 - `ElementsGuard`, `interpolate` and the analysis searched to the end of the markup for both of a
   comment's closing sequences at every comment, so a patch of many comments took time that grew
   with its square: 800 KB of them took seconds in the guard, on every patch. `interpolate` read the
-  markup before a hole again for every `Html` value (20000 of them took the better part of a
+  markup before a placeholder again for every `Html` value (20000 of them took the better part of a
   minute), followed every end tag that matched nothing through the open elements, and the guard
   searched every CDATA section of an svg for every svg tag, and the editors lowercased the whole
   markup for each raw-text end they looked for. Each is one walk now. This was in 0.15.0.
 
 ### Security
 
-- `interpolate`, and the editors with it, took an `=` where an attribute name begins as the start
-  of a value, where the browser's tokenizer takes it as the first character of the name, which then
-  runs to the next space, `/` or `>`, quotes included. So in `<img src=x ='%s'>` the hole was judged
-  a quoted value and let in, and the value ` onerror=alert(1) x` came out as an `onerror` the
-  browser runs. A name now always takes its first character, `=` or not, and a hole there is
-  structure. A smaller misreading went with it: a `/` that ends an unquoted value, as in
+- `interpolate`, and the editors with it, took an `=` where an attribute name begins as the start of
+  a value, where the browser's tokenizer takes it as the first character of the name, which then
+  runs to the next space, `/` or `>`, quotes included. So in `<img src=x ='%s'>` the placeholder was
+  judged to be in a quoted value and let in, and the value ` onerror=alert(1) x` came out as an
+  `onerror` the browser runs. A name now always takes its first character, `=` or not, and a value
+  there is structure. A smaller misreading went with it: a `/` that ends an unquoted value, as in
   `<svg x=a/>`, is part of the value and does not close the element. This was in 0.15.0.
 - `interpolate`, `ElementsGuard` and the editors ended a `<script>` at its first `</script>`, but
   the browser's tokenizer does not always: after a `<!--` in the body, a `<script` start makes it
   double-escaped, where `</script>` only returns it to escaped, until a `-->` or a second
-  `</script>`. So in `interpolate("<script><!--<script></script>%s", value)` the hole was judged
-  text and let in, and the value came out inside the script, which the browser runs. A script body
-  now ends where the tokenizer's script data states end it, escaped and double-escaped included,
-  so that hole is code and refused, and an `Html` that leaves a script open this way is escaped.
-  This was in 0.15.0.
+  `</script>`. So in `interpolate("<script><!--<script></script>%s", value)` the placeholder was
+  judged to be in text and let in, and the value came out inside the script, which the browser runs.
+  A script body now ends where the tokenizer's script data states end it, escaped and double-escaped
+  included, so a value there is code and refused, and an `Html` that leaves a script open this way
+  is escaped. This was in 0.15.0.
 - `interpolate` read the markup three fixed ways, all HTML, all `<svg>`/`<math>`, and all svg or
   math with CDATA sections as text, and took the strictest, but the browser switches reading as its
   element stack changes and no one fixed way follows it. In
@@ -376,18 +388,19 @@ All notable changes to Streamlord are recorded here. The format follows
   stack, svg and math nesting, their HTML and MathML-text integration points, and the tags that
   exit foreign content, and switches CDATA, bogus-comment and raw-text rules by position; it joins
   the three as a conservative floor, and the strictest still wins. This was in 0.15.0.
-- A value in a URL that loads what the browser runs, `src` of `<script>`, `href` of `<base>`,
-  `src` of `<iframe>` and `<embed>`, `data` of `<object>`, and `href` of an SVG `<script>`, is
-  refused unless the literal before the hole already fixes the host: a path-absolute `/x` (a single
+- A value in a URL that loads what the browser runs, `src` of `<script>`, `href` of `<base>`, `src`
+  of `<iframe>` and `<embed>`, `data` of `<object>`, and `href` of an SVG `<script>`, is refused
+  unless the literal before the placeholder already fixes the host: a path-absolute `/x` (a single
   `/` and then a character that is not `/` or `\`, so a value cannot make it `//host`), a
   same-document `#` or `?`, or a whole origin `scheme://host/` with a safe scheme. A safe scheme
   alone no longer settles such an attribute, since `https://` can still point at another origin, and
   a single leading `/` no longer settles its host, since the next character could be a second `/`.
   `Trusted(...)` passes as ever. `urlHostFixedBy` (internal API) answers it, and `HoleLanding`
-  (internal API) carries `loadsCode` for such an attribute, so the editors judge a hole there by
+  (internal API) carries `loadsCode` for such an attribute, so the editors judge a value there by
   the host too: a Kotlin template that may move it is an `unsafe-interpolation` warning, with no
-  rewrite to `interpolate`, which would refuse it, and a `%s` hole in an `interpolate` format whose
-  literal does not fix the host is an error where the value is known, since only `Trusted` passes.
+  rewrite to `interpolate`, which would refuse it, and a `%s` placeholder in an `interpolate` format
+  whose literal does not fix the host is an error where the value is known, since only `Trusted`
+  passes.
 - `interpolate` decoded each literal piece of a URL attribute on its own before it judged the
   scheme, where the browser decodes the attribute once it is whole, so a character reference could
   begin in the markup and end in the value: `<a href="&%s">` with `#106;avascript:alert(1)` wrote
@@ -433,11 +446,11 @@ All notable changes to Streamlord are recorded here. The format follows
   svg `<script>` or `<style>` for code though they hold elements. `Html` is new in this release;
   the formats read wrong inside an svg or a math were in 0.15.0.
 - One `Trusted` value in a URL attribute waived the URL check for every other value there:
-  `interpolate("<a href=\"%s%s\">x</a>", Trusted(""), "javascript:alert(1)")` wrote a
-  `javascript:` link. A `Trusted` value now counts toward the URL as the literal does, written as
-  it stands, and the whole URL is judged; only a URL with no other value in it goes unjudged. The
-  host rule for a URL that loads code reads a `Trusted` value before the hole the same way. This
-  was in 0.15.0.
+  `interpolate("<a href=\"%s%s\">x</a>", Trusted(""), "javascript:alert(1)")` wrote a `javascript:`
+  link. A `Trusted` value now counts toward the URL as the literal does, written as it stands, and
+  the whole URL is judged; only a URL with no other value in it goes unjudged. The host rule for a
+  URL that loads code reads a `Trusted` value before the placeholder the same way. This was in
+  0.15.0.
 - The readings from inside an `<svg>` and a `<math>` kept every HTML element open to its end tag,
   where the browser closes some by itself: a `<p>` at the next `<p>` or `<div>`, an `<li>` at the
   next `<li>`. Once the element opened from the svg is closed, the browser is back in the svg, so
@@ -458,18 +471,18 @@ All notable changes to Streamlord are recorded here. The format follows
 - `interpolate` and the editors took a value inside a comment or a bogus comment for text, but
   escaping takes only its `<` and `>`, and its dashes can still change the comment around it: in
   `interpolate("<!%s><a title=\"--><script>%s</script>\">", "-- x", v)` the value made `<!` a
-  comment that ran to the `-->` in the title, and the script after it was live. A hole right after
+  comment that ran to the `-->` in the title, and the script after it was live. A value right after
   `<!` or `<!-`, where a value can finish a comment or a `<![CDATA[`, and one in a comment or a
   CDATA section whose markup goes on with `>`, `!>`, `->`, `-!>` or `]>`, which a value's dashes,
   `!` or `]` would make an early end, is refused as structure. This was in 0.15.0.
-- A `Trusted` value was written as it stands but never read back into the markup, so one in a tag
-  or attribute name, or anywhere else that changes how the markup is read, waived the checks on
-  the values beside it: `interpolate("<button %s=\"%s\">", Trusted("onclick"), v)` put `v` in a
-  handler, and `<%s>%s</%s>` with `Trusted("script")` put it in a script. `interpolate` now reads
-  the markup as it will be written, each `Trusted` value's text in place, and judges every other
-  value where that puts it, URL and host checks included; a `Trusted` value itself is still not
-  judged. `holeLandings` (internal API) takes the text of the holes whose content is known, so the
-  editors can read it the same way. This was in 0.15.0.
+- A `Trusted` value was written as it stands but never read back into the markup, so one in a tag or
+  attribute name, or anywhere else that changes how the markup is read, waived the checks on the
+  values beside it: `interpolate("<button %s=\"%s\">", Trusted("onclick"), v)` put `v` in a handler,
+  and `<%s>%s</%s>` with `Trusted("script")` put it in a script. `interpolate` now reads the markup
+  as it will be written, each `Trusted` value's text in place, and judges every other value where
+  that puts it, URL and host checks included; a `Trusted` value itself is still not judged.
+  `holeLandings` (internal API) takes the text of each value already known, so the editors can read
+  it the same way. This was in 0.15.0.
 
 ## [0.15.0] - 2026-10-28
 
@@ -528,8 +541,8 @@ All notable changes to Streamlord are recorded here. The format follows
   that reads signals now gets an object, where it got none; a test that relied on none fails, and
   says so. The function's JVM signature changed with the argument.
 - `interpolate` admits a value into a `data-*` attribute the client reads as it stands:
-  `data-nonce`, `data-preserve-attr`, `data-ignore`, `data-ignore-morph`. A page written as a
-  string can take its CSP nonce through a hole. The expression attributes and the signal filters
+  `data-nonce`, `data-preserve-attr`, `data-ignore`, `data-ignore-morph`. A page written as a string
+  can take its CSP nonce through a placeholder. The expression attributes and the signal filters
   (`data-json-signals`, `data-on-signal-patch-filter`, `data-persist`, `data-query-string`) are
   refused as before, since the client evaluates those, and so are `data-bind`, `data-ref` and
   `data-indicator`, whose value is a signal path the client follows without a guard: `__proto__.x`
@@ -1074,7 +1087,7 @@ All notable changes to Streamlord are recorded here. The format follows
   already on the page then stop redrawing until it is reloaded, since the client leaves its
   update batch open after the throw, though the signals still change, element patches still land
   and new bindings show the current value. Beside a patch Streamlord refuses on purpose, a
-  `__proto__` or more holes than `holeLimit`, they say that and why instead.
+  `__proto__` or more empty slots than `holeLimit`, they say that and why instead.
 - The editors read a page's signals as Datastar's client stores them. `signal-kebab` said "no key
   declares" a `$my-key` the page declares with its hyphen, in the object form
   (`{'my-key': 1}`), in the value of `data-bind`, `data-ref` or `data-indicator`, or as
@@ -1313,7 +1326,7 @@ All notable changes to Streamlord are recorded here. The format follows
   CIO and threw Netty's own exception from the header loop.
 - Neither Ktor nor Spring WebMVC sends `Connection: keep-alive` to a request that asked to close.
 - `streamlord-test` folds a signal patch onto an array as Datastar's client does: an index past
-  the end extends it, and `null` leaves a hole, read as `null`. It dropped both.
+  the end extends it, and `null` leaves an empty slot, read as `null`. It dropped both.
 - `LiveDatastarStream` sends the client's `Accept`, now `DatastarProtocol.ACCEPT`, and words a
   frame it fails on as one Streamlord's rules refuse: the client takes `retry: 0` and `1e3`.
 - The pages give the measured disconnect figures (four to five heartbeats on CIO, two on Netty),
@@ -1353,8 +1366,8 @@ All notable changes to Streamlord are recorded here. The format follows
   HTML and as the inside of an `<svg>` or `<math>` and holds a value to both; the guard reads it as
   svg where the markup opens one or the patch carries an SVG or MathML namespace.
 - `interpolate` judges a URL attribute whole, every value in place, so `href="%s%s"` with `"java"`
-  and `"script:alert(1)"` throws, as does a hole in `href="javascript:…(%s)"`, which used to be
-  escaped and admitted. `values`, `to` and `from` on SVG's animation elements are URL attributes,
+  and `"script:alert(1)"` throws, as does a placeholder in `href="javascript:…(%s)"`, which used to
+  be escaped and admitted. `values`, `to` and `from` on SVG's animation elements are URL attributes,
   and custom prefixes are tried longest first, as the guard already did.
 - `PatchSignals` and `SignalsResponse` refuse signals that are not one JSON object, and `JsonNumber`
   text that is not a JSON number, with `DatastarEventValidationException` and
@@ -1843,12 +1856,12 @@ All notable changes to Streamlord are recorded here. The format follows
 ### Added
 
 - `streamlord-core`: `interpolate(format, vararg values)` writes values into markup at its `%s`
-  holes and decides what to do with each by where it landed, not by where it came from. Element
-  text and ordinary quoted attributes are escaped. A hole in a `data-*` attribute Datastar reads,
-  in a tag name, an attribute name, an unquoted value, or inside a `<script>` or `<style>` is
-  refused with `UnsafeInterpolationException`, because escaping cannot make those safe. A number
-  or a boolean is admitted into a Datastar attribute, so a server-rendered initial signal needs no
-  waiver, and `Trusted(html)` waives both the escaping and the refusals for a fragment you
+  placeholders and decides what to do with each by where it landed, not by where it came from.
+  Element text and ordinary quoted attributes are escaped. A placeholder in a `data-*` attribute
+  Datastar reads, in a tag name, an attribute name, an unquoted value, or inside a `<script>` or
+  `<style>` is refused with `UnsafeInterpolationException`, because escaping cannot make those safe.
+  A number or a boolean is admitted into a Datastar attribute, so a server-rendered initial signal
+  needs no waiver, and `Trusted(html)` waives both the escaping and the refusals for a fragment you
   rendered yourself.
 - `streamlord-core`: `Position`, the five places a value can land, which
   `UnsafeInterpolationException` reports.

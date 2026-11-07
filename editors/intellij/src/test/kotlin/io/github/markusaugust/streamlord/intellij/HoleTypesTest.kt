@@ -10,7 +10,7 @@ import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.profile.codeInspection.InspectionProjectProfileManager
 import com.intellij.psi.PsiDocumentManager
-import io.github.markusaugust.streamlord.analysis.HoleFact
+import io.github.markusaugust.streamlord.analysis.ValueFact
 import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.intellij.analysis.HoleFacts
@@ -106,36 +106,36 @@ class HoleTypesTest : StreamlordTestCase() {
         val facts = facts(MARKUP_PAGE)
         val wanted =
             mapOf(
-                "\${\"<b>\" + q}" to HoleFact.STRING,
-                "\${q + \"<b>\"}" to HoleFact.STRING,
-                "\${\"<p>\" + h + \"</p>\"}" to HoleFact.MARKUP,
-                "\${bold(q)}" to HoleFact.STRING,
-                "\${badge()}" to HoleFact.MARKUP,
-                "\${deep2()}" to HoleFact.MARKUP,
-                "\${deep1()}" to HoleFact.STRING,
-                "\${either(c)}" to HoleFact.MARKUP,
-                "\${mixed(c, q)}" to HoleFact.STRING,
-                "\${annotated()}" to HoleFact.MARKUP,
-                "\$frag" to HoleFact.MARKUP,
-                "\$h" to HoleFact.MARKUP,
-                "\${h.text}" to HoleFact.MARKUP,
-                "\$built" to HoleFact.MARKUP,
-                "\$fragment" to HoleFact.MARKUP,
-                "\${Trusted(q)}" to HoleFact.MARKUP,
-                "\${\"<li>\$q</li>\".trimIndent()}" to HoleFact.MARKUP,
-                "\${items.joinToString(\"\") { \"<li>\$it</li>\" }}" to HoleFact.MARKUP,
-                "\${items.map { \"<li>\$it</li>\" }.joinToString(\"\")}" to HoleFact.MARKUP,
-                "\${items.joinToString(\"\")}" to HoleFact.STRING,
-                "\${listOf(\"<b>a</b>\", q).joinToString()}" to HoleFact.STRING,
-                "\${if (c) \"<b>a</b>\" else q}" to HoleFact.STRING,
-                "\${when { c -> \"<b>a</b>\"; else -> \"<i>b</i>\" }}" to HoleFact.MARKUP,
-                "\${createHTML().div { +q }}" to HoleFact.MARKUP,
-                "\${elements { span { +q } }}" to HoleFact.MARKUP,
-                "\${buildString { appendHTML().div { +q } }}" to HoleFact.MARKUP,
-                "\${post(\"/save\")}" to HoleFact.CONSTANT,
-                "\${signal(\"count\")}" to HoleFact.CONSTANT,
-                "\${increment(\"n\")}" to HoleFact.CONSTANT,
-                "\${n}" to HoleFact.NUMBER,
+                "\${\"<b>\" + q}" to ValueFact.STRING,
+                "\${q + \"<b>\"}" to ValueFact.STRING,
+                "\${\"<p>\" + h + \"</p>\"}" to ValueFact.MARKUP,
+                "\${bold(q)}" to ValueFact.STRING,
+                "\${badge()}" to ValueFact.MARKUP,
+                "\${deep2()}" to ValueFact.MARKUP,
+                "\${deep1()}" to ValueFact.STRING,
+                "\${either(c)}" to ValueFact.MARKUP,
+                "\${mixed(c, q)}" to ValueFact.STRING,
+                "\${annotated()}" to ValueFact.MARKUP,
+                "\$frag" to ValueFact.MARKUP,
+                "\$h" to ValueFact.MARKUP,
+                "\${h.text}" to ValueFact.MARKUP,
+                "\$built" to ValueFact.MARKUP,
+                "\$fragment" to ValueFact.MARKUP,
+                "\${Trusted(q)}" to ValueFact.MARKUP,
+                "\${\"<li>\$q</li>\".trimIndent()}" to ValueFact.MARKUP,
+                "\${items.joinToString(\"\") { \"<li>\$it</li>\" }}" to ValueFact.MARKUP,
+                "\${items.map { \"<li>\$it</li>\" }.joinToString(\"\")}" to ValueFact.MARKUP,
+                "\${items.joinToString(\"\")}" to ValueFact.STRING,
+                "\${listOf(\"<b>a</b>\", q).joinToString()}" to ValueFact.STRING,
+                "\${if (c) \"<b>a</b>\" else q}" to ValueFact.STRING,
+                "\${when { c -> \"<b>a</b>\"; else -> \"<i>b</i>\" }}" to ValueFact.MARKUP,
+                "\${createHTML().div { +q }}" to ValueFact.MARKUP,
+                "\${elements { span { +q } }}" to ValueFact.MARKUP,
+                "\${buildString { appendHTML().div { +q } }}" to ValueFact.MARKUP,
+                "\${post(\"/save\")}" to ValueFact.CONSTANT,
+                "\${signal(\"count\")}" to ValueFact.CONSTANT,
+                "\${increment(\"n\")}" to ValueFact.CONSTANT,
+                "\${n}" to ValueFact.NUMBER,
             )
         val seen = wanted.keys.associateWith { facts[it] }
         assertEquals(wanted.entries.joinToString("\n"), seen.entries.joinToString("\n"))
@@ -147,21 +147,21 @@ class HoleTypesTest : StreamlordTestCase() {
         val facts = facts(HELPER_PAGE)
         val wanted =
             mapOf(
-                "\${signal(\"count\")}" to HoleFact.CONSTANT,
-                "\${signal(KEY)}" to HoleFact.CONSTANT,
-                "\${signal(q)}" to HoleFact.STRING,
-                "\${signal(\"a\" + q)}" to HoleFact.STRING,
-                "\${statements(increment(\"a\"), toggle(\"b\"))}" to HoleFact.CONSTANT,
-                "\${statements(increment(\"a\"), signal(q))}" to HoleFact.STRING,
-                "\${post(\"/save\") { contentType = ContentType.FORM }}" to HoleFact.CONSTANT,
-                "\${post(\"/save\") { selector = q }}" to HoleFact.STRING,
-                "\${post(url)}" to HoleFact.STRING,
-                "\${signal(Tab.HOME.name)}" to HoleFact.CONSTANT,
-                "\${Tab.HOME}" to HoleFact.CONSTANT,
-                "\${Tab.HOME.name}" to HoleFact.CONSTANT,
-                "\${maybe}" to HoleFact.NULLABLE_STRING,
-                "\$q" to HoleFact.STRING,
-                "\${set(\"n\", n)}" to HoleFact.CONSTANT,
+                "\${signal(\"count\")}" to ValueFact.CONSTANT,
+                "\${signal(KEY)}" to ValueFact.CONSTANT,
+                "\${signal(q)}" to ValueFact.STRING,
+                "\${signal(\"a\" + q)}" to ValueFact.STRING,
+                "\${statements(increment(\"a\"), toggle(\"b\"))}" to ValueFact.CONSTANT,
+                "\${statements(increment(\"a\"), signal(q))}" to ValueFact.STRING,
+                "\${post(\"/save\") { contentType = ContentType.FORM }}" to ValueFact.CONSTANT,
+                "\${post(\"/save\") { selector = q }}" to ValueFact.STRING,
+                "\${post(url)}" to ValueFact.STRING,
+                "\${signal(Tab.HOME.name)}" to ValueFact.CONSTANT,
+                "\${Tab.HOME}" to ValueFact.CONSTANT,
+                "\${Tab.HOME.name}" to ValueFact.CONSTANT,
+                "\${maybe}" to ValueFact.NULLABLE_STRING,
+                "\$q" to ValueFact.STRING,
+                "\${set(\"n\", n)}" to ValueFact.CONSTANT,
             )
         val seen = wanted.keys.associateWith { facts[it] }
         assertEquals(wanted.entries.joinToString("\n"), seen.entries.joinToString("\n"))
@@ -173,14 +173,14 @@ class HoleTypesTest : StreamlordTestCase() {
         val facts = facts(UNSIGNED_PAGE)
         val wanted =
             mapOf(
-                "\${u}" to HoleFact.UNSIGNED,
-                "\${w}" to HoleFact.UNSIGNED,
-                "\${maybe}" to HoleFact.NULLABLE,
-                "\${n}" to HoleFact.NUMBER,
-                "\${rows.joinToString(\"\")}" to HoleFact.MARKUP,
-                "\${built.joinToString(\"\")}" to HoleFact.MARKUP,
-                "\${trusted.joinToString(\"\")}" to HoleFact.MARKUP,
-                "\${names.joinToString(\"\")}" to HoleFact.STRING,
+                "\${u}" to ValueFact.UNSIGNED,
+                "\${w}" to ValueFact.UNSIGNED,
+                "\${maybe}" to ValueFact.NULLABLE,
+                "\${n}" to ValueFact.NUMBER,
+                "\${rows.joinToString(\"\")}" to ValueFact.MARKUP,
+                "\${built.joinToString(\"\")}" to ValueFact.MARKUP,
+                "\${trusted.joinToString(\"\")}" to ValueFact.MARKUP,
+                "\${names.joinToString(\"\")}" to ValueFact.STRING,
             )
         val seen = wanted.keys.associateWith { facts[it] }
         assertEquals(wanted.entries.joinToString("\n"), seen.entries.joinToString("\n"))
@@ -214,7 +214,7 @@ class HoleTypesTest : StreamlordTestCase() {
                 .mapNotNull { QuickFixWrapper.unwrap(it) as? ReplaceTextFix }
                 .map { it.familyName }
         assertTrue(fixes.joinToString(), fixes.contains("Convert u with toLong()"))
-        assertTrue(fixes.joinToString(), fixes.contains("Make \$inner a %s hole, where interpolate writes it as it is"))
+        assertTrue(fixes.joinToString(), fixes.contains("Make \$inner a %s placeholder, where interpolate writes it as it is"))
     }
 
     fun `test a level set in the profile lowers the errors and leaves the hints and warnings alone`() {
@@ -303,7 +303,7 @@ class HoleTypesTest : StreamlordTestCase() {
             .get()
 
     /** The facts of a page, by the text of each hole. */
-    private fun facts(text: String): Map<String, HoleFact> {
+    private fun facts(text: String): Map<String, ValueFact> {
         val file = myFixture.configureByText("Page.kt", text) as KtFile
         return background { HoleFacts.of(file) }.mapKeys { (range, _) -> range.substring(file.text) }
     }

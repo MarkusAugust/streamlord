@@ -234,7 +234,7 @@ class CspNonceWebFilter : WebFilter {
 `exchange.cspNonce` then reads it back in the handler, exactly as `call.cspNonce` does.
 
 A page written as a string takes the nonce through `interpolate`, which escapes it: the client
-reads `data-nonce` as it stands, never as an expression, so the hole is an ordinary one.
+reads `data-nonce` as it stands, never as an expression, so the placeholder is an ordinary one.
 
 ```kotlin sample=statements
 val nonce = CspNonce.generate()
@@ -396,9 +396,9 @@ div {
 ```
 
 Escaping is the other half, and it belongs wherever the interpolation happens. Hand Streamlord the
-holes and that is Streamlord, which is what [`interpolate`](/strings/) does. Hand it a finished
-string and the provenance is already gone, so the escaping was your template engine's job and
-stays there.
+placeholders and that is Streamlord, which is what [`interpolate`](/strings/) does. Hand it a
+finished string and the provenance is already gone, so the escaping was your template engine's job
+and stays there.
 
 ## Forms from other sites
 

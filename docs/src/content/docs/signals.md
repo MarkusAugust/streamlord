@@ -294,12 +294,12 @@ throw, so the bindings already on the page stop redrawing until it is reloaded. 
 Chrome, a `data-text` stayed where it was while clicks moved its signal on, while element
 patches still landed and a binding added after the throw showed the current value.
 
-Two kinds of patch are refused on purpose, whatever the client does with them, with `refused`
-set on the exception, and the inspectors say so and what the client does. One is a key
-`__proto__` anywhere in the patch, whatever it holds. Where its value is an object with keys,
-such as `{"__proto__":{"x":1}}`, the client mostly throws at that key, and the bindings stop
-redrawing as above; otherwise it keeps an object that is no longer plain JSON. The other is more
-indices past the end of an array than `holeLimit`, which the client takes and keeps as holes.
+Two kinds of patch are refused on purpose, whatever the client does with them, with `refused` set on
+the exception, and the inspectors say so and what the client does. One is a key `__proto__` anywhere
+in the patch, whatever it holds. Where its value is an object with keys, such as
+`{"__proto__":{"x":1}}`, the client mostly throws at that key, and the bindings stop redrawing as
+above; otherwise it keeps an object that is no longer plain JSON. The other is more indices past the
+end of an array than `emptySlotLimit`, which the client takes and keeps as empty slots.
 
 A dotted name reaches a nested signal: `patchSignals("form.email" to "")` patches `$form.email`,
 the signal `data-signals:form.email` declares, and `removeSignals("form.email")` removes it.

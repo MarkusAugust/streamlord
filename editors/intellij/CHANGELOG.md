@@ -122,7 +122,7 @@ All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here
 
 - Every Kotlin value written into an HTML string is judged by where it lands, as `interpolate`
   judges it at run time and with core's own reading of the markup: `$name`, `${...}`, a value
-  joined with `+`, a literal inside a template and the holes of a `$$` literal, where only `$name`
+  joined with `+`, a literal inside a template and the values in a `$$` literal, where only `$name`
   was looked at before, and that with the same hint, "make sure it is escaped", wherever it stood.
   `unescaped-interpolation` is a value where escaping saves it, in element text, a quoted attribute
   or a URL whose literal start settles the scheme: a hint, a warning for a `String` and for markup
@@ -164,24 +164,25 @@ All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here
   which wraps it in `Trusted(...)` and adds the import. The message says to declare markup `Html`
   or wrap it.
 - A call to `interpolate` is judged as it will run. A `%s` count that does not match the values is
-  the error `interpolate-holes`, since the call throws. A `%s` whose value `interpolate` will
-  refuse where it lands is `unsafe-interpolation`, an error where the value is known to be refused
-  (a `String` in a `data-*` expression, a `Boolean` in `style`) and a warning where it is not. A
-  Kotlin template written into the format is `interpolate-template`, a warning, since Kotlin fills
-  it in before `interpolate` sees it, with a fix that makes it a `%s` hole and passes its value in
-  its place. That goes for an `Html` or a `Trusted` in element text too: Kotlin writes its text
-  into the format, where a `%s` in it is a hole and a `%%` a per cent sign, and the fix makes it a
-  `%s` hole, where `interpolate` writes it as it is. A `%s` in element text given markup held as a
-  `String`, `h.text`, `elements { }`, a `joinToString` over markup or over a collection declared
-  one of `Html` or `Trusted`, or a `val` set to any of these, is `interpolate-template` too, a warning, since `interpolate` escapes it and its tags are
-  printed as text; a literal is text you chose to have escaped and says nothing. The format is read
-  as HTML, so a `%s` in it is a hole and not text. An unsigned number, a `UInt` or a `3u`, is no
-  `kotlin.Number`, which `interpolate` refuses where only a number is let in: in a `%s` hole in a
-  `data-*` expression or `style` it is an error, with a `toLong()` fix, and where a Kotlin template
-  writes one there, a hint.
+  the error `interpolate-holes`, since the call throws. A `%s` whose value `interpolate` will refuse
+  where it lands is `unsafe-interpolation`, an error where the value is known to be refused (a
+  `String` in a `data-*` expression, a `Boolean` in `style`) and a warning where it is not. A Kotlin
+  template written into the format is `interpolate-template`, a warning, since Kotlin fills it in
+  before `interpolate` sees it, with a fix that makes it a `%s` placeholder and passes its value in
+  its place. That goes for an `Html` or a `Trusted` in element text too: Kotlin writes its text into
+  the format, where a `%s` in it is a placeholder and a `%%` a per cent sign, and the fix makes it a
+  `%s` placeholder, where `interpolate` writes it as it is. A `%s` in element text given markup held
+  as a `String`, `h.text`, `elements { }`, a `joinToString` over markup or over a collection
+  declared one of `Html` or `Trusted`, or a `val` set to any of these, is `interpolate-template`
+  too, a warning, since `interpolate` escapes it and its tags are printed as text; a literal is text
+  you chose to have escaped and says nothing. The format is read as HTML, so a `%s` in it is a
+  placeholder and not text. An unsigned number, a `UInt` or a `3u`, is no `kotlin.Number`, which
+  `interpolate` refuses where only a number is let in: in a `%s` placeholder in a `data-*`
+  expression or `style` it is an error, with a `toLong()` fix, and where a Kotlin template writes
+  one there, a hint.
 - The `interpolate(...)` rewrite is offered only where it keeps the page as it was: not for a value
   that may be null, which a template writes as `null` and `interpolate` as nothing, nor for a
-  `Trusted` outside element text, nor for a hole in element text that may hold markup, which
+  `Trusted` outside element text, nor for a value in element text that may be markup, which
   `interpolate` would escape, nor for a value that is a `List`, which a template writes as
   `[a, b]`. The rewrite doubles each per cent sign the literal writes.
 - The interpolation inspection asks the Kotlin plugin what each value is, and that comes before
@@ -189,7 +190,7 @@ All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here
   declarations. A number or a boolean is safe where escaping is, and an `Int?` there too; a
   `String`, inferred or declared, is a `String`, and a `String?` or a Java `String` one that may be
   null, so the rewrite is not offered. An entry of a Kotlin enum that does not override `toString` is
-  your own. A hole is markup only when the whole value is: an HTML literal or a trimmed one,
+  your own. A value is markup only when the whole of it is: an HTML literal or a trimmed one,
   `interpolate(...)`, `Trusted(...)`, a value or function declared `Html` or `@Language("HTML")`,
   kotlinx.html output (`createHTML()`, `appendHTML()`, `elements { }`), a `joinToString` over
   markup, or a function, an `if`, a `when` or an `?:` whose every result is markup or a literal.

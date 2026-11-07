@@ -18,13 +18,13 @@ function that returns HTML, a `val` holding a fragment), and in `.html` and temp
 - Kotlin interpolation of signals: `"$count++"` becomes `"++"` at runtime. Flagged as an error
   with the fix spelled out. In HTML strings, `$name` inside a `data-*` expression is a warning,
   a hint when `name` is a number or a boolean, which is safe written in.
-- A Kotlin value in an HTML string, judged by where it lands as `interpolate` judges it at run
-  time: in text or a quoted attribute, where escaping saves it, a hint (a warning for a `String`)
-  with a fix that rewrites the literal as `interpolate(...)`; at the start of a URL, in `style`, a
-  `data-*` expression, a script or an event handler, a warning, since escaping cannot help there.
-  Constants, including a `const val` anywhere in the workspace, literals and markup built in the
-  template say nothing. A call to `interpolate` is judged too: a miscounted `%s` and a value it will
-  refuse are errors, a Kotlin template in its format a warning with a fix that makes it a `%s` hole.
+- A Kotlin value in an HTML string, judged by where it lands as `interpolate` judges it at run time:
+  in text or a quoted attribute, where escaping saves it, a hint (a warning for a `String`) with a
+  fix that rewrites the literal as `interpolate(...)`; at the start of a URL, in `style`, a `data-*`
+  expression, a script or an event handler, a warning, since escaping cannot help there. Constants,
+  including a `const val` anywhere in the workspace, literals and markup built in the template say
+  nothing. A call to `interpolate` is judged too: a miscounted `%s` and a value it will refuse are
+  errors, a Kotlin template in its format a warning with a fix that makes it a `%s` placeholder.
 - Datastar expression syntax, checked with a real JavaScript parser, with the error at the
   right column.
 - Unknown actions (`@Post`), Pro actions and Pro attributes (hint: they need the Pro bundle).

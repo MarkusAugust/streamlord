@@ -356,7 +356,7 @@ to completion again, which an over-strict pattern had excluded.
 ## 0.5.0
 
 **Values from outside, put into markup safely.** `interpolate("""<li>%s</li>""", name)` fills the
-holes you leave and decides what to do with each value by where it landed. Text and ordinary
+placeholders you leave and decides what to do with each value by where it landed. Text and ordinary
 attributes are escaped; a `data-*` attribute Datastar reads, a tag or attribute name, an unquoted
 value and a script body are refused, because escaping cannot save those. `Trusted(...)` waives it
 for markup you rendered yourself. See [Strings](/strings/).

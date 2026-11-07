@@ -4,7 +4,7 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
 import com.intellij.psi.util.PsiTreeUtil
 import io.github.markusaugust.streamlord.analysis.Catalog
-import io.github.markusaugust.streamlord.analysis.HoleFact
+import io.github.markusaugust.streamlord.analysis.ValueFact
 import org.jetbrains.kotlin.analysis.api.KaSession
 import org.jetbrains.kotlin.analysis.api.analyze
 import org.jetbrains.kotlin.analysis.api.types.KaClassType
@@ -84,7 +84,7 @@ object HoleFacts {
     private const val CALL_DEPTH = 3
 
     /** The fact of every value in an HTML template or `+` chain, by the range the analysis gives its hole. */
-    fun of(file: KtFile): Map<TextRange, HoleFact> {
+    fun of(file: KtFile): Map<TextRange, ValueFact> {
         val holes = holes(file)
         if (holes.isEmpty()) return emptyMap()
         // The property the Kotlin plugin's own plugin.xml switches K1 on with; KotlinPluginModeProvider,
@@ -111,23 +111,23 @@ object HoleFacts {
     private fun judge(
         holes: List<Pair<TextRange, KtExpression>>,
         constant: (KtExpression) -> Boolean,
-        typed: (KtExpression) -> HoleFact?,
+        typed: (KtExpression) -> ValueFact?,
         markupElements: (KtExpression) -> Boolean,
-    ): Map<TextRange, HoleFact> {
-        val facts = HashMap<TextRange, HoleFact>()
+    ): Map<TextRange, ValueFact> {
+        val facts = HashMap<TextRange, ValueFact>()
         val markup = Markup(markupElements)
         for ((range, expr) in holes) {
             if (constant(expr)) {
-                facts[range] = HoleFact.CONSTANT
+                facts[range] = ValueFact.CONSTANT
                 continue
             }
             val fact = typed(expr)
             facts[range] =
                 when {
-                    fact == HoleFact.MARKUP -> fact
-                    isHelper(expr) && ownArguments(expr, constant, typed) -> HoleFact.CONSTANT
-                    markup.isMarkup(expr, CALL_DEPTH) -> HoleFact.MARKUP
-                    literalOnly(expr) -> HoleFact.CONSTANT
+                    fact == ValueFact.MARKUP -> fact
+                    isHelper(expr) && ownArguments(expr, constant, typed) -> ValueFact.CONSTANT
+                    markup.isMarkup(expr, CALL_DEPTH) -> ValueFact.MARKUP
+                    literalOnly(expr) -> ValueFact.CONSTANT
                     else -> fact ?: continue
                 }
         }
@@ -142,13 +142,13 @@ object HoleFacts {
     private fun authorsOwn(
         expr: KtExpression?,
         constant: (KtExpression) -> Boolean,
-        typed: (KtExpression) -> HoleFact?,
+        typed: (KtExpression) -> ValueFact?,
     ): Boolean {
         val e = expr?.let { KtPsiUtil.safeDeparenthesize(it) } ?: return false
         if (constant(e) || literalOnly(e) || enumEntry(e)) return true
         if (isHelper(e)) return ownArguments(e, constant, typed)
         val fact = typed(e)
-        return fact == HoleFact.NUMBER || fact == HoleFact.BOOLEAN || fact == HoleFact.UNSIGNED
+        return fact == ValueFact.NUMBER || fact == ValueFact.BOOLEAN || fact == ValueFact.UNSIGNED
     }
 
     /**
@@ -158,7 +158,7 @@ object HoleFacts {
     private fun ownArguments(
         expr: KtExpression,
         constant: (KtExpression) -> Boolean,
-        typed: (KtExpression) -> HoleFact?,
+        typed: (KtExpression) -> ValueFact?,
     ): Boolean {
         val call = KtPsiUtil.safeDeparenthesize(expr) as? KtCallExpression ?: return false
         return call.valueArguments.all { argument ->
@@ -239,7 +239,7 @@ object HoleFacts {
         }
     }
 
-    private fun KaSession.typeFact(type: KaType?): HoleFact? {
+    private fun KaSession.typeFact(type: KaType?): ValueFact? {
         if (type == null) return null
         // A Java String may be null, and is a string all the same; a Java Integer is not a number that is safe.
         val lower = (type as? KaFlexibleType)?.lowerBound ?: type
@@ -247,26 +247,26 @@ object HoleFacts {
         return when {
             // A String? or a Java String: a Kotlin template writes null as "null", interpolate as nothing.
             lower.isStringType || lower.isCharSequenceType -> {
-                if (definite) HoleFact.STRING else HoleFact.NULLABLE_STRING
+                if (definite) ValueFact.STRING else ValueFact.NULLABLE_STRING
             }
 
             lower.isClass(HTML_CLASS) -> {
-                HoleFact.MARKUP
+                ValueFact.MARKUP
             }
 
             // A number or a boolean that may be null prints digits, true, false or null: safe where escaping is.
             lower.isIntType || lower.isLongType || lower.isShortType || lower.isByteType || lower.isDoubleType || lower.isFloatType ||
                 lower.isClass(NUMBER_CLASS) -> {
-                if (definite) HoleFact.NUMBER else HoleFact.NULLABLE
+                if (definite) ValueFact.NUMBER else ValueFact.NULLABLE
             }
 
             // Digits too, but not a kotlin.Number: interpolate refuses one where only a number is let in.
             lower.isUIntType || lower.isULongType || lower.isUShortType || lower.isUByteType -> {
-                if (definite) HoleFact.UNSIGNED else HoleFact.NULLABLE
+                if (definite) ValueFact.UNSIGNED else ValueFact.NULLABLE
             }
 
             lower.isBooleanType -> {
-                if (definite) HoleFact.BOOLEAN else HoleFact.NULLABLE
+                if (definite) ValueFact.BOOLEAN else ValueFact.NULLABLE
             }
 
             else -> {
@@ -302,7 +302,7 @@ object HoleFacts {
     }
 
     /** K1: the type the declaration a reference resolves to writes out. */
-    private fun typeK1(expr: KtExpression): HoleFact? {
+    private fun typeK1(expr: KtExpression): ValueFact? {
         // `a?.b` may be null whatever `b` declares.
         if (KtPsiUtil.safeDeparenthesize(expr) is KtSafeQualifiedExpression) return null
         val target = reference(expr)?.mainReference?.resolve() as? KtCallableDeclaration ?: return null
@@ -310,11 +310,11 @@ object HoleFacts {
         val nullable = type.endsWith('?')
         val bare = type.removeSuffix("?")
         return when {
-            NUMBER_TYPE.matches(bare) -> if (nullable) HoleFact.NULLABLE else HoleFact.NUMBER
-            UNSIGNED_TYPE.matches(bare) -> if (nullable) HoleFact.NULLABLE else HoleFact.UNSIGNED
-            BOOLEAN_TYPE.matches(bare) -> if (nullable) HoleFact.NULLABLE else HoleFact.BOOLEAN
-            STRING_TYPE.matches(bare) -> if (nullable) HoleFact.NULLABLE_STRING else HoleFact.STRING
-            HTML_TYPE.matches(type) -> HoleFact.MARKUP
+            NUMBER_TYPE.matches(bare) -> if (nullable) ValueFact.NULLABLE else ValueFact.NUMBER
+            UNSIGNED_TYPE.matches(bare) -> if (nullable) ValueFact.NULLABLE else ValueFact.UNSIGNED
+            BOOLEAN_TYPE.matches(bare) -> if (nullable) ValueFact.NULLABLE else ValueFact.BOOLEAN
+            STRING_TYPE.matches(bare) -> if (nullable) ValueFact.NULLABLE_STRING else ValueFact.STRING
+            HTML_TYPE.matches(type) -> ValueFact.MARKUP
             else -> null
         }
     }
