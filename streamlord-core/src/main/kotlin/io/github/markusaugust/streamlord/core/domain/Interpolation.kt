@@ -813,8 +813,7 @@ private class Landscape(
     private val opaqueEnds = ArrayList<Int>()
     private val textStarts = ArrayList<Int>()
     private val textEnds = ArrayList<Int>()
-    private val textNamespaces = ArrayList<Int>()
-    private val textIntegrationPoints = ArrayList<Boolean>()
+    private val textPlaces = ArrayList<TextPlace>()
 
     override fun attribute(
         tag: String,
@@ -860,14 +859,11 @@ private class Landscape(
     override fun text(
         start: Int,
         end: Int,
-        depth: Int,
-        namespace: Int,
-        integrationPoint: Boolean,
+        place: TextPlace,
     ) {
         textStarts += start
         textEnds += end
-        textNamespaces += namespace
-        textIntegrationPoints += integrationPoint
+        textPlaces += place
     }
 
     override fun declaration(
@@ -1000,14 +996,18 @@ private class Landscape(
         if (!closesIn(reading)) return false
         val at = indexOfSpan(hole, textStarts, textEnds)
         if (at < 0) return true
+        val place = textPlaces[at]
         // Right in an integration point the value is HTML, whatever the reading started in.
-        if (textIntegrationPoints[at]) return closesIn(reading.of(NS_HTML, leaves = false))
+        if (place.integrationPoint) return closesIn(reading.of(NS_HTML, leaves = false)) && fits(html, place)
         // Read from an svg or a math, a format's `<form>` or `<math>` is an element of that namespace,
-        // so that reading leaves the rest to the one from HTML, where the format's elements are what
-        // its author wrote.
-        if (reading.context != NS_HTML) return true
-        val namespace = if (textNamespaces[at] < 0) NS_HTML else textNamespaces[at]
-        return closesIn(reading.of(namespace, leaves = namespace != NS_HTML))
+        // so that reading leaves the format's elements to the one from HTML. Straight in the patch's
+        // own svg or math it still reads the value there, where an `<image>` or an `<input>` is an
+        // element left open; the reading that closes HTML elements by itself leaves even that.
+        if (reading.context != NS_HTML) {
+            return place.namespace >= 0 || !reading.htmlStaysOpen || closesIn(reading.of(reading.context, leaves = false))
+        }
+        val namespace = if (place.namespace < 0) NS_HTML else place.namespace
+        return closesIn(reading.of(namespace, leaves = namespace != NS_HTML)) && (namespace != NS_HTML || fits(html, place))
     }
 
     fun valueStartAt(hole: Int): Int = indexOfSpan(hole, attributeStarts, attributeEnds).let { if (it >= 0) attributeStarts[it] else -1 }
@@ -1034,5 +1034,80 @@ private class Landscape(
     ): Int {
         val i = lastAtOrBefore(starts, at)
         return if (i >= 0 && at < ends[i]) i else -1
+    }
+}
+
+/**
+ * Whether [html], written into HTML at [place], keeps the shape the walk reads it in, where the
+ * walk does not follow the tree builder: its table parts stand in its own table or in the element
+ * that holds them, a formatting element's end tag leaves none of its block elements open, and a
+ * form in it is not inside a form or a table, where the browser's form pointer moves fields.
+ */
+private fun fits(
+    html: String,
+    place: TextPlace,
+): Boolean = ValueShape(place).also { scanMarkup(html, it, tracked = true) }.fits
+
+/** The table parts, each with the elements that hold it. */
+private val TABLE_PARTS_IN =
+    mapOf(
+        "td" to setOf("tr"),
+        "th" to setOf("tr"),
+        "tr" to setOf("table", "tbody", "thead", "tfoot"),
+        "col" to setOf("colgroup"),
+        "caption" to setOf("table"),
+        "colgroup" to setOf("table"),
+        "tbody" to setOf("table"),
+        "thead" to setOf("table"),
+        "tfoot" to setOf("table"),
+    )
+
+/** The elements whose content the tree builder reads in a table mode, where a form is no container. */
+private val TABLE_MODES = setOf("table", "tbody", "thead", "tfoot", "tr")
+
+private val FORMATTING = setOf("a", "b", "big", "code", "em", "font", "i", "nobr", "s", "small", "strike", "strong", "tt", "u")
+
+/** Reads the start and end tags of a value for [fits], keeping the elements it opens as they open and close. */
+private class ValueShape(
+    private val place: TextPlace,
+) : MarkupVisitor {
+    var fits = true
+    private val open = ArrayList<String>()
+
+    // The element a table part or a form of the value goes into: its own innermost table element, or where it lands.
+    private fun tableContext(): String? = open.lastOrNull { it == "table" || it in TABLE_PARTS_IN } ?: place.parent
+
+    override fun attribute(
+        tag: String,
+        name: String,
+        nameStart: Int,
+        valueStart: Int,
+        valueEnd: Int,
+        quoted: Boolean,
+    ) = Unit
+
+    override fun startTag(
+        name: String,
+        start: Int,
+        end: Int,
+        selfClosing: Boolean,
+        rawText: Boolean,
+    ) {
+        val holders = TABLE_PARTS_IN[name]
+        if (holders != null && "table" !in open && tableContext() !in holders) fits = false
+        if (name == "form" && (place.formOpen || tableContext() in TABLE_MODES)) fits = false
+        if (name !in VOID) open += name
+    }
+
+    override fun endTag(
+        name: String,
+        start: Int,
+        end: Int,
+    ) {
+        if (name == "form" && (place.formOpen || tableContext() in TABLE_MODES)) fits = false
+        val at = open.lastIndexOf(name)
+        if (at < 0) return
+        if (name in FORMATTING && open.subList(at + 1, open.size).any { it in SPECIAL }) fits = false
+        open.subList(at, open.size).clear()
     }
 }

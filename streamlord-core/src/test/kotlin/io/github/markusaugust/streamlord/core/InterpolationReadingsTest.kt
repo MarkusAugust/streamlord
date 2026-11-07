@@ -151,6 +151,54 @@ class InterpolationReadingsTest {
         }
     }
 
+    // A table part out of its place closes the table or the cell around it, or, as a first `<col>`,
+    // turns what follows into a column group that drops it; a formatting element's end tag leaves a
+    // block opened in it open; a form inside a form or a table moves the format's fields out of theirs;
+    // and straight in an svg patch an `<image>` or an `<input>` is an svg element left open.
+    @Test
+    fun `an Html that reshapes a table, a form or a formatting element is written as text`() {
+        val cases =
+            listOf(
+                "<table><tr><td>%s</td></tr></table>" to "<td></td>",
+                "<table><tr><td>%s</td></tr></table>" to "<col>",
+                "<table><tr><td><svg><desc>%s</desc></svg></td></tr></table>" to "<td></td>",
+                "<template>%sQ1</template>" to "<col>",
+                "Q0%s<p>Q1</p>" to "<col>",
+                "<div>%s</div>" to "<tr><td>a</td></tr>",
+                "<div>%sQ1</div>Q2" to "<b><div>x</b>",
+                "<div>%sQ1</div>Q2" to "<b><p>x</b>",
+                "<form>%s<input name=a></form>" to "<form></form>",
+                "<div>%s</div>" to "<table><form></form></table>",
+                "<table>%s</table>" to "<form></form>",
+                "%s<text>Q1</text>" to "<image href=\"a.png\">",
+                "%s<text>Q1</text>" to "<input>",
+            )
+        for ((format, markup) in cases) {
+            val out = interpolate(format, interpolate(markup)).text
+            assertFalse(markup in out, "$format with $markup: $out")
+        }
+    }
+
+    @Test
+    fun `an Html of table parts in their place, of a whole form, or of formatting is still markup`() {
+        val cases =
+            listOf(
+                "<table><tr>%s</tr></table>" to "<td>a</td><td>b</td>",
+                "<table><tbody>%s</tbody></table>" to "<tr><td>a</td></tr>",
+                "<table>%s</table>" to "<caption>c</caption>",
+                "<table><colgroup>%s</colgroup></table>" to "<col>",
+                "<div>%s</div>" to "<table><tr><td>a</td></tr></table>",
+                "<table><tr><td>%s</td></tr></table>" to "<table><tr><td>x</td></tr></table>",
+                "<div>%s</div>" to "<b>x</b><div>y</div>",
+                "<div>%s</div>" to "<form><input name=a></form>",
+                "<table><tr><td>%s</td></tr></table>" to "<form><input name=a></form>",
+                "%s" to "<image href=\"a.png\"/>",
+            )
+        for ((format, markup) in cases) {
+            assertEquals(format.replace("%s", markup), interpolate(format, interpolate(markup)).text, "$format with $markup")
+        }
+    }
+
     @Test
     fun `an Html that stays in the svg or math it lands in is still markup`() {
         val cases =

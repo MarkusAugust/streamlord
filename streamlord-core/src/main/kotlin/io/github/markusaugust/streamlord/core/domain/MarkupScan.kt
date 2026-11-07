@@ -61,19 +61,11 @@ public interface MarkupVisitor {
         end: Int,
     ): Unit = Unit
 
-    /**
-     * Text between the tags, by [walkMarkup] and the walks that follow the element stack, with the
-     * number of elements open around it and the namespace of the open element it is inserted into:
-     * 0 for HTML, an integration point's included, 1 for svg and 2 for MathML, and -1 where none of
-     * the markup's own is open and it goes into the element the walk starts inside. [integrationPoint]
-     * says that element is an svg or math one whose content is HTML, such as a `foreignObject`.
-     */
+    /** Text between the tags, by [walkMarkup] and the walks that follow the element stack, and where it stands. */
     public fun text(
         start: Int,
         end: Int,
-        depth: Int,
-        namespace: Int,
-        integrationPoint: Boolean,
+        place: TextPlace,
     ): Unit = Unit
 
     /** The body of a `<script>` or `<style>`, which is code to the browser rather than text. */
@@ -113,6 +105,25 @@ public fun walkMarkup(
 ) {
     scanMarkupTracked(html, visitor, NS_HTML, scripting = false, htmlStaysOpen = true, templates = templates)
 }
+
+/** Where a run of text stands among the elements open around it, as a walk that follows the element stack reports it. */
+@InternalStreamlordApi
+public class TextPlace(
+    /** How many elements are open around it. */
+    public val depth: Int,
+    /**
+     * The namespace of the open element it is inserted into: 0 for HTML, an integration point's
+     * included, 1 for svg and 2 for MathML, and -1 where none of the markup's own is open and it goes
+     * into the element the walk starts inside.
+     */
+    public val namespace: Int,
+    /** Whether that element is an svg or math one whose content is HTML, such as a `foreignObject`. */
+    public val integrationPoint: Boolean,
+    /** That element's name, lowercased, or null where none is open. */
+    public val parent: String?,
+    /** Whether a `form` is open around it. */
+    public val formOpen: Boolean,
+)
 
 /** The characters that end a tag name, and so an end tag's name as well. */
 private fun Char?.endsName(): Boolean = this == null || isHtmlSpace() || this == '/' || this == '>'
@@ -246,7 +257,7 @@ private val MATH_IN_TEXT = setOf("mglyph", "malignmark")
 private val FONT_EXITS = setOf("color", "face", "size")
 
 /** HTML elements the browser never leaves open: it pops each as it inserts it. */
-private val VOID =
+internal val VOID =
     setOf(
         "area",
         "base",
@@ -513,12 +524,17 @@ private fun scanMarkupTracked(
 
     fun text(to: Int) {
         if (to > textStart) {
+            val top = stackName.lastIndex
             visitor.text(
                 textStart,
                 to,
-                stackName.size + documentOpen,
-                if (stackName.isEmpty()) -1 else insertionNs(),
-                stackName.isNotEmpty() && stackNs.last() != NS_HTML && stackHtmlContent.last(),
+                TextPlace(
+                    depth = top + 1 + documentOpen,
+                    namespace = if (top < 0) -1 else insertionNs(),
+                    integrationPoint = top >= 0 && stackNs[top] != NS_HTML && stackHtmlContent[top],
+                    parent = stackName.lastOrNull(),
+                    formOpen = (open["form"] ?: 0) > 0,
+                ),
             )
         }
     }
@@ -836,7 +852,7 @@ private val LIST_LOOP_PASSES = setOf("address", "div", "p")
 private val BUTTON_SCOPE = setOf("applet", "caption", "html", "table", "td", "th", "marquee", "object", "template", "button")
 
 /** The HTML elements of the tree builder's special category. */
-private val SPECIAL =
+internal val SPECIAL =
     setOf(
         "address",
         "applet",

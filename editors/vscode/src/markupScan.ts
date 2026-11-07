@@ -112,6 +112,20 @@ const SCRIPTING_RAW_TEXT = [...RAW_TEXT, "noscript"];
 const CODE_TEXT = ["script", "style"];
 const HTML_SPACE = "\t\n\f\r ";
 
+/** Where a run of text stands among the elements open around it: TextPlace in MarkupScan.kt. */
+export interface TextPlace {
+  /** How many elements are open around it. */
+  depth: number;
+  /** The namespace of the open element it goes into: an integration point's content is HTML, and -1 where none is open. */
+  namespace: number;
+  /** Whether that element is an svg or math integration point. */
+  integrationPoint: boolean;
+  /** That element's name, lowercased, or null where none is open. */
+  parent: string | null;
+  /** Whether a `form` is open around it. */
+  formOpen: boolean;
+}
+
 /** What a walk over HTML reports: MarkupVisitor in MarkupScan.kt. Offsets are into the string that was walked. */
 export interface Visitor {
   attribute(tag: string, name: string, nameStart: number, valueStart: number, valueEnd: number, quoted: boolean): void;
@@ -123,12 +137,8 @@ export interface Visitor {
   startTag?(name: string, start: number, end: number, selfClosing: boolean, rawText: boolean): void;
   /** An end tag, by walkMarkup, its name lowercased. */
   endTag?(name: string, start: number, end: number): void;
-  /**
-   * Text between the tags, with the number of elements open around it, the namespace of the open
-   * element it goes into (an integration point's content is HTML, and -1 where none is open), and
-   * whether that element is an svg or math integration point.
-   */
-  text?(start: number, end: number, depth: number, namespace: number, integrationPoint: boolean): void;
+  /** Text between the tags, and where it stands: TextPlace in MarkupScan.kt. */
+  text?(start: number, end: number, place: TextPlace): void;
 }
 
 /** Discard in MarkupScan.kt: takes the attributes of an end tag. */
@@ -365,7 +375,13 @@ export function scanMarkupTracked(html: string, visitor: Visitor, context: numbe
   const text = (to: number) => {
     if (to > textStart) {
       const top = stackName.length - 1;
-      visitor.text?.(textStart, to, top + 1 + documentOpen, top < 0 ? -1 : insertionNs(), top >= 0 && stackNs[top] !== NS_HTML && (stackHtmlContent[top] as boolean));
+      visitor.text?.(textStart, to, {
+        depth: top + 1 + documentOpen,
+        namespace: top < 0 ? -1 : insertionNs(),
+        integrationPoint: top >= 0 && stackNs[top] !== NS_HTML && (stackHtmlContent[top] as boolean),
+        parent: stackName[top] ?? null,
+        formOpen: (open.get("form") ?? 0) > 0,
+      });
     }
   };
   let i = 0;
