@@ -381,7 +381,7 @@ public abstract interface class io/github/markusaugust/streamlord/core/domain/Ma
 	public fun opaque (II)V
 	public fun startTag (Ljava/lang/String;IIZZ)V
 	public fun tag (II)V
-	public fun text (III)V
+	public fun text (IIII)V
 }
 
 public final class io/github/markusaugust/streamlord/core/domain/MarkupVisitor$DefaultImpls {
@@ -391,7 +391,7 @@ public final class io/github/markusaugust/streamlord/core/domain/MarkupVisitor$D
 	public static fun opaque (Lio/github/markusaugust/streamlord/core/domain/MarkupVisitor;II)V
 	public static fun startTag (Lio/github/markusaugust/streamlord/core/domain/MarkupVisitor;Ljava/lang/String;IIZZ)V
 	public static fun tag (Lio/github/markusaugust/streamlord/core/domain/MarkupVisitor;II)V
-	public static fun text (Lio/github/markusaugust/streamlord/core/domain/MarkupVisitor;III)V
+	public static fun text (Lio/github/markusaugust/streamlord/core/domain/MarkupVisitor;IIII)V
 }
 
 public final class io/github/markusaugust/streamlord/core/domain/MistypedAttributeException : io/github/markusaugust/streamlord/core/StreamlordException {

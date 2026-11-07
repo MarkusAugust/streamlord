@@ -61,11 +61,17 @@ public interface MarkupVisitor {
         end: Int,
     ): Unit = Unit
 
-    /** Text between the tags, by [walkMarkup], with the number of elements open around it. */
+    /**
+     * Text between the tags, by [walkMarkup] and the walks that follow the element stack, with the
+     * number of elements open around it and the namespace of the open element it is inserted into:
+     * 0 for HTML, an integration point's included, 1 for svg and 2 for MathML, and -1 where none of
+     * the markup's own is open and it goes into the element the walk starts inside.
+     */
     public fun text(
         start: Int,
         end: Int,
         depth: Int,
+        namespace: Int,
     ): Unit = Unit
 
     /** The body of a `<script>` or `<style>`, which is code to the browser rather than text. */
@@ -128,7 +134,9 @@ private fun Char?.isAsciiLetter(): Boolean = this != null && (this in 'a'..'z' |
  * reads a patch. With [tracked], it follows the element stack instead (see scanMarkupTracked),
  * starting inside an element of the [context] namespace, and, without [htmlStaysOpen], letting no
  * HTML element opened straight from that context stay open, and with [templates] as well, it skips
- * the syntax of a template language as [walkMarkup] does.
+ * the syntax of a template language as [walkMarkup] does. With [insideMarkup], the context is an
+ * element of the markup around this one, as it is for a value written into an svg, which a tag that
+ * returns to HTML closes, where a patch's own context element stays.
  *
  * @return Whether the markup ends in the data state, with no tag, attribute value, comment, CDATA
  *   section or raw-text body left open, and so whether markup written after it is read as written.
@@ -144,8 +152,9 @@ internal fun scanMarkup(
     context: Int = NS_HTML,
     htmlStaysOpen: Boolean = true,
     templates: Boolean = false,
+    insideMarkup: Boolean = false,
 ): Boolean {
-    if (tracked) return scanMarkupTracked(html, visitor, context, scripting, htmlStaysOpen, templates)
+    if (tracked) return scanMarkupTracked(html, visitor, context, scripting, htmlStaysOpen, templates, insideMarkup)
     val rawText =
         if (foreign) {
             CODE_TEXT
@@ -335,7 +344,9 @@ private val EXITS_FOREIGN =
  *   markup after it is read (one of another namespace than [context], an integration point, a
  *   `template` or a `select`), and has no end tag for an element it did not open, which would close
  *   one of the markup around it. Without [htmlStaysOpen], an end tag for an HTML element it never
- *   kept open does not count as such, since the walk with it judges that.
+ *   kept open does not count as such, since the walk with it judges that. With [insideMarkup], a
+ *   tag that returns a foreign [context] to HTML, such as `<em>` or `</p>`, with none of the
+ *   markup's own svg or math open, closes the context and so the markup around it as well.
  */
 private fun scanMarkupTracked(
     html: String,
@@ -344,6 +355,7 @@ private fun scanMarkupTracked(
     scripting: Boolean,
     htmlStaysOpen: Boolean,
     templates: Boolean = false,
+    insideMarkup: Boolean = false,
 ): Boolean {
     val rawText = if (scripting) SCRIPTING_RAW_TEXT else RAW_TEXT
     val stackNs = ArrayList<Int>()
@@ -356,6 +368,8 @@ private fun scanMarkupTracked(
     // How many `html`, `head` and `body` start tags are open: the tree builder drops them, but the text after one is inside it.
     var documentOpen = 0
     var stray = false
+    // Whether a tag closed the foreign [context] itself, as it does when the markup is a value inside an svg or math.
+    var leftContext = false
     // An svg or math `script` or `style` holds elements, but the text in it is still a program,
     // so all of it, from the first one opened to the last one closed, is reported as code.
     var foreignCode = 0
@@ -415,6 +429,13 @@ private fun scanMarkupTracked(
         at: Int,
     ) {
         while (stackName.size > k) pop(at)
+    }
+
+    // An HTML tag such as `<p>` or `</br>` in foreign content closes the foreign elements first; with
+    // none of the markup's own open, the browser closes the context's.
+    fun exitForeign(at: Int) {
+        while (stackNs.isNotEmpty() && stackNs.last() != NS_HTML && !stackHtmlContent.last()) pop(at)
+        if (insideMarkup && context != NS_HTML && stackNs.isEmpty()) leftContext = true
     }
 
     // The end tags the tree builder implies before it inserts the HTML element [name]: a `p` in
@@ -484,7 +505,7 @@ private fun scanMarkupTracked(
     var textStart = 0
 
     fun text(to: Int) {
-        if (to > textStart) visitor.text(textStart, to, stackName.size + documentOpen)
+        if (to > textStart) visitor.text(textStart, to, stackName.size + documentOpen, if (stackName.isEmpty()) -1 else insertionNs())
     }
 
     fun walk(): Boolean {
@@ -560,9 +581,7 @@ private fun scanMarkupTracked(
                 visitor.endTag(name, lt, if (end < 0) n else end)
                 if (end < 0) return false
                 // A `</p>` or `</br>` in foreign content closes the foreign elements, as an exiting tag does.
-                if (foreignNow && (name == "p" || name == "br")) {
-                    while (stackNs.isNotEmpty() && stackNs.last() != NS_HTML && !stackHtmlContent.last()) pop(lt)
-                }
+                if (foreignNow && (name == "p" || name == "br")) exitForeign(lt)
                 if (name in IGNORED_IN_BODY && documentOpen > 0) documentOpen--
                 val at = if (name == "br") -1 else endTagTarget(name)
                 if (at >= 0) {
@@ -595,9 +614,7 @@ private fun scanMarkupTracked(
 
             // In foreign content, an HTML tag such as <p> or <img> closes the foreign elements first.
             val exits = foreignNow && (name in EXITS_FOREIGN || snoop.fontExits)
-            if (exits) {
-                while (stackNs.isNotEmpty() && stackNs.last() != NS_HTML && !stackHtmlContent.last()) pop(lt)
-            }
+            if (exits) exitForeign(lt)
             val mathInText =
                 !exits && name in MATH_IN_TEXT && stackNs.isNotEmpty() && stackNs.last() == NS_MATH &&
                     stackName.last() in MATH_TEXT_INTEGRATION
@@ -657,7 +674,7 @@ private fun scanMarkupTracked(
 
     val ended = walk()
     if (foreignCode > 0) visitor.code(foreignCodeStart, n)
-    return ended && !stray && foreignCode == 0 &&
+    return ended && !stray && !leftContext && foreignCode == 0 &&
         stackName.indices.all { stackNs[it] == context && !stackHtmlContent[it] && stackName[it] !in CHANGES_MODE }
 }
 

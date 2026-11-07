@@ -481,6 +481,7 @@ public fun tokenize(
                 start: Int,
                 end: Int,
                 depth: Int,
+                namespace: Int,
             ) {
                 if (depth > 0) return
                 val t = html.substring(start, end)

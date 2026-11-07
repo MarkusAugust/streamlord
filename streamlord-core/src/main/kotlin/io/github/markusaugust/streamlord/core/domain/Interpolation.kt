@@ -287,7 +287,7 @@ public fun interpolate(
         val landing = landingOf(landscapes, hole)
         // Markup interpolate built is markup where it starts and ends in the data state in
         // every reading, so that it cannot move the holes after it; anywhere else it is characters.
-        if (value is Html && landing.position == Position.TEXT && landscapes.all { it.inData(hole) && it.closes(value.text) }) {
+        if (value is Html && landing.position == Position.TEXT && landscapes.all { it.inData(hole) && it.closes(value.text, hole) }) {
             out.append(value.text)
         } else {
             if (!landing.position.admits(value)) throw UnsafeInterpolationException(landing.position, index, landing.attribute)
@@ -596,14 +596,18 @@ private class Reading(
     val context: Int = NS_HTML,
     val htmlStaysOpen: Boolean = true,
     val templates: Boolean = false,
+    val insideMarkup: Boolean = false,
 ) {
     fun scan(
         html: String,
         visitor: MarkupVisitor,
-    ): Boolean = scanMarkup(html, visitor, foreign, cdata, tracked, scripting, context, htmlStaysOpen, templates)
+    ): Boolean = scanMarkup(html, visitor, foreign, cdata, tracked, scripting, context, htmlStaysOpen, templates, insideMarkup)
 
-    fun withScripting(): Reading =
-        Reading(foreign, cdata, tracked, scripting = true, context = context, htmlStaysOpen = htmlStaysOpen, templates = templates)
+    /** This tracked reading, of a value written where the content is of [namespace]. */
+    fun inside(namespace: Int): Reading =
+        Reading(tracked = true, scripting = scripting, context = namespace, htmlStaysOpen = htmlStaysOpen, insideMarkup = true)
+
+    fun withScripting(): Reading = Reading(foreign, cdata, tracked, true, context, htmlStaysOpen, templates, insideMarkup)
 }
 
 /**
@@ -793,6 +797,9 @@ private class Landscape(
     private val codeEnds = ArrayList<Int>()
     private val opaqueStarts = ArrayList<Int>()
     private val opaqueEnds = ArrayList<Int>()
+    private val textStarts = ArrayList<Int>()
+    private val textEnds = ArrayList<Int>()
+    private val textNamespaces = ArrayList<Int>()
 
     override fun attribute(
         tag: String,
@@ -833,6 +840,17 @@ private class Landscape(
     ) {
         opaqueStarts += start
         opaqueEnds += end
+    }
+
+    override fun text(
+        start: Int,
+        end: Int,
+        depth: Int,
+        namespace: Int,
+    ) {
+        textStarts += start
+        textEnds += end
+        textNamespaces += namespace
     }
 
     override fun declaration(
@@ -953,8 +971,20 @@ private class Landscape(
      * Whether [html], read in this landscape, leaves nothing open for the markup after it to fall
      * into, with scripting on as well when it holds a `noscript`.
      */
-    fun closes(html: String): Boolean =
-        reading.scan(html, Discard) && (reading.scripting || !mentionsNoscript(html) || reading.withScripting().scan(html, Discard))
+    fun closes(
+        html: String,
+        hole: Int,
+    ): Boolean {
+        fun closesIn(r: Reading) =
+            r.scan(html, Discard) && (r.scripting || !mentionsNoscript(html) || r.withScripting().scan(html, Discard))
+        if (!closesIn(reading)) return false
+        // Read from HTML, as a page or an HTML patch is, the format's own svg and math are what its
+        // author wrote, and the value is read in the one it lands in too. Read from inside an svg or a
+        // math, a format's `<math>` or `<svg>` is an element of the other, and that reading keeps to the above.
+        val at = indexOfSpan(hole, textStarts, textEnds)
+        if (at < 0 || !reading.tracked || reading.context != NS_HTML || textNamespaces[at] < 0 || textNamespaces[at] == NS_HTML) return true
+        return closesIn(reading.inside(textNamespaces[at]))
+    }
 
     fun valueStartAt(hole: Int): Int = indexOfSpan(hole, attributeStarts, attributeEnds).let { if (it >= 0) attributeStarts[it] else -1 }
 

@@ -1,7 +1,8 @@
 /**
  * The walk over HTML both the checks and `interpolate`'s judging read markup by: the twin of
  * MarkupScan.kt in streamlord-core, with the helpers of its ClientHtml.kt it needs. holes.ts takes
- * every reading of it, markup.ts's tokenize the one walkMarkup gives.
+ * every reading of it, markup.ts's tokenize the one walkMarkup gives. Core's insideMarkup, for the
+ * Html values interpolate writes, has no twin: the editors do not judge those.
  */
 
 /**
@@ -122,8 +123,8 @@ export interface Visitor {
   startTag?(name: string, start: number, end: number, selfClosing: boolean, rawText: boolean): void;
   /** An end tag, by walkMarkup, its name lowercased. */
   endTag?(name: string, start: number, end: number): void;
-  /** Text between the tags, by walkMarkup, with the number of elements open around it. */
-  text?(start: number, end: number, depth: number): void;
+  /** Text between the tags, with the number of elements open around it and the namespace of the open element it goes into, -1 where none is. */
+  text?(start: number, end: number, depth: number, namespace: number): void;
 }
 
 /** Discard in MarkupScan.kt: takes the attributes of an end tag. */
@@ -358,7 +359,7 @@ export function scanMarkupTracked(html: string, visitor: Visitor, context: numbe
   // Where the text since the last tag, comment or raw-text body began.
   let textStart = 0;
   const text = (to: number) => {
-    if (to > textStart) visitor.text?.(textStart, to, stackName.length + documentOpen);
+    if (to > textStart) visitor.text?.(textStart, to, stackName.length + documentOpen, stackName.length === 0 ? -1 : insertionNs());
   };
   let i = 0;
   while (i < n) {

@@ -6,6 +6,16 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- `interpolate` wrote an `Html` value as markup where it lands inside an `<svg>` or a `<math>`,
+  though a tag in it takes the browser back to HTML there: `<svg><g>%s</g></svg>` with
+  `<em></em>`, a `<p>`, a `<br>` or a `<font color>`. The browser closes the svg and the elements
+  around the value, and reads the format after it as HTML, so a value written later in the format
+  could land where it was not judged. Such a value is escaped now. `Html` that stays in the svg or
+  math, such as `<path/>` in `<svg>%s</svg>`, and `Html` in a `<foreignObject>` or an `<mi>`, are
+  still markup. 0.19.0 has the fault.
+
 ### Changed
 
 - A `%s` in `interpolate`'s format is called a placeholder everywhere Streamlord shows it: in the

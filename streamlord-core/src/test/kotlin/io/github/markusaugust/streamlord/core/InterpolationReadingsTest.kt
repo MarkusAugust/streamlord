@@ -75,6 +75,35 @@ class InterpolationReadingsTest {
         }
     }
 
+    // Where the value lands in svg or math, a tag that takes the browser back to HTML there closes
+    // the elements around it, and the markup after it is read as HTML.
+    @Test
+    fun `an Html that leaves the svg or math it lands in is written as text`() {
+        val formats = listOf("<svg><g>%s</g></svg>", "<svg>%s</svg>", "<math><mrow>%s</mrow></math>", "<svg><g><g>%s</g></g></svg>")
+        val leaving = listOf("<em></em>", "<p>x</p>", "</p>", "<br>", "</br>", "<font color=red>x</font>", "<div></div>")
+        for (format in formats) {
+            for (markup in leaving) {
+                val out = interpolate(format, interpolate(markup)).text
+                assertFalse(markup in out, "$format with $markup: $out")
+            }
+        }
+    }
+
+    @Test
+    fun `an Html that stays in the svg or math it lands in is still markup`() {
+        val cases =
+            listOf(
+                "<svg>%s</svg>" to "<path d=\"M0 0\"/>",
+                "<svg><g>%s</g></svg>" to "<g><circle r=\"1\"/></g>",
+                "<math>%s</math>" to "<mi>x</mi>",
+                "<svg><foreignObject>%s</foreignObject></svg>" to "<p>x</p>",
+                "<math><mi>%s</mi></math>" to "<b>x</b>",
+            )
+        for ((format, markup) in cases) {
+            assertEquals(format.replace("%s", markup), interpolate(format, interpolate(markup)).text, "$format with $markup")
+        }
+    }
+
     @Test
     fun `an Html that closes what it opens is still markup`() {
         val closed =
@@ -126,7 +155,8 @@ class InterpolationReadingsTest {
             refused("<p><pre></pre><style><dd>%s<li><li></li></style>%s", Trusted("<script>"), code).position,
         )
         assertEquals(Position.CODE, refused("<p><pre></pre><style><dd><script><li><li></li></style>%s", code).position)
-        assertEquals("<svg><p>a</p></svg>", interpolate("<svg>%s</svg>", interpolate("<p>%s</p>", "a")).text)
+        // Written into the svg itself, a `<p>` takes the browser out of it, and the `</svg>` after it is read in HTML.
+        assertEquals("<svg>&lt;p&gt;a&lt;/p&gt;</svg>", interpolate("<svg>%s</svg>", interpolate("<p>%s</p>", "a")).text)
     }
 
     // Inside foreign content an `<svg>` or `<math>` tag takes the namespace it stands in, so in a
