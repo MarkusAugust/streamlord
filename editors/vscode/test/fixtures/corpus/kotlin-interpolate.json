@@ -1,5 +1,5 @@
 {
-  "$comment": "Calls to interpolate, judged by both editors alike: a Kotlin template in the format, which Kotlin fills before interpolate sees it (interpolate-template); holes miscounted against the values (interpolate-placeholders); each %s hole judged by where it lands and what the value is (unsafe-interpolation); and the format read as HTML. The format is the one of kotlin.json.",
+  "$comment": "Calls to interpolate, judged by both editors alike: a Kotlin template in the format, which Kotlin fills before interpolate sees it (interpolate-template); placeholders miscounted against the values (interpolate-placeholders); each %s placeholder judged by where it lands and what the value is (unsafe-interpolation); and the format read as HTML. The format is the one of kotlin.json.",
   "kind": "kotlin",
   "cases": [
     {"name":"a template in the format is filled before interpolate sees it","source":"interpolate(\"<p>$query</p>\")","issues":[{"code":"interpolate-template","start":16,"end":22,"severity":"warning","fixes":["interpolate(\"<p>%s</p>\", query)"],"message":"Kotlin fills in $query before interpolate sees the markup, so interpolate neither escapes nor refuses it. Make it a %s placeholder and pass the value to interpolate."}]},
