@@ -2,22 +2,21 @@ package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.core.client.ClientCasing
-import io.github.markusaugust.streamlord.core.client.HTML_SPACE
-import io.github.markusaugust.streamlord.core.client.RAW_TEXT
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
-import io.github.markusaugust.streamlord.core.client.commentEnd
 import io.github.markusaugust.streamlord.core.client.decodeEntities
-import io.github.markusaugust.streamlord.core.client.rawTextEnd
 import io.github.markusaugust.streamlord.core.domain.AttributeKeys
 import io.github.markusaugust.streamlord.core.domain.CspNonce
 import io.github.markusaugust.streamlord.core.domain.ElementsGuard
+import io.github.markusaugust.streamlord.core.domain.MarkupVisitor
 import io.github.markusaugust.streamlord.core.domain.SignalNames
+import io.github.markusaugust.streamlord.core.domain.templateConstructEnd
+import io.github.markusaugust.streamlord.core.domain.walkMarkup
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import kotlin.math.abs
 
 /*
  * Markup checks for the HTML Datastar patches: complete elements, ids where the protocol needs
- * them, and well-formed `data-*` attributes. A deliberately small tokenizer, not a browser.
+ * them, and well-formed `data-*` attributes, over the tags core's walk reads as the browser does.
  */
 
 /** An attribute name as a browser parses it, without template syntax or a spread in it. */
@@ -112,19 +111,6 @@ public val TEMPLATE_SYNTAX: Regex =
         """\{\{|\{%|<%|[$!*#@]\{|\[#|\[=|(?:^|[\s>])@(?:if|elseif|else|endif|for|endfor|template|import|param|raw|endraw)\b|""" +
             """(?:^|[\s>])#(?:if|elseif|else|end|foreach|set|macro|parse|include)\b|__kt__""",
     )
-
-/**
- * Tags that belong to a template engine, not to the document: FreeMarker directives and macro
- * calls (`<#if>`, `</#if>`, `<@row/>`), and its `<#-- -->` comments. Skipped like `<!DOCTYPE>`.
- */
-private val TEMPLATE_TAG = Regex("""^</?[#@]""")
-
-// A Kotlin template as the name, `<$tag>`, is a tag all the same: the browser sees a name there.
-private val TAG_OPEN = Regex("""^<(/?)((?:[A-Za-z]|__kt__)[A-Za-z0-9:._-]*)""")
-
-/** A name also ends where a template construct starts: `data-x{{/if}}`, `data-x</#if>`. */
-private val ATTR_NAME = Regex("""^[^\t\n\f\r "'<>/={]+""")
-private val UNQUOTED_VALUE = Regex("""^[^\t\n\f\r >]*""")
 
 /** Datastar reads `500ms`, `1s`, and a bare number as milliseconds. */
 private val DURATION = Regex("""^\d+(ms|s)?$""")
@@ -382,63 +368,12 @@ private fun valueEnd(
     return body.length
 }
 
-private val TEMPLATE_CALL = Regex("""^[@#][A-Za-z]+\s*\(""")
-
 /**
  * Does the value hold template syntax, so that it cannot be judged before rendering? A `${`
  * inside a JavaScript template literal is JavaScript's own and does not count.
  */
 public fun hasTemplateSyntax(value: String): Boolean =
     TEMPLATE_SYNTAX.findAll(value).any { it.value != "\${" || quoteAt(value, it.range.first) != '`' }
-
-/**
- * Where a template construct that starts at [at] inside a tag ends, or [at] when none starts
- * there: `<% %>`, `{{ }}`, `{% %}`, `{# #}`, a FreeMarker directive, or a JTE or Velocity
- * directive with its parenthesised condition. Its `>` does not end the tag.
- */
-private fun templateConstructEnd(
-    html: String,
-    at: Int,
-): Int {
-    fun after(
-        close: String,
-        from: Int,
-    ): Int = html.indexOf(close, from).let { if (it < 0) at else it + close.length }
-    return when {
-        html.startsWith("<%", at) -> {
-            after("%>", at + 2)
-        }
-
-        html.startsWith("{{", at) -> {
-            after("}}", at + 2)
-        }
-
-        html.startsWith("{%", at) -> {
-            after("%}", at + 2)
-        }
-
-        html.startsWith("{#", at) -> {
-            after("#}", at + 2)
-        }
-
-        html.startsWith("<#", at) || html.startsWith("</#", at) || html.startsWith("<@", at) -> {
-            after(">", at + 2)
-        }
-
-        else -> {
-            val call = TEMPLATE_CALL.find(html.substring(at, minOf(html.length, at + 32))) ?: return at
-            var depth = 0
-            for (i in at + call.value.length - 1 until html.length) {
-                if (html[i] == '(') {
-                    depth++
-                } else if (html[i] == ')' && --depth == 0) {
-                    return i + 1
-                }
-            }
-            at
-        }
-    }
-}
 
 /** Whether a template construct starts at [at] in a tag's text, where it cuts the attribute name before it short: `${`, `{{`, `<%`. */
 private fun cutByTemplate(
@@ -488,349 +423,87 @@ public data class MarkupOptions(
     val checkAttributes: Boolean,
     /** Kebab-case signal names the source declares with `__case.kebab`, which `$my-value` then reaches as written. */
     val hyphenatedSignals: Set<String> = emptySet(),
+    /** Whether the markup is a template's or an HTML file's, whose template comments and tags are skipped, rather than a Kotlin string's. */
+    val templates: Boolean = true,
 )
 
-public fun tokenize(html: String): Tokens {
+/**
+ * The tags of [html] and its text outside any element, as core's [walkMarkup] reads them: the one
+ * reading the checks share with the caret, the browser's as it parses a patch. With [templates], as
+ * in a template or an HTML file, the comments and tags of a template language are skipped; a Kotlin
+ * string leaves them to the browser, which reads `{# #}` and `<#--` as text and the tags in them as tags.
+ */
+public fun tokenize(
+    html: String,
+    templates: Boolean = true,
+): Tokens {
     val tags = ArrayList<Tag>()
     val topLevelText = ArrayList<TextRun>()
-    var i = 0
-    var depth = 0
-    var textStart = -1
-    val content = ForeignContent()
-
-    fun flushText(end: Int) {
-        if (textStart >= 0 && depth == 0) {
-            val t = html.substring(textStart, end)
-            if (t.isNotBlank()) {
-                val lead = t.length - t.trimStart().length
-                topLevelText += TextRun(textStart + lead, textStart + t.trimEnd().length)
-            }
-        }
-        textStart = -1
-    }
-    while (i < html.length) {
-        if (html.startsWith("<!--", i)) {
-            flushText(i)
-            i = commentEnd(html, i)
-            continue
-        }
-        // A FreeMarker comment, which only `-->` ends.
-        if (html.startsWith("<#--", i)) {
-            flushText(i)
-            val close = html.indexOf("-->", i + 4)
-            i = if (close < 0) html.length else close + 3
-            continue
-        }
-        if (html.startsWith("<%--", i)) {
-            flushText(i)
-            val close = html.indexOf("--%>", i + 4)
-            i = if (close < 0) html.length else close + 4
-            continue
-        }
-        // Pebble and Twig comments, and Mustache and Handlebars ones. Skipped only when they close,
-        // because `{#` also opens a block in other template languages.
-        val commentClose =
-            when {
-                html.startsWith("{#", i) -> "#}"
-                html.startsWith("{{!--", i) -> "--}}"
-                html.startsWith("{{!", i) -> "}}"
-                else -> null
-            }
-        val commentEnd = if (commentClose == null) -1 else html.indexOf(commentClose, i + 2)
-        if (commentClose != null && commentEnd >= 0) {
-            flushText(i)
-            i = commentEnd + commentClose.length
-            continue
-        }
-        // Where the current element is foreign, `<![CDATA[` opens a section of text that only `]]>` ends;
-        // in HTML it is a bogus comment, which the first `>` ends.
-        if (html.startsWith("<![CDATA[", i) && content.foreign) {
-            flushText(i)
-            val close = html.indexOf("]]>", i + 9)
-            i = if (close < 0) html.length else close + 3
-            continue
-        }
-        if (html[i] == '<' &&
-            (
-                html.startsWith("<!", i) || html.startsWith("<?", i) ||
-                    TEMPLATE_TAG.containsMatchIn(html.substring(i, minOf(html.length, i + 3)))
-            )
-        ) {
-            flushText(i)
-            val close = html.indexOf('>', i)
-            i = if (close < 0) html.length else close + 1
-            continue
-        }
-        val tagMatch = if (html[i] == '<') TAG_OPEN.find(html.substring(i, minOf(html.length, i + 64))) else null
-        if (tagMatch != null) {
-            flushText(i)
-            val closing = tagMatch.groupValues[1] == "/"
-            val name = tagMatch.groupValues[2].asciiLowercase()
-            var j = i + tagMatch.value.length
+    walkMarkup(
+        withTemplateTagNames(html),
+        object : MarkupVisitor {
             val attributes = ArrayList<Attribute>()
-            var selfClosing = false
-            while (j < html.length && html[j] != '>') {
-                val c = html[j]
-                if (c in HTML_SPACE) {
-                    j++
-                    continue
-                }
-                if (c == '/') {
-                    selfClosing = true
-                    j++
-                    continue
-                }
-                val constructEnd = templateConstructEnd(html, j)
-                if (constructEnd > j) {
-                    j = constructEnd
-                    continue
-                }
-                val am = ATTR_NAME.find(html.substring(j))
-                if (am == null) {
-                    j++
-                    continue
-                }
-                val attrName = am.value
-                val nameStart = j
-                j += attrName.length
-                var k = j
-                while (k < html.length && html[k] in HTML_SPACE) k++
-                var value: String? = null
-                var valueStart = -1
-                var quoted = false
-                if (k < html.length && html[k] == '=') {
-                    k++
-                    while (k < html.length && html[k] in HTML_SPACE) k++
-                    val q = html.getOrNull(k)
-                    if (q == '"' || q == '\'') {
-                        val close = html.indexOf(q, k + 1)
-                        valueStart = k + 1
-                        value = html.substring(k + 1, if (close < 0) html.length else close)
-                        quoted = true
-                        j = if (close < 0) html.length else close + 1
-                    } else {
-                        val vm = UNQUOTED_VALUE.find(html.substring(minOf(k, html.length)))
-                        valueStart = k
-                        value = vm?.value ?: ""
-                        j = k + value.length
-                    }
-                }
-                attributes += Attribute(attrName, nameStart, value, valueStart, quoted)
+
+            override fun attribute(
+                tag: String,
+                name: String,
+                nameStart: Int,
+                valueStart: Int,
+                valueEnd: Int,
+                quoted: Boolean,
+            ) {
+                val value = if (valueStart < 0) null else html.substring(valueStart, valueEnd)
+                attributes += Attribute(name, nameStart, value, valueStart, quoted)
             }
-            val end = minOf(j + 1, html.length)
-            // As the browser reads it: a `/>` closes no raw-text element, plaintext runs to the end,
-            // only `</name` as a whole name ends the others, and a script ends by the script data
-            // states (rawTextEnd, which core's scanner shares; it reads svg and math by walking the
-            // markup each way instead).
-            if (closing) content.end(name)
-            val foreign = !closing && content.start(name, selfClosing, attributes)
-            val rawText = !closing && name in RAW_TEXT && !foreign
-            tags += Tag(name, i, end, closing, (selfClosing && !rawText) || name in VOID, attributes)
-            if (rawText) {
-                val closeIdx = if (name == "plaintext") -1 else rawTextEnd(html, name, end)
-                i = if (closeIdx < 0) html.length else closeIdx
-                depth++
-                continue
+
+            override fun startTag(
+                name: String,
+                start: Int,
+                end: Int,
+                selfClosing: Boolean,
+                rawText: Boolean,
+            ) {
+                val written = html.substring(start + 1, start + 1 + name.length).asciiLowercase()
+                tags += Tag(written, start, end, false, (selfClosing && !rawText) || written in VOID, attributes.toList())
+                attributes.clear()
             }
-            if (!closing && !selfClosing && name !in VOID) {
-                depth++
-            } else if (closing) {
-                depth = maxOf(0, depth - 1)
+
+            override fun endTag(
+                name: String,
+                start: Int,
+                end: Int,
+            ) {
+                attributes.clear()
+                tags += Tag(html.substring(start + 2, start + 2 + name.length).asciiLowercase(), start, end, true, false, emptyList())
             }
-            i = end
-            continue
-        }
-        if (textStart < 0) textStart = i
-        i++
-    }
-    flushText(html.length)
+
+            override fun text(
+                start: Int,
+                end: Int,
+                depth: Int,
+            ) {
+                if (depth > 0) return
+                val t = html.substring(start, end)
+                if (t.isBlank()) return
+                val lead = t.length - t.trimStart().length
+                topLevelText += TextRun(start + lead, start + t.trimEnd().length)
+            }
+        },
+        templates,
+    )
     return Tokens(tags, topLevelText)
 }
 
-private val FOREIGN_ROOTS = setOf("svg", "math")
+/** The `<` or `</` of a tag whose name is a Kotlin template's placeholder, which the browser would read as a name. */
+private val KOTLIN_TAG_NAME = Regex("""(</?)__kt__""")
 
 /**
- * Whether [name], opened in the foreign element [root], is an HTML integration point, in which the
- * browser reads the content as HTML: a foreignObject, desc or title in an svg, and in a math the
- * text elements and an annotation-xml whose encoding is HTML.
+ * [html] with the placeholder of a Kotlin template as a tag's name, `<$tag>`, turned into a name of
+ * the same length that starts with a letter: a tag all the same, since the browser sees a name there.
+ * The checks and the caret both read the markup so.
  */
-private fun integrationPoint(
-    root: String,
-    name: String,
-    attributes: List<Attribute>,
-): Boolean =
-    when (root) {
-        "svg" -> {
-            name == "foreignobject" || name == "desc" || name == "title"
-        }
-
-        else -> {
-            name in MATHML_TEXT ||
-                (
-                    name == "annotation-xml" &&
-                        attributes.any { it.name.asciiLowercase() == "encoding" && it.value?.asciiLowercase() in HTML_ENCODINGS }
-                )
-        }
-    }
-
-private val MATHML_TEXT = setOf("mi", "mo", "mn", "ms", "mtext")
-
-private val HTML_ENCODINGS = setOf("text/html", "application/xhtml+xml")
-
-/**
- * The start tags that end foreign content, so that the browser reads them, and what follows, as
- * HTML: `<svg><p><style>` holds an HTML style. A font does so with a color, face or size.
- */
-private val BREAKOUT =
-    (
-        "b big blockquote body br center code dd div dl dt em embed h1 h2 h3 h4 h5 h6 head hr i img li listing menu meta nobr ol p pre " +
-            "ruby s small span strong strike sub sup table tt u ul var"
-    ).split(" ").toSet()
-private val FONT_BREAKOUT = setOf("color", "face", "size")
-
-/** The end tags that do the same. */
-private val BREAKOUT_END = setOf("br", "p")
-
-/**
- * The HTML elements an end tag cannot close past in HTML content (the "special" category of the
- * HTML standard): `</b>` inside a `div` inside a `b` leaves the `b` open.
- */
-private val SPECIAL =
-    (
-        "address applet area article aside base basefont bgsound blockquote body br button caption center col colgroup dd " +
-            "details dir div dl dt embed fieldset figcaption figure footer form frame frameset h1 h2 h3 h4 h5 h6 head header " +
-            "hgroup hr html iframe img input keygen li link listing main marquee menu meta nav noembed noframes noscript object " +
-            "ol p param plaintext pre script search section select source style summary table tbody td template textarea tfoot " +
-            "th thead title tr track ul wbr xmp"
-    ).split(" ").toSet()
-
-/**
- * Where the tokenizer stands in foreign content, as the browser's tree builder reads it: the svg
- * and math elements open, the HTML integration points open in them, and the elements open inside
- * each, which decide where an svg begins and what an end tag closes. Inside an svg or a math a
- * `style` or a `script` is no raw text and `/>` closes an element; inside an integration point,
- * such as a foreignObject, the content is HTML again.
- */
-private class ForeignContent {
-    /** An element that changes how its content is read, and the elements open inside it. */
-    private class Scope(
-        val name: String,
-        val foreign: Boolean,
-        val namespace: String,
-    ) {
-        val open = ArrayList<String>()
-    }
-
-    // The document first, whose open elements an end tag can close an svg or a math by.
-    private val scopes = arrayListOf(Scope("", false, "html"))
-
-    /** Whether the current node is an svg or MathML element, in which `<![CDATA[` opens a section of text. */
-    val foreign: Boolean get() = scopes.last().foreign
-
-    /** Reads a start tag; returns whether it stands in foreign content, where no element holds raw text. */
-    fun start(
-        name: String,
-        selfClosing: Boolean,
-        attributes: List<Attribute>,
-    ): Boolean {
-        if (foreign && breaksOut(name, false, attributes)) popForeign()
-        val top = scopes.last()
-        if (top.foreign) {
-            when {
-                // Inside a math an svg is a MathML element, unless it opens right in an annotation-xml.
-                name == "svg" && top.namespace == "math" && top.open.lastOrNull() == "annotation-xml" -> {
-                    if (!selfClosing) scopes += Scope(name, true, "svg")
-                }
-
-                integrationPoint(top.namespace, name, attributes) -> {
-                    if (!selfClosing) scopes += Scope(name, false, top.namespace)
-                }
-
-                !selfClosing -> {
-                    top.open += name
-                }
-            }
-            return true
-        }
-        when {
-            // Right inside a MathML text element, mglyph and malignmark stay MathML.
-            top.open.isEmpty() && top.name in MATHML_TEXT && (name == "mglyph" || name == "malignmark") -> {
-                if (!selfClosing) scopes += Scope(name, true, "math")
-            }
-
-            name in FOREIGN_ROOTS -> {
-                if (!selfClosing) scopes += Scope(name, true, name)
-            }
-
-            name !in VOID && name !in RAW_TEXT -> {
-                top.open += name
-            }
-        }
-        return false
-    }
-
-    /** Reads an end tag. */
-    fun end(name: String) {
-        if (foreign && breaksOut(name, true, emptyList())) return popForeign()
-        val top = scopes.last()
-        if (top.foreign || (top.open.isEmpty() && scopes.size > 1)) {
-            // Foreign content's rule, which an integration point with nothing open inside it follows
-            // too: the nearest open element of the name, until an HTML element is open, whose rule
-            // takes over from there.
-            for (k in scopes.indices.reversed()) {
-                val scope = scopes[k]
-                if (!scope.foreign && scope.open.isNotEmpty() && k != scopes.lastIndex) {
-                    // Every integration point is special, so one open in between stops it.
-                    if (scopes.subList(k + 1, scopes.size).any { !it.foreign }) return
-                    return closeHtml(k, name)
-                }
-                val at = if (scope.foreign) scope.open.lastIndexOf(name) else -1
-                if (at >= 0) {
-                    scopes.subList(k + 1, scopes.size).clear()
-                    return scope.open.subList(at, scope.open.size).clear()
-                }
-                if (k > 0 && scope.name == name) return scopes.subList(k, scopes.size).clear()
-            }
-            return
-        }
-        closeHtml(scopes.lastIndex, name)
-    }
-
-    /**
-     * HTML content's rule for an end tag, from the elements open in the scope at [k]: the nearest
-     * open element of the name, unless a special one stands between, then the integration point
-     * itself, when the end tag spells its name. foreignObject's, which the element has in camel
-     * case, it never does.
-     */
-    private fun closeHtml(
-        k: Int,
-        name: String,
-    ) {
-        val scope = scopes[k]
-        for (e in scope.open.indices.reversed()) {
-            if (scope.open[e] == name) {
-                scopes.subList(k + 1, scopes.size).clear()
-                return scope.open.subList(e, scope.open.size).clear()
-            }
-            if (scope.open[e] in SPECIAL) return
-        }
-        if (k > 0 && k == scopes.lastIndex && name == scope.name && name != "foreignobject") scopes.removeAt(k)
-    }
-
-    private fun popForeign() {
-        while (scopes.last().foreign) scopes.removeAt(scopes.lastIndex)
-    }
-}
-
-/** Whether a tag ends the foreign content it stands in, as the tree builder reads it. */
-private fun breaksOut(
-    name: String,
-    closing: Boolean,
-    attributes: List<Attribute>,
-): Boolean {
-    if (closing) return name in BREAKOUT_END
-    return name in BREAKOUT || (name == "font" && attributes.any { it.name.asciiLowercase() in FONT_BREAKOUT })
-}
+internal fun withTemplateTagNames(html: String): String =
+    KOTLIN_TAG_NAME.replace(html) { it.groupValues[1] + "x" + it.value.substring(it.groupValues[1].length + 1) }
 
 /**
  * The key to write, and the `__case` to add, so that a key the author typed with capitals comes
@@ -972,7 +645,7 @@ public class MarkupValidator(
         opts: MarkupOptions,
     ): List<Issue> {
         val issues = ArrayList<Issue>()
-        val (tags, topLevelText) = tokenize(html)
+        val (tags, topLevelText) = tokenize(html, opts.templates)
         val stack = ArrayList<Tag>()
         val topLevel = ArrayList<Tag>()
         for (tag in tags) {

@@ -132,12 +132,8 @@ public final class io/github/markusaugust/streamlord/core/client/ClientExpressio
 }
 
 public final class io/github/markusaugust/streamlord/core/client/ClientHtmlKt {
-	public static final field HTML_SPACE Ljava/lang/String;
-	public static final fun commentEnd (Ljava/lang/String;I)I
 	public static final fun decodeEntities (Ljava/lang/String;)Lio/github/markusaugust/streamlord/core/client/DecodedValue;
-	public static final fun getRAW_TEXT ()Ljava/util/List;
 	public static final fun isHtmlSpace (C)Z
-	public static final fun rawTextEnd (Ljava/lang/String;Ljava/lang/String;I)I
 }
 
 public final class io/github/markusaugust/streamlord/core/client/ClientRequest {
@@ -365,10 +361,37 @@ public final class io/github/markusaugust/streamlord/core/domain/InterpolationKt
 	public static synthetic fun interpolate$default (Ljava/lang/String;Ljava/util/List;Ljava/util/List;ILjava/lang/Object;)Ljava/lang/String;
 	public static final fun joinToHtml-eKKYyv0 (Ljava/lang/Iterable;Ljava/lang/String;)Ljava/lang/String;
 	public static synthetic fun joinToHtml-eKKYyv0$default (Ljava/lang/Iterable;Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/String;
-	public static final fun landingAsParsed (Ljava/lang/String;Lkotlin/ranges/IntRange;Ljava/util/List;)Lio/github/markusaugust/streamlord/core/domain/HoleLanding;
-	public static synthetic fun landingAsParsed$default (Ljava/lang/String;Lkotlin/ranges/IntRange;Ljava/util/List;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/domain/HoleLanding;
+	public static final fun landingAsParsed (Ljava/lang/String;Lkotlin/ranges/IntRange;Ljava/util/List;Z)Lio/github/markusaugust/streamlord/core/domain/HoleLanding;
+	public static synthetic fun landingAsParsed$default (Ljava/lang/String;Lkotlin/ranges/IntRange;Ljava/util/List;ZILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/domain/HoleLanding;
 	public static final fun urlHostFixedBy (Ljava/lang/String;Ljava/lang/String;)Z
 	public static final fun urlSchemeFixedBy (Ljava/lang/String;Ljava/lang/String;)Z
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/MarkupScanKt {
+	public static final fun templateConstructEnd (Ljava/lang/String;I)I
+	public static final fun walkMarkup (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/MarkupVisitor;Z)V
+	public static synthetic fun walkMarkup$default (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/MarkupVisitor;ZILjava/lang/Object;)V
+}
+
+public abstract interface class io/github/markusaugust/streamlord/core/domain/MarkupVisitor {
+	public abstract fun attribute (Ljava/lang/String;Ljava/lang/String;IIIZ)V
+	public fun code (II)V
+	public fun declaration (II)V
+	public fun endTag (Ljava/lang/String;II)V
+	public fun opaque (II)V
+	public fun startTag (Ljava/lang/String;IIZZ)V
+	public fun tag (II)V
+	public fun text (III)V
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/MarkupVisitor$DefaultImpls {
+	public static fun code (Lio/github/markusaugust/streamlord/core/domain/MarkupVisitor;II)V
+	public static fun declaration (Lio/github/markusaugust/streamlord/core/domain/MarkupVisitor;II)V
+	public static fun endTag (Lio/github/markusaugust/streamlord/core/domain/MarkupVisitor;Ljava/lang/String;II)V
+	public static fun opaque (Lio/github/markusaugust/streamlord/core/domain/MarkupVisitor;II)V
+	public static fun startTag (Lio/github/markusaugust/streamlord/core/domain/MarkupVisitor;Ljava/lang/String;IIZZ)V
+	public static fun tag (Lio/github/markusaugust/streamlord/core/domain/MarkupVisitor;II)V
+	public static fun text (Lio/github/markusaugust/streamlord/core/domain/MarkupVisitor;III)V
 }
 
 public final class io/github/markusaugust/streamlord/core/domain/MistypedAttributeException : io/github/markusaugust/streamlord/core/StreamlordException {

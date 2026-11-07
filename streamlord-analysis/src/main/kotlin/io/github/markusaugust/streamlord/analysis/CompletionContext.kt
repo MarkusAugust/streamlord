@@ -20,20 +20,22 @@ private const val CARET = 'x'
 
 /**
  * The quoted attribute value [offset] stands in, in [markup] read as the browser reads it, or null.
- * The reading is core's [landingAsParsed], the browser's as it parses a patch, so a value over
- * several lines, in single quotes or in a script's text is found, and the text of a `<textarea>`
- * or a `<title>` is text, though `interpolate`, which takes the strictest reading, still judges a
- * value there.
+ * The reading is core's [landingAsParsed], the browser's as it parses a patch and the one [tokenize]
+ * gives the checks, so a value over several lines, in single quotes or in a script's text is found,
+ * and the text of a `<textarea>` or a `<title>` is text, though `interpolate`, which takes the
+ * strictest reading, still judges a value there. With [templates], as in a template file, a value in
+ * a template comment is not found, as the checks skip it.
  */
 public fun valueAtCaret(
     markup: String,
     offset: Int,
     prefix: String,
+    templates: Boolean = true,
 ): ValueAtCaret? {
     if (offset !in 0..markup.length) return null
     // A hole is at least one character wide, so the caret gets one of its own.
-    val probe = StringBuilder(markup).insert(offset, CARET).toString()
-    val landing = landingAsParsed(probe, offset..offset, listOf(prefix))
+    val probe = StringBuilder(withTemplateTagNames(markup)).insert(offset, CARET).toString()
+    val landing = landingAsParsed(probe, offset..offset, listOf(prefix), templates)
     val attribute = landing.attribute ?: return null
     if (landing.valueStart !in 0..offset) return null
     return ValueAtCaret(attribute, landing.valueStart, decodeEntities(markup.substring(landing.valueStart, offset)).text)
@@ -72,7 +74,7 @@ public fun Analyzer.expressionAtCaret(
     }
     htmlStringAt(src, offset)?.let { html ->
         if (offset <= html.contentStart || offset > html.contentEnd) return null
-        return expressionInMarkup(html.text, decodedIndex(html, offset), prefix)
+        return expressionInMarkup(html.text, decodedIndex(html, offset), prefix, templates = false)
     }
     val site =
         findCallSites(src, catalog.expressionCallSites.keys, lex(src)).firstOrNull { it.openParen < offset && offset <= it.closeParen }
@@ -91,8 +93,9 @@ private fun Analyzer.expressionInMarkup(
     markup: String,
     caret: Int,
     prefix: String,
+    templates: Boolean = true,
 ): ExpressionAtCaret? {
-    val at = valueAtCaret(markup, caret, prefix) ?: return null
+    val at = valueAtCaret(markup, caret, prefix, templates) ?: return null
     val spec = catalog.parseAttributeName(at.attribute.lowercase(), prefix)?.spec ?: return null
     if (spec.valueKind != ValueKind.EXPRESSION && spec.valueKind != ValueKind.SIGNAL) return null
     return ExpressionAtCaret(at.before, spec.valueKind == ValueKind.EXPRESSION, spec.name == "on-signal-patch")

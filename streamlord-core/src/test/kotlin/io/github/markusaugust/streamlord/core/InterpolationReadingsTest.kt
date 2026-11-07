@@ -55,10 +55,23 @@ class InterpolationReadingsTest {
 
     @Test
     fun `an Html that leaves foreign content, a template or a select open, or closes what it did not open, is written as text`() {
-        val open = listOf("<svg>", "<math>", "<svg><g>", "<svg><foreignObject>", "<math><mi>", "<template>", "<select>", "</svg>", "</div>")
+        // The last: the browser's adoption agency drops the inner span, so the `</span>` closes the span around the value.
+        val open =
+            listOf(
+                "<svg>",
+                "<math>",
+                "<svg><g>",
+                "<svg><foreignObject>",
+                "<math><mi>",
+                "<template>",
+                "<select>",
+                "</svg>",
+                "</div>",
+                "<b><span><div></b></div></span>",
+            )
         for (markup in open) {
-            val out = interpolate("<p>%s</p>", interpolate(markup)).text
-            assertFalse('<' in out.removePrefix("<p>").removeSuffix("</p>"), "$markup: $out")
+            val out = interpolate("<span>%s</span>", interpolate(markup)).text
+            assertFalse('<' in out.removePrefix("<span>").removeSuffix("</span>"), "$markup: $out")
         }
     }
 
@@ -73,6 +86,8 @@ class InterpolationReadingsTest {
                 "<math><mi>x</mi></math>",
                 "<hr/>",
                 "<textarea>t</textarea><script>x</script>",
+                // The div stops the `</span>`, so it closes nothing around the value.
+                "<div></span></div>",
             )
         for (markup in closed) {
             assertEquals("<p>$markup</p>", interpolate("<p>%s</p>", interpolate(markup)).text, markup)

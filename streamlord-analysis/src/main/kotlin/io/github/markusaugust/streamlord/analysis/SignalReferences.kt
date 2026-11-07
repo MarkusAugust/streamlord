@@ -101,9 +101,10 @@ internal fun markupSignalReferences(
     html: String,
     catalog: Catalog,
     prefix: String,
+    templates: Boolean = true,
 ): List<SignalReference> {
     val out = ArrayList<SignalReference>()
-    for (tag in tokenize(html).tags) {
+    for (tag in tokenize(html, templates).tags) {
         if (tag.closing) continue
         for (attr in tag.attributes) {
             val spec = catalog.parseAttributeName(attr.name.lowercase(), prefix)?.spec ?: continue

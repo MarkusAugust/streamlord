@@ -85,6 +85,7 @@ public object ElementsGuard {
                 override fun attribute(
                     tag: String,
                     name: String,
+                    nameStart: Int,
                     valueStart: Int,
                     valueEnd: Int,
                     quoted: Boolean,
@@ -108,6 +109,7 @@ public object ElementsGuard {
                         override fun attribute(
                             tag: String,
                             name: String,
+                            nameStart: Int,
                             valueStart: Int,
                             valueEnd: Int,
                             quoted: Boolean,

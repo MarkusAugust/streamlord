@@ -566,9 +566,10 @@ public class Analyzer(
         src: String,
         opts: AnalyzeOptions,
         hyphenated: Set<String>,
+        templates: Boolean = true,
     ): List<Issue> {
         val issues = ArrayList<Issue>()
-        for (tag in tokenize(src).tags) {
+        for (tag in tokenize(src, templates).tags) {
             if (tag.closing) continue
             issues += markup.validateAttributes(tag, opts.prefix, src.substring(tag.start, tag.end), hyphenated)
         }
@@ -613,7 +614,7 @@ public class Analyzer(
             }
             catalog.htmlCallSites[site.name]?.let { spec ->
                 val s = markupString(site, spec)?.takeUnless { it.unterminated } ?: return@let
-                add(s, markupSignalReferences(s.text, catalog, opts.prefix), site)
+                add(s, markupSignalReferences(s.text, catalog, opts.prefix, templates = false), site)
             }
         }
         val helpers =
@@ -636,7 +637,7 @@ public class Analyzer(
         }
         for (s in lex.strings) {
             if (s.start in claimed || s.unterminated || !isHtmlString(src, s)) continue
-            add(s, markupSignalReferences(s.text, catalog, opts.prefix), null)
+            add(s, markupSignalReferences(s.text, catalog, opts.prefix, templates = false), null)
         }
         return out
     }
@@ -668,7 +669,7 @@ public class Analyzer(
     ): List<Issue> {
         val view = markupView(src, s)
         val issues = ArrayList(judgeHoles(s, src, opts, view))
-        if (opts.checkHtmlAttributes) issues += mapIssues(s, src, analyzeHtml(view, opts, hyphenated))
+        if (opts.checkHtmlAttributes) issues += mapIssues(s, src, analyzeHtml(view, opts, hyphenated, templates = false))
         return issues
     }
 
@@ -885,7 +886,7 @@ public class Analyzer(
                     Docs.EXPRESSIONS,
                 )
         }
-        if (opts.checkHtmlAttributes) issues += mapIssues(format, src, analyzeHtml(view, opts, hyphenated))
+        if (opts.checkHtmlAttributes) issues += mapIssues(format, src, analyzeHtml(view, opts, hyphenated, templates = false))
         return issues
     }
 
@@ -1783,7 +1784,10 @@ public class Analyzer(
                 mapIssues(
                     s,
                     src,
-                    markup.validateMarkup(view, MarkupOptions(requireIds, opts.prefix, opts.checkHtmlAttributes, hyphenated)),
+                    markup.validateMarkup(
+                        view,
+                        MarkupOptions(requireIds, opts.prefix, opts.checkHtmlAttributes, hyphenated, templates = false),
+                    ),
                 )
         }
         return issues
