@@ -37,6 +37,7 @@ import org.jetbrains.kotlin.psi.KtReturnExpression
 import org.jetbrains.kotlin.psi.KtSafeQualifiedExpression
 import org.jetbrains.kotlin.psi.KtStringTemplateEntryWithExpression
 import org.jetbrains.kotlin.psi.KtStringTemplateExpression
+import org.jetbrains.kotlin.psi.KtTypeReference
 import org.jetbrains.kotlin.psi.KtValueArgument
 import org.jetbrains.kotlin.psi.KtWhenExpression
 
@@ -72,7 +73,7 @@ object HoleFacts {
         // which reads it too, is scheduled for removal in 2026.2.
         val k1 = System.getProperty("idea.kotlin.plugin.use.k1").toBoolean()
         return if (k1) {
-            judge(holes, ::constantK1, ::typeK1, ::markupElementsK1)
+            judge(holes, ::constantK1, ::typeK1, ::markupElementsK1) { ValueFact.ofTypeName(it.text) == ValueFact.MARKUP }
         } else {
             analyze(file) {
                 judge(
@@ -80,6 +81,7 @@ object HoleFacts {
                     { it.evaluate() != null || enumEntry(it) },
                     { typeFact(it.expressionType) },
                     { markupElements(it.expressionType) },
+                    { typeFact(it.type) == ValueFact.MARKUP },
                 )
             }
         }
@@ -94,9 +96,10 @@ object HoleFacts {
         constant: (KtExpression) -> Boolean,
         typed: (KtExpression) -> ValueFact?,
         markupElements: (KtExpression) -> Boolean,
+        markupType: (KtTypeReference) -> Boolean,
     ): Map<TextRange, ValueFact> {
         val facts = HashMap<TextRange, ValueFact>()
-        val markup = Markup(markupElements)
+        val markup = Markup(markupElements, markupType)
         for ((range, expr) in holes) {
             if (constant(expr)) {
                 facts[range] = ValueFact.CONSTANT
@@ -235,6 +238,11 @@ object HoleFacts {
                 ValueFact.MARKUP
             }
 
+            // Markup the author vouched for, which a Kotlin template writes as it stands; `null` if it may be.
+            definite && lower.isClass(TRUSTED_CLASS) -> {
+                ValueFact.MARKUP
+            }
+
             // A number or a boolean that may be null prints digits, true, false or null: safe where escaping is.
             lower.isIntType || lower.isLongType || lower.isShortType || lower.isByteType || lower.isDoubleType || lower.isFloatType ||
                 lower.isClass(NUMBER_CLASS) -> {
@@ -355,10 +363,11 @@ object HoleFacts {
 
     /**
      * The reading of markup, with what the editor knows of the elements of a collection, Html or
-     * Trusted, for a `joinToString` without a transform.
+     * Trusted, for a `joinToString` without a transform, and of a type a declaration writes.
      */
     private class Markup(
         private val markupElements: (KtExpression) -> Boolean,
+        private val markupType: (KtTypeReference) -> Boolean,
     ) {
         private fun branchesMarkup(
             branches: List<KtExpression?>,
@@ -542,10 +551,7 @@ object HoleFacts {
             if (ref == null || depth == 0) return false
             val target = ref.mainReference.resolve() ?: return false
             if (target is KtAnnotated && languageHtml(target)) return true
-            if (target is KtCallableDeclaration) {
-                val type = target.typeReference?.text
-                if (type != null && ValueFact.ofTypeName(type) == ValueFact.MARKUP) return true
-            }
+            if (target is KtCallableDeclaration && target.typeReference?.let(markupType) == true) return true
             if (target is KtProperty) {
                 return !target.isVar && target.typeReference == null && isMarkup(target.initializer, depth - 1)
             }
