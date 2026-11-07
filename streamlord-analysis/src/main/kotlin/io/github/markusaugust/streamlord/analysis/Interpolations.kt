@@ -10,7 +10,6 @@ package io.github.markusaugust.streamlord.analysis
 
 private val TRIM_MARGIN_AFTER = Regex("""^\s*\.\s*trimMargin\s*\(\s*(?:"([^"\\\n]*)")?\s*\)""")
 private val TRIM_CALL_AFTER = Regex("""^\s*\.\s*trim(?:Indent|Margin)\s*\(""")
-private val HTML_OPENING = Regex("""^\s*<(?:[A-Za-z]|__kt__(?=[\s>/])|!--|!doctype)""", RegexOption.IGNORE_CASE)
 private val IDENT = Regex("""[\p{L}_][\p{L}\p{Nd}_]*""")
 private val LITERAL = Regex("""(?:-?\d[\d_]*(?:\.\d+)?[LlFfDd]?|true|false|null)""")
 private val STRING_LITERAL = Regex(""""(?:[^"\\$]|\\.)*"""")
@@ -1364,7 +1363,6 @@ private val USES_ELEMENTS =
             """package[ \t]+io\.github\.markusaugust\.streamlord\.html(?![\p{L}\p{Nd}_]))""",
     )
 private val QUOTE_START = Regex("""^\$*"""")
-private val MARGIN_START = Regex("""^\s*\|""")
 private val TEXT_OF_VALUE = Regex("""^([\s\S]*?)\s*\.\s*text$""")
 private val CREATE_HTML = Regex("""^createHTML\s*\(""")
 private val APPEND_HTML = Regex("""\bappendHTML\s*\(""")
@@ -1387,7 +1385,7 @@ private fun htmlLiteral(t: String): Boolean {
     val rest = t.substring(end)
     if (rest.isNotBlank() && !TRIM_CALL.matches(rest)) return false
     val content = t.substring(minOf(end, at + (if (t.startsWith("\"\"\"", at)) 3 else 1)), end)
-    return HTML_OPENING.containsMatchIn(if ("trimMargin" in rest) content.replaceFirst(MARGIN_START, "") else content)
+    return opensWithTag(content, trimMargin = "trimMargin" in rest)
 }
 
 /** The call that ends [t], `receiver.name(args) { lambda }`. */

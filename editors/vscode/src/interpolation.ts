@@ -10,9 +10,8 @@ import { PLACEHOLDER, readKotlinStringAt, type Interpolation, type KotlinString 
 import { laterFix, type Fix } from "./expression.ts";
 import { catalog } from "./catalog.ts";
 import { EXPRESSION_HELPERS, unshadowed, USES_HTML_DSL } from "./signalNameHyphens.ts";
-import { isMarkupCollection, isTrustedType, valueFactOfTypeName } from "./valueTypes.ts";
+import { isMarkupCollection, isTrustedType, opensWithTag, valueFactOfTypeName } from "./valueTypes.ts";
 
-const HTML_START = /^\s*<(?:[A-Za-z]|__kt__(?=[\s>/])|!--|!doctype)/i;
 const IDENT = /^[\p{L}_][\p{L}\p{Nd}_]*$/u;
 
 /** An expression as a message quotes it: on one line, and cut short past 30 characters. */
@@ -1044,7 +1043,7 @@ function htmlLiteral(t: string): boolean {
   const rest = t.slice(end);
   if (rest.trim() !== "" && !TRIM_CALL.test(rest)) return false;
   const content = t.slice(at + (t.startsWith('"""', at) ? 3 : 1), end);
-  return HTML_START.test(/trimMargin/.test(rest) ? content.replace(/^\s*\|/, "") : content);
+  return opensWithTag(content, /trimMargin/.test(rest));
 }
 
 /** The call that ends `t`, `receiver.name(args) { lambda }`, or null when `t` does not end in one. */
