@@ -29,6 +29,7 @@ import org.jetbrains.kotlin.psi.KtLambdaExpression
 import org.jetbrains.kotlin.psi.KtLiteralStringTemplateEntry
 import org.jetbrains.kotlin.psi.KtNameReferenceExpression
 import org.jetbrains.kotlin.psi.KtNamedFunction
+import org.jetbrains.kotlin.psi.KtParenthesizedExpression
 import org.jetbrains.kotlin.psi.KtProperty
 import org.jetbrains.kotlin.psi.KtPsiUtil
 import org.jetbrains.kotlin.psi.KtQualifiedExpression
@@ -292,9 +293,11 @@ object HoleFacts {
 
     /** Whether `.trimMargin()` is called on [literal], which then starts past its first `|`. */
     private fun marginTrimmed(literal: KtExpression): Boolean {
-        val q = literal.parent as? KtQualifiedExpression ?: return false
+        var receiver: PsiElement = literal
+        while (receiver.parent is KtParenthesizedExpression) receiver = receiver.parent
+        val q = receiver.parent as? KtQualifiedExpression ?: return false
         val call = q.selectorExpression as? KtCallExpression
-        return q.receiverExpression == literal && call?.calleeExpression?.text == "trimMargin"
+        return q.receiverExpression == receiver && call?.calleeExpression?.text == "trimMargin"
     }
 
     /** The name an expression's value comes from: `x`, `a.x`, `f()`, `a.f()`. */

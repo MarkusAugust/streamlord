@@ -32,7 +32,7 @@ All notable changes to Streamlord are recorded here. The format follows
 - A string literal that opens with a tag a template names, `"<$tag>x</$tag>"`, is markup in VS Code
   too, as it was in IntelliJ; VS Code asked for `interpolate(...)` around it. The template in the
   tag name is still judged on its own.
-- In IntelliJ's K1 mode, a value declared `Trusted` is markup, and a literal is read past a `|`
+- IntelliJ reads a value declared `Trusted` as markup, as VS Code does, and a literal past a `|`
   margin only when `.trimMargin()` is called on it.
 
 ## [0.19.0] - 2026-11-06

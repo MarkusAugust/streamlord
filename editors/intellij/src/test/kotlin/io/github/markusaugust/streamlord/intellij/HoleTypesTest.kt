@@ -143,6 +143,12 @@ class HoleTypesTest : StreamlordTestCase() {
         assertNull(facts["\$who"])
     }
 
+    fun `test a margin is passed over only where trimMargin is called on the literal`() {
+        val facts = facts("fun f(q: String) = \"<div>\${(\"\"\"|<b>x</b>\"\"\").trimMargin()}\${\"|<u>\" + q}</div>\"")
+        assertEquals(ValueFact.MARKUP, facts["\${(\"\"\"|<b>x</b>\"\"\").trimMargin()}"])
+        assertEquals(ValueFact.STRING, facts["\${\"|<u>\" + q}"])
+    }
+
     fun `test a helper is the author's own only with the author's own arguments`() {
         val facts = facts(HELPER_PAGE)
         val wanted =
