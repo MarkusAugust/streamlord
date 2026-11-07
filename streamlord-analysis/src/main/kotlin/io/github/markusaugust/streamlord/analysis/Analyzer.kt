@@ -61,7 +61,20 @@ internal class Sdk private constructor(
  * a `UInt`, `ULong`, `UShort` or `UByte`: digits, but not a `kotlin.Number`, so `interpolate`
  * refuses it where only a number is let in.
  */
-public enum class ValueFact { STRING, NULLABLE_STRING, NUMBER, BOOLEAN, NULLABLE, CONSTANT, MARKUP, UNSIGNED }
+public enum class ValueFact {
+    STRING,
+    NULLABLE_STRING,
+    NUMBER,
+    BOOLEAN,
+    NULLABLE,
+    CONSTANT,
+    MARKUP,
+    UNSIGNED,
+    ;
+
+    /** What [ofTypeName] in ValueTypes.kt hangs on. */
+    public companion object
+}
 
 private val MODE_NAME = Regex("""(?:^|\.)([A-Z]+)\s*$""")
 private val CASE_ARG = Regex("""^\s*Case\.[A-Z]+\s*$""")

@@ -143,6 +143,24 @@ class HoleTypesTest : StreamlordTestCase() {
         assertNull(facts["\$who"])
     }
 
+    fun `test a Trusted is markup by its resolved type, and a class of the same name is not`() {
+        val facts =
+            facts(
+                "import io.github.markusaugust.streamlord.core.domain.Trusted as Vouched\n" +
+                    "class Trusted(val s: String)\n" +
+                    "fun f(own: Trusted, v: Vouched, vs: List<Vouched>) = \"<p>\$own \$v \${vs.first()}</p>\"",
+            )
+        assertEquals(null, facts["\$own"])
+        assertEquals(ValueFact.MARKUP, facts["\$v"])
+        assertEquals(ValueFact.MARKUP, facts["\${vs.first()}"])
+    }
+
+    fun `test a margin is passed over only where trimMargin is called on the literal`() {
+        val facts = facts("fun f(q: String) = \"<div>\${(\"\"\"|<b>x</b>\"\"\").trimMargin()}\${\"|<u>\" + q}</div>\"")
+        assertEquals(ValueFact.MARKUP, facts["\${(\"\"\"|<b>x</b>\"\"\").trimMargin()}"])
+        assertEquals(ValueFact.STRING, facts["\${\"|<u>\" + q}"])
+    }
+
     fun `test a helper is the author's own only with the author's own arguments`() {
         val facts = facts(HELPER_PAGE)
         val wanted =

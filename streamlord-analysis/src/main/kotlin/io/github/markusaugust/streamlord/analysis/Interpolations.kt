@@ -10,18 +10,11 @@ package io.github.markusaugust.streamlord.analysis
 
 private val TRIM_MARGIN_AFTER = Regex("""^\s*\.\s*trimMargin\s*\(\s*(?:"([^"\\\n]*)")?\s*\)""")
 private val TRIM_CALL_AFTER = Regex("""^\s*\.\s*trim(?:Indent|Margin)\s*\(""")
-private val HTML_OPENING = Regex("""^\s*<(?:[A-Za-z]|__kt__(?=[\s>/])|!--|!doctype)""", RegexOption.IGNORE_CASE)
 private val IDENT = Regex("""[\p{L}_][\p{L}\p{Nd}_]*""")
 private val LITERAL = Regex("""(?:-?\d[\d_]*(?:\.\d+)?[LlFfDd]?|true|false|null)""")
 private val STRING_LITERAL = Regex(""""(?:[^"\\$]|\\.)*"""")
-private val NUMBER_TYPE = Regex("""(?:kotlin\.)?(?:Int|Long|Short|Byte|Double|Float|Number)""")
 
-/** Digits, but not a `kotlin.Number`: interpolate refuses one where only a number is let in. */
-private val UNSIGNED_TYPE = Regex("""(?:kotlin\.)?(?:UInt|ULong|UShort|UByte)""")
 private val UNSIGNED_SUFFIX = Regex("""[uU][lL]?$""")
-private val BOOLEAN_TYPE = Regex("""(?:kotlin\.)?Boolean""")
-private val STRING_TYPE = Regex("""(?:kotlin\.)?(?:String|CharSequence)""")
-private val HTML_TYPE = Regex("""(?:[\p{L}_][\p{L}\p{Nd}_]*\.)*Html""")
 private val MARKUP_CALL_START = Regex("""^(?:interpolate|Trusted)\s*\(""")
 private val UNQUOTED_VALUE = Regex("""=[ \t\n\u000C\r]*([^ \t\n\u000C\r"'=<>`]*)\z""")
 private val WORD_CHAR = Regex("""[\p{L}\p{Nd}_]""")
@@ -516,7 +509,6 @@ private fun lineEnds(
 
 private val MARKUP_INITIALISER = Regex("""\s*=\s*(?:interpolate|Trusted)\s*\(""")
 private val TRUSTED_INITIALISER = Regex("""\s*=\s*Trusted\s*\(""")
-private val TRUSTED_TYPE = Regex("""(?:[\p{L}_][\p{L}\p{Nd}_]*\.)*Trusted""")
 private val STATEMENT_END = Regex("""^[ \t]*(?:[\n\r;})\],]|//|$)""")
 
 /** Whether what follows a declared name at [at] is `= interpolate(...)` or `= Trusted(...)`, the whole value: `val row = interpolate(...)`. */
@@ -970,30 +962,16 @@ internal fun declaredKind(
     // Without core, Html, Trusted and interpolate are not Streamlord's, and nothing says what they hold.
     if (d.markup) return if (core) ValueFact.MARKUP else null
     val declared = d.type ?: return null
-    val type = declared.removeSuffix("?")
-    val scalar =
-        when {
-            NUMBER_TYPE.matches(type) -> ValueFact.NUMBER
+    return when (val fact = ValueFact.ofTypeName(declared)) {
+        // Digits, true or false, or null: safe where anything is, and not where only a number or a boolean is.
+        ValueFact.NULLABLE -> if (nonNull) ValueFact.ofTypeName(declared.filterNot { it.isWhitespace() }.removeSuffix("?")) else fact
 
-            BOOLEAN_TYPE.matches(type) -> ValueFact.BOOLEAN
+        // A template writes `null` for it, which the analysis judges as the string it may also be.
+        ValueFact.NULLABLE_STRING -> ValueFact.STRING
 
-            // Digits too; an unsigned number that may be null is judged as any number that may be.
-            UNSIGNED_TYPE.matches(type) -> ValueFact.UNSIGNED
+        ValueFact.MARKUP -> if (core) fact else null
 
-            else -> null
-        }
-    // Digits, true or false, or null: safe where anything is, and not where only a number or a boolean is.
-    if (scalar != null) return if (type == declared || nonNull) scalar else ValueFact.NULLABLE
-    return when {
-        STRING_TYPE.matches(type) -> ValueFact.STRING
-
-        // What interpolate returns: markup whose values have been through it.
-        core && HTML_TYPE.matches(type) -> ValueFact.MARKUP
-
-        // Markup the author vouched for, which a Kotlin template writes as it stands.
-        core && type == declared && TRUSTED_TYPE.matches(type) -> ValueFact.MARKUP
-
-        else -> null
+        else -> fact
     }
 }
 
@@ -1071,7 +1049,7 @@ private fun trustedName(
     at: Int,
 ): Boolean {
     val d = declarationOf(src, name, at) ?: return false
-    return d.trusted || d.type?.let { TRUSTED_TYPE.matches(it) } == true
+    return d.trusted || d.type?.let { isTrustedType(it) } == true
 }
 
 /**
@@ -1385,7 +1363,6 @@ private val USES_ELEMENTS =
             """package[ \t]+io\.github\.markusaugust\.streamlord\.html(?![\p{L}\p{Nd}_]))""",
     )
 private val QUOTE_START = Regex("""^\$*"""")
-private val MARGIN_START = Regex("""^\s*\|""")
 private val TEXT_OF_VALUE = Regex("""^([\s\S]*?)\s*\.\s*text$""")
 private val CREATE_HTML = Regex("""^createHTML\s*\(""")
 private val APPEND_HTML = Regex("""\bappendHTML\s*\(""")
@@ -1408,7 +1385,7 @@ private fun htmlLiteral(t: String): Boolean {
     val rest = t.substring(end)
     if (rest.isNotBlank() && !TRIM_CALL.matches(rest)) return false
     val content = t.substring(minOf(end, at + (if (t.startsWith("\"\"\"", at)) 3 else 1)), end)
-    return HTML_OPENING.containsMatchIn(if ("trimMargin" in rest) content.replaceFirst(MARGIN_START, "") else content)
+    return opensWithTag(content, trimMargin = "trimMargin" in rest)
 }
 
 /** The call that ends [t], `receiver.name(args) { lambda }`. */
@@ -1542,13 +1519,6 @@ internal fun markupValue(
 /** How many names deep a value is followed to what it is set to. */
 private const val VALUE_DEPTH = 4
 
-/** A collection, as a declaration names its type: what `joinToString` is called on. */
-private val COLLECTION_TYPE =
-    Regex(
-        """(?:kotlin\.collections\.|kotlin\.sequences\.)?(?:List|MutableList|ArrayList|Collection|Iterable|Set|MutableSet|Sequence|Array)\??""",
-    )
-private val MARKUP_ELEMENT = Regex("""(?:[\p{L}_][\p{L}\p{Nd}_]*\.)*(?:Html|Trusted)""")
-
 /**
  * Whether every element of a collection is markup: `listOf(a, b)` of markup, a `map { }` to
  * markup, a name declared a `List<Html>`, or one set to such a collection.
@@ -1565,7 +1535,7 @@ private fun markupElements(
         val d = declarationOf(src, t, at) ?: return false
         val type = d.type
         if (type != null) {
-            return sdk.core && COLLECTION_TYPE.matches(type) && d.typeArguments?.trim()?.let { MARKUP_ELEMENT.matches(it) } == true
+            return sdk.core && d.typeArguments?.let { isMarkupCollection("${type.removeSuffix("?")}<$it>") } == true
         }
         val init = initialiser(src, d) ?: return false
         return depth < VALUE_DEPTH && markupElements(src, init, d.at, depth + 1, sdk)

@@ -17,6 +17,26 @@ All notable changes to Streamlord are recorded here. The format follows
 - The `holeLimit` parameter of `mergePatchAsClient` in streamlord-core is `emptySlotLimit`, and its
   refusal speaks of empty slots. A call that names the argument needs the new name.
 
+### Added
+
+- streamlord-analysis has `ValueFact.ofTypeName`, `isMarkupCollection` and `opensWithTag`: what a
+  declared type or the start of a string literal tells of a value joined into HTML. The analysis,
+  its TS twin and the IntelliJ plugin read types and literals with them, where each had a copy of
+  its own.
+
+### Fixed
+
+- A value declared `Html` or `Trusted` of another package written out in full, `com.acme.Html`
+  among them, was taken for Streamlord's markup: joined into HTML, handed to `interpolate(...)` or
+  joined with `joinToString`, without a word. It is judged now as any value of a type the editor
+  does not know.
+- A string literal that opens with a tag a template names, `"<$tag>x</$tag>"`, is markup in VS Code
+  too, as it was in IntelliJ; VS Code asked for `interpolate(...)` around it. The template in the
+  tag name is still judged on its own.
+- IntelliJ reads a value whose type is Streamlord's `Trusted` as markup, as VS Code does, by the
+  type it resolves: a class of your own named `Trusted` is not. It reads a literal past a `|`
+  margin only when `.trimMargin()` is called on it.
+
 ## [0.19.0] - 2026-11-06
 
 ### Added

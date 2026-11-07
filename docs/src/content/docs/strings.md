@@ -263,10 +263,11 @@ in a `data-*` expression or `style`: Kotlin writes its digits, but `interpolate`
 there. A value that is markup you built, as a whole, says nothing in element text and is a warning
 anywhere else, where its quotes and tags can end what holds it: an HTML literal, an
 `interpolate(...)` or `Trusted(...)` call, a value declared `Html` or `@Language("HTML")`,
-kotlinx.html output, or a `joinToString` whose every element is markup. Markup joined to a value is
-read as one string: in `${"<b>" + query + "</b>"}` the literals are markup and `query` is the value
-that is judged. An `if`, a `when` or an `?:` is judged by its weakest result, so
-`${if (blank) "nothing" else query}` is the `String` it may be.
+kotlinx.html output, or a `joinToString` whose every element is markup. `Html` and `Trusted` are
+Streamlord's own; a `com.acme.Html` is judged as any type the editor does not know. Markup joined
+to a value is read as one string: in `${"<b>" + query + "</b>"}` the literals are markup and
+`query` is the value that is judged. An `if`, a `when` or an `?:` is judged by its weakest result,
+so `${if (blank) "nothing" else query}` is the `String` it may be.
 
 VS Code knows what the file it is in declares, each name in the scope it is declared in, and every
 `const val` in the workspace that the file does not declare as something else; IntelliJ also knows

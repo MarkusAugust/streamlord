@@ -1356,6 +1356,7 @@ public final class io/github/markusaugust/streamlord/analysis/ValueAtCaret {
 public final class io/github/markusaugust/streamlord/analysis/ValueFact : java/lang/Enum {
 	public static final field BOOLEAN Lio/github/markusaugust/streamlord/analysis/ValueFact;
 	public static final field CONSTANT Lio/github/markusaugust/streamlord/analysis/ValueFact;
+	public static final field Companion Lio/github/markusaugust/streamlord/analysis/ValueFact$Companion;
 	public static final field MARKUP Lio/github/markusaugust/streamlord/analysis/ValueFact;
 	public static final field NULLABLE Lio/github/markusaugust/streamlord/analysis/ValueFact;
 	public static final field NULLABLE_STRING Lio/github/markusaugust/streamlord/analysis/ValueFact;
@@ -1367,6 +1368,9 @@ public final class io/github/markusaugust/streamlord/analysis/ValueFact : java/l
 	public static fun values ()[Lio/github/markusaugust/streamlord/analysis/ValueFact;
 }
 
+public final class io/github/markusaugust/streamlord/analysis/ValueFact$Companion {
+}
+
 public final class io/github/markusaugust/streamlord/analysis/ValueKind : java/lang/Enum {
 	public static final field EXPRESSION Lio/github/markusaugust/streamlord/analysis/ValueKind;
 	public static final field FILTER Lio/github/markusaugust/streamlord/analysis/ValueKind;
@@ -1376,5 +1380,12 @@ public final class io/github/markusaugust/streamlord/analysis/ValueKind : java/l
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/ValueKind;
 	public static fun values ()[Lio/github/markusaugust/streamlord/analysis/ValueKind;
+}
+
+public final class io/github/markusaugust/streamlord/analysis/ValueTypesKt {
+	public static final fun isMarkupCollection (Ljava/lang/String;)Z
+	public static final fun ofTypeName (Lio/github/markusaugust/streamlord/analysis/ValueFact$Companion;Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/ValueFact;
+	public static final fun opensWithTag (Ljava/lang/String;Z)Z
+	public static synthetic fun opensWithTag$default (Ljava/lang/String;ZILjava/lang/Object;)Z
 }
 
