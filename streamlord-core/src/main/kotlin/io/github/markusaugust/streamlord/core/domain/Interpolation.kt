@@ -998,20 +998,16 @@ private class Landscape(
         fun closesIn(r: Reading) =
             r.scan(html, Discard) && (r.scripting || !mentionsNoscript(html) || r.withScripting().scan(html, Discard))
         if (!closesIn(reading)) return false
-        // Straight in a patch's svg or math, with none of the format's elements around it, there is no
-        // end tag of the format for it to take. Right in an integration point it is HTML, whatever the
-        // reading started in. Read from HTML, the format's own svg and math are what its author wrote,
-        // and a tag that leaves them is refused; read from an svg or a math, a format's `<math>` or
-        // `<svg>` is an element of the other, so that reading leaves it to the one from HTML.
         val at = indexOfSpan(hole, textStarts, textEnds)
-        if (at < 0 || !reading.tracked || (textNamespaces[at] < 0 && reading.context != NS_HTML)) return true
-        val namespace =
-            when {
-                textIntegrationPoints[at] -> NS_HTML
-                textNamespaces[at] < 0 -> NS_HTML
-                else -> textNamespaces[at]
-            }
-        return closesIn(reading.of(namespace, leaves = reading.context == NS_HTML && namespace != NS_HTML))
+        if (at < 0) return true
+        // Right in an integration point the value is HTML, whatever the reading started in.
+        if (textIntegrationPoints[at]) return closesIn(reading.of(NS_HTML, leaves = false))
+        // Read from an svg or a math, a format's `<form>` or `<math>` is an element of that namespace,
+        // so that reading leaves the rest to the one from HTML, where the format's elements are what
+        // its author wrote.
+        if (reading.context != NS_HTML) return true
+        val namespace = if (textNamespaces[at] < 0) NS_HTML else textNamespaces[at]
+        return closesIn(reading.of(namespace, leaves = namespace != NS_HTML))
     }
 
     fun valueStartAt(hole: Int): Int = indexOfSpan(hole, attributeStarts, attributeEnds).let { if (it >= 0) attributeStarts[it] else -1 }

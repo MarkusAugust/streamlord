@@ -1,8 +1,8 @@
 /**
  * The walk over HTML both the checks and `interpolate`'s judging read markup by: the twin of
  * MarkupScan.kt in streamlord-core, with the helpers of its ClientHtml.kt it needs. holes.ts takes
- * every reading of it, markup.ts's tokenize the one walkMarkup gives. Core's insideMarkup, for the
- * Html values interpolate writes, has no twin: the editors do not judge those.
+ * every reading of it, markup.ts's tokenize the one walkMarkup gives. Core's insideMarkup and
+ * closesAll, for the Html values interpolate writes, have no twin: the editors do not judge those.
  */
 
 /**

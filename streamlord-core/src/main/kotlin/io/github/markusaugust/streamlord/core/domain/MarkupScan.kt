@@ -137,9 +137,9 @@ private fun Char?.isAsciiLetter(): Boolean = this != null && (this in 'a'..'z' |
  * starting inside an element of the [context] namespace, and, without [htmlStaysOpen], letting no
  * HTML element opened straight from that context stay open, and with [templates] as well, it skips
  * the syntax of a template language as [walkMarkup] does. With [insideMarkup], the context is an
- * element of the markup around this one, as it is for a value written into an svg, which a tag that
- * returns to HTML closes, where a patch's own context element stays, and with [closesAll] it may leave
- * no element open.
+ * element of the markup around this one, as it is for a value written into an svg: a tag that
+ * returns to HTML closes it, where a patch's own context element stays. With [closesAll], the
+ * markup may leave no element open.
  *
  * @return Whether the markup ends in the data state, with no tag, attribute value, comment, CDATA
  *   section or raw-text body left open, and so whether markup written after it is read as written.

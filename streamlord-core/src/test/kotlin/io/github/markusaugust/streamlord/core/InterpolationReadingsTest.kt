@@ -132,6 +132,25 @@ class InterpolationReadingsTest {
         }
     }
 
+    // Read from inside an svg or a math, a `form` or a `label` is an svg element, and an `<input>` in
+    // it one left open; the browser reads them as HTML, where the input is void.
+    @Test
+    fun `an Html of void elements in a form, a label or a media element is still markup`() {
+        val cases =
+            listOf(
+                "<form method=post>%s<button>Save</button></form>" to "<input name=email type=email>",
+                "<label>%s Remember me</label>" to "<input type=checkbox>",
+                "<table><tr><td>%s</td></tr></table>" to "<input type=checkbox name=a>",
+                "<form>%s</form>" to "<div><input name=a></div>",
+                "<video>%s</video>" to "<source src=a.mp4><track src=a.vtt>",
+                "<colgroup>%s</colgroup>" to "<col>",
+                "<button>%s</button>" to "<wbr>",
+            )
+        for ((format, markup) in cases) {
+            assertEquals(format.replace("%s", markup), interpolate(format, interpolate(markup)).text, "$format with $markup")
+        }
+    }
+
     @Test
     fun `an Html that stays in the svg or math it lands in is still markup`() {
         val cases =

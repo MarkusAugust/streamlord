@@ -20,8 +20,9 @@ All notable changes to Streamlord are recorded here. The format follows
     again around the text after its parent.
 
   Such a value is escaped now, and so is any `Html` that leaves an element open where it is written,
-  such as `<p>x` without its `</p>`. `<path/>` in `<svg>%s</svg>`, `<p>x</p>` in a `<foreignObject>`
-  and `<ul><li>a<li>b</ul>` are still markup. 0.19.0 has the fault: it writes `<em></em>` into
+  such as an `<a>` without its `</a>`, or an `<option>a` in `<select>%s</select>`. `<path/>` in
+  `<svg>%s</svg>`, `<p>x</p>` in a `<foreignObject>`, `<ul><li>a<li>b</ul>` and an `<input>` in a
+  `<form>` are still markup. 0.19.0 has the fault: it writes `<em></em>` into
   `<svg><g>%s</g></svg>` as markup.
 
 ### Changed
