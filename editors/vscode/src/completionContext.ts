@@ -6,7 +6,7 @@
 import { catalog } from "./catalog.ts";
 import { jsRegions, Region } from "./expression.ts";
 import { landingAsParsed } from "./holes.ts";
-import { decodeEntities } from "./markup.ts";
+import { decodeEntities, withTemplateTagNames } from "./markup.ts";
 
 /** The attribute value a caret stands in: the attribute's name as written, where its value starts, and the value before the caret, decoded. */
 export interface ValueAtCaret {
@@ -29,7 +29,8 @@ const CARET = "x";
 export function valueAtCaret(markup: string, offset: number, prefix: string, templates = true): ValueAtCaret | null {
   if (offset < 0 || offset > markup.length) return null;
   // A hole is at least one character wide, so the caret gets one of its own.
-  const probe = markup.slice(0, offset) + CARET + markup.slice(offset);
+  const walked = withTemplateTagNames(markup);
+  const probe = walked.slice(0, offset) + CARET + walked.slice(offset);
   const landing = landingAsParsed(probe, { start: offset, end: offset + 1 }, [prefix], templates);
   if (!landing.attribute) return null;
   if (landing.valueStart < 0 || landing.valueStart > offset) return null;

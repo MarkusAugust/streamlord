@@ -31,7 +31,7 @@ export function indexOfAsciiIgnoreCase(s: string, needle: string, from: number):
  * nowhere. A `script` ends where the tokenizer's script data states say: rawTextEnd in core
  * ClientHtml.kt, which holes.ts shares as MarkupScan.kt does.
  */
-export function rawTextEnd(html: string, name: string, from: number): number {
+function rawTextEnd(html: string, name: string, from: number): number {
   if (name === "script") return scriptEnd(html, from);
   for (let at = from; ; ) {
     const close = indexOfAsciiIgnoreCase(html, `</${name}`, at);
@@ -146,7 +146,7 @@ function startsWithAsciiIgnoreCase(html: string, at: number, needle: string): bo
   return asciiLowercase(html.slice(at, at + needle.length)) === needle;
 }
 
-/** commentEnd in ClientHtml.kt: one walk to the first `-->` or `--!>`, so many comments cost no more than their length. */
+/** commentClose in ClientHtml.kt, the end of the markup where nothing closes the comment: one walk to the first `-->` or `--!>`, so many comments cost no more than their length. */
 function commentEnd(html: string, lt: number): number {
   if (html.startsWith("<!-->", lt)) return lt + 5;
   if (html.startsWith("<!--->", lt)) return lt + 6;
@@ -274,6 +274,8 @@ export function scanMarkupTracked(html: string, visitor: Visitor, context: numbe
   const open = new Map<string, number>();
   // How many special elements are open, so an end tag for none open knows whether one would stop it.
   let specialOpen = 0;
+  // documentOpen in MarkupScan.kt: the html, head and body start tags open, which the tree builder drops.
+  let documentOpen = 0;
   const isSpecial = (ns: number, name: string, htmlContent: boolean) => (ns === NS_HTML ? SPECIAL.has(name) : htmlContent || name === "annotation-xml");
   // An svg or math script or style holds elements, but its text is a program: code from the first opened to the last closed.
   let foreignCode = 0;
@@ -356,7 +358,7 @@ export function scanMarkupTracked(html: string, visitor: Visitor, context: numbe
   // Where the text since the last tag, comment or raw-text body began.
   let textStart = 0;
   const text = (to: number) => {
-    if (to > textStart) visitor.text?.(textStart, to, stackName.length);
+    if (to > textStart) visitor.text?.(textStart, to, stackName.length + documentOpen);
   };
   let i = 0;
   while (i < n) {
@@ -410,16 +412,30 @@ export function scanMarkupTracked(html: string, visitor: Visitor, context: numbe
     }
     if (first === "/" && isLetter(html[lt + 2])) {
       text(lt);
-      const end = orEnd(scanTag(html, lt + 2, DISCARD, templates), n);
+      const closed = scanTag(html, lt + 2, DISCARD, templates);
+      const end = orEnd(closed, n);
       visitor.tag(lt, end);
       const name = tagName(html, lt + 2);
       visitor.endTag?.(name, lt, end);
+      if (closed < 0) {
+        textStart = n;
+        break;
+      }
+      if (IGNORED_IN_BODY.has(name) && documentOpen > 0) documentOpen--;
       // A `</p>` or `</br>` in foreign content closes the foreign elements, as an exiting tag does.
       if (foreignNow && (name === "p" || name === "br")) {
         while (stackNs.length > 0 && stackNs[stackNs.length - 1] !== NS_HTML && !stackHtmlContent[stackHtmlContent.length - 1]) pop(lt);
       }
       const at = name === "br" ? BLOCKED : endTagTarget(name);
-      if (at >= 0) popTo(at, lt);
+      let specialAbove = false;
+      for (let k = at + 1; at >= 0 && k < stackName.length; k++) if (special(k)) specialAbove = true;
+      if (at >= 0 && FORMATTING.has(name) && specialAbove) {
+        // The adoption agency closes the formatting element and keeps the special one opened inside it open.
+        const removed = stackName.splice(at, 1)[0] as string;
+        stackNs.splice(at, 1);
+        stackHtmlContent.splice(at, 1);
+        open.set(removed, (open.get(removed) as number) - 1);
+      } else if (at >= 0) popTo(at, lt);
       i = textStart = end;
       continue;
     }
@@ -465,7 +481,10 @@ export function scanMarkupTracked(html: string, visitor: Visitor, context: numbe
     const raw = html5 ? rawText.find((t) => t === name) : undefined;
     visitor.startTag?.(name, lt, end, selfClosing, raw !== undefined);
     if (html5) {
-      if (IGNORED_IN_BODY.has(name)) continue;
+      if (IGNORED_IN_BODY.has(name)) {
+        documentOpen++;
+        continue;
+      }
       if (TABLE_PARTS.has(name) && context !== NS_HTML && (open.get("table") ?? 0) === 0 && (open.get("template") ?? 0) === 0) continue;
       if (name !== "svg" && name !== "math") closeImplied(name, lt);
       if (raw !== undefined) {
@@ -558,6 +577,8 @@ const OWN_END_TAG_RULE = new Set([
   "applet", "marquee", "object", "template", "body", "html", "table", "caption", "colgroup", "tbody", "tfoot",
   "thead", "tr", "td", "th", "select", "option", "optgroup",
 ]);
+/** FORMATTING in MarkupScan.kt: the formatting elements, whose end tag the adoption agency handles. */
+const FORMATTING = new Set(["a", "b", "big", "code", "em", "font", "i", "nobr", "s", "small", "strike", "strong", "tt", "u"]);
 /** An end tag a special element stops before it reaches an open element of its name. */
 const BLOCKED = -1;
 /** An end tag for no element open in the markup. */

@@ -209,7 +209,9 @@ class StreamlordCompletionContributor : CompletionContributor() {
             if (valueFile != null) {
                 // Inside an attribute value, read as the browser reads the markup: over several lines and in either quote.
                 DatastarCaret.expressionAt(valueFile, offset)?.let { return expressionItems(it, src, offset, index, indexFile, result) }
-                if (valueAtCaret(src, offset, prefix) != null) return false
+                // A fragment injected into a Kotlin string is read as the browser reads it, template comments and all.
+                val templates = indexFile !is KtFile
+                if (valueAtCaret(src, offset, prefix, templates) != null) return false
             }
             val lineStart = src.lastIndexOf('\n', maxOf(0, offset - 1)) + 1
             val before = src.substring(maxOf(lineStart, offset - 400), offset.coerceIn(0, src.length))

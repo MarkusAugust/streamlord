@@ -2,6 +2,16 @@
  "$comment": "Where a hole lands, by holeLandings in streamlord-core Interpolation.kt, which interpolate calls, and by holes.ts in the VS Code analysis, both of which read these cases. Each %s in markup is a hole; position is the strictest of the readings (HTML, svg or math, svg or math with CDATA as text, and the ones that follow the element stack from HTML, from inside an svg and from inside a math, those two again with no HTML element opened from the svg or math left open, each with scripting off and, where a noscript stands, on), attribute the quoted attribute it landed in, or null, and loadsCode, false where it is left out, whether that attribute loads what the browser runs, so that its host must be fixed (urlHostFixedBy) rather than its scheme. HoleLandingsTest also holds every case to interpolate itself: a String is refused where the position refuses one, a Number where it refuses that, and anything but Trusted in a loadsCode attribute whose literal start does not fix the host. known, where a case has it, gives the text of holes by index whose content is known markup, as a Trusted value is: the markup is read with that text in place of the hole, the hole itself is not judged and lands as TEXT, and HoleLandingsTest passes it to interpolate as Trusted. urls: whether the literal start of a URL attribute's value, prefix, already settles the scheme (urlSchemeFixedBy).",
  "cases": [
   {
+   "name": "after a math style an end tag reaches from inside an annotation-xml that holds HTML, code",
+   "markup": "<style><title><annotation-xml encoding=text/html></style></math>%s",
+   "landings": [
+    {
+     "position": "CODE",
+     "attribute": null
+    }
+   ]
+  },
+  {
    "name": "text",
    "markup": "<li>%s</li>",
    "landings": [

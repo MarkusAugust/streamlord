@@ -1,6 +1,8 @@
 {
   "$comment": "The Datastar expression a caret stands in (expressionAtCaret): source is before + after with the caret between them, read as Kotlin when kotlin is true and as markup otherwise, with prefix the attribute prefix (data- when left out). expression is null outside one, or the expression before the caret as Datastar is handed it, Kotlin's escapes and character references decoded, whether actions belong there (an expression, not a signal name) and whether patch is in scope. Read by CompletionContextsTest.kt and completionContext.test.ts.",
   "cases": [
+    {"name":"an expression inside a Pebble comment in a Kotlin string, which the browser reads as text","kotlin":true,"before":"val page = \"<p>{# <b data-text=\\\"1 + ","after":"\\\"></b> #}</p>\"","expression":{"before":"1 + ","allowActions":true,"patchInScope":false}},
+    {"name":"an expression in a tag whose name is a Kotlin template","kotlin":true,"before":"val page = \"<$t data-text=\\\"1 + ","after":"\\\"></$t>\"","expression":{"before":"1 + ","allowActions":true,"patchInScope":false}},
     { "name": "an expression attribute in markup", "kotlin": false, "before": "<div data-on:click=\"@get(", "after": "\"></div>", "expression": { "before": "@get(", "allowActions": true, "patchInScope": false } },
     { "name": "a signal-name attribute takes no actions", "kotlin": false, "before": "<input data-bind=\"us", "after": "\">", "expression": { "before": "us", "allowActions": false, "patchInScope": false } },
     { "name": "patch is in scope in data-on-signal-patch", "kotlin": false, "before": "<div data-on-signal-patch=\"pat", "after": "\"></div>", "expression": { "before": "pat", "allowActions": true, "patchInScope": true } },

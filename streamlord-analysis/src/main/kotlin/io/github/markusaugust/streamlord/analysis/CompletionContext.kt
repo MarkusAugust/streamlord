@@ -34,7 +34,7 @@ public fun valueAtCaret(
 ): ValueAtCaret? {
     if (offset !in 0..markup.length) return null
     // A hole is at least one character wide, so the caret gets one of its own.
-    val probe = StringBuilder(markup).insert(offset, CARET).toString()
+    val probe = StringBuilder(withTemplateTagNames(markup)).insert(offset, CARET).toString()
     val landing = landingAsParsed(probe, offset..offset, listOf(prefix), templates)
     val attribute = landing.attribute ?: return null
     if (landing.valueStart !in 0..offset) return null

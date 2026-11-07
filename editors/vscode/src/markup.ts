@@ -5,7 +5,7 @@ import { clientKeyName, objectKeys, signalNameProblem, signalPathProblem, type O
 import { PROTOTYPE_NAMES } from "./signalNames.ts";
 import { asciiLowercase, templateConstructEnd, walkMarkup } from "./markupScan.ts";
 
-export { asciiLowercase, indexOfAsciiIgnoreCase, rawTextEnd } from "./markupScan.ts";
+export { asciiLowercase, indexOfAsciiIgnoreCase } from "./markupScan.ts";
 
 /**
  * Markup checks for the HTML Datastar patches: complete elements, ids where the protocol needs
@@ -168,14 +168,21 @@ const NO_SIGNALS: ReadonlySet<string> = new Set();
  * file, the comments and tags of a template language are skipped; a Kotlin string leaves them to
  * the browser. tokenize in Markup.kt.
  */
+/**
+ * `html` with the placeholder of a Kotlin template as a tag's name, `<$tag>`, turned into a name of
+ * the same length that starts with a letter, as the browser sees a name there: withTemplateTagNames
+ * in Markup.kt. The checks and the caret both read the markup so.
+ */
+export function withTemplateTagNames(html: string): string {
+  return html.replace(/(<\/?)__kt__/g, "$1x_kt__");
+}
+
 export function tokenize(html: string, templates = true): { tags: Tag[]; topLevelText: { start: number; end: number }[] } {
   const tags: Tag[] = [];
   const topLevelText: { start: number; end: number }[] = [];
   let attributes: Attribute[] = [];
-  // A Kotlin template as the name, `<$tag>`, is a tag all the same: the browser sees a name there.
-  const walked = html.replace(/(<\/?)__kt__/g, "$1x_kt__");
   walkMarkup(
-    walked,
+    withTemplateTagNames(html),
     {
       attribute(_tag, name, nameStart, valueStart, valueEnd, quoted) {
         attributes.push({ name, nameStart, value: valueStart < 0 ? null : html.slice(valueStart, valueEnd), valueStart, quoted });

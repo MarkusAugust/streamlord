@@ -318,12 +318,14 @@ private val EXITS_FOREIGN =
  * into HTML until the element it opened is closed again.
  *
  * It is not a parser: it keeps only each open element's namespace and whether its content is HTML,
- * enough to know the context, and matches an end tag to the nearest open element of its name.
+ * enough to know the context. An end tag closes the nearest open element of its name, unless a
+ * special element stands nearer for one the tree builder has no rule of its own for, and a
+ * formatting element's leaves the special elements opened inside it open, as the adoption agency does.
  *
- * Nor does it know the tree builder's implied end tags, by which a `<p>` closes the `<p>` before
- * it, a `<div>` closes an open `<p>` and an `<li>` the `<li>` before it. Inside an svg or a math
- * that matters, since once the HTML element opened from the context is closed, the tags after it
- * are svg or math again. So it is walked both ways: with [htmlStaysOpen], every HTML element stays
+ * Of the tree builder's implied end tags it knows those by which a `<p>` closes the `<p>` before it,
+ * a `<div>` closes an open `<p>` and an `<li>` the `<li>` before it, but not the table modes'. Inside
+ * an svg or a math that matters, since once the HTML element opened from the context is closed, the
+ * tags after it are svg or math again. So it is walked both ways: with [htmlStaysOpen], every HTML element stays
  * open to its end tag, and without, none opened straight from a foreign [context] does, which is
  * where the browser's stack is when every such element has been closed by the next.
  *
@@ -349,6 +351,8 @@ private fun scanMarkupTracked(
     val open = HashMap<String, Int>()
     // How many special elements are open, so an end tag for none open knows whether one would stop it.
     var specialOpen = 0
+    // How many `html`, `head` and `body` start tags are open: the tree builder drops them, but the text after one is inside it.
+    var documentOpen = 0
     var stray = false
     // An svg or math `script` or `style` holds elements, but the text in it is still a program,
     // so all of it, from the first one opened to the last one closed, is reported as code.
@@ -409,6 +413,15 @@ private fun scanMarkupTracked(
         at: Int,
     ) {
         while (stackName.size > k) pop(at)
+    }
+
+    // Takes the HTML element at [k] off the stack and leaves the elements above it open.
+    fun removeAt(k: Int) {
+        val name = stackName.removeAt(k)
+        stackNs.removeAt(k)
+        stackHtmlContent.removeAt(k)
+        open[name] = open.getValue(name) - 1
+        if (name in SPECIAL) specialOpen--
     }
 
     // The end tags the tree builder implies before it inserts the HTML element [name]: a `p` in
@@ -478,7 +491,7 @@ private fun scanMarkupTracked(
     var textStart = 0
 
     fun text(to: Int) {
-        if (to > textStart) visitor.text(textStart, to, stackName.size)
+        if (to > textStart) visitor.text(textStart, to, stackName.size + documentOpen)
     }
 
     fun walk(): Boolean {
@@ -557,8 +570,12 @@ private fun scanMarkupTracked(
                 if (foreignNow && (name == "p" || name == "br")) {
                     while (stackNs.isNotEmpty() && stackNs.last() != NS_HTML && !stackHtmlContent.last()) pop(lt)
                 }
+                if (name in IGNORED_IN_BODY && documentOpen > 0) documentOpen--
                 val at = if (name == "br") -1 else endTagTarget(name)
-                if (at >= 0) {
+                if (at >= 0 && name in FORMATTING && (at + 1 until stackName.size).any { special(it) }) {
+                    // The adoption agency closes the formatting element and keeps the special one opened inside it open.
+                    removeAt(at)
+                } else if (at >= 0) {
                     popTo(at, lt)
                 } else if (at == NOT_OPEN && htmlStaysOpen) {
                     stray = true
@@ -602,7 +619,10 @@ private fun scanMarkupTracked(
             visitor.startTag(name, lt, end, selfClosing, raw != null)
 
             if (html5) {
-                if (name in IGNORED_IN_BODY) continue
+                if (name in IGNORED_IN_BODY) {
+                    documentOpen++
+                    continue
+                }
                 if (name in TABLE_PARTS && context != NS_HTML && (open["table"] ?: 0) == 0 && (open["template"] ?: 0) == 0) continue
                 if (name != "svg" && name != "math") closeImplied(name, lt)
                 // HTML raw-text and code elements swallow their body to their own close tag.
@@ -729,6 +749,9 @@ private val OWN_END_TAG_RULE =
         "option",
         "optgroup",
     )
+
+/** The formatting elements, whose end tag the adoption agency handles. */
+private val FORMATTING = setOf("a", "b", "big", "code", "em", "font", "i", "nobr", "s", "small", "strike", "strong", "tt", "u")
 
 /** An end tag a special element stops before it reaches an open element of its name. */
 private const val BLOCKED = -1

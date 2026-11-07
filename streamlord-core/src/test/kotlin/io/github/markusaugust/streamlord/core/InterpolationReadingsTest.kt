@@ -73,6 +73,8 @@ class InterpolationReadingsTest {
                 "<math><mi>x</mi></math>",
                 "<hr/>",
                 "<textarea>t</textarea><script>x</script>",
+                // The div stops the `</span>`, so it closes nothing around the value.
+                "<div></span></div>",
             )
         for (markup in closed) {
             assertEquals("<p>$markup</p>", interpolate("<p>%s</p>", interpolate(markup)).text, markup)

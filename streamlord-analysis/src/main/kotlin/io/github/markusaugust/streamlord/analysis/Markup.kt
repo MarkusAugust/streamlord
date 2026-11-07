@@ -431,7 +431,7 @@ public data class MarkupOptions(
  * The tags of [html] and its text outside any element, as core's [walkMarkup] reads them: the one
  * reading the checks share with the caret, the browser's as it parses a patch. With [templates], as
  * in a template or an HTML file, the comments and tags of a template language are skipped; a Kotlin
- * string leaves them to the browser, which reads `{# #}` as text and `<#--` as a bogus comment.
+ * string leaves them to the browser, which reads `{# #}` and `<#--` as text and the tags in them as tags.
  */
 public fun tokenize(
     html: String,
@@ -440,8 +440,7 @@ public fun tokenize(
     val tags = ArrayList<Tag>()
     val topLevelText = ArrayList<TextRun>()
     walkMarkup(
-        // A Kotlin template as the name, `<$tag>`, is a tag all the same: the browser sees a name there.
-        KOTLIN_TAG_NAME.replace(html) { it.groupValues[1] + "x" + it.value.substring(it.groupValues[1].length + 1) },
+        withTemplateTagNames(html),
         object : MarkupVisitor {
             val attributes = ArrayList<Attribute>()
 
@@ -497,6 +496,14 @@ public fun tokenize(
 
 /** The `<` or `</` of a tag whose name is a Kotlin template's placeholder, which the browser would read as a name. */
 private val KOTLIN_TAG_NAME = Regex("""(</?)__kt__""")
+
+/**
+ * [html] with the placeholder of a Kotlin template as a tag's name, `<$tag>`, turned into a name of
+ * the same length that starts with a letter: a tag all the same, since the browser sees a name there.
+ * The checks and the caret both read the markup so.
+ */
+internal fun withTemplateTagNames(html: String): String =
+    KOTLIN_TAG_NAME.replace(html) { it.groupValues[1] + "x" + it.value.substring(it.groupValues[1].length + 1) }
 
 /**
  * The key to write, and the `__case` to add, so that a key the author typed with capitals comes
