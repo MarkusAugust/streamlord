@@ -307,7 +307,7 @@ public class Analyzer(
             val chain = chainFrom(src, s, if (s in topLevel) lex.mask else facts.code)
             val whole = chain ?: s
             if (chain != null) for (at in chain.start until chain.end) if (src[at] == '"' || src[at] == '$') chained += at
-            if (!isHtmlString(src, s) && !(chain != null && opensWithTag(chain.text))) continue
+            if (!isHtmlString(src, s) && !(chain != null && textOpensWithTag(chain.text))) continue
             val issues = checkFreeHtmlString(whole, opts, src, hyphenated)
             if (issues.isNotEmpty()) out += SiteIssues(null, whole, issues)
         }

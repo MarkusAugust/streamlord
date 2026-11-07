@@ -19,19 +19,6 @@ private val MARKUP_CALL_START = Regex("""^(?:interpolate|Trusted)\s*\(""")
 private val UNQUOTED_VALUE = Regex("""=[ \t\n\u000C\r]*([^ \t\n\u000C\r"'=<>`]*)\z""")
 private val WORD_CHAR = Regex("""[\p{L}\p{Nd}_]""")
 
-/** Each kind from the one safe in the fewest places to the one safe everywhere. */
-private val WEAKEST_FIRST =
-    listOf(
-        ValueFact.STRING,
-        null,
-        ValueFact.MARKUP,
-        ValueFact.NULLABLE,
-        ValueFact.UNSIGNED,
-        ValueFact.BOOLEAN,
-        ValueFact.NUMBER,
-        ValueFact.CONSTANT,
-    )
-
 /** What may end an operand of `+` at the top level: an argument or statement boundary, or an operator that binds less tightly. */
 private val OPERAND_END = Regex("""^(?:[,)\]};]|\?:|&&|\|\||==|!=|<=|>=|\.\.)""")
 
@@ -1329,12 +1316,6 @@ private fun callKind(
 private fun wholeOperand(e: String): Boolean {
     val d = depths(e)
     return e.indices.all { d[it] != 0 || OPERAND_CHAR.matches(e[it].toString()) }
-}
-
-/** Of the kinds a hole's values have, the one safe in the fewest places; one not known stands between a String and markup. */
-internal fun weakest(kinds: List<ValueFact?>): ValueFact? {
-    val worst = kinds.minOfOrNull { WEAKEST_FIRST.indexOf(it) } ?: WEAKEST_FIRST.lastIndex
-    return WEAKEST_FIRST[worst]
 }
 
 /** Whether [name] means, at [at], a parameter or value marked `@Language("HTML")`. */

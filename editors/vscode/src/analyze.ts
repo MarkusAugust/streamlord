@@ -6,10 +6,10 @@ import { signalNameRefusal } from "./signalNames.ts";
 import { asciiLowercase, decodeEntities, indexOfAsciiIgnoreCase, keyReading, nonceProblem, rawKeyNote, tokenize, validateAttributes, validateMarkup, wireKey, wireKeyReads, type Attribute, type Tag } from "./markup.ts";
 import { findCallSites, isHtmlString, lexKotlin, namedArgText, selectStringArg, stringAt, type Arg, type CallSite } from "./scanner.ts";
 import { holeLandings, urlHostFixedBy, urlSchemeFixedBy, type Hole, type HoleLanding, type Position } from "./holes.ts";
-import { argKind, callResult, chainFrom, coreNameUsable, countBelow, ESCAPES_TITLE, fileFacts, holeDisplay, holeValues, HTML_PACKAGE, importEdits, interpolateFix, interpolateText, isMarkup, markupHeldAsString, markupTextValue, markupValued, markupView, mayBeNull, mayHoldMarkup, percentHoles, quoteFix, REFUSES_URL_TITLE, sdkOf, shortened, trimmed, trustedFix, trustedLiteral, valueKind, visiblyList, weakest, withNested, withPercentHoles, type ArgKind } from "./interpolation.ts";
+import { argKind, callResult, chainFrom, coreNameUsable, countBelow, ESCAPES_TITLE, fileFacts, holeDisplay, holeValues, HTML_PACKAGE, importEdits, interpolateFix, interpolateText, isMarkup, markupHeldAsString, markupTextValue, markupValued, markupView, mayBeNull, mayHoldMarkup, percentHoles, quoteFix, REFUSES_URL_TITLE, sdkOf, shortened, trimmed, trustedFix, trustedLiteral, valueKind, visiblyList, withNested, withPercentHoles, type ArgKind } from "./interpolation.ts";
 import { dslHelpers, EXPRESSION_HELPERS, signalNameHyphenSites, unshadowed } from "./signalNameHyphens.ts";
-import { opensWithTag } from "./valueTypes.ts";
-import { argKindOf, described, digitsOrBoolean, interpolateTakesIn, isConstant, isMarkupFact, isNullable, isNullableString, isString, knownCharacters, plain, scalar, verdict, writesItself } from "./valueVerdict.ts";
+import { textOpensWithTag } from "./valueTypes.ts";
+import { argKindOf, described, digitsOrBoolean, interpolateTakesIn, isConstant, isMarkupFact, isNullable, isNullableString, isString, knownCharacters, plain, scalar, verdict, weakest, writesItself } from "./valueVerdict.ts";
 import { clientKeyName, collectSignalDefinitions } from "./signals.ts";
 
 /**
@@ -150,7 +150,7 @@ export function analyzeKotlin(src: string, opts: AnalyzeOptions): Issue[] {
     const chain = chainFrom(src, s, topLevel.has(s) ? lex.mask : facts.code);
     const whole = chain ?? s;
     if (chain) for (let at = chain.start; at < chain.end; at++) if (src[at] === '"' || src[at] === "$") chained.add(at);
-    if (!isHtmlString(src, s) && !(chain && opensWithTag(chain.text))) continue;
+    if (!isHtmlString(src, s) && !(chain && textOpensWithTag(chain.text))) continue;
     issues.push(...checkFreeHtmlString(whole, opts, src, hyphenated));
   }
   return issues;

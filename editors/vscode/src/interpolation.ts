@@ -11,7 +11,7 @@ import { laterFix, type Fix } from "./expression.ts";
 import { catalog } from "./catalog.ts";
 import { EXPRESSION_HELPERS, unshadowed, USES_HTML_DSL } from "./signalNameHyphens.ts";
 import { declaredFact, isMarkupCollection, isTrustedType, opensWithTag } from "./valueTypes.ts";
-import { argKindOf, isConstant, isMarkupFact, isString, writesItself } from "./valueVerdict.ts";
+import { argKindOf, isConstant, isMarkupFact, isString, weakest, writesItself } from "./valueVerdict.ts";
 
 const IDENT = /^[\p{L}_][\p{L}\p{Nd}_]*$/u;
 
@@ -1010,14 +1010,6 @@ function wholeOperand(e: string): boolean {
   const d = depths(e);
   for (let k = 0; k < e.length; k++) if (d[k] === 0 && !/[\p{L}\p{Nd}_.?!()[\]{}"']/u.test(e[k] as string)) return false;
   return true;
-}
-
-/** Of the kinds a hole's values have, the one safe in the fewest places; one not known stands between a String and markup. */
-export function weakest(kinds: readonly (TextKind | "constant" | null)[]): TextKind | "constant" | null {
-  const order: (TextKind | "constant" | null)[] = ["string", null, "markup", "nullable", "unsigned", "boolean", "number", "constant"];
-  let worst = order.length - 1;
-  for (const k of kinds) worst = Math.min(worst, order.indexOf(k));
-  return order[worst] ?? null;
 }
 
 /** Whether `name` means, at `at`, a parameter or value marked `@Language("HTML")`. */

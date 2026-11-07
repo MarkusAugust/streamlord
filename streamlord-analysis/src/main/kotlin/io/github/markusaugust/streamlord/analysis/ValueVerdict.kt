@@ -36,14 +36,10 @@ internal fun verdict(
         }
 
         Position.STYLE -> {
-            if (plain ==
-                ValueFact.NUMBER
-            ) {
-                Verdict.SAFE
-            } else if (plain == ValueFact.UNSIGNED) {
-                Verdict.DIGITS
-            } else {
-                Verdict.UNSAFE
+            when (plain) {
+                ValueFact.NUMBER -> Verdict.SAFE
+                ValueFact.UNSIGNED -> Verdict.DIGITS
+                else -> Verdict.UNSAFE
             }
         }
 
@@ -62,8 +58,9 @@ internal fun verdict(
 }
 
 /**
- * Whether the value is the author's own or cannot carry code, wherever it is written: a constant,
- * a number, a boolean or an unsigned number. Kotlin writes the digits of an unsigned number.
+ * Whether the value is the author's own or cannot carry code: a constant, a number, a boolean or
+ * an unsigned number, whose digits Kotlin writes. Where escaping does not help, [verdict] still
+ * asks which.
  */
 public fun ValueFact?.writesItself(): Boolean =
     this == ValueFact.CONSTANT || this == ValueFact.NUMBER || this == ValueFact.BOOLEAN || this == ValueFact.UNSIGNED
@@ -121,3 +118,22 @@ internal fun ValueFact?.isNullable(): Boolean = this == ValueFact.NULLABLE
 
 /** Html or Trusted: markup, whose values have been through interpolate or which the author vouched for. */
 public fun ValueFact?.isMarkup(): Boolean = this == ValueFact.MARKUP
+
+/** Each kind from the one safe in the fewest places to the one safe everywhere. */
+private val WEAKEST_FIRST =
+    listOf(
+        ValueFact.STRING,
+        null,
+        ValueFact.MARKUP,
+        ValueFact.NULLABLE,
+        ValueFact.UNSIGNED,
+        ValueFact.BOOLEAN,
+        ValueFact.NUMBER,
+        ValueFact.CONSTANT,
+    )
+
+/** Of the kinds a hole's values have, the one safe in the fewest places; one not known stands between a String and markup. */
+internal fun weakest(kinds: List<ValueFact?>): ValueFact? {
+    val worst = kinds.minOfOrNull { WEAKEST_FIRST.indexOf(it) } ?: WEAKEST_FIRST.lastIndex
+    return WEAKEST_FIRST[worst]
+}

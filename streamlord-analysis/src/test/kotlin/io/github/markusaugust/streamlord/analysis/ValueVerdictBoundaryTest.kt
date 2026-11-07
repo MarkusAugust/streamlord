@@ -13,9 +13,18 @@ import kotlin.test.assertTrue
  */
 class ValueVerdictBoundaryTest {
     private val sources = File("src/main/kotlin/io/github/markusaugust/streamlord/analysis")
+
     private val comparison =
-        Regex("""[=!]=\s*ValueFact\.|ValueFact\.[A-Z_]+\s*[=!]=|ValueFact\.[A-Z_]+(?:\s*,\s*ValueFact\.[A-Z_]+)*\s*->""")
-    private val tagStart = Regex(Regex.escape("<(?:[A-Za-z]"))
+        Regex(
+            """[=!]=\s*ValueFact\.|ValueFact\.[A-Z_]+\s*[=!]=|ValueFact\.[A-Z_]+(?:\s*,\s*ValueFact\.[A-Z_]+)*\s*->|""" +
+                """\bin\s+(?:setOf|listOf|arrayOf|setOfNotNull)\(\s*ValueFact\.|\.equals\(\s*ValueFact\.|""" +
+                """import\s+[\w.]*\bValueFact\.(?:[A-Z_]+|\*)""",
+        )
+
+    /** A first tag as a regex writes it: whitespace from the start and a `<`, `<(?:[A-Za-z]`, `<[a-zA-Z]`, or the placeholder as a tag name. */
+    private val tagStart = Regex("""\^(?:\\s|\[[^\]]*\])\*<|<\(\?:\[(?:A-Za-z|a-zA-Z|a-z)|<\[(?:A-Za-z|a-zA-Z)\]|__kt__\(\?=""")
+
+    private val comment = Regex("""//[^\n]*|/\*[\s\S]*?\*/""")
 
     private fun found(
         rule: Regex,
@@ -23,14 +32,17 @@ class ValueVerdictBoundaryTest {
     ): String {
         assertTrue(sources.isDirectory, "${sources.absolutePath} is not there; update the path in this test")
         return sources
-            .listFiles { f -> f.extension == "kt" && f.name !in owners }!!
-            .sortedBy { it.name }
+            .walkTopDown()
+            .filter { it.extension == "kt" && it.name !in owners }
+            .sortedBy { it.path }
             .flatMap { file ->
-                file
-                    .readLines()
-                    .withIndex()
-                    .filter { (_, line) -> rule.containsMatchIn(line) }
-                    .map { (n, line) -> "${file.name}:${n + 1}: ${line.trim()}" }
+                val text = file.readText()
+                // A comment may name what the code may not do.
+                val code = comment.replace(text) { m -> m.value.replace(Regex("[^\n]"), " ") }
+                rule.findAll(code).map { m ->
+                    val line = code.take(m.range.first).count { it == '\n' }
+                    "${file.name}:${line + 1}: ${text.lines()[line].trim()}"
+                }
             }.joinToString("\n")
     }
 

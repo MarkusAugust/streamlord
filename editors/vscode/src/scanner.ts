@@ -1,5 +1,5 @@
 import { charLiteralEnd, isStringStart, readKotlinStringAt, type KotlinString } from "./kotlinStrings.ts";
-import { opensWithTag } from "./valueTypes.ts";
+import { textOpensWithTag } from "./valueTypes.ts";
 
 /**
  * Finds calls to known DSL functions in Kotlin source and splits their arguments, without a
@@ -232,7 +232,7 @@ const HTML_MARKER = /@Language\(\s*"html"\s*\)|\/\/\s*language\s*=\s*html\b/gi;
  * string literal only.
  */
 export function isHtmlString(src: string, s: KotlinString): boolean {
-  if (opensWithTag(s.text)) return true;
+  if (textOpensWithTag(s.text)) return true;
   const before = src.slice(Math.max(0, s.start - 240), s.start);
   const markers = [...before.matchAll(HTML_MARKER)];
   const last = markers[markers.length - 1];

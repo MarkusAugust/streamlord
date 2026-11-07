@@ -28,15 +28,18 @@ private val MARKUP_COLLECTION =
     )
 
 /**
- * A tag, a comment or a doctype first: `<$tag ` and `<${t} ` among them when a space, `>` or `/`
- * follows the template, and `__kt__`, a `%s` of interpolate's format read as one. Whitespace and
- * letters as HTML has them, ASCII only, so the twins cannot fold or space them apart.
+ * A tag, a comment or a doctype first, with what may stand for the tag name when a space, `>` or
+ * `/` follows it. Whitespace and letters as HTML has them, ASCII only, so the twins cannot fold or
+ * space them apart.
  */
-private val TAG_START =
-    Regex(
-        """^[ \t\n\f\r]*<(?:[A-Za-z]|(?:__kt__|\$(?:\{[^{}]*\}|[\p{L}_][\p{L}\p{Nd}_]*))(?=[ \t\n\f\r>/])|!--|""" +
-            """![Dd][Oo][Cc][Tt][Yy][Pp][Ee])""",
-    )
+private fun tagStart(template: String): Regex =
+    Regex("""^[ \t\n\f\r]*<(?:[A-Za-z]|(?:$template)(?=[ \t\n\f\r>/])|!--|![Dd][Oo][Cc][Tt][Yy][Pp][Ee])""")
+
+/** In the source: `<$tag ` and `<${t} `, and `__kt__`, a `%s` of interpolate's format read as one. */
+private val TAG_START = tagStart("""__kt__|\$(?:\{[^{}]*\}|[\p{L}_][\p{L}\p{Nd}_]*)""")
+
+/** In the text at runtime, where each template is `__kt__` and a `$` left is one the author wrote. */
+private val TEXT_TAG_START = tagStart("__kt__")
 private val MARGIN_START = Regex("""^\s*\|""")
 
 /**
@@ -100,6 +103,9 @@ public fun opensWithTag(
     content: String,
     trimMargin: Boolean = false,
 ): Boolean = TAG_START.containsMatchIn(if (trimMargin) content.replaceFirst(MARGIN_START, "") else content)
+
+/** [opensWithTag] for a literal's text at runtime, [KotlinString.text], where each template is `__kt__`. */
+internal fun textOpensWithTag(text: String): Boolean = TEXT_TAG_START.containsMatchIn(text)
 
 /** Whether [type] is Streamlord's `Trusted`, which cannot be null. */
 internal fun isTrustedType(type: String): Boolean = TRUSTED_TYPE.matches(type.filterNot { it.isWhitespace() })

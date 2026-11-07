@@ -6,7 +6,7 @@
 
 import type { HoleFact } from "./analyze.ts";
 import type { Position } from "./holes.ts";
-import type { ArgKind } from "./interpolation.ts";
+import type { ArgKind, TextKind } from "./interpolation.ts";
 
 /**
  * What a fact alone says of a value a Kotlin template writes into a position: SAFE, nothing to
@@ -36,8 +36,9 @@ export function verdict(fact: HoleFact | null, position: Position): Verdict {
 }
 
 /**
- * Whether the value is the author's own or cannot carry code, wherever it is written: a constant,
- * a number, a boolean or an unsigned number. Kotlin writes the digits of an unsigned number.
+ * Whether the value is the author's own or cannot carry code: a constant, a number, a boolean or
+ * an unsigned number, whose digits Kotlin writes. Where escaping does not help, `verdict` still
+ * asks which.
  */
 export function writesItself(fact: HoleFact | null): boolean {
   return fact === "constant" || fact === "number" || fact === "boolean" || fact === "unsigned";
@@ -101,3 +102,11 @@ export const isNullable = (fact: HoleFact | null): boolean => fact === "nullable
 
 /** Html or Trusted: markup, whose values have been through interpolate or which the author vouched for. */
 export const isMarkupFact = (fact: HoleFact | null): boolean => fact === "markup";
+
+/** Of the kinds a hole's values have, the one safe in the fewest places; one not known stands between a String and markup. */
+export function weakest(kinds: readonly (TextKind | "constant" | null)[]): TextKind | "constant" | null {
+  const order: (TextKind | "constant" | null)[] = ["string", null, "markup", "nullable", "unsigned", "boolean", "number", "constant"];
+  let worst = order.length - 1;
+  for (const k of kinds) worst = Math.min(worst, order.indexOf(k));
+  return order[worst] ?? null;
+}

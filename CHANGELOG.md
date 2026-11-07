@@ -23,7 +23,7 @@ All notable changes to Streamlord are recorded here. The format follows
   declared type or the start of a string literal tells of a value joined into HTML. The analysis,
   its TS twin and the IntelliJ plugin read types and literals with them, where each had a copy of
   its own.
-- streamlord-analysis has `writesItself` and `isMarkup` on a `ValueFact`: whether the value is the
+- streamlord-analysis has `writesItself` and `isMarkup` on a `ValueFact?`: whether the value is the
   author's own or cannot carry code, and whether it is markup. What a fact says of a value is
   asked in one place in the analysis and in its TS twin, and the IntelliJ plugin asks it there.
 
