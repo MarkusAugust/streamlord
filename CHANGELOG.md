@@ -8,14 +8,21 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Security
 
-- `interpolate` wrote an `Html` value as markup where it lands inside an `<svg>` or a `<math>`,
-  though a tag in it takes the browser back to HTML there: `<svg><g>%s</g></svg>` with
-  `<em></em>`, a `<p>`, a `<br>` or a `<font color>`. The browser closes the svg and the elements
-  around the value, and reads the format after it as HTML, so a value written later in the format
-  could land where it was not judged. Such a value is escaped now, and so is one written right into
-  a `<foreignObject>`, a `<desc>` or an `<mi>` that leaves an element open, such as `<g/>`, which the
-  svg's end tags do not close, so the markup after it ended up inside that element. `<path/>` in
-  `<svg>%s</svg>`, and `<p>x</p>` in a `<foreignObject>`, are still markup. 0.19.0 has the fault.
+- `interpolate` wrote an `Html` value as markup where it reshapes the markup around it in the
+  browser, so that the format after it is read otherwise and a value written later could land where
+  it was not judged:
+  - in an `<svg>` or a `<math>`, a tag that takes the browser back to HTML closes the svg and the
+    elements around the value: `<svg><g>%s</g></svg>` with `<em></em>`, a `<p>`, a `<br>` or a
+    `<font color>`;
+  - an element the value leaves open is closed only by an end tag that reaches it, and some never
+    are: an `<object>`, an `<applet>` or a `<marquee>` bounds every one, the svg's end tags stop at a
+    `<foreignObject>`, a `<desc>` or an `<mi>` with a `<g/>` left open in it, and an `<a>` is opened
+    again around the text after its parent.
+
+  Such a value is escaped now, and so is any `Html` that leaves an element open where it is written,
+  such as `<p>x` without its `</p>`. `<path/>` in `<svg>%s</svg>`, `<p>x</p>` in a `<foreignObject>`
+  and `<ul><li>a<li>b</ul>` are still markup. 0.19.0 has the fault: it writes `<em></em>` into
+  `<svg><g>%s</g></svg>` as markup.
 
 ### Changed
 

@@ -138,7 +138,8 @@ private fun Char?.isAsciiLetter(): Boolean = this != null && (this in 'a'..'z' |
  * HTML element opened straight from that context stay open, and with [templates] as well, it skips
  * the syntax of a template language as [walkMarkup] does. With [insideMarkup], the context is an
  * element of the markup around this one, as it is for a value written into an svg, which a tag that
- * returns to HTML closes, where a patch's own context element stays.
+ * returns to HTML closes, where a patch's own context element stays, and with [closesAll] it may leave
+ * no element open.
  *
  * @return Whether the markup ends in the data state, with no tag, attribute value, comment, CDATA
  *   section or raw-text body left open, and so whether markup written after it is read as written.
@@ -155,8 +156,9 @@ internal fun scanMarkup(
     htmlStaysOpen: Boolean = true,
     templates: Boolean = false,
     insideMarkup: Boolean = false,
+    closesAll: Boolean = false,
 ): Boolean {
-    if (tracked) return scanMarkupTracked(html, visitor, context, scripting, htmlStaysOpen, templates, insideMarkup)
+    if (tracked) return scanMarkupTracked(html, visitor, context, scripting, htmlStaysOpen, templates, insideMarkup, closesAll)
     val rawText =
         if (foreign) {
             CODE_TEXT
@@ -348,8 +350,9 @@ private val EXITS_FOREIGN =
  *   one of the markup around it. Without [htmlStaysOpen], an end tag for an HTML element it never
  *   kept open does not count as such, since the walk with it judges that. With [insideMarkup], a
  *   tag that returns a foreign [context] to HTML, such as `<em>` or `</p>`, with none of the
- *   markup's own svg or math open, closes the context and so the markup around it as well; and in an
- *   HTML [context], which is then an integration point, the markup leaves no element open at all.
+ *   markup's own svg or math open, closes the context and so the markup around it as well. With
+ *   [closesAll], it also leaves no element open at all, as markup written into other markup has to:
+ *   the end tags around it do not all reach what it leaves open.
  */
 private fun scanMarkupTracked(
     html: String,
@@ -359,6 +362,7 @@ private fun scanMarkupTracked(
     htmlStaysOpen: Boolean,
     templates: Boolean = false,
     insideMarkup: Boolean = false,
+    closesAll: Boolean = false,
 ): Boolean {
     val rawText = if (scripting) SCRIPTING_RAW_TEXT else RAW_TEXT
     val stackNs = ArrayList<Int>()
@@ -685,9 +689,7 @@ private fun scanMarkupTracked(
 
     val ended = walk()
     if (foreignCode > 0) visitor.code(foreignCodeStart, n)
-    // Written right into an integration point, the markup is closed only by its own end tags: the svg or
-    // math ones around it stop at the integration point.
-    if (insideMarkup && context == NS_HTML && stackName.isNotEmpty()) return false
+    if (closesAll && stackName.isNotEmpty()) return false
     return ended && !stray && !leftContext && foreignCode == 0 &&
         stackName.indices.all { stackNs[it] == context && !stackHtmlContent[it] && stackName[it] !in CHANGES_MODE }
 }

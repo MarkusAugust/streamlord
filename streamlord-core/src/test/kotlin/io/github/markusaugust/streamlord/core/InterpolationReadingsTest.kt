@@ -109,6 +109,29 @@ class InterpolationReadingsTest {
         }
     }
 
+    // An element a value leaves open is closed only by an end tag the browser lets reach it: an object,
+    // an applet and a marquee bound every search, an integration point stops the svg's end tags, and an
+    // `<a>` is opened again around the text after it. So a value is markup only when it leaves none open.
+    @Test
+    fun `an Html that leaves any element open is written as text`() {
+        val cases =
+            listOf(
+                "<main><div>%s</div></main>" to "<object>",
+                "<div>%s</div>" to "<applet>",
+                "<div>%s</div>" to "<marquee>",
+                "<div><div>%s</div></div>" to "<a>",
+                "<div>%s</div>" to "<p>x",
+                "<svg><foreignObject><form>%s</form></foreignObject></svg>" to "<g>",
+                "<svg><foreignObject><p>%s</p></foreignObject></svg>" to "<button>",
+                "<desc>%s</desc><g>after</g>" to "<g/>",
+                "<mi>%s</mi>" to "<a/>",
+            )
+        for ((format, markup) in cases) {
+            val out = interpolate(format, interpolate(markup)).text
+            assertFalse(markup in out, "$format with $markup: $out")
+        }
+    }
+
     @Test
     fun `an Html that stays in the svg or math it lands in is still markup`() {
         val cases =

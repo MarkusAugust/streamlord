@@ -597,17 +597,31 @@ private class Reading(
     val htmlStaysOpen: Boolean = true,
     val templates: Boolean = false,
     val insideMarkup: Boolean = false,
+    val closesAll: Boolean = false,
 ) {
     fun scan(
         html: String,
         visitor: MarkupVisitor,
-    ): Boolean = scanMarkup(html, visitor, foreign, cdata, tracked, scripting, context, htmlStaysOpen, templates, insideMarkup)
+    ): Boolean = scanMarkup(html, visitor, foreign, cdata, tracked, scripting, context, htmlStaysOpen, templates, insideMarkup, closesAll)
 
-    /** This tracked reading, of a value written where the content is of [namespace]. */
-    fun inside(namespace: Int): Reading =
-        Reading(tracked = true, scripting = scripting, context = namespace, htmlStaysOpen = htmlStaysOpen, insideMarkup = true)
+    /**
+     * This tracked reading, of a value written into markup where the content is of [namespace]: it has
+     * to close all it opens, and with [leaves], a tag that returns from that svg or math to HTML closes it.
+     */
+    fun of(
+        namespace: Int,
+        leaves: Boolean,
+    ): Reading =
+        Reading(
+            tracked = true,
+            scripting = scripting,
+            context = namespace,
+            htmlStaysOpen = htmlStaysOpen,
+            insideMarkup = leaves,
+            closesAll = true,
+        )
 
-    fun withScripting(): Reading = Reading(foreign, cdata, tracked, true, context, htmlStaysOpen, templates, insideMarkup)
+    fun withScripting(): Reading = Reading(foreign, cdata, tracked, true, context, htmlStaysOpen, templates, insideMarkup, closesAll)
 }
 
 /**
@@ -972,9 +986,10 @@ private class Landscape(
 
     /**
      * Whether [html], read in this landscape, leaves nothing open for the markup after it to fall
-     * into, with scripting on as well when it holds a `noscript`. Written at [hole] in an svg or a
-     * math of the format, it is read there as well, where a tag that returns to HTML closes them,
-     * and right in an integration point it leaves no element open, which their end tags would not close.
+     * into, with scripting on as well when it holds a `noscript`. A reading that follows the element
+     * stack also reads it where it lands, at [hole], and there it leaves no element open at all: the
+     * format's end tags do not all reach one, as an object bounds them, an integration point stops
+     * an svg's, and an `<a>` is opened again after its parent closes.
      */
     fun closes(
         html: String,
@@ -983,14 +998,20 @@ private class Landscape(
         fun closesIn(r: Reading) =
             r.scan(html, Discard) && (r.scripting || !mentionsNoscript(html) || r.withScripting().scan(html, Discard))
         if (!closesIn(reading)) return false
-        // Read from HTML, as a page or an HTML patch is, the format's own svg and math are what its
-        // author wrote, and the value is read in the one it lands in too. Read from inside an svg or a
-        // math, a format's `<math>` or `<svg>` is an element of the other, and that reading keeps to the above.
-        // Right in an integration point, read as HTML, it has to close all it opens.
+        // Straight in a patch's svg or math, with none of the format's elements around it, there is no
+        // end tag of the format for it to take. Right in an integration point it is HTML, whatever the
+        // reading started in. Read from HTML, the format's own svg and math are what its author wrote,
+        // and a tag that leaves them is refused; read from an svg or a math, a format's `<math>` or
+        // `<svg>` is an element of the other, so that reading leaves it to the one from HTML.
         val at = indexOfSpan(hole, textStarts, textEnds)
-        if (at < 0 || !reading.tracked || reading.context != NS_HTML || textNamespaces[at] < 0) return true
-        if (textNamespaces[at] == NS_HTML && !textIntegrationPoints[at]) return true
-        return closesIn(reading.inside(textNamespaces[at]))
+        if (at < 0 || !reading.tracked || (textNamespaces[at] < 0 && reading.context != NS_HTML)) return true
+        val namespace =
+            when {
+                textIntegrationPoints[at] -> NS_HTML
+                textNamespaces[at] < 0 -> NS_HTML
+                else -> textNamespaces[at]
+            }
+        return closesIn(reading.of(namespace, leaves = reading.context == NS_HTML && namespace != NS_HTML))
     }
 
     fun valueStartAt(hole: Int): Int = indexOfSpan(hole, attributeStarts, attributeEnds).let { if (it >= 0) attributeStarts[it] else -1 }
