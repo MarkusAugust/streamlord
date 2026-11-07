@@ -489,16 +489,20 @@ public fun holeLandings(
  * the browser's element stack from HTML, with scripting off. Where [holeLandings] takes the
  * strictest of every reading, so that nothing is let through that one of them would refuse, this
  * is the reading the markup has, which an editor shows at the caret: in a `<textarea>` the text is
- * text. A [HoleLanding.valueStart] is an offset into [markup].
+ * text. It is [walkMarkup]'s, which the editors' checks read by as well, and with [templates] it
+ * skips the comments and tags of a template language as that does. A [HoleLanding.valueStart] is an
+ * offset into [markup].
  */
 @InternalStreamlordApi
 public fun landingAsParsed(
     markup: String,
     hole: IntRange,
     prefixes: List<String> = ElementsGuard.defaultPrefixes,
+    templates: Boolean = false,
 ): HoleLanding {
     val written = Written(markup, listOf(hole), emptyMap(), percents = false)
-    val parsed = landscape(shadow(written.text, written.open), written.open, prefixes, Reading(tracked = true, context = NS_HTML))
+    val reading = Reading(tracked = true, context = NS_HTML, templates = templates)
+    val parsed = landscape(shadow(written.text, written.open), written.open, prefixes, reading)
     val landing = landingOf(listOf(parsed), written.starts[0])
     if (landing.valueStart < 0) return landing
     return HoleLanding(landing.position, landing.attribute, written.sourceOf(landing.valueStart), landing.loadsCode)
@@ -591,13 +595,15 @@ private class Reading(
     val scripting: Boolean = false,
     val context: Int = NS_HTML,
     val htmlStaysOpen: Boolean = true,
+    val templates: Boolean = false,
 ) {
     fun scan(
         html: String,
         visitor: MarkupVisitor,
-    ): Boolean = scanMarkup(html, visitor, foreign, cdata, tracked, scripting, context, htmlStaysOpen)
+    ): Boolean = scanMarkup(html, visitor, foreign, cdata, tracked, scripting, context, htmlStaysOpen, templates)
 
-    fun withScripting(): Reading = Reading(foreign, cdata, tracked, scripting = true, context = context, htmlStaysOpen = htmlStaysOpen)
+    fun withScripting(): Reading =
+        Reading(foreign, cdata, tracked, scripting = true, context = context, htmlStaysOpen = htmlStaysOpen, templates = templates)
 }
 
 /**
@@ -791,6 +797,7 @@ private class Landscape(
     override fun attribute(
         tag: String,
         name: String,
+        nameStart: Int,
         valueStart: Int,
         valueEnd: Int,
         quoted: Boolean,

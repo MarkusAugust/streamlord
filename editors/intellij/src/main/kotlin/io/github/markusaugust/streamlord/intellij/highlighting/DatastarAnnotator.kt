@@ -125,7 +125,7 @@ class KotlinDatastarAnnotator : Annotator {
         analysis: StreamlordAnalysis,
     ) {
         val prefix = analysis.prefix
-        for (tag in tokenize(s.text).tags) {
+        for (tag in tokenize(s.text, templates = false).tags) {
             for (attr in tag.attributes) {
                 val spec = analysis.catalog.parseAttributeName(attr.name.lowercase(), prefix)?.spec ?: continue
                 val parts = tokenizeAttributeName(attr.name, prefix) ?: continue

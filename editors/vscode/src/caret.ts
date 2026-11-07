@@ -31,8 +31,8 @@ function decodedIndex(s: KotlinString, offset: number): number {
 }
 
 /** The expression in the attribute value the caret stands in, in `markup` at `caret`, or null. */
-function inMarkup(markup: string, caret: number, prefix: string): ExpressionAtCaret | null {
-  const at = valueAtCaret(markup, caret, prefix);
+function inMarkup(markup: string, caret: number, prefix: string, templates = true): ExpressionAtCaret | null {
+  const at = valueAtCaret(markup, caret, prefix, templates);
   if (!at) return null;
   const spec = parseAttributeName(at.attribute.toLowerCase(), prefix)?.spec;
   if (!spec || (spec.valueKind !== "expression" && spec.valueKind !== "signal")) return null;
@@ -60,7 +60,7 @@ export function expressionAtCaret(src: string, offset: number, kotlin: boolean, 
   const html = htmlStringAt(src, offset);
   if (html) {
     if (offset <= html.contentStart || offset > html.contentEnd) return null;
-    return inMarkup(html.text, decodedIndex(html, offset), prefix);
+    return inMarkup(html.text, decodedIndex(html, offset), prefix, false);
   }
   const site = findCallSites(src, EXPRESSION_SITES, lex.mask).find((s) => s.openParen < offset && offset <= s.closeParen);
   if (!site) return null;

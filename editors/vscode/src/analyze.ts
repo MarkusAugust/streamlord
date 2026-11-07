@@ -309,7 +309,7 @@ function chainArg(site: CallSite, spec: CallSiteSpec, src: string): KotlinString
 function checkFreeHtmlString(s: KotlinString, opts: AnalyzeOptions, src: string, hyphenated: ReadonlySet<string>): Issue[] {
   const view = markupView(src, s);
   const issues: Issue[] = judgeHoles(s, src, opts, view);
-  if (opts.checkHtmlAttributes) issues.push(...mapIssues(s, src, analyzeHtmlWith(view, opts, hyphenated)));
+  if (opts.checkHtmlAttributes) issues.push(...mapIssues(s, src, analyzeHtmlWith(view, opts, hyphenated, false)));
   return issues;
 }
 
@@ -488,7 +488,7 @@ function checkInterpolateSite(site: CallSite, f: InterpolateFormat, src: string,
     const message = uncertain && kind !== null ? uncertainMessage(shown, landing, endTagAt(view, d)) : refusedMessage(shown, landing, kind !== null, endTagAt(view, d));
     issues.push({ ...toSource(format, d, d + PLACEHOLDER.length), severity: kind === null || uncertain ? "warning" : "error", code: "unsafe-interpolation", link: DOCS.expressions, message });
   });
-  if (opts.checkHtmlAttributes) issues.push(...mapIssues(format, src, analyzeHtmlWith(view, opts, hyphenated)));
+  if (opts.checkHtmlAttributes) issues.push(...mapIssues(format, src, analyzeHtmlWith(view, opts, hyphenated, false)));
   return issues;
 }
 
@@ -1113,7 +1113,7 @@ function checkHtmlSite(site: CallSite, spec: CallSiteSpec, opts: AnalyzeOptions,
   }
   // A mode that cannot be read here (a variable) may be one that needs no ids.
   const requireIds = selector === null && (!modeArg || mode === "outer");
-  if (s) issues.push(...mapIssues(s, src, validateMarkup(view, { requireIds, prefix: opts.prefix, checkAttributes: opts.checkHtmlAttributes, hyphenatedSignals: hyphenated })));
+  if (s) issues.push(...mapIssues(s, src, validateMarkup(view, { requireIds, prefix: opts.prefix, checkAttributes: opts.checkHtmlAttributes, hyphenatedSignals: hyphenated, templates: false })));
   return issues;
 }
 
@@ -1299,9 +1299,9 @@ export function analyzeHtml(src: string, opts: AnalyzeOptions): Issue[] {
   return analyzeHtmlWith(src, opts, hyphenatedSignals(src, "html"));
 }
 
-function analyzeHtmlWith(src: string, opts: AnalyzeOptions, hyphenated: ReadonlySet<string>): Issue[] {
+function analyzeHtmlWith(src: string, opts: AnalyzeOptions, hyphenated: ReadonlySet<string>, templates = true): Issue[] {
   const issues: Issue[] = [];
-  for (const tag of tokenize(src).tags) {
+  for (const tag of tokenize(src, templates).tags) {
     if (tag.closing) continue;
     issues.push(...validateAttributes(tag, opts.prefix, src.slice(tag.start, tag.end), hyphenated));
   }

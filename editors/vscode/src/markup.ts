@@ -3,20 +3,16 @@ import { kebab } from "./attributeKeys.ts";
 import { attributeDoc, DOCS, expressionError, filterPatternIssues, isIdentPart, jsRegions, quoteAt, Region, validateExpression, type Fix, type Issue } from "./expression.ts";
 import { clientKeyName, objectKeys, signalNameProblem, signalPathProblem, type ObjectKey } from "./signals.ts";
 import { PROTOTYPE_NAMES } from "./signalNames.ts";
+import { asciiLowercase, templateConstructEnd, walkMarkup } from "./markupScan.ts";
+
+export { asciiLowercase, indexOfAsciiIgnoreCase, rawTextEnd } from "./markupScan.ts";
 
 /**
  * Markup checks for the HTML Datastar patches: complete elements, ids where the protocol needs
- * them, and well-formed `data-*` attributes. A deliberately small tokenizer, not a browser.
+ * them, and well-formed `data-*` attributes, over the tags markupScan.ts reads as the browser does.
  */
 
 const VOID = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"]);
-
-/**
- * Elements whose content is text, whatever it looks like: a `<div>` in a `<textarea>` or a `<title>`
- * is not a tag. RAW_TEXT in streamlord-core's ClientHtml.kt: not a `noscript`, which holds elements
- * to the client, since it parses a patch with scripting off.
- */
-const RAW_TEXT = new Set(["script", "style", "textarea", "title", "xmp", "iframe", "noembed", "noframes", "plaintext"]);
 
 /**
  * The elements whose end tag HTML lets the author leave out, each with the start tags that close
@@ -49,34 +45,6 @@ const OPTIONAL_END: Record<string, readonly string[]> = Object.assign(Object.cre
 const TEMPLATE_SYNTAX =
   /\{\{|\{%|<%|[$!*#@]\{|\[#|\[=|(?:^|[\s>])@(?:if|elseif|else|endif|for|endfor|template|import|param|raw|endraw)\b|(?:^|[\s>])#(?:if|elseif|else|end|foreach|set|macro|parse|include)\b|__kt__/;
 
-/**
- * Tags that belong to a template engine, not to the document: FreeMarker directives and macro
- * calls (`<#if>`, `</#if>`, `<@row/>`), and its `<#-- -->` comments. Skipped like `<!DOCTYPE>`.
- */
-const TEMPLATE_TAG = /^<\/?[#@]/;
-
-/**
- * Lowercases A to Z and nothing else, so the result is as long as the input: `toLowerCase()`
- * turns U+0130 into two characters and moves every offset after it.
- */
-export function asciiLowercase(s: string): string {
-  return s.replace(/[A-Z]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 32));
-}
-
-/** `indexOf` that ignores the case of A to Z; `needle` is given in lowercase. */
-export function indexOfAsciiIgnoreCase(s: string, needle: string, from: number): number {
-  for (let i = Math.max(0, from); i <= s.length - needle.length; i++) {
-    let k = 0;
-    while (k < needle.length) {
-      const c = s.charCodeAt(i + k);
-      if ((c >= 65 && c <= 90 ? c + 32 : c) !== needle.charCodeAt(k)) break;
-      k++;
-    }
-    if (k === needle.length) return i;
-  }
-  return -1;
-}
-
 /*
  * A named reference with its semicolon, one of the few legacy names the browser also reads
  * without it (unless `=` or a letter or digit follows, as in a URL's `&copy=1`), or a numeric
@@ -93,84 +61,6 @@ const NAMED_ENTITIES: Record<string, string> = {
   rsqb: "]", rbrack: "]", Hat: "^", lowbar: "_", UnderBar: "_", grave: "`", DiacriticalGrave: "`",
   lcub: "{", lbrace: "{", verbar: "|", vert: "|", VerticalLine: "|", rcub: "}", rbrace: "}",
 };
-
-/**
- * Where `</name` begins after `from` as a whole name, `</titlex>` not ending a `title`; -1 when
- * nowhere. A `script` ends where the tokenizer's script data states say: rawTextEnd in core
- * ClientHtml.kt, which holes.ts shares as MarkupScan.kt does.
- */
-export function rawTextEnd(html: string, name: string, from: number): number {
-  if (name === "script") return scriptEnd(html, from);
-  for (let at = from; ; ) {
-    const close = indexOfAsciiIgnoreCase(html, `</${name}`, at);
-    if (close < 0) return -1;
-    if (endsTagName(html[close + 2 + name.length])) return close;
-    at = close + 1;
-  }
-}
-
-const endsTagName = (c: string | undefined) => c === undefined || c === "/" || c === ">" || "\t\n\f\r ".includes(c);
-const isAsciiAlpha = (c: string | undefined) => c !== undefined && /[A-Za-z]/.test(c);
-
-const SCRIPT_DATA = 0;
-const SCRIPT_ESCAPED = 1;
-const SCRIPT_DOUBLE_ESCAPED = 2;
-
-/**
- * Where the body of a `<script>` that starts at `from` ends, by the script data states: scriptEnd
- * in ClientHtml.kt. After a `<!--` the body is escaped, and a `<script` there makes it
- * double-escaped, where a `</script>` only returns it to escaped; `-->` returns either to script data.
- */
-function scriptEnd(html: string, from: number): number {
-  let state = SCRIPT_DATA;
-  let dashes = 0;
-  let i = from;
-  const n = html.length;
-  while (i < n) {
-    const c = html[i];
-    if (c === "-" && state !== SCRIPT_DATA) {
-      dashes = Math.min(dashes + 1, 2);
-      i++;
-    } else if (c === ">") {
-      if (dashes === 2) state = SCRIPT_DATA;
-      dashes = 0;
-      i++;
-    } else if (c !== "<") {
-      dashes = 0;
-      i++;
-    } else if (state !== SCRIPT_DOUBLE_ESCAPED && asciiLowercase(html.slice(i, i + 8)) === "</script" && endsTagName(html[i + 8])) {
-      return i;
-    } else if (state === SCRIPT_DATA) {
-      if (html.startsWith("<!--", i)) {
-        state = SCRIPT_ESCAPED;
-        dashes = 2;
-        i += 4;
-      } else {
-        i++;
-      }
-    } else {
-      dashes = 0;
-      // `<script` opens the double escape from escaped, `</script` closes it from double-escaped.
-      const slash = state === SCRIPT_DOUBLE_ESCAPED;
-      if (slash && html[i + 1] !== "/") {
-        i++;
-        continue;
-      }
-      const start = i + (slash ? 2 : 1);
-      let j = start;
-      while (isAsciiAlpha(html[j])) j++;
-      // The letters are the temporary buffer; only a space, `/` or `>` after them decides.
-      const decided = j < n && endsTagName(html[j]);
-      if (decided && j - start === 6 && asciiLowercase(html.slice(start, j)) === "script") {
-        state = slash ? SCRIPT_ESCAPED : SCRIPT_DOUBLE_ESCAPED;
-        i = j + 1;
-      } else {
-        i = Math.max(j, i + 1);
-      }
-    }
-  }
-  return -1;
-}
 
 /** The character a numeric reference names, as the browser reads it: NUL, a surrogate and past U+10FFFF are U+FFFD. */
 function codePoint(cp: number): string {
@@ -235,31 +125,6 @@ export function hasTemplateSyntax(value: string): boolean {
   return false;
 }
 
-/**
- * Where a template construct that starts at `at` inside a tag ends, or `at` when none starts
- * there: `<% %>`, `{{ }}`, `{% %}`, `{# #}`, a FreeMarker directive, or a JTE or Velocity
- * directive with its parenthesised condition. Its `>` does not end the tag.
- */
-function templateConstructEnd(html: string, at: number): number {
-  const after = (close: string, from: number) => {
-    const idx = html.indexOf(close, from);
-    return idx < 0 ? at : idx + close.length;
-  };
-  if (html.startsWith("<%", at)) return after("%>", at + 2);
-  if (html.startsWith("{{", at)) return after("}}", at + 2);
-  if (html.startsWith("{%", at)) return after("%}", at + 2);
-  if (html.startsWith("{#", at)) return after("#}", at + 2);
-  if (html.startsWith("<#", at) || html.startsWith("</#", at) || html.startsWith("<@", at)) return after(">", at + 2);
-  const call = /^[@#][A-Za-z]+\s*\(/.exec(html.slice(at, at + 32));
-  if (!call) return at;
-  let depth = 0;
-  for (let i = at + call[0].length - 1; i < html.length; i++) {
-    if (html[i] === "(") depth++;
-    else if (html[i] === ")" && --depth === 0) return i + 1;
-  }
-  return at;
-}
-
 /** Whether a template construct starts at `at` in a tag's text, where it cuts the attribute name before it short: `${`, `{{`, `<%`. */
 function cutByTemplate(tagSource: string, at: number): boolean {
   return tagSource[at] === "{" || templateConstructEnd(tagSource, at) > at;
@@ -291,331 +156,56 @@ export interface MarkupOptions {
   checkAttributes: boolean;
   /** Kebab-case signal names the source declares with `__case.kebab`, which `$my-value` then reaches as written. */
   hyphenatedSignals?: ReadonlySet<string>;
+  /** Whether the markup is a template's or an HTML file's, whose template comments and tags are skipped, rather than a Kotlin string's; true unless given. */
+  templates?: boolean;
 }
 
 const NO_SIGNALS: ReadonlySet<string> = new Set();
 
-/** The white space of HTML, which alone ends an attribute name or value: a no-break space is part of one. */
-const HTML_SPACE = "\t\n\f\r ";
-
-const FOREIGN_ROOTS: ReadonlySet<string> = new Set(["svg", "math"]);
-const MATHML_TEXT: ReadonlySet<string> = new Set(["mi", "mo", "mn", "ms", "mtext"]);
-const HTML_ENCODINGS: ReadonlySet<string> = new Set(["text/html", "application/xhtml+xml"]);
-
 /**
- * The start tags that end foreign content, so that the browser reads them, and what follows, as
- * HTML: `<svg><p><style>` holds an HTML style. A font does so with a color, face or size.
+ * The tags of `html` and its text outside any element, as walkMarkup in markupScan.ts reads them:
+ * the one reading the checks share with the caret. With `templates`, as in a template or an HTML
+ * file, the comments and tags of a template language are skipped; a Kotlin string leaves them to
+ * the browser. tokenize in Markup.kt.
  */
-const BREAKOUT: ReadonlySet<string> = new Set(
-  ("b big blockquote body br center code dd div dl dt em embed h1 h2 h3 h4 h5 h6 head hr i img li listing menu meta nobr ol p pre " +
-    "ruby s small span strong strike sub sup table tt u ul var").split(" "),
-);
-const FONT_BREAKOUT: ReadonlySet<string> = new Set(["color", "face", "size"]);
-/** The end tags that do the same. */
-const BREAKOUT_END: ReadonlySet<string> = new Set(["br", "p"]);
-
-/**
- * One past the end of the comment that opens at `lt`, as the HTML tokenizer ends it: `<!-->` and
- * `<!--->` are whole comments, and `-->` and `--!>` both close one. `commentEnd` in core.
- */
-function htmlCommentEnd(html: string, lt: number): number {
-  if (html.startsWith("<!-->", lt)) return lt + 5;
-  if (html.startsWith("<!--->", lt)) return lt + 6;
-  // One walk to the first closing sequence of either kind, so a run of comments costs its length.
-  for (let at = lt + 4; ; ) {
-    const dashes = html.indexOf("--", at);
-    if (dashes < 0) return html.length;
-    if (html[dashes + 2] === ">") return dashes + 3;
-    if (html[dashes + 2] === "!" && html[dashes + 3] === ">") return dashes + 4;
-    at = dashes + 1;
-  }
-}
-
-/**
- * The HTML elements an end tag cannot close past in HTML content (the "special" category of the
- * HTML standard): `</b>` inside a `div` inside a `b` leaves the `b` open.
- */
-const SPECIAL: ReadonlySet<string> = new Set(
-  (
-    "address applet area article aside base basefont bgsound blockquote body br button caption center col colgroup dd " +
-    "details dir div dl dt embed fieldset figcaption figure footer form frame frameset h1 h2 h3 h4 h5 h6 head header " +
-    "hgroup hr html iframe img input keygen li link listing main marquee menu meta nav noembed noframes noscript object " +
-    "ol p param plaintext pre script search section select source style summary table tbody td template textarea tfoot " +
-    "th thead title tr track ul wbr xmp"
-  ).split(" "),
-);
-
-/** An element that changes how its content is read, and the elements open inside it. */
-interface Scope {
-  readonly name: string;
-  readonly foreign: boolean;
-  readonly namespace: string;
-  readonly open: string[];
-}
-
-/**
- * Where the tokenizer stands in foreign content, as the browser's tree builder reads it: the svg
- * and math elements open, the HTML integration points open in them, and the elements open inside
- * each, which decide where an svg begins and what an end tag closes. Inside an svg or a math a
- * `style` or a `script` is no raw text and `/>` closes an element; inside an integration point,
- * such as a foreignObject, the content is HTML again. `ForeignContent` in the Kotlin analysis.
- */
-class ForeignContent {
-  // The document first, whose open elements an end tag can close an svg or a math by.
-  private readonly scopes: Scope[] = [{ name: "", foreign: false, namespace: "html", open: [] }];
-
-  /** Whether the current node is an svg or MathML element, in which `<![CDATA[` opens a section of text. */
-  get foreign(): boolean {
-    return this.top.foreign;
-  }
-
-  private get top(): Scope {
-    return this.scopes[this.scopes.length - 1]!;
-  }
-
-  /** Reads a start tag; returns whether it stands in foreign content, where no element holds raw text. */
-  start(name: string, selfClosing: boolean, attributes: Attribute[]): boolean {
-    if (this.foreign && breaksOut(name, false, attributes)) this.popForeign();
-    const top = this.top;
-    if (top.foreign) {
-      // Inside a math an svg is a MathML element, unless it opens right in an annotation-xml.
-      if (name === "svg" && top.namespace === "math" && top.open[top.open.length - 1] === "annotation-xml") {
-        if (!selfClosing) this.scopes.push({ name, foreign: true, namespace: "svg", open: [] });
-      } else if (integrationPoint(top.namespace, name, attributes)) {
-        if (!selfClosing) this.scopes.push({ name, foreign: false, namespace: top.namespace, open: [] });
-      } else if (!selfClosing) {
-        top.open.push(name);
-      }
-      return true;
-    }
-    // Right inside a MathML text element, mglyph and malignmark stay MathML.
-    if (top.open.length === 0 && MATHML_TEXT.has(top.name) && (name === "mglyph" || name === "malignmark")) {
-      if (!selfClosing) this.scopes.push({ name, foreign: true, namespace: "math", open: [] });
-    } else if (FOREIGN_ROOTS.has(name)) {
-      if (!selfClosing) this.scopes.push({ name, foreign: true, namespace: name, open: [] });
-    } else if (!VOID.has(name) && !RAW_TEXT.has(name)) {
-      top.open.push(name);
-    }
-    return false;
-  }
-
-  /** Reads an end tag. */
-  end(name: string): void {
-    if (this.foreign && breaksOut(name, true, [])) return this.popForeign();
-    const top = this.top;
-    if (top.foreign || (top.open.length === 0 && this.scopes.length > 1)) {
-      // Foreign content's rule, which an integration point with nothing open inside it follows
-      // too: the nearest open element of the name, until an HTML element is open, whose rule
-      // takes over from there.
-      for (let k = this.scopes.length - 1; k >= 0; k--) {
-        const scope = this.scopes[k]!;
-        if (!scope.foreign && scope.open.length > 0 && k !== this.scopes.length - 1) {
-          // Every integration point is special, so one open in between stops it.
-          if (this.scopes.slice(k + 1).some((s) => !s.foreign)) return;
-          return this.closeHtml(k, name);
-        }
-        const at = scope.foreign ? scope.open.lastIndexOf(name) : -1;
-        if (at >= 0) {
-          this.scopes.length = k + 1;
-          scope.open.length = at;
-          return;
-        }
-        if (k > 0 && scope.name === name) {
-          this.scopes.length = k;
-          return;
-        }
-      }
-      return;
-    }
-    this.closeHtml(this.scopes.length - 1, name);
-  }
-
-  /**
-   * HTML content's rule for an end tag, from the elements open in the scope at `k`: the nearest
-   * open element of the name, unless a special one stands between, then the integration point
-   * itself, when the end tag spells its name. foreignObject's, which the element has in camel
-   * case, it never does.
-   */
-  private closeHtml(k: number, name: string): void {
-    const scope = this.scopes[k]!;
-    for (let e = scope.open.length - 1; e >= 0; e--) {
-      if (scope.open[e] === name) {
-        this.scopes.length = k + 1;
-        scope.open.length = e;
-        return;
-      }
-      if (SPECIAL.has(scope.open[e]!)) return;
-    }
-    if (k > 0 && k === this.scopes.length - 1 && name === scope.name && name !== "foreignobject") this.scopes.pop();
-  }
-
-  private popForeign(): void {
-    while (this.top.foreign) this.scopes.pop();
-  }
-}
-
-/** Whether a tag ends the foreign content it stands in, as the tree builder reads it. */
-function breaksOut(name: string, closing: boolean, attributes: Attribute[]): boolean {
-  if (closing) return BREAKOUT_END.has(name);
-  return BREAKOUT.has(name) || (name === "font" && attributes.some((a) => FONT_BREAKOUT.has(asciiLowercase(a.name))));
-}
-
-/**
- * Whether `name`, opened in the foreign element `root`, is an HTML integration point, in which the
- * browser reads the content as HTML: a foreignObject, desc or title in an svg, and in a math the
- * text elements and an annotation-xml whose encoding is HTML.
- */
-function integrationPoint(root: string, name: string, attributes: Attribute[]): boolean {
-  if (root === "svg") return name === "foreignobject" || name === "desc" || name === "title";
-  return MATHML_TEXT.has(name) || (name === "annotation-xml" && attributes.some((a) => asciiLowercase(a.name) === "encoding" && HTML_ENCODINGS.has(asciiLowercase(a.value ?? ""))));
-}
-
-export function tokenize(html: string): { tags: Tag[]; topLevelText: { start: number; end: number }[] } {
+export function tokenize(html: string, templates = true): { tags: Tag[]; topLevelText: { start: number; end: number }[] } {
   const tags: Tag[] = [];
   const topLevelText: { start: number; end: number }[] = [];
-  let i = 0;
-  let depth = 0;
-  let textStart = -1;
-  const content = new ForeignContent();
-  const flushText = (end: number) => {
-    if (textStart >= 0 && depth === 0) {
-      const t = html.slice(textStart, end);
-      if (t.trim().length > 0) topLevelText.push({ start: textStart + (t.length - t.trimStart().length), end: textStart + t.trimEnd().length });
-    }
-    textStart = -1;
-  };
-  while (i < html.length) {
-    if (html.startsWith("<!--", i)) {
-      flushText(i);
-      i = htmlCommentEnd(html, i);
-      continue;
-    }
-    // A FreeMarker comment, which only `-->` ends.
-    if (html.startsWith("<#--", i)) {
-      flushText(i);
-      const close = html.indexOf("-->", i + 4);
-      i = close < 0 ? html.length : close + 3;
-      continue;
-    }
-    if (html.startsWith("<%--", i)) {
-      flushText(i);
-      const close = html.indexOf("--%>", i + 4);
-      i = close < 0 ? html.length : close + 4;
-      continue;
-    }
-    // Pebble and Twig comments, and Mustache and Handlebars ones. Skipped only when they close,
-    // because `{#` also opens a block in other template languages.
-    const commentClose = html.startsWith("{#", i) ? "#}" : html.startsWith("{{!--", i) ? "--}}" : html.startsWith("{{!", i) ? "}}" : null;
-    const commentEnd = commentClose === null ? -1 : html.indexOf(commentClose, i + 2);
-    if (commentClose !== null && commentEnd >= 0) {
-      flushText(i);
-      i = commentEnd + commentClose.length;
-      continue;
-    }
-    // Where the current element is foreign, `<![CDATA[` opens a section of text that only `]]>` ends;
-    // in HTML it is a bogus comment, which the first `>` ends.
-    if (html.startsWith("<![CDATA[", i) && content.foreign) {
-      flushText(i);
-      const close = html.indexOf("]]>", i + 9);
-      i = close < 0 ? html.length : close + 3;
-      continue;
-    }
-    if (html[i] === "<" && (html.startsWith("<!", i) || html.startsWith("<?", i) || TEMPLATE_TAG.test(html.slice(i, i + 3)))) {
-      flushText(i);
-      const close = html.indexOf(">", i);
-      i = close < 0 ? html.length : close + 1;
-      continue;
-    }
-    // A Kotlin template as the name, `<$tag>`, is a tag all the same: the browser sees a name there.
-    const tagMatch = /^<(\/?)((?:[A-Za-z]|__kt__)[A-Za-z0-9:._-]*)/.exec(html.slice(i, i + 64));
-    if (html[i] === "<" && tagMatch) {
-      flushText(i);
-      const closing = tagMatch[1] === "/";
-      const name = asciiLowercase(tagMatch[2] ?? "");
-      let j = i + tagMatch[0].length;
-      const attributes: Attribute[] = [];
-      let selfClosing = false;
-      while (j < html.length && html[j] !== ">") {
-        const c = html[j] ?? "";
-        if (HTML_SPACE.includes(c)) {
-          j++;
-          continue;
-        }
-        if (c === "/" ) {
-          selfClosing = true;
-          j++;
-          continue;
-        }
-        const constructEnd = templateConstructEnd(html, j);
-        if (constructEnd > j) {
-          j = constructEnd;
-          continue;
-        }
-        // A name also ends where a template construct starts: `data-x{{/if}}`, `data-x</#if>`.
-        const am = /^([^\t\n\f\r "'<>\/={]+)/.exec(html.slice(j));
-        if (!am) {
-          j++;
-          continue;
-        }
-        const attrName = am[1] ?? "";
-        const nameStart = j;
-        j += attrName.length;
-        let k = j;
-        while (k < html.length && HTML_SPACE.includes(html[k] ?? "")) k++;
-        let value: string | null = null;
-        let valueStart = -1;
-        let quoted = false;
-        if (html[k] === "=") {
-          k++;
-          while (k < html.length && HTML_SPACE.includes(html[k] ?? "")) k++;
-          const q = html[k];
-          if (q === '"' || q === "'") {
-            const close = html.indexOf(q, k + 1);
-            valueStart = k + 1;
-            value = html.slice(k + 1, close < 0 ? html.length : close);
-            quoted = true;
-            j = close < 0 ? html.length : close + 1;
-          } else {
-            const vm = /^[^\t\n\f\r >]*/.exec(html.slice(k));
-            valueStart = k;
-            value = vm?.[0] ?? "";
-            j = k + value.length;
-          }
-        }
-        attributes.push({ name: attrName, nameStart, value, valueStart, quoted });
-      }
-      const end = Math.min(j + 1, html.length);
-      // As the browser reads it, and MarkupScan in core: a `/>` closes no raw-text element,
-      // plaintext runs to the end, only `</name` as a whole name ends the others, and a script
-      // ends by the script data states.
-      if (closing) content.end(name);
-      const foreign = !closing && content.start(name, selfClosing, attributes);
-      const rawText = !closing && RAW_TEXT.has(name) && !foreign;
-      tags.push({ name, start: i, end, closing, selfClosing: (selfClosing && !rawText) || VOID.has(name), attributes });
-      if (rawText) {
-        const closeIdx = name === "plaintext" ? -1 : rawTextEnd(html, name, end);
-        i = closeIdx < 0 ? html.length : closeIdx;
-        depth++;
-        continue;
-      }
-      if (!closing && !selfClosing && !VOID.has(name)) {
-        depth++;
-      } else if (closing) {
-        depth = Math.max(0, depth - 1);
-      }
-      i = end;
-      continue;
-    }
-    if (textStart < 0) textStart = i;
-    i++;
-  }
-  flushText(html.length);
+  let attributes: Attribute[] = [];
+  // A Kotlin template as the name, `<$tag>`, is a tag all the same: the browser sees a name there.
+  const walked = html.replace(/(<\/?)__kt__/g, "$1x_kt__");
+  walkMarkup(
+    walked,
+    {
+      attribute(_tag, name, nameStart, valueStart, valueEnd, quoted) {
+        attributes.push({ name, nameStart, value: valueStart < 0 ? null : html.slice(valueStart, valueEnd), valueStart, quoted });
+      },
+      tag: () => {},
+      code: () => {},
+      startTag(name, start, end, selfClosing, rawText) {
+        const written = asciiLowercase(html.slice(start + 1, start + 1 + name.length));
+        tags.push({ name: written, start, end, closing: false, selfClosing: (selfClosing && !rawText) || VOID.has(written), attributes });
+        attributes = [];
+      },
+      endTag(name, start, end) {
+        attributes = [];
+        tags.push({ name: asciiLowercase(html.slice(start + 2, start + 2 + name.length)), start, end, closing: true, selfClosing: false, attributes: [] });
+      },
+      text(start, end, depth) {
+        if (depth > 0) return;
+        const t = html.slice(start, end);
+        if (t.trim().length === 0) return;
+        topLevelText.push({ start: start + (t.length - t.trimStart().length), end: start + t.trimEnd().length });
+      },
+    },
+    templates,
+  );
   return { tags, topLevelText };
 }
 
 export function validateMarkup(html: string, opts: MarkupOptions): Issue[] {
   const issues: Issue[] = [];
-  const { tags, topLevelText } = tokenize(html);
+  const { tags, topLevelText } = tokenize(html, opts.templates ?? true);
   const stack: Tag[] = [];
   const topLevel: Tag[] = [];
   for (const tag of tags) {

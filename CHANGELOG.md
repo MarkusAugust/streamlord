@@ -17,6 +17,10 @@ All notable changes to Streamlord are recorded here. The format follows
 - The `holeLimit` parameter of `mergePatchAsClient` in streamlord-core is `emptySlotLimit`, and its
   refusal speaks of empty slots. A call that names the argument needs the new name.
 
+- `tokenize` in streamlord-analysis reads markup by core's walk, the one reading the caret has, and
+  takes `templates`, as `MarkupOptions` and `valueAtCaret` do: true for a template or an HTML file,
+  false for an HTML string in Kotlin. Its own tree builder for svg and math is gone.
+
 ### Added
 
 - streamlord-analysis has `ValueFact.ofTypeName`, `isMarkupCollection` and `opensWithTag`: what a
@@ -49,6 +53,15 @@ All notable changes to Streamlord are recorded here. The format follows
   `textarea` holds elements, both still read the expression.
 - IntelliJ no longer offers attribute names after a space inside a quoted value whose quote is
   still open, as VS Code already did not: `<textarea><i data-text="1 + d` is text.
+- In an HTML string in Kotlin, a template comment such as `{# #}`, `<#-- -->`, `<%-- --%>` or
+  `{{! }}` hid the markup in it from the checks, though the browser reads all of it as text and the
+  tags in it as tags. The `data-*` attributes there are checked now. In template and HTML files the
+  template engine removes them, and the checks still skip them.
+- In a template file, completion, hover and signature help no longer read a `data-*` value inside a
+  template comment, which the checks skip.
+- The checks and the caret read markup the one way in both editors, the browser's: an `<svg>` right
+  inside a MathML `annotation-xml` is an svg, and an end tag with a `<div>` between it and its
+  element, such as `</foreignObject>` there, closes nothing. Before, the caret read both otherwise.
 
 ## [0.19.0] - 2026-11-06
 
