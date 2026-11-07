@@ -10,6 +10,7 @@ import { PLACEHOLDER, readKotlinStringAt, type Interpolation, type KotlinString 
 import { laterFix, type Fix } from "./expression.ts";
 import { catalog } from "./catalog.ts";
 import { EXPRESSION_HELPERS, unshadowed, USES_HTML_DSL } from "./signalNameHyphens.ts";
+import { isMarkupCollection, isTrustedType, valueFactOfTypeName } from "./valueTypes.ts";
 
 const HTML_START = /^\s*<(?:[A-Za-z]|__kt__(?=[\s>/])|!--|!doctype)/i;
 const IDENT = /^[\p{L}_][\p{L}\p{Nd}_]*$/u;
@@ -647,7 +648,6 @@ function declarations(src: string, code: Uint8Array): Map<string, Declaration[]>
 
 const MARKUP_INITIALISER = /\s*=\s*(?:interpolate|Trusted)\s*\(/y;
 const TRUSTED_INITIALISER = /\s*=\s*Trusted\s*\(/y;
-const TRUSTED_TYPE = /^(?:[\p{L}_][\p{L}\p{Nd}_]*\.)*Trusted$/u;
 const STATEMENT_END = /^[ \t]*(?:[\n\r;})\],]|\/\/|$)/;
 
 /** Whether what follows a declared name at `at` is `= interpolate(...)` or `= Trusted(...)`, the whole value: `val row = interpolate(...)`. */
@@ -755,8 +755,6 @@ export function sdkOf(opts: { htmlDsl?: boolean | null; core?: boolean | null })
 /** What a declaration or a value shows: the facts of HoleFact the text alone can give. */
 export type TextKind = "number" | "unsigned" | "boolean" | "nullable" | "string" | "markup";
 
-/** Digits, but not a `kotlin.Number`: interpolate refuses one where only a number is let in. */
-const UNSIGNED_TYPE = /^(?:kotlin\.)?(?:UInt|ULong|UShort|UByte)$/;
 const UNSIGNED_SUFFIX = /[uU][lL]?$/;
 
 /**
@@ -773,17 +771,13 @@ export function declaredKind(src: string, name: string, at: number, nonNull = fa
   // Without core, Html, Trusted and interpolate are not Streamlord's, and nothing says what they hold.
   if (d.markup) return core ? "markup" : null;
   if (d.type === undefined) return null;
-  const type = d.type.replace(/\?$/, "");
-  // Digits too; an unsigned number that may be null is judged as any number that may be.
-  const scalar = /^(?:kotlin\.)?(?:Int|Long|Short|Byte|Double|Float|Number)$/.test(type) ? "number" : /^(?:kotlin\.)?Boolean$/.test(type) ? "boolean" : UNSIGNED_TYPE.test(type) ? "unsigned" : null;
+  const fact = valueFactOfTypeName(d.type);
   // Digits, true or false, or null: safe where anything is, and not where only a number or a boolean is.
-  if (scalar) return type === d.type || nonNull ? scalar : "nullable";
-  if (/^(?:kotlin\.)?(?:String|CharSequence)$/.test(type)) return "string";
-  // What interpolate returns: markup whose values have been through it.
-  if (core && /^(?:[\p{L}_][\p{L}\p{Nd}_]*\.)*Html$/u.test(type)) return "markup";
-  // Markup the author vouched for, which a Kotlin template writes as it stands.
-  if (core && type === d.type && TRUSTED_TYPE.test(type)) return "markup";
-  return null;
+  if (fact === "nullable") return nonNull ? (valueFactOfTypeName(d.type.replace(/\?$/, "")) as TextKind) : fact;
+  // A template writes `null` for it, which the analysis judges as the string it may also be.
+  if (fact === "nullable-string") return "string";
+  if (fact === "markup") return core ? fact : null;
+  return fact as TextKind | null;
 }
 
 const TRUSTED_LITERAL = /Trusted\s*\(\s*(?:html\s*=\s*)?(?:"((?:[^"\\$\n]|\\.)*)"|"""((?:[^"$]|"(?!""))*)""")\s*\)/y;
@@ -816,7 +810,7 @@ export function trustedLiteral(src: string, value: string, at: number): string |
 /** Whether `name` at `at` is declared a `Trusted`, or set to `Trusted(...)` and nothing more: what interpolate lets in anywhere. */
 function trustedName(src: string, name: string, at: number): boolean {
   const d = declarationOf(src, name, at);
-  return d !== null && (d.trusted === true || (d.type !== undefined && TRUSTED_TYPE.test(d.type)));
+  return d !== null && (d.trusted === true || (d.type !== undefined && isTrustedType(d.type)));
 }
 
 /**
@@ -1153,10 +1147,6 @@ export function markupValue(src: string, value: string, at: number, depth = 0, s
 /** How many names deep a value is followed to what it is set to. */
 const VALUE_DEPTH = 4;
 
-/** A collection, as a declaration names its type: what `joinToString` is called on. */
-const COLLECTION_TYPE = /^(?:kotlin\.collections\.|kotlin\.sequences\.)?(?:List|MutableList|ArrayList|Collection|Iterable|Set|MutableSet|Sequence|Array)\??$/;
-const MARKUP_ELEMENT = /^(?:[\p{L}_][\p{L}\p{Nd}_]*\.)*(?:Html|Trusted)$/u;
-
 /**
  * Whether every element of a collection is markup: `listOf(a, b)` of markup, a `map { }` to
  * markup, a name declared a `List<Html>`, or one set to such a collection.
@@ -1166,7 +1156,7 @@ function markupElements(src: string, receiver: string, at: number, depth: number
   if (IDENT.test(t)) {
     const d = declarationOf(src, t, at);
     if (!d) return false;
-    if (d.type !== undefined) return sdk.core && COLLECTION_TYPE.test(d.type) && MARKUP_ELEMENT.test(d.typeArguments?.trim() ?? "");
+    if (d.type !== undefined) return sdk.core && d.typeArguments !== undefined && isMarkupCollection(`${d.type.replace(/\?$/, "")}<${d.typeArguments}>`);
     const init = initialiser(src, d);
     return init !== null && depth < VALUE_DEPTH && markupElements(src, init, d.at, depth + 1, sdk);
   }

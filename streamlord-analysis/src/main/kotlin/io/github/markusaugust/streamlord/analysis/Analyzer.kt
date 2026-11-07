@@ -61,7 +61,26 @@ internal class Sdk private constructor(
  * a `UInt`, `ULong`, `UShort` or `UByte`: digits, but not a `kotlin.Number`, so `interpolate`
  * refuses it where only a number is let in.
  */
-public enum class ValueFact { STRING, NULLABLE_STRING, NUMBER, BOOLEAN, NULLABLE, CONSTANT, MARKUP, UNSIGNED }
+public enum class ValueFact {
+    STRING,
+    NULLABLE_STRING,
+    NUMBER,
+    BOOLEAN,
+    NULLABLE,
+    CONSTANT,
+    MARKUP,
+    UNSIGNED,
+    ;
+
+    public companion object {
+        /**
+         * The fact a type gives, as a declaration writes it: `Int` [NUMBER] and `Int?` [NULLABLE],
+         * `String?` [NULLABLE_STRING], and Streamlord's `Html` or `Trusted` [MARKUP], bare or in
+         * full. Null for any other type, `com.acme.Html` among them.
+         */
+        public fun ofTypeName(type: String): ValueFact? = valueFactOfTypeName(type)
+    }
+}
 
 private val MODE_NAME = Regex("""(?:^|\.)([A-Z]+)\s*$""")
 private val CASE_ARG = Regex("""^\s*Case\.[A-Z]+\s*$""")
