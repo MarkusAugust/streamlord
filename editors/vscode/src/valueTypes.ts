@@ -50,6 +50,20 @@ export function valueFactOfTypeName(written: string): HoleFact | null {
   return null;
 }
 
+/**
+ * The fact a declaration of the type `written` gives its value: `nonNull` reads it as the left
+ * side of `?:` does, and without `core` Html and Trusted are not Streamlord's.
+ */
+export function declaredFact(written: string, nonNull: boolean, core: boolean): HoleFact | null {
+  const fact = valueFactOfTypeName(written);
+  // Digits, true or false, or null: safe where anything is, and not where only a number or a boolean is.
+  if (fact === "nullable") return nonNull ? valueFactOfTypeName(written.replace(/\s+/g, "").replace(/\?$/, "")) : fact;
+  // A template writes `null` for it, which the analysis judges as the string it may also be.
+  if (fact === "nullable-string") return "string";
+  if (fact === "markup") return core ? fact : null;
+  return fact;
+}
+
 /** Whether `type` is a collection of Streamlord's markup, as `List<Html>`; the whitespace in it is ignored. */
 export const isMarkupCollection = (type: string): boolean => MARKUP_COLLECTION.test(noSpace(type));
 

@@ -1389,3 +1389,8 @@ public final class io/github/markusaugust/streamlord/analysis/ValueTypesKt {
 	public static synthetic fun opensWithTag$default (Ljava/lang/String;ZILjava/lang/Object;)Z
 }
 
+public final class io/github/markusaugust/streamlord/analysis/ValueVerdictKt {
+	public static final fun isMarkup (Lio/github/markusaugust/streamlord/analysis/ValueFact;)Z
+	public static final fun writesItself (Lio/github/markusaugust/streamlord/analysis/ValueFact;)Z
+}
+

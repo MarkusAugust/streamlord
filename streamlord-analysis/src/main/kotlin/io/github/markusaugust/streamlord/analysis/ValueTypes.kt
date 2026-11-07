@@ -68,6 +68,27 @@ public fun ValueFact.Companion.ofTypeName(written: String): ValueFact? {
     }
 }
 
+/**
+ * The fact a declaration of the type [written] gives its value: [nonNull] reads it as the left
+ * side of `?:` does, and without [core] Html and Trusted are not Streamlord's.
+ */
+internal fun declaredFact(
+    written: String,
+    nonNull: Boolean,
+    core: Boolean,
+): ValueFact? =
+    when (val fact = ValueFact.ofTypeName(written)) {
+        // Digits, true or false, or null: safe where anything is, and not where only a number or a boolean is.
+        ValueFact.NULLABLE -> if (nonNull) ValueFact.ofTypeName(written.filterNot { it.isWhitespace() }.removeSuffix("?")) else fact
+
+        // A template writes `null` for it, which the analysis judges as the string it may also be.
+        ValueFact.NULLABLE_STRING -> ValueFact.STRING
+
+        ValueFact.MARKUP -> if (core) fact else null
+
+        else -> fact
+    }
+
 /** Whether [type] is a collection of Streamlord's markup, as `List<Html>`; the whitespace in it is ignored. */
 public fun isMarkupCollection(type: String): Boolean = MARKUP_COLLECTION.matches(type.filterNot { it.isWhitespace() })
 

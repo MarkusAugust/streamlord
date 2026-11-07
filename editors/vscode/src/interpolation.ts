@@ -10,7 +10,8 @@ import { PLACEHOLDER, readKotlinStringAt, type Interpolation, type KotlinString 
 import { laterFix, type Fix } from "./expression.ts";
 import { catalog } from "./catalog.ts";
 import { EXPRESSION_HELPERS, unshadowed, USES_HTML_DSL } from "./signalNameHyphens.ts";
-import { isMarkupCollection, isTrustedType, opensWithTag, valueFactOfTypeName } from "./valueTypes.ts";
+import { declaredFact, isMarkupCollection, isTrustedType, opensWithTag } from "./valueTypes.ts";
+import { argKindOf, isConstant, isMarkupFact, isString, writesItself } from "./valueVerdict.ts";
 
 const IDENT = /^[\p{L}_][\p{L}\p{Nd}_]*$/u;
 
@@ -770,13 +771,7 @@ export function declaredKind(src: string, name: string, at: number, nonNull = fa
   // Without core, Html, Trusted and interpolate are not Streamlord's, and nothing says what they hold.
   if (d.markup) return core ? "markup" : null;
   if (d.type === undefined) return null;
-  const fact = valueFactOfTypeName(d.type);
-  // Digits, true or false, or null: safe where anything is, and not where only a number or a boolean is.
-  if (fact === "nullable") return nonNull ? (valueFactOfTypeName(d.type.replace(/\s+/g, "").replace(/\?$/, "")) as TextKind) : fact;
-  // A template writes `null` for it, which the analysis judges as the string it may also be.
-  if (fact === "nullable-string") return "string";
-  if (fact === "markup") return core ? fact : null;
-  return fact as TextKind | null;
+  return declaredFact(d.type, nonNull, core) as TextKind | null;
 }
 
 const TRUSTED_LITERAL = /Trusted\s*\(\s*(?:html\s*=\s*)?(?:"((?:[^"\\$\n]|\\.)*)"|"""((?:[^"$]|"(?!""))*)""")\s*\)/y;
@@ -932,7 +927,7 @@ function ownArgument(src: string, arg: string, at: number, constants: ReadonlySe
   const a = arg.replace(ARGUMENT_NAME, "").trim();
   if (a.startsWith("*")) return false;
   const kind = weakest(holeValues(a).map((v) => valueKind(src, v.text, at, constants, v.nonNull, sdk)));
-  return kind === "constant" || kind === "number" || kind === "boolean" || kind === "unsigned";
+  return writesItself(kind);
 }
 
 /**
@@ -969,7 +964,7 @@ export function valueKind(src: string, value: string, at: number, constants?: Re
   if (args) return args.every((a) => ownArgument(src, a, at, constants, sdk)) ? "constant" : "string";
   // `"ab".repeat(3)`: a plain change to text the author wrote, made with what the author wrote.
   const call = lastCall(t);
-  if (call?.receiver && call.lambda === null && TEXT_TRANSFORMS.has(call.name) && valueKind(src, call.receiver, at, constants, false, sdk) === "constant") {
+  if (call?.receiver && call.lambda === null && TEXT_TRANSFORMS.has(call.name) && isConstant(valueKind(src, call.receiver, at, constants, false, sdk))) {
     if (call.args.trim() === "" || splitTop(call.args, ",").every((a) => ownArgument(src, a, at, constants, sdk))) return "constant";
   }
   const kind = callKind(src, t, at, constants, sdk);
@@ -1004,10 +999,10 @@ function callKind(src: string, t: string, at: number, constants?: ReadonlySet<st
   const lambda = call.name === "ifBlank" || call.name === "ifEmpty";
   if (!(STRING_CHANGES.has(call.name) && call.lambda === null) && !(lambda && call.lambda !== null && call.args.trim() === "")) return null;
   // `query!!.trim()`: what `!!` leaves of a `String?` is a String.
-  if (valueKind(src, call.receiver.replace(/\s*!!$/, ""), at, constants, false, sdk) !== "string") return null;
+  if (!isString(valueKind(src, call.receiver.replace(/\s*!!$/, ""), at, constants, false, sdk))) return null;
   if (!lambda) return "string";
   const result = valueKind(src, lambdaResult(call.lambda as string), at, constants, false, sdk);
-  return result === "string" || result === "constant" ? "string" : null;
+  return isString(result) || isConstant(result) ? "string" : null;
 }
 
 /** Whether `e` is one operand, a name, a chain of calls or a bracketed expression, with no operator outside its brackets. */
@@ -1124,9 +1119,9 @@ export function markupValue(src: string, value: string, at: number, depth = 0, s
   if (sum.length > 1) return htmlLiteral((sum[0] as string).trim());
   if (sdk.core && (wholeCall(t, "interpolate") || wholeCall(t, "Trusted"))) return true;
   const textOf = /^([\s\S]*?)\s*\.\s*text$/.exec(t)?.[1];
-  if (sdk.core && textOf !== undefined && (wholeCall(textOf, "interpolate") || (IDENT.test(textOf) && declaredKind(src, textOf, at) === "markup"))) return true;
+  if (sdk.core && textOf !== undefined && (wholeCall(textOf, "interpolate") || (IDENT.test(textOf) && isMarkupFact(declaredKind(src, textOf, at))))) return true;
   if (IDENT.test(t)) {
-    if (declaredKind(src, t, at, false, sdk.core) === "markup" || htmlNamed(src, t, at)) return true;
+    if (isMarkupFact(declaredKind(src, t, at, false, sdk.core)) || htmlNamed(src, t, at)) return true;
     // `val e = elements { }`: the name stands for the call it is set to; a literal it is set to is judged where it is written.
     const d = declarationOf(src, t, at);
     const init = d ? initialiser(src, d) : null;
@@ -1251,7 +1246,7 @@ export function markupValued(src: string, s: KotlinString, ip: Interpolation): b
 function heldAsMarkup(src: string, value: string, at: number): boolean {
   return (branches(value) ?? [value]).every((v) => {
     const t = v.trim();
-    if (IDENT.test(t)) return declaredKind(src, t, at) === "markup";
+    if (IDENT.test(t)) return isMarkupFact(declaredKind(src, t, at));
     const call = /^(?:interpolate|Trusted)\s*\(/.exec(t);
     return call !== null && closing(t, depths(t), call[0].length - 1) === t.length;
   });
@@ -1272,7 +1267,7 @@ export function markupHeldAsString(src: string, value: string, at: number): bool
 function markupText(src: string, name: string, at: number): boolean {
   const d = declarationOf(src, name, at);
   if (d?.textOf === undefined) return false;
-  return wholeCall(d.textOf, "interpolate") || (IDENT.test(d.textOf) && declaredKind(src, d.textOf, d.at) === "markup");
+  return wholeCall(d.textOf, "interpolate") || (IDENT.test(d.textOf) && isMarkupFact(declaredKind(src, d.textOf, d.at)));
 }
 
 /** Whether every value a hole can give is a name set to the `.text` of an Html: markup held as a String. */
@@ -1805,5 +1800,5 @@ export function argKind(src: string, text: string, literal: boolean, at: number)
   // `val name = "Gorvek"`: a String, though no type is written.
   if (declared === null && IDENT.test(t) && declarationOf(src, t, at)?.string) return "string";
   // An Int? may be null, which interpolate admits only where anything is: not known here.
-  return declared === "nullable" ? null : declared;
+  return argKindOf(declared);
 }
