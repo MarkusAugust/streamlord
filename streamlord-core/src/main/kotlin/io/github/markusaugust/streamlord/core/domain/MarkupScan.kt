@@ -693,7 +693,8 @@ private fun scanMarkupTracked(
                 }
                 // HTML ignores a self-closing mark on its own elements; only an svg or a math takes one.
                 if (name in VOID || (selfClosing && (name == "svg" || name == "math"))) continue
-                if (name == "form") formPointer = true
+                // In a template the browser leaves the form pointer alone.
+                if (name == "form" && (open["template"] ?: 0) == 0) formPointer = true
                 if (!htmlStaysOpen && stackNs.isEmpty() && context != NS_HTML && name != "svg" && name != "math") continue
                 val ns =
                     if (name == "svg") {

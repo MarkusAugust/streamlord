@@ -527,7 +527,7 @@ export function scanMarkupTracked(html: string, visitor: Visitor, context: numbe
       }
       // HTML ignores a self-closing mark on its own elements; only an svg or a math takes one.
       if (VOID.has(name) || (selfClosing && (name === "svg" || name === "math"))) continue;
-      if (name === "form") formPointer = true;
+      if (name === "form" && (open.get("template") ?? 0) === 0) formPointer = true;
       if (!htmlStaysOpen && stackNs.length === 0 && context !== NS_HTML && name !== "svg" && name !== "math") continue;
       push(name === "svg" ? NS_SVG : name === "math" ? NS_MATH : NS_HTML, name, false, i);
     } else {

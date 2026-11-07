@@ -984,9 +984,9 @@ private class Landscape(
     /**
      * Whether [html], read in this landscape, leaves nothing open for the markup after it to fall
      * into, with scripting on as well when it holds a `noscript`. A reading that follows the element
-     * stack also reads it where it lands, at [hole], and there it leaves no element open at all: the
-     * format's end tags do not all reach one, as an object bounds them, an integration point stops
-     * an svg's, and an `<a>` is opened again after its parent closes.
+     * stack reads it where it lands, at [hole], rather than where the reading starts, and there it
+     * leaves no element open at all: the format's end tags do not all reach one, as an object bounds
+     * them, an integration point stops an svg's, and an `<a>` is opened again after its parent closes.
      */
     fun closes(
         html: String,
@@ -1055,8 +1055,10 @@ private class Landscape(
  * Whether [html], written into HTML at [place], keeps the shape the walk reads it in, where the
  * walk does not follow the tree builder: its table parts stand in its own table or in the element
  * that holds them, and a `<table>` does not stand in a table mode, which it closes; no end tag of it
- * reaches past an element that bounds the search, or past a block a formatting element holds; and it
- * has no form where the format has one, whose form pointer the browser keeps.
+ * reaches past an element that bounds the search, past a block a formatting element holds, or past
+ * a formatting element of another, which the browser opens again after it; no start tag of it closes
+ * the format's `p` while it has an element open; and it has no form where the format has one, whose
+ * form pointer the browser keeps.
  */
 private fun fits(
     html: String,
@@ -1089,6 +1091,9 @@ private val TABLE_MODES = setOf("table", "tbody", "thead", "tfoot", "tr")
 
 /** The elements that bound the search of an end tag in scope, so it cannot close what is open outside them. */
 private val SCOPE_BOUNDS = setOf("applet", "caption", "html", "marquee", "object", "table", "td", "th", "template")
+
+/** The elements that bound the search of a table's end tags, in table scope. */
+private val TABLE_SCOPE_BOUNDS = setOf("html", "table", "template")
 
 private val FORMATTING = setOf("a", "b", "big", "code", "em", "font", "i", "nobr", "s", "small", "strike", "strong", "tt", "u")
 
@@ -1130,8 +1135,9 @@ private class ValueShape(
         if (name == "form" && place.formOpen) fits = false
         // A start tag that closes the format's `p` closes all the value has open inside it as well, and
         // the value's end tags for those then reach the format.
+        // Inside the value's own svg or math, a `<section>` is an element of that namespace and closes no `p`.
         if (outerParagraph && (name in CLOSES_P || name == "li" || name == "dd" || name == "dt") &&
-            open.none { it == "p" || it in SCOPE_BOUNDS || it == "button" }
+            open.none { it == "p" || it in SCOPE_BOUNDS || it == "button" || it == "svg" || it == "math" }
         ) {
             if (open.isNotEmpty()) fits = false
             outerParagraph = false
@@ -1151,8 +1157,10 @@ private class ValueShape(
         if (name in FORMATTING && inside.any { it in SPECIAL }) fits = false
         // A formatting element another end tag closes is opened again around the text after it.
         if (inside.any { it in FORMATTING }) fits = false
-        // An object, a table or a cell opened inside bounds the end tag's search, which then closes nothing.
-        if (inside.any { it in SCOPE_BOUNDS }) fits = false
+        // An object, a table or a cell opened inside bounds the end tag's search, which then closes
+        // nothing; a table's own end tags search only past a table or a template, and close its cells.
+        val bounds = if (name == "table" || name in TABLE_PARTS_IN) TABLE_SCOPE_BOUNDS else SCOPE_BOUNDS
+        if (inside.any { it in bounds }) fits = false
         open.subList(at, open.size).clear()
     }
 }

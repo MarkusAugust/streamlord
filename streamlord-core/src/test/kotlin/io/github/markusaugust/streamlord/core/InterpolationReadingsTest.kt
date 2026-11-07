@@ -207,6 +207,13 @@ class InterpolationReadingsTest {
                 // At a patch's top level, or in a template, a row or a table section is no harm.
                 "%s" to "<tr id=r1><td>a</td><td>b</td></tr>",
                 "%s<p>after</p>" to "<thead><tr><td>a</td></tr></thead>",
+                // A table's end tags close its open cells and caption first.
+                "<div>%s</div>" to "<table><tr><td>a<td>b</table>",
+                "<div>%s</div>" to "<table><tr><td>a</tr></table>",
+                "<div>%s</div>" to "<table><caption>c</table>",
+                // Inside an svg a `<section>` closes no `<p>`; in a template a form sets no form pointer.
+                "<p>%s</p>" to "<svg><section></section></svg>",
+                "<template><form></template><div>%s</div>" to "<form><input name=a></form>",
                 "<template>%s</template>" to "<tr><td>a</td></tr>",
                 "%s" to "<colgroup><col></colgroup>",
             )
