@@ -800,6 +800,7 @@ private class Landscape(
     private val textStarts = ArrayList<Int>()
     private val textEnds = ArrayList<Int>()
     private val textNamespaces = ArrayList<Int>()
+    private val textIntegrationPoints = ArrayList<Boolean>()
 
     override fun attribute(
         tag: String,
@@ -847,10 +848,12 @@ private class Landscape(
         end: Int,
         depth: Int,
         namespace: Int,
+        integrationPoint: Boolean,
     ) {
         textStarts += start
         textEnds += end
         textNamespaces += namespace
+        textIntegrationPoints += integrationPoint
     }
 
     override fun declaration(
@@ -969,7 +972,9 @@ private class Landscape(
 
     /**
      * Whether [html], read in this landscape, leaves nothing open for the markup after it to fall
-     * into, with scripting on as well when it holds a `noscript`.
+     * into, with scripting on as well when it holds a `noscript`. Written at [hole] in an svg or a
+     * math of the format, it is read there as well, where a tag that returns to HTML closes them,
+     * and right in an integration point it leaves no element open, which their end tags would not close.
      */
     fun closes(
         html: String,
@@ -981,8 +986,10 @@ private class Landscape(
         // Read from HTML, as a page or an HTML patch is, the format's own svg and math are what its
         // author wrote, and the value is read in the one it lands in too. Read from inside an svg or a
         // math, a format's `<math>` or `<svg>` is an element of the other, and that reading keeps to the above.
+        // Right in an integration point, read as HTML, it has to close all it opens.
         val at = indexOfSpan(hole, textStarts, textEnds)
-        if (at < 0 || !reading.tracked || reading.context != NS_HTML || textNamespaces[at] < 0 || textNamespaces[at] == NS_HTML) return true
+        if (at < 0 || !reading.tracked || reading.context != NS_HTML || textNamespaces[at] < 0) return true
+        if (textNamespaces[at] == NS_HTML && !textIntegrationPoints[at]) return true
         return closesIn(reading.inside(textNamespaces[at]))
     }
 

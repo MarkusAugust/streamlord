@@ -79,10 +79,30 @@ class InterpolationReadingsTest {
     // the elements around it, and the markup after it is read as HTML.
     @Test
     fun `an Html that leaves the svg or math it lands in is written as text`() {
-        val formats = listOf("<svg><g>%s</g></svg>", "<svg>%s</svg>", "<math><mrow>%s</mrow></math>", "<svg><g><g>%s</g></g></svg>")
+        val formats =
+            listOf(
+                "<svg><g>%s</g></svg>",
+                "<svg>%s</svg>",
+                "<math><mrow>%s</mrow></math>",
+                "<svg><g><g>%s</g></g></svg>",
+                "<math><mi><svg>%s</svg></mi></math>",
+            )
         val leaving = listOf("<em></em>", "<p>x</p>", "</p>", "<br>", "</br>", "<font color=red>x</font>", "<div></div>")
         for (format in formats) {
             for (markup in leaving) {
+                val out = interpolate(format, interpolate(markup)).text
+                assertFalse(markup in out, "$format with $markup: $out")
+            }
+        }
+    }
+
+    // Right in an integration point, an element the value leaves open is HTML, and the svg or math
+    // end tags of the format after it stop at the integration point and close nothing.
+    @Test
+    fun `an Html that leaves an element open right in an integration point is written as text`() {
+        val formats = listOf("<svg><foreignObject>%s</foreignObject></svg>", "<svg><desc>%s</desc></svg>", "<math><mi>%s</mi></math>")
+        for (format in formats) {
+            for (markup in listOf("<g/>", "<a/>", "<g>", "<span>x")) {
                 val out = interpolate(format, interpolate(markup)).text
                 assertFalse(markup in out, "$format with $markup: $out")
             }
@@ -98,6 +118,8 @@ class InterpolationReadingsTest {
                 "<math>%s</math>" to "<mi>x</mi>",
                 "<svg><foreignObject>%s</foreignObject></svg>" to "<p>x</p>",
                 "<math><mi>%s</mi></math>" to "<b>x</b>",
+                "<svg><g>%s</g></svg>" to "<font>x</font>",
+                "<math>%s</math>" to "<mrow><mi>x</mi></mrow>",
             )
         for ((format, markup) in cases) {
             assertEquals(format.replace("%s", markup), interpolate(format, interpolate(markup)).text, "$format with $markup")

@@ -65,13 +65,15 @@ public interface MarkupVisitor {
      * Text between the tags, by [walkMarkup] and the walks that follow the element stack, with the
      * number of elements open around it and the namespace of the open element it is inserted into:
      * 0 for HTML, an integration point's included, 1 for svg and 2 for MathML, and -1 where none of
-     * the markup's own is open and it goes into the element the walk starts inside.
+     * the markup's own is open and it goes into the element the walk starts inside. [integrationPoint]
+     * says that element is an svg or math one whose content is HTML, such as a `foreignObject`.
      */
     public fun text(
         start: Int,
         end: Int,
         depth: Int,
         namespace: Int,
+        integrationPoint: Boolean,
     ): Unit = Unit
 
     /** The body of a `<script>` or `<style>`, which is code to the browser rather than text. */
@@ -346,7 +348,8 @@ private val EXITS_FOREIGN =
  *   one of the markup around it. Without [htmlStaysOpen], an end tag for an HTML element it never
  *   kept open does not count as such, since the walk with it judges that. With [insideMarkup], a
  *   tag that returns a foreign [context] to HTML, such as `<em>` or `</p>`, with none of the
- *   markup's own svg or math open, closes the context and so the markup around it as well.
+ *   markup's own svg or math open, closes the context and so the markup around it as well; and in an
+ *   HTML [context], which is then an integration point, the markup leaves no element open at all.
  */
 private fun scanMarkupTracked(
     html: String,
@@ -505,7 +508,15 @@ private fun scanMarkupTracked(
     var textStart = 0
 
     fun text(to: Int) {
-        if (to > textStart) visitor.text(textStart, to, stackName.size + documentOpen, if (stackName.isEmpty()) -1 else insertionNs())
+        if (to > textStart) {
+            visitor.text(
+                textStart,
+                to,
+                stackName.size + documentOpen,
+                if (stackName.isEmpty()) -1 else insertionNs(),
+                stackName.isNotEmpty() && stackNs.last() != NS_HTML && stackHtmlContent.last(),
+            )
+        }
     }
 
     fun walk(): Boolean {
@@ -674,6 +685,9 @@ private fun scanMarkupTracked(
 
     val ended = walk()
     if (foreignCode > 0) visitor.code(foreignCodeStart, n)
+    // Written right into an integration point, the markup is closed only by its own end tags: the svg or
+    // math ones around it stop at the integration point.
+    if (insideMarkup && context == NS_HTML && stackName.isNotEmpty()) return false
     return ended && !stray && !leftContext && foreignCode == 0 &&
         stackName.indices.all { stackNs[it] == context && !stackHtmlContent[it] && stackName[it] !in CHANGES_MODE }
 }

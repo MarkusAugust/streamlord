@@ -12,9 +12,10 @@ All notable changes to Streamlord are recorded here. The format follows
   though a tag in it takes the browser back to HTML there: `<svg><g>%s</g></svg>` with
   `<em></em>`, a `<p>`, a `<br>` or a `<font color>`. The browser closes the svg and the elements
   around the value, and reads the format after it as HTML, so a value written later in the format
-  could land where it was not judged. Such a value is escaped now. `Html` that stays in the svg or
-  math, such as `<path/>` in `<svg>%s</svg>`, and `Html` in a `<foreignObject>` or an `<mi>`, are
-  still markup. 0.19.0 has the fault.
+  could land where it was not judged. Such a value is escaped now, and so is one written right into
+  a `<foreignObject>`, a `<desc>` or an `<mi>` that leaves an element open, such as `<g/>`, which the
+  svg's end tags do not close, so the markup after it ended up inside that element. `<path/>` in
+  `<svg>%s</svg>`, and `<p>x</p>` in a `<foreignObject>`, are still markup. 0.19.0 has the fault.
 
 ### Changed
 
