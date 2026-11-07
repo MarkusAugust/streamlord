@@ -23,6 +23,9 @@ All notable changes to Streamlord are recorded here. The format follows
   declared type or the start of a string literal tells of a value joined into HTML. The analysis,
   its TS twin and the IntelliJ plugin read types and literals with them, where each had a copy of
   its own.
+- streamlord-analysis has `writesItself` and `isMarkup` on a `ValueFact`: whether the value is the
+  author's own or cannot carry code, and whether it is markup. What a fact says of a value is
+  asked in one place in the analysis and in its TS twin, and the IntelliJ plugin asks it there.
 
 ### Fixed
 
@@ -36,6 +39,10 @@ All notable changes to Streamlord are recorded here. The format follows
 - IntelliJ reads a value whose type is Streamlord's `Trusted` as markup, as VS Code does, by the
   type it resolves: a class of your own named `Trusted` is not. It reads a literal past a `|`
   margin only when `.trimMargin()` is called on it.
+- Literals joined with `+` whose text opens with a doctype, `"\n" + "<!doctype html>..."`, are
+  checked as HTML, as one literal that opens with it is.
+- A vertical tab before the first `<`, and in VS Code a no-break space, made a literal markup. Only
+  the whitespace HTML has does now.
 
 ## [0.19.0] - 2026-11-06
 
