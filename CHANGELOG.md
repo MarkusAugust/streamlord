@@ -19,8 +19,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 - `tokenize` in streamlord-analysis reads markup by core's walk, the one reading the caret has. It,
   `MarkupOptions` and `valueAtCaret` take a new `templates`, true by default, for a template or an
-  HTML file, and false for an HTML string in Kotlin. Source that calls them compiles as before;
-  code compiled against the old signatures needs a rebuild. Its own tree builder for svg and math
+  HTML file, and false for an HTML string in Kotlin. Kotlin source that calls them compiles as
+  before; Java source has to pass it, and code compiled against the old signatures needs a rebuild. Its own tree builder for svg and math
   is gone.
 
 ### Added
@@ -67,8 +67,6 @@ All notable changes to Streamlord are recorded here. The format follows
   the caret read both otherwise.
 - In an HTML string in Kotlin, completion, hover and signature help find the expression in a tag
   whose name is a template, `"<$tag data-text=\"...\">"`, as the checks did.
-- `<b id="a"><div id="b"></b>text</div>` no longer warns of text outside any element: the browser
-  keeps the `div` open after the `</b>`, and the text is in it.
 - `interpolate` reads markup by the same walk, so it follows the browser in these places too. In a
   few nestings of svg and math it now judges a value more strictly, and an `Html` value such as
   `<div></span></div>`, whose `</span>` its own `div` stops, is written as markup where it was

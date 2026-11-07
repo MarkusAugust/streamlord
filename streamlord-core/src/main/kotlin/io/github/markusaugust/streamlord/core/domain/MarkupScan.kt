@@ -319,8 +319,10 @@ private val EXITS_FOREIGN =
  *
  * It is not a parser: it keeps only each open element's namespace and whether its content is HTML,
  * enough to know the context. An end tag closes the nearest open element of its name, unless a
- * special element stands nearer for one the tree builder has no rule of its own for, and a
- * formatting element's leaves the special elements opened inside it open, as the adoption agency does.
+ * special element stands nearer for one the tree builder has no rule of its own for. A formatting
+ * element's closes everything opened inside it, where the adoption agency would keep some of it
+ * open, so a later end tag for one of those finds nothing open and counts as closing the markup
+ * around it.
  *
  * Of the tree builder's implied end tags it knows those by which a `<p>` closes the `<p>` before it,
  * a `<div>` closes an open `<p>` and an `<li>` the `<li>` before it, but not the table modes'. Inside
@@ -413,15 +415,6 @@ private fun scanMarkupTracked(
         at: Int,
     ) {
         while (stackName.size > k) pop(at)
-    }
-
-    // Takes the HTML element at [k] off the stack and leaves the elements above it open.
-    fun removeAt(k: Int) {
-        val name = stackName.removeAt(k)
-        stackNs.removeAt(k)
-        stackHtmlContent.removeAt(k)
-        open[name] = open.getValue(name) - 1
-        if (name in SPECIAL) specialOpen--
     }
 
     // The end tags the tree builder implies before it inserts the HTML element [name]: a `p` in
@@ -572,10 +565,7 @@ private fun scanMarkupTracked(
                 }
                 if (name in IGNORED_IN_BODY && documentOpen > 0) documentOpen--
                 val at = if (name == "br") -1 else endTagTarget(name)
-                if (at >= 0 && name in FORMATTING && (at + 1 until stackName.size).any { special(it) }) {
-                    // The adoption agency closes the formatting element and keeps the special one opened inside it open.
-                    removeAt(at)
-                } else if (at >= 0) {
+                if (at >= 0) {
                     popTo(at, lt)
                 } else if (at == NOT_OPEN && htmlStaysOpen) {
                     stray = true
@@ -749,9 +739,6 @@ private val OWN_END_TAG_RULE =
         "option",
         "optgroup",
     )
-
-/** The formatting elements, whose end tag the adoption agency handles. */
-private val FORMATTING = setOf("a", "b", "big", "code", "em", "font", "i", "nobr", "s", "small", "strike", "strong", "tt", "u")
 
 /** An end tag a special element stops before it reaches an open element of its name. */
 private const val BLOCKED = -1

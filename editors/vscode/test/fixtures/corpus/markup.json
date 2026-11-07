@@ -3,7 +3,6 @@
   "kind": "markup",
   "cases": [
     {"name":"text inside a body is inside an element","source":"<html><body>Hello</body></html>","requireIds":true,"issues":[]},
-    {"name":"an end tag for a b with a div opened inside it leaves the div open, so the text after it is in the div","source":"<b id=\"a\"><div id=\"b\"></b>text</div>","requireIds":true,"issues":[{"code":"unclosed","start":10,"end":22},{"code":"stray-close","start":30,"end":36}]},
     {"name":"a complete element with an id","source":"<div id=\"a\">x</div>","requireIds":true,"issues":[]},
     {"name":"a top-level element without an id","source":"<div id=\"a\">x</div><span>y</span>","requireIds":true,"issues":[{"code":"missing-id","start":19,"end":25,"fixes":["<div id=\"a\">x</div><span id=\"span\">y</span>"]}]},
     {"name":"an unclosed element","source":"<div id=\"a\"><span>x</div>","requireIds":true,"issues":[{"code":"unclosed","start":12,"end":18}]},

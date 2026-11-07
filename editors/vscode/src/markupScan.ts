@@ -105,10 +105,10 @@ function scriptEnd(html: string, from: number): number {
 }
 
 /** RAW_TEXT in ClientHtml.kt: a noscript holds elements to the client, which parses with scripting off. */
-export const RAW_TEXT = ["script", "style", "textarea", "title", "xmp", "iframe", "noembed", "noframes", "plaintext"];
+const RAW_TEXT = ["script", "style", "textarea", "title", "xmp", "iframe", "noembed", "noframes", "plaintext"];
 /** SCRIPTING_RAW_TEXT: a page loaded with scripting on reads a noscript as text. */
-export const SCRIPTING_RAW_TEXT = [...RAW_TEXT, "noscript"];
-export const CODE_TEXT = ["script", "style"];
+const SCRIPTING_RAW_TEXT = [...RAW_TEXT, "noscript"];
+const CODE_TEXT = ["script", "style"];
 const HTML_SPACE = "\t\n\f\r ";
 
 /** What a walk over HTML reports: MarkupVisitor in MarkupScan.kt. Offsets are into the string that was walked. */
@@ -427,15 +427,7 @@ export function scanMarkupTracked(html: string, visitor: Visitor, context: numbe
         while (stackNs.length > 0 && stackNs[stackNs.length - 1] !== NS_HTML && !stackHtmlContent[stackHtmlContent.length - 1]) pop(lt);
       }
       const at = name === "br" ? BLOCKED : endTagTarget(name);
-      let specialAbove = false;
-      for (let k = at + 1; at >= 0 && k < stackName.length; k++) if (special(k)) specialAbove = true;
-      if (at >= 0 && FORMATTING.has(name) && specialAbove) {
-        // The adoption agency closes the formatting element and keeps the special one opened inside it open.
-        const removed = stackName.splice(at, 1)[0] as string;
-        stackNs.splice(at, 1);
-        stackHtmlContent.splice(at, 1);
-        open.set(removed, (open.get(removed) as number) - 1);
-      } else if (at >= 0) popTo(at, lt);
+      if (at >= 0) popTo(at, lt);
       i = textStart = end;
       continue;
     }
@@ -577,8 +569,6 @@ const OWN_END_TAG_RULE = new Set([
   "applet", "marquee", "object", "template", "body", "html", "table", "caption", "colgroup", "tbody", "tfoot",
   "thead", "tr", "td", "th", "select", "option", "optgroup",
 ]);
-/** FORMATTING in MarkupScan.kt: the formatting elements, whose end tag the adoption agency handles. */
-const FORMATTING = new Set(["a", "b", "big", "code", "em", "font", "i", "nobr", "s", "small", "strike", "strong", "tt", "u"]);
 /** An end tag a special element stops before it reaches an open element of its name. */
 const BLOCKED = -1;
 /** An end tag for no element open in the markup. */
