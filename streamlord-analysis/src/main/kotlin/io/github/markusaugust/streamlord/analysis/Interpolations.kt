@@ -29,14 +29,14 @@ private val WORD_CHAR = Regex("""[\p{L}\p{Nd}_]""")
 /** Each kind from the one safe in the fewest places to the one safe everywhere. */
 private val WEAKEST_FIRST =
     listOf(
-        HoleFact.STRING,
+        ValueFact.STRING,
         null,
-        HoleFact.MARKUP,
-        HoleFact.NULLABLE,
-        HoleFact.UNSIGNED,
-        HoleFact.BOOLEAN,
-        HoleFact.NUMBER,
-        HoleFact.CONSTANT,
+        ValueFact.MARKUP,
+        ValueFact.NULLABLE,
+        ValueFact.UNSIGNED,
+        ValueFact.BOOLEAN,
+        ValueFact.NUMBER,
+        ValueFact.CONSTANT,
     )
 
 /** What may end an operand of `+` at the top level: an argument or statement boundary, or an operator that binds less tightly. */
@@ -957,41 +957,41 @@ internal fun declaredKind(
     at: Int,
     nonNull: Boolean = false,
     core: Boolean = true,
-): HoleFact? {
+): ValueFact? {
     val d = declarationOf(src, name, at) ?: return null
     val literal = d.literal
     if (literal != null) {
         return when {
-            literal == "true" || literal == "false" -> HoleFact.BOOLEAN
-            UNSIGNED_SUFFIX.containsMatchIn(literal) -> HoleFact.UNSIGNED
-            else -> HoleFact.NUMBER
+            literal == "true" || literal == "false" -> ValueFact.BOOLEAN
+            UNSIGNED_SUFFIX.containsMatchIn(literal) -> ValueFact.UNSIGNED
+            else -> ValueFact.NUMBER
         }
     }
     // Without core, Html, Trusted and interpolate are not Streamlord's, and nothing says what they hold.
-    if (d.markup) return if (core) HoleFact.MARKUP else null
+    if (d.markup) return if (core) ValueFact.MARKUP else null
     val declared = d.type ?: return null
     val type = declared.removeSuffix("?")
     val scalar =
         when {
-            NUMBER_TYPE.matches(type) -> HoleFact.NUMBER
+            NUMBER_TYPE.matches(type) -> ValueFact.NUMBER
 
-            BOOLEAN_TYPE.matches(type) -> HoleFact.BOOLEAN
+            BOOLEAN_TYPE.matches(type) -> ValueFact.BOOLEAN
 
             // Digits too; an unsigned number that may be null is judged as any number that may be.
-            UNSIGNED_TYPE.matches(type) -> HoleFact.UNSIGNED
+            UNSIGNED_TYPE.matches(type) -> ValueFact.UNSIGNED
 
             else -> null
         }
     // Digits, true or false, or null: safe where anything is, and not where only a number or a boolean is.
-    if (scalar != null) return if (type == declared || nonNull) scalar else HoleFact.NULLABLE
+    if (scalar != null) return if (type == declared || nonNull) scalar else ValueFact.NULLABLE
     return when {
-        STRING_TYPE.matches(type) -> HoleFact.STRING
+        STRING_TYPE.matches(type) -> ValueFact.STRING
 
         // What interpolate returns: markup whose values have been through it.
-        core && HTML_TYPE.matches(type) -> HoleFact.MARKUP
+        core && HTML_TYPE.matches(type) -> ValueFact.MARKUP
 
         // Markup the author vouched for, which a Kotlin template writes as it stands.
-        core && type == declared && TRUSTED_TYPE.matches(type) -> HoleFact.MARKUP
+        core && type == declared && TRUSTED_TYPE.matches(type) -> ValueFact.MARKUP
 
         else -> null
     }
@@ -1224,7 +1224,7 @@ private fun ownArgument(
     val a = arg.replaceFirst(ARGUMENT_NAME, "").trim()
     if (a.startsWith("*")) return false
     val kind = weakest(holeValues(a).map { valueKind(src, it.text, at, constants, it.nonNull, sdk) })
-    return kind == HoleFact.CONSTANT || kind == HoleFact.NUMBER || kind == HoleFact.BOOLEAN || kind == HoleFact.UNSIGNED
+    return kind == ValueFact.CONSTANT || kind == ValueFact.NUMBER || kind == ValueFact.BOOLEAN || kind == ValueFact.UNSIGNED
 }
 
 private val QUALIFIED = Regex("""^((?:[\p{L}_][\p{L}\p{Nd}_]*\s*\.\s*)+)([\p{L}_][\p{L}\p{Nd}_]*)$""")
@@ -1266,9 +1266,9 @@ internal fun valueKind(
     constants: Set<String>,
     nonNull: Boolean = false,
     sdk: Sdk = Sdk.DEFAULT,
-): HoleFact? {
+): ValueFact? {
     val t = value.trim()
-    if (LITERAL.matches(t) || STRING_LITERAL.matches(t) || CHAR_LITERAL.matches(t)) return HoleFact.CONSTANT
+    if (LITERAL.matches(t) || STRING_LITERAL.matches(t) || CHAR_LITERAL.matches(t)) return ValueFact.CONSTANT
     stringLiteral(t)?.let { literal ->
         return weakest(
             literal.interpolations.flatMap { ip ->
@@ -1278,20 +1278,20 @@ internal fun valueKind(
         )
     }
     helperArguments(src, t, sdk)?.let { args ->
-        return if (args.all { ownArgument(src, it, at, constants, sdk) }) HoleFact.CONSTANT else HoleFact.STRING
+        return if (args.all { ownArgument(src, it, at, constants, sdk) }) ValueFact.CONSTANT else ValueFact.STRING
     }
     // `"ab".repeat(3)`: a plain change to text the author wrote, made with what the author wrote.
     val call = lastCall(t)
     if (call?.receiver != null && call.lambda == null && call.name in TEXT_TRANSFORMS &&
-        valueKind(src, call.receiver, at, constants, sdk = sdk) == HoleFact.CONSTANT &&
+        valueKind(src, call.receiver, at, constants, sdk = sdk) == ValueFact.CONSTANT &&
         (call.args.isBlank() || splitTop(call.args, ",").all { ownArgument(src, it, at, constants, sdk) })
     ) {
-        return HoleFact.CONSTANT
+        return ValueFact.CONSTANT
     }
     callKind(src, t, at, constants, sdk)?.let { return it }
-    if (qualifiedConstant(src, t, at, constants)) return HoleFact.CONSTANT
+    if (qualifiedConstant(src, t, at, constants)) return ValueFact.CONSTANT
     if (!IDENT.matches(t)) return null
-    if (constantAt(src, t, at, constants)) return HoleFact.CONSTANT
+    if (constantAt(src, t, at, constants)) return ValueFact.CONSTANT
     return declaredKind(src, t, at, nonNull, sdk.core)
 }
 
@@ -1333,7 +1333,7 @@ private fun callKind(
     at: Int,
     constants: Set<String>,
     sdk: Sdk = Sdk.DEFAULT,
-): HoleFact? {
+): ValueFact? {
     val call = lastCall(t) ?: return null
     val receiver = call.receiver ?: return null
     if (!wholeOperand(receiver) ||
@@ -1345,16 +1345,16 @@ private fun callKind(
     ) {
         return null
     }
-    if (call.name in NUMBER_CONVERSIONS) return if (call.lambda == null && call.args.isBlank()) HoleFact.NUMBER else null
+    if (call.name in NUMBER_CONVERSIONS) return if (call.lambda == null && call.args.isBlank()) ValueFact.NUMBER else null
     // Whatever it is called on, and `x!!.toString()` too.
-    if (call.name == "toString") return if (call.lambda == null && call.args.isBlank()) HoleFact.STRING else null
+    if (call.name == "toString") return if (call.lambda == null && call.args.isBlank()) ValueFact.STRING else null
     val lambda = call.name == "ifBlank" || call.name == "ifEmpty"
     if (!(call.name in STRING_CHANGES && call.lambda == null) && !(lambda && call.lambda != null && call.args.isBlank())) return null
     // `query!!.trim()`: what `!!` leaves of a `String?` is a String.
-    if (valueKind(src, receiver.replace(NON_NULL_ASSERTION, ""), at, constants, sdk = sdk) != HoleFact.STRING) return null
-    if (!lambda) return HoleFact.STRING
+    if (valueKind(src, receiver.replace(NON_NULL_ASSERTION, ""), at, constants, sdk = sdk) != ValueFact.STRING) return null
+    if (!lambda) return ValueFact.STRING
     val result = valueKind(src, lambdaResult(call.lambda!!), at, constants, sdk = sdk)
-    return if (result == HoleFact.STRING || result == HoleFact.CONSTANT) HoleFact.STRING else null
+    return if (result == ValueFact.STRING || result == ValueFact.CONSTANT) ValueFact.STRING else null
 }
 
 /** Whether [e] is one operand, a name, a chain of calls or a bracketed expression, with no operator outside its brackets. */
@@ -1364,7 +1364,7 @@ private fun wholeOperand(e: String): Boolean {
 }
 
 /** Of the kinds a hole's values have, the one safe in the fewest places; one not known stands between a String and markup. */
-internal fun weakest(kinds: List<HoleFact?>): HoleFact? {
+internal fun weakest(kinds: List<ValueFact?>): ValueFact? {
     val worst = kinds.minOfOrNull { WEAKEST_FIRST.indexOf(it) } ?: WEAKEST_FIRST.lastIndex
     return WEAKEST_FIRST[worst]
 }
@@ -1516,12 +1516,12 @@ internal fun markupValue(
     val textOf = TEXT_OF_VALUE.find(t)?.groupValues?.get(1)
     if (sdk.core &&
         textOf != null &&
-        (wholeCall(textOf, "interpolate") || (IDENT.matches(textOf) && declaredKind(src, textOf, at) == HoleFact.MARKUP))
+        (wholeCall(textOf, "interpolate") || (IDENT.matches(textOf) && declaredKind(src, textOf, at) == ValueFact.MARKUP))
     ) {
         return true
     }
     if (IDENT.matches(t)) {
-        if (declaredKind(src, t, at, core = sdk.core) == HoleFact.MARKUP || htmlNamed(src, t, at)) return true
+        if (declaredKind(src, t, at, core = sdk.core) == ValueFact.MARKUP || htmlNamed(src, t, at)) return true
         // `val e = elements { }`: the name stands for the call it is set to; a literal it is set to is judged where it is written.
         val d = declarationOf(src, t, at) ?: return false
         val init = initialiser(src, d) ?: return false
@@ -1748,7 +1748,7 @@ private fun heldAsMarkup(
     (branches(value) ?: listOf(value)).all { v ->
         val t = v.trim()
         if (IDENT.matches(t)) {
-            declaredKind(src, t, at) == HoleFact.MARKUP
+            declaredKind(src, t, at) == ValueFact.MARKUP
         } else {
             val call = MARKUP_CALL_START.find(t)
             call != null && closing(t, depths(t), call.value.length - 1) == t.length
@@ -1784,7 +1784,7 @@ private fun markupText(
 ): Boolean {
     val of = declarationOf(src, name, at)?.textOf ?: return false
     return wholeCall(of, "interpolate") ||
-        (IDENT.matches(of) && declaredKind(src, of, declarationOf(src, name, at)!!.at) == HoleFact.MARKUP)
+        (IDENT.matches(of) && declaredKind(src, of, declarationOf(src, name, at)!!.at) == ValueFact.MARKUP)
 }
 
 /** Whether every value a hole can give is a name set to the `.text` of an Html: markup held as a String. */
@@ -2435,11 +2435,11 @@ internal fun valueKind(
     val html = TEXT_OF.find(t)?.groupValues?.get(1)
     if (html != null && wholeCall(html, "interpolate")) return ArgKind.STRING
     when (callKind(src, t, at, emptySet())) {
-        HoleFact.NUMBER -> {
+        ValueFact.NUMBER -> {
             return ArgKind.NUMBER
         }
 
-        HoleFact.STRING -> {
+        ValueFact.STRING -> {
             return ArgKind.STRING
         }
 
@@ -2447,15 +2447,15 @@ internal fun valueKind(
     }
     if (!IDENT.matches(t)) return null
     return when (declaredKind(src, t, at)) {
-        HoleFact.NUMBER -> ArgKind.NUMBER
+        ValueFact.NUMBER -> ArgKind.NUMBER
 
-        HoleFact.UNSIGNED -> ArgKind.UNSIGNED
+        ValueFact.UNSIGNED -> ArgKind.UNSIGNED
 
-        HoleFact.BOOLEAN -> ArgKind.BOOLEAN
+        ValueFact.BOOLEAN -> ArgKind.BOOLEAN
 
-        HoleFact.STRING -> ArgKind.STRING
+        ValueFact.STRING -> ArgKind.STRING
 
-        HoleFact.MARKUP -> ArgKind.MARKUP
+        ValueFact.MARKUP -> ArgKind.MARKUP
 
         // `val name = "Gorvek"`: a String, though no type is written.
         null -> if (declarationOf(src, t, at)?.string == true) ArgKind.STRING else null

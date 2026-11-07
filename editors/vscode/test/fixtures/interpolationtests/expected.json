@@ -1,5 +1,5 @@
 {
- "$comment": "The interpolation findings both analyses give the files of the test project in this folder, copied verbatim from the user's interpolationtests project, where every form of A to C also writes query, text from the request, somewhere it does harm, and D_EveryPosition.kt writes every kind of value into every position, with what the editor must say above each line, as E_Interpolate.kt does for calls to interpolate: analyzeKotlin in editors/vscode/src/analyze.ts and Analyzer.analyzeKotlin in streamlord-analysis, each file on its own, with the const vals the workspace declares (constants) known, as the VS Code index and IntelliJ provide them. Only the interpolation codes are listed (kotlin-interpolation, unescaped-interpolation, unsafe-interpolation, interpolate-template, interpolate-holes), and missing-id and top-level-text must not appear in any file. Offsets count UTF-16 code units; line is for the reader. What IntelliJ adds with types is in the plugin's own InspectionTest.",
+ "$comment": "The interpolation findings both analyses give the files of the test project in this folder, copied verbatim from the user's interpolationtests project, where every form of A to C also writes query, text from the request, somewhere it does harm, and D_EveryPosition.kt writes every kind of value into every position, with what the editor must say above each line, as E_Interpolate.kt does for calls to interpolate: analyzeKotlin in editors/vscode/src/analyze.ts and Analyzer.analyzeKotlin in streamlord-analysis, each file on its own, with the const vals the workspace declares (constants) known, as the VS Code index and IntelliJ provide them. Only the interpolation codes are listed (kotlin-interpolation, unescaped-interpolation, unsafe-interpolation, interpolate-template, interpolate-placeholders), and missing-id and top-level-text must not appear in any file. Offsets count UTF-16 code units; line is for the reader. What IntelliJ adds with types is in the plugin's own InspectionTest.",
  "constants": [
   "variant",
   "fieldId",
@@ -2104,7 +2104,7 @@
     "end": 825,
     "code": "interpolate-template",
     "severity": "warning",
-    "message": "Kotlin fills in $query before interpolate sees the markup, so interpolate neither escapes nor refuses it. Make it a %s hole and pass the value to interpolate."
+    "message": "Kotlin fills in $query before interpolate sees the markup, so interpolate neither escapes nor refuses it. Make it a %s placeholder and pass the value to interpolate."
    },
    {
     "line": 23,
@@ -2113,7 +2113,7 @@
     "end": 1148,
     "code": "interpolate-template",
     "severity": "warning",
-    "message": "Kotlin fills in ${applicant.name} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Make it a %s hole and pass the value to interpolate."
+    "message": "Kotlin fills in ${applicant.name} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Make it a %s placeholder and pass the value to interpolate."
    },
    {
     "line": 28,
@@ -2138,27 +2138,27 @@
     "hole": "interpolate",
     "start": 1912,
     "end": 1923,
-    "code": "interpolate-holes",
+    "code": "interpolate-placeholders",
     "severity": "error",
-    "message": "interpolate throws IllegalArgumentException here: the markup has 2 %s holes and 1 value is given. Write %% for a per cent sign that is not a hole."
+    "message": "interpolate throws IllegalArgumentException here: the markup has 2 %s placeholders and 1 value is given. Write %% for a per cent sign that is not a placeholder."
    },
    {
     "line": 41,
     "hole": "interpolate",
     "start": 2133,
     "end": 2144,
-    "code": "interpolate-holes",
+    "code": "interpolate-placeholders",
     "severity": "error",
-    "message": "interpolate throws IllegalArgumentException here: the markup has 1 %s hole and 2 values are given. Write %% for a per cent sign that is not a hole."
+    "message": "interpolate throws IllegalArgumentException here: the markup has 1 %s placeholder and 2 values are given. Write %% for a per cent sign that is not a placeholder."
    },
    {
     "line": 45,
     "hole": "interpolate",
     "start": 2370,
     "end": 2381,
-    "code": "interpolate-holes",
+    "code": "interpolate-placeholders",
     "severity": "error",
-    "message": "interpolate throws IllegalArgumentException here: the markup has 0 %s holes and 1 value is given. Write %% for a per cent sign that is not a hole."
+    "message": "interpolate throws IllegalArgumentException here: the markup has 0 %s placeholders and 1 value is given. Write %% for a per cent sign that is not a placeholder."
    },
    {
     "line": 49,
@@ -2230,7 +2230,7 @@
     "end": 4658,
     "code": "interpolate-template",
     "severity": "warning",
-    "message": "Kotlin fills in ${applicant.errors.joinToString…} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Make it a %s hole and pass the value to interpolate."
+    "message": "Kotlin fills in ${applicant.errors.joinToString…} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Make it a %s placeholder and pass the value to interpolate."
    },
    {
     "line": 98,
@@ -2239,7 +2239,7 @@
     "end": 5214,
     "code": "interpolate-template",
     "severity": "warning",
-    "message": "Kotlin fills in $inner before interpolate reads the markup, so interpolate reads what it holds as markup too: a %s in it is a hole and a %% a per cent sign, and interpolate throws or changes the markup. Make it a %s hole and pass the Html: interpolate writes an Html or a Trusted there as it is."
+    "message": "Kotlin fills in $inner before interpolate reads the markup, so interpolate reads what it holds as markup too: a %s in it is a placeholder and a %% a per cent sign, and interpolate throws or changes the markup. Make it a %s placeholder and pass the Html: interpolate writes an Html or a Trusted there as it is."
    }
   ]
  }

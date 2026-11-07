@@ -93,7 +93,7 @@ All notable changes to the Streamlord extension are recorded here.
 
 - Every Kotlin value written into an HTML string is judged by where it lands, as `interpolate`
   judges it at run time and with core's own reading of the markup: `$name`, `${...}`, a value
-  joined with `+`, a literal inside a template and the holes of a `$$` literal, where only `$name`
+  joined with `+`, a literal inside a template and the template expressions of a `$$` literal, where only `$name`
   was looked at before, and that with the same hint, "make sure it is escaped", wherever it stood.
   `unescaped-interpolation` is a value where escaping saves it, in element text, a quoted attribute
   or a URL whose literal start settles the scheme: a hint, a warning for a `String` and for markup
@@ -139,20 +139,20 @@ All notable changes to the Streamlord extension are recorded here.
   refuse where it lands is `unsafe-interpolation`, an error where the value is known to be refused
   (a `String` in a `data-*` expression, a `Boolean` in `style`) and a warning where it is not. A
   Kotlin template written into the format is `interpolate-template`, a warning, since Kotlin fills
-  it in before `interpolate` sees it, with a fix that makes it a `%s` hole and passes its value in
+  it in before `interpolate` sees it, with a fix that makes it a `%s` placeholder and passes its value in
   its place. That goes for an `Html` or a `Trusted` in element text too: Kotlin writes its text
-  into the format, where a `%s` in it is a hole and a `%%` a per cent sign, and the fix makes it a
-  `%s` hole, where `interpolate` writes it as it is. A `%s` in element text given markup held as a
+  into the format, where a `%s` in it is a placeholder and a `%%` a per cent sign, and the fix makes it a
+  `%s` placeholder, where `interpolate` writes it as it is. A `%s` in element text given markup held as a
   `String`, `h.text`, `elements { }`, a `joinToString` over markup or over a collection declared
   one of `Html` or `Trusted`, or a `val` set to any of these, is `interpolate-template` too, a warning, since `interpolate` escapes it and its tags are
   printed as text; a literal is text you chose to have escaped and says nothing. The format is read
-  as HTML, so a `%s` in it is a hole and not text. An unsigned number, a `UInt` or a `3u`, is no
-  `kotlin.Number`, which `interpolate` refuses where only a number is let in: in a `%s` hole in a
+  as HTML, so a `%s` in it is a placeholder and not text. An unsigned number, a `UInt` or a `3u`, is no
+  `kotlin.Number`, which `interpolate` refuses where only a number is let in: in a `%s` placeholder in a
   `data-*` expression or `style` it is an error, with a `toLong()` fix, and where a Kotlin template
   writes one there, a hint.
 - The `interpolate(...)` rewrite is offered only where it keeps the page as it was: not for a value
   that may be null, which a template writes as `null` and `interpolate` as nothing, nor for a
-  `Trusted` outside element text, nor for a hole in element text that may hold markup, which
+  `Trusted` outside element text, nor for a value in element text that may be markup, which
   `interpolate` would escape, nor for a value that is a `List`, which a template writes as
   `[a, b]`. The rewrite doubles each per cent sign the literal writes.
 - A workspace index of `const val`s: a constant declared in another file is your own, where the
@@ -161,7 +161,7 @@ All notable changes to the Streamlord extension are recorded here.
   can see, a getter for one: `$title` is no longer silent everywhere because one file has a
   `private const val title` and another a `val title get() = ...` that reads the request. Names
   are resolved by their scope (lambda and loop parameters, local functions, destructuring and
-  constructor properties), and a hole is markup only when its whole value is: an HTML literal or a `+` chain that opens with one,
+  constructor properties), and a value is markup only when the whole of it is: an HTML literal or a `+` chain that opens with one,
   `interpolate(...)`, `Trusted(...)`, a value declared `Html` or `@Language("HTML")`, kotlinx.html
   output, a `joinToString` over markup, or an `if`, a `when` or an `?:` whose every result is markup
   or a literal.

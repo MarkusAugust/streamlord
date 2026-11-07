@@ -15,7 +15,7 @@ class InterpolationProjectTest {
     private val analyzer = Analyzer()
     private val dir = File("../editors/vscode/test/fixtures/interpolationtests")
     private val codes =
-        setOf("kotlin-interpolation", "unescaped-interpolation", "unsafe-interpolation", "interpolate-template", "interpolate-holes")
+        setOf("kotlin-interpolation", "unescaped-interpolation", "unsafe-interpolation", "interpolate-template", "interpolate-placeholders")
 
     private fun line(
         start: Int,

@@ -22,7 +22,7 @@ class HoleJudgementTest {
         val src = "fun f(b: Boolean) = \"<p>\${if (b) \"<b>x</b>\" else \"<i>y</i>\"} \$LABEL</p>\""
         val text = AnalyzeOptions(constants = setOf("LABEL"))
         assertEquals(emptyList(), interpolation(src, text))
-        val typed = text.copy(holeFact = { _, _ -> HoleFact.STRING })
+        val typed = text.copy(valueFact = { _, _ -> ValueFact.STRING })
         assertEquals(listOf(Severity.WARNING, Severity.WARNING), interpolation(src, typed))
     }
 

@@ -196,8 +196,8 @@ export class SignalPatchError extends Error {
  * Objects are made without a prototype, so `constructor` is a signal name and nothing else. A
  * patch that throws, here or in the client, has its earlier keys applied: the error is a
  * `SignalPatchError` that carries the store as the client keeps it. Two kinds of patch are refused
- * on purpose, with `refused` set, whatever the client does with them. More than `holeLimit` indices
- * past the end of an array, which would fill memory with the holes the client never allocates.
+ * on purpose, with `refused` set, whatever the client does with them. More than `emptySlotLimit` indices
+ * past the end of an array, which would fill memory with the empty slots the client never allocates.
  * And a key named `__proto__` anywhere in the patch, at any depth and inside array values too,
  * whatever it holds. Where its value is an object with keys, the client mostly throws at that key,
  * and the bindings on the page stop redrawing. Otherwise it gives the object holding the key a
@@ -214,13 +214,13 @@ export class SignalPatchError extends Error {
  * The store passed in is never changed. Each object and array on the patch's path is copied, and
  * the rest of the result is the very same values.
  */
-export function mergePatchAsClient(store: Record<string, unknown>, patch: unknown, ifMissing = false, holeLimit = 10_000): Record<string, unknown> {
+export function mergePatchAsClient(store: Record<string, unknown>, patch: unknown, ifMissing = false, emptySlotLimit = 10_000): Record<string, unknown> {
   // `Object.entries` walks an array's indices and a string's UTF-16 units, as `for ... in` does.
   const root = copyObject(store);
   if (patch === null || (typeof patch !== "object" && typeof patch !== "string")) return root;
   try {
     if (Object.hasOwn(store, PROTO)) throw new Refusal(STORE_PROTO_REFUSED);
-    new ClientMerge(ifMissing, holeLimit).fold(Object.entries(patch), root);
+    new ClientMerge(ifMissing, emptySlotLimit).fold(Object.entries(patch), root);
   } catch (e) {
     throw new SignalPatchError((e as Error).message, root, e instanceof Refusal);
   }
@@ -233,7 +233,7 @@ type Node = Record<string, unknown> | unknown[];
 class ClientMerge {
   constructor(
     private readonly ifMissing: boolean,
-    private readonly holeLimit: number,
+    private readonly emptySlotLimit: number,
   ) {}
 
   fold(patch: [string, unknown][], node: Node): void {
@@ -281,7 +281,7 @@ class ClientMerge {
     if (key === "length") {
       const length = jsNumber(raw);
       if (!(Number.isInteger(length) && length >= 0 && length <= 4294967295)) throw new Error(`Invalid array length ${JSON.stringify(raw)} in a signal patch`);
-      if (length > parent.length + this.holeLimit) throw new Refusal(`Signal patch length ${length} is more than ${this.holeLimit} past the end of an array of ${parent.length}${HOLES}`);
+      if (length > parent.length + this.emptySlotLimit) throw new Refusal(`Signal patch length ${length} is more than ${this.emptySlotLimit} past the end of an array of ${parent.length}${EMPTY_SLOTS}`);
       const before = parent.length;
       parent.length = length;
       if (length > before) parent.fill("", before);
@@ -290,7 +290,7 @@ class ClientMerge {
     // A key that is not an index is a property JSON.stringify leaves out.
     const index = arrayIndex(key);
     if (index === null) return;
-    if (index > parent.length + this.holeLimit) throw new Refusal(`Signal patch index ${index} is more than ${this.holeLimit} past the end of an array of ${parent.length}${HOLES}`);
+    if (index > parent.length + this.emptySlotLimit) throw new Refusal(`Signal patch index ${index} is more than ${this.emptySlotLimit} past the end of an array of ${parent.length}${EMPTY_SLOTS}`);
     while (parent.length < index) parent.push("");
     parent[index] = value;
   }
@@ -346,7 +346,7 @@ export const PROTO_REFUSED =
 
 export const STORE_PROTO_REFUSED = "The store holds a key named __proto__, which Datastar's client never holds; Streamlord does not fold a patch into the object that has it";
 
-const HOLES = ": the client takes it, and Streamlord does not fill memory with the holes";
+const EMPTY_SLOTS = ": the client takes it, and Streamlord does not fill memory with the empty slots";
 
 /** Whether a key `__proto__` stands anywhere in `value`, as `JSON.parse` leaves it, an own key. */
 function holdsProto(value: unknown): boolean {

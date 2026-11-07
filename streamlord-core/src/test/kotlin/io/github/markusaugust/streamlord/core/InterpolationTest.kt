@@ -163,7 +163,7 @@ class InterpolationTest {
         assertTrue(
             assertFailsWith<IllegalArgumentException> { render("<li></li>", "a") }
                 .message!!
-                .contains("0 %s holes and 1 value"),
+                .contains("0 %s placeholders and 1 value"),
         )
     }
 

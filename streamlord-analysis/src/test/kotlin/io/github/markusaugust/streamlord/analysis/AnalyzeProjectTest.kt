@@ -91,7 +91,13 @@ class AnalyzeProjectTest {
     fun `judges the interpolation test project as the VS Code index does`() {
         val dir = File("../editors/vscode/test/fixtures/interpolationtests")
         val codes =
-            setOf("kotlin-interpolation", "unescaped-interpolation", "unsafe-interpolation", "interpolate-template", "interpolate-holes")
+            setOf(
+                "kotlin-interpolation",
+                "unescaped-interpolation",
+                "unsafe-interpolation",
+                "interpolate-template",
+                "interpolate-placeholders",
+            )
         val files = JsonParser.parseObject(dir.resolve("expected.json").readText()).obj("files")!!
         val seen = analyzer.analyzeProject(dir).filter { it.issue.code in codes }.groupBy({ it.file.name }, { it.issue })
         assertTrue(files.keys.containsAll(seen.keys), seen.keys.toString())

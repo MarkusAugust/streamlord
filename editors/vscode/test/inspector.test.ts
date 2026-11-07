@@ -54,7 +54,7 @@ describe("inspector signal store", () => {
         "which then throws on some later keys, replaces the object on a later patch, or with a second __proto__ writes into String.prototype. " +
         "Streamlord does not model it and refuses the patch. The store shown keeps the keys before it.",
       "Streamlord refuses this signal patch on purpose: Signal patch index 20000 is more than 10000 past the end of an array of 1: " +
-        "the client takes it, and Streamlord does not fill memory with the holes. The store shown keeps the keys before it.",
+        "the client takes it, and Streamlord does not fill memory with the empty slots. The store shown keeps the keys before it.",
     ]);
   });
 

@@ -59,11 +59,11 @@ named `build`, `node_modules`, `dist`, `out` or `target`, the files the VS Code 
 constant counts when another file can see it, so not a private one, and when no file declares
 the same name as something else, a `val` with a getter for one. The test gives the verdict VS
 Code gives. It is milder than IntelliJ, which knows the type of every value and not only what
-the text shows, and so warns on some holes this test lets through.
+the text shows, and so warns on some values this test lets through.
 
 `failures()` keeps the errors: an interpolated signal, an expression that does not parse, and an
 `interpolate(...)` call that throws when it runs, with a `%s` too many or too few
-(`interpolate-holes`) or a value it is known to refuse where it lands (`unsafe-interpolation`). It
+(`interpolate-placeholders`) or a value it is known to refuse where it lands (`unsafe-interpolation`). It
 keeps the `unsafe-interpolation` warnings too: a Kotlin template that writes a value into an HTML
 string where escaping cannot save it, a warning only because the text alone cannot tell a number
 from a string. The same code is a hint where the value is most likely safe, `colspan=$n` with an

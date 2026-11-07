@@ -719,7 +719,7 @@ class InspectorTest : BasePlatformTestCase() {
         patch("""{"a":{"20000":1}}""")
         val holes =
             "Streamlord refuses this signal patch on purpose: Signal patch index 20000 is more than 10000 past the end of an array " +
-                "of 1: the client takes it, and Streamlord does not fill memory with the holes. The store shown keeps the keys before it."
+                "of 1: the client takes it, and Streamlord does not fill memory with the empty slots. The store shown keeps the keys before it."
         assertTrue(labels().toString(), holes in labels())
         assertEquals("""{"a":[1],"b":1,"o":{}}""", JsonParser.parse(store.text).toJson())
     }

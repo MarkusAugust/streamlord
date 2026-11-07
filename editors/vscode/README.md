@@ -24,7 +24,7 @@ function that returns HTML, a `val` holding a fragment), and in `.html` and temp
   `data-*` expression, a script or an event handler, a warning, since escaping cannot help there.
   Constants, including a `const val` anywhere in the workspace, literals and markup built in the
   template say nothing. A call to `interpolate` is judged too: a miscounted `%s` and a value it will
-  refuse are errors, a Kotlin template in its format a warning with a fix that makes it a `%s` hole.
+  refuse are errors, a Kotlin template in its format a warning with a fix that makes it a `%s` placeholder.
 - Datastar expression syntax, checked with a real JavaScript parser, with the error at the
   right column.
 - Unknown actions (`@Post`), Pro actions and Pro attributes (hint: they need the Pro bundle).
