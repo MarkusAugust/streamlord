@@ -82,18 +82,18 @@ In IntelliJ, where nothing flags an unknown `data-*` name on its own, this guard
 
 ## Values from outside
 
-`guardElements` walks a finished string, so it can tell you an expression was eaten. What it
-cannot tell you is where a value came from, because by then Kotlin has concatenated everything.
-`interpolate` turns that around: leave the placeholders standing and Streamlord fills them, which means
-it knows exactly where each value landed.
+`guardElements` walks a finished string, so it can tell you an expression was eaten. What it cannot
+tell you is where a value came from, because by then Kotlin has concatenated everything.
+`interpolate` turns that around: leave the placeholders standing and Streamlord fills them, which
+means it knows exactly where each value landed.
 
 ```kotlin sample=declarations
 fun hit(title: String, url: String): Html =
     interpolate("""<li><a class="lt-link" href="%s">%s</a></li>""", url, title)
 ```
 
-`%s` is a placeholder and `%%` writes one `%`. Every other `%` is literal, so `width: 50%` and `/a%20b`
-need no ceremony. A miscounted placeholder throws rather than shipping a half-filled page.
+`%s` is a placeholder and `%%` writes one `%`. Every other `%` is literal, so `width: 50%` and
+`/a%20b` need no ceremony. A miscounted placeholder throws rather than shipping a half-filled page.
 
 What happens to a value is decided by where it landed, not by where it came from:
 
@@ -111,15 +111,15 @@ What happens to a value is decided by where it landed, not by where it came from
 | A tag name, an attribute name, an unquoted value | **Refused** |
 | Inside `<script>` or `<style>` | **Refused** |
 
-So the `url` in the example above may be `/heads/1` or `https://thurn.example/`, and a
-`javascript:` URL throws instead of becoming a link that runs. The value is judged whole, as the
-browser reads it: a placeholder that ends a path the markup begins takes anything, because the markup
-already chose where it points, and `href="%s%s"` cannot be made into `javascript:` across its two
-placeholders. Character references are decoded once the attribute is whole, as the browser does, so
-`href="&%s"` cannot be finished into `&#106;avascript:` by its value. A `Trusted` value counts
-toward the URL as the literal does: it is written as it stands, and the URL is still judged whole,
-so `href="%s%s"` given `Trusted("")` and `javascript:alert(1)` throws. Only a URL with no other
-value in it goes unjudged.
+So the `url` in the example above may be `/heads/1` or `https://thurn.example/`, and a `javascript:`
+URL throws instead of becoming a link that runs. The value is judged whole, as the browser reads it:
+a placeholder that ends a path the markup begins takes anything, because the markup already chose
+where it points, and `href="%s%s"` cannot be made into `javascript:` across its two placeholders.
+Character references are decoded once the attribute is whole, as the browser does, so `href="&%s"`
+cannot be finished into `&#106;avascript:` by its value. A `Trusted` value counts toward the URL as
+the literal does: it is written as it stands, and the URL is still judged whole, so `href="%s%s"`
+given `Trusted("")` and `javascript:alert(1)` throws. Only a URL with no other value in it goes
+unjudged.
 
 A URL that loads code asks more of the markup. `https://` settles the scheme of a `<script src>`
 but not whose script it is, so a value there is refused until the literal has written the host
@@ -129,21 +129,21 @@ host; `/js/%s` is. The same goes for `<link href>`, whatever its `rel`, since a 
 module loads from there too. The exception says so, and its `loadsCode` tells such a refusal apart.
 Wrap a URL you chose yourself in `Trusted`.
 
-The markup is read the way the browser's tokenizer reads it, comments, end tags and all, and in
-more than one way: as HTML, as the inside of an `<svg>` or `<math>`, where a `title` or a
-`textarea` holds elements rather than text, and following the browser's own stack of open
-elements, which switches between HTML and svg or math, and the rules for CDATA sections, as the
-markup opens and closes them. A value has to be safe every way, since a patch with an SVG namespace
-carries no `<svg>` of its own. A `<noscript>` holds elements, as the client parses a patch with
-scripting off; markup that mentions one is also read with scripting on, as a page loads it, where a
-noscript holds text, and the stricter reading wins. So a `title` or a `textarea` that shows markup as a code sample cannot
-take a placeholder inside a `data-*` attribute of that sample; put the whole sample in one placeholder instead,
-where it is text either way.
+The markup is read the way the browser's tokenizer reads it, comments, end tags and all, and in more
+than one way: as HTML, as the inside of an `<svg>` or `<math>`, where a `title` or a `textarea`
+holds elements rather than text, and following the browser's own stack of open elements, which
+switches between HTML and svg or math, and the rules for CDATA sections, as the markup opens and
+closes them. A value has to be safe every way, since a patch with an SVG namespace carries no
+`<svg>` of its own. A `<noscript>` holds elements, as the client parses a patch with scripting off;
+markup that mentions one is also read with scripting on, as a page loads it, where a noscript holds
+text, and the stricter reading wins. So a `title` or a `textarea` that shows markup as a code sample
+cannot take a placeholder inside a `data-*` attribute of that sample; put the whole sample in one
+placeholder instead, where it is text either way.
 
-One thing the reading does not follow yet is the browser building the page: inside a `<select>`
-the browser drops start tags such as `<title>` or `<style>` that the reading still takes as the
-start of text, so a format that writes one there can put a later placeholder somewhere it is not judged.
-Only markup you write in the format can do this, never a value; leave such tags out of a `<select>`.
+One thing the reading does not follow yet is the browser building the page: inside a `<select>` the
+browser drops start tags such as `<title>` or `<style>` that the reading still takes as the start of
+text, so a format that writes one there can put a later placeholder somewhere it is not judged. Only
+markup you write in the format can do this, never a value; leave such tags out of a `<select>`.
 
 The refusals are the point. Escaping cannot save these: a value in a `data-*` attribute Datastar
 evaluates becomes part of a Datastar expression, and your own server signed the page it arrived
@@ -218,11 +218,12 @@ val hits = repository.search("gate")
 interpolate("""<ul class="lt-list">%s</ul>""", Trusted(renderResults(hits)))
 ```
 
-That waives both the escaping and the refusals for that value, which is right for a fragment you rendered
-yourself and wrong for anything that came out of a request. It is a word in your source that a
-reviewer can search for, which is the whole reason it is a type and not a flag. It vouches for
-itself alone: in a URL with other placeholders it is part of the URL, and the URL is judged whole. Its
-text is markup like the literal around it, so the other values are judged where it puts them:
+That waives both the escaping and the refusals for that value, which is right for a fragment you
+rendered yourself and wrong for anything that came out of a request. It is a word in your source
+that a reviewer can search for, which is the whole reason it is a type and not a flag. It vouches
+for itself alone: in a URL with other placeholders it is part of the URL, and the URL is judged
+whole. Its text is markup like the literal around it, so the other values are judged where it puts
+them:
 
 ```kotlin sample=statements
 val name = "Gorvek"
@@ -279,16 +280,16 @@ text from outside wants the rewrite, a fragment you rendered yourself wants `Tru
 to be declared `Html`.
 
 A call to `interpolate` is judged as it will run. A miscounted `%s` is an error,
-`interpolate-placeholders`, because it always throws. A `%s` whose value `interpolate` will refuse, a
-`String` in a `data-*` expression, is an error where the value is known to be one and a warning
-where it is not; a `UInt` there is an error, with a `toLong()` fix. And a Kotlin template written into the format, `interpolate("<p>$name</p>")`, is
-`interpolate-template`: Kotlin fills it in before `interpolate` sees the markup, so it is neither
-escaped nor refused, and the fix turns it into a `%s` placeholder with the value among the arguments.
-Markup is no exception, an `Html` or a `Trusted`: in `interpolate("<div>$inner</div>")` Kotlin
-writes the text of `inner` into the format, where `interpolate` reads it again as markup of yours,
-so a `%s` in it, which a value may have put there, becomes a placeholder and the call throws, and a `%%`
-becomes `%`. It is `interpolate-template` too, a warning, with the fix that gives it a placeholder of
-its own:
+`interpolate-placeholders`, because it always throws. A `%s` whose value `interpolate` will refuse,
+a `String` in a `data-*` expression, is an error where the value is known to be one and a warning
+where it is not; a `UInt` there is an error, with a `toLong()` fix. And a Kotlin template written
+into the format, `interpolate("<p>$name</p>")`, is `interpolate-template`: Kotlin fills it in before
+`interpolate` sees the markup, so it is neither escaped nor refused, and the fix turns it into a
+`%s` placeholder with the value among the arguments. Markup is no exception, an `Html` or a
+`Trusted`: in `interpolate("<div>$inner</div>")` Kotlin writes the text of `inner` into the format,
+where `interpolate` reads it again as markup of yours, so a `%s` in it, which a value may have put
+there, becomes a placeholder and the call throws, and a `%%` becomes `%`. It is
+`interpolate-template` too, a warning, with the fix that gives it a placeholder of its own:
 
 ```kotlin sample=statements
 val inner = interpolate("<b>%s</b>", "Gorvek")
@@ -302,7 +303,8 @@ A `%s` in element text given markup held as a `String`, `h.text`, `elements { }`
 literal is left alone, `"<the oath>"` among them: text you chose to have escaped.
 
 At run time the source is gone and only the finished string arrives, so the placeholders have to be
-left standing for the same question to be asked. That is the whole of what `interpolate` wants from you.
+left standing for the same question to be asked. That is the whole of what `interpolate` wants from
+you.
 
 ## On Spring
 

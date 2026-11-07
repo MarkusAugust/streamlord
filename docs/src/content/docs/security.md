@@ -396,9 +396,9 @@ div {
 ```
 
 Escaping is the other half, and it belongs wherever the interpolation happens. Hand Streamlord the
-placeholders and that is Streamlord, which is what [`interpolate`](/strings/) does. Hand it a finished
-string and the provenance is already gone, so the escaping was your template engine's job and
-stays there.
+placeholders and that is Streamlord, which is what [`interpolate`](/strings/) does. Hand it a
+finished string and the provenance is already gone, so the escaping was your template engine's job
+and stays there.
 
 ## Forms from other sites
 

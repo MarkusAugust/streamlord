@@ -63,11 +63,11 @@ the text shows, and so warns on some values this test lets through.
 
 `failures()` keeps the errors: an interpolated signal, an expression that does not parse, and an
 `interpolate(...)` call that throws when it runs, with a `%s` too many or too few
-(`interpolate-placeholders`) or a value it is known to refuse where it lands (`unsafe-interpolation`). It
-keeps the `unsafe-interpolation` warnings too: a Kotlin template that writes a value into an HTML
-string where escaping cannot save it, a warning only because the text alone cannot tell a number
-from a string. The same code is a hint where the value is most likely safe, `colspan=$n` with an
-`Int` `n`, or `<h$level>`, and a hint does not fail a build.
+(`interpolate-placeholders`) or a value it is known to refuse where it lands
+(`unsafe-interpolation`). It keeps the `unsafe-interpolation` warnings too: a Kotlin template that
+writes a value into an HTML string where escaping cannot save it, a warning only because the text
+alone cannot tell a number from a string. The same code is a hint where the value is most likely
+safe, `colspan=$n` with an `Int` `n`, or `<h$level>`, and a hint does not fail a build.
 [Strings](/strings/#this-is-the-editors-rule-at-run-time) has what each code means.
 
 `format()` writes each finding as `src/main/kotlin/Page.kt:12:5: error: ... [kotlin-interpolation]`,

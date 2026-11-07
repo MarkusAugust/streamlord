@@ -45,10 +45,11 @@ public value class Trusted(
  * read as HTML and as the inside of an `<svg>` or `<math>`: a tag, an attribute value, a comment,
  * a CDATA section, the body of a `<script>`, `<textarea>` or `<title>`, a `<` at its very end, an
  * `<svg>` or a `<math>` and what is in them, a `<template>` and a `<select>`; and it may not end an
- * element it did not open. The `%s` it fills has to stand outside all of those in the outer markup. Otherwise the fragment
- * would move every placeholder after it, `interpolate("<script>")` turning the next value into a program and
- * `interpolate("<svg>")` turning a `<title>` after it into one that holds elements, so it is
- * escaped like a string instead, and shows as the markup it is.
+ * element it did not open. The placeholder it fills has to stand outside all of those in the outer
+ * markup. Otherwise the fragment would move every placeholder after it, `interpolate("<script>")`
+ * turning the next value into a program and `interpolate("<svg>")` turning a `<title>` after it
+ * into one that holds elements, so it is escaped like a string instead, and shows as the markup it
+ * is.
  */
 @JvmInline
 public value class Html
@@ -265,7 +266,7 @@ public fun interpolate(
     val holes = holes(format)
     require(holes.size == values.size) {
         "The markup has ${holes.size} %s ${if (holes.size == 1) "placeholder" else "placeholders"} and ${values.size} " +
-            "${if (values.size == 1) "value" else "values"} were given"
+            "${if (values.size == 1) "value was" else "values were"} given"
     }
     if (holes.isEmpty()) return Html(format.replace("%%", "%"))
 
