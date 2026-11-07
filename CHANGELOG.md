@@ -6,6 +6,25 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- `interpolate` wrote an `Html` value as markup where it reshapes the markup around it in the
+  browser, so that the format after it is read otherwise and a value written later could land where
+  it was not judged:
+  - in an `<svg>` or a `<math>`, a tag that takes the browser back to HTML closes the svg and the
+    elements around the value: `<svg><g>%s</g></svg>` with `<em></em>`, a `<p>`, a `<br>` or a
+    `<font color>`;
+  - an element the value leaves open is closed only by an end tag that reaches it, and some never
+    are: an `<object>`, an `<applet>` or a `<marquee>` bounds every one, the svg's end tags stop at a
+    `<foreignObject>`, a `<desc>` or an `<mi>` with a `<g/>` left open in it, and an `<a>` is opened
+    again around the text after its parent.
+
+  Such a value is escaped now, and so is any `Html` that leaves an element open where it is written,
+  such as an `<a>` without its `</a>`, or an `<option>a` in `<select>%s</select>`. `<path/>` in
+  `<svg>%s</svg>`, `<p>x</p>` in a `<foreignObject>`, `<ul><li>a<li>b</ul>` and an `<input>` in a
+  `<form>` are still markup. 0.19.0 has the fault: it writes `<em></em>` into
+  `<svg><g>%s</g></svg>` as markup.
+
 ### Changed
 
 - A `%s` in `interpolate`'s format is called a placeholder everywhere Streamlord shows it: in the
