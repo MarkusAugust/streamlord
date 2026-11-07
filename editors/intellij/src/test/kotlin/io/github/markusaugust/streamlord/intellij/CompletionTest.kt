@@ -104,6 +104,12 @@ class CompletionTest : StreamlordTestCase() {
         assertEquals(listOf("500ms", "1s", "300ms", "100ms"), values)
     }
 
+    fun `test no attribute names in a textarea's text`() {
+        myFixture.configureByText("page.html", "<textarea><i data-text=\"1 + data-<caret>\"></i></textarea>")
+        val items = myFixture.completeBasic()?.map { it.lookupString } ?: emptyList()
+        assertFalse(items.toString(), "data-on" in items)
+    }
+
     fun `test the html side inside an html string in kotlin`() {
         myFixture.configureByText("View.kt", "fun side() = \"\"\"\n<div data-<caret>\n\"\"\"")
         val items = myFixture.completeBasic()?.map { it.lookupString } ?: emptyList()

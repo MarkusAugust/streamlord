@@ -213,10 +213,11 @@ class StreamlordCompletionContributor : CompletionContributor() {
             }
             val lineStart = src.lastIndexOf('\n', maxOf(0, offset - 1)) + 1
             val before = src.substring(maxOf(lineStart, offset - 400), offset.coerceIn(0, src.length))
-            // On an attribute name inside a tag: <div data-on:cl|
+            // On an attribute name inside a tag: <div data-on:cl|. What comes before is whitespace-separated runs of
+            // plain characters and quoted strings, as completion.ts reads it, so a quote left open is a value, not a name.
             val inName =
                 Regex(
-                    """<([A-Za-z][A-Za-z0-9:-]*)(?:\s+[^\s<>]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'>]*))?)*\s+([^\s<>="']*)$""",
+                    """<([A-Za-z][A-Za-z0-9:-]*)(?:\s+(?:[^\s<>"']|"[^"]*"|'[^']*')+)*\s+([^\s<>="']*)$""",
                 ).find(before)
                     ?: return false
             val partial = inName.groupValues[2]

@@ -21,8 +21,9 @@ private const val CARET = 'x'
 /**
  * The quoted attribute value [offset] stands in, in [markup] read as the browser reads it, or null.
  * The reading is core's [landingAsParsed], the browser's as it parses a patch, so a value over
- * several lines, in single quotes or in a script's text is told as `interpolate` tells it, and
- * the text of a `<textarea>` or a `<title>` is text.
+ * several lines, in single quotes or in a script's text is found, and the text of a `<textarea>`
+ * or a `<title>` is text, though `interpolate`, which takes the strictest reading, still judges a
+ * value there.
  */
 public fun valueAtCaret(
     markup: String,

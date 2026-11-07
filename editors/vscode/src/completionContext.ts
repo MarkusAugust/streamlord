@@ -21,8 +21,9 @@ const CARET = "x";
 /**
  * The quoted attribute value `offset` stands in, in `markup` read as the browser reads it, or null.
  * The reading is `landingAsParsed`, the browser's as it parses a patch, so a value over several
- * lines, in single quotes or in a script's text is told as `interpolate` tells it, and the text of a
- * `<textarea>` or a `<title>` is text.
+ * lines, in single quotes or in a script's text is found, and the text of a `<textarea>` or a
+ * `<title>` is text, though `interpolate`, which takes the strictest reading, still judges a value
+ * there.
  */
 export function valueAtCaret(markup: string, offset: number, prefix: string): ValueAtCaret | null {
   if (offset < 0 || offset > markup.length) return null;

@@ -486,9 +486,10 @@ public fun holeLandings(
 
 /**
  * Where [hole] lands in [markup] as the browser parses it as a patch: the one reading that follows
- * its element stack from HTML, with scripting off. Where [holeLandings] takes the strictest of
- * every reading, so that nothing is let through that one of them would refuse, this is the reading
- * the markup has, which an editor shows at the caret: in a `<textarea>` the text is text.
+ * the browser's element stack from HTML, with scripting off. Where [holeLandings] takes the
+ * strictest of every reading, so that nothing is let through that one of them would refuse, this
+ * is the reading the markup has, which an editor shows at the caret: in a `<textarea>` the text is
+ * text. A [HoleLanding.valueStart] is an offset into [markup].
  */
 @InternalStreamlordApi
 public fun landingAsParsed(
@@ -497,8 +498,8 @@ public fun landingAsParsed(
     prefixes: List<String> = ElementsGuard.defaultPrefixes,
 ): HoleLanding {
     val written = Written(markup, listOf(hole), emptyMap(), percents = false)
-    val parsed = landscapes(written.text, written.open, prefixes, listOf(Reading(tracked = true, context = NS_HTML)))
-    val landing = landingOf(parsed, written.starts[0])
+    val parsed = landscape(shadow(written.text, written.open), written.open, prefixes, Reading(tracked = true, context = NS_HTML))
+    val landing = landingOf(listOf(parsed), written.starts[0])
     if (landing.valueStart < 0) return landing
     return HoleLanding(landing.position, landing.attribute, written.sourceOf(landing.valueStart), landing.loadsCode)
 }
@@ -612,20 +613,16 @@ private class Reading(
  *
  * Markup with a `noscript` is read twice over: with scripting off, as the client parses a patch,
  * where it holds elements, and with scripting on, as a page loads, where it is text to its end tag.
- * Given [only], the markup is read those ways instead.
  */
 private fun landscapes(
     markup: String,
     holes: List<IntRange>,
     prefixes: List<String>,
-    only: List<Reading>? = null,
 ): List<Landscape> {
     val shadow = shadow(markup, holes)
-    // Longest first, so `data-star-` is tried before `data-` whatever order the caller used.
-    val ordered = prefixes.sortedByDescending { it.length }
     val scripting = if (mentionsNoscript(shadow)) listOf(false, true) else listOf(false)
     val readings =
-        only ?: scripting.map { Reading(scripting = it) } +
+        scripting.map { Reading(scripting = it) } +
             listOf(Reading(foreign = true), Reading(foreign = true, cdata = true)) +
             listOf(NS_HTML, NS_SVG, NS_MATH).flatMap { context ->
                 scripting.map { Reading(tracked = true, scripting = it, context = context) }
@@ -633,8 +630,20 @@ private fun landscapes(
             listOf(NS_SVG, NS_MATH).flatMap { context ->
                 scripting.map { Reading(tracked = true, scripting = it, context = context, htmlStaysOpen = false) }
             }
+    return readings.map { landscape(shadow, holes, prefixes, it) }
+}
+
+/** The [shadow] of a markup with [holes] in it, read the one way [reading] gives. */
+private fun landscape(
+    shadow: String,
+    holes: List<IntRange>,
+    prefixes: List<String>,
+    reading: Reading,
+): Landscape {
+    // Longest first, so `data-star-` is tried before `data-` whatever order the caller used.
+    val ordered = prefixes.sortedByDescending { it.length }
     val holeEnds = holes.associate { it.first to it.last + 1 }
-    return readings.map { reading -> Landscape(ordered, reading, shadow, holeEnds).also { reading.scan(shadow, it) } }
+    return Landscape(ordered, reading, shadow, holeEnds).also { reading.scan(shadow, it) }
 }
 
 /** Whether a `noscript` may stand in [html], which only then reads differently with scripting on. */

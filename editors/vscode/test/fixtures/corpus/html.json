@@ -230,8 +230,8 @@
     {"name":"a templated nonce in Thymeleaf's own attribute is no data-nonce","source":"<html th:data-nonce=\"${nonce}\"><body></body></html>","issues":[]},
     {"name":"a nonce a Velocity or Kotlin template fills in is judged once rendered","source":"<html data-nonce=\"$nonce\"><body data-nonce=\"x\"></body></html>\n<html data-nonce=\"$!nonce\"></html>","issues":[{"code":"wrong-element","start":32,"end":42}]},
     {"name":"a nonce Razor, Twirl or Svelte fills in is judged once rendered","source":"<html data-nonce=\"@nonce\"></html>\n<html data-nonce=\"@helper.CSPNonce()\"></html>\n<html data-nonce=\"{nonce}\"></html>","issues":[]},
-    {"name":"a textarea's content is text, as the caret reads it","source":"<textarea><i data-text=\"1 +\"></i></textarea>","issues":[]},
-    {"name":"a title's content is text, as the caret reads it","source":"<title><i data-text=\"1 +\"></i></title>","issues":[]},
-    {"name":"in an svg a textarea holds elements, as the caret reads it","source":"<svg><textarea><i data-text=\"1 +\"></i></textarea></svg>","issues":[{"code":"expression-syntax","start":32,"end":33,"severity":"error"}]}
+    {"name":"a textarea's content is text, to the checks","source":"<textarea><i data-text=\"1 +\"></i></textarea>","issues":[]},
+    {"name":"a title's content is text, to the checks","source":"<title><i data-text=\"1 +\"></i></title>","issues":[]},
+    {"name":"in an svg a textarea holds elements, to the checks","source":"<svg><textarea><i data-text=\"1 +\"></i></textarea></svg>","issues":[{"code":"expression-syntax","start":32,"end":33,"severity":"error"}]}
   ]
 }

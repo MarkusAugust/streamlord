@@ -581,9 +581,10 @@ export function holeLandings(markup: string, holes: readonly Hole[], prefixes: s
 
 /**
  * Where `hole` lands in `markup` as the browser parses it as a patch: the one reading that follows
- * its element stack from HTML, with scripting off. Where `holeLandings` takes the strictest of
- * every reading, this is the reading the markup has, which an editor shows at the caret: in a
- * `<textarea>` the text is text. landingAsParsed in Interpolation.kt.
+ * the browser's element stack from HTML, with scripting off. Where `holeLandings` takes the
+ * strictest of every reading, this is the reading the markup has, which an editor shows at the
+ * caret: in a `<textarea>` the text is text. Its `valueStart` is an offset into `markup`.
+ * landingAsParsed in Interpolation.kt.
  */
 export function landingAsParsed(markup: string, hole: Hole, prefixes: string[] = PREFIXES): HoleLanding {
   const w = written(markup, [hole], new Map());

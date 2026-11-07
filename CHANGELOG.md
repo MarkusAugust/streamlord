@@ -47,6 +47,8 @@ All notable changes to Streamlord are recorded here. The format follows
   `<i data-text="1 +">` as text, completion, hover and signature help no longer treat it as a
   Datastar expression. The checks already read it as text there. Inside an `<svg>`, where a
   `textarea` holds elements, both still read the expression.
+- IntelliJ no longer offers attribute names after a space inside a quoted value whose quote is
+  still open, as VS Code already did not: `<textarea><i data-text="1 + d` is text.
 
 ## [0.19.0] - 2026-11-06
 

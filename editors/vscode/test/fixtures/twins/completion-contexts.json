@@ -100,6 +100,40 @@
       "after": "\"></i></textarea></svg>",
       "attribute": "data-text",
       "value": "$"
+    },
+    {
+      "name": "a value after a closed textarea is markup again",
+      "before": "<textarea></textarea><i data-text=\"$",
+      "after": "\"></i>",
+      "attribute": "data-text",
+      "value": "$"
+    },
+    {
+      "name": "a value after a closed title is markup again",
+      "before": "<title>x</title><i data-text=\"$",
+      "after": "\"></i>",
+      "attribute": "data-text",
+      "value": "$"
+    },
+    {
+      "name": "a textarea in capitals is a textarea",
+      "before": "<TEXTAREA><i data-text=\"$",
+      "after": "\"></i></TEXTAREA>",
+      "attribute": null
+    },
+    {
+      "name": "a noscript holds elements, as a patch is parsed with scripting off",
+      "before": "<noscript><i data-text=\"$",
+      "after": "\"></i></noscript>",
+      "attribute": "data-text",
+      "value": "$"
+    },
+    {
+      "name": "in an svg a title is svg's, and an i after it is HTML again",
+      "before": "<svg><title><i data-text=\"$",
+      "after": "\"></i></title></svg>",
+      "attribute": "data-text",
+      "value": "$"
     }
   ]
 }

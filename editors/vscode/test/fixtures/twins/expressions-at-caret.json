@@ -20,6 +20,7 @@
     { "name": "an attributes index for a non-expression attribute", "kotlin": true, "before": "fun FlowContent.f() { div { attributes[\"data-ignore-morph\"] = \"tr", "after": "ue\" } }", "expression": null },
     { "name": "an attributes index inside a string is text", "kotlin": true, "before": "val s = \"\"\"attributes[\"data-text\"] = \"$co", "after": " x\"\"\"", "expression": null },
     { "name": "a textarea's content is text, in markup", "kotlin": false, "before": "<textarea><i data-text=\"1 + ", "after": "\"></i></textarea>", "expression": null },
-    { "name": "a textarea's content is text, in a Kotlin string", "kotlin": true, "before": "val page = \"\"\"<textarea><i data-text=\"1 + ", "after": "\"></i></textarea>\"\"\"", "expression": null }
+    { "name": "a textarea's content is text, in a Kotlin string", "kotlin": true, "before": "val page = \"\"\"<textarea><i data-text=\"1 + ", "after": "\"></i></textarea>\"\"\"", "expression": null },
+    { "name": "a textarea's content is text, past a template in a Kotlin string", "kotlin": true, "before": "val page = \"\"\"<textarea>${x}<i data-text=\"1 + ", "after": "\"></i></textarea>\"\"\"", "expression": null }
   ]
 }
