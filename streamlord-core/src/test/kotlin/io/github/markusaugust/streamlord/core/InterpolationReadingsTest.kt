@@ -173,6 +173,12 @@ class InterpolationReadingsTest {
                 "<table><tr><td>%s</td><td>Q1</td></tr></table>" to "<table><table></table></table>",
                 "<div><form></div>%s" to "<form><input name=a></form>",
                 "<div>%sQ1</div>Q2" to "<div><object></div>",
+                // A formatting element an end tag of another closes is opened again after the value.
+                "<div>%sQ1</div>Q2" to "<noscript><b>x</noscript>",
+                "<div>%sQ1</div>Q2" to "<span><b>x</span>",
+                // The value's `<p>` closes the format's, and its own element with it, so its end tag reaches the format.
+                "<svg><foreignObject><p>%sQ1</p></foreignObject><text>Q2</text></svg>" to "<foreignObject><p>x</p></foreignObject>",
+                "<p>%s</p>" to "<span><p>x</p></span>",
                 "%s<text>Q1</text>" to "<image href=\"a.png\">",
                 "%s<text>Q1</text>" to "<input>",
             )
@@ -223,7 +229,7 @@ class InterpolationReadingsTest {
                 "<section><p>a</p></section>",
                 "<article><h2>t</h2><p>a</p></article>",
             )
-        for (format in listOf("<div>%s</div>", "<li>%s</li>")) {
+        for (format in listOf("<div>%s</div>", "<li>%s</li>", "<table><tr><td>%s</td></tr></table>", "<nav>%s</nav>", "<main>%s</main>")) {
             for (markup in values) {
                 assertEquals(format.replace("%s", markup), interpolate(format, interpolate(markup)).text, "$format with $markup")
             }

@@ -1008,6 +1008,9 @@ private class Landscape(
         // `<input>` is an element left open; the reading that closes HTML elements by itself leaves that.
         if (reading.context != NS_HTML) {
             val top = place.namespace < 0
+            // Inside an element of the format whose name is HTML's, `<td>` or `<nav>`, the svg or math
+            // patch this reading supposes is not one an author writes, and the reading from HTML judges it.
+            if (!top && place.namespace != NS_HTML && place.parent !in FOREIGN_NAMES) return true
             return closesIn(
                 reading.of(
                     if (top) reading.context else place.namespace,
@@ -1096,6 +1099,9 @@ private class ValueShape(
     var fits = true
     private val open = ArrayList<String>()
 
+    // Whether a `p` of the format is still open around the value, for a start tag of it to close.
+    private var outerParagraph = place.paragraphInScope
+
     // The element a table part or a form of the value goes into: its own innermost table element, or where it lands.
     private fun tableContext(): String? = open.lastOrNull { it == "table" || it in TABLE_PARTS_IN || it == "template" } ?: place.parent
 
@@ -1122,6 +1128,14 @@ private class ValueShape(
         // In a table mode a `<table>` closes the open one first.
         if (name == "table" && context in TABLE_MODES) fits = false
         if (name == "form" && place.formOpen) fits = false
+        // A start tag that closes the format's `p` closes all the value has open inside it as well, and
+        // the value's end tags for those then reach the format.
+        if (outerParagraph && (name in CLOSES_P || name == "li" || name == "dd" || name == "dt") &&
+            open.none { it == "p" || it in SCOPE_BOUNDS || it == "button" }
+        ) {
+            if (open.isNotEmpty()) fits = false
+            outerParagraph = false
+        }
         if (name !in VOID) open += name
     }
 
@@ -1135,8 +1149,24 @@ private class ValueShape(
         if (at < 0) return
         val inside = open.subList(at + 1, open.size)
         if (name in FORMATTING && inside.any { it in SPECIAL }) fits = false
+        // A formatting element another end tag closes is opened again around the text after it.
+        if (inside.any { it in FORMATTING }) fits = false
         // An object, a table or a cell opened inside bounds the end tag's search, which then closes nothing.
         if (inside.any { it in SCOPE_BOUNDS }) fits = false
         open.subList(at, open.size).clear()
     }
 }
+
+/** The names of svg and MathML elements, inside which a reading from an svg or a math judges a value. */
+private val FOREIGN_NAMES =
+    (
+        "a animate animatemotion animatetransform circle clippath defs desc ellipse feblend fecolormatrix " +
+            "fecomponenttransfer fecomposite feconvolvematrix fediffuselighting fedisplacementmap fedistantlight " +
+            "fedropshadow feflood fefunca fefuncb fefuncg fefuncr fegaussianblur feimage femerge femergenode " +
+            "femorphology feoffset fepointlight fespecularlighting fespotlight fetile feturbulence filter foreignobject " +
+            "g image line lineargradient marker mask metadata mpath path pattern polygon polyline radialgradient rect " +
+            "script set stop style svg switch symbol text textpath title tspan use view " +
+            "math maction annotation annotation-xml menclose merror mfenced mfrac mi mmultiscripts mn mo mover mpadded " +
+            "mphantom mprescripts mroot mrow ms mspace msqrt mstyle msub msubsup msup mtable mtd mtext mtr munder " +
+            "munderover semantics none mglyph malignmark"
+    ).split(" ").toSet()

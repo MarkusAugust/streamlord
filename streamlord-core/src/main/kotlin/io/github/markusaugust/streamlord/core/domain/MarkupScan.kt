@@ -123,6 +123,8 @@ public class TextPlace(
     public val parent: String?,
     /** Whether the browser's form pointer is set there: a `form` started before it and not yet ended, even one its parent closed. */
     public val formOpen: Boolean,
+    /** Whether a `p` is open there in button scope, which a `<div>`, a `<p>` or an `<li>` written there closes. */
+    public val paragraphInScope: Boolean,
 )
 
 /** The characters that end a tag name, and so an end tag's name as well. */
@@ -520,6 +522,15 @@ private fun scanMarkupTracked(
         return NOT_OPEN
     }
 
+    // Whether a `p` is open in button scope, as closeImplied looks for one.
+    fun paragraphInScope(): Boolean {
+        for (k in stackName.indices.reversed()) {
+            if (stackNs[k] == NS_HTML && stackName[k] == "p") return true
+            if (boundsScope(k)) return false
+        }
+        return false
+    }
+
     val n = html.length
 
     // Where the text since the last tag, comment or raw-text body began.
@@ -537,6 +548,7 @@ private fun scanMarkupTracked(
                     integrationPoint = top >= 0 && stackNs[top] != NS_HTML && stackHtmlContent[top],
                     parent = stackName.lastOrNull(),
                     formOpen = formPointer,
+                    paragraphInScope = paragraphInScope(),
                 ),
             )
         }
@@ -812,7 +824,7 @@ private val HEADINGS = setOf("h1", "h2", "h3", "h4", "h5", "h6")
  * HTML start tags that close a `p` open in button scope. A `table` does too in a document without
  * quirks, but a patch's own document has none, so it is left out: the reading keeps the `p` open.
  */
-private val CLOSES_P =
+internal val CLOSES_P =
     setOf(
         "address",
         "article",

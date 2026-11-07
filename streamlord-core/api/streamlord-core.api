@@ -514,11 +514,12 @@ public final class io/github/markusaugust/streamlord/core/domain/SignalsResponse
 }
 
 public final class io/github/markusaugust/streamlord/core/domain/TextPlace {
-	public fun <init> (IIZLjava/lang/String;Z)V
+	public fun <init> (IIZLjava/lang/String;ZZ)V
 	public final fun getDepth ()I
 	public final fun getFormOpen ()Z
 	public final fun getIntegrationPoint ()Z
 	public final fun getNamespace ()I
+	public final fun getParagraphInScope ()Z
 	public final fun getParent ()Ljava/lang/String;
 }
 

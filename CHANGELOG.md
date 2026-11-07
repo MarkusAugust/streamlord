@@ -21,9 +21,12 @@ All notable changes to Streamlord are recorded here. The format follows
   - a table part out of its place closes the table or the cell around it: a `<td>` in a `<td>`, a
     `<td>` in an svg's `<desc>` in a table cell, or a `<table>` between rows; and a first `<col>` in
     a `<template>` or at the start of a patch drops all that follows it;
-  - an end tag closes nothing past an element that bounds its search, and a formatting element's
-    leaves a block opened in it open, so in `<div>%s</div>` the values `<div><object></div>` and
-    `<b><div>x</b>` take the text after them into their own elements;
+  - an end tag closes nothing past an element that bounds its search, a formatting element's leaves
+    a block opened in it open, and a formatting element another end tag closes is opened again, so
+    in `<div>%s</div>` the values `<div><object></div>`, `<b><div>x</b>` and
+    `<noscript><b>x</noscript>` take the text after them into their own elements;
+  - a start tag that closes the format's `<p>` closes what the value has open as well, so the
+    value's own end tags then close the format's elements;
   - a `<form>` where the format has started one, even one whose parent has closed, moves the
     format's fields out of their form;
   - straight in a patch in the svg namespace, an `<image>` or an `<input>` is an svg element left

@@ -124,6 +124,8 @@ export interface TextPlace {
   parent: string | null;
   /** Whether the browser's form pointer is set there, even for a form its parent closed. */
   formOpen: boolean;
+  /** Whether a `p` is open there in button scope. */
+  paragraphInScope: boolean;
 }
 
 /** What a walk over HTML reports: MarkupVisitor in MarkupScan.kt. Offsets are into the string that was walked. */
@@ -371,6 +373,14 @@ export function scanMarkupTracked(html: string, visitor: Visitor, context: numbe
     }
     return NOT_OPEN;
   };
+  // paragraphInScope in MarkupScan.kt.
+  const paragraphInScope = () => {
+    for (let k = stackName.length - 1; k >= 0; k--) {
+      if (stackNs[k] === NS_HTML && stackName[k] === "p") return true;
+      if (boundsScope(k)) return false;
+    }
+    return false;
+  };
   const n = html.length;
   // Where the text since the last tag, comment or raw-text body began.
   let textStart = 0;
@@ -383,6 +393,7 @@ export function scanMarkupTracked(html: string, visitor: Visitor, context: numbe
         integrationPoint: top >= 0 && stackNs[top] !== NS_HTML && (stackHtmlContent[top] as boolean),
         parent: stackName[top] ?? null,
         formOpen: formPointer,
+        paragraphInScope: paragraphInScope(),
       });
     }
   };
