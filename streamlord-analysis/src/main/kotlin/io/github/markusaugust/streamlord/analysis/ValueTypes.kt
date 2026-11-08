@@ -19,12 +19,15 @@ private val STRING_TYPE = Regex("""(?:kotlin\.)?(?:String|CharSequence)""")
 private val HTML_TYPE = Regex("${CORE_DOMAIN}Html")
 private val TRUSTED_TYPE = Regex("${CORE_DOMAIN}Trusted")
 
-/** A collection of markup: what `joinToString` over Html or Trusted is called on. */
+/**
+ * A collection of markup: what `joinToString` over Html or Trusted is called on. An Html that may be
+ * null is markup as it is on its own, and `out` changes nothing a read sees.
+ */
 private val MARKUP_COLLECTION =
     Regex(
         """(?:kotlin\.collections\.|kotlin\.sequences\.)?""" +
             """(?:List|MutableList|ArrayList|Collection|Iterable|Set|MutableSet|Sequence|Array)""" +
-            """<$CORE_DOMAIN(?:Html|Trusted)>\??""",
+            """<$CORE_DOMAIN(?:Html\??|Trusted)>\??""",
     )
 
 /**
@@ -109,7 +112,11 @@ internal fun declaredFact(
     }
 
 /** Whether [type] is a collection of Streamlord's markup, as `List<Html>`; the whitespace in it is ignored. */
-public fun isMarkupCollection(type: String): Boolean = MARKUP_COLLECTION.matches(type.filterNot { it.isWhitespace() })
+public fun isMarkupCollection(type: String): Boolean =
+    MARKUP_COLLECTION.matches(type.replace(OUT_PROJECTION, "<").filterNot { it.isWhitespace() })
+
+// `out` as a keyword, so a type named `outHtml` is not read as `out Html`.
+private val OUT_PROJECTION = Regex("""<\s*out\s+""")
 
 /**
  * Whether the content of a string literal, past its opening quotes, starts with a tag, a comment

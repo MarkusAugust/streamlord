@@ -362,7 +362,9 @@ function codeMask(src: string, strings: readonly KotlinString[], mask: Uint8Arra
 }
 
 const NAME = String.raw`[\p{L}_][\p{L}\p{Nd}_]*`;
-const TYPE = String.raw`[\p{L}_][\p{L}\p{Nd}_.]*\??`;
+// A name in backticks too, as `` `Page` ``, which means the same name without them.
+const TICKED = "`[^`\\n]+`";
+const TYPE = String.raw`(?:[\p{L}_][\p{L}\p{Nd}_.]*|${TICKED})(?:\.(?:[\p{L}_][\p{L}\p{Nd}_]*|${TICKED}))*\??`;
 const VAL_AFTER = new RegExp(
   String.raw`\s*(?:<[^<>]*>\s*)?((?:${NAME}\s*\.\s*)*)(${NAME})(?:\s*:\s*(${TYPE}))?(?:\s*=\s*(?:(-?\d[\d_]*(?:\.\d+)?(?:[uU][lL]?|[LlFfDd])?|true|false)|("(?:[^"\\$\n]|\\[^$])*"))(?=[ \t]*(?:[\n\r;})\],]|//|$)))?`,
   "uy",
@@ -372,7 +374,7 @@ const TYPE_ARGUMENTS = String.raw`\s*<((?:[^<>]|<[^<>]*>)*)>`;
 const PARAMETER = new RegExp(String.raw`^\s*(?:@[\p{L}_][\p{L}\p{Nd}_.]*(?:\s*\([^)]*\))?\s*)*((?:[\p{L}]+\s+)*?)(${NAME})\s*:\s*(${TYPE})?(?:${TYPE_ARGUMENTS})?`, "u");
 const TYPE_ARGUMENTS_AFTER = new RegExp(TYPE_ARGUMENTS, "y");
 const VALUE_AFTER = /\s*=(?!=)\s*/y;
-const LAMBDA_PARAMETERS = new RegExp(String.raw`\s*((?:\([^()]*\)|${NAME})(?:\s*:\s*[\p{L}\p{Nd}_.<>?]+)?(?:\s*,\s*(?:\([^()]*\)|${NAME})(?:\s*:\s*[\p{L}\p{Nd}_.<>?]+)?)*)\s*->`, "uy");
+const LAMBDA_PARAMETERS = new RegExp(String.raw`\s*((?:\([^()]*\)|${NAME})(?:\s*:\s*[\p{L}\p{Nd}_.<>?${"`"}]+)?(?:\s*,\s*(?:\([^()]*\)|${NAME})(?:\s*:\s*[\p{L}\p{Nd}_.<>?${"`"}]+)?)*)\s*->`, "uy");
 const FOR_VARIABLE = new RegExp(String.raw`\s*(\([^()]*\)|${NAME})(?:\s*:\s*(${TYPE}))?\s+in\b`, "uy");
 const CONST_BEFORE = /\bconst[ \t]+(?:\p{L}+[ \t]+)*$/u;
 const PRIVATE_BEFORE = /\bprivate[ \t]+(?:\p{L}+[ \t]+)*$/u;
@@ -653,7 +655,7 @@ function declarations(src: string, code: Uint8Array): Map<string, Declaration[]>
   return names;
 }
 
-const MARKUP_INITIALISER = /\s*=\s*([\p{L}_][\p{L}\p{Nd}_]*)\s*\(/uy;
+const MARKUP_INITIALISER = /\s*=\s*(`?)([\p{L}_][\p{L}\p{Nd}_]*)\1\s*\(/uy;
 const STATEMENT_END = /^[ \t]*(?:[\n\r;})\],]|\/\/|$)/;
 
 /**
@@ -665,14 +667,14 @@ function markupInitialiser(src: string, at: number, aliases: ReadonlyMap<string,
   MARKUP_INITIALISER.lastIndex = at;
   const m = MARKUP_INITIALISER.exec(src);
   if (!m) return null;
-  const callee = m[1] as string;
+  const callee = m[2] as string;
   const name = aliases.get(callee) ?? callee;
   if (name !== "interpolate" && name !== "Trusted") return null;
   const open = at + m[0].length - 1;
   const e = src.slice(open, open + 20_000);
   const close = closing(e, depths(e), 0);
   if (close <= 0 || !STATEMENT_END.test(e.slice(close, close + 8))) return null;
-  return { name, start: at + m[0].indexOf(callee), aliased: name !== callee };
+  return { name, start: at + m[0].indexOf(callee) - (m[1] as string).length, aliased: name !== callee };
 }
 
 const TEXT_OF_NAME = new RegExp(String.raw`\s*=\s*(${NAME})\s*\.\s*text(?=[ \t]*(?:[\n\r;})\],]|//|$))`, "uy");
@@ -791,7 +793,7 @@ export function declaredKind(src: string, name: string, at: number, nonNull = fa
 }
 
 // The callee is Trusted or an alias of it, which the caller has read.
-const TRUSTED_LITERAL = /[\p{L}_][\p{L}\p{Nd}_]*\s*\(\s*(?:html\s*=\s*)?(?:"((?:[^"\\$\n]|\\.)*)"|"""((?:[^"$]|"(?!""))*)""")\s*\)/uy;
+const TRUSTED_LITERAL = /(`?)[\p{L}_][\p{L}\p{Nd}_]*\1\s*\(\s*(?:html\s*=\s*)?(?:"((?:[^"\\$\n]|\\.)*)"|"""((?:[^"$]|"(?!""))*)""")\s*\)/uy;
 
 /**
  * The text of `Trusted("...")` at `at`, or of `Trusted("""...""")` or `Trusted(html = ...)`, with
@@ -802,9 +804,9 @@ function literalTrusted(src: string, at: number, whole = false): string | null {
   const m = TRUSTED_LITERAL.exec(src);
   if (!m || (whole && m[0].length !== src.length - at)) return null;
   // A raw string has no escapes.
-  if (m[2] !== undefined) return m[2];
+  if (m[3] !== undefined) return m[3];
   const escapes: Record<string, string> = { t: "\t", b: "\b", n: "\n", r: "\r" };
-  return (m[1] as string).replace(/\\(u[0-9A-Fa-f]{4}|.)/g, (_, e: string) => (e.length === 5 ? String.fromCharCode(Number.parseInt(e.slice(1), 16)) : (escapes[e] ?? e)));
+  return (m[2] as string).replace(/\\(u[0-9A-Fa-f]{4}|.)/g, (_, e: string) => (e.length === 5 ? String.fromCharCode(Number.parseInt(e.slice(1), 16)) : (escapes[e] ?? e)));
 }
 
 /**
@@ -1090,7 +1092,7 @@ function lastCall(t: string): { name: string; receiver: string | null; args: str
 
 /** What a lambda gives: its last expression, without its parameters. */
 function lambdaResult(body: string): string {
-  const b = body.replace(/^\s*(?:\([^()]*\)|[\p{L}_][\p{L}\p{Nd}_]*)(?:\s*:\s*[\p{L}\p{Nd}_.<>?]+)?(?:\s*,\s*(?:\([^()]*\)|[\p{L}_][\p{L}\p{Nd}_]*)(?:\s*:\s*[\p{L}\p{Nd}_.<>?]+)?)*\s*->/u, "");
+  const b = body.replace(/^\s*(?:\([^()]*\)|[\p{L}_][\p{L}\p{Nd}_]*)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?(?:\s*,\s*(?:\([^()]*\)|[\p{L}_][\p{L}\p{Nd}_]*)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?)*\s*->/u, "");
   const d = depths(b);
   let from = 0;
   for (let k = 0; k < b.length; k++) {
@@ -1166,7 +1168,8 @@ function markupElements(src: string, receiver: string, at: number, depth: number
     const d = declarationOf(src, t, at);
     if (!d) return false;
     if (d.type !== undefined) {
-      return sdk.core && d.typeArguments !== undefined && !markupTypeShadowed(src, d.typeArguments) && isMarkupCollection(`${d.type.replace(/\?$/, "")}<${coreType(src, d.typeArguments)}>`);
+      const element = d.typeArguments?.replace(OUT_VARIANCE, "");
+      return sdk.core && element !== undefined && !markupTypeShadowed(src, element) && isMarkupCollection(`${d.type.replace(/\?$/, "")}<${coreType(src, element)}>`);
     }
     const init = initialiser(src, d);
     return init !== null && depth < VALUE_DEPTH && markupElements(src, init, d.at, depth + 1, sdk);
@@ -1513,7 +1516,7 @@ export function coreAliases(src: string): ReadonlyMap<string, string> {
 function aliasesIn(src: string, code: Uint8Array): ReadonlyMap<string, string> {
   const out = new Map<string, string>();
   for (const line of keywordLines(src, code, "import")) {
-    const t = src.slice(line.start, line.codeEnd).trim().replace(/;$/, "").trim();
+    const t = unticked(src.slice(line.start, line.codeEnd).trim().replace(/;$/, "").trim());
     const m = CORE_ALIAS.exec(t);
     if (m) out.set(m[2] as string, m[1] as string);
   }
@@ -1524,10 +1527,10 @@ const CORE_ALIAS = new RegExp(`^${DOMAIN.replace(/\./g, "\\.")}\\.([\\p{L}_][\\p
 
 /** `written`, a declared type, with a bare alias of core's `Html` or `Trusted` written as the name it stands for: `Page?` as `Html?`. `coreType` in Interpolations.kt. */
 function coreType(src: string, written: string): string {
-  const t = written.trim();
+  const t = unticked(written).trim();
   const bare = t.replace(/\?$/, "").trim();
   const name = coreAliases(src).get(bare);
-  if (name !== "Html" && name !== "Trusted") return written;
+  if (name !== "Html" && name !== "Trusted") return t;
   return name + t.slice(bare.length);
 }
 
@@ -1536,13 +1539,23 @@ function coreType(src: string, written: string): string {
  * the file imports it by: `T(x)` as `Trusted(x)`. Null where `text` starts with no call to core's `name`.
  */
 function asCoreCall(src: string, text: string, name: string): string | null {
-  const callee = CALLEE.exec(text)?.[1];
-  if (callee === undefined) return null;
-  if (callee === name) return shadowsCore(src, name) ? null : text;
-  return coreAliases(src).get(callee) === name ? name + text.slice(callee.length) : null;
+  const m = CALLEE.exec(text);
+  if (!m) return null;
+  const callee = m[2] as string;
+  const rest = text.slice(callee.length + 2 * (m[1] as string).length);
+  if (callee === name) return shadowsCore(src, name) ? null : name + rest;
+  return coreAliases(src).get(callee) === name ? name + rest : null;
 }
 
-const CALLEE = /^([\p{L}_][\p{L}\p{Nd}_]*)\s*\(/u;
+// `List<out Html>` reads its elements as `List<Html>` does.
+const OUT_VARIANCE = /^\s*out\s+/;
+
+const CALLEE = /^(`?)([\p{L}_][\p{L}\p{Nd}_]*)\1\s*\(/u;
+
+/** `written` with its backticks dropped: `` `Page`? `` as `Page?`, the same name to Kotlin. `unticked` in Interpolations.kt. */
+function unticked(written: string): string {
+  return written.replace(/`/g, "");
+}
 
 /** Whether `text` is one call to core's `name`, under that name or an alias: `Trusted(x)`, `T(x)`. */
 function coreCall(src: string, text: string, name: string): boolean {
@@ -1554,12 +1567,12 @@ function coreCall(src: string, text: string, name: string): boolean {
 export function callsTrusted(src: string, text: string): boolean {
   if (TRUSTED_CALL.test(text)) return true;
   for (const [alias, name] of coreAliases(src)) {
-    if (name === "Trusted" && new RegExp(`(?:^|[^\\p{L}\\p{Nd}_.])${alias}\\s*\\(`, "u").test(text)) return true;
+    if (name === "Trusted" && new RegExp(`(?:^|[^\\p{L}\\p{Nd}_.\`])(\`?)${alias}\\1\\s*\\(`, "u").test(text)) return true;
   }
   return false;
 }
 
-const TRUSTED_CALL = /(?:^|[^\p{L}\p{Nd}_.])Trusted\s*\(/u;
+const TRUSTED_CALL = /(?:^|[^\p{L}\p{Nd}_.`])(`?)Trusted\1\s*\(/u;
 
 /** Whether `d` is set to a call to core's `interpolate` or `Trusted`: by an alias, or by a name nothing else in `src` takes. `setToCore` in Interpolations.kt. */
 function setToCore(src: string, d: Declaration): boolean {
@@ -1568,7 +1581,7 @@ function setToCore(src: string, d: Declaration): boolean {
 
 /** Whether `written`, a declared type, is a bare `Html` or `Trusted` that means another type in `src`: `markupTypeShadowed` in Interpolations.kt. */
 function markupTypeShadowed(src: string, written: string): boolean {
-  const name = written.replace(/\s/g, "").replace(/\?$/, "");
+  const name = unticked(written).replace(/\s/g, "").replace(/\?$/, "");
   return (name === "Html" || name === "Trusted") && shadowsCore(src, name);
 }
 
@@ -1582,7 +1595,7 @@ function markupTypeShadowed(src: string, written: string): boolean {
  * take, and the import is unambiguous.
  */
 function shadowedInFile(src: string, code: Uint8Array, name: string, stars = true): boolean {
-  const targets = keywordLines(src, code, "import").map((l) => src.slice(l.start, l.codeEnd).trim().replace(/;$/, "").trim());
+  const targets = keywordLines(src, code, "import").map((l) => unticked(src.slice(l.start, l.codeEnd).trim().replace(/;$/, "").trim()));
   if (targets.includes(`${DOMAIN}.${name}`)) return false;
   for (const t of targets) {
     const as = t.indexOf(" as ");
@@ -1593,7 +1606,7 @@ function shadowedInFile(src: string, code: Uint8Array, name: string, stars = tru
     if (t.endsWith(`.${name}`)) return true;
     if (stars && t.endsWith(".*") && t !== `${DOMAIN}.*` && !t.startsWith("io.github.markusaugust.streamlord.") && usedInCode(src, code, name)) return true;
   }
-  const declaration = new RegExp(String.raw`\b(?:fun|class|object|interface|typealias)\s+(?:<[^>]*>\s*)?${name}(?![\p{L}\p{Nd}_])`, "gu");
+  const declaration = new RegExp(String.raw`\b(?:fun|class|object|interface|typealias)\s+(?:<[^>]*>\s*)?(${"`"}?)${name}\1(?![\p{L}\p{Nd}_])`, "gu");
   for (const m of src.matchAll(declaration)) {
     const at = m.index ?? 0;
     if (code[at] !== 1) continue;

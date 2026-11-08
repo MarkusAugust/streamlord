@@ -88,7 +88,16 @@ All notable changes to Streamlord are recorded here. The format follows
 - Streamlord's own `Html` and `Trusted` imported under another name,
   `import io.github.markusaugust.streamlord.core.domain.Html as Page`, are markup: a value declared
   `Page` or `List<Page>`, a call to `T(x)` or `T("...")` for a `Trusted` imported as `T`, and a
-  `val` set to one, asked for `interpolate(...)` they do not need.
+  `val` set to one, asked for `interpolate(...)` they do not need. A name in backticks is the same
+  name, for `Html` and `Trusted` and for their aliases, in the import, the type or the call:
+  `` import …Html as `Page` ``, `` h: `Html` ``, `` `T`(x) ``. A class of the file's own written
+  `` `Html` `` still takes the name from Streamlord's.
+- A value declared a list of `Html` that may be null, `List<Html?>`, or `List<out Html>`, is markup
+  when joined with `joinToString`, as an `Html?` on its own is. Both were asked for
+  `interpolate(...)`.
+- A comment after a value handed to `interpolate(...)`, `Trusted(x) /* id */`, made the analysis
+  read the comment as part of the value, so a `Trusted` was not let into a `<script>`. The value is
+  read without it, and IntelliJ's reading of its type now reaches it too.
 - An `interpolate` imported from another package, `import com.acme.interpolate`, is no longer
   checked as Streamlord's: its format got errors about placeholders it may not have. Nor is one the
   file declares, since the text cannot tell which the call fits.

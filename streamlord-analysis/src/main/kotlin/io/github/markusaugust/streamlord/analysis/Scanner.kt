@@ -202,6 +202,27 @@ private fun parseArgs(
     return null
 }
 
+/** [a] up to the end of its last token, without the comments and whitespace after it: `x /* id */` as `x`. */
+internal fun uncommented(
+    src: String,
+    a: Arg,
+): Arg {
+    var i = a.start
+    var last = a.start
+    while (true) {
+        i = skipTrivia(src, i, a.end)
+        if (i >= a.end) break
+        i =
+            when {
+                isStringStart(src, i) -> readKotlinStringAt(src, i)?.end ?: (i + 1)
+                src[i] == '\'' -> charLiteralEnd(src, i)
+                else -> i + 1
+            }.coerceAtMost(a.end)
+        last = i
+    }
+    return if (last == a.end) a else a.copy(end = last, text = src.substring(a.start, last))
+}
+
 private fun makeArg(
     src: String,
     from: Int,

@@ -708,7 +708,8 @@ public class Analyzer(
     ): List<Issue> {
         val holes = percentHoles(s.text)
         val (format, at) = withPercentHoles(s, holes)
-        val values = site.args.filter { it !== formatArg && it.named == null }
+        // Each value as the code writes it, without a comment after it, which the editor's range leaves out too.
+        val values = site.args.filter { it !== formatArg && it.named == null }.map { uncommented(src, it) }
         // The values one by one, as the vararg overload takes them: no spread and nothing by name.
         val plain = site.args.all { it.named == null } && values.none { it.text.startsWith("*") }
         val known = values.map { opts.valueFact?.invoke(it.start, it.end) }

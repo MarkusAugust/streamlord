@@ -16,9 +16,12 @@ const STRING_TYPE = /^(?:kotlin\.)?(?:String|CharSequence)$/;
 const HTML_TYPE = new RegExp(`^${CORE_DOMAIN}Html$`);
 const TRUSTED_TYPE = new RegExp(`^${CORE_DOMAIN}Trusted$`);
 
-/** A collection of markup: what `joinToString` over Html or Trusted is called on. */
+/**
+ * A collection of markup: what `joinToString` over Html or Trusted is called on. An Html that may be
+ * null is markup as it is on its own, and `out` changes nothing a read sees.
+ */
 const MARKUP_COLLECTION = new RegExp(
-  String.raw`^(?:kotlin\.collections\.|kotlin\.sequences\.)?(?:List|MutableList|ArrayList|Collection|Iterable|Set|MutableSet|Sequence|Array)<${CORE_DOMAIN}(?:Html|Trusted)>\??$`,
+  String.raw`^(?:kotlin\.collections\.|kotlin\.sequences\.)?(?:List|MutableList|ArrayList|Collection|Iterable|Set|MutableSet|Sequence|Array)<${CORE_DOMAIN}(?:Html\??|Trusted)>\??$`,
 );
 
 /**
@@ -71,7 +74,10 @@ export function declaredFact(written: string, nonNull: boolean, core: boolean): 
 }
 
 /** Whether `type` is a collection of Streamlord's markup, as `List<Html>`; the whitespace in it is ignored. */
-export const isMarkupCollection = (type: string): boolean => MARKUP_COLLECTION.test(noSpace(type));
+export const isMarkupCollection = (type: string): boolean => MARKUP_COLLECTION.test(noSpace(type.replace(OUT_PROJECTION, "<")));
+
+// `out` as a keyword, so a type named `outHtml` is not read as `out Html`.
+const OUT_PROJECTION = /<\s*out\s+/g;
 
 /** Whether `type` is Streamlord's `Trusted`, which cannot be null. */
 export const isTrustedType = (type: string): boolean => TRUSTED_TYPE.test(noSpace(type));
