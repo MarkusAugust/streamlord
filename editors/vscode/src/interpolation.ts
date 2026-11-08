@@ -321,6 +321,8 @@ interface FileFacts {
   coreCalls?: Map<string, number[]>;
   /** Whether something other than core's domain takes each name in this file, by the name (`shadowedInFile`). */
   shadowed?: Map<string, boolean>;
+  /** The same with no star import counted, for what a name means here (`shadowsCore`). */
+  taken?: Map<string, boolean>;
   /** Whether the file's imports show it uses the DSL: what decides when the host does not know. */
   usesDsl?: boolean;
   /** The type parameters the file declares, each with whether a value of it may be null. */
@@ -799,6 +801,7 @@ function literalTrusted(src: string, at: number, whole = false): string | null {
  */
 export function trustedLiteral(src: string, value: string, at: number): string | null {
   const t = value.trim();
+  if (shadowsCore(src, "Trusted")) return null;
   if (IDENT.test(t)) return declarationOf(src, t, at)?.trustedText ?? null;
   return literalTrusted(t, 0, true);
 }
@@ -1455,22 +1458,31 @@ export function coreNameUsable(src: string, name: string, sdk: Sdk, foreignCalls
     }
     if (starts.some((at) => foreignCalls.has(at))) return false;
   }
-  return !shadowsCore(src, name);
-}
-
-/** Whether something other than core's domain takes `name` in `src`, read once per file: shadowsCore in Interpolations.kt. */
-function shadowsCore(src: string, name: string): boolean {
-  const facts = fileFacts(src);
   facts.shadowed ??= new Map();
   let shadowed = facts.shadowed.get(name);
   if (shadowed === undefined) {
     shadowed = shadowedInFile(src, facts.code, name);
     facts.shadowed.set(name, shadowed);
   }
-  return shadowed;
+  return !shadowed;
 }
 
-/** Whether `written`, a declared type, is a bare `Html` or `Trusted` that means another type in `src`: markupTypeShadowed in Interpolations.kt. */
+/**
+ * Whether `name` in `src` means something other than core's own, read once per file by
+ * `shadowedInFile` with no star import counted: `shadowsCore` in Interpolations.kt.
+ */
+export function shadowsCore(src: string, name: string): boolean {
+  const facts = fileFacts(src);
+  facts.taken ??= new Map();
+  let taken = facts.taken.get(name);
+  if (taken === undefined) {
+    taken = shadowedInFile(src, facts.code, name, false);
+    facts.taken.set(name, taken);
+  }
+  return taken;
+}
+
+/** Whether `written`, a declared type, is a bare `Html` or `Trusted` that means another type in `src`: `markupTypeShadowed` in Interpolations.kt. */
 function markupTypeShadowed(src: string, written: string): boolean {
   const name = written.replace(/\s/g, "").replace(/\?$/, "");
   return (name === "Html" || name === "Trusted") && shadowsCore(src, name);
@@ -1480,12 +1492,12 @@ function markupTypeShadowed(src: string, written: string): boolean {
  * Whether something other than core's domain takes `name` in `src`: an import of it from elsewhere,
  * by name or as an alias, or a `fun`, `class`, `object`, `interface` or `typealias` of that name at
  * the top of the file. An import of core's own name settles it, since an explicit import wins.
- * A star import from outside Streamlord counts only where the file already uses the name: an
- * explicit import the fix adds wins over a star import, so the one risk is that it takes the name
- * from uses that meant the star import's. With no use there is nothing to take, and the import is
- * unambiguous.
+ * With `stars`, as a fix asks it, a star import from outside Streamlord counts where the file
+ * already uses the name: an explicit import the fix adds wins over a star import, so the one risk is
+ * that it takes the name from uses that meant the star import's. With no use there is nothing to
+ * take, and the import is unambiguous.
  */
-function shadowedInFile(src: string, code: Uint8Array, name: string): boolean {
+function shadowedInFile(src: string, code: Uint8Array, name: string, stars = true): boolean {
   const targets = keywordLines(src, code, "import").map((l) => src.slice(l.start, l.codeEnd).trim().replace(/;$/, "").trim());
   if (targets.includes(`${DOMAIN}.${name}`)) return false;
   for (const t of targets) {
@@ -1495,7 +1507,7 @@ function shadowedInFile(src: string, code: Uint8Array, name: string): boolean {
       continue;
     }
     if (t.endsWith(`.${name}`)) return true;
-    if (t.endsWith(".*") && t !== `${DOMAIN}.*` && !t.startsWith("io.github.markusaugust.streamlord.") && usedInCode(src, code, name)) return true;
+    if (stars && t.endsWith(".*") && t !== `${DOMAIN}.*` && !t.startsWith("io.github.markusaugust.streamlord.") && usedInCode(src, code, name)) return true;
   }
   const declared = new RegExp(String.raw`\b(?:fun|class|object|interface|typealias)\s+(?:<[^>]*>\s*)?${name}(?![\p{L}\p{Nd}_])`, "gu");
   for (const m of src.matchAll(declared)) {
@@ -1798,11 +1810,11 @@ export function argKind(src: string, text: string, literal: boolean, at: number)
   if (t === "null") return "null";
   if (/^'(?:[^'\\]|\\.[^']*)'$/.test(t)) return "char";
   if (/^if\s*\(/.test(t) && literalOnly(t)) return t.includes('"') ? "string" : null;
-  if (wholeCall(t, "Trusted") || (IDENT.test(t) && trustedName(src, t, at))) return "trusted";
-  if (wholeCall(t, "interpolate")) return "markup";
+  if ((wholeCall(t, "Trusted") && !shadowsCore(src, "Trusted")) || (IDENT.test(t) && trustedName(src, t, at))) return "trusted";
+  if (wholeCall(t, "interpolate") && !shadowsCore(src, "interpolate")) return "markup";
   // The String of the Html: interpolate(...).text.
   const html = /^([\s\S]*?)\s*\.\s*text$/.exec(t)?.[1];
-  if (html !== undefined && wholeCall(html, "interpolate")) return "string";
+  if (html !== undefined && wholeCall(html, "interpolate") && !shadowsCore(src, "interpolate")) return "string";
   const called = callKind(src, t, at);
   if (called !== null) return called;
   const declared = IDENT.test(t) ? declaredKind(src, t, at) : null;

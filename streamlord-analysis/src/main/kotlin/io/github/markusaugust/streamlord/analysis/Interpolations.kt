@@ -312,6 +312,9 @@ internal class FileFacts(
     /** Whether something other than core's domain takes each name in this file, by the name ([shadowedInFile]). */
     val shadowed: MutableMap<String, Boolean> = java.util.concurrent.ConcurrentHashMap()
 
+    /** The same with no star import counted, for what a name means here rather than what a fix may add ([shadowsCore]). */
+    val taken: MutableMap<String, Boolean> = java.util.concurrent.ConcurrentHashMap()
+
     /** Whether the file's imports show it uses the DSL: what decides when the host does not know. */
     val usesDsl: Boolean by lazy(LazyThreadSafetyMode.PUBLICATION) { USES_HTML_DSL.containsMatchIn(src) }
 
@@ -1017,6 +1020,7 @@ internal fun trustedLiteral(
     at: Int,
 ): String? {
     val t = value.trim()
+    if (shadowsCore(src, "Trusted")) return null
     if (IDENT.matches(t)) return declarationOf(src, t, at)?.trustedText
     return literalTrusted(t, 0, whole = true)
 }
@@ -1955,16 +1959,20 @@ internal fun coreNameUsable(
     ) {
         return false
     }
-    return !shadowsCore(src, name)
+    return !facts.shadowed.getOrPut(name) { shadowedInFile(src, facts.code, name) }
 }
 
-/** Whether something other than core's domain takes [name] in [src], read once per file: [shadowedInFile]. */
+/**
+ * Whether [name] in [src] means something other than core's own, read once per file by
+ * [shadowedInFile]: an import of it from elsewhere, by name or as an alias, or a declaration of it.
+ * A star import from elsewhere does not count, since nothing says the package has the name.
+ */
 internal fun shadowsCore(
     src: String,
     name: String,
 ): Boolean {
     val facts = fileFacts(src)
-    return facts.shadowed.getOrPut(name) { shadowedInFile(src, facts.code, name) }
+    return facts.taken.getOrPut(name) { shadowedInFile(src, facts.code, name, stars = false) }
 }
 
 /** Whether [written], a type as a declaration writes it, is a bare `Html` or `Trusted` that means another type in [src]. */
@@ -1980,15 +1988,16 @@ internal fun markupTypeShadowed(
  * Whether something other than core's domain takes [name] in [src]: an import of it from elsewhere,
  * by name or as an alias, or a `fun`, `class`, `object`, `interface` or `typealias` of that name at
  * the top of the file. An import of core's own name settles it, since an explicit import wins.
- * A star import from outside Streamlord counts only where the file already uses the name: an
- * explicit import the fix adds wins over a star import, so the one risk is that it takes the name
- * from uses that meant the star import's. With no use there is nothing to take, and the import is
- * unambiguous.
+ * With [stars], as a fix asks it, a star import from outside Streamlord counts where the file
+ * already uses the name: an explicit import the fix adds wins over a star import, so the one risk is
+ * that it takes the name from uses that meant the star import's. With no use there is nothing to
+ * take, and the import is unambiguous.
  */
 private fun shadowedInFile(
     src: String,
     code: BooleanArray,
     name: String,
+    stars: Boolean = true,
 ): Boolean {
     val targets =
         keywordLines(src, code, "import").map {
@@ -2006,7 +2015,9 @@ private fun shadowedInFile(
             continue
         }
         if (t.endsWith(".$name")) return true
-        if (t.endsWith(".*") && t != "$DOMAIN.*" && !t.startsWith("io.github.markusaugust.streamlord.") && usedInCode(src, code, name)) {
+        if (stars && t.endsWith(".*") && t != "$DOMAIN.*" && !t.startsWith("io.github.markusaugust.streamlord.") &&
+            usedInCode(src, code, name)
+        ) {
             return true
         }
     }
@@ -2395,11 +2406,11 @@ internal fun valueKind(
     if (t == "null") return ArgKind.NULL
     if (CHAR_LITERAL.matches(t)) return ArgKind.CHAR
     if (IF_START.containsMatchIn(t) && literalOnly(t)) return if ('"' in t) ArgKind.STRING else null
-    if (wholeCall(t, "Trusted") || (IDENT.matches(t) && trustedName(src, t, at))) return ArgKind.TRUSTED
-    if (wholeCall(t, "interpolate")) return ArgKind.MARKUP
+    if ((wholeCall(t, "Trusted") && !shadowsCore(src, "Trusted")) || (IDENT.matches(t) && trustedName(src, t, at))) return ArgKind.TRUSTED
+    if (wholeCall(t, "interpolate") && !shadowsCore(src, "interpolate")) return ArgKind.MARKUP
     // The String of the Html: interpolate(...).text.
     val html = TEXT_OF.find(t)?.groupValues?.get(1)
-    if (html != null && wholeCall(html, "interpolate")) return ArgKind.STRING
+    if (html != null && wholeCall(html, "interpolate") && !shadowsCore(src, "interpolate")) return ArgKind.STRING
     callKind(src, t, at, emptySet())?.argKind()?.let { return it }
     if (!IDENT.matches(t)) return null
     // `val name = "Gorvek"`: a String, though no type is written.

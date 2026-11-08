@@ -44,8 +44,25 @@ class DeclaredTypeTest : StreamlordTestCase() {
         assertTrue(hinted("package p\n\nimport com.acme.Markup as Html\n\nfun f(h: Html) = \"<p>\$h</p>\"\n", "\$h"))
     }
 
-    fun `test an Html under a star import of another package is no markup`() {
-        assertTrue(hinted("package p\n\nimport com.acme.*\n\nfun f(h: Html) = \"<p>\$h</p>\"\n", "\$h"))
+    fun `test an Html of another package written in full is no markup`() {
+        assertTrue(hinted("package p\n\nfun f(h: com.acme.Html) = \"<p>\$h</p>\"\n", "\$h"))
+    }
+
+    fun `test an Html the file declares is no markup`() {
+        assertTrue(hinted("package p\n\nclass Html\n\nfun f(h: Html) = \"<p>\$h</p>\"\n", "\$h"))
+    }
+
+    fun `test a joinToString of an Html imported from another package is no markup`() {
+        assertTrue(
+            hinted(
+                "package p\n\nimport com.acme.Html\n\nfun f(items: List<Html>) = \"<ul>\${items.joinToString(\"\")}</ul>\"\n",
+                "\${items.joinToString(\"\")}",
+            ),
+        )
+    }
+
+    fun `test a Trusted imported from another package is no markup`() {
+        assertTrue(hinted("package p\n\nimport com.acme.Trusted\n\nfun f(t: Trusted) = \"<p>\$t</p>\"\n", "\$t"))
     }
 
     fun `test a call to a Trusted of another package is no markup`() {
