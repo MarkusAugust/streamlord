@@ -43,6 +43,22 @@ private val TEXT_TAG_START = tagStart("__kt__")
 private val MARGIN_START = Regex("""^\s*\|""")
 
 /**
+ * The fact of a class the editor resolved, by its qualified name, where the text alone would read
+ * its name as Streamlord's markup: [ValueFact.OTHER] for an `Html` or a `Trusted` that is not
+ * Streamlord's, of another package or of none. Null for any other class, Streamlord's own among them.
+ */
+public fun ValueFact.Companion.ofResolvedClass(qualified: String): ValueFact? {
+    val name = qualified.substringAfterLast('.')
+    return if ((name == "Html" || name == "Trusted") &&
+        qualified != "io.github.markusaugust.streamlord.core.domain.$name"
+    ) {
+        ValueFact.OTHER
+    } else {
+        null
+    }
+}
+
+/**
  * The fact a type gives, as a declaration writes it, the whitespace in it ignored: `Int`
  * [ValueFact.NUMBER] and `Int?` [ValueFact.NULLABLE], `String?` [ValueFact.NULLABLE_STRING], and
  * Streamlord's `Html` or `Trusted` [ValueFact.MARKUP], bare or in full. Null for any other type,

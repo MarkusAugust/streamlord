@@ -501,20 +501,28 @@ private fun lineEnds(
     return !LINE_GOES_ON_AFTER.containsMatchIn(src.substring(k, minOf(src.length, k + 5)))
 }
 
-private val MARKUP_INITIALISER = Regex("""\s*=\s*(?:interpolate|Trusted)\s*\(""")
-private val TRUSTED_INITIALISER = Regex("""\s*=\s*Trusted\s*\(""")
+private val MARKUP_INITIALISER = Regex("""\s*=\s*([\p{L}_][\p{L}\p{Nd}_]*)\s*\(""")
 private val STATEMENT_END = Regex("""^[ \t]*(?:[\n\r;})\],]|//|$)""")
 
-/** Whether what follows a declared name at [at] is `= interpolate(...)` or `= Trusted(...)`, the whole value: `val row = interpolate(...)`. */
+/**
+ * Which of `interpolate` and `Trusted` what follows a declared name at [at] calls as the whole
+ * value, `val row = interpolate(...)`, under its name or one of [aliases], and where the call
+ * starts; null for any other value.
+ */
 private fun markupInitialiser(
     src: String,
     at: Int,
-): Boolean {
-    val m = MARKUP_INITIALISER.matchAt(src, at) ?: return false
+    aliases: Map<String, String>,
+): Pair<String, Int>? {
+    val m = MARKUP_INITIALISER.matchAt(src, at) ?: return null
+    val callee = m.groups[1]!!
+    val name = aliases[callee.value] ?: callee.value
+    if (name != "interpolate" && name != "Trusted") return null
     val open = m.range.last
     val e = src.substring(open, minOf(src.length, open + 20_000))
     val close = closing(e, depths(e), 0)
-    return close > 0 && STATEMENT_END.containsMatchIn(e.substring(close, minOf(e.length, close + 8)))
+    if (close <= 0 || !STATEMENT_END.containsMatchIn(e.substring(close, minOf(e.length, close + 8)))) return null
+    return name to callee.range.first
 }
 
 private val TEXT_OF_NAME = Regex("""\s*=\s*($NAME)\s*\.\s*text(?=[ \t]*(?:[\n\r;})\],]|//|$))""")
@@ -574,6 +582,7 @@ private fun declarations(
     code: BooleanArray,
 ): Map<String, List<Declaration>> {
     val names = HashMap<String, ArrayList<Declaration>>()
+    val aliases = aliasesIn(src, code)
 
     fun add(
         name: String,
@@ -713,16 +722,10 @@ private fun declarations(
                         if (m != null && m.groupValues[1].isEmpty()) {
                             val at = m.groups[2]!!.range.first
                             val bare = m.groups[4] == null && m.groups[5] == null
-                            val markup = bare && markupInitialiser(src, m.range.last + 1)
-                            val trusted = markup && TRUSTED_INITIALISER.matchAt(src, m.range.last + 1) != null
-                            val trustedText =
-                                if (trusted &&
-                                    word == "val"
-                                ) {
-                                    literalTrusted(src, src.indexOf("Trusted", m.range.last + 1))
-                                } else {
-                                    null
-                                }
+                            val initialiser = if (bare) markupInitialiser(src, m.range.last + 1, aliases) else null
+                            val markup = initialiser != null
+                            val trusted = initialiser?.first == "Trusted"
+                            val trustedText = if (trusted && word == "val") literalTrusted(src, initialiser.second) else null
                             val arguments = m.groups[3]?.let { TYPE_ARGUMENTS_AFTER.matchAt(src, it.range.last + 1) }
                             // The value of a `val` set once, which a name then stands for.
                             val valueAt =
@@ -961,8 +964,11 @@ internal fun declaredKind(
     return declaredFact(coreType(src, declared), nonNull, core)
 }
 
+// The callee is Trusted or an alias of it, which the caller has read.
 private val TRUSTED_LITERAL =
-    Regex("Trusted\\s*\\(\\s*(?:html\\s*=\\s*)?(?:\"((?:[^\"\\\\$\\n]|\\\\.)*)\"|\"\"\"((?:[^\"$]|\"(?!\"\"))*)\"\"\")\\s*\\)")
+    Regex(
+        "[\\p{L}_][\\p{L}\\p{Nd}_]*\\s*\\(\\s*(?:html\\s*=\\s*)?(?:\"((?:[^\"\\\\$\\n]|\\\\.)*)\"|\"\"\"((?:[^\"$]|\"(?!\"\"))*)\"\"\")\\s*\\)",
+    )
 private val KOTLIN_ESCAPE = Regex("""\\(u[0-9A-Fa-f]{4}|.)""")
 
 /**
@@ -1987,8 +1993,16 @@ internal fun shadowsCore(
  */
 internal fun coreAliases(src: String): Map<String, String> {
     val facts = fileFacts(src)
-    return facts.aliases ?: HashMap<String, String>().also { out ->
-        for (line in keywordLines(src, facts.code, "import")) {
+    return facts.aliases ?: aliasesIn(src, facts.code).also { facts.aliases = it }
+}
+
+/** The aliases of [coreAliases], read from the imports in the [code] of [src]. */
+private fun aliasesIn(
+    src: String,
+    code: BooleanArray,
+): Map<String, String> =
+    HashMap<String, String>().also { out ->
+        for (line in keywordLines(src, code, "import")) {
             val t =
                 src
                     .substring(line.start, line.codeEnd)
@@ -1998,9 +2012,7 @@ internal fun coreAliases(src: String): Map<String, String> {
             val m = CORE_ALIAS.matchEntire(t) ?: continue
             out[m.groupValues[2]] = m.groupValues[1]
         }
-        facts.aliases = out
     }
-}
 
 private val CORE_ALIAS = Regex("""${Regex.escape(DOMAIN)}\.([\p{L}_][\p{L}\p{Nd}_]*)\s+as\s+([\p{L}_][\p{L}\p{Nd}_]*)""")
 
@@ -2041,7 +2053,7 @@ internal fun coreCall(
     name: String,
 ): Boolean = asCoreCall(src, text, name)?.let { wholeCall(it, name) } == true
 
-/** Whether [text] calls core's `Trusted` anywhere, under that name or an alias: what a hole that calls it holds. */
+/** Whether [text] calls core's `Trusted` anywhere, under that name or an alias. */
 internal fun callsTrusted(
     src: String,
     text: String,
@@ -2053,6 +2065,15 @@ internal fun callsTrusted(
         }
 
 private val TRUSTED_CALL = Regex("""(?:^|[^\p{L}\p{Nd}_.])Trusted\s*\(""")
+
+/**
+ * Whether [src] imports [name] from another package, by name or as an alias. A `fun` of the name in
+ * the file does not count: an overload that does not fit the call leaves it to core's.
+ */
+internal fun importsOther(
+    src: String,
+    name: String,
+): Boolean = shadowedInFile(src, fileFacts(src).code, name, stars = false, declared = false)
 
 /** Whether [written], a type as a declaration writes it, is a bare `Html` or `Trusted` that means another type in [src]. */
 internal fun markupTypeShadowed(
@@ -2070,13 +2091,14 @@ internal fun markupTypeShadowed(
  * With [stars], as a fix asks it, a star import from outside Streamlord counts where the file
  * already uses the name: an explicit import the fix adds wins over a star import, so the one risk is
  * that it takes the name from uses that meant the star import's. With no use there is nothing to
- * take, and the import is unambiguous.
+ * take, and the import is unambiguous. Without [declared], only the imports count.
  */
 private fun shadowedInFile(
     src: String,
     code: BooleanArray,
     name: String,
     stars: Boolean = true,
+    declared: Boolean = true,
 ): Boolean {
     val targets =
         keywordLines(src, code, "import").map {
@@ -2100,8 +2122,9 @@ private fun shadowedInFile(
             return true
         }
     }
-    val declared = Regex("""\b(?:fun|class|object|interface|typealias)\s+(?:<[^>]*>\s*)?${Regex.escape(name)}(?![\p{L}\p{Nd}_])""")
-    for (m in declared.findAll(src)) {
+    if (!declared) return false
+    val declaration = Regex("""\b(?:fun|class|object|interface|typealias)\s+(?:<[^>]*>\s*)?${Regex.escape(name)}(?![\p{L}\p{Nd}_])""")
+    for (m in declaration.findAll(src)) {
         if (!code[m.range.first]) continue
         var depth = 0
         for (i in 0 until m.range.first) {

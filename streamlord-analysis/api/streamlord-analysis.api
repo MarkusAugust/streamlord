@@ -1389,6 +1389,7 @@ public final class io/github/markusaugust/streamlord/analysis/ValueKind : java/l
 
 public final class io/github/markusaugust/streamlord/analysis/ValueTypesKt {
 	public static final fun isMarkupCollection (Ljava/lang/String;)Z
+	public static final fun ofResolvedClass (Lio/github/markusaugust/streamlord/analysis/ValueFact$Companion;Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/ValueFact;
 	public static final fun ofTypeName (Lio/github/markusaugust/streamlord/analysis/ValueFact$Companion;Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/ValueFact;
 	public static final fun opensWithTag (Ljava/lang/String;Z)Z
 	public static synthetic fun opensWithTag$default (Ljava/lang/String;ZILjava/lang/Object;)Z

@@ -83,13 +83,15 @@ All notable changes to Streamlord are recorded here. The format follows
   literal is no longer read as markup in place. IntelliJ in K1 mode reads the type the declaration
   resolves to, as K2 does. IntelliJ also goes by the class it resolves where the text alone would
   say Streamlord's: an `Html` of the file's own package declared in another file, one a star import
-  brings in from another package, or one written in backticks.
+  brings in from another package, or one written in backticks. That goes for a `Trusted(...)` too:
+  its literal is not read in place, and `interpolate` does not let it into a `<script>`.
 - Streamlord's own `Html` and `Trusted` imported under another name,
   `import io.github.markusaugust.streamlord.core.domain.Html as Page`, are markup: a value declared
-  `Page` or `List<Page>`, and a call to `T(x)` or `T("...")` for a `Trusted` imported as `T`, asked
-  for `interpolate(...)` they do not need.
+  `Page` or `List<Page>`, a call to `T(x)` or `T("...")` for a `Trusted` imported as `T`, and a
+  `val` set to one, asked for `interpolate(...)` they do not need.
 - An `interpolate` imported from another package, `import com.acme.interpolate`, is no longer
-  checked as Streamlord's: its format got errors about placeholders it may not have.
+  checked as Streamlord's: its format got errors about placeholders it may not have. A `fun
+  interpolate` the file declares still leaves the call to Streamlord's where it does not fit.
 - A string literal that opens with a tag a template names, `"<$tag>x</$tag>"`, is markup in VS Code
   too, as it was in IntelliJ; VS Code asked for `interpolate(...)` around it. The template in the
   tag name is still judged on its own.

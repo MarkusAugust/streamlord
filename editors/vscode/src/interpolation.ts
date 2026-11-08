@@ -439,6 +439,7 @@ interface Frame {
  */
 function declarations(src: string, code: Uint8Array): Map<string, Declaration[]> {
   const names = new Map<string, Declaration[]>();
+  const aliases = aliasesIn(src, code);
   const add = (name: string, d: Declaration) => {
     if (name === "_") return;
     const list = names.get(name);
@@ -520,10 +521,10 @@ function declarations(src: string, code: Uint8Array): Map<string, Declaration[]>
           // `val String.shout`: an extension, read on a receiver and never by its name alone.
           if (m && !m[1]) {
             const at = end + m[0].indexOf(m[2] as string, (m[0].length - m[0].trimStart().length));
-            const markup = m[4] === undefined && m[5] === undefined && markupInitialiser(src, end + m[0].length);
-            TRUSTED_INITIALISER.lastIndex = end + m[0].length;
-            const trusted = markup && TRUSTED_INITIALISER.test(src);
-            const trustedText = trusted && word === "val" ? (literalTrusted(src, src.indexOf("Trusted", end + m[0].length)) ?? undefined) : undefined;
+            const initialiser = m[4] === undefined && m[5] === undefined ? markupInitialiser(src, end + m[0].length, aliases) : null;
+            const markup = initialiser !== null;
+            const trusted = initialiser?.name === "Trusted";
+            const trustedText = trusted && word === "val" ? (literalTrusted(src, initialiser.start) ?? undefined) : undefined;
             const textOf = m[4] === undefined && m[5] === undefined && !markup ? textInitialiser(src, end + m[0].length) : undefined;
             let after = end + m[0].length;
             let typeArguments: string | undefined;
@@ -650,19 +651,26 @@ function declarations(src: string, code: Uint8Array): Map<string, Declaration[]>
   return names;
 }
 
-const MARKUP_INITIALISER = /\s*=\s*(?:interpolate|Trusted)\s*\(/y;
-const TRUSTED_INITIALISER = /\s*=\s*Trusted\s*\(/y;
+const MARKUP_INITIALISER = /\s*=\s*([\p{L}_][\p{L}\p{Nd}_]*)\s*\(/uy;
 const STATEMENT_END = /^[ \t]*(?:[\n\r;})\],]|\/\/|$)/;
 
-/** Whether what follows a declared name at `at` is `= interpolate(...)` or `= Trusted(...)`, the whole value: `val row = interpolate(...)`. */
-function markupInitialiser(src: string, at: number): boolean {
+/**
+ * Which of `interpolate` and `Trusted` what follows a declared name at `at` calls as the whole
+ * value, `val row = interpolate(...)`, under its name or one of `aliases`, and where the call
+ * starts; null for any other value. `markupInitialiser` in Interpolations.kt.
+ */
+function markupInitialiser(src: string, at: number, aliases: ReadonlyMap<string, string>): { name: string; start: number } | null {
   MARKUP_INITIALISER.lastIndex = at;
   const m = MARKUP_INITIALISER.exec(src);
-  if (!m) return false;
+  if (!m) return null;
+  const callee = m[1] as string;
+  const name = aliases.get(callee) ?? callee;
+  if (name !== "interpolate" && name !== "Trusted") return null;
   const open = at + m[0].length - 1;
   const e = src.slice(open, open + 20_000);
   const close = closing(e, depths(e), 0);
-  return close > 0 && STATEMENT_END.test(e.slice(close, close + 8));
+  if (close <= 0 || !STATEMENT_END.test(e.slice(close, close + 8))) return null;
+  return { name, start: at + m[0].indexOf(callee) };
 }
 
 const TEXT_OF_NAME = new RegExp(String.raw`\s*=\s*(${NAME})\s*\.\s*text(?=[ \t]*(?:[\n\r;})\],]|//|$))`, "uy");
@@ -780,7 +788,8 @@ export function declaredKind(src: string, name: string, at: number, nonNull = fa
   return declaredFact(coreType(src, d.type), nonNull, core) as TextKind | null;
 }
 
-const TRUSTED_LITERAL = /Trusted\s*\(\s*(?:html\s*=\s*)?(?:"((?:[^"\\$\n]|\\.)*)"|"""((?:[^"$]|"(?!""))*)""")\s*\)/y;
+// The callee is Trusted or an alias of it, which the caller has read.
+const TRUSTED_LITERAL = /[\p{L}_][\p{L}\p{Nd}_]*\s*\(\s*(?:html\s*=\s*)?(?:"((?:[^"\\$\n]|\\.)*)"|"""((?:[^"$]|"(?!""))*)""")\s*\)/uy;
 
 /**
  * The text of `Trusted("...")` at `at`, or of `Trusted("""...""")` or `Trusted(html = ...)`, with
@@ -1491,16 +1500,27 @@ export function shadowsCore(src: string, name: string): boolean {
  */
 export function coreAliases(src: string): ReadonlyMap<string, string> {
   const facts = fileFacts(src);
-  if (facts.aliases === undefined) {
-    const out = new Map<string, string>();
-    for (const line of keywordLines(src, facts.code, "import")) {
-      const t = src.slice(line.start, line.codeEnd).trim().replace(/;$/, "").trim();
-      const m = CORE_ALIAS.exec(t);
-      if (m) out.set(m[2] as string, m[1] as string);
-    }
-    facts.aliases = out;
-  }
+  facts.aliases ??= aliasesIn(src, facts.code);
   return facts.aliases;
+}
+
+/** The aliases of `coreAliases`, read from the imports in the `code` of `src`. */
+function aliasesIn(src: string, code: Uint8Array): ReadonlyMap<string, string> {
+  const out = new Map<string, string>();
+  for (const line of keywordLines(src, code, "import")) {
+    const t = src.slice(line.start, line.codeEnd).trim().replace(/;$/, "").trim();
+    const m = CORE_ALIAS.exec(t);
+    if (m) out.set(m[2] as string, m[1] as string);
+  }
+  return out;
+}
+
+/**
+ * Whether `src` imports `name` from another package, by name or as an alias. A `fun` of the name in
+ * the file does not count: an overload that does not fit the call leaves it to core's. `importsOther` in Interpolations.kt.
+ */
+export function importsOther(src: string, name: string): boolean {
+  return shadowedInFile(src, fileFacts(src).code, name, false, false);
 }
 
 const CORE_ALIAS = new RegExp(`^${DOMAIN.replace(/\./g, "\\.")}\\.([\\p{L}_][\\p{L}\\p{Nd}_]*)\\s+as\\s+([\\p{L}_][\\p{L}\\p{Nd}_]*)$`, "u");
@@ -1533,7 +1553,7 @@ function coreCall(src: string, text: string, name: string): boolean {
   return call !== null && wholeCall(call, name);
 }
 
-/** Whether `text` calls core's `Trusted` anywhere, under that name or an alias: what a hole that calls it holds. */
+/** Whether `text` calls core's `Trusted` anywhere, under that name or an alias. */
 export function callsTrusted(src: string, text: string): boolean {
   if (TRUSTED_CALL.test(text)) return true;
   for (const [alias, name] of coreAliases(src)) {
@@ -1557,9 +1577,9 @@ function markupTypeShadowed(src: string, written: string): boolean {
  * With `stars`, as a fix asks it, a star import from outside Streamlord counts where the file
  * already uses the name: an explicit import the fix adds wins over a star import, so the one risk is
  * that it takes the name from uses that meant the star import's. With no use there is nothing to
- * take, and the import is unambiguous.
+ * take, and the import is unambiguous. Without `declared`, only the imports count.
  */
-function shadowedInFile(src: string, code: Uint8Array, name: string, stars = true): boolean {
+function shadowedInFile(src: string, code: Uint8Array, name: string, stars = true, declared = true): boolean {
   const targets = keywordLines(src, code, "import").map((l) => src.slice(l.start, l.codeEnd).trim().replace(/;$/, "").trim());
   if (targets.includes(`${DOMAIN}.${name}`)) return false;
   for (const t of targets) {
@@ -1571,8 +1591,9 @@ function shadowedInFile(src: string, code: Uint8Array, name: string, stars = tru
     if (t.endsWith(`.${name}`)) return true;
     if (stars && t.endsWith(".*") && t !== `${DOMAIN}.*` && !t.startsWith("io.github.markusaugust.streamlord.") && usedInCode(src, code, name)) return true;
   }
-  const declared = new RegExp(String.raw`\b(?:fun|class|object|interface|typealias)\s+(?:<[^>]*>\s*)?${name}(?![\p{L}\p{Nd}_])`, "gu");
-  for (const m of src.matchAll(declared)) {
+  if (!declared) return false;
+  const declaration = new RegExp(String.raw`\b(?:fun|class|object|interface|typealias)\s+(?:<[^>]*>\s*)?${name}(?![\p{L}\p{Nd}_])`, "gu");
+  for (const m of src.matchAll(declaration)) {
     const at = m.index ?? 0;
     if (code[at] !== 1) continue;
     let depth = 0;

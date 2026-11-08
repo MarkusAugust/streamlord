@@ -91,6 +91,24 @@ class DeclaredTypeTest : StreamlordTestCase() {
         assertTrue(hinted("package p\n\nimport com.acme.*\n\nfun f(h: `Html`) = \"<p>\$h</p>\"\n", "\$h"))
     }
 
+    fun `test a Trusted of no package the file declares is no markup`() {
+        assertTrue(hinted("class Trusted(val s: String)\n\nfun f(t: Trusted) = \"<p>\$t</p>\"\n", "\$t"))
+    }
+
+    fun `test a Trusted literal a star import resolves elsewhere is not read in place`() {
+        val text = "package p\n\nimport com.acme.*\n\nfun f(x: String) = \"<div>\${Trusted(\"<a href=\")}\$x</div>\"\n"
+        assertTrue(hinted(text, "\${Trusted(\"<a href=\")}"))
+    }
+
+    fun `test a Trusted a star import resolves elsewhere is not let into a script`() {
+        myFixture.configureByText(
+            "Page.kt",
+            "package p\n\nimport com.acme.*\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\n" +
+                "fun f(x: String) = interpolate(\"<script>%s</script>\", Trusted(x))\n",
+        )
+        assertTrue(myFixture.doHighlighting().any { it.text == "%s" && it.description?.contains("script") == true })
+    }
+
     fun `test Streamlord's Html under another name is markup`() {
         assertFalse(
             hinted(

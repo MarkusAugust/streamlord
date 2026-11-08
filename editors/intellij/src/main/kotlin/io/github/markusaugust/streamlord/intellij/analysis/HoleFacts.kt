@@ -3,11 +3,13 @@ package io.github.markusaugust.streamlord.intellij.analysis
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiMethod
 import com.intellij.psi.util.PsiTreeUtil
 import io.github.markusaugust.streamlord.analysis.Catalog
 import io.github.markusaugust.streamlord.analysis.ValueFact
 import io.github.markusaugust.streamlord.analysis.isMarkup
 import io.github.markusaugust.streamlord.analysis.isMarkupCollection
+import io.github.markusaugust.streamlord.analysis.ofResolvedClass
 import io.github.markusaugust.streamlord.analysis.ofTypeName
 import io.github.markusaugust.streamlord.analysis.opensWithTag
 import io.github.markusaugust.streamlord.analysis.writesItself
@@ -26,6 +28,7 @@ import org.jetbrains.kotlin.psi.KtCallableDeclaration
 import org.jetbrains.kotlin.psi.KtClass
 import org.jetbrains.kotlin.psi.KtClassOrObject
 import org.jetbrains.kotlin.psi.KtConstantExpression
+import org.jetbrains.kotlin.psi.KtConstructor
 import org.jetbrains.kotlin.psi.KtEnumEntry
 import org.jetbrains.kotlin.psi.KtExpression
 import org.jetbrains.kotlin.psi.KtFile
@@ -59,10 +62,6 @@ import org.jetbrains.kotlin.psi.KtWhenExpression
 object HoleFacts {
     private val HTML_CLASS = ClassId.fromString("io/github/markusaugust/streamlord/core/domain/Html")
     private val TRUSTED_CLASS = ClassId.fromString("io/github/markusaugust/streamlord/core/domain/Trusted")
-
-    /** The names the analysis reads as Streamlord's markup, and the classes that are. */
-    private val MARKUP_NAMES = setOf("Html", "Trusted")
-    private val OWN_MARKUP = setOf(HTML_CLASS, TRUSTED_CLASS).map { it.asFqNameString() }
     private val NUMBER_CLASS = ClassId.fromString("kotlin/Number")
     private const val HTML_PACKAGE = "io.github.markusaugust.streamlord.html"
     private const val KOTLINX_STREAM = "kotlinx.html.stream"
@@ -80,12 +79,13 @@ object HoleFacts {
     /** The fact of every value in an HTML template or `+` chain, by the range the analysis gives its hole. */
     fun of(file: KtFile): Map<TextRange, ValueFact> {
         val holes = holes(file)
-        if (holes.isEmpty()) return emptyMap()
+        val arguments = interpolateArguments(file)
+        if (holes.isEmpty() && arguments.isEmpty()) return emptyMap()
         // The property the Kotlin plugin's own plugin.xml switches K1 on with; KotlinPluginModeProvider,
         // which reads it too, is scheduled for removal in 2026.2.
         val k1 = System.getProperty("idea.kotlin.plugin.use.k1").toBoolean()
         return if (k1) {
-            judge(holes, ::constantK1, ::typeK1, ::markupElementsK1) { typeFactK1(it).isMarkup() }
+            judge(holes, ::constantK1, ::typeK1, ::markupElementsK1) { typeFactK1(it).isMarkup() } + resolved(arguments, ::classK1)
         } else {
             analyze(file) {
                 judge(
@@ -94,9 +94,39 @@ object HoleFacts {
                     { typeFact(it.expressionType) },
                     { markupElements(it.expressionType) },
                     { typeFact(it.type).isMarkup() },
-                )
+                ) + resolved(arguments) { classOf(it.expressionType) }
             }
         }
+    }
+
+    /**
+     * The values handed to each `interpolate(...)` after its format, by their own range: the
+     * analysis reads them from the text, and is told only where the class says otherwise.
+     */
+    private fun interpolateArguments(file: KtFile): List<Pair<TextRange, KtExpression>> =
+        PsiTreeUtil
+            .collectElementsOfType(file, KtCallExpression::class.java)
+            .filter { it.calleeExpression?.text == "interpolate" }
+            .flatMap { call -> call.valueArguments.drop(1).mapNotNull { a -> a.getArgumentExpression()?.let { it.textRange to it } } }
+
+    /** The fact of each value by the class [qualified] resolves it to, where the text alone would read the class wrong. */
+    private fun resolved(
+        values: List<Pair<TextRange, KtExpression>>,
+        qualified: (KtExpression) -> String?,
+    ): Map<TextRange, ValueFact> =
+        buildMap { for ((range, expr) in values) qualified(expr)?.let { ValueFact.ofResolvedClass(it) }?.let { put(range, it) } }
+
+    /** The qualified name of the class of [type], or null where it is none. */
+    private fun classOf(type: KaType?): String? {
+        val lower = (type as? KaFlexibleType)?.lowerBound ?: type
+        return (lower as? KaClassType)?.classId?.asFqNameString()
+    }
+
+    /** K1: the qualified name of the class a call constructs, or a reference's declaration is declared. */
+    private fun classK1(expr: KtExpression): String? {
+        constructedK1(expr)?.let { return it }
+        val target = reference(expr)?.mainReference?.resolve() as? KtCallableDeclaration ?: return null
+        return classK1(target.typeReference ?: return null)
     }
 
     /**
@@ -270,16 +300,9 @@ object HoleFacts {
                 if (definite) ValueFact.BOOLEAN else ValueFact.NULLABLE
             }
 
-            // An Html or a Trusted of another package, which the analysis would take for ours by the name.
-            (lower as? KaClassType)?.classId?.let {
-                it.shortClassName.asString() in MARKUP_NAMES && it != HTML_CLASS && it != TRUSTED_CLASS
-            } ==
-                true -> {
-                ValueFact.OTHER
-            }
-
+            // An Html or a Trusted of another package, which the text alone would take for Streamlord's.
             else -> {
-                null
+                classOf(lower)?.let { ValueFact.ofResolvedClass(it) }
             }
         }
     }
@@ -314,16 +337,28 @@ object HoleFacts {
      */
     private fun typeFactK1(ref: KtTypeReference): ValueFact? {
         val nullable = if (ref.typeElement is KtNullableType) "?" else ""
-        val resolved = (unwrapped(ref) as? KtUserType)?.referenceExpression?.mainReference?.resolve()
-        val qualified =
-            when (resolved) {
-                is KtClassOrObject -> resolved.fqName?.asString()
-                is PsiClass -> resolved.qualifiedName
-                else -> null
-            }
-        if (qualified == null) return null
-        ValueFact.ofTypeName(qualified + nullable)?.let { return it }
-        return if (qualified.substringAfterLast('.') in MARKUP_NAMES && qualified !in OWN_MARKUP) ValueFact.OTHER else null
+        val qualified = classK1(ref) ?: return null
+        return ValueFact.ofResolvedClass(qualified) ?: ValueFact.ofTypeName(qualified + nullable)
+    }
+
+    /** K1: the qualified name of the class the type [ref] writes resolves to. */
+    private fun classK1(ref: KtTypeReference): String? =
+        when (val resolved = (unwrapped(ref) as? KtUserType)?.referenceExpression?.mainReference?.resolve()) {
+            is KtClassOrObject -> resolved.fqName?.asString()
+            is PsiClass -> resolved.qualifiedName
+            else -> null
+        }
+
+    /** K1: the qualified name of the class a call constructs, `Trusted(x)`; null for any other call. */
+    private fun constructedK1(expr: KtExpression): String? {
+        val call = KtPsiUtil.safeDeparenthesize(expr) as? KtCallExpression ?: return null
+        return when (val target = (call.calleeExpression as? KtNameReferenceExpression)?.mainReference?.resolve()) {
+            is KtClassOrObject -> target.fqName?.asString()
+            is KtConstructor<*> -> target.getContainingClassOrObject().fqName?.asString()
+            is PsiClass -> target.qualifiedName
+            is PsiMethod -> if (target.isConstructor) target.containingClass?.qualifiedName else null
+            else -> null
+        }
     }
 
     /** K1: a `const val` the reference resolves to, or an enum entry. */
@@ -336,6 +371,7 @@ object HoleFacts {
 
     /** K1: the type the declaration a reference resolves to writes out. */
     private fun typeK1(expr: KtExpression): ValueFact? {
+        constructedK1(expr)?.let { ValueFact.ofResolvedClass(it) }?.let { return it }
         // `a?.b` may be null whatever `b` declares.
         if (KtPsiUtil.safeDeparenthesize(expr) is KtSafeQualifiedExpression) return null
         val target = reference(expr)?.mainReference?.resolve() as? KtCallableDeclaration ?: return null

@@ -116,7 +116,7 @@ internal fun ValueFact?.isNullableString(): Boolean = this == ValueFact.NULLABLE
 /** A number or a boolean that may be null. */
 internal fun ValueFact?.isNullable(): Boolean = this == ValueFact.NULLABLE
 
-/** A type the editor resolved that is none of the others, which no reading of the text makes markup. */
+/** An `Html` or a `Trusted` the editor resolved to another package, which no reading of the text makes markup. */
 internal fun ValueFact?.isOther(): Boolean = this == ValueFact.OTHER
 
 /** Html or Trusted: markup, whose values have been through interpolate or which the author vouched for. */

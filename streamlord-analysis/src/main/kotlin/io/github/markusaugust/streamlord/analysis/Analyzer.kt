@@ -59,9 +59,10 @@ internal class Sdk private constructor(
  * number or a boolean that may be null (`Int?`): digits, true, false or null. [NULLABLE_STRING] is
  * a `String?`, which a Kotlin template writes as `null` and `interpolate` as nothing. [UNSIGNED] is
  * a `UInt`, `ULong`, `UShort` or `UByte`: digits, but not a `kotlin.Number`, so `interpolate`
- * refuses it where only a number is let in. [OTHER] is a type the editor resolved that is none of
- * these, such as an `Html` of another package: nothing about it is known, and no reading of the
- * text makes it markup.
+ * refuses it where only a number is let in. [OTHER] is a class the editor resolved whose name the
+ * text alone would take for Streamlord's markup, an `Html` or a `Trusted` of another package
+ * ([ofResolvedClass]): nothing about it is known, and no reading of the text makes it markup. Only
+ * IntelliJ gives it; VS Code has no resolver.
  */
 public enum class ValueFact {
     STRING,
@@ -276,9 +277,10 @@ public class Analyzer(
             }
             if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
         }
+        // An interpolate the file takes from another package is not core's, whose format this reads.
+        val otherInterpolate = importsOther(src, "interpolate")
         for (site in findCallSites(src, INTERPOLATE, lex)) {
-            // An interpolate the file takes from another package is not core's, whose format this reads.
-            if (foreign(site.name, site.nameStart) || shadowsCore(src, "interpolate")) continue
+            if (foreign(site.name, site.nameStart) || otherInterpolate) continue
             val format = interpolateFormat(site, src) ?: continue
             for (x in lex.strings) if (x.start >= format.second.start && x.end <= format.second.end) claimed += x.start
             val issues = checkInterpolateSite(site, format.first, format.second, src, opts, hyphenated)
@@ -1261,7 +1263,8 @@ public class Analyzer(
         // A literal Trusted is markup the author wrote, read in place: the other holes are judged against it.
         val written = HashMap<Int, String>()
         for ((k, ip) in s.interpolations.withIndex()) {
-            if (ip.kind == InterpolationKind.OPERAND || !core) continue
+            // A Trusted the editor resolves to another package is none of core's, whatever the text says.
+            if (ip.kind == InterpolationKind.OPERAND || !core || opts.valueFact?.invoke(ip.start, ip.end).isOther()) continue
             trustedLiteral(src, ip.text, s.start)?.let { written[k] = it }
         }
         val reading =
