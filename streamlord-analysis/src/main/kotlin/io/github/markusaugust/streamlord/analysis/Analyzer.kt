@@ -277,8 +277,9 @@ public class Analyzer(
             }
             if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
         }
-        // An interpolate the file takes from another package is not core's, whose format this reads.
-        val otherInterpolate = importsOther(src, "interpolate")
+        // An interpolate the file takes from elsewhere is not core's, whose format this reads; nor one it
+        // declares, since the text cannot tell whether the call fits it.
+        val otherInterpolate = shadowsCore(src, "interpolate")
         for (site in findCallSites(src, INTERPOLATE, lex)) {
             if (foreign(site.name, site.nameStart) || otherInterpolate) continue
             val format = interpolateFormat(site, src) ?: continue

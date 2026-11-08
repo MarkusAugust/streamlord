@@ -90,8 +90,8 @@ All notable changes to Streamlord are recorded here. The format follows
   `Page` or `List<Page>`, a call to `T(x)` or `T("...")` for a `Trusted` imported as `T`, and a
   `val` set to one, asked for `interpolate(...)` they do not need.
 - An `interpolate` imported from another package, `import com.acme.interpolate`, is no longer
-  checked as Streamlord's: its format got errors about placeholders it may not have. A `fun
-  interpolate` the file declares still leaves the call to Streamlord's where it does not fit.
+  checked as Streamlord's: its format got errors about placeholders it may not have. Nor is one the
+  file declares, since the text cannot tell which the call fits.
 - A string literal that opens with a tag a template names, `"<$tag>x</$tag>"`, is markup in VS Code
   too, as it was in IntelliJ; VS Code asked for `interpolate(...)` around it. The template in the
   tag name is still judged on its own.

@@ -284,6 +284,8 @@ internal class Declaration(
     val trusted: Boolean = false,
     /** The text a `val` set to `Trusted("...")` writes, the literal as the Kotlin compiler reads it. */
     val trustedText: String? = null,
+    /** Whether the call it is set to names core's own under an alias the file imports, which no other import can take. */
+    val aliased: Boolean = false,
 ) {
     /** Just past where it can last be seen. */
     var end: Int = Int.MAX_VALUE
@@ -506,14 +508,14 @@ private val STATEMENT_END = Regex("""^[ \t]*(?:[\n\r;})\],]|//|$)""")
 
 /**
  * Which of `interpolate` and `Trusted` what follows a declared name at [at] calls as the whole
- * value, `val row = interpolate(...)`, under its name or one of [aliases], and where the call
- * starts; null for any other value.
+ * value, `val row = interpolate(...)`, under its name or one of [aliases], where the call starts,
+ * and whether it is called by an alias; null for any other value.
  */
 private fun markupInitialiser(
     src: String,
     at: Int,
     aliases: Map<String, String>,
-): Pair<String, Int>? {
+): Triple<String, Int, Boolean>? {
     val m = MARKUP_INITIALISER.matchAt(src, at) ?: return null
     val callee = m.groups[1]!!
     val name = aliases[callee.value] ?: callee.value
@@ -522,7 +524,7 @@ private fun markupInitialiser(
     val e = src.substring(open, minOf(src.length, open + 20_000))
     val close = closing(e, depths(e), 0)
     if (close <= 0 || !STATEMENT_END.containsMatchIn(e.substring(close, minOf(e.length, close + 8)))) return null
-    return name to callee.range.first
+    return Triple(name, callee.range.first, name != callee.value)
 }
 
 private val TEXT_OF_NAME = Regex("""\s*=\s*($NAME)\s*\.\s*text(?=[ \t]*(?:[\n\r;})\],]|//|$))""")
@@ -758,6 +760,7 @@ private fun declarations(
                                         shared,
                                         trusted,
                                         trustedText,
+                                        aliased = initialiser?.third == true,
                                     ),
                                 )
                             if (owner.kind != "top") owner.ends += d
@@ -957,7 +960,7 @@ internal fun declaredKind(
         }
     }
     // Without core, Html, Trusted and interpolate are not Streamlord's, and nothing says what they hold.
-    if (d.markup) return if (core && !shadowsCore(src, if (d.trusted) "Trusted" else "interpolate")) ValueFact.MARKUP else null
+    if (d.markup) return if (core && setToCore(src, d)) ValueFact.MARKUP else null
     val declared = d.type ?: return null
     // An Html or a Trusted the file takes from another package is no markup the analysis knows.
     if (markupTypeShadowed(src, declared)) return null
@@ -1030,7 +1033,7 @@ internal fun trustedLiteral(
     at: Int,
 ): String? {
     val t = value.trim()
-    if (IDENT.matches(t)) return if (shadowsCore(src, "Trusted")) null else declarationOf(src, t, at)?.trustedText
+    if (IDENT.matches(t)) return declarationOf(src, t, at)?.takeIf { setToCore(src, it) }?.trustedText
     return literalTrusted(asCoreCall(src, t, "Trusted") ?: return null, 0, whole = true)
 }
 
@@ -1043,7 +1046,7 @@ private fun trustedName(
     val d = declarationOf(src, name, at) ?: return false
     val type = d.type
     if (type != null && isTrustedType(coreType(src, type))) return !markupTypeShadowed(src, type)
-    return d.trusted && !shadowsCore(src, "Trusted")
+    return d.trusted && setToCore(src, d)
 }
 
 /**
@@ -2066,14 +2069,11 @@ internal fun callsTrusted(
 
 private val TRUSTED_CALL = Regex("""(?:^|[^\p{L}\p{Nd}_.])Trusted\s*\(""")
 
-/**
- * Whether [src] imports [name] from another package, by name or as an alias. A `fun` of the name in
- * the file does not count: an overload that does not fit the call leaves it to core's.
- */
-internal fun importsOther(
+/** Whether [d] is set to a call to core's `interpolate` or `Trusted`: by an alias, or by a name nothing else in [src] takes. */
+private fun setToCore(
     src: String,
-    name: String,
-): Boolean = shadowedInFile(src, fileFacts(src).code, name, stars = false, declared = false)
+    d: Declaration,
+): Boolean = d.markup && (d.aliased || !shadowsCore(src, if (d.trusted) "Trusted" else "interpolate"))
 
 /** Whether [written], a type as a declaration writes it, is a bare `Html` or `Trusted` that means another type in [src]. */
 internal fun markupTypeShadowed(
@@ -2091,14 +2091,13 @@ internal fun markupTypeShadowed(
  * With [stars], as a fix asks it, a star import from outside Streamlord counts where the file
  * already uses the name: an explicit import the fix adds wins over a star import, so the one risk is
  * that it takes the name from uses that meant the star import's. With no use there is nothing to
- * take, and the import is unambiguous. Without [declared], only the imports count.
+ * take, and the import is unambiguous.
  */
 private fun shadowedInFile(
     src: String,
     code: BooleanArray,
     name: String,
     stars: Boolean = true,
-    declared: Boolean = true,
 ): Boolean {
     val targets =
         keywordLines(src, code, "import").map {
@@ -2122,7 +2121,6 @@ private fun shadowedInFile(
             return true
         }
     }
-    if (!declared) return false
     val declaration = Regex("""\b(?:fun|class|object|interface|typealias)\s+(?:<[^>]*>\s*)?${Regex.escape(name)}(?![\p{L}\p{Nd}_])""")
     for (m in declaration.findAll(src)) {
         if (!code[m.range.first]) continue

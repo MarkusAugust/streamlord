@@ -6,7 +6,7 @@ import { signalNameRefusal } from "./signalNames.ts";
 import { asciiLowercase, decodeEntities, indexOfAsciiIgnoreCase, keyReading, nonceProblem, rawKeyNote, tokenize, validateAttributes, validateMarkup, wireKey, wireKeyReads, type Attribute, type Tag } from "./markup.ts";
 import { findCallSites, isHtmlString, lexKotlin, namedArgText, selectStringArg, stringAt, type Arg, type CallSite } from "./scanner.ts";
 import { holeLandings, urlHostFixedBy, urlSchemeFixedBy, type Hole, type HoleLanding, type Position } from "./holes.ts";
-import { argKind, callResult, callsTrusted, chainFrom, coreNameUsable, countBelow, ESCAPES_TITLE, fileFacts, holeDisplay, holeValues, HTML_PACKAGE, importEdits, importsOther, interpolateFix, interpolateText, isMarkup, markupHeldAsString, markupTextValue, markupValued, markupView, mayBeNull, mayHoldMarkup, percentHoles, quoteFix, REFUSES_URL_TITLE, sdkOf, shortened, trimmed, trustedFix, trustedLiteral, valueKind, visiblyList, withNested, withPercentHoles, type ArgKind } from "./interpolation.ts";
+import { argKind, callResult, callsTrusted, chainFrom, coreNameUsable, countBelow, ESCAPES_TITLE, fileFacts, holeDisplay, holeValues, HTML_PACKAGE, importEdits, interpolateFix, interpolateText, isMarkup, markupHeldAsString, markupTextValue, markupValued, markupView, mayBeNull, mayHoldMarkup, percentHoles, quoteFix, REFUSES_URL_TITLE, sdkOf, shadowsCore, shortened, trimmed, trustedFix, trustedLiteral, valueKind, visiblyList, withNested, withPercentHoles, type ArgKind } from "./interpolation.ts";
 import { dslHelpers, EXPRESSION_HELPERS, signalNameHyphenSites, unshadowed } from "./signalNameHyphens.ts";
 import { textOpensWithTag } from "./valueTypes.ts";
 import { argKindOf, described, digitsOrBoolean, interpolateTakesIn, isConstant, isMarkupFact, isNullable, isNullableString, isString, knownCharacters, plain, scalar, verdict, weakest, writesItself } from "./valueVerdict.ts";
@@ -126,8 +126,9 @@ export function analyzeKotlin(src: string, opts: AnalyzeOptions): Issue[] {
     // The literals of a `+` chain handed to the site are judged there, as one string; the arguments it does not read are free.
     for (const judged of judgedStrings(site, src)) for (const x of lex.strings) if (x.start >= judged.start && x.end <= judged.end) claimed.add(x.start);
   }
-  // An interpolate the file takes from another package is not core's, whose format this reads.
-  const otherInterpolate = importsOther(src, "interpolate");
+  // An interpolate the file takes from elsewhere is not core's, whose format this reads; nor one it
+  // declares, since the text cannot tell whether the call fits it.
+  const otherInterpolate = shadowsCore(src, "interpolate");
   for (const site of findCallSites(src, INTERPOLATE, lex.mask)) {
     if (foreign(site.name, site.nameStart) || otherInterpolate) continue;
     const format = interpolateFormat(site, src);

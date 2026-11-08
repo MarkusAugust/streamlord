@@ -292,6 +292,8 @@ interface Declaration {
   trusted?: boolean;
   /** The text a `val` set to `Trusted("...")` writes, the literal as the Kotlin compiler reads it. */
   trustedText?: string;
+  /** Whether the call it is set to names core's own under an alias the file imports, which no other import can take. */
+  aliased?: boolean;
   /** What it is set to the `.text` of, `interpolate(...)` or a name: markup held as a String when that is an Html. */
   textOf?: string;
   /** What the brackets after its type hold, `Html` of `List<Html>`. */
@@ -543,7 +545,7 @@ function declarations(src: string, code: Uint8Array): Map<string, Declaration[]>
               const v = VALUE_AFTER.exec(src);
               if (v) valueAt = after + v[0].length;
             }
-            const d = { ...scope(at), type: m[3], literal: m[4], text: constant ? m[5] : undefined, string: m[5] !== undefined, markup, trusted, trustedText, textOf, typeArguments, valueAt };
+            const d = { ...scope(at), type: m[3], literal: m[4], text: constant ? m[5] : undefined, string: m[5] !== undefined, markup, trusted, trustedText, aliased: initialiser?.aliased === true, textOf, typeArguments, valueAt };
             add(m[2] as string, d);
             if (owner.kind !== "top") owner.ends.push(d);
           }
@@ -656,10 +658,10 @@ const STATEMENT_END = /^[ \t]*(?:[\n\r;})\],]|\/\/|$)/;
 
 /**
  * Which of `interpolate` and `Trusted` what follows a declared name at `at` calls as the whole
- * value, `val row = interpolate(...)`, under its name or one of `aliases`, and where the call
- * starts; null for any other value. `markupInitialiser` in Interpolations.kt.
+ * value, `val row = interpolate(...)`, under its name or one of `aliases`, where the call starts,
+ * and whether it is called by an alias; null for any other value. `markupInitialiser` in Interpolations.kt.
  */
-function markupInitialiser(src: string, at: number, aliases: ReadonlyMap<string, string>): { name: string; start: number } | null {
+function markupInitialiser(src: string, at: number, aliases: ReadonlyMap<string, string>): { name: string; start: number; aliased: boolean } | null {
   MARKUP_INITIALISER.lastIndex = at;
   const m = MARKUP_INITIALISER.exec(src);
   if (!m) return null;
@@ -670,7 +672,7 @@ function markupInitialiser(src: string, at: number, aliases: ReadonlyMap<string,
   const e = src.slice(open, open + 20_000);
   const close = closing(e, depths(e), 0);
   if (close <= 0 || !STATEMENT_END.test(e.slice(close, close + 8))) return null;
-  return { name, start: at + m[0].indexOf(callee) };
+  return { name, start: at + m[0].indexOf(callee), aliased: name !== callee };
 }
 
 const TEXT_OF_NAME = new RegExp(String.raw`\s*=\s*(${NAME})\s*\.\s*text(?=[ \t]*(?:[\n\r;})\],]|//|$))`, "uy");
@@ -781,7 +783,7 @@ export function declaredKind(src: string, name: string, at: number, nonNull = fa
   if (!d) return null;
   if (d.literal !== undefined) return d.literal === "true" || d.literal === "false" ? "boolean" : UNSIGNED_SUFFIX.test(d.literal) ? "unsigned" : "number";
   // Without core, Html, Trusted and interpolate are not Streamlord's, and nothing says what they hold.
-  if (d.markup) return core && !shadowsCore(src, d.trusted ? "Trusted" : "interpolate") ? "markup" : null;
+  if (d.markup) return core && setToCore(src, d) ? "markup" : null;
   if (d.type === undefined) return null;
   // An Html or a Trusted the file takes from another package is no markup the analysis knows.
   if (markupTypeShadowed(src, d.type)) return null;
@@ -812,7 +814,10 @@ function literalTrusted(src: string, at: number, whole = false): string | null {
  */
 export function trustedLiteral(src: string, value: string, at: number): string | null {
   const t = value.trim();
-  if (IDENT.test(t)) return shadowsCore(src, "Trusted") ? null : (declarationOf(src, t, at)?.trustedText ?? null);
+  if (IDENT.test(t)) {
+    const d = declarationOf(src, t, at);
+    return d !== null && setToCore(src, d) ? (d.trustedText ?? null) : null;
+  }
   const call = asCoreCall(src, t, "Trusted");
   return call === null ? null : literalTrusted(call, 0, true);
 }
@@ -822,7 +827,7 @@ function trustedName(src: string, name: string, at: number): boolean {
   const d = declarationOf(src, name, at);
   if (d === null) return false;
   if (d.type !== undefined && isTrustedType(coreType(src, d.type))) return !markupTypeShadowed(src, d.type);
-  return d.trusted === true && !shadowsCore(src, "Trusted");
+  return d.trusted === true && setToCore(src, d);
 }
 
 /**
@@ -1515,14 +1520,6 @@ function aliasesIn(src: string, code: Uint8Array): ReadonlyMap<string, string> {
   return out;
 }
 
-/**
- * Whether `src` imports `name` from another package, by name or as an alias. A `fun` of the name in
- * the file does not count: an overload that does not fit the call leaves it to core's. `importsOther` in Interpolations.kt.
- */
-export function importsOther(src: string, name: string): boolean {
-  return shadowedInFile(src, fileFacts(src).code, name, false, false);
-}
-
 const CORE_ALIAS = new RegExp(`^${DOMAIN.replace(/\./g, "\\.")}\\.([\\p{L}_][\\p{L}\\p{Nd}_]*)\\s+as\\s+([\\p{L}_][\\p{L}\\p{Nd}_]*)$`, "u");
 
 /** `written`, a declared type, with a bare alias of core's `Html` or `Trusted` written as the name it stands for: `Page?` as `Html?`. `coreType` in Interpolations.kt. */
@@ -1564,6 +1561,11 @@ export function callsTrusted(src: string, text: string): boolean {
 
 const TRUSTED_CALL = /(?:^|[^\p{L}\p{Nd}_.])Trusted\s*\(/u;
 
+/** Whether `d` is set to a call to core's `interpolate` or `Trusted`: by an alias, or by a name nothing else in `src` takes. `setToCore` in Interpolations.kt. */
+function setToCore(src: string, d: Declaration): boolean {
+  return d.markup === true && (d.aliased === true || !shadowsCore(src, d.trusted ? "Trusted" : "interpolate"));
+}
+
 /** Whether `written`, a declared type, is a bare `Html` or `Trusted` that means another type in `src`: `markupTypeShadowed` in Interpolations.kt. */
 function markupTypeShadowed(src: string, written: string): boolean {
   const name = written.replace(/\s/g, "").replace(/\?$/, "");
@@ -1577,9 +1579,9 @@ function markupTypeShadowed(src: string, written: string): boolean {
  * With `stars`, as a fix asks it, a star import from outside Streamlord counts where the file
  * already uses the name: an explicit import the fix adds wins over a star import, so the one risk is
  * that it takes the name from uses that meant the star import's. With no use there is nothing to
- * take, and the import is unambiguous. Without `declared`, only the imports count.
+ * take, and the import is unambiguous.
  */
-function shadowedInFile(src: string, code: Uint8Array, name: string, stars = true, declared = true): boolean {
+function shadowedInFile(src: string, code: Uint8Array, name: string, stars = true): boolean {
   const targets = keywordLines(src, code, "import").map((l) => src.slice(l.start, l.codeEnd).trim().replace(/;$/, "").trim());
   if (targets.includes(`${DOMAIN}.${name}`)) return false;
   for (const t of targets) {
@@ -1591,7 +1593,6 @@ function shadowedInFile(src: string, code: Uint8Array, name: string, stars = tru
     if (t.endsWith(`.${name}`)) return true;
     if (stars && t.endsWith(".*") && t !== `${DOMAIN}.*` && !t.startsWith("io.github.markusaugust.streamlord.") && usedInCode(src, code, name)) return true;
   }
-  if (!declared) return false;
   const declaration = new RegExp(String.raw`\b(?:fun|class|object|interface|typealias)\s+(?:<[^>]*>\s*)?${name}(?![\p{L}\p{Nd}_])`, "gu");
   for (const m of src.matchAll(declaration)) {
     const at = m.index ?? 0;
