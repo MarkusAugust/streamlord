@@ -1365,6 +1365,7 @@ public final class io/github/markusaugust/streamlord/analysis/ValueFact : java/l
 	public static final field NULLABLE Lio/github/markusaugust/streamlord/analysis/ValueFact;
 	public static final field NULLABLE_STRING Lio/github/markusaugust/streamlord/analysis/ValueFact;
 	public static final field NUMBER Lio/github/markusaugust/streamlord/analysis/ValueFact;
+	public static final field OTHER Lio/github/markusaugust/streamlord/analysis/ValueFact;
 	public static final field STRING Lio/github/markusaugust/streamlord/analysis/ValueFact;
 	public static final field UNSIGNED Lio/github/markusaugust/streamlord/analysis/ValueFact;
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;

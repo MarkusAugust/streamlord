@@ -59,6 +59,10 @@ import org.jetbrains.kotlin.psi.KtWhenExpression
 object HoleFacts {
     private val HTML_CLASS = ClassId.fromString("io/github/markusaugust/streamlord/core/domain/Html")
     private val TRUSTED_CLASS = ClassId.fromString("io/github/markusaugust/streamlord/core/domain/Trusted")
+
+    /** The names the analysis reads as Streamlord's markup, and the classes that are. */
+    private val MARKUP_NAMES = setOf("Html", "Trusted")
+    private val OWN_MARKUP = setOf(HTML_CLASS, TRUSTED_CLASS).map { it.asFqNameString() }
     private val NUMBER_CLASS = ClassId.fromString("kotlin/Number")
     private const val HTML_PACKAGE = "io.github.markusaugust.streamlord.html"
     private const val KOTLINX_STREAM = "kotlinx.html.stream"
@@ -266,6 +270,14 @@ object HoleFacts {
                 if (definite) ValueFact.BOOLEAN else ValueFact.NULLABLE
             }
 
+            // An Html or a Trusted of another package, which the analysis would take for ours by the name.
+            (lower as? KaClassType)?.classId?.let {
+                it.shortClassName.asString() in MARKUP_NAMES && it != HTML_CLASS && it != TRUSTED_CLASS
+            } ==
+                true -> {
+                ValueFact.OTHER
+            }
+
             else -> {
                 null
             }
@@ -296,9 +308,9 @@ object HoleFacts {
     private fun unwrapped(ref: KtTypeReference): KtTypeElement? = ref.typeElement.let { (it as? KtNullableType)?.innerType ?: it }
 
     /**
-     * K1: the fact of the type [ref] writes, by the class it resolves to, so an `Html` the file
-     * imports from another package is none of Streamlord's. Where it does not resolve, none: the
-     * analysis reads the declaration and the file's imports itself.
+     * K1: the fact of the type [ref] writes, by the class it resolves to, so an `Html` or a `Trusted`
+     * of another package is [ValueFact.OTHER]. Where it does not resolve, none: the analysis reads
+     * the declaration and the file's imports itself.
      */
     private fun typeFactK1(ref: KtTypeReference): ValueFact? {
         val nullable = if (ref.typeElement is KtNullableType) "?" else ""
@@ -309,7 +321,9 @@ object HoleFacts {
                 is PsiClass -> resolved.qualifiedName
                 else -> null
             }
-        return qualified?.let { ValueFact.ofTypeName(it + nullable) }
+        if (qualified == null) return null
+        ValueFact.ofTypeName(qualified + nullable)?.let { return it }
+        return if (qualified.substringAfterLast('.') in MARKUP_NAMES && qualified !in OWN_MARKUP) ValueFact.OTHER else null
     }
 
     /** K1: a `const val` the reference resolves to, or an enum entry. */

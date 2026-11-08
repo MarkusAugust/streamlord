@@ -315,6 +315,10 @@ internal class FileFacts(
     /** The same with no star import counted, for what a name means here rather than what a fix may add ([shadowsCore]). */
     val taken: MutableMap<String, Boolean> = java.util.concurrent.ConcurrentHashMap()
 
+    /** The names the file imports names of core's domain under, each with the name it stands for ([coreAliases]). */
+    @Volatile
+    var aliases: Map<String, String>? = null
+
     /** Whether the file's imports show it uses the DSL: what decides when the host does not know. */
     val usesDsl: Boolean by lazy(LazyThreadSafetyMode.PUBLICATION) { USES_HTML_DSL.containsMatchIn(src) }
 
@@ -954,7 +958,7 @@ internal fun declaredKind(
     val declared = d.type ?: return null
     // An Html or a Trusted the file takes from another package is no markup the analysis knows.
     if (markupTypeShadowed(src, declared)) return null
-    return declaredFact(declared, nonNull, core)
+    return declaredFact(coreType(src, declared), nonNull, core)
 }
 
 private val TRUSTED_LITERAL =
@@ -1020,9 +1024,8 @@ internal fun trustedLiteral(
     at: Int,
 ): String? {
     val t = value.trim()
-    if (shadowsCore(src, "Trusted")) return null
-    if (IDENT.matches(t)) return declarationOf(src, t, at)?.trustedText
-    return literalTrusted(t, 0, whole = true)
+    if (IDENT.matches(t)) return if (shadowsCore(src, "Trusted")) null else declarationOf(src, t, at)?.trustedText
+    return literalTrusted(asCoreCall(src, t, "Trusted") ?: return null, 0, whole = true)
 }
 
 /** Whether [name] at [at] is declared a `Trusted`, or set to `Trusted(...)` and nothing more: what interpolate lets in anywhere. */
@@ -1032,8 +1035,9 @@ private fun trustedName(
     at: Int,
 ): Boolean {
     val d = declarationOf(src, name, at) ?: return false
-    if (shadowsCore(src, "Trusted")) return false
-    return d.trusted || d.type?.let { isTrustedType(it) } == true
+    val type = d.type
+    if (type != null && isTrustedType(coreType(src, type))) return !markupTypeShadowed(src, type)
+    return d.trusted && !shadowsCore(src, "Trusted")
 }
 
 /**
@@ -1467,12 +1471,12 @@ internal fun markupValue(
     if (htmlLiteral(t)) return true
     val sum = splitTop(t, "+")
     if (sum.size > 1) return htmlLiteral(sum[0].trim())
-    if (sdk.core && listOf("interpolate", "Trusted").any { wholeCall(t, it) && !shadowsCore(src, it) }) return true
+    if (sdk.core && (coreCall(src, t, "interpolate") || coreCall(src, t, "Trusted"))) return true
     val textOf = TEXT_OF_VALUE.find(t)?.groupValues?.get(1)
     if (sdk.core &&
         textOf != null &&
         (
-            (wholeCall(textOf, "interpolate") && !shadowsCore(src, "interpolate")) ||
+            coreCall(src, textOf, "interpolate") ||
                 (IDENT.matches(textOf) && declaredKind(src, textOf, at).isMarkup())
         )
     ) {
@@ -1517,7 +1521,9 @@ private fun markupElements(
         val type = d.type
         if (type != null) {
             return sdk.core &&
-                d.typeArguments?.let { !markupTypeShadowed(src, it) && isMarkupCollection("${type.removeSuffix("?")}<$it>") } == true
+                d.typeArguments?.let {
+                    !markupTypeShadowed(src, it) && isMarkupCollection("${type.removeSuffix("?")}<${coreType(src, it)}>")
+                } == true
         }
         val init = initialiser(src, d) ?: return false
         return depth < VALUE_DEPTH && markupElements(src, init, d.at, depth + 1, sdk)
@@ -1975,6 +1981,79 @@ internal fun shadowsCore(
     return facts.taken.getOrPut(name) { shadowedInFile(src, facts.code, name, stars = false) }
 }
 
+/**
+ * The names [src] imports names of core's domain under, each with the name it stands for:
+ * `import io.github.markusaugust.streamlord.core.domain.Html as Page` gives `Page` to `Html`.
+ */
+internal fun coreAliases(src: String): Map<String, String> {
+    val facts = fileFacts(src)
+    return facts.aliases ?: HashMap<String, String>().also { out ->
+        for (line in keywordLines(src, facts.code, "import")) {
+            val t =
+                src
+                    .substring(line.start, line.codeEnd)
+                    .trim()
+                    .removeSuffix(";")
+                    .trim()
+            val m = CORE_ALIAS.matchEntire(t) ?: continue
+            out[m.groupValues[2]] = m.groupValues[1]
+        }
+        facts.aliases = out
+    }
+}
+
+private val CORE_ALIAS = Regex("""${Regex.escape(DOMAIN)}\.([\p{L}_][\p{L}\p{Nd}_]*)\s+as\s+([\p{L}_][\p{L}\p{Nd}_]*)""")
+
+/** [written], a type as a declaration writes it, with a bare alias of core's `Html` or `Trusted` written as the name it stands for: `Page?` as `Html?`. */
+internal fun coreType(
+    src: String,
+    written: String,
+): String {
+    val t = written.trim()
+    val bare = t.removeSuffix("?").trim()
+    val name = coreAliases(src)[bare]?.takeIf { it == "Html" || it == "Trusted" } ?: return written
+    return name + t.substring(bare.length)
+}
+
+/**
+ * [text] written with core's [name] where it starts with a call to it, under that name or an alias
+ * the file imports it by: `T(x)` as `Trusted(x)`. Null where [text] starts with no call to core's [name].
+ */
+internal fun asCoreCall(
+    src: String,
+    text: String,
+    name: String,
+): String? {
+    val callee = CALLEE.find(text)?.groupValues?.get(1) ?: return null
+    return when {
+        callee == name -> if (shadowsCore(src, name)) null else text
+        coreAliases(src)[callee] == name -> name + text.substring(callee.length)
+        else -> null
+    }
+}
+
+private val CALLEE = Regex("""^([\p{L}_][\p{L}\p{Nd}_]*)\s*\(""")
+
+/** Whether [text] is one call to core's [name], under that name or an alias: `Trusted(x)`, `T(x)`. */
+internal fun coreCall(
+    src: String,
+    text: String,
+    name: String,
+): Boolean = asCoreCall(src, text, name)?.let { wholeCall(it, name) } == true
+
+/** Whether [text] calls core's `Trusted` anywhere, under that name or an alias: what a hole that calls it holds. */
+internal fun callsTrusted(
+    src: String,
+    text: String,
+): Boolean =
+    TRUSTED_CALL.containsMatchIn(text) ||
+        coreAliases(src).any { (alias, name) ->
+            name == "Trusted" &&
+                Regex("""(?:^|[^\p{L}\p{Nd}_.])${Regex.escape(alias)}\s*\(""").containsMatchIn(text)
+        }
+
+private val TRUSTED_CALL = Regex("""(?:^|[^\p{L}\p{Nd}_.])Trusted\s*\(""")
+
 /** Whether [written], a type as a declaration writes it, is a bare `Html` or `Trusted` that means another type in [src]. */
 internal fun markupTypeShadowed(
     src: String,
@@ -2406,11 +2485,11 @@ internal fun valueKind(
     if (t == "null") return ArgKind.NULL
     if (CHAR_LITERAL.matches(t)) return ArgKind.CHAR
     if (IF_START.containsMatchIn(t) && literalOnly(t)) return if ('"' in t) ArgKind.STRING else null
-    if ((wholeCall(t, "Trusted") && !shadowsCore(src, "Trusted")) || (IDENT.matches(t) && trustedName(src, t, at))) return ArgKind.TRUSTED
-    if (wholeCall(t, "interpolate") && !shadowsCore(src, "interpolate")) return ArgKind.MARKUP
+    if (coreCall(src, t, "Trusted") || (IDENT.matches(t) && trustedName(src, t, at))) return ArgKind.TRUSTED
+    if (coreCall(src, t, "interpolate")) return ArgKind.MARKUP
     // The String of the Html: interpolate(...).text.
     val html = TEXT_OF.find(t)?.groupValues?.get(1)
-    if (html != null && wholeCall(html, "interpolate") && !shadowsCore(src, "interpolate")) return ArgKind.STRING
+    if (html != null && coreCall(src, html, "interpolate")) return ArgKind.STRING
     callKind(src, t, at, emptySet())?.argKind()?.let { return it }
     if (!IDENT.matches(t)) return null
     // `val name = "Gorvek"`: a String, though no type is written.

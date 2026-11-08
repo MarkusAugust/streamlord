@@ -150,7 +150,7 @@ class HoleTypesTest : StreamlordTestCase() {
                     "class Trusted(val s: String)\n" +
                     "fun f(own: Trusted, v: Vouched, vs: List<Vouched>) = \"<p>\$own \$v \${vs.first()}</p>\"",
             )
-        assertEquals(null, facts["\$own"])
+        assertEquals(ValueFact.OTHER, facts["\$own"])
         assertEquals(ValueFact.MARKUP, facts["\$v"])
         assertEquals(ValueFact.MARKUP, facts["\${vs.first()}"])
     }

@@ -68,4 +68,44 @@ class DeclaredTypeTest : StreamlordTestCase() {
     fun `test a call to a Trusted of another package is no markup`() {
         assertTrue(hinted("package p\n\nimport com.acme.Trusted\n\nfun f(x: String) = \"<p>\${Trusted(x)}</p>\"\n", "\${Trusted(x)}"))
     }
+
+    fun `test an Html of the file's own package declared elsewhere is no markup`() {
+        myFixture.addFileToProject("p/Html.kt", "package p\n\nclass Html\n")
+        assertTrue(hinted("package p\n\nfun f(h: Html) = \"<p>\$h</p>\"\n", "\$h"))
+    }
+
+    fun `test an Html a star import resolves to another package is no markup`() {
+        assertTrue(hinted("package p\n\nimport com.acme.*\n\nfun f(h: Html) = \"<p>\$h</p>\"\n", "\$h"))
+    }
+
+    fun `test a joinToString of an Html a star import resolves elsewhere is no markup`() {
+        assertTrue(
+            hinted(
+                "package p\n\nimport com.acme.*\n\nfun f(items: List<Html>) = \"<ul>\${items.joinToString(\"\")}</ul>\"\n",
+                "\${items.joinToString(\"\")}",
+            ),
+        )
+    }
+
+    fun `test an Html in backticks from another package is no markup`() {
+        assertTrue(hinted("package p\n\nimport com.acme.*\n\nfun f(h: `Html`) = \"<p>\$h</p>\"\n", "\$h"))
+    }
+
+    fun `test Streamlord's Html under another name is markup`() {
+        assertFalse(
+            hinted(
+                "package p\n\nimport io.github.markusaugust.streamlord.core.domain.Html as Page\n\nfun f(h: Page) = \"<p>\$h</p>\"\n",
+                "\$h",
+            ),
+        )
+    }
+
+    fun `test Streamlord's Trusted called under another name is markup`() {
+        assertFalse(
+            hinted(
+                "package p\n\nimport io.github.markusaugust.streamlord.core.domain.Trusted as T\n\nfun f(x: String) = \"<p>\${T(x)}</p>\"\n",
+                "\${T(x)}",
+            ),
+        )
+    }
 }

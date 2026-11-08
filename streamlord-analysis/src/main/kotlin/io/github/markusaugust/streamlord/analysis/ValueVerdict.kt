@@ -116,6 +116,9 @@ internal fun ValueFact?.isNullableString(): Boolean = this == ValueFact.NULLABLE
 /** A number or a boolean that may be null. */
 internal fun ValueFact?.isNullable(): Boolean = this == ValueFact.NULLABLE
 
+/** A type the editor resolved that is none of the others, which no reading of the text makes markup. */
+internal fun ValueFact?.isOther(): Boolean = this == ValueFact.OTHER
+
 /** Html or Trusted: markup, whose values have been through interpolate or which the author vouched for. */
 public fun ValueFact?.isMarkup(): Boolean = this == ValueFact.MARKUP
 
@@ -124,6 +127,7 @@ private val WEAKEST_FIRST =
     listOf(
         ValueFact.STRING,
         null,
+        ValueFact.OTHER,
         ValueFact.MARKUP,
         ValueFact.NULLABLE,
         ValueFact.UNSIGNED,
