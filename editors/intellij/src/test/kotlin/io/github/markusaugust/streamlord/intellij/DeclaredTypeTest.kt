@@ -1,41 +1,54 @@
 package io.github.markusaugust.streamlord.intellij
 
-import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.ReadAction
-import io.github.markusaugust.streamlord.analysis.isMarkup
-import io.github.markusaugust.streamlord.intellij.analysis.HoleFacts
-import org.jetbrains.kotlin.psi.KtFile
+import io.github.markusaugust.streamlord.intellij.inspections.KotlinInterpolationInspection
+import org.jetbrains.kotlin.idea.base.plugin.KotlinPluginModeProvider
 
 /**
- * Whether a value is Streamlord's markup by the type it is declared with, in the mode the test JVM
- * runs the Kotlin plugin in: K2 under `test`, K1 under `testK1`. Each resolves the type, so an
- * `Html` the file imports from another package is no markup.
+ * Whether a value is Streamlord's markup by the type it is declared with, as the inspection judges
+ * it, in the mode the test JVM runs the Kotlin plugin in: K2 under `test`, K1 under `test -PkotlinK1`.
+ * A value that is not markup gets the hint to write it through `interpolate`.
  */
 class DeclaredTypeTest : StreamlordTestCase() {
-    private fun markup(text: String): Boolean {
-        myFixture.addFileToProject("com/acme/Html.kt", "package com.acme\n\nclass Html\n\nclass Markup\n")
-        val file = myFixture.configureByText("Page.kt", text) as KtFile
-        val facts =
-            ApplicationManager
-                .getApplication()
-                .executeOnPooledThread<Map<String, Boolean>> {
-                    ReadAction
-                        .nonBlocking<Map<String, Boolean>> {
-                            HoleFacts.of(file).entries.associate { (range, fact) -> range.substring(file.text) to fact.isMarkup() }
-                        }.executeSynchronously()
-                }.get()
-        return facts["\$h"] == true
+    override fun setUp() {
+        super.setUp()
+        // So a Kotlin plugin that ignored the switch fails here rather than passing as K2.
+        @Suppress("DEPRECATION")
+        if (System.getProperty("idea.kotlin.plugin.use.k1").toBoolean()) assertTrue(KotlinPluginModeProvider.isK1Mode())
+        myFixture.addFileToProject(
+            "com/acme/Html.kt",
+            "package com.acme\n\nclass Html\n\nclass Markup\n\nclass Trusted(val html: String)\n",
+        )
+        myFixture.enableInspections(KotlinInterpolationInspection())
+    }
+
+    /** Whether the inspection asks for `interpolate` around the value `hole` in [text]. */
+    private fun hinted(
+        text: String,
+        hole: String,
+    ): Boolean {
+        myFixture.configureByText("Page.kt", text)
+        return myFixture.doHighlighting().any { it.text == hole && it.inspectionToolId == "KotlinInterpolationInspection" }
     }
 
     fun `test Streamlord's Html is markup`() {
-        assertTrue(markup("package p\n\nimport io.github.markusaugust.streamlord.core.domain.Html\n\nfun f(h: Html) = \"<p>\$h</p>\"\n"))
+        assertFalse(
+            hinted("package p\n\nimport io.github.markusaugust.streamlord.core.domain.Html\n\nfun f(h: Html) = \"<p>\$h</p>\"\n", "\$h"),
+        )
     }
 
     fun `test an Html imported from another package is no markup`() {
-        assertFalse(markup("package p\n\nimport com.acme.Html\n\nfun f(h: Html) = \"<p>\$h</p>\"\n"))
+        assertTrue(hinted("package p\n\nimport com.acme.Html\n\nfun f(h: Html) = \"<p>\$h</p>\"\n", "\$h"))
     }
 
     fun `test a type imported as Html is no markup`() {
-        assertFalse(markup("package p\n\nimport com.acme.Markup as Html\n\nfun f(h: Html) = \"<p>\$h</p>\"\n"))
+        assertTrue(hinted("package p\n\nimport com.acme.Markup as Html\n\nfun f(h: Html) = \"<p>\$h</p>\"\n", "\$h"))
+    }
+
+    fun `test an Html under a star import of another package is no markup`() {
+        assertTrue(hinted("package p\n\nimport com.acme.*\n\nfun f(h: Html) = \"<p>\$h</p>\"\n", "\$h"))
+    }
+
+    fun `test a call to a Trusted of another package is no markup`() {
+        assertTrue(hinted("package p\n\nimport com.acme.Trusted\n\nfun f(x: String) = \"<p>\${Trusted(x)}</p>\"\n", "\${Trusted(x)}"))
     }
 }

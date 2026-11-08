@@ -947,10 +947,10 @@ internal fun declaredKind(
         }
     }
     // Without core, Html, Trusted and interpolate are not Streamlord's, and nothing says what they hold.
-    if (d.markup) return if (core) ValueFact.MARKUP else null
+    if (d.markup) return if (core && !shadowsCore(src, if (d.trusted) "Trusted" else "interpolate")) ValueFact.MARKUP else null
     val declared = d.type ?: return null
-    // An Html or a Trusted the file imports from another package is no markup the analysis knows.
-    if (importsOtherMarkup(src, declared)) return null
+    // An Html or a Trusted the file takes from another package is no markup the analysis knows.
+    if (markupTypeShadowed(src, declared)) return null
     return declaredFact(declared, nonNull, core)
 }
 
@@ -1028,6 +1028,7 @@ private fun trustedName(
     at: Int,
 ): Boolean {
     val d = declarationOf(src, name, at) ?: return false
+    if (shadowsCore(src, "Trusted")) return false
     return d.trusted || d.type?.let { isTrustedType(it) } == true
 }
 
@@ -1462,11 +1463,14 @@ internal fun markupValue(
     if (htmlLiteral(t)) return true
     val sum = splitTop(t, "+")
     if (sum.size > 1) return htmlLiteral(sum[0].trim())
-    if (sdk.core && (wholeCall(t, "interpolate") || wholeCall(t, "Trusted"))) return true
+    if (sdk.core && listOf("interpolate", "Trusted").any { wholeCall(t, it) && !shadowsCore(src, it) }) return true
     val textOf = TEXT_OF_VALUE.find(t)?.groupValues?.get(1)
     if (sdk.core &&
         textOf != null &&
-        (wholeCall(textOf, "interpolate") || (IDENT.matches(textOf) && declaredKind(src, textOf, at).isMarkup()))
+        (
+            (wholeCall(textOf, "interpolate") && !shadowsCore(src, "interpolate")) ||
+                (IDENT.matches(textOf) && declaredKind(src, textOf, at).isMarkup())
+        )
     ) {
         return true
     }
@@ -1509,7 +1513,7 @@ private fun markupElements(
         val type = d.type
         if (type != null) {
             return sdk.core &&
-                d.typeArguments?.let { !importsOtherMarkup(src, it) && isMarkupCollection("${type.removeSuffix("?")}<$it>") } == true
+                d.typeArguments?.let { !markupTypeShadowed(src, it) && isMarkupCollection("${type.removeSuffix("?")}<$it>") } == true
         }
         val init = initialiser(src, d) ?: return false
         return depth < VALUE_DEPTH && markupElements(src, init, d.at, depth + 1, sdk)
@@ -1951,7 +1955,25 @@ internal fun coreNameUsable(
     ) {
         return false
     }
-    return !facts.shadowed.getOrPut(name) { shadowedInFile(src, facts.code, name) }
+    return !shadowsCore(src, name)
+}
+
+/** Whether something other than core's domain takes [name] in [src], read once per file: [shadowedInFile]. */
+internal fun shadowsCore(
+    src: String,
+    name: String,
+): Boolean {
+    val facts = fileFacts(src)
+    return facts.shadowed.getOrPut(name) { shadowedInFile(src, facts.code, name) }
+}
+
+/** Whether [written], a type as a declaration writes it, is a bare `Html` or `Trusted` that means another type in [src]. */
+internal fun markupTypeShadowed(
+    src: String,
+    written: String,
+): Boolean {
+    val name = written.filterNot { it.isWhitespace() }.removeSuffix("?")
+    return (name == "Html" || name == "Trusted") && shadowsCore(src, name)
 }
 
 /**

@@ -68,19 +68,18 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
-- A value declared `Html` or `Trusted` in a file that imports another type by that name,
-  `import com.acme.Html` or `import com.acme.Markup as Html`, was taken for Streamlord's markup in
-  VS Code and in IntelliJ's K1 mode. It is judged now as any value of a type the editor does not
-  know. IntelliJ in K1 mode reads the type the declaration resolves to, as K2 does.
 - `interpolate` escaped an `Html` value of an element that holds HTML, such as
   `<a href="/x"><span>a</span></a>`, a `<button>` or a `<label>` with a `<span>` in it, or a
   `<section>` with a `<p>`, written into a `<div>`, an `<li>` or another element. It read the value
   as if the format were an svg, where the `<span>` leaves the `<a>`. It reads the value where it
   lands now. 0.19.0 has the fault.
-- A value declared `Html` or `Trusted` of another package written out in full, `com.acme.Html`
-  among them, was taken for Streamlord's markup: joined into HTML, handed to `interpolate(...)` or
-  joined with `joinToString`, without a word. It is judged now as any value of a type the editor
-  does not know.
+- A value declared `Html` or `Trusted` of another package was taken for Streamlord's markup:
+  joined into HTML, handed to `interpolate(...)` or joined with `joinToString`, without a word. It
+  is judged now as any value of a type the editor does not know, whether the type is written out in
+  full, `com.acme.Html`, or the file takes the bare name from elsewhere: `import com.acme.Html`,
+  `import com.acme.Markup as Html`, a star import, or an `Html` it declares itself. The same holds
+  for a `Trusted(...)` of another package. IntelliJ in K1 mode reads the type the declaration
+  resolves to, as K2 does, and K1 has tests in CI.
 - A string literal that opens with a tag a template names, `"<$tag>x</$tag>"`, is markup in VS Code
   too, as it was in IntelliJ; VS Code asked for `interpolate(...)` around it. The template in the
   tag name is still judged on its own.

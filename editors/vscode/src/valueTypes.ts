@@ -60,30 +60,6 @@ export function valueFactOfTypeName(written: string): HoleFact | null {
  * The fact a declaration of the type `written` gives its value: `nonNull` reads it as the left
  * side of `?:` does, and without `core` Html and Trusted are not Streamlord's.
  */
-const IMPORT = /^[ \t]*import[ \t]+([\w.]+)(?:[ \t]+as[ \t]+(\w+))?/gm;
-
-/** The last source importsOtherMarkup read, and what it found, so a file is read once however many values it judges. */
-let lastImports: { src: string; others: Set<string> } | null = null;
-
-/**
- * Whether `written`, a type as a declaration writes it, names an `Html` or a `Trusted` that an
- * import in `src` binds to another package than Streamlord's: importsOtherMarkup in ValueTypes.kt.
- */
-export function importsOtherMarkup(src: string, written: string): boolean {
-  const name = written.replace(/\s/g, "").replace(/\?$/, "");
-  if (name !== "Html" && name !== "Trusted") return false;
-  if (lastImports?.src !== src) {
-    const others = new Set<string>();
-    for (const m of src.matchAll(IMPORT)) {
-      const path = m[1] as string;
-      const bound = m[2] ?? path.slice(path.lastIndexOf(".") + 1);
-      if (path !== `io.github.markusaugust.streamlord.core.domain.${bound}`) others.add(bound);
-    }
-    lastImports = { src, others };
-  }
-  return lastImports.others.has(name);
-}
-
 export function declaredFact(written: string, nonNull: boolean, core: boolean): HoleFact | null {
   const fact = valueFactOfTypeName(written);
   // Digits, true or false, or null: safe where anything is, and not where only a number or a boolean is.

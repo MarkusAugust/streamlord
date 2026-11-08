@@ -6,7 +6,6 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.util.PsiTreeUtil
 import io.github.markusaugust.streamlord.analysis.Catalog
 import io.github.markusaugust.streamlord.analysis.ValueFact
-import io.github.markusaugust.streamlord.analysis.importsOtherMarkup
 import io.github.markusaugust.streamlord.analysis.isMarkup
 import io.github.markusaugust.streamlord.analysis.isMarkupCollection
 import io.github.markusaugust.streamlord.analysis.ofTypeName
@@ -298,8 +297,8 @@ object HoleFacts {
 
     /**
      * K1: the fact of the type [ref] writes, by the class it resolves to, so an `Html` the file
-     * imports from another package is none of Streamlord's; by what the file imports where it does
-     * not resolve, as the shared analysis reads it.
+     * imports from another package is none of Streamlord's. Where it does not resolve, none: the
+     * analysis reads the declaration and the file's imports itself.
      */
     private fun typeFactK1(ref: KtTypeReference): ValueFact? {
         val nullable = if (ref.typeElement is KtNullableType) "?" else ""
@@ -310,9 +309,7 @@ object HoleFacts {
                 is PsiClass -> resolved.qualifiedName
                 else -> null
             }
-        if (qualified != null) return ValueFact.ofTypeName(qualified + nullable)
-        if (importsOtherMarkup(ref.containingFile.text, ref.text)) return null
-        return ValueFact.ofTypeName(ref.text)
+        return qualified?.let { ValueFact.ofTypeName(it + nullable) }
     }
 
     /** K1: a `const val` the reference resolves to, or an enum entry. */

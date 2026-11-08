@@ -10,7 +10,7 @@ import { PLACEHOLDER, readKotlinStringAt, type Interpolation, type KotlinString 
 import { laterFix, type Fix } from "./expression.ts";
 import { catalog } from "./catalog.ts";
 import { EXPRESSION_HELPERS, unshadowed, USES_HTML_DSL } from "./signalNameHyphens.ts";
-import { declaredFact, importsOtherMarkup, isMarkupCollection, isTrustedType, opensWithTag } from "./valueTypes.ts";
+import { declaredFact, isMarkupCollection, isTrustedType, opensWithTag } from "./valueTypes.ts";
 import { argKindOf, isConstant, isMarkupFact, isString, weakest, writesItself } from "./valueVerdict.ts";
 
 const IDENT = /^[\p{L}_][\p{L}\p{Nd}_]*$/u;
@@ -769,10 +769,10 @@ export function declaredKind(src: string, name: string, at: number, nonNull = fa
   if (!d) return null;
   if (d.literal !== undefined) return d.literal === "true" || d.literal === "false" ? "boolean" : UNSIGNED_SUFFIX.test(d.literal) ? "unsigned" : "number";
   // Without core, Html, Trusted and interpolate are not Streamlord's, and nothing says what they hold.
-  if (d.markup) return core ? "markup" : null;
+  if (d.markup) return core && !shadowsCore(src, d.trusted ? "Trusted" : "interpolate") ? "markup" : null;
   if (d.type === undefined) return null;
-  // An Html or a Trusted the file imports from another package is no markup the analysis knows.
-  if (importsOtherMarkup(src, d.type)) return null;
+  // An Html or a Trusted the file takes from another package is no markup the analysis knows.
+  if (markupTypeShadowed(src, d.type)) return null;
   return declaredFact(d.type, nonNull, core) as TextKind | null;
 }
 
@@ -806,7 +806,8 @@ export function trustedLiteral(src: string, value: string, at: number): string |
 /** Whether `name` at `at` is declared a `Trusted`, or set to `Trusted(...)` and nothing more: what interpolate lets in anywhere. */
 function trustedName(src: string, name: string, at: number): boolean {
   const d = declarationOf(src, name, at);
-  return d !== null && (d.trusted === true || (d.type !== undefined && isTrustedType(d.type)));
+  if (d === null || shadowsCore(src, "Trusted")) return false;
+  return d.trusted === true || (d.type !== undefined && isTrustedType(d.type));
 }
 
 /**
@@ -1111,9 +1112,9 @@ export function markupValue(src: string, value: string, at: number, depth = 0, s
   if (htmlLiteral(t)) return true;
   const sum = splitTop(t, "+");
   if (sum.length > 1) return htmlLiteral((sum[0] as string).trim());
-  if (sdk.core && (wholeCall(t, "interpolate") || wholeCall(t, "Trusted"))) return true;
+  if (sdk.core && ["interpolate", "Trusted"].some((name) => wholeCall(t, name) && !shadowsCore(src, name))) return true;
   const textOf = /^([\s\S]*?)\s*\.\s*text$/.exec(t)?.[1];
-  if (sdk.core && textOf !== undefined && (wholeCall(textOf, "interpolate") || (IDENT.test(textOf) && isMarkupFact(declaredKind(src, textOf, at))))) return true;
+  if (sdk.core && textOf !== undefined && ((wholeCall(textOf, "interpolate") && !shadowsCore(src, "interpolate")) || (IDENT.test(textOf) && isMarkupFact(declaredKind(src, textOf, at))))) return true;
   if (IDENT.test(t)) {
     if (isMarkupFact(declaredKind(src, t, at, false, sdk.core)) || htmlNamed(src, t, at)) return true;
     // `val e = elements { }`: the name stands for the call it is set to; a literal it is set to is judged where it is written.
@@ -1145,7 +1146,7 @@ function markupElements(src: string, receiver: string, at: number, depth: number
     const d = declarationOf(src, t, at);
     if (!d) return false;
     if (d.type !== undefined) {
-      return sdk.core && d.typeArguments !== undefined && !importsOtherMarkup(src, d.typeArguments) && isMarkupCollection(`${d.type.replace(/\?$/, "")}<${d.typeArguments}>`);
+      return sdk.core && d.typeArguments !== undefined && !markupTypeShadowed(src, d.typeArguments) && isMarkupCollection(`${d.type.replace(/\?$/, "")}<${d.typeArguments}>`);
     }
     const init = initialiser(src, d);
     return init !== null && depth < VALUE_DEPTH && markupElements(src, init, d.at, depth + 1, sdk);
@@ -1454,13 +1455,25 @@ export function coreNameUsable(src: string, name: string, sdk: Sdk, foreignCalls
     }
     if (starts.some((at) => foreignCalls.has(at))) return false;
   }
+  return !shadowsCore(src, name);
+}
+
+/** Whether something other than core's domain takes `name` in `src`, read once per file: shadowsCore in Interpolations.kt. */
+function shadowsCore(src: string, name: string): boolean {
+  const facts = fileFacts(src);
   facts.shadowed ??= new Map();
   let shadowed = facts.shadowed.get(name);
   if (shadowed === undefined) {
     shadowed = shadowedInFile(src, facts.code, name);
     facts.shadowed.set(name, shadowed);
   }
-  return !shadowed;
+  return shadowed;
+}
+
+/** Whether `written`, a declared type, is a bare `Html` or `Trusted` that means another type in `src`: markupTypeShadowed in Interpolations.kt. */
+function markupTypeShadowed(src: string, written: string): boolean {
+  const name = written.replace(/\s/g, "").replace(/\?$/, "");
+  return (name === "Html" || name === "Trusted") && shadowsCore(src, name);
 }
 
 /**
