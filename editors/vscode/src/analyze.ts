@@ -4,7 +4,7 @@ import { PLACEHOLDER, readKotlinStringAt, toSource, type Interpolation, type Kot
 import { capitalIn, kebab, nameProblem, runsIntoModifiers, spellings } from "./attributeKeys.ts";
 import { signalNameRefusal } from "./signalNames.ts";
 import { asciiLowercase, decodeEntities, indexOfAsciiIgnoreCase, keyReading, nonceProblem, rawKeyNote, tokenize, validateAttributes, validateMarkup, wireKey, wireKeyReads, type Attribute, type Tag } from "./markup.ts";
-import { findCallSites, isHtmlString, lexKotlin, namedArgText, selectStringArg, stringAt, type Arg, type CallSite } from "./scanner.ts";
+import { findCallSites, isHtmlString, lexKotlin, namedArgText, selectStringArg, stringAt, uncommented, type Arg, type CallSite } from "./scanner.ts";
 import { holeLandings, urlHostFixedBy, urlSchemeFixedBy, type Hole, type HoleLanding, type Position } from "./holes.ts";
 import { argKind, callResult, callsTrusted, chainFrom, coreNameUsable, countBelow, ESCAPES_TITLE, fileFacts, holeDisplay, holeValues, HTML_PACKAGE, importEdits, interpolateFix, interpolateText, isMarkup, markupHeldAsString, markupTextValue, markupValued, markupView, mayBeNull, mayHoldMarkup, percentHoles, quoteFix, REFUSES_URL_TITLE, sdkOf, shadowsCore, shortened, trimmed, trustedFix, trustedLiteral, valueKind, visiblyList, withNested, withPercentHoles, type ArgKind } from "./interpolation.ts";
 import { dslHelpers, EXPRESSION_HELPERS, signalNameHyphenSites, unshadowed } from "./signalNameHyphens.ts";
@@ -369,7 +369,8 @@ function checkInterpolateSite(site: CallSite, f: InterpolateFormat, src: string,
   const s = f.string;
   const holes = percentHoles(s.text);
   const { format, at } = withPercentHoles(s, holes);
-  const values = site.args.filter((a) => a !== f.arg && a.named === null);
+  // Each value as the code writes it, without a comment after it, which the editor's range leaves out too.
+  const values = site.args.filter((a) => a !== f.arg && a.named === null).map((a) => uncommented(src, a));
   // The values one by one, as the vararg overload takes them: no spread and nothing by name.
   const positional = site.args.every((a) => a.named === null) && !values.some((a) => a.text.startsWith("*"));
   const known = values.map((a) => opts.holeFact?.(a.start, a.end) ?? null);

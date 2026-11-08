@@ -17,6 +17,16 @@ describe("the judgement of holes", () => {
     assert.deepEqual(interpolation(src, { ...text, holeFact: () => "string" as const }), ["warning", "warning"]);
   });
 
+  it("asks the editor about a value without the comment after it", () => {
+    // Only the editor knows the value is a number, which a style takes.
+    const src = 'import io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(n: Any) = interpolate("<div style=\\"%s\\"></div>", n /* id */ // id\n)';
+    const at = src.lastIndexOf("n /*");
+    const text = { prefix: "data-", checkHtmlAttributes: true };
+    assert.deepEqual(analyzeKotlin(src, text).map((i) => i.code), ["unsafe-interpolation"]);
+    const holeFact = (start: number, end: number) => (start === at && end === at + 1 ? ("number" as const) : null);
+    assert.deepEqual(analyzeKotlin(src, { ...text, holeFact }), []);
+  });
+
   it("analyses a file of two thousand functions with HTML in a moment", () => {
     const q = '"""';
     let src = "package p\n";

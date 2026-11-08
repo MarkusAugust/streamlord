@@ -418,7 +418,9 @@ private fun codeMask(
 }
 
 private const val NAME = """[\p{L}_][\p{L}\p{Nd}_]*"""
-private const val TYPE = """[\p{L}_][\p{L}\p{Nd}_.]*\??"""
+
+// A name in backticks too, as `` `Page` ``, which means the same name without them.
+private const val TYPE = """(?:[\p{L}_][\p{L}\p{Nd}_.]*|`[^`\n]+`)(?:\.(?:[\p{L}_][\p{L}\p{Nd}_]*|`[^`\n]+`))*\??"""
 private val VAL_AFTER =
     Regex(
         """\s*(?:<[^<>]*>\s*)?((?:$NAME\s*\.\s*)*)($NAME)(?:\s*:\s*($TYPE))?""" +
@@ -432,7 +434,7 @@ private val TYPE_ARGUMENTS_AFTER = Regex(TYPE_ARGUMENTS)
 private val VALUE_AFTER = Regex("""\s*=(?!=)\s*""")
 private val LAMBDA_PARAMETERS =
     Regex(
-        """\s*((?:\([^()]*\)|$NAME)(?:\s*:\s*[\p{L}\p{Nd}_.<>?]+)?(?:\s*,\s*(?:\([^()]*\)|$NAME)(?:\s*:\s*[\p{L}\p{Nd}_.<>?]+)?)*)\s*->""",
+        """\s*((?:\([^()]*\)|$NAME)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?(?:\s*,\s*(?:\([^()]*\)|$NAME)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?)*)\s*->""",
     )
 private val FOR_VARIABLE = Regex("""\s*(\([^()]*\)|$NAME)(?:\s*:\s*($TYPE))?\s+in\b""")
 private val NAMES = Regex("""($NAME)(?:\s*:\s*($TYPE))?""")
@@ -503,7 +505,7 @@ private fun lineEnds(
     return !LINE_GOES_ON_AFTER.containsMatchIn(src.substring(k, minOf(src.length, k + 5)))
 }
 
-private val MARKUP_INITIALISER = Regex("""\s*=\s*([\p{L}_][\p{L}\p{Nd}_]*)\s*\(""")
+private val MARKUP_INITIALISER = Regex("""\s*=\s*(`?)([\p{L}_][\p{L}\p{Nd}_]*)\1\s*\(""")
 private val STATEMENT_END = Regex("""^[ \t]*(?:[\n\r;})\],]|//|$)""")
 
 /**
@@ -517,14 +519,14 @@ private fun markupInitialiser(
     aliases: Map<String, String>,
 ): Triple<String, Int, Boolean>? {
     val m = MARKUP_INITIALISER.matchAt(src, at) ?: return null
-    val callee = m.groups[1]!!
+    val callee = m.groups[2]!!
     val name = aliases[callee.value] ?: callee.value
     if (name != "interpolate" && name != "Trusted") return null
     val open = m.range.last
     val e = src.substring(open, minOf(src.length, open + 20_000))
     val close = closing(e, depths(e), 0)
     if (close <= 0 || !STATEMENT_END.containsMatchIn(e.substring(close, minOf(e.length, close + 8)))) return null
-    return Triple(name, callee.range.first, name != callee.value)
+    return Triple(name, callee.range.first - m.groupValues[1].length, name != callee.value)
 }
 
 private val TEXT_OF_NAME = Regex("""\s*=\s*($NAME)\s*\.\s*text(?=[ \t]*(?:[\n\r;})\],]|//|$))""")
@@ -970,7 +972,7 @@ internal fun declaredKind(
 // The callee is Trusted or an alias of it, which the caller has read.
 private val TRUSTED_LITERAL =
     Regex(
-        "[\\p{L}_][\\p{L}\\p{Nd}_]*\\s*\\(\\s*(?:html\\s*=\\s*)?(?:\"((?:[^\"\\\\$\\n]|\\\\.)*)\"|\"\"\"((?:[^\"$]|\"(?!\"\"))*)\"\"\")\\s*\\)",
+        "(`?)[\\p{L}_][\\p{L}\\p{Nd}_]*\\1\\s*\\(\\s*(?:html\\s*=\\s*)?(?:\"((?:[^\"\\\\$\\n]|\\\\.)*)\"|\"\"\"((?:[^\"$]|\"(?!\"\"))*)\"\"\")\\s*\\)",
     )
 private val KOTLIN_ESCAPE = Regex("""\\(u[0-9A-Fa-f]{4}|.)""")
 
@@ -987,8 +989,8 @@ private fun literalTrusted(
     val m = TRUSTED_LITERAL.matchAt(src, at) ?: return null
     if (whole && m.range.last + 1 != src.length) return null
     // A raw string has no escapes.
-    m.groups[2]?.let { return it.value }
-    return KOTLIN_ESCAPE.replace(m.groupValues[1]) {
+    m.groups[3]?.let { return it.value }
+    return KOTLIN_ESCAPE.replace(m.groupValues[2]) {
         val e = it.groupValues[1]
         when {
             e.length == 5 -> {
@@ -1361,7 +1363,7 @@ private val NAME_AT_END = Regex("""([\p{L}_][\p{L}\p{Nd}_]*)\s*$""")
 private val SAFE_CALL_DOT = Regex("""\??\.$""")
 private val LAMBDA_HEAD =
     Regex(
-        """^\s*(?:\([^()]*\)|[\p{L}_][\p{L}\p{Nd}_]*)(?:\s*:\s*[\p{L}\p{Nd}_.<>?]+)?(?:\s*,\s*(?:\([^()]*\)|[\p{L}_][\p{L}\p{Nd}_]*)(?:\s*:\s*[\p{L}\p{Nd}_.<>?]+)?)*\s*->""",
+        """^\s*(?:\([^()]*\)|[\p{L}_][\p{L}\p{Nd}_]*)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?(?:\s*,\s*(?:\([^()]*\)|[\p{L}_][\p{L}\p{Nd}_]*)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?)*\s*->""",
     )
 private val ENDS_IN_OPERATOR = Regex("""[-+*/%=<>&|?:.,(]$""")
 private val STARTS_WITH_OPERATOR = Regex("""^(?:[-+*/%&|?:.]|else\b)""")
@@ -1530,7 +1532,7 @@ private fun markupElements(
         val type = d.type
         if (type != null) {
             return sdk.core &&
-                d.typeArguments?.let {
+                d.typeArguments?.replace(OUT_VARIANCE, "")?.let {
                     !markupTypeShadowed(src, it) && isMarkupCollection("${type.removeSuffix("?")}<${coreType(src, it)}>")
                 } == true
         }
@@ -2012,6 +2014,7 @@ private fun aliasesIn(
                     .trim()
                     .removeSuffix(";")
                     .trim()
+                    .let(::unticked)
             val m = CORE_ALIAS.matchEntire(t) ?: continue
             out[m.groupValues[2]] = m.groupValues[1]
         }
@@ -2024,11 +2027,17 @@ internal fun coreType(
     src: String,
     written: String,
 ): String {
-    val t = written.trim()
+    val t = unticked(written).trim()
     val bare = t.removeSuffix("?").trim()
-    val name = coreAliases(src)[bare]?.takeIf { it == "Html" || it == "Trusted" } ?: return written
+    val name = coreAliases(src)[bare]?.takeIf { it == "Html" || it == "Trusted" } ?: return t
     return name + t.substring(bare.length)
 }
+
+// `List<out Html>` reads its elements as `List<Html>` does.
+private val OUT_VARIANCE = Regex("""^\s*out\s+""")
+
+/** [written] with its backticks dropped: `` `Page`? `` as `Page?`, the same name to Kotlin. */
+internal fun unticked(written: String): String = written.replace("`", "")
 
 /**
  * [text] written with core's [name] where it starts with a call to it, under that name or an alias
@@ -2039,15 +2048,17 @@ internal fun asCoreCall(
     text: String,
     name: String,
 ): String? {
-    val callee = CALLEE.find(text)?.groupValues?.get(1) ?: return null
+    val m = CALLEE.find(text) ?: return null
+    val callee = m.groupValues[2]
+    val rest = text.substring(m.groups[2]!!.range.last + 1 + m.groupValues[1].length)
     return when {
-        callee == name -> if (shadowsCore(src, name)) null else text
-        coreAliases(src)[callee] == name -> name + text.substring(callee.length)
+        callee == name -> if (shadowsCore(src, name)) null else name + rest
+        coreAliases(src)[callee] == name -> name + rest
         else -> null
     }
 }
 
-private val CALLEE = Regex("""^([\p{L}_][\p{L}\p{Nd}_]*)\s*\(""")
+private val CALLEE = Regex("""^(`?)([\p{L}_][\p{L}\p{Nd}_]*)\1\s*\(""")
 
 /** Whether [text] is one call to core's [name], under that name or an alias: `Trusted(x)`, `T(x)`. */
 internal fun coreCall(
@@ -2064,10 +2075,10 @@ internal fun callsTrusted(
     TRUSTED_CALL.containsMatchIn(text) ||
         coreAliases(src).any { (alias, name) ->
             name == "Trusted" &&
-                Regex("""(?:^|[^\p{L}\p{Nd}_.])${Regex.escape(alias)}\s*\(""").containsMatchIn(text)
+                Regex("""(?:^|[^\p{L}\p{Nd}_.`])(`?)${Regex.escape(alias)}\1\s*\(""").containsMatchIn(text)
         }
 
-private val TRUSTED_CALL = Regex("""(?:^|[^\p{L}\p{Nd}_.])Trusted\s*\(""")
+private val TRUSTED_CALL = Regex("""(?:^|[^\p{L}\p{Nd}_.`])(`?)Trusted\1\s*\(""")
 
 /** Whether [d] is set to a call to core's `interpolate` or `Trusted`: by an alias, or by a name nothing else in [src] takes. */
 private fun setToCore(
@@ -2080,7 +2091,7 @@ internal fun markupTypeShadowed(
     src: String,
     written: String,
 ): Boolean {
-    val name = written.filterNot { it.isWhitespace() }.removeSuffix("?")
+    val name = unticked(written).filterNot { it.isWhitespace() }.removeSuffix("?")
     return (name == "Html" || name == "Trusted") && shadowsCore(src, name)
 }
 
@@ -2106,6 +2117,7 @@ private fun shadowedInFile(
                 .trim()
                 .removeSuffix(";")
                 .trim()
+                .let(::unticked)
         }
     if ("$DOMAIN.$name" in targets) return false
     for (t in targets) {
@@ -2121,7 +2133,7 @@ private fun shadowedInFile(
             return true
         }
     }
-    val declaration = Regex("""\b(?:fun|class|object|interface|typealias)\s+(?:<[^>]*>\s*)?${Regex.escape(name)}(?![\p{L}\p{Nd}_])""")
+    val declaration = Regex("""\b(?:fun|class|object|interface|typealias)\s+(?:<[^>]*>\s*)?(`?)${Regex.escape(name)}\1(?![\p{L}\p{Nd}_])""")
     for (m in declaration.findAll(src)) {
         if (!code[m.range.first]) continue
         var depth = 0

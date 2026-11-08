@@ -26,13 +26,13 @@ class HoleJudgementTest {
         assertEquals(listOf(Severity.WARNING, Severity.WARNING), interpolation(src, typed))
     }
 
-    /** The issues on [src] where the editor says the value at [value] is [fact], as code and the text they cover. */
+    /** The issues on [src] where the editor says the last [value] in it is [fact], as code and the text they cover. */
     private fun told(
         src: String,
         value: String,
         fact: ValueFact,
     ): List<Pair<String, String>> {
-        val at = src.indexOf(value)
+        val at = src.lastIndexOf(value)
         val opts = AnalyzeOptions(valueFact = { start, end -> if (start == at && end == at + value.length) fact else null })
         return analyzer.analyzeKotlin(src, opts).map { (it.code ?: "") to src.substring(it.start, it.end) }
     }
@@ -53,6 +53,14 @@ class HoleJudgementTest {
         val src = "import com.acme.*\n\nfun f(x: String) = interpolate(\"<script>%s</script>\", Trusted(x))"
         assertEquals(emptyList(), told(src, "", ValueFact.STRING))
         assertEquals(listOf("unsafe-interpolation" to "%s"), told(src, "Trusted(x)", ValueFact.OTHER))
+    }
+
+    @Test
+    fun `the editor is asked about a value without the comment after it`() {
+        // Only the editor knows the value is a number, which a style takes.
+        val src = "fun f(n: Any) = interpolate(\"<div style=\\\"%s\\\"></div>\", n /* id */ // id\n)"
+        assertEquals(listOf("unsafe-interpolation" to "%s"), told(src, "", ValueFact.NUMBER))
+        assertEquals(emptyList(), told(src, "n", ValueFact.NUMBER))
     }
 
     @Test

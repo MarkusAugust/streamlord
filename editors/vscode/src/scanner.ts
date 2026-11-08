@@ -118,6 +118,22 @@ function parseArgs(src: string, openParen: number): { closeParen: number; args: 
   return null;
 }
 
+/** `a` up to the end of its last token, without the comments and whitespace after it: `x /* id *\/` as `x`. `uncommented` in Scanner.kt. */
+export function uncommented(src: string, a: Arg): Arg {
+  let i = a.start;
+  let last = a.start;
+  for (;;) {
+    i = skipTrivia(src, i, a.end);
+    if (i >= a.end) break;
+    if (isStringStart(src, i)) i = readKotlinStringAt(src, i)?.end ?? i + 1;
+    else if (src[i] === "'") i = charLiteralEnd(src, i);
+    else i++;
+    i = Math.min(i, a.end);
+    last = i;
+  }
+  return last === a.end ? a : { ...a, end: last, text: src.slice(a.start, last) };
+}
+
 function makeArg(src: string, from: number, to: number): Arg {
   let end = to;
   while (end > from && /\s/.test(src[end - 1] ?? "")) end--;
