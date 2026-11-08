@@ -292,6 +292,8 @@ interface Declaration {
   trusted?: boolean;
   /** The text a `val` set to `Trusted("...")` writes, the literal as the Kotlin compiler reads it. */
   trustedText?: string;
+  /** Whether the call it is set to names core's own under an alias the file imports, which no other import can take. */
+  aliased?: boolean;
   /** What it is set to the `.text` of, `interpolate(...)` or a name: markup held as a String when that is an Html. */
   textOf?: string;
   /** What the brackets after its type hold, `Html` of `List<Html>`. */
@@ -323,6 +325,8 @@ interface FileFacts {
   shadowed?: Map<string, boolean>;
   /** The same with no star import counted, for what a name means here (`shadowsCore`). */
   taken?: Map<string, boolean>;
+  /** The names the file imports names of core's domain under, each with the name it stands for (`coreAliases`). */
+  aliases?: ReadonlyMap<string, string>;
   /** Whether the file's imports show it uses the DSL: what decides when the host does not know. */
   usesDsl?: boolean;
   /** The type parameters the file declares, each with whether a value of it may be null. */
@@ -437,6 +441,7 @@ interface Frame {
  */
 function declarations(src: string, code: Uint8Array): Map<string, Declaration[]> {
   const names = new Map<string, Declaration[]>();
+  const aliases = aliasesIn(src, code);
   const add = (name: string, d: Declaration) => {
     if (name === "_") return;
     const list = names.get(name);
@@ -518,10 +523,10 @@ function declarations(src: string, code: Uint8Array): Map<string, Declaration[]>
           // `val String.shout`: an extension, read on a receiver and never by its name alone.
           if (m && !m[1]) {
             const at = end + m[0].indexOf(m[2] as string, (m[0].length - m[0].trimStart().length));
-            const markup = m[4] === undefined && m[5] === undefined && markupInitialiser(src, end + m[0].length);
-            TRUSTED_INITIALISER.lastIndex = end + m[0].length;
-            const trusted = markup && TRUSTED_INITIALISER.test(src);
-            const trustedText = trusted && word === "val" ? (literalTrusted(src, src.indexOf("Trusted", end + m[0].length)) ?? undefined) : undefined;
+            const initialiser = m[4] === undefined && m[5] === undefined ? markupInitialiser(src, end + m[0].length, aliases) : null;
+            const markup = initialiser !== null;
+            const trusted = initialiser?.name === "Trusted";
+            const trustedText = trusted && word === "val" ? (literalTrusted(src, initialiser.start) ?? undefined) : undefined;
             const textOf = m[4] === undefined && m[5] === undefined && !markup ? textInitialiser(src, end + m[0].length) : undefined;
             let after = end + m[0].length;
             let typeArguments: string | undefined;
@@ -540,7 +545,7 @@ function declarations(src: string, code: Uint8Array): Map<string, Declaration[]>
               const v = VALUE_AFTER.exec(src);
               if (v) valueAt = after + v[0].length;
             }
-            const d = { ...scope(at), type: m[3], literal: m[4], text: constant ? m[5] : undefined, string: m[5] !== undefined, markup, trusted, trustedText, textOf, typeArguments, valueAt };
+            const d = { ...scope(at), type: m[3], literal: m[4], text: constant ? m[5] : undefined, string: m[5] !== undefined, markup, trusted, trustedText, aliased: initialiser?.aliased === true, textOf, typeArguments, valueAt };
             add(m[2] as string, d);
             if (owner.kind !== "top") owner.ends.push(d);
           }
@@ -648,19 +653,26 @@ function declarations(src: string, code: Uint8Array): Map<string, Declaration[]>
   return names;
 }
 
-const MARKUP_INITIALISER = /\s*=\s*(?:interpolate|Trusted)\s*\(/y;
-const TRUSTED_INITIALISER = /\s*=\s*Trusted\s*\(/y;
+const MARKUP_INITIALISER = /\s*=\s*([\p{L}_][\p{L}\p{Nd}_]*)\s*\(/uy;
 const STATEMENT_END = /^[ \t]*(?:[\n\r;})\],]|\/\/|$)/;
 
-/** Whether what follows a declared name at `at` is `= interpolate(...)` or `= Trusted(...)`, the whole value: `val row = interpolate(...)`. */
-function markupInitialiser(src: string, at: number): boolean {
+/**
+ * Which of `interpolate` and `Trusted` what follows a declared name at `at` calls as the whole
+ * value, `val row = interpolate(...)`, under its name or one of `aliases`, where the call starts,
+ * and whether it is called by an alias; null for any other value. `markupInitialiser` in Interpolations.kt.
+ */
+function markupInitialiser(src: string, at: number, aliases: ReadonlyMap<string, string>): { name: string; start: number; aliased: boolean } | null {
   MARKUP_INITIALISER.lastIndex = at;
   const m = MARKUP_INITIALISER.exec(src);
-  if (!m) return false;
+  if (!m) return null;
+  const callee = m[1] as string;
+  const name = aliases.get(callee) ?? callee;
+  if (name !== "interpolate" && name !== "Trusted") return null;
   const open = at + m[0].length - 1;
   const e = src.slice(open, open + 20_000);
   const close = closing(e, depths(e), 0);
-  return close > 0 && STATEMENT_END.test(e.slice(close, close + 8));
+  if (close <= 0 || !STATEMENT_END.test(e.slice(close, close + 8))) return null;
+  return { name, start: at + m[0].indexOf(callee), aliased: name !== callee };
 }
 
 const TEXT_OF_NAME = new RegExp(String.raw`\s*=\s*(${NAME})\s*\.\s*text(?=[ \t]*(?:[\n\r;})\],]|//|$))`, "uy");
@@ -771,14 +783,15 @@ export function declaredKind(src: string, name: string, at: number, nonNull = fa
   if (!d) return null;
   if (d.literal !== undefined) return d.literal === "true" || d.literal === "false" ? "boolean" : UNSIGNED_SUFFIX.test(d.literal) ? "unsigned" : "number";
   // Without core, Html, Trusted and interpolate are not Streamlord's, and nothing says what they hold.
-  if (d.markup) return core && !shadowsCore(src, d.trusted ? "Trusted" : "interpolate") ? "markup" : null;
+  if (d.markup) return core && setToCore(src, d) ? "markup" : null;
   if (d.type === undefined) return null;
   // An Html or a Trusted the file takes from another package is no markup the analysis knows.
   if (markupTypeShadowed(src, d.type)) return null;
-  return declaredFact(d.type, nonNull, core) as TextKind | null;
+  return declaredFact(coreType(src, d.type), nonNull, core) as TextKind | null;
 }
 
-const TRUSTED_LITERAL = /Trusted\s*\(\s*(?:html\s*=\s*)?(?:"((?:[^"\\$\n]|\\.)*)"|"""((?:[^"$]|"(?!""))*)""")\s*\)/y;
+// The callee is Trusted or an alias of it, which the caller has read.
+const TRUSTED_LITERAL = /[\p{L}_][\p{L}\p{Nd}_]*\s*\(\s*(?:html\s*=\s*)?(?:"((?:[^"\\$\n]|\\.)*)"|"""((?:[^"$]|"(?!""))*)""")\s*\)/uy;
 
 /**
  * The text of `Trusted("...")` at `at`, or of `Trusted("""...""")` or `Trusted(html = ...)`, with
@@ -801,16 +814,20 @@ function literalTrusted(src: string, at: number, whole = false): string | null {
  */
 export function trustedLiteral(src: string, value: string, at: number): string | null {
   const t = value.trim();
-  if (shadowsCore(src, "Trusted")) return null;
-  if (IDENT.test(t)) return declarationOf(src, t, at)?.trustedText ?? null;
-  return literalTrusted(t, 0, true);
+  if (IDENT.test(t)) {
+    const d = declarationOf(src, t, at);
+    return d !== null && setToCore(src, d) ? (d.trustedText ?? null) : null;
+  }
+  const call = asCoreCall(src, t, "Trusted");
+  return call === null ? null : literalTrusted(call, 0, true);
 }
 
 /** Whether `name` at `at` is declared a `Trusted`, or set to `Trusted(...)` and nothing more: what interpolate lets in anywhere. */
 function trustedName(src: string, name: string, at: number): boolean {
   const d = declarationOf(src, name, at);
-  if (d === null || shadowsCore(src, "Trusted")) return false;
-  return d.trusted === true || (d.type !== undefined && isTrustedType(d.type));
+  if (d === null) return false;
+  if (d.type !== undefined && isTrustedType(coreType(src, d.type))) return !markupTypeShadowed(src, d.type);
+  return d.trusted === true && setToCore(src, d);
 }
 
 /**
@@ -1115,9 +1132,9 @@ export function markupValue(src: string, value: string, at: number, depth = 0, s
   if (htmlLiteral(t)) return true;
   const sum = splitTop(t, "+");
   if (sum.length > 1) return htmlLiteral((sum[0] as string).trim());
-  if (sdk.core && ["interpolate", "Trusted"].some((name) => wholeCall(t, name) && !shadowsCore(src, name))) return true;
+  if (sdk.core && (coreCall(src, t, "interpolate") || coreCall(src, t, "Trusted"))) return true;
   const textOf = /^([\s\S]*?)\s*\.\s*text$/.exec(t)?.[1];
-  if (sdk.core && textOf !== undefined && ((wholeCall(textOf, "interpolate") && !shadowsCore(src, "interpolate")) || (IDENT.test(textOf) && isMarkupFact(declaredKind(src, textOf, at))))) return true;
+  if (sdk.core && textOf !== undefined && (coreCall(src, textOf, "interpolate") || (IDENT.test(textOf) && isMarkupFact(declaredKind(src, textOf, at))))) return true;
   if (IDENT.test(t)) {
     if (isMarkupFact(declaredKind(src, t, at, false, sdk.core)) || htmlNamed(src, t, at)) return true;
     // `val e = elements { }`: the name stands for the call it is set to; a literal it is set to is judged where it is written.
@@ -1149,7 +1166,7 @@ function markupElements(src: string, receiver: string, at: number, depth: number
     const d = declarationOf(src, t, at);
     if (!d) return false;
     if (d.type !== undefined) {
-      return sdk.core && d.typeArguments !== undefined && !markupTypeShadowed(src, d.typeArguments) && isMarkupCollection(`${d.type.replace(/\?$/, "")}<${d.typeArguments}>`);
+      return sdk.core && d.typeArguments !== undefined && !markupTypeShadowed(src, d.typeArguments) && isMarkupCollection(`${d.type.replace(/\?$/, "")}<${coreType(src, d.typeArguments)}>`);
     }
     const init = initialiser(src, d);
     return init !== null && depth < VALUE_DEPTH && markupElements(src, init, d.at, depth + 1, sdk);
@@ -1482,6 +1499,73 @@ export function shadowsCore(src: string, name: string): boolean {
   return taken;
 }
 
+/**
+ * The names `src` imports names of core's domain under, each with the name it stands for:
+ * `import io.github.markusaugust.streamlord.core.domain.Html as Page` gives `Page` to `Html`. `coreAliases` in Interpolations.kt.
+ */
+export function coreAliases(src: string): ReadonlyMap<string, string> {
+  const facts = fileFacts(src);
+  facts.aliases ??= aliasesIn(src, facts.code);
+  return facts.aliases;
+}
+
+/** The aliases of `coreAliases`, read from the imports in the `code` of `src`. */
+function aliasesIn(src: string, code: Uint8Array): ReadonlyMap<string, string> {
+  const out = new Map<string, string>();
+  for (const line of keywordLines(src, code, "import")) {
+    const t = src.slice(line.start, line.codeEnd).trim().replace(/;$/, "").trim();
+    const m = CORE_ALIAS.exec(t);
+    if (m) out.set(m[2] as string, m[1] as string);
+  }
+  return out;
+}
+
+const CORE_ALIAS = new RegExp(`^${DOMAIN.replace(/\./g, "\\.")}\\.([\\p{L}_][\\p{L}\\p{Nd}_]*)\\s+as\\s+([\\p{L}_][\\p{L}\\p{Nd}_]*)$`, "u");
+
+/** `written`, a declared type, with a bare alias of core's `Html` or `Trusted` written as the name it stands for: `Page?` as `Html?`. `coreType` in Interpolations.kt. */
+function coreType(src: string, written: string): string {
+  const t = written.trim();
+  const bare = t.replace(/\?$/, "").trim();
+  const name = coreAliases(src).get(bare);
+  if (name !== "Html" && name !== "Trusted") return written;
+  return name + t.slice(bare.length);
+}
+
+/**
+ * `text` written with core's `name` where it starts with a call to it, under that name or an alias
+ * the file imports it by: `T(x)` as `Trusted(x)`. Null where `text` starts with no call to core's `name`.
+ */
+function asCoreCall(src: string, text: string, name: string): string | null {
+  const callee = CALLEE.exec(text)?.[1];
+  if (callee === undefined) return null;
+  if (callee === name) return shadowsCore(src, name) ? null : text;
+  return coreAliases(src).get(callee) === name ? name + text.slice(callee.length) : null;
+}
+
+const CALLEE = /^([\p{L}_][\p{L}\p{Nd}_]*)\s*\(/u;
+
+/** Whether `text` is one call to core's `name`, under that name or an alias: `Trusted(x)`, `T(x)`. */
+function coreCall(src: string, text: string, name: string): boolean {
+  const call = asCoreCall(src, text, name);
+  return call !== null && wholeCall(call, name);
+}
+
+/** Whether `text` calls core's `Trusted` anywhere, under that name or an alias. */
+export function callsTrusted(src: string, text: string): boolean {
+  if (TRUSTED_CALL.test(text)) return true;
+  for (const [alias, name] of coreAliases(src)) {
+    if (name === "Trusted" && new RegExp(`(?:^|[^\\p{L}\\p{Nd}_.])${alias}\\s*\\(`, "u").test(text)) return true;
+  }
+  return false;
+}
+
+const TRUSTED_CALL = /(?:^|[^\p{L}\p{Nd}_.])Trusted\s*\(/u;
+
+/** Whether `d` is set to a call to core's `interpolate` or `Trusted`: by an alias, or by a name nothing else in `src` takes. `setToCore` in Interpolations.kt. */
+function setToCore(src: string, d: Declaration): boolean {
+  return d.markup === true && (d.aliased === true || !shadowsCore(src, d.trusted ? "Trusted" : "interpolate"));
+}
+
 /** Whether `written`, a declared type, is a bare `Html` or `Trusted` that means another type in `src`: `markupTypeShadowed` in Interpolations.kt. */
 function markupTypeShadowed(src: string, written: string): boolean {
   const name = written.replace(/\s/g, "").replace(/\?$/, "");
@@ -1509,8 +1593,8 @@ function shadowedInFile(src: string, code: Uint8Array, name: string, stars = tru
     if (t.endsWith(`.${name}`)) return true;
     if (stars && t.endsWith(".*") && t !== `${DOMAIN}.*` && !t.startsWith("io.github.markusaugust.streamlord.") && usedInCode(src, code, name)) return true;
   }
-  const declared = new RegExp(String.raw`\b(?:fun|class|object|interface|typealias)\s+(?:<[^>]*>\s*)?${name}(?![\p{L}\p{Nd}_])`, "gu");
-  for (const m of src.matchAll(declared)) {
+  const declaration = new RegExp(String.raw`\b(?:fun|class|object|interface|typealias)\s+(?:<[^>]*>\s*)?${name}(?![\p{L}\p{Nd}_])`, "gu");
+  for (const m of src.matchAll(declaration)) {
     const at = m.index ?? 0;
     if (code[at] !== 1) continue;
     let depth = 0;
@@ -1810,11 +1894,11 @@ export function argKind(src: string, text: string, literal: boolean, at: number)
   if (t === "null") return "null";
   if (/^'(?:[^'\\]|\\.[^']*)'$/.test(t)) return "char";
   if (/^if\s*\(/.test(t) && literalOnly(t)) return t.includes('"') ? "string" : null;
-  if ((wholeCall(t, "Trusted") && !shadowsCore(src, "Trusted")) || (IDENT.test(t) && trustedName(src, t, at))) return "trusted";
-  if (wholeCall(t, "interpolate") && !shadowsCore(src, "interpolate")) return "markup";
+  if (coreCall(src, t, "Trusted") || (IDENT.test(t) && trustedName(src, t, at))) return "trusted";
+  if (coreCall(src, t, "interpolate")) return "markup";
   // The String of the Html: interpolate(...).text.
   const html = /^([\s\S]*?)\s*\.\s*text$/.exec(t)?.[1];
-  if (html !== undefined && wholeCall(html, "interpolate") && !shadowsCore(src, "interpolate")) return "string";
+  if (html !== undefined && coreCall(src, html, "interpolate")) return "string";
   const called = callKind(src, t, at);
   if (called !== null) return called;
   const declared = IDENT.test(t) ? declaredKind(src, t, at) : null;

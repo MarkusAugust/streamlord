@@ -6,7 +6,7 @@ import { signalNameRefusal } from "./signalNames.ts";
 import { asciiLowercase, decodeEntities, indexOfAsciiIgnoreCase, keyReading, nonceProblem, rawKeyNote, tokenize, validateAttributes, validateMarkup, wireKey, wireKeyReads, type Attribute, type Tag } from "./markup.ts";
 import { findCallSites, isHtmlString, lexKotlin, namedArgText, selectStringArg, stringAt, type Arg, type CallSite } from "./scanner.ts";
 import { holeLandings, urlHostFixedBy, urlSchemeFixedBy, type Hole, type HoleLanding, type Position } from "./holes.ts";
-import { argKind, callResult, chainFrom, coreNameUsable, countBelow, ESCAPES_TITLE, fileFacts, holeDisplay, holeValues, HTML_PACKAGE, importEdits, interpolateFix, interpolateText, isMarkup, markupHeldAsString, markupTextValue, markupValued, markupView, mayBeNull, mayHoldMarkup, percentHoles, quoteFix, REFUSES_URL_TITLE, sdkOf, shortened, trimmed, trustedFix, trustedLiteral, valueKind, visiblyList, withNested, withPercentHoles, type ArgKind } from "./interpolation.ts";
+import { argKind, callResult, callsTrusted, chainFrom, coreNameUsable, countBelow, ESCAPES_TITLE, fileFacts, holeDisplay, holeValues, HTML_PACKAGE, importEdits, interpolateFix, interpolateText, isMarkup, markupHeldAsString, markupTextValue, markupValued, markupView, mayBeNull, mayHoldMarkup, percentHoles, quoteFix, REFUSES_URL_TITLE, sdkOf, shadowsCore, shortened, trimmed, trustedFix, trustedLiteral, valueKind, visiblyList, withNested, withPercentHoles, type ArgKind } from "./interpolation.ts";
 import { dslHelpers, EXPRESSION_HELPERS, signalNameHyphenSites, unshadowed } from "./signalNameHyphens.ts";
 import { textOpensWithTag } from "./valueTypes.ts";
 import { argKindOf, described, digitsOrBoolean, interpolateTakesIn, isConstant, isMarkupFact, isNullable, isNullableString, isString, knownCharacters, plain, scalar, verdict, weakest, writesItself } from "./valueVerdict.ts";
@@ -126,8 +126,11 @@ export function analyzeKotlin(src: string, opts: AnalyzeOptions): Issue[] {
     // The literals of a `+` chain handed to the site are judged there, as one string; the arguments it does not read are free.
     for (const judged of judgedStrings(site, src)) for (const x of lex.strings) if (x.start >= judged.start && x.end <= judged.end) claimed.add(x.start);
   }
+  // An interpolate the file takes from elsewhere is not core's, whose format this reads; nor one it
+  // declares, since the text cannot tell whether the call fits it.
+  const otherInterpolate = shadowsCore(src, "interpolate");
   for (const site of findCallSites(src, INTERPOLATE, lex.mask)) {
-    if (foreign(site.name, site.nameStart)) continue;
+    if (foreign(site.name, site.nameStart) || otherInterpolate) continue;
     const format = interpolateFormat(site, src);
     if (!format) continue;
     for (const x of lex.strings) if (x.start >= format.string.start && x.end <= format.string.end) claimed.add(x.start);
@@ -936,7 +939,7 @@ function interpolateKeeps(src: string, s: KotlinString, ip: Interpolation, told:
   if (isNullable(fact) || isNullableString(told) || mayBeNull(src, ip.text, s.start)) return false;
   // A template writes a List as `[a, b]`; interpolate given one value that is a List takes the other overload.
   if (visiblyList(src, ip.text, s.start)) return false;
-  if (/(?:^|[^\p{L}\p{Nd}_.])Trusted\s*\(/u.test(ip.text)) return position === "TEXT";
+  if (callsTrusted(src, ip.text)) return position === "TEXT";
   if (isMarkupFact(fact)) return position !== "TEXT" || markupValued(src, s, ip);
   if (position === "TEXT" && !digitsOrBoolean(fact) && mayHoldMarkup(src, ip.text, s.start, opts.constants)) return false;
   return !(isConstant(fact) && position === "TEXT" && ip.kind !== "simple" && ip.text.includes("<"));

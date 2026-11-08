@@ -59,7 +59,10 @@ internal class Sdk private constructor(
  * number or a boolean that may be null (`Int?`): digits, true, false or null. [NULLABLE_STRING] is
  * a `String?`, which a Kotlin template writes as `null` and `interpolate` as nothing. [UNSIGNED] is
  * a `UInt`, `ULong`, `UShort` or `UByte`: digits, but not a `kotlin.Number`, so `interpolate`
- * refuses it where only a number is let in.
+ * refuses it where only a number is let in. [OTHER] is a class the editor resolved whose name the
+ * text alone would take for Streamlord's markup, an `Html` or a `Trusted` of another package
+ * ([ofResolvedClass]): nothing about it is known, and no reading of the text makes it markup. Only
+ * IntelliJ gives it; VS Code has no resolver.
  */
 public enum class ValueFact {
     STRING,
@@ -70,6 +73,7 @@ public enum class ValueFact {
     CONSTANT,
     MARKUP,
     UNSIGNED,
+    OTHER,
     ;
 
     /** What [ofTypeName] in ValueTypes.kt hangs on. */
@@ -113,8 +117,6 @@ private const val CODE_URL_ADVICE =
 
 /** The folders [Analyzer.analyzeProject] leaves unread, as the VS Code index does: build output and dependencies. */
 private val SKIPPED_FOLDERS = setOf("build", "node_modules", ".gradle", "dist", "out", "target")
-
-private val TRUSTED_CALL = Regex("""(?:^|[^\p{L}\p{Nd}_.])Trusted\s*\(""")
 
 /** Where a markup's holes land, read with the text of the known ones in place. */
 private class HoleReading(
@@ -275,8 +277,11 @@ public class Analyzer(
             }
             if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
         }
+        // An interpolate the file takes from elsewhere is not core's, whose format this reads; nor one it
+        // declares, since the text cannot tell whether the call fits it.
+        val otherInterpolate = shadowsCore(src, "interpolate")
         for (site in findCallSites(src, INTERPOLATE, lex)) {
-            if (foreign(site.name, site.nameStart)) continue
+            if (foreign(site.name, site.nameStart) || otherInterpolate) continue
             val format = interpolateFormat(site, src) ?: continue
             for (x in lex.strings) if (x.start >= format.second.start && x.end <= format.second.end) claimed += x.start
             val issues = checkInterpolateSite(site, format.first, format.second, src, opts, hyphenated)
@@ -707,7 +712,10 @@ public class Analyzer(
         // The values one by one, as the vararg overload takes them: no spread and nothing by name.
         val plain = site.args.all { it.named == null } && values.none { it.text.startsWith("*") }
         val known = values.map { opts.valueFact?.invoke(it.start, it.end) }
-        val kinds = values.mapIndexed { k, it -> known[k].argKind() ?: valueKind(src, it.text, it.string != null, s.start) }
+        val kinds =
+            values.mapIndexed { k, it ->
+                if (known[k].isOther()) null else known[k].argKind() ?: valueKind(src, it.text, it.string != null, s.start)
+            }
         val issues = ArrayList<Issue>()
         // The overload that takes a List is called with one or two values, each of which could be a List.
         val counted = plain && (values.isEmpty() || values.size >= 3 || kinds.any { it != null })
@@ -1256,7 +1264,8 @@ public class Analyzer(
         // A literal Trusted is markup the author wrote, read in place: the other holes are judged against it.
         val written = HashMap<Int, String>()
         for ((k, ip) in s.interpolations.withIndex()) {
-            if (ip.kind == InterpolationKind.OPERAND || !core) continue
+            // A Trusted the editor resolves to another package is none of core's, whatever the text says.
+            if (ip.kind == InterpolationKind.OPERAND || !core || opts.valueFact?.invoke(ip.start, ip.end).isOther()) continue
             trustedLiteral(src, ip.text, s.start)?.let { written[k] = it }
         }
         val reading =
@@ -1504,7 +1513,7 @@ public class Analyzer(
         if (fact.isNullable() || told.isNullableString() || mayBeNull(src, ip.text, s.start)) return false
         // A template writes a List as `[a, b]`; interpolate given one value that is a List takes the other overload.
         if (visiblyList(src, ip.text, s.start)) return false
-        if (TRUSTED_CALL.containsMatchIn(ip.text)) return position == Position.TEXT
+        if (!told.isOther() && callsTrusted(src, ip.text)) return position == Position.TEXT
         if (fact.isMarkup()) return position != Position.TEXT || markupValued(src, s, ip)
         if (position == Position.TEXT && !fact.digitsOrBoolean() &&
             mayHoldMarkup(src, ip.text, s.start, opts.constants)

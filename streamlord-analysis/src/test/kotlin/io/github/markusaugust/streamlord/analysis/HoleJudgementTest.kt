@@ -26,6 +26,35 @@ class HoleJudgementTest {
         assertEquals(listOf(Severity.WARNING, Severity.WARNING), interpolation(src, typed))
     }
 
+    /** The issues on [src] where the editor says the value at [value] is [fact], as code and the text they cover. */
+    private fun told(
+        src: String,
+        value: String,
+        fact: ValueFact,
+    ): List<Pair<String, String>> {
+        val at = src.indexOf(value)
+        val opts = AnalyzeOptions(valueFact = { start, end -> if (start == at && end == at + value.length) fact else null })
+        return analyzer.analyzeKotlin(src, opts).map { (it.code ?: "") to src.substring(it.start, it.end) }
+    }
+
+    @Test
+    fun `a Trusted the editor resolves to another package is no markup the text reads in place`() {
+        // A star import leaves the name Streamlord's to the text, which reads the literal as an open <a href=.
+        val src = "import com.acme.*\n\nfun f(x: String) = \"<div>\${Trusted(\"<a href=\")}\$x</div>\""
+        assertEquals(listOf("unsafe-interpolation" to "\$x"), told(src, "", ValueFact.STRING))
+        assertEquals(
+            listOf("unescaped-interpolation" to "\${Trusted(\"<a href=\")}", "unescaped-interpolation" to "\$x"),
+            told(src, "\${Trusted(\"<a href=\")}", ValueFact.OTHER),
+        )
+    }
+
+    @Test
+    fun `a Trusted the editor resolves to another package is not let into a script`() {
+        val src = "import com.acme.*\n\nfun f(x: String) = interpolate(\"<script>%s</script>\", Trusted(x))"
+        assertEquals(emptyList(), told(src, "", ValueFact.STRING))
+        assertEquals(listOf("unsafe-interpolation" to "%s"), told(src, "Trusted(x)", ValueFact.OTHER))
+    }
+
     @Test
     fun `a file of two thousand functions with HTML is analysed in a moment`() {
         val q = "\"\"\""
