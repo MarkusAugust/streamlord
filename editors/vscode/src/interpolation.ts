@@ -10,7 +10,7 @@ import { PLACEHOLDER, readKotlinStringAt, type Interpolation, type KotlinString 
 import { laterFix, type Fix } from "./expression.ts";
 import { catalog } from "./catalog.ts";
 import { EXPRESSION_HELPERS, unshadowed, USES_HTML_DSL } from "./signalNameHyphens.ts";
-import { declaredFact, isMarkupCollection, isTrustedType, opensWithTag } from "./valueTypes.ts";
+import { declaredFact, importsOtherMarkup, isMarkupCollection, isTrustedType, opensWithTag } from "./valueTypes.ts";
 import { argKindOf, isConstant, isMarkupFact, isString, weakest, writesItself } from "./valueVerdict.ts";
 
 const IDENT = /^[\p{L}_][\p{L}\p{Nd}_]*$/u;
@@ -771,6 +771,8 @@ export function declaredKind(src: string, name: string, at: number, nonNull = fa
   // Without core, Html, Trusted and interpolate are not Streamlord's, and nothing says what they hold.
   if (d.markup) return core ? "markup" : null;
   if (d.type === undefined) return null;
+  // An Html or a Trusted the file imports from another package is no markup the analysis knows.
+  if (importsOtherMarkup(src, d.type)) return null;
   return declaredFact(d.type, nonNull, core) as TextKind | null;
 }
 
@@ -1142,7 +1144,9 @@ function markupElements(src: string, receiver: string, at: number, depth: number
   if (IDENT.test(t)) {
     const d = declarationOf(src, t, at);
     if (!d) return false;
-    if (d.type !== undefined) return sdk.core && d.typeArguments !== undefined && isMarkupCollection(`${d.type.replace(/\?$/, "")}<${d.typeArguments}>`);
+    if (d.type !== undefined) {
+      return sdk.core && d.typeArguments !== undefined && !importsOtherMarkup(src, d.typeArguments) && isMarkupCollection(`${d.type.replace(/\?$/, "")}<${d.typeArguments}>`);
+    }
     const init = initialiser(src, d);
     return init !== null && depth < VALUE_DEPTH && markupElements(src, init, d.at, depth + 1, sdk);
   }

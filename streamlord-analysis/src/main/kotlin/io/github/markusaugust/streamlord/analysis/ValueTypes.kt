@@ -92,6 +92,41 @@ internal fun declaredFact(
         else -> fact
     }
 
+private val IMPORT = Regex("""(?m)^[ \t]*import[ \t]+([\w.]+)(?:[ \t]+as[ \t]+(\w+))?""")
+
+/** The last source [importsOtherMarkup] read, and what it found, so a file is read once however many values it judges. */
+@Volatile
+private var lastImports: Pair<String, Set<String>>? = null
+
+/**
+ * Whether [written], a type as a declaration writes it, names an `Html` or a `Trusted` that an
+ * import in [src] binds to another package than Streamlord's: `import com.acme.Html`, or
+ * `import com.acme.Markup as Html`. A bare name otherwise stays Streamlord's, as a snippet without
+ * imports means it.
+ */
+public fun importsOtherMarkup(
+    src: String,
+    written: String,
+): Boolean {
+    val name = written.filterNot { it.isWhitespace() }.removeSuffix("?")
+    if (name != "Html" && name != "Trusted") return false
+    val cached = lastImports
+    val others =
+        if (cached != null && cached.first === src) {
+            cached.second
+        } else {
+            IMPORT
+                .findAll(src)
+                .mapNotNull { m ->
+                    val path = m.groupValues[1]
+                    val bound = m.groupValues[2].ifEmpty { path.substringAfterLast('.') }
+                    bound.takeIf { path != "io.github.markusaugust.streamlord.core.domain.$it" }
+                }.toSet()
+                .also { lastImports = src to it }
+        }
+    return name in others
+}
+
 /** Whether [type] is a collection of Streamlord's markup, as `List<Html>`; the whitespace in it is ignored. */
 public fun isMarkupCollection(type: String): Boolean = MARKUP_COLLECTION.matches(type.filterNot { it.isWhitespace() })
 

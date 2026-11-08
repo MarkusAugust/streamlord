@@ -68,6 +68,10 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- A value declared `Html` or `Trusted` in a file that imports another type by that name,
+  `import com.acme.Html` or `import com.acme.Markup as Html`, was taken for Streamlord's markup in
+  VS Code and in IntelliJ's K1 mode. It is judged now as any value of a type the editor does not
+  know. IntelliJ in K1 mode reads the type the declaration resolves to, as K2 does.
 - `interpolate` escaped an `Html` value of an element that holds HTML, such as
   `<a href="/x"><span>a</span></a>`, a `<button>` or a `<label>` with a `<span>` in it, or a
   `<section>` with a `<p>`, written into a `<div>`, an `<li>` or another element. It read the value

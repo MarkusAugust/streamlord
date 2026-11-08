@@ -949,6 +949,8 @@ internal fun declaredKind(
     // Without core, Html, Trusted and interpolate are not Streamlord's, and nothing says what they hold.
     if (d.markup) return if (core) ValueFact.MARKUP else null
     val declared = d.type ?: return null
+    // An Html or a Trusted the file imports from another package is no markup the analysis knows.
+    if (importsOtherMarkup(src, declared)) return null
     return declaredFact(declared, nonNull, core)
 }
 
@@ -1506,7 +1508,8 @@ private fun markupElements(
         val d = declarationOf(src, t, at) ?: return false
         val type = d.type
         if (type != null) {
-            return sdk.core && d.typeArguments?.let { isMarkupCollection("${type.removeSuffix("?")}<$it>") } == true
+            return sdk.core &&
+                d.typeArguments?.let { !importsOtherMarkup(src, it) && isMarkupCollection("${type.removeSuffix("?")}<$it>") } == true
         }
         val init = initialiser(src, d) ?: return false
         return depth < VALUE_DEPTH && markupElements(src, init, d.at, depth + 1, sdk)
