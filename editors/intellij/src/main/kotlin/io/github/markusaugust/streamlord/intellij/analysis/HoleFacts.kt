@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.intellij.analysis
 
 import com.intellij.openapi.util.TextRange
+import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiElement
 import com.intellij.psi.util.PsiTreeUtil
 import io.github.markusaugust.streamlord.analysis.Catalog
@@ -23,6 +24,7 @@ import org.jetbrains.kotlin.psi.KtBinaryExpression
 import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtCallableDeclaration
 import org.jetbrains.kotlin.psi.KtClass
+import org.jetbrains.kotlin.psi.KtClassOrObject
 import org.jetbrains.kotlin.psi.KtConstantExpression
 import org.jetbrains.kotlin.psi.KtEnumEntry
 import org.jetbrains.kotlin.psi.KtExpression
@@ -32,6 +34,7 @@ import org.jetbrains.kotlin.psi.KtLambdaExpression
 import org.jetbrains.kotlin.psi.KtLiteralStringTemplateEntry
 import org.jetbrains.kotlin.psi.KtNameReferenceExpression
 import org.jetbrains.kotlin.psi.KtNamedFunction
+import org.jetbrains.kotlin.psi.KtNullableType
 import org.jetbrains.kotlin.psi.KtParenthesizedExpression
 import org.jetbrains.kotlin.psi.KtProperty
 import org.jetbrains.kotlin.psi.KtPsiUtil
@@ -40,7 +43,9 @@ import org.jetbrains.kotlin.psi.KtReturnExpression
 import org.jetbrains.kotlin.psi.KtSafeQualifiedExpression
 import org.jetbrains.kotlin.psi.KtStringTemplateEntryWithExpression
 import org.jetbrains.kotlin.psi.KtStringTemplateExpression
+import org.jetbrains.kotlin.psi.KtTypeElement
 import org.jetbrains.kotlin.psi.KtTypeReference
+import org.jetbrains.kotlin.psi.KtUserType
 import org.jetbrains.kotlin.psi.KtValueArgument
 import org.jetbrains.kotlin.psi.KtWhenExpression
 
@@ -76,7 +81,7 @@ object HoleFacts {
         // which reads it too, is scheduled for removal in 2026.2.
         val k1 = System.getProperty("idea.kotlin.plugin.use.k1").toBoolean()
         return if (k1) {
-            judge(holes, ::constantK1, ::typeK1, ::markupElementsK1) { ValueFact.ofTypeName(it.text).isMarkup() }
+            judge(holes, ::constantK1, ::typeK1, ::markupElementsK1) { typeFactK1(it).isMarkup() }
         } else {
             analyze(file) {
                 judge(
@@ -281,8 +286,30 @@ object HoleFacts {
     /** K1: a collection the declaration a reference resolves to writes out as one of Html or Trusted. */
     private fun markupElementsK1(expr: KtExpression): Boolean {
         val target = reference(expr)?.mainReference?.resolve() as? KtCallableDeclaration ?: return false
-        val type = target.typeReference?.text ?: return false
-        return isMarkupCollection(type)
+        val ref = target.typeReference ?: return false
+        val element = unwrapped(ref)
+        val argument = (element as? KtUserType)?.typeArgumentsAsTypes?.singleOrNull()
+        return isMarkupCollection(ref.text) && (argument == null || typeFactK1(argument).isMarkup())
+    }
+
+    /** The type a nullable type reference wraps, or the reference's own. */
+    private fun unwrapped(ref: KtTypeReference): KtTypeElement? = ref.typeElement.let { (it as? KtNullableType)?.innerType ?: it }
+
+    /**
+     * K1: the fact of the type [ref] writes, by the class it resolves to, so an `Html` the file
+     * imports from another package is none of Streamlord's. Where it does not resolve, none: the
+     * analysis reads the declaration and the file's imports itself.
+     */
+    private fun typeFactK1(ref: KtTypeReference): ValueFact? {
+        val nullable = if (ref.typeElement is KtNullableType) "?" else ""
+        val resolved = (unwrapped(ref) as? KtUserType)?.referenceExpression?.mainReference?.resolve()
+        val qualified =
+            when (resolved) {
+                is KtClassOrObject -> resolved.fqName?.asString()
+                is PsiClass -> resolved.qualifiedName
+                else -> null
+            }
+        return qualified?.let { ValueFact.ofTypeName(it + nullable) }
     }
 
     /** K1: a `const val` the reference resolves to, or an enum entry. */
@@ -298,8 +325,7 @@ object HoleFacts {
         // `a?.b` may be null whatever `b` declares.
         if (KtPsiUtil.safeDeparenthesize(expr) is KtSafeQualifiedExpression) return null
         val target = reference(expr)?.mainReference?.resolve() as? KtCallableDeclaration ?: return null
-        val type = target.typeReference?.text ?: return null
-        return ValueFact.ofTypeName(type)
+        return typeFactK1(target.typeReference ?: return null)
     }
 
     /** Whether `.trimMargin()` is called on [literal], which then starts past its first `|`. */

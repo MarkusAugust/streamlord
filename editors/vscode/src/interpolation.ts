@@ -321,6 +321,8 @@ interface FileFacts {
   coreCalls?: Map<string, number[]>;
   /** Whether something other than core's domain takes each name in this file, by the name (`shadowedInFile`). */
   shadowed?: Map<string, boolean>;
+  /** The same with no star import counted, for what a name means here (`shadowsCore`). */
+  taken?: Map<string, boolean>;
   /** Whether the file's imports show it uses the DSL: what decides when the host does not know. */
   usesDsl?: boolean;
   /** The type parameters the file declares, each with whether a value of it may be null. */
@@ -769,8 +771,10 @@ export function declaredKind(src: string, name: string, at: number, nonNull = fa
   if (!d) return null;
   if (d.literal !== undefined) return d.literal === "true" || d.literal === "false" ? "boolean" : UNSIGNED_SUFFIX.test(d.literal) ? "unsigned" : "number";
   // Without core, Html, Trusted and interpolate are not Streamlord's, and nothing says what they hold.
-  if (d.markup) return core ? "markup" : null;
+  if (d.markup) return core && !shadowsCore(src, d.trusted ? "Trusted" : "interpolate") ? "markup" : null;
   if (d.type === undefined) return null;
+  // An Html or a Trusted the file takes from another package is no markup the analysis knows.
+  if (markupTypeShadowed(src, d.type)) return null;
   return declaredFact(d.type, nonNull, core) as TextKind | null;
 }
 
@@ -797,6 +801,7 @@ function literalTrusted(src: string, at: number, whole = false): string | null {
  */
 export function trustedLiteral(src: string, value: string, at: number): string | null {
   const t = value.trim();
+  if (shadowsCore(src, "Trusted")) return null;
   if (IDENT.test(t)) return declarationOf(src, t, at)?.trustedText ?? null;
   return literalTrusted(t, 0, true);
 }
@@ -804,7 +809,8 @@ export function trustedLiteral(src: string, value: string, at: number): string |
 /** Whether `name` at `at` is declared a `Trusted`, or set to `Trusted(...)` and nothing more: what interpolate lets in anywhere. */
 function trustedName(src: string, name: string, at: number): boolean {
   const d = declarationOf(src, name, at);
-  return d !== null && (d.trusted === true || (d.type !== undefined && isTrustedType(d.type)));
+  if (d === null || shadowsCore(src, "Trusted")) return false;
+  return d.trusted === true || (d.type !== undefined && isTrustedType(d.type));
 }
 
 /**
@@ -1109,9 +1115,9 @@ export function markupValue(src: string, value: string, at: number, depth = 0, s
   if (htmlLiteral(t)) return true;
   const sum = splitTop(t, "+");
   if (sum.length > 1) return htmlLiteral((sum[0] as string).trim());
-  if (sdk.core && (wholeCall(t, "interpolate") || wholeCall(t, "Trusted"))) return true;
+  if (sdk.core && ["interpolate", "Trusted"].some((name) => wholeCall(t, name) && !shadowsCore(src, name))) return true;
   const textOf = /^([\s\S]*?)\s*\.\s*text$/.exec(t)?.[1];
-  if (sdk.core && textOf !== undefined && (wholeCall(textOf, "interpolate") || (IDENT.test(textOf) && isMarkupFact(declaredKind(src, textOf, at))))) return true;
+  if (sdk.core && textOf !== undefined && ((wholeCall(textOf, "interpolate") && !shadowsCore(src, "interpolate")) || (IDENT.test(textOf) && isMarkupFact(declaredKind(src, textOf, at))))) return true;
   if (IDENT.test(t)) {
     if (isMarkupFact(declaredKind(src, t, at, false, sdk.core)) || htmlNamed(src, t, at)) return true;
     // `val e = elements { }`: the name stands for the call it is set to; a literal it is set to is judged where it is written.
@@ -1142,7 +1148,9 @@ function markupElements(src: string, receiver: string, at: number, depth: number
   if (IDENT.test(t)) {
     const d = declarationOf(src, t, at);
     if (!d) return false;
-    if (d.type !== undefined) return sdk.core && d.typeArguments !== undefined && isMarkupCollection(`${d.type.replace(/\?$/, "")}<${d.typeArguments}>`);
+    if (d.type !== undefined) {
+      return sdk.core && d.typeArguments !== undefined && !markupTypeShadowed(src, d.typeArguments) && isMarkupCollection(`${d.type.replace(/\?$/, "")}<${d.typeArguments}>`);
+    }
     const init = initialiser(src, d);
     return init !== null && depth < VALUE_DEPTH && markupElements(src, init, d.at, depth + 1, sdk);
   }
@@ -1460,15 +1468,36 @@ export function coreNameUsable(src: string, name: string, sdk: Sdk, foreignCalls
 }
 
 /**
+ * Whether `name` in `src` means something other than core's own, read once per file by
+ * `shadowedInFile` with no star import counted: `shadowsCore` in Interpolations.kt.
+ */
+export function shadowsCore(src: string, name: string): boolean {
+  const facts = fileFacts(src);
+  facts.taken ??= new Map();
+  let taken = facts.taken.get(name);
+  if (taken === undefined) {
+    taken = shadowedInFile(src, facts.code, name, false);
+    facts.taken.set(name, taken);
+  }
+  return taken;
+}
+
+/** Whether `written`, a declared type, is a bare `Html` or `Trusted` that means another type in `src`: `markupTypeShadowed` in Interpolations.kt. */
+function markupTypeShadowed(src: string, written: string): boolean {
+  const name = written.replace(/\s/g, "").replace(/\?$/, "");
+  return (name === "Html" || name === "Trusted") && shadowsCore(src, name);
+}
+
+/**
  * Whether something other than core's domain takes `name` in `src`: an import of it from elsewhere,
  * by name or as an alias, or a `fun`, `class`, `object`, `interface` or `typealias` of that name at
  * the top of the file. An import of core's own name settles it, since an explicit import wins.
- * A star import from outside Streamlord counts only where the file already uses the name: an
- * explicit import the fix adds wins over a star import, so the one risk is that it takes the name
- * from uses that meant the star import's. With no use there is nothing to take, and the import is
- * unambiguous.
+ * With `stars`, as a fix asks it, a star import from outside Streamlord counts where the file
+ * already uses the name: an explicit import the fix adds wins over a star import, so the one risk is
+ * that it takes the name from uses that meant the star import's. With no use there is nothing to
+ * take, and the import is unambiguous.
  */
-function shadowedInFile(src: string, code: Uint8Array, name: string): boolean {
+function shadowedInFile(src: string, code: Uint8Array, name: string, stars = true): boolean {
   const targets = keywordLines(src, code, "import").map((l) => src.slice(l.start, l.codeEnd).trim().replace(/;$/, "").trim());
   if (targets.includes(`${DOMAIN}.${name}`)) return false;
   for (const t of targets) {
@@ -1478,7 +1507,7 @@ function shadowedInFile(src: string, code: Uint8Array, name: string): boolean {
       continue;
     }
     if (t.endsWith(`.${name}`)) return true;
-    if (t.endsWith(".*") && t !== `${DOMAIN}.*` && !t.startsWith("io.github.markusaugust.streamlord.") && usedInCode(src, code, name)) return true;
+    if (stars && t.endsWith(".*") && t !== `${DOMAIN}.*` && !t.startsWith("io.github.markusaugust.streamlord.") && usedInCode(src, code, name)) return true;
   }
   const declared = new RegExp(String.raw`\b(?:fun|class|object|interface|typealias)\s+(?:<[^>]*>\s*)?${name}(?![\p{L}\p{Nd}_])`, "gu");
   for (const m of src.matchAll(declared)) {
@@ -1781,11 +1810,11 @@ export function argKind(src: string, text: string, literal: boolean, at: number)
   if (t === "null") return "null";
   if (/^'(?:[^'\\]|\\.[^']*)'$/.test(t)) return "char";
   if (/^if\s*\(/.test(t) && literalOnly(t)) return t.includes('"') ? "string" : null;
-  if (wholeCall(t, "Trusted") || (IDENT.test(t) && trustedName(src, t, at))) return "trusted";
-  if (wholeCall(t, "interpolate")) return "markup";
+  if ((wholeCall(t, "Trusted") && !shadowsCore(src, "Trusted")) || (IDENT.test(t) && trustedName(src, t, at))) return "trusted";
+  if (wholeCall(t, "interpolate") && !shadowsCore(src, "interpolate")) return "markup";
   // The String of the Html: interpolate(...).text.
   const html = /^([\s\S]*?)\s*\.\s*text$/.exec(t)?.[1];
-  if (html !== undefined && wholeCall(html, "interpolate")) return "string";
+  if (html !== undefined && wholeCall(html, "interpolate") && !shadowsCore(src, "interpolate")) return "string";
   const called = callKind(src, t, at);
   if (called !== null) return called;
   const declared = IDENT.test(t) ? declaredKind(src, t, at) : null;

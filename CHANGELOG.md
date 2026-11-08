@@ -73,10 +73,15 @@ All notable changes to Streamlord are recorded here. The format follows
   `<section>` with a `<p>`, written into a `<div>`, an `<li>` or another element. It read the value
   as if the format were an svg, where the `<span>` leaves the `<a>`. It reads the value where it
   lands now. 0.19.0 has the fault.
-- A value declared `Html` or `Trusted` of another package written out in full, `com.acme.Html`
-  among them, was taken for Streamlord's markup: joined into HTML, handed to `interpolate(...)` or
-  joined with `joinToString`, without a word. It is judged now as any value of a type the editor
-  does not know.
+- A value declared `Html` or `Trusted` of another package was taken for Streamlord's markup:
+  joined into HTML, handed to `interpolate(...)` or joined with `joinToString`, without a word. It
+  is judged now as any value of a type the editor does not know, whether the type is written out in
+  full, `com.acme.Html`, or the file takes the bare name from elsewhere: `import com.acme.Html`,
+  `import com.acme.Markup as Html`, or an `Html` it declares itself. A star import of another
+  package leaves the name Streamlord's, since nothing says the package has one. The same holds for
+  a `Trusted(...)` of another package, which interpolate no longer lets into a `<script>` and whose
+  literal is no longer read as markup in place. IntelliJ in K1 mode reads the type the declaration
+  resolves to, as K2 does.
 - A string literal that opens with a tag a template names, `"<$tag>x</$tag>"`, is markup in VS Code
   too, as it was in IntelliJ; VS Code asked for `interpolate(...)` around it. The template in the
   tag name is still judged on its own.
