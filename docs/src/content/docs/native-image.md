@@ -165,8 +165,9 @@ compiled into it as a string, not read from the jar by name.
 
 ## 4. The container
 
-A native image links glibc and zlib dynamically by default. `gcr.io/distroless/base-debian13`
-carries glibc and not zlib, so link zlib in:
+A native image links glibc and zlib dynamically by default. A distroless base image promises
+glibc and no more: `gcr.io/distroless/base-debian12` has no zlib, and `base-debian13` has it
+today. Link zlib in, so the binary needs nothing the base may drop:
 
 ```kotlin sample=none
 // GraalVM for JDK 21

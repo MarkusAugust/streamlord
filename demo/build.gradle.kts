@@ -102,9 +102,10 @@ graalvmNative {
             /*
              * Mostly static, on Linux: every library the image needs is linked in, zlib and the
              * JDK's static libraries with it, and only glibc is left to the container. That is
-             * the documented option for a distroless base image, which carries glibc and nothing
-             * else. Without it the binary links zlib dynamically and the container exits at
-             * startup with "libz.so.1: cannot open shared object file", which no build step sees.
+             * the documented option for a distroless base image, which promises glibc and no
+             * more: Debian 12's had no zlib. Without it the binary links zlib dynamically and on
+             * such a base the container exits at startup with "libz.so.1: cannot open shared
+             * object file", which no build step sees.
              *
              * The flag name is version-specific. GraalVM for JDK 21, which CI installs and which
              * the plugin here is pinned for, calls it -H:+StaticExecutableWithDynamicLibC;
