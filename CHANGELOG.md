@@ -38,6 +38,8 @@ All notable changes to Streamlord are recorded here. The format follows
   `<form>`, cells in `<tr>%s</tr>`, rows in a `<tbody>` or at a patch's top level, a whole table
   and a whole form are still markup. 0.19.0 has the fault: it writes `<em></em>` into
   `<svg><g>%s</g></svg>` as markup.
+- streamlord-live, the service behind the documentation site, runs on a distroless Debian 13 image
+  with Debian's `zlib1g` fixes for CVE-2026-76844 and CVE-2026-85091, both rated high.
 
 ### Changed
 

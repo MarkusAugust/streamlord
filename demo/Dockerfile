@@ -6,16 +6,18 @@
 # distroless rather than alpine, because native-image links against glibc by default and
 # alpine ships musl. The :nonroot tag runs as uid 65532 without a useradd step.
 #
-# distroless carries glibc and nothing else: no zlib, no libstdc++. The first deployment
-# died on exactly that: the binary linked zlib dynamically, the image built and pushed and
-# deployed without complaint, and the container exited with
+# distroless/base promises glibc and nothing more. What else it carries changes between
+# releases: Debian 12's had no zlib, Debian 13's has it. The first deployment, on Debian 12,
+# died on the missing zlib: the binary linked it dynamically, the image built
+# and pushed and deployed without complaint, and the container exited with
 #
 #   /app/streamlord-live: error while loading shared libraries: libz.so.1
 #
 # The answer is not a fatter base image but a thinner binary: demo/build.gradle.kts passes
 # -H:+StaticExecutableWithDynamicLibC on Linux, which links zlib and the JDK's static
-# libraries in and leaves only glibc to the container. CI measures the binary's dynamic
-# dependencies against that promise, and starts the image and calls it, before it is pushed.
+# libraries in and leaves only glibc to the container, whatever else the base happens to
+# carry. CI measures the binary's dynamic dependencies against that promise, and starts the
+# image and calls it, before it is pushed.
 #
 # Locally, with a GraalVM 21 on JAVA_HOME:
 #   ./gradlew :demo:nativeCompile
@@ -24,7 +26,7 @@
 # The context is the repository root, because the artifact path starts at demo/.
 
 # By digest, so the image is the one that was scanned and run in CI, whatever the tag moves to.
-FROM gcr.io/distroless/base-debian13:nonroot@sha256:9039a88709bcc2bacf5a2faac331d65dd6840f763f225ad9594cc0c67bcd0fba
+FROM gcr.io/distroless/base-debian13:nonroot@sha256:7fe4df6a4413adf5889960d345a28b4574aea0872ea47684c7244c8d88027dca
 
 WORKDIR /app
 COPY --chown=nonroot:nonroot demo/build/native/nativeCompile/streamlord-live /app/streamlord-live
