@@ -14,7 +14,7 @@ markup around it where it lands, such as an `<a>` without its `</a>`, a `<p>` in
 `<svg>%s</svg>` or a `<td>` in a `<td>`, let a value written after it land where it was not
 judged. It is printed as text now. Close in the value what it opens, an `<a>` with its `</a>`, and
 write it where the browser keeps it in place: a whole table, a whole form and `<path/>` in an svg
-are still markup. An `Html` of an element that holds HTML, such as `<a href="/x"><span>a</span></a>`
+are still markup. An `Html` of an element that holds HTML, such as `<button><span>a</span></button>`
 in a `<div>`, which 0.19.0 escaped, is markup again.
 
 **A few names and messages changed.** The editors' error for a `%s` count that does not match the
