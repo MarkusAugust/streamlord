@@ -7,6 +7,29 @@ description: "What each release changed, and what it asks of your code."
 repository is authoritative and complete. This page carries only what changes how you write code,
 with a sentence about what to do.
 
+## 0.20.0
+
+**`interpolate` escapes some `Html` values it wrote as markup.** An `Html` value that reshapes the
+markup around it where it lands, such as an `<a>` without its `</a>`, a `<p>` in
+`<svg>%s</svg>` or a `<td>` in a `<td>`, let a value written after it land where it was not
+judged. It is printed as text now. Close in the value what it opens, an `<a>` with its `</a>`, and
+write it where the browser keeps it in place: a whole table, a whole form and `<path/>` in an svg
+are still markup. An `Html` of an element that holds HTML, such as `<a href="/x"><span>a</span></a>`
+in a `<div>`, which 0.19.0 escaped, is markup again.
+
+**A few names and messages changed.** The editors' error for a `%s` count that does not match the
+values is `interpolate-placeholders`, where it was `interpolate-holes`, so anything that names the
+old code, such as a test over the findings of `analyzeProject`, needs the new one. The message
+`interpolate` throws for that count speaks of placeholders, and the refusal of `mergePatchAsClient`
+of empty slots, so a test that matches either text needs the new one. In streamlord-core, the
+`holeLimit` argument of `mergePatchAsClient` is `emptySlotLimit`.
+
+**Code that calls streamlord-analysis needs a few changes.** `HoleFact` is `ValueFact` and
+`AnalyzeOptions.holeFact` is `valueFact`, and a `when` over every `ValueFact` needs a branch for
+its new `OTHER`. `tokenize`, `MarkupOptions` and `valueAtCaret` take a new `templates`: Kotlin
+source compiles as before, Java source passes `true` for a template or an HTML file and `false`
+for an HTML string in Kotlin, and code compiled against the old signatures needs a rebuild.
+
 ## 0.19.0
 
 **Code that uses the SDK needs no change.** The release is editors that know what the project
