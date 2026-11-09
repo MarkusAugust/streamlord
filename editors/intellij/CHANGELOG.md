@@ -2,6 +2,50 @@
 
 All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here.
 
+## 0.13.0
+
+- The messages and fixes for `interpolate` call a `%s` a placeholder.
+- A type of your own, or of another library, named `Html` or `Trusted` is no longer taken for
+  Streamlord's markup. Where a value of it is joined into HTML, handed to `interpolate(...)` or
+  joined with `joinToString`, you get the warnings a value of any type the plugin does not know
+  gets, where before it got none, and a `Trusted(...)` of another package is not let into a
+  `<script>`. The plugin goes by the class it resolves, so this holds for `com.acme.Html` written
+  out, `import com.acme.Html`, `import com.acme.Markup as Html`, an `Html` of the file's own
+  package, one a star import brings in from another package, and one written in backticks. In K1
+  mode the plugin reads the type a declaration resolves to, as in K2.
+- A class of your own named `Trusted` no longer makes a value markup: the plugin reads a value as
+  Streamlord's `Trusted` by the type it resolves, as VS Code does.
+- Streamlord's own `Html` and `Trusted` imported under another name,
+  `import io.github.markusaugust.streamlord.core.domain.Html as Page`, are markup: a value declared
+  `Page` or `List<Page>`, a call to `T(x)` for a `Trusted` imported as `T`, and a `val` set to one
+  are no longer asked for `interpolate(...)`. A name in backticks is the same name, in the import,
+  the type or the call.
+- A value declared `List<Html?>` or `List<out Html>` is markup when joined with `joinToString`, as
+  an `Html?` on its own is.
+- A comment after a value handed to `interpolate(...)`, `Trusted(x) /* id */`, is no longer read
+  as part of the value, so a `Trusted` there is let into a `<script>`.
+- An `interpolate` imported from another package, or declared in the file, is no longer checked as
+  Streamlord's, so its format no longer gets errors about placeholders it may not have.
+- A string literal with a `|` margin is taken for markup only when `.trimMargin()` is called on it,
+  since the margin is part of the text otherwise.
+- Literals joined with `+` whose text opens with a doctype, `"\n" + "<!doctype html>..."`, are
+  checked as HTML. A vertical tab before the first `<` no longer makes a literal markup.
+- Inside a `<textarea>` or a `<title>`, where the browser reads `<i data-text="1 +">` as text,
+  completion, hover and parameter info no longer treat it as a Datastar expression. Inside an
+  `<svg>` the expression is still read.
+- Attribute names are no longer offered after a space inside a quoted value whose quote is still
+  open, as in `<i data-text="1 + d`.
+- In an HTML string in Kotlin, a template comment such as `{# #}`, `<#-- -->`, `<%-- --%>` or
+  `{{! }}` no longer hides the `data-*` attributes in it from the checks, since the browser reads
+  the tags in it as tags. In template and HTML files the checks still skip them, as the template
+  engine removes them, and completion, hover and parameter info skip them now too.
+- Completion, hover and parameter info read markup as the checks do, the browser's way, where they
+  read some nestings otherwise: an `<svg>` right inside a MathML `annotation-xml` is an svg, and an
+  end tag such as `</foreignObject>` closes nothing when a `<div>` stands between it and its
+  element.
+- In an HTML string in Kotlin, completion, hover and parameter info find the expression in a tag
+  whose name is a template, `"<$tag data-text=\"...\">"`, as the checks did.
+
 ## 0.12.0
 
 - Only the catalog's attributes are coloured as Datastar in HTML, in an HTML file and in an HTML
