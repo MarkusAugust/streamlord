@@ -2,6 +2,50 @@
 
 All notable changes to the Streamlord extension are recorded here.
 
+## 0.15.0
+
+- The messages and fixes for `interpolate` call a `%s` a placeholder. The error for a `%s` count
+  that does not match the values is `interpolate-placeholders`, where it was `interpolate-holes`,
+  so anything that names the old code needs the new one.
+- A type of your own, or of another library, named `Html` or `Trusted` is no longer taken for
+  Streamlord's markup. Where a value of it is joined into HTML, handed to `interpolate(...)` or
+  joined with `joinToString`, you get the warnings a value of any type the extension does not know
+  gets, where before it got none, and a `Trusted(...)` of another package is not let into a
+  `<script>`. That holds for `com.acme.Html` written out, and where the file takes the bare name
+  from elsewhere: `import com.acme.Html`, `import com.acme.Markup as Html`, or an `Html` it declares
+  itself. A star import of another package leaves the name Streamlord's, since the extension cannot
+  tell whether the package has one.
+- Streamlord's own `Html` and `Trusted` imported under another name,
+  `import io.github.markusaugust.streamlord.core.domain.Html as Page`, are markup: a value declared
+  `Page` or `List<Page>`, a call to `T(x)` for a `Trusted` imported as `T`, and a `val` set to one
+  are no longer asked for `interpolate(...)`. A name in backticks is the same name, in the import,
+  the type or the call.
+- A value declared `List<Html?>` or `List<out Html>` is markup when joined with `joinToString`, as
+  an `Html?` on its own is.
+- A comment after a value handed to `interpolate(...)`, `Trusted(x) /* id */`, is no longer read
+  as part of the value, so a `Trusted` there is let into a `<script>`.
+- An `interpolate` imported from another package, or declared in the file, is no longer checked as
+  Streamlord's, so its format no longer gets errors about placeholders it may not have.
+- A string literal that opens with a tag a template names, `"<$tag>x</$tag>"`, is markup, as it is
+  in IntelliJ, and is no longer asked for `interpolate(...)`. The template in the tag name is still
+  judged on its own.
+- Literals joined with `+` whose text opens with a doctype, `"\n" + "<!doctype html>..."`, are
+  checked as HTML. A vertical tab or a no-break space before the first `<` no longer makes a
+  literal markup.
+- Inside a `<textarea>` or a `<title>`, where the browser reads `<i data-text="1 +">` as text,
+  completion, hover and signature help no longer treat it as a Datastar expression. Inside an
+  `<svg>` the expression is still read.
+- In an HTML string in Kotlin, a template comment such as `{# #}`, `<#-- -->`, `<%-- --%>` or
+  `{{! }}` no longer hides the `data-*` attributes in it from the checks, since the browser reads
+  the tags in it as tags. In template and HTML files the checks still skip them, as the template
+  engine removes them, and completion, hover and signature help skip them now too.
+- Completion, hover and signature help read markup as the checks do, the browser's way, where they
+  read some nestings otherwise: an `<svg>` right inside a MathML `annotation-xml` is an svg, and an
+  end tag such as `</foreignObject>` closes nothing when a `<div>` stands between it and its
+  element.
+- In an HTML string in Kotlin, completion, hover and signature help find the expression in a tag
+  whose name is a template, `"<$tag data-text=\"...\">"`, as the checks did.
+
 ## 0.14.0
 
 - A helper called on a receiver, `headers.set("Cache-Control", "no-cache")` or
