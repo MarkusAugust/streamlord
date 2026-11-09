@@ -6,6 +6,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-11-09
+
 ### Security
 
 - `interpolate` wrote an `Html` value as markup where it reshapes the markup around it in the
@@ -51,17 +53,23 @@ All notable changes to Streamlord are recorded here. The format follows
   `AnalyzeOptions.valueFact`. Code that names either needs the new name.
 - The `holeLimit` parameter of `mergePatchAsClient` in streamlord-core is `emptySlotLimit`, and its
   refusal speaks of empty slots. A call that names the argument needs the new name.
-
+- `RAW_TEXT`, `HTML_SPACE` and `rawTextEnd` in streamlord-core (internal API) are internal, since
+  only core reads markup with them now, and `commentEnd`, which nothing called, is gone. Code that
+  opted in to them needs a copy of its own.
 - `tokenize` in streamlord-analysis reads markup by core's walk, the one reading the caret has. It,
   `MarkupOptions` and `valueAtCaret` take a new `templates`, true by default, for a template or an
   HTML file, and false for an HTML string in Kotlin. Kotlin source that calls them compiles as
-  before; Java source has to pass it, and code compiled against the old signatures needs a rebuild. Its own tree builder for svg and math
-  is gone.
+  before; Java source has to pass it, and code compiled against the old signatures needs a
+  rebuild. Its own tree builder for svg and math is gone.
+- `ValueFact` has a new entry, `OTHER`, for a class the editor resolved whose name the text alone
+  would take for Streamlord's `Html` or `Trusted`. A `when` over every `ValueFact` needs a branch
+  for it.
 
 ### Added
 
-- streamlord-analysis has `ValueFact.ofTypeName`, `isMarkupCollection` and `opensWithTag`: what a
-  declared type or the start of a string literal tells of a value joined into HTML. The analysis,
+- streamlord-analysis has `ValueFact.ofTypeName`, `ValueFact.ofResolvedClass`, `isMarkupCollection`
+  and `opensWithTag`: what a declared type, a class the editor resolved or the start of a string
+  literal tells of a value joined into HTML. The analysis,
   its TS twin and the IntelliJ plugin read types and literals with them, where each had a copy of
   its own.
 - streamlord-analysis has `writesItself` and `isMarkup` on a `ValueFact?`: whether the value is the
