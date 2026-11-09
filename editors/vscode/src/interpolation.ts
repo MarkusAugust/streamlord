@@ -10,6 +10,7 @@ import { PLACEHOLDER, readKotlinStringAt, type Interpolation, type KotlinString 
 import { laterFix, type Fix } from "./expression.ts";
 import { catalog } from "./catalog.ts";
 import { EXPRESSION_HELPERS, unshadowed, USES_HTML_DSL } from "./signalNameHyphens.ts";
+import { escapeRegExp } from "./signals.ts";
 import { declaredFact, isMarkupCollection, isTrustedType, opensWithTag } from "./valueTypes.ts";
 import { argKindOf, isConstant, isMarkupFact, isString, weakest, writesItself } from "./valueVerdict.ts";
 
@@ -1523,7 +1524,7 @@ function aliasesIn(src: string, code: Uint8Array): ReadonlyMap<string, string> {
   return out;
 }
 
-const CORE_ALIAS = new RegExp(`^${DOMAIN.replace(/\./g, "\\.")}\\.([\\p{L}_][\\p{L}\\p{Nd}_]*)\\s+as\\s+([\\p{L}_][\\p{L}\\p{Nd}_]*)$`, "u");
+const CORE_ALIAS = new RegExp(`^${escapeRegExp(DOMAIN)}\\.([\\p{L}_][\\p{L}\\p{Nd}_]*)\\s+as\\s+([\\p{L}_][\\p{L}\\p{Nd}_]*)$`, "u");
 
 /** `written`, a declared type, with a bare alias of core's `Html` or `Trusted` written as the name it stands for: `Page?` as `Html?`. `coreType` in Interpolations.kt. */
 function coreType(src: string, written: string): string {
