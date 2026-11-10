@@ -3,6 +3,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { mergeVariables, parseEnv, variableValues, type SavedRequest } from "../src/requests.ts";
 import { twinCases } from "./twins.ts";
+import { createServer } from "node:net";
+import type { AddressInfo } from "node:net";
+import { Inspector } from "../src/inspector.ts";
+import { RequestStore } from "../src/requestStore.ts";
+import { RunningServers } from "../src/serverLog.ts";
+import type { DatastarFrame } from "../src/sse.ts";
+import { files, settings, unreadable, Uri, window, workspace } from "./vscode-mock.ts";
 
 /**
  * The inspector's page is a template literal, so its script escapes are TypeScript's and the
@@ -102,7 +109,8 @@ describe("inspector page", () => {
     const requests = (more: Record<string, unknown>) =>
       listener({ data: { type: "requests", saved: [], recent: [], variables: {}, newLabel: "New request…", variablesText: "", variableErrors: [], requestProblems: [], ...more } });
     const send = (requestProblems: string[], variableErrors: string[] = []) => requests({ requestProblems, variableErrors });
-    return { send, requests, element: (id: string) => byId.get(id)!, problems: byId.get("requestProblems"), variableErrors: byId.get("varErrors")! };
+    const post = (message: unknown) => listener({ data: message });
+    return { send, requests, post, element: (id: string) => byId.get(id)!, problems: byId.get("requestProblems"), variableErrors: byId.get("varErrors")! };
   }
 
   it("has a place for what is wrong with the requests file, right after the row of the request list", () => {
@@ -227,6 +235,123 @@ describe("inspector page", () => {
       element("url").type("/newer");
       assert.notEqual(element("dirty").style.visibility, "visible");
       assert.deepEqual(element("dirty").written.filter((w) => !w.startsWith("style.visibility=")), []);
+    });
+  });
+  /** The page over the extension: what the extension posts is what the page is sent. `i` is the inspector, whose handle and applyFrame are private. */
+  function overExtension() {
+    files.clear();
+    unreadable.clear();
+    settings.clear();
+    workspace.textDocuments.length = 0;
+    workspace.workspaceFolders = [{ uri: Uri.file("/ws") }];
+    const shown = running();
+    const context = { subscriptions: [] as unknown[], workspaceState: { get: <T>(_k: string, d: T) => d, update: async () => {} } };
+    const servers = new RunningServers();
+    const i = new Inspector(context as never, new RequestStore(context as never, servers), servers) as any;
+    i.panel = { webview: { postMessage: async (m: unknown) => (shown.post(m), true) } };
+    const status = shown.element("status");
+    const env = (text: string) => files.set("/ws/.streamlord/env.json", new TextEncoder().encode(text));
+    const request = (url: string, more: Partial<SavedRequest> = {}): SavedRequest => ({ name: "", url, method: "GET", signals: "", headers: "", ...more });
+    return { ...shown, i, status, env, request };
+  }
+
+  /** A port nothing listens on. */
+  async function closedPort(): Promise<number> {
+    const server = createServer();
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const { port } = server.address() as AddressInfo;
+    await new Promise((resolve) => server.close(resolve));
+    return port;
+  }
+
+  describe("the status belongs to the request it is about", () => {
+    it("says error, with the URL of the request in its title, when a request cannot be sent or fails", async () => {
+      const port = await closedPort();
+      const cases: { what: string; env: string; request: (p: ReturnType<typeof overExtension>) => SavedRequest; url: string; says: string }[] = [
+        { what: "an env file that is not valid", env: "[]", request: (p) => p.request("{{baseUrl}}/x?a=1&b=2"), url: "{{baseUrl}}/x?a=1&b=2", says: "env.json is not valid" },
+        { what: "a variable that is unknown", env: '{"baseUrl": "http://h:1"}', request: (p) => p.request("{{nope}}/x"), url: "{{nope}}/x", says: "{{nope}} is not set" },
+        { what: "a variable that is misplaced", env: '{"baseUrl": "http://h:1"}', request: (p) => p.request("{{baseUrl}}/x", { signals: "{{baseUrl}}" }), url: "{{baseUrl}}/x", says: "belongs in the URL field" },
+        { what: "a variable that is not set", env: '{"baseUrl": "http://h:1", "params": {"id": ""}}', request: (p) => p.request("{{baseUrl}}/x/{{id}}"), url: "{{baseUrl}}/x/{{id}}", says: "{{id}} is empty" },
+        { what: "signals that are not valid JSON", env: '{"baseUrl": "http://h:1"}', request: (p) => p.request("{{baseUrl}}/x", { signals: "{" }), url: "http://h:1/x", says: "Signals are not valid JSON" },
+        { what: "a URL that cannot be sent", env: '{"baseUrl": "http://h:1"}', request: (p) => p.request("{{baseUrl}}/x?filter[name]=1"), url: "http://h:1/x?filter[name]=1", says: "The URL holds [" },
+        { what: "a header the HTTP client will not set", env: `{"baseUrl": "http://127.0.0.1:${port}"}`, request: (p) => p.request("{{baseUrl}}/x", { headers: "Expect: 100-continue" }), url: `http://127.0.0.1:${port}/x`, says: "expect header" },
+        { what: "a failed connection", env: `{"baseUrl": "http://127.0.0.1:${port}"}`, request: (p) => p.request("{{baseUrl}}/x"), url: `http://127.0.0.1:${port}/x`, says: "Connection refused" },
+      ];
+      const found: string[] = [];
+      for (const c of cases) {
+        const p = overExtension();
+        p.env(c.env);
+        p.post({ type: "status", status: "open", http: "200 OK", resolvedUrl: "http://h/old" });
+        await p.i.handle({ type: "connect", request: c.request(p) });
+        const shown = `${p.status.textContent} | ${(p.status as unknown as { title?: string }).title}`;
+        if (shown !== `error | ${c.url}`) found.push(`${c.what}: ${shown}, not error | ${c.url}`);
+        const line = p.element("frames").children.find((e) => e.className === "error")?.textContent ?? "";
+        if (!line.includes(c.says)) found.push(`${c.what}: the error line says ${line}`);
+      }
+      assert.equal(found.join("\n"), "");
+    });
+
+    it("leaves the status of an open stream as it was when an error is not about the request", async () => {
+      const { showInputBox, showWarningMessage } = window as Record<string, unknown>;
+      const found: string[] = [];
+      try {
+        (window as Record<string, unknown>).showInputBox = async () => "a";
+        (window as Record<string, unknown>).showWarningMessage = async () => "Delete";
+        const failures: { what: string; run: (p: ReturnType<typeof overExtension>) => Promise<void> }[] = [
+          {
+            what: "a Save that fails",
+            run: async (p) => {
+              settings.set("streamlord.inspector.requestsFile", "../elsewhere/requests.json");
+              await p.i.handle({ type: "save", request: p.request("/a") });
+            },
+          },
+          {
+            what: "a Delete that fails",
+            run: async (p) => {
+              settings.set("streamlord.inspector.requestsFile", "../elsewhere/requests.json");
+              await p.i.handle({ type: "delete", name: "feed" });
+            },
+          },
+          { what: "Copy as curl with a variable not set", run: (p) => p.i.handle({ type: "curl", request: p.request("{{nope}}/x") }) },
+          {
+            what: "Edit variables that fails",
+            run: async (p) => {
+              workspace.workspaceFolders = undefined;
+              await p.i.handle({ type: "defineVariables", names: [] });
+            },
+          },
+          {
+            what: "Use baseUrl that fails",
+            run: async (p) => {
+              workspace.workspaceFolders = undefined;
+              await p.i.handle({ type: "useBaseUrl", url: "http://localhost:9" });
+            },
+          },
+          {
+            what: "a signal patch the signal store cannot take",
+            run: async (p) => {
+              const frame = (signals: string): DatastarFrame => ({ event: "datastar-patch-signals", id: null, retry: null, args: { signals }, raw: "", receivedAt: 0 });
+              p.i.applyFrame(frame('{"a":[1,2]}'));
+              p.i.applyFrame(frame('{"a":{"length":-1}}'));
+            },
+          },
+        ];
+        for (const f of failures) {
+          const p = overExtension();
+          p.post({ type: "status", status: "open", http: "200 OK", resolvedUrl: "http://h/feed" });
+          const lines = p.element("frames").children.length;
+          await f.run(p);
+          settings.clear();
+          const errors = p.element("frames").children.slice(0, p.element("frames").children.length - lines).filter((c) => c.className === "error");
+          if (errors.length !== 1) found.push(`${f.what} shows ${errors.length} error lines`);
+          const shown = `${p.status.textContent} | ${(p.status as unknown as { title?: string }).title}`;
+          if (shown !== "open · 200 OK | http://h/feed") found.push(`${f.what}: ${shown}`);
+        }
+      } finally {
+        Object.assign(window, { showInputBox, showWarningMessage });
+        settings.clear();
+      }
+      assert.equal(found.join("\n"), "");
     });
   });
 });

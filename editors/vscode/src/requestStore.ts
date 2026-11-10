@@ -20,9 +20,37 @@ export class RequestStore implements vscode.Disposable {
     this.disposables.push(running.onChange(() => this.onChange.fire()));
     const watcher = vscode.workspace.createFileSystemWatcher("**/.streamlord/*.json");
     this.disposables.push(watcher, watcher.onDidChange(() => this.onChange.fire()), watcher.onDidCreate(() => this.onChange.fire()), watcher.onDidDelete(() => this.onChange.fire()));
-    this.disposables.push(vscode.workspace.onDidChangeConfiguration((e) => e.affectsConfiguration("streamlord.inspector") && this.onChange.fire()));
-    // The Variables box follows the env file as it is typed, as Connect reads it.
-    this.disposables.push(vscode.workspace.onDidChangeTextDocument((e) => e.document.uri.path.endsWith(`/${ENV_FILE}`) && this.onChange.fire()));
+    this.watchRequests();
+    this.disposables.push(
+      vscode.workspace.onDidChangeConfiguration((e) => {
+        if (!e.affectsConfiguration("streamlord.inspector")) return;
+        this.watchRequests();
+        this.onChange.fire();
+      }),
+    );
+    // The Variables box and the Request list follow their files as they are typed, as Connect and Save read them.
+    this.disposables.push(
+      vscode.workspace.onDidChangeTextDocument((e) => {
+        const requests = this.fileUri(this.requestsRel());
+        if (e.document.uri.path.endsWith(`/${ENV_FILE}`) || e.document.uri.toString() === requests?.toString()) this.onChange.fire();
+      }),
+    );
+  }
+
+  /** The watcher of a requests file the setting names, which may lie outside `.streamlord`. */
+  private requestsWatcher: vscode.FileSystemWatcher | undefined;
+
+  private watchRequests(): void {
+    this.requestsWatcher?.dispose();
+    this.requestsWatcher = undefined;
+    const folder = this.folder();
+    const rel = this.requestsRel();
+    if (!folder || rel === REQUESTS_FILE) return;
+    const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(folder, rel));
+    watcher.onDidChange(() => this.onChange.fire());
+    watcher.onDidCreate(() => this.onChange.fire());
+    watcher.onDidDelete(() => this.onChange.fire());
+    this.requestsWatcher = watcher;
   }
 
   private folder(): vscode.WorkspaceFolder | undefined {
@@ -49,10 +77,12 @@ export class RequestStore implements vscode.Disposable {
     return requestsPathProblem(this.configuredRequestsPath());
   }
 
-  /** The text of the requests file, or null when there is none. A file that is there and cannot be read throws: it is no missing file. */
+  /** The text of the requests file as an open editor has it, saved or not, or null when there is none. A file that is there and cannot be read throws: it is no missing file. */
   private async requestsText(): Promise<string | null> {
     const uri = this.fileUri(this.requestsRel());
     if (!uri) return null;
+    const doc = this.openDocument(uri);
+    if (doc) return doc.getText();
     try {
       return Buffer.from(await vscode.workspace.fs.readFile(uri)).toString("utf8");
     } catch (e) {
@@ -106,8 +136,7 @@ export class RequestStore implements vscode.Disposable {
     const next = edit(text, this.requestsRel());
     if (next.text === null) throw unreadable(next.error);
     if (next.text === (text ?? "")) return;
-    await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(uri, ".."));
-    await vscode.workspace.fs.writeFile(uri, Buffer.from(next.text, "utf8"));
+    await this.writeText(uri, next.text);
     this.onChange.fire();
   }
 
@@ -148,15 +177,15 @@ export class RequestStore implements vscode.Disposable {
     return { vars: mergeVariables(defaultUrl, env.errors.length ? parseEnv("{}") : env, this.running.current()), errors: env.errors };
   }
 
-  /** The env file as an open editor has it, so Connect uses what is on screen, saved or not. */
-  private openEnv(uri: vscode.Uri): vscode.TextDocument | undefined {
+  /** The file as an open editor has it, so the panel uses what is on screen, saved or not. */
+  private openDocument(uri: vscode.Uri): vscode.TextDocument | undefined {
     return vscode.workspace.textDocuments.find((d) => d.uri.toString() === uri.toString());
   }
 
   private async envText(): Promise<string | null> {
     const uri = this.fileUri(ENV_FILE);
     if (!uri) return null;
-    const doc = this.openEnv(uri);
+    const doc = this.openDocument(uri);
     if (doc) return doc.getText();
     try {
       return Buffer.from(await vscode.workspace.fs.readFile(uri)).toString("utf8");
@@ -189,8 +218,13 @@ export class RequestStore implements vscode.Disposable {
   private async write(uri: vscode.Uri, text: string | null, next: string | null): Promise<{ uri: vscode.Uri; extended: boolean }> {
     if (next === null) return { uri, extended: false };
     if (next === text) return { uri, extended: true };
-    // An open editor gets an edit it can undo, not a write underneath its unsaved text.
-    const doc = this.openEnv(uri);
+    await this.writeText(uri, next);
+    return { uri, extended: true };
+  }
+
+  /** Put `next` in the file: an open editor gets an edit it can undo, not a write underneath its unsaved text. */
+  private async writeText(uri: vscode.Uri, next: string): Promise<void> {
+    const doc = this.openDocument(uri);
     if (doc) {
       const edit = new vscode.WorkspaceEdit();
       edit.replace(uri, new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length)), next);
@@ -199,10 +233,10 @@ export class RequestStore implements vscode.Disposable {
       await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(uri, ".."));
       await vscode.workspace.fs.writeFile(uri, Buffer.from(next, "utf8"));
     }
-    return { uri, extended: true };
   }
 
   dispose(): void {
+    this.requestsWatcher?.dispose();
     this.disposables.forEach((d) => d.dispose());
     this.onChange.dispose();
   }

@@ -107,14 +107,14 @@ function readRequests(json: string, path: string): ReadRequests {
       skipped.push(`Request ${index + 1} in ${path} is not read: ${missing}.`);
       return null;
     }
-    const method = String(item.method ?? "GET").toUpperCase();
+    const method = typeof item.method === "string" ? item.method.toUpperCase() : "GET";
     return {
       name: item.name as string,
       url: item.url as string,
       method: METHODS.includes(method) ? method : "GET",
       // As written in the file: JSON.parse has already rounded a number past 2^53, and a second writer spells escapes its own way.
       signals: typeof item.signals === "string" ? item.signals : item.signals && typeof item.signals === "object" ? (rawMember(json, index) ?? JSON.stringify(item.signals, null, 2)) : "",
-      headers: typeof item.headers === "string" ? item.headers : isObject(item.headers) ? Object.entries(item.headers).map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`).join("\n") : "",
+      headers: typeof item.headers === "string" ? item.headers : isObject(item.headers) ? headerLines(item.headers, rawHeaders(json, index)) : "",
     };
   });
   return { file: { version: 1, requests: entries.filter((e): e is SavedRequest => e !== null), skipped }, entries, root: raw };
@@ -140,6 +140,57 @@ function rawMember(text: string, index: number): string | null {
     });
   });
   return found;
+}
+
+/**
+ * The headers of an entry as lines. A value that is not text is as written in the file, without the
+ * spaces between its parts: JSON.parse has already spelt `1.0` as `1` and rounded a number past 2^53.
+ */
+function headerLines(headers: Record<string, unknown>, raw: Map<string, string>): string {
+  return Object.entries(headers)
+    .map(([k, v]) => `${k}: ${typeof v === "string" ? v : compactJson(raw.get(k) ?? JSON.stringify(v))}`)
+    .join("\n");
+}
+
+/** The source text of each member of `requests[index].headers`; the last of a key counts, as with JSON.parse. */
+function rawHeaders(text: string, index: number): Map<string, string> {
+  const scan = new JsonScan(text);
+  const found = new Map<string, string>();
+  scan.members(scan.skipSpace(0), (key, start) => {
+    if (key !== "requests" || text[start] !== "[") return;
+    let i = index;
+    scan.elements(start, (elementStart, elementEnd) => {
+      if (i-- === 0 && text[elementStart] === "{") {
+        scan.members(elementStart, (k, s) => {
+          if (k === "headers" && text[s] === "{") {
+            found.clear();
+            scan.members(s, (name, vs, ve) => found.set(name, text.slice(vs, ve)));
+          }
+        });
+      }
+      return elementEnd;
+    });
+  });
+  return found;
+}
+
+/** JSON as written, less the spaces between its parts; a string is spelt as JSON.stringify spells it. */
+function compactJson(text: string): string {
+  let out = "";
+  let i = 0;
+  while (i < text.length) {
+    const c = text[i] ?? "";
+    if (c === '"') {
+      let end = i + 1;
+      while (end < text.length && text[end] !== '"') end += text[end] === "\\" ? 2 : 1;
+      out += JSON.stringify(JSON.parse(text.slice(i, end + 1)));
+      i = end + 1;
+    } else {
+      if (!" \t\n\r".includes(c)) out += c;
+      i++;
+    }
+  }
+  return out;
 }
 
 /** Just enough of a JSON scanner to find the span of a member of valid JSON; the text must have parsed already. */

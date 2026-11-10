@@ -225,18 +225,19 @@ class InspectorPanel(
             VirtualFileManager.VFS_CHANGES_BG,
             object : BulkFileListenerBackgroundable {
                 override fun after(events: List<VFileEvent>) {
-                    if (events.any { it.path.contains("/.streamlord/") && it.path.endsWith(".json") }) {
+                    val requests = store.requestsFilePath()
+                    if (events.any { it.path == requests || (it.path.contains("/.streamlord/") && it.path.endsWith(".json")) }) {
                         later { pushRequests(null) }
                     }
                 }
             },
         )
-        // The Variables box follows the env file as it is typed, as Connect reads it.
+        // The Variables box and the Request list follow their files as they are typed, as Connect and Save read them.
         EditorFactory.getInstance().eventMulticaster.addDocumentListener(
             object : com.intellij.openapi.editor.event.DocumentListener {
                 override fun documentChanged(event: com.intellij.openapi.editor.event.DocumentEvent) {
                     val file = FileDocumentManager.getInstance().getFile(event.document) ?: return
-                    if (file.name == "env.json" && file.parent?.name == ".streamlord") {
+                    if ((file.name == "env.json" && file.parent?.name == ".streamlord") || file.path == store.requestsFilePath()) {
                         later { pushRequests(null) }
                     }
                 }
@@ -616,17 +617,22 @@ class InspectorPanel(
 
     /**
      * The request with its variables filled in, or null after the reason is shown: an invalid env
-     * file, or a variable that is unknown, misplaced or not set.
+     * file, or a variable that is unknown, misplaced or not set. With [sending], the reason is the
+     * status of the request, whose URL is as written since it could not be filled in.
      */
-    private fun resolve(raw: SavedRequest): Pair<SavedRequest, List<Requests.Variable>>? {
+    private fun resolve(
+        raw: SavedRequest,
+        sending: Boolean = false,
+    ): Pair<SavedRequest, List<Requests.Variable>>? {
+        val show = { message: String, define: List<String> -> if (sending) failed(raw.url, message, define) else error(message, define) }
         val env = environment
         if (env.errors.isNotEmpty()) {
-            error(env.errors.joinToString(" "), emptyList())
+            show(env.errors.joinToString(" "), emptyList())
             return null
         }
         val resolved = Requests.resolveRequest(raw, env.vars)
         if (resolved.errors.isNotEmpty()) {
-            error(resolved.errors.joinToString(" "), resolved.unset)
+            show(resolved.errors.joinToString(" "), resolved.unset)
             return null
         }
         return resolved.request to env.vars
@@ -660,11 +666,11 @@ class InspectorPanel(
     }
 
     private fun send(raw: SavedRequest) {
-        val (request, vars) = resolve(raw) ?: return
+        val (request, vars) = resolve(raw, sending = true) ?: return
         try {
             JsonParser.parse(Requests.compactSignals(request.signals))
         } catch (e: Exception) {
-            error("Signals are not valid JSON: ${e.message}")
+            failed(request.url, "Signals are not valid JSON: ${e.message}")
             return
         }
         store.addRecent(raw)
@@ -677,11 +683,15 @@ class InspectorPanel(
                 request.signals,
                 Requests.parseHeaderLines(request.headers),
                 object : StreamClient.Handlers {
+                    /** Set on the UI thread, where the statuses are shown in turn: the close after an error does not hide it. */
+                    private var failed = false
+
                     override fun onStatus(
                         status: StreamClient.Status,
                         http: String?,
                         contentType: String?,
                     ) = later {
+                        if (failed && status == StreamClient.Status.CLOSED) return@later
                         setStatus(
                             status.name.lowercase() + (http?.let { " · $it" } ?: "") + (contentType?.let { " · $it" } ?: ""),
                             status,
@@ -712,10 +722,11 @@ class InspectorPanel(
                             val server = running.current()
                             val hint = if (unreachable) Requests.unreachableHint(raw.url, vars, server) else null
                             val elsewhere = if (unreachable) Requests.baseUrlSuggestion(vars, server) else null
+                            failed = true
                             when {
-                                elsewhere != null -> error("$message $hint", useBaseUrl = elsewhere)
-                                hint != null -> error("$message $hint", emptyList())
-                                else -> error(message)
+                                elsewhere != null -> failed(request.url, "$message $hint", useBaseUrl = elsewhere)
+                                hint != null -> failed(request.url, "$message $hint", emptyList())
+                                else -> failed(request.url, message)
                             }
                         }
                 },
@@ -897,7 +908,8 @@ class InspectorPanel(
 
     /**
      * An error line; with [define], a link that adds those names to the env file, or opens it when
-     * there are none; with [useBaseUrl], a link that sets the file's `baseUrl` to it.
+     * there are none; with [useBaseUrl], a link that sets the file's `baseUrl` to it. It leaves the
+     * status of the stream as it is: an error of the request sent is [failed].
      */
     private fun error(
         message: String,
@@ -928,7 +940,17 @@ class InspectorPanel(
                 },
             )
         }
-        setStatus("error", null)
+    }
+
+    /** An error that keeps the request to [url] from being sent or ends it, and so is its status. */
+    private fun failed(
+        url: String,
+        message: String,
+        define: List<String>? = null,
+        useBaseUrl: String? = null,
+    ) {
+        error(message, define, useBaseUrl)
+        setStatus("error", null, url)
     }
 
     /** Set the env file's `baseUrl` to [url] and open the file, so the change is seen where it was made. */

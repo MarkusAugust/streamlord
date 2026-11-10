@@ -2,12 +2,21 @@ package io.github.markusaugust.streamlord.intellij
 
 import com.intellij.execution.process.ProcessHandler
 import com.intellij.execution.process.ProcessOutputTypes
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.command.undo.UndoManager
 import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.ui.TestDialog
+import com.intellij.openapi.ui.TestDialogManager
+import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.testFramework.PlatformTestUtil
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
+import com.intellij.testFramework.replaceService
+import com.intellij.toolWindow.ToolWindowHeadlessManagerImpl
 import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextArea
@@ -1738,6 +1747,334 @@ class InspectorTest : BasePlatformTestCase() {
             assertEquals(emptyList<String>(), errors)
         } finally {
             server.close()
+        }
+    }
+
+    /** Let the tool window's queue run, as it does in the IDE; in a test it drops what it is given. */
+    private fun toolWindowRuns() {
+        val manager =
+            object : ToolWindowHeadlessManagerImpl(project) {
+                override fun invokeLater(runnable: Runnable) = ApplicationManager.getApplication().invokeLater(runnable)
+            }
+        project.replaceService(ToolWindowManager::class.java, manager, testRootDisposable)
+    }
+
+    /** Run the UI thread until [done], or fail with [what]. */
+    private fun until(
+        what: () -> String,
+        seconds: Long = 10,
+        done: () -> Boolean,
+    ) {
+        val deadline = System.currentTimeMillis() + seconds * 1000
+        while (!done() && System.currentTimeMillis() < deadline) {
+            PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+            Thread.sleep(5)
+        }
+        assertTrue(what(), done())
+    }
+
+    /** Run the UI thread for [millis], so what is on its way arrives. */
+    private fun settle(millis: Long = 300) {
+        val deadline = System.currentTimeMillis() + millis
+        while (System.currentTimeMillis() < deadline) {
+            PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+            Thread.sleep(5)
+        }
+    }
+
+    /** The names of the saved requests in the request list, in its order. */
+    private fun savedNames(panel: InspectorPanel): List<String> {
+        val list = UIUtil.findComponentsOfType(panel, JComboBox::class.java).single { it.getItemAt(0) !is String }
+        return (1 until list.itemCount).map { list.getItemAt(it).toString() }.filter { !it.startsWith("recent: ") }
+    }
+
+    /** The lines of text in the event list, newest first. */
+    private fun lines(events: JScrollPane) = UIUtil.findComponentsOfType(events, JTextArea::class.java).filter { !it.isEditable }
+
+    /** The requests file as the store writes it, holding feed; [typed] is it with an entry typed and not saved. */
+    private val written = "{\n  \"version\": 1,\n  \"requests\": [\n    ${entry("feed", "/feed")}\n  ]\n}\n"
+
+    private val typed = written.replace(entry("feed", "/feed"), "${entry("feed", "/feed")},\n    ${entry("typed", "/typed")}")
+
+    /** Drop what is typed in the editor of [file] and not saved, so the next test reads the file. */
+    private fun forget(file: VirtualFile) {
+        val documents = FileDocumentManager.getInstance()
+        documents.getCachedDocument(file)?.let { documents.reloadFromDisk(it) }
+    }
+
+    fun `test the saved requests follow what an open editor holds of the requests file, saved or not`() {
+        val store = RequestStore.getInstance(project)
+        val file = write(Requests.REQUESTS_FILE, written)
+        val document = FileDocumentManager.getInstance().getDocument(file)!!
+        try {
+            assertEquals(listOf("feed"), store.saved().map { it.name })
+            WriteCommandAction.runWriteCommandAction(project) { document.setText(typed) }
+            assertEquals(listOf("feed", "typed"), store.saved().map { it.name })
+            WriteCommandAction.runWriteCommandAction(project) { document.setText("""{"requests": [{"name": "typed", "url": "/typed"}]}""") }
+            assertEquals(listOf("typed"), store.saved().map { it.name })
+        } finally {
+            forget(file)
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    fun `test a save and a delete change the open editor of the requests file, keeping what is typed there and leaving the disk alone`() {
+        val store = RequestStore.getInstance(project)
+        val file = write(Requests.REQUESTS_FILE, written)
+        val documents = FileDocumentManager.getInstance()
+        val document = documents.getDocument(file)!!
+        try {
+            WriteCommandAction.runWriteCommandAction(project) { document.setText(typed) }
+            val a = SavedRequest("a", "/a", "GET", "", "")
+            store.save(a)
+            val withA = Requests.saveRequest(typed, a, Requests.REQUESTS_FILE).text!!
+            assertEquals(withA, document.text)
+            assertEquals(written, String(file.contentsToByteArray()))
+            assertTrue(documents.isDocumentUnsaved(document))
+
+            store.delete("feed")
+            val withoutFeed = Requests.removeRequest(withA, "feed", Requests.REQUESTS_FILE).text!!
+            assertEquals(withoutFeed, document.text)
+            store.delete("typed")
+            assertEquals(Requests.removeRequest(withoutFeed, "typed", Requests.REQUESTS_FILE).text, document.text)
+            assertFalse(document.text, "\"typed\"" in document.text)
+            assertEquals(written, String(file.contentsToByteArray()))
+        } finally {
+            forget(file)
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    fun `test a save into the open editor of the requests file is one edit that can be undone`() {
+        val store = RequestStore.getInstance(project)
+        val file = write(Requests.REQUESTS_FILE, written)
+        try {
+            myFixture.openFileInEditor(file)
+            val document = myFixture.editor.document
+            WriteCommandAction.runWriteCommandAction(project) { document.setText(typed) }
+            store.save(SavedRequest("a", "/a", "GET", "", ""))
+            assertTrue(document.text, "\"a\"" in document.text)
+            val editor = FileEditorManager.getInstance(project).getSelectedEditor(file)!!
+            UndoManager.getInstance(project).undo(editor)
+            assertEquals(typed, document.text)
+        } finally {
+            forget(file)
+            FileEditorManager.getInstance(project).closeFile(file)
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    fun `test the requests file typed in after a save was planned is left as it is`() {
+        val store = RequestStore.getInstance(project)
+        val file = write(Requests.REQUESTS_FILE, written)
+        val document = FileDocumentManager.getInstance().getDocument(file)!!
+        try {
+            val planned = store.saving(SavedRequest("a", "/a", "GET", "", ""))
+            WriteCommandAction.runWriteCommandAction(project) { document.setText(typed) }
+            val e = assertFailsWith<IllegalStateException> { store.apply(planned) }
+            assertEquals("${Requests.REQUESTS_FILE} changed in the meantime. Try again.", e.message)
+            assertEquals(typed, document.text)
+            assertEquals(written, String(file.contentsToByteArray()))
+        } finally {
+            forget(file)
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    fun `test the request list follows the requests file as it is typed, at the default path and at the path the settings name`() {
+        toolWindowRuns()
+        val settings = StreamlordSettings.getInstance(project)
+        try {
+            for (path in listOf(Requests.REQUESTS_FILE, "requests/inspector.json")) {
+                settings.state.requestsFile = path
+                val file = write(path, written)
+                try {
+                    val panel = InspectorPanel(project, testRootDisposable)
+                    await(panel.pushRequests(null))
+                    assertEquals(listOf("feed"), savedNames(panel))
+                    val document = FileDocumentManager.getInstance().getDocument(file)!!
+                    WriteCommandAction.runWriteCommandAction(project) { document.setText(typed) }
+                    until({ "the list of $path as typed: ${savedNames(panel)}" }, 3) { savedNames(panel) == listOf("feed", "typed") }
+                } finally {
+                    forget(file)
+                    remove(path)
+                }
+            }
+        } finally {
+            settings.state.requestsFile = Requests.REQUESTS_FILE
+            remove("requests")
+        }
+    }
+
+    fun `test the request list follows a change on disk, at the default path and at the path the settings name`() {
+        toolWindowRuns()
+        val settings = StreamlordSettings.getInstance(project)
+        try {
+            for (path in listOf(Requests.REQUESTS_FILE, "requests/inspector.json")) {
+                settings.state.requestsFile = path
+                write(path, written)
+                try {
+                    val panel = InspectorPanel(project, testRootDisposable)
+                    await(panel.pushRequests(null))
+                    assertEquals(listOf("feed"), savedNames(panel))
+                    write(path, typed)
+                    until({ "the list of $path after a change on disk: ${savedNames(panel)}" }, 3) {
+                        savedNames(panel) ==
+                            listOf("feed", "typed")
+                    }
+                } finally {
+                    remove(path)
+                }
+            }
+        } finally {
+            settings.state.requestsFile = Requests.REQUESTS_FILE
+            remove("requests")
+        }
+    }
+
+    fun `test an error that keeps a request from being sent or ends it says error, with the URL of that request`() {
+        toolWindowRuns()
+        val port = java.net.ServerSocket(0).use { it.localPort }
+
+        // [sent] is the URL as filled in, or as written when filling it in is what failed.
+        class Case(
+            val what: String,
+            val env: String,
+            val url: String,
+            val sent: String,
+            val says: String,
+            val signals: String = "",
+            val headers: String = "",
+        )
+        val h = """{"baseUrl": "http://h:1"}"""
+        val closed = """{"baseUrl": "http://127.0.0.1:$port"}"""
+        val cases =
+            listOf(
+                Case("an env file that is not valid", "[]", "{{baseUrl}}/x?a=1&b=2", "{{baseUrl}}/x?a=1&b=2", "env.json is not valid"),
+                Case("a variable that is unknown", h, "{{nope}}/x", "{{nope}}/x", "{{nope}} is not set"),
+                Case(
+                    "a variable that is misplaced",
+                    h,
+                    "{{baseUrl}}/x",
+                    "{{baseUrl}}/x",
+                    "belongs in the URL field",
+                    signals = "{{baseUrl}}",
+                ),
+                Case(
+                    "a variable that is not set",
+                    """{"baseUrl": "http://h:1", "params": {"id": ""}}""",
+                    "{{baseUrl}}/x/{{id}}",
+                    "{{baseUrl}}/x/{{id}}",
+                    "{{id}} is empty",
+                ),
+                Case("signals that are not valid JSON", h, "{{baseUrl}}/x", "http://h:1/x", "Signals are not valid JSON", signals = "{"),
+                Case("a URL that cannot be sent", h, "{{baseUrl}}/x?filter[name]=1", "http://h:1/x?filter[name]=1", "The URL holds ["),
+                Case(
+                    "a header the HTTP client will not set",
+                    closed,
+                    "{{baseUrl}}/x",
+                    "http://127.0.0.1:$port/x",
+                    "Cannot send the request",
+                    headers = "Expect: 100-continue",
+                ),
+                Case("a failed connection", closed, "{{baseUrl}}/x", "http://127.0.0.1:$port/x", "Connection refused"),
+            )
+        val panel = InspectorPanel(project, testRootDisposable)
+        await(panel.pushRequests(null))
+        val events = events(panel)
+        val status = UIUtil.findComponentsOfType(form(panel), JLabel::class.java).single { it.text == "idle" }
+        val url = UIUtil.findComponentsOfType(panel, JBTextField::class.java).single()
+        val (signals, headers) = UIUtil.findComponentsOfType(form(panel), JBTextArea::class.java).filter { it.isEditable }
+        val stop = button(panel, "Stop")
+        val found = ArrayList<String>()
+        try {
+            for (c in cases) {
+                write(Requests.ENV_FILE, c.env)
+                url.text = c.url
+                signals.text = c.signals
+                headers.text = c.headers
+                setStatus(panel, "open · 200 OK", StreamClient.Status.OPEN, "http://h/old")
+                val before = lines(events).toSet()
+                button(panel, "Connect").doClick()
+                until({ "${c.what} shows no error line" }) { lines(events).any { it !in before } }
+                // A connection that failed is closed after its error is told.
+                settle()
+                val line = lines(events).filter { it !in before }.joinToString(" | ") { it.text }
+                if (c.says !in line) found += "${c.what}: the error line says $line"
+                val tooltip = "error<br>${StringUtil.escapeXmlEntities(c.sent)}"
+                if (status.text != "error" || status.toolTipText != tooltip) {
+                    found += "${c.what}: the status is ${status.text} with the tooltip ${status.toolTipText}, not $tooltip"
+                }
+                if (stop.isEnabled) found += "${c.what}: Stop is enabled"
+            }
+        } finally {
+            remove(Requests.ENV_FILE)
+            InspectorState.getInstance(project).loadState(InspectorState.State())
+        }
+        assertEquals("", found.joinToString("\n"))
+    }
+
+    fun `test an error that is not about the request leaves the status of an open stream as it was`() {
+        val settings = StreamlordSettings.getInstance(project)
+        write(Requests.REQUESTS_FILE, written)
+        // Not a JSON object, so neither Edit variables nor Use baseUrl can change it.
+        write(Requests.ENV_FILE, "[]")
+        val input = TestDialogManager.setTestInputDialog { "a" }
+        val dialog = TestDialogManager.setTestDialog(TestDialog.YES)
+        try {
+            val panel = InspectorPanel(project, testRootDisposable)
+            await(panel.pushRequests(SavedRequest("feed", "/feed", "GET", "", "")))
+            val events = events(panel)
+            val editVariables = UIUtil.findComponentsOfType(panel, ActionLink::class.java).single { it.text == "Edit variables" }
+            showError(panel, "The server is elsewhere.", useBaseUrl = "http://localhost:9")
+            val useBaseUrl =
+                UIUtil.findComponentsOfType(events, ActionLink::class.java).single {
+                    it.text ==
+                        "Use http://localhost:9 in ${Requests.ENV_FILE}"
+                }
+            // A path that leaves the project: Save and Delete are refused, and the default file is still read.
+            settings.state.requestsFile = "../elsewhere/inspector.json"
+            val apply = panel.javaClass.getDeclaredMethod("applyFrame", DatastarFrame::class.java).apply { isAccessible = true }
+
+            fun patch(signals: String) =
+                apply.invoke(panel, DatastarFrame("datastar-patch-signals", null, null, mapOf("signals" to signals), "", 0L))
+            val url = UIUtil.findComponentsOfType(panel, JBTextField::class.java).single()
+            val failures =
+                listOf<Pair<String, () -> Unit>>(
+                    "a Save that fails" to { button(panel, "Save").doClick() },
+                    "a Delete that fails" to { button(panel, "Delete").doClick() },
+                    "Copy as curl with a variable not set" to {
+                        url.text = "{{nope}}/x"
+                        button(panel, "Copy as curl").doClick()
+                    },
+                    "Edit variables that fails" to { editVariables.doClick() },
+                    "Use baseUrl that fails" to { useBaseUrl.doClick() },
+                    "a signal patch the signal store cannot take" to {
+                        patch("""{"a":[1,2]}""")
+                        patch("""{"b":1,"a":{"0":7,"length":-1},"c":2}""")
+                    },
+                )
+            val status = UIUtil.findComponentsOfType(form(panel), JLabel::class.java).single { it.text == "error" || it.text == "idle" }
+            val stop = button(panel, "Stop")
+            val found = ArrayList<String>()
+            for ((what, fail) in failures) {
+                setStatus(panel, "open · 200 OK", StreamClient.Status.OPEN, "http://h/feed")
+                val before = lines(events).toSet()
+                fail()
+                until({ "$what shows no error line" }) { lines(events).any { it !in before } }
+                settle(100)
+                if (status.text != "open · 200 OK" || status.toolTipText != "open · 200 OK<br>http://h/feed") {
+                    found += "$what: the status is ${status.text} with the tooltip ${status.toolTipText}"
+                }
+                if (!stop.isEnabled) found += "$what: Stop is disabled"
+            }
+            assertEquals("", found.joinToString("\n"))
+        } finally {
+            TestDialogManager.setTestInputDialog(input)
+            TestDialogManager.setTestDialog(dialog)
+            settings.state.requestsFile = Requests.REQUESTS_FILE
+            remove(Requests.ENV_FILE)
+            remove(Requests.REQUESTS_FILE)
         }
     }
 

@@ -156,15 +156,17 @@ other response is shown with its `datastar-*` headers and up to 1 MiB of its bod
 
   `name` and `url` are needed, and a name is held once, whatever its case. `method` is `GET`
   when left out. `signals` is an object or JSON text, and `headers` an object or `Name: value`
-  lines; text is the form to use for `{{signals}}` and `{{headers}}`. The file is JSON, so
-  it takes no comments.
+  lines; text is the form to use for `{{signals}}` and `{{headers}}`. A header value that is
+  a number, such as `1.0`, is sent as it is written. The file is JSON, so it takes no comments.
+  With the file open in an editor, the Request list follows it as you type, saved or not.
 
   **Save** and **Delete** change the one entry and leave the rest of the file as you wrote it:
   the other entries, their layout, and what else the file holds. The entry that is saved is
   written in the layout above and keeps its members of your own, such as a `"note"`; `signals`
   stays an object where the new value is one, and `headers` an object on one line with text
   values where each line is a header of its own name. A request saved as it was read
-  writes nothing. What the inspector cannot read is said in red under the Request list, and
+  writes nothing. With the file open in an editor, the change goes into the editor's text as
+  one edit you can undo, and what you typed there and did not save is kept. What the inspector cannot read is said in red under the Request list, and
   stays in the file: an entry without a `name` or a `url`, or a second entry of a name. A file
   that is not JSON, not an object with a `requests` list, or of another `version` than 1 is not
   read and not written over until it is fixed. An empty file is a file without requests.

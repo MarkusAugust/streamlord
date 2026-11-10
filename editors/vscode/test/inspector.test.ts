@@ -4,7 +4,7 @@ import { Inspector } from "../src/inspector.ts";
 import type { DatastarFrame } from "../src/sse.ts";
 import { RequestStore } from "../src/requestStore.ts";
 import { RunningServers } from "../src/serverLog.ts";
-import { files, settings, unreadable, Uri, workspace } from "./vscode-mock.ts";
+import { files, Position, settings, unreadable, Uri, workspace } from "./vscode-mock.ts";
 
 /** An inspector with a stand-in panel that records what it posts to the page. */
 function inspector(): { apply: (signals: string, onlyIfMissing?: string) => void; posted: { type: string; [k: string]: unknown }[] } {
@@ -160,6 +160,152 @@ describe("inspector requests file", () => {
       settings.clear();
       assert.deepEqual((await push()).requestProblems, []);
     } finally {
+      settings.clear();
+    }
+  });
+});
+
+/** A glob as VS Code reads it: `**` is any folders, `*` any part of a name, `{a,b}` either. */
+function globMatches(glob: string, path: string): boolean {
+  let re = "";
+  for (let i = 0; i < glob.length; i++) {
+    const c = glob[i]!;
+    if (glob.startsWith("**/", i)) {
+      re += "(?:.*/)?";
+      i += 2;
+    } else if (glob.startsWith("**", i)) {
+      re += ".*";
+      i += 1;
+    } else if (c === "*") re += "[^/]*";
+    else if (c === "?") re += "[^/]";
+    else if (c === "{") re += "(?:";
+    else if (c === "}") re += ")";
+    else if (c === ",") re += "|";
+    else re += c.replace(/[.+^$()|[\]\\]/g, "\\$&");
+  }
+  return new RegExp(`^${re}$`).test(path);
+}
+
+/**
+ * An inspector whose store hears the editor: `type` is an edit of an open document, and `change` a file
+ * changed on disk, told to each file watcher whose pattern takes its path. `lists` is the names last
+ * sent to the page.
+ */
+function watchedInspector(text: string, path = REQUESTS) {
+  files.clear();
+  unreadable.clear();
+  workspace.textDocuments.length = 0;
+  workspace.workspaceFolders = [{ uri: Uri.file("/ws") }];
+  files.set(path, new TextEncoder().encode(text));
+  const edits: ((e: { document: { uri: unknown } }) => void)[] = [];
+  const watchers: { pattern: unknown; listeners: ((u: unknown) => void)[] }[] = [];
+  const { onDidChangeTextDocument, createFileSystemWatcher } = workspace;
+  (workspace as Record<string, unknown>).onDidChangeTextDocument = (l: (e: { document: { uri: unknown } }) => void) => {
+    edits.push(l);
+    return { dispose: () => {} };
+  };
+  (workspace as Record<string, unknown>).createFileSystemWatcher = (pattern: unknown) => {
+    const w = { pattern, listeners: [] as ((u: unknown) => void)[] };
+    watchers.push(w);
+    const on = (l: (u: unknown) => void) => {
+      w.listeners.push(l);
+      return { dispose: () => {} };
+    };
+    return { onDidChange: on, onDidCreate: on, onDidDelete: on, dispose: () => {} };
+  };
+  const restore = () => {
+    workspace.onDidChangeTextDocument = onDidChangeTextDocument;
+    workspace.createFileSystemWatcher = createFileSystemWatcher;
+  };
+  const context = { subscriptions: [] as unknown[], workspaceState: { get: <T>(_k: string, d: T) => d, update: async () => {} } };
+  let store: RequestStore;
+  try {
+    store = new RequestStore(context as never, new RunningServers());
+  } catch (e) {
+    restore();
+    throw e;
+  }
+  const posted: { type: string; [k: string]: any }[] = [];
+  const i = new Inspector(context as never, store, null as never) as any;
+  i.panel = { webview: { postMessage: (m: { type: string }) => posted.push(m) } };
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+  const lists = () => posted.filter((m) => m.type === "requests").at(-1)?.saved.map((r: { name: string }) => r.name);
+  const type = async (typed: string, at = path) => {
+    const doc = workspace.textDocuments.find((d) => d.uri.path === at);
+    if (doc) doc.text = typed;
+    else {
+      const opened = { uri: Uri.file(at), text: typed, getText: () => opened.text, offsetAt: () => 0, positionAt: () => new Position(0, 0) };
+      workspace.textDocuments.push(opened);
+    }
+    for (const l of edits) l({ document: { uri: Uri.file(at) } });
+    await settle();
+  };
+  const change = async (written: string, at = path) => {
+    files.set(at, new TextEncoder().encode(written));
+    const relative = at.replace(/^\/ws\//, "");
+    for (const w of watchers) {
+      const p = w.pattern as string | { pattern: string; base?: string; baseUri?: { path: string } };
+      const hit =
+        typeof p === "string"
+          ? globMatches(p, at) || globMatches(p, relative)
+          : globMatches(p.pattern, at.slice(((p.baseUri?.path ?? p.base ?? "").replace(/\/$/, "") + "/").length));
+      if (hit) for (const l of w.listeners) l(Uri.file(at));
+    }
+    await settle();
+  };
+  return { push: () => i.pushRequests(), lists, type, change, restore };
+}
+
+describe("inspector requests file as the editor has it", () => {
+  const feed = '{"requests": [{"name": "feed", "url": "/feed"}]}';
+  const typed = '{"requests": [{"name": "feed", "url": "/feed"}, {"name": "typed", "url": "/typed"}]}';
+
+  it("lists again what is typed in the open requests file, saved or not", async () => {
+    const w = watchedInspector(feed);
+    try {
+      await w.push();
+      assert.deepEqual(w.lists(), ["feed"]);
+      await w.type(typed);
+      assert.deepEqual(w.lists(), ["feed", "typed"]);
+      await w.type('{"requests": [{"name": "typed", "url": "/typed"}]}');
+      assert.deepEqual(w.lists(), ["typed"]);
+    } finally {
+      w.restore();
+    }
+  });
+
+  it("lists again what is typed in the open requests file the setting names", async () => {
+    settings.set("streamlord.inspector.requestsFile", "requests/inspector.json");
+    const w = watchedInspector(feed, "/ws/requests/inspector.json");
+    try {
+      await w.push();
+      assert.deepEqual(w.lists(), ["feed"]);
+      await w.type(typed);
+      assert.deepEqual(w.lists(), ["feed", "typed"]);
+    } finally {
+      w.restore();
+      settings.clear();
+    }
+  });
+
+  it("lists again when the requests file changes on disk, at the default path and at the path the setting names", async () => {
+    const atDefault = watchedInspector(feed);
+    try {
+      await atDefault.push();
+      await atDefault.change(typed);
+      assert.deepEqual(atDefault.lists(), ["feed", "typed"]);
+    } finally {
+      atDefault.restore();
+    }
+    settings.set("streamlord.inspector.requestsFile", "requests/inspector.json");
+    const named = watchedInspector(feed, "/ws/requests/inspector.json");
+    try {
+      await named.push();
+      assert.deepEqual(named.lists(), ["feed"]);
+      await named.change(typed);
+      assert.deepEqual(named.lists(), ["feed", "typed"]);
+    } finally {
+      named.restore();
       settings.clear();
     }
   });

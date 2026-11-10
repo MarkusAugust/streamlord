@@ -206,7 +206,9 @@ the settings.
 `inspector.json` as it was written: the other entries, their layout, and what else the file
 holds. The entry that is saved is written in the layout above, with its members of your own such
 as a `"note"` after `headers`, and with `signals` and `headers` still objects where the new
-values allow it. So the diff a colleague reviews is the request that changed.
+values allow it. So the diff a colleague reviews is the request that changed. With the file
+open in an editor, the Request list follows it as you type, saved or not, and **Save** and
+**Delete** change the editor's text as one edit you can undo, keeping what you typed there.
 
 **What stops you, and where it says so.** Both files are JSON and take no comments, and both
 have a schema, so the editor marks a mistake as you type it.

@@ -85,17 +85,19 @@ export class Inspector {
 
   /**
    * The request with its variables filled in, or null after the reason is posted: an invalid
-   * env file, or a variable that is unknown, misplaced or not set.
+   * env file, or a variable that is unknown, misplaced or not set. With `sending`, the reason is
+   * the status of the request, whose URL is as written since it could not be filled in.
    */
-  private async resolve(raw: SavedRequest): Promise<{ request: SavedRequest; vars: Variable[] } | null> {
+  private async resolve(raw: SavedRequest, sending = false): Promise<{ request: SavedRequest; vars: Variable[] } | null> {
+    const requestUrl = sending ? raw.url : undefined;
     const env = await this.store.environment();
     if (env.errors.length) {
-      this.post({ type: "error", message: env.errors.join(" "), define: [] });
+      this.post({ type: "error", message: env.errors.join(" "), define: [], requestUrl });
       return null;
     }
     const { request, errors, unset } = resolveRequest(raw, env.vars);
     if (errors.length) {
-      this.post({ type: "error", message: errors.join(" "), define: unset });
+      this.post({ type: "error", message: errors.join(" "), define: unset, requestUrl });
       return null;
     }
     return { request, vars: env.vars };
@@ -184,13 +186,13 @@ export class Inspector {
 
   private async connect(raw: SavedRequest): Promise<void> {
     this.stop();
-    const resolved = await this.resolve(raw);
+    const resolved = await this.resolve(raw, true);
     if (!resolved) return;
     const { request, vars } = resolved;
     try {
       JSON.parse(compactSignals(request.signals));
     } catch (e) {
-      this.post({ type: "error", message: `Signals are not valid JSON: ${(e as Error).message}` });
+      this.post({ type: "error", message: `Signals are not valid JSON: ${(e as Error).message}`, requestUrl: request.url });
       return;
     }
     await this.store.addRecent(raw);
@@ -220,9 +222,8 @@ export class Inspector {
           const server = this.running.current();
           const hint = unreachable ? unreachableHint(raw.url, vars, server) : null;
           const elsewhere = unreachable ? baseUrlSuggestion(vars, server) : null;
-          if (elsewhere !== null) this.post({ type: "error", message: `${message} ${hint}`, useBaseUrl: elsewhere });
-          else this.post({ type: "error", message: hint ? `${message} ${hint}` : message, define: hint ? [] : undefined });
-          this.post({ type: "status", status: "idle" });
+          if (elsewhere !== null) this.post({ type: "error", message: `${message} ${hint}`, useBaseUrl: elsewhere, requestUrl: request.url });
+          else this.post({ type: "error", message: hint ? `${message} ${hint}` : message, define: hint ? [] : undefined, requestUrl: request.url });
         },
       },
       this.abort.signal,
@@ -458,7 +459,9 @@ function html(cspSource: string): string {
       // A missing variable is added to the env file in one click; an unreachable server opens it to change baseUrl.
       if (m.define) { const b = document.createElement('button'); b.type = 'button'; b.className = 'link'; b.textContent = m.define.length ? 'Add to .streamlord/env.json' : 'Edit variables'; b.addEventListener('click', () => vscode.postMessage({ type: 'defineVariables', names: m.define })); p.append(b); }
       if (m.useBaseUrl) { const b = document.createElement('button'); b.type = 'button'; b.className = 'link'; b.textContent = 'Use ' + m.useBaseUrl + ' in .streamlord/env.json'; b.addEventListener('click', () => vscode.postMessage({ type: 'useBaseUrl', url: m.useBaseUrl })); p.append(b); }
-      frames.prepend(p); $('status').className = 'status error'; $('status').textContent = 'error';
+      frames.prepend(p);
+      // An error of the request sent is its status; any other leaves the status of the stream as it is.
+      if (m.requestUrl !== undefined) { const s = $('status'); s.className = 'status error'; s.textContent = 'error'; s.title = m.requestUrl; }
     }
     if (m.type === 'completions') showCompletions(m);
     if (m.type === 'signals') { $('store').textContent = JSON.stringify(m.signals, null, 2); }

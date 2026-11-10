@@ -44,11 +44,18 @@ class RequestStore(
 
     fun requestsFile(): VirtualFile? = baseDir()?.findFileByRelativePath(requestsPath())
 
-    /** The requests file; a file that is missing is empty, one that is not read says why in [RequestsFile.error], and an entry that is not read is named in [RequestsFile.skipped]. */
+    /** Where the requests file is, found or not, so a change of it is known by its path alone. */
+    fun requestsFilePath(): String? = baseDir()?.path?.let { "$it/${requestsPath()}" }
+
+    /**
+     * The requests file as an open editor has it, saved or not; a file that is missing is empty, one
+     * that is not read says why in [RequestsFile.error], and an entry that is not read is named in
+     * [RequestsFile.skipped].
+     */
     @RequiresReadLock
     fun read(): RequestsFile {
         val file = requestsFile() ?: return RequestsFile.EMPTY
-        return Requests.parseRequestsFile(VfsUtil.loadText(file), requestsPath())
+        return Requests.parseRequestsFile(textOf(file), requestsPath())
     }
 
     @RequiresReadLock
@@ -80,11 +87,11 @@ class RequestStore(
     private fun requests(edit: (text: String?, path: String) -> RequestsEdit): Change {
         requestsPathProblem()?.let { throw IllegalStateException("$it Nothing was saved.") }
         val file = requestsFile()
-        val text = file?.let { VfsUtil.loadText(it) }
+        val text = file?.let(::textOf)
         val edited = edit(text, requestsPath())
         val next =
             edited.text ?: throw IllegalStateException("${edited.error} Fix the file before saving, so the requests in it are not lost.")
-        return Change(requestsPath(), file?.modificationStamp, text ?: "", next, throughDocument = false)
+        return Change(requestsPath(), file?.let(::stampOf), text ?: "", next, throughDocument = true)
     }
 
     /**
@@ -147,9 +154,11 @@ class RequestStore(
 
     private fun envFile(): VirtualFile? = baseDir()?.findFileByRelativePath(Requests.ENV_FILE)
 
-    /** The env file as an open editor has it, so Connect uses what is on screen, saved or not. */
-    private fun envText(): String? =
-        envFile()?.let { FileDocumentManager.getInstance().getCachedDocument(it)?.text ?: VfsUtil.loadText(it) }
+    private fun envText(): String? = envFile()?.let(::textOf)
+
+    /** A file as an open editor has it, so the panel uses what is on screen, saved or not. */
+    private fun textOf(file: VirtualFile): String =
+        FileDocumentManager.getInstance().getCachedDocument(file)?.text ?: VfsUtil.loadText(file)
 
     /**
      * Add [keys] to `.streamlord/env.json`, creating it with `baseUrl` when it is missing. The file is

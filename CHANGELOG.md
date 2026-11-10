@@ -31,6 +31,18 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- In both editors, the inspector reads `.streamlord/inspector.json` as an open editor has it,
+  saved or not, as it reads `env.json`, and the Request list follows it as you type. **Save** and
+  **Delete** change the open editor's text as one edit that can be undone, where they wrote the
+  file underneath it: IntelliJ asked which version to keep, and what was typed and not saved was
+  lost. A requests file at a path the settings name outside `.streamlord/` is followed as well.
+- In VS Code, a `method` in `inspector.json` that is not text is GET, as in IntelliJ, where
+  `["post"]` was POST. A header value that is a number is read as written, `1.0` and `1e2`, where
+  it was `1` and `100` and a number past 2^53 was rounded.
+- In both editors, the inspector's status says "error" only for an error of the request sent,
+  and its tooltip names that request's URL. A Save, Delete, Copy as curl or signal patch that
+  failed while a stream was open set the status to "error", and in IntelliJ disabled **Stop**,
+  though the stream went on; and a failed connection showed "closed", or "idle" in VS Code.
 - In both editors, the URL shown under the inspector's URL field is the one that is sent. It
   showed a param as written, `/feed/4 2/x`, where the request sends `/feed/4%202%2Fx`.
 - In both editors, **Save** and **Delete** in the inspector stay where they are when "modified"

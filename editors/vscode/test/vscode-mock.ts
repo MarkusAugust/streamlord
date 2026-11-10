@@ -176,6 +176,16 @@ export class Location {
   ) {}
 }
 
+export class RelativePattern {
+  readonly baseUri: MockUri;
+  constructor(
+    base: { uri: MockUri } | MockUri,
+    readonly pattern: string,
+  ) {
+    this.baseUri = "uri" in base ? base.uri : base;
+  }
+}
+
 export class WorkspaceEdit {
   readonly replacements: { uri: MockUri; range: Range; text: string }[] = [];
   replace(u: MockUri, range: Range, text: string): void {
