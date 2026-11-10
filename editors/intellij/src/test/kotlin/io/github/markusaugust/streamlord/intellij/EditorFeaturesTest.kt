@@ -6,25 +6,24 @@ import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.colors.impl.AbstractColorsScheme
 import com.intellij.openapi.editor.colors.impl.EditorColorsSchemeImpl
 import com.intellij.openapi.editor.markup.TextAttributes
-import io.github.markusaugust.streamlord.intellij.documentation.StreamlordDocumentationProvider
+import io.github.markusaugust.streamlord.intellij.documentation.StreamlordDocumentation
 import io.github.markusaugust.streamlord.intellij.highlighting.DatastarColors
 import java.awt.Color
 
 class EditorFeaturesTest : StreamlordTestCase() {
     fun `test hover documents attributes actions and dsl functions`() {
-        val provider = StreamlordDocumentationProvider()
         myFixture.configureByText("page.html", "<div data-on-intersect__once=\"@post('/x')\"></div>")
-        val attr = provider.documentationAt(myFixture.file, 10)!!
+        val attr = StreamlordDocumentation.at(myFixture.file, 10)!!
         assertTrue(attr.first, attr.first.contains("<b>data-on-intersect</b>") && attr.first.contains("__threshold"))
-        val action = provider.documentationAt(myFixture.file, myFixture.file.text.indexOf("@post") + 2)!!
+        val action = StreamlordDocumentation.at(myFixture.file, myFixture.file.text.indexOf("@post") + 2)!!
         assertTrue(action.first, action.first.contains("@post(uri, options?)"))
         myFixture.configureByText("View.kt", "fun f() { dataOnClick(\"@post('/x')\") }\nval x = \"data-on-intersect\"")
-        val fn = provider.documentationAt(myFixture.file, myFixture.file.text.indexOf("dataOnClick") + 3)!!
+        val fn = StreamlordDocumentation.at(myFixture.file, myFixture.file.text.indexOf("dataOnClick") + 3)!!
         assertTrue(fn.first, fn.first.contains("<b>data-on</b>"))
-        assertNull(provider.documentationAt(myFixture.file, myFixture.file.text.indexOf("data-on-intersect") + 3))
+        assertNull(StreamlordDocumentation.at(myFixture.file, myFixture.file.text.indexOf("data-on-intersect") + 3))
         // dataOnSignalPatch also writes the filter, but its expression fills data-on-signal-patch.
         myFixture.configureByText("Feed.kt", "fun f() { dataOnSignalPatch(\"console.log(patch)\") }")
-        val patch = provider.documentationAt(myFixture.file, myFixture.file.text.indexOf("dataOnSignalPatch") + 3)!!
+        val patch = StreamlordDocumentation.at(myFixture.file, myFixture.file.text.indexOf("dataOnSignalPatch") + 3)!!
         assertTrue(patch.first, patch.first.contains("<b>data-on-signal-patch</b>") && !patch.first.contains("data-on-signal-patch-filter"))
     }
 

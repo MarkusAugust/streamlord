@@ -9,7 +9,9 @@ import com.intellij.testFramework.utils.parameterInfo.MockUpdateParameterInfoCon
 import io.github.markusaugust.streamlord.analysis.ActionSpec
 import io.github.markusaugust.streamlord.intellij.completion.DatastarCaret
 import io.github.markusaugust.streamlord.intellij.completion.DatastarParameterInfoHandler
-import io.github.markusaugust.streamlord.intellij.documentation.StreamlordDocumentationProvider
+import io.github.markusaugust.streamlord.intellij.documentation.StreamlordDocumentation
+import io.github.markusaugust.streamlord.intellij.documentation.StreamlordDocumentationTarget
+import io.github.markusaugust.streamlord.intellij.documentation.StreamlordLookupDocumentationTargetProvider
 
 /** Help inside a Datastar expression: completion where the value is, its options and events, parameter info and option docs. */
 class ExpressionHelpTest : StreamlordTestCase() {
@@ -108,12 +110,17 @@ class ExpressionHelpTest : StreamlordTestCase() {
 
     // The documentation of the lookup's items (F1 or Ctrl+Q while the list is open).
     fun `test options and events are documented in the list`() {
-        val provider = StreamlordDocumentationProvider()
+        val provider = StreamlordLookupDocumentationTargetProvider()
 
         fun docOf(name: String): String {
             val item = myFixture.lookupElements!!.first { it.lookupString == name }
-            val element = provider.getDocumentationElementForLookupItem(psiManager, item.`object`, myFixture.file)
-            return provider.generateDoc(element, null).orEmpty()
+            return (
+                provider.documentationTarget(
+                    myFixture.file,
+                    item,
+                    myFixture.caretOffset,
+                ) as? StreamlordDocumentationTarget
+            )?.html.orEmpty()
         }
         myFixture.configureByText("j.html", "<div data-on:click=\"@get('/x', {<caret>})\"></div>")
         myFixture.completeBasic()
@@ -150,7 +157,7 @@ class ExpressionHelpTest : StreamlordTestCase() {
 
     fun `test an option of a backend action is documented`() {
         myFixture.configureByText("g.html", "<div data-on:click=\"@get('/x', {retryScaler: 3})\"></div>")
-        val doc = StreamlordDocumentationProvider().documentationAt(myFixture.file, myFixture.file.text.indexOf("retryScaler") + 3)
+        val doc = StreamlordDocumentation.at(myFixture.file, myFixture.file.text.indexOf("retryScaler") + 3)
         assertTrue(doc?.first.orEmpty(), doc?.first.orEmpty().contains("<b>retryScaler</b>"))
     }
 }
