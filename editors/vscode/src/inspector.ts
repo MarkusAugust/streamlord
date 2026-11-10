@@ -186,8 +186,13 @@ export class Inspector {
 
   private async connect(raw: SavedRequest): Promise<void> {
     this.stop();
+    // Made before the request is prepared, so a Stop or the next Connect meanwhile keeps it from being sent.
+    const abort = new AbortController();
+    this.abort = abort;
+    // A request stopped, or followed by another, no longer speaks for the status: its close can come late.
+    const current = () => !abort.signal.aborted;
     const resolved = await this.resolve(raw, true);
-    if (!resolved) return;
+    if (!resolved || !current()) return;
     const { request, vars } = resolved;
     try {
       JSON.parse(compactSignals(request.signals));
@@ -197,11 +202,8 @@ export class Inspector {
     }
     await this.store.addRecent(raw);
     void this.pushRequests();
+    if (!current()) return;
     const since = Date.now();
-    const abort = new AbortController();
-    this.abort = abort;
-    // A request stopped, or followed by another, no longer speaks for the status: its close can come late.
-    const current = () => !abort.signal.aborted;
     await openStream(
       { url: request.url, method: request.method, signals: request.signals, headers: parseHeaderLines(request.headers) },
       {

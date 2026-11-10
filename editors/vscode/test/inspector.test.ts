@@ -165,11 +165,13 @@ describe("inspector requests file", () => {
   });
 });
 
-/** Where the class that opens at `start` ends, or -1 when it is no class; a `]` first in it is one of its characters. */
+/**
+ * Where the class that opens at `start` ends, or -1 when it is no class, as VS Code's glob.ts reads it: a `!` or
+ * `^` first in it negates it and the next `]` ends it, so `[!]` is `[^]`; otherwise a `]` first in it is one of its characters.
+ */
 function classEnd(glob: string, start: number): number {
-  let j = start + 1;
-  if (glob[j] === "!" || glob[j] === "^") j++;
-  return glob.indexOf("]", j + 1);
+  // The first character after `[` is a member or the negation, and never ends the class.
+  return glob.indexOf("]", start + 2);
 }
 
 /** A glob as VS Code reads it: `**` is any folders, `*` any part of a name, `?` one character, `[...]` a class and `{a,b}` either. */
@@ -187,7 +189,7 @@ function globMatches(glob: string, path: string): boolean {
     } else if (c === "*") re += "[^/]*";
     else if (c === "?") re += "[^/]";
     else if (c === "[" && classEnd(glob, i) > 0) {
-      // `!` or `^` first takes the class's complement.
+      // `!` or `^` first takes the class's complement: `[!]` is `[^]`, any character, as VS Code reads it.
       const end = classEnd(glob, i);
       const negated = glob[i + 1] === "!" || glob[i + 1] === "^";
       const members = glob.slice(i + (negated ? 2 : 1), end).replace(/[\\\]^]/g, "\\$&");
@@ -196,9 +198,12 @@ function globMatches(glob: string, path: string): boolean {
     } else if (c === "{") {
       braces++;
       re += "(?:";
-    } else if (c === "}" && braces > 0) {
-      braces--;
-      re += ")";
+    } else if (c === "}") {
+      // VS Code makes a `}` outside braces an empty group, so it stands for nothing.
+      if (braces > 0) {
+        braces--;
+        re += ")";
+      }
     } else if (c === "," && braces > 0) re += "|";
     else re += c.replace(/[.+^$()|[\]{}\\]/g, "\\$&");
   }
@@ -282,7 +287,9 @@ function watchedInspector(text: string, path = REQUESTS) {
     for (const l of configurations) l({ affectsConfiguration: (section: string) => key === section || key.startsWith(`${section}.`) });
     await settle();
   };
-  return { push: () => i.pushRequests(), lists, type, change, configure, restore };
+  /** How many times the panel was sent the list. */
+  const posts = () => posted.filter((m) => m.type === "requests").length;
+  return { push: () => i.pushRequests(), lists, posts, type, change, configure, restore };
 }
 
 describe("inspector requests file as the editor has it", () => {
@@ -343,6 +350,23 @@ describe("inspector requests file as the editor has it", () => {
 
   it("follows a requests file whose path holds glob characters as that very path", async () => {
     const found = [...(await followed("req[1]/inspector.json", "/ws/req[1]/inspector.json")), ...(await followed("a{b}/inspector.json", "/ws/a{b}/inspector.json"))];
+    assert.equal(found.join("\n"), "");
+  });
+
+  it("follows a requests file whose path holds ! as that very path, and not a file of another name", async () => {
+    const found = await followed("a!b/inspector.json", "/ws/a!b/inspector.json");
+    settings.set("streamlord.inspector.requestsFile", "a!b/inspector.json");
+    const w = watchedInspector(feed, "/ws/a!b/inspector.json");
+    try {
+      await w.push();
+      // A change the store hears makes the panel post the list again.
+      const before = w.posts();
+      await w.change(typed, "/ws/aXb/inspector.json");
+      if (w.posts() !== before) found.push(`a change of aXb/inspector.json sent the list ${w.posts() - before} more times`);
+    } finally {
+      w.restore();
+      settings.clear();
+    }
     assert.equal(found.join("\n"), "");
   });
 

@@ -148,8 +148,13 @@ function rawMember(text: string, index: number): string | null {
  * read the escapes and kept one of two keys of a name.
  */
 function headerLines(headers: Record<string, unknown>, raw: Map<string, string>): string {
-  return Object.entries(headers)
-    .map(([k, v]) => `${k}: ${typeof v === "string" ? v : compactJson(raw.get(k) ?? JSON.stringify(v))}`)
+  // In the order written: Object.entries puts a name such as "10" first.
+  const names = raw.size > 0 ? [...raw.keys()].filter((k) => Object.hasOwn(headers, k)) : Object.keys(headers);
+  return names
+    .map((k) => {
+      const v = headers[k];
+      return `${k}: ${typeof v === "string" ? v : compactJson(raw.get(k) ?? JSON.stringify(v))}`;
+    })
     .join("\n");
 }
 

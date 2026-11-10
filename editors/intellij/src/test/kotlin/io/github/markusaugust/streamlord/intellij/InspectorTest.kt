@@ -1973,7 +1973,19 @@ class InspectorTest : BasePlatformTestCase() {
     private class Streaming : AutoCloseable {
         private val server = java.net.ServerSocket(0)
         private val sockets = CopyOnWriteArrayList<java.net.Socket>()
+        private val byPath = java.util.concurrent.ConcurrentHashMap<String, java.net.Socket>()
         val port = server.localPort
+
+        /** The path of each request without its query, in the order they came. */
+        val paths = CopyOnWriteArrayList<String>()
+
+        /** Break the connection of the request to [path], as a network that fails does: the client reads an error, not an end. */
+        fun drop(path: String) {
+            byPath[path]?.apply {
+                setSoLinger(true, 0)
+                close()
+            }
+        }
 
         init {
             Thread {
@@ -1985,6 +1997,14 @@ class InspectorTest : BasePlatformTestCase() {
                             runCatching {
                                 val input = socket.getInputStream().bufferedReader()
                                 var line = input.readLine()
+                                val path =
+                                    line
+                                        .orEmpty()
+                                        .split(' ')
+                                        .getOrElse(1) { "" }
+                                        .substringBefore('?')
+                                byPath[path] = socket
+                                paths += path
                                 while (!line.isNullOrEmpty()) line = input.readLine()
                                 socket.getOutputStream().apply {
                                     write("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\r\n: open\n\n".toByteArray())
@@ -2068,6 +2088,135 @@ class InspectorTest : BasePlatformTestCase() {
             }
         }
     }
+
+    /** A panel over a server that streams, with what the tests of more than one request look at. */
+    private inner class Streams(
+        val server: Streaming,
+    ) {
+        val panel = InspectorPanel(project, testRootDisposable)
+        val events: JScrollPane
+        val status: JLabel
+        val url: JBTextField
+        val stop: JButton
+
+        init {
+            await(panel.pushRequests(null))
+            events = events(panel)
+            status = UIUtil.findComponentsOfType(form(panel), JLabel::class.java).single { it.text == "idle" }
+            url = UIUtil.findComponentsOfType(panel, JBTextField::class.java).single()
+            stop = button(panel, "Stop")
+        }
+
+        fun connect(path: String) {
+            url.text = "{{baseUrl}}$path"
+            button(panel, "Connect").doClick()
+        }
+
+        /** Connect to [path] and wait until its stream is open. */
+        fun open(path: String) {
+            connect(path)
+            until({ "$path does not open: ${status.text} ${status.toolTipText}" }) { isOpen(path) }
+            settle(100)
+        }
+
+        fun isOpen(path: String) = status.text.startsWith("open") && status.toolTipText.endsWith("<br>http://127.0.0.1:${server.port}$path")
+    }
+
+    /** Run [test] over a server that streams, with the env file pointing at it. */
+    private fun streams(test: (Streams, Queue) -> Unit) {
+        val queue = toolWindowRuns()
+        Streaming().use { server ->
+            write(Requests.ENV_FILE, """{"baseUrl": "http://127.0.0.1:${server.port}"}""")
+            try {
+                test(Streams(server), queue)
+            } finally {
+                queue.release()
+                remove(Requests.ENV_FILE)
+                InspectorState.getInstance(project).loadState(InspectorState.State())
+            }
+        }
+    }
+
+    /** Wait, without running the UI thread, until the queue holds something or [seconds] have passed. */
+    private fun heldWithin(
+        queue: Queue,
+        seconds: Long,
+    ): Boolean {
+        val deadline = System.currentTimeMillis() + seconds * 1000
+        while (queue.held.isEmpty() && System.currentTimeMillis() < deadline) Thread.sleep(5)
+        // What else the same close tells comes right after.
+        Thread.sleep(200)
+        return queue.held.isNotEmpty()
+    }
+
+    fun `test Stop and Connect stop a request still being prepared`() =
+        streams { s, _ ->
+            s.open("/feed")
+            // Stop is enabled by the stream that is open, and clicked before the request after it is prepared.
+            s.connect("/stopped")
+            s.stop.doClick()
+            settle(500)
+            val found = ArrayList<String>()
+            if (s.status.text != "idle" ||
+                s.status.toolTipText != "idle"
+            ) {
+                found += "after Stop the status is ${s.status.text} ${s.status.toolTipText}"
+            }
+
+            s.open("/feed")
+            s.connect("/first")
+            s.connect("/second")
+            if (!within(5) { s.isOpen("/second") }) found += "the second Connect does not open: ${s.status.text} ${s.status.toolTipText}"
+            settle(300)
+            if (s.server.paths != listOf("/feed", "/feed", "/second")) found += "the server was sent ${s.server.paths}"
+            assertEquals("", found.joinToString("\n"))
+        }
+
+    // The earlier stream's close is held until the request after it is open, as a slow close of a stream may come.
+    fun `test a later request that is open keeps its status when the earlier stream's close comes after it`() =
+        streams { s, queue ->
+            s.open("/feed")
+            val before = lines(s.events).toSet()
+            queue.holding = true
+            s.connect("/b")
+            // The UI thread does not run meanwhile, so only the earlier stream's close can come.
+            val closed = heldWithin(queue, 5)
+            val earlier = queue.held.toList()
+            queue.held.clear()
+            queue.holding = false
+            until({ "/b does not open: ${s.status.text} ${s.status.toolTipText}" }) { s.isOpen("/b") }
+            earlier.forEach { it.run() }
+            settle(200)
+            val found = ArrayList<String>()
+            if (!closed) found += "the earlier stream told nothing as it closed"
+            if (!s.isOpen("/b")) found += "the status is ${s.status.text} with the tooltip ${s.status.toolTipText}"
+            if (!s.stop.isEnabled) found += "Stop is disabled"
+            val shown = lines(s.events).filter { it !in before }.map { it.text }
+            if (shown.isNotEmpty()) found += "the event list shows $shown"
+            assertEquals("", found.joinToString("\n"))
+        }
+
+    fun `test a later request that is open keeps its status when the earlier stream's error comes after it`() =
+        streams { s, queue ->
+            s.open("/feed")
+            val before = lines(s.events).toSet()
+            queue.holding = true
+            s.server.drop("/feed")
+            val failed = heldWithin(queue, 5)
+            val earlier = queue.held.toList()
+            queue.held.clear()
+            queue.holding = false
+            s.open("/b")
+            earlier.forEach { it.run() }
+            settle(200)
+            val found = ArrayList<String>()
+            if (!failed) found += "the earlier stream told nothing as it broke"
+            if (!s.isOpen("/b")) found += "the status is ${s.status.text} with the tooltip ${s.status.toolTipText}"
+            if (!s.stop.isEnabled) found += "Stop is disabled"
+            val shown = lines(s.events).filter { it !in before }.map { it.text }
+            if (shown.isNotEmpty()) found += "the event list shows $shown"
+            assertEquals("", found.joinToString("\n"))
+        }
 
     fun `test an error that keeps a request from being sent or ends it says error, with the URL of that request`() {
         toolWindowRuns()

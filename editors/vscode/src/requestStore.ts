@@ -50,7 +50,8 @@ export class RequestStore implements vscode.Disposable {
       .filter((part) => part !== "" && part !== ".")
       .join("/");
     if (!folder || rel === REQUESTS_FILE) return;
-    const literal = rel.replace(/[[\]{}*?!,]/g, (c) => `[${c}]`);
+    // `!` is no glob character outside a class, and `[!]` would be one of any character.
+    const literal = rel.replace(/[[\]{}*?,]/g, (c) => `[${c}]`);
     const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(folder, literal));
     watcher.onDidChange(() => this.onChange.fire());
     watcher.onDidCreate(() => this.onChange.fire());

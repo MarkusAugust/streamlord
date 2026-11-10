@@ -43,13 +43,16 @@ All notable changes to Streamlord are recorded here. The format follows
   it was `1` and `100` and a number past 2^53 was rounded.
 - In both editors, a header value in `inspector.json` that is an object or a list is read as it
   is written, less its white space, so the two editors send the same header. They spelt escapes
-  their own ways, and IntelliJ kept one of two keys of a name.
+  their own ways, IntelliJ kept one of two keys of a name, and VS Code put a header named like a
+  number, such as `10`, first.
 - In both editors, the inspector's status says "error" only for an error that keeps the request
   from being sent or ends it, and its tooltip names that request's URL. A Save, Delete, Edit
   variables, Use baseUrl, Copy as curl or signal patch that failed while a stream was open set
   the status to "error", and in IntelliJ disabled **Stop**, though the stream went on; and a
   failed connection showed "closed", or "idle" in VS Code. A request that was stopped, or
-  followed by another, no longer sets the status when its close comes late.
+  followed by another, no longer sets the status, or shows an error, when its close or its error
+  comes late. In VS Code, a Stop or a second Connect while a request is still being prepared
+  keeps it from being sent, where it was sent anyway.
 - In both editors, the URL shown under the inspector's URL field is the one that is sent. It
   showed a param as written, `/feed/4 2/x`, where the request sends `/feed/4%202%2Fx`.
 - In both editors, **Save** and **Delete** in the inspector stay where they are when "modified"

@@ -249,12 +249,15 @@ describe("inspector page", () => {
     const context = { subscriptions: [] as unknown[], workspaceState: { get: <T>(_k: string, d: T) => d, update: async () => {} } };
     const servers = new RunningServers();
     const i = new Inspector(context as never, new RequestStore(context as never, servers), servers) as any;
-    // While `held` is set, the status messages wait there instead of reaching the page.
-    const hold = { held: null as unknown[] | null };
+    // While `held` is set, the messages `which` picks, the status messages unless said, wait there instead of reaching the page.
+    const hold = { held: null as unknown[] | null, which: (m: { type?: string; resolvedUrl?: unknown; requestUrl?: unknown }) => m.type === "status" };
+    // Everything the extension posts, in order.
+    const sent: { type?: string; [k: string]: unknown }[] = [];
     i.panel = {
       webview: {
         postMessage: async (m: { type?: string }) => {
-          if (hold.held !== null && m.type === "status") hold.held.push(m);
+          sent.push(m);
+          if (hold.held !== null && hold.which(m)) hold.held.push(m);
           else shown.post(m);
           return true;
         },
@@ -263,7 +266,7 @@ describe("inspector page", () => {
     const status = shown.element("status");
     const env = (text: string) => files.set("/ws/.streamlord/env.json", new TextEncoder().encode(text));
     const request = (url: string, more: Partial<SavedRequest> = {}): SavedRequest => ({ name: "", url, method: "GET", signals: "", headers: "", ...more });
-    return { ...shown, i, status, env, request, hold };
+    return { ...shown, i, status, env, request, hold, sent };
   }
 
   /** A port nothing listens on. */
@@ -366,7 +369,13 @@ describe("inspector page", () => {
     });
       /** A server that opens a stream on each request and holds it open until it is closed. */
     async function streaming() {
-      const server = createHttpServer((_q, res) => {
+      // The path of each request without its query, in order, and the response of each path, to drop its connection.
+      const paths: string[] = [];
+      const responses = new Map<string, import("node:http").ServerResponse>();
+      const server = createHttpServer((q, res) => {
+        const path = (q.url ?? "").split("?")[0] ?? "";
+        paths.push(path);
+        responses.set(path, res);
         res.writeHead(200, { "Content-Type": "text/event-stream" });
         res.write(": open\n\n");
       });
@@ -376,20 +385,86 @@ describe("inspector page", () => {
         server.closeAllConnections();
         return new Promise((resolve) => server.close(resolve));
       };
-      return { base, close };
+      const drop = (path: string) => responses.get(path)?.socket?.destroy();
+      return { base, close, paths, drop };
     }
 
     const statusOf = (p: ReturnType<typeof overExtension>) => `${p.status.textContent} | ${(p.status as unknown as { title?: string }).title}`;
 
     /** Connect to `base` and wait until the stream is open; `earlier` ends when it does. */
-    async function opened(p: ReturnType<typeof overExtension>, base: string): Promise<{ earlier: Promise<void> }> {
+    async function opened(p: ReturnType<typeof overExtension>, base: string, path = "/feed"): Promise<{ earlier: Promise<void> }> {
       p.env(`{"baseUrl": "${base}"}`);
-      const earlier: Promise<void> = p.i.handle({ type: "connect", request: p.request("{{baseUrl}}/feed") });
-      const deadline = Date.now() + 5000;
-      while (!p.status.textContent.startsWith("open") && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 5));
-      assert.equal(statusOf(p), `open · 200 OK · text/event-stream | ${base}/feed`);
+      const earlier: Promise<void> = p.i.handle({ type: "connect", request: p.request(`{{baseUrl}}${path}`) });
+      await until(() => statusOf(p) === `open · 200 OK · text/event-stream | ${base}${path}`);
+      assert.equal(statusOf(p), `open · 200 OK · text/event-stream | ${base}${path}`);
       return { earlier };
     }
+
+    /** Wait until `done`, or two seconds. */
+    async function until(done: () => boolean): Promise<void> {
+      const deadline = Date.now() + 2000;
+      while (!done() && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+
+    const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    it("sends no request that Stop stops while it is being prepared", async () => {
+      const server = await streaming();
+      const p = overExtension();
+      try {
+        p.env(`{"baseUrl": "${server.base}"}`);
+        void p.i.handle({ type: "connect", request: p.request("{{baseUrl}}/feed") });
+        await p.i.handle({ type: "stop" });
+        await pause(300);
+        const statuses = p.sent.filter((m) => m.type === "status" && m.resolvedUrl !== undefined).map((m) => m.status);
+        assert.deepEqual([server.paths, statuses, statusOf(p)], [[], [], "idle | "]);
+      } finally {
+        await p.i.handle({ type: "stop" });
+        await server.close();
+      }
+    });
+
+    it("sends only the second of two Connects, the first being prepared still", async () => {
+      const server = await streaming();
+      const p = overExtension();
+      try {
+        p.env(`{"baseUrl": "${server.base}"}`);
+        void p.i.handle({ type: "connect", request: p.request("{{baseUrl}}/a") });
+        void p.i.handle({ type: "connect", request: p.request("{{baseUrl}}/b") });
+        await until(() => statusOf(p).startsWith("open"));
+        await pause(300);
+        const ofFirst = p.sent.filter((m) => m.resolvedUrl === `${server.base}/a` || m.requestUrl === `${server.base}/a`).map((m) => m.status ?? m.type);
+        assert.deepEqual([server.paths, ofFirst, statusOf(p)], [["/b"], [], `open · 200 OK · text/event-stream | ${server.base}/b`]);
+      } finally {
+        await p.i.handle({ type: "stop" });
+        await server.close();
+      }
+    });
+
+    // What the earlier stream tells is held until the request after it is open, as a slow close may come.
+    it("keeps the status of a later request that is open when the earlier stream's close and error come after it", async () => {
+      const server = await streaming();
+      const p = overExtension();
+      try {
+        const earlier = `${server.base}/feed`;
+        await opened(p, server.base);
+        p.hold.which = (m: { resolvedUrl?: unknown; requestUrl?: unknown }) => m.resolvedUrl === earlier || m.requestUrl === earlier;
+        p.hold.held = [];
+        const lines = p.element("frames").children.length;
+        void p.i.handle({ type: "connect", request: p.request("{{baseUrl}}/b") });
+        await until(() => statusOf(p) === `open · 200 OK · text/event-stream | ${server.base}/b`);
+        server.drop("/feed");
+        await pause(200);
+        const held = p.hold.held;
+        p.hold.held = null;
+        for (const m of held) p.post(m);
+        const errors = p.element("frames").children.slice(0, p.element("frames").children.length - lines).filter((c) => c.className === "error");
+        assert.deepEqual([statusOf(p), errors.map((e) => e.textContent)], [`open · 200 OK · text/event-stream | ${server.base}/b`, []]);
+      } finally {
+        await p.i.handle({ type: "stop" });
+        await server.close();
+      }
+    });
 
     it("keeps the status of a new request that failed when the earlier stream's close comes after it", async () => {
       const server = await streaming();
