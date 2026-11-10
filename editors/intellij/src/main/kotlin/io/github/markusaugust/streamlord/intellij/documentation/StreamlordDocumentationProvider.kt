@@ -150,10 +150,6 @@ class StreamlordDocumentationProvider : AbstractDocumentationProvider() {
         override fun getText(): String = word
     }
 
-    companion object {
-        fun applies(file: com.intellij.psi.PsiFile): Boolean = file is KtFile || file.language.isKindOf(HTMLLanguage.INSTANCE)
-    }
-
     /** Whether [offset] is in a string handed straight to a call with one of [names]. */
     private fun inCallNamed(
         file: PsiFile,

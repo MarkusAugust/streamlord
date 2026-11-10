@@ -96,7 +96,7 @@ class SignalRenameProcessor : RenamePsiElementProcessor() {
         val out = ArrayList<PsiReference>()
         // The rename asks in the target's own scope, which is empty so that no word search runs: a signal's is the project.
         val scope = searchScope as? LocalSearchScope ?: GlobalSearchScope.projectScope(element.project)
-        SignalReferencesSearcher.references(element.project, (element as SignalTarget).name, scope, under = true) {
+        signalReferences(element.project, (element as SignalTarget).name, scope, under = true) {
             out += it
             true
         }
@@ -114,7 +114,7 @@ class SignalRenameProcessor : RenamePsiElementProcessor() {
             conflicts.putValue(element, "The project already defines the signal '$newName'.")
         }
         val project = element.project
-        SignalReferencesSearcher.references(project, old, GlobalSearchScope.projectScope(project), under = true) { ref ->
+        signalReferences(project, old, GlobalSearchScope.projectScope(project), under = true) { ref ->
             if (ref.renameText(old, newName) == null) {
                 val written =
                     ref.element.containingFile.text
@@ -146,7 +146,7 @@ class SignalRenameProcessor : RenamePsiElementProcessor() {
         for (place in index.declarationsOf(old, inside = true) + index.readsOf(old)) {
             val file = SignalSites.psiOf(manager, place.file) ?: continue
             val sites = SignalSites.of(file).filter { it.start >= place.start && it.end <= place.end }
-            if (sites.any { SignalReferencesSearcher.referenceAt(file, it.start) != null }) continue
+            if (sites.any { signalReferenceAt(file, it.start) != null }) continue
             val written = file.text.substring(place.start, place.end)
             if (file !is KtFile) {
                 conflicts.putValue(file, "'$written' in ${file.name} is not renamed: the plugin finds no reference there to rewrite.")

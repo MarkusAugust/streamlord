@@ -36,8 +36,6 @@ class DatastarTypedHandler : TypedHandlerDelegate() {
         AutoPopupController.getInstance(project).scheduleAutoPopup(editor)
         return Result.CONTINUE
     }
-
-    private companion object {
-        val TRIGGERS = setOf('$', '@', '#', '_', ':')
-    }
 }
+
+private val TRIGGERS = setOf('$', '@', '#', '_', ':')

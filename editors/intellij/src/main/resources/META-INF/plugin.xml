@@ -17,9 +17,6 @@
     </extensions>
 
     <extensions defaultExtensionNs="com.intellij">
-        <projectService serviceImplementation="io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings" />
-        <projectService serviceImplementation="io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis" />
-        <projectService serviceImplementation="io.github.markusaugust.streamlord.intellij.index.SignalIndex" />
         <completion.contributor
             language="kotlin"
             order="first, before KotlinCompletionContributor"
@@ -139,9 +136,6 @@
         <defaultLiveTemplates file="/liveTemplates/StreamlordHtml.xml" />
         <notificationGroup id="Streamlord" displayType="BALLOON" />
 
-        <projectService serviceImplementation="io.github.markusaugust.streamlord.intellij.inspector.InspectorState" />
-        <projectService serviceImplementation="io.github.markusaugust.streamlord.intellij.inspector.RequestStore" />
-        <projectService serviceImplementation="io.github.markusaugust.streamlord.intellij.inspector.InspectorService" />
         <toolWindow
             id="Streamlord"
             anchor="right"

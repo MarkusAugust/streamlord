@@ -1,12 +1,13 @@
 package io.github.markusaugust.streamlord.intellij.inspector
 
 import com.intellij.openapi.actionSystem.ActionUpdateThread
-import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.DumbAware
+import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.openapi.wm.ToolWindowManager
@@ -23,9 +24,13 @@ class InspectorToolWindowFactory :
         project: Project,
         toolWindow: ToolWindow,
     ) {
-        val panel = InspectorPanel(project, toolWindow.disposable)
+        // What the tab holds, listeners and an open stream, goes with the tab.
+        val disposable = Disposer.newDisposable(toolWindow.disposable, "Stream Inspector")
+        val panel = InspectorPanel(project, disposable)
         InspectorService.getInstance(project).panel = panel
         val content = ContentFactory.getInstance().createContent(panel, "Stream Inspector", false)
+        content.setDisposer(disposable)
+        Disposer.register(disposable) { InspectorService.getInstance(project).panel = null }
         toolWindow.contentManager.addContent(content)
     }
 }
@@ -63,7 +68,7 @@ class InspectorService(
 }
 
 /** Tools | Streamlord | Open Stream Inspector. */
-class OpenInspectorAction : AnAction() {
+class OpenInspectorAction : DumbAwareAction() {
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
     override fun update(e: AnActionEvent) {
