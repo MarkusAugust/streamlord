@@ -1,6 +1,6 @@
 package io.github.markusaugust.streamlord.intellij.actions
 
-import com.intellij.notification.NotificationGroupManager
+import com.intellij.notification.Notification
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
@@ -26,10 +26,7 @@ class ReindexSignalsAction : AnAction() {
             object : Task.Backgroundable(project, "Streamlord: indexing signals", false) {
                 override fun run(indicator: ProgressIndicator) {
                     val count = ReadAction.nonBlocking<Int> { SignalIndex.getInstance(project).rebuild() }.executeSynchronously()
-                    NotificationGroupManager
-                        .getInstance()
-                        .getNotificationGroup(Streamlord.NOTIFICATION_GROUP)
-                        .createNotification("Streamlord: indexed $count signal names.", NotificationType.INFORMATION)
+                    Notification(Streamlord.NOTIFICATION_GROUP, "Streamlord: indexed $count signal names.", NotificationType.INFORMATION)
                         .notify(project)
                 }
             },

@@ -50,8 +50,6 @@ class DatastarCompletionConfidence : CompletionConfidence() {
             }
         }
     }
-
-    private companion object {
-        val IN_DATA_VALUE = Regex("""data-[^\s"'<>=]*\s*=\s*"[^"]*$""")
-    }
 }
+
+private val IN_DATA_VALUE = Regex("""data-[^\s"'<>=]*\s*=\s*"[^"]*$""")

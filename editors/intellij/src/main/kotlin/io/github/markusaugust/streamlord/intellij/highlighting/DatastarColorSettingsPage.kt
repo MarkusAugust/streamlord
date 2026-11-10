@@ -32,47 +32,45 @@ class DatastarColorSettingsPage : ColorSettingsPage {
              <prefix>data-</prefix><plugin>text</plugin>="<scope>evt</scope> ? <string>'yes'</string> : <regex>/^a/</regex>.test(<signal>${'$'}form</signal><path>.q</path>)">
         </div>
         """.trimIndent()
-
-    private companion object {
-        val DESCRIPTORS =
-            arrayOf(
-                AttributesDescriptor("Expression//Signal", DatastarColors.SIGNAL),
-                AttributesDescriptor("Expression//Signal path", DatastarColors.SIGNAL_PATH),
-                AttributesDescriptor("Expression//Backend action (@get, @post, ...)", DatastarColors.ACTION_BACKEND),
-                AttributesDescriptor("Expression//Other action", DatastarColors.ACTION),
-                AttributesDescriptor("Expression//Scope variable (el, evt, patch)", DatastarColors.SCOPE_VARIABLE),
-                AttributesDescriptor("Expression//Option key", DatastarColors.OPTION_KEY),
-                AttributesDescriptor("Expression//Duration", DatastarColors.DURATION),
-                AttributesDescriptor("Expression//String", DatastarColors.STRING),
-                AttributesDescriptor("Expression//Regular expression", DatastarColors.REGEX),
-                AttributesDescriptor("Expression//JavaScript keyword", DatastarColors.KEYWORD),
-                AttributesDescriptor("Expression//Number", DatastarColors.NUMBER),
-                AttributesDescriptor("Expression//Kotlin dollar escape", DatastarColors.KOTLIN_DOLLAR_ESCAPE),
-                AttributesDescriptor("Attribute//Prefix (data-)", DatastarColors.ATTRIBUTE_PREFIX),
-                AttributesDescriptor("Attribute//Plugin name", DatastarColors.ATTRIBUTE_PLUGIN),
-                AttributesDescriptor("Attribute//Key", DatastarColors.ATTRIBUTE_KEY),
-                AttributesDescriptor("Attribute//Modifier", DatastarColors.MODIFIER),
-                AttributesDescriptor("Attribute//Modifier sigils (__ : .)", DatastarColors.MODIFIER_SIGIL),
-                AttributesDescriptor("Attribute//Modifier argument", DatastarColors.MODIFIER_ARG),
-            )
-        val TAGS =
-            mapOf(
-                "signal" to DatastarColors.SIGNAL,
-                "path" to DatastarColors.SIGNAL_PATH,
-                "backend" to DatastarColors.ACTION_BACKEND,
-                "action" to DatastarColors.ACTION,
-                "scope" to DatastarColors.SCOPE_VARIABLE,
-                "option" to DatastarColors.OPTION_KEY,
-                "string" to DatastarColors.STRING,
-                "regex" to DatastarColors.REGEX,
-                "keyword" to DatastarColors.KEYWORD,
-                "number" to DatastarColors.NUMBER,
-                "prefix" to DatastarColors.ATTRIBUTE_PREFIX,
-                "plugin" to DatastarColors.ATTRIBUTE_PLUGIN,
-                "key" to DatastarColors.ATTRIBUTE_KEY,
-                "modifier" to DatastarColors.MODIFIER,
-                "sigil" to DatastarColors.MODIFIER_SIGIL,
-                "arg" to DatastarColors.MODIFIER_ARG,
-            )
-    }
 }
+
+private val DESCRIPTORS =
+    arrayOf(
+        AttributesDescriptor("Expression//Signal", DatastarColors.SIGNAL),
+        AttributesDescriptor("Expression//Signal path", DatastarColors.SIGNAL_PATH),
+        AttributesDescriptor("Expression//Backend action (@get, @post, ...)", DatastarColors.ACTION_BACKEND),
+        AttributesDescriptor("Expression//Other action", DatastarColors.ACTION),
+        AttributesDescriptor("Expression//Scope variable (el, evt, patch)", DatastarColors.SCOPE_VARIABLE),
+        AttributesDescriptor("Expression//Option key", DatastarColors.OPTION_KEY),
+        AttributesDescriptor("Expression//Duration", DatastarColors.DURATION),
+        AttributesDescriptor("Expression//String", DatastarColors.STRING),
+        AttributesDescriptor("Expression//Regular expression", DatastarColors.REGEX),
+        AttributesDescriptor("Expression//JavaScript keyword", DatastarColors.KEYWORD),
+        AttributesDescriptor("Expression//Number", DatastarColors.NUMBER),
+        AttributesDescriptor("Expression//Kotlin dollar escape", DatastarColors.KOTLIN_DOLLAR_ESCAPE),
+        AttributesDescriptor("Attribute//Prefix (data-)", DatastarColors.ATTRIBUTE_PREFIX),
+        AttributesDescriptor("Attribute//Plugin name", DatastarColors.ATTRIBUTE_PLUGIN),
+        AttributesDescriptor("Attribute//Key", DatastarColors.ATTRIBUTE_KEY),
+        AttributesDescriptor("Attribute//Modifier", DatastarColors.MODIFIER),
+        AttributesDescriptor("Attribute//Modifier sigils (__ : .)", DatastarColors.MODIFIER_SIGIL),
+        AttributesDescriptor("Attribute//Modifier argument", DatastarColors.MODIFIER_ARG),
+    )
+private val TAGS =
+    mapOf(
+        "signal" to DatastarColors.SIGNAL,
+        "path" to DatastarColors.SIGNAL_PATH,
+        "backend" to DatastarColors.ACTION_BACKEND,
+        "action" to DatastarColors.ACTION,
+        "scope" to DatastarColors.SCOPE_VARIABLE,
+        "option" to DatastarColors.OPTION_KEY,
+        "string" to DatastarColors.STRING,
+        "regex" to DatastarColors.REGEX,
+        "keyword" to DatastarColors.KEYWORD,
+        "number" to DatastarColors.NUMBER,
+        "prefix" to DatastarColors.ATTRIBUTE_PREFIX,
+        "plugin" to DatastarColors.ATTRIBUTE_PLUGIN,
+        "key" to DatastarColors.ATTRIBUTE_KEY,
+        "modifier" to DatastarColors.MODIFIER,
+        "sigil" to DatastarColors.MODIFIER_SIGIL,
+        "arg" to DatastarColors.MODIFIER_ARG,
+    )

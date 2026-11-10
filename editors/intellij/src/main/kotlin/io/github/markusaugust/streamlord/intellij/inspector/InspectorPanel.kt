@@ -1,10 +1,9 @@
 package io.github.markusaugust.streamlord.intellij.inspector
 
 import com.intellij.icons.AllIcons
-import com.intellij.notification.NotificationGroupManager
+import com.intellij.notification.Notification
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
@@ -14,6 +13,7 @@ import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.vfs.newvfs.BulkFileListener
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent
+import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.ui.JBColor
 import com.intellij.ui.OnePixelSplitter
 import com.intellij.ui.components.ActionLink
@@ -166,7 +166,7 @@ class InspectorPanel(
             object : BulkFileListener {
                 override fun after(events: List<VFileEvent>) {
                     if (events.any { it.path.contains("/.streamlord/") && it.path.endsWith(".json") }) {
-                        ApplicationManager.getApplication().invokeLater { pushRequests(null) }
+                        later { pushRequests(null) }
                     }
                 }
             },
@@ -177,14 +177,14 @@ class InspectorPanel(
                 override fun documentChanged(event: com.intellij.openapi.editor.event.DocumentEvent) {
                     val file = FileDocumentManager.getInstance().getFile(event.document) ?: return
                     if (file.name == "env.json" && file.parent?.name == ".streamlord") {
-                        ApplicationManager.getApplication().invokeLater { pushRequests(null) }
+                        later { pushRequests(null) }
                     }
                 }
             },
             parentDisposable,
         )
         // The Variables box follows a server the project starts or stops, as Connect reads it.
-        running.onChange(parentDisposable) { ApplicationManager.getApplication().invokeLater { pushRequests(null) } }
+        running.onChange(parentDisposable) { later { pushRequests(null) } }
         com.intellij.openapi.util.Disposer
             .register(parentDisposable) { stop() }
         val vars = { store.environment().vars }
@@ -486,7 +486,7 @@ class InspectorPanel(
     }
 
     private fun later(block: () -> Unit) {
-        ApplicationManager.getApplication().invokeLater(block, project.disposed)
+        ToolWindowManager.getInstance(project).invokeLater(block)
     }
 
     /** The store as the client would hold it after this frame, see [mergePatchAsClient]; `onlyIfMissing` is read as the client reads it (patchSignals.ts:16, text.ts:24 in 1.0.4). */
@@ -707,11 +707,7 @@ class InspectorPanel(
         }
 
     private fun notify(message: String) {
-        NotificationGroupManager
-            .getInstance()
-            .getNotificationGroup(Streamlord.NOTIFICATION_GROUP)
-            .createNotification(message, NotificationType.INFORMATION)
-            .notify(project)
+        Notification(Streamlord.NOTIFICATION_GROUP, message, NotificationType.INFORMATION).notify(project)
     }
 
     companion object {
