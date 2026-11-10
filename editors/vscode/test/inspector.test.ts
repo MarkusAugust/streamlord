@@ -2,6 +2,9 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { Inspector } from "../src/inspector.ts";
 import type { DatastarFrame } from "../src/sse.ts";
+import { RequestStore } from "../src/requestStore.ts";
+import { RunningServers } from "../src/serverLog.ts";
+import { files, Uri, workspace } from "./vscode-mock.ts";
 
 /** An inspector with a stand-in panel that records what it posts to the page. */
 function inspector(): { apply: (signals: string, onlyIfMissing?: string) => void; posted: { type: string; [k: string]: unknown }[] } {
@@ -64,5 +67,76 @@ describe("inspector signal store", () => {
     apply('{"a":2,"b":2}', "\ufefftrue\u2028");
     apply('{"b":3,"c":3}', "\u001ctrue");
     assert.equal(JSON.stringify(posted.at(-1)?.signals), '{"a":1,"b":3,"c":3}');
+  });
+});
+
+const REQUESTS = "/ws/.streamlord/inspector.json";
+
+/** An inspector over a store that reads `text` as the requests file, null for none; `push` sends the page its requests. */
+function inspectorOver(text: string | null) {
+  files.clear();
+  workspace.textDocuments.length = 0;
+  workspace.workspaceFolders = [{ uri: Uri.file("/ws") }];
+  const write = (t: string | null) => (t === null ? files.delete(REQUESTS) : files.set(REQUESTS, new TextEncoder().encode(t)));
+  write(text);
+  const context = { subscriptions: [] as unknown[], workspaceState: { get: <T>(_k: string, d: T) => d, update: async () => {} } };
+  const store = new RequestStore(context as never, new RunningServers());
+  const reads = { count: 0 };
+  const readFile = store.readFile.bind(store);
+  store.readFile = () => {
+    reads.count++;
+    return readFile();
+  };
+  const posted: { type: string; [k: string]: any }[] = [];
+  // The panel and pushRequests are private to the class.
+  const i = new Inspector(context as never, store, null as never) as any;
+  i.panel = { webview: { postMessage: (m: { type: string }) => posted.push(m) } };
+  const push = async () => {
+    await i.pushRequests();
+    return posted.at(-1)!;
+  };
+  return { push, write, reads };
+}
+
+describe("inspector requests file", () => {
+  it("tells the page which entries of the file are not read", async () => {
+    const { push } = inspectorOver('{"requests": [7, {"name": "feed", "url": "/feed"}, {"name": "no url"}]}');
+    const m = await push();
+    assert.equal(m.type, "requests");
+    assert.deepEqual(m.requestProblems, [
+      "Request 1 in .streamlord/inspector.json is not read: it is not an object.",
+      'Request 3 in .streamlord/inspector.json is not read: it has no "url".',
+    ]);
+    assert.deepEqual(m.saved.map((r: { name: string }) => r.name), ["feed"]);
+  });
+
+  it("tells the page why a file that is a list is not read, and lists no requests", async () => {
+    const { push } = inspectorOver('[{"name": "a", "url": "/a"}]');
+    const m = await push();
+    assert.deepEqual(m.requestProblems, ['.streamlord/inspector.json is not a requests file: it must be an object with a "requests" list.']);
+    assert.deepEqual(m.saved, []);
+  });
+
+  it("has nothing to tell about a clean file or a missing one", async () => {
+    const clean = await inspectorOver('{"requests": [{"name": "feed", "url": "/feed"}]}').push();
+    assert.deepEqual(clean.requestProblems, []);
+    assert.deepEqual(clean.saved.map((r: { name: string }) => r.name), ["feed"]);
+    const missing = await inspectorOver(null).push();
+    assert.deepEqual(missing.requestProblems, []);
+    assert.deepEqual(missing.saved, []);
+  });
+
+  it("stops telling once the file is put right", async () => {
+    const { push, write } = inspectorOver("[]");
+    assert.equal((await push()).requestProblems.length, 1);
+    write('{"requests": []}');
+    assert.deepEqual((await push()).requestProblems, []);
+  });
+
+  // Two reads could see two files: the list from one and the problems from the other.
+  it("reads the file once for the list and its problems", async () => {
+    const { push, reads } = inspectorOver('{"requests": [7, {"name": "feed", "url": "/feed"}]}');
+    await push();
+    assert.equal(reads.count, 1);
   });
 });
