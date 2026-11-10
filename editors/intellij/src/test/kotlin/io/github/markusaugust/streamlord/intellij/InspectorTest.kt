@@ -5,8 +5,10 @@ import com.intellij.execution.process.ProcessOutputTypes
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.vfs.VfsUtil
+import com.intellij.testFramework.PlatformTestUtil
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.ui.components.JBTextArea
+import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.UIUtil
 import com.sun.net.httpserver.HttpServer
 import io.github.markusaugust.streamlord.analysis.DatastarFrame
@@ -20,6 +22,11 @@ import io.github.markusaugust.streamlord.intellij.inspector.RequestStore
 import io.github.markusaugust.streamlord.intellij.inspector.RunningServers
 import io.github.markusaugust.streamlord.intellij.inspector.StreamClient
 import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.runBlocking
 import java.net.InetSocketAddress
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
@@ -31,6 +38,41 @@ import javax.swing.ListCellRenderer
 import kotlin.test.assertFailsWith
 
 class InspectorTest : BasePlatformTestCase() {
+    /** Where the requests of a test run; ended with the test. */
+    private val background = CoroutineScope(SupervisorJob())
+
+    override fun tearDown() {
+        try {
+            background.cancel()
+        } finally {
+            super.tearDown()
+        }
+    }
+
+    private fun RequestStore.save(request: SavedRequest) = apply(saving(request))
+
+    private fun RequestStore.delete(name: String) = apply(deleting(name))
+
+    private fun RequestStore.defineVariables(keys: List<String>) = apply(definingVariables(keys))
+
+    private fun RequestStore.useBaseUrl(url: String) = apply(usingBaseUrl(url))
+
+    private fun pump(
+        body: java.io.InputStream,
+        handlers: StreamClient.Handlers,
+        aborted: java.util.concurrent.atomic.AtomicBoolean,
+    ) = runBlocking { StreamClient.pump(body, handlers, aborted) }
+
+    /** Wait for what the panel reads off the UI thread, letting the UI thread take the result. */
+    private fun await(job: Job) {
+        val deadline = System.currentTimeMillis() + 10_000
+        while (!job.isCompleted && System.currentTimeMillis() < deadline) {
+            PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+            Thread.sleep(5)
+        }
+        assertTrue("the panel did not finish reading", job.isCompleted && !job.isCancelled)
+    }
+
     fun `test the client reads a datastar stream as the browser would`() {
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         val seen = CopyOnWriteArrayList<String>()
@@ -63,7 +105,7 @@ class InspectorTest : BasePlatformTestCase() {
             val comments = CopyOnWriteArrayList<String>()
             val statuses = CopyOnWriteArrayList<StreamClient.Status>()
             val done = CountDownLatch(1)
-            val client = StreamClient()
+            val client = StreamClient(background)
             client.open(
                 "$base/api/feed",
                 "GET",
@@ -162,7 +204,7 @@ class InspectorTest : BasePlatformTestCase() {
                 val before = seen.size
                 val done = CountDownLatch(1)
                 var error: String? = null
-                StreamClient().open(
+                StreamClient(background).open(
                     r.url,
                     r.method,
                     r.signals,
@@ -402,7 +444,7 @@ class InspectorTest : BasePlatformTestCase() {
             val frames = CopyOnWriteArrayList<DatastarFrame>()
             val errors = CopyOnWriteArrayList<String>()
             val done = CountDownLatch(1)
-            StreamClient().open(
+            StreamClient(background).open(
                 "http://localhost:${server.address.port}/v6",
                 "GET",
                 "{}",
@@ -496,7 +538,7 @@ class InspectorTest : BasePlatformTestCase() {
                     java.util.concurrent.atomic
                         .AtomicReference<StreamClient.NonSseResponse>()
                 val done = CountDownLatch(1)
-                StreamClient().open(
+                StreamClient(background).open(
                     "$base$path",
                     "GET",
                     "{}",
@@ -538,7 +580,7 @@ class InspectorTest : BasePlatformTestCase() {
     /** Comments after the last message come back when the stream ends, through the parser's finish. */
     fun `test the comments that end a stream after its last message are shown`() {
         val comments = CopyOnWriteArrayList<String>()
-        StreamClient.pump(
+        pump(
             "data: x\n\n: bye\n".byteInputStream(),
             object : StreamClient.Handlers {
                 override fun onComment(text: String) {
@@ -572,7 +614,7 @@ class InspectorTest : BasePlatformTestCase() {
                 }
             }
         val frames = CopyOnWriteArrayList<DatastarFrame>()
-        StreamClient.pump(
+        pump(
             trickle,
             object : StreamClient.Handlers {
                 override fun onFrame(frame: DatastarFrame) {
@@ -623,7 +665,7 @@ class InspectorTest : BasePlatformTestCase() {
         val store = RequestStore.getInstance(project)
         store.save(SavedRequest("<html><b>x</b><img src='http://127.0.0.1:1/beacon'>", "/a", "GET", "", ""))
         val panel = InspectorPanel(project, testRootDisposable)
-        panel.pushRequests(null)
+        await(panel.pushRequests(null))
         val frame = DatastarFrame("<html><b>forged</b><img src='http://127.0.0.1:1/b'>", "1", null, mapOf("elements" to "<p>x</p>"), "", 0L)
         panel.javaClass
             .getDeclaredMethod("addFrame", DatastarFrame::class.java)
@@ -749,5 +791,153 @@ class InspectorTest : BasePlatformTestCase() {
         patch("""{"b":3,"c":3}""", "\u001Ctrue")
         val store = UIUtil.findComponentsOfType(panel, JBTextArea::class.java).single { it.text.startsWith("{\n") }
         assertEquals("""{"a":1,"b":3,"c":3}""", JsonParser.parse(store.text).toJson())
+    }
+
+    // Reading a file is not work for the UI thread: the form is there at once, and the list follows.
+    fun `test the panel fills the form at once and reads the saved requests off the UI thread`() {
+        RequestStore.getInstance(project).save(SavedRequest("feed", "{{baseUrl}}/feed", "GET", "", ""))
+        val panel = InspectorPanel(project, testRootDisposable)
+
+        fun names() =
+            UIUtil
+                .findComponentsOfType(panel, JComboBox::class.java)
+                .flatMap { combo -> (0 until combo.itemCount).map { combo.getItemAt(it).toString() } }
+        val job = panel.pushRequests(SavedRequest("feed", "{{baseUrl}}/feed", "GET", "", ""))
+        assertTrue(UIUtil.findComponentsOfType(panel, JBTextField::class.java).any { it.text == "{{baseUrl}}/feed" })
+        assertFalse(names().toString(), "feed" in names())
+
+        await(job)
+        assertTrue(names().toString(), "feed" in names())
+    }
+
+    // A save is planned in the background and written on the UI thread: what changed in between is not written over.
+    fun `test a file changed after a save was planned is left as it is`() {
+        val store = RequestStore.getInstance(project)
+        store.save(SavedRequest("feed", "/feed", "GET", "", ""))
+        val planned = store.saving(SavedRequest("count", "/count", "GET", "", ""))
+        store.save(SavedRequest("pulled", "/pulled", "GET", "", ""))
+
+        try {
+            store.apply(planned)
+            fail("the save wrote over a file that had changed")
+        } catch (e: IllegalStateException) {
+            assertEquals("${Requests.REQUESTS_FILE} changed in the meantime. Try again.", e.message)
+        }
+        assertEquals(listOf("feed", "pulled"), store.saved().map { it.name })
+    }
+
+    fun `test the variables file edited after a change was planned is left as it is`() {
+        val store = RequestStore.getInstance(project)
+        val (file, _) = store.defineVariables(emptyList())
+        try {
+            val planned = store.usingBaseUrl("http://localhost:9103")
+            val document = FileDocumentManager.getInstance().getDocument(file)!!
+            WriteCommandAction.runWriteCommandAction(project) { document.setText("""{"baseUrl": "http://typed"}""") }
+
+            try {
+                store.apply(planned)
+                fail("the change wrote over text typed since")
+            } catch (e: IllegalStateException) {
+                assertEquals("${Requests.ENV_FILE} changed in the meantime. Try again.", e.message)
+            }
+            assertEquals("""{"baseUrl": "http://typed"}""", document.text)
+        } finally {
+            WriteCommandAction.runWriteCommandAction(project) { file.delete(this) }
+        }
+    }
+
+    // The stream is open and silent when its scope ends: the read under way is interrupted, which is no failure.
+    fun `test an open stream ends quietly when its scope does`() {
+        val server = java.net.ServerSocket(0)
+        val serving =
+            Thread {
+                runCatching {
+                    server.accept().use { socket ->
+                        val input = socket.getInputStream().bufferedReader()
+                        var line = input.readLine()
+                        while (!line.isNullOrEmpty()) line = input.readLine()
+                        socket.getOutputStream().apply {
+                            write("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\r\n".toByteArray())
+                            flush()
+                        }
+                        Thread.sleep(30_000)
+                    }
+                }
+            }.apply {
+                isDaemon = true
+                start()
+            }
+        try {
+            val open = CountDownLatch(1)
+            val closed = CountDownLatch(1)
+            val errors = java.util.concurrent.CopyOnWriteArrayList<String>()
+            val scope = CoroutineScope(SupervisorJob())
+            StreamClient(scope).open(
+                "http://127.0.0.1:${server.localPort}/silent",
+                "GET",
+                "{}",
+                emptyMap(),
+                object : StreamClient.Handlers {
+                    override fun onStatus(
+                        status: StreamClient.Status,
+                        http: String?,
+                        contentType: String?,
+                    ) {
+                        if (status == StreamClient.Status.OPEN) open.countDown()
+                        if (status == StreamClient.Status.CLOSED) closed.countDown()
+                    }
+
+                    override fun onError(message: String) {
+                        errors += message
+                    }
+                },
+            )
+            assertTrue(open.await(10, TimeUnit.SECONDS))
+            Thread.sleep(200)
+            scope.cancel()
+            assertTrue(closed.await(10, TimeUnit.SECONDS))
+            assertEquals(emptyList<String>(), errors)
+        } finally {
+            serving.interrupt()
+            server.close()
+        }
+    }
+
+    // The server takes the connection and never answers, so the request is waiting when its scope ends.
+    fun `test a request waiting for the server ends quietly when its scope does`() {
+        val server = java.net.ServerSocket(0)
+        try {
+            val connecting = CountDownLatch(1)
+            val closed = CountDownLatch(1)
+            val errors = java.util.concurrent.CopyOnWriteArrayList<String>()
+            val scope = CoroutineScope(SupervisorJob())
+            StreamClient(scope).open(
+                "http://127.0.0.1:${server.localPort}/never",
+                "GET",
+                "{}",
+                emptyMap(),
+                object : StreamClient.Handlers {
+                    override fun onStatus(
+                        status: StreamClient.Status,
+                        http: String?,
+                        contentType: String?,
+                    ) {
+                        if (status == StreamClient.Status.CONNECTING) connecting.countDown()
+                        if (status == StreamClient.Status.CLOSED) closed.countDown()
+                    }
+
+                    override fun onError(message: String) {
+                        errors += message
+                    }
+                },
+            )
+            assertTrue(connecting.await(10, TimeUnit.SECONDS))
+            Thread.sleep(300)
+            scope.cancel()
+            assertTrue(closed.await(10, TimeUnit.SECONDS))
+            assertEquals(emptyList<String>(), errors)
+        } finally {
+            server.close()
+        }
     }
 }

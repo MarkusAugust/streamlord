@@ -1,6 +1,5 @@
 package io.github.markusaugust.streamlord.intellij.inspector
 
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.ui.popup.JBPopup
 import com.intellij.openapi.ui.popup.PopupChooserBuilder
 import com.intellij.ui.DocumentAdapter
@@ -28,6 +27,8 @@ internal class VariableCompletion(
     private val variables: () -> List<Requests.Variable>,
     /** False while the panel fills the field itself, so loading a request opens no list. */
     private val enabled: () -> Boolean,
+    /** Runs a block on the UI thread once the events at hand are done, as the tool window schedules its work. */
+    private val later: (() -> Unit) -> Unit,
 ) {
     private var popup: JBPopup? = null
     private var list: JBList<Requests.Variable>? = null
@@ -50,7 +51,7 @@ internal class VariableCompletion(
         field.document.addDocumentListener(
             object : DocumentAdapter() {
                 override fun textChanged(e: DocumentEvent) {
-                    if (enabled()) ApplicationManager.getApplication().invokeLater { offer() }
+                    if (enabled()) later { offer() }
                 }
             },
         )

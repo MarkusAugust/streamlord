@@ -4,6 +4,10 @@ import com.intellij.icons.AllIcons
 import com.intellij.notification.Notification
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.EDT
+import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.asContextElement
+import com.intellij.openapi.application.readAction
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
@@ -11,7 +15,9 @@ import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.Messages
-import com.intellij.openapi.vfs.newvfs.BulkFileListener
+import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.openapi.vfs.newvfs.BulkFileListenerBackgroundable
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent
 import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.ui.JBColor
@@ -24,7 +30,6 @@ import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.panel
-import com.intellij.util.concurrency.AppExecutorUtil
 import com.intellij.util.ui.JBFont
 import com.intellij.util.ui.JBUI
 import io.github.markusaugust.streamlord.analysis.DatastarFrame
@@ -37,13 +42,18 @@ import io.github.markusaugust.streamlord.core.json.JsonValue
 import io.github.markusaugust.streamlord.core.json.SignalPatchException
 import io.github.markusaugust.streamlord.core.json.mergePatchAsClient
 import io.github.markusaugust.streamlord.intellij.Streamlord
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.awt.BorderLayout
 import java.awt.Component
 import java.awt.Font
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.concurrent.TimeUnit
 import javax.swing.BoxLayout
 import javax.swing.DefaultComboBoxModel
 import javax.swing.DefaultListCellRenderer
@@ -67,7 +77,18 @@ class InspectorPanel(
 ) : JBPanel<InspectorPanel>(BorderLayout()) {
     private val store = RequestStore.getInstance(project)
     private val running = RunningServers.getInstance(project)
-    private val client = StreamClient()
+    private val scope = InspectorService.getInstance(project).scopeFor(parentDisposable)
+    private val client = StreamClient(scope)
+
+    /** The variables as last read, off the UI thread; what the form shows. Connect and the curl export read them again first. */
+    private var environment = RequestStore.Environment(emptyList(), emptyList())
+
+    /** The request to select once the list is read again, and the read under way. */
+    private var selecting: SavedRequest? = null
+    private var reading: Job? = null
+
+    /** A Connect that is reading the variables before it sends. */
+    private var connecting: Job? = null
     private var connection: StreamClient.Connection? = null
     private var signals: JsonObject = JsonObject.EMPTY
     private var count = 0
@@ -162,8 +183,9 @@ class InspectorPanel(
         headersField.document.addDocumentListener(watch)
         method.addActionListener { refresh() }
         project.messageBus.connect(parentDisposable).subscribe(
-            com.intellij.openapi.vfs.VirtualFileManager.VFS_CHANGES,
-            object : BulkFileListener {
+            // Off the UI thread: it looks at paths and nothing else.
+            VirtualFileManager.VFS_CHANGES_BG,
+            object : BulkFileListenerBackgroundable {
                 override fun after(events: List<VFileEvent>) {
                     if (events.any { it.path.contains("/.streamlord/") && it.path.endsWith(".json") }) {
                         later { pushRequests(null) }
@@ -187,11 +209,11 @@ class InspectorPanel(
         running.onChange(parentDisposable) { later { pushRequests(null) } }
         com.intellij.openapi.util.Disposer
             .register(parentDisposable) { stop() }
-        val vars = { store.environment().vars }
+        val vars = { environment.vars }
         val typing = { !filling }
-        VariableCompletion(url, Requests.Field.URL, vars, typing)
-        VariableCompletion(signalsField, Requests.Field.SIGNALS, vars, typing)
-        VariableCompletion(headersField, Requests.Field.HEADERS, vars, typing)
+        VariableCompletion(url, Requests.Field.URL, vars, typing, ::later)
+        VariableCompletion(signalsField, Requests.Field.SIGNALS, vars, typing, ::later)
+        VariableCompletion(headersField, Requests.Field.HEADERS, vars, typing, ::later)
         pushRequests(store.lastUsed() ?: SavedRequest("", "{{baseUrl}}/"))
     }
 
@@ -293,7 +315,7 @@ class InspectorPanel(
 
     private fun refresh() {
         if (filling) return
-        val vars = Requests.variableValues(store.environment().vars)
+        val vars = Requests.variableValues(environment.vars)
         resolved.text = if ("{{" in url.text) Requests.substitute(url.text, vars).text else ""
         val f = fields()
         val l = loaded
@@ -301,11 +323,30 @@ class InspectorPanel(
         deleteButton.isEnabled = (choices.selectedItem as? Choice)?.saved == true
     }
 
-    /** Fill the list from the file and the workspace state, and the form from [current] when given. */
-    fun pushRequests(current: SavedRequest?) {
-        val saved = store.saved()
+    /**
+     * Fill the form from [current] when given, and the list and the variables from the files and the workspace state.
+     * The files are read off the UI thread, so the list follows when the returned job is done; a newer call takes over
+     * from one still reading.
+     */
+    fun pushRequests(current: SavedRequest?): Job {
+        if (current != null) {
+            fill(current)
+            selecting = current
+        }
+        reading?.cancel()
+        return scope
+            .launch {
+                val read = readAction { store.saved() to store.environment() }
+                withContext(Dispatchers.EDT) { show(read.first, read.second) }
+            }.also { reading = it }
+    }
+
+    private fun show(
+        saved: List<SavedRequest>,
+        env: RequestStore.Environment,
+    ) {
+        environment = env
         val recent = store.recent()
-        val env = store.environment()
         variablesView.text = Requests.describeVariables(env.vars)
         variableErrors.text = env.errors.joinToString("\n")
         variableErrors.isVisible = env.errors.isNotEmpty()
@@ -316,8 +357,9 @@ class InspectorPanel(
         model.addElement(Choice(Requests.newRequestLabel(saved.size, recent.size), null, false))
         for (r in saved) model.addElement(Choice(r.name, r, true))
         for (r in recent) model.addElement(Choice("recent: ${r.name}", r, false))
+        val current = selecting
+        selecting = null
         if (current != null) {
-            fill(current)
             val known = current.name.isNotEmpty() && saved.any { it.name == current.name }
             choices.selectedIndex =
                 if (known) {
@@ -331,7 +373,8 @@ class InspectorPanel(
                     0
                 }
             filling = false
-            loaded = if (known) fields() else null
+            // As it was loaded, whatever has been typed since: an edit made while the files were read is an edit.
+            loaded = if (known) current else null
         } else {
             val idx = (0 until model.size).firstOrNull { model.getElementAt(it).label == previous } ?: 0
             choices.selectedIndex = idx
@@ -360,11 +403,8 @@ class InspectorPanel(
             )
                 ?: return
         if (name.isBlank()) return
-        try {
-            store.save(current.copy(name = name))
+        change("Could not save the request.", { store.saving(current.copy(name = name)) }) { _, _ ->
             pushRequests(current.copy(name = name))
-        } catch (e: Exception) {
-            error(e.message ?: "Could not save the request.")
         }
     }
 
@@ -374,8 +414,9 @@ class InspectorPanel(
         if (!choice.saved) return
         val ok = Messages.showYesNoDialog(project, "Delete saved request “$name”?", "Delete Request", "Delete", "Cancel", null)
         if (ok != Messages.YES) return
-        store.delete(name)
-        pushRequests(SavedRequest("", url.text, method.selectedItem as String, signalsField.text, headersField.text))
+        change("Could not delete the request.", { store.deleting(name) }) { _, _ ->
+            pushRequests(SavedRequest("", url.text, method.selectedItem as String, signalsField.text, headersField.text))
+        }
     }
 
     /**
@@ -383,7 +424,7 @@ class InspectorPanel(
      * file, or a variable that is unknown, misplaced or not set.
      */
     private fun resolve(raw: SavedRequest): Pair<SavedRequest, List<Requests.Variable>>? {
-        val env = store.environment()
+        val env = environment
         if (env.errors.isNotEmpty()) {
             error(env.errors.joinToString(" "), emptyList())
             return null
@@ -397,29 +438,33 @@ class InspectorPanel(
     }
 
     private fun copyCurl() {
-        val (request, _) = resolve(fields()) ?: return
-        try {
-            CopyPasteManager.getInstance().setContents(java.awt.datatransfer.StringSelection(Requests.toCurl(request)))
-            notify("Streamlord: curl command copied.")
-        } catch (e: Exception) {
-            error(e.message ?: "Could not build the curl command.")
+        val raw = fields()
+        withVariables {
+            val (request, _) = resolve(raw) ?: return@withVariables
+            try {
+                CopyPasteManager.getInstance().setContents(java.awt.datatransfer.StringSelection(Requests.toCurl(request)))
+                notify("Streamlord: curl command copied.")
+            } catch (e: Exception) {
+                error(e.message ?: "Could not build the curl command.")
+            }
         }
     }
 
     /** Add [names] to the env file, creating it when it is missing, and open it. */
     private fun editVariables(names: List<String>) {
-        try {
-            val (file, extended) = store.defineVariables(names)
+        change("Could not open ${Requests.ENV_FILE}.", { store.definingVariables(names) }) { file, extended ->
             OpenFileDescriptor(project, file).navigate(true)
             if (!extended) error("${Requests.ENV_FILE} is not a JSON object, so nothing was added to it.")
-        } catch (e: Exception) {
-            error(e.message ?: "Could not open ${Requests.ENV_FILE}.")
         }
     }
 
     private fun connect() {
         stop()
         val raw = fields()
+        connecting = withVariables { send(raw) }
+    }
+
+    private fun send(raw: SavedRequest) {
         val (request, vars) = resolve(raw) ?: return
         try {
             JsonParser.parse(Requests.compactSignals(request.signals))
@@ -457,11 +502,10 @@ class InspectorPanel(
                     override fun onNonSse(response: StreamClient.NonSseResponse) {
                         if ((response.http.substringBefore(' ').toIntOrNull() ?: 0) < 400) return later { addNonSse(response, emptyList()) }
                         // The server logs the reason as it answers, and a little after; wait for it before drawing the card.
-                        AppExecutorUtil.getAppScheduledExecutorService().schedule(
-                            { later { addNonSse(response, running.problemsSince(since)) } },
-                            LOG_GRACE_MS,
-                            TimeUnit.MILLISECONDS,
-                        )
+                        scope.launch {
+                            delay(LOG_GRACE_MS)
+                            later { addNonSse(response, running.problemsSince(since)) }
+                        }
                     }
 
                     override fun onError(message: String) =
@@ -481,9 +525,53 @@ class InspectorPanel(
     }
 
     private fun stop() {
+        connecting?.cancel()
+        connecting = null
         connection?.close()
         connection = null
     }
+
+    /**
+     * Change a file of the project: [plan] reads it under a read action in the background, the UI thread
+     * writes what was planned, and [done] gets the file and whether it holds the change. Shows
+     * [failure], or the reason given, when it cannot be done.
+     */
+    private fun change(
+        failure: String,
+        plan: () -> RequestStore.Change,
+        done: (VirtualFile, Boolean) -> Unit,
+    ): Job =
+        scope.launch(ModalityState.current().asContextElement()) {
+            val planned =
+                try {
+                    readAction(plan)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    withContext(Dispatchers.EDT) { error(e.message ?: failure) }
+                    return@launch
+                }
+            withContext(Dispatchers.EDT) {
+                val written =
+                    try {
+                        store.apply(planned)
+                    } catch (e: Exception) {
+                        error(e.message ?: failure)
+                        return@withContext
+                    }
+                done(written.first, written.second)
+            }
+        }
+
+    /** Read the variables again, as the files and the settings have them now, and then do [use] with them on the UI thread. */
+    private fun withVariables(use: () -> Unit): Job =
+        scope.launch(ModalityState.current().asContextElement()) {
+            val env = readAction { store.environment() }
+            withContext(Dispatchers.EDT) {
+                environment = env
+                use()
+            }
+        }
 
     private fun later(block: () -> Unit) {
         ToolWindowManager.getInstance(project).invokeLater(block)
@@ -630,12 +718,9 @@ class InspectorPanel(
 
     /** Set the env file's `baseUrl` to [url] and open the file, so the change is seen where it was made. */
     private fun useBaseUrl(url: String) {
-        try {
-            val (file, changed) = store.useBaseUrl(url)
+        change("Could not open ${Requests.ENV_FILE}.", { store.usingBaseUrl(url) }) { file, changed ->
             OpenFileDescriptor(project, file).navigate(true)
             if (!changed) error("${Requests.ENV_FILE} is not a JSON object, so baseUrl was not changed.")
-        } catch (e: Exception) {
-            error(e.message ?: "Could not open ${Requests.ENV_FILE}.")
         }
     }
 
