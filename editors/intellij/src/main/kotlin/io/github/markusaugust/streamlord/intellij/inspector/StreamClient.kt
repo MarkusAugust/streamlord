@@ -7,6 +7,11 @@ import io.github.markusaugust.streamlord.analysis.SseParser
 import io.github.markusaugust.streamlord.analysis.decodeDatastar
 import io.github.markusaugust.streamlord.core.client.ClientRequest
 import io.github.markusaugust.streamlord.core.json.JsonParser
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runInterruptible
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.net.ConnectException
@@ -18,9 +23,6 @@ import java.net.http.HttpResponse
 import java.nio.channels.UnresolvedAddressException
 import java.time.Duration
 import java.util.concurrent.CancellationException
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
-import java.util.concurrent.Future
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -30,10 +32,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  * what comes back. The URL and the signals are the ones the curl export writes.
  */
 class StreamClient(
-    private val executor: ExecutorService =
-        Executors.newCachedThreadPool { r ->
-            Thread(r, "streamlord-inspector").apply { isDaemon = true }
-        },
+    /** Where a request runs; cancelling it ends every request under way. */
+    private val scope: CoroutineScope,
 ) {
     enum class Status { CONNECTING, OPEN, CLOSED }
 
@@ -62,14 +62,14 @@ class StreamClient(
 
     /** A running request; [close] aborts it. */
     class Connection internal constructor(
-        private val future: Future<*>,
+        private val job: Job,
         private val aborted: AtomicBoolean,
         private val stream: AtomicReferenceStream,
     ) : AutoCloseable {
         override fun close() {
             aborted.set(true)
             stream.close()
-            future.cancel(true)
+            job.cancel()
         }
     }
 
@@ -99,11 +99,12 @@ class StreamClient(
     ): Connection {
         val aborted = AtomicBoolean(false)
         val holder = AtomicReferenceStream()
-        val future =
-            executor.submit {
-                run(url, method, signals, headers, handlers, aborted, holder)
+        // The HTTP client blocks its thread; interrupting it is how a cancelled request lets go of one.
+        val job =
+            scope.launch(Dispatchers.IO) {
+                runInterruptible { run(url, method, signals, headers, handlers, aborted, holder) }
             }
-        return Connection(future, aborted, holder)
+        return Connection(job, aborted, holder)
     }
 
     private fun run(

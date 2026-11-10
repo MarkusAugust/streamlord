@@ -1,15 +1,15 @@
 package io.github.markusaugust.streamlord.intellij.inspector
 
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
-import com.intellij.openapi.util.Computable
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.util.concurrency.annotations.RequiresEdt
+import com.intellij.util.concurrency.annotations.RequiresReadLock
 import io.github.markusaugust.streamlord.analysis.Requests
 import io.github.markusaugust.streamlord.analysis.RequestsFile
 import io.github.markusaugust.streamlord.analysis.SavedRequest
@@ -20,6 +20,9 @@ import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
  * same file the VS Code extension reads, so a team shares them), recent ones and the last-used
  * request in the workspace state, and the variables in `.streamlord/env.json`, which is meant for
  * local hosts and tokens and stays out of version control.
+ *
+ * It takes no lock of its own: a caller reads under a read action, off the UI thread, and writes
+ * on the UI thread.
  */
 @Service(Service.Level.PROJECT)
 class RequestStore(
@@ -38,19 +41,21 @@ class RequestStore(
     fun requestsFile(): VirtualFile? = baseDir()?.findFileByRelativePath(requestsPath())
 
     /** The requests file; a file that is missing is empty, one that is not JSON says so in [RequestsFile.error]. */
+    @RequiresReadLock
     fun read(): RequestsFile {
         val file = requestsFile() ?: return RequestsFile.EMPTY
-        return ApplicationManager.getApplication().runReadAction(
-            Computable { Requests.parseRequestsFile(VfsUtil.loadText(file), requestsPath()) },
-        )
+        return Requests.parseRequestsFile(VfsUtil.loadText(file), requestsPath())
     }
 
+    @RequiresReadLock
     fun saved(): List<SavedRequest> = read().requests
 
+    @RequiresEdt
     fun save(request: SavedRequest) {
         write(Requests.upsert(writable(), request))
     }
 
+    @RequiresEdt
     fun delete(name: String) {
         write(Requests.remove(writable(), name))
     }
@@ -67,17 +72,14 @@ class RequestStore(
         val base = baseDir() ?: throw IllegalStateException("Open a project to save requests; they are stored in the project.")
         val text = Requests.serializeRequestsFile(file)
         val path = requestsPath()
-        val run = {
-            WriteCommandAction.runWriteCommandAction(project) {
-                val dir =
-                    VfsUtil.createDirectoryIfMissing(base, path.substringBeforeLast('/', ""))
-                        ?: throw IllegalStateException("Cannot create the directory for $path")
-                val name = path.substringAfterLast('/')
-                val vf = dir.findChild(name) ?: dir.createChildData(this, name)
-                VfsUtil.saveText(vf, text)
-            }
+        WriteCommandAction.runWriteCommandAction(project) {
+            val dir =
+                VfsUtil.createDirectoryIfMissing(base, path.substringBeforeLast('/', ""))
+                    ?: throw IllegalStateException("Cannot create the directory for $path")
+            val name = path.substringAfterLast('/')
+            val vf = dir.findChild(name) ?: dir.createChildData(this, name)
+            VfsUtil.saveText(vf, text)
         }
-        if (ApplicationManager.getApplication().isDispatchThread) run() else ApplicationManager.getApplication().invokeAndWait(run)
     }
 
     fun recent(): List<SavedRequest> = InspectorState.getInstance(project).recent()
@@ -97,6 +99,7 @@ class RequestStore(
      * the settings when it does not, and what is wrong with the file. An invalid file sets nothing:
      * a request is not sent half filled.
      */
+    @RequiresReadLock
     fun environment(): Environment {
         val env = Requests.parseEnv(envText() ?: "{}")
         val usable = if (env.errors.isEmpty()) env else Requests.parseEnv("{}")
@@ -108,16 +111,13 @@ class RequestStore(
 
     /** The env file as an open editor has it, so Connect uses what is on screen, saved or not. */
     private fun envText(): String? =
-        envFile()?.let { env ->
-            ApplicationManager.getApplication().runReadAction(
-                Computable { FileDocumentManager.getInstance().getCachedDocument(env)?.text ?: VfsUtil.loadText(env) },
-            )
-        }
+        envFile()?.let { FileDocumentManager.getInstance().getCachedDocument(it)?.text ?: VfsUtil.loadText(it) }
 
     /**
      * Add [keys] to `.streamlord/env.json`, creating it with `baseUrl` when it is missing, and
      * return it to be opened. The flag is false when the file is not a JSON object to add to.
      */
+    @RequiresEdt
     fun defineVariables(keys: List<String>): Pair<VirtualFile, Boolean> {
         val base = baseDir() ?: throw IllegalStateException("Open a project to keep variables; they live in ${Requests.ENV_FILE}.")
         val text = envText()
@@ -126,6 +126,7 @@ class RequestStore(
     }
 
     /** Set `baseUrl` in `.streamlord/env.json` to [url], leaving the rest as written, and return it to be opened. */
+    @RequiresEdt
     fun useBaseUrl(url: String): Pair<VirtualFile, Boolean> {
         val base = baseDir() ?: throw IllegalStateException("Open a project to keep variables; they live in ${Requests.ENV_FILE}.")
         val text = envText()
@@ -141,20 +142,17 @@ class RequestStore(
         envFile()?.let { if (next == null || next == text) return it to (next != null) }
         val path = Requests.ENV_FILE
         var file: VirtualFile? = null
-        val run = {
-            WriteCommandAction.runWriteCommandAction(project) {
-                val dir =
-                    VfsUtil.createDirectoryIfMissing(base, path.substringBeforeLast('/'))
-                        ?: throw IllegalStateException("Cannot create the directory for $path")
-                val name = path.substringAfterLast('/')
-                val vf = dir.findChild(name) ?: dir.createChildData(this, name)
-                // An open editor gets an edit it can undo, not a write underneath its unsaved text.
-                val document = FileDocumentManager.getInstance().getCachedDocument(vf)
-                if (document != null) document.setText(next ?: "") else VfsUtil.saveText(vf, next ?: "")
-                file = vf
-            }
+        WriteCommandAction.runWriteCommandAction(project) {
+            val dir =
+                VfsUtil.createDirectoryIfMissing(base, path.substringBeforeLast('/'))
+                    ?: throw IllegalStateException("Cannot create the directory for $path")
+            val name = path.substringAfterLast('/')
+            val vf = dir.findChild(name) ?: dir.createChildData(this, name)
+            // An open editor gets an edit it can undo, not a write underneath its unsaved text.
+            val document = FileDocumentManager.getInstance().getCachedDocument(vf)
+            if (document != null) document.setText(next ?: "") else VfsUtil.saveText(vf, next ?: "")
+            file = vf
         }
-        if (ApplicationManager.getApplication().isDispatchThread) run() else ApplicationManager.getApplication().invokeAndWait(run)
         return file!! to true
     }
 
