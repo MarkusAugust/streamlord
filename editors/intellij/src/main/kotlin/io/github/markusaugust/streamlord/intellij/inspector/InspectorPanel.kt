@@ -32,6 +32,7 @@ import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.util.ui.JBFont
 import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.WrapLayout
 import io.github.markusaugust.streamlord.analysis.DatastarFrame
 import io.github.markusaugust.streamlord.analysis.Requests
 import io.github.markusaugust.streamlord.analysis.RequestsFile
@@ -51,7 +52,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.awt.BorderLayout
 import java.awt.Component
+import java.awt.Dimension
+import java.awt.FlowLayout
 import java.awt.Font
+import java.awt.Rectangle
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -62,7 +66,9 @@ import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JList
 import javax.swing.JPanel
+import javax.swing.Scrollable
 import javax.swing.SwingConstants
+import javax.swing.SwingUtilities
 import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
 
@@ -103,13 +109,30 @@ class InspectorPanel(
         override fun toString(): String = label
     }
 
-    private val choices = ComboBox(DefaultComboBoxModel<Choice>())
+    private val choices = ComboBox(DefaultComboBoxModel<Choice>(), JBUI.scale(FIELD_WIDTH))
     private val url = JBTextField()
     private val method = ComboBox(Requests.METHODS.toTypedArray())
-    private val signalsField = JBTextArea(3, 40).mono()
-    private val headersField = JBTextArea(2, 40).mono()
-    private val resolved = plainLabel().apply { foreground = JBColor.GRAY }
-    private val dirty = JBLabel("● modified").apply { foreground = JBColor.namedColor("Label.warningForeground", JBColor.ORANGE) }
+    private val signalsField = JBTextArea(3, FIELD_COLUMNS).mono()
+    private val headersField = JBTextArea(2, FIELD_COLUMNS).mono()
+
+    /** The URL as it is sent. It asks for little width, so a long one is cut at the edge and read whole in its tooltip, and does not widen the form. */
+    private val resolved =
+        object : JBLabel() {
+            override fun getPreferredSize(): Dimension = Dimension(JBUI.scale(FIELD_WIDTH), super.getPreferredSize().height)
+        }.apply {
+            putClientProperty("html.disable", true)
+            foreground = JBColor.GRAY
+        }
+
+    /** Says a loaded request is edited. It holds its place whether it says so or not, so Save and Delete do not move under the pointer. */
+    private val dirty =
+        JBLabel(MODIFIED).apply {
+            foreground = JBColor.namedColor("Label.warningForeground", JBColor.ORANGE)
+            val place = preferredSize
+            minimumSize = place
+            preferredSize = place
+            text = ""
+        }
     private val status = plainLabel("idle")
     private val frames = JPanel().apply { layout = BoxLayout(this, BoxLayout.Y_AXIS) }
     private val storeView = JBTextArea("{}").mono().apply { isEditable = false }
@@ -236,53 +259,134 @@ class InspectorPanel(
             wrapStyleWord = false
         }
 
-    private fun form(): JComponent =
-        panel {
-            row("Request:") {
-                cell(choices).align(AlignX.FILL).resizableColumn()
-                button("Save") { save() }.applyToComponent { toolTipText = "Save the current request to ${store.requestsPath()}" }
-                cell(deleteButton).applyToComponent {
-                    toolTipText = "Delete the selected saved request"
-                    addActionListener { delete() }
+    /**
+     * The fields over the action buttons. Each field gives way when the tool window is narrow, and the
+     * buttons go on to a second line, so nothing is laid out past the edge where it cannot be reached.
+     */
+    private fun form(): JComponent {
+        val fields =
+            panel {
+                row("Request:") {
+                    cell(choices).align(AlignX.FILL).resizableColumn().applyToComponent { narrows() }
+                    button("Save") { save() }.applyToComponent { toolTipText = "Save the current request to ${store.requestsPath()}" }
+                    cell(deleteButton).applyToComponent {
+                        toolTipText = "Delete the selected saved request"
+                        addActionListener { delete() }
+                    }
+                    cell(dirty)
                 }
-                cell(dirty)
-            }
-            row("") { cell(requestProblems).align(AlignX.FILL) }
-            row("URL:") {
-                cell(url).align(AlignX.FILL).applyToComponent { emptyText.text = "{{baseUrl}}/api/feed" }
-            }
-            row("") { cell(resolved) }
-            row("Method:") { cell(method) }
-            row("Signals:") {
-                scrollCell(signalsField).align(AlignX.FILL).applyToComponent { emptyText.text = "{\"search\": \"ash\"}" }
-            }
-            row("Headers:") {
-                scrollCell(headersField).align(AlignX.FILL).applyToComponent { emptyText.text = "Authorization: Bearer token" }
-            }
-            row {
-                button("Connect") { connect() }.applyToComponent { icon = AllIcons.Actions.Execute }
-                cell(stopButton).applyToComponent {
-                    icon = AllIcons.Actions.Suspend
-                    addActionListener {
-                        stop()
-                        setStatus("idle", null)
+                row("") { cell(requestProblems).align(AlignX.FILL).resizableColumn() }
+                row("URL:") {
+                    cell(url).align(AlignX.FILL).resizableColumn().applyToComponent {
+                        emptyText.text = "{{baseUrl}}/api/feed"
+                        narrows()
                     }
                 }
-                button("Clear") { clearFrames("Cleared.") }
-                button("Reset signals") {
-                    signals = JsonObject.EMPTY
-                    storeView.text = "{}"
+                row("") { cell(resolved).align(AlignX.FILL).resizableColumn().applyToComponent { narrows() } }
+                row("Method:") { cell(method) }
+                row("Signals:") {
+                    scrollCell(signalsField).align(AlignX.FILL).resizableColumn().applyToComponent {
+                        emptyText.text =
+                            "{\"search\": \"ash\"}"
+                    }
                 }
-                button("Copy as curl") { copyCurl() }.applyToComponent { toolTipText = "Copy an equivalent curl command" }
-                cell(status).align(AlignX.RIGHT).resizableColumn()
+                row("Headers:") {
+                    scrollCell(headersField).align(AlignX.FILL).resizableColumn().applyToComponent {
+                        emptyText.text =
+                            "Authorization: Bearer token"
+                    }
+                }
             }
+        val actions =
+            Wrapping().apply {
+                add(JButton("Connect", AllIcons.Actions.Execute).apply { addActionListener { connect() } })
+                add(
+                    stopButton.apply {
+                        icon = AllIcons.Actions.Suspend
+                        addActionListener {
+                            stop()
+                            setStatus("idle", null)
+                        }
+                    },
+                )
+                add(JButton("Clear").apply { addActionListener { clearFrames("Cleared.") } })
+                add(
+                    JButton("Reset signals").apply {
+                        addActionListener {
+                            signals = JsonObject.EMPTY
+                            storeView.text = "{}"
+                        }
+                    },
+                )
+                add(
+                    JButton("Copy as curl").apply {
+                        toolTipText = "Copy an equivalent curl command"
+                        addActionListener { copyCurl() }
+                    },
+                )
+                add(status)
+            }
+        return JPanel(BorderLayout()).apply {
+            add(fields, BorderLayout.CENTER)
+            add(actions, BorderLayout.SOUTH)
+        }
+    }
+
+    /** Lets a field be laid out narrower than it would like, down to a few characters. */
+    private fun JComponent.narrows() {
+        minimumSize = Dimension(JBUI.scale(40), minimumSize.height)
+    }
+
+    /** A row of buttons that goes on to a new line where the panel ends. Its height follows from its width, so a new width is laid out again. */
+    private class Wrapping : JPanel(WrapLayout(FlowLayout.LEFT, JBUI.scale(GAP), JBUI.scale(4))) {
+        init {
+            // The layout sets its gap before the first button too; taken back, so the row starts where the fields do.
+            border = JBUI.Borders.emptyLeft(-GAP)
         }
 
+        override fun getMinimumSize(): Dimension = Dimension(JBUI.scale(40), super.getMinimumSize().height)
+
+        override fun setBounds(
+            x: Int,
+            y: Int,
+            width: Int,
+            height: Int,
+        ) {
+            val wider = width != this.width
+            super.setBounds(x, y, width, height)
+            // After the layout under way: one asked for in the middle of it is forgotten when it ends.
+            if (wider) SwingUtilities.invokeLater { revalidate() }
+        }
+    }
+
     private fun framesHolder(): JComponent {
-        val holder = JPanel(BorderLayout())
+        val holder = EventList()
         holder.add(frames, BorderLayout.NORTH)
         clearFrames("No events yet. The realm is quiet.")
         return holder
+    }
+
+    /** The list of events, as wide as the pane that scrolls it: a long line breaks in it, and is not cut at the edge. */
+    private class EventList :
+        JPanel(BorderLayout()),
+        Scrollable {
+        override fun getPreferredScrollableViewportSize(): Dimension = preferredSize
+
+        override fun getScrollableUnitIncrement(
+            visibleRect: Rectangle,
+            orientation: Int,
+            direction: Int,
+        ): Int = JBUI.scale(16)
+
+        override fun getScrollableBlockIncrement(
+            visibleRect: Rectangle,
+            orientation: Int,
+            direction: Int,
+        ): Int = visibleRect.height
+
+        override fun getScrollableTracksViewportWidth(): Boolean = true
+
+        override fun getScrollableTracksViewportHeight(): Boolean = false
     }
 
     private fun aside(): JComponent =
@@ -328,11 +432,13 @@ class InspectorPanel(
 
     private fun refresh() {
         if (filling) return
-        val vars = Requests.variableValues(environment.vars)
-        resolved.text = if ("{{" in url.text) Requests.substitute(url.text, vars).text else ""
+        resolved.text = Requests.previewUrl(url.text, environment.vars)
+        // A tooltip that opens with <html> is rendered as HTML, and a saved URL comes from a shared file: that one gets none.
+        resolved.toolTipText = resolved.text.takeIf { it.isNotEmpty() && !it.startsWith("<html", ignoreCase = true) }
         val f = fields()
         val l = loaded
-        dirty.isVisible = l != null && (f.url != l.url || f.method != l.method || f.signals != l.signals || f.headers != l.headers)
+        val edited = l != null && (f.url != l.url || f.method != l.method || f.signals != l.signals || f.headers != l.headers)
+        dirty.text = if (edited) MODIFIED else ""
         deleteButton.isEnabled = (choices.selectedItem as? Choice)?.saved == true
     }
 
@@ -712,24 +818,35 @@ class InspectorPanel(
         define: List<String>? = null,
         useBaseUrl: String? = null,
     ) {
-        val label =
-            plainLabel(message).apply {
+        // A text area, which breaks the line at the edge of the list and shows a message from a server as text.
+        val text =
+            JBTextArea(message).apply {
+                isEditable = false
+                isOpaque = false
+                lineWrap = true
+                wrapStyleWord = true
+                font = JBFont.label()
                 foreground = JBColor.RED
                 border = JBUI.Borders.empty(2, 4)
             }
         if (define == null && useBaseUrl == null) {
-            prepend(label)
+            prepend(text)
         } else {
-            val line =
-                JPanel(java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 0, 0)).apply {
+            val links =
+                JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(4), 0)).apply {
                     isOpaque = false
-                    add(label)
                     if (define != null) {
                         add(ActionLink(if (define.isEmpty()) "Edit variables" else "Add to ${Requests.ENV_FILE}") { editVariables(define) })
                     }
                     if (useBaseUrl != null) add(ActionLink("Use $useBaseUrl in ${Requests.ENV_FILE}") { useBaseUrl(useBaseUrl) })
                 }
-            prepend(line)
+            prepend(
+                JPanel(BorderLayout()).apply {
+                    isOpaque = false
+                    add(text, BorderLayout.CENTER)
+                    add(links, BorderLayout.SOUTH)
+                },
+            )
         }
         setStatus("error", null)
     }
@@ -815,6 +932,12 @@ class InspectorPanel(
 
     companion object {
         private const val MAX_FRAMES = 500
+        private const val MODIFIED = "● modified"
+
+        /** What a field of the form asks for; each is given the width there is, and asks for little so a narrow panel can hold it. */
+        private const val GAP = 6
+        private const val FIELD_COLUMNS = 12
+        private const val FIELD_WIDTH = 60
 
         /** How long a failed request waits for the server to finish logging why. */
         private const val LOG_GRACE_MS = 400L

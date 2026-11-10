@@ -161,6 +161,7 @@ class RequestsTest {
                     "unset" to r.unset,
                 )
             },
+            "previewUrl" to { c -> Requests.previewUrl(c.string("url")!!, variables(c)) },
             "unreachableHint" to { c -> Requests.unreachableHint(c.string("url")!!, variables(c), running(c)) },
             "baseUrlSuggestion" to { c -> Requests.baseUrlSuggestion(variables(c), running(c)) },
             "variableCompletions" to { c ->

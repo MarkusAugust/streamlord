@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { baseUrlSuggestion, describeVariables, emptyBodyHint, emptyRequestsFile, lineAndColumn, mergeVariables, newRequestLabel, parseEnv, parseRequestsFile, pushRecent, readsAsStream, removeRequest, requestHeaders, requestsPathProblem, requestUrl, resolveRequest, routeHeaders, routeOptional, routeUrl, saveRequest, sendableUrl, serializeRequestsFile, substitute, toCurl, unreachableHint, variableCompletions, withBaseUrl, withEnvVariables, type SavedRequest } from "../src/requests.ts";
+import { baseUrlSuggestion, describeVariables, emptyBodyHint, emptyRequestsFile, lineAndColumn, mergeVariables, newRequestLabel, parseEnv, parseRequestsFile, previewUrl, pushRecent, readsAsStream, removeRequest, requestHeaders, requestsPathProblem, requestUrl, resolveRequest, routeHeaders, routeOptional, routeUrl, saveRequest, sendableUrl, serializeRequestsFile, substitute, toCurl, unreachableHint, variableCompletions, withBaseUrl, withEnvVariables, type SavedRequest } from "../src/requests.ts";
 import { findRoutes } from "../src/routes.ts";
 import { twinCases } from "./twins.ts";
 
@@ -82,6 +82,7 @@ const calls: Record<string, (c: Case) => unknown> = {
     const r = resolveRequest(request(c.request), variables(c));
     return { url: r.request.url, signals: r.request.signals, headers: r.request.headers, errors: r.errors, unset: r.unset };
   },
+  previewUrl: (c) => previewUrl(c.url, variables(c)),
   unreachableHint: (c) => unreachableHint(c.url, variables(c), c.running ?? null),
   baseUrlSuggestion: (c) => baseUrlSuggestion(variables(c), c.running ?? null),
   variableCompletions: (c) => {

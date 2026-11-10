@@ -6,8 +6,21 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- streamlord-analysis has `Requests.previewUrl`: a URL with its variables filled in as a request
+  sends it, a param encoded and one that cannot be filled left as written.
+
 ### Fixed
 
+- In both editors, the URL shown under the inspector's URL field is the one that is sent. It
+  showed a param as written, `/feed/4 2/x`, where the request sends `/feed/4%202%2Fx`.
+- In both editors, **Save** and **Delete** in the inspector stay where they are when "modified"
+  appears beside them. They moved to the left, so a click where Save stood hit Delete.
+- In IntelliJ, a long error in the inspector's list of events is read whole, on as many lines as
+  it takes, where it was cut at the edge of the list. The fields of the form give way in a
+  narrow tool window and the action buttons go on to a second line, where Save and Delete were
+  laid out past the edge.
 - In both editors, **Save** and **Delete** in the Stream Inspector wrote
   `.streamlord/inspector.json` anew, which dropped what a person had written in it: an entry
   without a `url`, members of their own such as a `"note"`, and the object form of `signals` and

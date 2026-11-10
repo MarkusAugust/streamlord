@@ -346,7 +346,7 @@ function html(cspSource: string): string {
     <select id="saved"><option value="">New request…</option></select>
     <button type="button" class="secondary" id="save" title="Save the current request to .streamlord/inspector.json">Save</button>
     <button type="button" class="secondary" id="delete" title="Delete the selected saved request">Delete</button>
-    <span class="dirty" id="dirty" hidden>● modified</span>
+    <span class="dirty" id="dirty" style="visibility: hidden">● modified</span>
   </div>
   <div id="requestProblems"></div>
   <label for="url">URL</label><input id="url" placeholder="{{baseUrl}}/api/feed">
@@ -388,12 +388,21 @@ function html(cspSource: string): string {
   const clearEmpty = () => { const e = frames.querySelector('.empty'); if (e) e.remove(); };
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const time = (t) => new Date(t).toLocaleTimeString(undefined, { hour12: false }) + '.' + String(t % 1000).padStart(3, '0');
-  const substitute = (s) => s.replace(/\\{\\{\\s*([A-Za-z_][A-Za-z0-9_.-]*)\\s*\\}\\}/g, (w, n) => (n in variables ? variables[n] : w));
+  // The URL as it is sent, by the rule of previewUrl in requests.ts: baseUrl as it is, a param encoded, and what cannot be filled in left as written.
+  const OWN = ['baseUrl', 'signals', 'headers'];
+  const encode = (s) => encodeURIComponent(s.replace(/[\\uD800-\\uDBFF](?![\\uDC00-\\uDFFF])|(?<![\\uD800-\\uDBFF])[\\uDC00-\\uDFFF]/g, '\\uFFFD'));
+  const preview = (s) => s.replace(/\\{\\{\\s*([A-Za-z_][A-Za-z0-9_.-]*)\\s*\\}\\}/g, (w, n) => {
+    const value = Object.hasOwn(variables, n) ? variables[n] : '';
+    if (n === 'baseUrl') return Object.hasOwn(variables, n) ? value : w;
+    if (OWN.some((k) => k.toLowerCase() === n.toLowerCase()) || value === '') return w;
+    return encode(value);
+  });
   const refresh = () => {
-    $('resolved').textContent = $('url').value.includes('{{') ? substitute($('url').value) : '';
+    $('resolved').textContent = $('url').value.includes('{{') ? preview($('url').value) : '';
     const f = fields();
     const dirty = !!loaded && ['url','method','signals','headers'].some((k) => f[k] !== loaded[k]);
-    $('dirty').hidden = !dirty;
+    // Hidden in its place, so Save and Delete do not move under the pointer when it comes and goes.
+    $('dirty').style.visibility = dirty ? 'visible' : 'hidden';
     $('delete').disabled = !loadedName();
   };
   const fill = (r) => { $('url').value = r.url ?? ''; $('method').value = r.method ?? 'GET'; $('signals').value = r.signals ?? ''; $('headers').value = r.headers ?? ''; };

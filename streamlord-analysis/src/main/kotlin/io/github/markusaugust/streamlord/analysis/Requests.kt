@@ -742,6 +742,16 @@ public object Requests {
     }
 
     /**
+     * The URL as a request would send it, to show under the field while it is written: each variable
+     * filled in as [resolveRequest] fills it, a param encoded, and one that cannot be filled left as
+     * written. Empty for a URL without a variable, which shows itself.
+     */
+    public fun previewUrl(
+        url: String,
+        vars: List<Variable>,
+    ): String = if ("{{" in url) resolveRequest(SavedRequest("", url), vars).request.url else ""
+
+    /**
      * The text of `.streamlord/env.json` with [keys] added after what is there: `baseUrl` with its
      * current value, `signals` and `headers` as empty objects to fill in, and any other name as an
      * empty entry in `params`. A missing file is written with `baseUrl` first. The text is extended
