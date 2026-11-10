@@ -309,7 +309,7 @@ function html(cspSource: string): string {
   .status { margin-left: auto; opacity: .8; }
   .status.open { color: var(--vscode-testing-iconPassed); }
   .status.error { color: var(--vscode-errorForeground); }
-  .resolved { grid-column: 2; opacity: .6; font-family: var(--vscode-editor-font-family); font-size: .9em; min-height: 0; }
+  .resolved { grid-column: 2; opacity: .6; font-family: var(--vscode-editor-font-family); font-size: .9em; min-height: 0; overflow-wrap: anywhere; }
   .resolved:empty { display: none; }
   main { display: grid; grid-template-columns: 1fr 320px; gap: 12px; }
   @media (max-width: 800px) { main { grid-template-columns: 1fr; } }

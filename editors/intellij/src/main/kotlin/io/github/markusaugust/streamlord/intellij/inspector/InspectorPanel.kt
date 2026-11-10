@@ -15,6 +15,7 @@ import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.Messages
+import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.vfs.newvfs.BulkFileListenerBackgroundable
@@ -55,6 +56,7 @@ import java.awt.Component
 import java.awt.Dimension
 import java.awt.FlowLayout
 import java.awt.Font
+import java.awt.KeyboardFocusManager
 import java.awt.Rectangle
 import java.time.Instant
 import java.time.ZoneId
@@ -115,24 +117,29 @@ class InspectorPanel(
     private val signalsField = JBTextArea(3, FIELD_COLUMNS).mono()
     private val headersField = JBTextArea(2, FIELD_COLUMNS).mono()
 
-    /** The URL as it is sent. It asks for little width, so a long one is cut at the edge and read whole in its tooltip, and does not widen the form. */
+    /** The URL as it is sent, read whole: a long one goes on to more lines. */
     private val resolved =
-        object : JBLabel() {
-            override fun getPreferredSize(): Dimension = Dimension(JBUI.scale(FIELD_WIDTH), super.getPreferredSize().height)
-        }.apply {
-            putClientProperty("html.disable", true)
+        Wrapped("").apply {
+            columns = FIELD_COLUMNS
+            // A URL has no spaces to break at.
+            wrapStyleWord = false
             foreground = JBColor.GRAY
+            isVisible = false
         }
 
     /** Says a loaded request is edited. It holds its place whether it says so or not, so Save and Delete do not move under the pointer. */
     private val dirty =
-        JBLabel(MODIFIED).apply {
-            foreground = JBColor.namedColor("Label.warningForeground", JBColor.ORANGE)
-            val place = preferredSize
-            minimumSize = place
-            preferredSize = place
-            text = ""
-        }
+        object : JBLabel() {
+            /** The room of the marker in the font of the moment, so it is whole after a zoom as well. */
+            private fun place(): Dimension {
+                val metrics = getFontMetrics(font)
+                return Dimension(metrics.stringWidth(MODIFIED) + insets.left + insets.right, metrics.height + insets.top + insets.bottom)
+            }
+
+            override fun getPreferredSize(): Dimension = place()
+
+            override fun getMinimumSize(): Dimension = place()
+        }.apply { foreground = JBColor.namedColor("Label.warningForeground", JBColor.ORANGE) }
     private val status = plainLabel("idle")
     private val frames = JPanel().apply { layout = BoxLayout(this, BoxLayout.Y_AXIS) }
     private val storeView = JBTextArea("{}").mono().apply { isEditable = false }
@@ -148,11 +155,7 @@ class InspectorPanel(
 
     /** What is wrong with the requests file: why it is not read, or which of its entries are not. */
     private val requestProblems =
-        JBTextArea("").apply {
-            isEditable = false
-            isOpaque = false
-            lineWrap = true
-            wrapStyleWord = true
+        Wrapped("").apply {
             foreground = JBColor.RED
             isVisible = false
         }
@@ -282,7 +285,7 @@ class InspectorPanel(
                         narrows()
                     }
                 }
-                row("") { cell(resolved).align(AlignX.FILL).resizableColumn().applyToComponent { narrows() } }
+                row("") { cell(resolved).align(AlignX.FILL).resizableColumn() }
                 row("Method:") { cell(method) }
                 row("Signals:") {
                     scrollCell(signalsField).align(AlignX.FILL).resizableColumn().applyToComponent {
@@ -324,11 +327,54 @@ class InspectorPanel(
                         addActionListener { copyCurl() }
                     },
                 )
-                add(status)
+            }
+        // The status keeps to the right end of the row, where a longer one takes room from the buttons and moves nothing else.
+        val row =
+            JPanel(BorderLayout(JBUI.scale(GAP), 0)).apply {
+                add(actions, BorderLayout.CENTER)
+                add(status, BorderLayout.EAST)
             }
         return JPanel(BorderLayout()).apply {
             add(fields, BorderLayout.CENTER)
-            add(actions, BorderLayout.SOUTH)
+            add(row, BorderLayout.SOUTH)
+        }
+    }
+
+    /**
+     * Text to read and not to write, on as many lines as its width takes: a message from a server or a
+     * URL from a shared file is shown whole, and as text. Its height follows from its width, so a
+     * new width is laid out again.
+     */
+    private class Wrapped(
+        text: String,
+    ) : JBTextArea(text) {
+        init {
+            isEditable = false
+            isOpaque = false
+            lineWrap = true
+            wrapStyleWord = true
+            font = JBFont.label()
+            // Tab goes on to the next component, as from a label; a text area keeps the key to itself.
+            setFocusTraversalKeys(KeyboardFocusManager.FORWARD_TRAVERSAL_KEYS, null)
+            setFocusTraversalKeys(KeyboardFocusManager.BACKWARD_TRAVERSAL_KEYS, null)
+        }
+
+        /** As high as its text is at the width it has, and asking for little width itself: a text area asks for the width it was last given, and would hold a form at it. */
+        override fun getPreferredSize(): Dimension =
+            super.getPreferredSize().let { Dimension(minOf(it.width, JBUI.scale(FIELD_WIDTH)), it.height) }
+
+        override fun getMinimumSize(): Dimension = preferredSize
+
+        override fun setBounds(
+            x: Int,
+            y: Int,
+            width: Int,
+            height: Int,
+        ) {
+            val wider = width != this.width
+            super.setBounds(x, y, width, height)
+            // After the layout under way: one asked for in the middle of it is forgotten when it ends.
+            if (wider) SwingUtilities.invokeLater { revalidate() }
         }
     }
 
@@ -433,8 +479,7 @@ class InspectorPanel(
     private fun refresh() {
         if (filling) return
         resolved.text = Requests.previewUrl(url.text, environment.vars)
-        // A tooltip that opens with <html> is rendered as HTML, and a saved URL comes from a shared file: that one gets none.
-        resolved.toolTipText = resolved.text.takeIf { it.isNotEmpty() && !it.startsWith("<html", ignoreCase = true) }
+        resolved.isVisible = resolved.text.isNotEmpty()
         val f = fields()
         val l = loaded
         val edited = l != null && (f.url != l.url || f.method != l.method || f.signals != l.signals || f.headers != l.headers)
@@ -611,8 +656,11 @@ class InspectorPanel(
                         http: String?,
                         contentType: String?,
                     ) = later {
-                        setStatus(status.name.lowercase() + (http?.let { " · $it" } ?: "") + (contentType?.let { " · $it" } ?: ""), status)
-                        this@InspectorPanel.status.toolTipText = request.url
+                        setStatus(
+                            status.name.lowercase() + (http?.let { " · $it" } ?: "") + (contentType?.let { " · $it" } ?: ""),
+                            status,
+                            request.url,
+                        )
                     }
 
                     override fun onFrame(frame: DatastarFrame) =
@@ -731,11 +779,15 @@ class InspectorPanel(
 
     // ---- rendering -----------------------------------------------------------------------------
 
+    /** Show the status; with [url], the request it is the status of is its tooltip. */
     private fun setStatus(
         text: String,
         s: StreamClient.Status?,
+        url: String? = null,
     ) {
         status.text = text
+        // The IDE renders a tooltip as HTML, whatever it starts with, and a URL comes from a shared file.
+        if (url != null) status.toolTipText = StringUtil.escapeXmlEntities(url)
         status.foreground =
             when (s) {
                 StreamClient.Status.OPEN -> JBColor.namedColor("Label.successForeground", JBColor(0x368746, 0x50A661))
@@ -747,22 +799,30 @@ class InspectorPanel(
     private fun clearFrames(message: String) {
         frames.removeAll()
         count = 0
-        frames.add(
+        val note =
             plainLabel(message).apply {
                 foreground = JBColor.GRAY
                 border = JBUI.Borders.empty(8)
-            },
-        )
+                alignmentX = LEFT_ALIGNMENT
+            }
+        emptyNote = note
+        frames.add(note)
         frames.revalidate()
         frames.repaint()
     }
 
+    /** The note of a list without events, which the first event takes the place of. A comment is a label as well, and stays. */
+    private var emptyNote: JComponent? = null
+
     private fun clearEmpty() {
-        if (frames.componentCount == 1 && frames.getComponent(0) is JBLabel) frames.removeAll()
+        emptyNote?.let(frames::remove)
+        emptyNote = null
     }
 
     private fun prepend(c: JComponent) {
         clearEmpty()
+        // One left edge for every kind of line: the layout sets a label and a panel apart when they differ in this.
+        c.alignmentX = LEFT_ALIGNMENT
         frames.add(c, 0)
         while (frames.componentCount > MAX_FRAMES) frames.remove(frames.componentCount - 1)
         frames.revalidate()
@@ -818,14 +878,8 @@ class InspectorPanel(
         define: List<String>? = null,
         useBaseUrl: String? = null,
     ) {
-        // A text area, which breaks the line at the edge of the list and shows a message from a server as text.
         val text =
-            JBTextArea(message).apply {
-                isEditable = false
-                isOpaque = false
-                lineWrap = true
-                wrapStyleWord = true
-                font = JBFont.label()
+            Wrapped(message).apply {
                 foreground = JBColor.RED
                 border = JBUI.Borders.empty(2, 4)
             }

@@ -11,6 +11,24 @@ All notable changes to Streamlord are recorded here. The format follows
 - streamlord-analysis has `Requests.previewUrl`: a URL with its variables filled in as a request
   sends it, a param encoded and one that cannot be filled left as written.
 
+### Changed
+
+- `Requests.upsert` and `Requests.remove` in streamlord-analysis are gone, since they changed a
+  requests file by writing it anew, which lost what the file held besides its requests.
+  `Requests.saveRequest` and `Requests.removeRequest` take the text of the file and return it with
+  the one entry changed, as a `RequestsEdit`: other members, entries that are not read and the
+  layout stay as written, and an entry that is saved keeps its own other members and the object
+  form of its `signals` and `headers`. Each touches the first entry of the name and no other.
+- `RequestsFile` has a third value, `skipped`, with one message for each entry of the file that
+  is not read, so code compiled against its two-value constructor or `copy` needs a rebuild.
+- `Requests.parseRequestsFile` reports a file whose root is no object, whose `requests` is no
+  list, or whose `version` is not 1, in `error`, where it read each as a file of requests; a
+  save then wrote over them. A second entry of a name is not read, and is named in `skipped`.
+  An empty file is a file without requests, and no longer invalid JSON, and `Requests.parseEnv`,
+  `withEnvVariables` and `withBaseUrl` read an empty env file as a missing one.
+- `Requests.requestsPathProblem` refuses a path that names `.streamlord/env.json`, however it
+  is spelled, one with a backslash and one that ends in `/`.
+
 ### Fixed
 
 - In both editors, the URL shown under the inspector's URL field is the one that is sent. It
@@ -18,9 +36,12 @@ All notable changes to Streamlord are recorded here. The format follows
 - In both editors, **Save** and **Delete** in the inspector stay where they are when "modified"
   appears beside them. They moved to the left, so a click where Save stood hit Delete.
 - In IntelliJ, a long error in the inspector's list of events is read whole, on as many lines as
-  it takes, where it was cut at the edge of the list. The fields of the form give way in a
-  narrow tool window and the action buttons go on to a second line, where Save and Delete were
-  laid out past the edge.
+  it takes, where it was cut at the edge of the list, and so is the URL under the URL field.
+  The fields of the form give way in a narrow tool window and the action buttons go on to a
+  second line, where Save and Delete were laid out past the edge.
+- In IntelliJ, the tooltip of the inspector's status shows the URL as written. The IDE renders a
+  tooltip as HTML, so a URL with `&copy=1` in it showed a copyright sign, and markup in a URL
+  from a shared requests file was rendered.
 - In both editors, **Save** and **Delete** in the Stream Inspector wrote
   `.streamlord/inspector.json` anew, which dropped what a person had written in it: an entry
   without a `url`, members of their own such as a `"note"`, and the object form of `signals` and
@@ -41,24 +62,6 @@ All notable changes to Streamlord are recorded here. The format follows
   settings are applied, where it showed the old ones until something else made it read.
 - In VS Code, a requests file that could not be read was taken for a missing one, and a save
   wrote a new file over it; and two saves at once could each write over what the other had read.
-
-### Changed
-
-- `Requests.upsert` and `Requests.remove` in streamlord-analysis are gone, since they changed a
-  requests file by writing it anew, which lost what the file held besides its requests.
-  `Requests.saveRequest` and `Requests.removeRequest` take the text of the file and return it with
-  the one entry changed, as a `RequestsEdit`: other members, entries that are not read and the
-  layout stay as written, and an entry that is saved keeps its own other members and the object
-  form of its `signals` and `headers`. Each touches the first entry of the name and no other.
-- `RequestsFile` has a third value, `skipped`, with one message for each entry of the file that
-  is not read, so code compiled against its two-value constructor or `copy` needs a rebuild.
-- `Requests.parseRequestsFile` reports a file whose root is no object, whose `requests` is no
-  list, or whose `version` is not 1, in `error`, where it read each as a file of requests; a
-  save then wrote over them. A second entry of a name is not read, and is named in `skipped`.
-  An empty file is a file without requests, and no longer invalid JSON, and `Requests.parseEnv`,
-  `withEnvVariables` and `withBaseUrl` read an empty env file as a missing one.
-- `Requests.requestsPathProblem` refuses a path that names `.streamlord/env.json`, however it
-  is spelled, one with a backslash and one that ends in `/`.
 
 ## [0.20.0] - 2026-11-09
 
